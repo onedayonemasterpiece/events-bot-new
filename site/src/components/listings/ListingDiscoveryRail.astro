@@ -9,13 +9,54 @@ interface Props {
 }
 const { cities, total, label, hasTime = true } = Astro.props;
 ---
+<span class="ke-listing-discovery-sentinel" aria-hidden="true" data-listing-discovery-sentinel></span>
 <div
   class:list={['ke-listing-discovery-rail', !hasTime && 'ke-listing-discovery-rail--cities-only']}
   data-ds-component="ListingDiscoveryRail"
-  data-ds-version="1"
+  data-ds-version="2"
   data-listing-discovery-rail
   data-has-time={hasTime ? 'true' : 'false'}
 >
   <ListingControls cities={cities} total={total} label={label} />
   {hasTime ? <div class="ke-listing-discovery-rail__time"><slot /></div> : null}
 </div>
+
+<script>
+  function initListingDiscoveryRail() {
+    const rail = document.querySelector('[data-listing-discovery-rail]');
+    const sentinel = document.querySelector('[data-listing-discovery-sentinel]');
+    if (!rail || rail.dataset.discoveryReady === 'true') return;
+    rail.dataset.discoveryReady = 'true';
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const labels = [...rail.querySelectorAll('[data-listing-city-filter] .ke-filter-chip')]
+          .filter((item) => getComputedStyle(item).display !== 'none');
+        const tops = [];
+        labels.forEach((item) => {
+          const top = Math.round(item.getBoundingClientRect().top);
+          if (!tops.some((value) => Math.abs(value - top) <= 2)) tops.push(top);
+        });
+        const cityRows = Math.max(1, tops.length || 1);
+        const cityHeight = cityRows * 44;
+        const discoveryHeight = cityHeight + (rail.dataset.hasTime === 'true' ? 44 : 0);
+        rail.dataset.cityRows = String(cityRows);
+        rail.style.setProperty('--ke-listing-city-row-height', `${cityHeight}px`);
+        rail.style.setProperty('--ke-listing-discovery-height', `${discoveryHeight}px`);
+        document.documentElement.style.setProperty('--ke-listing-discovery-height', `${discoveryHeight}px`);
+      });
+    };
+    if (sentinel && 'IntersectionObserver' in window) {
+      new IntersectionObserver(([entry]) => {
+        rail.dataset.stuck = entry.isIntersecting ? 'false' : 'true';
+        measure();
+      }, { rootMargin: '-57px 0px 0px 0px', threshold: [0, 1] }).observe(sentinel);
+    }
+    document.fonts?.ready.then(measure);
+    new ResizeObserver(measure).observe(rail);
+    window.addEventListener('resize', measure, { passive: true });
+    measure();
+  }
+  initListingDiscoveryRail();
+</script>

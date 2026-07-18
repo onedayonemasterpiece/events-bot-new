@@ -96,7 +96,8 @@ export function getListingIdentityMedallions(event: PreviewEvent): ListingVenueM
  */
 export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: EventImageAsset | null): ListingVenueMedallion | null {
   const primaryAsset = selectedAsset || event.image_assets?.[0];
-  if (!event.image_url || !primaryAsset || primaryAsset.image_text_mode !== 'visual_only') return null;
+  const isNeutralFallback = !event.image_url && !primaryAsset;
+  if (!isNeutralFallback && (!primaryAsset || primaryAsset.image_text_mode !== 'visual_only')) return null;
   const item = listingCandidates(event)[0];
   if (!item) return null;
   return toListingMedallion(item);

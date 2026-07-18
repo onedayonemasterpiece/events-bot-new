@@ -10,6 +10,12 @@ const ranges = getAvailableWeekendRanges();
 const index = ranges.findIndex((range) => range.start === weekend.start);
 const previousRange = index > 0 ? ranges[index - 1] : null;
 const nextRange = index >= 0 && index < ranges.length - 1 ? ranges[index + 1] : null;
+const rangeLinks = ranges.slice(Math.max(0, index), Math.min(ranges.length, Math.max(0, index) + 6)).map((range) => ({
+  href: range.start === weekend.start ? '/vyhodnye/' : `/vyhodnye/${range.start}/`,
+  label: range.label,
+  selected: range.start === weekend.start,
+  actualCurrent: range.start === weekend.start,
+}));
 ---
 <EventLayout title={`События на выходные в Калининграде | ${SITE_NAME}`} description={`События на ближайшие выходные ${weekend.label}, по дням и точному времени начала.`} canonicalUrl={absoluteUrl('/vyhodnye/')} structuredData={[]} headerCurrent="weekend">
   <main id="main" class="ke-listing-page">
@@ -21,6 +27,7 @@ const nextRange = index >= 0 && index < ranges.length - 1 ? ranges[index + 1] : 
       currentDate={getCurrentDate()}
       previous={previousRange ? { href: `/vyhodnye/${previousRange.start}/`, label: previousRange.label } : null}
       next={nextRange ? { href: `/vyhodnye/${nextRange.start}/`, label: nextRange.label } : null}
+      ranges={rangeLinks}
     />
     <div class="ke-listing-shell"><PersonalFeedSlot context="weekend" /></div>
   </main>

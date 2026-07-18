@@ -2207,6 +2207,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         const PERSONAL_FEED_LIMIT = 30;
         const PERSONAL_FEED_TTL_MS = 30 * 60 * 1000;
         const LISTING_MODE_KEY = 'ke_listing_mode_v1';
+        let listingPrototypeMode = null;
         const NEGATIVE_HARD_FILTER_THRESHOLD = 0.95;
         const DEFAULT_WEIGHTS = {
           staticContext: 0.80,
@@ -2520,10 +2521,15 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const filters = Array.from(document.querySelectorAll('[data-listing-filter]'));
           const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar]'));
           if (!items.length || (!filters.length && !bars.length)) return;
+          const prototypeQualified = (location.pathname.includes('/preview-') || ['127.0.0.1', 'localhost'].includes(location.hostname))
+            && new URLSearchParams(location.search).get('personalization') === 'qualified';
           const profile = readProfile();
           const validProfile = isCompatibleProfile(profile);
-          const hiddenIds = validProfile ? hiddenSet(profile) : new Set();
-          const explicitMode = readListingMode();
+          const prototypeHiddenIds = prototypeQualified
+            ? new Set(items.filter((_, index) => index % 5 === 4).map((item) => asId(item.dataset.eventId)).filter(Boolean))
+            : new Set();
+          const hiddenIds = prototypeQualified ? prototypeHiddenIds : (validProfile ? hiddenSet(profile) : new Set());
+          const explicitMode = prototypeQualified ? listingPrototypeMode : readListingMode();
           const hiddenCandidates = items.filter((item) => listingItemShouldHide(item, hiddenIds));
           const hiddenCount = hiddenCandidates.length;
           const total = items.length;
@@ -2567,6 +2573,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               : `Показаны все ${total}. Пока нечего скрывать по вашим отметкам.`;
           const titleText = personalMode ? 'Для меня' : 'Все события';
           [...filters, ...bars].forEach((root) => {
+            root.dataset.personalizationPrototype = prototypeQualified ? 'qualified' : '';
             root.hidden = false;
             root.classList.add('is-visible');
             root.querySelectorAll('[data-listing-mode-button]').forEach((button) => {
@@ -3841,7 +3848,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           if (!button) return;
           event.preventDefault();
           const mode = button.dataset.listingModeButton === 'personal' ? 'personal' : 'all';
-          writeListingMode(mode);
+          const prototypeQualified = (location.pathname.includes('/preview-') || ['127.0.0.1', 'localhost'].includes(location.hostname))
+            && new URLSearchParams(location.search).get('personalization') === 'qualified';
+          if (prototypeQualified) listingPrototypeMode = mode;
+          else writeListingMode(mode);
           syncListingPersonalFilter({ focusSummary: true });
           const firstList = document.querySelector('[data-listing-filter]');
           if (firstList && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {

@@ -1,0 +1,27 @@
+---
+import { withBase } from '../../lib/events';
+
+interface RangeLink {
+  href: string;
+  label: string;
+  selected?: boolean;
+  actualCurrent?: boolean;
+}
+interface Props { ranges: RangeLink[]; placement?: 'top' | 'bottom' }
+const { ranges, placement = 'top' } = Astro.props;
+---
+<nav class:list={['ke-weekend-ranges', `ke-weekend-ranges--${placement}`]} aria-label="Другие выходные" data-ds-component="WeekendRangeNav" data-ds-version="1">
+  <span class="ke-weekend-ranges__label">Другие выходные</span>
+  <div class="ke-weekend-ranges__flow">
+    {ranges.map((range, index) => (
+      <a
+        href={withBase(range.href)}
+        class:list={['ke-weekend-range', range.selected && 'is-selected', index === ranges.length - 1 && 'ke-weekend-range--terminal']}
+        aria-current={range.selected ? 'page' : undefined}
+      >
+        <span>{range.actualCurrent ? 'Текущие · ' : ''}{range.label}</span>
+        {index === ranges.length - 1 ? <img src={withBase('/assets/icons/svgrepo-450220-long-arrow-right.svg')} alt="" aria-hidden="true" /> : null}
+      </a>
+    ))}
+  </div>
+</nav>

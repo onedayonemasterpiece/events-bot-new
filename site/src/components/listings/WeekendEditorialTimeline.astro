@@ -16,7 +16,7 @@ const groupMaps = new Map(days.map((day) => [day.key, new Map(day.groups.map((gr
 const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.key)))]
   .sort((left, right) => left === 'untimed' ? 1 : right === 'untimed' ? -1 : left.localeCompare(right));
 ---
-<div class="ke-weekend-timeline" data-ds-component="WeekendEditorialTimeline" data-ds-version="2">
+<div class="ke-weekend-timeline" data-ds-component="WeekendEditorialTimeline" data-ds-version="3">
   {keys.map((key, keyIndex) => {
     const groups = days.map((day) => groupMaps.get(day.key)?.get(key));
     const label = key === 'untimed' ? 'Время уточняется' : key;
@@ -34,6 +34,11 @@ const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.k
           id={`weekend-time-${key}-title`}
           label={label}
           className="ke-weekend-time-rail"
+          dayCounts={days.map((day, index) => ({
+            key: day.key,
+            label: day.key === 'sat' ? 'Сб' : 'Вс',
+            count: groups[index]?.events.length || 0,
+          }))}
         />
         {days.map((day, index) => {
           const group = groups[index];

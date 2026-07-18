@@ -6,10 +6,12 @@ import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingWeekendTimeNav from './ListingWeekendTimeNav.astro';
 import WeekendEditorialTimeline from './WeekendEditorialTimeline.astro';
+import WeekendRangeNav from './WeekendRangeNav.astro';
 
 interface WeekendLink { href?: string | null; label: string; }
-interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; currentDate?: string; previous?: WeekendLink | null; next?: WeekendLink | null; }
-const { events: rawEvents, start, end, dateLabel, currentDate = '', previous = null, next = null } = Astro.props;
+interface WeekendRangeLink { href: string; label: string; selected?: boolean; actualCurrent?: boolean; }
+interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; currentDate?: string; previous?: WeekendLink | null; next?: WeekendLink | null; ranges?: WeekendRangeLink[]; }
+const { events: rawEvents, start, end, dateLabel, currentDate = '', previous = null, next = null, ranges = [] } = Astro.props;
 const events = deduplicateListingEvents(rawEvents);
 const days = [
   { key: 'sat', title: 'Суббота', date: start, events: events.filter((event) => event.start_date === start) },
@@ -22,8 +24,9 @@ function dayDateLabel(date: string): string {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' }).format(new Date(`${date}T12:00:00+02:00`));
 }
 ---
-<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="TH-P1" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
+<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="DATE-LISTING-V16" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
   <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
+  {ranges.length ? <WeekendRangeNav ranges={ranges} placement="top" /> : null}
   <ListingDiscoveryRail cities={cities} total={events.length} label="на выходных">
     <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
   </ListingDiscoveryRail>
@@ -42,7 +45,7 @@ function dayDateLabel(date: string): string {
     </div>
     <WeekendEditorialTimeline days={days.map((day) => ({ key: day.key as 'sat' | 'sun', title: day.title, date: day.date, groups: day.groups }))} />
   </div>
-  {(previous || next) ? (
+  {ranges.length ? <WeekendRangeNav ranges={ranges} placement="bottom" /> : (previous || next) ? (
     <nav class="ke-weekend-adjacent" aria-label="Другие выходные">
       <div>
         {previous?.href ? <a href={withBase(previous.href)}>← {previous.label}</a> : previous ? <span aria-disabled="true">← {previous.label} · события пока не опубликованы</span> : null}
@@ -72,9 +75,14 @@ function dayDateLabel(date: string): string {
       const group = card.closest('[data-listing-time-group]');
       const date = group?.dataset.listingDate || '';
       const endAt = card.dataset.eventEndAt || '';
+      const startAt = card.dataset.eventStartAt || '';
       const explicitlyEnded = endAt && Number.isFinite(Date.parse(endAt)) && Date.parse(endAt) <= now;
       const pastDay = date && date < clock.date;
+      const knownOngoing = endAt && Number.isFinite(Date.parse(endAt)) && Date.parse(endAt) > now;
+      const startedEarlier = !pastDay && !explicitlyEnded && !knownOngoing
+        && startAt && Number.isFinite(Date.parse(startAt)) && Date.parse(startAt) <= now - 60 * 60 * 1000;
       card.dataset.listingPast = explicitlyEnded || pastDay ? 'true' : 'false';
+      card.dataset.listingStartedEarlier = startedEarlier ? 'true' : 'false';
     });
   }
   function maybePositionCurrentSunday() {
@@ -103,6 +111,18 @@ function dayDateLabel(date: string): string {
     }, 350);
   }
   weekendRoot?.querySelector('[data-weekend-back-to-top]')?.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
+  function alignWeekendHashAfterLayout() {
+    if (!weekendRoot || !location.hash.startsWith('#weekend-time-')) return;
+    const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (!target || target.dataset.hashRealigned === 'true') return;
+    target.dataset.hashRealigned = 'true';
+    requestAnimationFrame(() => requestAnimationFrame(() => target.scrollIntoView({ block: 'start', behavior: 'instant' })));
+  }
   applyWeekendPastState();
   maybePositionCurrentSunday();
+  document.fonts?.ready.then(alignWeekendHashAfterLayout);
+  addEventListener('hashchange', () => {
+    document.querySelectorAll('[data-hash-realigned]').forEach((item) => delete item.dataset.hashRealigned);
+    alignWeekendHashAfterLayout();
+  });
 </script>

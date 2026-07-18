@@ -11,7 +11,7 @@ const cities = [...new Set(events.map((event) => event.city || 'Калининг
   .map((name) => ({ name, count: events.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
 ---
-<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V15">
+<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V16">
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={events.length} current="popular" />
   <ListingDiscoveryRail cities={cities} total={events.length} label="популярное" hasTime={false} />
   <section class="ke-popular-flow" aria-label="Популярные события">

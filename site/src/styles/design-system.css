@@ -940,3 +940,200 @@
   .ke-listing-discovery-rail .ke-city-filter--direct { flex-wrap: wrap; align-content: center; }
   .ke-listing-discovery-rail .ke-time-nav__inner { padding-left: 0; }
 }
+
+/* V16 listing geometry: intrinsic cards keep their order, while the listing
+   surface may use genuinely available desktop width. Media scale is no longer
+   coupled to viewport height, which previously made 1920px packing worse than
+   1536px. */
+:root {
+  --ke-content-listing-max: 1600px;
+  --ke-listing-media-height: 221px;
+  --ke-weekend-media-height: 178px;
+  --ke-weekend-heads-height: 61px;
+}
+.ke-listing-shell { width: min(var(--ke-content-listing-max), calc(100% - clamp(3rem, 5vw, 6rem))); }
+.ke-listing-discovery-rail > .ke-listing-controls {
+  height: var(--ke-listing-city-row-height, 44px);
+  padding-right: max(24px, calc((100vw - var(--ke-content-listing-max)) / 2));
+}
+.ke-listing-discovery-rail .ke-time-nav__inner { width: min(var(--ke-content-listing-max), calc(100% - clamp(3rem, 5vw, 6rem))); }
+.ke-listing-discovery-sentinel { width: 1px; height: 1px; display: block; margin-bottom: -1px; pointer-events: none; }
+.ke-listing-discovery-rail .ke-city-filter,
+.ke-listing-discovery-rail .ke-city-filter--direct {
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 0 12px;
+}
+.ke-listing-discovery-rail .ke-filter-chip { font-size: .86rem; }
+.ke-listing-discovery-rail[data-stuck="true"] .ke-city-filter,
+.ke-listing-discovery-rail[data-stuck="true"] .ke-city-filter--direct { gap-inline: 8px; }
+.ke-listing-discovery-rail[data-stuck="true"] .ke-filter-chip { font-size: .78rem; }
+.ke-listing-discovery-rail[data-stuck="true"] .ke-filter-chip strong { display: none; }
+.ke-listing-discovery-rail[data-city-rows="1"] .ke-city-filter,
+.ke-listing-discovery-rail[data-city-rows="1"] .ke-city-filter--direct { flex-wrap: nowrap; }
+.ke-listing-discovery-rail .listing-filter.is-visible {
+  flex: 0 0 auto;
+  min-height: 40px;
+  margin: 0 0 0 auto;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.ke-listing-discovery-rail .listing-filter__copy { display: none; }
+.ke-listing-discovery-rail .listing-mode-switch { min-width: 212px; padding: 2px; box-shadow: none; }
+.ke-listing-discovery-rail .listing-mode-switch button { min-height: 34px; padding: 3px 8px; font-size: .76rem; }
+.ke-listing-discovery-rail .listing-mode-switch__count { min-width: 1.35rem; min-height: 1.35rem; font-size: .7rem; }
+
+@media (min-width: 1760px) {
+  :root { --ke-listing-media-height: 232px; --ke-weekend-media-height: 188px; }
+}
+
+/* Weekend has an additional sticky day-head layer. Both anchor landing and
+   the pinned exact-time marker must sit below it. */
+.ke-weekend-heads { height: var(--ke-weekend-heads-height); min-height: var(--ke-weekend-heads-height); }
+.ke-weekend-time-row {
+  scroll-margin-top: calc(var(--ke-listing-sticky-stack-height) + var(--ke-weekend-heads-height) + 12px);
+}
+.ke-weekend-time-rail {
+  top: calc(var(--ke-listing-sticky-stack-height) + var(--ke-weekend-heads-height) + 12px);
+}
+.ke-weekend-time-cell .ke-time-group__flow { --ke-listing-media-height: var(--ke-weekend-media-height); }
+.ke-listing-time-marker__day-counts {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+}
+.ke-weekend-time-rail .ke-listing-time-marker__day-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ke-color-muted);
+  font-size: .75rem;
+  line-height: 1.1;
+}
+.ke-weekend-time-rail .ke-listing-time-marker__day-chip[hidden] { display: none; }
+.ke-listing-time-marker__day-chip > b {
+  min-width: 30px;
+  min-height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ke-color-brand-700) 88%, transparent);
+  color: #fffaf2;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+.ke-listing-time-marker__day-chip--sun > b { background: color-mix(in srgb, var(--ke-color-accent-700) 88%, transparent); }
+.ke-weekend-time-rail .ke-listing-time-marker__day-chip > span { display: inline; margin: 0; white-space: nowrap; color: var(--ke-color-muted); font-size: .75rem; line-height: 1.1; }
+.ke-listing-time-marker__day-chip strong { color: var(--ke-color-copy); font-variant-numeric: tabular-nums; }
+.ke-listing-time-marker__day-chip i { font-style: normal; }
+
+/* One quiet 60px rail: identity first for recognition, non-zero audience
+   evidence at the bottom for decision support. */
+.ke-listing-card__side-rail {
+  flex: 0 0 60px;
+  width: 60px;
+  height: var(--ke-listing-media-height);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.ke-listing-card__side-rail .ke-listing-card__identity-rail {
+  flex: 0 0 auto;
+  width: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.ke-listing-card[data-listing-has-social-proof="true"][data-listing-side-identity-count="2"] .ke-listing-card__identity-medallion,
+.ke-listing-card[data-listing-has-social-proof="true"][data-listing-side-identity-count="2"] .ke-listing-card__free-medallion,
+.ke-listing-card[data-listing-side-identity-count="3"] .ke-listing-card__identity-medallion,
+.ke-listing-card[data-listing-side-identity-count="3"] .ke-listing-card__free-medallion {
+  width: 52px;
+  height: 52px;
+  flex-basis: 52px;
+}
+.ke-listing-card__side-rail .ke-listing-card__social-proof {
+  width: 60px;
+  min-width: 60px;
+  flex: 0 0 auto;
+  margin-top: auto;
+  gap: 4px;
+  padding: 0 5px;
+}
+.ke-listing-card__side-rail .ke-listing-card__social-proof > span { min-height: 24px; }
+.ke-listing-card__medallion { right: 10px; bottom: 10px; }
+.ke-listing-card__fallback + .ke-listing-card__medallion { right: 50%; bottom: 50%; transform: translate(50%, 50%); }
+
+/* A singleton is centred as one painted envelope (media + rail + copy), not
+   by the image alone. Internal typography remains left aligned. */
+.ke-time-group__flow[data-listing-singleton="true"] { justify-content: center; }
+.ke-time-group__flow[data-listing-singleton="true"] > .ke-listing-card {
+  flex-basis: var(--ke-listing-singleton-envelope);
+  width: var(--ke-listing-singleton-envelope);
+  max-width: 100%;
+}
+.ke-time-group__flow[data-listing-singleton="true"] > .ke-listing-card .ke-listing-card__visual {
+  width: var(--ke-listing-singleton-visual);
+  margin-inline: auto;
+}
+
+[data-listing-started-earlier="true"] .ke-listing-card__media img {
+  filter: grayscale(.34) saturate(.58);
+  opacity: .74;
+}
+[data-listing-started-earlier="true"] .ke-listing-card__copy::before {
+  content: "Началось ранее";
+  color: var(--ke-color-muted);
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1450px) and (min-width: 981px) {
+  :root { --ke-listing-discovery-height: 88px; }
+  .ke-listing-discovery-rail > .ke-listing-controls { height: var(--ke-listing-city-row-height, 44px); }
+}
+@media (max-width: 1700px) and (min-width: 981px) {
+  .ke-listing-discovery-rail--cities-only,
+  .ke-listing-discovery-rail--cities-only > .ke-listing-controls { height: var(--ke-listing-city-row-height, 44px); }
+}
+
+.ke-weekend-ranges {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ke-color-line) 70%, transparent);
+}
+.ke-weekend-ranges--bottom { margin-top: 30px; border-top: 1px solid var(--ke-color-line); border-bottom: 0; padding-block: 14px; }
+.ke-weekend-ranges__label { flex: 0 0 auto; color: var(--ke-color-muted); font-size: .76rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.ke-weekend-ranges__flow { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding-block: 7px; }
+.ke-weekend-range {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 6px 11px;
+  color: var(--ke-color-copy);
+  font-size: .84rem;
+  font-weight: 720;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ke-weekend-range:hover { border-color: var(--ke-color-line); background: color-mix(in srgb, var(--ke-color-surface-strong) 68%, transparent); }
+.ke-weekend-range.is-selected { border-color: color-mix(in srgb, var(--ke-color-brand-700) 24%, transparent); background: color-mix(in srgb, var(--ke-color-brand-700) 9%, transparent); color: var(--ke-color-brand-800); font-weight: 880; }
+.ke-weekend-range--terminal img { width: 74px; height: 18px; object-fit: fill; opacity: .68; }
+.ke-weekend-adjacent { display: none; }

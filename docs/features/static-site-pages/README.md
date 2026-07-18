@@ -56,24 +56,27 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Текущий публичный preview
 
-Desktop listing consumer candidate `DATE-LISTING TH-P1 · V15`:
-[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v15/segodnya/),
-[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v15/zavtra/),
-[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v15/vyhodnye/),
-[Популярное](https://kenigevents.ru/preview-20260718-date-listings-v15/populyarnoe/) и
-[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v15/lab/design-system/).
+Desktop listing consumer candidate `DATE-LISTING · V16`:
+[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v16/segodnya/),
+[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v16/zavtra/),
+[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v16/vyhodnye/),
+[Популярное](https://kenigevents.ru/preview-20260718-date-listings-v16/populyarnoe/) и
+[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v16/lab/design-system/).
 Это immutable review prefix, а не production promotion.
 
-V15 сохраняет проверенную Weekend-структуру: одна сильная sticky-ось времени и две
-непрерывные day-lane. Города и периоды образуют две лёгкие строки общей discovery
-surface без dropdown, тяжёлых pills, graphite bar или горизонтального тупика. Popular
-остаётся вертикально продолжаемым intrinsic flow. OCR/unknown/identity posters больше
-не получают агрессивный crop; отсутствие OCR не считается `visual_only`. Внешние
-медальоны тихие, без двойных колец; ненулевые Share/Like — статичные social-proof
-индикаторы, а не кнопки, Calendar на listings отсутствует. `3794` использует существующее 300×174 canonical фото
-без event-specific подмены и без нового crawler: listing renderer потребляет уже
-существующий media/Smart Update contract. Product rationale and measurable acceptance:
-[`listing-surfaces-v14-product.md`](listing-surfaces-v14-product.md).
+V16 сохраняет согласованную Weekend-композицию с одной сильной sticky-осью
+времени и двумя непрерывными day-lane, но ставит маркер ниже полного sticky
+stack и показывает под ним лёгкие `сб/вс + N событий`. Города имеют читаемое
+expanded и компактное sticky-состояния с измеряемым wrap. Medallion identity и
+ненулевые Share/Like proof объединены в один 60px rail; Calendar aggregate не
+выводится, пока нет privacy-safe deduplicated durable saved-event count — ICS
+traffic не называется людьми. Singleton центрируется полным painted envelope,
+не растягивая natural/OCR media; listing flow использует до 1600px и сохраняет
+relevance order. Weekend получает облако текущего и пяти будущих диапазонов,
+квалифицированное preview-состояние демонстрирует `Для меня / Полный список`, а
+Popular остаётся единым score-ordered потоком до появления контролируемой
+категорийной taxonomy. Product decisions and measured acceptance:
+[`listing-surfaces-v16-product.md`](listing-surfaces-v16-product.md).
 
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
 
@@ -141,7 +144,7 @@ Event detail pages render large quick-read **medallions** after the hero/title a
 
 ## Listing personalization on static lists
 
-P0 list personalization is a local **filter**, not a second SEO page and not a backend dependency. `/segodnya/`, `/zavtra/` and `/vyhodnye/` keep the full static list in HTML for users without JS and for crawlers. After JS starts, a `Все / Для меня` segmented switch appears only if the compatible local profile can actually hide at least one event (`Скрыто N > 0`). On mobile it is a fixed bottom switch with footer-overlap guard; when nothing is hidden it is not shown. If the user has not explicitly selected a mode and there are local `Не интересно` marks, the list defaults to `Для меня`; choosing `Все` is an explicit override. `Для меня` reads only the consented local profile (`ke_personalization_profile`) and hides exact events / linked date variants that the user already marked as `Не интересно`; it does not create `?personal=1`, does not affect canonical/sitemap/JSON-LD, and all controls are `data-nosnippet` buttons, not crawlable links.
+P0 list personalization is a local **filter**, not a second SEO page and not a backend dependency. `/segodnya/`, `/zavtra/` and `/vyhodnye/` keep the full static list in HTML for users without JS and for crawlers. After JS starts, a `Для меня / Полный список` segmented switch appears only if the compatible consented local profile can actually hide at least one event (`Скрыто N > 0`). Full inventory is always the initial/default state; personal mode requires explicit selection and never silently narrows a first visit. On mobile the qualified control may use a fixed bottom placement with footer-overlap guard; when nothing differs it is not shown. `Для меня` reads only `ke_personalization_profile` and hides exact events / linked date variants already marked `Не интересно`; it does not create a crawlable personalized route, affect canonical/sitemap/JSON-LD, or expose controls to snippets. The V16 review build permits `?personalization=qualified` only under preview/localhost to inspect the future qualified composition without claiming production readiness.
 
 ## Browser notifications / Web Push planning
 

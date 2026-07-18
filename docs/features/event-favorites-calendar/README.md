@@ -37,6 +37,17 @@ Supabase/Postgres owns favorite/follow state with RLS by user identity. Local an
 - export/delete/account purge;
 - offline/static fallback that never blocks event navigation.
 
+## Public aggregate semantics
+
+The current contract plans durable saved-event state but does not yet provide a
+public `saved_event_count`. An ICS file request/download/click is a transport
+event, not proof that a unique person saved or retained the event in an external
+calendar. Listing pages therefore must not label ICS telemetry as “N people
+added”. A future calendar social-proof count is eligible only when it is a
+privacy-safe, deduplicated aggregate over durable saved-event rows, is non-zero,
+and is labelled as saves rather than attendance. Zero or unavailable evidence
+renders no icon and reserves no card width.
+
 ## Related documentation
 
 - [Site user identity](../site-user-identity/README.md)

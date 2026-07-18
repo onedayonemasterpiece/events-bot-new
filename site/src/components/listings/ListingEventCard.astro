@@ -41,15 +41,18 @@ const responsiveSizes = density === 'weekend'
   : '(min-width: 1880px) 396px, (max-width: 720px) 38vw, 332px';
 const overlayMedallion = getListingVenueMedallion(event, image.asset);
 const identityMedallions = getListingIdentityMedallions(event);
-const externalMedallions = image.asset?.image_text_mode === 'visual_only' && overlayMedallion
+const externalMedallions = overlayMedallion
   ? identityMedallions.filter((item) => item.slug !== overlayMedallion.slug)
   : identityMedallions;
 const showFree = event.ticket?.is_free === true;
-const identityCount = Math.min(3, externalMedallions.length + (showFree ? 1 : 0));
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count || 0;
 const hasSocialProof = likesCount > 0 || sharesCount > 0;
-const tailWidth = (identityCount > 0 ? 64 : 0) + (hasSocialProof ? 40 : 0);
+const identityLimit = hasSocialProof ? 2 : 3;
+const visibleExternalMedallions = externalMedallions.slice(0, Math.max(0, identityLimit - (showFree ? 1 : 0)));
+const visibleIdentityCount = Math.min(identityLimit, visibleExternalMedallions.length + (showFree ? 1 : 0));
+const hasSideRail = visibleIdentityCount > 0 || hasSocialProof;
+const tailWidth = hasSideRail ? 64 : 0;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const style = [
   `--ke-listing-image-ratio:${image.ratio.toFixed(5)}`,
@@ -73,7 +76,7 @@ const socialProofLabel = [
   class="ke-listing-card"
   style={style}
   data-ds-component="ListingEventCard"
-  data-ds-version="5"
+  data-ds-version="6"
   data-feedback-scope
   data-listing-item
   data-event-id={event.id}
@@ -92,8 +95,10 @@ const socialProofLabel = [
   data-image-text-mode={image.asset?.image_text_mode || event.image_text_mode}
   data-venue-medallion={overlayMedallion?.slug || identityMedallions[0]?.slug}
   data-listing-has-social-proof={hasSocialProof ? 'true' : 'false'}
-  data-listing-identity-count={identityCount}
+  data-listing-identity-count={visibleIdentityCount}
+  data-listing-side-identity-count={visibleIdentityCount}
   data-event-end-at={event.end_at || undefined}
+  data-event-start-at={event.starts_at || undefined}
 >
   <div class="ke-listing-card__visual">
   <a class="ke-listing-card__media ke-skeleton" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`} data-listing-media-loading>
@@ -130,24 +135,28 @@ const socialProofLabel = [
       </span>
     ) : null}
   </a>
-  {identityCount > 0 ? (
-    <div class="ke-listing-card__identity-rail" aria-label="Свойства события">
-      {externalMedallions.slice(0, Math.max(0, 3 - (showFree ? 1 : 0))).map((medallion) => (
-        <span class="ke-listing-card__identity-medallion" style={medallionStyle(medallion)} title={medallion.name} aria-label={medallion.ariaLabel}>
-          <picture>
-            {medallion.avatarUrl.endsWith('.webp') && medallion.fallbackPngUrl ? <source srcset={withBase(medallion.avatarUrl)} type="image/webp" /> : null}
-            <img src={withBase(medallionFallbackSrc(medallion))} alt="" loading="lazy" decoding="async" />
-          </picture>
-        </span>
-      ))}
-      {showFree ? <span class="ke-listing-card__free-medallion" aria-label="Бесплатное событие"><img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" /></span> : null}
+  {hasSideRail ? (
+    <div class="ke-listing-card__side-rail">
+      {visibleIdentityCount > 0 ? (
+        <div class="ke-listing-card__identity-rail" aria-label="Свойства события">
+          {visibleExternalMedallions.map((medallion) => (
+            <span class="ke-listing-card__identity-medallion" style={medallionStyle(medallion)} title={medallion.name} aria-label={medallion.ariaLabel}>
+              <picture>
+                {medallion.avatarUrl.endsWith('.webp') && medallion.fallbackPngUrl ? <source srcset={withBase(medallion.avatarUrl)} type="image/webp" /> : null}
+                <img src={withBase(medallionFallbackSrc(medallion))} alt="" loading="lazy" decoding="async" />
+              </picture>
+            </span>
+          ))}
+          {showFree && visibleIdentityCount > visibleExternalMedallions.length ? <span class="ke-listing-card__free-medallion" aria-label="Бесплатное событие"><img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" /></span> : null}
+        </div>
+      ) : null}
+      {hasSocialProof ? (
+        <a class="ke-listing-card__social-proof" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
+          {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
+          {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}
+        </a>
+      ) : null}
     </div>
-  ) : null}
-  {hasSocialProof ? (
-    <a class="ke-listing-card__social-proof" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
-      {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
-      {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}
-    </a>
   ) : null}
   </div>
   <div class="ke-listing-card__copy">

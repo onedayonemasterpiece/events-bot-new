@@ -14,7 +14,7 @@ const showCities = cities.length > 1;
   class="ke-listing-controls"
   aria-label="Фильтры списка"
   data-ds-component="ListingControls"
-  data-ds-version="3"
+  data-ds-version="4"
   data-listing-controls
 >
   {showCities ? (
@@ -72,8 +72,11 @@ const showCities = cities.length > 1;
         card.removeAttribute('data-listing-row-end');
         card.removeAttribute('data-listing-full-title');
         card.style.removeProperty('--ke-listing-row-tail');
+        card.style.removeProperty('--ke-listing-singleton-envelope');
+        card.style.removeProperty('--ke-listing-singleton-visual');
         card.querySelector('.ke-listing-card__copy')?.style.removeProperty('width');
       });
+      flow.dataset.listingSingleton = cards.length === 1 ? 'true' : 'false';
       if (!cards.length) return;
       const flowRight = flow.getBoundingClientRect().right;
       const rows = [];
@@ -90,13 +93,30 @@ const showCities = cities.length > 1;
         const available = Math.max(0, flowRight - last.rect.left);
         const singleton = cards.length === 1;
         if (!singleton && (tail < 72 || available < 280)) return;
-        if (singleton && available < 280) return;
+        if (singleton) return;
         last.card.setAttribute('data-listing-row-end', 'true');
         last.card.setAttribute('data-listing-full-title', 'true');
         last.card.style.setProperty('--ke-listing-row-tail', `${tail}px`);
         const copy = last.card.querySelector('.ke-listing-card__copy');
         if (copy) copy.style.width = `${Math.min(420, available)}px`;
       });
+      if (cards.length === 1) {
+        const card = cards[0];
+        const style = getComputedStyle(card);
+        const mediaHeight = Number.parseFloat(style.getPropertyValue('--ke-listing-media-height')) || 0;
+        const mediaRatio = Number.parseFloat(style.getPropertyValue('--ke-listing-image-ratio')) || 1;
+        const tailWidth = Number.parseFloat(style.getPropertyValue('--ke-listing-tail-width')) || 0;
+        // Derive the visual envelope from canonical media geometry. Measuring
+        // a previously expanded flex child would feed its width back into the
+        // next pass and create UI side fields around natural/OCR media.
+        const visualWidth = Math.min(flow.getBoundingClientRect().width, mediaHeight * mediaRatio + tailWidth);
+        const envelope = Math.min(flow.getBoundingClientRect().width, Math.max(visualWidth, 420));
+        card.style.setProperty('--ke-listing-singleton-envelope', `${envelope}px`);
+        card.style.setProperty('--ke-listing-singleton-visual', `${visualWidth}px`);
+        card.setAttribute('data-listing-full-title', 'true');
+        const copy = card.querySelector('.ke-listing-card__copy');
+        if (copy) copy.style.width = '100%';
+      }
     });
     requestAnimationFrame(() => {
       document.querySelectorAll('[data-listing-full-title]').forEach((card) => {
@@ -187,8 +207,10 @@ const showCities = cities.length > 1;
         const key = chip.dataset.listingWeekendDayCountChip;
         const dayCount = [...row.querySelectorAll(`[data-listing-day="${key}"] [data-listing-item]`)].filter((item) => !item.hidden).length;
         chip.hidden = dayCount === 0;
-        const value = chip.querySelector('strong');
+        const value = chip.querySelector('[data-listing-weekend-day-count-value]');
         if (value) value.textContent = String(dayCount);
+        const countLabel = chip.querySelector('[data-listing-weekend-day-count-label]');
+        if (countLabel) countLabel.textContent = eventCountLabel(dayCount);
         const label = key === 'sat' ? 'Сб' : 'Вс';
         chip.setAttribute('aria-label', `${label}: ${dayCount} ${eventCountLabel(dayCount)}`);
       });
