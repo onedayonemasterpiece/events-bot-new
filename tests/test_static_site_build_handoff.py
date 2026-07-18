@@ -240,6 +240,33 @@ def test_runner_closes_status_database_after_config_creation() -> None:
     assert db.closed is True
 
 
+def test_static_site_kernel_loads_status_helper_from_mounted_dataset(tmp_path: Path) -> None:
+    import importlib.util
+
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location("static_site_builder_status_test", kernel_path)
+    assert spec and spec.loader
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+
+    mounted = tmp_path / "status-static-site-builder" / "v1"
+    mounted.mkdir(parents=True)
+    (mounted / "kaggle_status_client.py").write_text(
+        "def load_status_client(**kwargs):\n    return ('mounted', kwargs)\n",
+        encoding="utf-8",
+    )
+
+    loader = kernel._load_status_loader([tmp_path])
+
+    assert loader is not None
+    assert loader(output_dir="/tmp/output") == ("mounted", {"output_dir": "/tmp/output"})
+
+
 def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
     from scripts.run_static_site_builder_kaggle import resolve_build_template
 

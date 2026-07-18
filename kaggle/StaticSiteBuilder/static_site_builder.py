@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import importlib.util
 import json
 import os
 import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,10 +69,56 @@ def validate_build_clock(config: dict) -> dict:
         raise RuntimeError('production input fingerprint missing')
     return clock
 
-try:
-    from kaggle_status_client import load_status_client
-except Exception:  # pragma: no cover - local non-Kaggle fallback
-    load_status_client = None
+def _load_status_loader(search_roots: list[Path] | None = None):
+    """Load the callback helper from the mounted private status dataset.
+
+    Kaggle dataset sources are mounted below ``/kaggle/input`` and are not
+    automatically added to ``sys.path``.  A direct import therefore succeeds
+    only for kernels that happen to bundle the helper themselves.  Search the
+    mounted inputs explicitly so production static builds cannot silently run
+    without heartbeat/terminal callbacks.
+    """
+
+    try:
+        from kaggle_status_client import load_status_client as loader
+
+        return loader
+    except Exception as exc:  # pragma: no cover - expected on Kaggle mounts
+        print(f'[kaggle_status] direct import failed: {exc}', flush=True)
+    roots = search_roots or [ROOT, Path.cwd(), WORKING, INPUT_ROOT]
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        candidates = [root / 'kaggle_status_client.py']
+        try:
+            candidates.extend(sorted(root.rglob('kaggle_status_client.py')))
+        except Exception as exc:
+            print(f'[kaggle_status] helper scan failed under {root}: {exc}', flush=True)
+        for candidate in candidates:
+            candidate = candidate.resolve()
+            if candidate in seen or not candidate.is_file():
+                continue
+            seen.add(candidate)
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    'events_bot_static_site_kaggle_status_client', candidate
+                )
+                if spec is None or spec.loader is None:
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[spec.name] = module
+                spec.loader.exec_module(module)
+                loader = getattr(module, 'load_status_client', None)
+                if callable(loader):
+                    print(f'[kaggle_status] loaded helper from {candidate}', flush=True)
+                    return loader
+            except Exception as exc:
+                print(f'[kaggle_status] helper load failed from {candidate}: {exc}', flush=True)
+    return None
+
+
+load_status_client = _load_status_loader()
 
 STATUS_CLIENT = None
 STATUS_PROGRESS: dict[str, object] = {

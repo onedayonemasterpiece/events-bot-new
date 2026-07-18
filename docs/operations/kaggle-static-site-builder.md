@@ -82,6 +82,14 @@ Rules:
   after writing the callback config. Otherwise the non-daemon `aiosqlite`
   worker can keep a successfully completed process alive at Python interpreter
   shutdown, leaving the durable static-build claim stuck before publication.
+- The kernel must locate `kaggle_status_client.py` inside the mounted private
+  status dataset under `/kaggle/input`; Kaggle does not add dataset directories
+  to `sys.path`. A direct-import-only kernel silently loses all callbacks.
+- Kernel callbacks remain authoritative. If callback delivery is absent but
+  Fly validates the exact downloaded result and completes publication, the
+  host records one idempotent `host_result_validated` terminal event so the
+  ledger cannot remain falsely `created`; it does not populate
+  `last_heartbeat_at` or pretend a kernel heartbeat occurred.
 - Data export: `site/scripts/export-production-preview-data.py`.
 - Fly handoff: `JobTask.static_site_build` and `main.py` `job_static_site_build_kaggle`.
 - Feature docs: `docs/features/static-site-pages/astro-preview.md`.
