@@ -17,7 +17,7 @@ committed
 `dc7b1dbc63643b1a5f72f64bc7305154abbb96ce`
 
 ## Head SHA
-Implementation commit: `f2c930be96a81b45229f305bc8a28588af1347d9`.
+Implementation commit: `f2c930beb06260a198b23d326fff802fd2ba963f`.
 
 The final lane head additionally contains this evidence file; resolve it with
 `git rev-parse agent/static-event-v13/gallery-nav` after the evidence commit.
