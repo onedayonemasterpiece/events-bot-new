@@ -97,13 +97,17 @@ def test_tr_exp_04_05_08_09_static_contract_preserves_actions_and_qa_trust_bound
     component = COMPONENT.read_text(encoding="utf-8")
     host = HOST.read_text(encoding="utf-8")
     client = CLIENT.read_text(encoding="utf-8")
+    transport_components = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "site" / "src" / "components" / "transport").glob("*.astro")
+    )
     for action in (
         "official_transfer_booking_click",
         "bus_origin_map_click",
         "walk_route_click",
         "car_route_click",
     ):
-        assert f'data-transport-action="{action}"' in component
+        assert f'data-transport-action="{action}"' in component + transport_components
     for variant in (
         "DepartureBoardTimetable",
         "RouteStripsTimetable",
@@ -153,10 +157,38 @@ def test_tr_exp_06_treatments_have_many_trip_disclosure_and_same_trip_markers() 
         assert "data-transport-trip-id" in source
         assert "data-departure-at" in source
         assert "schedule_expand" in source
-    assert "slice(0, 5)" in (treatment_dir / "DepartureBoardTimetable.astro").read_text(encoding="utf-8")
-    assert "slice(0, 5)" in (treatment_dir / "RouteStripsTimetable.astro").read_text(encoding="utf-8")
+    assert "slice(0, 2)" in (treatment_dir / "DepartureBoardTimetable.astro").read_text(encoding="utf-8")
+    assert "slice(0, 2)" in (treatment_dir / "RouteStripsTimetable.astro").read_text(encoding="utf-8")
     next_source = (treatment_dir / "NextDepartureQueueTimetable.astro").read_text(encoding="utf-8")
     assert "additionalCount > 0 && <summary" in next_source
+
+
+def test_tr_exp_06a_accepted_visual_hierarchy_and_shared_icons_are_canonical() -> None:
+    treatment_dir = ROOT / "site" / "src" / "components" / "transport"
+    heading = (treatment_dir / "TransportRouteHeading.astro").read_text(encoding="utf-8")
+    board = (treatment_dir / "DepartureBoardTimetable.astro").read_text(encoding="utf-8")
+    strips = (treatment_dir / "RouteStripsTimetable.astro").read_text(encoding="utf-8")
+    next_queue = (treatment_dir / "NextDepartureQueueTimetable.astro").read_text(encoding="utf-8")
+    alerts = (treatment_dir / "TransportJourneyAlerts.astro").read_text(encoding="utf-8")
+    component = COMPONENT.read_text(encoding="utf-8")
+
+    assert 'class="transport-route-heading__badge"' in heading
+    assert '<Icon name="bus" />' in heading
+    assert '<Icon name="walk" />' in alerts
+    assert '<Icon name="car" />' in component
+    assert "TransportIcon" not in component
+    assert "Автобус до ${arrivalStop}" in board
+    assert "Показать больше отправлений" in board
+    assert "через ${arrivalStop} · автобус + пешком" in strips
+    assert "background:#1d6759" in strips
+    assert "Ближайший подходящий · по расписанию" in next_queue
+    assert "background:#176653" in next_queue
+    assert "После события обратного автобуса нет" in alerts
+    assert "Как добраться на Кауп" in component
+    assert " в Кауп" not in component
+    for source in (component, board, strips, next_queue, alerts):
+        assert "Сильная сторона" not in source
+        assert "Риск:" not in source
 
 
 def test_tr_exp_11_balanced_sample_passes_and_biased_sample_blocks() -> None:
