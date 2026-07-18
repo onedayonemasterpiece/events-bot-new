@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-18-static-snapshot-disk-pressure.md`
+  - Scope: Smart Update/Kaggle immutable snapshot lifecycle, retry/recovery
+    retention, Fly `/data` readiness and deploy health checks.
+  - Must not regress: terminal handoffs delete their exact snapshot pairs;
+    crash leftovers stay bounded while durable active inputs are preserved;
+    candidate retries cannot cross the disk-critical health floor.
+
 - `INC-2026-07-18-dramteatr-same-day-event-glue.md`
   - Scope: Smart Update post-match identity enforcement, same-date Dramatic
     Theatre occurrences, canonical/public repair and static source/media

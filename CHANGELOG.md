@@ -39,6 +39,13 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static snapshot volume retention**: delete immutable SQLite snapshot pairs
+  after every terminal Smart Update/Kaggle handoff, clean them after recovered
+  runs, and prune crash leftovers before a new build while preserving the exact
+  durable active handoff plus one newest terminal diagnostic pair. This prevents
+  failed candidate retries from crossing the Fly `/data` critical health floor;
+  pass candidate tokens with argparse's equals form so a valid base64url token
+  beginning with `-` cannot trigger four deterministic retry snapshots.
 - **Static footer candidate fixture**: make the retained footer regression
   specimen use frozen desktop event `5658` instead of active-catalog-only event
   `6589`, so normal event expiry cannot abort a Smart Update/Kaggle production

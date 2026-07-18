@@ -270,6 +270,7 @@ from static_site_release import (
     claim_static_site_build,
     compute_static_site_input_fingerprint,
     create_immutable_snapshot,
+    delete_immutable_snapshot,
     event_public_revision,
     freshness_state as static_site_freshness_state,
     iso_utc as static_site_iso_utc,
@@ -277,6 +278,7 @@ from static_site_release import (
     max_attempts as static_site_max_attempts,
     merge_request_payload as merge_static_site_request_payload,
     publish_secret_candidate_archive,
+    prune_immutable_snapshots,
     resolve_current_secret_candidate,
     recoverable_static_site_build,
     finish_static_site_build_claim,
@@ -22533,7 +22535,9 @@ def _static_site_build_kaggle_command(
                 "--catalog-mode", "full",
                 "--repo-sha", repo_sha,
                 "--run-id", run_id,
-                "--candidate-token", candidate_token,
+                # A valid base64url token may begin with `-`; argparse treats
+                # that as another option when it is a separate argv item.
+                f"--candidate-token={candidate_token}",
             ]
         )
     if adopt_existing:
@@ -22547,6 +22551,46 @@ def _static_site_build_kaggle_command(
     if _env_flag("STATIC_SITE_KEEP_SECRET_DATASETS"):
         cmd.append("--keep-secret-datasets")
     return cmd
+
+
+def _static_site_snapshot_retention_context(database_path: str) -> tuple[bool, list[str]]:
+    """Return whether pruning is safe and exact active snapshot paths.
+
+    An unreadable/malformed active handoff fails closed: retention is skipped
+    rather than guessing which immutable input a remote kernel still owns.
+    """
+
+    with sqlite3.connect(database_path) as connection:
+        state_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='static_site_build_state'"
+        ).fetchone()
+        if not state_exists:
+            return True, []
+        active_row = connection.execute(
+            "SELECT active_job_id FROM static_site_build_state WHERE release_channel=?",
+            ("secret_preview",),
+        ).fetchone()
+        if not active_row or not active_row[0]:
+            return True, []
+        payload_row = connection.execute(
+            "SELECT payload FROM joboutbox WHERE id=? AND task='static_site_build'",
+            (int(active_row[0]),),
+        ).fetchone()
+        if not payload_row or not payload_row[0]:
+            return False, []
+        try:
+            active_payload = json.loads(payload_row[0])
+        except (TypeError, ValueError):
+            return False, []
+        active_snapshot = active_payload.get("snapshot")
+        if not isinstance(active_snapshot, dict):
+            return False, []
+        paths = [
+            str(value).strip() for value in (
+                active_snapshot.get("sqlite_path"), active_snapshot.get("manifest_path")
+            ) if str(value or "").strip()
+        ]
+        return (len(paths) == 2), paths
 
 
 async def _static_site_running_request(db: Database, event_id: int) -> tuple[int, dict[str, Any]]:
@@ -22811,6 +22855,14 @@ async def _recover_previous_static_site_attempt(
             job_id,
             {"remote_handoff": None, "remote_recovery": {"status": "unavailable", "run_id": claim.run_id}},
         )
+        removed = await asyncio.to_thread(
+            delete_immutable_snapshot, required["snapshot_path"], required["manifest_path"]
+        )
+        logging.info(
+            "static_site_build: unavailable remote snapshot cleanup run_id=%s bytes=%s",
+            claim.run_id,
+            removed,
+        )
         return False, None
     if proc.returncode != 0:
         raise StaticSiteSingleFlightDeferred(
@@ -22875,6 +22927,15 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         limit=limit,
     )
     if recovered:
+        previous_snapshot = request_payload.get("snapshot")
+        previous_snapshot = previous_snapshot if isinstance(previous_snapshot, dict) else {}
+        previous_path = previous_snapshot.get("sqlite_path")
+        previous_manifest = previous_snapshot.get("manifest_path")
+        if previous_path and previous_manifest:
+            removed = await asyncio.to_thread(
+                delete_immutable_snapshot, previous_path, previous_manifest
+            )
+            logging.info("static_site_build: recovered snapshot cleanup bytes=%s", removed)
         return recovered_result if recovered_result is not None else True
     vector_evidence = await asyncio.to_thread(
         validate_vector_barrier,
@@ -22887,6 +22948,30 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
         or str(Path(db.path).resolve().parent / "static_site_snapshots")
     )
+    prune_safe, active_snapshot_paths = await asyncio.to_thread(
+        _static_site_snapshot_retention_context, db.path
+    )
+    prune_report = (
+        await asyncio.to_thread(
+            prune_immutable_snapshots,
+            snapshot_root,
+            preserve_paths=active_snapshot_paths,
+            keep_latest_terminal=max(0, _env_int("STATIC_SITE_SNAPSHOT_KEEP_LATEST_TERMINAL", 1)),
+            stale_incomplete_seconds=max(
+                60, _env_int("STATIC_SITE_SNAPSHOT_STALE_INCOMPLETE_SECONDS", 900)
+            ),
+        )
+        if prune_safe
+        else {
+            "removed_snapshot_ids": [], "removed_incomplete_files": [],
+            "removed_bytes": 0, "preserved_paths": [], "retained_terminal_count": 0,
+            "status": "skipped_unreadable_active_handoff",
+        }
+    )
+    if not prune_safe:
+        logging.error("static_site_build: snapshot retention skipped; active handoff is unreadable")
+    if prune_report["removed_snapshot_ids"] or prune_report["removed_incomplete_files"]:
+        logging.info("static_site_build: snapshot retention %s", json.dumps(prune_report, sort_keys=True))
     snapshot_id = f"snapshot-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:10]}"
     snapshot_path, manifest_path, snapshot_metadata = await asyncio.to_thread(
         create_immutable_snapshot,
@@ -23007,8 +23092,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 }
             },
         )
-        snapshot_path.unlink(missing_ok=True)
-        manifest_path.unlink(missing_ok=True)
+        await asyncio.to_thread(delete_immutable_snapshot, snapshot_path, manifest_path)
         logging.info(
             "static_site_build: %s fingerprint=%s previous=%s blocking=%s",
             outcome,
@@ -23032,14 +23116,14 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 }
             },
         )
-        snapshot_path.unlink(missing_ok=True)
-        manifest_path.unlink(missing_ok=True)
+        await asyncio.to_thread(delete_immutable_snapshot, snapshot_path, manifest_path)
         raise StaticSiteSingleFlightDeferred(
             f"static_site_single_flight_busy:{claim.blocking_run_id or 'unknown'}"
         )
     if not claim.claim_token:
         raise StaticSitePermanentError("static_site_claim_missing_token")
     claim_finished = False
+    preserve_for_recovery = False
     try:
         candidate_token = secrets.token_urlsafe(32)
         await _patch_static_site_request_payload(
@@ -23130,6 +23214,23 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     finally:
         if not claim_finished:
             try:
+                recovery_claim = await asyncio.to_thread(
+                    recoverable_static_site_build, db.path, job_id=job_id
+                )
+                preserve_for_recovery = bool(
+                    recovery_claim
+                    and recovery_claim.run_id == run_id
+                    and recovery_claim.dataset_ref
+                )
+            except Exception:
+                # Fail closed for the immutable recovery input. A later
+                # retention pass can remove it once durable state is readable.
+                preserve_for_recovery = True
+                logging.exception(
+                    "static_site_build: could not classify snapshot cleanup run_id=%s", run_id
+                )
+        if not claim_finished and not preserve_for_recovery:
+            try:
                 await asyncio.to_thread(
                     finish_static_site_build_claim,
                     db.path,
@@ -23142,6 +23243,18 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 )
             except Exception:
                 logging.exception("static_site_build: failed to release durable claim run_id=%s", run_id)
+        if preserve_for_recovery and not claim_finished:
+            logging.info(
+                "static_site_build: retaining snapshot for durable recovery run_id=%s", run_id
+            )
+        else:
+            try:
+                removed = await asyncio.to_thread(
+                    delete_immutable_snapshot, snapshot_path, manifest_path
+                )
+                logging.info("static_site_build: terminal snapshot cleanup run_id=%s bytes=%s", run_id, removed)
+            except Exception:
+                logging.exception("static_site_build: terminal snapshot cleanup failed run_id=%s", run_id)
 
 
 async def job_event_media_review(
