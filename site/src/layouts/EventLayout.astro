@@ -1,6 +1,7 @@
 ---
 import SocialIcon from '../components/SocialIcon.astro';
 import ServiceShareAction from '../components/ServiceShareAction.astro';
+import SiteFooterPrototype from '../components/SiteFooterPrototype.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
@@ -18,9 +19,10 @@ interface Props {
   structuredData?: unknown[];
   heroChrome?: 'standard' | 'immersive';
   headerCurrent?: HeaderCurrent;
+  footerVariant?: 'current' | 'prototype-v1';
 }
 
-const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent } = Astro.props;
+const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent, footerVariant = 'current' } = Astro.props;
 const robots = IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive');
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
@@ -2235,6 +2237,9 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       </div>
     </header>
     <slot />
+    {footerVariant === 'prototype-v1' ? (
+      <SiteFooterPrototype socialLinks={FOOTER_SOCIAL_LINKS} />
+    ) : (
     <footer class="site-footer">
       <div class="page-shell site-footer__inner">
         <div class="site-footer__top">
@@ -2276,6 +2281,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         <p class="site-footer__note">{IS_PRODUCTION ? SITE_ORIGIN : <>Preview · noindex · {SITE_ORIGIN}</>}</p>
       </div>
     </footer>
+    )}
 
     <script is:inline>
       (() => {

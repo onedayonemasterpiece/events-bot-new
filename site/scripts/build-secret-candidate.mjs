@@ -20,6 +20,8 @@ const productionManifestBytes = readFileSync(productionManifestPath);
 const productionManifest = JSON.parse(productionManifestBytes);
 const transportExperimentMode = process.env.SECRET_CANDIDATE_TRANSPORT_EXPERIMENT_MODE || 'qa';
 const transportQaRoute = 'lab/event-desktop/examples/editorial-ocr-companion-arrival';
+const footerPrototypeRoute = 'lab/event-desktop/examples/footer-service-v1';
+const retainedLabRoutes = [transportQaRoute, footerPrototypeRoute];
 if (!['qa', 'focus_group'].includes(transportExperimentMode)) throw new Error('Secret candidate transport experiment mode must be qa or focus_group');
 for (const key of ['template_matrix','production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) {
   if (productionManifest.checks?.[key] !== 'ok') throw new Error(`Production artifact is not checked: ${key}`);
@@ -40,16 +42,20 @@ const env = {
 const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['build'], { cwd: siteDir, env, stdio: 'inherit', shell: process.platform === 'win32' });
 if (astro.status !== 0) process.exit(astro.status || 1);
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });
-// Secret candidates retain exactly one noindex design-system specimen so the
-// three transport arms remain reviewable after the source event has elapsed.
-// Every other lab route stays excluded from the immutable candidate.
-const transportQaSource = join(distDir, transportQaRoute);
-const transportQaStaged = join(siteDir, `.secret-transport-qa-${process.pid}`);
-rmSync(transportQaStaged, { recursive: true, force: true });
-renameSync(transportQaSource, transportQaStaged);
+// Secret candidates retain only the explicit noindex review specimens: the
+// transport experiment and the isolated footer prototype. Every other lab
+// route stays excluded from the immutable candidate.
+const retainedLabStaging = retainedLabRoutes.map((route, index) => {
+  const staged = join(siteDir, `.secret-lab-${process.pid}-${index}`);
+  rmSync(staged, { recursive: true, force: true });
+  renameSync(join(distDir, route), staged);
+  return { route, staged };
+});
 rmSync(join(distDir, 'lab'), { recursive: true, force: true });
-mkdirSync(dirname(join(distDir, transportQaRoute)), { recursive: true });
-renameSync(transportQaStaged, join(distDir, transportQaRoute));
+for (const { route, staged } of retainedLabStaging) {
+  mkdirSync(dirname(join(distDir, route)), { recursive: true });
+  renameSync(staged, join(distDir, route));
+}
 rmSync(join(distDir, 'partnerstvo', 'index.html'), { force: true });
 let rootHtml = readFileSync(join(distDir, 'segodnya/index.html'), 'utf8');
 const todayCanonical = `${siteOrigin}${basePath}/segodnya/`;

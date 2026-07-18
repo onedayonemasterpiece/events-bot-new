@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- **Isolated static footer prototype**: add one secret-only noindex event
+  specimen with a cohesive branded service-share surface, deduplicated event /
+  project navigation, reserved non-broken legal-document slots and accessible
+  responsive social/contact controls; the existing site-wide footer remains
+  unchanged pending owner acceptance.
 - **Static build idempotency and crash adoption**: add a Kaliningrad-date public
   projection fingerprint, durable SQLite single-flight/history, one coalesced
   follow-up, unchanged-input no-op, audited operator force and exact Kaggle

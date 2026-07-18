@@ -132,6 +132,24 @@ test('service share prompt uses the canonical inline announcements wordmark', as
   assert.doesNotMatch(share, />Поделиться афишей</u);
 });
 
+test('footer service prototype is isolated, cohesive and does not duplicate partnership navigation', async () => {
+  const component = await read('src/components/SiteFooterPrototype.astro');
+  const layout = await read('src/layouts/EventLayout.astro');
+  const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
+  const secretBuilder = await read('scripts/build-secret-candidate.mjs');
+
+  assert.match(component, /data-footer-prototype="service-v1"/u);
+  assert.equal((component.match(/>Информационное партнёрство</gu) || []).length, 1);
+  assert.match(component, /Пользовательское соглашение/u);
+  assert.match(component, /Политика обработки персональных данных/u);
+  assert.match(component, /role="link" aria-disabled="true" data-footer-future-document/u);
+  assert.match(component, /showPrompt=\{false\}/u);
+  assert.match(layout, /footerVariant\?: 'current' \| 'prototype-v1'/u);
+  assert.match(layout, /footerVariant === 'prototype-v1'/u);
+  assert.match(lab, /slug: 'footer-service-v1', eventId: 6589[^\r\n]*footerVariant: 'prototype-v1'/u);
+  assert.match(secretBuilder, /const footerPrototypeRoute = 'lab\/event-desktop\/examples\/footer-service-v1'/u);
+});
+
 test('Dramatic Theatre medallion is present in the accepted manifest', async () => {
   const manifest = JSON.parse(await read('src/data/organizerMedallions.json'));
   const item = manifest.items.find((candidate) => candidate.slug === 'dramteatr39');

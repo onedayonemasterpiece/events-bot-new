@@ -1,0 +1,209 @@
+---
+import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
+import AnnouncementsWordmark from './brand/AnnouncementsWordmark.astro';
+import ServiceShareAction from './ServiceShareAction.astro';
+import SocialIcon from './SocialIcon.astro';
+import { IS_PRODUCTION, SITE_ORIGIN, siteHomeHref, withBase } from '../lib/events';
+
+interface SocialLink {
+  network: string;
+  label: string;
+  href: string;
+  icon: 'telegram' | 'vk' | 'max';
+}
+
+interface Props {
+  socialLinks: readonly SocialLink[];
+}
+
+const { socialLinks } = Astro.props;
+---
+
+<footer class="site-footer site-footer--prototype" data-footer-prototype="service-v1">
+  <div class="page-shell site-footer-prototype">
+    <section class="site-footer-prototype__share" aria-labelledby="footer-share-title">
+      <div class="site-footer-prototype__share-copy">
+        <p>Расскажите о сервисе</p>
+        <h2 id="footer-share-title">
+          <span>Понравились</span>
+          <AnnouncementsWordmark class="site-footer-prototype__share-wordmark" />
+          <span aria-hidden="true">?</span>
+        </h2>
+        <span>Отправьте друзьям карточку или ссылку — событие они выберут сами.</span>
+      </div>
+      <div class="site-footer-prototype__share-actions">
+        <ServiceShareAction surface="footer" showPrompt={false} class="site-footer-prototype__share-control" />
+      </div>
+    </section>
+
+    <div class="site-footer-prototype__main">
+      <section class="site-footer-prototype__brand" aria-label="Полюбить Калининград Анонсы">
+        <a class="site-footer-prototype__brand-link" href={siteHomeHref()} aria-label="На главную страницу Анонсов">
+          <AnnouncementsLockup class="site-footer-prototype__lockup" />
+        </a>
+        <p>События Калининграда и области — без лишнего шума, с понятным маршрутом к следующему впечатлению.</p>
+        <a class="site-footer-prototype__contact" href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
+      </section>
+
+      <nav class="site-footer-prototype__column" aria-labelledby="footer-events-title">
+        <h3 id="footer-events-title">Афиша</h3>
+        <a href={withBase('/segodnya/')}>Сегодня</a>
+        <a href={withBase('/zavtra/')}>Завтра</a>
+        <a href={withBase('/vyhodnye/')}>Выходные</a>
+        <a href={withBase('/vystavki/')}>Выставки</a>
+        <a href={withBase('/populyarnoe/')}>Популярное</a>
+        <a href={withBase('/poisk/')}>Поиск</a>
+        <a href={siteHomeHref()}>Все анонсы</a>
+      </nav>
+
+      <nav class="site-footer-prototype__column" aria-labelledby="footer-project-title">
+        <h3 id="footer-project-title">О проекте</h3>
+        <a href={withBase('/partnerstvo/')}>Информационное партнёрство</a>
+        <a href="mailto:info@kenigevents.ru?subject=Правообладателям">Правообладателям</a>
+      </nav>
+
+      <nav class="site-footer-prototype__column site-footer-prototype__documents" aria-labelledby="footer-documents-title" aria-describedby="footer-documents-note">
+        <h3 id="footer-documents-title">Документы</h3>
+        <span class="site-footer-prototype__future-document" role="link" aria-disabled="true" data-footer-future-document>
+          <span>Пользовательское соглашение</span><small>готовится</small>
+        </span>
+        <span class="site-footer-prototype__future-document" role="link" aria-disabled="true" data-footer-future-document>
+          <span>Политика обработки персональных данных</span><small>готовится</small>
+        </span>
+        <p id="footer-documents-note">Ссылки закреплены в прототипе; тексты будут опубликованы после юридической проверки.</p>
+      </nav>
+    </div>
+
+    <div class="site-footer-prototype__bottom">
+      <nav class="site-footer-prototype__social" aria-label="Соцсети Полюбить Калининград Анонсы">
+        {socialLinks.map((link) => (
+          <a href={link.href} target="_blank" rel="me noopener noreferrer" aria-label={`${link.network}: ${link.label}`}>
+            <SocialIcon name={link.icon} />
+            <span>{link.label}</span>
+            <small>{link.network}</small>
+          </a>
+        ))}
+      </nav>
+      <div class="site-footer-prototype__utility" data-nosnippet>
+        <button type="button" class="personalization-reset-button" data-reset-personalization>Сбросить персонализацию</button>
+        <span class="personalization-reset-status" data-personalization-reset-status hidden></span>
+        <span aria-hidden="true">·</span>
+        <span>{IS_PRODUCTION ? `© ${new Date().getUTCFullYear()} ${SITE_ORIGIN}` : <>Прототип · noindex · {SITE_ORIGIN}</>}</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer--prototype {
+    overflow: hidden;
+    border-top: 0;
+    padding: clamp(6rem, 7vw, 7rem) 0 2rem;
+    background: #25211e;
+    color: #f8ecdd;
+  }
+  .site-footer-prototype { display: grid; gap: clamp(2rem, 4vw, 3.5rem); }
+  .site-footer-prototype__share {
+    display: grid;
+    grid-template-columns: minmax(18rem, .82fr) minmax(28rem, 1.18fr);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 28px;
+    background: #fff8ee;
+    color: #251c17;
+    box-shadow: 0 24px 60px rgba(0,0,0,.2);
+  }
+  .site-footer-prototype__share-copy {
+    display: grid;
+    align-content: center;
+    gap: .65rem;
+    min-height: 190px;
+    padding: clamp(1.5rem, 3vw, 2.4rem);
+    background: #9b3f1d;
+    color: #fff7ed;
+  }
+  .site-footer-prototype__share-copy p,
+  .site-footer-prototype__share-copy h2,
+  .site-footer-prototype__share-copy > span { margin: 0; }
+  .site-footer-prototype__share-copy p { font-size: .76rem; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; opacity: .8; }
+  .site-footer-prototype__share-copy h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: .28em; font-size: clamp(1.6rem, 2.4vw, 2.5rem); line-height: 1; letter-spacing: -.035em; }
+  .site-footer-prototype__share-copy > span { max-width: 42ch; color: rgba(255,247,237,.78); font-size: .9rem; line-height: 1.45; }
+  .site-footer-prototype__share-wordmark { width: auto; height: .88em; color: #fff; }
+  .site-footer-prototype__share-actions { display: flex; align-items: center; padding: clamp(1.25rem, 3vw, 2.4rem); }
+  .site-footer-prototype__share-actions :global(.site-footer-prototype__share-control) { width: 100%; }
+  .site-footer-prototype__share-actions :global(.service-share-action__controls) { flex-basis: auto; }
+  .site-footer-prototype__share-actions :global(.service-share-action__button) {
+    flex: 1 1 13rem;
+    min-height: 52px;
+    padding-inline: 1rem;
+    border-color: rgba(121,48,20,.25);
+    background: #fffdf8;
+  }
+  .site-footer-prototype__share-actions :global(.service-share-action__button:hover) { border-color: #9b3f1d; background: #f7eadc; }
+  .site-footer-prototype__main {
+    display: grid;
+    grid-template-columns: minmax(16rem, 1.5fr) repeat(3, minmax(9rem, 1fr));
+    gap: clamp(1.75rem, 3vw, 3.5rem);
+    align-items: start;
+  }
+  .site-footer-prototype__brand { display: grid; gap: 1rem; align-content: start; }
+  .site-footer-prototype__brand-link { width: min(100%, 240px); color: #fff7ed; text-decoration: none; }
+  .site-footer-prototype__lockup { display: grid; gap: .32rem; }
+  .site-footer-prototype__lockup :global(.announcements-lockup__endorsement) { font-size: .68rem; font-weight: 760; letter-spacing: .09em; text-transform: uppercase; }
+  .site-footer-prototype__lockup :global(.announcements-lockup__wordmark) { display: block; width: 220px; max-width: 100%; height: auto; color: #fff7ed; overflow: visible; }
+  .site-footer-prototype__brand p { max-width: 35ch; margin: 0; color: #bfb1a6; font-size: .9rem; line-height: 1.55; }
+  .site-footer-prototype__contact { width: fit-content; color: #f5b18f; font-weight: 760; text-decoration: none; }
+  .site-footer-prototype__column { display: grid; gap: .56rem; align-content: start; }
+  .site-footer-prototype__column h3 { margin: 0 0 .45rem; color: #b9aaa0; font-size: .72rem; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; }
+  .site-footer-prototype__column a { width: fit-content; color: #fff7ed; font-size: .9rem; font-weight: 650; line-height: 1.35; text-decoration: none; }
+  .site-footer-prototype__column a:hover { color: #f5b18f; text-decoration: underline; text-underline-offset: .24em; }
+  .site-footer-prototype__documents .site-footer-prototype__future-document { display: grid; gap: .15rem; color: #fff7ed; font-size: .9rem; font-weight: 650; line-height: 1.35; }
+  .site-footer-prototype__documents small { color: #be9b88; font-size: .68rem; font-weight: 760; text-transform: uppercase; }
+  .site-footer-prototype__documents p { margin: .2rem 0 0; color: #bfb1a6; font-size: .72rem; line-height: 1.45; }
+  .site-footer-prototype__bottom { display: grid; gap: 1.25rem; padding-top: 1.35rem; border-top: 1px solid rgba(255,255,255,.11); }
+  .site-footer-prototype__social { display: flex; flex-wrap: wrap; gap: .55rem; }
+  .site-footer-prototype__social a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .48rem .72rem;
+    border: 1px solid rgba(255,255,255,.13);
+    border-radius: 999px;
+    background: rgba(255,255,255,.045);
+    color: #fff7ed;
+    text-decoration: none;
+  }
+  .site-footer-prototype__social a:hover { border-color: rgba(245,177,143,.6); background: rgba(255,255,255,.08); }
+  .site-footer-prototype__social :global(.social-icon) { width: 1.15rem; height: 1.15rem; }
+  .site-footer-prototype__social span { font-size: .84rem; font-weight: 720; }
+  .site-footer-prototype__social small { color: #9f9188; font-size: .68rem; }
+  .site-footer-prototype__utility { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; color: #bfb1a6; font-size: .76rem; }
+  .site-footer-prototype__utility :global(.personalization-reset-button) { color: #c9b8ad; border-bottom-color: rgba(255,255,255,.22); }
+
+  @media (max-width: 980px) {
+    .site-footer-prototype__share { grid-template-columns: 1fr; }
+    .site-footer-prototype__share-copy { min-height: 0; }
+    .site-footer-prototype__main { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .site-footer-prototype__brand { grid-column: 1 / -1; }
+  }
+  @media (max-width: 640px) {
+    .site-footer--prototype { padding-block: 6.25rem calc(2rem + env(safe-area-inset-bottom)); }
+    .site-footer-prototype { gap: 2rem; }
+    .site-footer-prototype__share { border-radius: 22px; }
+    .site-footer-prototype__share-copy { padding: 1.25rem; }
+    .site-footer-prototype__share-copy h2 { display: grid; justify-items: start; gap: .4rem; }
+    .site-footer-prototype__share-copy h2 > span:first-child { font-size: 1rem; }
+    .site-footer-prototype__share-wordmark { height: 1.12em; }
+    .site-footer-prototype__share-copy h2 > span:last-child { display: none; }
+    .site-footer-prototype__share-actions { padding: 1rem; }
+    .site-footer-prototype__share-actions :global(.service-share-action__button) { width: 100%; flex-basis: 100%; }
+    .site-footer-prototype__main { grid-template-columns: 1fr 1fr; gap: 2rem 1.25rem; }
+    .site-footer-prototype__brand, .site-footer-prototype__documents { grid-column: 1 / -1; }
+    .site-footer-prototype__column { gap: 0; }
+    .site-footer-prototype__column a,
+    .site-footer-prototype__documents .site-footer-prototype__future-document { min-height: 44px; display: flex; align-items: center; }
+    .site-footer-prototype__documents .site-footer-prototype__future-document { justify-content: space-between; gap: .75rem; }
+    .site-footer-prototype__social a { flex: 1 1 calc(50% - .55rem); }
+  }
+</style>
