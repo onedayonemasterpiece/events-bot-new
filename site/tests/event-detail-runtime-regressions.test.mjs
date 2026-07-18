@@ -98,6 +98,40 @@ test('desktop telephone remains a branded reveal-and-copy CTA', async () => {
   assert.match(icon, /name === 'copy'/u);
 });
 
+test('desktop actions keep calendar, share and like in one invariant bottom row', async () => {
+  const panel = await read('src/components/DesktopEventActionPanel.astro');
+  const legacyPanel = await read('src/components/EventCtaPanel.astro');
+  const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
+
+  assert.match(panel, /data-desktop-action-row="calendar-share-like"/u);
+  const panelRow = panel.slice(panel.indexOf('data-desktop-action-row="calendar-share-like"'));
+  assert.ok(panelRow.indexOf('<CalendarLink') < panelRow.indexOf('data-native-share'));
+  assert.ok(panelRow.indexOf('data-native-share') < panelRow.indexOf('data-feedback-action="like"'));
+  assert.match(panel, /grid-template-columns:minmax\(0,1fr\) !important/u);
+  assert.match(panel, /grid-template-rows:auto auto auto !important/u);
+  assert.doesNotMatch(panel, /data-primary-action-kind="phone"\] \{/u);
+  assert.match(legacyPanel, /data-event-cta-action-row="calendar-share-like"/u);
+  assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551/u);
+  assert.match(lab, /slug: 'cta-ticket-invariant', eventId: 5374/u);
+  assert.match(lab, /slug: 'editorial-ocr-companion-arrival', eventId: 4671[^\n]*transport: true, showTransport: true/u);
+  assert.match(lab, /import KaupTransportSchedule/u);
+  assert.match(lab, /data-lab-mobile-transport/u);
+  assert.match(lab, /<KaupTransportSchedule event=\{event\} compact \/>/u);
+  assert.match(lab, /@media \(max-width:1023px\)/u);
+});
+
+test('service share prompt uses the canonical inline announcements wordmark', async () => {
+  const share = await read('src/components/ServiceShareAction.astro');
+
+  assert.match(share, /import AnnouncementsWordmark from '\.\/brand\/AnnouncementsWordmark\.astro'/u);
+  assert.match(share, /aria-label="Понравились Анонсы\? Поделитесь"/u);
+  assert.match(share, /<span class="sr-only">Понравились Анонсы\? Поделитесь<\/span>/u);
+  assert.match(share, /<AnnouncementsWordmark class="service-share-action__wordmark" \/>/u);
+  assert.match(share, /width:auto/u);
+  assert.match(share, /height:1em/u);
+  assert.doesNotMatch(share, />Поделиться афишей</u);
+});
+
 test('Dramatic Theatre medallion is present in the accepted manifest', async () => {
   const manifest = JSON.parse(await read('src/data/organizerMedallions.json'));
   const item = manifest.items.find((candidate) => candidate.slug === 'dramteatr39');

@@ -3,23 +3,15 @@ import Icon from './Icon.astro';
 import organizerMedallions from '../data/organizerMedallions.json';
 import type { PreviewEvent } from '../lib/types';
 import { eventAdmissionLabel, isTicketSoldOut, withBase } from '../lib/events';
+import {
+  resolveEventMedallions,
+  type MedallionEvidence,
+  type OrganizerMedallionDefinition,
+} from '../lib/eventMedallions';
 
 interface Props {
   event: PreviewEvent;
 }
-
-type OrganizerMedallion = {
-  slug: string;
-  name: string;
-  shortName?: string;
-  aliases?: string[];
-  avatarUrl: string;
-  fallbackPngUrl?: string;
-  background?: string;
-  ring?: string;
-  ariaLabel?: string;
-  category?: 'venue_brand' | string;
-};
 
 type Token = {
   kind: 'organizer' | 'source' | 'pushkin' | 'pill';
@@ -35,6 +27,7 @@ type Token = {
   ring?: string;
   tone?: 'green' | 'brown' | 'blue' | 'purple' | 'neutral';
   slug?: string;
+  evidence?: MedallionEvidence;
 };
 
 const { event } = Astro.props;
@@ -43,64 +36,11 @@ function normalize(value: unknown): string {
   return String(value || '').toLowerCase().replace(/<[^>]*>/gu, ' ').replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
 }
 
-function includesAlias(haystack: string, aliases: string[] | undefined): boolean {
-  return Boolean(aliases?.some((alias) => {
-    const needle = normalize(alias);
-    return needle && haystack.includes(needle);
-  }));
-}
-
-function matchesZnanieContext(haystack: string): boolean {
-  if (includesAlias(haystack, ['Российское общество Знание', 'Общество Знание', 'Знание Лекторий', 'Знание.Лекторий', 'znanierussia.ru', 'znanie russia'])) return true;
-  return /(?:организатор|организаторы|соорганизатор|партнер|партн[её]р|при поддержке|совместно с)\s+(?:российское\s+общество\s+)?знание/u.test(haystack)
-    || /знание\s+(?:организатор|соорганизатор|партнер|партн[её]р|поддерживает|проводит|представляет)/u.test(haystack);
-}
-
-function isKgd80Festival(festivalValue?: string | null): boolean {
-  return normalize(festivalValue).includes('80 историй о главном');
-}
-
-function matchesOrganizer(item: OrganizerMedallion, haystack: string, festivalValue?: string | null): boolean {
-  const kgd80Festival = isKgd80Festival(festivalValue);
-  if (item.slug === 'znanie-russia') return matchesZnanieContext(haystack) || kgd80Festival;
-  if (item.slug === 'kgd80') return kgd80Festival || includesAlias(haystack, item.aliases || []);
-  if (item.slug === 'kantata-festival') return includesAlias(haystack, item.aliases || []) || normalize(festivalValue).includes('кантата');
-  return includesAlias(haystack, item.aliases || [item.name, item.shortName || '']);
-}
-
-function organizerPriority(item: OrganizerMedallion, festivalValue?: string | null): number {
-  if (isKgd80Festival(festivalValue)) {
-    if (item.slug === 'kgd80') return 0;
-    if (item.slug === 'znanie-russia') return 1;
-  }
-  if (item.slug === 'kantata-festival' && normalize(festivalValue).includes('кантата')) return 0;
-  return 10;
-}
-
-const manifest = organizerMedallions as { items?: OrganizerMedallion[] };
+const manifest = organizerMedallions as { items?: OrganizerMedallionDefinition[] };
 const sourceUrls = Array.from(new Set([...(event.source_urls || []), event.source_url].filter(Boolean).map((url) => String(url))));
 const sourceCount = Number.isFinite(event.source_count) && Number(event.source_count) > 0 ? Number(event.source_count) : sourceUrls.length;
-const organizerHaystack = normalize([
-  event.venue_name,
-  event.festival,
-  event.city,
-  event.description_html,
-  event.summary,
-  event.source_url,
-  ...sourceUrls,
-].filter(Boolean).join(' '));
-const venueBrandHaystack = normalize([
-  event.venue_name,
-  event.festival,
-  event.source_url,
-  ...sourceUrls,
-].filter(Boolean).join(' '));
-const organizers = (manifest.items || [])
-  .filter((item) => item.category === 'venue_brand'
-    ? includesAlias(venueBrandHaystack, item.aliases || [item.name, item.shortName || ''])
-    : matchesOrganizer(item, organizerHaystack, event.festival))
-  .sort((left, right) => organizerPriority(left, event.festival) - organizerPriority(right, event.festival))
-  .slice(0, 3);
+const organizerResolution = resolveEventMedallions(event, manifest.items || []);
+const organizers = organizerResolution.identities;
 const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
 const admissionLabel = eventAdmissionLabel(event);
 const ticket = event.ticket || {};
@@ -109,7 +49,7 @@ const hasKids = /\b(kids|family)\b/u.test(explicitText) || /детск|детя�
 const hasCharity = /благотвор|пожертв|донат/u.test(normalize([event.summary, event.description_html, ticket.label, ticket.note].join(' ')));
 
 const tokens: Token[] = [];
-organizers.forEach((organizer) => {
+organizers.forEach(({ item:organizer, evidence }) => {
   tokens.push({
     kind: 'organizer',
     key: `organizer:${organizer.slug}`,
@@ -122,6 +62,7 @@ organizers.forEach((organizer) => {
     background: organizer.background,
     ring: organizer.ring,
     slug: organizer.slug,
+    evidence,
   });
 });
 if (hasMeowAfishaSource && sourceCount > 0 && sourceCount <= 2) {
@@ -199,7 +140,7 @@ if (hasCharity) {
     tone: 'green',
   });
 }
-const hasFestivalLogoToken = organizers.some((organizer) => organizer.slug === 'kgd80' || organizer.slug === 'kantata-festival');
+const hasFestivalLogoToken = organizers.some(({ item }) => item.slug === 'kgd80' || item.slug === 'kantata-festival');
 if (event.festival && !hasFestivalLogoToken && tokens.length < 6) {
   tokens.push({
     kind: 'pill',
@@ -224,10 +165,21 @@ function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
 }
 ---
 {visibleTokens.length > 0 && (
-  <section class="event-token-section" aria-label="Быстрые признаки события">
+  <section
+    class="event-token-section"
+    aria-label="Быстрые признаки события"
+    data-identity-resolution={organizerResolution.failClosedReason || 'resolved'}
+    data-identity-conflict={organizerResolution.conflictEvidence?.join('|')}
+  >
     <ul class="event-token-row" role="list">
       {visibleTokens.map((token) => (
-        <li class={`event-token event-token--${token.kind} event-token--${token.tone || 'custom'} ${token.slug ? `event-token--${token.slug}` : ''}`} style={tokenStyle(token)}>
+        <li
+          class={`event-token event-token--${token.kind} event-token--${token.tone || 'custom'} ${token.slug ? `event-token--${token.slug}` : ''}`}
+          style={tokenStyle(token)}
+          data-medallion-evidence-field={token.evidence?.field}
+          data-medallion-evidence-alias={token.evidence?.alias}
+          data-medallion-evidence-match={token.evidence?.match}
+        >
           {(token.kind === 'organizer' || token.kind === 'source') && token.imageUrl ? (
             <span class="event-token__circle" aria-label={token.ariaLabel} title={token.title || token.label}>
               <picture>

@@ -451,6 +451,450 @@
       "shares_count": 0
     },
     {
+      "id": 4783,
+      "source_prod_id": 4783,
+      "title": "Мюзикл «Алые паруса»",
+      "slug": "myuzikl-alye-parusa-kaliningrad-4783",
+      "event_type": "спектакль",
+      "festival": null,
+      "status_label": "Билеты",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-17T19:00:00+02:00",
+      "start_date": "2026-07-17",
+      "start_time": "19:00",
+      "end_date": "2026-07-17",
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-17",
+      "display_time": "19:00",
+      "city": "Калининград",
+      "venue_name": "Музыкальный театр",
+      "address": "Мира 87",
+      "map_query": "Калининград, Музыкальный театр, Мира 87",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
+        "status": "available",
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": "16+",
+      "age_restriction_status": "declared",
+      "age_restriction_provenance": "official_structured",
+      "age_restriction_decision_version": "event-age-decision-v1",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
+      "source_urls": [
+        "https://muzteatr39.ru/spektakli/muzykalnye/alye-parusa/",
+        "https://vk.com/wall-231920894_7143",
+        "https://t.me/c/3954607218/1553",
+        "https://t.me/muztear39/10123"
+      ],
+      "source_count": 4,
+      "telegraph_url": "https://telegra.ph/Spektakl--Muzykalnyj-teatr-05-10-5",
+      "image_url": "https://static.kenigevents.ru/p/dh16/02/02904290029024902510258024603260e6380c1858d8182c0e9414020c000600.webp",
+      "image_alt": "Афиша события «Мюзикл «Алые паруса»»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "event_photo",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/02/02904290029024902510258024603260e6380c1858d8182c0e9414020c000600.webp",
+          "width": 819,
+          "height": 1024,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/24/24d73900870e8c230a3507b692f60fceaf12324772c05c1dd8b991f7f9083f49/256.webp",
+              "width": 205,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/24/24d73900870e8c230a3507b692f60fceaf12324772c05c1dd8b991f7f9083f49/512.webp",
+              "width": 409,
+              "height": 512
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "recommended_object_position": "50% 50%",
+          "asset_key": "74dcda2975885260da9c6ae41497a883c9ecd7278fc5ede88acf14cd1b579e34",
+          "quality_score": 14.2396
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/44/440c43180318860c0608460cda0c9399969986492459465d077a4d5a644f0467.webp",
+          "width": 300,
+          "height": 199,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 1,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c9/c9577b98eabf03855a99321d22f6ec3e358d05affc3d3c13ef72d7d014c713ca/256.webp",
+              "width": 256,
+              "height": 170
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c9/c9577b98eabf03855a99321d22f6ec3e358d05affc3d3c13ef72d7d014c713ca/512.webp",
+              "width": 300,
+              "height": 199
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.6
+          },
+          "recommended_object_position": "50% 60%",
+          "asset_key": "8c1b116917a116d0d61f2dc3f6cc66b11f92db8cd6bba0fe73529957ef0fc28c",
+          "quality_score": 7.5971
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/09/091a050a090f092e0b2e0a2f420f4207864f960c062d0e6d4e6d4c4d0c5c0c4d.webp",
+          "width": 300,
+          "height": 204,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 2,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c4/c43cd4489ce6ecd3f85d9744c8280d090765fe72744db58c6507369220d0619e/256.webp",
+              "width": 256,
+              "height": 174
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c4/c43cd4489ce6ecd3f85d9744c8280d090765fe72744db58c6507369220d0619e/512.webp",
+              "width": 300,
+              "height": 204
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "recommended_object_position": "50% 50%",
+          "asset_key": "3460dc448944d2c333b915fe180f2917b6d0fbb357d96ad3ded8a81d4fce44e4",
+          "quality_score": 7.6219
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/1f/1f273f273f273b173b073f135db45f109d109d319cb1be32122a1e331e320e30.webp",
+          "width": 300,
+          "height": 199,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 1.0,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 3,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/b0/b02d234e61fabde772f2600311345dde35e97b6677aa784003577becfa78d193/256.webp",
+              "width": 256,
+              "height": 170
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/b0/b02d234e61fabde772f2600311345dde35e97b6677aa784003577becfa78d193/512.webp",
+              "width": 300,
+              "height": 199
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "recommended_object_position": "50% 50%",
+          "asset_key": "12eb97a4ffd6bdb399184fe8a41e7e7f4a8ed6db804750b0ad01224943977708",
+          "quality_score": 7.5971
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/e5/e5c0c460c26042706270667020eda2cda64ce4ec44dc64d824b224b804b806b4.webp",
+          "width": 819,
+          "height": 1024,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 4,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/e0/e0f115aeeab9825aac7e8d96b3a061f126d44c31728a532c2dbf5837079d1b0b/256.webp",
+              "width": 205,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/e0/e0f115aeeab9825aac7e8d96b3a061f126d44c31728a532c2dbf5837079d1b0b/512.webp",
+              "width": 409,
+              "height": 512
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.25
+          },
+          "recommended_object_position": "50% 25%",
+          "asset_key": "13df6b62a843526c8637712f4f06e0cfa77484997a0f12496f4f53d558bad134",
+          "quality_score": 14.2396
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/14/1409151b0b190b3103330b3903390b310d1128591d4918495249535952495049.webp",
+          "width": 300,
+          "height": 199,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 5,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/5b/5be2f0dc38933636c2b004b9e9041c7339fa5c592a1e23c139fae556a622fd8b/256.webp",
+              "width": 256,
+              "height": 170
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/5b/5be2f0dc38933636c2b004b9e9041c7339fa5c592a1e23c139fae556a622fd8b/512.webp",
+              "width": 300,
+              "height": 199
+            }
+          ],
+          "focal_point": {
+            "x": 0.65,
+            "y": 0.5
+          },
+          "recommended_object_position": "65% 50%",
+          "asset_key": "3ecb315ad121b0f5835017581315c174b7bed35b7cdfba16b19e061ab366577b",
+          "quality_score": 7.5971
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/00/000000000000008001c001c004c006d0399007b0033000300020072801800000.webp",
+          "width": 683,
+          "height": 1024,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 6,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/af/af0d7d271a79680a023f3811ed7d8eded2772d270302055c7af10d5361063bab/256.webp",
+              "width": 171,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/af/af0d7d271a79680a023f3811ed7d8eded2772d270302055c7af10d5361063bab/512.webp",
+              "width": 341,
+              "height": 512
+            }
+          ],
+          "asset_key": "b910276d593be2c7681c77f9f327927f80c0f8c932061cd5dcbce582b33eb027",
+          "quality_score": 13.608
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/1a/1a591a590a592efd04ed04dd0685048d0599059995989198119e91321592059b.webp",
+          "width": 300,
+          "height": 199,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 7,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d0/d07e8907db9fdf1bbe1cef8949dade7e0d3a61c895c2c215a5dbeef5701aeb81/256.webp",
+              "width": 256,
+              "height": 170
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d0/d07e8907db9fdf1bbe1cef8949dade7e0d3a61c895c2c215a5dbeef5701aeb81/512.webp",
+              "width": 300,
+              "height": 199
+            }
+          ],
+          "asset_key": "be051c7bce177cfbc772a34d862a46e47c342852d19071177b0c15200977db60",
+          "quality_score": 7.1471
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/c9/c901610071a082f2827082548f1c9e0c0b18d593d362c29996e08cf07e217f20.webp",
+          "width": 819,
+          "height": 1024,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 8,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/e6/e650f647d0a087e0c7a5543f8458292a03d37acf76db97c7c5f67b160e377a54/256.webp",
+              "width": 205,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/e6/e650f647d0a087e0c7a5543f8458292a03d37acf76db97c7c5f67b160e377a54/512.webp",
+              "width": 409,
+              "height": 512
+            }
+          ],
+          "asset_key": "98e44e56cdf06761aadcd3b1c6c966eb03ce8e4c95fe5922a67f9f2fc50f38ae",
+          "quality_score": 13.7896
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/42/4230b0d0b2261226126e513b39333973a3634373e343a647a6d3666307336313.webp",
+          "width": 1280,
+          "height": 853,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 9,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c7/c782800a602bc4838827ea3a967a00f31f2a8a32b74d26ec20f6145c49f01cfc/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c7/c782800a602bc4838827ea3a967a00f31f2a8a32b74d26ec20f6145c49f01cfc/512.webp",
+              "width": 512,
+              "height": 341
+            }
+          ],
+          "asset_key": "76a50db2e73557338306c7e7c2d5e0900608b4187e855a275ff160417e593766",
+          "quality_score": 14.0534
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/01/010020a030301030123092b16ad56c632423a19d93d9881887188b4b49461023.webp",
+          "width": 1280,
+          "height": 853,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 10,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/8f/8fee3e380cc4438e26e672b171b1bc11fd3ad99946f54d6abd160403fd01e0cd/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/8f/8fee3e380cc4438e26e672b171b1bc11fd3ad99946f54d6abd160403fd01e0cd/512.webp",
+              "width": 512,
+              "height": 341
+            }
+          ],
+          "asset_key": "f80327a7d9aa62f3f6e45a6ab19e0864bcf8266b86b833a389ed7b1ca30ab445",
+          "quality_score": 14.0534
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/30/30c430c830cc2cc62d4e1a4e1a6e0a260e2e2e6e086e2e4d2a4d4a4e4a4e224d.webp",
+          "width": 1280,
+          "height": 853,
+          "alt": "Фотография события «Мюзикл «Алые паруса»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 11,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/53/5378606d0da1b9a9c0a7019ae6475bc77e640d0b6c74fe417e76eb08327a7f63/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/53/5378606d0da1b9a9c0a7019ae6475bc77e640d0b6c74fe417e76eb08327a7f63/512.webp",
+              "width": 512,
+              "height": 341
+            }
+          ],
+          "asset_key": "576fabb1d1aec002790fec75e2c8d63deebc5efd8bf86e25aa86489e1b1d7307",
+          "quality_score": 14.0534
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": true,
+      "summary": "Музыкальный спектакль по мотивам повести Александра Грина рассказывает историю веры в мечту и любовь Ассоль.",
+      "meta_description": "Музыкальный спектакль по мотивам повести Александра Грина рассказывает историю веры в мечту и любовь Ассоль.",
+      "description_html": "<blockquote>«Повесть Александра Грина &quot;Алые паруса&quot; — история о девушке Ассоль и капитане Грее»</blockquote>\n<p>В центре сценического повествования — море, становящееся главным ведущим обстоятельством в судьбах героев. Этот спектакль, основанный на мюзикле Максима Дунаевского, пьесе Михаила Бартенева и стихах Андрея Усачева, уже более 5 лет занимает свое место в репертуаре театра. ⚓</p>\n<h3>Смысловые акценты</h3>\n<p>В постановке исследуются ключевые темы, раскрывающие внутренний мир персонажей и их путь:<br />* любовь;<br />* вера в чудо;<br />* надежда;<br />* мистика и реальность.</p>\n<h3>Сюжетная линия</h3>\n<p>История сосредоточена на судьбе Ассоль, которой приходится преодолевать жизненные трудности и предательство. Все испытания героиня проходит ради спасения своего отца, сохраняя верность мечте.</p>",
+      "topics": [
+        "THEATRE",
+        "THEATRE_CLASSIC",
+        "FAMILY"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-05-10 14:53:26.534250",
+      "likes_count": 4,
+      "source_likes_count": 4,
+      "service_likes_count": 0,
+      "source_views_count": 55,
+      "source_engagement_sources_count": 2,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
       "id": 5077,
       "source_prod_id": 5077,
       "title": "Калининград и область как кинодекорация и выставка «Калининградская область. История любви»",
@@ -734,6 +1178,230 @@
       "source_views_count": 2655,
       "source_engagement_sources_count": 1,
       "shares_count": 2
+    },
+    {
+      "id": 5374,
+      "source_prod_id": 5374,
+      "title": "Трибьют Linkin Park от Yalta Band",
+      "slug": "tribyut-linkin-park-ot-yalta-band-pos-romanovo-5374",
+      "event_type": "концерт",
+      "festival": null,
+      "status_label": "Условия уточняются",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-24T21:00:00+02:00",
+      "start_date": "2026-07-24",
+      "start_time": "21:00",
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-24",
+      "display_time": "21:00",
+      "city": "пос. Романово",
+      "venue_name": "Поселение викингов Кауп",
+      "address": "Романово",
+      "map_query": "пос. Романово, Поселение викингов Кауп, Романово",
+      "ticket": {
+        "kind": "ticket",
+        "label": "Купить билет",
+        "href": "https://nightkaup.ru/linkinpark",
+        "status": null,
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "assessed",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": null,
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://vk.com/wall-221061373_7277",
+      "source_urls": [
+        "https://vk.com/wall-221061373_7277",
+        "https://vk.com/wall-231920894_7630",
+        "https://t.me/c/3954607218/2441",
+        "https://vk.com/wall-221061373_8214"
+      ],
+      "source_count": 4,
+      "telegraph_url": "https://telegra.ph/Tribyut-LINKIN-PARK-ot-Yalta-Band-05-27",
+      "image_url": "https://static.kenigevents.ru/p/dh16/01/01ba21fe247c023c033a0b5b09cd09c70b6c0b4540e5a4e08c4894689260e240.webp",
+      "image_alt": "Фотография события «Трибьют Linkin Park от Yalta Band»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/01/01ba21fe247c023c033a0b5b09cd09c70b6c0b4540e5a4e08c4894689260e240.webp",
+          "width": 2560,
+          "height": 1709,
+          "alt": "Фотография события «Трибьют Linkin Park от Yalta Band»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 4,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d2/d206959f79df779e5cf8cf0ed34a3f79dae1825375394c7896a0f49ecee1a8e4/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/d2/d206959f79df779e5cf8cf0ed34a3f79dae1825375394c7896a0f49ecee1a8e4/512.webp",
+              "width": 512,
+              "height": 342
+            }
+          ],
+          "asset_key": "d206959f79df779e5cf8cf0ed34a3f79dae1825375394c7896a0f49ecee1a8e4",
+          "quality_score": 15.4414
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/7a/7a0678473c0d3c0f140f1c1f4f3f4f77075e132e333623163204040004046404.webp",
+          "width": 1280,
+          "height": 855,
+          "alt": "Фотография события «Трибьют Linkin Park от Yalta Band»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "error",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/8f/8fbe6b8b1578be56d22b443946595db2c676ff863dc1017ef7f4a8c84f1a1626/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/8f/8fbe6b8b1578be56d22b443946595db2c676ff863dc1017ef7f4a8c84f1a1626/512.webp",
+              "width": 512,
+              "height": 342
+            }
+          ],
+          "asset_key": "8fbe6b8b1578be56d22b443946595db2c676ff863dc1017ef7f4a8c84f1a1626",
+          "quality_score": 14.0557
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/00/004f013f093f011f041f021f060f040f02570307832e04d610cd1269227a6c10.webp",
+          "width": 1280,
+          "height": 851,
+          "alt": "Фотография события «Трибьют Linkin Park от Yalta Band»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 1,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/61/615d1c60ba91e3ddb601213af5c1a419dee0a6bf8c9a7fd595849df49fe97a06/256.webp",
+              "width": 256,
+              "height": 170
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/61/615d1c60ba91e3ddb601213af5c1a419dee0a6bf8c9a7fd595849df49fe97a06/512.webp",
+              "width": 512,
+              "height": 340
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.75
+          },
+          "recommended_object_position": "50% 75%",
+          "asset_key": "615d1c60ba91e3ddb601213af5c1a419dee0a6bf8c9a7fd595849df49fe97a06",
+          "quality_score": 14.501
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/00/000001000110009104310a601f261531b5383538746458446e308b309132d312.webp",
+          "width": 1280,
+          "height": 851,
+          "alt": "Фотография события «Трибьют Linkin Park от Yalta Band»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 2,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c0/c028bb9c5b05093e6ff39b97d0f4d099920872abf5eae0a58e84f7ec12391180/256.webp",
+              "width": 256,
+              "height": 170
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/c0/c028bb9c5b05093e6ff39b97d0f4d099920872abf5eae0a58e84f7ec12391180/512.webp",
+              "width": 512,
+              "height": 340
+            }
+          ],
+          "asset_key": "c028bb9c5b05093e6ff39b97d0f4d099920872abf5eae0a58e84f7ec12391180",
+          "quality_score": 14.051
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/01/015881f8857c053c87b487b805f4055806780af84cfc04de2a3a22be053e7028.webp",
+          "width": 1280,
+          "height": 855,
+          "alt": "Фотография события «Трибьют Linkin Park от Yalta Band»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 3,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/1e/1e8550d26abd86ef4554e05cf8e1094b20458cb2a231259263a77c8d5b26b9ab/256.webp",
+              "width": 256,
+              "height": 171
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/1e/1e8550d26abd86ef4554e05cf8e1094b20458cb2a231259263a77c8d5b26b9ab/512.webp",
+              "width": 512,
+              "height": 342
+            }
+          ],
+          "asset_key": "1e8550d26abd86ef4554e05cf8e1094b20458cb2a231259263a77c8d5b26b9ab",
+          "quality_score": 14.0557
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Музыкальный коллектив Yalta Band исполнит главные хиты группы Linkin Park на открытой сцене поселения Кауп.",
+      "meta_description": "Музыкальный коллектив Yalta Band исполнит главные хиты группы Linkin Park на открытой сцене поселения Кауп.",
+      "description_html": "<blockquote>Атмосфера мероприятия характеризуется как «громкая» и «душевная».</blockquote>\n<p>В поселении викингов Кауп после заката состоится единственный в текущем сезоне трибьют-концерт группы Linkin Park в исполнении Yalta Band. Музыкальный концерт под открытым небом станет возвращением коллектива на эту площадку, где музыканты уже выступали прошлым летом. 🎸</p>\n<h3>Программа и сет-лист</h3>\n<p>В программу выступления включены знаковые хиты группы Linkin Park. В сет-лист вошли следующие композиции:<br />- «In the End»<br />- «Numb»</p>\n<h3>Детали события</h3>\n<p>Концерт проходит в рамках сезона мероприятий в поселении викингов Кауп. Запечатлеть ключевые моменты вечера будет фотограф Роман Большаков.</p>",
+      "topics": [
+        "CONCERTS",
+        "OPEN_AIR"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-05-27 10:25:40.561798",
+      "likes_count": 41,
+      "source_likes_count": 41,
+      "service_likes_count": 0,
+      "source_views_count": 3246,
+      "source_engagement_sources_count": 3,
+      "shares_count": 14,
+      "popularity_reason_codes": [
+        "frequently_shared"
+      ],
+      "popularity_signal_score": 2.5
     },
     {
       "id": 5658,
@@ -2024,6 +2692,113 @@
       "shares_count": 5
     },
     {
+      "id": 6551,
+      "source_prod_id": 6551,
+      "title": "Концерт «Море музыки»",
+      "slug": "kontsert-more-muzyki-svetlogorsk-6551",
+      "event_type": "концерт",
+      "festival": null,
+      "status_label": "Условия уточняются",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-22T16:00:00+02:00",
+      "start_date": "2026-07-22",
+      "start_time": "16:00",
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-22",
+      "display_time": "16:00",
+      "city": "Светлогорск",
+      "venue_name": "Янтарь холл",
+      "address": "Ленина 11",
+      "map_query": "Светлогорск, Янтарь холл, Ленина 11",
+      "ticket": {
+        "kind": "phone",
+        "label": "Позвонить организатору",
+        "href": "tel:+74015324070",
+        "status": null,
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://vk.com/wall-35373633_28114",
+      "source_urls": [
+        "https://vk.com/wall-35373633_28114",
+        "https://vk.com/wall-231920894_5303",
+        "https://t.me/c/3954607218/1686"
+      ],
+      "source_count": 3,
+      "telegraph_url": "https://telegra.ph/Koncert-More-muzyki-07-01",
+      "image_url": "https://static.kenigevents.ru/p/dh16/98/9816980ecf46c638c649c6590e181f25194f554fb54f1d4f3d0f7c06fc26c006.webp",
+      "image_alt": "Фотография события «Концерт «Море музыки»»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/98/9816980ecf46c638c649c6590e181f25194f554fb54f1d4f3d0f7c06fc26c006.webp",
+          "width": 2560,
+          "height": 1920,
+          "alt": "Фотография события «Концерт «Море музыки»»",
+          "image_text_mode": "visual_only",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0.0,
+          "media_semantic_status": "error",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/97/97cd4196d76899022f66e40bda9b9276e0e632e51769c382204a230766f253b6/256.webp",
+              "width": 256,
+              "height": 192
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/97/97cd4196d76899022f66e40bda9b9276e0e632e51769c382204a230766f253b6/512.webp",
+              "width": 512,
+              "height": 384
+            }
+          ],
+          "asset_key": "d8695023a993e635f4741c0db1f7a0c499e8667f132a8865557661a2480c94ec",
+          "quality_score": 15.5578
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Концерт классической музыки Море музыки объединяет выступления московских музыкантов и образовательную программу экспертов музея.",
+      "meta_description": "Концерт классической музыки Море музыки объединяет выступления московских музыкантов и образовательную программу экспертов музея.",
+      "description_html": "<p>Концерт классической музыки «Море музыки» объединяет выступления профессиональных музыкантов и образовательную программу в рамках июльского дайджеста событий Морского выставочного центра. Программа включает музыкальные номера и лекционную часть, организованную при участии экспертов Музея Мирового океана.</p>\n<h3>Музыкальная программа</h3>\n<p>На сцене выступают участники и преподаватели школы «Камертон» из Москвы. Коллектив представляет классический репертуар, демонстрируя мастерство исполнения в стенах Морского выставочного центра.</p>\n<h3>Лекторий «Клуба путешественников»</h3>\n<p>В рамках события проходят выступления лекторов «Клуба путешественников»:<br />* Павел Матвиец, старший научный сотрудник Музея Мирового океана;<br />* Полина Матвиец, старший научный сотрудник Музея Мирового океана.</p>\n<h3>Дополнительные активности</h3>\n<p>Событие проходит при поддержке партнеров, включая Русское географическое общество. Также в Морском выставочном центре функционирует семейный клуб выходного дня «Вокруг света», предлагающий интерактивные экскурсии и мастер-классы. Организаторами летней школы «Лето музыки» выступают Академия музыки им. Гнесиных и МГК им. Чайковского.</p>",
+      "topics": [
+        "CONCERTS",
+        "LECTURES",
+        "FAMILY",
+        "MOVIES",
+        "MASTERCLASS"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-01 04:54:40.093399",
+      "likes_count": 9,
+      "source_likes_count": 9,
+      "service_likes_count": 0,
+      "source_views_count": 1920,
+      "source_engagement_sources_count": 2,
+      "shares_count": 1,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
+    },
+    {
       "id": 6583,
       "source_prod_id": 6583,
       "title": "Встреча «Город в персональном зеркале: диалог о времени, о городе и о себе»",
@@ -2218,6 +2993,118 @@
       "source_views_count": 2518,
       "source_engagement_sources_count": 1,
       "shares_count": 2
+    },
+    {
+      "id": 6815,
+      "source_prod_id": 6815,
+      "title": "Блогерский автобус: сплав на байдарках",
+      "slug": "blogerskiy-avtobus-splav-na-baydarkah-kaliningrad-6815",
+      "event_type": "встреча",
+      "festival": null,
+      "status_label": "Регистрация",
+      "lifecycle_status": "active",
+      "starts_at": null,
+      "start_date": "2026-07-17",
+      "start_time": null,
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-17",
+      "display_time": null,
+      "city": "Калининград",
+      "venue_name": "Центр отдыха Ангел",
+      "address": null,
+      "map_query": "Калининград, Центр отдыха Ангел",
+      "ticket": {
+        "kind": "registration",
+        "label": "Зарегистрироваться",
+        "href": "https://t.me/livelyconversation/608",
+        "status": "registration",
+        "is_free": false,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://t.me/terkatalk/5135",
+      "source_urls": [
+        "https://t.me/terkatalk/5135",
+        "https://vk.com/wall-231920894_7005",
+        "https://t.me/c/3954607218/2237",
+        "https://t.me/kulturnaya_chaika/8038",
+        "https://t.me/livelyconversation/608",
+        "https://t.me/terkatalk/5172"
+      ],
+      "source_count": 6,
+      "telegraph_url": "https://telegra.ph/Blogerskij-avtobus-splav-na-bajdarkah-07-10",
+      "image_url": "https://static.kenigevents.ru/p/dh16/20/200022000060027a1b363e7a3e1ea437405b885188630fd003b2316038340299.webp",
+      "image_alt": "Афиша события «Блогерский автобус: сплав на байдарках»",
+      "image_text_mode": "visual_only",
+      "image_media_role": "event_photo",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/20/200022000060027a1b363e7a3e1ea437405b885188630fd003b2316038340299.webp",
+          "width": 180,
+          "height": 320,
+          "alt": "Фотография события «Блогерский автобус: сплав на байдарках»",
+          "image_text_mode": "visual_only",
+          "media_role": "event_photo",
+          "media_role_confidence": 0.95,
+          "media_semantic_status": "classified",
+          "image_kind": "photo",
+          "recommended_hero_fit": "cover",
+          "safe_crop": true,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/39/39e0a354df50141e9d377b74c74e79a60de8a199ba3634ef9062f8a645294023/256.webp",
+              "width": 144,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/39/39e0a354df50141e9d377b74c74e79a60de8a199ba3634ef9062f8a645294023/512.webp",
+              "width": 180,
+              "height": 320
+            }
+          ],
+          "focal_point": {
+            "x": 0.5,
+            "y": 0.35
+          },
+          "recommended_object_position": "50% 35%",
+          "asset_key": "9680cacb2b73dc716b9a217023e0a9b985f9db488e6401b85325b74065aff549",
+          "quality_score": 7.5613
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": true,
+      "summary": "Блогеры и создатели контента отправляются в совместный сплав на байдарках для нетворкинга и съемок материалов.",
+      "meta_description": "Блогеры и создатели контента отправляются в совместный сплав на байдарках для нетворкинга и съемок материалов.",
+      "description_html": "<p>Блогерский автобус: сплав на байдарках — это выездное мероприятие для блогеров и создателей контента, организованное с трансфером на автобусе. Целью поездки является создание контента, коллаборации, нетворкинг и отдых участников. 🚌</p>\n<h3>Программа мероприятия</h3>\n<p>Программа включает совместный выезд для профессионального общения и отдыха, состоящий из следующих активностей:</p>\n<ul>\n<li>Сплав на байдарках</li>\n<li>Прогулка по вечернему городу с таинственным гостем</li>\n<li>Нетворкинг и знакомство участников</li>\n<li>Создание контента для блогов</li>\n</ul>\n<h3>Концепция и задачи</h3>\n<p>Мероприятие ориентировано на блогеров и создателей контента, которым важно совместить профессиональную деятельность с активным досугом. В рамках выезда участники занимаются созданием контента для своих блогов, налаживают новые связи и обмениваются опытом в неформальной обстановке. 📸</p>",
+      "topics": [
+        "ACTIVE",
+        "NETWORKING"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-10 23:57:39.513278",
+      "likes_count": 8,
+      "source_likes_count": 8,
+      "service_likes_count": 0,
+      "source_views_count": 794,
+      "source_engagement_sources_count": 3,
+      "shares_count": 0,
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     }
   ],
   "build": {

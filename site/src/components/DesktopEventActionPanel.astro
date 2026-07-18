@@ -8,7 +8,6 @@ import {
   eventActionHref,
   eventAdmissionLabel,
   eventTicketActionLabel,
-  isCalendarEligible,
   isExternalHttpUrl,
   isTelephoneUrl,
   isTicketSoldOut,
@@ -39,9 +38,6 @@ const phoneDisplay = normalizedPhoneDigits.length === 11 && normalizedPhoneDigit
   ? `+7 ${normalizedPhoneDigits.slice(1, 4)} ${normalizedPhoneDigits.slice(4, 7)}-${normalizedPhoneDigits.slice(7, 9)}-${normalizedPhoneDigits.slice(9, 11)}`
   : phoneValue;
 const soldOut = isTicketSoldOut(event);
-const canAddToCalendar = isCalendarEligible(event);
-const requiresExplicitBooking = event.ticket.kind === 'registration' || event.ticket.kind === 'phone';
-const calendarPrimary = canAddToCalendar && (!ctaHref || (event.ticket.is_free && !requiresExplicitBooking));
 const ctaLabel = !event.ticket.is_free && !event.ticket.price_label && ctaHref ? 'Билеты' : eventTicketActionLabel(event);
 const canonicalUrl = eventAbsoluteUrl(event);
 const likesCount = event.likes_count || 0;
@@ -51,11 +47,9 @@ const shareImageType = shareImage.toLowerCase().includes('.webp') ? 'image/webp'
 const shareFileName = `kenigevents-${event.slug}`;
 ---
 
-<aside class:list={['desktop-prototype__action', className]} data-feedback-scope data-desktop-action-panel data-primary-action-kind={ctaIsTelephone ? 'phone' : calendarPrimary ? 'calendar' : 'default'} aria-label="Действия события">
+<aside class:list={['desktop-prototype__action', className]} data-feedback-scope data-desktop-action-panel data-primary-action-kind={ctaIsTelephone ? 'phone' : 'default'} aria-label="Действия события">
   <p><span>вход</span><strong>{admissionLabel}</strong></p>
-  {calendarPrimary ? (
-    <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
-  ) : ctaIsTelephone && phoneValue ? (
+  {ctaIsTelephone && phoneValue ? (
     <button
       type="button"
       class="desktop-prototype__primary-action desktop-prototype__phone-copy"
@@ -76,13 +70,13 @@ const shareFileName = `kenigevents-${event.slug}`;
     </a>
   ) : soldOut ? (
     <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Билеты закончились</span>
-  ) : canAddToCalendar ? (
-    <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
+  ) : event.ticket.is_free ? (
+    <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Билеты не требуются</span>
   ) : (
     <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Информация уточняется</span>
   )}
-  <div class="desktop-prototype__action-row event-hero__metric-row">
-    {!calendarPrimary && <CalendarLink event={event} className="desktop-prototype__icon-action" compact />}
+  <div class="desktop-prototype__action-row event-hero__metric-row" data-desktop-action-row="calendar-share-like">
+    <CalendarLink event={event} className="desktop-prototype__icon-action" compact />
     <button
       type="button"
       class="desktop-prototype__icon-action"
@@ -197,7 +191,13 @@ const shareFileName = `kenigevents-${event.slug}`;
     color: #fffaf2;
     background: #292521;
     container: desktop-actions / inline-size;
+    grid-template-columns:minmax(0,1fr) !important;
+    grid-template-rows:auto auto auto !important;
+    align-items:stretch !important;
   }
+  .desktop-prototype__action > p,
+  .desktop-prototype__action > :global(.desktop-prototype__primary-action),
+  .desktop-prototype__action > .desktop-prototype__action-row { grid-column:1 !important; }
   .desktop-prototype__action > p { display: grid; gap: .06rem; margin: 0; }
   .desktop-prototype__action > p span {
     color: #d7c9bc;
@@ -300,38 +300,4 @@ const shareFileName = `kenigevents-${event.slug}`;
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:52px; min-width:52px; padding-inline:.3rem; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { max-width:0; opacity:0; }
 
-  /* The branded phone CTA must remain one compact, copyable primary action.
-     Keep the whole action surface on one explicit row instead of
-     relying on CSS grid auto-placement, which previously pushed the metrics
-     to a second line when the empty live-status node occupied a grid cell. */
-  .desktop-prototype__action[data-primary-action-kind="phone"] {
-    grid-template-columns:minmax(76px,auto) minmax(190px,1fr) auto;
-    grid-template-rows:auto;
-    align-items:center;
-    column-gap:.7rem;
-    row-gap:0;
-  }
-  .desktop-prototype__action[data-primary-action-kind="phone"] > p:first-child { grid-column:1; grid-row:1; min-width:4.75rem; }
-  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__phone-copy { grid-column:2; grid-row:1; min-width:0; }
-  .desktop-prototype__action[data-primary-action-kind="phone"] > .desktop-prototype__action-row { grid-column:3; grid-row:1; justify-self:end; }
-  :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) {
-    width:52px;
-    min-width:52px;
-    padding-inline:.3rem;
-  }
-  :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) {
-    max-width:0;
-    opacity:0;
-  }
-  @container desktop-actions (max-width:480px) {
-    .desktop-prototype__action[data-primary-action-kind="phone"] {
-      grid-template-columns:minmax(68px,auto) minmax(178px,1fr) auto;
-      column-gap:.5rem;
-      padding-inline:.9rem;
-    }
-    .desktop-prototype__action[data-primary-action-kind="phone"] > p:first-child { min-width:4.25rem; }
-    .desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__action-row { gap:.32rem; }
-    :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action) { min-width:48px; min-height:48px; }
-    :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__icon-action[data-calendar-adaptive-label]) { width:48px; min-width:48px; }
-  }
 </style>

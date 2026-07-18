@@ -228,7 +228,7 @@ import contextlib
 import random
 import html
 from types import SimpleNamespace
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import sqlite3
 from io import BytesIO
 import aiosqlite
@@ -261,9 +261,13 @@ from sections import (
 )
 from db import Database
 from static_site_release import (
+    active_static_site_remote_run,
     StaticSitePermanentError,
     StaticSiteRetryableError,
+    StaticSiteSingleFlightDeferred,
     classify_failure as classify_static_site_failure,
+    claim_static_site_build,
+    compute_static_site_input_fingerprint,
     create_immutable_snapshot,
     event_public_revision,
     freshness_state as static_site_freshness_state,
@@ -272,6 +276,9 @@ from static_site_release import (
     max_attempts as static_site_max_attempts,
     merge_request_payload as merge_static_site_request_payload,
     publish_secret_candidate_archive,
+    recoverable_static_site_build,
+    finish_static_site_build_claim,
+    resolve_build_clock as resolve_static_site_build_clock,
     validate_production_candidate_result,
     validate_snapshot,
     validate_vector_barrier,
@@ -14365,6 +14372,173 @@ async def upsert_event(session: AsyncSession, new: Event) -> Tuple[Event, bool]:
     return new, True
 
 
+def _sqlite_datetime(value: datetime) -> str:
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(timezone.utc).replace(tzinfo=None).isoformat(sep=" ")
+
+
+def _sqlite_parse_datetime(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+async def _enqueue_static_site_build_atomic(
+    db: Database,
+    event_id: int,
+    payload: dict | None,
+    *,
+    coalesce_key: str,
+    next_run_at: datetime | None,
+) -> str:
+    """Serialize the singleton static build queue across processes.
+
+    SQLite ``BEGIN IMMEDIATE`` closes the select-then-insert race in the generic
+    outbox path while retaining one running owner plus exactly one pending
+    follow-up.
+    """
+
+    now = datetime.now(timezone.utc)
+    requested = next_run_at or now
+    immediate = bool(
+        isinstance(payload, dict)
+        and payload.get("trigger") in {"operator_request", "calendar_rollover", "startup_catchup"}
+    )
+    connection = await aiosqlite.connect(db.path, timeout=30)
+    connection.row_factory = aiosqlite.Row
+    try:
+        await connection.execute("PRAGMA busy_timeout=30000")
+        await connection.execute("BEGIN IMMEDIATE")
+        cursor = await connection.execute(
+            """
+            SELECT id, event_id, payload, status, updated_at, next_run_at
+            FROM joboutbox
+            WHERE task='static_site_build' AND coalesce_key=?
+              AND status IN ('running', 'pending')
+            ORDER BY id DESC
+            """,
+            (coalesce_key,),
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+        running = next((row for row in rows if row["status"] == "running"), None)
+        pending = next((row for row in rows if row["status"] == "pending"), None)
+        if running is not None:
+            updated_at = _sqlite_parse_datetime(running["updated_at"])
+            stale_after = int(JOB_MAX_RUNTIME.get(JobTask.static_site_build, 5400))
+            if (now - updated_at).total_seconds() > stale_after:
+                remote_run_id = await asyncio.to_thread(
+                    active_static_site_remote_run,
+                    db.path,
+                    stale_seconds=max(stale_after, 7200),
+                    now=now,
+                )
+                if remote_run_id:
+                    logging.info(
+                        "STATIC_SITE_REMOTE_STILL_LIVE job_id=%s run_id=%s",
+                        running["id"],
+                        remote_run_id,
+                    )
+                else:
+                    await connection.execute(
+                        "UPDATE joboutbox SET status='error', last_error='stale', updated_at=?, next_run_at=? WHERE id=? AND status='running'",
+                        (_sqlite_datetime(now), _sqlite_datetime(now), int(running["id"])),
+                    )
+                    running = None
+        encoded_payload = json.dumps(payload, ensure_ascii=False) if payload is not None else None
+        if running is not None:
+            if pending is not None:
+                old_payload = json.loads(pending["payload"] or "null")
+                merged = merge_static_site_request_payload(old_payload, payload) if payload is not None else old_payload
+                old_next = _sqlite_parse_datetime(pending["next_run_at"])
+                target = min(old_next, requested) if immediate else max(old_next, requested)
+                await connection.execute(
+                    "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL WHERE id=? AND status='pending'",
+                    (
+                        json.dumps(merged, ensure_ascii=False) if merged is not None else None,
+                        _sqlite_datetime(target), _sqlite_datetime(now), int(pending["id"]),
+                    ),
+                )
+            else:
+                deferred = requested
+                if deferred <= now and not immediate:
+                    deferred = now + timedelta(minutes=15)
+                await connection.execute(
+                    """
+                    INSERT INTO joboutbox(event_id, task, payload, status, attempts, updated_at,
+                                          next_run_at, coalesce_key)
+                    VALUES(?, 'static_site_build', ?, 'pending', 0, ?, ?, ?)
+                    """,
+                    (
+                        event_id, encoded_payload, _sqlite_datetime(now),
+                        _sqlite_datetime(deferred), coalesce_key,
+                    ),
+                )
+            await connection.commit()
+            return "merged"
+        if pending is not None:
+            old_payload = json.loads(pending["payload"] or "null")
+            merged = merge_static_site_request_payload(old_payload, payload) if payload is not None else old_payload
+            old_next = _sqlite_parse_datetime(pending["next_run_at"])
+            target = min(old_next, requested) if immediate else max(old_next, requested)
+            if old_next < now and not immediate:
+                target = now
+            await connection.execute(
+                "UPDATE joboutbox SET payload=?, next_run_at=?, updated_at=?, attempts=0, last_error=NULL WHERE id=? AND status='pending'",
+                (
+                    json.dumps(merged, ensure_ascii=False) if merged is not None else None,
+                    _sqlite_datetime(target), _sqlite_datetime(now), int(pending["id"]),
+                ),
+            )
+            await connection.commit()
+            return "merged-rearmed"
+        cursor = await connection.execute(
+            """
+            SELECT id FROM joboutbox
+            WHERE task='static_site_build' AND coalesce_key=?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (coalesce_key,),
+        )
+        prior = await cursor.fetchone()
+        await cursor.close()
+        if prior is not None:
+            await connection.execute(
+                """
+                UPDATE joboutbox SET event_id=?, payload=?, status='pending', attempts=0,
+                    last_error=NULL, updated_at=?, next_run_at=? WHERE id=?
+                """,
+                (
+                    event_id, encoded_payload, _sqlite_datetime(now),
+                    _sqlite_datetime(requested), int(prior["id"]),
+                ),
+            )
+            await connection.commit()
+            return "requeued"
+        await connection.execute(
+            """
+            INSERT INTO joboutbox(event_id, task, payload, status, attempts, updated_at,
+                                  next_run_at, coalesce_key)
+            VALUES(?, 'static_site_build', ?, 'pending', 0, ?, ?, ?)
+            """,
+            (
+                event_id, encoded_payload, _sqlite_datetime(now),
+                _sqlite_datetime(requested), coalesce_key,
+            ),
+        )
+        await connection.commit()
+        return "new"
+    except Exception:
+        await connection.rollback()
+        raise
+    finally:
+        await connection.close()
+
+
 async def enqueue_job(
     db: Database,
     event_id: int,
@@ -14377,6 +14551,19 @@ async def enqueue_job(
     next_run_at: datetime | None = None,
     requeue_done: bool = False,
 ) -> str:
+    if (
+        task == JobTask.static_site_build
+        and coalesce_key
+        and db.path
+        and not db.path.startswith((":memory:", "file:"))
+    ):
+        return await _enqueue_static_site_build_atomic(
+            db,
+            event_id,
+            payload,
+            coalesce_key=coalesce_key,
+            next_run_at=next_run_at,
+        )
     async with db.get_session() as session:
         now = datetime.now(timezone.utc)
         run_time = next_run_at or now
@@ -15724,6 +15911,7 @@ async def enqueue_static_site_build_request(
     correlation_id: str | None = None,
     delay_seconds: int = 0,
     trigger: str = "operator_request",
+    force_rebuild: bool = False,
 ) -> str:
     """Durably enqueue an on-demand secret-preview build in the same outbox.
 
@@ -15740,6 +15928,12 @@ async def enqueue_static_site_build_request(
             continue
         if event_id > 0:
             ids.append(event_id)
+    if force_rebuild and trigger != "operator_request":
+        raise ValueError("force_rebuild is restricted to explicit operator requests")
+    clock = resolve_static_site_build_clock(
+        current_date=(os.getenv("STATIC_SITE_CURRENT_DATE") or "").strip() or None,
+        current_datetime=(os.getenv("STATIC_SITE_CURRENT_DATETIME") or "").strip() or None,
+    )
     payload = make_static_site_request_payload(
         reason=reason,
         event_ids=ids,
@@ -15753,7 +15947,10 @@ async def enqueue_static_site_build_request(
         ),
         expected_search_v3_hash=(os.getenv("STATIC_SITE_EXPECTED_SEARCH_V3_HASH") or "").strip() or None,
         expected_related_v1_hash=(os.getenv("STATIC_SITE_EXPECTED_RELATED_V1_HASH") or "").strip() or None,
+        force_rebuild=force_rebuild,
     )
+    payload["effective_build_date"] = clock.effective_date
+    payload["build_time_zone"] = clock.time_zone
     owner_event_id = ids[0] if ids else 0
     return await enqueue_job(
         db,
@@ -18002,6 +18199,21 @@ async def _run_due_jobs_once_locked(
             limit = JOB_MAX_RUNTIME.get(rjob.task, DEFAULT_JOB_MAX_RUNTIME)
             age = (now - rjob.updated_at).total_seconds()
             if age > limit:
+                if rjob.task == JobTask.static_site_build:
+                    remote_run_id = await asyncio.to_thread(
+                        active_static_site_remote_run,
+                        db.path,
+                        stale_seconds=max(int(limit), 7200),
+                        now=now,
+                    )
+                    if remote_run_id:
+                        logging.info(
+                            "STATIC_SITE_REMOTE_STILL_LIVE job_id=%s run_id=%s age=%s",
+                            rjob.id,
+                            remote_run_id,
+                            int(age),
+                        )
+                        continue
                 retry_event_pipeline = (
                     rjob.task in EVENT_PIPELINE_INDEPENDENT_TASKS
                     and rjob.event_id is not None
@@ -18413,10 +18625,39 @@ async def _run_due_jobs_once_locked(
                         next_run_at=deferred_to.isoformat(),
                     )
                     continue
-            obj.status = JobStatus.running
-            obj.updated_at = datetime.now(timezone.utc)
-            session.add(obj)
-            await session.commit()
+            claimed_at = datetime.now(timezone.utc)
+            if obj.task == JobTask.static_site_build:
+                # Compare-and-swap the durable owner.  Another Fly process may
+                # have selected the same due row before either process wrote;
+                # only one is allowed to cross into the effectful handler.
+                claim_result = await session.execute(
+                    update(JobOutbox)
+                    .where(
+                        JobOutbox.id == obj.id,
+                        JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
+                        ~select(JobOutbox.id)
+                        .where(
+                            JobOutbox.task == JobTask.static_site_build,
+                            JobOutbox.status == JobStatus.running,
+                            JobOutbox.id != obj.id,
+                        )
+                        .exists(),
+                    )
+                    .values(status=JobStatus.running, updated_at=claimed_at)
+                    .execution_options(synchronize_session=False)
+                )
+                if claim_result.rowcount != 1:
+                    await session.rollback()
+                    logging.info("STATIC_SITE_CLAIM_LOST job_id=%s", obj.id)
+                    continue
+                await session.commit()
+                obj.status = JobStatus.running
+                obj.updated_at = claimed_at
+            else:
+                obj.status = JobStatus.running
+                obj.updated_at = claimed_at
+                session.add(obj)
+                await session.commit()
         run_id = uuid.uuid4().hex
         attempt = job.attempts + 1
         job_key = obj.coalesce_key or f"{obj.task.value}:{obj.event_id}"
@@ -18440,6 +18681,7 @@ async def _run_due_jobs_once_locked(
         handler = JOB_HANDLERS.get(obj.task.value)
         pause = False
         static_failure = None
+        static_deferred = False
         if not handler:
             status = JobStatus.done
             err = None
@@ -18499,6 +18741,23 @@ async def _run_due_jobs_once_locked(
                     task=obj.task.value,
                     result_url=link,
                     result="changed" if changed else "nochange",
+                )
+            except StaticSiteSingleFlightDeferred as exc:
+                took_ms = (_time.perf_counter() - start) * 1000
+                pause = False
+                err = str(exc)
+                status = JobStatus.pending
+                retry = False
+                static_deferred = True
+                link = None
+                changed = False
+                logline(
+                    "RUN",
+                    obj.event_id,
+                    "deferred",
+                    job_id=obj.id,
+                    task=obj.task.value,
+                    reason="static_site_single_flight",
                 )
             except asyncio.TimeoutError:  # pragma: no cover - depends on slow/external handlers
                 took_ms = (_time.perf_counter() - start) * 1000
@@ -18600,7 +18859,12 @@ async def _run_due_jobs_once_locked(
                 obj.status = status
                 obj.last_error = err
                 obj.updated_at = datetime.now(timezone.utc)
-                if status == JobStatus.done:
+                if static_deferred:
+                    # Preserve the exact follow-up payload and retry after the
+                    # current server/remote lease has had time to advance.
+                    obj.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+                    send = False
+                elif status == JobStatus.done:
                     cur_res = link if link else ("ok" if changed else "nochange")
                     if cur_res == prev and not force_notify:
                         send = False
@@ -22163,11 +22427,15 @@ def _static_site_build_kaggle_command(
     current_date: str,
     script_path: str,
     status_callback_url: str,
+    current_datetime: str | None = None,
+    input_fingerprint: str | None = None,
     snapshot_manifest_path: str | None = None,
     repo_sha: str | None = None,
     run_id: str | None = None,
     candidate_token: str | None = None,
     profile: str = "preview",
+    adopt_existing: bool = False,
+    expected_dataset_ref: str | None = None,
 ) -> list[str]:
     related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
     if related_mode not in {"sparse", "pgvector"}:
@@ -22232,6 +22500,10 @@ def _static_site_build_kaggle_command(
         str(_env_int("STATIC_SITE_KAGGLE_POLL_INTERVAL", 30)),
         "--download-output",
     ]
+    if current_datetime:
+        cmd.extend(["--current-datetime", current_datetime])
+    if input_fingerprint:
+        cmd.extend(["--input-fingerprint", input_fingerprint])
     if profile == "production-candidate":
         if not snapshot_manifest_path or not repo_sha or not run_id or not candidate_token:
             raise ValueError("production-candidate Kaggle handoff identity is incomplete")
@@ -22245,6 +22517,10 @@ def _static_site_build_kaggle_command(
                 "--candidate-token", candidate_token,
             ]
         )
+    if adopt_existing:
+        if not expected_dataset_ref:
+            raise ValueError("adoption requires the durable Kaggle input dataset identity")
+        cmd.extend(["--adopt-existing", "--expected-dataset-ref", expected_dataset_ref])
     if _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"):
         cmd.append("--sync-pgvector-vectors")
     if _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"):
@@ -22288,127 +22564,21 @@ async def _patch_static_site_request_payload(
         await session.commit()
 
 
-async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool | str:
-    """Coalesced static-site build after Smart Update.
-
-    Heavy Astro build work runs on Kaggle CPU; Fly only exports data, pushes the
-    kernel and receives a tar.gz artifact. The Kaggle status dataset/ledger is
-    intentionally the same contract CherryFlash uses, so operators see
-    heartbeat/progress from inside the kernel instead of opaque failed runs.
-    """
-
-    enabled = (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    if not enabled:
-        logging.info("static_site_build: skipped because ENABLE_STATIC_SITE_KAGGLE_BUILDER is off")
-        return False
-    job_id, request_payload = await _static_site_running_request(db, event_id)
-    if request_payload.get("release_channel") not in {None, "secret_preview"}:
-        raise StaticSitePermanentError("root_release_channel_is_disabled")
-    vector_evidence = await asyncio.to_thread(
-        validate_vector_barrier,
-        request_payload,
-        (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None,
-    )
-    # ADD-BUILD-08: the runner only ever receives an immutable online-backup
-    # snapshot. The live DB remains a separate status-ledger connection.
-    snapshot_root = Path(
-        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
-        or str(Path(db.path).resolve().parent / "static_site_snapshots")
-    )
-    snapshot_id = f"snapshot-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:10]}"
-    snapshot_path, manifest_path, snapshot_metadata = await asyncio.to_thread(
-        create_immutable_snapshot,
-        db.path,
-        snapshot_root,
-        request_payload=request_payload,
-        snapshot_id=snapshot_id,
-    )
-    await asyncio.to_thread(validate_snapshot, snapshot_path, manifest_path)
-    await _patch_static_site_request_payload(
-        db,
-        job_id,
-        {
-            "snapshot": {
-                "snapshot_id": snapshot_metadata.snapshot_id,
-                "sqlite_path": str(snapshot_path),
-                "manifest_path": str(manifest_path),
-                "sha256": snapshot_metadata.sha256,
-                "size_bytes": snapshot_metadata.size_bytes,
-                "quick_check": snapshot_metadata.quick_check,
-                "target_watermark": snapshot_metadata.target_watermark,
-            },
-            "vector_barrier_result": vector_evidence,
-        },
-    )
-    # Production builds own the whole actionable catalog; bounded preview
-    # canaries must opt into a smaller limit explicitly.
-    limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "5000").strip() or "5000")
-    now_local = datetime.now(LOCAL_TZ)
-    current_date = (os.getenv("STATIC_SITE_CURRENT_DATE") or now_local.date().isoformat()).strip()
-    configured_label = (os.getenv("STATIC_SITE_BUILD_ID") or "production-secret").strip()
-    safe_label = re.sub(r"[^a-zA-Z0-9._-]+", "-", configured_label).strip("-._") or "production-secret"
-    if not safe_label.startswith("production-"):
-        safe_label = f"production-{safe_label}"
-    build_id = f"{safe_label}-{now_local.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
-    repo_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
-        raise StaticSitePermanentError("STATIC_SITE_REPO_SHA must be the exact pushed 40-character SHA")
-    run_id = f"static-site:{build_id}:{uuid.uuid4().hex[:12]}"
-    candidate_token = secrets.token_urlsafe(32)
-    script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
-    cmd = _static_site_build_kaggle_command(
-        db_path=str(snapshot_path),
-        status_db_path=db.path,
-        build_id=build_id,
-        limit=limit,
-        current_date=current_date,
-        script_path=script_path,
-        status_callback_url=_static_site_status_callback_url(),
-        snapshot_manifest_path=str(manifest_path),
-        repo_sha=repo_sha,
-        run_id=run_id,
-        candidate_token=candidate_token,
-        profile="production-candidate",
-    )
-    logging.info(
-        "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",
-        event_id,
-        build_id,
-        limit,
-        (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse",
-        _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"),
-        _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"),
-    )
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-        cwd=os.path.dirname(__file__),
-        env=os.environ.copy(),
-    )
-    assert proc.stdout is not None
-    tail: list[str] = []
-    while True:
-        line = await proc.stdout.readline()
-        if not line:
-            break
-        text = line.decode("utf-8", errors="replace").rstrip()
-        if text:
-            logging.info("static_site_build: %s", text)
-            tail.append(text)
-            if len(tail) > 80:
-                tail.pop(0)
-    code = await proc.wait()
-    if code != 0:
-        raise StaticSiteRetryableError(
-            f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
-        )
-    output_dir = Path(__file__).resolve().parent / "artifacts" / "codex" / "static-site-builder" / f"output-{build_id}"
+async def _finish_static_site_candidate(
+    *,
+    db: Database,
+    job_id: int,
+    output_dir: Path,
+    build_id: str,
+    run_id: str,
+    repo_sha: str,
+    snapshot_metadata: Any,
+    candidate_token: str,
+    input_fingerprint: str,
+    clock: Any,
+    claim_token: str,
+    recovered_remote: bool = False,
+) -> bool | str:
     result_path = output_dir / "static_site_build_result.json"
     if not result_path.is_file():
         raise StaticSitePermanentError("static_site_result_receipt_missing")
@@ -22421,6 +22591,8 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         repo_sha=repo_sha,
         snapshot=snapshot_metadata,
         candidate_token=candidate_token,
+        input_fingerprint=input_fingerprint,
+        build_clock=clock,
     )
     publication_receipt = None
     if _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"):
@@ -22468,19 +22640,459 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 ),
                 "finished_at": result.get("finished_at") or static_site_iso_utc(),
                 "release_channel": "secret_preview",
+                "recovered_remote": recovered_remote,
             },
             "last_success_at": static_site_iso_utc(),
         },
     )
+    await asyncio.to_thread(
+        finish_static_site_build_claim,
+        db.path,
+        claim_token=claim_token,
+        run_id=run_id,
+        input_fingerprint=input_fingerprint,
+        effective_date=clock.effective_date,
+        success=True,
+        receipt={
+            "build_id": build_id,
+            "run_id": run_id,
+            "snapshot_id": snapshot_metadata.snapshot_id,
+            "input_fingerprint": input_fingerprint,
+            "effective_date": clock.effective_date,
+            "published": bool(publication_receipt),
+            "recovered_remote": recovered_remote,
+        },
+    )
     logging.info(
-        "static_site_build: done build_id=%s run_id=%s snapshot_id=%s published=%s token_sha256=%s",
+        "static_site_build: done build_id=%s run_id=%s snapshot_id=%s published=%s recovered_remote=%s token_sha256=%s",
         build_id,
         run_id,
         snapshot_metadata.snapshot_id,
         bool(publication_receipt),
+        recovered_remote,
         publication_receipt.token_sha256 if publication_receipt else None,
     )
     return publication_receipt.public_url if publication_receipt else True
+
+
+async def _recover_previous_static_site_attempt(
+    *,
+    db: Database,
+    job_id: int,
+    request_payload: Mapping[str, Any],
+    limit: int,
+) -> tuple[bool, bool | str | None]:
+    """Adopt a surviving Kaggle run before any replacement push is allowed."""
+
+    handoff = request_payload.get("remote_handoff")
+    if not isinstance(handoff, Mapping):
+        return False, None
+    claim = await asyncio.to_thread(recoverable_static_site_build, db.path, job_id=job_id)
+    if claim is None:
+        return False, None
+    required = {
+        "build_id": str(handoff.get("build_id") or "").strip(),
+        "run_id": str(handoff.get("run_id") or "").strip(),
+        "repo_sha": str(handoff.get("repo_sha") or "").strip(),
+        "candidate_token": str(handoff.get("candidate_token") or "").strip(),
+        "snapshot_path": str(handoff.get("snapshot_path") or "").strip(),
+        "manifest_path": str(handoff.get("manifest_path") or "").strip(),
+        "input_fingerprint": str(handoff.get("input_fingerprint") or "").strip(),
+        "current_datetime": str(handoff.get("current_datetime") or "").strip(),
+    }
+    if (
+        not all(required.values())
+        or required["run_id"] != claim.run_id
+        or required["input_fingerprint"] != claim.input_fingerprint
+        or not claim.dataset_ref
+    ):
+        raise StaticSitePermanentError("static_site_recovery_handoff_identity_mismatch")
+    snapshot_metadata = await asyncio.to_thread(
+        validate_snapshot, Path(required["snapshot_path"]), Path(required["manifest_path"])
+    )
+    clock = resolve_static_site_build_clock(
+        current_date=claim.effective_date,
+        current_datetime=required["current_datetime"],
+    )
+    script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
+    cmd = _static_site_build_kaggle_command(
+        db_path=required["snapshot_path"],
+        status_db_path=db.path,
+        build_id=required["build_id"],
+        limit=limit,
+        current_date=clock.effective_date,
+        current_datetime=clock.current_datetime,
+        input_fingerprint=claim.input_fingerprint,
+        script_path=script_path,
+        status_callback_url=_static_site_status_callback_url(),
+        snapshot_manifest_path=required["manifest_path"],
+        repo_sha=required["repo_sha"],
+        run_id=claim.run_id,
+        candidate_token=required["candidate_token"],
+        profile="production-candidate",
+        adopt_existing=True,
+        expected_dataset_ref=claim.dataset_ref,
+    )
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=os.path.dirname(__file__),
+        env=os.environ.copy(),
+    )
+    output, _ = await proc.communicate()
+    tail = output.decode("utf-8", errors="replace").splitlines()[-30:]
+    for line in tail:
+        logging.info("static_site_build: recovery %s", line)
+    if proc.returncode == 75:
+        raise StaticSiteSingleFlightDeferred(f"static_site_remote_recovery_live:{claim.run_id}")
+    if proc.returncode == 76:
+        await asyncio.to_thread(
+            finish_static_site_build_claim,
+            db.path,
+            claim_token=claim.claim_token,
+            run_id=claim.run_id,
+            input_fingerprint=claim.input_fingerprint,
+            effective_date=claim.effective_date,
+            success=False,
+            receipt={"status": "remote_recovery_unavailable", "remote_status": claim.remote_status},
+        )
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {"remote_handoff": None, "remote_recovery": {"status": "unavailable", "run_id": claim.run_id}},
+        )
+        return False, None
+    if proc.returncode != 0:
+        raise StaticSiteSingleFlightDeferred(
+            f"static_site_remote_recovery_probe_failed:{claim.run_id}:code={proc.returncode}"
+        )
+    output_dir = Path(__file__).resolve().parent / "artifacts" / "codex" / "static-site-builder" / f"output-{required['build_id']}"
+    result = await _finish_static_site_candidate(
+        db=db,
+        job_id=job_id,
+        output_dir=output_dir,
+        build_id=required["build_id"],
+        run_id=claim.run_id,
+        repo_sha=required["repo_sha"],
+        snapshot_metadata=snapshot_metadata,
+        candidate_token=required["candidate_token"],
+        input_fingerprint=claim.input_fingerprint,
+        clock=clock,
+        claim_token=claim.claim_token,
+        recovered_remote=True,
+    )
+    return True, result
+
+
+async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool | str:
+    """Coalesced static-site build after Smart Update.
+
+    Heavy Astro build work runs on Kaggle CPU; Fly only exports data, pushes the
+    kernel and receives a tar.gz artifact. The Kaggle status dataset/ledger is
+    intentionally the same contract CherryFlash uses, so operators see
+    heartbeat/progress from inside the kernel instead of opaque failed runs.
+    """
+
+    enabled = (os.getenv("ENABLE_STATIC_SITE_KAGGLE_BUILDER") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        logging.info("static_site_build: skipped because ENABLE_STATIC_SITE_KAGGLE_BUILDER is off")
+        return False
+    job_id, request_payload = await _static_site_running_request(db, event_id)
+    if request_payload.get("release_channel") not in {None, "secret_preview"}:
+        raise StaticSitePermanentError("root_release_channel_is_disabled")
+    force_rebuild = bool(request_payload.get("force_rebuild"))
+    if force_rebuild and request_payload.get("trigger") != "operator_request":
+        raise StaticSitePermanentError("force_rebuild_requires_operator_request")
+    clock = resolve_static_site_build_clock(
+        current_date=(os.getenv("STATIC_SITE_CURRENT_DATE") or "").strip() or None,
+        current_datetime=(os.getenv("STATIC_SITE_CURRENT_DATETIME") or "").strip() or None,
+    )
+    # Production builds own the whole actionable catalog; bounded preview
+    # canaries must opt into a smaller limit explicitly.
+    limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "5000").strip() or "5000")
+    repo_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
+        raise StaticSitePermanentError("STATIC_SITE_REPO_SHA must be the exact pushed 40-character SHA")
+    recovered, recovered_result = await _recover_previous_static_site_attempt(
+        db=db,
+        job_id=job_id,
+        request_payload=request_payload,
+        limit=limit,
+    )
+    if recovered:
+        return recovered_result if recovered_result is not None else True
+    vector_evidence = await asyncio.to_thread(
+        validate_vector_barrier,
+        request_payload,
+        (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None,
+    )
+    # ADD-BUILD-08: the runner only ever receives an immutable online-backup
+    # snapshot. The live DB remains a separate status-ledger connection.
+    snapshot_root = Path(
+        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
+        or str(Path(db.path).resolve().parent / "static_site_snapshots")
+    )
+    snapshot_id = f"snapshot-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:10]}"
+    snapshot_path, manifest_path, snapshot_metadata = await asyncio.to_thread(
+        create_immutable_snapshot,
+        db.path,
+        snapshot_root,
+        request_payload=request_payload,
+        snapshot_id=snapshot_id,
+    )
+    await asyncio.to_thread(validate_snapshot, snapshot_path, manifest_path)
+    related_cache_path = (
+        os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json"
+    ).strip()
+    fingerprint_config = {
+        "profile": "production-candidate",
+        "catalog_mode": "full",
+        "limit": limit,
+        "public_site_origin": _first_env(
+            "STATIC_SITE_PUBLIC_SITE_ORIGIN", "PUBLIC_SITE_ORIGIN", default="https://kenigevents.ru"
+        ),
+        "asset_base_url": _first_env("STATIC_SITE_ASSET_BASE_URL", "PUBLIC_ASSET_BASE_URL"),
+        "astro_asset_base_url": _first_env(
+            "STATIC_SITE_ASTRO_ASSET_BASE_URL", "PUBLIC_ASTRO_ASSET_BASE_URL"
+        ),
+        "ics_base_url": _first_env("STATIC_SITE_ICS_BASE_URL", "PUBLIC_ICS_BASE_URL"),
+        "related_mode": (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse",
+        "sync_pgvector_vectors": _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"),
+        "pgvector_embedding_model": (
+            os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2"
+        ).strip(),
+        "pgvector_max_provider_calls": _env_int("STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS", 1000),
+        "gemma_related_verify": _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"),
+        "gemma_related_model": (
+            os.getenv("STATIC_SITE_GEMMA_RELATED_MODEL") or "models/gemma-4-26b-a4b-it"
+        ).strip(),
+        "gemma_related_max_anchors": _env_int("STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS", 0),
+        "secret_publish_enabled": _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"),
+        "public_personalization_supabase_url": _first_env(
+            "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL",
+            "PUBLIC_PERSONALIZATION_SUPABASE_URL",
+            "PERSONALIZATION_SUPABASE_URL",
+        ),
+        # The browser-safe key can affect the generated JS, but evidence stores
+        # only its digest rather than the key itself.
+        "public_personalization_key_sha256": hashlib.sha256(
+            _first_env(
+                "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
+                "PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
+                "PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY",
+            ).encode()
+        ).hexdigest(),
+        "public_yandex_auth_provider": _first_env(
+            "STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER",
+            "PUBLIC_YANDEX_AUTH_PROVIDER",
+            default="custom:yandex",
+        ),
+    }
+    input_fingerprint, fingerprint_evidence = await asyncio.to_thread(
+        compute_static_site_input_fingerprint,
+        snapshot_path,
+        effective_date=clock.effective_date,
+        repo_sha=repo_sha,
+        build_config=fingerprint_config,
+        related_cache_path=related_cache_path,
+    )
+    now_local = datetime.fromisoformat(clock.current_datetime)
+    configured_label = (os.getenv("STATIC_SITE_BUILD_ID") or "production-secret").strip()
+    safe_label = re.sub(r"[^a-zA-Z0-9._-]+", "-", configured_label).strip("-._") or "production-secret"
+    if not safe_label.startswith("production-"):
+        safe_label = f"production-{safe_label}"
+    build_id = f"{safe_label}-{now_local.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    run_id = f"static-site:{build_id}:{uuid.uuid4().hex[:12]}"
+    claim = await asyncio.to_thread(
+        claim_static_site_build,
+        db.path,
+        job_id=job_id,
+        run_id=run_id,
+        input_fingerprint=input_fingerprint,
+        effective_date=clock.effective_date,
+        request_watermark=str(request_payload.get("target_watermark") or "") or None,
+        force_rebuild=force_rebuild,
+    )
+    await _patch_static_site_request_payload(
+        db,
+        job_id,
+        {
+            "snapshot": {
+                "snapshot_id": snapshot_metadata.snapshot_id,
+                "sqlite_path": str(snapshot_path),
+                "manifest_path": str(manifest_path),
+                "sha256": snapshot_metadata.sha256,
+                "size_bytes": snapshot_metadata.size_bytes,
+                "quick_check": snapshot_metadata.quick_check,
+                "target_watermark": snapshot_metadata.target_watermark,
+            },
+            "vector_barrier_result": vector_evidence,
+            "input_fingerprint": input_fingerprint,
+            "fingerprint_evidence": fingerprint_evidence,
+            "build_clock": asdict(clock),
+        },
+    )
+    if claim.action == "noop" or (
+        claim.action == "busy" and claim.blocking_fingerprint == input_fingerprint
+    ):
+        outcome = "noop" if claim.action == "noop" else "single_flight_covered"
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {
+                "build_receipt": {
+                    "status": outcome,
+                    "input_fingerprint": input_fingerprint,
+                    "effective_date": clock.effective_date,
+                    "time_zone": clock.time_zone,
+                    "previous_run_id": claim.previous_run_id,
+                    "blocking_run_id": claim.blocking_run_id,
+                    "kaggle_push_count": 0,
+                    "force_rebuild": force_rebuild,
+                }
+            },
+        )
+        snapshot_path.unlink(missing_ok=True)
+        manifest_path.unlink(missing_ok=True)
+        logging.info(
+            "static_site_build: %s fingerprint=%s previous=%s blocking=%s",
+            outcome,
+            input_fingerprint,
+            claim.previous_run_id,
+            claim.blocking_run_id,
+        )
+        return False
+    if claim.action == "busy":
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {
+                "build_receipt": {
+                    "status": "single_flight_deferred",
+                    "input_fingerprint": input_fingerprint,
+                    "effective_date": clock.effective_date,
+                    "blocking_run_id": claim.blocking_run_id,
+                    "blocking_fingerprint": claim.blocking_fingerprint,
+                    "kaggle_push_count": 0,
+                }
+            },
+        )
+        snapshot_path.unlink(missing_ok=True)
+        manifest_path.unlink(missing_ok=True)
+        raise StaticSiteSingleFlightDeferred(
+            f"static_site_single_flight_busy:{claim.blocking_run_id or 'unknown'}"
+        )
+    if not claim.claim_token:
+        raise StaticSitePermanentError("static_site_claim_missing_token")
+    claim_finished = False
+    try:
+        candidate_token = secrets.token_urlsafe(32)
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {
+                "remote_handoff": {
+                    "schema_version": "static_site_remote_handoff_v1",
+                    "build_id": build_id,
+                    "run_id": run_id,
+                    "repo_sha": repo_sha,
+                    "candidate_token": candidate_token,
+                    "snapshot_path": str(snapshot_path),
+                    "manifest_path": str(manifest_path),
+                    "input_fingerprint": input_fingerprint,
+                    "effective_date": clock.effective_date,
+                    "current_datetime": clock.current_datetime,
+                    "prepared_at": static_site_iso_utc(),
+                }
+            },
+        )
+        script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
+        cmd = _static_site_build_kaggle_command(
+            db_path=str(snapshot_path),
+            status_db_path=db.path,
+            build_id=build_id,
+            limit=limit,
+            current_date=clock.effective_date,
+            current_datetime=clock.current_datetime,
+            input_fingerprint=input_fingerprint,
+            script_path=script_path,
+            status_callback_url=_static_site_status_callback_url(),
+            snapshot_manifest_path=str(manifest_path),
+            repo_sha=repo_sha,
+            run_id=run_id,
+            candidate_token=candidate_token,
+            profile="production-candidate",
+        )
+        logging.info(
+            "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",
+            event_id,
+            build_id,
+            limit,
+            (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse",
+            _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"),
+            _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"),
+        )
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=os.path.dirname(__file__),
+            env=os.environ.copy(),
+        )
+        assert proc.stdout is not None
+        tail: list[str] = []
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            text = line.decode("utf-8", errors="replace").rstrip()
+            if text:
+                logging.info("static_site_build: %s", text)
+                tail.append(text)
+                if len(tail) > 80:
+                    tail.pop(0)
+        code = await proc.wait()
+        if code != 0:
+            raise StaticSiteRetryableError(
+                f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
+            )
+        output_dir = Path(__file__).resolve().parent / "artifacts" / "codex" / "static-site-builder" / f"output-{build_id}"
+        completed = await _finish_static_site_candidate(
+            db=db,
+            job_id=job_id,
+            output_dir=output_dir,
+            build_id=build_id,
+            run_id=run_id,
+            repo_sha=repo_sha,
+            snapshot_metadata=snapshot_metadata,
+            candidate_token=candidate_token,
+            input_fingerprint=input_fingerprint,
+            clock=clock,
+            claim_token=claim.claim_token,
+        )
+        claim_finished = True
+        return completed
+    finally:
+        if not claim_finished:
+            try:
+                await asyncio.to_thread(
+                    finish_static_site_build_claim,
+                    db.path,
+                    claim_token=claim.claim_token,
+                    run_id=run_id,
+                    input_fingerprint=input_fingerprint,
+                    effective_date=clock.effective_date,
+                    success=False,
+                    receipt={"status": "failed_before_success_receipt"},
+                )
+            except Exception:
+                logging.exception("static_site_build: failed to release durable claim run_id=%s", run_id)
 
 
 async def job_event_media_review(

@@ -23,16 +23,20 @@ import sys
 import tarfile
 import tempfile
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from static_site_release import resolve_build_clock
 KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
 SITE_SRC = ROOT / 'site'
 ARTIFACT_ROOT = ROOT / 'artifacts' / 'codex' / 'static-site-builder'
 LOCK_PATH = ARTIFACT_ROOT / 'static-site-kaggle.lock'
+ADOPT_REMOTE_LIVE_EXIT = 75
+ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
 
 
 def sha256_file(path: Path) -> str:
@@ -86,6 +90,10 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
             actual = result.get('snapshot', {}).get(key) if key.startswith('snapshot_') else result.get(key)
             if str(actual) != str(value):
                 raise RuntimeError(f'Kaggle result {key} mismatch: {actual!r} != {value!r}')
+        if result.get('input_fingerprint') != args.input_fingerprint:
+            raise RuntimeError('Kaggle result input fingerprint mismatch')
+        if result.get('build_clock') != args.build_clock:
+            raise RuntimeError('Kaggle result build clock mismatch')
         artifacts = result.get('artifacts')
         if not isinstance(artifacts, list) or len(artifacts) != 2:
             raise RuntimeError('production-candidate result must contain exactly root and secret artifacts')
@@ -489,7 +497,9 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'candidate_token': args.candidate_token or None,
         'snapshot': args.snapshot_contract or None,
         'current_date': args.current_date,
-        'current_datetime': args.current_datetime or None,
+        'current_datetime': args.current_datetime,
+        'build_clock': args.build_clock,
+        'input_fingerprint': args.input_fingerprint or None,
         'focus_date_from': args.focus_date_from or None,
         'focus_date_to': args.focus_date_to or None,
         'limit': args.limit,
@@ -555,6 +565,52 @@ def embed_site_payload(staging: Path, site_dir: Path, config: dict) -> None:
     archive_path.unlink(missing_ok=True)
 
 
+def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: str) -> int:
+    """Reconcile one exact already-pushed kernel without creating a new run."""
+
+    expected_dataset = str(args.expected_dataset_ref or '').strip()
+    if not expected_dataset:
+        print('[static-site-kaggle] adoption unavailable: durable dataset identity missing', flush=True)
+        return ADOPT_REMOTE_UNAVAILABLE_EXIT
+    try:
+        matched, metadata = client.kernel_has_dataset_sources(kernel_ref, [expected_dataset])
+    except Exception as exc:
+        print(f'[static-site-kaggle] adoption dataset probe failed: {exc}', flush=True)
+        return ADOPT_REMOTE_LIVE_EXIT
+    if not matched:
+        print(
+            '[static-site-kaggle] adoption unavailable: fixed kernel now has different inputs '
+            f"expected={expected_dataset} actual={metadata.get('dataset_sources')}",
+            flush=True,
+        )
+        return ADOPT_REMOTE_UNAVAILABLE_EXIT
+    status = client.get_kernel_status(kernel_ref)
+    raw = str(status.get('status') or '').upper()
+    print(f'[static-site-kaggle] adoption status={raw} raw={status}', flush=True)
+    if raw in {'QUEUED', 'RUNNING', 'INITIALIZING', 'PREPARING'}:
+        return ADOPT_REMOTE_LIVE_EXIT
+    if raw != 'COMPLETE':
+        return ADOPT_REMOTE_UNAVAILABLE_EXIT
+    out_dir = ARTIFACT_ROOT / f'output-{args.build_id}'
+    shutil.rmtree(out_dir, ignore_errors=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
+    print(f'[static-site-kaggle] adopted and downloaded {len(files)} files to {out_dir}', flush=True)
+    validated = validate_downloaded_result(out_dir, args)
+    print(
+        '[static-site-kaggle] adopted exact output '
+        f"build_id={validated.get('build_id')} result_sha256={sha256_file(out_dir / 'static_site_build_result.json')}",
+        flush=True,
+    )
+    secret_sources = [
+        str(item) for item in metadata.get('dataset_sources') or []
+        if '/ssb-secrets-' in str(item) or '/ssb-key-' in str(item)
+    ]
+    if secret_sources and not args.keep_secret_datasets:
+        cleanup_secret_datasets(client, secret_sources)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--db', help='Optional SQLite snapshot; if set, export preview JSON before staging')
@@ -565,8 +621,9 @@ def main() -> int:
     parser.add_argument('--run-id', default=os.getenv('STATIC_SITE_RUN_ID', ''))
     parser.add_argument('--candidate-token', default=os.getenv('STATIC_SITE_CANDIDATE_TOKEN', ''))
     parser.add_argument('--limit', type=int, default=int(os.getenv('STATIC_SITE_BUILDER_LIMIT', '50')))
-    parser.add_argument('--current-date', default=os.getenv('STATIC_SITE_CURRENT_DATE', '2026-06-28'))
+    parser.add_argument('--current-date', default=os.getenv('STATIC_SITE_CURRENT_DATE', ''))
     parser.add_argument('--current-datetime', default=os.getenv('STATIC_SITE_CURRENT_DATETIME', ''))
+    parser.add_argument('--input-fingerprint', default=os.getenv('STATIC_SITE_INPUT_FINGERPRINT', ''))
     parser.add_argument('--focus-date-from', default=os.getenv('STATIC_SITE_FOCUS_DATE_FROM', ''))
     parser.add_argument('--focus-date-to', default=os.getenv('STATIC_SITE_FOCUS_DATE_TO', ''))
     parser.add_argument('--build-id', default=os.getenv('STATIC_SITE_BUILD_ID'))
@@ -615,8 +672,17 @@ def main() -> int:
     parser.add_argument('--status-callback-url', default=os.getenv('KAGGLE_STATUS_CALLBACK_URL', ''), help='Override callback URL for kaggle status events')
     parser.add_argument('--no-wait', action='store_true')
     parser.add_argument('--download-output', action='store_true')
+    parser.add_argument('--adopt-existing', action='store_true', help='Download/reconcile the exact already-pushed kernel; never push')
+    parser.add_argument('--expected-dataset-ref', default='', help='Durable input dataset identity required for adoption')
     parser.add_argument('--keep-staging', action='store_true')
     args = parser.parse_args()
+    clock = resolve_build_clock(
+        current_date=args.current_date or None,
+        current_datetime=args.current_datetime or None,
+    )
+    args.current_date = clock.effective_date
+    args.current_datetime = clock.current_datetime
+    args.build_clock = asdict(clock)
 
     if args.profile == 'production-candidate':
         if args.catalog_mode != 'full' or not args.export_in_kaggle:
@@ -625,6 +691,8 @@ def main() -> int:
             raise SystemExit('production-candidate requires --repo-sha with a full 40-character SHA')
         if not args.run_id:
             raise SystemExit('production-candidate requires --run-id')
+        if not re.fullmatch(r'[0-9a-f]{64}', args.input_fingerprint or ''):
+            raise SystemExit('production-candidate requires --input-fingerprint SHA-256')
         if not args.build_id or not re.fullmatch(r'production-[A-Za-z0-9][A-Za-z0-9._-]*', args.build_id):
             raise SystemExit('production-candidate requires a production-* --build-id')
         if args.candidate_token and not re.fullmatch(r'[A-Za-z0-9_-]{43}', args.candidate_token):
@@ -640,6 +708,17 @@ def main() -> int:
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise SystemExit('static-site Kaggle builder is already running locally')
+        # Import after --help parsing so optional Kaggle deps are not required for docs.
+        from video_announce.kaggle_client import KaggleClient
+
+        env_user = (os.getenv('KAGGLE_USERNAME') or '').strip()
+        if not env_user:
+            raise RuntimeError('KAGGLE_USERNAME is required')
+        client = KaggleClient()
+        kernel_ref = f'{env_user}/kenigevents-static-site-builder'
+        if args.adopt_existing:
+            return adopt_existing_kernel_output(args, client, kernel_ref)
+
         with tempfile.TemporaryDirectory(prefix='static-site-kaggle-') as tmp:
             tmp_root = Path(tmp)
             staging = tmp_root / 'kernel'
@@ -647,13 +726,6 @@ def main() -> int:
             staging.mkdir(parents=True)
             dataset_dir.mkdir(parents=True)
 
-            # Import after --help parsing so optional Kaggle deps are not required for docs.
-            from video_announce.kaggle_client import KaggleClient
-
-            env_user = (os.getenv('KAGGLE_USERNAME') or '').strip()
-            if not env_user:
-                raise RuntimeError('KAGGLE_USERNAME is required')
-            client = KaggleClient()
             build_id, dataset_ref = stage_kernel_and_dataset(args, staging, dataset_dir, client, env_user)
             secret_dataset_refs = create_secret_datasets_if_needed(
                 args,
@@ -669,7 +741,6 @@ def main() -> int:
                 shutil.copytree(tmp_root, keep)
                 print(f"[static-site-kaggle] staging kept: {keep}", flush=True)
 
-            kernel_ref = f'{env_user}/kenigevents-static-site-builder'
             try:
                 dataset_sources = [dataset_ref, *secret_dataset_refs]
                 status_dataset = create_status_dataset_if_configured(

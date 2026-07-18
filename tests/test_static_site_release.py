@@ -5,6 +5,7 @@ import hashlib
 import io
 import sqlite3
 import tarfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -14,15 +15,271 @@ from static_site_release import (
     MAX_EVENT_IDS,
     StaticSitePermanentError,
     StaticSiteRetryableError,
+    active_static_site_remote_run,
+    recoverable_static_site_build,
     classify_failure,
+    claim_static_site_build,
+    compute_static_site_input_fingerprint,
     create_immutable_snapshot,
+    finish_static_site_build_claim,
     freshness_state,
     make_request_payload,
     merge_request_payload,
     publish_secret_candidate_archive,
+    resolve_build_clock,
     validate_snapshot,
     validate_vector_barrier,
 )
+
+
+def test_build_clock_uses_kaliningrad_boundary_and_rejects_mismatch() -> None:
+    before = resolve_build_clock(now=datetime(2026, 7, 18, 21, 59, tzinfo=timezone.utc))
+    after = resolve_build_clock(now=datetime(2026, 7, 18, 22, 0, tzinfo=timezone.utc))
+    assert before.time_zone == after.time_zone == "Europe/Kaliningrad"
+    assert before.effective_date == "2026-07-18"
+    assert after.effective_date == "2026-07-19"
+    assert after.current_datetime.startswith("2026-07-19T00:00:00+02:00")
+    normalized = resolve_build_clock(current_date="2026-07-18")
+    assert normalized.current_datetime == "2026-07-18T00:00:00+02:00"
+    with pytest.raises(StaticSitePermanentError, match="date_mismatch"):
+        resolve_build_clock(
+            current_date="2026-07-18",
+            current_datetime="2026-07-19T00:00:00+02:00",
+        )
+
+
+def _fingerprint_db(path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE event(id INTEGER PRIMARY KEY, title TEXT, date TEXT, description TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO event VALUES(1, 'Public title', '2026-08-01', 'Public description')"
+        )
+        connection.execute(
+            "CREATE TABLE joboutbox(id INTEGER PRIMARY KEY, attempts INTEGER, updated_at TEXT)"
+        )
+        connection.execute("INSERT INTO joboutbox VALUES(1, 0, '2026-07-18T00:00:00Z')")
+
+
+def test_fingerprint_ignores_operational_churn_but_changes_for_public_date_and_config(tmp_path) -> None:
+    database = tmp_path / "fingerprint.sqlite"
+    _fingerprint_db(database)
+    base, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full", "policy": "v1"},
+    )
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE joboutbox SET attempts=99, updated_at='2026-07-18T12:00:00Z' WHERE id=1"
+        )
+        connection.execute(
+            "INSERT INTO event VALUES(2, 'Past-only churn', '2026-07-01', 'Already absent from output')"
+        )
+    unchanged, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full", "policy": "v1"},
+    )
+    assert unchanged == base
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE event SET title='Changed public title' WHERE id=1")
+    public_changed, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full", "policy": "v1"},
+    )
+    rollover, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-19",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full", "policy": "v1"},
+    )
+    config_changed, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full", "policy": "v2"},
+    )
+    publish_disabled, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={
+            "catalog_mode": "full",
+            "policy": "v1",
+            "secret_publish_enabled": False,
+        },
+    )
+    publish_enabled, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={
+            "catalog_mode": "full",
+            "policy": "v1",
+            "secret_publish_enabled": True,
+        },
+    )
+    assert public_changed != base
+    assert rollover != public_changed
+    assert config_changed != public_changed
+    assert publish_enabled != publish_disabled
+
+
+def test_durable_noop_force_and_concurrent_single_flight(tmp_path) -> None:
+    database = tmp_path / "claims.sqlite"
+    _fingerprint_db(database)
+    fingerprint, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full"},
+    )
+
+    def attempt(number: int):
+        return claim_static_site_build(
+            database,
+            job_id=number,
+            run_id=f"run-{number}",
+            input_fingerprint=fingerprint,
+            effective_date="2026-07-18",
+            request_watermark=f"watermark-{number}",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = list(pool.map(attempt, (1, 2)))
+    assert sorted(claim.action for claim in claims) == ["busy", "claimed"]
+    owner = next(claim for claim in claims if claim.action == "claimed")
+    finish_static_site_build_claim(
+        database,
+        claim_token=owner.claim_token or "",
+        run_id="run-1" if claims[0] is owner else "run-2",
+        input_fingerprint=fingerprint,
+        effective_date="2026-07-18",
+        success=True,
+        receipt={"kaggle_push_count": 1},
+    )
+    noop = claim_static_site_build(
+        database,
+        job_id=3,
+        run_id="run-3",
+        input_fingerprint=fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="watermark-3",
+    )
+    assert noop.action == "noop"
+    forced = claim_static_site_build(
+        database,
+        job_id=4,
+        run_id="run-4",
+        input_fingerprint=fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="watermark-4",
+        force_rebuild=True,
+    )
+    assert forced.action == "claimed"
+    finish_static_site_build_claim(
+        database,
+        claim_token=forced.claim_token or "",
+        run_id="run-4",
+        input_fingerprint=fingerprint,
+        effective_date="2026-07-18",
+        success=False,
+    )
+    with sqlite3.connect(database) as connection:
+        outcomes = [row[0] for row in connection.execute(
+            "SELECT outcome FROM static_site_build_history ORDER BY id"
+        )]
+    assert "busy" in outcomes and "noop" in outcomes and "success" in outcomes
+
+
+def test_live_kaggle_ledger_prevents_stale_remote_reset(tmp_path) -> None:
+    database = tmp_path / "remote.sqlite"
+    _fingerprint_db(database)
+    fingerprint, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full"},
+    )
+    old = datetime(2026, 7, 18, 0, tzinfo=timezone.utc)
+    claim = claim_static_site_build(
+        database,
+        job_id=1,
+        run_id="remote-live",
+        input_fingerprint=fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="watermark",
+        now=old,
+    )
+    assert claim.action == "claimed"
+    fresh = datetime(2026, 7, 18, 3, tzinfo=timezone.utc)
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE kaggle_run_ledger(
+                run_id TEXT PRIMARY KEY, status TEXT, updated_at TEXT,
+                last_heartbeat_at TEXT, terminal_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO kaggle_run_ledger VALUES(?, 'alive', ?, ?, NULL)",
+            ("remote-live", fresh.isoformat(), fresh.isoformat()),
+        )
+    assert active_static_site_remote_run(
+        database, stale_seconds=60, now=fresh + timedelta(seconds=30)
+    ) == "remote-live"
+    blocked = claim_static_site_build(
+        database,
+        job_id=2,
+        run_id="would-duplicate",
+        input_fingerprint="b" * 64,
+        effective_date="2026-07-18",
+        request_watermark="watermark-2",
+        stale_seconds=60,
+        now=fresh + timedelta(seconds=30),
+    )
+    assert blocked.action == "busy"
+
+
+def test_terminal_orphan_remains_recoverable_by_exact_job_and_dataset(tmp_path) -> None:
+    database = tmp_path / "terminal.sqlite"
+    _fingerprint_db(database)
+    claim = claim_static_site_build(
+        database,
+        job_id=41,
+        run_id="remote-terminal",
+        input_fingerprint="c" * 64,
+        effective_date="2026-07-18",
+        request_watermark="watermark",
+    )
+    assert claim.action == "claimed"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE kaggle_run_ledger(
+                run_id TEXT PRIMARY KEY, kernel_ref TEXT, dataset_ref TEXT,
+                status TEXT, terminal_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO kaggle_run_ledger VALUES(?, ?, ?, 'done', ?)",
+            ("remote-terminal", "owner/kernel", "owner/exact-input", "2026-07-18T12:00:00Z"),
+        )
+    recovered = recoverable_static_site_build(database, job_id=41)
+    assert recovered is not None
+    assert recovered.claim_token == claim.claim_token
+    assert recovered.run_id == "remote-terminal"
+    assert recovered.dataset_ref == "owner/exact-input"
+    assert recovered.remote_status == "done"
+    assert recoverable_static_site_build(database, job_id=42) is None
 
 
 class _MemoryS3:

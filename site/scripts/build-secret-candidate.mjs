@@ -19,6 +19,7 @@ const siteOrigin = (process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').
 const productionManifestBytes = readFileSync(productionManifestPath);
 const productionManifest = JSON.parse(productionManifestBytes);
 const transportExperimentMode = process.env.SECRET_CANDIDATE_TRANSPORT_EXPERIMENT_MODE || 'qa';
+const transportQaRoute = 'lab/event-desktop/examples/editorial-ocr-companion-arrival';
 if (!['qa', 'focus_group'].includes(transportExperimentMode)) throw new Error('Secret candidate transport experiment mode must be qa or focus_group');
 for (const key of ['template_matrix','production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) {
   if (productionManifest.checks?.[key] !== 'ok') throw new Error(`Production artifact is not checked: ${key}`);
@@ -39,7 +40,16 @@ const env = {
 const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['build'], { cwd: siteDir, env, stdio: 'inherit', shell: process.platform === 'win32' });
 if (astro.status !== 0) process.exit(astro.status || 1);
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });
+// Secret candidates retain exactly one noindex design-system specimen so the
+// three transport arms remain reviewable after the source event has elapsed.
+// Every other lab route stays excluded from the immutable candidate.
+const transportQaSource = join(distDir, transportQaRoute);
+const transportQaStaged = join(siteDir, `.secret-transport-qa-${process.pid}`);
+rmSync(transportQaStaged, { recursive: true, force: true });
+renameSync(transportQaSource, transportQaStaged);
 rmSync(join(distDir, 'lab'), { recursive: true, force: true });
+mkdirSync(dirname(join(distDir, transportQaRoute)), { recursive: true });
+renameSync(transportQaStaged, join(distDir, transportQaRoute));
 rmSync(join(distDir, 'partnerstvo', 'index.html'), { force: true });
 let rootHtml = readFileSync(join(distDir, 'segodnya/index.html'), 'utf8');
 const todayCanonical = `${siteOrigin}${basePath}/segodnya/`;
@@ -76,6 +86,7 @@ const manifest = {
       ...productionManifest.versions.transport_timetable_experiment,
       mode: env.PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE,
       trusted_telemetry: env.PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE === 'focus_group',
+      qa_route: `/${transportQaRoute}/`,
     },
   },
   counts: pageCounts(files, events.length), tree_sha256: treeHash(files), files,

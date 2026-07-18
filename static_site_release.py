@@ -17,12 +17,13 @@ import tempfile
 import tarfile
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 from typing import Any, Iterable, Mapping
+from zoneinfo import ZoneInfo
 
 
 REQUEST_SCHEMA = "static_site_build_request_v1"
@@ -35,6 +36,97 @@ MAX_EVENT_REVISIONS = 256
 SECRET_CANDIDATE_RESULT_SCHEMA = "static_site_build_result_v2"
 SECRET_CANDIDATE_MANIFEST_SCHEMA = "static_secret_candidate_manifest_v1"
 SECRET_CANDIDATE_TOKEN_RE = r"[A-Za-z0-9_-]{43}"
+STATIC_SITE_TIME_ZONE_NAME = "Europe/Kaliningrad"
+STATIC_SITE_TIME_ZONE = ZoneInfo(STATIC_SITE_TIME_ZONE_NAME)
+STATIC_SITE_FINGERPRINT_SCHEMA = "static_site_input_fingerprint_v1"
+STATIC_SITE_STATE_SCHEMA = "static_site_build_state_v1"
+STATIC_SITE_PROJECTION_VERSION = "static_event_public_projection_v2"
+
+
+@dataclass(frozen=True)
+class StaticSiteBuildClock:
+    time_zone: str
+    effective_date: str
+    current_datetime: str
+
+
+@dataclass(frozen=True)
+class StaticSiteBuildClaim:
+    action: str
+    input_fingerprint: str
+    claim_token: str | None = None
+    blocking_run_id: str | None = None
+    blocking_fingerprint: str | None = None
+    previous_run_id: str | None = None
+
+
+@dataclass(frozen=True)
+class StaticSiteRecoveryClaim:
+    claim_token: str
+    job_id: int
+    run_id: str
+    input_fingerprint: str
+    effective_date: str
+    kernel_ref: str | None = None
+    dataset_ref: str | None = None
+    remote_status: str | None = None
+    remote_terminal_at: str | None = None
+
+
+def resolve_build_clock(
+    *,
+    now: datetime | None = None,
+    current_date: str | date | None = None,
+    current_datetime: str | datetime | None = None,
+) -> StaticSiteBuildClock:
+    """Resolve one explicit Europe/Kaliningrad clock for a build.
+
+    A date-only override is normalized to local midnight, which preserves
+    deterministic historical/manual builds.  When a datetime is supplied its
+    local date must agree with ``current_date`` instead of silently letting the
+    exporter use two different days.
+    """
+
+    requested_date: date | None = None
+    if current_date not in (None, ""):
+        try:
+            requested_date = (
+                current_date if isinstance(current_date, date) else date.fromisoformat(str(current_date))
+            )
+        except (TypeError, ValueError) as exc:
+            raise StaticSitePermanentError("static_site_current_date_invalid") from exc
+
+    if current_datetime not in (None, ""):
+        try:
+            parsed = (
+                current_datetime
+                if isinstance(current_datetime, datetime)
+                else datetime.fromisoformat(str(current_datetime).replace("Z", "+00:00"))
+            )
+        except (TypeError, ValueError) as exc:
+            raise StaticSitePermanentError("static_site_current_datetime_invalid") from exc
+        if parsed.tzinfo is None:
+            # CLI values without an offset are explicitly Kaliningrad local,
+            # never host-local or UTC by accident.
+            parsed = parsed.replace(tzinfo=STATIC_SITE_TIME_ZONE)
+        local = parsed.astimezone(STATIC_SITE_TIME_ZONE)
+        if requested_date is not None and local.date() != requested_date:
+            raise StaticSitePermanentError("static_site_build_clock_date_mismatch")
+    elif requested_date is not None:
+        local = datetime.combine(requested_date, time.min, tzinfo=STATIC_SITE_TIME_ZONE)
+    else:
+        observed = now or datetime.now(timezone.utc)
+        if observed.tzinfo is None:
+            observed = observed.replace(tzinfo=timezone.utc)
+        local = observed.astimezone(STATIC_SITE_TIME_ZONE)
+        requested_date = local.date()
+
+    effective = requested_date or local.date()
+    return StaticSiteBuildClock(
+        time_zone=STATIC_SITE_TIME_ZONE_NAME,
+        effective_date=effective.isoformat(),
+        current_datetime=local.isoformat(timespec="seconds"),
+    )
 
 
 class StaticSiteReleaseError(RuntimeError):
@@ -43,6 +135,10 @@ class StaticSiteReleaseError(RuntimeError):
 
 class StaticSiteRetryableError(StaticSiteReleaseError):
     """A transient external/dependency failure that may be retried."""
+
+
+class StaticSiteSingleFlightDeferred(StaticSiteRetryableError):
+    """Another remote build owns the lease; retain this request unchanged."""
 
 
 class StaticSitePermanentError(StaticSiteReleaseError):
@@ -179,6 +275,7 @@ def _watermark_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
         "correlation_ids": payload.get("correlation_ids") or [],
         "reasons": payload.get("reasons") or [],
         "release_channel": payload.get("release_channel") or RELEASE_CHANNEL_SECRET,
+        "force_rebuild": bool(payload.get("force_rebuild")),
     }
 
 
@@ -199,6 +296,7 @@ def make_request_payload(
     require_vector_barrier: bool = False,
     expected_search_v3_hash: str | None = None,
     expected_related_v1_hash: str | None = None,
+    force_rebuild: bool = False,
 ) -> dict[str, Any]:
     valid_ids: set[int] = set()
     for value in event_ids:
@@ -230,6 +328,7 @@ def make_request_payload(
         "event_revisions": revisions,
         "correlation_ids": [correlation],
         "latest_effect_at": iso_utc(effect_at),
+        "force_rebuild": bool(force_rebuild),
         "vector_barrier": {
             "required": bool(require_vector_barrier),
             "expected_search_v3_hash": _clean_token(expected_search_v3_hash, max_len=128) or None,
@@ -285,6 +384,7 @@ def merge_request_payload(current: Mapping[str, Any] | None, incoming: Mapping[s
             "expected_search_v3_hash": right_barrier.get("expected_search_v3_hash") or left_barrier.get("expected_search_v3_hash"),
             "expected_related_v1_hash": right_barrier.get("expected_related_v1_hash") or left_barrier.get("expected_related_v1_hash"),
         }
+        merged["force_rebuild"] = bool(left.get("force_rebuild") or right.get("force_rebuild"))
     merged.setdefault("schema_version", REQUEST_SCHEMA)
     merged["release_channel"] = RELEASE_CHANNEL_SECRET
     merged.setdefault("reasons", [])
@@ -292,6 +392,7 @@ def merge_request_payload(current: Mapping[str, Any] | None, incoming: Mapping[s
     merged.setdefault("event_revisions", {})
     merged.setdefault("correlation_ids", [])
     merged.setdefault("latest_effect_at", iso_utc())
+    merged.setdefault("force_rebuild", False)
     merged["target_watermark"] = request_watermark(merged)
     return merged
 
@@ -341,6 +442,529 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+# Columns that can reach the public static projection.  Deliberately absent are
+# outbox attempts/status, metrics polling timestamps, Kaggle ids, cache access
+# times and other operational churn that must not trigger an effectful build.
+_PUBLIC_FINGERPRINT_TABLES: dict[str, tuple[str, ...]] = {
+    "event": (
+        "id", "title", "description", "short_description", "search_digest",
+        "festival", "date", "end_date", "time", "time_is_default",
+        "location_name", "location_address", "city", "ticket_price_min",
+        "ticket_price_max", "ticket_link", "ticket_status", "event_type",
+        "is_free", "pushkin_card", "silent", "lifecycle_status", "status",
+        "moderation_status", "identity_status", "merged_into_event_id",
+        "age_restriction", "age_restriction_status", "age_restriction_decision_version",
+        "age_restriction_input_hash", "age_assessment", "age_assessment_status",
+        "age_assessment_decision_version", "age_assessment_input_hash",
+        "linked_event_ids", "other_date_ids", "photo_urls", "photo_count", "topics",
+        "source_post_url", "source_vk_post_url", "tg_event_post_url", "vk_repost_url",
+    ),
+    "eventposter": (
+        "id", "event_id", "supabase_url", "catbox_url", "ocr_text", "review_status",
+        "display_order", "media_role", "recommended_hero_fit", "width", "height",
+    ),
+    "event_source": ("event_id", "source_url"),
+    "event_publication": ("event_id", "status", "stored_url", "live_url"),
+    "interest_club": (
+        "id", "slug", "canonical_name", "topic", "description", "city", "typical_place",
+        "public_status",
+    ),
+    "interest_club_event": ("club_id", "event_id", "status"),
+}
+
+
+def _canonical_scalar(value: Any) -> Any:
+    if isinstance(value, bytes):
+        return {"sha256": hashlib.sha256(value).hexdigest(), "size": len(value)}
+    if not isinstance(value, str):
+        return value
+    clean = value.strip()
+    if clean[:1] in {"[", "{"}:
+        try:
+            return json.loads(clean)
+        except (TypeError, ValueError):
+            pass
+    return value
+
+
+def _table_projection_digest(
+    connection: sqlite3.Connection,
+    table: str,
+    requested: tuple[str, ...],
+    *,
+    effective_date: str,
+) -> str:
+    columns = {str(row[1]) for row in connection.execute(f'PRAGMA table_info("{table}")')}
+    selected = [name for name in requested if name in columns]
+    digest = hashlib.sha256()
+    digest.update(json.dumps({"table": table, "columns": selected}, separators=(",", ":")).encode())
+    if not selected:
+        return digest.hexdigest()
+    quoted = ",".join(f'"{name}"' for name in selected)
+    order = ",".join(f'"{name}"' for name in selected)
+    where = ""
+    params: tuple[Any, ...] = ()
+    event_columns = {
+        str(row[1]) for row in connection.execute('PRAGMA table_info("event")')
+    }
+    if table == "event" and "date" in columns:
+        if "end_date" in columns:
+            where = " WHERE date >= ? OR COALESCE(NULLIF(end_date, ''), date) >= ?"
+            params = (effective_date, effective_date)
+        else:
+            where = " WHERE date >= ?"
+            params = (effective_date,)
+    elif table in {"eventposter", "event_source", "event_publication"} and {
+        "id",
+        "date",
+    }.issubset(event_columns):
+        end_clause = (
+            " OR COALESCE(NULLIF(end_date, ''), date) >= ?" if "end_date" in event_columns else ""
+        )
+        where = (
+            f" WHERE event_id IN (SELECT id FROM event WHERE date >= ?{end_clause})"
+        )
+        params = (effective_date, effective_date) if end_clause else (effective_date,)
+    elif table == "interest_club" and "public_status" in columns:
+        where = " WHERE public_status='approved'"
+    elif table == "interest_club_event" and {"id", "date"}.issubset(event_columns):
+        end_clause = (
+            " OR COALESCE(NULLIF(end_date, ''), date) >= ?" if "end_date" in event_columns else ""
+        )
+        where = (
+            f" WHERE event_id IN (SELECT id FROM event WHERE date >= ?{end_clause})"
+        )
+        params = (effective_date, effective_date) if end_clause else (effective_date,)
+    for row in connection.execute(
+        f'SELECT {quoted} FROM "{table}"{where} ORDER BY {order}', params
+    ):
+        canonical = [_canonical_scalar(value) for value in row]
+        digest.update(json.dumps(canonical, ensure_ascii=False, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def compute_static_site_input_fingerprint(
+    database_path: str | os.PathLike[str],
+    *,
+    effective_date: str,
+    repo_sha: str,
+    build_config: Mapping[str, Any],
+    related_cache_path: str | os.PathLike[str] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Hash the canonical public projection and stable build policy inputs."""
+
+    # Validate the date with the same zoned clock contract used by handoff.
+    clock = resolve_build_clock(current_date=effective_date)
+    connection = _readonly_sqlite_connection(Path(database_path))
+    try:
+        table_digests = {
+            table: _table_projection_digest(
+                connection, table, columns, effective_date=clock.effective_date
+            )
+            for table, columns in sorted(_PUBLIC_FINGERPRINT_TABLES.items())
+        }
+    finally:
+        connection.close()
+    cache_path = Path(related_cache_path).resolve() if related_cache_path else None
+    related_digest = _sha256_file(cache_path) if cache_path and cache_path.is_file() else "absent"
+    stable_config = {
+        str(key): _canonical_scalar(value)
+        for key, value in sorted(build_config.items())
+        if key not in {
+            "build_id", "run_id", "candidate_token", "queued_at", "generated_at",
+            "snapshot_id", "snapshot_sha256", "output_dir", "status_callback_url",
+        }
+    }
+    evidence: dict[str, Any] = {
+        "schema_version": STATIC_SITE_FINGERPRINT_SCHEMA,
+        "time_zone": clock.time_zone,
+        "effective_date": clock.effective_date,
+        "repo_sha": str(repo_sha),
+        "projection_version": STATIC_SITE_PROJECTION_VERSION,
+        "export_version": "export-production-preview-data-v1",
+        "policy_version": "static-site-release-v12",
+        "table_digests": table_digests,
+        "related_digest": related_digest,
+        "config": stable_config,
+    }
+    raw = json.dumps(evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    fingerprint = hashlib.sha256(raw).hexdigest()
+    return fingerprint, {**evidence, "input_fingerprint": fingerprint}
+
+
+def _ensure_static_site_state_schema(connection: sqlite3.Connection) -> None:
+    statements = (
+        """
+        CREATE TABLE IF NOT EXISTS static_site_build_state(
+            release_channel TEXT PRIMARY KEY,
+            schema_version TEXT NOT NULL,
+            last_success_fingerprint TEXT,
+            last_success_run_id TEXT,
+            last_success_at TEXT,
+            last_success_receipt_json TEXT NOT NULL DEFAULT '{}',
+            active_claim_token TEXT,
+            active_job_id INTEGER,
+            active_run_id TEXT,
+            active_fingerprint TEXT,
+            active_effective_date TEXT,
+            active_claimed_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS static_site_build_history(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            release_channel TEXT NOT NULL,
+            job_id INTEGER,
+            request_watermark TEXT,
+            input_fingerprint TEXT NOT NULL,
+            effective_date TEXT NOT NULL,
+            force_rebuild INTEGER NOT NULL DEFAULT 0,
+            outcome TEXT NOT NULL,
+            run_id TEXT,
+            evidence_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_static_site_build_history_fingerprint
+            ON static_site_build_history(input_fingerprint, outcome, created_at)
+        """,
+    )
+    for statement in statements:
+        connection.execute(statement)
+
+
+def _parse_db_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _kaggle_run_is_live(connection: sqlite3.Connection, run_id: str, *, now: datetime, stale_seconds: int) -> bool:
+    exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='kaggle_run_ledger'"
+    ).fetchone()
+    if not exists:
+        return False
+    row = connection.execute(
+        "SELECT status, updated_at, last_heartbeat_at, terminal_at FROM kaggle_run_ledger WHERE run_id=?",
+        (run_id,),
+    ).fetchone()
+    if not row or row[3]:
+        return False
+    if str(row[0] or "").lower() in {"done", "failed", "error", "cancelled", "complete"}:
+        return False
+    freshest = max(
+        (value for value in (_parse_db_timestamp(row[1]), _parse_db_timestamp(row[2])) if value),
+        default=None,
+    )
+    return bool(freshest and (now - freshest).total_seconds() <= stale_seconds)
+
+
+def active_static_site_remote_run(
+    database_path: str | os.PathLike[str],
+    *,
+    stale_seconds: int = 7200,
+    now: datetime | None = None,
+) -> str | None:
+    """Return the active remote run only when its durable ledger is live."""
+
+    now_utc = (now or utc_now()).astimezone(timezone.utc)
+    connection = sqlite3.connect(str(database_path), timeout=30)
+    try:
+        state_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='static_site_build_state'"
+        ).fetchone()
+        if not state_exists:
+            return None
+        row = connection.execute(
+            "SELECT active_run_id FROM static_site_build_state WHERE release_channel=?",
+            (RELEASE_CHANNEL_SECRET,),
+        ).fetchone()
+        run_id = str(row[0] or "") if row else ""
+        if not run_id:
+            return None
+        return run_id if _kaggle_run_is_live(
+            connection, run_id, now=now_utc, stale_seconds=stale_seconds
+        ) else None
+    finally:
+        connection.close()
+
+
+def recoverable_static_site_build(
+    database_path: str | os.PathLike[str],
+    *,
+    job_id: int,
+) -> StaticSiteRecoveryClaim | None:
+    """Return the previous attempt's exact handoff before permitting a new push.
+
+    A Fly process can disappear after ``kernels_push`` while the fixed Kaggle
+    kernel keeps running.  The active durable claim is therefore recoverable
+    even when its callback heartbeat is stale or terminal: the caller must
+    first reconcile the exact kernel dataset/output identity and only then
+    either adopt it or release the claim for a new push.
+    """
+
+    connection = sqlite3.connect(str(database_path), timeout=30)
+    try:
+        state_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='static_site_build_state'"
+        ).fetchone()
+        if not state_exists:
+            return None
+        row = connection.execute(
+            """
+            SELECT active_claim_token, active_job_id, active_run_id,
+                   active_fingerprint, active_effective_date
+            FROM static_site_build_state WHERE release_channel=?
+            """,
+            (RELEASE_CHANNEL_SECRET,),
+        ).fetchone()
+        if not row or not row[0] or int(row[1] or 0) != int(job_id):
+            return None
+        run_id = str(row[2] or "").strip()
+        fingerprint = str(row[3] or "").strip()
+        effective_date = str(row[4] or "").strip()
+        if not run_id or not re.fullmatch(r"[0-9a-f]{64}", fingerprint) or not effective_date:
+            return None
+        ledger = None
+        ledger_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='kaggle_run_ledger'"
+        ).fetchone()
+        if ledger_exists:
+            ledger = connection.execute(
+                """
+                SELECT kernel_ref, dataset_ref, status, terminal_at
+                FROM kaggle_run_ledger WHERE run_id=?
+                """,
+                (run_id,),
+            ).fetchone()
+        return StaticSiteRecoveryClaim(
+            claim_token=str(row[0]),
+            job_id=int(row[1]),
+            run_id=run_id,
+            input_fingerprint=fingerprint,
+            effective_date=effective_date,
+            kernel_ref=str(ledger[0] or "").strip() or None if ledger else None,
+            dataset_ref=str(ledger[1] or "").strip() or None if ledger else None,
+            remote_status=str(ledger[2] or "").strip() or None if ledger else None,
+            remote_terminal_at=str(ledger[3] or "").strip() or None if ledger else None,
+        )
+    finally:
+        connection.close()
+
+
+def claim_static_site_build(
+    database_path: str | os.PathLike[str],
+    *,
+    job_id: int,
+    run_id: str,
+    input_fingerprint: str,
+    effective_date: str,
+    request_watermark: str | None,
+    force_rebuild: bool = False,
+    stale_seconds: int = 7200,
+    now: datetime | None = None,
+) -> StaticSiteBuildClaim:
+    """Atomically perform durable no-op comparison and server-side single flight."""
+
+    if not re.fullmatch(r"[0-9a-f]{64}", input_fingerprint):
+        raise StaticSitePermanentError("static_site_input_fingerprint_invalid")
+    now_utc = (now or utc_now()).astimezone(timezone.utc)
+    now_iso = iso_utc(now_utc)
+    token = uuid.uuid4().hex
+    connection = sqlite3.connect(str(database_path), timeout=30, isolation_level=None)
+    try:
+        connection.execute("PRAGMA busy_timeout=30000")
+        connection.execute("BEGIN IMMEDIATE")
+        _ensure_static_site_state_schema(connection)
+        connection.execute(
+            "INSERT OR IGNORE INTO static_site_build_state(release_channel, schema_version, updated_at) VALUES(?, ?, ?)",
+            (RELEASE_CHANNEL_SECRET, STATIC_SITE_STATE_SCHEMA, now_iso),
+        )
+        row = connection.execute(
+            """
+            SELECT last_success_fingerprint, last_success_run_id, active_claim_token,
+                   active_run_id, active_fingerprint, active_claimed_at
+            FROM static_site_build_state WHERE release_channel=?
+            """,
+            (RELEASE_CHANNEL_SECRET,),
+        ).fetchone()
+        assert row is not None
+        (
+            last_fingerprint,
+            last_run_id,
+            active_token,
+            active_run_id,
+            active_fingerprint,
+            active_claimed_at,
+        ) = row
+        if active_token:
+            claimed_at = _parse_db_timestamp(active_claimed_at)
+            claim_fresh = bool(claimed_at and (now_utc - claimed_at).total_seconds() <= stale_seconds)
+            remote_live = bool(
+                active_run_id
+                and _kaggle_run_is_live(
+                    connection, str(active_run_id), now=now_utc, stale_seconds=stale_seconds
+                )
+            )
+            if claim_fresh or remote_live:
+                evidence = {"reason": "active_single_flight", "blocking_run_id": active_run_id}
+                connection.execute(
+                    """
+                    INSERT INTO static_site_build_history(
+                        release_channel, job_id, request_watermark, input_fingerprint,
+                        effective_date, force_rebuild, outcome, run_id, evidence_json, created_at
+                    ) VALUES(?, ?, ?, ?, ?, ?, 'busy', ?, ?, ?)
+                    """,
+                    (
+                        RELEASE_CHANNEL_SECRET, job_id, request_watermark, input_fingerprint,
+                        effective_date, int(force_rebuild), run_id,
+                        json.dumps(evidence, sort_keys=True), now_iso,
+                    ),
+                )
+                connection.commit()
+                return StaticSiteBuildClaim(
+                    "busy",
+                    input_fingerprint,
+                    blocking_run_id=str(active_run_id or "") or None,
+                    blocking_fingerprint=str(active_fingerprint or "") or None,
+                )
+        if not force_rebuild and last_fingerprint == input_fingerprint:
+            evidence = {"reason": "unchanged_public_inputs", "previous_run_id": last_run_id}
+            connection.execute(
+                """
+                INSERT INTO static_site_build_history(
+                    release_channel, job_id, request_watermark, input_fingerprint,
+                    effective_date, force_rebuild, outcome, run_id, evidence_json, created_at
+                ) VALUES(?, ?, ?, ?, ?, 0, 'noop', ?, ?, ?)
+                """,
+                (
+                    RELEASE_CHANNEL_SECRET, job_id, request_watermark, input_fingerprint,
+                    effective_date, run_id, json.dumps(evidence, sort_keys=True), now_iso,
+                ),
+            )
+            connection.execute(
+                "UPDATE static_site_build_state SET updated_at=? WHERE release_channel=?",
+                (now_iso, RELEASE_CHANNEL_SECRET),
+            )
+            connection.commit()
+            return StaticSiteBuildClaim(
+                "noop", input_fingerprint, previous_run_id=str(last_run_id or "") or None
+            )
+        connection.execute(
+            """
+            UPDATE static_site_build_state
+            SET active_claim_token=?, active_job_id=?, active_run_id=?, active_fingerprint=?,
+                active_effective_date=?, active_claimed_at=?, updated_at=?
+            WHERE release_channel=?
+            """,
+            (
+                token, job_id, run_id, input_fingerprint, effective_date, now_iso, now_iso,
+                RELEASE_CHANNEL_SECRET,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO static_site_build_history(
+                release_channel, job_id, request_watermark, input_fingerprint,
+                effective_date, force_rebuild, outcome, run_id, evidence_json, created_at
+            ) VALUES(?, ?, ?, ?, ?, ?, 'claimed', ?, '{}', ?)
+            """,
+            (
+                RELEASE_CHANNEL_SECRET, job_id, request_watermark, input_fingerprint,
+                effective_date, int(force_rebuild), run_id, now_iso,
+            ),
+        )
+        connection.commit()
+        return StaticSiteBuildClaim("claimed", input_fingerprint, claim_token=token)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def finish_static_site_build_claim(
+    database_path: str | os.PathLike[str],
+    *,
+    claim_token: str,
+    run_id: str,
+    input_fingerprint: str,
+    effective_date: str,
+    success: bool,
+    receipt: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+) -> None:
+    now_iso = iso_utc(now)
+    evidence = dict(receipt or {})
+    connection = sqlite3.connect(str(database_path), timeout=30, isolation_level=None)
+    try:
+        connection.execute("PRAGMA busy_timeout=30000")
+        connection.execute("BEGIN IMMEDIATE")
+        _ensure_static_site_state_schema(connection)
+        row = connection.execute(
+            "SELECT active_claim_token FROM static_site_build_state WHERE release_channel=?",
+            (RELEASE_CHANNEL_SECRET,),
+        ).fetchone()
+        if not row or row[0] != claim_token:
+            raise StaticSitePermanentError("static_site_claim_token_mismatch")
+        if success:
+            connection.execute(
+                """
+                UPDATE static_site_build_state
+                SET last_success_fingerprint=?, last_success_run_id=?, last_success_at=?,
+                    last_success_receipt_json=?, active_claim_token=NULL, active_job_id=NULL,
+                    active_run_id=NULL, active_fingerprint=NULL, active_effective_date=NULL,
+                    active_claimed_at=NULL, updated_at=?
+                WHERE release_channel=? AND active_claim_token=?
+                """,
+                (
+                    input_fingerprint, run_id, now_iso,
+                    json.dumps(evidence, ensure_ascii=False, sort_keys=True, default=str),
+                    now_iso, RELEASE_CHANNEL_SECRET, claim_token,
+                ),
+            )
+        else:
+            connection.execute(
+                """
+                UPDATE static_site_build_state
+                SET active_claim_token=NULL, active_job_id=NULL, active_run_id=NULL,
+                    active_fingerprint=NULL, active_effective_date=NULL,
+                    active_claimed_at=NULL, updated_at=?
+                WHERE release_channel=? AND active_claim_token=?
+                """,
+                (now_iso, RELEASE_CHANNEL_SECRET, claim_token),
+            )
+        connection.execute(
+            """
+            INSERT INTO static_site_build_history(
+                release_channel, input_fingerprint, effective_date, force_rebuild,
+                outcome, run_id, evidence_json, created_at
+            ) VALUES(?, ?, ?, 0, ?, ?, ?, ?)
+            """,
+            (
+                RELEASE_CHANNEL_SECRET, input_fingerprint, effective_date,
+                "success" if success else "failed", run_id,
+                json.dumps(evidence, ensure_ascii=False, sort_keys=True, default=str), now_iso,
+            ),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def create_immutable_snapshot(
@@ -497,6 +1121,8 @@ def validate_production_candidate_result(
     repo_sha: str,
     snapshot: SnapshotMetadata,
     candidate_token: str,
+    input_fingerprint: str | None = None,
+    build_clock: StaticSiteBuildClock | None = None,
 ) -> tuple[dict[str, Any], Path]:
     """Revalidate the bounded Kaggle receipt at the trusted publisher boundary."""
 
@@ -518,6 +1144,16 @@ def validate_production_candidate_result(
     for key, value in expected.items():
         if result.get(key) != value:
             raise StaticSitePermanentError(f"static_site_result_identity_mismatch:{key}")
+    if input_fingerprint is not None and result.get("input_fingerprint") != input_fingerprint:
+        raise StaticSitePermanentError("static_site_result_input_fingerprint_mismatch")
+    if build_clock is not None:
+        result_clock = result.get("build_clock") if isinstance(result.get("build_clock"), Mapping) else {}
+        if (
+            result_clock.get("time_zone") != build_clock.time_zone
+            or result_clock.get("effective_date") != build_clock.effective_date
+            or result_clock.get("current_datetime") != build_clock.current_datetime
+        ):
+            raise StaticSitePermanentError("static_site_result_build_clock_mismatch")
     result_snapshot = result.get("snapshot") if isinstance(result.get("snapshot"), Mapping) else {}
     if (
         result_snapshot.get("snapshot_id") != snapshot.snapshot_id

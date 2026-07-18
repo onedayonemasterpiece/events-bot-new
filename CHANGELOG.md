@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- **Static build idempotency and crash adoption**: add a Kaliningrad-date public
+  projection fingerprint, durable SQLite single-flight/history, one coalesced
+  follow-up, unchanged-input no-op, audited operator force and exact Kaggle
+  dataset/output adoption after a Fly waiter crash before any replacement push.
+- **Typed event image fallbacks**: add supplied presentation-only symphonic and
+  lecture artwork plus a read-only no-image reason/type inventory without
+  polluting canonical media, gallery, Open Graph, JSON-LD or share payloads.
 - **Static event-page secret release pipeline**: add effect-only 15-minute Smart
   Update coalescing, exactly-one running-build follow-up, durable manual requests,
   immutable SQLite backup manifests, checked full-catalog production and noindex
@@ -15,6 +22,19 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static event v12 fidelity**: reproduce the accepted Telegram transport
+  A/B/C hierarchy and arm-specific copy with shared icons and `на Кауп`
+  grammar; retain one secret-only noindex transport specimen with desktop and
+  mobile forced-arm review, freeze accepted examples so expired events cannot
+  break a later full-catalog build, restore the
+  invariant desktop calendar/share/like CTA row, use the branded footer prompt
+  `Понравились Анонсы? Поделитесь`, and cap venue-brand medallions at one with
+  fail-closed structured-evidence conflicts.
+- **Rachmaninoff duplicate recurrence (`6774→2884`)**: restore the established
+  official-ticket survivor, merge official/teaser sources into it, tombstone the
+  later duplicate, remove duplicate Telegram/VK publications and redirect its
+  Telegraph page; keep the survivor's verified 28 August, 20:00, Cathedral/Kant
+  location and festival identity.
 - **Static event v11 review regressions (INC-2026-07-16/18)**: apply one
   quality-admitted photo set to desktop and mobile while preserving weak-only
   fallbacks, route a lone low-resolution portrait to a source-size bounded

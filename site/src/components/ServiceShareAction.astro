@@ -1,5 +1,6 @@
 ---
 import { withBase } from '../lib/events';
+import AnnouncementsWordmark from './brand/AnnouncementsWordmark.astro';
 
 interface Props {
   surface?: 'footer' | 'menu' | 'lab';
@@ -28,14 +29,20 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
   data-service-share-canonical-url="https://kenigevents.ru/"
   data-nosnippet
 >
-  <span class="service-share-action__prompt">Поделиться афишей</span>
+  <span class="service-share-action__prompt" aria-label="Понравились Анонсы? Поделитесь">
+    <span class="sr-only">Понравились Анонсы? Поделитесь</span>
+    <span aria-hidden="true">Понравились</span>
+    <AnnouncementsWordmark class="service-share-action__wordmark" />
+    <span aria-hidden="true">?</span>
+    <strong aria-hidden="true">Поделитесь</strong>
+  </span>
   <div class="service-share-action__controls">
     <button
       type="button"
       class="service-share-action__button service-share-action__button--mobile"
       data-service-share-button
       data-service-share-intent="mobile"
-      aria-label="Поделиться афишей KenigEvents"
+      aria-label="Поделиться анонсами KenigEvents"
       aria-describedby={statusId}
       aria-busy="false"
     >
@@ -119,9 +126,20 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
     padding: 0;
   }
   .service-share-action__prompt {
+    display:inline-flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:.18rem .28rem;
     color: var(--muted);
     font-size: .9rem;
     line-height: 1.4;
+  }
+  .service-share-action__prompt strong { color:var(--text); font-weight:780; }
+  .service-share-action__prompt :global(.service-share-action__wordmark) {
+    width:auto;
+    height:1em;
+    flex:0 0 auto;
+    color:var(--primary-strong);
   }
   .service-share-action__controls {
     min-width: 0;

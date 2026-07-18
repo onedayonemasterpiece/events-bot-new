@@ -233,6 +233,17 @@ Notes:
 
 Because these fields affect event meaning and user trust, use the repo's LLM-first policy. Deterministic checks may support or validate narrow signals, but broad semantic classification must stay in LLM prompts / Smart Update enrichment, not ad-hoc regex.
 
+### Single-venue public ceiling
+
+The static projection renders at most one `venue_brand` medallion. Exact
+structured evidence (canonical venue, trusted ticket/source identity) outranks
+description prose and short aliases. If two venue brands have equal-strength
+structured evidence, or several same-host ticket identities conflict, the
+renderer fails closed and shows no venue medallion rather than guessing. Unicode
+word boundaries are mandatory for short aliases: `ММО` must not match inside
+`программой`. Real regressions: `6796` resolves to KAUP only; contradictory
+legacy event `5295` resolves to neither venue until canonical data is repaired.
+
 ### Required output shape for enrichment
 
 ```json

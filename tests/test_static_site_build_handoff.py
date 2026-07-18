@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import sys
+import json
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -106,6 +109,8 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
         profile="production-candidate",
         limit=5000,
         current_date="2026-07-17",
+        current_datetime="2026-07-17T00:00:00+02:00",
+        input_fingerprint="f" * 64,
         script_path="/repo/scripts/run_static_site_builder_kaggle.py",
         status_callback_url="https://events-bot.example/internal/kaggle/run-event",
     )
@@ -115,6 +120,65 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
     assert _arg_after(cmd, "--repo-sha") == "a" * 40
     assert _arg_after(cmd, "--run-id").startswith("static-site:")
     assert _arg_after(cmd, "--candidate-token") == "A" * 43
+    assert _arg_after(cmd, "--current-datetime") == "2026-07-17T00:00:00+02:00"
+    assert _arg_after(cmd, "--input-fingerprint") == "f" * 64
+
+
+def test_add_build_08_recovery_command_never_pushes_and_binds_dataset() -> None:
+    import main
+
+    cmd = main._static_site_build_kaggle_command(
+        db_path="/data/static_site_snapshots/request.sqlite",
+        status_db_path="/data/db.sqlite",
+        snapshot_manifest_path="/data/static_site_snapshots/request.manifest.json",
+        build_id="production-secret-test",
+        repo_sha="a" * 40,
+        run_id="static-site:production-secret-test:12345678",
+        candidate_token="A" * 43,
+        profile="production-candidate",
+        limit=5000,
+        current_date="2026-07-18",
+        current_datetime="2026-07-18T12:00:00+02:00",
+        input_fingerprint="f" * 64,
+        script_path="/repo/scripts/run_static_site_builder_kaggle.py",
+        status_callback_url="https://events-bot.example/internal/kaggle/run-event",
+        adopt_existing=True,
+        expected_dataset_ref="owner/static-site-builder-input-exact",
+    )
+    assert "--adopt-existing" in cmd
+    assert _arg_after(cmd, "--expected-dataset-ref") == "owner/static-site-builder-input-exact"
+
+
+def test_runner_adopts_exact_complete_output_without_push(tmp_path: Path) -> None:
+    from scripts.run_static_site_builder_kaggle import adopt_existing_kernel_output
+
+    class Client:
+        pushes = 0
+        def kernel_has_dataset_sources(self, _kernel, expected):
+            return expected == ["owner/exact-input"], {"dataset_sources": ["owner/exact-input"]}
+        def get_kernel_status(self, _kernel):
+            return {"status": "COMPLETE"}
+        def download_kernel_output(self, _kernel, *, path, force=True):
+            output = Path(path)
+            (output / "static_site_build_result.json").write_text(
+                json.dumps({"ok": True, "build_id": "preview-adopt"}), encoding="utf-8"
+            )
+            return ["static_site_build_result.json"]
+
+    args = SimpleNamespace(
+        expected_dataset_ref="owner/exact-input",
+        build_id="preview-adopt",
+        profile="preview",
+        keep_secret_datasets=True,
+    )
+    import scripts.run_static_site_builder_kaggle as runner
+    old_root = runner.ARTIFACT_ROOT
+    runner.ARTIFACT_ROOT = tmp_path
+    try:
+        assert adopt_existing_kernel_output(args, Client(), "owner/kernel") == 0
+    finally:
+        runner.ARTIFACT_ROOT = old_root
+    assert Client.pushes == 0
 
 
 def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:

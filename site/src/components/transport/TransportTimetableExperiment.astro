@@ -31,6 +31,10 @@ const options = suggestion.outbound;
   <DepartureBoardTimetable
     route={suggestion.busRoute}
     arrivalStop={suggestion.busArrivalStop}
+    originName={suggestion.busOriginName}
+    originMapUrl={suggestion.busOriginMapUrl}
+    walkRouteUrl={suggestion.stopToVenueDirectionsUrl}
+    publicReturnAvailable={suggestion.publicReturnAvailable}
     options={options}
     baseline={true}
     hidden={false}
@@ -53,13 +57,17 @@ const options = suggestion.outbound;
     <DepartureBoardTimetable
       route={suggestion.busRoute}
       arrivalStop={suggestion.busArrivalStop}
+      originName={suggestion.busOriginName}
+      originMapUrl={suggestion.busOriginMapUrl}
+      walkRouteUrl={suggestion.stopToVenueDirectionsUrl}
+      publicReturnAvailable={suggestion.publicReturnAvailable}
       options={options}
       baseline={true}
       hidden={false}
     />
     <div data-transport-treatment-set hidden>
-      <RouteStripsTimetable route={suggestion.busRoute} arrivalStop={suggestion.busArrivalStop} options={options} />
-      <NextDepartureQueueTimetable route={suggestion.busRoute} arrivalStop={suggestion.busArrivalStop} options={options} />
+      <RouteStripsTimetable route={suggestion.busRoute} arrivalStop={suggestion.busArrivalStop} originName={suggestion.busOriginName} originMapUrl={suggestion.busOriginMapUrl} walkRouteUrl={suggestion.stopToVenueDirectionsUrl} publicReturnAvailable={suggestion.publicReturnAvailable} options={options} />
+      <NextDepartureQueueTimetable route={suggestion.busRoute} arrivalStop={suggestion.busArrivalStop} originName={suggestion.busOriginName} originMapUrl={suggestion.busOriginMapUrl} walkRouteUrl={suggestion.stopToVenueDirectionsUrl} publicReturnAvailable={suggestion.publicReturnAvailable} options={options} />
     </div>
   </div>
 )}

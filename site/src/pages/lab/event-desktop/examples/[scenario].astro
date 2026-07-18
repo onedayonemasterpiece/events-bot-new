@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../../../layouts/EventLayout.astro';
 import DesktopEventCleanPage from '../../../../components/DesktopEventPage.astro';
+import KaupTransportSchedule from '../../../../components/KaupTransportSchedule.astro';
 import previewData from '../../../../data/preview-events.json';
 import examplesData from '../../../../data/desktop-event-examples.json';
 import thumbnailOverridesData from '../../../../data/desktop-event-thumbnail-overrides.json';
@@ -14,6 +15,7 @@ type Scenario = {
   candidate: 'editorial' | 'split';
   mediaPolicy: 'non-ocr' | 'ocr';
   transport?: boolean;
+  showTransport?: boolean;
   heroImageIndex?: number;
   heroWidth?: number;
   heroHeight?: number;
@@ -63,13 +65,15 @@ const scenarios: Scenario[] = [
   { slug: 'editorial-photo-continuous-wide', eventId: 5201, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'continuous', editorialCropPolicy: 'bounded-cover', heroObjectPosition: '50% 50%', editorialRail: true, autoRotate: false },
   { slug: 'editorial-photo-continuous-near-square', eventId: 6583, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'continuous', editorialCropPolicy: 'bottom-safe', heroObjectPosition: '50% 100%', editorialRail: true, autoRotate: false },
   { slug: 'editorial-ocr-companion', eventId: 6323, candidate: 'editorial', mediaPolicy: 'ocr', editorialMotion: 'pinned', heroImageIndex: 2, heroWidth: 2560, heroHeight: 1703, heroObjectPosition: '50% 52%', ocrCompanionImageIndex: 0, ocrCompanionLayout: 'separate', editorialRail: true, autoRotate: false, ocrSourceIndexes: [0, 1], mediaRoleOverrides:kupalaRoles, mediaDimensionOverrides:kupalaDimensions },
-  { slug: 'editorial-ocr-companion-arrival', eventId: 4671, candidate: 'editorial', mediaPolicy: 'ocr', editorialMotion: 'continuous', heroImageIndex: 3, heroWidth: 2560, heroHeight: 1709, heroObjectPosition: '50% 50%', ocrCompanionImageIndex: 0, ocrCompanionLayout: 'arrival', editorialRail: false, autoRotate: false, ocrSourceIndexes: [0, 5], duplicateSourceIndexes: [5], mediaRoleOverrides:epidemicRoles, mediaDimensionOverrides:epidemicDimensions },
+  { slug: 'editorial-ocr-companion-arrival', eventId: 4671, candidate: 'editorial', mediaPolicy: 'ocr', transport: true, showTransport: true, editorialMotion: 'continuous', heroImageIndex: 3, heroWidth: 2560, heroHeight: 1709, heroObjectPosition: '50% 50%', ocrCompanionImageIndex: 0, ocrCompanionLayout: 'arrival', editorialRail: false, autoRotate: false, ocrSourceIndexes: [0, 5], duplicateSourceIndexes: [5], mediaRoleOverrides:epidemicRoles, mediaDimensionOverrides:epidemicDimensions },
   { slug: 'split-ocr', eventId: 5077, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0, duplicateSourceIndexes: [1] },
   { slug: 'split-portrait', eventId: 6550, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0, duplicateSourceIndexes: [1, 2] },
   { slug: 'split-low-resolution', eventId: 5761, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 5, heroWidth: 800, heroHeight: 602, splitMediaFit: 'viewport-cover', splitPortraitViewer: true },
   { slug: 'split-multi-portrait', eventId: 5894, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 3, heroWidth: 960, heroHeight: 1280, splitPortraitViewer: true, splitPortraitSourceIndexes: [3, 5, 6, 8, 10, 11] },
   { slug: 'portrait-carousel-production', eventId: 4783, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0, heroWidth: 819, heroHeight: 1024, splitPortraitViewer: true, splitPortraitSourceIndexes: [0, 4, 6, 8, 9, 10, 11], splitViewerHiddenSourceIndexes: [1, 2, 3, 5, 7] },
   { slug: 'split-ocr-with-photos', eventId: 6323, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0, heroWidth: 1179, heroHeight: 1523, ocrSourceIndexes: [0, 1], mediaRoleOverrides:kupalaRoles, mediaDimensionOverrides:kupalaDimensions },
+  { slug: 'cta-phone-invariant', eventId: 6551, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0 },
+  { slug: 'cta-ticket-invariant', eventId: 5374, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0 },
   { slug: 'related-cover', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'cover' },
   { slug: 'related-ambient', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'ambient' },
   { slug: 'related-hybrid', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'pinned', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: false, ocrSourceIndexes: [4], relatedMediaTreatment: 'hybrid' },
@@ -89,6 +93,8 @@ export function getStaticPaths() {
     'split-multi-portrait',
     'portrait-carousel-production',
     'split-ocr-with-photos',
+    'cta-phone-invariant',
+    'cta-ticket-invariant',
     'related-cover',
     'related-ambient',
     'related-hybrid',
@@ -125,6 +131,7 @@ const description = event.meta_description || event.summary || event.title;
     candidate={scenario.candidate}
     mediaPolicy={scenario.mediaPolicy}
     transport={scenario.transport}
+    showTransport={scenario.showTransport}
     heroImageIndex={scenario.heroImageIndex}
     heroWidth={scenario.heroWidth}
     heroHeight={scenario.heroHeight}
@@ -146,4 +153,15 @@ const description = event.meta_description || event.summary || event.title;
     mediaRoleOverrides={scenario.mediaRoleOverrides}
     mediaDimensionOverrides={scenario.mediaDimensionOverrides}
   />
+  {scenario.showTransport && (
+    <div class="lab-mobile-transport page-shell" data-lab-mobile-transport>
+      <KaupTransportSchedule event={event} compact />
+    </div>
+  )}
+  <style is:global>
+    .lab-mobile-transport { display:none; }
+    @media (max-width:1023px) {
+      .lab-mobile-transport { display:block; padding-block:1rem 2rem; }
+    }
+  </style>
 </EventLayout>

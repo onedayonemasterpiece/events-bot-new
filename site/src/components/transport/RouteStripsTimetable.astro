@@ -1,42 +1,57 @@
 ---
 import type { KaupBusOption } from '../../lib/eventKaupTransport';
+import TransportRouteHeading from './TransportRouteHeading.astro';
+import TransportJourneyAlerts from './TransportJourneyAlerts.astro';
 
-interface Props { route: string; arrivalStop: string; options: KaupBusOption[]; }
-const { route, arrivalStop, options } = Astro.props;
-const visible = options.slice(0, 5);
-const additional = options.slice(5);
+interface Props { route: string; arrivalStop: string; originName: string; originMapUrl: string; walkRouteUrl: string; publicReturnAvailable: boolean; options: KaupBusOption[]; }
+const { route, arrivalStop, originName, originMapUrl, walkRouteUrl, publicReturnAvailable, options } = Astro.props;
+const visible = options.slice(0, 2);
+const additional = options.slice(2);
 ---
 <section class="transport-treatment transport-strips" data-transport-treatment="route_strips_v1" hidden aria-label={`Маршруты автобуса № ${route}`}>
+  <TransportRouteHeading
+    route={route}
+    title={`${originName.replace(/ вокзал$/iu, '')} → КАУП`}
+    subtitle={`через ${arrivalStop} · автобус + пешком`}
+    originMapUrl={originMapUrl}
+    originMapLabel={originName}
+  />
   <ol>{visible.map((option) => <li data-transport-trip-id={option.tripId} data-departure-at={option.departureAt}>
-    <div class="strip" aria-label={`${option.departure} Северный, ${option.estimatedStopArrival} ${arrivalStop}, ${option.estimatedVenueArrival} Кауп`}>
+    <strong class="transport-strips__departure">{option.departureEstimated ? '≈' : ''}{option.departure}</strong>
+    <div class="strip" aria-label={`${option.departure} Северный, ${option.estimatedStopArrival} ${arrivalStop}, ${option.estimatedVenueArrival} КАУП`}>
       <span><b>{option.departureEstimated ? '≈' : ''}{option.departure}</b><small>Северный</small></span><i></i>
       <span><b>≈{option.estimatedStopArrival}</b><small>{arrivalStop}</small></span><i></i>
-      <span><b>≈{option.estimatedVenueArrival}</b><small>Кауп</small></span>
+      <span><b>≈{option.estimatedVenueArrival}</b><small>КАУП</small></span>
     </div>{option.tight && <em>Небольшой запас — лучше выбрать более ранний рейс.</em>}
   </li>)}</ol>
   {additional.length > 0 && <details data-transport-disclosure>
-    <summary data-transport-action="schedule_expand">Показать все {options.length} рейсов</summary>
+    <summary data-transport-action="schedule_expand">Показать больше отправлений</summary>
     <ol>{additional.map((option) => <li data-transport-trip-id={option.tripId} data-departure-at={option.departureAt}>
-      <div class="strip"><span><b>{option.departureEstimated ? '≈' : ''}{option.departure}</b><small>Северный</small></span><i></i><span><b>≈{option.estimatedStopArrival}</b><small>{arrivalStop}</small></span><i></i><span><b>≈{option.estimatedVenueArrival}</b><small>Кауп</small></span></div>
+      <strong class="transport-strips__departure">{option.departureEstimated ? '≈' : ''}{option.departure}</strong>
+      <div class="strip"><span><b>{option.departureEstimated ? '≈' : ''}{option.departure}</b><small>Северный</small></span><i></i><span><b>≈{option.estimatedStopArrival}</b><small>{arrivalStop}</small></span><i></i><span><b>≈{option.estimatedVenueArrival}</b><small>КАУП</small></span></div>
       {option.tight && <em>Небольшой запас — лучше выбрать более ранний рейс.</em>}
     </li>)}</ol>
   </details>}
+  <TransportJourneyAlerts arrivalStop={arrivalStop} walkRouteUrl={walkRouteUrl} publicReturnAvailable={publicReturnAvailable} treatment="route-strips" />
 </section>
 
 <style>
   .transport-treatment[hidden] { display:none !important; }
-  ol { display:grid; gap:.1rem; margin:.15rem 0 0; padding:0; list-style:none; }
-  li { padding:.52rem 0; border-top:1px solid rgba(93,71,43,.12); }
+  .transport-strips>:global(.transport-route-heading) { margin-bottom:.45rem; }
+  ol { display:grid; gap:.1rem; margin:0; padding:0; list-style:none; }
+  li { display:grid; grid-template-columns:3.2rem minmax(0,1fr); align-items:center; gap:.65rem; padding:.58rem 0; border-top:1px solid rgba(61,74,70,.14); }
+  .transport-strips__departure { color:#d34b3e; font-size:.88rem; font-variant-numeric:tabular-nums; }
   .strip { display:grid; grid-template-columns:auto minmax(18px,1fr) auto minmax(18px,1fr) auto; align-items:center; gap:.3rem; font-variant-numeric:tabular-nums; }
   .strip span { display:grid; gap:.08rem; min-width:0; }
   .strip span:nth-of-type(2) { text-align:center; }
   .strip span:last-child { text-align:right; }
-  b { font-size:.88rem; }
+  b { font-size:.77rem; }
   small { color:#6c5c51; font-size:.64rem; line-height:1.15; }
-  i { height:2px; background:#b6532a; position:relative; }
-  i::after { position:absolute; top:50%; right:-2px; width:6px; height:6px; border:2px solid #b6532a; border-radius:50%; background:#f7efe3; content:""; transform:translateY(-50%); }
-  em { display:block; margin-top:.3rem; color:#8e3d1e; font-size:.68rem; font-style:normal; font-weight:800; }
-  summary { display:flex; align-items:center; min-height:44px; cursor:pointer; color:#8e3d1e; font-size:.78rem; font-weight:850; list-style:none; }
+  i { height:3px; background:#1d6759; position:relative; }
+  i::after { position:absolute; top:50%; right:-3px; width:7px; height:7px; border:2px solid #1d6759; border-radius:50%; background:#f4f1e8; content:""; transform:translateY(-50%); }
+  em { grid-column:2; display:block; margin-top:.2rem; color:#8e3d1e; font-size:.66rem; font-style:normal; font-weight:800; }
+  summary { display:flex; align-items:center; justify-content:center; min-height:44px; margin-top:.3rem; border:1px solid rgba(69,76,73,.22); border-radius:12px; cursor:pointer; color:#17201f; background:#fff; font-size:.76rem; font-weight:850; list-style:none; }
   summary::-webkit-details-marker { display:none; }
-  @container kaup-transport (max-width:360px) { .strip { gap:.2rem; } b { font-size:.8rem; } small { font-size:.58rem; } }
+  summary:focus-visible { outline:3px solid #b54d22; outline-offset:2px; }
+  @container kaup-transport (max-width:390px) { li { grid-template-columns:2.8rem minmax(0,1fr); gap:.42rem; } .transport-strips__departure { font-size:.78rem; } .strip { gap:.16rem; } b { font-size:.7rem; } small { font-size:.54rem; } }
 </style>

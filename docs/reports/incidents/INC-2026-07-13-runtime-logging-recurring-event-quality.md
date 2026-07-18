@@ -194,3 +194,30 @@ slot, event `6857` was restored to `7250`, and the production/API post-check is
 ## Prevention
 
 The operational rule is “logs bounded, not disabled.” The quality rule remains LLM-first and vector-first: vectors retrieve active neighbors and durable incident prototypes; an LLM compares exact source/OCR occurrence roles and evidence; narrow deterministic code only enforces budgets, provenance and fail-closed validation.
+
+## 2026-07-18 duplicate recurrence repair: `6774→2884`
+
+During the static-page no-image/location review, event `6774` was incorrectly
+repaired as an independent active occurrence before this incident's confirmed
+duplicate inventory was re-applied. The external source review established the
+correct 28 August facts but omitted survivor `2884`, so it could not adjudicate
+identity. This briefly recreated duplicate public Telegram/VK surfaces.
+
+Containment and repair applied the existing source-grounded verdict:
+
+- survivor `2884` remains `active/canonical`, 28 August 20:00, Cathedral/Kant;
+  the official web/tourism and later artist-teaser sources were moved to it and
+  its festival identity was filled;
+- `6774` is `merged/merged`, `merged_into_event_id=2884`, `silent=1`; all its
+  outbox rows are terminal with `merged_into_event:2884`;
+- duplicate Telegram `@kldevents/2152` was deleted and rich-message survivor
+  `2531` re-read through the approved E2E session;
+- managed VK live duplicate `wall-231920894_7717` (the published form of stored
+  postponed id `7716`) was deleted; authenticated API returns
+  `is_deleted=true`, while survivor `7412` remains;
+- the duplicate Telegraph path now contains only a link to the canonical
+  survivor page; `PRAGMA quick_check=ok` after row-level backup/transaction.
+
+Regression rule: any event named as a confirmed survivor mapping in this record
+must be checked before an event-local repair prompt or public rearm. Source-fact
+verification without the known neighbor is not an identity verdict.

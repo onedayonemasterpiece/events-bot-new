@@ -3050,6 +3050,36 @@ async def _run_video_tomorrow_startup_checks(db: Any, bot: Any) -> None:
     await _maybe_catch_up_kenigsberg_story_on_startup(db, bot)
 
 
+async def _enqueue_static_site_calendar_refresh(db: Any, *, trigger: str) -> bool:
+    """Enqueue the zoned date effect independently from Smart Update."""
+
+    if not _env_enabled("ENABLE_STATIC_SITE_KAGGLE_BUILDER", default=False):
+        return False
+    main_module = get_running_main()
+    enqueue = getattr(main_module, "enqueue_static_site_build_request", None) if main_module else None
+    if enqueue is None:
+        logging.warning("SCHED static site calendar refresh skipped: main enqueue unavailable")
+        return False
+    await enqueue(
+        db,
+        reason="Europe/Kaliningrad local date rollover",
+        event_ids=(),
+        correlation_id=f"static-site-{trigger}-{datetime.now(timezone.utc).date().isoformat()}",
+        delay_seconds=0,
+        trigger=trigger,
+    )
+    logging.info("SCHED static site calendar refresh enqueued trigger=%s", trigger)
+    return True
+
+
+async def _run_startup_catchups(db: Any, bot: Any) -> None:
+    await _run_video_tomorrow_startup_checks(db, bot)
+    try:
+        await _enqueue_static_site_calendar_refresh(db, trigger="startup_catchup")
+    except Exception:
+        logging.exception("SCHED static site startup catch-up failed")
+
+
 class BatchProgress:
     """Track progress for a batch of event tasks."""
 
@@ -5050,6 +5080,41 @@ def startup(
                 misfire_grace_time=120,
             )
 
+    if _env_enabled("ENABLE_STATIC_SITE_KAGGLE_BUILDER", default=False):
+        static_midnight_hour, static_midnight_minute = _cron_from_local(
+            "00:00",
+            "Europe/Kaliningrad",
+            default_hour="0",
+            default_minute="0",
+            label="STATIC_SITE_LOCAL_MIDNIGHT",
+        )
+
+        async def static_site_calendar_rollover(
+            db_obj,
+            _bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            await _enqueue_static_site_calendar_refresh(db_obj, trigger="calendar_rollover")
+
+        _register_job(
+            "static_site_calendar_rollover",
+            _job_wrapper(
+                "static_site_calendar_rollover",
+                static_site_calendar_rollover,
+                notify_skip=_notify_admin_skip,
+            ),
+            "cron",
+            id="static_site_calendar_rollover",
+            hour=static_midnight_hour,
+            minute=static_midnight_minute,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=30,
+        )
+
     _scheduler.add_listener(
         _on_event,
         EVENT_JOB_SUBMITTED | EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
@@ -5062,7 +5127,7 @@ def startup(
     except Exception:
         logging.exception("SCHED failed to schedule startup catchup for video_tomorrow")
     else:
-        loop.create_task(_run_video_tomorrow_startup_checks(db, bot))
+        loop.create_task(_run_startup_catchups(db, bot))
     return _scheduler
 
 

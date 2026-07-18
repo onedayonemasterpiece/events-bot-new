@@ -17,9 +17,11 @@ const manifest = JSON.parse(source('secret-candidate-manifest.json'));
 if (manifest.schema_version !== CANDIDATE_MANIFEST_SCHEMA || manifest.site_mode !== 'secret_candidate' || manifest.publication_mode !== 'secret_link') fail('wrong candidate manifest profile');
 if (manifest.base_path !== basePath || manifest.token_sha256 !== sha256(token)) fail('candidate token/base mismatch');
 const transportExperiment = manifest.experiments?.transport_timetable_layout;
+const transportQaRoute = 'lab/event-desktop/examples/editorial-ocr-companion-arrival';
 if (!transportExperiment || !['qa', 'focus_group'].includes(transportExperiment.mode)) fail('transport timetable experiment mode missing');
 if (transportExperiment.config_hash !== 'sha256:bf9a8a80e35c8699a26993ae25ac83313d4b6923900f9e51688d2dad7d92cdf2') fail('transport timetable experiment config mismatch');
 if (transportExperiment.mode === 'qa' && transportExperiment.trusted_telemetry !== false) fail('QA experiment telemetry must be untrusted');
+if (transportExperiment.qa_route !== `/${transportQaRoute}/`) fail('transport QA route contract mismatch');
 const files = fileInventory(root, { exclude: ['secret-candidate-manifest.json'], secretCandidate: true });
 const byKey = new Map(manifest.files.map((file) => [file.key, file]));
 if (files.length !== byKey.size || manifest.counts.file_count !== files.length) fail('candidate file count mismatch');
@@ -28,7 +30,10 @@ for (const file of files) {
   if (!expected || expected.sha256 !== file.sha256 || expected.size !== file.size || expected.cache_control !== 'private, no-store, max-age=0') fail(`candidate inventory mismatch ${file.key}`);
 }
 if (manifest.tree_sha256 !== treeHash(files)) fail('candidate tree hash mismatch');
-for (const key of files.map((file) => file.key)) if (/^(?:__preview|lab)(?:\/|$)/u.test(key) || key === 'partnerstvo/index.html') fail(`QA route leaked ${key}`);
+for (const key of files.map((file) => file.key)) {
+  if (/^__preview(?:\/|$)/u.test(key) || (/^lab(?:\/|$)/u.test(key) && !key.startsWith(`${transportQaRoute}/`)) || key === 'partnerstvo/index.html') fail(`QA route leaked ${key}`);
+}
+source(`${transportQaRoute}/index.html`);
 for (const event of eventsData.events) {
   const eventHtml = source(`sobytiya/${event.slug}/index.html`);
   source(`sobytiya/${event.slug}/event.ics`); source(`data/discovery/${event.id}.json`);

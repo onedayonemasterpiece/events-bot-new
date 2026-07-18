@@ -318,3 +318,34 @@ and read back as Telegram message `300` in topic `2`.
 
 This incident remains open only for the user's visual acceptance and any later
 explicit production-root promotion; the rejected v1 link remains excluded.
+
+## 2026-07-18 v12 fidelity/idempotency addendum
+
+The next correction treats Telegram messages `261–264` as the exact A/B/C
+transport contract. Shared icons remain canonical, but each arm keeps its own
+accepted last-mile and no-return copy; all product prose says `на Кауп`. One
+noindex transport specimen is retained only inside the bearer candidate so the
+three forced arms remain reviewable after event `4671` elapsed. The retained
+route renders the responsive transport component at desktop and mobile widths;
+the accepted `4783/5374/6551/6815` event data is frozen as design-system fixture
+input so current production eligibility cannot delete the regression surface.
+
+The same release also pins the desktop action hierarchy: ticket, phone and
+information variants keep a primary action above one aligned
+calendar/share/like bottom row. The footer prompt is
+`Понравились Анонсы? Поделитесь` with the canonical inline wide-`о` wordmark.
+Venue medallions have a one-venue ceiling and fail closed on equal structured
+identity conflicts; supplied symphonic/lecture fallback art remains
+presentation-only.
+
+Production generation now uses one Kaliningrad clock, a canonical public-input
+fingerprint, a durable SQLite single-flight claim and exactly one coalesced
+follow-up. A stale Fly waiter may not cause a second Kaggle push: the retry must
+first verify the exact ledger dataset against the fixed kernel, defer while it
+is live or adopt/download/validate it when complete. Normal automatic/manual
+requests no-op when unchanged; explicit operator force is separately audited.
+
+Closure remains blocked until this source is main-reachable, deployed, a fresh
+current-date production-Kaggle secret candidate passes public HTTP/Playwright
+including the retained A/B/C specimen and FHD×125% CTA geometry, and its links
+are read back in the existing Telegram topic for user acceptance.
