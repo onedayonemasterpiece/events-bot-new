@@ -98,8 +98,9 @@ test('desktop telephone remains a branded reveal-and-copy CTA', async () => {
   assert.match(icon, /name === 'copy'/u);
 });
 
-test('desktop actions keep calendar, share and like in one invariant bottom row', async () => {
+test('desktop action geometry follows the resolved media family', async () => {
   const panel = await read('src/components/DesktopEventActionPanel.astro');
+  const desktop = await read('src/components/DesktopEventPage.astro');
   const legacyPanel = await read('src/components/EventCtaPanel.astro');
   const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
 
@@ -107,8 +108,17 @@ test('desktop actions keep calendar, share and like in one invariant bottom row'
   const panelRow = panel.slice(panel.indexOf('data-desktop-action-row="calendar-share-like"'));
   assert.ok(panelRow.indexOf('<CalendarLink') < panelRow.indexOf('data-native-share'));
   assert.ok(panelRow.indexOf('data-native-share') < panelRow.indexOf('data-feedback-action="like"'));
-  assert.match(panel, /grid-template-columns:minmax\(0,1fr\) !important/u);
-  assert.match(panel, /grid-template-rows:auto auto auto !important/u);
+  assert.match(panel, /family\?: 'split' \| 'editorial'/u);
+  assert.match(panel, /data-action-family=\{family\}/u);
+  assert.match(panel, /data-action-layout=\{family === 'split' \? 'inline' : 'stacked'\}/u);
+  assert.match(panel, /data-action-layout="inline"[^}]*grid-template-columns:minmax\(112px,max-content\) minmax\(0,1fr\) auto !important/su);
+  assert.match(panel, /data-action-layout="stacked"[^}]*grid-template-columns:minmax\(0,1fr\) !important/su);
+  assert.match(panel, /data-action-layout="stacked"[^}]*grid-template-rows:auto auto auto !important/su);
+  assert.match(desktop, /family="editorial"/u);
+  assert.match(desktop, /family="split"/u);
+  assert.match(desktop, /const splitFamily = panel\.dataset\.actionFamily === 'split'/u);
+  assert.match(desktop, /if \(!splitFamily\) return/u);
+  assert.match(desktop, /outside \|\| overlaps \|\| overflows/u);
   assert.doesNotMatch(panel, /data-primary-action-kind="phone"\] \{/u);
   assert.match(legacyPanel, /data-event-cta-action-row="calendar-share-like"/u);
   assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551/u);

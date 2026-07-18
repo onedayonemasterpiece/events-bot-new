@@ -436,7 +436,7 @@ const descriptionHtml = (event.description_html || '')
                 </button>
               </div>
             )}
-            <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" />
+            <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" family="editorial" />
             {ocrCompanion && ocrCompanionLayout === 'separate' && (
               <button
                 type="button"
@@ -504,7 +504,7 @@ const descriptionHtml = (event.description_html || '')
             <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} /></div>
           </div>
 
-          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--inline" />}
+          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--inline" family="split" />}
 
           {usesLongFlow && (
             <div class="desktop-prototype__flow-body" data-continuous-event-body>
@@ -532,7 +532,7 @@ const descriptionHtml = (event.description_html || '')
           )}
         </div>
 
-        {!usesLongFlow && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--flow" />}
+        {!usesLongFlow && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--flow" family={candidate} />}
       </section>
     </div>
   </article>
@@ -670,14 +670,42 @@ const descriptionHtml = (event.description_html || '')
         if (!force && previousWidth !== undefined && Math.abs(previousWidth - width) < .5) return;
         actionPanelWidths.set(panel, width);
         const phonePanel = panel.dataset.primaryActionKind === 'phone';
-        // Measure the real inline composition, including the current calendar
-        // label and counters. CSS breakpoints cannot know this component width
-        // inside the half-canvas split family.
-        panel.dataset.actionLayout = 'inline';
+        const splitFamily = panel.dataset.actionFamily === 'split';
+        // The component family chooses the intended composition. Only Split
+        // attempts the accepted one-row geometry; Editorial keeps the tall
+        // three-row card. Measure actual rendered children before allowing the
+        // Split row so dynamic labels/counters can still fail closed.
+        panel.dataset.actionLayout = splitFamily ? 'inline' : 'stacked';
         panel.dataset.actionDensity = phonePanel ? 'compact' : 'comfortable';
-        const overflows = panel.scrollWidth > panel.clientWidth + 1;
-        panel.dataset.actionLayout = overflows ? 'stacked' : 'inline';
-        if (overflows) panel.dataset.actionDensity = 'compact';
+        if (!splitFamily) return;
+
+        const panelRect = panel.getBoundingClientRect();
+        const styles = getComputedStyle(panel);
+        const leftLimit = panelRect.left + (Number.parseFloat(styles.paddingLeft) || 0) - 2;
+        const rightLimit = panelRect.right - (Number.parseFloat(styles.paddingRight) || 0) + 2;
+        const primary = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__primary-action');
+        const actionRow = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__action-row');
+        const children = [
+          panel.querySelector<HTMLElement>(':scope > p:first-child'),
+          primary,
+          actionRow,
+        ].filter((item): item is HTMLElement => Boolean(item));
+        const outside = children.some((item) => {
+          const rect = item.getBoundingClientRect();
+          return rect.left < leftLimit || rect.right > rightLimit;
+        });
+        const overlaps = children.some((item, index) => children.slice(index + 1).some((other) => {
+          const first = item.getBoundingClientRect();
+          const second = other.getBoundingClientRect();
+          return Math.min(first.right, second.right) - Math.max(first.left, second.left) > 2;
+        }));
+        const overflows = panel.scrollWidth > panel.clientWidth + 1
+          || Boolean(primary && primary.scrollWidth > primary.clientWidth + 2)
+          || Boolean(actionRow && actionRow.scrollWidth > actionRow.clientWidth + 2);
+        if (outside || overlaps || overflows) {
+          panel.dataset.actionLayout = 'stacked';
+          panel.dataset.actionDensity = 'compact';
+        }
       };
       actionPanels.forEach((panel) => {
         fitActionPanel(panel, true);
@@ -2460,16 +2488,9 @@ const descriptionHtml = (event.description_html || '')
     .desktop-portrait-viewer__track { box-sizing:border-box; }
     .desktop-portrait-viewer__item { max-height:100%; }
 
-    /* Component-responsive action geometry. The calendar wording still follows
-       the per-user usage state, but constrained phone panels never wrap or
-       push share/like controls outside their graphite surface. */
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"]) {
-      grid-template-columns:minmax(0,1fr) auto !important;
-      align-items:center;
-    }
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] > p:first-child) { grid-column:1; grid-row:1; }
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__primary-action) { grid-column:1/-1 !important; grid-row:2 !important; min-width:0; }
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__action-row) { grid-column:2 !important; grid-row:1 !important; justify-self:end; }
+    /* Action layout is owned by DesktopEventActionPanel: Editorial is the tall
+       three-row card, while Split may admit one row after measuring its own
+       rendered children. Keep only the phone clipping safety here. */
     .desktop-clean-event :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__primary-action) { overflow:hidden; }
   }
 

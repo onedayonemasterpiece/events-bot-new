@@ -17,9 +17,10 @@ interface Props {
   event: PreviewEvent;
   shareImage?: string;
   className?: string;
+  family?: 'split' | 'editorial';
 }
 
-const { event, shareImage = event.image_url || '', className = '' } = Astro.props;
+const { event, shareImage = event.image_url || '', className = '', family = 'editorial' } = Astro.props;
 const dateTimeLabel = displayDateTime(event);
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'Место уточняется';
 const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
@@ -47,7 +48,15 @@ const shareImageType = shareImage.toLowerCase().includes('.webp') ? 'image/webp'
 const shareFileName = `kenigevents-${event.slug}`;
 ---
 
-<aside class:list={['desktop-prototype__action', className]} data-feedback-scope data-desktop-action-panel data-primary-action-kind={ctaIsTelephone ? 'phone' : 'default'} aria-label="Действия события">
+<aside
+  class:list={['desktop-prototype__action', className]}
+  data-feedback-scope
+  data-desktop-action-panel
+  data-action-family={family}
+  data-action-layout={family === 'split' ? 'inline' : 'stacked'}
+  data-primary-action-kind={ctaIsTelephone ? 'phone' : 'default'}
+  aria-label="Действия события"
+>
   <p><span>вход</span><strong>{admissionLabel}</strong></p>
   {ctaIsTelephone && phoneValue ? (
     <button
@@ -191,13 +200,25 @@ const shareFileName = `kenigevents-${event.slug}`;
     color: #fffaf2;
     background: #292521;
     container: desktop-actions / inline-size;
+  }
+  .desktop-prototype__action[data-action-layout="stacked"] {
     grid-template-columns:minmax(0,1fr) !important;
     grid-template-rows:auto auto auto !important;
     align-items:stretch !important;
   }
-  .desktop-prototype__action > p,
-  .desktop-prototype__action > :global(.desktop-prototype__primary-action),
-  .desktop-prototype__action > .desktop-prototype__action-row { grid-column:1 !important; }
+  .desktop-prototype__action[data-action-layout="stacked"] > p { grid-column:1 !important; grid-row:1 !important; }
+  .desktop-prototype__action[data-action-layout="stacked"] > :global(.desktop-prototype__primary-action) { grid-column:1 !important; grid-row:2 !important; }
+  .desktop-prototype__action[data-action-layout="stacked"] > .desktop-prototype__action-row { grid-column:1 !important; grid-row:3 !important; }
+  .desktop-prototype__action[data-action-layout="inline"] {
+    grid-template-columns:minmax(112px,max-content) minmax(0,1fr) auto !important;
+    grid-template-rows:auto !important;
+    align-items:center !important;
+    column-gap:clamp(.65rem,1.4vw,.95rem);
+    row-gap:0;
+  }
+  .desktop-prototype__action[data-action-layout="inline"] > p { grid-column:1 !important; grid-row:1 !important; }
+  .desktop-prototype__action[data-action-layout="inline"] > :global(.desktop-prototype__primary-action) { grid-column:2 !important; grid-row:1 !important; min-width:0; }
+  .desktop-prototype__action[data-action-layout="inline"] > .desktop-prototype__action-row { grid-column:3 !important; grid-row:1 !important; justify-self:end; }
   .desktop-prototype__action > p { display: grid; gap: .06rem; margin: 0; }
   .desktop-prototype__action > p span {
     color: #d7c9bc;

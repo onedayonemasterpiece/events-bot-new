@@ -27,6 +27,12 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Desktop portrait event CTA regression**: route action geometry from the
+  resolved Split/Editorial media family instead of a viewport guess, restoring
+  the compact one-row admission/primary/calendar-share-like panel across real
+  portrait specimens while retaining the wide-photo Editorial three-row card
+  with its utility controls on the bottom row; add executable Playwright
+  geometry checks at the `1536×864` FHD/125%-equivalent viewport.
 - **Static footer prototype polish**: replace the oversized share split-card
   with an `84px` desktop / compact stacked mobile inline bar while preserving
   two desktop intents, one mobile system-share intent and `44px+` controls; use
