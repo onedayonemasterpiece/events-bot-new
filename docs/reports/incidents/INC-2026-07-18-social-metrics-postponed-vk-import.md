@@ -1,10 +1,10 @@
 # INC-2026-07-18 Social metrics postponed VK row rejected batch import
 
-Status: open
+Status: closed
 Severity: sev2
 Service: scheduled SocialMetricsCollector / static Popular feed signals
 Opened: 2026-07-18
-Closed: —
+Closed: 2026-07-18 08:24 UTC
 Owners: events-bot production
 Related incidents: —
 Related docs: `docs/features/post-metrics/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -22,8 +22,10 @@ consecutively on 2026-07-18.
 
 - compact popularity snapshots stopped advancing after the successful
   `social-metrics:991309` import at 06:43 UTC;
-- the public Popular feed remained available from existing data, but new
-  reactions/views/shares and age buckets could become stale;
+- the generated/preview Popular feed remained buildable from existing data,
+  but new reactions/views/shares and age buckets could become stale; the
+  canonical root `/populyarnoe/` route had not yet been promoted and returned
+  `404`, so this incident did not take an already-live listing page offline;
 - each failed result contained 34 valid observations, so keeping the defect
   would repeatedly lose useful current-day signal while the postponed VK rows
   remained scheduled.
@@ -47,6 +49,12 @@ consecutively on 2026-07-18.
 - 2026-07-18 08:00 UTC — `social-metrics:991311` reproduced the same failure.
 - 2026-07-18 08:02 UTC — latest Kaggle result isolated the future-dated direct
   postponed rows as the rejecting payload.
+- 2026-07-18 08:11 UTC — merge SHA `d81adb04` was deployed as Fly release
+  `v1697`; application readiness and the deployed collector guard were checked.
+- 2026-07-18 08:14–08:17 UTC — compensating run
+  `social-metrics:991312` completed with `status=done, phase=imported`, imported
+  `34` current observations, accepted `5` published resolutions and classified
+  `10` unresolved candidates as missing without rejecting the batch.
 
 ## Root Cause
 
@@ -123,10 +131,30 @@ consecutively on 2026-07-18.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `d81adb0404c3c91593498eda7feabfc1b1690b09`, merged by
+  [PR #73](https://github.com/onedayonemasterpiece/events-bot-new/pull/73)
+  and reachable from `origin/main`;
+- deploy path: clean detached worktree at the exact merge SHA, Fly release
+  `v1697`, image `deployment-01KXT4FB4W7BQJ83WSX97VQP4X`;
+- regression checks: `26` focused tests passed across
+  `tests/test_social_metrics_kaggle.py` and
+  `tests/test_social_metrics_batch.py`; both scheduled-direct-row controls,
+  `py_compile`, and `git diff --check` passed;
+- post-deploy run: `social-metrics:991312` imported `34/38` requested
+  observations with `not_found=0`, `error=0`, `skipped_late=0`; callbacks
+  reached `kernel_started`, `preflight_ok`, `report_written`, and two
+  `resource_release` events;
+- cleanup and health: both `job:social_metrics_batch` and
+  `telegram_session:telegram_auth_bundle_check_popular` leases are released;
+  all four temporary run datasets are absent from Kaggle; SQLite
+  `quick_check=ok`; `/healthz` reports `ok=true, ready=true` with `1/1` Fly
+  checks passing;
+- freshness: the compensating import advanced `social_metric_snapshot` from
+  `2691` to `2725` rows (`929 collected` total); owned Telegram `kldevents`
+  and VK `231920894` snapshots now reach `2026-07-18 08:16:09 UTC`;
+- fresh runtime-log lines for `social-metrics:991312` contain no
+  `invalid published VK resolution`; the remaining matches in the retained log
+  predate release `v1697` and belong to the failed runs documented above.
 
 ## Prevention
 
