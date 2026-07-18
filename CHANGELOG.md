@@ -39,6 +39,10 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Expiry-proof live CTA acceptance:** retain the frozen Split phone-CTA
+  specimen alongside the Editorial footer/CTA specimen in every immutable
+  secret candidate, and point the FHD/125%-equivalent Playwright gate at those
+  routes instead of elapsed event URLs that can legitimately return 404.
 - **Static snapshot volume retention**: delete immutable SQLite snapshot pairs
   after every terminal Smart Update/Kaggle handoff, clean them after recovered
   runs, and prune crash leftovers before a new build while preserving the exact

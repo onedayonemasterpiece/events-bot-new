@@ -21,7 +21,12 @@ const productionManifest = JSON.parse(productionManifestBytes);
 const transportExperimentMode = process.env.SECRET_CANDIDATE_TRANSPORT_EXPERIMENT_MODE || 'qa';
 const transportQaRoute = 'lab/event-desktop/examples/editorial-ocr-companion-arrival';
 const footerPrototypeRoute = 'lab/event-desktop/examples/footer-service-v1';
-const retainedLabRoutes = [transportQaRoute, footerPrototypeRoute];
+// The compact Split CTA is retained as an expiry-proof browser-acceptance
+// surface. Real event URLs are still checked during review, but they cannot be
+// the only executable contract because an event can legitimately leave the
+// active catalog between two Smart Update builds.
+const splitCtaRegressionRoute = 'lab/event-desktop/examples/cta-phone-invariant';
+const retainedLabRoutes = [transportQaRoute, footerPrototypeRoute, splitCtaRegressionRoute];
 if (!['qa', 'focus_group'].includes(transportExperimentMode)) throw new Error('Secret candidate transport experiment mode must be qa or focus_group');
 for (const key of ['template_matrix','production_contract','catalog_parity','fixture_isolation','canonical_and_indexing','tree_hashes']) {
   if (productionManifest.checks?.[key] !== 'ok') throw new Error(`Production artifact is not checked: ${key}`);
@@ -43,8 +48,9 @@ const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['
 if (astro.status !== 0) process.exit(astro.status || 1);
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });
 // Secret candidates retain only the explicit noindex review specimens: the
-// transport experiment and the isolated footer prototype. Every other lab
-// route stays excluded from the immutable candidate.
+// transport experiment, isolated footer prototype and compact Split CTA
+// regression surface. Every other lab route stays excluded from the immutable
+// candidate.
 const retainedLabStaging = retainedLabRoutes.map((route, index) => {
   const staged = join(siteDir, `.secret-lab-${process.pid}-${index}`);
   rmSync(staged, { recursive: true, force: true });

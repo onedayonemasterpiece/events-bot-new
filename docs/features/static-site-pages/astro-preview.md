@@ -35,6 +35,9 @@ recreating it per candidate:
   `4671` elapsed;
 - desktop ticket/telephone/information CTAs share the invariant bottom
   calendar/share/like row; the phone remains a branded reveal-and-copy action;
+- the immutable candidate retains one Split phone-CTA fixture and one Editorial
+  footer/CTA fixture, so the live `1536×864` Playwright geometry gate remains
+  executable after the original acceptance events leave the active catalog;
 - venue medallions are evidence-aware, capped at one and fail closed on
   conflicting structured identities;
 - supplied symphonic/lecture art is presentation-only fallback and never enters

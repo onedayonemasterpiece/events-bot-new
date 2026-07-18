@@ -226,6 +226,24 @@ test('accepted service footer is global, cohesive and does not duplicate partner
   assert.doesNotMatch(secretChecker, /data-footer-prototype/u);
 });
 
+test('secret candidate keeps expiry-proof Split and Editorial CTA geometry fixtures', async () => {
+  const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
+  const examples = JSON.parse(await read('src/data/desktop-event-examples.json'));
+  const secretBuilder = await read('scripts/build-secret-candidate.mjs');
+  const secretChecker = await read('scripts/check-secret-candidate.mjs');
+  const browserGate = await read('scripts/check-desktop-cta-geometry-playwright.sh');
+
+  assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551, candidate: 'split'/u);
+  assert.ok(examples.events.some((event) => event.id === 6551), 'Split CTA specimen must use a frozen desktop fixture');
+  assert.match(secretBuilder, /const splitCtaRegressionRoute = 'lab\/event-desktop\/examples\/cta-phone-invariant'/u);
+  assert.match(secretBuilder, /retainedLabRoutes = \[transportQaRoute, footerPrototypeRoute, splitCtaRegressionRoute\]/u);
+  assert.match(secretChecker, /data-action-layout="inline"/u);
+  assert.match(secretChecker, /data-action-layout="stacked"/u);
+  assert.match(browserGate, /lab\/event-desktop\/examples\/cta-phone-invariant.*split/u);
+  assert.match(browserGate, /lab\/event-desktop\/examples\/footer-service-v1.*editorial/u);
+  assert.doesNotMatch(browserGate, /opera-i-dzhaz-znamensk-6876|myuzikl-alye-parusa-kaliningrad-4783/u);
+});
+
 test('Dramatic Theatre medallion is present in the accepted manifest', async () => {
   const manifest = JSON.parse(await read('src/data/organizerMedallions.json'));
   const item = manifest.items.find((candidate) => candidate.slug === 'dramteatr39');
