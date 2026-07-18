@@ -434,6 +434,15 @@ def resolve_status_callback_url(args: argparse.Namespace) -> str | None:
     return None
 
 
+async def _create_status_config_and_close(db, create_run_config, **kwargs):
+    """Build the callback config without leaking an aiosqlite worker thread."""
+
+    try:
+        return await create_run_config(db, **kwargs)
+    finally:
+        await db.close()
+
+
 def create_status_dataset_if_configured(
     args: argparse.Namespace,
     client,
@@ -457,17 +466,20 @@ def create_status_dataset_if_configured(
 
     run_id = args.run_id or f'static-site-builder:{build_id}'
     db = Database(status_db)
-    config = asyncio.run(create_kaggle_run_config(
-        db,
-        run_id=run_id,
-        session_id=None,
-        kind='static_site_builder',
-        notebook='StaticSiteBuilder',
-        kernel_ref=kernel_ref,
-        dataset_ref=dataset_ref,
-        callback_url=callback_url,
-        resource_leases=['static_site:builder'],
-    ))
+    config = asyncio.run(
+        _create_status_config_and_close(
+            db,
+            create_kaggle_run_config,
+            run_id=run_id,
+            session_id=None,
+            kind='static_site_builder',
+            notebook='StaticSiteBuilder',
+            kernel_ref=kernel_ref,
+            dataset_ref=dataset_ref,
+            callback_url=callback_url,
+            resource_leases=['static_site:builder'],
+        )
+    )
     if not config:
         return None
     status_dataset = create_kaggle_status_dataset(

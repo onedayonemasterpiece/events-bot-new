@@ -349,3 +349,11 @@ Closure remains blocked until this source is main-reachable, deployed, a fresh
 current-date production-Kaggle secret candidate passes public HTTP/Playwright
 including the retained A/B/C specimen and FHD×125% CTA geometry, and its links
 are read back in the existing Telegram topic for user acceptance.
+
+The first production v12 run reached Kaggle `COMPLETE`, downloaded and validated
+the immutable result, then remained in Python interpreter shutdown instead of
+publishing it. Live `py-spy` evidence showed the main thread in
+`threading._shutdown` and a non-daemon `aiosqlite` connection worker left by the
+short-lived status-ledger `Database`. The runner must close that database after
+creating the callback config; crash adoption must then recover this exact
+complete kernel/dataset without a second push before closure can continue.

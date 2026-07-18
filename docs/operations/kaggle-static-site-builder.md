@@ -75,6 +75,10 @@ Rules:
 
 - Runner: `scripts/run_static_site_builder_kaggle.py`.
 - Kernel script: `kaggle/StaticSiteBuilder/static_site_builder.py`.
+- The runner must close its short-lived status-ledger `Database` immediately
+  after writing the callback config. Otherwise the non-daemon `aiosqlite`
+  worker can keep a successfully completed process alive at Python interpreter
+  shutdown, leaving the durable static-build claim stuck before publication.
 - Data export: `site/scripts/export-production-preview-data.py`.
 - Fly handoff: `JobTask.static_site_build` and `main.py` `job_static_site_build_kaggle`.
 - Feature docs: `docs/features/static-site-pages/astro-preview.md`.

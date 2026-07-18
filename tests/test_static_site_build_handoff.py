@@ -181,6 +181,28 @@ def test_runner_adopts_exact_complete_output_without_push(tmp_path: Path) -> Non
     assert Client.pushes == 0
 
 
+def test_runner_closes_status_database_after_config_creation() -> None:
+    import asyncio
+    from scripts.run_static_site_builder_kaggle import _create_status_config_and_close
+
+    class Database:
+        closed = False
+
+        async def close(self):
+            self.closed = True
+
+    async def create_config(db, **kwargs):
+        assert not db.closed
+        return {"run_id": kwargs["run_id"]}
+
+    db = Database()
+    result = asyncio.run(
+        _create_status_config_and_close(db, create_config, run_id="static-site:test")
+    )
+    assert result == {"run_id": "static-site:test"}
+    assert db.closed is True
+
+
 def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
     from scripts.run_static_site_builder_kaggle import resolve_build_template
 
