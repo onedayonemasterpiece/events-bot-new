@@ -33,6 +33,11 @@
   portrait specimens while retaining the wide-photo Editorial three-row card
   with its utility controls on the bottom row; add executable Playwright
   geometry checks at the `1536×864` FHD/125%-equivalent viewport.
+- **Static event desktop media polish**: expose venue-medallion rings and
+  shadows beyond the title token-row bounds without changing the single-venue
+  fail-closed identity gate, and reserve server-rendered `Смотрите дальше`
+  skeleton geometry until every related image loads or fails while preserving
+  alt text, media crop/quality rules and the mobile renderer.
 - **Static footer prototype polish**: replace the oversized share split-card
   with an `84px` desktop / compact stacked mobile inline bar while preserving
   two desktop intents, one mobile system-share intent and `44px+` controls; use

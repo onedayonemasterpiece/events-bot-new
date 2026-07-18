@@ -120,9 +120,78 @@ const relatedMediaGeometry = (item:PreviewEvent) => {
   const ratio = asset?.width && asset?.height ? asset.width / asset.height : (documentMedia ? .8 : 1);
   return { documentMedia, ratio:Number.isFinite(ratio) && ratio > 0 ? ratio : (documentMedia ? .8 : 1) };
 };
+type DesktopRelatedLayout = {
+  mediaRatio:number;
+  rowRatio:number;
+  rowIndex:number;
+  rowMode:string;
+  mediaKind:'document' | 'visual';
+  mediaTreatment:'document-safe-cover' | 'visual-cover';
+  coverCrop:number;
+  rowWorstCrop:number;
+};
+const relatedRowLayout = (
+  row:Array<{ item:PreviewEvent; documentMedia:boolean; ratio:number }>,
+  rowIndex:number,
+):Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }> => {
+  const documents = row.filter(({ documentMedia }) => documentMedia);
+  const visuals = row.filter(({ documentMedia }) => !documentMedia);
+  const documentRatios = documents.map(({ ratio }) => ratio);
+  const visualRatios = visuals.map(({ ratio }) => ratio);
+  let targetRatio = 1;
+  let rowMode = 'visual-square';
+  if (documents.length === 0) {
+    const geometricMean = visualRatios.length
+      ? Math.exp(visualRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / visualRatios.length)
+      : 1;
+    targetRatio = Math.min(4 / 3, Math.max(1, geometricMean));
+    rowMode = 'visual-squareish';
+  } else if (visuals.length > 0) {
+    if (relatedMediaTreatment === 'cover') {
+      targetRatio = 1.12;
+      rowMode = 'mixed-compact-cover';
+    } else if (relatedMediaTreatment === 'ambient') {
+      targetRatio = 1;
+      rowMode = 'mixed-square-ambient';
+    } else {
+      const documentCenter = Math.exp(documentRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / documentRatios.length);
+      targetRatio = [.8, 1, 4 / 3]
+        .sort((left, right) => Math.abs(Math.log(left / documentCenter)) - Math.abs(Math.log(right / documentCenter)))[0];
+      rowMode = 'mixed-adaptive-ambient';
+    }
+  } else if (documentRatios.length === 1) {
+    targetRatio = Math.min(.9, documentRatios[0] * 1.1);
+    rowMode = 'document-bounded-vertical-crop';
+  } else if (documentRatios.length > 1) {
+    targetRatio = Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios));
+    rowMode = 'document-minimax-contained';
+  } else {
+    rowMode = 'document-pending-contained';
+  }
+  if (documentRatios.length > 0) {
+    const safeLower = Math.max(...documentRatios.map((documentRatio) => documentRatio * .8));
+    const safeUpper = Math.min(...documentRatios.map((documentRatio) => documentRatio / .8));
+    if (safeLower <= safeUpper) targetRatio = Math.min(safeUpper, Math.max(safeLower, targetRatio));
+  }
+  const rowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio)));
+  return row.map(({ item, documentMedia, ratio:mediaRatio }) => ({
+    item,
+    layout:{
+      mediaRatio,
+      rowRatio:targetRatio,
+      rowIndex,
+      rowMode,
+      mediaKind:documentMedia ? 'document' : 'visual',
+      mediaTreatment:documentMedia ? 'document-safe-cover' : 'visual-cover',
+      coverCrop:Math.max(0, 1 - Math.min(mediaRatio / targetRatio, targetRatio / mediaRatio)),
+      rowWorstCrop,
+    },
+  }));
+};
 const packRelatedRows = (items:PreviewEvent[], limit = 10) => {
   const remaining = items.map((item) => ({ item, ...relatedMediaGeometry(item) }));
-  const packed:PreviewEvent[] = [];
+  const packed:Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }> = [];
+  let rowIndex = 0;
   while (remaining.length && packed.length < limit) {
     const row = [remaining.shift()!];
     let safeLower = row[0].documentMedia ? row[0].ratio * .8 : 0;
@@ -140,7 +209,8 @@ const packRelatedRows = (items:PreviewEvent[], limit = 10) => {
         safeUpper = Math.min(safeUpper, candidate.ratio / .8);
       }
     }
-    packed.push(...row.map(({ item }) => item));
+    packed.push(...relatedRowLayout(row, rowIndex));
+    rowIndex += 1;
     // Do not let an incompatible OCR family leak into the same CSS-grid row.
     // A short final row is preferable to either fields or more than 20% crop.
     if (row.length < 3) break;
@@ -576,7 +646,7 @@ const descriptionHtml = (event.description_html || '')
         <h2 id={`related-${event.id}`}>Смотрите дальше</h2>
       </header>
       <div class="cards-grid cards-grid--immersive desktop-clean-related__grid" data-lab-row-normalize>
-        {relatedForRender.map((item) => <EventCard event={item} variant="split-actions" desktopRelatedCrop />)}
+        {relatedForRender.map(({ item, layout }) => <EventCard event={item} variant="split-actions" desktopRelatedCrop desktopRelatedLayout={layout} />)}
       </div>
     </div>
   </section>
@@ -1606,8 +1676,10 @@ const descriptionHtml = (event.description_html || '')
           const ratiosOf = (items:HTMLElement[]) => items
             .map((card) => {
               const image = card.querySelector<HTMLImageElement>('.event-card__media');
-              if (!image?.naturalWidth || !image.naturalHeight) return null;
-              const imageRatio = image.naturalWidth / image.naturalHeight;
+              const declaredRatio = Number(card.dataset.labMediaRatio);
+              const imageRatio = Number.isFinite(declaredRatio) && declaredRatio > 0
+                ? declaredRatio
+                : image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0;
               return Number.isFinite(imageRatio) && imageRatio > 0 ? imageRatio : null;
             })
             .filter((value):value is number => value !== null);
@@ -1652,7 +1724,10 @@ const descriptionHtml = (event.description_html || '')
           }
           row.forEach((card) => {
             const image = card.querySelector<HTMLImageElement>('.event-card__media');
-            const imageRatio = image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
+            const declaredRatio = Number(card.dataset.labMediaRatio);
+            const imageRatio = Number.isFinite(declaredRatio) && declaredRatio > 0
+              ? declaredRatio
+              : image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
             const isDocument = card.dataset.labMediaKind === 'document';
             const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
             const cardTreatment = isDocument ? 'document-safe-cover' : 'visual-cover';
@@ -1708,9 +1783,9 @@ const descriptionHtml = (event.description_html || '')
   .desktop-prototype__place span { display:grid; gap:.06rem; }
   .desktop-prototype__place strong { font-size:clamp(.88rem,1.4vw,1.02rem); }
   .desktop-prototype__place small { color:#72645b; font-size:.8rem; font-weight:680; }
-  .desktop-prototype__medallions { min-height:0; overflow:hidden; }
+  .desktop-prototype__medallions { min-height:0; overflow:visible; }
   .desktop-prototype__medallions :global(.event-token-section) { margin:0; }
-  .desktop-prototype__medallions :global(.event-token-row) { gap:.55rem; overflow:hidden; padding:.1rem 0; }
+  .desktop-prototype__medallions :global(.event-token-row) { gap:.55rem; overflow:visible; padding:.1rem 0; }
   .desktop-prototype__medallions :global(.event-token--organizer),
   .desktop-prototype__medallions :global(.event-token--festival),
   .desktop-prototype__medallions :global(.event-token--source),

@@ -832,6 +832,16 @@ to `10` recommendations in safe rows:
 - crop focus may later use a reviewed focal region, but absent that evidence the
   document crop is centered and the hard `20%` budget remains authoritative.
 
+Every initial-HTML image card on this desktop continuation surface also owns a
+visible skeleton from first paint until that exact image fires `load` or
+`error`. The server emits the accepted row ratio, source media ratio and crop
+treatment before JavaScript runs, so the skeleton, successfully loaded image
+and error fallback occupy identical geometry. The image keeps its descriptive
+`alt`; the decorative shimmer has no separate accessible name, and
+`aria-busy` is removed on both terminal outcomes. Reduced-motion visitors keep
+the reserved placeholder without shimmer animation. Mobile continuation cards
+remain on their separate accepted renderer and media-quality rules.
+
 The v3 corpus Playwright gate covered all `282` future/ongoing pages and `1090`
 rendered related rows at `1536×864`. It found zero media-height deltas over one
 pixel, zero card-height deltas over one pixel, zero mixed row-ratio values, zero

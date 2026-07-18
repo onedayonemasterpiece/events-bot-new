@@ -75,6 +75,35 @@ test('dynamic recommendation media reserves geometry through load and failure', 
   assert.match(layout, /aspect-ratio: var\(--dynamic-media-ratio, 4 \/ 5\)/u);
 });
 
+test('desktop static continuation emits stable initial skeleton geometry', async () => {
+  const card = await read('src/components/EventCard.astro');
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const built = await readBuilt('sobytiya/spektakl-garazh-kaliningrad-5658/index.html');
+
+  assert.match(desktop, /relatedRowLayout/u);
+  assert.match(desktop, /desktopRelatedLayout=\{layout\}/u);
+  assert.match(desktop, /dataset\.labMediaRatio/u);
+  assert.match(card, /desktopRelatedCrop && 'event-card__media-shell--dynamic'/u);
+  assert.match(card, /desktopRelatedCrop && 'is-image-loading'/u);
+  assert.match(card, /aria-busy=\{desktopRelatedCrop \? 'true' : undefined\}/u);
+  assert.match(card, /onload=\{imageLoadHandler\}/u);
+  assert.match(card, /onerror=\{imageErrorHandler\}/u);
+  assert.match(built, /data-lab-related-card="true"/u);
+  assert.match(built, /event-card__media-shell--dynamic is-image-loading/u);
+  assert.match(built, /aria-busy="true"/u);
+  assert.match(built, /--lab-row-media-ratio:/u);
+});
+
+test('desktop medallion wrapper exposes venue ring and shadow without changing identity resolution', async () => {
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const medallions = await read('src/components/EventTokenMedallions.astro');
+
+  assert.match(desktop, /\.desktop-prototype__medallions \{ min-height:0; overflow:visible; \}/u);
+  assert.match(desktop, /\.desktop-prototype__medallions :global\(\.event-token-row\) \{ gap:\.55rem; overflow:visible;/u);
+  assert.match(medallions, /resolveEventMedallions\(event, manifest\.items \|\| \[\]\)/u);
+  assert.match(medallions, /data-identity-resolution=\{organizerResolution\.failClosedReason \|\| 'resolved'\}/u);
+});
+
 test('desktop telephone remains a branded reveal-and-copy CTA', async () => {
   const panel = await read('src/components/DesktopEventActionPanel.astro');
   const desktop = await read('src/components/DesktopEventPage.astro');

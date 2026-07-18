@@ -244,6 +244,15 @@ word boundaries are mandatory for short aliases: `ММО` must not match inside
 `программой`. Real regressions: `6796` resolves to KAUP only; contradictory
 legacy event `5295` resolves to neither venue until canonical data is repaired.
 
+### Desktop edge and shadow contract
+
+The accepted desktop title panel must not clip the circular medallion ring or
+its soft shadow at the bounds of the token row. The title-panel wrapper and its
+token row therefore expose visual overflow while retaining the existing token
+width, order, accessible label and single-venue fail-closed resolution. This is
+a presentation-only rule: it must not widen alias matching or add a second
+`venue_brand` identity.
+
 ### Required output shape for enrichment
 
 ```json
