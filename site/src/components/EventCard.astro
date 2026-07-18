@@ -1,11 +1,19 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
+import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
-type CardVariant = 'overlay-controls' | 'split-actions';
-interface Props { event: PreviewEvent; label?: string; variant?: CardVariant }
-const { event, label, variant = 'split-actions' } = Astro.props;
+import { cityKey } from '../lib/listingPresentation';
+import { getListingIdentityMedallions, getListingVenueMedallion, type ListingVenueMedallion } from '../lib/listingVenueMedallions';
+type CardVariant = 'overlay-controls' | 'split-actions' | 'listing-proof';
+interface Props {
+  event: PreviewEvent;
+  label?: string;
+  variant?: CardVariant;
+  listingItem?: boolean;
+  priority?: boolean;
+}
+const { event, label, variant = 'split-actions', listingItem = false, priority = false } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const absolute = eventAbsoluteUrl(event);
@@ -15,6 +23,7 @@ const metaLabel = [label, dateTimeLabel].filter(Boolean).join(' · ');
 const statusLabel = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count ?? 0;
+const hasSocialProof = likesCount > 0 || sharesCount > 0;
 const imageUrl = eventImageUrl(event.image_url);
 const shareText = [event.title, [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · '), statusLabel].filter(Boolean).join('\n');
 const shareImageType = imageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : imageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
@@ -30,12 +39,16 @@ function normalizeObjectPosition(value: string | null | undefined) {
 // Cropping is unlocked only by the explicit LLM-authored event_photo role.
 // OCR/legacy `visual_only` is not reliable enough: a poster can be mislabelled
 // and horizontal cover would then destroy text along its left/right edges.
-const imageMediaRole = event.image_media_role || 'unknown_document';
-const documentMedia = imageMediaRole !== 'event_photo';
 const primaryImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
+const imageMediaRole = variant === 'listing-proof'
+  ? (primaryImageAsset?.media_role || event.image_media_role || 'unknown_document')
+  : (event.image_media_role || 'unknown_document');
+const documentMedia = imageMediaRole !== 'event_photo';
 const mediaShellClass = ['event-card__media-shell', documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover'].join(' ');
 const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
-const cardObjectPosition = !documentMedia ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
+const cardObjectPosition = !documentMedia
+  ? normalizeObjectPosition(event.image_object_position || focalObjectPosition)
+  : null;
 const focalY = event.focal_point ? Math.max(0, Math.min(1, event.focal_point.y)) : 0.5;
 const focalOffset = Math.max(-12, Math.min(12, (0.5 - focalY) * 24));
 const likeCountLabel = likesCount > 0 ? String(likesCount) : '';
@@ -43,15 +56,58 @@ const shareCountLabel = sharesCount > 0 ? String(sharesCount) : '';
 const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;
 const canAddToCalendar = isCalendarEligible(event);
 const calendarHref = eventCalendarHref(event);
-const cardClass = ['event-card', `event-card--${variant}`].join(' ');
+// `listing-proof` deliberately remains the same EventCard component and base
+// DOM used by the mobile "Смотрите дальше" feed. It only replaces decision
+// actions with quiet, non-interactive social proof on listing surfaces.
+const cardClass = [
+  'event-card',
+  variant === 'listing-proof' ? 'event-card--split-actions event-card--listing-proof' : `event-card--${variant}`,
+].join(' ');
 const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'].join(' ');
 const eventTypeTag = eventTypeLabel(event.event_type);
+const overlayMedallion = variant === 'listing-proof' ? getListingVenueMedallion(event, primaryImageAsset) : null;
+const listingIdentityMedallions = variant === 'listing-proof' ? getListingIdentityMedallions(event) : [];
+const listingHasFree = variant === 'listing-proof' && event.ticket?.is_free === true;
+const externalMedallions = listingIdentityMedallions
+  .filter((medallion) => medallion.slug !== overlayMedallion?.slug)
+  .slice(0, listingHasFree ? 2 : 3);
+const medallionStyle = (medallion: ListingVenueMedallion) => [
+  medallion.background ? `--event-card-medallion-bg:${medallion.background}` : '',
+  medallion.ring ? `--event-card-medallion-ring:${medallion.ring}` : '',
+].filter(Boolean).join(';');
+const medallionFallbackSrc = (medallion: ListingVenueMedallion) => medallion.avatarUrl.endsWith('.webp')
+  ? (medallion.fallbackPngUrl || medallion.avatarUrl)
+  : medallion.avatarUrl;
 const otherTimeLabels = getOtherDates(event)
   .filter((item) => item.start_date === event.start_date && item.display_time && item.display_time !== event.display_time)
   .map((item) => item.display_time)
   .filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
 ---
-<article class={cardClass} data-event-card data-feed-card-variant={variant} data-calendar-eligible={canAddToCalendar ? "true" : "false"} data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
+<article
+  class={cardClass}
+  data-ds-component="EventCard"
+  data-ds-version="3"
+  data-event-card
+  data-feed-card-variant={variant}
+  data-calendar-eligible={canAddToCalendar ? "true" : "false"}
+  data-event-id={event.id}
+  data-event-title={event.title}
+  data-card-href={href}
+  data-listing-item={listingItem ? '' : undefined}
+  data-linked-event-ids={listingItem ? (event.other_date_ids || []).join(',') : undefined}
+  data-listing-city={listingItem ? cityKey(event.city) : undefined}
+  data-listing-event-type={listingItem ? cityKey(event.event_type || 'other') : undefined}
+  data-listing-image-mode={listingItem ? (documentMedia ? 'document-natural' : 'photo-cover') : undefined}
+  data-listing-crop-adaptive={listingItem ? (!documentMedia ? 'true' : 'false') : undefined}
+  data-listing-source-width={listingItem ? primaryImageAsset?.width : undefined}
+  data-listing-source-height={listingItem ? primaryImageAsset?.height : undefined}
+  data-listing-media-role={listingItem ? imageMediaRole : undefined}
+  data-listing-vertical-retention={listingItem ? (documentMedia ? '1.00000' : undefined) : undefined}
+  data-event-end-at={listingItem ? (event.end_at || undefined) : undefined}
+  data-event-start-at={listingItem ? (event.starts_at || undefined) : undefined}
+  tabindex="0"
+  aria-label={`${event.title}: ${dateLabel}`}
+>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
       <span class={mediaShellClass} data-media-role={imageMediaRole} style={documentMedia ? `--card-focal-y:${focalY};--card-focal-offset:${focalOffset}%` : undefined}>
@@ -64,22 +120,57 @@ const otherTimeLabels = getOtherDates(event)
           class="event-card__media"
           src={imageUrl}
           alt={event.image_alt || `Афиша события «${event.title}»`}
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
+          fetchpriority={priority ? 'high' : 'auto'}
           decoding="async"
           width={primaryImageAsset?.width}
           height={primaryImageAsset?.height}
           style={cardObjectPosition ? `object-position: ${cardObjectPosition}` : undefined}
           onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"
         />
+        {overlayMedallion && (
+          <span class="event-card__listing-medallion" data-listing-medallion-slug={overlayMedallion.slug} style={medallionStyle(overlayMedallion)} title={overlayMedallion.name} aria-label={overlayMedallion.ariaLabel}>
+            <picture>
+              {overlayMedallion.avatarUrl.endsWith('.webp') && overlayMedallion.fallbackPngUrl
+                ? <source srcset={withBase(overlayMedallion.avatarUrl)} type="image/webp" />
+                : null}
+              <img src={withBase(medallionFallbackSrc(overlayMedallion))} alt="" loading="lazy" decoding="async" />
+            </picture>
+          </span>
+        )}
       </span>
     ) : (
       <span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true">
         <span>{dateLabel}</span>
         <strong>{event.event_type || 'событие'}</strong>
         {event.city && <span>{event.city}</span>}
+        {overlayMedallion && (
+          <span class="event-card__listing-medallion" data-listing-medallion-slug={overlayMedallion.slug} style={medallionStyle(overlayMedallion)}>
+            <img src={withBase(medallionFallbackSrc(overlayMedallion))} alt="" loading="lazy" decoding="async" />
+          </span>
+        )}
       </span>
     )}
   </a>
+  {variant === 'listing-proof' && (externalMedallions.length > 0 || listingHasFree) && (
+    <div class="event-card__listing-identities" aria-label="Свойства события">
+      {externalMedallions.map((medallion) => (
+        <span data-listing-medallion-slug={medallion.slug} style={medallionStyle(medallion)} title={medallion.name} aria-label={medallion.ariaLabel}>
+          <picture>
+            {medallion.avatarUrl.endsWith('.webp') && medallion.fallbackPngUrl
+              ? <source srcset={withBase(medallion.avatarUrl)} type="image/webp" />
+              : null}
+            <img src={withBase(medallionFallbackSrc(medallion))} alt="" loading="lazy" decoding="async" />
+          </picture>
+        </span>
+      ))}
+      {listingHasFree && (
+        <span data-listing-medallion-slug="free" title="Бесплатно" aria-label="Бесплатное событие">
+          <img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" loading="lazy" decoding="async" />
+        </span>
+      )}
+    </div>
+  )}
   <div class="event-card__body">
     <a class="event-card__title" href={href} data-prefetch>{event.title}</a>
     <div class="event-card__meta-row">
@@ -171,5 +262,20 @@ const otherTimeLabels = getOtherDates(event)
         </button>
       </div>
     </>
+  )}
+
+  {variant === 'listing-proof' && hasSocialProof && (
+    <a
+      class="event-card__listing-proof"
+      href={href}
+      data-prefetch
+      data-nosnippet
+      aria-label={likesCount > 0 || sharesCount > 0
+        ? `${sharesCount > 0 ? `${sharesCount} поделились` : ''}${sharesCount > 0 && likesCount > 0 ? ', ' : ''}${likesCount > 0 ? `${likesCount} отметок нравится` : ''}. Открыть событие: ${event.title}`
+        : `Открыть событие: ${event.title}`}
+    >
+      {sharesCount > 0 && <span data-listing-share-proof><Icon name="share" /><b>{sharesCount}</b></span>}
+      {likesCount > 0 && <span data-listing-like-proof><Icon name="heart" /><b>{likesCount}</b></span>}
+    </a>
   )}
 </article>
