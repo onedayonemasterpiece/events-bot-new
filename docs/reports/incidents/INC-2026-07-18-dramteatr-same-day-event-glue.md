@@ -133,7 +133,7 @@ classification was projected.
 - [ ] repair canonical rows/sources/media for `5754`–`5757` and reconcile the
   separate `14:30` tour occurrence;
 - [ ] repair already-published public surfaces and publication hashes;
-- [ ] regenerate and publish a new immutable secret candidate through Kaggle.
+- [x] regenerate and publish a new immutable secret candidate through Kaggle.
 
 ## Follow-up Actions
 
@@ -146,10 +146,25 @@ classification was projected.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- static candidate source SHA: `a6ad22fba8b63e3dee7a71b8ca0837494c554033`
+  (reachable from `origin/main`; CI passed). No production runtime/config deploy
+  was performed because the identity gate remains intentionally in shadow.
+- deploy path: immutable secret-link prefix only; bearer token is not committed.
+  Build `production-20260718t-static-event-v11-regression-repair-kaggle-v2b`,
+  snapshot SHA-256
+  `8c784e2d14b34738a89f4cf0101645a46e470a2147c7752f73db7dcf83629972`,
+  `323` event pages, `1173` publicly verified create-only objects.
+- regression checks: `63` Python static/identity tests, `5` media tests, `5`
+  static-release tests, Kaggle production/secret contracts, seven noindex HTTP
+  specimens, `21` focused Playwright checks, `36 × 2` mobile event-page checks
+  and five actual related-event transitions passed.
+- post-deploy verification: production root and sitemap hashes were unchanged;
+  candidate links were sent/read back in Telegram review message `300`.
+
+The incident remains open: this candidate safely projects event `5756`, but the
+canonical `5754`–`5757` rows/publications and the production enforce rollout are
+still blocked on the documented manual precision audit and source-grounded
+repair.
 
 ### Prevention implementation evidence (not deployed)
 
