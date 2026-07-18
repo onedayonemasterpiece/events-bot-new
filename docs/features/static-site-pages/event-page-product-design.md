@@ -171,8 +171,8 @@ Typography:
    - calendar/share/copy remain available;
    - on mobile use sticky bottom action only if it does not hide content.
 
-7. **Другие даты**
-   - belongs to the primary date/time owner, not to a second card below the description;
+7. **Расписание этой программы**
+   - belongs to the primary date/time owner, not to a separate event-card feed;
    - same event occurrence group, separate from related events;
    - cancelled/postponed marked clearly.
 
@@ -197,7 +197,8 @@ the date below the description and made the visitor interpret another block
 before reaching the ticket action. It is not a valid base for the final
 templates.
 
-The accepted solution keeps one owner for the fact:
+The accepted solution keeps the choice at the existing date/time owner and
+does not make the visitor open a disclosure before comparing slots:
 
 - **desktop Split:** the selector stays in the top-right date/time area of the
   cream reading header;
@@ -206,25 +207,38 @@ The accepted solution keeps one owner for the fact:
 - **mobile accepted-v8:** it stays inside the existing compact weekday/date/time
   strip below the dark action dock and above the venue row;
 - the graphite ticket/action dock is never made the owner of event dates;
-- the current occurrence remains ordinary primary text, not a new selected
-  chip; this preserves the accepted visual hierarchy;
-- a same-day alternative is exposed immediately as the underlined,
-  link-shaped `Другое время: 17:00`; several times remain on one line, separated
-  by commas;
-- alternatives on other days use the explicit underlined control
-  `Другие даты N`. It progressively reveals a compact list where every date is
-  one row and every time is a direct link to that occurrence page;
-- the list is server-rendered with native `<details>`, works without JavaScript,
-  keeps 44 px-class mobile rows and does not hide alternatives behind an
-  unlabeled chip;
+- with one date and one time, the accepted compact date line remains unchanged;
+- with alternatives, an always-visible `Расписание` groups all occurrences by
+  date. A date is printed once; its time chips wrap on the same row instead of
+  repeating the weekday and date for every slot;
+- the current time is a filled, non-link chip with `aria-current="page"`;
+  every alternative is an underlined canonical `<a>` to that exact occurrence;
+- no `<details>`, dropdown, carousel or horizontal scroll is used. All 2–7 dates
+  and all known times remain visible, including dense 3–5-times-per-day cases;
+- desktop writes the weekday in full (`воскресенье`), preserving the accepted
+  typography. Mobile retains the compact two-letter weekday badge;
+- mobile alternatives keep at least a 44 px target; long rows wrap naturally;
 - the current slot and exact same-slot duplicates are excluded; only active,
   eligible future occurrence URLs are offered;
-- the old full-size `Другие даты` card grid below the description is removed so
-  the same decision is not presented twice.
+- the old full-size event-card grid below the description is removed;
+- desktop intentionally repeats the same compact schedule in the lower
+  `Перед посещением → Когда` card. The first placement supports ticket choice;
+  the second is a practical checkpoint after reading. Both render the same
+  component and canonical links, so they cannot disagree.
 
-This makes the label explicit without adding explanatory prose: the visitor can
-recognise that the program has another time/date, compare it in place, select
-the correct occurrence, and only then register or buy the corresponding ticket.
+This keeps the label explicit without adding instructional prose: the visitor
+can compare every available slot immediately, choose the exact occurrence and
+only then register or buy its ticket.
+
+The layout is based on linked-occurrence data rather than only the current
+preview window. On 2026-07-18 the active production slice contained `305`
+eligible events, `38` linked events and `16` mutual groups: `14` groups had two
+dates and `2` had three. That slice happened to have one time per day, but the
+historical canonical graph contains `79` groups with multiple times on one day.
+Real examples reach five times per day (the ship excursion at `11:00`, `12:30`,
+`14:00`, `15:30`, `17:00`) and seven-date programs with up to four times per
+day. Therefore a permanently collapsed two-date control would optimise for a
+temporary sparse window and fail known seasonal schedules.
 
 ## 5. CTA contract
 
@@ -278,8 +292,9 @@ H1 Event title
 [Primary CTA full width]
 [Calendar] [Share] [Copy]
 
-[weekday] [current date] [current time]
-[Другие даты N ▼] -> [date row: time link, time link]
+[Расписание]
+[weekday] [date] [current time] [time link]
+[weekday] [date] [time link] [time link]
 [venue/address row]
 [price/status row]
 

@@ -478,7 +478,7 @@ const descriptionHtml = (event.description_html || '')
           <div class="desktop-prototype__info" data-title-panel>
             <div class="desktop-prototype__kicker">
               <span>{event.event_type || 'событие'}</span>
-              <EventOccurrenceNav event={event} occurrences={occurrences} variant="desktop" desktopContext={candidate} />
+              <EventOccurrenceNav event={event} occurrences={occurrences} variant="desktop" />
             </div>
             <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
             {candidate === 'editorial' && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
@@ -498,7 +498,7 @@ const descriptionHtml = (event.description_html || '')
               <section class="desktop-clean-practical" aria-labelledby={`practical-${event.id}`}>
                 <p class="eyebrow">Перед посещением</p><h2 id={`practical-${event.id}`}>Всё главное в одном месте</h2>
                 <div class="desktop-clean-practical__grid">
-                  <article><Icon name="calendar" /><span>Когда</span><strong>{dateTimeLabel}</strong></article>
+                  <article><Icon name="calendar" /><span>Когда</span><EventOccurrenceNav event={event} occurrences={occurrences} variant="practical" /></article>
                   <article><Icon name="pin" /><span>Где</span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></article>
                   <article><Icon name="ticket" /><span>Вход</span><strong>{admissionLabel}</strong></article>
                 </div>
@@ -531,7 +531,7 @@ const descriptionHtml = (event.description_html || '')
     <p class="eyebrow">Перед посещением</p>
     <h2 id={`practical-${event.id}`}>Всё главное в одном месте</h2>
     <div class="desktop-clean-practical__grid">
-      <article><Icon name="calendar" /><span>Когда</span><strong>{dateTimeLabel}</strong></article>
+      <article><Icon name="calendar" /><span>Когда</span><EventOccurrenceNav event={event} occurrences={occurrences} variant="practical" /></article>
       <article><Icon name="pin" /><span>Где</span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></article>
       <article><Icon name="ticket" /><span>Вход</span><strong>{admissionLabel}</strong></article>
     </div>

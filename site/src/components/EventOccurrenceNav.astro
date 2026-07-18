@@ -1,22 +1,29 @@
 ---
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, displayDateWithWeekday, eventHref } from '../lib/events';
+import { displayDate, displayDateTime, eventHref } from '../lib/events';
 
 interface Props {
   event: PreviewEvent;
   occurrences?: PreviewEvent[];
-  variant: 'desktop' | 'mobile';
-  desktopContext?: 'editorial' | 'split';
+  variant: 'desktop' | 'mobile' | 'practical';
 }
 
 type OccurrenceGroup = {
   date: string;
   dateLabel: string;
-  weekdayLabel: string;
+  weekdayFull: string;
+  weekdayShort: string;
   occurrences: PreviewEvent[];
 };
 
-const { event, occurrences = [], variant, desktopContext } = Astro.props;
+const { event, occurrences = [], variant } = Astro.props;
+const weekdaysFull = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+const weekdaysShort = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const weekdayIndex = (value: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (!match) return -1;
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay();
+};
 const timeSortValue = (item: PreviewEvent) => {
   const match = /(\d{1,2}):(\d{2})/u.exec(item.start_time || item.display_time || '');
   return match ? `${match[1].padStart(2, '0')}:${match[2]}` : `99:${String(item.id).padStart(10, '0')}`;
@@ -38,138 +45,118 @@ for (const item of unique.values()) {
 }
 const groups: OccurrenceGroup[] = [...grouped.entries()]
   .map(([date, items]) => {
-    const sample = items[0];
-    const withWeekday = displayDateWithWeekday(sample);
-    const dateLabel = displayDate(sample);
+    const dayIndex = weekdayIndex(date);
     return {
       date,
-      dateLabel,
-      weekdayLabel: withWeekday.endsWith(dateLabel)
-        ? withWeekday.slice(0, -dateLabel.length).replace(/,\s*$/u, '')
-        : '',
+      dateLabel: displayDate(items[0]),
+      weekdayFull: dayIndex >= 0 ? weekdaysFull[dayIndex] : '',
+      weekdayShort: dayIndex >= 0 ? weekdaysShort[dayIndex] : '',
       occurrences: items.sort((left, right) => timeSortValue(left).localeCompare(timeSortValue(right)) || left.id - right.id),
     };
   })
   .sort((left, right) => left.date.localeCompare(right.date));
 const currentGroup = groups.find((group) => group.date === event.start_date);
-const sameDateAlternatives = (currentGroup?.occurrences || []).filter((item) => item.id !== event.id);
-const otherDateGroups = groups.filter((group) => group.date !== event.start_date);
-const hasAlternatives = sameDateAlternatives.length > 0 || otherDateGroups.length > 0;
-const alternativeCount = sameDateAlternatives.length + otherDateGroups.reduce((sum, group) => sum + group.occurrences.length, 0);
-const disclosureId = `event-occurrences-${variant}-${event.id}`;
+const hasAlternatives = unique.size > 1;
+const alternativeCount = Math.max(0, unique.size - 1);
 ---
 
-<div
-  class:list={['event-occurrences', `event-occurrences--${variant}`, desktopContext && `event-occurrences--desktop-${desktopContext}`, variant === 'mobile' && 'event-hero__when']}
-  data-event-occurrences
-  data-occurrence-variant={variant}
-  data-occurrence-current-id={event.id}
-  data-occurrence-alternative-count={alternativeCount}
->
-  <div class="event-occurrences__current">
+{!hasAlternatives ? (
+  <div class:list={['event-occurrences', `event-occurrences--${variant}`, 'event-occurrences--single', variant === 'mobile' && 'event-hero__when']} data-event-occurrences data-occurrence-variant={variant} data-occurrence-current-id={event.id} data-occurrence-alternative-count="0">
     {variant === 'mobile' ? (
       <>
-        {currentGroup?.weekdayLabel && <span class="event-hero__weekday">{currentGroup.weekdayLabel}</span>}
+        {currentGroup?.weekdayShort && <span class="event-hero__weekday">{currentGroup.weekdayShort}</span>}
         <span class="event-hero__date">{currentGroup?.dateLabel || displayDate(event)}</span>
         {event.display_time && <span class="event-hero__time">{event.display_time}</span>}
       </>
-    ) : (
-      <time datetime={event.starts_at || event.start_date} aria-current="date">
+    ) : variant === 'desktop' ? (
+      <time datetime={event.starts_at || event.start_date} aria-current="page">
         <strong>{currentGroup?.dateLabel || displayDate(event)}</strong>
-        {currentGroup?.weekdayLabel && <b>{currentGroup.weekdayLabel}</b>}
+        {currentGroup?.weekdayFull && <b>{currentGroup.weekdayFull}</b>}
         {event.display_time && <strong>{event.display_time}</strong>}
       </time>
+    ) : (
+      <strong class="event-occurrences__practical-current">{displayDateTime(event)}</strong>
     )}
   </div>
-
-  {hasAlternatives && (
-    <div class="event-occurrences__choices" id={disclosureId}>
-      {sameDateAlternatives.length > 0 && (
-        <div class="event-occurrences__same-date" aria-label="Другое время в эту дату">
-          <span>Другое время</span>
-          <span class="event-occurrences__time-links">
-            {sameDateAlternatives.map((item, index) => (
+) : (
+  <nav
+    class:list={['event-occurrences', `event-occurrences--${variant}`, 'event-occurrences--multiple', variant === 'mobile' && 'event-hero__when']}
+    aria-label="Расписание сеансов"
+    data-event-occurrences
+    data-occurrence-variant={variant}
+    data-occurrence-current-id={event.id}
+    data-occurrence-alternative-count={alternativeCount}
+  >
+    {variant !== 'practical' && <span class="event-occurrences__title">Расписание</span>}
+    <div class="event-occurrences__rows">
+      {groups.map((group) => (
+        <div class:list={['event-occurrences__date-row', group.occurrences.some((item) => item.id === event.id) && 'is-current-date']}>
+          <span class="event-occurrences__date-copy">
+            {variant === 'mobile' ? (
               <>
-                {index > 0 && <span aria-hidden="true">, </span>}
-                <a href={eventHref(item)} aria-label={`${displayDate(item)}, ${item.display_time || 'подробнее'}`}>{item.display_time || 'Подробнее'}</a>
+                {group.weekdayShort && <span class="event-hero__weekday">{group.weekdayShort}</span>}
+                <strong class="event-hero__date">{group.dateLabel}</strong>
               </>
+            ) : (
+              <>
+                <strong>{group.dateLabel}</strong>
+                {group.weekdayFull && <span>{group.weekdayFull}</span>}
+              </>
+            )}
+          </span>
+          <span class="event-occurrences__times">
+            {group.occurrences.map((item) => item.id === event.id ? (
+              <time class="event-occurrences__time is-current" datetime={item.starts_at || item.start_date} aria-current="page">{item.display_time || 'время уточняется'}</time>
+            ) : (
+              <a class="event-occurrences__time" href={eventHref(item)} aria-label={`${group.dateLabel}, ${group.weekdayFull}, ${item.display_time || 'подробнее'}`}>{item.display_time || 'Подробнее'}</a>
             ))}
           </span>
         </div>
-      )}
-
-      {otherDateGroups.length > 0 && (
-        <details class="event-occurrences__details">
-          <summary>
-            <span>Другие даты</span>
-            <span class="event-occurrences__count" aria-label={`${otherDateGroups.length} других дат`}>{otherDateGroups.length}</span>
-            <span class="event-occurrences__chevron" aria-hidden="true"></span>
-          </summary>
-          <div class="event-occurrences__panel" aria-label="Другие даты и время события">
-            {otherDateGroups.map((group) => (
-              <div class="event-occurrences__date-row">
-                <span class="event-occurrences__date-copy">
-                  {group.weekdayLabel && <small>{group.weekdayLabel}</small>}
-                  <strong>{group.dateLabel}</strong>
-                </span>
-                <span class="event-occurrences__time-links">
-                  {group.occurrences.map((item, index) => (
-                    <>
-                      {index > 0 && <span aria-hidden="true">, </span>}
-                      <a href={eventHref(item)} aria-label={`${group.weekdayLabel}, ${group.dateLabel}, ${item.display_time || 'подробнее'}`}>{item.display_time || 'Подробнее'}</a>
-                    </>
-                  ))}
-                </span>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
+      ))}
     </div>
-  )}
-</div>
+  </nav>
+)}
 
 <style>
   .event-occurrences { min-width:0; }
-  .event-occurrences__current { min-width:0; }
-  .event-occurrences__choices { margin-top:.34rem; font-size:.75rem; letter-spacing:0; text-transform:none; }
-  .event-occurrences__same-date { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:flex-end; gap:.24rem .48rem; color:#75665b; font-weight:760; }
-  .event-occurrences__time-links { color:#8d3417; font-variant-numeric:tabular-nums; font-weight:900; white-space:nowrap; }
-  .event-occurrences__time-links a { color:inherit; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.2em; }
-  .event-occurrences__time-links a:hover { color:#b54d22; }
-  .event-occurrences__details { position:relative; margin-top:.16rem; }
-  .event-occurrences__details summary { display:flex; min-height:30px; align-items:center; justify-content:flex-end; gap:.38rem; margin-left:auto; color:#8d3417; cursor:pointer; font-size:.76rem; font-weight:880; list-style:none; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.22em; }
-  .event-occurrences__details summary::-webkit-details-marker { display:none; }
-  .event-occurrences__details summary:focus-visible { outline:2px solid #b54d22; outline-offset:3px; border-radius:4px; }
-  .event-occurrences__count { display:inline-grid; min-width:1.25rem; min-height:1.25rem; place-items:center; padding:0 .25rem; border-radius:999px; background:rgba(181,77,34,.12); font-size:.68rem; text-decoration:none; }
-  .event-occurrences__chevron { display:inline-block; width:.42rem; height:.42rem; margin:-.18rem .12rem 0 .16rem; border-right:2px solid currentColor; border-bottom:2px solid currentColor; text-decoration:none; transform:rotate(45deg); transition:transform .18s ease, margin .18s ease; }
-  .event-occurrences__details[open] .event-occurrences__chevron { margin-top:.18rem; transform:rotate(225deg); }
-  .event-occurrences__panel { z-index:20; display:grid; min-width:18.5rem; margin-top:.3rem; padding:.42rem .78rem; border:1px solid rgba(121,48,20,.18); border-radius:12px; background:#fffaf2; box-shadow:0 14px 34px rgba(42,28,19,.18); color:#30251f; }
-  .event-occurrences__date-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.9rem; min-height:2.7rem; padding:.45rem 0; }
-  .event-occurrences__date-row + .event-occurrences__date-row { border-top:1px solid rgba(121,48,20,.12); }
-  .event-occurrences__date-copy { display:flex; align-items:baseline; gap:.45rem; min-width:0; }
-  .event-occurrences__date-copy small { color:#7b6b5e; font-size:.68rem; font-weight:850; text-transform:uppercase; }
-  .event-occurrences__date-copy strong { color:#352820; font-size:.82rem; }
+  .event-occurrences--single time { display:flex; align-items:baseline; gap:.65rem; color:inherit; font-variant-numeric:tabular-nums; }
+  .event-occurrences--single time strong { font-size:clamp(.9rem,1.5vw,1.18rem); }
+  .event-occurrences--single time b { color:#7b6b5e; }
+  .event-occurrences__title { color:#75665b; font-size:.68rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .event-occurrences__rows { display:grid; gap:.34rem; min-width:0; }
+  .event-occurrences__date-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.55rem 1rem; min-width:0; }
+  .event-occurrences__date-copy { display:flex; flex-wrap:wrap; align-items:baseline; gap:.18rem .42rem; min-width:0; color:#352820; }
+  .event-occurrences__date-copy strong { font-size:.82rem; font-weight:950; }
+  .event-occurrences__date-copy > span:not(.event-hero__weekday) { color:#75665b; font-size:.72rem; font-weight:800; }
+  .event-occurrences__times { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.32rem; min-width:0; font-variant-numeric:tabular-nums; }
+  .event-occurrences__time { display:inline-flex; min-height:32px; align-items:center; justify-content:center; padding:.34rem .58rem; border:1px solid rgba(141,52,23,.28); border-radius:999px; background:#fffaf2; color:#8d3417; font-size:.76rem; font-weight:950; line-height:1; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:.18em; white-space:nowrap; }
+  a.event-occurrences__time:hover { border-color:#b54d22; background:#fff3e8; color:#b54d22; }
+  .event-occurrences__time:focus-visible { outline:2px solid #b54d22; outline-offset:2px; }
+  .event-occurrences__time.is-current { border-color:#b54d22; background:#b54d22; color:#fffaf2; text-decoration:none; box-shadow:0 4px 12px rgba(141,52,23,.18); }
 
-  .event-occurrences--desktop { position:relative; display:flex; flex-direction:column; align-items:flex-end; text-align:right; }
-  .event-occurrences--desktop .event-occurrences__current time { display:flex; align-items:baseline; justify-content:flex-end; gap:.65rem; color:inherit; font-variant-numeric:tabular-nums; }
-  .event-occurrences--desktop .event-occurrences__current time strong { font-size:clamp(.9rem,1.5vw,1.18rem); }
-  .event-occurrences--desktop .event-occurrences__current time b { color:#7b6b5e; }
-  .event-occurrences--desktop .event-occurrences__panel { position:static; }
-  .event-occurrences--desktop-editorial .event-occurrences__details { position:static; }
-  .event-occurrences--desktop-editorial .event-occurrences__panel { position:absolute; right:0; bottom:calc(100% + .38rem); }
+  .event-occurrences--desktop { display:grid; justify-items:end; gap:.3rem; max-width:min(31rem,100%); text-align:right; text-transform:none; }
+  .event-occurrences--desktop .event-occurrences__rows { justify-items:stretch; min-width:min(25rem,48vw); }
+  .event-occurrences--desktop .event-occurrences__date-copy { justify-content:flex-end; }
+  .event-occurrences--desktop .event-occurrences__date-row + .event-occurrences__date-row { padding-top:.34rem; border-top:1px solid rgba(121,48,20,.12); }
 
-  .event-occurrences--mobile { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:.5rem; line-height:1; }
-  .event-occurrences--mobile .event-occurrences__current { display:contents; }
-  .event-occurrences--mobile .event-occurrences__choices { grid-column:1 / -1; display:grid; gap:.18rem; margin-top:.14rem; }
-  .event-occurrences--mobile .event-occurrences__same-date { justify-content:flex-start; min-height:44px; padding:.14rem .02rem 0; font-size:.78rem; line-height:1.35; }
-  .event-occurrences--mobile .event-occurrences__time-links a { display:inline-flex; min-height:44px; align-items:center; }
-  .event-occurrences--mobile .event-occurrences__details { margin:0; }
-  .event-occurrences--mobile .event-occurrences__details summary { justify-content:flex-start; min-height:44px; margin:0; font-size:.8rem; }
-  .event-occurrences--mobile .event-occurrences__panel { position:static; min-width:0; margin:.12rem 0 .24rem; padding:.34rem .68rem; border-radius:10px; box-shadow:none; }
-  .event-occurrences--mobile .event-occurrences__date-row { min-height:2.8rem; gap:.7rem; }
+  .event-occurrences--mobile.event-occurrences--multiple { display:grid !important; grid-template-columns:minmax(0,1fr) !important; gap:.38rem !important; line-height:1.15 !important; }
+  .event-occurrences--mobile .event-occurrences__title { padding:.08rem .02rem 0; }
+  .event-occurrences--mobile .event-occurrences__rows { gap:0; }
+  .event-occurrences--mobile .event-occurrences__date-row { grid-template-columns:minmax(0,1fr) auto; min-height:54px; padding:.3rem .02rem; }
+  .event-occurrences--mobile .event-occurrences__date-row + .event-occurrences__date-row { border-top:1px solid rgba(121,48,20,.12); }
+  .event-occurrences--mobile .event-occurrences__date-copy { flex-wrap:nowrap; }
+  .event-occurrences--mobile .event-occurrences__times { max-width:11.5rem; }
+  .event-occurrences--mobile .event-occurrences__time { min-width:44px; min-height:44px; padding:.42rem .62rem; }
 
-  @media (prefers-reduced-motion:reduce) {
-    .event-occurrences__chevron { transition:none; }
+  .event-occurrences--practical { width:100%; margin-top:.24rem; text-transform:none; }
+  .event-occurrences--practical .event-occurrences__rows { gap:.48rem; }
+  .event-occurrences--practical .event-occurrences__date-row { grid-template-columns:minmax(9.5rem,1fr) minmax(8rem,auto); }
+  .event-occurrences--practical .event-occurrences__date-row + .event-occurrences__date-row { padding-top:.48rem; border-top:1px solid rgba(121,48,20,.12); }
+  .event-occurrences--practical .event-occurrences__times { justify-content:flex-start; }
+  .event-occurrences__practical-current { display:block; }
+
+  @media (max-width:430px) {
+    .event-occurrences--mobile .event-occurrences__date-row { grid-template-columns:minmax(0,1fr); gap:.32rem; }
+    .event-occurrences--mobile .event-occurrences__times { max-width:none; justify-content:flex-start; padding-left:2.72rem; }
   }
 </style>

@@ -21,9 +21,11 @@ legacy `EventHero + event-grid` desktop DOM fails closed.
 Linked occurrences use the same accepted compositions rather than a legacy
 schedule card: desktop Split/Continuous Editorial extend their existing
 date/time header owner, while mobile accepted-v8 extends its weekday/date/time
-strip. Explicit `Другое время` and `Другие даты N` links lead to the selected
-occurrence; the former duplicate card grid below the mobile description is not
-rendered. Product and grouping contract:
+strip. When alternatives exist, every date and time is server-rendered as an
+always-visible compact schedule: the current slot is marked, while every other
+time links directly to its occurrence. Desktop repeats the same schedule in the
+lower `Когда` practical card; the former duplicate large-card section below the
+mobile description is not rendered. Product and grouping contract:
 [`event-page-product-design.md`](event-page-product-design.md#related-dates-and-times-in-the-accepted-compositions).
 
 В `events-bot-new` есть Astro SSG preview и отдельный checked production profile в `site/`: он строит

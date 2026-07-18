@@ -120,10 +120,14 @@ test('linked occurrences stay inside the accepted desktop and mobile date owners
   assert.match(route, /<DesktopEventPage[\s\S]*occurrences=\{otherDates\}/u);
   assert.match(route, /<EventHero[^>]*metaTreatment="weekday-panel"[^>]*occurrences=\{otherDates\}/u);
   assert.doesNotMatch(route, /mobile-event-production__other-dates/u);
-  assert.match(desktop, /<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="desktop" desktopContext=\{candidate\} \/>/u);
+  assert.match(desktop, /<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="desktop" \/>/u);
+  assert.equal((desktop.match(/<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="practical" \/>/gu) || []).length, 2);
   assert.match(hero, /<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="mobile" \/>/u);
-  assert.match(occurrenceNav, />Другие даты</u);
-  assert.match(occurrenceNav, />Другое время</u);
+  assert.match(occurrenceNav, /<nav[\s\S]*aria-label="Расписание сеансов"/u);
+  assert.match(occurrenceNav, />Расписание</u);
+  assert.match(occurrenceNav, /aria-current="page"/u);
+  assert.match(occurrenceNav, /'воскресенье'/u);
+  assert.doesNotMatch(occurrenceNav, /<details|<summary|>Другие даты|>Другое время/u);
   assert.match(occurrenceNav, /const slotKey =/u);
   assert.match(occurrenceNav, /if \(!unique\.has\(slot\)\) unique\.set\(slot, item\)/u);
   assert.match(events, /export function collapseLinkedOccurrenceChoices/u);
@@ -132,6 +136,9 @@ test('linked occurrences stay inside the accepted desktop and mobile date owners
   const built = await readBuilt('sobytiya/ekskursiya-oplot-nezavisimosti-i-piva-kaliningrad-6685/index.html');
   assert.match(built, /data-occurrence-variant="desktop"[^>]*data-occurrence-alternative-count="2"/u);
   assert.match(built, /data-occurrence-variant="mobile"[^>]*data-occurrence-alternative-count="2"/u);
+  assert.match(built, /data-occurrence-variant="practical"[^>]*data-occurrence-alternative-count="2"/u);
+  assert.match(built, />воскресенье</u);
+  assert.doesNotMatch(built, /<details[^>]*data-event-occurrences/u);
   assert.match(built, /ekskursiya-oplot-nezavisimosti-i-piva-kaliningrad-6686/u);
   assert.match(built, /ekskursiya-oplot-nezavisimosti-i-piva-kaliningrad-6687/u);
 });
