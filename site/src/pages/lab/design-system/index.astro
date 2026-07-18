@@ -20,10 +20,10 @@ import PersonalFeedSlot from '../../../components/PersonalFeedSlot.astro';
 import SocialIcon from '../../../components/SocialIcon.astro';
 import AnnouncementsLockup from '../../../components/brand/AnnouncementsLockup.astro';
 import ListingEventCard from '../../../components/listings/ListingEventCard.astro';
+import ListingDiscoveryRail from '../../../components/listings/ListingDiscoveryRail.astro';
 import ExactTimeTimeline from '../../../components/listings/ExactTimeTimeline.astro';
 import ListingTimeNav from '../../../components/listings/ListingTimeNav.astro';
 import ListingTimeMarker from '../../../components/listings/ListingTimeMarker.astro';
-import ListingControls from '../../../components/listings/ListingControls.astro';
 import ListingPageHeader from '../../../components/listings/ListingPageHeader.astro';
 import WeekendEditorialTimeline from '../../../components/listings/WeekendEditorialTimeline.astro';
 import type { PreviewEvent } from '../../../lib/types';
@@ -302,8 +302,9 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
             <div class="ds-component-block__head"><div><h3>Листинг по точному времени</h3><p>Общий candidate для «Сегодня», «Завтра» и двухколоночных «Выходных»: гибридная навигация, intrinsic flow и surface-specific media selection.</p></div><Badge tone="warning">Candidate</Badge></div>
             <div class="ds-component-stage">
               <ListingPageHeader title="Сегодня" dateLabel="пятница, 17 июля" count={listingEvents.length} current="today" />
-              <ListingControls cities={listingCities} total={listingEvents.length} label="каталоге" />
-              <ListingTimeNav groups={listingGroups} idPrefix="ds-time" />
+              <ListingDiscoveryRail cities={listingCities} total={listingEvents.length} label="каталоге">
+                <ListingTimeNav groups={listingGroups} idPrefix="ds-time" />
+              </ListingDiscoveryRail>
               <ListingTimeMarker id="ds-time-marker" label="18:00" count={3} />
               <ExactTimeTimeline groups={listingGroups} idPrefix="ds-time" date="2026-07-17" />
               <ListingEventCard event={baseEvent} />
@@ -381,7 +382,10 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="WeekendEditorialTimeline" data-ds-version="2"><td>WeekendEditorialTimeline · shared time rail</td><td><code>v2</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/WeekendEditorialTimeline.astro</code></td><td>one left axis + per-day count chips + continuous washes</td></tr>
                 <tr data-ds-component="WeekendEditorialTimeline" data-ds-version="1" data-ds-replaced-by="WeekendEditorialTimeline@2"><td>WeekendEditorialTimeline · duplicate heads</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/WeekendEditorialTimeline.astro</code></td><td>replaced: duplicate sticky day row and generic count</td></tr>
                 <tr data-ds-component="WeekendTimeMatrix" data-ds-version="1" data-ds-replaced-by="WeekendEditorialTimeline@2"><td>WeekendTimeMatrix</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/WeekendTimeMatrix.astro</code></td><td>replaced: center time rail read as a spreadsheet</td></tr>
-                <tr data-ds-component="ListingEventCard" data-ds-version="3"><td>ListingEventCard · reviewed responsive crop</td><td><code>v3</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>source-reviewed crop + truthful sizes + 56px medallion</td></tr>
+                <tr data-ds-component="ListingDiscoveryRail" data-ds-version="1"><td>ListingDiscoveryRail · quiet direct discovery</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingDiscoveryRail.astro</code></td><td>link-like city toggles + time navigation on one light sticky surface</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="5"><td>ListingEventCard · OCR-safe social proof</td><td><code>v5</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>OCR fail-closed geometry + non-zero static Share/Like evidence + authored medallion frames; no listing Calendar/feedback CTA</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="4" data-ds-replaced-by="ListingEventCard@5"><td>ListingEventCard · decision actions</td><td><code>v4</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: listing actions implied premature Share/Like/Calendar conversion</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="3" data-ds-replaced-by="ListingEventCard@4"><td>ListingEventCard · reviewed responsive crop</td><td><code>v3</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: missing-OCR fail-open crop and visually dominant action/identity rails</td></tr>
                 <tr data-ds-component="ListingEventCard" data-ds-version="2" data-ds-replaced-by="ListingEventCard@3"><td>ListingEventCard · responsive media</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: fixed 256px sizes and narrow unreviewed thumbnails</td></tr>
                 <tr data-ds-component="ListingEventCard" data-ds-version="1" data-ds-replaced-by="ListingEventCard@2"><td>ListingEventCard · TH-P1</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: original-only lazy media and fallback ratio regression</td></tr>
                 <tr data-ds-component="EventListItem" data-ds-version="1"><td>EventListItem</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventListItem.astro</code></td><td>mobile/tablet/desktop</td></tr>

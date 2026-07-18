@@ -2,7 +2,7 @@
 import type { PreviewEvent } from '../../lib/types';
 import { deduplicateListingEvents, eventCountLabel, groupListingEvents } from '../../lib/listingPresentation';
 import { withBase } from '../../lib/events';
-import ListingControls from './ListingControls.astro';
+import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingWeekendTimeNav from './ListingWeekendTimeNav.astro';
 import WeekendEditorialTimeline from './WeekendEditorialTimeline.astro';
@@ -22,10 +22,11 @@ function dayDateLabel(date: string): string {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' }).format(new Date(`${date}T12:00:00+02:00`));
 }
 ---
-<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="TH-P1" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
+<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="TH-P1" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
   <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
-  <ListingControls cities={cities} total={events.length} label="на выходных" />
-  <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
+  <ListingDiscoveryRail cities={cities} total={events.length} label="на выходных">
+    <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
+  </ListingDiscoveryRail>
   <div class="ke-weekend-board">
     <div class="ke-weekend-heads" aria-label="Дни выходных">
       <div class="ke-weekend-heads__time" aria-hidden="true"></div>

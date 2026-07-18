@@ -1,7 +1,7 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
 import Icon from '../Icon.astro';
-import { eventAbsoluteUrl, eventAdmissionLabel, eventHref } from '../../lib/events';
+import { eventHref } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
 import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingIdentityMedallions, getListingVenueMedallion } from '../../lib/listingVenueMedallions';
@@ -46,30 +46,38 @@ const externalMedallions = image.asset?.image_text_mode === 'visual_only' && ove
   : identityMedallions;
 const showFree = event.ticket?.is_free === true;
 const identityCount = Math.min(3, externalMedallions.length + (showFree ? 1 : 0));
-const isWideVisual = image.mode === 'visual-crop' && image.adaptiveCrop;
-const utilityInside = isWideVisual && image.ratio >= 1.33;
-const tailWidth = identityCount > 0 ? 80 + (utilityInside ? 0 : 48) : (utilityInside ? 0 : 48);
+const likesCount = event.likes_count || 0;
+const sharesCount = event.shares_count || 0;
+const hasSocialProof = likesCount > 0 || sharesCount > 0;
+const tailWidth = (identityCount > 0 ? 64 : 0) + (hasSocialProof ? 40 : 0);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
-const style = `--ke-listing-image-ratio:${image.ratio.toFixed(5)};--ke-listing-object-position:${image.objectPosition};--ke-listing-tail-width:${tailWidth}px`;
+const style = [
+  `--ke-listing-image-ratio:${image.ratio.toFixed(5)}`,
+  `--ke-listing-object-position:${image.objectPosition}`,
+  `--ke-listing-tail-width:${tailWidth}px`,
+  image.asset ? `--ke-listing-source-width:${image.asset.width}px` : '',
+  image.asset ? `--ke-listing-source-height:${image.asset.height}px` : '',
+].filter(Boolean).join(';');
 const medallionStyle = (medallion: typeof overlayMedallion) => medallion
   ? [medallion.background ? `--venue-medallion-bg:${medallion.background}` : '', medallion.ring ? `--venue-medallion-ring:${medallion.ring}` : ''].filter(Boolean).join(';')
   : undefined;
 const medallionFallbackSrc = (medallion: NonNullable<typeof overlayMedallion>) => medallion.avatarUrl.endsWith('.webp')
   ? (medallion.fallbackPngUrl || medallion.avatarUrl)
   : medallion.avatarUrl;
-const absolute = eventAbsoluteUrl(event);
-const admission = eventAdmissionLabel(event);
-const shareText = [event.title, [event.display_date, event.display_time, place].filter(Boolean).join(' · '), admission].filter(Boolean).join('\n');
-const likesCount = event.likes_count || 0;
-const sharesCount = event.shares_count || 0;
+const socialProofLabel = [
+  sharesCount > 0 ? `${sharesCount} поделились` : '',
+  likesCount > 0 ? `${likesCount} отметок нравится` : '',
+].filter(Boolean).join(', ');
 ---
 <article
   class="ke-listing-card"
   style={style}
   data-ds-component="ListingEventCard"
-  data-ds-version="3"
+  data-ds-version="5"
+  data-feedback-scope
   data-listing-item
   data-event-id={event.id}
+  data-event-title={event.title}
   data-linked-event-ids={(event.other_date_ids || []).join(',')}
   data-listing-city={cityKey(event.city)}
   data-listing-image-mode={image.mode}
@@ -77,10 +85,14 @@ const sharesCount = event.shares_count || 0;
   data-listing-crop-evidence={image.asset?.listing_crop_evidence}
   data-listing-source-width={image.asset?.width}
   data-listing-source-height={image.asset?.height}
+  data-listing-media-role={image.asset?.media_role}
+  data-listing-vertical-retention={image.verticalRetention.toFixed(5)}
+  data-listing-low-resolution={image.asset && image.asset.width < 320 ? 'true' : 'false'}
   data-listing-density={density}
   data-image-text-mode={image.asset?.image_text_mode || event.image_text_mode}
   data-venue-medallion={overlayMedallion?.slug || identityMedallions[0]?.slug}
-  data-listing-utility-inside={utilityInside ? 'true' : 'false'}
+  data-listing-has-social-proof={hasSocialProof ? 'true' : 'false'}
+  data-listing-identity-count={identityCount}
   data-event-end-at={event.end_at || undefined}
 >
   <div class="ke-listing-card__visual">
@@ -117,16 +129,9 @@ const sharesCount = event.shares_count || 0;
         </picture>
       </span>
     ) : null}
-    {utilityInside ? (
-      <div class="ke-listing-card__utility ke-listing-card__utility--inside" data-nosnippet aria-label={`Действия: ${event.title}`}>
-        <button type="button" data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute} aria-label={`Поделиться событием: ${event.title}`}><Icon name="share" /><span>{sharesCount > 0 ? sharesCount : ''}</span></button>
-        <button type="button" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Поставить лайк: ${event.title}`}><Icon name="heart" /><span data-feedback-count>{likesCount > 0 ? likesCount : ''}</span></button>
-      </div>
-    ) : null}
   </a>
   {identityCount > 0 ? (
     <div class="ke-listing-card__identity-rail" aria-label="Свойства события">
-      {showFree ? <span class="ke-listing-card__free-medallion" aria-label="Бесплатное событие"><Icon name="ticket" /><b>0 ₽</b></span> : null}
       {externalMedallions.slice(0, Math.max(0, 3 - (showFree ? 1 : 0))).map((medallion) => (
         <span class="ke-listing-card__identity-medallion" style={medallionStyle(medallion)} title={medallion.name} aria-label={medallion.ariaLabel}>
           <picture>
@@ -135,13 +140,14 @@ const sharesCount = event.shares_count || 0;
           </picture>
         </span>
       ))}
+      {showFree ? <span class="ke-listing-card__free-medallion" aria-label="Бесплатное событие"><img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" /></span> : null}
     </div>
   ) : null}
-  {!utilityInside ? (
-    <div class="ke-listing-card__utility" data-nosnippet aria-label={`Действия: ${event.title}`}>
-      <button type="button" data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute} aria-label={`Поделиться событием: ${event.title}`}><Icon name="share" /><span>{sharesCount > 0 ? sharesCount : ''}</span></button>
-      <button type="button" data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Поставить лайк: ${event.title}`}><Icon name="heart" /><span data-feedback-count>{likesCount > 0 ? likesCount : ''}</span></button>
-    </div>
+  {hasSocialProof ? (
+    <a class="ke-listing-card__social-proof" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
+      {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
+      {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}
+    </a>
   ) : null}
   </div>
   <div class="ke-listing-card__copy">

@@ -623,3 +623,320 @@
   .ke-listing-controls { padding-inline: 16px; }
   .ke-time-nav__inner { padding-left: 0; }
 }
+
+/* V15 listing discovery and decision-support hierarchy. City and time
+   controls share one quiet sticky surface; informational rails no longer
+   compete with event media as circular CTAs. */
+:root {
+  --ke-listing-discovery-height: 88px;
+  --ke-listing-sticky-stack-height: calc(var(--ke-site-header-bar-height) + var(--ke-listing-discovery-height));
+}
+.ke-listing-discovery-rail {
+  position: sticky;
+  top: var(--ke-site-header-bar-height);
+  z-index: 52;
+  width: 100vw;
+  height: var(--ke-listing-discovery-height);
+  margin-left: calc(50% - 50vw);
+  border-bottom: 1px solid var(--ke-color-line);
+  background: color-mix(in srgb, var(--ke-color-canvas) 96%, transparent);
+  backdrop-filter: blur(10px);
+}
+.ke-listing-discovery-rail--cities-only { height: 44px; }
+.ke-listing-discovery-rail > .ke-listing-controls {
+  position: static;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  padding: 0 max(24px, calc((100vw - var(--ke-content-wide-max)) / 2));
+  padding-left: max(304px, calc((100vw - var(--ke-content-wide-max)) / 2));
+  border: 0;
+  background: transparent;
+}
+.ke-listing-discovery-rail .ke-city-filter,
+.ke-listing-discovery-rail .ke-city-filter--direct {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 2px 10px;
+  overflow: visible;
+  padding: 0;
+  scrollbar-width: none;
+}
+.ke-listing-discovery-rail .ke-filter-chip {
+  min-height: 44px;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ke-color-muted);
+  font-size: .82rem;
+  font-weight: 650;
+}
+.ke-listing-discovery-rail .ke-filter-chip::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 4px;
+  left: 0;
+  height: 2px;
+  background: transparent;
+}
+.ke-listing-discovery-rail .ke-filter-chip__check {
+  position: absolute;
+  width: 1px;
+  height: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ke-color-brand-700);
+  font-size: .7rem;
+  opacity: 0;
+}
+.ke-listing-discovery-rail .ke-filter-chip strong {
+  min-width: 0;
+  min-height: 0;
+  display: inline;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--ke-color-muted) 78%, transparent);
+  font-size: .68rem;
+  font-weight: 750;
+}
+.ke-listing-discovery-rail .ke-filter-chip:has(input:checked) {
+  border: 0;
+  background: transparent;
+  color: var(--ke-color-brand-800);
+  box-shadow: none;
+  font-weight: 850;
+}
+.ke-listing-discovery-rail .ke-filter-chip:has(input:checked)::after { background: var(--ke-color-brand-600); }
+.ke-listing-discovery-rail .ke-filter-chip:has(input:checked) .ke-filter-chip__check {
+  border: 0;
+  background: transparent;
+  color: var(--ke-color-brand-700);
+  opacity: 0;
+}
+.ke-listing-discovery-rail .ke-filter-chip:has(input:focus-visible) { outline-offset: -5px; }
+.ke-listing-discovery-rail__time { height: 44px; border-top: 1px solid color-mix(in srgb, var(--ke-color-line) 64%, transparent); }
+.ke-listing-discovery-rail .ke-time-nav {
+  position: static;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ke-color-copy);
+}
+.ke-listing-discovery-rail .ke-time-nav__inner {
+  width: min(var(--ke-content-wide-max), calc(100% - clamp(3rem, 5vw, 6rem)));
+  height: 44px;
+  margin-inline: auto;
+  grid-template-columns: 1fr;
+  padding-left: 256px;
+}
+.ke-listing-discovery-rail .ke-time-nav__links { justify-content: flex-end; gap: 8px; }
+.ke-listing-discovery-rail .ke-time-nav a {
+  min-height: 44px;
+  border-radius: 0;
+  padding: 0 4px;
+  color: var(--ke-color-copy);
+  font-size: .86rem;
+}
+.ke-listing-discovery-rail .ke-time-nav a:hover { background: transparent; color: var(--ke-color-brand-700); }
+.ke-listing-discovery-rail .ke-time-nav strong {
+  min-width: 0;
+  min-height: 0;
+  display: inline;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ke-color-muted);
+  font-size: .7rem;
+}
+.ke-listing-discovery-rail .ke-time-nav__exact > summary {
+  width: 30px;
+  height: 44px;
+  border-radius: 0;
+  color: var(--ke-color-muted);
+}
+.ke-listing-discovery-rail .ke-time-nav__exact > summary:hover { background: transparent; color: var(--ke-color-brand-700); }
+.ke-listing-discovery-rail .ke-time-nav__popover { top: calc(100% + 2px); }
+
+/* The time axis is navigation context, not a one-off heading. It remains
+   pinned until the next exact-time group pushes it away. Give it its own
+   quiet paint layer so photos cannot make the pinned numerals disappear. */
+.ke-listing-time-marker,
+.ke-weekend-time-rail {
+  z-index: 7;
+  background: linear-gradient(90deg, var(--ke-color-canvas) 0 82%, transparent);
+}
+
+/* Canonical last-resort media may be slightly below the normal desktop gate
+   (regression control 3794: 300x174). Keep its true size instead of silently
+   upscaling it to the common 198px media height. */
+.ke-listing-card[data-listing-low-resolution="true"] {
+  --ke-listing-media-height: var(--ke-listing-source-height);
+}
+.ke-listing-card[data-listing-low-resolution="true"] .ke-listing-card__media {
+  flex: 0 0 var(--ke-listing-source-width);
+  width: var(--ke-listing-source-width);
+  min-width: 0;
+  max-width: var(--ke-listing-source-width);
+}
+
+.ke-weekend-heads {
+  top: var(--ke-listing-sticky-stack-height);
+  min-height: 59px;
+}
+.ke-weekend-day__head { padding-block: 8px; }
+.ke-listing-card__visual { position: relative; }
+.ke-listing-card__identity-rail {
+  flex: 0 0 60px;
+  width: 60px;
+  gap: 5px;
+}
+.ke-listing-card__identity-medallion,
+.ke-listing-card__free-medallion {
+  width: 60px;
+  height: 60px;
+  flex-basis: 60px;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: saturate(.68);
+  opacity: .82;
+  transition: filter 150ms ease, opacity 150ms ease;
+}
+.ke-listing-card[data-listing-identity-count="3"] .ke-listing-card__identity-medallion,
+.ke-listing-card[data-listing-identity-count="3"] .ke-listing-card__free-medallion {
+  width: clamp(52px, calc((var(--ke-listing-media-height) - 10px) / 3), 60px);
+  height: clamp(52px, calc((var(--ke-listing-media-height) - 10px) / 3), 60px);
+  flex-basis: clamp(52px, calc((var(--ke-listing-media-height) - 10px) / 3), 60px);
+}
+.ke-listing-card:hover .ke-listing-card__identity-medallion,
+.ke-listing-card:focus-within .ke-listing-card__identity-medallion,
+.ke-listing-card:hover .ke-listing-card__free-medallion,
+.ke-listing-card:focus-within .ke-listing-card__free-medallion { filter: saturate(.86); opacity: .94; }
+.ke-listing-card__free-medallion img { width: 100%; height: 100%; object-fit: contain; }
+.ke-listing-card__medallion {
+  width: 60px;
+  height: 60px;
+  box-sizing: border-box;
+  border: 2px solid rgba(255,255,255,.58);
+  box-shadow: none;
+  filter: saturate(.72);
+  opacity: .84;
+}
+.ke-listing-card__utility { flex: 0 0 44px; gap: 0; }
+.ke-listing-card__utility button,
+.ke-listing-card__utility a {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  display: grid;
+  grid-template-columns: 19px auto;
+  place-content: center;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--ke-color-muted) 78%, transparent);
+  cursor: pointer;
+  text-decoration: none;
+}
+.ke-listing-card__utility button:hover,
+.ke-listing-card__utility a:hover { border: 0; background: transparent; color: var(--ke-color-copy); }
+.ke-listing-card__utility button:focus-visible,
+.ke-listing-card__utility a:focus-visible { outline: 2px solid var(--ke-color-focus); outline-offset: -5px; }
+.ke-listing-card__utility button[aria-pressed="true"] { background: transparent; color: var(--ke-color-brand-700); }
+.ke-listing-card__utility button[aria-pressed="true"] .icon--heart { transform: scale(1.08); }
+.ke-listing-card__utility .icon { width: 19px; height: 19px; fill: currentColor; }
+.ke-listing-card__utility .icon--calendar { width: 20px; height: 20px; }
+.ke-listing-card__utility button span:not(:empty) { color: inherit; font-size: .66rem; font-weight: 780; }
+.ke-listing-card__utility--inside {
+  top: 8px;
+  right: calc(var(--ke-listing-tail-width, 0px) + 8px);
+  flex-basis: auto;
+  flex-direction: row;
+  gap: 4px;
+}
+.ke-listing-card__utility--inside button,
+.ke-listing-card__utility--inside a {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255,255,255,.52);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ke-color-surface-strong) 68%, transparent);
+  color: color-mix(in srgb, var(--ke-color-copy) 74%, transparent);
+  backdrop-filter: blur(5px);
+}
+.ke-listing-card__utility--inside button:hover,
+.ke-listing-card__utility--inside a:hover { border-color: rgba(255,255,255,.72); background: color-mix(in srgb, var(--ke-color-surface-strong) 78%, transparent); }
+
+.ke-listing-card__social-proof {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding-top: 3px;
+  color: color-mix(in srgb, var(--ke-color-muted) 68%, transparent);
+  text-decoration: none;
+}
+.ke-listing-card__social-proof:hover,
+.ke-listing-card__social-proof:visited { color: color-mix(in srgb, var(--ke-color-muted) 68%, transparent); }
+.ke-listing-card__social-proof:focus-visible { outline: 2px solid var(--ke-color-focus); outline-offset: 2px; }
+.ke-listing-card__social-proof > span {
+  min-height: 24px;
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.ke-listing-card__social-proof .icon { width: 17px; height: 17px; fill: currentColor; }
+.ke-listing-card__social-proof b { min-width: 0; font-size: .66rem; font-weight: 760; line-height: 1; }
+.ke-listing-card__social-proof [data-listing-like-proof][data-liked="true"] { color: var(--ke-color-brand-700); }
+
+@media (max-width: 1450px) and (min-width: 981px) {
+  :root { --ke-listing-discovery-height: 132px; }
+  .ke-listing-discovery-rail > .ke-listing-controls { height: 88px; }
+  .ke-listing-discovery-rail .ke-city-filter,
+  .ke-listing-discovery-rail .ke-city-filter--direct { flex-wrap: wrap; align-content: center; }
+}
+
+@media (max-width: 1700px) and (min-width: 981px) {
+  .ke-listing-discovery-rail .ke-filter-chip[data-listing-city-count="1"] strong { display: none; }
+  .ke-listing-discovery-rail--cities-only { height: 88px; }
+  .ke-listing-discovery-rail--cities-only > .ke-listing-controls { height: 88px; }
+  .ke-listing-discovery-rail--cities-only .ke-city-filter,
+  .ke-listing-discovery-rail--cities-only .ke-city-filter--direct { flex-wrap: wrap; align-content: center; }
+}
+
+@media (max-width: 1700px) and (min-width: 1451px) {
+  .ke-listing-discovery-rail--cities-only { height: 44px; }
+  .ke-listing-discovery-rail--cities-only > .ke-listing-controls { height: 44px; }
+  .ke-listing-discovery-rail--cities-only .ke-city-filter,
+  .ke-listing-discovery-rail--cities-only .ke-city-filter--direct { flex-wrap: nowrap; }
+  .ke-listing-discovery-rail--cities-only .ke-filter-chip strong { display: none; }
+}
+
+@media (max-width: 980px) {
+  :root { --ke-listing-discovery-height: 132px; }
+  .ke-listing-discovery-rail > .ke-listing-controls { height: 88px; padding-inline: 16px; }
+  .ke-listing-discovery-rail .ke-city-filter,
+  .ke-listing-discovery-rail .ke-city-filter--direct { flex-wrap: wrap; align-content: center; }
+  .ke-listing-discovery-rail .ke-time-nav__inner { padding-left: 0; }
+}

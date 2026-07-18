@@ -581,12 +581,13 @@ def image_url_key(url: str) -> str:
 
 def meaningful_ocr(value: Any) -> bool:
     text = clean_text(value).lower()
-    if len(text) < 60:
-        return False
     if "no readable text" in text or "no text" in text:
         return False
     letters = re.findall(r"[a-zа-яё]", text, flags=re.I)
-    return len(letters) >= 20
+    # A short date, venue name or price is still compositionally meaningful.
+    # The former 60-character threshold mislabeled real posters as
+    # `visual_only` and unlocked destructive listing crops.
+    return len(letters) >= 2
 
 
 IMAGE_DIMENSION_CACHE: dict[str, tuple[int | None, int | None]] = {}
@@ -853,7 +854,10 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     for index, url in enumerate(urls[:12]):
         metadata = metadata_by_url.get(image_url_key(url), {})
         ocr = str(metadata.get("ocr_text") or "")
-        mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "visual_only")
+        # Missing OCR is uncertainty, not proof that an image has no text.
+        # Only explicit curated exceptions or positive OCR evidence may make
+        # the stronger visual-only / text-bearing claims.
+        mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "unknown")
         semantic_status = clean_text(metadata.get("media_semantic_status")).lower()
         semantic_reason_code = clean_text(metadata.get("media_semantic_reason_code")).lower()
         raw_role = clean_text(metadata.get("media_role")).lower()

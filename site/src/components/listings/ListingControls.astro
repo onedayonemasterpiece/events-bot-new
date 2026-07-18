@@ -20,13 +20,13 @@ const showCities = cities.length > 1;
   {showCities ? (
     <fieldset class="ke-city-filter ke-city-filter--direct" data-listing-city-filter>
       <legend>Города</legend>
-      <label class="ke-filter-chip ke-filter-chip--all">
+      <label class="ke-filter-chip ke-filter-chip--all" data-listing-city-count={total}>
         <input type="checkbox" value="all" checked data-listing-city-all />
         <i class="ke-filter-chip__check" aria-hidden="true">✓</i>
         <span>Все</span><strong>{total}</strong>
       </label>
       {cities.map((city) => (
-        <label class="ke-filter-chip">
+        <label class="ke-filter-chip" data-listing-city-count={city.count}>
           <input type="checkbox" value={cityKey(city.name)} data-listing-city-input />
           <i class="ke-filter-chip__check" aria-hidden="true">✓</i>
           <span>{city.name}</span><strong>{city.count}</strong>

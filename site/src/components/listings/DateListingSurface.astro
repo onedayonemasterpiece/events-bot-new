@@ -1,7 +1,7 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
 import { deduplicateListingEvents, eventCountLabel, groupListingEvents } from '../../lib/listingPresentation';
-import ListingControls from './ListingControls.astro';
+import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingTimeNav from './ListingTimeNav.astro';
 import ExactTimeTimeline from './ExactTimeTimeline.astro';
@@ -39,10 +39,12 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
   data-listing-date={date}
   data-listing-variant="TH-P1"
   data-listing-density={upcomingEvents.length > 0 && upcomingEvents.length <= 4 ? 'sparse' : 'regular'}
+  data-listing-has-time-nav="true"
 >
   <ListingPageHeader title={title} dateLabel={dateLabel} count={events.length} current={kind} />
-  <ListingControls cities={cities} total={events.length} label={kind === 'today' ? 'сегодня' : 'завтра'} />
-  <ListingTimeNav groups={upcomingGroups} idPrefix={idPrefix} earlierCount={earlierEvents.length} />
+  <ListingDiscoveryRail cities={cities} total={events.length} label={kind === 'today' ? 'сегодня' : 'завтра'}>
+    <ListingTimeNav groups={upcomingGroups} idPrefix={idPrefix} earlierCount={earlierEvents.length} />
+  </ListingDiscoveryRail>
 
   {kind === 'today' ? (
     <details id="today-earlier" class="ke-earlier" data-listing-earlier hidden={earlierEvents.length === 0}>

@@ -1,6 +1,6 @@
-# Listing surfaces V14: product and composition decisions
+# Listing surfaces V15: product and composition decisions
 
-> **Status:** desktop preview candidate, 2026-07-18. Mobile is deliberately not the acceptance focus of V14.
+> **Status:** desktop preview candidate, 2026-07-18. Mobile is deliberately not the acceptance focus of V15. The file keeps its historical path because it records the V14 → V15 correction without creating a second competing specification.
 > **Surfaces:** `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/populyarnoe/`.
 
 ## What problem the pages solve
@@ -19,8 +19,9 @@ The date pages are not catalog grids. They answer, in order: **when can I go, wh
 
 - Exhibitions and continuing month-scale entities are removed from the primary date stream while there are enough atomic starts. They remain discoverable through Exhibitions/Search; a multi-day festival with a real start is not automatically equivalent to a six-month exhibition.
 - Today shows an event as past only when its explicit `end_at` has elapsed. Start time alone is insufficient because a concert or festival may still be in progress.
-- Past events stay above the current/future stream in a collapsed `Завершились` section. Their images are desaturated, but text and actions keep normal contrast.
+- Past events stay above the current/future stream in a collapsed `Завершились` section. Their images are desaturated, but text and social evidence keep readable contrast.
 - `Сейчас · HH:MM` is a visible separator. Tomorrow has no false current-time state.
+- The exact-time label is a persistent reading axis: while a long `17:00` group scrolls, `17:00` stays pinned below the discovery rail until the next exact time replaces it. This is a navigation/context function, not decorative sticky behavior.
 - `Время уточняется` is a bottom content section, not a navigation goal. Missing source data is not a user intent.
 
 ### Weekend
@@ -33,47 +34,51 @@ The date pages are not catalog grids. They answer, in order: **when can I go, wh
 
 ### City selection and personalization
 
-- Desktop city selection is one direct sticky horizontal chip rail, not a dropdown. `Все` is the safe default; multi-city selection remains possible and counts are recomputed on the same page.
-- The rail begins after the 240×88 brand tag while sticky, so controls do not pass under the tag.
-- Full list remains the default. `Для меня` is only enabled when a compatible consented profile produces a real different set; V14 must not present a decorative disabled promise.
+- Desktop city selection is direct and always visible, not a dropdown. V15 uses quiet link-like checkbox labels rather than large pills; `Все` is the safe default, multi-city selection remains possible and counts are recomputed on the same page.
+- City counts are secondary to direct access: single-result counts are omitted on compact desktop, and the cities-only Popular rail may omit all counts to keep one balanced line at 1536px. Exact-time/daypart counts remain visible because they directly estimate choice density.
+- Cities and time navigation live on one light sticky discovery surface as two semantic rows. The rows may wrap at narrower desktop widths, but must never require horizontal scrolling. The rail begins after the brand tag so controls do not pass under it.
+- Full list remains the default. `Для меня` is only enabled when a compatible consented profile produces a real different set; V15 must not present a decorative disabled promise.
 - A combined Today+Tomorrow desktop view remains an explicit later experiment, not the default. It needs observed comparison behavior and an easy persistent off switch before implementation.
 
-### Media, medallions and actions
+### Media, medallions and social proof
 
-- OCR media keeps its natural geometry; it is never widened by cropping away text.
-- A reviewed no-OCR source may crop adaptively to 3:2/4:3. A large no-OCR portrait whose focal review is still pending may use only a conservative square floor; it does not get the stronger 3:2 claim.
+- OCR media keeps its natural geometry. Missing OCR is `unknown`, not proof of no text; even a short date/name is compositionally meaningful. OCR, unknown documents, identity posters, schedules and attendee instructions never enter adaptive crop. Their vertical retention is `1.0` (and in any later bounded-cover experiment must remain at least `0.8`).
+- When the same approved event inventory contains several `unknown` assets, the wider authored candidate may win in its own natural ratio (control `6875`: 1280×960). This is candidate selection, not a crop claim: no pixels are discarded and the mode remains `unknown-natural`.
+- Only a classified event photo with event relevance, `safe_crop`, focal evidence and a reviewed/high-confidence media role may crop adaptively. This is fail-closed: no OCR result alone never unlocks crop.
 - A 180px-wide thumbnail is not enlarged into a 300–400px desktop frame. A source-manifest replacement is applied before this quality gate; otherwise the shared neutral fallback is more honest than visible upscale.
 - Available wide alternatives win within the same source inventory (control `6875`: 1280×960 beats 750×1000).
 - A source candidate classified `no_event_relevance` fails closed (control `6904`); it cannot become a listing image through generic fallback.
-- Identity medallions are recognition and trust aids, not decoration. V14 uses 72px (about 29% above V13's 56px), may show up to three in an external vertical rail for OCR, and may overlay one identity only on a safe no-OCR visual. `Бесплатно` is a first-class 0 ₽ medallion.
-- The shared static-site Share icon is shown before Like. Counts are visible only when non-zero. A wide safe no-OCR visual may absorb the action rail; OCR keeps it outside.
+- Identity medallions are recognition and trust aids, not decoration. V15 shows at most three in a `52…60px` external rail, removes the universal border/shadow that produced double rings on KGD80/KONB, and lowers saturation/opacity until hover/focus. Identity precedes the quiet monochrome `0 ₽ / БЕСПЛАТНО` token.
+- The listing supports `scan → shortlist → open detail`; final intent/actions belong to the detail page. Therefore listing Calendar is absent and Share/Like are **static social-proof**, not feedback/share buttons. Each metric renders only when its aggregate is non-zero; if both are zero the whole rail is absent and consumes no width. The shared visual order remains `Share → Like`; a locally liked event may tint the existing Like proof but clicking the proof only opens detail. No overlay social controls are used.
+- Zero is treated as “no trustworthy signal yet”, not as “unpopular”: there is no `0`, empty placeholder, disabled icon or negative styling. This limits cold-start bias against new/small-city events while still letting real non-zero activity guide what to open.
 - The title may use free copy space only for the actual last card of a rendered row, at lower priority than adaptive media growth. It never changes flex basis or pushes the next card.
 
-## Automatic source-media contract
+## Existing source-media contract — no new crawler
 
-V13 event `3794` used a manually selected 1024×683 Cathedral article photo keyed to that event. Although the photo was official, this did **not** demonstrate automatic generation from available sources. V14 removes the association.
+V13 event `3794` used a manually selected 1024×683 Cathedral article photo keyed to that event. Although official, it did **not** demonstrate automatic generation from the content already attached to the event. V14 correctly removed that substitution, but its document then incorrectly invented a future “general crawler” as if it were an agreed system requirement.
 
-The only acceptable general path is:
+**Correction:** no additional crawler was planned or approved for these listing pages. The product contract is to consume the existing event media/OCR/Smart Update projection and the already supported Telegram/VK/source adapters. Listing rendering must not compensate for a framing bug by introducing a new ingestion subsystem.
 
-1. traverse canonical `source_url/source_urls` with a host adapter;
-2. enumerate source-grounded media candidates;
-3. materialize dimensions/hash/derivatives;
-4. run the common event-relevance, OCR, role, focal and crop decision;
-5. persist a durable `source URL → candidate asset → decision/version` manifest;
-6. let every renderer consume that manifest without `event_id` media overrides.
+The accepted path is:
 
-V14 implements the renderer-side fail-closed and stable source-page manifest lookup, but not a complete Cathedral/article crawler. Therefore `3794` correctly uses its 300×174 canonical source only if it passes the general frame gate, otherwise the neutral fallback. The automatic source adapter remains follow-up work and must not be reported as complete.
+1. consume the canonical event's existing approved media inventory;
+2. reject `no_event_relevance` and quarantined candidates;
+3. preserve exported OCR/media-role uncertainty fail-closed;
+4. choose the best eligible existing candidate and its derivatives;
+5. render a slightly sub-threshold but event-relevant canonical image as a no-upscale last resort before using a neutral fallback.
+
+Control `3794` therefore uses its existing 300×174 canonical photo, at its true size, rather than the rejected event-specific 1024×683 substitution or an empty card. Control `6904` remains empty because its only candidate is explicitly `no_event_relevance`.
 
 ## Fresh-data evidence
 
-Production snapshot: `2026-07-18T09:52:41Z`, 6549 event rows; preview export: `2026-07-18T09:54:16Z`, 220 bounded real events.
+Production snapshot: `2026-07-18T09:52:41Z`, 6549 event rows; V15 preview export: `2026-07-18T12:06Z`, 220 bounded real events.
 
 - 18 July: 46 raw date starts; 43 primary non-exhibition/deduplicated Weekend events.
 - 19 July: 28 primary starts.
 - Weekend consumer surface: 71 events total across the two lanes.
 - `6904`: rejected automatically as `no_event_relevance`.
 - `6932`: 48×48 candidate is below the desktop quality gate.
-- `3794`: only the canonical 300×174 source is present; the rejected listing-only 1024×683 file is not selected.
+- `3794`: the canonical 300×174 source is rendered without upscale; the rejected listing-only 1024×683 file is absent.
 - Popular: 60 events, vertical wrap, no document horizontal overflow at 1920px; the first measured row contains four different-width cards.
 
 ## Reference research and what was rejected
@@ -90,8 +95,10 @@ Literal calendar grids, TV schedules, Gantt/timetable matrices, SaaS dashboards 
 - Do medallions improve detail opens and trust, or merely increase visual weight? Measure opens by medallion presence/type and guard against CTR-only conclusions.
 - Personalization success requires coverage and satisfaction guardrails: detail opens, saves/likes, return-to-list, diversity, city/date availability and an explicit full-list recovery path.
 
-## Final critical acceptance
+## Critical consultant gate
 
-The published desktop pages and four FHD screenshots received a final `agy/Opus` review on 2026-07-18. Verdict: **PASS WITH FOLLOW-UPS**, with no blocker before user review. The consultant accepted the time-first composition, continuous Weekend lanes, vertically wrapping Popular stream, 72px medallions and Share → Like rail. It also verified that event `3794` renders a neutral category fallback rather than the rejected manually selected photo.
+Before browser acceptance, the evidence and implementation plan received a full **agy Gemini 3.1 Pro (High)** review on 2026-07-18. It rejected the crawler scope, chose the monochrome Free reference (Ref 2 / option 10), removed universal medallion rings and selected the two-light-row Weekend shell over pills, a dropdown or a graphite bar. A second targeted review accepted the owner's behavioral model and replaced premature listing actions with non-zero-only static Share/Like proof; Calendar remains detail-only.
 
-The follow-ups remain explicit rather than being folded into the acceptance claim: implement the general source-page crawler; browser-test past-image desaturation against events with an explicit elapsed `end_at`; test the maximum three-item identity rail and zero-count action policy; and hide an entire Weekend time row when city filtering leaves both day lanes empty.
+Browser acceptance is measurable: at 1536×864 the sticky site header plus discovery rows must occupy no more than `150px`; city controls must have no horizontal overflow; each exact-time marker must remain pinned until the next group pushes it away; text-protected cards retain at least 80% vertically (V15 uses 100%); `3794` renders 300×174 without upscale; external medallions have no added border/shadow; and no action control is nested inside a media link.
+
+Final local acceptance on the immutable V15 build checked 202 rendered cards across the four consumer surfaces. All 181 cards using a natural (non-`visual-crop`) mode matched their selected source ratio within `0.012`; controls `3794`, `3795` and `4785` rendered at `300×174`, `300×199` and `300×225` respectively, without a fixed-height `contain` frame. The browser found 184 cards with at least one non-zero static social signal and 18 with the whole signal rail absent. All four pages had zero document/city overflow at 1536×864; the discovery stack measured 145px on date/weekend pages and 101px on Popular. The `17:00` marker remained at `157px` through three scroll positions.

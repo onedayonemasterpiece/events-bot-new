@@ -259,3 +259,34 @@ def test_collect_images_fails_closed_for_approved_no_event_relevance_media() -> 
 
     assert primary is None
     assert assets == []
+
+
+def test_listing_ocr_gate_protects_short_text_and_treats_missing_ocr_as_unknown() -> None:
+    exporter = _load_exporter_module()
+
+    assert exporter.meaningful_ocr("18 июля") is True
+    assert exporter.meaningful_ocr("0 ₽") is False
+    assert exporter.meaningful_ocr("") is False
+    assert exporter.meaningful_ocr(None) is False
+
+    exporter.SKIP_IMAGE_PROBES = True
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        "create table eventposter(id integer primary key, event_id integer, supabase_url text, catbox_url text, ocr_text text, review_status text, display_order integer)"
+    )
+    con.executemany(
+        "insert into eventposter values(?, ?, ?, ?, ?, ?, ?)",
+        [
+            (1, 20, "https://static.kenigevents.ru/p/short.webp", None, "18 июля", "approved", 0),
+            (2, 21, "https://static.kenigevents.ru/p/unknown.webp", None, None, "approved", 0),
+        ],
+    )
+
+    _primary, short_mode, _role, short_assets = exporter.collect_images(con, 20, "[]", "Короткая афиша")
+    _primary, unknown_mode, _role, unknown_assets = exporter.collect_images(con, 21, "[]", "Неизвестное изображение")
+
+    assert short_mode == "ocr_text"
+    assert short_assets[0]["image_text_mode"] == "ocr_text"
+    assert unknown_mode == "unknown"
+    assert unknown_assets[0]["image_text_mode"] == "unknown"

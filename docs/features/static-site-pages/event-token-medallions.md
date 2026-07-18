@@ -1,7 +1,7 @@
 # Event token medallions / quick-read badges
 
-> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. A separate, deliberately narrow listing-overlay **candidate** exists in `DATE-LISTING TH-P1 · V13`: a named venue/festival medallion may sit over the selected image without OCR. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA. The 2026-07-15 Telegram projection also keeps deterministic same-stem PNG fallbacks for SVG items so the production Pillow renderer needs no SVG engine.
-> **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`), plus the explicitly gated V10 date-listing photo overlay described below. Other listing/search/related cards are unaffected without a separate approval.
+> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. `DATE-LISTING TH-P1 · V15` also has an approved compact recognition rail: at most three quiet identity/fact medallions may sit beside media; a single overlay remains restricted to reviewed no-OCR photo media. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA.
+> **Surface:** **страница конкретного события** (`/sobytiya/<slug>/`) and the explicitly bounded V15 date-listing compact rail/overlay. Search/related cards remain unaffected without separate approval.
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
 ## Goal
@@ -13,24 +13,25 @@ Add a visually large row of **quick-read event medallions** on the **event detai
 - whether the event is charity-related, kid/family-friendly, recorded/streamed, accessible, free, etc.;
 - which properties matter for personalization and later filters without making personalization a first-paint dependency.
 
-The medallion row is informational and belongs to the event detail page; it is not a replacement for the existing `Коротко` facts or CTA panel. Facts still need source-grounded text in the event body/quick facts; medallions are the fast visual layer. Event-list cards do **not** need this medallion row in the current scope.
+The medallion row is informational and is not a replacement for the existing `Коротко` facts or CTA panel. Facts still need source-grounded text in the event body/quick facts; medallions are the fast visual layer. On listings they are deliberately quieter: recognition and trust cues that support the choice to open a card, not CTA or decoration.
 
 ## Scope clarification
 
 Current scope:
 
 - **P0:** medallions on the concrete event page only;
-- **Candidate compact exception:** on the V13 Today/Tomorrow/Weekend date-listing family, one named venue/festival medallion may be placed at the bottom-right edge of an event image only when the selected asset passes the no-OCR gate below;
+- **Approved compact exception:** on V15 Today/Tomorrow/Weekend/Popular, a vertical external rail may show up to three structured medallions. It is allowed for OCR/unknown media because it does not cover the image. Identity tokens precede the `Бесплатно` fact;
+- **Overlay exception:** one named venue/festival medallion may be placed at the bottom-right edge only when the selected asset passes the reviewed no-OCR gate below;
 - **P0:** listing/card date formatting: show short weekday and render event type without `#`;
-- **Not P0:** medallion rows inside listing/search/related cards. If added later, they must be re-approved as a separate compact-card design.
+- **Not P0:** medallions on generic search/related cards. If added later, they need separate compact-card acceptance.
 
-### `DATE-LISTING TH-P1 · V13` venue-overlay candidate
+### `DATE-LISTING TH-P1 · V15` compact rail and venue overlay
 
 This is not a general permission to decorate posters. It is a fail-closed
 location cue for the dense exact-time desktop flow:
 
-- placement: one `56px` circle with a `4px` ring at the image's bottom-right edge, with a quiet
-  ring/shadow; the title and venue text remain below the image;
+- external placement: `52…60px`, at most three items in a vertical rail. No universal CSS border or shadow; KGD80/KONB and other identity marks keep their own authored ring. Default listing treatment is `opacity≈.82`, `saturate≈.68`, recovering toward normal on card hover/focus;
+- overlay placement: one `60px` circle at the image's bottom-right edge, with at most a neutral 2px contrast edge and no shadow; the title and venue text remain below the image;
 - semantics: the matched token must carry `listingStatus=listing_ready` and a
   structured `listingBinding`. Runtime priority is `venue → festival →
   organizer`, exact/bounded aliases only, at most one token;
@@ -39,14 +40,14 @@ location cue for the dense exact-time desktop flow:
   identity, not crop safety; reviewed crop evidence remains asset-specific;
 - forbidden shortcuts: `safe_crop`, OCR length alone, filename, event title or
   an inferred organizer are not sufficient evidence;
-- OCR/unknown text mode, missing structured match or a manifest status other
-  than `listing_ready` always renders no medallion;
+- OCR/unknown text mode forbids only the **overlay**. A structured `listing_ready` token may still appear in the external rail. Missing structured match or a manifest status other than `listing_ready` renders no identity medallion;
 - an organizer asset with no structured organizer field is marked
   `blocked_missing_binding`, not guessed from event prose/title.
 
-The candidate still requires immutable preview review before it can be promoted
-beyond date listings. No listing flag treats `safe_crop`, filename or venue
-name as proof that an image has no OCR: `visual_only` remains mandatory.
+No listing flag treats `safe_crop`, filename or venue name as proof that an
+image has no OCR: `visual_only` plus reviewed event-photo/focal evidence remains
+mandatory for overlay/crop. The external rail does not need crop evidence
+because it never covers the image.
 
 ## Visual contract
 
@@ -72,7 +73,7 @@ Token medallion row
 Primary CTA / Коротко facts / description
 ```
 
-Listing/search/related cards are not a medallion surface in P0. They only get the separate metadata formatting fix:
+Generic search/related cards are not a medallion surface in P0. Date/Popular listings use only the bounded V15 exception above. Other cards get the separate metadata formatting fix:
 
 ```text
 Пн, 14 октября · Концерт     # weekday + event type without hashtag
@@ -92,6 +93,8 @@ Runtime event-page medallions are intentionally larger than ordinary chips: they
 | Pushkin-card medallion | visual black circle uses the same `--token-size` as organizer circles; the wordmark may protrude to the right inside one composite image | same responsive token | same circle diameter as organizer medallions; composite width is larger only because of the original wordmark |
 | Detail pill height | 56px | 48px | 44px minimum hit/scan area |
 | Gap | 12px | 10px | 8px |
+| V15 listing external circle | `52…60px`, max 3 | desktop acceptance only | deferred |
+| V15 listing overlay circle | `60px`, max 1 | desktop acceptance only | deferred |
 
 Special crop notes:
 
@@ -118,6 +121,7 @@ Overflow:
 | Surface | Max visible | Overflow |
 | --- | --- | --- |
 | Detail page | 6 primary tokens | second line is allowed; avoid more than 2 lines |
+| V15 listing | 3 total | no overflow UI; identity first, `Бесплатно` last |
 
 ## Token catalog
 

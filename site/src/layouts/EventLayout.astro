@@ -3347,6 +3347,21 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               const base = Number(shareButton?.dataset.shareBaseCount || '0');
               count.textContent = formatCount(base + Number(current.shares || 0));
             });
+            card.querySelectorAll('[data-listing-like-proof]').forEach((proof) => {
+              const base = Number(proof.dataset.baseCount || '0');
+              const total = base + (current.liked ? 1 : 0);
+              proof.dataset.liked = current.liked ? 'true' : 'false';
+              const count = proof.querySelector('[data-listing-like-count]');
+              if (count) count.textContent = formatCount(total);
+              proof.setAttribute('aria-label', `${total} отметок нравится${current.liked ? ', включая вашу' : ''}`);
+            });
+            card.querySelectorAll('[data-listing-share-proof]').forEach((proof) => {
+              const base = Number(proof.dataset.baseCount || '0');
+              const total = base + Number(current.shares || 0);
+              const count = proof.querySelector('[data-listing-share-count]');
+              if (count) count.textContent = formatCount(total);
+              proof.setAttribute('aria-label', `${total} поделились`);
+            });
             card.querySelectorAll('[data-feedback-action="not_interested"]').forEach((button) => {
               button.setAttribute('aria-pressed', current.not_interested ? 'true' : 'false');
               const title = current.not_interested ? 'Вернуть в рекомендации' : 'Не интересно';

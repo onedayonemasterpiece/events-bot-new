@@ -17,6 +17,7 @@ export interface ListingImagePresentation {
   mode: 'poster-natural' | 'photo-natural' | 'photo-crop' | 'visual-natural' | 'visual-crop' | 'unknown-natural';
   adaptiveCrop: boolean;
   objectPosition: string;
+  verticalRetention: number;
 }
 
 export function exactListingTime(event: Pick<PreviewEvent, 'start_time' | 'display_time'>): string | null {
@@ -105,6 +106,10 @@ function usableAsset(asset: EventImageAsset): boolean {
   return Boolean(asset?.src && asset.width >= 256 && asset.height >= 180);
 }
 
+function usableLowResolutionFallback(asset: EventImageAsset): boolean {
+  return Boolean(asset?.src && asset.width >= 256 && asset.height >= 160 && asset.width * asset.height >= 50_000);
+}
+
 function knownAsset(asset: EventImageAsset): boolean {
   return Boolean(
     asset?.src
@@ -180,10 +185,6 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
     asset.media_semantic_status === 'classified'
     && asset.media_role === 'event_identity_poster'
     && Number(asset.media_role_confidence || 0) >= 0.9
-    && assetRatio(asset) >= 1.85
-    && assetRatio(asset) <= 2.1
-    && asset.width >= 520
-    && asset.height >= 250
   ));
   const photos = assets.filter((asset) => (
     asset.media_semantic_status === 'classified'
@@ -193,21 +194,38 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
     && Boolean(asset.focal_point)
   ));
   const visualOnly = assets.filter((asset) => (
-    (asset.image_text_mode || event.image_text_mode) === 'visual_only'
+    asset.image_text_mode === 'visual_only'
+    && event.image_text_mode !== 'ocr_text'
+    && asset.media_role !== 'event_identity_poster'
+    && asset.media_role !== 'program_or_schedule'
+    && asset.media_role !== 'attendee_information'
   ));
 
   // A classified wide poster keeps more of its own title readable. It wins over
   // a portrait/square poster but never over a different semantic media family.
-  const selectedPoster = bestWideAsset(posters, 2);
+  const selectedPoster = bestWideAsset(posters, 1.25);
   const preferredPhotos = photos.filter((asset) => assetRatio(asset) >= 1);
   const selectedPhoto = bestWideAsset(preferredPhotos.length ? preferredPhotos : photos, preferredPhotos.length ? 1.5 : 0.8);
   const preferredVisuals = visualOnly.filter((asset) => assetRatio(asset) >= 1);
   const selectedVisual = bestWideAsset(preferredVisuals.length ? preferredVisuals : visualOnly, visualCropRatio);
+  // Unknown is not crop permission, but it also is not a reason to ignore a
+  // wider approved candidate from the same event inventory. Prefer its
+  // authored natural geometry without asserting visual_only or safe_crop.
+  const unknownNaturalAssets = assets.filter((asset) => (
+    asset.image_text_mode === 'unknown'
+    && !['event_identity_poster', 'program_or_schedule', 'attendee_information'].includes(asset.media_role || '')
+  ));
+  const preferredUnknownNatural = unknownNaturalAssets.filter((asset) => assetRatio(asset) >= 1);
+  const selectedUnknownNatural = bestWideAsset(
+    preferredUnknownNatural.length ? preferredUnknownNatural : unknownNaturalAssets,
+    preferredUnknownNatural.length ? 1.35 : 0.8,
+  );
   // Assets smaller than the minimum listing frame are not silently upscaled.
   // If no usable event-relevant asset exists, the card renders the shared
   // neutral fallback; source recovery remains an ingestion concern.
   const primary = assets[0] || null;
-  const sourceAsset = selectedPoster || selectedPhoto || selectedVisual || primary;
+  const lowResolutionFallback = knownAssets.find(usableLowResolutionFallback) || null;
+  const sourceAsset = selectedPoster || selectedPhoto || selectedVisual || selectedUnknownNatural || primary || lowResolutionFallback;
   const asset = sourceAsset;
   const src = asset?.src || null;
   const rawRatio = asset ? assetRatio(asset) : visualCropRatio;
@@ -217,7 +235,16 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
     && asset.media_role === 'event_photo'
     && asset.image_kind === 'photo'
   );
-  const isVisualOnly = Boolean(asset && (asset.image_text_mode || event.image_text_mode) === 'visual_only');
+  const isPoster = Boolean(asset && asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
+  const textProtected = Boolean(
+    asset
+    && (
+      asset.image_text_mode !== 'visual_only'
+      || event.image_text_mode === 'ocr_text'
+      || ['event_identity_poster', 'program_or_schedule', 'attendee_information'].includes(asset.media_role || '')
+    )
+  );
+  const isVisualOnly = Boolean(asset && !textProtected && asset.image_text_mode === 'visual_only');
   const hasCropEvidence = Boolean(
     isVisualOnly
     && isPhoto
@@ -228,42 +255,25 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
   const cropRetention = rawRatio > 0
     ? Math.min(rawRatio / visualCropRatio, visualCropRatio / rawRatio)
     : 0;
-  // A sufficiently large no-OCR portrait may use a conservative square floor
-  // even while its finer semantic/focal review is pending. This is deliberately
-  // weaker than the 3:2 source-reviewed path: it removes obsolete narrow-photo
-  // columns without pretending that an unreviewed centre crop is safe at 3:2.
-  const conservativeSquareCrop = Boolean(
-    isVisualOnly
-    && asset
-    && asset.width >= 512
-    && asset.height >= 512
-    && rawRatio >= 0.5
-    && rawRatio < 1
-  );
   const visualCanCrop = Boolean(
-    conservativeSquareCrop
-    || (
-      hasCropEvidence
-      && (asset?.listing_crop_evidence === 'source-reviewed' || cropRetention >= (rawRatio < 1 ? 0.7 : 0.8))
-    )
+    hasCropEvidence
+    && (asset?.listing_crop_evidence === 'source-reviewed' || cropRetention >= (rawRatio < 1 ? 0.7 : 0.8))
   );
   const useNatural = Boolean(asset?.listing_use_natural);
   const visualRatio = isVisualOnly && asset
     ? (useNatural
       ? rawRatio
       : visualCanCrop
-      ? (conservativeSquareCrop ? 1 : visualCropRatio)
+      ? visualCropRatio
       : rawRatio)
     : visualCropRatio;
-  const isPoster = Boolean(asset && asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
+  const outputRatio = isVisualOnly
+    ? visualRatio
+    : Math.max(0.2, Math.min(3.2, rawRatio || 0.8));
   return {
     asset,
     src,
-    ratio: isVisualOnly
-      ? visualRatio
-      : isPhoto
-      ? Math.max(0.2, Math.min(3.2, rawRatio || 0.8))
-      : Math.max(0.2, Math.min(3.2, rawRatio || 0.8)),
+    ratio: outputRatio,
     mode: isVisualOnly
       ? (useNatural ? 'visual-natural' : visualCanCrop ? 'visual-crop' : 'visual-natural')
       : isPhoto
@@ -273,6 +283,7 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
           : 'unknown-natural',
     adaptiveCrop: visualCanCrop && !useNatural,
     objectPosition: asset?.recommended_object_position || event.image_object_position || '50% 50%',
+    verticalRetention: rawRatio > 0 && outputRatio > rawRatio ? Math.min(1, rawRatio / outputRatio) : 1,
   };
 }
 

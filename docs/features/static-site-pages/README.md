@@ -56,23 +56,23 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Текущий публичный preview
 
-Desktop listing consumer candidate `DATE-LISTING TH-P1 · V14`:
-[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v14/segodnya/),
-[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v14/zavtra/),
-[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v14/vyhodnye/),
-[Популярное](https://kenigevents.ru/preview-20260718-date-listings-v14/populyarnoe/) и
-[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v14/lab/design-system/).
+Desktop listing consumer candidate `DATE-LISTING TH-P1 · V15`:
+[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v15/segodnya/),
+[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v15/zavtra/),
+[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v15/vyhodnye/),
+[Популярное](https://kenigevents.ru/preview-20260718-date-listings-v15/populyarnoe/) и
+[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v15/lab/design-system/).
 Это immutable review prefix, а не production promotion.
 
-V14 возвращает проверенную Weekend-структуру: одна сильная ось времени,
-две непрерывные day-lane и единственные weekday-only чипы в заголовках. Города даны
-одним sticky direct-chip rail без dropdown; time rail остаётся графитовым. Popular
-снова использует intrinsic cards, но длинный список переносится вниз без
-горизонтального тупика. 72px medallions могут идти внешней вертикальной rail у OCR;
-`Поделиться → Лайк` берутся из общей системы. Медиа 180px не растягивается;
-`no_event_relevance` падает в neutral fallback. Ручная event-specific подмена `3794` удалена:
-автоматический source adapter остаётся отдельным незакрытым pipeline, а renderer больше не
-имитирует его ручным результатом. Product rationale, fresh-data evidence и deferred questions:
+V15 сохраняет проверенную Weekend-структуру: одна сильная sticky-ось времени и две
+непрерывные day-lane. Города и периоды образуют две лёгкие строки общей discovery
+surface без dropdown, тяжёлых pills, graphite bar или горизонтального тупика. Popular
+остаётся вертикально продолжаемым intrinsic flow. OCR/unknown/identity posters больше
+не получают агрессивный crop; отсутствие OCR не считается `visual_only`. Внешние
+медальоны тихие, без двойных колец; ненулевые Share/Like — статичные social-proof
+индикаторы, а не кнопки, Calendar на listings отсутствует. `3794` использует существующее 300×174 canonical фото
+без event-specific подмены и без нового crawler: listing renderer потребляет уже
+существующий media/Smart Update contract. Product rationale and measurable acceptance:
 [`listing-surfaces-v14-product.md`](listing-surfaces-v14-product.md).
 
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
