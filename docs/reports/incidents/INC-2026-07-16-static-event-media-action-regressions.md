@@ -413,22 +413,23 @@ short-lived status-ledger `Database`. The runner must close that database after
 creating the callback config; crash adoption must then recover this exact
 complete kernel/dataset without a second push before closure can continue.
 
-## 2026-07-18 main-based preproduction candidate
+## 2026-07-18 final main-based preproduction candidate
 
-The v12 fidelity, component and automation corrections are now reachable from
-`origin/main` and deployed at exact SHA
-`b82a52bf27a452c50c6bd48237c6ba5d956a5734` (Fly image
-`deployment-01KXVAE0Q7WYY8GPKZJC3QE5ZZ`, machine version `1709`). Startup
+The earlier `b82a52bf` candidate and Telegram message `360` are superseded.
+The v12 fidelity, component, footer and automation corrections are reachable
+from `origin/main` and deployed at exact SHA
+`191eb0c7239aacdddad72398f8a45a6e08c9f3ad` (Fly image
+`deployment-01KXVDHRCAN2C6DGA5JSQ885HD`, machine version `1711`). Startup
 catch-up invoked the same Smart Update/Kaggle production rail and completed
-build `production-secret-20260718T211626-05742840`, run
-`static-site:production-secret-20260718T211626-05742840:5c616deb0234`, from
-immutable snapshot `snapshot-20260718T191626-7d4e6665fa`. It published `987`
+build `production-secret-20260718T221203-9132a760`, run
+`static-site:production-secret-20260718T221203-9132a760:76d8fb98cf48`, from
+immutable snapshot `snapshot-20260718T201203-9828d9a7c1`. It published `984`
 create-only objects with manifest SHA-256
-`87023aa04a1f44211eeeee52fac384b09400a317b942f542c206743d2e1a07f7` and
+`4d6a81ce6031f20bf1c510910a30cb407d25d95c2bce27dbe3d6ab3d71ecddbe` and
 result SHA-256
-`3bda94500744f7ab9bc8596a2d1d3125f6a914124e9ae3dca84e9fd88d3381c3`.
+`f634d18f812913653bf04bc75a5ceee51e0c156c652fb77748a07f30d49f5326`.
 The durable current receipt identifies that exact source and token SHA-256
-`a5608d22322da289a10e26d978616f02c7b34f527db3eb17b91dec77e96d63cb`;
+`25f8da859b2d03c2d21e9fc1bad58ba947fc756aebfad70d99d3916be1989def`;
 the bearer token is intentionally excluded from this committed record.
 
 Public HTTP and Playwright acceptance passed on the candidate index, the
@@ -437,8 +438,10 @@ and `5658`. At `1536x864`, frozen Split was an inline `100.78 px` action panel
 and frozen Editorial a stacked `227.125 px` panel; actual `6851` preserved the
 compact phone CTA while `6551` and `5658` retained the accepted Editorial
 hierarchy. The footer appeared once with one partnership link, both future
-legal-document links, a coloured MAX asset and compact share prompt. Medallion
-overflow remained visible. All A/B/C transport arms were force-reviewable with
+legal-document links, a coloured MAX asset and the exact accessible prompt
+`Понравились Анонсы? Поделитесь`. Gemini 3.1 Pro (High) independently validated
+the compact 84 px desktop inline-bar and returned `PASS`, with no blockers.
+Medallion overflow remained visible. All A/B/C transport arms were force-reviewable with
 their distinct accepted structure and `на Кауп` wording. Desktop continuation
 ended after six cards with `popular_fallback`, no load-more and `Все анонсы`.
 At `390 px`, the accepted mobile surface remained active with zero horizontal
@@ -449,9 +452,15 @@ The production root and sitemap were unchanged (body SHA-256
 `e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`,
 sitemap SHA-256
 `643f22960e703b91c173d4d52425ca28b6513da9612904047d9930508e329fa7`).
-Eight current-candidate links were sent through the role-approved E2E human
-session and read back as Telegram message `360`, replying to message `261` in
-topic `2` of chat `-1004337049383`.
+The corrected current-candidate links were sent through the role-approved E2E
+human session and read back as Telegram message `361`, replying to message
+`261` in topic `2` of chat `-1004337049383`.
+
+The production status ledger for the same run contains real kernel events
+`kernel_started`, `resource_acquire`, repeated `alive` heartbeats across
+export/install/build/archive, `preflight_ok`, terminal `report_written` and
+`resource_release`. It finished `status=done`, `phase=cleanup`, with
+`last_heartbeat_at=2026-07-18T20:19:33.283030+00:00` and no active build claim.
 
 The incident remains **open only for the user's visual acceptance**. Secret
 preproduction generation is now live and automatic; production-root promotion
