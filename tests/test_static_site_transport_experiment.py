@@ -9,6 +9,14 @@ MODULE = ROOT / "site" / "src" / "lib" / "transportExperiment.ts"
 COMPONENT = ROOT / "site" / "src" / "components" / "KaupTransportSchedule.astro"
 HOST = ROOT / "site" / "src" / "components" / "transport" / "TransportTimetableExperiment.astro"
 CLIENT = ROOT / "site" / "src" / "lib" / "transportExperimentClient.ts"
+DEPARTURE_BOARD = (
+    ROOT
+    / "site"
+    / "src"
+    / "components"
+    / "transport"
+    / "DepartureBoardTimetable.astro"
+)
 
 
 def _node(script: str) -> dict:
@@ -80,7 +88,7 @@ process.stdout.write(JSON.stringify({{
     result = _node(script)
     assert result["modes"] == ["off", "qa", "focus_group", "live", "off"]
     assert result["eligible"] is True
-    assert result["oneTrip"] is False
+    assert result["oneTrip"] is True
     assert result["allPast"] is False
     assert result["malformed"] is False
 
@@ -109,6 +117,29 @@ def test_tr_exp_04_05_08_09_static_contract_preserves_actions_and_qa_trust_bound
     assert "mode !== 'focus_group' && mode !== 'live'" in client
     assert "keepalive: true" in client
     assert "event.preventDefault" not in client
+    assert "new URLSearchParams(location.search).get('ke-exp-transport')" in client
+    assert "mode !== 'qa' && mode !== 'focus_group'" in client
+
+
+def test_tr_exp_04a_accepted_board_is_the_only_resilient_fallback() -> None:
+    """No-JS, off-mode and elapsed schedules must not revive the rejected list UI."""
+    host = HOST.read_text(encoding="utf-8")
+    board = DEPARTURE_BOARD.read_text(encoding="utf-8")
+    client = CLIENT.read_text(encoding="utf-8")
+
+    assert host.count("<DepartureBoardTimetable") == 2
+    assert host.count("baseline={true}") == 2
+    assert host.count("hidden={false}") == 2
+    assert '<ol class="transport-baseline"' not in host
+    assert 'data-transport-treatment="departure_board_v1"' in board
+    assert "data-transport-baseline={baseline ? '' : undefined}" in board
+    assert "baseline.hidden = treatment !== baseline" in client
+
+
+def test_tr_exp_04b_official_transfer_covers_bus_and_minibus() -> None:
+    component = COMPONENT.read_text(encoding="utf-8")
+    assert "номер автобуса или микроавтобуса" in component
+    assert "номер микроавтобуса приходят" not in component
 
 
 def test_tr_exp_06_treatments_have_many_trip_disclosure_and_same_trip_markers() -> None:
@@ -124,6 +155,8 @@ def test_tr_exp_06_treatments_have_many_trip_disclosure_and_same_trip_markers() 
         assert "schedule_expand" in source
     assert "slice(0, 5)" in (treatment_dir / "DepartureBoardTimetable.astro").read_text(encoding="utf-8")
     assert "slice(0, 5)" in (treatment_dir / "RouteStripsTimetable.astro").read_text(encoding="utf-8")
+    next_source = (treatment_dir / "NextDepartureQueueTimetable.astro").read_text(encoding="utf-8")
+    assert "additionalCount > 0 && <summary" in next_source
 
 
 def test_tr_exp_11_balanced_sample_passes_and_biased_sample_blocks() -> None:

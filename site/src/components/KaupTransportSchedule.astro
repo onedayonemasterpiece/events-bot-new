@@ -27,7 +27,7 @@ const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABA
         <h3>Официальный трансфер · {suggestion.transferPriceLabel}</h3>
         <details class="kaup-transport__transfer-details">
           <summary>Точки посадки и условия</summary>
-          <p>Место и номер микроавтобуса приходят на email после 19:00 накануне события. Посадка только по заранее купленному и распечатанному билету.</p>
+          <p>Место посадки и номер автобуса или микроавтобуса приходят на email после 19:00 накануне события. Посадка только по заранее купленному и распечатанному билету.</p>
           <ul>{suggestion.transferBoardingPoints.map((point) => <li>{point}</li>)}</ul>
         </details>
       </div>
