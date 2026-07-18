@@ -653,6 +653,46 @@ def _find_video(files: Iterable[Path]) -> Path | None:
     return max(candidates, key=lambda f: f.stat().st_size if f.exists() else 0)
 
 
+def _expected_video_name(session_obj: VideoAnnounceSession) -> str | None:
+    """Return the product-final artifact required for a successful session.
+
+    CherryFlash also writes an intro-only approval mp4 whose filename contains
+    ``final``.  It is useful diagnostic output, but it must never be accepted
+    as the completed daily product after the notebook exits early.
+    """
+
+    profile_key = str(session_obj.profile_key or "").strip().lower()
+    kernel_ref = str(session_obj.kaggle_kernel_ref or "").strip().lower()
+    if (
+        profile_key.startswith("popular_review")
+        or profile_key.startswith("cherryflash")
+        or "cherryflash" in kernel_ref
+    ):
+        return "cherryflash_full_final.mp4"
+    return None
+
+
+def _find_session_video(
+    session_obj: VideoAnnounceSession,
+    files: Iterable[Path],
+) -> Path | None:
+    materialized = list(files)
+    expected_name = _expected_video_name(session_obj)
+    if expected_name:
+        candidates = [
+            path
+            for path in materialized
+            if path.exists() and path.name == expected_name
+        ]
+        if not candidates:
+            return None
+        return max(
+            candidates,
+            key=lambda path: path.stat().st_size if path.exists() else 0,
+        )
+    return _find_video(materialized)
+
+
 def _find_logs(files: Iterable[Path]) -> list[Path]:
     return [
         f
@@ -1950,7 +1990,7 @@ async def run_kernel_poller(
                     raise
         paths = [output_dir / f for f in files]
         output_files = _expand_output_paths(paths)
-        video_path = _find_video(output_files)
+        video_path = _find_session_video(session_obj, output_files)
         log_files = _find_logs(output_files)
         story_report_path = _find_story_report(output_files)
         story_report = _load_story_report(story_report_path)
@@ -1993,11 +2033,17 @@ async def run_kernel_poller(
                         caption=f"⚠️ Логи preflight/publish blocker сессии #{session_obj.id}",
                     )
                 return
+            expected_video_name = _expected_video_name(session_obj)
+            missing_video_error = output_probe_failure_error or (
+                f"missing expected video output: {expected_video_name}"
+                if expected_video_name
+                else "missing video output"
+            )
             session_obj = await _update_status(
                 db,
                 session_obj.id,
                 status=VideoAnnounceSessionStatus.FAILED,
-                error="missing video output",
+                error=missing_video_error,
             )
             if not session_obj:
                 return

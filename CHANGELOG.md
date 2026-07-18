@@ -15,6 +15,10 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **CherryFlash multi-day Stories outage (INC-2026-07-18)**: ship the approved
+  guide True3D renderer in every per-session Kaggle bundle and require the exact
+  `cherryflash_full_final.mp4` product artifact, preventing failed notebooks
+  with only an intro approval video from being marked `PUBLISHED_TEST`.
 - **VK captcha publication cadence (INC-2026-07-18)**: replace indefinite
   unscoped JobOutbox pauses with persisted captcha cohorts, block new VK work
   from hammering a cached challenge, harmlessly probe and pace cohort recovery,

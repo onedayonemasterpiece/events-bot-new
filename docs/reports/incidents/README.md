@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-18-cherryflash-missing-true3d-bundle.md`
+  - Scope: CherryFlash True3D runtime bundling, product-final output discovery,
+    failed-Kaggle output recovery and daily Telegram Stories catch-up.
+  - Must not regress: every invoked renderer ships in the per-session dataset;
+    intro-only mp4 output cannot become `PUBLISHED_TEST`; daily closure requires
+    a real `cherryflash_full_final.mp4` and verified public story fanout.
+
 - `INC-2026-07-18-vk-captcha-publication-cadence-gap.md`
   - Scope: managed VK `vk_sync`, captcha persistence/recovery, expired post
     edits, JobOutbox pause cohorts and postponed publication cadence.
