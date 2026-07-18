@@ -197,8 +197,8 @@ the date below the description and made the visitor interpret another block
 before reaching the ticket action. It is not a valid base for the final
 templates.
 
-The accepted solution keeps the choice at the existing date/time owner and
-does not make the visitor open a disclosure before comparing slots:
+The accepted solution separates a quiet hero summary from the complete desktop
+schedule and never makes the visitor open a disclosure:
 
 - **desktop Split:** the selector stays in the top-right date/time area of the
   cream reading header;
@@ -208,23 +208,28 @@ does not make the visitor open a disclosure before comparing slots:
   strip below the dark action dock and above the venue row;
 - the graphite ticket/action dock is never made the owner of event dates;
 - with one date and one time, the accepted compact date line remains unchanged;
-- with alternatives, an always-visible `Расписание` groups all occurrences by
-  date. A date is printed once; its time chips wrap on the same row instead of
-  repeating the weekday and date for every slot;
-- the current time is a filled, non-link chip with `aria-current="page"`;
-  every alternative is an underlined canonical `<a>` to that exact occurrence;
-- no `<details>`, dropdown, carousel or horizontal scroll is used. All 2–7 dates
-  and all known times remain visible, including dense 3–5-times-per-day cases;
+- mobile preserves the accepted strong current row. Same-day alternatives use
+  quiet `Другое время` text links; other dates follow under a non-interactive
+  `Другие даты` label as an always-open compact list. Links have 44 px-class hit
+  areas without visually heavy pills;
+- desktop hero never renders the full date matrix before H1. It shows the current
+  slot, same-day `Другое время` links and, when needed, `Другие даты (N) ↓` as a
+  native anchor to the lower complete schedule;
+- the lower desktop `Когда` groups all occurrences by date. Its current time is
+  a filled, non-link chip with `aria-current="page"`; every alternative is an
+  underlined canonical `<a>` to that exact occurrence;
+- no `<details>`, dropdown, carousel or horizontal scroll is used. Dense dates
+  remain visible in the mobile list and lower desktop schedule, not above H1;
 - desktop writes the weekday in full (`воскресенье`), preserving the accepted
   typography. Mobile retains the compact two-letter weekday badge;
 - mobile alternatives keep at least a 44 px target; long rows wrap naturally;
 - the current slot and exact same-slot duplicates are excluded; only active,
   eligible future occurrence URLs are offered;
 - the old full-size event-card grid below the description is removed;
-- desktop intentionally repeats the same compact schedule in the lower
-  `Перед посещением → Когда` card. The first placement supports ticket choice;
-  the second is a practical checkpoint after reading. Both render the same
-  component and canonical links, so they cannot disagree.
+- desktop intentionally uses two projections of the same component data: a
+  bounded summary above and the exhaustive schedule in
+  `Перед посещением → Когда`. The anchor connects them and canonical links are
+  generated from the same occurrence set, so they cannot disagree.
 
 This keeps the label explicit without adding instructional prose: the visitor
 can compare every available slot immediately, choose the exact occurrence and
@@ -292,9 +297,10 @@ H1 Event title
 [Primary CTA full width]
 [Calendar] [Share] [Copy]
 
-[Расписание]
-[weekday] [date] [current time] [time link]
-[weekday] [date] [time link] [time link]
+[weekday] [current date] [current time]
+[Другое время: time link, time link]
+[Другие даты]
+[weekday] [date] [time link, time link]
 [venue/address row]
 [price/status row]
 

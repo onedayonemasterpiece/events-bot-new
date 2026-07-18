@@ -123,11 +123,13 @@ test('linked occurrences stay inside the accepted desktop and mobile date owners
   assert.match(desktop, /<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="desktop" \/>/u);
   assert.equal((desktop.match(/<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="practical" \/>/gu) || []).length, 2);
   assert.match(hero, /<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="mobile" \/>/u);
-  assert.match(occurrenceNav, /<nav[\s\S]*aria-label="Расписание сеансов"/u);
-  assert.match(occurrenceNav, />Расписание</u);
+  assert.match(occurrenceNav, /aria-label="Полное расписание сеансов"/u);
+  assert.match(occurrenceNav, /class="event-occurrences__other-title">Другие даты</u);
+  assert.match(occurrenceNav, /class="event-occurrences__schedule-jump" href=\{`#\$\{scheduleId\}`\}/u);
+  assert.match(occurrenceNav, />Другое время</u);
   assert.match(occurrenceNav, /aria-current="page"/u);
   assert.match(occurrenceNav, /'воскресенье'/u);
-  assert.doesNotMatch(occurrenceNav, /<details|<summary|>Другие даты|>Другое время/u);
+  assert.doesNotMatch(occurrenceNav, /<details|<summary/u);
   assert.match(occurrenceNav, /const slotKey =/u);
   assert.match(occurrenceNav, /if \(!unique\.has\(slot\)\) unique\.set\(slot, item\)/u);
   assert.match(events, /export function collapseLinkedOccurrenceChoices/u);
