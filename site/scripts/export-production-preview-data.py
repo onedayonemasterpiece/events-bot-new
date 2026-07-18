@@ -202,6 +202,130 @@ def description_looks_truncated(description: str, source_text: str) -> bool:
     return False
 
 
+def lead_excerpt(description: str, *, soft_limit: int = 320, hard_limit: int = 520) -> str:
+    """Return a sentence-safe lead without inventing or completing source prose.
+
+    Static event cards used to take ``description[:260]``.  That can turn a
+    perfectly complete LLM description into a grammatically false sentence by
+    appending a full stop at the cut boundary.  Prefer the first complete
+    source sentence; when the source itself has no bounded sentence, disclose
+    the excerpt with an ellipsis at a word boundary.
+    """
+
+    text = str(description or "").strip()
+    if not text:
+        return ""
+    # Leads are prose, not Markdown section markers or blockquote chrome.
+    text = re.sub(r"^(?:#{1,6}|>)\s*", "", text)
+    text = clean_text(text)
+    if not text:
+        return ""
+    for match in re.finditer(r"[.!?…](?=\s|$)", text):
+        end = match.end()
+        if end >= 48 and end <= hard_limit:
+            return text[:end].strip()
+        if end > hard_limit:
+            break
+    if len(text) <= soft_limit:
+        return text
+    prefix = text[:soft_limit + 1]
+    boundary = prefix.rfind(" ")
+    if boundary < max(48, soft_limit // 2):
+        boundary = soft_limit
+    return text[:boundary].rstrip(" ,;:.-") + "…"
+
+
+def summary_is_false_terminal_prefix(summary: str, description: str) -> bool:
+    """Detect a summary that is merely a punctuated cut of the description."""
+
+    short = clean_text(summary)
+    full = clean_text(description)
+    stem = short.rstrip(".!?… ")
+    if not stem or len(full) <= len(stem) or not full.startswith(stem):
+        return False
+    continuation = full[len(stem):].lstrip()
+    return bool(continuation and continuation[0].islower())
+
+
+def event_summary(short_description: Any, description: str) -> str:
+    """Keep an authored short description unless it is a proven false cut."""
+
+    short = clean_text(short_description)
+    if short and not summary_is_false_terminal_prefix(short, description):
+        return short
+    return lead_excerpt(description)
+
+
+STRUCTURED_SOURCE_TYPE_HEADINGS = {
+    "о спектакле": "спектакль",
+    "о концерте": "концерт",
+    "о выставке": "выставка",
+    "об экскурсии": "экскурсия",
+    "о лекции": "лекция",
+    "о мастер-классе": "мастер-класс",
+}
+
+
+def structured_occurrence_projection(row: sqlite3.Row) -> dict[str, str] | None:
+    """Project an exact structured source occurrence when canonical fields conflict.
+
+    This is deliberately a narrow source-consistency guard, not a keyword
+    classifier.  It activates only for a structured first-party source whose
+    date, time and ticket URL exactly match the canonical row.  The explicit
+    ``О спектакле``/equivalent heading is source data, so using it cannot invent
+    event meaning.
+    """
+
+    source = str(row_get(row, "source_text") or "").strip()
+    if not source or "Описание:" not in source:
+        return None
+    fields: dict[str, str] = {}
+    for label, key in (("Название", "title"), ("Дата", "date"), ("Время", "time"), ("Ссылка", "link")):
+        match = re.search(rf"(?m)^{label}:\s*(.+?)\s*$", source)
+        if not match:
+            return None
+        fields[key] = clean_text(match.group(1))
+    row_date = normalize_date(row_get(row, "date")) or clean_text(row_get(row, "date"))
+    row_time, _end_time, _display_time = split_time(row_get(row, "time"))
+    row_link = clean_text(row_get(row, "ticket_link")).rstrip("/")
+    if fields["date"] != row_date or fields["time"] != (row_time or ""):
+        return None
+    if not row_link or fields["link"].rstrip("/") != row_link:
+        return None
+    description = source.split("Описание:", 1)[1].strip()
+    lines = [line.strip() for line in description.splitlines()]
+    while lines and not lines[0]:
+        lines.pop(0)
+    heading = clean_text(lines[0]).lower() if lines else ""
+    source_type = STRUCTURED_SOURCE_TYPE_HEADINGS.get(heading)
+    if not source_type:
+        return None
+    lines = lines[1:]
+    while lines and not lines[-1]:
+        lines.pop()
+    if lines and re.match(r"^Сцена:\s*", lines[-1], flags=re.I):
+        lines.pop()
+    description = "\n".join(lines).strip()
+    if not fields["title"] or not description:
+        return None
+    return {**fields, "event_type": source_type, "description": description}
+
+
+def source_event_type_conflicts(stored_type: Any, source_type: str) -> bool:
+    stored = clean_text(stored_type).lower()
+    if not stored:
+        return False
+    compatible = {
+        "спектакль": {"спектакль", "театр", "театральное событие"},
+        "концерт": {"концерт", "музыка", "музыкальное событие"},
+        "выставка": {"выставка", "экспозиция"},
+        "экскурсия": {"экскурсия", "тур"},
+        "лекция": {"лекция"},
+        "мастер-класс": {"мастер-класс"},
+    }
+    return stored not in compatible.get(source_type, {source_type})
+
+
 def title_looks_prompt_leak(title: str) -> bool:
     """Skip obvious prompt/debug leakage before building public static pages.
 
@@ -757,6 +881,43 @@ def choose_primary_image_asset(assets: list[dict[str, Any]]) -> dict[str, Any] |
     first = assets[0]
     first_area = image_area(first)
     first_score = hero_image_quality_score(first)
+    # Theatre/catalog parsers may attach the same monthly advert or generic
+    # venue gallery to many unrelated events.  When a row also has a strong
+    # event-exclusive visual, prefer that evidence over cross-event boilerplate.
+    # If no exclusive alternative exists we keep the shared asset, preserving
+    # recurring-event and weak-media fallbacks.
+    if int(first.get("_event_reuse_count") or first.get("event_reuse_count") or 1) > 1:
+        exclusive_candidates = [
+            candidate
+            for candidate in assets[1:]
+            if int(candidate.get("_event_reuse_count") or candidate.get("event_reuse_count") or 1) == 1
+            and candidate.get("image_text_mode") == "visual_only"
+            and min(int(candidate.get("width") or 0), int(candidate.get("height") or 0)) >= 720
+            and image_area(candidate) >= 900_000
+        ]
+        if exclusive_candidates:
+            return max(exclusive_candidates, key=hero_image_quality_score)
+    # A classified utility/advertising/document image is useful gallery
+    # material, but it must not monopolise the event hero when the same event
+    # has a separately classified, crop-safe, full-resolution photograph.
+    # This is a semantic-role guard supplied by the upstream LLM pass, not an
+    # OCR/filename guess.
+    first_is_non_photo_document = (
+        first.get("media_semantic_status") == "classified"
+        and first.get("media_role") not in {"event_photo", "event_identity_poster"}
+    )
+    if first_is_non_photo_document:
+        photo_candidates = [
+            candidate
+            for candidate in assets[1:]
+            if candidate.get("media_semantic_status") == "classified"
+            and candidate.get("media_role") == "event_photo"
+            and candidate.get("safe_crop") is True
+            and min(int(candidate.get("width") or 0), int(candidate.get("height") or 0)) >= 720
+            and image_area(candidate) >= 900_000
+        ]
+        if photo_candidates:
+            return max(photo_candidates, key=hero_image_quality_score)
     # If the first item is tiny, rescue it with the earliest adequate later image,
     # not necessarily the largest one: source order still carries editorial intent.
     if first_area < 300_000:
@@ -795,6 +956,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         optional_fields = [
             "width",
             "height",
+            "image_text_mode",
             "media_role",
             "media_role_confidence",
             "media_semantic_status",
@@ -839,6 +1001,26 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         canonical_ledger_present = bool(rows)
     metadata_by_url: dict[str, dict[str, Any]] = {}
     poster_urls: list[str] = []
+    approved_reuse_count_by_url: dict[str, int] = {}
+    approved_urls = [clean_text(row_get(row, "supabase_url")) for row in rows]
+    approved_urls = [url for url in approved_urls if url]
+    if approved_urls:
+        try:
+            placeholders = ",".join("?" for _ in approved_urls)
+            approved_reuse_count_by_url = {
+                clean_text(reuse_row["supabase_url"]): int(reuse_row["event_count"] or 1)
+                for reuse_row in con.execute(
+                    f"""
+                    select supabase_url, count(distinct event_id) as event_count
+                    from eventposter
+                    where review_status='approved' and supabase_url in ({placeholders})
+                    group by supabase_url
+                    """,
+                    approved_urls,
+                ).fetchall()
+            }
+        except sqlite3.OperationalError:
+            approved_reuse_count_by_url = {}
     for row in rows:
         # One EventPoster is one logical gallery item.  Its managed and source
         # URLs are alternate locations, never two public images.
@@ -851,6 +1033,10 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             for key in row.keys()
             if key not in {"supabase_url", "catbox_url"}
         }
+        metadata_by_url[image_url_key(url)]["event_reuse_count"] = approved_reuse_count_by_url.get(
+            clean_text(row_get(row, "supabase_url")),
+            1,
+        )
     photo_urls = read_json(photo_urls_raw, [])
     urls = []
     seen = set()
@@ -882,7 +1068,16 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     for index, url in enumerate(urls[:12]):
         metadata = metadata_by_url.get(image_url_key(url), {})
         ocr = str(metadata.get("ocr_text") or "")
-        mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "visual_only")
+        stored_mode = clean_text(metadata.get("image_text_mode")).lower()
+        mode = (
+            "visual_only"
+            if event_id in FORCE_VISUAL_IMAGE_MODE_IDS
+            else stored_mode
+            if stored_mode in {"ocr_text", "visual_only"}
+            else "ocr_text"
+            if meaningful_ocr(ocr)
+            else "visual_only"
+        )
         semantic_status = clean_text(metadata.get("media_semantic_status")).lower()
         raw_role = clean_text(metadata.get("media_role")).lower()
         media_role = raw_role if semantic_status == "classified" and raw_role in EVENT_IMAGE_MEDIA_ROLES else None
@@ -934,6 +1129,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             "recommended_hero_fit": "cover" if role_for_ui == "event_photo" else "contain",
             "safe_crop": bool(metadata.get("safe_crop")) if metadata.get("safe_crop") is not None else False,
             "source_order": index,
+            "_event_reuse_count": max(1, int(metadata.get("event_reuse_count") or 1)),
         }
         if thumbnail_sources:
             asset["thumbnail_sources"] = thumbnail_sources
@@ -963,6 +1159,8 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     primary = assets[0]["src"] if assets else None
     primary_mode = assets[0]["image_text_mode"] if assets else "unknown"
     primary_role = assets[0].get("media_role") if assets else None
+    for asset in assets:
+        asset.pop("_event_reuse_count", None)
     return primary, primary_mode, primary_role, assets
 
 
@@ -1503,9 +1701,14 @@ def build_catalog_ledger(
 
 def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) -> dict[str, Any]:
     event_id = int(row["id"])
-    title = strip_emoji_prefix(row["title"]) or f"Событие {event_id}"
+    occurrence = structured_occurrence_projection(row)
+    occurrence_conflict = bool(
+        occurrence
+        and source_event_type_conflicts(row_get(row, "event_type"), occurrence["event_type"])
+    )
+    title = strip_emoji_prefix(occurrence["title"] if occurrence_conflict else row["title"]) or f"Событие {event_id}"
     topics = [str(item) for item in read_json(row["topics"], []) if str(item).strip()]
-    event_type = infer_event_type(row, topics)
+    event_type = occurrence["event_type"] if occurrence_conflict and occurrence else infer_event_type(row, topics)
     city = clean_place(row["city"])
     venue = clean_place(row["location_name"])
     venue = drop_city_only_venue(venue, city)
@@ -1513,8 +1716,12 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     start_date = normalize_date(row["date"]) or current_date
     end_date = normalize_date(row["end_date"])
     start_time, time_end, display_time = split_time(row["time"])
-    description = str(row["description"] or row["source_text"] or "").strip()
-    if description_looks_truncated(description, str(row["source_text"] or "")):
+    description = str(
+        occurrence["description"]
+        if occurrence_conflict and occurrence
+        else row["description"] or row["source_text"] or ""
+    ).strip()
+    if not occurrence_conflict and description_looks_truncated(description, str(row["source_text"] or "")):
         description = str(row["source_text"] or description).strip()
     if not time_end and (not end_date or end_date == start_date):
         duration_minutes = explicit_event_duration_minutes(row["source_text"], description)
@@ -1531,8 +1738,10 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     source_urls = collect_source_urls(con, event_id, row)
     source_likes, source_views, source_shares, engagement_sources = source_metrics(con, source_urls)
     popularity_reason_codes, popularity_signal_score = popularity_signals(con, source_urls)
-    summary = clean_text(row["short_description"]) or clean_text(row["description"])[:260]
+    summary = event_summary(None if occurrence_conflict else row["short_description"], description)
     description = description or summary
+    primary_asset = next((asset for asset in image_assets if asset.get("src") == primary_image), image_assets[0] if image_assets else None)
+    primary_alt = primary_asset.get("alt") if primary_asset else f"Изображение события «{title}»"
     slug_parts = [slugify(title), slugify(city or venue or "kaliningrad")]
     slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
     source_url = source_urls[0] if source_urls else None
@@ -1566,7 +1775,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "source_count": len(source_urls),
         "telegraph_url": clean_text(row["telegraph_url"]) or None,
         "image_url": primary_image,
-        "image_alt": f"Афиша события «{title}»",
+        "image_alt": primary_alt,
         "image_text_mode": image_mode,
         "image_media_role": image_role,
         "image_assets": image_assets,
@@ -1574,9 +1783,9 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "ocr_boxes": [],
         "focal_point": None,
         "image_object_position": None,
-        "safe_crop": bool(image_assets and image_assets[0].get("safe_crop")),
+        "safe_crop": bool(primary_asset and primary_asset.get("safe_crop")),
         "summary": summary,
-        "meta_description": clean_text(row["short_description"]) or summary,
+        "meta_description": summary,
         "description_html": markdownish_to_html(description) or f"<p>{html.escape(summary or title)}</p>",
         "topics": topics,
         "pushkin_card": bool(row["pushkin_card"]),
@@ -1585,7 +1794,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
             for item in read_json(row_get(row, "linked_event_ids"), [])
             if str(item).isdigit() and int(item) != event_id
         }),
-        "data_quality_notes": [],
+        "data_quality_notes": ["structured_source_occurrence_conflict_guard"] if occurrence_conflict else [],
         "updated_at": clean_text(row_get(row, "updated_at")) or clean_text(row_get(row, "added_at")) or None,
         "likes_count": source_likes,
         "source_likes_count": source_likes,
