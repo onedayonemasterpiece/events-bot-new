@@ -112,7 +112,7 @@ lanes:
       - site/**
     expected_output: committed exact negative/positive replay plus bounded shadow-to-enforce recommendation
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: integration_release
     role: merge_reviewer
     effort: extra-high
