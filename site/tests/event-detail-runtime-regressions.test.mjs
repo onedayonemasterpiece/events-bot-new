@@ -238,10 +238,16 @@ test('secret candidate keeps expiry-proof Split and Editorial CTA geometry fixtu
   assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551, candidate: 'split'/u);
   assert.ok(examples.events.some((event) => event.id === 6551), 'Split CTA specimen must use a frozen desktop fixture');
   assert.match(secretBuilder, /const splitCtaRegressionRoute = 'lab\/event-desktop\/examples\/cta-phone-invariant'/u);
-  assert.match(secretBuilder, /retainedLabRoutes = \[transportQaRoute, footerPrototypeRoute, splitCtaRegressionRoute\]/u);
+  assert.match(secretBuilder, /const registrationCtaRegressionRoute = 'lab\/event-desktop\/examples\/cta-registration-invariant'/u);
+  assert.match(secretBuilder, /const freeCalendarCtaRegressionRoute = 'lab\/event-desktop\/examples\/cta-free-calendar-invariant'/u);
+  assert.match(secretBuilder, /registrationCtaRegressionRoute,[\s\S]*freeCalendarCtaRegressionRoute/u);
+  assert.match(secretChecker, /registration CTA regression marker missing/u);
+  assert.match(secretChecker, /calendar-primary CTA regression marker missing/u);
   assert.match(secretChecker, /data-action-layout="inline"/u);
   assert.match(secretChecker, /data-action-layout="stacked"/u);
   assert.match(browserGate, /lab\/event-desktop\/examples\/cta-phone-invariant.*split/u);
+  assert.match(browserGate, /lab\/event-desktop\/examples\/cta-registration-invariant.*split.*Зарегистрироваться/u);
+  assert.match(browserGate, /lab\/event-desktop\/examples\/cta-free-calendar-invariant.*split.*В календарь/u);
   assert.match(browserGate, /lab\/event-desktop\/examples\/footer-service-v1.*editorial/u);
   assert.doesNotMatch(browserGate, /opera-i-dzhaz-znamensk-6876|myuzikl-alye-parusa-kaliningrad-4783/u);
 });

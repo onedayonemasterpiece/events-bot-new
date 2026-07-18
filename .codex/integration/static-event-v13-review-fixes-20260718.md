@@ -1,6 +1,6 @@
 # Static event v13 integration report — 2026-07-18
 
-Base: `origin/main@fb5a35dd`  
+Base: `origin/main@fb5a35dd`
 Branch: `integration/static-event-v13-review-fixes-20260718`
 
 ## Integrated requirements

@@ -74,8 +74,10 @@
 - **ADD-V12-10 — Related-card loading geometry.** Desktop `Смотрите дальше`
   emits a server-rendered skeleton and `aria-busy=true`; successful and failed
   image completion both clear the state without changing the reserved frame.
-- **ADD-V12-11 — CTA follows media family.** At `1536×864`, the retained
-  `cta-phone-invariant` Split fixture keeps one contained inline row, while the
+- **ADD-V12-11 — CTA follows media family.** At `1536×864`, the retained Split
+  fixtures `cta-phone-invariant`, `cta-registration-invariant` and
+  `cta-free-calendar-invariant` keep one contained inline row, validate long
+  primary-label compaction and calendar-primary semantics, while the
   retained `footer-service-v1` Editorial fixture keeps the three-row panel with
   calendar/share/like aligned on the bottom row. Review may additionally sample
   live events, but expiry of `6876`, `4783`, `6551` or `5374` cannot remove or
