@@ -1,739 +1,571 @@
-# Сквозная продуктовая система статического сайта KenigEvents
+# Feed-first продуктовая модель статического сайта KenigEvents
 
-> Дата анализа: 2026-07-18
-> Статус: product decision memo / implementation backlog
-> Каноническая база аудита: `docs/static-site-video-guides-20260718@1c74d65a`
-> Внешняя критика: `agy`, `Gemini 3.1 Pro (High)`; итог синтезирован, а не принят автоматически.
+> Дата: 2026-07-18
+> Статус: revised feed-first recommendation after owner correction; final navigation acceptance pending owner confirmation
+> Каноническая база: `docs/static-site-video-guides-20260718@191a4019`
+> Внешняя критика: два review через `agy`, `Gemini 3.1 Pro (High)`; выводы сверены с repo и решением владельца.
 
-## 1. Executive verdict
+## 1. Исправление прежнего анализа
 
-Текущего набора **недостаточно как целостного продукта**, хотя фундамент уже сильный.
+Прежняя версия переусложняла продукт. Она превращала технические понятия — `hub`, `leaf`, taxonomy, entity page, collection type — в пользовательское меню.
 
-Сейчас хорошо проработана вертикаль `ссылка на событие → страница события → CTA → похожие`, есть статические страницы `Сегодня / Завтра / Выходные`, отдельные `Популярное`, `Выставки` и авторизованный умный поиск. Но это пока набор leaf/listing surfaces, а не замкнутая система выбора и возврата.
+Это неверный центр проектирования.
 
-Нужно строить не «ещё один каталог афиш», а **event decision engine**:
+Основной трафик будет мобильным. Главная ценность KenigEvents — сильная персонализация по мере накопления сигналов. Поэтому продукт должен восприниматься как **одна продолжающаяся лента**, а статические event/selection/SEO/email pages — как разные точки входа в неё.
 
-> из любого входа довести пользователя до подходящего активного события за минимальное число осмысленно просмотренных карточек, дать сохранить намерение и понятно показать, что нового появилось при следующем визите.
+Новый тезис:
 
-Главный продуктовый разрыв находится не в количестве типов страниц. Не замкнут цикл:
+> KenigEvents — это одна адаптивная мобильная feed-сессия. Внешняя ссылка задаёт её начало и контекст, а последующий скролл собирает сигналы, постепенно персонализирует продолжение и приводит к событию, которое пользователь сохранит, добавит в календарь или откроет для покупки.
 
-```text
-acquisition
-  → landing
-  → discovery continuation
-  → qualified action
-  → durable/user-local signal
-  → next feed edition
-  → newness/update awareness
-  → return/reactivation
-  → новый qualified action
-```
+Статический сайт нужен не для строительства портала-энциклопедии. Он обеспечивает:
 
-Следовательно, страницы `Сегодня / Завтра / Выходные / Популярное / Поиск` необходимы, но сами по себе недостаточны.
+- быстрые и надёжные social/SEO deep links;
+- полезный no-JS/static fallback;
+- grounded narrative pages;
+- индексируемые входы;
+- начальный candidate set для ленты.
 
-## 2. Что уже есть и что реально не закрыто
+## 2. Минимальная пользовательская модель
 
-### Сильная база
+### Три постоянных назначения
 
-- статические event detail pages, ICS, JSON-LD и related manifests;
-- дата-листинги `Сегодня / Завтра / Выходные`;
-- отдельные поверхности `Выставки`, `Популярное`, `Поиск`;
-- local-first профиль и явные `like / not interested / share`;
-- static-first fallback: публичный HTML не обязан зависеть от Supabase;
-- принятый контракт global identity, favorites, exactly-three recommendation email и bearer personal page;
-- строгая архитектурная граница Fly SQLite / Supabase / YDB;
-- KPI-контракт mature golden persona: `30` valid impressions, `5` strong positives, `2` explicit negatives, не менее `3` сессий; релевантное событие должно быть достигнуто за `<=20` валидно изученных карточек при наличии релевантного supply.
+1. **Лента** — основная Афиша;
+2. **Поиск** — свободный запрос и быстрые темы;
+3. **Моё** — сохранённые события и минимальные пользовательские настройки.
 
-### Критические разрывы
+`Сегодня`, `Завтра`, `Выходные`, `Бесплатно`, `С детьми`, `Новое` и другие срезы — не отдельные уровни меню. Это **контекстные chips/presets**, меняющие начало и дальнейший состав ленты.
 
-| Gap | Severity | Фактическое состояние | Product impact | Что закрывает gap |
-|---|---:|---|---|---|
-| Нет настоящей главной | P0 | `/` — noindex test landing; `/__preview/` — техническая страница | вход через logo/SEO не даёт discovery | `/` как статическая «Афиша»: быстрые даты, категории, подборки, начало стабильной ленты |
-| Production SEO выключен | P0 | `noindex,nofollow,noarchive`, `robots: Disallow /`, preview/lab в sitemap | SEO как acquisition-канал фактически не запущен | production build profile, allowlisted sitemap, truthful `lastmod`, stable canonical/slug registry |
-| Соцсети не используют один canonical resolver | P0 | действующие издатели могут продолжать вести на source/Telegraph | event/collection deep links не образуют измеримый funnel | один public-link resolver, current promoted manifest, UTM/campaign attribution, TG/VK/MAX unfurl gate |
-| Нет единой системы подборок | P0 | маршруты и правила заданы по одному | сайт, соцсети и email могут выбирать разное | versioned `collection_manifest` как единый selection contract |
-| Нет навигации по жанрам | P0 | есть только отдельная `Выставки` | пользователь не может перейти от события/даты к устойчивому интересу | `/kategorii/` + bounded canonical category leaves |
-| Поиск заметен не везде и закрыт логином | P0/P1 | semantic search существует, anonymous quota `0`; desktop header не даёт равноправного входа | free discovery сломан до авторизации | один заметный search entry; анонимный zero-cost catalog search + authenticated semantic upgrade |
-| Персонализация не замкнута | P0/P1 | `seen_event_ids` не заполняется; нет trusted valid-impression/CTA ingest; listing mostly hides dislikes | нельзя доказать «подходящее в первых 20–30» | exposure observer, outcome signals, profile maturity, served-list linkage, real next-session rerank |
-| Нет durable «В планы» | P0/P1 | ICS есть, favorite/cross-device state отсутствует | пользователь не может вернуться к намерению; calendar ≠ управляемое сохранение | один durable saved-event state, `/izbrannoe/`, lifecycle updates |
-| Нет модели «что изменилось» | P1 | нет visit/build watermark, new/updated state и update center | частая возвратность не имеет видимой причины | feed editions, `last_acknowledged_build`, `new_for_user`, `materially_updated`, отдельный newness indicator |
-| Identity не глобальна | P1 | Yandex auth живёт в search; verified-email/profile link partial | search, save, email и personal page выглядят разными продуктами | общий identity shell на всех HTML page families |
-| Recommendation email только в design | P1 | control plane силён, генератор/page publisher/worker выключены | нет owned reactivation-канала | exactly 3 + already-published larger personal page + canary `<=200` |
-| Меню не отражает целевой lifecycle | P0 | mobile/desktop наборы различаются; brand/«Все анонсы» ведут в preview | пользователь не видит search, categories, saved/new | единая IA, adaptive geometry, utility `Моё избранное` и отдельный newness indicator |
+### Mobile
 
-## 3. Целевая продуктовая модель
-
-### 3.1. Не одна лента, а связанный граф surfaces
-
-Показатель `cards_to_first_relevant` должен считаться по **уникальным валидным касаниям всего journey**, а не только внутри одной бесконечной ленты:
-
-- главная;
-- дата-листинг;
-- подборка/категория;
-- search results;
-- related block event detail;
-- personal continuation;
-- personal email page.
-
-Одно событие, показанное на трёх surfaces, остаётся одним уникальным касанием для данного decision journey. Для этого нужны `journey_id`, `served_list_id`, `surface`, `event_id`, `position`, `algorithm_id`, `build_id`.
-
-### 3.2. Сквозные маршруты
-
-**Социальный event deep link**
+Bottom navigation:
 
 ```text
-TG/VK/MAX event post
-→ event detail
-→ ticket/register/calendar/save
-→ related by same intent + «Вся подборка»
-→ category/date/collection continuation
-→ save/profile signal
-→ next edition / return
+Лента · Поиск · Моё
 ```
 
-Если событие не подошло, страница не должна быть тупиком. Но решением не обязан быть uncontrolled infinite scroll: лучше видимая, ограниченная continuation-секция, затем явный `Показать ещё` и переход в исходную подборку.
-
-**Социальный collection deep link**
+В верхней части ленты — горизонтальные chips:
 
 ```text
-TG/VK/MAX digest
-→ stable collection page
-→ event card/detail
-→ qualified action
-→ сохранить тему / перейти в соседнюю подборку
-→ новое по этой теме при следующем визите
+Сегодня · Завтра · Выходные · Бесплатно · С детьми · Новое · Ещё
 ```
 
-**SEO**
+Нажатие на chip не должно ощущаться переходом в другой продукт. Даже если технически загружается другой статический URL, сохраняются shell, card language, density preference и feed-session semantics.
+
+### Desktop
+
+Desktop показывает те же три назначения и больше chips одновременно. Третье назначение называется **`Мои события`**; accessible name на mobile тоже `Мои события`, хотя короткий visible label — `Моё`. Desktop не получает отдельную информационную архитектуру.
+
+### Семантика `Моё` / `Мои события`
+
+Это уже принятый единый personal hub:
+
+- mobile label: `Моё`;
+- desktop/accessibility label: `Мои события`;
+- canonical route: `/moi-sobytiya/`;
+- `/izbrannoe/` — compatibility entry в тот же shell с filter `Избранное`;
+- filters: `Предстоящие`, `Прошедшие`, `В календаре`, `Избранное`.
+
+Badge считает distinct **current upcoming union** calendar + favorite. Событие в обоих состояниях учитывается один раз. Past, removed, merged-away, likes, reminders, raw repeated ICS downloads и transport-only state badge не увеличивают. Newness имеет отдельную семантику.
+
+## 3. Любой mobile-вход превращается в feed session
+
+### 3.1. Event deep link
 
 ```text
-category / intent / venue / event query
-→ indexable static landing
-→ current event set + transparent freshness
-→ event detail
-→ qualified action
-→ adjacent intent/date hub
+пост TG/VK/MAX
+→ полная карточка/страница конкретного события как anchor
+→ CTA: билет / регистрация / календарь / сохранить
+→ несколько действительно связанных событий
+→ обычное персонализируемое продолжение ленты
 ```
 
-**Search**
+Если событие не подошло, пользователь не упирается в footer или каталог. После event anchor начинается продолжение.
+
+### 3.2. Social selection link
 
 ```text
-visible one-line query
-→ anonymous local catalog result
-→ optional semantic refinement/login only when valuable
-→ event detail / «нашёл» feedback
-→ useful-query candidate
-→ automatic fail-closed collection promotion
+пост «Бесплатно на выходных»
+→ короткий selection header
+→ отобранные события
+→ расширение в персональную ленту с сохранённым контекстом
 ```
 
-**Email**
+### 3.3. SEO narrative entry
 
 ```text
-verified purpose-specific opt-in
-→ exactly 3 events in email
-→ already-published larger personal page (proposed canary: 12–24 events)
-→ qualified action / feedback
-→ next issue suppresses repeats and uses the same profile/feed revision
+поисковый запрос «куда пойти в дождь в Калининграде»
+→ grounded narrative intro
+→ текст ведёт от события к событию
+→ после завершения сценария начинается лента
 ```
 
-## 4. Итоговая информационная архитектура и меню
-
-### 4.1. Канонический mental model
-
-Основные destinations и порядок:
-
-1. **Афиша** — настоящая главная `/`;
-2. **Сегодня**;
-3. **Завтра**;
-4. **Выходные**;
-5. **Категории**;
-6. **Подборки**;
-7. **Поиск**.
-
-Отдельный utility cluster:
-
-- **Моё избранное** — только distinct durable saved events и их lifecycle;
-- **Профиль** — identity, email, consent/preferences, reset/export/delete.
-
-Канонический badge `Моё избранное` показывает только число distinct durable saved events при `N>0`; likes, reminders, transport legs и newness его не увеличивают. `Новое для вас` — отдельный contextual update chip/dot на главной и в раскрытом меню с собственной семантикой. Эти два индикатора нельзя объединять.
-
-### 4.2. Desktop
-
-В header постоянно видны:
+### 3.4. Email personal page
 
 ```text
-Афиша · Сегодня · Завтра · Выходные · Категории · Подборки · Поиск
-                                      Моё избранное · Профиль
+exactly-three email
+→ три верхних персональных события
+→ более широкая ranked selection
+→ дальнейшая feed edition
 ```
 
-Search желательно показывать не только ссылкой, но и как заметный короткий input/command entry на главной и крупных листингах.
+### 3.5. Возврат из event detail
 
-### 4.3. Mobile
+Если event detail был открыт из ленты, browser Back обязан восстановить:
 
-Постоянная компактная shortcut-навигация может быть:
+- scroll position;
+- feed edition/order;
+- выбранный chip;
+- density mode;
+- уже загруженные карточки;
+- локальные saved/hidden states.
+
+Это P0. Без этого лента распадается на отдельные страницы.
+
+## 4. Не «Категории» и «Подборки», а темы ленты
+
+Пользователю не нужно объяснять разницу между category, filter, intent и collection. Всё это — способы попросить другую ленту.
+
+### Пользовательские темы
+
+- Сегодня;
+- Завтра;
+- Выходные;
+- Концерты;
+- Выставки;
+- С детьми;
+- Бесплатно;
+- На улице;
+- Новое;
+- Популярное;
+- другие доказавшие спрос темы.
+
+Внутри остаётся canonical taxonomy v1, но она не диктует навигацию. Taxonomy нужна ranking/export/compatibility, а не для показа пользователю технического рубрикатора.
+
+### Нужна ли отдельная страница со всеми темами
+
+Только как простой overflow sheet `Все темы`, если chips перестают помещаться. Не нужен отдельный портал с двумя хабами `Категории` и `Подборки`.
+
+### Зачем всё ещё нужны стабильные URL
+
+У темы может быть статический URL для:
+
+- ссылки из соцсети;
+- SEO;
+- share;
+- canonical/no-JS fallback;
+- восстановления состояния.
+
+Но URL — техническая точка входа в feed preset, а не причина создавать ещё один пользовательский раздел.
+
+## 5. Четыре типа selection surface
+
+### 5.1. Автоматический срез
+
+Примеры:
+
+- Бесплатно;
+- С детьми;
+- Под открытым небом;
+- Сегодня;
+- Завтра;
+- Выходные;
+- Пушкинская карта.
+
+Свойства:
+
+- deterministic filter над canonical facts;
+- обновляется при каждой генерации сайта;
+- обычно не требует длинного текста;
+- сразу продолжается общей лентой;
+- может комбинировать не больше двух устойчивых условий при достаточном supply.
+
+### 5.2. Алгоритмическая лента
+
+Примеры:
+
+- Новое;
+- Популярное;
+- Для вас;
+- related continuation.
+
+Свойства:
+
+- versioned ranking/projection;
+- `Популярное` уже существует и не требует нового продуктового раздела;
+- порядок фиксируется в feed edition;
+- static fallback остаётся полезным;
+- персонализация применяется как progressive enhancement.
+
+### 5.3. Автоматически создаваемое повествование
+
+Примеры:
+
+- Сегодня вечером;
+- Куда пойти в дождь;
+- День туриста в Калининграде;
+- План прогулки перед концертом;
+- Семейная суббота.
+
+Это не обычная сетка карточек и не обязательно ручная редакционная статья. Это **build-time LLM-first narrative**, автоматически создаваемый из отобранных событий.
+
+### 5.4. Персональная feed edition
+
+Это основная поверхность продукта:
+
+- учитывает накопленные сигналы;
+- использует context/source/date;
+- сохраняет порядок на текущую сессию;
+- содержит controlled exploration;
+- продолжает любой из трёх предыдущих типов.
+
+## 6. Contract автоматического narrative
+
+### 6.1. Сначала selection, потом writer
+
+LLM не выбирает события из сырого каталога произвольно.
 
 ```text
-Афиша · Сегодня · Подборки · Поиск · Избранное
+canonical active events
+→ deterministic/context candidate filter
+→ diversity and route/time compatibility
+→ grounded event fact pack
+→ narrative writer
+→ independent fact/sequence verifier
+→ SSG artifact
 ```
 
-Раскрытая navigation sheet обязана сохранять полный канонический порядок и destinations, включая `Завтра`, `Выходные`, `Категории`. Это shortcut layer, а не другая IA. Внутри `Сегодня`/`Афиша` остаётся заметный date switch `Сегодня / Завтра / Выходные`.
+### 6.2. Writer contract
 
-### 4.4. Что не класть в top-level menu
+Writer получает только подтверждённые данные выбранных event IDs:
 
-- `Выставки` — leaf в `Категории`;
-- `Популярное`, `Новое`, `Бесплатно`, `С детьми`, `Пушкинская карта` — quick links в `Подборки`;
-- площадки, организаторы и города — entity/internal-link layer, не постоянные пункты;
-- клубы — category/community surface после отдельного release gate;
-- partners/about/privacy — footer.
+- title;
+- date/time;
+- venue/address/city;
+- price/admission;
+- duration if known;
+- canonical summary;
+- transport/travel facts only if separately verified;
+- media and canonical URL.
 
-## 5. Итоговые типы статических страниц
+Writer строит связное повествование:
 
-| Family | Route example | Основной intent | Источник | Index policy | Refresh | Primary next action |
-|---|---|---|---|---|---|---|
-| Главная | `/` | «помоги выбрать» | static collection manifests + optional local rerank | index | каждый promoted build | дата, категория, поиск, event |
-| Event occurrence | `/sobytiya/<slug>/` | решение по конкретному событию | Fly canonical export | index while current; lifecycle policy after | effectful update + expiry rebuild | ticket/register/save/calendar + continuation |
-| Date | `/segodnya/`, `/zavtra/`, `/vyhodnye/` | срочно/планирование | occurrence-aware selection | index | daily/build | event |
-| Calendar horizon | `/na-nedele/`, later month/date | планирование заранее | occurrence manifest | index only with useful supply | daily | event/date |
-| Category hub | `/kategorii/` | обзор жанров/форматов | versioned taxonomy | index | taxonomy/build | category leaf |
-| Category leaf | `/kategorii/koncerty/` | устойчивый жанровый intent | normalized taxonomy + active events | index if quality/inventory gate | build | event/related collection |
-| Collections hub | `/podborki/` | задачи и ограничения | collection registry | index | build | collection leaf |
-| Intent/editorial leaf | `/podborki/besplatno/`, `/podborki/s-detmi/` | concrete constraint | collection manifest | index if stable useful intent | build/daily | event |
-| Promoted search collection | `/podborki/dzhaz-vecherom/` | long-tail reusable intent | accepted automatic query candidate | index only after novelty/quality gate | build | event/search refinement |
-| Algorithmic | `/populyarnoe/`, `/novoe/` | social proof / freshness | versioned projections | index if deterministic/explainable | daily/build | event |
-| Search shell | `/poisk/` | ad-hoc intent | local index + optional semantic backend | page can be index/noindex by content; result query URLs noindex | current catalog | event/save query |
-| Saved | `/izbrannoe/` | мои планы | Supabase/local fallback shell | noindex, auth/privacy-safe | dynamic | event/update/reminder |
-| Personal update center | `/dlya-vas/` | что нового для меня | profile/feed issue | noindex | new edition | event/acknowledge |
-| Bearer email page | `/dlya-vas/<opaque-token>/` | larger email selection | immutable issue artifact | noindex,nofollow,noarchive; never sitemap | per issue | event/feedback |
-| Entity hub/leaf | `/mesta/`, `/mesta/<slug>/`, organizers/cities | navigation/trust/long-tail | normalized entity registry | later, only after identity cleanup | build | event/follow |
-| Festival edition | `/festivali/<edition>/` | program planning | festival entity/program | separate post-release gate | build | program event |
-| Service/legal | privacy, recommendation disclosure, about, contacts, partners | trust/compliance | authored static docs | index as appropriate | rare | preferences/contact |
-| Email/account service | verify/callback/preferences/unsubscribe | control | Supabase identity/control plane | noindex | dynamic | return to initiating route |
-| Machine/lifecycle | sitemap index, robots, ICS, 404/410, redirect map | crawl/runtime | build manifest | machine policy | build | canonical fallback |
+- объясняет общий замысел;
+- вводит события в естественном порядке;
+- связывает переходы между ними;
+- не пересказывает каждую карточку;
+- не придумывает расстояния, погоду, атмосферу, длительность или доступность;
+- не обещает, что пользователь физически успеет между событиями без verified route/time calculation.
 
-### 5.1. Не создавать SEO-комбинаторику
+### 6.3. Формат страницы
 
-Нельзя материализовывать `category × city × date × free × audience`. Query filters остаются `noindex,follow` и canonical указывает на допустимую базовую landing. Indexable registry — allowlist.
-
-Публиковать collection leaf можно только если одновременно выполнены:
-
-- устойчивый человеческий intent;
-- минимум около `5` активных релевантных событий;
-- уникальный набор относительно существующего leaf;
-- полезное вводное описание, не шаблонный SEO-текст;
-- стабильный slug;
-- нет unsafe/private/raw query;
-- текущие результаты проходят lifecycle and quality gate.
-
-При истончении страницы её не надо мгновенно превращать в новый пустой URL: сначала `noindex` + полезный переход к parent/sibling; затем redirect/410 по lifecycle policy.
-
-## 6. Единая модель подборки
-
-Сайт, социальный пост и email не должны иметь три независимых selection algorithm. Нужен `collection_manifest`:
+Не `введение → 20 одинаковых карточек`, а:
 
 ```text
-collection_id
-slug
-kind: time | category | constraint | editorial | algorithmic | promoted_query
-name / short_description
-selection_rule_version | editorial_event_ids
-catalog_build_id / generated_at / next_refresh_at / content_hash
-min_results / max_results
-exclusions / lifecycle_policy / diversity_policy
-index_policy / canonical
-social_copy_variant / OG asset
-campaign_key
+короткий grounded lead
+→ событие 1
+→ переход/почему дальше
+→ событие 2
+→ следующий поворот сценария
+→ событие 3
+→ optional alternatives
+→ персонализируемое продолжение ленты
 ```
 
-Один manifest используется для:
+Текст и event modules образуют одно повествование.
 
-- HTML collection page;
-- ссылок и карточек TG/VK/MAX;
-- related continuation «вся подборка»;
-- email candidate generation;
-- analytics and QA.
+### 6.4. Lifecycle
 
-Это защищает от ситуации, когда пост обещает одну подборку, сайт показывает другую, а email повторяет третью.
+Narrative rebuild запускается, если:
 
-## 7. Какие подборки публиковать в TG/VK/MAX
+- событие закончилось/отменено/перенесено;
+- изменились критические факты;
+- selection перестал быть связным;
+- появился существенно лучший candidate set;
+- истёк freshness window данного сценария.
 
-Нужна небольшая повторяемая editorial matrix, а не десятки постоянных рубрик.
+Если writer/verifier недоступен или coherence gate не пройден:
 
-| Рубрика | Cadence | User intent | Роль |
-|---|---:|---|---|
-| Сегодня вечером | ежедневно утром при достаточном supply | спонтанный выход | быстрый conversion |
-| Завтра | вечером предыдущего дня | короткое планирование | bridge к date page |
-| Выходные | четверг; optional Friday reminder без повтора тех же cards | планирование | главный регулярный digest |
-| Новое за неделю | 1 раз/неделю | причина вернуться | freshness discovery |
-| Бесплатно | 1 раз/неделю или чередовать | price constraint | широкий acquisition |
-| С детьми / семьёй | 1 раз/неделю или чередовать | family planning | устойчивый сегмент |
-| Выставки и long-running | 1 раз в 1–2 недели | «можно выбрать дату» | evergreen discovery |
-| Ротация жанра | 1 слот/неделю | concerts / theatre / lectures / workshops / cinema / excursions / festivals | обучение breadth каталога |
-| Сезонная/погодная | только при реальном контексте | rain/outdoor/holiday/tourist day | editorial relevance |
+- старая заведомо устаревшая статья не публикуется;
+- surface деградирует в честный автоматический список;
+- ambiguity остаётся pending;
+- runtime LLM на page view не вызывается.
 
-### Не делать `Популярное` основной соцсетевой рубрикой
+### 6.5. Защита от SEO-спама
 
-Социальные реакции уже участвуют в popularity. Постоянно публикуя «популярное» обратно в соцсети, продукт создаёт self-reinforcing loop и подавляет новое/нишевое. `Популярное` остаётся полезным site surface и редким social proof post, но не заменяет `Новое`, exploration и тематическую ротацию.
+Narrative создаётся только если:
 
-Все каналы используют один `collection_id`, но адаптируют текст/медиа под TG/VK/MAX. Canonical URL очищен от attribution params; analytics хранит channel/post/campaign/build отдельно.
+- есть повторяемый пользовательский intent;
+- достаточно подходящих активных событий;
+- события образуют объяснимую последовательность;
+- результат заметно отличается от существующих stories;
+- URL и intent стабильны;
+- текст проходит fact/duplication/quality gates.
 
-## 8. Жанры и свободный умный поиск
+Не создаются автоматические тексты для каждой комбинации фильтров.
 
-### 8.1. Жанры: гибрид taxonomy + язык задачи
+## 7. Что автоматизировать максимально
 
-Пользователь думает и жанрами, и задачами. Поэтому нужны два разных слоя:
+### Безопасная автоматика
 
-**Категории** — что это. V1 не вводит новую скрытую онтологию: UI leaves явно отображаются на canonical `event-taxonomy-v1`:
+- today/tomorrow/weekend;
+- free;
+- kids/family;
+- outdoor;
+- Pushkin card;
+- new;
+- popular;
+- canonical category/type slices;
+- пары устойчивых признаков при достаточном supply;
+- related/top-up;
+- rebuild/expiry/noindex lifecycle.
 
-| UI label/route | Canonical category v1 |
-|---|---|
-| Концерты и музыка | `music` |
-| Театр | `theatre` |
-| Выставки | `exhibition` |
-| Детские события | `kids` |
-| Спорт | `sport` |
-| Экскурсии | `excursion` |
-| Лекции | `lecture` |
-| Мастер-классы | `workshop` |
-| Кино | `cinema` |
-| Фестивали | `festival` |
-| Ярмарки | `market` |
-| Ночная жизнь | `nightlife` |
-| Гастрономия | `food` |
-| Другое | `other` |
+### Автоматический LLM-writer с gates
 
-`Встречи`, `шоу`, `краеведение`, `игры` и `outdoor` могут быть user-facing tags/collection intents, но не молча новыми primary categories. Любое объединение leaves в одну UI-группу — только presentation grouping над сохранёнными canonical ids. Изменение самих ids/семантики требует versioned taxonomy migration, profile/manifest compatibility и E2E, а не правки menu copy.
+- rainy-day plan;
+- evening itinerary;
+- tourist day;
+- date/romantic plan;
+- seasonal scenario;
+- event-to-event thematic story.
 
-**Подборки** — зачем/при каких условиях:
+Это тоже автоматизация, но не простой SQL/filter.
 
-- сегодня вечером;
-- бесплатно;
-- с детьми;
-- Пушкинская карта;
-- на улице / в дождь;
-- новое;
-- популярное;
-- туристу на один день;
-- approved user-language intents.
+### Не создавать
 
-Жанр появляется:
+- страницы по любой случайной фразе;
+- сочетания трёх и более фильтров без доказанного спроса;
+- пустые/sparse stories;
+- страницы площадок или организаторов только ради SEO;
+- тексты, где связь событий держится на выдуманном writer context.
 
-- в global navigation через `Категории`;
-- на главной как bounded category rail;
-- в event breadcrumbs/medallions;
-- в related reason и переходе «Все концерты»;
-- в search suggestions;
-- в отдельном `Новое для вас`/saved-topic surface, когда появится durable state; badge `Моё избранное` при этом остаётся только счётчиком сохранённых событий.
+## 8. Площадки, организаторы и города
 
-### 8.2. Search должен быть видим до логина
+Отдельные entity pages удаляются из обычного roadmap.
 
-Целевой UX — одно поле, два уровня:
+KenigEvents не должен подменять сайт организатора, энциклопедию площадки или городской справочник.
 
-1. **Anonymous instant search:** title, venue, category, date, city, approved collection aliases, local fuzzy/full-text index. Zero runtime LLM cost.
-2. **Semantic upgrade:** естественный запрос, vector + verifier; логин/квота нужны только там, где действительно расходуется backend и сохраняется история/профиль.
+Площадка/организатор остаются:
 
-Нельзя показывать пользователю лишь login wall вместо поиска. Даже запрос «выставки завтра» должен дать полезный анонимный ответ из уже опубликованного каталога/collection manifests.
+- фактом события;
+- фильтром/поисковым признаком;
+- medallion/trust link;
+- ссылкой на официальный ресурс, если это полезно;
+- ranking feature.
 
-Search entry points:
+Отдельный static surface появляется только при доказанном самостоятельном пользовательском сценарии, например:
 
-- visible desktop header action/input;
-- mobile bottom/icon action;
-- large but non-blocking input on homepage;
-- search suggestion at the end of a collection and empty state;
-- optional contextual query prefill from event/category.
+- пользователь действительно ищет расписание одной крупной площадки;
+- у площадки постоянно достаточно актуального supply;
+- страница решает задачу лучше, чем фильтр или официальный сайт;
+- есть продуктовая метрика, а не только гипотетический SEO-трафик.
 
-### 8.3. Search → static collection governance
+Городские страницы также не нужны по умолчанию. Для текущей региональной афиши город — фильтр/chip. Фестиваль может иметь отдельную программу, потому что это самостоятельный много-событийный planning task, а не справочник организатора.
 
-Pipeline:
+## 9. Что конкретно находится в `Моё`
 
-```text
-query + results
-→ explicit «нашёл» + qualified downstream action
-→ private candidate aggregate
-→ automatic LLM normalization
-→ duplicate/result-overlap merge
-→ novelty, safety, privacy, supply and quality gates
-→ accepted collection manifest
-→ static page on next build
-→ lifecycle monitoring
-```
+### Обязательно
 
-Контракт проекта уже требует fully automatic LLM-first fail-closed curation. Provider failure или ambiguity = `pending`, не публикация слабой страницы.
+1. **`Мои события`**: единый upcoming union календаря и избранного;
+2. filters `В календаре` и `Избранное`, collapsed `Прошедшие`;
+3. статус изменений сохранённых событий;
+4. email recommendation subscription: включена/пауза/частота после утверждения product policy;
+5. transactional reminder opt-ins;
+6. вход/выход и masked verified identity;
+7. `Сбросить персонализацию`;
+8. `Не использовать историю для рекомендаций` / consent state;
+9. доступ к privacy/export/delete flows.
 
-Кандидат не проходит, если он:
+### Контекстно, не отдельные разделы
 
-- персональный/приватный или содержит PII;
-- сводится к одному событию/площадке без самостоятельного intent;
-- дублирует существующую category/collection;
-- имеет почти тот же verified result set;
-- нестабилен и пустеет между builds;
-- требует небезопасной смысловой интерпретации.
+- сохранить событие — на card/detail;
+- выбрать density — на ленте;
+- выбрать тему — chips;
+- добавить/проверить email — в момент save/subscription;
+- объяснение `Почему показано` — на карточке;
+- `Новое для вас` — блок/chip в ленте.
 
-Accepted query должен жить в namespace `/podborki/<slug>/`, а не создавать параллельные `/t/`, `/tag/` и `/search/landing/` онтологии.
+### Не нужно
 
-## 9. Персонализация и проверка идеи «30 карточек»
+- публичный user profile;
+- bio/avatar/preferences questionnaire;
+- отдельный центр всех уведомлений на MVP;
+- ручное редактирование десятков inferred interests;
+- настройки алгоритма с техническими коэффициентами.
 
-### 9.1. Корректная формулировка обещания
+## 10. Feed session contract
 
-Не:
+### Anchor
 
-> после 30 карточек пользователь точно найдёт интересное.
+Первые элементы строго соответствуют источнику входа. Social/SEO promise нельзя сразу заменить общей персонализацией.
 
-А:
+### Continuation
 
-> для зрелого профиля и при наличии хотя бы одного ground-truth релевантного активного события в кандидатном пуле, KenigEvents должен показать событие с meaningful action не позже 20-го уникального valid impression; `30` — верхний пользовательский budget и maturity threshold, а не гарантия supply.
+После anchor идут:
 
-### 9.2. Что считать valid impression
+1. ближайшие по исходному intent;
+2. profile-aware candidates;
+3. exploration/new supply;
+4. явная stop-line или расширение горизонта.
 
-- distinct event;
-- карточка видна не менее чем на 50%;
-- не менее 0.8–1.2 секунды;
-- вкладка активна;
-- нет fast scroll/layout transition;
-- не идёт смена density mode;
-- повторный показ того же события в journey не увеличивает unique count.
-
-### 9.3. Иерархия outcome
-
-1. `ticket / register / phone click` — strongest observable intent;
-2. `save / calendar add` — сильное намерение;
-3. `share` — сильный положительный сигнал;
-4. `detail open + meaningful dwell` — средний;
-5. `like` — preference, но не план посещения;
-6. `not interested` — exact hard hide + мягкое обобщение;
-7. `quick skip` — только очень слабый повторяющийся negative, никогда не hard hide.
-
-Коррелированные действия по одному событию не складываются бесконечно: хранится highest/capped outcome.
-
-### 9.4. North Star и guardrails
-
-```text
-qualified_success@20 =
-eligible mature journeys with ticket/register/phone or save/calendar
-within first 20 unique valid impressions
-/
-eligible mature journeys with relevant active supply
-```
-
-Дополнительно:
-
-- `success@10 / @20 / @30`;
-- median/P75 `cards_to_first_qualified_action`;
-- time to first qualified action;
-- relevant-supply coverage;
-- profile-to-next-feed application rate;
-- D7/D30 return after genuinely new relevant supply;
-- repeated-seen rate;
-- not-interested top-10/top-20;
-- category/venue concentration;
-- stale/cancelled leakage;
-- no-consent trusted writes = `0`;
-- page/feed latency.
-
-Все срезается по source, surface, viewport, density, cold/warm/mature, profile/algorithm/taxonomy/build version.
-
-### 9.5. Progressive ranking
-
-- cold: context/date + popular + fresh + broad exploration;
-- warming: растущая доля profile affinity, но всё ещё заметная exploration;
-- mature: примерно 60–70% exploitation, 10–20% exploration, остальное context/freshness;
-- diversity caps по category, venue, date, format;
-- current viewport никогда не пересортировывается после like/hide.
-
-## 10. Стабильные, но умные ленты
-
-Нужна не постоянно меняющаяся ranking function, а **feed edition**:
+### Stable edition
 
 ```text
 feed_edition_id
+entry_context
 catalog_build_id
 profile_revision
 algorithm_id
-generated_at / expires_at
 ordered_event_ids
 ```
 
-Правила:
+- current viewport не пересортировывается;
+- actions влияют ниже anchor или на следующую edition;
+- новый build предлагает refresh, но не вставляет cards сверху;
+- отмена/перенос/sold-out патчатся немедленно;
+- Back восстанавливает edition и scroll.
 
-1. Порядок фиксирован для текущей edition/session.
-2. Like/hide меняет state карточки, но rerank применяется только ниже scroll anchor или в следующей edition.
-3. Новый build показывает `Появилось N новых`, но не вставляет cards над пользователем.
-4. Safety/lifecycle change — отмена, перенос, sold out — патчится сразу.
-5. Tie-break детерминирован по visitor/surface/edition seed.
-6. 30-minute cache может остаться техническим cache, но product edition живёт достаточно долго, чтобы пользователь узнавал ленту.
-7. Static HTML/canonical остаётся детерминированным; personal layer — progressive enhancement.
+### Не бесконечный doomscroll
 
-### Состояния карточки
+Лента содержит естественные stop-lines:
 
-- `unseen_new`;
-- `seen`;
-- `opened`;
-- `liked`;
-- `saved/planned`;
-- `calendar_added`;
-- `ticket_clicked`;
-- `not_interested`;
-- `materially_updated`;
-- `expired/cancelled`.
+- `Это всё на сегодня`;
+- `Посмотреть завтра`;
+- `Расширить интересы`;
+- `Вы посмотрели все новые события`;
+- `Показать ещё`.
 
-`Updated` означает изменение даты, времени, места, цены, ticket/lifecycle status после последнего просмотра. Косметическая правка описания не должна создавать badge.
+### Density
 
-## 11. Система возвратности: где что обновилось
+Baseline — видимый переключатель `Крупно / Компактно / Список`. Pinch может быть later shortcut, но не sole control и не должен ломать browser zoom.
 
-На возврате продукт должен сообщать не «лента стала другой», а конкретный digest:
+### Valid impression
 
-- `С прошлого визита: 8 новых для вас`;
-- `2 события из ваших планов изменились`;
-- `На выходные появилось 5 новых`;
-- `Скоро начнутся 3 сохранённых события`;
-- `Новое в теме «джаз вечером»`.
+Считается только distinct event, реально находившийся в viewport достаточно долго без fast scroll/reflow. Density transition не создаёт impressions.
 
-Newness показывается отдельным contextual chip/dot `Новое для вас`, ведущим в группы:
+## 11. Персонализация остаётся ядром
 
-1. Новое для вас;
-2. Изменения моих планов;
-3. Скоро начнётся;
-4. Новое в сохранённых темах;
-5. Продолжить просмотр.
+Упрощение IA не означает упрощение ranking loop.
 
-Глобальное `Моё избранное` остаётся отдельным destination `/izbrannoe/`; его badge считает только distinct durable saved events и никогда не используется для newness/reminders.
+Сигналы по силе:
 
-Минимальная data model:
+1. ticket/register/phone click;
+2. save/calendar;
+3. share;
+4. detail + meaningful dwell;
+5. like;
+6. explicit not interested;
+7. repeated quick skip — только слабый negative.
 
-```text
-visitor_surface_watermark(surface, last_build_id, acknowledged_at)
-visitor_event_state(event_id, first_seen_at, last_seen_revision_hash,
-                    liked_at, saved_at, calendar_added_at,
-                    ticket_clicked_at, hidden_at)
-event_revision(first_published_at, material_updated_at,
-               revision_kind, build_id)
-```
+Главный contract:
 
-Reactivation priority:
+> Для зрелого профиля и при наличии релевантного active supply meaningful action должен появиться не позже 20-го unique valid impression. Тридцать impressions — maturity/user budget, а не гарантия supply.
 
-1. on-site update center and saved-plan changes;
-2. transactional reminder/change mail only after explicit event consent;
-3. recommendation email after separate consent;
-4. browser push only after demonstrated value and explicit gesture;
-5. social channels remain broad editorial acquisition, not personal notification transport.
+Лента обязана сохранять exploration. Долю нельзя фиксировать навсегда без production evidence; она калибруется по diversity, hide rate и qualified success.
 
-## 12. Email: итоговое решение
+## 12. Newness и возвратность внутри ленты
 
-### 12.1. Базовый продукт
+Не нужен отдельный сложный `/dlya-vas/` как обязательный MVP-раздел.
 
-Сохраняется уже принятое правило:
-
-- **ровно 3 разных события в письме**;
-- одно может быть visual hero, ещё два — compact;
-- CTA ведёт на заранее опубликованную более крупную персональную страницу;
-- все три события также есть на этой странице; proposed canary size `12–24` требует отдельного owner/data-quality threshold approval;
-- recommendations идут только через NotiSend;
-- transactional event reminders идут только через Postbox;
-- consent, suppression и send eligibility принадлежат Supabase;
-- hard launch cap — `<=200` active consented recipients.
-
-Таким образом, идеи «3 предложения» и «1 hero + personal page» не взаимоисключающие: письмо может визуально иметь **один hero + два compact предложения**, оставаясь exactly-three.
-
-### 12.2. Что делать с одним мгновенным предложением
-
-Не запускать второй recurring stream. Позже можно A/B-тестировать:
-
-- immediate 3-event welcome issue;
-- immediate 1-event `welcome_selection` + personal page.
-
-Второй вариант требует отдельного product kind, consent/cadence/template/SQL contract и не должен молча нарушать `exactly_three`.
-
-### 12.3. Signup и frequency
-
-Числовые cadence/fatigue/retention thresholds ниже — **предлагаемые canary hypotheses, не принятые release decisions**. Их должны утвердить product/legal owners после deliverability, complaint и click-delay evidence.
-
-Показывать предложение после demonstrated value:
-
-- save/calendar;
-- successful search;
-- like/qualified action;
-- candidate trigger около 10 valid impressions;
-- конец полезной подборки.
-
-Не на первом page load.
-
-Предлагаемый canary preference set:
-
-- `2 раза в неделю`;
-- `1 раз в неделю`;
-- `пауза`;
-- timezone/local send window;
-- weekend-only preference;
-- optional free/family/city facets;
-- `next_due_at`, `last_issue_at`, `welcome_sent_at`;
-- максимум 2 recommendation messages / 7 days;
-- no-repeat одного события 14–30 дней;
-- автоматический downshift после 4–6 проигнорированных выпусков.
-
-### 12.4. Personal page security
-
-Route example: `/dlya-vas/<128-bit-opaque-token>/`.
-
-- назвать `Ваша подборка`, а не обещать криптографическую «секретность»;
-- forwardable bearer access;
-- hash/HMAC token at rest;
-- revocable/rotatable;
-- TTL/retention остаётся open product/legal decision; canary hypothesis — 14 days с последующей проверкой click-delay distribution;
-- `noindex,nofollow,noarchive`, restrictive `Referrer-Policy: no-referrer`;
-- token отсутствует в canonical, OG, outbound referrer/UTM/analytics payload;
-- никакого email, user id, raw profile/tags/vectors/internal scores;
-- page/click/unsubscribe/feedback tokens различны;
-- страница остаётся читаемой при отказе feedback API.
-
-### 12.5. Email success
-
-Primary: ticket/register/phone or save/calendar. Candidate attribution windows `72h/7d` должны быть откалиброваны и утверждены; это не текущий release threshold. Like is secondary. Open rate is delivery diagnostic, not outcome. Нужен holdout, иначе рост действий нельзя приписать письму.
-
-## 13. Pinch-to-density
-
-Идея ценна как optional accelerator, но не как основной или единственный control.
-
-Риски web pinch:
-
-- почти нулевая discoverability;
-- конфликт с browser zoom и accessibility;
-- accidental activation;
-- сложность корректного impression tracking при reflow;
-- пользователь может потерять scroll position и ощущение стабильности.
-
-Целевой контракт:
+На новом визите сверху появляется понятный блок:
 
 ```text
-presentation_density = large | compact | dense
+Новое для вас
+8 новых событий · 2 изменения в сохранённых
 ```
 
-Обязательный control — видимый переключатель `Крупно / Компактно / Список` или одна cycle-button с понятным label. Настройка сохраняется per device/surface.
+Действия:
 
-Pinch можно тестировать позже только как shortcut:
+- показать новые;
+- посмотреть изменения планов;
+- продолжить предыдущую edition;
+- скрыть/acknowledge block.
 
-- он не отключает browser zoom;
-- не считается taste signal;
-- сохраняет event order и scroll anchor;
-- не создаёт новые impressions во время reflow и ещё около 500 ms после;
-- имеет onboarding hint и доступную альтернативу;
-- analytics разделяет density и viewport.
+Badge `Моё` / `Мои события` считает только distinct current upcoming union calendar + favorite; dual state считается один раз. Newness имеет отдельный chip/dot.
 
-На P0 достаточно visible density control. Pinch не должен блокировать release.
+## 13. Email
 
-## 14. Roadmap
+Принятый контракт сохраняется:
 
-### P0 — замкнуть публичный discovery loop
+- exactly three events;
+- одно может быть hero;
+- ссылка на уже опубликованную более широкую personal selection;
+- recommendation consent отдельно от transactional consent;
+- ordinary browsing/ICS без auth;
+- personal page продолжается в feed session.
 
-Deliverables:
+Email — reactivation lane, а не отдельная продуктовая вселенная.
 
-1. production root `/` как Афиша;
-2. единая navigation IA;
-3. production canonical/sitemap/robots profile;
-4. public URL resolver и TG/VK/MAX switch with rollback;
-5. `collection_manifest` и обязательные time/category/collection pages;
-6. заметный anonymous catalog search;
-7. один card projection с крупным/compact/list presentation;
-8. event → collection/category continuation без тупика;
-9. valid-impression + qualified CTA baseline analytics;
-10. occurrence-aware date selection and copy.
+## 14. Что принять и отклонить из второго Gemini review
 
-Exit evidence:
+### Принято
 
-- 100% social target URLs существуют в promoted manifest;
-- no preview/lab/private URLs в sitemap;
-- zero dead-end event pages in E2E journey;
-- baseline `success@20/@30` измеряется, а не симулируется;
-- page families usable without auth/JS optional services.
+- прежняя IA была overengineered;
+- 3 постоянных назначения сильнее 7 разделов;
+- categories/selections лучше представить chips;
+- entity pages не нужны по умолчанию;
+- все входы должны превращаться в feed session;
+- scroll/back restore — P0;
+- narrative генерируется build-time и проверяется;
+- stop-lines нужны против doomscroll.
 
-### P1 — персонализация, сохранение и newness
+### Скорректировано
 
-Deliverables:
+Gemini предложил полностью `Delete` hubs. Пользовательского hub действительно не нужно, но технические статические URLs/presets сохраняются для social/SEO/no-JS и восстановления состояния.
 
-1. trusted compact action ingest;
-2. seen/valid impression, detail+dwell, save/calendar, ticket/register/phone capture;
-3. profile maturity/confidence;
-4. real personal candidate feed and next-session rerank;
-5. feed editions and scroll-anchor stability;
-6. durable favorite `/izbrannoe/`;
-7. global identity shell and profile linking;
-8. отдельный `Новое для вас` / update center / material changes без изменения badge `Моё избранное`;
-9. end-to-end golden personas.
+Gemini предложил создавать entity page при SEO demand и `>5` events. Одного SEO demand недостаточно: страница появляется только при самостоятельной пользовательской задаче и доказанной ценности относительно фильтра/официального сайта.
 
-Exit evidence:
+Gemini назвал personal feed «бесконечным discovery». Бесконечность не является целью: нужны stop-lines, horizons и explicit continuation.
 
-- every eligible mature golden persona: relevant meaningful action `<=20`;
-- `100%` accepted/deduped valid fixture telemetry and `0` without consent;
-- changed profile visibly changes the next eligible served list;
-- no hidden/stale/cancelled recurrence;
-- no prior-user leakage on account switch/logout.
+Gemini предложил смешивать density modes алгоритмом. Режим плотности должен выбирать пользователь; алгоритм может варьировать emphasis, но не самовольно менять выбранную плотность.
 
-### P2 — owned retention and controlled SEO scale
+## 15. Упрощённый roadmap
 
-Deliverables:
+### P0 — одна работающая mobile feed session
 
-1. exactly-three email generator;
-2. larger bearer personal pages; proposed canary size 12–24 after owner approval;
-3. consent/preferences/unsubscribe/fatigue/due-state;
-4. NotiSend seed canary then `<=200` beta;
-5. saved-query → automatic collection pipeline;
-6. entity pages after normalization;
-7. browser notifications only after proof of value;
-8. cohort/holdout evaluation and SEO/GEO gate.
+- `Лента / Поиск / Моё`;
+- contextual chips;
+- event/social/static entry anchors;
+- continuous continuation under anchor;
+- Back/scroll/feed-edition restore;
+- visible density control;
+- valid impression and strong-action baseline;
+- static/no-JS fallback;
+- production canonical resolver.
 
-Exit evidence:
+### P1 — сильная персонализация и возврат
 
-- zero send without current verified purpose consent;
-- no stale/cancelled event in sent three;
-- deliverability/suppression/replay gates pass;
-- email incremental qualified action lift proven against holdout;
-- promoted collections meet supply/novelty/quality/index gates over repeated builds.
+- trusted compact action ingest;
+- next-edition rerank;
+- durable save;
+- newness block;
+- material update state;
+- global lightweight identity only when needed;
+- exactly-three email canary;
+- golden-persona `<=20` E2E.
 
-## 15. Anti-roadmap
+### P2 — автоматическое расширение входов
 
-Сейчас не делать:
+- build-time narrative writer + verifier;
+- automated intent discovery from successful searches;
+- safe selection factory;
+- SEO/social narrative lifecycle;
+- semantic search upgrade;
+- rare entity/program surfaces only after proven user task.
 
-1. infinite scroll как единственный discovery pattern;
-2. runtime LLM ranking/generation на каждый page view;
-3. indexation raw search results или facet Cartesian product;
-4. отдельную recurring one-event email stream;
-5. push permission на первом визите;
-6. quick skip как hard negative;
-7. pinch как единственный density control или запрет browser zoom;
-8. социальные механики friends/attendance до решения «куда пойти мне»;
-9. десятки venue/city/artist pages до entity/alias normalization;
-10. homepage motion/«Городской обзор» вместо полезных categories/search/feed;
-11. popularity-only optimization, создающую feedback echo chamber;
-12. raw per-view telemetry в Supabase без compaction/TTL.
+## 16. Итоговые решения
 
-## 16. Критика Gemini Pro и принятые решения
-
-Независимый `agy` review (`Gemini 3.1 Pro (High)`) подтвердил основные системные проблемы:
-
-- leaf-page bias и dead-end deep links;
-- отсутствие visible newness/return loop;
-- необходимость global search/categories/favorites/newness;
-- feed stability и explicit refresh;
-- опасность pinch-only UX;
-- недоказуемость слова «точно» в 30-card promise.
-
-После repo reconciliation скорректированы предложения консультанта:
-
-- **не принято** делать infinite scroll обязательным продолжением каждого event page; используем bounded continuation + explicit `Показать ещё`;
-- **не принято** считать dwell `>3s` implicit like: это средний noisy signal, а не preference truth;
-- **не принято** требовать auth для обычного ICS/calendar action; auth нужен для durable saved state/cross-device, публичный fallback сохраняется;
-- **не принято** объявлять one-hero email winner: канонический контракт уже фиксирует exactly three; один hero может быть одним из трёх;
-- **уточнено**: past/cancelled route lifecycle не решается blanket 404 после падения inventory; нужны redirects/410/noindex and current alternatives по типу изменения.
-
-Сырой review, brief и exact invocation/model evidence сохранены локально в `artifacts/codex/static-site-product-system-20260718/` и не коммитятся согласно artifact policy.
-
-## 17. Итоговые решения
-
-1. Продукт — не каталог, а система быстрого выбора и возврата.
-2. Главный KPI — qualified success within first 20 unique valid touches for mature eligible journeys; 30 — budget/maturity, не гарантия supply.
-3. Главная IA: `Афиша / Сегодня / Завтра / Выходные / Категории / Подборки / Поиск`, отдельно `Моё избранное / Профиль`; newness имеет собственный indicator.
-4. Жанры живут в `Категории`; потребности и ограничения — в `Подборки`.
-5. Search всегда обнаружим и полезен до логина; expensive semantic layer может требовать identity/quota.
-6. Сайт, TG/VK/MAX и email используют один versioned collection contract.
-7. Feed стабилен как edition; newness показывается явно и по запросу пользователя.
-8. Like — слабее calendar/save/ticket; durable `В планы` обязателен.
-9. Email V1 — exactly 3 + larger already-published personal page; one-event — только later welcome experiment.
-10. Pinch-density — optional delight, visible accessible density control — обязательный baseline.
+1. Продукт — одна feed session, а не портал разделов.
+2. Постоянная навигация — `Лента / Поиск / Моё`.
+3. Время, жанры и ограничения — chips/presets ленты.
+4. `Категории` и `Подборки` не показываются как два пользовательских hubs.
+5. Stable URLs остаются техническими social/SEO entry points.
+6. Автоматические filters покрывают простые grounded intents.
+7. Narrative intents тоже автоматизируются, но через build-time LLM writer + verifier.
+8. Event, social selection, SEO story и email page становятся anchors одной ленты.
+9. Back/scroll/feed restore — P0.
+10. Entity pages удалены из roadmap по умолчанию.
+11. `Моё` / `Мои события` открывает `/moi-sobytiya/` с union календаря/избранного; account, consent/subscription и reset доступны как вторичные actions.
+12. Newness живёт внутри ленты, не требует отдельного портала.
+13. Feed edition стабильна; current viewport не пересортировывается.
+14. Лента имеет stop-lines и controlled exploration.
+15. Главная метрика — meaningful action within first 20 unique valid impressions при наличии relevant supply.

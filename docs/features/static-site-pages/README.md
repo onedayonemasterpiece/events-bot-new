@@ -213,7 +213,7 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 
 ## Связанные документы
 
-- Сквозной product-system анализ, итоговая IA, page families, personalization/return/email contract: `docs/features/static-site-pages/product-system-analysis-2026-07-18.md`.
+- Feed-first product-system memo: единая mobile feed session, contextual themes, automatic/narrative selections, personalization/return/email contract: `docs/features/static-site-pages/product-system-analysis-2026-07-18.md`.
 - Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
 - Event-page production release and 10-day Telegraph cutover: `docs/features/static-site-pages/release-plan.md`.
 - Test/release scenario inventory: `docs/features/static-site-pages/test-scenarios.md`.
