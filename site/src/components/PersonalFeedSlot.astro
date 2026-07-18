@@ -3,8 +3,10 @@ import { siteHomeHref, withBase } from '../lib/events';
 
 interface Props {
   context: 'today' | 'tomorrow' | 'weekend' | 'event-detail' | 'exhibitions' | 'popular';
+  currentEventId?: number;
+  relatedSrc?: string;
 }
-const { context } = Astro.props;
+const { context, currentEventId, relatedSrc } = Astro.props;
 const isEventDetail = context === 'event-detail';
 const eyebrow = isEventDetail ? 'Продолжить выбор' : 'Личная лента';
 const heading = isEventDetail ? 'Ещё события' : 'Дальше — под ваши интересы';
@@ -17,6 +19,8 @@ const headingId = `personal-feed-${context}-title`;
   class:list={['section-card', 'personal-feed-section', { 'personal-feed-section--event-detail': isEventDetail }]}
   data-personal-feed-section
   data-personal-feed-src={withBase('/data/personal-feed.json')}
+  data-personal-feed-related-src={relatedSrc ? withBase(relatedSrc) : undefined}
+  data-current-event-id={currentEventId}
   data-listing-context={context}
   data-personal-feed-mode={isEventDetail ? 'pending' : undefined}
   aria-labelledby={headingId}
@@ -81,6 +85,44 @@ const headingId = `personal-feed-${context}-title`;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: clamp(0.75rem, 1.8vw, 1.25rem);
     align-items: stretch;
+  }
+
+  .personal-feed-section--event-detail :global([data-lab-related-card]) {
+    height: 100%;
+    grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
+  }
+
+  .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__media-shell) {
+    position: relative;
+    isolation: isolate;
+    width: 100%;
+    height: auto !important;
+    aspect-ratio: var(--lab-row-media-ratio) !important;
+    overflow: hidden;
+    background: #d2c5b7;
+  }
+
+  .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__media) {
+    position: absolute !important;
+    z-index: 2;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .personal-feed-section--event-detail :global([data-lab-media-kind="visual"] .event-card__media) {
+    object-fit: cover !important;
+  }
+
+  .personal-feed-section--event-detail :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) {
+    object-fit: cover !important;
+    object-position: center center !important;
+  }
+
+  .personal-feed-section--event-detail :global([data-lab-media-treatment="document-contain"] .event-card__media) {
+    object-fit: contain !important;
+    object-position: center center !important;
+    background: #15110f !important;
   }
 
   .personal-feed-section__load-more,

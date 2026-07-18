@@ -2235,6 +2235,15 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
     <slot />
     <SiteFooter socialLinks={FOOTER_SOCIAL_LINKS} />
 
+    <script>
+      import { packRelatedCardRows, relatedCardMediaGeometry } from '../lib/relatedCardLayout.mjs';
+      import { selectEventContinuation } from '../lib/eventContinuation.mjs';
+      Object.assign(window, {
+        KenigEventsPackRelatedCardRows: packRelatedCardRows,
+        KenigEventsRelatedCardMediaGeometry: relatedCardMediaGeometry,
+        KenigEventsSelectEventContinuation: selectEventContinuation,
+      });
+    </script>
     <script is:inline>
       (() => {
         const PROFILE_KEY = 'ke_personalization_profile';
@@ -2261,6 +2270,9 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         const PERSONAL_FEED_SCHEMA_VERSION = 'listing-personal-feed-v1';
         const PERSONAL_FEED_LIMIT = 30;
         const PERSONAL_FEED_TTL_MS = 30 * 60 * 1000;
+        const EVENT_CONTINUATION_RECENT_KEY = `ke_event_continuation_recent_v1:${CURRENT_BASE_PATH || '/'}`;
+        const EVENT_CONTINUATION_RECENT_TTL_MS = 6 * 60 * 60 * 1000;
+        const EVENT_CONTINUATION_RECENT_BLOCKS = 12;
         const LISTING_MODE_KEY = 'ke_listing_mode_v1';
         const CALENDAR_STATE_KEY = 'ke_calendar_saved_v1';
         const CALENDAR_STATE_VERSION = 1;
@@ -3083,6 +3095,12 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             static_score: Number(candidate?.static_score ?? candidate?.base_similarity ?? Math.max(0, 1 - index * 0.001)),
             reason_codes: unique([...(toArray(candidate?.reason_codes)), 'catalog:personal_feed']),
             exploration_candidate: Boolean(candidate?.exploration_candidate),
+            slot_type: candidate?.slot_type || null,
+            vector_similarity: Number.isFinite(Number(candidate?.vector_similarity)) ? Number(candidate.vector_similarity) : null,
+            llm_semantic_score: Number.isFinite(Number(candidate?.llm_semantic_score)) ? Number(candidate.llm_semantic_score) : null,
+            verification_state: candidate?.verification_state || 'not_run',
+            gemma_reject: candidate?.gemma_reject === true,
+            retrieval_sources: toArray(candidate?.retrieval_sources).map(String),
             display: {
               ...display,
               id,
@@ -3111,8 +3129,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           };
         }
 
-        function normalizePersonalFeedManifest(payload) {
+        function normalizePersonalFeedManifest(payload, options = {}) {
           const items = toArray(payload?.related_static || payload?.items || payload?.events || payload?.recommendations);
+          const relatedItems = toArray(options.relatedPayload?.related_static);
+          const currentEventId = asId(options.currentEventId || options.relatedPayload?.event_id || options.relatedPayload?.current_event?.event_id);
           return {
             version: payload?.version || 1,
             schema_version: payload?.schema_version || PERSONAL_FEED_SCHEMA_VERSION,
@@ -3123,27 +3143,35 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             generated_at: payload?.generated_at || new Date().toISOString(),
             preload_target: Number(payload?.preload_target || PERSONAL_FEED_LIMIT),
             page_size: Number(payload?.page_size || PERSONAL_FEED_LIMIT),
-            current_event: null,
+            current_event: currentEventId ? { event_id: currentEventId } : null,
+            current_event_id: currentEventId || null,
             related_static: items.map(normalizePersonalFeedItem).filter((item) => item.event_id != null),
+            related_adjacent: relatedItems.map(normalizePersonalFeedItem).filter((item) => item.event_id != null),
           };
         }
 
-        function readPersonalFeedCache(profile) {
+        function personalFeedCurrentEventId(section) {
+          return asId(section?.dataset.currentEventId);
+        }
+
+        function readPersonalFeedCache(profile, section) {
           const cache = readJson(PERSONAL_FEED_CACHE_KEY, null);
           if (!cache || cache.schema_version !== PERSONAL_FEED_SCHEMA_VERSION) return null;
           if (cache.base_path !== CURRENT_BASE_PATH) return null;
           if (Number(cache.expires_at || 0) <= Date.now()) return null;
           if (cache.profile_hash !== personalFeedProfileHash(profile)) return null;
+          if (asId(cache.current_event_id) !== personalFeedCurrentEventId(section)) return null;
           if (!cache.manifest || !Array.isArray(cache.manifest.related_static)) return null;
           return cache.manifest;
         }
 
-        function writePersonalFeedCache(manifest, profile) {
+        function writePersonalFeedCache(manifest, profile, section) {
           if (!manifest || !Array.isArray(manifest.related_static) || !manifest.related_static.length) return;
           writeJson(PERSONAL_FEED_CACHE_KEY, {
             schema_version: PERSONAL_FEED_SCHEMA_VERSION,
             base_path: CURRENT_BASE_PATH,
             profile_hash: personalFeedProfileHash(profile),
+            current_event_id: personalFeedCurrentEventId(section),
             saved_at: Date.now(),
             expires_at: Date.now() + PERSONAL_FEED_TTL_MS,
             manifest,
@@ -3178,31 +3206,46 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
 
         async function fetchPersonalFeedManifest(profile, section) {
           const source = String(section?.dataset.personalFeedSrc || '').trim();
+          let payload = null;
           if (source) {
             try {
               const response = await fetch(source, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
-              if (response.ok) return normalizePersonalFeedManifest(await response.json());
+              if (response.ok) payload = await response.json();
             } catch (_) {}
           }
-          if (!personalFeedProfileIsReady(profile)) return null;
-          const config = personalFeedConfig();
-          if (!config) return null;
-          const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
-            method: 'POST',
-            headers: {
-              Accept: 'application/json',
-              'Content-Type': 'application/json',
-              apikey: config.key,
-              Authorization: `Bearer ${config.key}`,
-            },
-            body: JSON.stringify({
-              p_surface: PERSONAL_FEED_SURFACE,
-              p_limit: PERSONAL_FEED_LIMIT,
-              p_profile: compactProfileForRpc(profile),
-            }),
+          if (!payload && personalFeedProfileIsReady(profile)) {
+            const config = personalFeedConfig();
+            if (config) {
+              const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
+                method: 'POST',
+                headers: {
+                  Accept: 'application/json',
+                  'Content-Type': 'application/json',
+                  apikey: config.key,
+                  Authorization: `Bearer ${config.key}`,
+                },
+                body: JSON.stringify({
+                  p_surface: PERSONAL_FEED_SURFACE,
+                  p_limit: PERSONAL_FEED_LIMIT,
+                  p_profile: compactProfileForRpc(profile),
+                }),
+              });
+              if (response.ok) payload = await response.json();
+            }
+          }
+          if (!payload) return null;
+          let relatedPayload = null;
+          const relatedSource = String(section?.dataset.personalFeedRelatedSrc || '').trim();
+          if (relatedSource) {
+            try {
+              const response = await fetch(relatedSource, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+              if (response.ok) relatedPayload = await response.json();
+            } catch (_) {}
+          }
+          return normalizePersonalFeedManifest(payload, {
+            currentEventId: personalFeedCurrentEventId(section),
+            relatedPayload,
           });
-          if (!response.ok) return null;
-          return normalizePersonalFeedManifest(await response.json());
         }
 
         async function getPersonalFeedManifest(section, { force = false } = {}) {
@@ -3210,18 +3253,20 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const allowsPopularFallback = section?.dataset.listingContext === 'event-detail';
           if (!personalFeedProfileIsReady(profile) && !allowsPopularFallback) return null;
           if (!force) {
-            const cached = readPersonalFeedCache(profile);
+            const cached = readPersonalFeedCache(profile, section);
             if (cached) return cached;
           }
-          if (personalFeedRequest && !force) return personalFeedRequest;
-          personalFeedRequest = fetchPersonalFeedManifest(profile, section)
+          const requestKey = `${personalFeedProfileHash(profile)}:${personalFeedCurrentEventId(section)}`;
+          if (personalFeedRequest?.key === requestKey && !force) return personalFeedRequest.promise;
+          const promise = fetchPersonalFeedManifest(profile, section)
             .then((manifest) => {
-              if (manifest) writePersonalFeedCache(manifest, profile);
+              if (manifest) writePersonalFeedCache(manifest, profile, section);
               return manifest;
             })
             .catch(() => null)
-            .finally(() => { personalFeedRequest = null; });
-          return personalFeedRequest;
+            .finally(() => { if (personalFeedRequest?.key === requestKey) personalFeedRequest = null; });
+          personalFeedRequest = { key: requestKey, promise };
+          return promise;
         }
 
         function personalFeedPopularity(candidate) {
@@ -3302,6 +3347,50 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           }));
         }
 
+        function rankAdjacentContinuationCandidates(manifest, profile) {
+          const active = isCompatibleProfile(profile) ? profile : null;
+          return toArray(manifest?.related_adjacent)
+            .filter((candidate) => isEligibleCandidate(candidate, manifest, active))
+            .filter((candidate) => candidate?.verification_state !== 'llm_rejected' && candidate?.gemma_reject !== true)
+            .filter((candidate) => candidate?.vector_similarity != null || candidate?.slot_type === 'adjacent_discovery' || toArray(candidate?.retrieval_sources).some((source) => /pgvector|event_embedding/iu.test(String(source))))
+            .map((candidate, index) => ({
+              event_id: candidateId(candidate),
+              candidate,
+              rank: index,
+              personal_score: Number(staticCandidateScore(candidate).toFixed(4)),
+              base_similarity: Number(staticCandidateScore(candidate).toFixed(4)),
+              reason_codes: unique([...(toArray(candidate.reason_codes)), 'continuation:current_event_tail']),
+            }));
+        }
+
+        function normalizeRecentContinuationRing(value) {
+          const now = Date.now();
+          const blocks = toArray(value?.blocks)
+            .filter((block) => Number(block?.served_at || 0) > now - EVENT_CONTINUATION_RECENT_TTL_MS)
+            .slice(-EVENT_CONTINUATION_RECENT_BLOCKS)
+            .map((block) => ({
+              served_at: Number(block.served_at),
+              current_event_id: asId(block.current_event_id),
+              event_ids: unique(toArray(block.event_ids).map(asId).filter(Boolean)).slice(0, EVENT_DETAIL_CONTINUATION_LIMIT),
+            }));
+          return { version: 1, blocks };
+        }
+
+        function readRecentContinuationIds() {
+          const ring = normalizeRecentContinuationRing(readJson(EVENT_CONTINUATION_RECENT_KEY, null));
+          writeJson(EVENT_CONTINUATION_RECENT_KEY, ring);
+          return new Set(ring.blocks.flatMap((block) => block.event_ids));
+        }
+
+        function recordRecentContinuation(currentEventId, ranked) {
+          const ring = normalizeRecentContinuationRing(readJson(EVENT_CONTINUATION_RECENT_KEY, null));
+          const eventIds = unique(toArray(ranked).map((item) => asId(item?.event_id)).filter(Boolean)).slice(0, EVENT_DETAIL_CONTINUATION_LIMIT);
+          if (!eventIds.length) return;
+          ring.blocks.push({ served_at: Date.now(), current_event_id: asId(currentEventId), event_ids: eventIds });
+          ring.blocks = ring.blocks.slice(-EVENT_CONTINUATION_RECENT_BLOCKS);
+          writeJson(EVENT_CONTINUATION_RECENT_KEY, ring);
+        }
+
         const PERSONAL_FEED_CHUNK_SIZE = 6;
         const PERSONAL_FEED_RENDER_LIMIT = 18;
         const EVENT_DETAIL_CONTINUATION_LIMIT = 6;
@@ -3336,7 +3425,18 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           if (!store || !slot) return 0;
           const end = Math.min(store.items.length, store.rendered + PERSONAL_FEED_CHUNK_SIZE);
           const chunk = store.items.slice(store.rendered, end);
-          if (chunk.length) slot.insertAdjacentHTML('beforeend', chunk.map((item) => eventCardHtml(item, slot.dataset.feedCardVariant || 'split-actions')).join(''));
+          if (chunk.length) {
+            const eventDetail = section.dataset.listingContext === 'event-detail';
+            const packed = eventDetail && typeof window.KenigEventsPackRelatedCardRows === 'function'
+              ? window.KenigEventsPackRelatedCardRows(chunk, {
+                  limit: EVENT_DETAIL_CONTINUATION_LIMIT,
+                  rowSize: 3,
+                  mediaTreatment: 'hybrid',
+                  geometry: window.KenigEventsRelatedCardMediaGeometry,
+                })
+              : chunk.map((item) => ({ item, layout: null }));
+            slot.insertAdjacentHTML('beforeend', packed.map(({ item, layout }) => eventCardHtml(item, slot.dataset.feedCardVariant || 'split-actions', layout)).join(''));
+          }
           store.rendered = end;
           if (loadMore) loadMore.hidden = store.rendered >= store.items.length;
           syncCardsFeedbackState(store.profile);
@@ -3364,10 +3464,33 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             personalFeedStores.delete(section);
             return;
           }
+          if (isEventDetail && (typeof window.KenigEventsSelectEventContinuation !== 'function' || typeof window.KenigEventsPackRelatedCardRows !== 'function')) {
+            section.hidden = false;
+            section.dataset.personalFeedMode = 'unavailable';
+            if (status) status.textContent = 'Подборка временно недоступна — можно перейти ко всем анонсам.';
+            personalFeedStores.delete(section);
+            return;
+          }
           const excluded = eventIdsAlreadyOffered(section);
-          const ranked = (isPersonal ? rankPersonalFeedCandidates(manifest, profile) : rankPopularFallbackCandidates(manifest, profile))
-            .filter((item) => !excluded.has(asId(item.event_id)))
-            .slice(0, isEventDetail ? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT);
+          const profileRanked = isPersonal ? rankPersonalFeedCandidates(manifest, profile) : [];
+          const genericRanked = rankPopularFallbackCandidates(manifest, profile);
+          const adjacentRanked = isEventDetail ? rankAdjacentContinuationCandidates(manifest, profile) : [];
+          const recentServed = isEventDetail ? readRecentContinuationIds() : new Set();
+          const ranked = isEventDetail
+            ? window.KenigEventsSelectEventContinuation({
+                currentEventId: personalFeedCurrentEventId(section),
+                profileCandidates: profileRanked,
+                adjacentCandidates: adjacentRanked,
+                genericCandidates: genericRanked,
+                excludedIds: [...excluded],
+                recentServedIds: [...recentServed],
+                limit: EVENT_DETAIL_CONTINUATION_LIMIT,
+                maxSameCategory: 3,
+                maxSameVenue: 2,
+              })
+            : (isPersonal ? profileRanked : genericRanked)
+                .filter((item) => !excluded.has(asId(item.event_id)))
+                .slice(0, isEventDetail ? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT);
           if (!ranked.length) {
             if (isEventDetail) {
               section.hidden = false;
@@ -3381,10 +3504,11 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           }
           slot.innerHTML = '';
           personalFeedStores.set(section, { items: ranked, rendered: 0, profile });
+          if (isEventDetail) recordRecentContinuation(personalFeedCurrentEventId(section), ranked);
           section.hidden = false;
           section.dataset.personalFeedReady = 'true';
           section.dataset.personalFeedMode = isPersonal ? 'personal' : 'popular_fallback';
-          if (isEventDetail && title) title.textContent = isPersonal ? 'По вашим интересам' : 'Ещё события';
+          if (isEventDetail && title) title.textContent = 'Ещё события';
           if (isEventDetail && explanation) {
             explanation.textContent = isPersonal
               ? 'Подборка учитывает ваши лайки и отметки «Не интересно» на этом устройстве.'
@@ -3591,10 +3715,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           };
         }
 
-        function eventCardHtml(item, variant = 'split-actions') {
+        function eventCardHtml(item, variant = 'split-actions', relatedLayout = null) {
           const data = normalizeDisplayCandidate(item);
           const cardVariant = variant === 'split-actions' ? 'split-actions' : 'overlay-controls';
-          const documentMedia = data.image_media_role !== 'event_photo';
+          const documentMedia = relatedLayout ? data.image_text_mode !== 'visual_only' : data.image_media_role !== 'event_photo';
           const mediaClass = documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover';
           const likes = Number(data.likes_count || 0);
           const shares = Number(data.shares_count || 0);
@@ -3620,16 +3744,20 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const imageRatio = data.image_width > 0 && data.image_height > 0
             ? `${Math.max(1, data.image_width)} / ${Math.max(1, data.image_height)}`
             : '4 / 5';
+          const relatedMediaStyle = relatedLayout
+            ? `--lab-row-media-ratio:${Number(relatedLayout.rowRatio).toFixed(5)};--dynamic-media-ratio:${Number(relatedLayout.rowRatio).toFixed(5)}`
+            : `--dynamic-media-ratio:${imageRatio}`;
           const image = data.image_url
-            ? `<span class="event-card__media-shell event-card__media-shell--dynamic is-image-loading ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="--dynamic-media-ratio:${escapeHtml(imageRatio)};--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" width="${escapeHtml(data.image_width || '')}" height="${escapeHtml(data.image_height || '')}" loading="lazy" decoding="async" onload="this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-loaded');" onerror="this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
-            : `<span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
+            ? `<span class="event-card__media-shell event-card__media-shell--dynamic is-image-loading ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="${escapeHtml(relatedMediaStyle)};--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" width="${escapeHtml(data.image_width || '')}" height="${escapeHtml(data.image_height || '')}" loading="lazy" decoding="async" onload="this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-loaded');" onerror="this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
+            : `<span class="event-card__media-shell event-card__media-shell--dynamic event-card__media-shell--cover event-card__fallback" style="${escapeHtml(relatedMediaStyle)}" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
           const overlayFeedback = cardVariant === 'overlay-controls'
             ? `<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${negativeButton}${shareButton}${likeButton}</div>`
             : '';
           const splitUtility = cardVariant === 'split-actions'
             ? `<div class="event-card__utility-row" data-nosnippet aria-label="${escapeHtml(`Дополнительные действия: ${data.title}`)}">${negativeButton}${calendarButton}</div><div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${shareButton}${likeButton}</div>`
             : '';
-          return `<article class="${cardClass}" data-event-card data-feed-card-variant="${cardVariant}" data-calendar-eligible="${data.calendar_eligible ? 'true' : 'false'}" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}" tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
+          const relatedAttributes = relatedLayout ? ` data-lab-related-card="true" data-lab-media-kind="${escapeHtml(relatedLayout.mediaKind)}" data-lab-media-ratio="${escapeHtml(Number(relatedLayout.mediaRatio).toFixed(5))}" data-lab-row-media="${escapeHtml(relatedLayout.rowMode)}" data-lab-row-index="${escapeHtml(relatedLayout.rowIndex)}" data-lab-media-treatment="${escapeHtml(relatedLayout.mediaTreatment)}" data-lab-cover-crop="${escapeHtml(Number(relatedLayout.coverCrop).toFixed(4))}" data-lab-potential-cover-crop="${escapeHtml(Number(relatedLayout.potentialCoverCrop).toFixed(4))}" data-lab-row-worst-crop="${escapeHtml(Number(relatedLayout.rowWorstCrop).toFixed(4))}" style="--lab-row-media-ratio:${escapeHtml(Number(relatedLayout.rowRatio).toFixed(5))}"` : '';
+          return `<article class="${cardClass}" data-event-card data-feed-card-variant="${cardVariant}" data-calendar-eligible="${data.calendar_eligible ? 'true' : 'false'}" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}"${relatedAttributes} tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
             <a class="event-card__media-link" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
             ${overlayFeedback}
             <div class="event-card__body"><a class="event-card__title" href="${escapeHtml(data.href)}" data-prefetch>${escapeHtml(data.title)}</a><div class="event-card__meta-row">${typeTag ? `<span class="event-card__tag">${escapeHtml(typeTag)}</span>` : ''}<span class="event-card__meta">${escapeHtml(data.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div>${data.place ? `<span class="event-card__footer">${escapeHtml(data.place)}</span>` : ''}</div>
@@ -4311,7 +4439,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const button = event.target.closest('[data-reset-personalization]');
           if (!button) return;
           event.preventDefault();
-          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, LISTING_MODE_KEY, CALENDAR_STATE_KEY, CALENDAR_USAGE_KEY];
+          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, EVENT_CONTINUATION_RECENT_KEY, LISTING_MODE_KEY, CALENDAR_STATE_KEY, CALENDAR_USAGE_KEY];
           keys.forEach((key) => {
             try { localStorage.removeItem(key); } catch (_) {}
           });

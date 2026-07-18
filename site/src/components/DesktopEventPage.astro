@@ -20,6 +20,7 @@ import { eventImageUrl } from '../lib/assets';
 import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
 import { selectEventMediaByQuality } from '../lib/eventMediaQuality';
 import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
+import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
 
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
@@ -126,98 +127,17 @@ type DesktopRelatedLayout = {
   rowIndex:number;
   rowMode:string;
   mediaKind:'document' | 'visual';
-  mediaTreatment:'document-safe-cover' | 'visual-cover';
+  mediaTreatment:'document-safe-cover' | 'document-contain' | 'visual-cover';
   coverCrop:number;
+  potentialCoverCrop:number;
   rowWorstCrop:number;
 };
-const relatedRowLayout = (
-  row:Array<{ item:PreviewEvent; documentMedia:boolean; ratio:number }>,
-  rowIndex:number,
-):Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }> => {
-  const documents = row.filter(({ documentMedia }) => documentMedia);
-  const visuals = row.filter(({ documentMedia }) => !documentMedia);
-  const documentRatios = documents.map(({ ratio }) => ratio);
-  const visualRatios = visuals.map(({ ratio }) => ratio);
-  let targetRatio = 1;
-  let rowMode = 'visual-square';
-  if (documents.length === 0) {
-    const geometricMean = visualRatios.length
-      ? Math.exp(visualRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / visualRatios.length)
-      : 1;
-    targetRatio = Math.min(4 / 3, Math.max(1, geometricMean));
-    rowMode = 'visual-squareish';
-  } else if (visuals.length > 0) {
-    if (relatedMediaTreatment === 'cover') {
-      targetRatio = 1.12;
-      rowMode = 'mixed-compact-cover';
-    } else if (relatedMediaTreatment === 'ambient') {
-      targetRatio = 1;
-      rowMode = 'mixed-square-ambient';
-    } else {
-      const documentCenter = Math.exp(documentRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / documentRatios.length);
-      targetRatio = [.8, 1, 4 / 3]
-        .sort((left, right) => Math.abs(Math.log(left / documentCenter)) - Math.abs(Math.log(right / documentCenter)))[0];
-      rowMode = 'mixed-adaptive-ambient';
-    }
-  } else if (documentRatios.length === 1) {
-    targetRatio = Math.min(.9, documentRatios[0] * 1.1);
-    rowMode = 'document-bounded-vertical-crop';
-  } else if (documentRatios.length > 1) {
-    targetRatio = Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios));
-    rowMode = 'document-minimax-contained';
-  } else {
-    rowMode = 'document-pending-contained';
-  }
-  if (documentRatios.length > 0) {
-    const safeLower = Math.max(...documentRatios.map((documentRatio) => documentRatio * .8));
-    const safeUpper = Math.min(...documentRatios.map((documentRatio) => documentRatio / .8));
-    if (safeLower <= safeUpper) targetRatio = Math.min(safeUpper, Math.max(safeLower, targetRatio));
-  }
-  const rowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio)));
-  return row.map(({ item, documentMedia, ratio:mediaRatio }) => ({
-    item,
-    layout:{
-      mediaRatio,
-      rowRatio:targetRatio,
-      rowIndex,
-      rowMode,
-      mediaKind:documentMedia ? 'document' : 'visual',
-      mediaTreatment:documentMedia ? 'document-safe-cover' : 'visual-cover',
-      coverCrop:Math.max(0, 1 - Math.min(mediaRatio / targetRatio, targetRatio / mediaRatio)),
-      rowWorstCrop,
-    },
-  }));
-};
-const packRelatedRows = (items:PreviewEvent[], limit = 10) => {
-  const remaining = items.map((item) => ({ item, ...relatedMediaGeometry(item) }));
-  const packed:Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }> = [];
-  let rowIndex = 0;
-  while (remaining.length && packed.length < limit) {
-    const row = [remaining.shift()!];
-    let safeLower = row[0].documentMedia ? row[0].ratio * .8 : 0;
-    let safeUpper = row[0].documentMedia ? row[0].ratio / .8 : Number.POSITIVE_INFINITY;
-    while (row.length < 3 && remaining.length && packed.length + row.length < limit) {
-      const candidateIndex = remaining.findIndex((candidate) => {
-        if (!candidate.documentMedia) return true;
-        return Math.max(safeLower, candidate.ratio * .8) <= Math.min(safeUpper, candidate.ratio / .8);
-      });
-      if (candidateIndex < 0) break;
-      const [candidate] = remaining.splice(candidateIndex, 1);
-      row.push(candidate);
-      if (candidate.documentMedia) {
-        safeLower = Math.max(safeLower, candidate.ratio * .8);
-        safeUpper = Math.min(safeUpper, candidate.ratio / .8);
-      }
-    }
-    packed.push(...relatedRowLayout(row, rowIndex));
-    rowIndex += 1;
-    // Do not let an incompatible OCR family leak into the same CSS-grid row.
-    // A short final row is preferable to either fields or more than 20% crop.
-    if (row.length < 3) break;
-  }
-  return packed;
-};
-const relatedForRender = packRelatedRows(relatedWithRoles, 10);
+const relatedForRender = packRelatedCardRows(relatedWithRoles, {
+  limit:10,
+  rowSize:3,
+  mediaTreatment:relatedMediaTreatment,
+  geometry:relatedMediaGeometry,
+}) as Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }>;
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const rawAssets = event.image_assets || [];
 const qualitySelection = surface === 'production'
@@ -1743,121 +1663,9 @@ const descriptionHtml = (event.description_html || '')
       updateOcrFrame();
       window.addEventListener('resize', updateOcrFrame, { passive:true });
 
-      const relatedGrid = cleanRoot.querySelector<HTMLElement>('[data-lab-row-normalize]');
-      const relatedMediaTreatment = cleanRoot.dataset.relatedMediaTreatment || 'hybrid';
-      let normalizeFrame = 0;
-      const normalizeRelatedRows = () => {
-        normalizeFrame = 0;
-        if (!relatedGrid) return;
-        const cards = Array.from(relatedGrid.querySelectorAll<HTMLElement>(':scope > [data-event-card]'));
-        if (window.innerWidth < 1024) {
-          cards.forEach((card) => {
-            card.removeAttribute('data-lab-related-card');
-            card.removeAttribute('data-lab-media-kind');
-            card.removeAttribute('data-lab-row-media');
-            card.removeAttribute('data-lab-row-index');
-            card.removeAttribute('data-lab-row-worst-crop');
-            card.removeAttribute('data-lab-media-treatment');
-            card.removeAttribute('data-lab-cover-crop');
-            card.removeAttribute('data-media-text-mode');
-            card.style.removeProperty('--lab-row-media-ratio');
-          });
-          return;
-        }
-        cards.forEach((card) => {
-          card.dataset.labRelatedCard = 'true';
-          const shell = card.querySelector<HTMLElement>('.event-card__media-shell');
-          card.dataset.labMediaKind = shell?.classList.contains('event-card__media-shell--document') || shell?.classList.contains('event-card__media-shell--preserve') ? 'document' : 'visual';
-        });
-        const rows:Array<HTMLElement[]> = [];
-        cards.forEach((card) => {
-          const top = card.getBoundingClientRect().top;
-          const row = rows.find((items) => Math.abs(items[0].getBoundingClientRect().top - top) <= 2);
-          if (row) row.push(card); else rows.push([card]);
-        });
-        rows.forEach((row, rowIndex) => {
-          const documents = row.filter((card) => card.dataset.labMediaKind === 'document');
-          const visuals = row.filter((card) => card.dataset.labMediaKind === 'visual');
-          const ratiosOf = (items:HTMLElement[]) => items
-            .map((card) => {
-              const image = card.querySelector<HTMLImageElement>('.event-card__media');
-              const declaredRatio = Number(card.dataset.labMediaRatio);
-              const imageRatio = Number.isFinite(declaredRatio) && declaredRatio > 0
-                ? declaredRatio
-                : image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0;
-              return Number.isFinite(imageRatio) && imageRatio > 0 ? imageRatio : null;
-            })
-            .filter((value):value is number => value !== null);
-          const documentRatios = ratiosOf(documents);
-          const visualRatios = ratiosOf(visuals);
-          let targetRatio = 1;
-          let mode = 'visual-square';
-          if (documents.length === 0) {
-            const geometricMean = visualRatios.length
-              ? Math.exp(visualRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / visualRatios.length)
-              : 1;
-            targetRatio = Math.min(4 / 3, Math.max(1, geometricMean));
-            mode = 'visual-squareish';
-          } else if (visuals.length > 0) {
-            if (relatedMediaTreatment === 'cover') {
-              targetRatio = 1.12;
-              mode = 'mixed-compact-cover';
-            } else if (relatedMediaTreatment === 'ambient') {
-              targetRatio = 1;
-              mode = 'mixed-square-ambient';
-            } else {
-              const buckets = [.8, 1, 4 / 3];
-              const documentCenter = Math.exp(documentRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / documentRatios.length);
-              targetRatio = buckets.sort((a, b) => Math.abs(Math.log(a / documentCenter)) - Math.abs(Math.log(b / documentCenter)))[0];
-              mode = 'mixed-adaptive-ambient';
-            }
-          } else if (documentRatios.length === 1) {
-            targetRatio = Math.min(.9, documentRatios[0] * 1.1);
-            mode = 'document-bounded-vertical-crop';
-          } else if (documentRatios.length > 1) {
-            targetRatio = Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios));
-            mode = 'document-minimax-contained';
-          } else {
-            mode = 'document-pending-contained';
-          }
-          if (documentRatios.length > 0) {
-            // Server-side packing guarantees that every OCR family in this row has
-            // a shared frame whose cover crop is at most 20% of the poster area.
-            const safeLower = Math.max(...documentRatios.map((documentRatio) => documentRatio * .8));
-            const safeUpper = Math.min(...documentRatios.map((documentRatio) => documentRatio / .8));
-            if (safeLower <= safeUpper) targetRatio = Math.min(safeUpper, Math.max(safeLower, targetRatio));
-          }
-          row.forEach((card) => {
-            const image = card.querySelector<HTMLImageElement>('.event-card__media');
-            const declaredRatio = Number(card.dataset.labMediaRatio);
-            const imageRatio = Number.isFinite(declaredRatio) && declaredRatio > 0
-              ? declaredRatio
-              : image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
-            const isDocument = card.dataset.labMediaKind === 'document';
-            const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
-            const cardTreatment = isDocument ? 'document-safe-cover' : 'visual-cover';
-            card.style.setProperty('--lab-row-media-ratio', targetRatio.toFixed(5));
-            card.dataset.labRowMedia = mode;
-            card.dataset.labRowIndex = String(rowIndex);
-            card.dataset.labMediaTreatment = cardTreatment;
-            card.dataset.labCoverCrop = Math.max(0, coverCrop).toFixed(4);
-            card.dataset.labRowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio))).toFixed(4);
-          });
-        });
-      };
-      const scheduleNormalize = () => {
-        if (normalizeFrame) return;
-        normalizeFrame = window.requestAnimationFrame(normalizeRelatedRows);
-      };
-      if (relatedGrid) {
-        const images = Array.from(relatedGrid.querySelectorAll<HTMLImageElement>('.event-card__media'));
-        images.forEach((image) => image.addEventListener('load', scheduleNormalize, { once:true }));
-        Promise.allSettled(images.map((image) => image.decode?.())).then(scheduleNormalize);
-        new ResizeObserver(scheduleNormalize).observe(relatedGrid);
-        new MutationObserver(scheduleNormalize).observe(relatedGrid, { childList:true, subtree:true });
-        window.addEventListener('resize', scheduleNormalize, { passive:true });
-        scheduleNormalize();
-      }
+      // Related rows are fully resolved from exported dimensions before first paint.
+      // Do not re-measure intrinsic image sizes here: that would reintroduce
+      // post-load geometry jumps and could exceed the OCR crop budget.
     }
   </script>
 </main>
@@ -2026,6 +1834,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; object-fit:cover !important; }
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-cover"] .event-card__media),
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) { object-fit:cover !important; object-position:center center !important; }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-contain"] .event-card__media) { object-fit:contain !important; object-position:center center !important; background:#15110f !important; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }
