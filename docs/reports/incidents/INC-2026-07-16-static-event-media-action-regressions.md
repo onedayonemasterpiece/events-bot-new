@@ -294,3 +294,12 @@ This incident remains **open** until a newly generated immutable secret
 candidate is published through the production Kaggle rail, the named desktop
 and mobile specimens pass public Playwright, the links are read back from the
 existing Telegram review topic, and the user completes visual acceptance.
+
+The first 2026-07-18 repair artifact (`…kaggle-v1`) completed the production
+Kaggle build and create-only secret-prefix publication, but the real public
+browser gate rejected it before Telegram handoff: event `6815` was contained on
+desktop while the active mobile hero still enlarged its `180×320` source into
+a full-width `cover`. That candidate is not acceptance evidence. The shared
+mobile hero/gallery now carries the same weak-only low-resolution policy and
+bounds the image to source dimensions with `contain`; a new immutable build and
+token are required rather than overwriting the rejected prefix.

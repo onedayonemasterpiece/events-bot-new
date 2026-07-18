@@ -17,7 +17,8 @@
 ### Fixed
 - **Static event v11 review regressions (INC-2026-07-16/18)**: apply one
   quality-admitted photo set to desktop and mobile while preserving weak-only
-  fallbacks, route a lone low-resolution portrait to a bounded contain viewer,
+  fallbacks, route a lone low-resolution portrait to a source-size bounded
+  contain hero/viewer on both responsive surfaces,
   preserve stored OCR classification and prefer event-local classified media,
   project exact structured occurrence content when a merged aggregate is
   contradictory, and make editorial leads sentence-safe; restore the accepted
