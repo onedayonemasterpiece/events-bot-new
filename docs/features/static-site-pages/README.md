@@ -1,17 +1,18 @@
 # Static Site Event Pages
 
-> **Status:** accepted v11 event-page template matrix integrated with the checked Smart Update/Kaggle secret-candidate pipeline; root promotion remains blocked/disabled
+> **Status:** accepted v11 baseline plus v12 fidelity corrections are the primary preproduction event-page family, integrated with the checked Smart Update/Kaggle secret-candidate pipeline; root promotion remains blocked/disabled
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
 ## Implementation status
 
-`static-event-detail-v11` is the mandatory event-detail template contract for
-automatic and on-demand builds. Its accepted baseline is source SHA
+`static-event-detail-v11` is the mandatory baseline contract for automatic and
+on-demand builds; v12 is the current fidelity/idempotency correction layer on
+that same accepted family, not a competing lab template. Its accepted baseline is source SHA
 `3b17e536e4dffa9c9fcebab6e641a7cd4ba99b6a`; the current build SHA may advance,
 but every event HTML and release manifest must retain that contract identity.
-The gate covers the complete desktop lab matrix, not three hand-picked pages:
+The gate covers the complete accepted desktop scenario matrix, not three hand-picked pages:
 horizontal photo, horizontal photo plus OCR companion, OCR/document contain,
 portrait series, low-resolution and quality-fallback combinations. The same
 `buildDesktopEventPresentation()` router is used for preview, checked
@@ -33,7 +34,29 @@ checked root-form artifact, загружается create-only и никогда
 после отключения anonymous bucket listing; она не является авторизацией и может
 быть переслана получателем.
 
-### 2026-07-15 replacement production integration candidate
+### Каноническая preproduction-ссылка
+
+Ссылки вида `preview-2026…` ниже сохранены только как датированное acceptance
+evidence. Код, бот, operator scripts и новые review-документы не должны выбирать
+из них «последнюю». Единственный текущий review target — последний полностью
+проверенный и опубликованный immutable candidate в durable
+`static_site_build_state.current_secret_candidate_receipt_json`. Он содержит
+build/run/repo/snapshot/result/manifest/token hashes и bearer URL; failed,
+unchanged/no-op и artifact-only build не могут заменить его. Публичного
+`current` redirect/object нет и не будет на preproduction-этапе.
+
+Получить target через общий read-only resolver:
+
+```bash
+.venv/bin/python scripts/request_static_site_build.py \
+  --db /data/db.sqlite --show-current-review
+```
+
+Resolver fail-closed возвращает `current_review_unavailable`, если receipt
+неполон или не доказывает noindex/prefix/root-isolation публикацию. Bearer URL
+нельзя коммитить, добавлять в sitemap или отправлять в публичные каналы.
+
+### Historical acceptance evidence: 2026-07-15 replacement candidate
 
 `preview-20260715t-production-desktop-contract-v2` is the replacement noindex
 review surface. Unlike the rejected v1 build, every generated desktop event
@@ -172,7 +195,7 @@ parity before promotion.  Canonical identity and staged production gates:
 [Interest clubs](../interest-clubs/README.md) and its
 [release plan](../interest-clubs/release-plan.md).
 
-## Текущий публичный preview
+## Historical public preview evidence
 
 Latest main-reachable checked public preview evidence as of 2026-07-17 is
 `preview-20260717-interest-clubs-prod-canary`: 303 current/future events, checked
@@ -198,7 +221,7 @@ Historical v44 CDN/Kaggle baseline: public preview `preview-20260628-event-pages
 - Robots: <https://kenigevents.ru/preview-20260628-event-pages-v44-cdn-kaggle/robots.txt>
 - Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260628-event-pages-v44-cdn-kaggle/__preview/>
 
-Current v44 preview scale/evidence (Kaggle CPU build from the 2026-06-28 production snapshot):
+Historical v44 preview scale/evidence (Kaggle CPU build from the 2026-06-28 production snapshot):
 
 - preview fixture: `80` real active events, including `49` events starting on 2026-06-28 across `14` event types;
 - generated output: `95` static pages, `261` files, `28 MiB`;

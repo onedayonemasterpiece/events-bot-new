@@ -12,7 +12,7 @@ Related-card media is a hard, testable desktop contract rather than an aesthetic
 - if one normalized row frame cannot satisfy that OCR budget, the document keeps its natural ratio instead of receiving fields or a crop above the budget;
 - blur, duplicated backdrops, gradients and other field-masking techniques are forbidden.
 
-Current clean review target: <https://kenigevents.ru/preview-20260714t-desktop-focus-v11/lab/event-desktop/>. Preserved v10 review: <https://kenigevents.ru/preview-20260714t-desktop-focus-v10/lab/event-desktop/>. Preserved v9 review: <https://kenigevents.ru/preview-20260714t-desktop-focus-v9/lab/event-desktop/>. Preserved v8 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
+Historical clean v11 review evidence: <https://kenigevents.ru/preview-20260714t-desktop-focus-v11/lab/event-desktop/>. Preserved v10 review: <https://kenigevents.ru/preview-20260714t-desktop-focus-v10/lab/event-desktop/>. Preserved v9 review: <https://kenigevents.ru/preview-20260714t-desktop-focus-v9/lab/event-desktop/>. Preserved v8 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v8/lab/event-desktop/>. Preserved v7 review: <https://kenigevents.ru/preview-20260713t-desktop-focus-v7/lab/event-desktop/>. Preserved v5 review: <https://kenigevents.ru/preview-20260713t-desktop-media-polish-v5/lab/event-desktop/>. Preserved v4 review: <https://kenigevents.ru/preview-20260712t-desktop-continuous-scroll-v4/lab/event-desktop/>. Preserved v3 review: <https://kenigevents.ru/preview-20260712t-desktop-scroll-compositions-v3/lab/event-desktop/>. Preserved v2 review: <https://kenigevents.ru/preview-20260712t-desktop-clean-pages-v2/lab/event-desktop/>. Preserved media matrix: <https://kenigevents.ru/preview-20260712t-desktop-media-families/lab/event-desktop/>.
 
 The previous `preview-20260712t-desktop-multimedia-full-flow` pages are rejected as a product review surface: they exposed research/service explanations, changed the accepted media-family geometry, moved the gallery into the story flow and did not make the parallax behavior clear. They remain only as failure/rollback evidence. The production mobile hero-overlap composition is explicitly outside this change.
 
@@ -813,7 +813,7 @@ browser-console errors and warnings.
 
 ## Production v3: normalized discovery rows without media-policy escape hatches
 
-This production contract supersedes the earlier v11 experimental
+This production contract supersedes the earlier historical v11 related-card
 `12% + ambient contain` treatment for the generated desktop `Смотрите дальше`
 surface. It does not change the accepted primary Continuous Editorial/Split
 shells and does not alter the mobile breakpoint.

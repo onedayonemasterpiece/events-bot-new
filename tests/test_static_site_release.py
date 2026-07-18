@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from static_site_release import (
+    CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA,
     MAX_CORRELATIONS,
     MAX_EVENT_IDS,
     StaticSitePermanentError,
@@ -27,9 +28,38 @@ from static_site_release import (
     merge_request_payload,
     publish_secret_candidate_archive,
     resolve_build_clock,
+    resolve_current_secret_candidate,
+    validate_production_candidate_result,
     validate_snapshot,
     validate_vector_barrier,
 )
+
+
+def _current_candidate_receipt(
+    token: str,
+    *,
+    build_id: str,
+    run_id: str,
+    fingerprint: str,
+) -> dict[str, object]:
+    return {
+        "schema_version": CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA,
+        "release_channel": "secret_preview",
+        "build_id": build_id,
+        "run_id": run_id,
+        "repo_sha": "a" * 40,
+        "snapshot_id": f"snapshot-{build_id}",
+        "input_fingerprint": fingerprint,
+        "effective_date": "2026-07-18",
+        "result_sha256": "b" * 64,
+        "manifest_sha256": "c" * 64,
+        "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+        "object_count": 42,
+        "public_url": f"https://kenigevents.ru/_review/{token}/",
+        "verified_at": "2026-07-18T12:00:00Z",
+        "root_mutation": False,
+        "stable_ics_mutation": False,
+    }
 
 
 def test_build_clock_uses_kaliningrad_boundary_and_rejects_mismatch() -> None:
@@ -198,6 +228,192 @@ def test_durable_noop_force_and_concurrent_single_flight(tmp_path) -> None:
     assert "busy" in outcomes and "noop" in outcomes and "success" in outcomes
 
 
+@pytest.mark.asyncio
+async def test_current_review_resolver_tracks_latest_checked_candidate_and_preserves_previous(
+    tmp_path,
+) -> None:
+    import main
+
+    database = tmp_path / "current-review.sqlite"
+    _fingerprint_db(database)
+    first_fingerprint, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full", "revision": 1},
+    )
+    first_token = "A" * 43
+    first = claim_static_site_build(
+        database,
+        job_id=1,
+        run_id="static-site:first",
+        input_fingerprint=first_fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="first",
+    )
+    finish_static_site_build_claim(
+        database,
+        claim_token=first.claim_token or "",
+        run_id="static-site:first",
+        input_fingerprint=first_fingerprint,
+        effective_date="2026-07-18",
+        success=True,
+        receipt={
+            "current_secret_candidate": _current_candidate_receipt(
+                first_token,
+                build_id="production-first",
+                run_id="static-site:first",
+                fingerprint=first_fingerprint,
+            )
+        },
+    )
+    current = resolve_current_secret_candidate(database)
+    assert current is not None
+    assert current.public_url.endswith(f"/_review/{first_token}/")
+
+    # An unchanged request does not publish and must not erase the last review.
+    noop = claim_static_site_build(
+        database,
+        job_id=2,
+        run_id="static-site:noop",
+        input_fingerprint=first_fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="noop",
+    )
+    assert noop.action == "noop"
+    assert resolve_current_secret_candidate(database) == current
+
+    second_fingerprint, _ = compute_static_site_input_fingerprint(
+        database,
+        effective_date="2026-07-18",
+        repo_sha="a" * 40,
+        build_config={"catalog_mode": "full", "revision": 2},
+    )
+    failed = claim_static_site_build(
+        database,
+        job_id=3,
+        run_id="static-site:failed",
+        input_fingerprint=second_fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="failed",
+    )
+    finish_static_site_build_claim(
+        database,
+        claim_token=failed.claim_token or "",
+        run_id="static-site:failed",
+        input_fingerprint=second_fingerprint,
+        effective_date="2026-07-18",
+        success=False,
+        receipt={"status": "failed"},
+    )
+    assert resolve_current_secret_candidate(database) == current
+
+    # The outbox/bot link producer consumes the same resolver rather than a
+    # hard-coded historical preview URL.
+    database_ref = type("DatabaseRef", (), {"path": str(database)})()
+    assert (
+        await main._job_result_link(main.JobTask.static_site_build, 0, database_ref)
+        == current.public_url
+    )
+
+    second_token = "B" * 43
+    second = claim_static_site_build(
+        database,
+        job_id=4,
+        run_id="static-site:second",
+        input_fingerprint=second_fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="second",
+    )
+    finish_static_site_build_claim(
+        database,
+        claim_token=second.claim_token or "",
+        run_id="static-site:second",
+        input_fingerprint=second_fingerprint,
+        effective_date="2026-07-18",
+        success=True,
+        receipt={
+            "current_secret_candidate": _current_candidate_receipt(
+                second_token,
+                build_id="production-second",
+                run_id="static-site:second",
+                fingerprint=second_fingerprint,
+            )
+        },
+    )
+    latest = resolve_current_secret_candidate(database)
+    assert latest is not None and latest.run_id == "static-site:second"
+    assert await main._job_result_link(main.JobTask.static_site_build, 0, database_ref) == latest.public_url
+
+
+def test_current_review_resolver_rejects_incomplete_receipt_without_replacing_previous(tmp_path) -> None:
+    database = tmp_path / "invalid-current-review.sqlite"
+    _fingerprint_db(database)
+    first_fingerprint = "1" * 64
+    first_token = "C" * 43
+    first = claim_static_site_build(
+        database,
+        job_id=1,
+        run_id="static-site:first",
+        input_fingerprint=first_fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="first",
+    )
+    finish_static_site_build_claim(
+        database,
+        claim_token=first.claim_token or "",
+        run_id="static-site:first",
+        input_fingerprint=first_fingerprint,
+        effective_date="2026-07-18",
+        success=True,
+        receipt={
+            "current_secret_candidate": _current_candidate_receipt(
+                first_token,
+                build_id="production-first",
+                run_id="static-site:first",
+                fingerprint=first_fingerprint,
+            )
+        },
+    )
+    previous = resolve_current_secret_candidate(database)
+    second_fingerprint = "2" * 64
+    second = claim_static_site_build(
+        database,
+        job_id=2,
+        run_id="static-site:second",
+        input_fingerprint=second_fingerprint,
+        effective_date="2026-07-18",
+        request_watermark="second",
+    )
+    incomplete = _current_candidate_receipt(
+        "D" * 43,
+        build_id="production-second",
+        run_id="static-site:second",
+        fingerprint=second_fingerprint,
+    )
+    incomplete.pop("manifest_sha256")
+    with pytest.raises(StaticSitePermanentError, match="manifest_sha256"):
+        finish_static_site_build_claim(
+            database,
+            claim_token=second.claim_token or "",
+            run_id="static-site:second",
+            input_fingerprint=second_fingerprint,
+            effective_date="2026-07-18",
+            success=True,
+            receipt={"current_secret_candidate": incomplete},
+        )
+    assert resolve_current_secret_candidate(database) == previous
+    finish_static_site_build_claim(
+        database,
+        claim_token=second.claim_token or "",
+        run_id="static-site:second",
+        input_fingerprint=second_fingerprint,
+        effective_date="2026-07-18",
+        success=False,
+        receipt={"status": "rejected_incomplete_receipt"},
+    )
+
+
 def test_live_kaggle_ledger_prevents_stale_remote_reset(tmp_path) -> None:
     database = tmp_path / "remote.sqlite"
     _fingerprint_db(database)
@@ -354,6 +570,112 @@ def test_add_build_08_online_backup_is_immutable_and_hash_bound(tmp_path) -> Non
     snapshot.write_bytes(snapshot.read_bytes() + b"tamper")
     with pytest.raises(StaticSitePermanentError, match="hash_or_size"):
         validate_snapshot(snapshot, manifest)
+
+
+def test_production_candidate_result_requires_exact_template_and_noindex_checks(tmp_path) -> None:
+    source = tmp_path / "source.sqlite"
+    _fingerprint_db(source)
+    snapshot, _manifest, metadata = create_immutable_snapshot(
+        source,
+        tmp_path / "snapshots",
+        request_payload=make_request_payload(reason="checks"),
+        snapshot_id="candidate-checks",
+    )
+    assert snapshot.is_file()
+    output = tmp_path / "output"
+    output.mkdir()
+    artifacts = []
+    for kind, filename in (
+        ("production_root", "production-root.tar.gz"),
+        ("secret_candidate", "secret-candidate.tar.gz"),
+    ):
+        path = output / filename
+        with tarfile.open(path, "w:gz") as bundle:
+            payload = b"checked"
+            info = tarfile.TarInfo(name=f"{kind}.txt")
+            info.size = len(payload)
+            bundle.addfile(info, io.BytesIO(payload))
+        artifacts.append(
+            {
+                "kind": kind,
+                "filename": filename,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "size": path.stat().st_size,
+            }
+        )
+    token = "E" * 43
+    clock = resolve_build_clock(current_date="2026-07-18")
+    result = {
+        "schema_version": "static_site_build_result_v2",
+        "ok": True,
+        "profile": "production-candidate",
+        "build_id": "production-checks",
+        "run_id": "static-site:checks",
+        "repo_sha": "a" * 40,
+        "input_fingerprint": "f" * 64,
+        "build_clock": {
+            "time_zone": clock.time_zone,
+            "effective_date": clock.effective_date,
+            "current_datetime": clock.current_datetime,
+        },
+        "snapshot": {
+            "snapshot_id": metadata.snapshot_id,
+            "snapshot_sha256": metadata.sha256,
+            "size": metadata.size_bytes,
+        },
+        "candidate": {"token": token},
+        "checks": {
+            "production": {
+                "astro_build": "ok",
+                "template_matrix": "ok",
+                "production_contract": "ok",
+                "catalog_parity": "ok",
+                "fixture_isolation": "ok",
+                "canonical_and_indexing": "ok",
+                "tree_hashes": "ok",
+            },
+            "secret_candidate": {
+                "astro_build": "ok",
+                "candidate_contract": "ok",
+                "catalog_parity": "ok",
+                "noindex": "ok",
+                "no_referrer": "ok",
+                "prefix_containment": "ok",
+                "root_isolation": "ok",
+            },
+        },
+        "artifacts": artifacts,
+    }
+    result_path = output / "static_site_build_result.json"
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    validated, candidate_archive = validate_production_candidate_result(
+        result_path,
+        output_dir=output,
+        build_id="production-checks",
+        run_id="static-site:checks",
+        repo_sha="a" * 40,
+        snapshot=metadata,
+        candidate_token=token,
+        input_fingerprint="f" * 64,
+        build_clock=clock,
+    )
+    assert validated["checks"]["production"]["template_matrix"] == "ok"
+    assert candidate_archive.name == "secret-candidate.tar.gz"
+
+    result["checks"]["production"]["template_matrix"] = "pending"
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    with pytest.raises(StaticSitePermanentError, match="template_matrix"):
+        validate_production_candidate_result(
+            result_path,
+            output_dir=output,
+            build_id="production-checks",
+            run_id="static-site:checks",
+            repo_sha="a" * 40,
+            snapshot=metadata,
+            candidate_token=token,
+            input_fingerprint="f" * 64,
+            build_clock=clock,
+        )
 
 
 def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_path) -> None:

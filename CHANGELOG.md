@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- **Canonical static preproduction review routing**: persist the latest fully
+  checked immutable noindex candidate as a hash-bound internal SQLite receipt,
+  expose one fail-closed resolver to bot/operator link-producing paths, preserve
+  the previous review target across failed, unchanged/no-op and artifact-only
+  runs, and reject Kaggle results unless the accepted template matrix plus all
+  candidate noindex/no-referrer/prefix/root-isolation checks are complete;
+  production root/current/stable ICS remain untouched.
 - **Isolated static footer prototype**: add one secret-only noindex event
   specimen with a cohesive branded service-share surface, deduplicated event /
   project navigation, reserved non-broken legal-document slots and accessible

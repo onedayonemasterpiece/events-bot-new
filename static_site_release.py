@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
@@ -41,6 +41,7 @@ STATIC_SITE_TIME_ZONE = ZoneInfo(STATIC_SITE_TIME_ZONE_NAME)
 STATIC_SITE_FINGERPRINT_SCHEMA = "static_site_input_fingerprint_v1"
 STATIC_SITE_STATE_SCHEMA = "static_site_build_state_v1"
 STATIC_SITE_PROJECTION_VERSION = "static_event_public_projection_v2"
+CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA = "static_site_current_secret_candidate_v1"
 
 
 @dataclass(frozen=True)
@@ -177,6 +178,33 @@ class SecretCandidateReceipt:
     snapshot_id: str
     token_sha256: str
     manifest_sha256: str
+    object_count: int
+    public_url: str
+    verified_at: str
+    root_mutation: bool = False
+    stable_ics_mutation: bool = False
+
+
+@dataclass(frozen=True)
+class CurrentSecretCandidate:
+    """The latest fully checked and published immutable review target.
+
+    This is an internal durable pointer, not a public redirect.  The bearer
+    token exists only inside ``public_url``; callers must not log or persist it
+    separately.
+    """
+
+    schema_version: str
+    release_channel: str
+    build_id: str
+    run_id: str
+    repo_sha: str
+    snapshot_id: str
+    input_fingerprint: str
+    effective_date: str
+    result_sha256: str
+    manifest_sha256: str
+    token_sha256: str
     object_count: int
     public_url: str
     verified_at: str
@@ -605,6 +633,7 @@ def _ensure_static_site_state_schema(connection: sqlite3.Connection) -> None:
             last_success_run_id TEXT,
             last_success_at TEXT,
             last_success_receipt_json TEXT NOT NULL DEFAULT '{}',
+            current_secret_candidate_receipt_json TEXT,
             active_claim_token TEXT,
             active_job_id INTEGER,
             active_run_id TEXT,
@@ -636,6 +665,144 @@ def _ensure_static_site_state_schema(connection: sqlite3.Connection) -> None:
     )
     for statement in statements:
         connection.execute(statement)
+    columns = {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info(static_site_build_state)").fetchall()
+    }
+    if "current_secret_candidate_receipt_json" not in columns:
+        connection.execute(
+            "ALTER TABLE static_site_build_state "
+            "ADD COLUMN current_secret_candidate_receipt_json TEXT"
+        )
+
+
+def _validated_current_secret_candidate(
+    value: Mapping[str, Any],
+) -> CurrentSecretCandidate:
+    """Validate the durable review pointer without trusting a URL alone."""
+
+    required_text = {
+        "schema_version": CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA,
+        "release_channel": RELEASE_CHANNEL_SECRET,
+    }
+    for key, expected in required_text.items():
+        if value.get(key) != expected:
+            raise StaticSitePermanentError(f"current_secret_candidate_identity_mismatch:{key}")
+    build_id = str(value.get("build_id") or "")
+    run_id = str(value.get("run_id") or "")
+    repo_sha = str(value.get("repo_sha") or "")
+    snapshot_id = str(value.get("snapshot_id") or "")
+    input_fingerprint = str(value.get("input_fingerprint") or "")
+    effective_date = str(value.get("effective_date") or "")
+    result_sha256 = str(value.get("result_sha256") or "")
+    manifest_sha256 = str(value.get("manifest_sha256") or "")
+    token_sha256 = str(value.get("token_sha256") or "")
+    public_url = str(value.get("public_url") or "")
+    verified_at = str(value.get("verified_at") or "")
+    if not re.fullmatch(r"production-[A-Za-z0-9][A-Za-z0-9._-]*", build_id):
+        raise StaticSitePermanentError("current_secret_candidate_build_id_invalid")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{7,159}", run_id):
+        raise StaticSitePermanentError("current_secret_candidate_run_id_invalid")
+    if not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
+        raise StaticSitePermanentError("current_secret_candidate_repo_sha_invalid")
+    if not snapshot_id or not re.fullmatch(r"[0-9a-f]{64}", input_fingerprint):
+        raise StaticSitePermanentError("current_secret_candidate_snapshot_or_fingerprint_invalid")
+    try:
+        date.fromisoformat(effective_date)
+        iso_utc(verified_at)
+    except (TypeError, ValueError) as exc:
+        raise StaticSitePermanentError("current_secret_candidate_timestamp_invalid") from exc
+    for label, digest in (
+        ("result", result_sha256),
+        ("manifest", manifest_sha256),
+        ("token", token_sha256),
+    ):
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise StaticSitePermanentError(f"current_secret_candidate_{label}_sha256_invalid")
+    parsed = urlsplit(public_url)
+    path_match = re.fullmatch(rf"/_review/({SECRET_CANDIDATE_TOKEN_RE})/", parsed.path)
+    if (
+        parsed.scheme != "https"
+        or not parsed.netloc
+        or parsed.query
+        or parsed.fragment
+        or not path_match
+        or hashlib.sha256(path_match.group(1).encode()).hexdigest() != token_sha256
+    ):
+        raise StaticSitePermanentError("current_secret_candidate_public_url_invalid")
+    try:
+        object_count = int(value.get("object_count") or 0)
+    except (TypeError, ValueError) as exc:
+        raise StaticSitePermanentError("current_secret_candidate_object_count_invalid") from exc
+    if object_count <= 0:
+        raise StaticSitePermanentError("current_secret_candidate_object_count_invalid")
+    if value.get("root_mutation") is not False or value.get("stable_ics_mutation") is not False:
+        raise StaticSitePermanentError("current_secret_candidate_root_isolation_invalid")
+    return CurrentSecretCandidate(
+        schema_version=CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA,
+        release_channel=RELEASE_CHANNEL_SECRET,
+        build_id=build_id,
+        run_id=run_id,
+        repo_sha=repo_sha,
+        snapshot_id=snapshot_id,
+        input_fingerprint=input_fingerprint,
+        effective_date=effective_date,
+        result_sha256=result_sha256,
+        manifest_sha256=manifest_sha256,
+        token_sha256=token_sha256,
+        object_count=object_count,
+        public_url=public_url,
+        verified_at=iso_utc(verified_at),
+        root_mutation=False,
+        stable_ics_mutation=False,
+    )
+
+
+def resolve_current_secret_candidate(
+    database_path: str | os.PathLike[str],
+) -> CurrentSecretCandidate | None:
+    """Return the canonical immutable preproduction review target.
+
+    The resolver is read-only and fails closed for an absent, legacy or
+    incomplete receipt.  Failed, no-op and artifact-only builds therefore
+    cannot replace the last fully published candidate.
+    """
+
+    path = Path(database_path)
+    if not path.is_file():
+        return None
+    connection = _readonly_sqlite_connection(path)
+    try:
+        state_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='static_site_build_state'"
+        ).fetchone()
+        if not state_exists:
+            return None
+        columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(static_site_build_state)").fetchall()
+        }
+        if "current_secret_candidate_receipt_json" not in columns:
+            return None
+        row = connection.execute(
+            "SELECT current_secret_candidate_receipt_json "
+            "FROM static_site_build_state WHERE release_channel=?",
+            (RELEASE_CHANNEL_SECRET,),
+        ).fetchone()
+        if not row or not row[0]:
+            return None
+        try:
+            payload = json.loads(str(row[0]))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(payload, Mapping):
+            return None
+        try:
+            return _validated_current_secret_candidate(payload)
+        except StaticSitePermanentError:
+            return None
+    finally:
+        connection.close()
 
 
 def _parse_db_timestamp(value: Any) -> datetime | None:
@@ -908,6 +1075,18 @@ def finish_static_site_build_claim(
 ) -> None:
     now_iso = iso_utc(now)
     evidence = dict(receipt or {})
+    current_candidate_payload = evidence.get("current_secret_candidate")
+    current_candidate = None
+    if current_candidate_payload is not None:
+        if not success or not isinstance(current_candidate_payload, Mapping):
+            raise StaticSitePermanentError("current_secret_candidate_receipt_invalid")
+        current_candidate = _validated_current_secret_candidate(current_candidate_payload)
+        if (
+            current_candidate.run_id != run_id
+            or current_candidate.input_fingerprint != input_fingerprint
+            or current_candidate.effective_date != effective_date
+        ):
+            raise StaticSitePermanentError("current_secret_candidate_claim_identity_mismatch")
     connection = sqlite3.connect(str(database_path), timeout=30, isolation_level=None)
     try:
         connection.execute("PRAGMA busy_timeout=30000")
@@ -920,21 +1099,40 @@ def finish_static_site_build_claim(
         if not row or row[0] != claim_token:
             raise StaticSitePermanentError("static_site_claim_token_mismatch")
         if success:
-            connection.execute(
-                """
-                UPDATE static_site_build_state
-                SET last_success_fingerprint=?, last_success_run_id=?, last_success_at=?,
-                    last_success_receipt_json=?, active_claim_token=NULL, active_job_id=NULL,
-                    active_run_id=NULL, active_fingerprint=NULL, active_effective_date=NULL,
-                    active_claimed_at=NULL, updated_at=?
-                WHERE release_channel=? AND active_claim_token=?
-                """,
-                (
-                    input_fingerprint, run_id, now_iso,
-                    json.dumps(evidence, ensure_ascii=False, sort_keys=True, default=str),
-                    now_iso, RELEASE_CHANNEL_SECRET, claim_token,
-                ),
-            )
+            if current_candidate is not None:
+                connection.execute(
+                    """
+                    UPDATE static_site_build_state
+                    SET last_success_fingerprint=?, last_success_run_id=?, last_success_at=?,
+                        last_success_receipt_json=?, current_secret_candidate_receipt_json=?,
+                        active_claim_token=NULL, active_job_id=NULL, active_run_id=NULL,
+                        active_fingerprint=NULL, active_effective_date=NULL,
+                        active_claimed_at=NULL, updated_at=?
+                    WHERE release_channel=? AND active_claim_token=?
+                    """,
+                    (
+                        input_fingerprint, run_id, now_iso,
+                        json.dumps(evidence, ensure_ascii=False, sort_keys=True, default=str),
+                        json.dumps(asdict(current_candidate), ensure_ascii=False, sort_keys=True),
+                        now_iso, RELEASE_CHANNEL_SECRET, claim_token,
+                    ),
+                )
+            else:
+                connection.execute(
+                    """
+                    UPDATE static_site_build_state
+                    SET last_success_fingerprint=?, last_success_run_id=?, last_success_at=?,
+                        last_success_receipt_json=?, active_claim_token=NULL, active_job_id=NULL,
+                        active_run_id=NULL, active_fingerprint=NULL, active_effective_date=NULL,
+                        active_claimed_at=NULL, updated_at=?
+                    WHERE release_channel=? AND active_claim_token=?
+                    """,
+                    (
+                        input_fingerprint, run_id, now_iso,
+                        json.dumps(evidence, ensure_ascii=False, sort_keys=True, default=str),
+                        now_iso, RELEASE_CHANNEL_SECRET, claim_token,
+                    ),
+                )
         else:
             connection.execute(
                 """
@@ -1164,6 +1362,37 @@ def validate_production_candidate_result(
     candidate = result.get("candidate") if isinstance(result.get("candidate"), Mapping) else {}
     if candidate.get("token") != candidate_token or not re.fullmatch(SECRET_CANDIDATE_TOKEN_RE, candidate_token):
         raise StaticSitePermanentError("static_site_result_candidate_token_mismatch")
+    checks = result.get("checks") if isinstance(result.get("checks"), Mapping) else {}
+    production_checks = (
+        checks.get("production") if isinstance(checks.get("production"), Mapping) else {}
+    )
+    candidate_checks = (
+        checks.get("secret_candidate")
+        if isinstance(checks.get("secret_candidate"), Mapping)
+        else {}
+    )
+    for check in (
+        "astro_build",
+        "template_matrix",
+        "production_contract",
+        "catalog_parity",
+        "fixture_isolation",
+        "canonical_and_indexing",
+        "tree_hashes",
+    ):
+        if production_checks.get(check) != "ok":
+            raise StaticSitePermanentError(f"static_site_result_production_check_incomplete:{check}")
+    for check in (
+        "astro_build",
+        "candidate_contract",
+        "catalog_parity",
+        "noindex",
+        "no_referrer",
+        "prefix_containment",
+        "root_isolation",
+    ):
+        if candidate_checks.get(check) != "ok":
+            raise StaticSitePermanentError(f"static_site_result_candidate_check_incomplete:{check}")
     artifacts = result.get("artifacts")
     if not isinstance(artifacts, list) or len(artifacts) != 2 or {item.get("kind") for item in artifacts if isinstance(item, Mapping)} != {
         "production_root",

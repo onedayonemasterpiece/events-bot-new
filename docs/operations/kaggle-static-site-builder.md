@@ -40,8 +40,11 @@ The production rail is a durable state machine, not a local process lock:
    downloaded and fully identity/hash validated, published once and adopted.
    It is forbidden to push a replacement merely because the callback is stale.
    Only a failed or different dataset identity releases the old claim.
-6. Publication remains create-only under a fresh secret prefix. Root/current
-   and stable ICS are outside this state machine.
+6. Publication remains create-only under a fresh secret prefix. After full
+   result/manifest/object verification, the durable internal current-review
+   receipt advances atomically. Failed, no-op and artifact-only runs preserve
+   its previous value. Root/current and stable ICS are outside this state
+   machine.
 
 The local `fcntl` lock remains a same-process convenience only. Correctness is
 owned by SQLite claim/CAS, Kaggle dataset identity, result receipt and
@@ -68,7 +71,7 @@ Rules:
 - anonymous Object Storage listing must be disabled before treating an unlisted
   token as a bearer link; `noindex` is not access control;
 - the publisher refuses every root/current/stable-ICS key and uses create-only
-  writes (`If-None-Match: *`) below one immutable `secret-candidates/<token>/`
+  writes (`If-None-Match: *`) below one immutable `_review/<token>/`
   prefix.
 
 ## Current implementation path
@@ -117,12 +120,26 @@ outbox state machine:
   --correlation-id static-site:manual:<ticket>
 ```
 
+All operator/bot link-producing paths must use
+`static_site_release.resolve_current_secret_candidate`; historical named
+preview URLs are evidence, not routing. The current checked immutable target is
+read without enqueueing or mutating the DB:
+
+```bash
+.venv/bin/python scripts/request_static_site_build.py \
+  --db /data/db.sqlite --show-current-review
+```
+
+The resolver requires the exact build/run/repo/snapshot/input fingerprint,
+result/manifest/token hashes, verified object count, HTTPS bearer URL and
+negative root/stable-ICS mutation evidence. It returns unavailable for legacy
+or incomplete receipts. There is deliberately no public stable redirect.
+
 Automatic execution and upload are deliberately opt-in. Required identity and
 flags are documented in `.env.example`; defaults stay off:
 
 ```text
-ENABLE_STATIC_SITE_BUILD_AFTER_SMART_UPDATE=0
-ENABLE_STATIC_SITE_KAGGLE_BUILD=0
+ENABLE_STATIC_SITE_KAGGLE_BUILDER=0
 ENABLE_STATIC_SITE_SECRET_PUBLISH=0
 STATIC_SITE_REPO_SHA=<exact clean pushed SHA>
 ```
@@ -133,7 +150,9 @@ The Kaggle production-candidate invocation must include
 --export-in-kaggle`. The kernel runs Node 22, full export,
 `build:production/check:production`, then
 `build:secret-candidate/check:secret-candidate`, and returns the bounded v2
-result. Local gates are:
+result. The trusted boundary rejects the result unless the complete production
+template matrix and candidate noindex/no-referrer/prefix/root-isolation checks
+are all `ok`. Local gates are:
 
 ```bash
 pytest -q tests/test_static_site_release.py \
@@ -156,7 +175,7 @@ bearer URL and tree hash. Never put the URL/token in public docs, sitemap,
 canonical, Telegram public channels or logs. Revocation in this phase means
 deleting that complete immutable prefix; root/current remain untouched.
 
-### Smart Update debounce and 2026-07-15 current-data evidence
+### Smart Update debounce and historical 2026-07-15 data evidence
 
 Smart Update enqueues `static_site_build:prod` for 15 minutes after the latest
 accepted event update. Repeated updates move the one pending job forward. If a
@@ -184,9 +203,9 @@ CDN/ICS bases). It becomes active only after this branch is merged and deployed;
 the currently running Fly release does not contain that config yet.
 
 
-## Current v59 strict pgvector evidence and open gate
+## Historical v59 strict pgvector evidence and open gate
 
-`preview-20260629-event-pages-v59-related-gemma50` is the current strict related canary on real production-snapshot data: 50 events focused on 2026-06-30/2026-07-01, CDN-enabled assets/ICS, `npm run check:preview` passed, public Playwright smoke passed, and `/data/discovery/6447.json` shows `6310` “Архитектурно-урбанистическая студия...” as the strict Gemma-approved first related candidate (`llm_semantic_score=0.88`).
+`preview-20260629-event-pages-v59-related-gemma50` is historical strict related canary evidence on real production-snapshot data: 50 events focused on 2026-06-30/2026-07-01, CDN-enabled assets/ICS, `npm run check:preview` passed, public Playwright smoke passed, and `/data/discovery/6447.json` shows `6310` “Архитектурно-урбанистическая студия...” as the strict Gemma-approved first related candidate (`llm_semantic_score=0.88`).
 
 Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback, CDN asset/ICS bases, browser-safe AuthorizedEventSearch public env (`--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`, `--public-yandex-auth-provider`) and the date-focus controls `--current-datetime`, `--focus-date-from`, `--focus-date-to`. This means the coalesced `static_site_build` job can reproduce the v59-style vector sync/retrieval/Gemma strict-verification process from `/data/db.sqlite` after Smart Update and can render the one-line authorized search UI in focus-group previews when Yandex/Supabase Auth is configured.
 

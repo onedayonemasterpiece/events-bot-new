@@ -1,9 +1,29 @@
 # Astro SSG preview — event pages
 
-> **Status:** accepted v11 full-catalog event-page matrix is the mandatory template baseline; the corrected production-Kaggle secret candidate is published and has passed public desktop/mobile automation. Product visual acceptance and production-root rollout remain pending.
+> **Status:** accepted v11 full-catalog baseline plus v12 fidelity/idempotency corrections are the primary preproduction event templates; checked immutable secret candidates are refreshed through Smart Update/Kaggle. Production-root rollout remains pending.
 > **Accepted template source:** `3b17e536` (`integration/static-event-v11-transport-phone-carousel`), including horizontal photo, photo+OCR companion, document-contain, portrait-series and quality-fallback families.
 
-This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
+This is the primary Astro SSG preproduction implementation for `kenigevents.ru`
+event-detail pages in `events-bot-new`, not a lab experiment. It remains
+noindex and prefix-contained: no Supabase page-view write path, no
+personalization telemetry persistence on ordinary views, and no LLM fragments
+in rendered HTML. Event-detail discovery hydration is a static same-origin JSON
+manifest; pgvector is used only during the offline build/search sidecar
+pipeline, not as a live page-view ranking service.
+
+Named `preview-…` URLs in this document are historical evidence only. The
+canonical current review link is resolved from the last fully checked published
+receipt, never hard-coded:
+
+```bash
+.venv/bin/python scripts/request_static_site_build.py \
+  --db /data/db.sqlite --show-current-review
+```
+
+The durable pointer is internal SQLite state, not a public redirect. A failed,
+no-op or artifact-only run preserves the previous immutable target; an
+incomplete receipt resolves to unavailable. Production `/`, `current.json` and
+stable `/ics/*` stay untouched.
 
 ## 2026-07-18 v12 fidelity and production-rail contract
 
@@ -31,7 +51,7 @@ as the later teaser duplicate `6774→2884`. Production is repaired to the
 canonical `2884`; its official sources were merged, duplicate Telegram/VK
 surfaces removed and the duplicate Telegraph page redirects to the survivor.
 
-## 2026-07-18 v11 regression repair candidate
+## 2026-07-18 v11 regression repair evidence
 
 The next immutable secret candidate supersedes the visually rejected
 `5roC…` candidate and must be produced from a fresh read-only Fly SQLite
@@ -104,12 +124,12 @@ Required URLs for the historical 2026-07-02 detailed review target:
 - Information partnership/reference block page: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/partnerstvo/>
 - Information partners directory: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/partners/>
 - Event-token medallion QA lab: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/lab/medallions/>
-- Current related discovery JSON: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/data/discovery/5658.json>
+- Historical related discovery JSON: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/data/discovery/5658.json>
 - Preview sitemap: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sitemap.xml>
 - Preview robots: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/robots.txt>
 - Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260715t-production-mobile-v8-related-transport-v3/__preview/>
 
-CDN media/ICS verification for current previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 and the 2026-07-02 recovery preview use `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`; the 2026-07-02 recovery preview has Gemma strict verification disabled for the fast end-of-day rebuild and keeps the pgvector chain/audit metadata transparent in `preview-related.json`.
+CDN media/ICS verification for those historical previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 and the 2026-07-02 recovery preview use `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`; the 2026-07-02 recovery preview has Gemma strict verification disabled for the fast end-of-day rebuild and keeps the pgvector chain/audit metadata transparent in `preview-related.json`.
 
 ## Code layout
 
@@ -234,7 +254,7 @@ Remaining production gate after v48 was automatic Smart Update → Kaggle → CD
 
 ## v59 strict pgvector + Gemma 4 related preview
 
-`preview-20260629-event-pages-v59-related-gemma50` is the current strict related-events canary. It was generated from a read-only production SQLite snapshot on 2026-06-29 with `--current-datetime 2026-06-29T21:30`, prioritising events starting on 2026-06-30 and 2026-07-01. The two-day focus window contained 21 eligible one-day/short events, so the exporter supplemented later active future events to reach a 50-event review slice.
+`preview-20260629-event-pages-v59-related-gemma50` is historical strict related-events canary evidence. It was generated from a read-only production SQLite snapshot on 2026-06-29 with `--current-datetime 2026-06-29T21:30`, prioritising events starting on 2026-06-30 and 2026-07-01. The two-day focus window contained 21 eligible one-day/short events, so the exporter supplemented later active future events to reach a 50-event review slice.
 
 Related/publication contract:
 
