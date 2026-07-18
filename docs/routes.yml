@@ -93,6 +93,7 @@ sections:
       post_event_attendance_feedback: docs/backlog/features/post-event-attendance-feedback/README.md
       static_typed_briefing: docs/backlog/features/static-typed-briefing/README.md
       static_typed_briefing_artist_arrivals: docs/backlog/features/static-typed-briefing/artist-arrivals-and-unusual-events.md
+      static_site_video_guides: docs/backlog/features/static-site-video-guides/README.md
       movie_showtimes: docs/backlog/features/movie-showtimes/README.md
       poll_to_forward: docs/backlog/features/poll-to-forward/README.md
       poll_to_forward_requirements: docs/backlog/features/poll-to-forward/requirements.md

@@ -48,6 +48,13 @@
    Это не делает clubs частью first-presentation GO и не доказывает stable release:
    семидневное observation, freshness, false merge/split, rollback и owner stable
    decision закрываются отдельно.
+37. **Видеогайды «Как быстро найти событие» выпускаются только после релиза сайта.**
+   Их записывают на стабильном canonical production после D10 Telegraph cutover,
+   когда navigation/search/event-action flows уже зафиксированы. Первый набор
+   показывает быстрый выбор через `Сегодня`/`Завтра`/`Выходные`, точный поиск и
+   сохранение правильного occurrence. Preview/lab, персональные данные и ещё не
+   принятые функции в ролики не попадают; субтитры, production SHA/build, privacy
+   review, owner approval и обновление устаревших версий обязательны.
 
 ## Consequences
 

@@ -100,6 +100,11 @@ Current decisions and questions that affect several feature families live in [gl
   seven-day observation, freshness, false-merge/split, rollback and stable-release
   decision are closed; this does not make it a blocker for the first static-site
   presentation.
+- [Видеогайды «Как быстро найти событие»](../../backlog/features/static-site-video-guides/README.md):
+  отдельный post-release content release после стабильного production UI и D10
+  Telegraph cutover. Первая серия показывает быстрый путь через разделы/поиск к
+  корректному событию и сохранению выбранного occurrence; каждый ролик проходит
+  production-SHA, privacy, subtitles, mobile/desktop и owner-approval gates.
 
 ## Documentation completion rule
 

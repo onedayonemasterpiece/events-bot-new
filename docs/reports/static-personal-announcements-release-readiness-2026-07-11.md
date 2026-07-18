@@ -4,8 +4,8 @@
 > найдена в `origin/agent/static-release/checklist-cdn-social@fbb5b6a2` после
 > аварийного обрыва предыдущей задачи и возвращена в main-based release branch.
 > Базовый восстановленный реестр содержит **228 отдельных checkbox-требований**
-> в Stage 0–11; пять D0–D10 строк добавлены при сверке, поэтому текущая версия
-> содержит **233 checkbox-требования**;
+> в Stage 0–11; пять D0–D10 и семь video-guide строк добавлены при сверке,
+> поэтому текущая версия Stage 0–12 содержит **240 checkbox-требований**;
 > scope **F1–F18, H1, M1–M6** и не сводится к пяти задачам production-платформы.
 > Источники и расхождения с текущим `origin/main` зафиксированы в
 > [отчёте восстановления](static-site-release-context-recovery-2026-07-17.md).
@@ -25,7 +25,7 @@
 | Interest clubs | `98180d1e`, `6b234a52` и evidence `6cdae545` достигли `origin/main`; production canary включён | Stage 11 research/implementation baseline частично superseded; обязательны семидневное наблюдение, freshness/false-merge/rollback closure и отдельное решение о stable release. |
 | Full event-site publisher | `62ba7110` и последующее hardening остаются вне `origin/main` | Stage 2 production publish/promotion остаётся Blocked независимо от успешного preview. |
 | Design-system catalog | candidate `128a2d6a` находится в side branch | Это полезный F5 candidate, но не main/release truth и не заменяет immutable RC sign-off. |
-| Test inventory | 208 стабильных scenario IDs задокументированы | Автоматическая traceability пока нулевая: ID не встречаются в tests/scripts; это отдельный P0 release-evidence gap. |
+| Test inventory | 215 стабильных scenario IDs задокументированы | Автоматическая traceability пока нулевая: ID не встречаются в tests/scripts; это отдельный P0 release-evidence gap. |
 
 Текущий общий verdict остаётся **NO-GO**. Ни один новый merged slice не отменяет
 остальные требования реестра или 14-дневное quality window.
@@ -35,6 +35,11 @@
 > Актуализация product scope: **2026-07-12** — D-1 event reminders, one-time localStorage email, Yandex/manual-email choice, saved-search public tags, metric-backed personalization E2E и экологичный Supabase 500 MB capacity/compaction gate.
 >
 > Актуализация product scope: **2026-07-14** — F18: mobile menu/footer share of KenigEvents through one centrally prerendered metric-bound service card, desktop copy-link behavior, claim-evidence and CDN/real-device gates.
+>
+> Актуализация post-release scope: **2026-07-18** — Stage 12: видеогайды
+> «Как быстро найти событие» для сайта «Полюбить Калининград Анонсы» после
+> стабильного production UI и D10 cutover; production-SHA, subtitles, privacy,
+> multi-target publication и freshness/withdrawal gates обязательны.
 >
 > F18 desktop clarification: **2026-07-14** — Windows/macOS rich clipboard (`image/png` + `text/html` + `text/plain`) remains an evidence-gated candidate; current baseline is text+URL copy until the native browser/target-app matrix and owner decision are complete.
 >
@@ -551,6 +556,21 @@ stable-release decision.
 - [ ] После принятого research GO утвердить identity/schema/ownership, freshness/retention, LLM-first verdict, merge/split/redirect и ecological storage ADR.
 - [ ] Только затем реализовать shadow incremental pipeline и отдельный static index/detail slice с checked artifact, coalesced rebuild, atomic promotion, last-good/rollback, UI freeze, a11y/no-JS и SEO/GEO evidence.
 - [ ] Закрывать feature отдельным RC/canary: zero confirmed false public merge, no dangling relation и новая встреча подтверждённого клуба появляется в принятом freshness SLO.
+
+### Stage 12 — Пострелизные видеогайды «Как быстро найти событие»
+
+Эта стадия не блокирует public launch. Она начинается после стабильного Stage 7,
+завершённого D10 event-detail Telegraph cutover и фиксации production
+navigation/search/event-action flows. Каноника:
+[video guides](../backlog/features/static-site-video-guides/README.md).
+
+- [ ] Зафиксировать production SHA/build/manifest и подтвердить, что показанные navigation/search/event-action flows не находятся в эксперименте или незавершённом rollout.
+- [ ] Утвердить первую серию: быстрый путь через `Сегодня`/`Завтра`/`Выходные`, точный поиск по пользовательскому намерению и сохранение выбранного occurrence.
+- [ ] Подготовить storyboard/script для каждого guide id: одна задача на ролик, фактические labels/URL/CTA, без обещаний ещё не выпущенных функций.
+- [ ] Записать основной mobile vertical master и отдельный desktop вариант там, где путь отличается; показывать только canonical production, не preview/lab.
+- [ ] Пройти subtitles/transcript, privacy и accessibility QA: не раскрывать email, токены, private URLs, персональные интересы, admin state или чужие уведомления.
+- [ ] Для каждого target (site/Telegram/VK/MAX) получить owner approval, опубликовать принятую версию и сохранить public URL, source/export hashes и production evidence.
+- [ ] Проверить воспроизводимость новым пользователем и завести version/review/withdrawal process: изменение UI или критическая неточность снимает старый ролик до проверенной замены.
 
 ## 8. Reliability objectives to approve
 

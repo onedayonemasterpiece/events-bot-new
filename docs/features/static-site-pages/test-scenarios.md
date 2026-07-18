@@ -5,7 +5,7 @@
 > **Статус:** канонический acceptance inventory, а не журнал уже пройденных
 > тестов. Наличие ID не означает, что функция реализована, автоматизирована или
 > принята в production. Full release scope определяет
-> [Stage 0–11 readiness checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
+> [Stage 0–12 readiness checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
 > [release-plan.md](release-plan.md) владеет только platform/Telegraph slice.
 
 ## Уровни доказательства
@@ -237,7 +237,7 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-OBS-01 — Ошибки видимы и коррелируются.** Build/search/share/email/transport/personalization failure оставляет run/request correlation evidence без PII; UI не сообщает успех, если backend действие не принято.
 - **ADD-OBS-02 — Чистая клиентская сессия.** На каждой page family нет неожиданных console errors, unhandled rejections, failed first-party requests, hydration mismatch и повторяющегося telemetry spam.
 
-## Release-orchestration scenarios из полного Stage 0–11 checklist
+## Release-orchestration scenarios из полного Stage 0–12 checklist
 
 Эти IDs восстанавливают требования, которые не помещались в прежние широкие
 `ADD-*` families. Они остаются `Planned`, пока ID не связан с runnable test/manual
@@ -352,6 +352,13 @@ evidence row на frozen SHA.
 - **ADD-CLUB-03 — False merge/split closure.** Canary имеет zero confirmed false public merge, no dangling relation и accepted split/redirect behavior.
 - **ADD-CLUB-04 — Club freshness.** Новая встреча accepted club появляется в SLO, stale/deferred identity fail closed и не блокирует base event build.
 - **ADD-CLUB-05 — Club stable release.** Семидневное observation, rollback, UI/a11y/no-JS/SEO and owner decision закрывают отдельный canary release.
+- **ADD-VIDEO-GUIDE-01 — Stable production basis.** Ролик привязан к canonical production SHA/build/manifest после D10 и не показывает experimental/preview/lab flow.
+- **ADD-VIDEO-GUIDE-02 — Быстрый старт.** Новый пользователь по гайду открывает актуальное событие через `Сегодня`/`Завтра`/`Выходные` или категорию без лишнего обхода сайта.
+- **ADD-VIDEO-GUIDE-03 — Точный поиск.** Показанный запрос по жанру/времени/месту/цене воспроизводится на текущем catalog и приводит к корректному событию, а не к смонтированному успеху.
+- **ADD-VIDEO-GUIDE-04 — Правильный occurrence и сохранение.** Detail URL, дата/время, favorite/calendar и остальные показанные действия относятся к выбранному occurrence.
+- **ADD-VIDEO-GUIDE-05 — Формат и доступность.** Mobile/desktop вариант соответствует реальному flow, subtitles/transcript читаемы, taps/cursor и labels различимы без одной только озвучки.
+- **ADD-VIDEO-GUIDE-06 — Privacy and publication evidence.** В кадре нет PII/secrets/private URL/admin state; для каждого target сохранены owner approval, public URL и hashes source/export.
+- **ADD-VIDEO-GUIDE-07 — Freshness and withdrawal.** После изменения navigation/search/action contract зависимые guide ids отправляются на review, а критически устаревшая версия снимается до проверенной замены.
 
 
 ## Правило исполнения
