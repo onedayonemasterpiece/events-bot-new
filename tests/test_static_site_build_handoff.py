@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import json
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +11,42 @@ import pytest
 
 def _arg_after(cmd: list[str], name: str) -> str:
     return cmd[cmd.index(name) + 1]
+
+
+def test_snapshot_retention_context_fails_closed_for_malformed_active_handoff(tmp_path: Path) -> None:
+    import main
+
+    database = tmp_path / "retention.sqlite"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE static_site_build_state(release_channel TEXT PRIMARY KEY, active_job_id INTEGER)"
+        )
+        connection.execute(
+            "CREATE TABLE joboutbox(id INTEGER PRIMARY KEY, task TEXT, payload TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO static_site_build_state VALUES('secret_preview', 7)"
+        )
+        connection.execute(
+            "INSERT INTO joboutbox VALUES(7, 'static_site_build', '{malformed')"
+        )
+    assert main._static_site_snapshot_retention_context(str(database)) == (False, [])
+
+    payload = json.dumps({
+        "snapshot": {
+            "sqlite_path":"/data/static_site_snapshots/active.sqlite",
+            "manifest_path":"/data/static_site_snapshots/active.manifest.json",
+        }
+    })
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE joboutbox SET payload=? WHERE id=7", (payload,))
+    assert main._static_site_snapshot_retention_context(str(database)) == (
+        True,
+        [
+            "/data/static_site_snapshots/active.sqlite",
+            "/data/static_site_snapshots/active.manifest.json",
+        ],
+    )
 
 
 def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -105,7 +142,7 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
         build_id="production-secret-test",
         repo_sha="a" * 40,
         run_id="static-site:production-secret-test:12345678",
-        candidate_token="A" * 43,
+        candidate_token="-" + "A" * 42,
         profile="production-candidate",
         limit=5000,
         current_date="2026-07-17",
@@ -119,7 +156,7 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
     assert _arg_after(cmd, "--snapshot-manifest").endswith("request.manifest.json")
     assert _arg_after(cmd, "--repo-sha") == "a" * 40
     assert _arg_after(cmd, "--run-id").startswith("static-site:")
-    assert _arg_after(cmd, "--candidate-token") == "A" * 43
+    assert "--candidate-token=" + "-" + "A" * 42 in cmd
     assert _arg_after(cmd, "--current-datetime") == "2026-07-17T00:00:00+02:00"
     assert _arg_after(cmd, "--input-fingerprint") == "f" * 64
 

@@ -15,6 +15,7 @@ import re
 import sqlite3
 import tempfile
 import tarfile
+import time as unix_time
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timezone
@@ -1268,6 +1269,108 @@ def validate_snapshot(snapshot_path: str | os.PathLike[str], manifest_path: str 
     finally:
         connection.close()
     return metadata
+
+
+def delete_immutable_snapshot(
+    snapshot_path: str | os.PathLike[str],
+    manifest_path: str | os.PathLike[str],
+) -> int:
+    """Delete one terminal/regenerable snapshot and its SQLite sidecars.
+
+    The caller owns lifecycle safety (the snapshot must no longer be used by a
+    live handoff). Returning the removed byte count makes volume evidence
+    explicit without weakening immutable creation semantics.
+    """
+
+    snapshot = Path(snapshot_path)
+    manifest = Path(manifest_path)
+    removed_bytes = 0
+    for path in (
+        snapshot,
+        manifest,
+        Path(f"{snapshot}-wal"),
+        Path(f"{snapshot}-shm"),
+    ):
+        try:
+            removed_bytes += path.stat().st_size
+        except FileNotFoundError:
+            continue
+        path.unlink(missing_ok=True)
+    return removed_bytes
+
+
+def prune_immutable_snapshots(
+    snapshot_dir: str | os.PathLike[str],
+    *,
+    preserve_paths: Iterable[str | os.PathLike[str]] = (),
+    keep_latest_terminal: int = 1,
+    stale_incomplete_seconds: int = 900,
+) -> dict[str, Any]:
+    """Bound leaked static-site snapshots without touching active handoffs.
+
+    A normal terminal path deletes its own snapshot. This guard handles process
+    death between snapshot creation and terminal cleanup. At most one newest
+    unreferenced complete pair is retained for diagnosis; exact active paths
+    supplied by the durable build state are always preserved.
+    """
+
+    root = Path(snapshot_dir).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    keep_latest = max(0, int(keep_latest_terminal))
+    preserved: set[Path] = set()
+    for raw in preserve_paths:
+        candidate = Path(raw).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            continue
+        preserved.add(candidate)
+
+    complete: list[tuple[float, Path, Path]] = []
+    for snapshot in root.glob("snapshot-*.sqlite"):
+        manifest = snapshot.with_name(f"{snapshot.stem}.manifest.json")
+        if manifest.is_file():
+            complete.append((snapshot.stat().st_mtime, snapshot, manifest))
+    terminal = [
+        item for item in sorted(complete, key=lambda item: item[0], reverse=True)
+        if item[1].resolve() not in preserved and item[2].resolve() not in preserved
+    ]
+    removed: list[str] = []
+    removed_bytes = 0
+    for _mtime, snapshot, manifest in terminal[keep_latest:]:
+        removed.append(snapshot.stem)
+        removed_bytes += delete_immutable_snapshot(snapshot, manifest)
+    complete_paths = {
+        path.resolve()
+        for _mtime, snapshot, manifest in complete
+        for path in (snapshot, manifest, Path(f"{snapshot}-wal"), Path(f"{snapshot}-shm"))
+    }
+    stale_cutoff = unix_time.time() - max(60, int(stale_incomplete_seconds))
+    removed_incomplete: list[str] = []
+    for path in root.iterdir():
+        resolved = path.resolve()
+        if resolved in preserved or resolved in complete_paths or not path.is_file():
+            continue
+        name = path.name
+        recognized = (
+            (name.startswith(".snapshot-") and name.endswith(".tmp"))
+            or (name.startswith("snapshot-") and name.endswith(".manifest.json.tmp"))
+            or (name.startswith("snapshot-") and name.endswith(".sqlite"))
+            or (name.startswith("snapshot-") and name.endswith((".sqlite-wal", ".sqlite-shm")))
+            or (name.startswith("snapshot-") and name.endswith(".manifest.json"))
+        )
+        if not recognized or path.stat().st_mtime > stale_cutoff:
+            continue
+        removed_incomplete.append(name)
+        removed_bytes += path.stat().st_size
+        path.unlink(missing_ok=True)
+    return {
+        "removed_snapshot_ids": removed,
+        "removed_incomplete_files": sorted(removed_incomplete),
+        "removed_bytes": removed_bytes,
+        "preserved_paths": sorted(str(path) for path in preserved),
+        "retained_terminal_count": min(len(terminal), keep_latest),
+    }
 
 
 def validate_vector_barrier(request_payload: Mapping[str, Any], receipt_path: str | os.PathLike[str] | None) -> dict[str, Any]:

@@ -5,6 +5,7 @@ import hashlib
 import io
 import sqlite3
 import tarfile
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
@@ -22,11 +23,13 @@ from static_site_release import (
     claim_static_site_build,
     compute_static_site_input_fingerprint,
     create_immutable_snapshot,
+    delete_immutable_snapshot,
     finish_static_site_build_claim,
     freshness_state,
     make_request_payload,
     merge_request_payload,
     publish_secret_candidate_archive,
+    prune_immutable_snapshots,
     resolve_build_clock,
     resolve_current_secret_candidate,
     validate_production_candidate_result,
@@ -570,6 +573,60 @@ def test_add_build_08_online_backup_is_immutable_and_hash_bound(tmp_path) -> Non
     snapshot.write_bytes(snapshot.read_bytes() + b"tamper")
     with pytest.raises(StaticSitePermanentError, match="hash_or_size"):
         validate_snapshot(snapshot, manifest)
+
+
+def test_snapshot_retention_preserves_active_and_bounds_terminal_leaks(tmp_path) -> None:
+    source = tmp_path / "live.sqlite"
+    _fingerprint_db(source)
+    root = tmp_path / "snapshots"
+    snapshots = []
+    for index in range(4):
+        snapshot, manifest, _metadata = create_immutable_snapshot(
+            source,
+            root,
+            request_payload=make_request_payload(reason=f"retention-{index}"),
+            snapshot_id=f"snapshot-retention-{index}",
+        )
+        snapshot.touch()
+        snapshots.append((snapshot, manifest))
+
+    report = prune_immutable_snapshots(
+        root,
+        preserve_paths=snapshots[0],
+        keep_latest_terminal=1,
+    )
+    assert snapshots[0][0].is_file() and snapshots[0][1].is_file()
+    assert snapshots[3][0].is_file() and snapshots[3][1].is_file()
+    assert not snapshots[1][0].exists() and not snapshots[2][0].exists()
+    assert len(report["removed_snapshot_ids"]) == 2
+    assert report["removed_bytes"] > 0
+
+    removed = delete_immutable_snapshot(*snapshots[3])
+    assert removed > 0
+    assert not snapshots[3][0].exists() and not snapshots[3][1].exists()
+
+
+def test_snapshot_retention_removes_only_stale_recognized_incomplete_files(tmp_path) -> None:
+    root = tmp_path / "snapshots"
+    root.mkdir()
+    old_tmp = root / ".snapshot-old.deadbeef.tmp"
+    orphan_sqlite = root / "snapshot-orphan.sqlite"
+    recent_tmp = root / ".snapshot-recent.deadbeef.tmp"
+    unknown = root / "operator-note.txt"
+    for path in (old_tmp, orphan_sqlite, recent_tmp, unknown):
+        path.write_bytes(b"evidence")
+    old = datetime.now(timezone.utc).timestamp() - 3600
+    os.utime(old_tmp, (old, old))
+    os.utime(orphan_sqlite, (old, old))
+    os.utime(unknown, (old, old))
+
+    report = prune_immutable_snapshots(root, stale_incomplete_seconds=900)
+    assert sorted(report["removed_incomplete_files"]) == sorted(
+        [old_tmp.name, orphan_sqlite.name]
+    )
+    assert not old_tmp.exists() and not orphan_sqlite.exists()
+    assert recent_tmp.exists(), "a possibly active backup temp must be preserved"
+    assert unknown.exists(), "unknown operator evidence must never be pruned"
 
 
 def test_production_candidate_result_requires_exact_template_and_noindex_checks(tmp_path) -> None:

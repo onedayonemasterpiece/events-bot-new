@@ -45,6 +45,19 @@ recreating it per candidate:
   waiter must reconcile/adopt the exact Kaggle dataset/output before another
   push; automatic/operator requests no-op on an unchanged fingerprint unless
   the operator explicitly requests `force_rebuild`.
+- immutable SQLite inputs live only for the handoff lifecycle. Success,
+  no-op, recovered success and failures without a durable remote dataset delete
+  the snapshot, manifest and SQLite sidecars. A pushed dataset keeps its exact
+  input and claim until adoption/recovery; a pre-build crash guard preserves it
+  plus at most `STATIC_SITE_SNAPSHOT_KEEP_LATEST_TERMINAL=1` newest unreferenced
+  complete pair. Snapshot accumulation is never allowed to consume the Fly
+  `/data` health reserve.
+- the 256-bit base64url candidate token is handed to the runner as
+  `--candidate-token=<value>`; a leading `-` is valid token entropy, not a new
+  CLI option and must not cause a retry loop.
+- recognized incomplete backup files are removed only after
+  `STATIC_SITE_SNAPSHOT_STALE_INCOMPLETE_SECONDS=900`; unknown files are never
+  touched, and an unreadable active handoff disables pruning fail-closed.
 
 Event `6774` is not a valid no-image specimen: incident evidence identifies it
 as the later teaser duplicate `6774→2884`. Production is repaired to the
