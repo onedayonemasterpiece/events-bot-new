@@ -1,25 +1,41 @@
 # Городской обзор на главной: минимальный prototype gate
 
-> **Status:** clean-home lab with an expanded narrative queue, finite automatic chains and optional desktop media; immutable review build is recorded below after each verified publication.
+> **Status:** clean-home lab evidence for an owner-accepted homepage capability; no lab variant is accepted as production UI.
 > **Implementation:** dedicated one-route build for `/lab/briefing/`; no production homepage integration.
 > **Production effect:** none; the lab is not linked from production navigation and is published only under an immutable preview prefix.
-> **Decision:** `GO_TO_PROTOTYPE_ONLY`.
-> **Product desirability:** unvalidated.
+> **Decision:** product inclusion accepted by owner on 2026-07-18; exact minimal static implementation and every optional layer remain gated.
+> **Product performance/desirability:** unvalidated by behavioral metrics.
 > **Validated by users:** false.
 > **Validated by metrics:** false.
-> **Owner:** unassigned.
+> **Product owner decision:** capability accepted; exact production UI acceptance remains with the project owner.
 > **Review after:** production canary + baseline listing funnel + lab usability/telemetry evidence.
 
 ## Решение после внешнего аудита
 
+### Owner superseding decision — 2026-07-18
+
+Владелец принял саму homepage capability как неизменную часть продукта: Hero Talk
+должен работать как static-first автоматизатор promo campaigns и сценарный
+router в `Сегодня`, `Завтра`, `Выходные`, `Популярное`, public search или
+конкретное событие. Это решение отменяет pending product-level `ship|defer`, но
+не превращает ни один существующий lab build в принятый production UI.
+
+Минимальный grounded static router входит в homepage scope. Motion, personal
+catalog delta, backend reads и LLM writer остаются раздельными экспериментальными
+слоями и могут быть deferred. Каноническая сквозная роль и downstream KPI
+описаны в [продуктовой модели](product-system-analysis-2026-07-18.md).
+
+### Исторический lab gate
+
 Первое исследование подробно ответило на вопрос «как могла бы работать полноценная briefing-система», но не доказало, что она нужна пользователям. Два прохода одного Gemini Pro — полезное итеративное design review, а не две независимые консультации и не product evidence.
 
-Поэтому прежний `Conditional Go` отменён:
+До owner decision этот аудит отменял прежний `Conditional Go` и разрешал только
+изолированный prototype:
 
 ```text
 research: accept with corrected provenance/status
 minimal isolated prototype: approved
-production implementation: not approved
+production implementation: not approved by this historical lab gate
 Gemini Lite: deferred
 personalization overlay: deferred
 extended scenario platform: deferred
@@ -29,14 +45,16 @@ extended scenario platform: deferred
 
 ## Место в roadmap
 
-Typed briefing не разблокирует текущий production static-site rollout и не является P0/P1 до появления базовой воронки. Правильная последовательность:
+Сама Hero Talk capability теперь входит в homepage scope, но этот lab по-прежнему
+не разблокирует production rollout и не доказывает конкретную реализацию.
+Последовательность exact-implementation проверки:
 
 ```text
 production export
 → production canary
-→ baseline listing funnel
-→ выявление конкретной потери discovery
-→ minimal static briefing experiment
+→ baseline listing funnel и instrumentation
+→ minimal grounded static router integration
+→ downstream-value experiment
 → только после выигрыша motion/personalization/platform work
 ```
 
@@ -819,7 +837,7 @@ metric validation.
 
 | Requirement | Resolution |
 |---|---|
-| R01 status/evidence | `GO_TO_PROTOTYPE_ONLY`; user/metric validation false |
+| R01 status/evidence | product capability accepted by owner on 2026-07-18; exact implementation and user/metric validation remain open |
 | R02 no Gemini/personalization MVP | excluded from V0; retained only in appendix |
 | R03 initial ≤8 scenarios + fallback | первоначально выполнено как 8+fallback; последующий явный user-review superseded этот showcase-limit, поэтому selector расширен до 19+fallback без изменения production gate |
 | R04 isolated A/B/C lab | `/lab/briefing/` |

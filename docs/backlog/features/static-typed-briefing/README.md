@@ -1,8 +1,8 @@
 # Typed briefing: расширенная platform-гипотеза и post-validation appendix
 
-> **Status:** P1/P2 research appendix; not an MVP or production contract.
+> **Status:** P1/P2 research appendix for optional Hero Talk layers; the minimal homepage capability itself was accepted by the owner on 2026-07-18.
 > **Implementation:** none for the extended platform described below.
-> **Decision:** deferred until a minimal static briefing proves user and metric value.
+> **Decision:** extended platform remains deferred; minimal grounded static router belongs to homepage scope, while its exact UI and downstream value remain gated.
 > **Superseding MVP gate:** [`typed-briefing-hero-research.md`](../../../features/static-site-pages/typed-briefing-hero-research.md).
 
 This file preserves and extends the post-validation scenario library, pace profiles, personalization/manifest ideas, Gemini Lite writer boundary and extended risk/checklist work as future research. It must not be read as approved MVP scope. Where this appendix conflicts with the minimal gate, the minimal gate wins.

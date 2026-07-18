@@ -37,9 +37,9 @@ rendered at `/lab/design-system/`. Because the candidate is not yet in
 - personal page, transport (including the optional gallery slide «Как добраться»), discussion signals and admin report when included in launch scope;
 - empty, loading, degraded, cancelled/rescheduled and stale-data states.
 
-## Preliminary homepage «Городской обзор» candidate
+## Homepage Hero Talk / «Городской обзор» capability
 
-H1 is provisionally routed into release planning but is not yet part of the immutable UI baseline. Its [research contract](typed-briefing-hero-research.md) permits only a staged `Conditional Go`: categories-first control → static editorial briefing → semantic-fragment motion. Before this document can be frozen, the owner must explicitly choose `ship` or `defer` on an immutable preview.
+The owner accepted H1 as a permanent homepage product capability on 2026-07-18: a grounded static-first scenario and promo router that resolves into current eligible inventory. This does **not** accept any existing lab variant as production UI. Before this document can be frozen, the exact minimal static implementation must be integrated into one immutable preview and pass the research contract's downstream-value, route/supply, no-JS, reduced-motion, responsive, accessibility and performance gates. Semantic-fragment motion, personal catalog delta, backend reads and LLM writing remain separately deferrable layers.
 
 The candidate may ship only if the first useful scene is already in SSG/no-JS HTML, search/categories and at least the beginning of the feed remain visible and independently usable, the briefing stays within its 320/360/390/1366/1440 viewport budgets, and mobile plus `prefers-reduced-motion` are static/manual rather than autoplay. Links have stable hitboxes, motion interruption creates zero CLS, the approved lockup is unchanged, and every number/time/event/popularity/personal claim is backed by a versioned deterministic fact and route token. Client/runtime LLM, invented urgency and a terminal/chat-assistant skin are out of scope.
 
@@ -126,7 +126,7 @@ The frozen event-detail UI consumes the single medallion slice from draft PR [#3
 - mobile menu/footer service-card share and desktop menu/footer copy checks, including D0 text/link fallback and the owner-selected D1/D2 rich clipboard behavior after native Windows/macOS evidence;
 - visual baselines tied to one immutable preview build id;
 - `/lab/design-system/` is reviewed at acceptance widths with default/hover/focus/pressed/loading/disabled/error/degraded states; runtime-source imports, token-only primitives and promotion registry checks pass;
-- an explicit H1 `ship|defer` record; if `ship`, categories-first/static/motion comparison, 320–1440 viewport captures, no-JS/reduced-motion/keyboard/low-end checks and downstream discovery instrumentation are bound to that same preview;
+- an explicit H1 exact-implementation record: minimal static router is present, while motion/personal/backend/writer layers are individually marked `ship|defer`; 320–1440 viewport captures, no-JS/reduced-motion/keyboard/low-end checks and downstream discovery instrumentation are bound to that same preview;
 - M5 full renderer inventory covers every non-null rating plus unknown at mobile/tablet/desktop, with zero missing, contradictory, clipped, color-only or invented labels and visible/structured/ICS parity where applicable;
 - M6 captures same-day multi-time and different-date groups in every shared card family at mobile/tablet/desktop and no-JS; each alternative opens/saves the correct occurrence, while past/unavailable/false-linked/same-slot duplicates never appear as available choices;
 - the project owner/user signs off the exact branch/SHA, immutable preview build id and any explicitly accepted deviations; no proxy or automated check may grant final UI approval.
