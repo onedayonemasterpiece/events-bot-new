@@ -1,4 +1,5 @@
 import type { EventImageAsset, PreviewEvent } from './types';
+import { isTechnicallyStrongEventMedia, selectEventMediaByQuality } from './eventMediaQuality.ts';
 
 export type DesktopEventCandidate = 'editorial' | 'split';
 export type DesktopEventMediaPolicy = 'non-ocr' | 'ocr';
@@ -18,7 +19,7 @@ export interface DesktopEventPresentation {
   autoRotate: boolean;
   ocrSourceIndexes: number[];
   duplicateSourceIndexes: number[];
-  splitMediaFit: 'natural' | 'viewport-cover';
+  splitMediaFit: 'natural' | 'viewport-cover' | 'viewport-contain';
   splitPortraitViewer: boolean;
   splitPortraitSourceIndexes: number[];
   splitViewerHiddenSourceIndexes: number[];
@@ -77,10 +78,10 @@ function objectPosition(event: PreviewEvent, asset: EventImageAsset | undefined,
   return '50% 50%';
 }
 
-function primaryAssetIndex(event: PreviewEvent, assets: EventImageAsset[]): number {
-  if (!event.image_url) return 0;
-  const exact = assets.findIndex((asset) => asset.src === event.image_url);
-  return exact >= 0 ? exact : 0;
+function primaryAssetIndex(event: PreviewEvent, assets: EventImageAsset[], admittedIndexes: number[]): number {
+  if (!event.image_url) return admittedIndexes[0] ?? 0;
+  const exact = admittedIndexes.find((index) => assets[index]?.src === event.image_url);
+  return exact ?? admittedIndexes[0] ?? 0;
 }
 
 function distinctSourceIndexes(assets: EventImageAsset[]): number[] {
@@ -94,21 +95,6 @@ function distinctSourceIndexes(assets: EventImageAsset[]): number[] {
   return out;
 }
 
-function qualityAdmittedSourceIndexes(assets: EventImageAsset[], indexes: number[]): number[] {
-  const technicallyStrong = indexes.filter((index) => {
-    const asset = assets[index];
-    const pixels = Number(asset?.width || 0) * Number(asset?.height || 0);
-    const longEdge = Math.max(Number(asset?.width || 0), Number(asset?.height || 0));
-    // 720 px on the long edge plus a real image area is the minimum at which
-    // a desktop fullscreen presentation remains useful. `quality_score` is a
-    // supporting signal only; geometry is the stable cross-export contract.
-    return longEdge >= 720 && pixels >= 450_000 && Number(asset?.quality_score || 0) >= 10;
-  });
-  // Curate only when there is a genuine strong set. If an event has no strong
-  // media family, preserving its weak originals is better than an empty viewer.
-  return technicallyStrong.length >= 4 ? technicallyStrong : indexes;
-}
-
 /**
  * Route production desktop pages into the exact accepted Continuous Editorial
  * or Split component families. This is deliberately geometry + semantic-state
@@ -118,8 +104,10 @@ function qualityAdmittedSourceIndexes(assets: EventImageAsset[], indexes: number
  */
 export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEventPresentation {
   const assets = event.image_assets || [];
-  const distinctIndexes = distinctSourceIndexes(assets);
-  const primaryIndex = primaryAssetIndex(event, assets);
+  const qualitySelection = selectEventMediaByQuality(assets);
+  const qualityAdmittedIndexSet = new Set(qualitySelection.admittedSourceIndexes);
+  const distinctIndexes = distinctSourceIndexes(assets).filter((index) => qualityAdmittedIndexSet.has(index));
+  const primaryIndex = primaryAssetIndex(event, assets, distinctIndexes);
   const primary = assets[primaryIndex];
   const primaryRatio = assetRatio(primary);
   const ocrSourceIndexes = distinctIndexes.filter((index) => !isVisual(assets[index]));
@@ -132,15 +120,18 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
   // The accepted grouped viewer is useful once an event has a real portrait
   // family, not only when portraits are an absolute majority. Two classified
   // event photos anchor semantics; pending companions may then join by geometry.
-  const splitPortraitViewer = portraitIndexes.length >= 4
+  const groupedPortraitViewer = portraitIndexes.length >= 4
     && classifiedPortraitPhotoCount >= 2
     && portraitIndexes.length >= Math.ceil(Math.max(1, distinctIndexes.length) * 0.3);
-  const admittedSplitIndexes = splitPortraitViewer
-    ? qualityAdmittedSourceIndexes(assets, distinctIndexes)
-    : [];
-  const hiddenSplitIndexes = splitPortraitViewer
-    ? distinctIndexes.filter((index) => !admittedSplitIndexes.includes(index))
-    : [];
+  const lowResolutionPortraitFallback = Boolean(primary)
+    && isVisual(primary)
+    && primaryRatio > 0
+    && primaryRatio < PORTRAIT_MAX_RATIO
+    && !isTechnicallyStrongEventMedia(primary)
+    && distinctIndexes.length === 1;
+  const splitPortraitViewer = groupedPortraitViewer || lowResolutionPortraitFallback;
+  const admittedSplitIndexes = splitPortraitViewer ? distinctIndexes : [];
+  const hiddenSplitIndexes = splitPortraitViewer ? qualitySelection.hiddenSourceIndexes : [];
 
   // A landscape alternative may become hero only when a classified identity
   // poster anchors event semantics. A portrait/square visual primary alone is
@@ -257,7 +248,9 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
     autoRotate:false,
     ocrSourceIndexes,
     duplicateSourceIndexes:[],
-    splitMediaFit:selectedIsVisual && selectedRatio >= 1.15 ? 'viewport-cover' : 'natural',
+    splitMediaFit:lowResolutionPortraitFallback
+      ? 'viewport-contain'
+      : selectedIsVisual && selectedRatio >= 1.15 ? 'viewport-cover' : 'natural',
     splitPortraitViewer,
     // The grouped viewer must contain every rail source. Restricting it to the
     // portrait subset made a click on a landscape thumbnail open image one.
@@ -267,7 +260,9 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
     reason:!primary && !event.image_url
       ? 'split-no-image-fallback'
       : selectedIsVisual
-        ? (selectedRatio < 1.15 ? 'split-portrait-or-square-visual' : 'split-resolution-constrained-landscape')
+        ? lowResolutionPortraitFallback
+          ? 'split-low-resolution-portrait-viewer'
+          : (selectedRatio < 1.15 ? 'split-portrait-or-square-visual' : 'split-resolution-constrained-landscape')
         : 'split-document-or-unclassified-media',
   };
 }
