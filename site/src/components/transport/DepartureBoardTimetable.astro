@@ -33,7 +33,7 @@ const additional = options.slice(2);
     originMapLabel={originName}
   />
   <table>
-    <thead><tr><th scope="col">рейс</th><th scope="col">Северный</th><th scope="col">{arrivalStop}</th><th scope="col">Кауп</th></tr></thead>
+    <thead><tr><th scope="col">рейс</th><th scope="col">Северный</th><th scope="col">{arrivalStop}</th><th scope="col">КАУП</th></tr></thead>
     <tbody>
       {visible.map((option, index) => <tr data-transport-trip-id={option.tripId} data-departure-at={option.departureAt}>
         <th scope="row">{index + 1}</th>

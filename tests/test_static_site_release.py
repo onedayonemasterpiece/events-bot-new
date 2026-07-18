@@ -16,6 +16,7 @@ from static_site_release import (
     StaticSitePermanentError,
     StaticSiteRetryableError,
     active_static_site_remote_run,
+    recoverable_static_site_build,
     classify_failure,
     claim_static_site_build,
     compute_static_site_input_fingerprint,
@@ -245,6 +246,40 @@ def test_live_kaggle_ledger_prevents_stale_remote_reset(tmp_path) -> None:
         now=fresh + timedelta(seconds=30),
     )
     assert blocked.action == "busy"
+
+
+def test_terminal_orphan_remains_recoverable_by_exact_job_and_dataset(tmp_path) -> None:
+    database = tmp_path / "terminal.sqlite"
+    _fingerprint_db(database)
+    claim = claim_static_site_build(
+        database,
+        job_id=41,
+        run_id="remote-terminal",
+        input_fingerprint="c" * 64,
+        effective_date="2026-07-18",
+        request_watermark="watermark",
+    )
+    assert claim.action == "claimed"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE kaggle_run_ledger(
+                run_id TEXT PRIMARY KEY, kernel_ref TEXT, dataset_ref TEXT,
+                status TEXT, terminal_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO kaggle_run_ledger VALUES(?, ?, ?, 'done', ?)",
+            ("remote-terminal", "owner/kernel", "owner/exact-input", "2026-07-18T12:00:00Z"),
+        )
+    recovered = recoverable_static_site_build(database, job_id=41)
+    assert recovered is not None
+    assert recovered.claim_token == claim.claim_token
+    assert recovered.run_id == "remote-terminal"
+    assert recovered.dataset_ref == "owner/exact-input"
+    assert recovered.remote_status == "done"
+    assert recoverable_static_site_build(database, job_id=42) is None
 
 
 class _MemoryS3:

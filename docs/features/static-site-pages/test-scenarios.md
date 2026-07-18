@@ -19,7 +19,7 @@
   визуальный review; mocks не заменяют evidence.
 - **Planned** — product/implementation ещё отсутствует в `origin/main`.
 
-## Карта текущего покрытия на 2026-07-17
+## Карта текущего покрытия на 2026-07-18
 
 | Surface | Сценарии | Уровень сейчас | Канонический test/command | Что не доказано |
 |---|---|---|---|---|
@@ -28,9 +28,44 @@
 | Static build orchestration and immutable Kaggle handoff | `ADD-BUILD-01`, `ADD-BUILD-08/13`, `ADD-OBS-01` | Automated component | `pytest -q tests/test_static_site_release.py tests/test_static_site_build_handoff.py` | real Kaggle/status-ledger and enabled Fly flags |
 | Production/preview/secret artifact profiles | `ADD-BUILD-07/09/11/12` | Automated component | `npm --prefix site run test:static-release`; production/secret build+check commands from the runbook | live candidate HTTP and root promotion |
 | KAUP timetable A/B/C | `ADD-TR-06..10` | Automated component + manual visual | `pytest -q tests/test_static_site_bus_boarding.py tests/test_static_site_transport_experiment.py` | consented focus-group/live outcomes and statistical decision |
+| Exact KAUP reference fidelity | `ADD-V12-01` | Component + secret-candidate Playwright | exact A/B/C copy assertions; forced query URLs on the retained noindex specimen | user visual acceptance |
+| CTA invariant geometry | `ADD-V12-02` | Browser geometry | `STATIC_SITE_REVIEW_BASE_URL=… npm --prefix site run check:desktop-cta-geometry` at `1536×864` | additional browser matrix |
+| Venue medallion conflict ceiling | `ADD-V12-03` | Unit + generated HTML | `npm --prefix site run test:content-media`; events `5295/6796` | canonical cleanup of ambiguous past rows |
+| Kaliningrad today + build single-flight | `ADD-V12-04..06` | State-machine/unit + fresh candidate | build clock boundary, no-op fingerprint, live/terminal orphan adoption, `/segodnya/` public check | production-run evidence |
+| Typed no-image fallbacks | `ADD-V12-07` | Unit + public candidate | fallback is visible but absent from gallery/OG/JSON-LD/share | inventory refresh after each snapshot |
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
+
+### V12 mandatory regressions
+
+- **ADD-V12-01 — Reference, not reinterpretation.** Arms A/B/C preserve their
+  distinct last-mile and warning copy from Telegram messages `261–264`, the
+  green route hierarchy, shared icons and `на Кауп` grammar. On the retained
+  noindex QA route, every forced arm must be visible and overflow-free at both
+  `1536×864` and `390×844`.
+- **ADD-V12-02 — CTA bottom row.** At `1536×864`, event `6551` and the positive
+  control `5374` each have exactly three aligned, contained bottom controls in
+  calendar/share/like order with no horizontal overflow.
+- **ADD-V12-03 — One venue medallion.** A short alias matches only at Unicode
+  token boundaries; equally strong conflicting venue/ticket evidence renders
+  zero venue marks, never two.
+- **ADD-V12-04 — Local day.** `21:59 UTC` remains the same Kaliningrad day and
+  `22:00 UTC` rolls to the next; `/segodnya/` must match the build receipt date.
+- **ADD-V12-05 — No duplicate remote push.** A live orphan is deferred; an
+  exact completed orphan is downloaded, hash/identity validated and adopted
+  without `kernels_push`; only mismatched/failed remote identity releases the
+  old claim for a replacement.
+- **ADD-V12-06 — Content no-op.** Operational queue churn and already elapsed
+  rows do not change the public fingerprint; public fields, policy, repo SHA,
+  related cache or local date do. Explicit operator force is audited separately.
+- **ADD-V12-07 — Presentation-only art.** Symphonic/lecture fallback selection
+  is typed and deterministic; it cannot become event media or appear in machine
+  metadata/share payloads.
+- **ADD-V12-08 — Expiry-safe design fixtures.** Full-catalog generation after a
+  reviewed event expires must still build every design-system scenario from the
+  frozen examples; current production membership is not a prerequisite for a
+  lab contract.
 
 ### Release evidence row contract
 

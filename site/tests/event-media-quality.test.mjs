@@ -6,7 +6,9 @@ import { buildDesktopEventPresentation } from '../src/lib/desktopEventPresentati
 import { isLowResolutionPortraitEventMedia, selectEventMediaByQuality } from '../src/lib/eventMediaQuality.ts';
 
 const preview = JSON.parse(await readFile(new URL('../src/data/preview-events.json', import.meta.url), 'utf8'));
-const eventById = (id) => preview.events.find((event) => event.id === id);
+const examples = JSON.parse(await readFile(new URL('../src/data/desktop-event-examples.json', import.meta.url), 'utf8'));
+const frozenEvents = new Map([...examples.events, ...preview.events].map((event) => [event.id, event]));
+const eventById = (id) => frozenEvents.get(id);
 
 test('quality gate drops weak photo renditions when event-local strong media exists', () => {
   const selection = selectEventMediaByQuality([
@@ -38,6 +40,10 @@ test('Alye parusa contract keeps seven strong sources and excludes five weak one
   assert.equal(presentation.splitPortraitViewer, true);
   assert.deepEqual(presentation.splitPortraitSourceIndexes, [0, 4, 6, 8, 9, 10, 11]);
   assert.deepEqual(presentation.splitViewerHiddenSourceIndexes, [1, 2, 3, 5, 7]);
+});
+
+test('accepted media/CTA design-system examples remain frozen after the live event expires', () => {
+  for (const eventId of [4783, 5374, 6551, 6815]) assert.ok(examples.events.some((event) => event.id === eventId), `missing frozen event ${eventId}`);
 });
 
 test('a lone low-resolution portrait stays available in viewport-contain efficient viewer', () => {

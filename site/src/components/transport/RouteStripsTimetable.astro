@@ -11,24 +11,24 @@ const additional = options.slice(2);
 <section class="transport-treatment transport-strips" data-transport-treatment="route_strips_v1" hidden aria-label={`Маршруты автобуса № ${route}`}>
   <TransportRouteHeading
     route={route}
-    title={`${originName.replace(/ вокзал$/iu, '')} → Кауп`}
+    title={`${originName.replace(/ вокзал$/iu, '')} → КАУП`}
     subtitle={`через ${arrivalStop} · автобус + пешком`}
     originMapUrl={originMapUrl}
     originMapLabel={originName}
   />
   <ol>{visible.map((option) => <li data-transport-trip-id={option.tripId} data-departure-at={option.departureAt}>
     <strong class="transport-strips__departure">{option.departureEstimated ? '≈' : ''}{option.departure}</strong>
-    <div class="strip" aria-label={`${option.departure} Северный, ${option.estimatedStopArrival} ${arrivalStop}, ${option.estimatedVenueArrival} Кауп`}>
+    <div class="strip" aria-label={`${option.departure} Северный, ${option.estimatedStopArrival} ${arrivalStop}, ${option.estimatedVenueArrival} КАУП`}>
       <span><b>{option.departureEstimated ? '≈' : ''}{option.departure}</b><small>Северный</small></span><i></i>
       <span><b>≈{option.estimatedStopArrival}</b><small>{arrivalStop}</small></span><i></i>
-      <span><b>≈{option.estimatedVenueArrival}</b><small>Кауп</small></span>
+      <span><b>≈{option.estimatedVenueArrival}</b><small>КАУП</small></span>
     </div>{option.tight && <em>Небольшой запас — лучше выбрать более ранний рейс.</em>}
   </li>)}</ol>
   {additional.length > 0 && <details data-transport-disclosure>
     <summary data-transport-action="schedule_expand">Показать больше отправлений</summary>
     <ol>{additional.map((option) => <li data-transport-trip-id={option.tripId} data-departure-at={option.departureAt}>
       <strong class="transport-strips__departure">{option.departureEstimated ? '≈' : ''}{option.departure}</strong>
-      <div class="strip"><span><b>{option.departureEstimated ? '≈' : ''}{option.departure}</b><small>Северный</small></span><i></i><span><b>≈{option.estimatedStopArrival}</b><small>{arrivalStop}</small></span><i></i><span><b>≈{option.estimatedVenueArrival}</b><small>Кауп</small></span></div>
+      <div class="strip"><span><b>{option.departureEstimated ? '≈' : ''}{option.departure}</b><small>Северный</small></span><i></i><span><b>≈{option.estimatedStopArrival}</b><small>{arrivalStop}</small></span><i></i><span><b>≈{option.estimatedVenueArrival}</b><small>КАУП</small></span></div>
       {option.tight && <em>Небольшой запас — лучше выбрать более ранний рейс.</em>}
     </li>)}</ol>
   </details>}

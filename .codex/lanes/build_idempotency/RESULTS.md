@@ -5,7 +5,7 @@
 - Lane: `build_idempotency`
 - Requirements: R04, R05
 - Base SHA: `2fda48d8ba1fb8cda13878a2e9fb726c984eb0f3`
-- Implementation SHA: `a20ee0d7a9f443e28362a109a3b76ce8d81903f4`
+- Implementation SHA: `a20ee0d7b988fa824da418a4a870d8cbfe1503cc`
 - Final lane head: the commit containing this report (`git rev-parse HEAD`)
 
 ## Delivered evidence
@@ -30,6 +30,10 @@
 - The server-side claim occurs before `asyncio.create_subprocess_exec`/Kaggle push. Identical default automatic/manual requests become `noop` with `kaggle_push_count=0`; operator-only `force_rebuild` bypasses fingerprint equality but not the active lease.
 - A changed request blocked by an active lease is returned to pending without incrementing attempts or losing payload, then runs after the lease clears.
 - Before stale reset, both enqueue and due-job recovery consult the durable Kaggle ledger; a fresh heartbeat/unterminated remote run prevents reset/relaunch.
+- Integration hardening additionally persists the exact remote handoff and
+  requires dataset-identity reconciliation: a matching live orphan is deferred
+  and a matching completed orphan is downloaded/validated/adopted before any
+  replacement push.
 - Fingerprint and clock are validated and emitted by the runner/kernel result and included in Fly receipt evidence.
 
 ## Commands and tests

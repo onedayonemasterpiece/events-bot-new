@@ -71,8 +71,8 @@
   - Must not regress: event `6811` semantics resolve KОНБ + KGD80 + Znanie; every approved event image is preserved above one standalone bottom strip; `Подробнее` and `Max` retain a 12-space non-collapsing one-row gap; RichMessages never enqueue or receive legacy emoji medallions.
 
 - `INC-2026-07-16-static-event-media-action-regressions.md`
-  - Scope: static event medallion inventory, legacy approved media duplicates, user-state-driven desktop calendar labels, stable dynamic-card media and desktop/mobile gallery-ending parity.
-  - Must not regress: Dramatic Theatre renders its accepted medallion; event `4671` exposes one canonical poster variant; mobile secondary actions never expand by event-id parity; delayed images reserve geometry; both galleries finish with a related event.
+  - Scope: static event medallion/media inventory, exact KAUP A/B/C design-system fidelity, invariant desktop CTA geometry, Kaliningrad-date production generation and durable Smart Update→Kaggle single-flight/adoption.
+  - Must not regress: accepted transport is reproduced rather than reinterpreted and says `на Кауп`; ticket/phone variants keep the bottom calendar/share/like row; conflicting venue identities fail closed; delayed images reserve geometry; a stale Fly waiter never causes a duplicate Kaggle push; `/segodnya/` matches the receipt's Kaliningrad date.
 - `INC-2026-07-15-static-production-v2-secondary-surfaces.md`
   - Scope: generated desktop recommendation geometry, rail transport media, exact accepted mobile V8 integration and full-catalog preview acceptance.
   - Must not regress: recommendation rows use one media ratio without fields, OCR crops stay at or below 20%, rail examples retain the train image, and production mobile routes reuse the accepted V8 behavior from `fd8766b1` rather than an older approximation.
@@ -94,7 +94,7 @@
 
 - `INC-2026-07-13-runtime-logging-recurring-event-quality.md`
   - Scope: bounded permanent runtime logs, Fly volume hygiene, reversible production Telegram E2E authorization, complete future-event quality acceptance and vector/LLM evidence.
-  - Must not regress: production observability must be bounded rather than disabled; logs cannot exhaust SQLite storage; every live import acceptance needs correlated UI/log/ops/vector evidence; broad future quality claims require a complete source-adjudicated denominator.
+  - Must not regress: production observability must be bounded rather than disabled; logs cannot exhaust SQLite storage; every live import acceptance needs correlated UI/log/ops/vector evidence; broad future quality claims require a complete source-adjudicated denominator; known mappings such as `6774→2884` must be included before any event-local repair/public rearm.
 - `INC-2026-07-12-autoretro-one-day-exhibition-location-period.md`
   - Scope: source-grounded one-day outdoor exhibition date/venue semantics, Smart Update period/location merge safety, vector-first recall and all public projections.
   - Must not regress: a one-day street vehicle exhibition must not inherit a long-running exhibition period or unrelated indoor/default venue; vector similarity is recall only and cannot authorize semantic field transfer.

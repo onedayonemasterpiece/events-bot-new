@@ -11,7 +11,7 @@ const additionalCount = Math.max(0, options.length - 1);
   <TransportRouteHeading
     route={route}
     title="Из Калининграда"
-    subtitle={`${originName} → Кауп`}
+    subtitle={`${originName} → КАУП`}
     originMapUrl={originMapUrl}
     originMapLabel={originName}
   />
@@ -22,7 +22,7 @@ const additionalCount = Math.max(0, options.length - 1);
   <details data-transport-queue-details open>
     {additionalCount > 0 && <summary data-transport-action="schedule_expand">Следующие отправления</summary>}
     <ol data-transport-next-queue>
-      {options.map((option) => <li data-transport-c-trip data-transport-trip-id={option.tripId} data-departure-at={option.departureAt} aria-label={`${option.departure} Северный, ${option.estimatedStopArrival} ${arrivalStop}, ${option.estimatedVenueArrival} Кауп`}>
+      {options.map((option) => <li data-transport-c-trip data-transport-trip-id={option.tripId} data-departure-at={option.departureAt} aria-label={`${option.departure} Северный, ${option.estimatedStopArrival} ${arrivalStop}, ${option.estimatedVenueArrival} КАУП`}>
         <div class="transport-next__primary-line" aria-hidden="true">
           <strong data-terminal-departure={option.terminalDeparture}>{option.departureEstimated ? '≈' : ''}{option.departure}</strong>
           <span>→ ≈{option.estimatedVenueArrival}</span>
@@ -30,11 +30,11 @@ const additionalCount = Math.max(0, options.length - 1);
         <div class="transport-next__timeline" aria-hidden="true">
           <span><b>{option.departureEstimated ? '≈' : ''}{option.departure}</b><small>Северный</small></span>
           <span><b>≈{option.estimatedStopArrival}</b><small>{arrivalStop}</small></span>
-          <span><b>≈{option.estimatedVenueArrival}</b><small>Кауп</small></span>
+          <span><b>≈{option.estimatedVenueArrival}</b><small>КАУП</small></span>
         </div>
         <div class="transport-next__queue-line" aria-hidden="true">
           <strong>{option.departureEstimated ? '≈' : ''}{option.departure}</strong>
-          <span>Северный <b>→ {arrivalStop} ≈{option.estimatedStopArrival}</b><small>→ Кауп ≈{option.estimatedVenueArrival}</small></span>
+          <span>Северный <b>→ {arrivalStop} ≈{option.estimatedStopArrival}</b><small>→ КАУП ≈{option.estimatedVenueArrival}</small></span>
         </div>
         {option.tight && <em>Небольшой запас</em>}
       </li>)}

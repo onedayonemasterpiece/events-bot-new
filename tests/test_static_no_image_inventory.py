@@ -80,3 +80,32 @@ def test_cli_does_not_mutate_snapshot(tmp_path: Path) -> None:
             asset_base_url="https://static.kenigevents.ru",
         )
     assert db_path.read_bytes() == before
+
+
+def test_inventory_rolls_over_at_kaliningrad_midnight(tmp_path: Path) -> None:
+    db_path = tmp_path / "snapshot.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("create table event (id integer primary key, updated_at text)")
+    preview = {
+        "build": {},
+        "events": [{
+            "id": 99,
+            "title": "Local next-day lecture",
+            "event_type": "лекция",
+            "start_date": "2026-07-18",
+            "end_date": "2026-07-18",
+            "image_url": None,
+            "image_assets": [],
+            "lifecycle_status": "active",
+        }],
+    }
+    with AUDIT.open_read_only(db_path) as connection:
+        report = AUDIT.build_inventory(
+            connection,
+            preview,
+            db_path=db_path,
+            as_of=datetime(2026, 7, 18, 22, tzinfo=timezone.utc),
+            asset_base_url="https://static.kenigevents.ru",
+        )
+    assert report["summary"]["no_image_total"] == 0
+    assert report["summary"]["past_or_inactive_projection_count"] == 1

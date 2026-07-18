@@ -12,9 +12,11 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 SCHEMA_VERSION = "static_no_image_inventory_v1"
 REASONS = ("no_ledger", "no_approved", "approved_non_cdn", "projection_mismatch")
+KALININGRAD_TIME_ZONE = ZoneInfo("Europe/Kaliningrad")
 
 
 def clean(value: Any) -> str:
@@ -112,7 +114,7 @@ def build_inventory(
     as_of: datetime,
     asset_base_url: str,
 ) -> dict[str, Any]:
-    inventory_date = as_of.date().isoformat()
+    inventory_date = as_of.astimezone(KALININGRAD_TIME_ZONE).date().isoformat()
     all_no_image_events = [
         event for event in preview_payload.get("events", [])
         if not clean(event.get("image_url")) and not event.get("image_assets")

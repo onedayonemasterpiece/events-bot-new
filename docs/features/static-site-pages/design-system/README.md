@@ -46,6 +46,30 @@ No gradient, inset tile, outline, texture or decorative lettering animation is
 part of the approved identity. A contextual mobile shadow is allowed because
 the handle overlays photography; the desktop tag remains shadowless.
 
+## Event-detail component contracts
+
+- **Transport A/B/C:** `site/src/components/transport/*` is the only canonical
+  implementation. It shares bus/walk/pin/car icons but deliberately keeps the
+  accepted arm-specific route, last-mile and return-warning copy documented in
+  [event-transport-schedule.md](../event-transport-schedule.md). The retained
+  secret-candidate specimen renders the same responsive component at desktop
+  and mobile widths; query forcing must select the visible arm on both.
+- **Desktop CTA:** admission/primary action and the bottom
+  `calendar-share-like` row keep the same three-row hierarchy for ticket,
+  telephone and informational variants. At `1536×864` (FHD at 125%) the three
+  bottom controls must align, remain inside the card and never move beside the
+  primary action. Run `STATIC_SITE_REVIEW_BASE_URL=… npm --prefix site run
+  check:desktop-cta-geometry` for browser geometry
+  acceptance.
+- **Service footer:** `Понравились ` + the canonical inline `Анонсы` wordmark +
+  `? Поделитесь` is one accessible prompt. Do not redraw the expanded `о` with
+  CSS or revert to the ambiguous `Поделиться афишей` copy.
+- **Frozen accepted specimens:** time-bounded production events used for design
+  acceptance (`4783`, `5374`, `6551`, `6815`) are also stored in
+  `desktop-event-examples.json`. Production eligibility may expire, but the
+  design-system route and regression tests must not disappear or break a later
+  full-catalog build.
+
 ## Governance
 
 1. Change brand geometry only in the shared runtime assets/components.

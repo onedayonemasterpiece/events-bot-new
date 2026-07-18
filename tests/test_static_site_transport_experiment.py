@@ -183,7 +183,13 @@ def test_tr_exp_06a_accepted_visual_hierarchy_and_shared_icons_are_canonical() -
     assert "background:#1d6759" in strips
     assert "Ближайший подходящий · по расписанию" in next_queue
     assert "background:#176653" in next_queue
-    assert "После события обратного автобуса нет" in alerts
+    assert "От ${arrivalStop} пешком 4 км" in alerts
+    assert "≈53 минуты, короткого входа нет" in alerts
+    assert "Последний участок: 4 км пешком · 53 мин" in alerts
+    assert "Обратно — только авто или трансфер" in alerts
+    assert "Время до КАУП включает 53 мин пешком" in alerts
+    assert "4 км от ${arrivalStop}" in alerts
+    assert alerts.count("После события обратного автобуса нет") == 2
     assert "Как добраться на Кауп" in component
     assert " в Кауп" not in component
     for source in (component, board, strips, next_queue, alerts):

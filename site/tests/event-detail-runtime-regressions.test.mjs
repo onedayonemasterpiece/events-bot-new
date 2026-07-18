@@ -114,6 +114,10 @@ test('desktop actions keep calendar, share and like in one invariant bottom row'
   assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551/u);
   assert.match(lab, /slug: 'cta-ticket-invariant', eventId: 5374/u);
   assert.match(lab, /slug: 'editorial-ocr-companion-arrival', eventId: 4671[^\n]*transport: true, showTransport: true/u);
+  assert.match(lab, /import KaupTransportSchedule/u);
+  assert.match(lab, /data-lab-mobile-transport/u);
+  assert.match(lab, /<KaupTransportSchedule event=\{event\} compact \/>/u);
+  assert.match(lab, /@media \(max-width:1023px\)/u);
 });
 
 test('service share prompt uses the canonical inline announcements wordmark', async () => {

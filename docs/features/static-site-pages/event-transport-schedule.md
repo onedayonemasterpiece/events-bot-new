@@ -94,6 +94,23 @@ All three accepted timetable readings are implemented under experiment key
   queue of the remaining departures. It says `по расписанию` and never implies
   real-time vehicle tracking.
 
+The Telegram review messages `261–264` are the pixel/content reference, not an
+inspiration board. The shared design-system contract preserves these
+treatment-specific readings:
+
+| arm | route body | last mile | no-return warning |
+|---|---|---|---|
+| A | green `119` badge, `Автобус до Романово`, North/Romanovo/KAUP table, bounded disclosure | `От Романово пешком 4 км` + `≈53 минуты, короткого входа нет` | `После события обратного автобуса нет` |
+| B | `Северный → КАУП`, one transit strip per trip | `Последний участок: 4 км пешком · 53 мин` | `Обратно — только авто или трансфер` |
+| C | `Из Калининграда`, dark-green nearest-trip card plus compact queue | `Время до КАУП включает 53 мин пешком` + `4 км от Романово` | `После события обратного автобуса нет` |
+
+All arms use the same `Icon.astro` bus/walk/pin set. Product prose says
+`Как добраться на Кауп`; `в Кауп` is a regression. The immutable secret
+candidate retains only the noindex
+`/lab/event-desktop/examples/editorial-ocr-companion-arrival/` specimen so A/B/C
+can still be reviewed after the real event has elapsed; no other lab route may
+leak into the candidate.
+
 Every arm receives the same ordered, source-backed trip set and leaves the
 boarding point, route, arrival/walk estimates, return warning, official
 transfer and car alternative unchanged. The static root defaults to `off` and

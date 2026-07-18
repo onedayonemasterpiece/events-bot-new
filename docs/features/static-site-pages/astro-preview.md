@@ -5,6 +5,32 @@
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
+## 2026-07-18 v12 fidelity and production-rail contract
+
+V12 applies the accepted component system to automatic generation rather than
+recreating it per candidate:
+
+- transport A/B/C uses the exact Telegram `261–264` hierarchy/copy and shared
+  icons; a secret-only noindex specimen remains query-forceable after event
+  `4671` elapsed;
+- desktop ticket/telephone/information CTAs share the invariant bottom
+  calendar/share/like row; the phone remains a branded reveal-and-copy action;
+- venue medallions are evidence-aware, capped at one and fail closed on
+  conflicting structured identities;
+- supplied symphonic/lecture art is presentation-only fallback and never enters
+  gallery, Open Graph, JSON-LD, share media or the canonical media ledger;
+- `/segodnya/`, export, runner and receipt use one `Europe/Kaliningrad` clock;
+- Smart Update requests are coalesced, fingerprinted against the canonical
+  public projection and protected by a durable SQLite claim. A crashed Fly
+  waiter must reconcile/adopt the exact Kaggle dataset/output before another
+  push; automatic/operator requests no-op on an unchanged fingerprint unless
+  the operator explicitly requests `force_rebuild`.
+
+Event `6774` is not a valid no-image specimen: incident evidence identifies it
+as the later teaser duplicate `6774→2884`. Production is repaired to the
+canonical `2884`; its official sources were merged, duplicate Telegram/VK
+surfaces removed and the duplicate Telegraph page redirects to the survivor.
+
 ## 2026-07-18 v11 regression repair candidate
 
 The next immutable secret candidate supersedes the visually rejected

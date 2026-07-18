@@ -60,6 +60,19 @@ class StaticSiteBuildClaim:
     previous_run_id: str | None = None
 
 
+@dataclass(frozen=True)
+class StaticSiteRecoveryClaim:
+    claim_token: str
+    job_id: int
+    run_id: str
+    input_fingerprint: str
+    effective_date: str
+    kernel_ref: str | None = None
+    dataset_ref: str | None = None
+    remote_status: str | None = None
+    remote_terminal_at: str | None = None
+
+
 def resolve_build_clock(
     *,
     now: datetime | None = None,
@@ -684,6 +697,69 @@ def active_static_site_remote_run(
         return run_id if _kaggle_run_is_live(
             connection, run_id, now=now_utc, stale_seconds=stale_seconds
         ) else None
+    finally:
+        connection.close()
+
+
+def recoverable_static_site_build(
+    database_path: str | os.PathLike[str],
+    *,
+    job_id: int,
+) -> StaticSiteRecoveryClaim | None:
+    """Return the previous attempt's exact handoff before permitting a new push.
+
+    A Fly process can disappear after ``kernels_push`` while the fixed Kaggle
+    kernel keeps running.  The active durable claim is therefore recoverable
+    even when its callback heartbeat is stale or terminal: the caller must
+    first reconcile the exact kernel dataset/output identity and only then
+    either adopt it or release the claim for a new push.
+    """
+
+    connection = sqlite3.connect(str(database_path), timeout=30)
+    try:
+        state_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='static_site_build_state'"
+        ).fetchone()
+        if not state_exists:
+            return None
+        row = connection.execute(
+            """
+            SELECT active_claim_token, active_job_id, active_run_id,
+                   active_fingerprint, active_effective_date
+            FROM static_site_build_state WHERE release_channel=?
+            """,
+            (RELEASE_CHANNEL_SECRET,),
+        ).fetchone()
+        if not row or not row[0] or int(row[1] or 0) != int(job_id):
+            return None
+        run_id = str(row[2] or "").strip()
+        fingerprint = str(row[3] or "").strip()
+        effective_date = str(row[4] or "").strip()
+        if not run_id or not re.fullmatch(r"[0-9a-f]{64}", fingerprint) or not effective_date:
+            return None
+        ledger = None
+        ledger_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='kaggle_run_ledger'"
+        ).fetchone()
+        if ledger_exists:
+            ledger = connection.execute(
+                """
+                SELECT kernel_ref, dataset_ref, status, terminal_at
+                FROM kaggle_run_ledger WHERE run_id=?
+                """,
+                (run_id,),
+            ).fetchone()
+        return StaticSiteRecoveryClaim(
+            claim_token=str(row[0]),
+            job_id=int(row[1]),
+            run_id=run_id,
+            input_fingerprint=fingerprint,
+            effective_date=effective_date,
+            kernel_ref=str(ledger[0] or "").strip() or None if ledger else None,
+            dataset_ref=str(ledger[1] or "").strip() or None if ledger else None,
+            remote_status=str(ledger[2] or "").strip() or None if ledger else None,
+            remote_terminal_at=str(ledger[3] or "").strip() or None if ledger else None,
+        )
     finally:
         connection.close()
 

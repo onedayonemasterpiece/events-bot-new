@@ -276,6 +276,7 @@ from static_site_release import (
     max_attempts as static_site_max_attempts,
     merge_request_payload as merge_static_site_request_payload,
     publish_secret_candidate_archive,
+    recoverable_static_site_build,
     finish_static_site_build_claim,
     resolve_build_clock as resolve_static_site_build_clock,
     validate_production_candidate_result,
@@ -22433,6 +22434,8 @@ def _static_site_build_kaggle_command(
     run_id: str | None = None,
     candidate_token: str | None = None,
     profile: str = "preview",
+    adopt_existing: bool = False,
+    expected_dataset_ref: str | None = None,
 ) -> list[str]:
     related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
     if related_mode not in {"sparse", "pgvector"}:
@@ -22514,6 +22517,10 @@ def _static_site_build_kaggle_command(
                 "--candidate-token", candidate_token,
             ]
         )
+    if adopt_existing:
+        if not expected_dataset_ref:
+            raise ValueError("adoption requires the durable Kaggle input dataset identity")
+        cmd.extend(["--adopt-existing", "--expected-dataset-ref", expected_dataset_ref])
     if _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"):
         cmd.append("--sync-pgvector-vectors")
     if _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"):
@@ -22557,6 +22564,227 @@ async def _patch_static_site_request_payload(
         await session.commit()
 
 
+async def _finish_static_site_candidate(
+    *,
+    db: Database,
+    job_id: int,
+    output_dir: Path,
+    build_id: str,
+    run_id: str,
+    repo_sha: str,
+    snapshot_metadata: Any,
+    candidate_token: str,
+    input_fingerprint: str,
+    clock: Any,
+    claim_token: str,
+    recovered_remote: bool = False,
+) -> bool | str:
+    result_path = output_dir / "static_site_build_result.json"
+    if not result_path.is_file():
+        raise StaticSitePermanentError("static_site_result_receipt_missing")
+    result, candidate_archive = await asyncio.to_thread(
+        validate_production_candidate_result,
+        result_path,
+        output_dir=output_dir,
+        build_id=build_id,
+        run_id=run_id,
+        repo_sha=repo_sha,
+        snapshot=snapshot_metadata,
+        candidate_token=candidate_token,
+        input_fingerprint=input_fingerprint,
+        build_clock=clock,
+    )
+    publication_receipt = None
+    if _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"):
+        required_env = {
+            "bucket": (os.getenv("KENIGEVENTS_SITE_YC_BUCKET") or "").strip(),
+            "endpoint": (os.getenv("KENIGEVENTS_SITE_YC_ENDPOINT") or "https://storage.yandexcloud.net").strip(),
+            "region": (os.getenv("KENIGEVENTS_SITE_YC_REGION") or "ru-central1").strip(),
+            "access_key_id": (os.getenv("KENIGEVENTS_SITE_YC_ACCESS_KEY_ID") or "").strip(),
+            "secret_access_key": (os.getenv("KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY") or "").strip(),
+        }
+        if not required_env["bucket"] or not required_env["access_key_id"] or not required_env["secret_access_key"]:
+            raise StaticSitePermanentError("secret_candidate_publisher_credentials_missing")
+        publication_receipt = await asyncio.to_thread(
+            publish_secret_candidate_archive,
+            candidate_archive,
+            build_result=result,
+            extraction_root=output_dir / "candidate-publication",
+            public_base_url=(os.getenv("KENIGEVENTS_SITE_PUBLIC_BASE_URL") or "https://kenigevents.ru").strip(),
+            **required_env,
+        )
+    await _patch_static_site_request_payload(
+        db,
+        job_id,
+        {
+            "build_receipt": {
+                "build_id": build_id,
+                "run_id": run_id,
+                "repo_sha": repo_sha,
+                "event_count": int(result.get("event_count") or 0),
+                "candidate_archive": str(candidate_archive),
+                "artifacts": result.get("artifacts"),
+                "checks": result.get("checks"),
+                "publication": (
+                    {
+                        "status": "published",
+                        "public_url": publication_receipt.public_url,
+                        "manifest_sha256": publication_receipt.manifest_sha256,
+                        "token_sha256": publication_receipt.token_sha256,
+                        "object_count": publication_receipt.object_count,
+                        "root_mutation": False,
+                        "stable_ics_mutation": False,
+                    }
+                    if publication_receipt
+                    else {"status": "disabled", "root_mutation": False, "stable_ics_mutation": False}
+                ),
+                "finished_at": result.get("finished_at") or static_site_iso_utc(),
+                "release_channel": "secret_preview",
+                "recovered_remote": recovered_remote,
+            },
+            "last_success_at": static_site_iso_utc(),
+        },
+    )
+    await asyncio.to_thread(
+        finish_static_site_build_claim,
+        db.path,
+        claim_token=claim_token,
+        run_id=run_id,
+        input_fingerprint=input_fingerprint,
+        effective_date=clock.effective_date,
+        success=True,
+        receipt={
+            "build_id": build_id,
+            "run_id": run_id,
+            "snapshot_id": snapshot_metadata.snapshot_id,
+            "input_fingerprint": input_fingerprint,
+            "effective_date": clock.effective_date,
+            "published": bool(publication_receipt),
+            "recovered_remote": recovered_remote,
+        },
+    )
+    logging.info(
+        "static_site_build: done build_id=%s run_id=%s snapshot_id=%s published=%s recovered_remote=%s token_sha256=%s",
+        build_id,
+        run_id,
+        snapshot_metadata.snapshot_id,
+        bool(publication_receipt),
+        recovered_remote,
+        publication_receipt.token_sha256 if publication_receipt else None,
+    )
+    return publication_receipt.public_url if publication_receipt else True
+
+
+async def _recover_previous_static_site_attempt(
+    *,
+    db: Database,
+    job_id: int,
+    request_payload: Mapping[str, Any],
+    limit: int,
+) -> tuple[bool, bool | str | None]:
+    """Adopt a surviving Kaggle run before any replacement push is allowed."""
+
+    handoff = request_payload.get("remote_handoff")
+    if not isinstance(handoff, Mapping):
+        return False, None
+    claim = await asyncio.to_thread(recoverable_static_site_build, db.path, job_id=job_id)
+    if claim is None:
+        return False, None
+    required = {
+        "build_id": str(handoff.get("build_id") or "").strip(),
+        "run_id": str(handoff.get("run_id") or "").strip(),
+        "repo_sha": str(handoff.get("repo_sha") or "").strip(),
+        "candidate_token": str(handoff.get("candidate_token") or "").strip(),
+        "snapshot_path": str(handoff.get("snapshot_path") or "").strip(),
+        "manifest_path": str(handoff.get("manifest_path") or "").strip(),
+        "input_fingerprint": str(handoff.get("input_fingerprint") or "").strip(),
+        "current_datetime": str(handoff.get("current_datetime") or "").strip(),
+    }
+    if (
+        not all(required.values())
+        or required["run_id"] != claim.run_id
+        or required["input_fingerprint"] != claim.input_fingerprint
+        or not claim.dataset_ref
+    ):
+        raise StaticSitePermanentError("static_site_recovery_handoff_identity_mismatch")
+    snapshot_metadata = await asyncio.to_thread(
+        validate_snapshot, Path(required["snapshot_path"]), Path(required["manifest_path"])
+    )
+    clock = resolve_static_site_build_clock(
+        current_date=claim.effective_date,
+        current_datetime=required["current_datetime"],
+    )
+    script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
+    cmd = _static_site_build_kaggle_command(
+        db_path=required["snapshot_path"],
+        status_db_path=db.path,
+        build_id=required["build_id"],
+        limit=limit,
+        current_date=clock.effective_date,
+        current_datetime=clock.current_datetime,
+        input_fingerprint=claim.input_fingerprint,
+        script_path=script_path,
+        status_callback_url=_static_site_status_callback_url(),
+        snapshot_manifest_path=required["manifest_path"],
+        repo_sha=required["repo_sha"],
+        run_id=claim.run_id,
+        candidate_token=required["candidate_token"],
+        profile="production-candidate",
+        adopt_existing=True,
+        expected_dataset_ref=claim.dataset_ref,
+    )
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=os.path.dirname(__file__),
+        env=os.environ.copy(),
+    )
+    output, _ = await proc.communicate()
+    tail = output.decode("utf-8", errors="replace").splitlines()[-30:]
+    for line in tail:
+        logging.info("static_site_build: recovery %s", line)
+    if proc.returncode == 75:
+        raise StaticSiteSingleFlightDeferred(f"static_site_remote_recovery_live:{claim.run_id}")
+    if proc.returncode == 76:
+        await asyncio.to_thread(
+            finish_static_site_build_claim,
+            db.path,
+            claim_token=claim.claim_token,
+            run_id=claim.run_id,
+            input_fingerprint=claim.input_fingerprint,
+            effective_date=claim.effective_date,
+            success=False,
+            receipt={"status": "remote_recovery_unavailable", "remote_status": claim.remote_status},
+        )
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {"remote_handoff": None, "remote_recovery": {"status": "unavailable", "run_id": claim.run_id}},
+        )
+        return False, None
+    if proc.returncode != 0:
+        raise StaticSiteSingleFlightDeferred(
+            f"static_site_remote_recovery_probe_failed:{claim.run_id}:code={proc.returncode}"
+        )
+    output_dir = Path(__file__).resolve().parent / "artifacts" / "codex" / "static-site-builder" / f"output-{required['build_id']}"
+    result = await _finish_static_site_candidate(
+        db=db,
+        job_id=job_id,
+        output_dir=output_dir,
+        build_id=required["build_id"],
+        run_id=claim.run_id,
+        repo_sha=required["repo_sha"],
+        snapshot_metadata=snapshot_metadata,
+        candidate_token=required["candidate_token"],
+        input_fingerprint=claim.input_fingerprint,
+        clock=clock,
+        claim_token=claim.claim_token,
+        recovered_remote=True,
+    )
+    return True, result
+
+
 async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool | str:
     """Coalesced static-site build after Smart Update.
 
@@ -22591,6 +22819,14 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     repo_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
         raise StaticSitePermanentError("STATIC_SITE_REPO_SHA must be the exact pushed 40-character SHA")
+    recovered, recovered_result = await _recover_previous_static_site_attempt(
+        db=db,
+        job_id=job_id,
+        request_payload=request_payload,
+        limit=limit,
+    )
+    if recovered:
+        return recovered_result if recovered_result is not None else True
     vector_evidence = await asyncio.to_thread(
         validate_vector_barrier,
         request_payload,
@@ -22757,6 +22993,25 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     claim_finished = False
     try:
         candidate_token = secrets.token_urlsafe(32)
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {
+                "remote_handoff": {
+                    "schema_version": "static_site_remote_handoff_v1",
+                    "build_id": build_id,
+                    "run_id": run_id,
+                    "repo_sha": repo_sha,
+                    "candidate_token": candidate_token,
+                    "snapshot_path": str(snapshot_path),
+                    "manifest_path": str(manifest_path),
+                    "input_fingerprint": input_fingerprint,
+                    "effective_date": clock.effective_date,
+                    "current_datetime": clock.current_datetime,
+                    "prepared_at": static_site_iso_utc(),
+                }
+            },
+        )
         script_path = os.path.join(os.path.dirname(__file__), "scripts", "run_static_site_builder_kaggle.py")
         cmd = _static_site_build_kaggle_command(
             db_path=str(snapshot_path),
@@ -22808,98 +23063,21 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
             )
         output_dir = Path(__file__).resolve().parent / "artifacts" / "codex" / "static-site-builder" / f"output-{build_id}"
-        result_path = output_dir / "static_site_build_result.json"
-        if not result_path.is_file():
-            raise StaticSitePermanentError("static_site_result_receipt_missing")
-        result, candidate_archive = await asyncio.to_thread(
-            validate_production_candidate_result,
-            result_path,
+        completed = await _finish_static_site_candidate(
+            db=db,
+            job_id=job_id,
             output_dir=output_dir,
             build_id=build_id,
             run_id=run_id,
             repo_sha=repo_sha,
-            snapshot=snapshot_metadata,
+            snapshot_metadata=snapshot_metadata,
             candidate_token=candidate_token,
             input_fingerprint=input_fingerprint,
-            build_clock=clock,
-        )
-        publication_receipt = None
-        if _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"):
-            required_env = {
-                "bucket": (os.getenv("KENIGEVENTS_SITE_YC_BUCKET") or "").strip(),
-                "endpoint": (os.getenv("KENIGEVENTS_SITE_YC_ENDPOINT") or "https://storage.yandexcloud.net").strip(),
-                "region": (os.getenv("KENIGEVENTS_SITE_YC_REGION") or "ru-central1").strip(),
-                "access_key_id": (os.getenv("KENIGEVENTS_SITE_YC_ACCESS_KEY_ID") or "").strip(),
-                "secret_access_key": (os.getenv("KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY") or "").strip(),
-            }
-            if not required_env["bucket"] or not required_env["access_key_id"] or not required_env["secret_access_key"]:
-                raise StaticSitePermanentError("secret_candidate_publisher_credentials_missing")
-            publication_receipt = await asyncio.to_thread(
-                publish_secret_candidate_archive,
-                candidate_archive,
-                build_result=result,
-                extraction_root=output_dir / "candidate-publication",
-                public_base_url=(os.getenv("KENIGEVENTS_SITE_PUBLIC_BASE_URL") or "https://kenigevents.ru").strip(),
-                **required_env,
-            )
-        await _patch_static_site_request_payload(
-            db,
-            job_id,
-            {
-                "build_receipt": {
-                    "build_id": build_id,
-                    "run_id": run_id,
-                    "repo_sha": repo_sha,
-                    "event_count": int(result.get("event_count") or 0),
-                    "candidate_archive": str(candidate_archive),
-                    "artifacts": result.get("artifacts"),
-                    "checks": result.get("checks"),
-                    "publication": (
-                        {
-                            "status": "published",
-                            "public_url": publication_receipt.public_url,
-                            "manifest_sha256": publication_receipt.manifest_sha256,
-                            "token_sha256": publication_receipt.token_sha256,
-                            "object_count": publication_receipt.object_count,
-                            "root_mutation": False,
-                            "stable_ics_mutation": False,
-                        }
-                        if publication_receipt
-                        else {"status": "disabled", "root_mutation": False, "stable_ics_mutation": False}
-                    ),
-                    "finished_at": result.get("finished_at") or static_site_iso_utc(),
-                    "release_channel": "secret_preview",
-                },
-                "last_success_at": static_site_iso_utc(),
-            },
-        )
-        await asyncio.to_thread(
-            finish_static_site_build_claim,
-            db.path,
+            clock=clock,
             claim_token=claim.claim_token,
-            run_id=run_id,
-            input_fingerprint=input_fingerprint,
-            effective_date=clock.effective_date,
-            success=True,
-            receipt={
-                "build_id": build_id,
-                "run_id": run_id,
-                "snapshot_id": snapshot_metadata.snapshot_id,
-                "input_fingerprint": input_fingerprint,
-                "effective_date": clock.effective_date,
-                "published": bool(publication_receipt),
-            },
         )
         claim_finished = True
-        logging.info(
-            "static_site_build: done build_id=%s run_id=%s snapshot_id=%s published=%s token_sha256=%s",
-            build_id,
-            run_id,
-            snapshot_metadata.snapshot_id,
-            bool(publication_receipt),
-            publication_receipt.token_sha256 if publication_receipt else None,
-        )
-        return publication_receipt.public_url if publication_receipt else True
+        return completed
     finally:
         if not claim_finished:
             try:

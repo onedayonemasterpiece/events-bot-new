@@ -1,55 +1,50 @@
-# Integration report — static-event-v11-regression-repair
+# Integration report — static-event-v12-fidelity-idempotency
 
 ## Integrated scope
 
 | Requirement | Status | Integration evidence |
 |---|---|---|
-| R01 | Done | One shared quality-admitted desktop/mobile media set; event `4783` keeps seven strong images and drops five weak renditions only because alternatives exist. |
-| R02 | Done | Exact occurrence projection presents `5756` as the play «Женитьба», with event-photo hero and non-cropped OCR companion. |
-| R03 | Done | Event `5658` lead ends with the complete source-backed sentence «превращается в остросюжетный конфликт.» |
-| R04 | Done | KAUP ordinary/off/no-JS/elapsed fallback is `departure_board_v1`; all three accepted arms remain query-forceable, North station and bus/minibus copy are preserved. |
-| R05 | Done | Weak-only `180×320` event `6815` remains available at source-size `contain` in desktop/mobile hero and fullscreen instead of crop/upscale. |
-| R06 | Done | Main-reachable production-Kaggle build, immutable secret publication, public HTTP/Playwright, visual screenshot audit and Telegram handoff completed. |
-| R07 | Partial | Exact negative/positive Smart Update identity replays are merged, but production remains shadow and canonical `5754`–`5757`/public repair awaits the documented manual audit. |
+| R01 | Done in source | Exact Telegram `261–264` A/B/C hierarchy, arm-specific last-mile/return copy, shared icons, `на Кауп`; one secret-only noindex QA route survives elapsed event `4671`. |
+| R02 | Done in source | Unicode alias boundaries, evidence-ranked one-venue ceiling and fail-closed conflicts; `6796` resolves only KAUP and `5295` resolves no disputed venue mark. |
+| R03 | Done in source | Footer uses canonical inline wide-`о` wordmark in `Понравились Анонсы? Поделитесь`. |
+| R04 | Done locally; awaiting public candidate | One Europe/Kaliningrad clock across scheduler/export/runner/receipt; boundary tests pass. Fresh-snapshot local candidate `/segodnya/` is 18 July; a 17–19 July ongoing event remains correctly visible. |
+| R05 | Done in source | Durable claim/history, canonical public fingerprint/no-op, one follow-up, operator force, remote liveness and exact completed-orphan adoption before any replacement Kaggle push. |
+| R06 | Done in source | Ticket/telephone variants keep a three-control bottom row; committed Playwright CLI geometry gate covers `6551/5374` at `1536×864`. |
+| R07 | Done after incident correction | Supplied typed fallback art is presentation-only. Incorrect independent repair of `6774` was reversed per known `6774→2884`: survivor/source/public surfaces reconciled and duplicate tombstoned. |
+| R08 | Done locally; awaiting release refresh | Read-only reason/type inventory uses Kaliningrad local day. Fresh post-repair snapshot has exactly two `no_ledger` rows: `5663` (concert) and `6890` (meeting); both receive typed presentation-only art. |
 
 ## Integration decisions
 
-- The accepted v11 family matrix, not the named three pages alone, is the
-  automatic template baseline.
-- Weak images are excluded only when an event-local strong alternative exists;
-  weak-only media stays visible without destructive enlargement.
-- The accepted departure board is the safe transport default. Query-forced A/B/C
-  arms are review controls and do not create trusted experiment telemetry.
-- The static `5756` source-consistency guard is a safe projection, not a claim
-  that canonical production data or existing public posts are repaired.
-- The production root was not promoted. The bearer token is kept only in ignored
-  release artifacts and the Telegram review message, never in tracked docs.
+- Accepted transport screenshots are a normative design-system reference, not
+  an inspiration board. Shared primitives may not collapse treatment-specific
+  content.
+- The safe secret-candidate QA route is allowlisted exactly; all other lab
+  routes remain forbidden and it stays absent from sitemap/indexing.
+- Build idempotency is server-side and crash-safe. A local file lock or stale
+  callback alone cannot authorize another fixed-kernel push.
+- Known incident duplicate mappings are mandatory context for event-local
+  semantic repair. Source-fact correctness alone is not identity correctness.
+- Fallback artwork is presentation, never canonical event media.
 
-## Verification
+## Verification completed before release
 
-- `pytest -q tests/test_static_site_*.py tests/test_smart_update_merge_identity_gate.py`: `63 passed`.
-- `node --test site/tests/event-media-quality.test.mjs`: `5 passed`.
-- `npm --prefix site run test:static-release`: `5 passed`.
-- GitHub CI for PR `#76`: success; source SHA
-  `a6ad22fba8b63e3dee7a71b8ca0837494c554033` is in `origin/main`.
-- Kaggle build
-  `production-20260718t-static-event-v11-regression-repair-kaggle-v2b`:
-  snapshot SHA-256
-  `8c784e2d14b34738a89f4cf0101645a46e470a2147c7752f73db7dcf83629972`,
-  `323` event pages / `1172` files, all mandatory production/secret checks green.
-- Secret prefix: `1173` exact authenticated objects and public hash/MIME checks.
-  A tool-session interruption left `745` already-created objects; each ETag was
-  checked against the local single-part body, the remaining `428` were created
-  with `If-None-Match`, and final inventory/body/MIME parity was exact.
-- Public acceptance: seven HTTP specimens with `noindex`/`no-referrer`; `21`
-  focused Playwright checks, `36 × 2` mobile page checks and five real
-  transitions; production root and sitemap hashes unchanged.
-- Telegram delivery/readback: chat `4337049383`, topic `2`, message `300`.
+- `pytest -q tests/test_static_site_*.py tests/test_static_no_image_inventory.py tests/test_smart_update_merge_identity_gate.py`: `78 passed`.
+- All static-site Node behavior suites against `preview-v12-final`: `27 passed`; content/media suite: `6 passed`; `check:preview` passed for `303` events and the preview build produced `379` pages.
+- Fresh production-snapshot contract build: `292` event pages / `1062` files; secret candidate: `1063` files with exactly one allowlisted noindex lab route.
+- Playwright: both CTA specimens passed the committed `1536×864` geometry gate; transport A/B/C each selected exactly one visible forced arm with no horizontal overflow at `1536×864` and `390×844`. Six element screenshots reproduce the accepted hierarchy/copy.
+- Local candidate checks: `6796` emits only structured KAUP evidence and no MMO text; `2884` has the verified Cathedral/Kant identity and image; fallback assets are `concert-symphonic.webp` for `5663` and `lecture-meeting.webp` for `6890`; footer exposes the branded `Понравились Анонсы? Поделитесь` prompt.
+- Production duplicate repair: `PRAGMA quick_check=ok`; survivor `2884`
+  active/canonical, duplicate `6774` merged/silent; Telegram duplicate `2152`
+  absent, rich survivor `2531` present; authenticated VK duplicate `7717`
+  `is_deleted=true`, survivor `7412` present; duplicate Telegraph redirects.
+- External consultation: `a-opus` was blocked by individual quota and is not
+  represented as completed. Gemini 3.1 Pro (High) completed the UI and
+  idempotency reviews and endorsed exact visual reproduction plus server-side
+  claim/fingerprint/adoption boundaries.
 
-## Remaining gates
+## Remaining release gates
 
-- User visual acceptance before any production-root promotion.
-- Source-grounded canonical repair and authenticated TG/VK/Telegraph repair for
-  events `5754`–`5757`.
-- Manual precision audit before changing the Smart Update identity gate from
-  `shadow` to `enforce`.
+- main-reachable commit, production deploy/health/schema verification;
+- fresh current-date production-Kaggle secret candidate, public checks and
+  refreshed no-image inventory;
+- Telegram review-topic link handoff/readback and user visual acceptance.

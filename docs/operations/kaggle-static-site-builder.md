@@ -19,6 +19,34 @@ It is acceptable for the Kaggle API actor to be a dedicated personal Kaggle user
 
 ## Production protocol
 
+### V12 single-flight, no-op and crash adoption
+
+The production rail is a durable state machine, not a local process lock:
+
+1. Smart Update and the operator endpoint coalesce effects into one singleton
+   outbox request; a changed effect during a run becomes one follow-up.
+2. A read-only immutable snapshot and one `Europe/Kaliningrad` build clock feed
+   a canonical public-projection SHA-256. Queue attempts, timestamps and elapsed
+   past-only churn are excluded; public event/media/config/repo/date/related
+   inputs are included.
+3. `BEGIN IMMEDIATE` claims `static_site_build_state` before any Kaggle push.
+   Equal successful fingerprints no-op for both automatic and ordinary manual
+   requests. Only `trigger=operator_request + force_rebuild=true` bypasses it.
+4. Before push, the running outbox payload stores the exact build/run/repo,
+   candidate-token, snapshot hash/path, fingerprint and clock handoff. The
+   Kaggle ledger stores the exact input dataset identity.
+5. If Fly dies after push, a retry first pulls the fixed kernel metadata. A
+   matching running kernel is deferred; a matching complete kernel is
+   downloaded and fully identity/hash validated, published once and adopted.
+   It is forbidden to push a replacement merely because the callback is stale.
+   Only a failed or different dataset identity releases the old claim.
+6. Publication remains create-only under a fresh secret prefix. Root/current
+   and stable ICS are outside this state machine.
+
+The local `fcntl` lock remains a same-process convenience only. Correctness is
+owned by SQLite claim/CAS, Kaggle dataset identity, result receipt and
+conditional Object Storage writes.
+
 ```text
 immutable Fly SQLite snapshot
   -> one Kaggle CPU build with status ledger

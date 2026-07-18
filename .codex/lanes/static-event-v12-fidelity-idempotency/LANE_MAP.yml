@@ -43,7 +43,7 @@ lanes:
       - CHANGELOG.md
     expected_output: committed exact design-system implementation and responsive regression tests
     verification_scope: full_local
-    status: planned
+    status: completed
 
   - id: content_media
     role: worker
@@ -82,7 +82,7 @@ lanes:
       - CHANGELOG.md
     expected_output: committed data guards/assets/audit tooling plus evidence bundle; production repair patch only if sources prove it
     verification_scope: targeted
-    status: planned
+    status: completed
 
   - id: build_idempotency
     role: worker
@@ -117,7 +117,7 @@ lanes:
       - CHANGELOG.md
     expected_output: committed state-machine/fingerprint implementation with race/no-op/manual/date tests
     verification_scope: full_local
-    status: planned
+    status: completed
 
   - id: integration_release
     role: merge_reviewer
@@ -136,4 +136,4 @@ lanes:
     forbidden_files: []
     expected_output: integrated main-reachable changes, release evidence, closure matrix
     verification_scope: full_local
-    status: planned
+    status: in_progress

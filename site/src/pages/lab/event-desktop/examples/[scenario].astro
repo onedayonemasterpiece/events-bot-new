@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../../../layouts/EventLayout.astro';
 import DesktopEventCleanPage from '../../../../components/DesktopEventPage.astro';
+import KaupTransportSchedule from '../../../../components/KaupTransportSchedule.astro';
 import previewData from '../../../../data/preview-events.json';
 import examplesData from '../../../../data/desktop-event-examples.json';
 import thumbnailOverridesData from '../../../../data/desktop-event-thumbnail-overrides.json';
@@ -152,4 +153,15 @@ const description = event.meta_description || event.summary || event.title;
     mediaRoleOverrides={scenario.mediaRoleOverrides}
     mediaDimensionOverrides={scenario.mediaDimensionOverrides}
   />
+  {scenario.showTransport && (
+    <div class="lab-mobile-transport page-shell" data-lab-mobile-transport>
+      <KaupTransportSchedule event={event} compact />
+    </div>
+  )}
+  <style is:global>
+    .lab-mobile-transport { display:none; }
+    @media (max-width:1023px) {
+      .lab-mobile-transport { display:block; padding-block:1rem 2rem; }
+    }
+  </style>
 </EventLayout>

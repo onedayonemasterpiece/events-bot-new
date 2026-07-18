@@ -9,12 +9,29 @@ interface Props {
 }
 
 const { arrivalStop, walkRouteUrl, publicReturnAvailable, treatment } = Astro.props;
+const copy = treatment === 'departure-board'
+  ? {
+      title: `От ${arrivalStop} пешком 4 км`,
+      detail: '≈53 минуты, короткого входа нет',
+      warning: 'После события обратного автобуса нет',
+    }
+  : treatment === 'route-strips'
+    ? {
+        title: 'Последний участок: 4 км пешком · 53 мин',
+        detail: '',
+        warning: 'Обратно — только авто или трансфер',
+      }
+    : {
+        title: 'Время до КАУП включает 53 мин пешком',
+        detail: `4 км от ${arrivalStop}`,
+        warning: 'После события обратного автобуса нет',
+      };
 ---
 
 <div class:list={['transport-journey-alerts', `transport-journey-alerts--${treatment}`]} data-transport-journey-alerts={treatment}>
   <div class="transport-journey-alerts__walk" data-kaup-last-mile>
     <Icon name="walk" />
-    <p><strong>Последний участок: 4 км пешком · 53 мин</strong><span>От {arrivalStop}; короткого входа нет</span></p>
+    <p><strong>{copy.title}</strong>{copy.detail && <span>{copy.detail}</span>}</p>
     <a
       href={walkRouteUrl}
       target="_blank"
@@ -24,7 +41,7 @@ const { arrivalStop, walkRouteUrl, publicReturnAvailable, treatment } = Astro.pr
       data-transport-action="walk_route_click"
     ><Icon name="pin" /></a>
   </div>
-  {!publicReturnAvailable && <p class="transport-journey-alerts__warning kaup-transport__warning--strong">После события обратного автобуса нет</p>}
+  {!publicReturnAvailable && <p class="transport-journey-alerts__warning kaup-transport__warning--strong">{copy.warning}</p>}
 </div>
 
 <style>
