@@ -94,10 +94,30 @@ The deploy script uploads preview files with default short cache and then re-upl
 | --- | --- | --- |
 | `/<build_id>/*.html`, JSON, sitemap/robots | `public, max-age=300` | safe for focus-group preview; new build id for changes |
 | `/<build_id>/_astro/*` | `public, max-age=31536000, immutable` | content-hashed and build-prefixed |
+| `/<build_id>/assets/*` | `public, max-age=31536000, immutable` | build-prefixed local visual assets, including listing-media derivatives |
 | `/<build_id>/event.ics` | `public, max-age=300` + `text/calendar` metadata | build-scoped fallback |
 | `/ics/<event_id>.ics` | `public, max-age=300` + `text/calendar` metadata | stable calendar CTA target |
 | `/p/**` | object metadata, intended immutable for content-addressed keys | mirrored from legacy media bucket; safe for `PUBLIC_ASSET_BASE_URL` |
 | `/p/thumb/v1/**` | `public, max-age=31536000, immutable` | content-addressed 256/512 WebP derivatives used by rails/cards through `srcset` |
+
+### V19 listing-media profile (2026-07-18)
+
+Public V18 Weekend profiling at `1536×864` measured 67 event images and showed
+that the browser cache was already effective: a warm reload and subsequent
+scroll transferred **0 image body bytes** (memory cache first, disk cache later).
+The perceived disappearance was instead late discovery: only six images had a
+real `src` initially because application JS copied URLs from `data-listing-src`
+after a narrow `200px` observer intersection. A visible second card received its
+URL around 916ms and became ready around 1.15s. V19 therefore emits every
+`src/srcset` in parser-visible HTML and uses native `loading=lazy`; the first four
+Weekend cards in global chronology are eager/high priority. It also changes the
+Weekend `sizes` contract to 320/340px because 15 of 67 V18 cards selected a 256w
+file for an actual 257–317px frame at DPR 1.
+
+Build-scoped `assets/**` are re-uploaded immutable in V19; HTML and ICS retain
+the short-cache policy. Cross-origin RUM still needs a separate
+`Timing-Allow-Origin` CDN configuration before client Resource Timing can be
+used as authoritative transfer evidence.
 
 ## Acceptance gates
 

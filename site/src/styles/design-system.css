@@ -624,7 +624,7 @@
   .ke-time-nav__inner { padding-left: 0; }
 }
 
-/* V18 canonical desktop listing contract.
+/* V19 canonical desktop listing contract.
    Supersedes the accumulated V15/V16/V17 listing overrides below this point:
    one stable discovery plane, source-truthful media geometry, bounded rails,
    and width-aware editorial packing rather than a fixed card grid. */
@@ -901,8 +901,8 @@
   border: 0;
   background: transparent;
   box-shadow: none;
-  filter: saturate(.68);
-  opacity: .82;
+  filter: none;
+  opacity: 1;
 }
 .ke-listing-card__fallback + .ke-listing-card__medallion { right: 10px; bottom: 10px; transform: none; }
 

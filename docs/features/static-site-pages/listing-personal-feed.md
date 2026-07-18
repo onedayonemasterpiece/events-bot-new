@@ -4,7 +4,16 @@
 
 ## Product rule
 
-Static listing pages (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) end with a dynamic “Личная лента” section. The section is **not pre-rendered with personal cards** in static HTML. It stays hidden until the browser can use a cached personal list or fetch one from a backend.
+Static date listing pages (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) may end with a dynamic “Личная лента” section. The section is **not pre-rendered with personal cards** in static HTML. It stays hidden until the browser can use a cached personal list or fetch one from a backend.
+
+`/populyarnoe/` is intentionally excluded from this generic slot. Its primary
+job is a bounded behavioral overview. A future continuation is a separate
+experiment: one wrapper containing `Вам может быть интересно` (popular ×
+affinity) and `Откройте новое` (anti-bubble exploration). The wrapper appears
+only with explicit consent, compatible meaningful profile, experiment bucket,
+fresh normalized popularity score, page-wide exact/family exclusions and enough
+qualified candidates for **both** lanes; otherwise the whole continuation stays
+absent. A generic personal response must never render under either heading.
 
 This keeps SEO-safe deterministic listing content first, then adds a personal continuation only for real users.
 

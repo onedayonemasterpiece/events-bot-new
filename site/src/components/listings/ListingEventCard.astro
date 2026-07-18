@@ -35,9 +35,11 @@ const responsiveSrcset = responsiveCandidates.length
   ? responsiveCandidates.map((item) => `${listingImageUrl(item.src)} ${item.width}w`).join(', ')
   : undefined;
 const responsiveSizes = density === 'weekend'
-  ? (image.asset?.listing_crop_evidence === 'source-reviewed'
-      ? '(min-width: 1880px) 297px, (max-width: 720px) 38vw, 267px'
-      : '(min-width: 1880px) 291px, (max-width: 720px) 38vw, 245px')
+  // Weekend media can absorb spare row width after the client-side packer has
+  // measured the two day columns. Declare that reviewed maximum rather than
+  // the old 245px nominal width: the latter selected a 256w file for cards
+  // that actually rendered as wide as 317px at DPR 1.
+  ? '(min-width: 1880px) 340px, (max-width: 720px) 44vw, 320px'
   : density === 'popular'
     ? '(min-width: 1880px) 290px, (max-width: 720px) 38vw, 250px'
     : '(min-width: 1880px) 396px, (max-width: 720px) 38vw, 332px';
@@ -85,7 +87,7 @@ const socialProofLabel = [
   class="ke-listing-card"
   style={style}
   data-ds-component="ListingEventCard"
-  data-ds-version="8"
+  data-ds-version="9"
   data-feedback-scope
   data-listing-item
   data-event-id={event.id}
@@ -117,12 +119,9 @@ const socialProofLabel = [
   <div class="ke-listing-card__visual">
   <a class="ke-listing-card__media ke-skeleton" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`} data-listing-media-loading>
     {imageUrl ? (
-      <>
       <img
-        src={priority ? imageUrl : undefined}
-        srcset={priority ? responsiveSrcset : undefined}
-        data-listing-src={priority ? undefined : imageUrl}
-        data-listing-srcset={priority ? undefined : responsiveSrcset}
+        src={imageUrl}
+        srcset={responsiveSrcset}
         sizes={responsiveSizes}
         width={image.asset?.width || undefined}
         height={image.asset?.height || undefined}
@@ -130,11 +129,8 @@ const socialProofLabel = [
         loading={priority ? 'eager' : 'lazy'}
         fetchpriority={priority ? 'high' : 'auto'}
         decoding="async"
+        data-listing-native-loading={priority ? 'eager' : 'lazy'}
       />
-      {!priority ? (
-        <noscript><img src={imageUrl} srcset={responsiveSrcset} sizes={responsiveSizes} width={image.asset?.width || undefined} height={image.asset?.height || undefined} alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`} /></noscript>
-      ) : null}
-      </>
     ) : (
       <span class="ke-listing-card__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
     )}
@@ -201,10 +197,7 @@ const socialProofLabel = [
         frame.dataset.listingMediaReady = 'true';
       };
       const decodeAndFinish = () => image.decode?.().catch(() => {}).finally(finish) || finish();
-      if (image.dataset.listingSrc && !image.currentSrc) {
-        image.addEventListener('load', decodeAndFinish, { once: true });
-        image.addEventListener('error', finish, { once: true });
-      } else if (image.complete) decodeAndFinish();
+      if (image.complete) decodeAndFinish();
       else {
         image.addEventListener('load', decodeAndFinish, { once: true });
         image.addEventListener('error', finish, { once: true });
@@ -212,20 +205,4 @@ const socialProofLabel = [
     });
   }
   initListingMediaSkeletons();
-
-  if ('IntersectionObserver' in window) {
-    const priorityObserver = new IntersectionObserver((entries, observer) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        const image = entry.target.querySelector(':scope > img');
-        if (image?.loading === 'lazy') {
-          image.fetchPriority = 'high';
-          if (image.dataset.listingSrcset) image.srcset = image.dataset.listingSrcset;
-          if (image.dataset.listingSrc) image.src = image.dataset.listingSrc;
-        }
-        observer.unobserve(entry.target);
-      });
-    }, { rootMargin: '200px 0px' });
-    document.querySelectorAll('[data-listing-media-loading]').forEach((frame) => priorityObserver.observe(frame));
-  }
 </script>

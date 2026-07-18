@@ -60,17 +60,23 @@ const target = `s3://${bucket}/${buildId}/`;
 console.log(`Uploading ${sourceDir} -> ${target}`);
 const cp = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', sourceDir, target, '--recursive', '--cache-control', 'public, max-age=300', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
 if (cp.status !== 0) process.exit(cp.status || 1);
-// Astro output filenames are content-hashed and the preview prefix is versioned,
-// so code assets are safe to cache aggressively through the CDN.
-const astroAssetsDir = join(sourceDir, '_astro');
-if (existsSync(astroAssetsDir)) {
-  const findAstroAssets = spawnSync('find', [astroAssetsDir, '-type', 'f'], { encoding: 'utf8' });
-  for (const file of findAstroAssets.stdout.split(/\r?\n/).filter(Boolean)) {
+// The preview prefix is immutable by contract. Astro bundles and local visual
+// assets (including content-hashed listing-media derivatives) can therefore be
+// reused from browser/CDN cache instead of falling back to the 5-minute HTML
+// policy on every later review session.
+function uploadImmutableTree(relativeDir) {
+  const absoluteDir = join(sourceDir, relativeDir);
+  if (!existsSync(absoluteDir)) return;
+  const found = spawnSync('find', [absoluteDir, '-type', 'f'], { encoding: 'utf8' });
+  if (found.status !== 0) process.exit(found.status || 1);
+  for (const file of found.stdout.split(/\r?\n/).filter(Boolean)) {
     const rel = file.slice(sourceDir.length + 1);
     const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', file, `s3://${bucket}/${buildId}/${rel}`, '--cache-control', 'public, max-age=31536000, immutable', '--no-progress'], { env: awsEnv, stdio: 'inherit' });
     if (put.status !== 0) process.exit(put.status || 1);
   }
 }
+uploadImmutableTree('_astro');
+uploadImmutableTree('assets');
 // Ensure calendar endpoints have the right metadata for clients that care about content-type.
 const eventsBySlug = loadPreviewEventsBySlug();
 let stableIcsUploaded = 0;

@@ -22,9 +22,7 @@ const generatedAtMs = generatedAt ? Date.parse(generatedAt) : Number.NaN;
 function endedBeforeBuild(event: PreviewEvent): boolean {
   if (kind !== 'today' || !Number.isFinite(generatedAtMs)) return false;
   const endMs = Date.parse(event.end_at || '');
-  if (Number.isFinite(endMs)) return endMs <= generatedAtMs;
-  const startMs = Date.parse(event.starts_at || '');
-  return Number.isFinite(startMs) && startMs <= generatedAtMs - 60 * 60 * 1000;
+  return Number.isFinite(endMs) && endMs <= generatedAtMs;
 }
 
 const earlierEvents = kind === 'today' ? events.filter(endedBeforeBuild) : [];
@@ -40,7 +38,7 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
   class="ke-listing-shell"
   data-date-listing={kind}
   data-listing-date={date}
-  data-listing-variant="DATE-LISTING-V18"
+  data-listing-variant="DATE-LISTING-V19"
   data-listing-density={upcomingEvents.length > 0 && upcomingEvents.length <= 4 ? 'sparse' : 'regular'}
   data-listing-has-time-nav="true"
 >
@@ -63,7 +61,7 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
   ) : null}
 
   {kind === 'today' ? (
-    <div class="ke-now-marker" role="separator" aria-label="Текущее время в Калининграде" data-listing-now-marker>
+    <div class="ke-now-marker" role="separator" aria-label="Текущее время в Калининграде" data-listing-now-marker hidden>
       <time data-listing-now-label>Сейчас</time>
       <span class="ke-now-marker__line" aria-hidden="true"></span>
     </div>
@@ -113,6 +111,20 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
       const upcomingHost = root.querySelector('[data-listing-upcoming-groups]');
       const earlierTimeline = earlierHost?.querySelector('.ke-time-timeline');
       const upcomingTimeline = upcomingHost?.querySelector('.ke-time-timeline');
+      // The marker belongs to the time axis, not to the header of the list.
+      // Keep it before the first future exact start, after every elapsed exact
+      // start, and before the non-chronological “time unknown” group. It starts
+      // hidden in HTML so there is no incorrect first-frame position before the
+      // Kaliningrad clock has been evaluated.
+      if (nowMarker && upcomingTimeline) {
+        const groups = [...upcomingTimeline.querySelectorAll(':scope > [data-listing-time-group]')];
+        const nextGroup = groups.find((group) => {
+          const groupTime = group.dataset.listingTime || 'untimed';
+          return groupTime === 'untimed' || groupTime >= clock.time;
+        });
+        if (nextGroup) upcomingTimeline.insertBefore(nowMarker, nextGroup);
+        else upcomingTimeline.appendChild(nowMarker);
+      }
       const earlierCount = [...(earlierTimeline?.querySelectorAll('[data-listing-item]') || [])].length;
       const now = Date.now();
       root.querySelectorAll('[data-listing-item]').forEach((card) => {

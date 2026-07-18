@@ -15,14 +15,22 @@ const { days } = Astro.props;
 const groupMaps = new Map(days.map((day) => [day.key, new Map(day.groups.map((group) => [group.key, group]))]));
 const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.key)))]
   .sort((left, right) => left === 'untimed' ? 1 : right === 'untimed' ? -1 : left.localeCompare(right));
+// Priority is page-global, not scoped to the first time key. Sparse early rows
+// often contain a single card, while the next row is already in the initial
+// desktop viewport. Let the parser discover and prioritize the first four real
+// media cards in document chronology.
+const priorityEventIds = new Set(
+  keys.flatMap((key) => days.flatMap((day) => groupMaps.get(day.key)?.get(key)?.events || []))
+    .slice(0, 4)
+    .map((event) => event.id),
+);
 
 ---
 <div class="ke-weekend-timeline" data-ds-component="WeekendEditorialTimeline" data-ds-version="5">
-  {keys.map((key, keyIndex) => {
+  {keys.map((key) => {
     const groups = days.map((day) => groupMaps.get(day.key)?.get(key));
     const label = key === 'untimed' ? 'Время уточняется' : key;
     const daypart = listingDaypart(key === 'untimed' ? null : key);
-    let priorityIndex = 0;
     return (
       <section
         id={`weekend-time-${key}`}
@@ -62,7 +70,7 @@ const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.k
               >
                 <div class="ke-time-group__flow" data-listing-weekend-flow data-listing-packed="false">
                   {packedEvents.map((event) => {
-                    const priority = keyIndex === 0 && priorityIndex++ < 2;
+                    const priority = priorityEventIds.has(event.id);
                     return <ListingEventCard event={event} density="weekend" priority={priority} />;
                   })}
                 </div>

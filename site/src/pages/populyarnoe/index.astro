@@ -1,7 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import PopularListingSurface from '../../components/listings/PopularListingSurface.astro';
-import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { absoluteUrl, getPopularEvents, SITE_NAME } from '../../lib/events';
 
 const events = getPopularEvents(100);
@@ -12,6 +11,5 @@ const description = 'Лента популярных событий по соц�
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="popular">
   <main id="main" class="ke-listing-page">
     <PopularListingSurface events={events} />
-    <div class="ke-listing-shell"><PersonalFeedSlot context="popular" /></div>
   </main>
 </EventLayout>

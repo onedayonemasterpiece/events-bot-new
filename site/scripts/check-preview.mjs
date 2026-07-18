@@ -80,7 +80,7 @@ function listingCard(html, id) {
   return html.match(new RegExp(`<article[^>]+data-event-id="${id}"[\\s\\S]*?<\\/article>`, 'u'))?.[0] || '';
 }
 
-async function checkDateListingsV18() {
+async function checkDateListingsV19() {
   const today = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
   const tomorrow = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
   const weekend = readFileSync(join(root, 'vyhodnye/index.html'), 'utf8');
@@ -89,9 +89,9 @@ async function checkDateListingsV18() {
   const compactCss = css.replace(/\s+/gu, '');
   for (const [name, html, timeline] of [['today', today, 'ExactTimeTimeline'], ['tomorrow', tomorrow, 'ExactTimeTimeline'], ['weekend', weekend, 'WeekendEditorialTimeline']]) {
     const timelineVersion = timeline === 'WeekendEditorialTimeline' ? '5' : '2';
-    if (!html.includes(`data-ds-component="${timeline}" data-ds-version="${timelineVersion}"`) || !html.includes('data-ds-component="ListingTimeMarker" data-ds-version="3"') || !html.includes('data-ds-component="ListingEventCard" data-ds-version="8"') || !html.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !html.includes('data-ds-component="ListingPersonalFilter" data-ds-version="3"')) throw new Error(`${name} misses shared V18 listing components`);
+    if (!html.includes(`data-ds-component="${timeline}" data-ds-version="${timelineVersion}"`) || !html.includes('data-ds-component="ListingTimeMarker" data-ds-version="3"') || !html.includes('data-ds-component="ListingEventCard" data-ds-version="9"') || !html.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !html.includes('data-ds-component="ListingPersonalFilter" data-ds-version="3"')) throw new Error(`${name} misses shared V19 listing components`);
   }
-  if (!popular.includes('data-listing-variant="POPULAR-V18"') || !popular.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !popular.includes('data-ds-component="ListingEventCard" data-ds-version="8"') || !popular.includes('data-ds-component="PopularBehaviorRows" data-ds-version="1"') || popular.includes('data-ds-component="PopularCategoryFilter"')) throw new Error('Popular misses the V18 behavioral-shelf contract or still exposes the rejected type-filter constructor');
+  if (!popular.includes('data-listing-variant="POPULAR-V19"') || !popular.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !popular.includes('data-ds-component="ListingEventCard" data-ds-version="9"') || !popular.includes('data-ds-component="PopularBehaviorRows" data-ds-version="1"') || popular.includes('data-ds-component="PopularCategoryFilter"') || /<section[^>]+data-personal-feed-section/u.test(popular)) throw new Error('Popular misses the V19 behavioral-shelf contract or exposes an unqualified type/personal-feed continuation');
   const popularReasons = [...popular.matchAll(/data-popular-reason="([^"]+)"/gu)].map((match) => match[1]);
   if (popularReasons.length < 4 || popularReasons.length > 5 || popularReasons[0] !== 'fast_growth' || popularReasons.at(-1) !== 'score_fallback' || !popularReasons.includes('discussed') || !popularReasons.includes('frequently_shared')) throw new Error(`Popular needs 4-5 priority-ordered behavioral shelves, got: ${popularReasons.join(', ')}`);
   const popularIds = [...popular.matchAll(/data-event-id="(\d+)"/gu)].map((match) => match[1]);
@@ -137,18 +137,23 @@ async function checkDateListingsV18() {
     const like = card.indexOf('data-listing-like-proof');
     if (share >= 0 && like >= 0 && share > like) throw new Error(`Listing social proof must keep shared-system Share -> Like order: ${event.id}`);
   }
-  if (!compactCss.includes('--ke-listing-discovery-height:52px') || !compactCss.includes('--ke-content-listing-max:1720px') || compactCss.includes('[data-stuck=true].ke-filter-chip') || compactCss.includes('data-listing-discovery-stuck')) throw new Error('V18 stable CSS-first discovery geometry is missing or the rejected delayed JS compaction returned');
-  if (!compactCss.includes('flex-wrap:wrap') || !compactCss.includes('filter:saturate(.68)') || !compactCss.includes('opacity:.82') || !compactCss.includes('.ke-listing-card[data-listing-tail-layout=split].ke-listing-card__side-rail') || !dateListings.includes('--ke-listing-tail-width:96px')) throw new Error('V18 split identity/social-proof rail geometry is missing');
+  if (!compactCss.includes('--ke-listing-discovery-height:52px') || !compactCss.includes('--ke-content-listing-max:1720px') || compactCss.includes('[data-stuck=true].ke-filter-chip') || compactCss.includes('data-listing-discovery-stuck')) throw new Error('V19 stable CSS-first discovery geometry is missing or the rejected delayed JS compaction returned');
+  if (!compactCss.includes('flex-wrap:wrap') || !compactCss.includes('.ke-listing-card__medallion{right:10px;bottom:10px;width:64px;height:64px;border:0;background:transparent;box-shadow:none;filter:none;opacity:1') || !compactCss.includes('.ke-listing-card__social-proof{') || !compactCss.includes('opacity:.58') || !compactCss.includes('.ke-listing-card[data-listing-tail-layout=split].ke-listing-card__side-rail') || !dateListings.includes('--ke-listing-tail-width:96px')) throw new Error('V19 opaque overlay plus quiet proof/split rail geometry is missing');
   if (!weekend.includes('data-ds-component="WeekendRangeNav" data-ds-version="2"') || !weekend.includes('ke-weekend-ranges__continuation') || !weekend.includes('svgrepo-450220-long-arrow-right.svg') || !weekend.includes('data-listing-weekend-day-count-value')) throw new Error('Weekend misses V17 future-range navigation or lightweight day counts');
   if (!compactCss.includes('scroll-margin-top:calc(var(--ke-listing-sticky-stack-height)+var(--ke-weekend-heads-height)+12px)') || !compactCss.includes('.ke-weekend-time-rail{top:calc(var(--ke-listing-sticky-stack-height)+var(--ke-weekend-heads-height)+12px)')) throw new Error('Weekend sticky/hash landing must clear both sticky rails');
   if (!compactCss.includes('.ke-listing-time-marker,.ke-weekend-time-rail{position:sticky') || !compactCss.includes('z-index:7')) throw new Error('Exact-time markers must keep the proven sticky navigation context');
   const identityControl = listingCard(dateListings, 6811);
   if (!identityControl.includes('data-listing-identity-count="3"') || !identityControl.includes('data-listing-tail-layout="compact"') || !identityControl.includes('--ke-listing-tail-width:64px') || !identityControl.includes('data-listing-medallion-slug="konb"') || !identityControl.includes('data-listing-medallion-slug="kgd80-80-stories"') || !identityControl.includes('data-listing-medallion-slug="free"')) throw new Error('Event 6811 must compact all three identities and proof into one regular-height rail');
-  if (!dateListings.includes('data-listing-overlay-kind="neutral-fallback"') || /data-listing-overlay-kind="reviewed-photo"[^>]*data-image-text-mode="(?:ocr_text|unknown)"/u.test(dateListings)) throw new Error('V18 systemic medallion overlay/fallback gate is missing or fail-open');
+  if (!dateListings.includes('data-listing-overlay-kind="neutral-fallback"') || /data-listing-overlay-kind="reviewed-photo"[^>]*data-image-text-mode="(?:ocr_text|unknown)"/u.test(dateListings)) throw new Error('V19 systemic medallion overlay/fallback gate is missing or fail-open');
+  if (weekend.includes('data-listing-src=') || weekend.includes('data-listing-srcset=') || !weekend.includes('data-listing-native-loading="lazy"') || !weekend.includes('loading="lazy"') || !weekend.includes('srcset=') || !weekend.includes('width=') || !weekend.includes('height=')) throw new Error('V19 cards must be parser-discoverable native lazy images with intrinsic responsive sources');
+  const dateListingSource = readFileSync(join(siteDir, 'src/components/listings/DateListingSurface.astro'), 'utf8');
+  const listingCardSource = readFileSync(join(siteDir, 'src/components/listings/ListingEventCard.astro'), 'utf8');
+  if (!today.includes('data-listing-now-marker hidden') || !dateListingSource.includes('upcomingTimeline.insertBefore(nowMarker, nextGroup)') || !dateListingSource.includes("groupTime >= clock.time")) throw new Error('V19 current marker must start hidden and be inserted chronologically inside the live exact-time axis');
+  if (listingCardSource.includes('data-listing-src=') || listingCardSource.includes('rootMargin: \'200px 0px\'')) throw new Error('Rejected 200px JS-gated image discovery returned');
   const freeSvg = readFileSync(join(root, 'assets/badges/free-listing-medallion.svg'), 'utf8');
   if (!freeSvg.includes('0 ₽') || !freeSvg.includes('БЕСПЛАТНО') || /gradient|#d4af37|gold/iu.test(freeSvg)) throw new Error('Free medallion must remain the quiet monochrome deterministic V15 asset');
 }
-await checkDateListingsV18();
+await checkDateListingsV19();
 
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {
@@ -478,7 +483,7 @@ if (!weekendHtml.includes('data-listing-day="sat"') || !weekendHtml.includes('da
 if (!weekendHtml.includes('data-weekend-time-row') || !weekendHtml.includes('ke-weekend-time-rail') || !weekendHtml.includes('data-time-nav-disclosure')) throw new Error('Dense Weekend must expose one union exact-time axis and exact-time navigation');
 if (!weekendHtml.includes('ke-weekend-weekday-chip') || weekendHtml.includes('data-listing-weekend-day-count-chip=')) throw new Error('Weekend must keep Сб/Вс only in the strong day heads, not repeat them at every time');
 if (weekendHtml.includes('ke-city-picker') || !weekendHtml.includes('ke-city-filter--direct') || !weekendHtml.includes('data-ds-component="ListingControls" data-ds-version="4"')) throw new Error('Weekend must use adaptive visible ListingControls v4 multi-city links without a disclosure');
-if (!weekendHtml.includes('data-listing-srcset=') || !weekendHtml.includes('<noscript><img') || !weekendHtml.includes('width=') || !weekendHtml.includes('height=')) throw new Error('Weekend cards must emit intrinsic responsive thumbnails with a no-JS fallback');
+if (!weekendHtml.includes('data-listing-native-loading="lazy"') || !weekendHtml.includes('srcset=') || !weekendHtml.includes('width=') || !weekendHtml.includes('height=')) throw new Error('Weekend cards must emit parser-discoverable native lazy responsive thumbnails');
 for (const slug of ['kldzoo', 'muzteatr39', 'tretyakovka-kaliningrad']) {
   if (!weekendHtml.includes(`data-venue-medallion="${slug}"`)) throw new Error(`Weekend misses positive visual-only medallion control: ${slug}`);
 }

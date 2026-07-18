@@ -25,7 +25,7 @@ function dayDateLabel(date: string): string {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' }).format(new Date(`${date}T12:00:00+02:00`));
 }
 ---
-<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="DATE-LISTING-V18" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
+<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="DATE-LISTING-V19" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
   <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
   {ranges.length ? <WeekendRangeNav ranges={ranges} placement="top" /> : null}
   <ListingDiscoveryRail cities={cities} total={events.length} label="на выходных">
