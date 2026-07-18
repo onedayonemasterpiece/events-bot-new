@@ -1169,3 +1169,271 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .ke-listing-card__free-medallion,
   .listing-filter--floating { transition: none; }
 }
+
+/* Popular V20 mobile: one ranked DOM, two explicit presentation densities.
+   Native browser zoom remains untouched; the visible bottom control is the
+   only density affordance. */
+.ke-listing-mobile-density-dock { display: none; }
+
+@media (max-width: 720px) {
+  .ke-popular-listing {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  .ke-popular-listing .ke-listing-head h1 {
+    font-size: clamp(3.2rem, 14vw, 3.7rem);
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .ke-popular-behavior {
+    gap: 30px;
+    padding: 20px 0 28px;
+  }
+  .ke-popular-behavior__head {
+    min-height: 38px;
+    gap: 8px;
+  }
+  .ke-popular-behavior__head h2 {
+    max-width: min(84vw, 34rem);
+    font-size: 1.18rem;
+    line-height: 1.12;
+  }
+  .ke-popular-behavior__row {
+    padding-top: 12px;
+  }
+
+  /* Comfortable mode keeps each shelf short and makes the next card peek.
+     Natural/OCR media keeps its authored ratio; only the existing reviewed
+     visual-crop gate may fill a wider card. */
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-padding-inline: 0 24px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+  }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row::-webkit-scrollbar { display: none; }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row .ke-listing-card {
+    flex: 0 0 min(86vw, calc(240px * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px)));
+    width: min(86vw, calc(240px * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px)));
+    max-width: 86vw;
+    display: block;
+    scroll-snap-align: start;
+  }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row .ke-listing-card[data-listing-image-mode="visual-crop"][data-listing-crop-adaptive="true"] {
+    flex-basis: 86vw;
+    width: 86vw;
+    min-width: 86vw;
+    max-width: 86vw;
+  }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-listing-card__visual {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+  }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-listing-card__media {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    aspect-ratio: var(--ke-listing-image-ratio);
+  }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-listing-card__side-rail {
+    height: auto;
+    min-height: 0;
+  }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-listing-card__copy {
+    width: 100%;
+    padding-top: 10px;
+  }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-listing-card__title {
+    font-size: 1.12rem;
+    line-height: 1.18;
+    -webkit-line-clamp: 3;
+  }
+  .ke-popular-listing[data-mobile-card-density="large"] .ke-listing-card__copy p {
+    font-size: .9rem;
+  }
+
+  /* Compact mode is a true scan list, not a smaller carousel. Width remains
+     media-truth + a reduced evidence rail, so protected posters get neither
+     synthetic fields nor a destructive crop. */
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-popular-behavior {
+    gap: 24px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-popular-behavior__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-popular-behavior__row .ke-listing-card {
+    --ke-mobile-compact-tail: min(var(--ke-listing-tail-width, 0px), 48px);
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    display: flex;
+    grid-template-columns: none;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__visual {
+    flex: 0 0 min(48vw, calc(116px * var(--ke-listing-image-ratio) + var(--ke-mobile-compact-tail)));
+    width: min(48vw, calc(116px * var(--ke-listing-image-ratio) + var(--ke-mobile-compact-tail)));
+    min-width: 0;
+    height: auto;
+    gap: 3px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__media {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    aspect-ratio: var(--ke-listing-image-ratio);
+    border-radius: 10px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__side-rail {
+    flex-basis: var(--ke-mobile-compact-tail);
+    width: var(--ke-mobile-compact-tail);
+    height: auto;
+    min-height: 0;
+    gap: 3px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__side-rail .ke-listing-card__identity-rail {
+    width: 44px;
+    gap: 3px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__identity-medallion,
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__free-medallion {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card[data-listing-tail-layout="split"] .ke-listing-card__side-rail {
+    flex-basis: 76px;
+    width: 76px;
+    grid-template-columns: 44px 29px;
+    gap: 3px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card[data-listing-tail-layout="split"] .ke-listing-card__identity-rail { width: 44px; }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__social-proof {
+    width: 29px;
+    min-width: 29px;
+    height: auto;
+    gap: 3px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__social-proof > span {
+    min-width: 29px;
+    min-height: 24px;
+    grid-template-columns: 13px auto;
+    gap: 1px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__social-proof .icon { width: 14px; height: 14px; }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__social-proof b { font-size: .6rem; }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__medallion {
+    right: 6px;
+    bottom: 6px;
+    width: 44px;
+    height: 44px;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__copy {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    padding: 2px 0 0;
+    align-content: start;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__title {
+    font-size: 1rem;
+    line-height: 1.17;
+    -webkit-line-clamp: 3;
+  }
+  .ke-popular-listing[data-mobile-card-density="compact"] .ke-listing-card__copy p {
+    margin-top: 3px;
+    font-size: .82rem;
+    line-height: 1.2;
+  }
+
+  .ke-listing-mobile-density-dock {
+    position: fixed;
+    z-index: 52;
+    right: 12px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    left: 12px;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+  .ke-listing-mobile-density-switch {
+    width: min(272px, 100%);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+    border: 1px solid color-mix(in srgb, var(--ke-color-line) 82%, transparent);
+    border-radius: 999px;
+    padding: 3px;
+    background: color-mix(in srgb, var(--ke-color-canvas) 94%, transparent);
+    box-shadow: 0 5px 18px rgba(43,31,23,.1);
+    backdrop-filter: blur(12px);
+    pointer-events: auto;
+  }
+  .ke-listing-mobile-density-switch button {
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 0;
+    border-radius: 999px;
+    padding: 5px 12px;
+    background: transparent;
+    color: var(--ke-color-copy);
+    font: inherit;
+    font-size: .82rem;
+    font-weight: 860;
+    cursor: pointer;
+  }
+  .ke-listing-mobile-density-switch button[aria-checked="true"] {
+    background: var(--ke-color-brand-800);
+    color: #fff;
+  }
+  .ke-listing-mobile-density-switch button:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 66%, transparent);
+    outline-offset: 2px;
+  }
+  .ke-listing-mobile-density-switch__icon {
+    width: 16px;
+    height: 16px;
+    display: grid;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+  }
+  .ke-listing-mobile-density-switch__icon--large::before {
+    content: "";
+    margin: 3px;
+    border-top: 5px solid currentColor;
+    border-bottom: 2px solid currentColor;
+  }
+  .ke-listing-mobile-density-switch__icon--compact::before {
+    content: "";
+    margin: 3px 2px;
+    background: repeating-linear-gradient(to bottom, currentColor 0 2px, transparent 2px 4px);
+  }
+  body.is-footer-visible .ke-listing-mobile-density-dock {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(120%);
+  }
+}
+
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
+  .ke-listing-mobile-density-dock { transition: none; }
+}

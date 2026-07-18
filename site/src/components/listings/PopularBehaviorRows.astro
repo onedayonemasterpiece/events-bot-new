@@ -6,7 +6,7 @@ interface Props { groups: PopularListingGroup[]; }
 const { groups } = Astro.props;
 let priorityIndex = 0;
 ---
-<div class="ke-popular-behavior" data-ds-component="PopularBehaviorRows" data-ds-version="1">
+<div class="ke-popular-behavior" data-ds-component="PopularBehaviorRows" data-ds-version="2">
   {groups.map((group) => (
     <section class="ke-popular-behavior__group" data-popular-behavior-group data-popular-reason={group.key} aria-labelledby={`popular-${group.key}`}>
       <header class="ke-popular-behavior__head">

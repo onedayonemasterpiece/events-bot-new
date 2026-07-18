@@ -79,6 +79,14 @@ density и immutable build assets. `Популярное` остаётся ко�
 продуктовый и измеряемый контракт:
 [`listing-surfaces-v19-product.md`](listing-surfaces-v19-product.md).
 
+V20 делает названия двух поведенческих полок `Популярного` явными, исправляет
+грубую ничью категориального score через сортировку `Часто делятся` по реальным
+share-count (поэтому BREAK SUMMER FEST 5130 входит системно, без ID override) и
+добавляет первый мобильный контракт списочных страниц: один DOM карточек,
+режимы `Крупно / Компактно`, явный bottom safe-area switch, сохранение viewport
+anchor и нативного pinch zoom. Подробный контракт:
+[`listing-surfaces-v20-mobile-popular.md`](listing-surfaces-v20-mobile-popular.md).
+
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
 
 

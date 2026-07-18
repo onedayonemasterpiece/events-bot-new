@@ -80,7 +80,7 @@ function listingCard(html, id) {
   return html.match(new RegExp(`<article[^>]+data-event-id="${id}"[\\s\\S]*?<\\/article>`, 'u'))?.[0] || '';
 }
 
-async function checkDateListingsV19() {
+async function checkDateListingsV20() {
   const today = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
   const tomorrow = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
   const weekend = readFileSync(join(root, 'vyhodnye/index.html'), 'utf8');
@@ -91,11 +91,15 @@ async function checkDateListingsV19() {
     const timelineVersion = timeline === 'WeekendEditorialTimeline' ? '5' : '2';
     if (!html.includes(`data-ds-component="${timeline}" data-ds-version="${timelineVersion}"`) || !html.includes('data-ds-component="ListingTimeMarker" data-ds-version="3"') || !html.includes('data-ds-component="ListingEventCard" data-ds-version="9"') || !html.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !html.includes('data-ds-component="ListingPersonalFilter" data-ds-version="3"')) throw new Error(`${name} misses shared V19 listing components`);
   }
-  if (!popular.includes('data-listing-variant="POPULAR-V19"') || !popular.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !popular.includes('data-ds-component="ListingEventCard" data-ds-version="9"') || !popular.includes('data-ds-component="PopularBehaviorRows" data-ds-version="1"') || popular.includes('data-ds-component="PopularCategoryFilter"') || /<section[^>]+data-personal-feed-section/u.test(popular)) throw new Error('Popular misses the V19 behavioral-shelf contract or exposes an unqualified type/personal-feed continuation');
+  if (!popular.includes('data-listing-variant="POPULAR-V20"') || !popular.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !popular.includes('data-ds-component="ListingEventCard" data-ds-version="9"') || !popular.includes('data-ds-component="PopularBehaviorRows" data-ds-version="2"') || !popular.includes('data-ds-component="ListingMobileDensitySwitch" data-ds-version="1"') || popular.includes('data-ds-component="PopularCategoryFilter"') || popular.includes('data-ds-component="ListingPersonalFilter"') || /<section[^>]+data-personal-feed-section/u.test(popular)) throw new Error('Popular misses the V20 behavioral/mobile-density contract or exposes a competing filter/feed control');
+  if (!popular.includes('Быстро набирают популярность') || !popular.includes('Встречается во множестве источников') || popular.includes('>Быстро набирают<') || popular.includes('>В разных источниках<')) throw new Error('Popular misses the explicit V20 behavioral shelf labels');
   const popularReasons = [...popular.matchAll(/data-popular-reason="([^"]+)"/gu)].map((match) => match[1]);
   if (popularReasons.length < 4 || popularReasons.length > 5 || popularReasons[0] !== 'fast_growth' || popularReasons.at(-1) !== 'score_fallback' || !popularReasons.includes('discussed') || !popularReasons.includes('frequently_shared')) throw new Error(`Popular needs 4-5 priority-ordered behavioral shelves, got: ${popularReasons.join(', ')}`);
   const popularIds = [...popular.matchAll(/data-event-id="(\d+)"/gu)].map((match) => match[1]);
   if (new Set(popularIds).size !== popularIds.length) throw new Error('Popular repeats an event across behavioral shelves');
+  const frequentlySharedShelf = popular.match(/<section[^>]+data-popular-reason="frequently_shared"[\s\S]*?<\/section>/u)?.[0] || '';
+  if (!frequentlySharedShelf.includes('data-event-id="5130"')) throw new Error('Popular frequently-shared shelf must rank BREAK SUMMER FEST 5130 by its 69 real shares without an id override');
+  if (!popular.includes('data-mobile-card-density="large"') || !popular.includes('role="radiogroup" aria-label="Размер карточек"') || !popular.includes('data-listing-density-button="large"') || !popular.includes('data-listing-density-button="compact"')) throw new Error('Popular misses the accessible large/compact mobile control and large no-JS default');
   if (!weekend.includes('data-weekend-day-summary="sat"') || !weekend.includes('data-weekend-day-summary="sun"') || !weekend.includes('ke-weekend-weekday-chip')) throw new Error('Weekend misses the strong two-lane weekday-only head contract');
   const dateListings = `${today}\n${tomorrow}\n${weekend}`;
   const hufen = listingCard(dateListings, 6762);
@@ -137,7 +141,10 @@ async function checkDateListingsV19() {
     const like = card.indexOf('data-listing-like-proof');
     if (share >= 0 && like >= 0 && share > like) throw new Error(`Listing social proof must keep shared-system Share -> Like order: ${event.id}`);
   }
-  if (!compactCss.includes('--ke-listing-discovery-height:52px') || !compactCss.includes('--ke-content-listing-max:1720px') || compactCss.includes('[data-stuck=true].ke-filter-chip') || compactCss.includes('data-listing-discovery-stuck')) throw new Error('V19 stable CSS-first discovery geometry is missing or the rejected delayed JS compaction returned');
+  if (!compactCss.includes('--ke-listing-discovery-height:52px') || !compactCss.includes('--ke-content-listing-max:1720px') || compactCss.includes('[data-stuck=true].ke-filter-chip') || compactCss.includes('data-listing-discovery-stuck')) throw new Error('V20 stable CSS-first discovery geometry is missing or the rejected delayed JS compaction returned');
+  if (!compactCss.includes('.ke-popular-listing[data-mobile-card-density=large]') || !compactCss.includes('.ke-popular-listing[data-mobile-card-density=compact]') || !compactCss.includes('.ke-listing-mobile-density-dock{display:none') || !compactCss.includes('scroll-snap-type:xproximity')) throw new Error('Popular V20 mobile dual-density CSS is missing or not scoped to the Popular surface');
+  const layoutSource = readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8');
+  if (/user-scalable\s*=\s*no|maximum-scale\s*=\s*1/iu.test(layoutSource)) throw new Error('Mobile density must not disable native browser zoom');
   if (!compactCss.includes('flex-wrap:wrap') || !compactCss.includes('.ke-listing-card__medallion{right:10px;bottom:10px;width:64px;height:64px;border:0;background:transparent;box-shadow:none;filter:none;opacity:1') || !compactCss.includes('.ke-listing-card__social-proof{') || !compactCss.includes('opacity:.58') || !compactCss.includes('.ke-listing-card[data-listing-tail-layout=split].ke-listing-card__side-rail') || !dateListings.includes('--ke-listing-tail-width:96px')) throw new Error('V19 opaque overlay plus quiet proof/split rail geometry is missing');
   if (!weekend.includes('data-ds-component="WeekendRangeNav" data-ds-version="2"') || !weekend.includes('ke-weekend-ranges__continuation') || !weekend.includes('svgrepo-450220-long-arrow-right.svg') || !weekend.includes('data-listing-weekend-day-count-value')) throw new Error('Weekend misses V17 future-range navigation or lightweight day counts');
   if (!compactCss.includes('scroll-margin-top:calc(var(--ke-listing-sticky-stack-height)+var(--ke-weekend-heads-height)+12px)') || !compactCss.includes('.ke-weekend-time-rail{top:calc(var(--ke-listing-sticky-stack-height)+var(--ke-weekend-heads-height)+12px)')) throw new Error('Weekend sticky/hash landing must clear both sticky rails');
@@ -153,7 +160,7 @@ async function checkDateListingsV19() {
   const freeSvg = readFileSync(join(root, 'assets/badges/free-listing-medallion.svg'), 'utf8');
   if (!freeSvg.includes('0 ₽') || !freeSvg.includes('БЕСПЛАТНО') || /gradient|#d4af37|gold/iu.test(freeSvg)) throw new Error('Free medallion must remain the quiet monochrome deterministic V15 asset');
 }
-await checkDateListingsV19();
+await checkDateListingsV20();
 
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {

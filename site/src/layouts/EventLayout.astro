@@ -3937,7 +3937,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
 
 
         function hydrateListingFilterFooterGuard() {
-          const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar], .listing-filter--floating'));
+          const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar], .listing-filter--floating, [data-listing-mobile-density-dock]'));
           if (!bars.length) return;
           const footer = document.querySelector('.site-footer');
           if (!footer || !('IntersectionObserver' in window)) return;

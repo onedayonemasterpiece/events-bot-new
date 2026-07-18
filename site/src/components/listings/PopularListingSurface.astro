@@ -4,7 +4,7 @@ import { buildPopularListingGroups, deduplicateListingEvents } from '../../lib/l
 import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import PopularBehaviorRows from './PopularBehaviorRows.astro';
-import ListingPersonalFilter from '../ListingPersonalFilter.astro';
+import ListingMobileDensitySwitch from './ListingMobileDensitySwitch.astro';
 
 interface Props { events: PreviewEvent[]; }
 const events = deduplicateListingEvents(Astro.props.events);
@@ -14,12 +14,19 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
   .map((name) => ({ name, count: visibleEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
 ---
-<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V19">
+<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V20" data-mobile-card-density="large">
+  <script is:inline>
+    try {
+      const surface = document.currentScript.closest('[data-date-listing="popular"]');
+      const saved = window.localStorage.getItem('ke_listing_density_v1');
+      if (surface && (saved === 'large' || saved === 'compact')) surface.dataset.mobileCardDensity = saved;
+    } catch {}
+  </script>
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={visibleEvents.length} current="popular" />
   <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} />
   <PopularBehaviorRows groups={groups} />
   <div class="ke-listing-empty" data-listing-no-events hidden={visibleEvents.length > 0}>
     <strong>Пока нет событий с подтверждённой активностью</strong>
   </div>
-  <ListingPersonalFilter total={visibleEvents.length} label="популярное" version={2} placement="floating" />
+  <ListingMobileDensitySwitch />
 </div>

@@ -86,16 +86,31 @@ export function buildPopularListingGroups(items: PreviewEvent[], perGroup = 5): 
   const limit = Math.max(1, perGroup);
   const allocated = new Set<string>();
   const candidates = deduplicateListingEvents(items);
+  const inputRank = new Map(candidates.map((event, index) => [event.id, index]));
   const familyKey = (event: PreviewEvent) => [
     normalizedIdentityPart(event.title),
     normalizedIdentityPart(event.event_type),
     normalizedIdentityPart(event.venue_name || event.city),
   ].join('|');
-  const definitions: Array<{ key: PopularListingReason; label: string; matches: (event: PreviewEvent) => boolean }> = [
-    { key: 'fast_growth', label: 'Быстро набирают', matches: (event) => event.popularity_reason_codes?.includes('fast_growth') === true },
-    { key: 'multi_source', label: 'В разных источниках', matches: (event) => event.popularity_reason_codes?.includes('multi_source') === true },
+  const stableInputOrder = (left: PreviewEvent, right: PreviewEvent) => (
+    (inputRank.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (inputRank.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+  );
+  const sharedEvidenceOrder = (left: PreviewEvent, right: PreviewEvent) => (
+    Number(right.shares_count || 0) - Number(left.shares_count || 0)
+    || Number(right.likes_count || 0) - Number(left.likes_count || 0)
+    || Number(right.source_views_count || 0) - Number(left.source_views_count || 0)
+    || stableInputOrder(left, right)
+  );
+  const definitions: Array<{
+    key: PopularListingReason;
+    label: string;
+    matches: (event: PreviewEvent) => boolean;
+    order?: (left: PreviewEvent, right: PreviewEvent) => number;
+  }> = [
+    { key: 'fast_growth', label: 'Быстро набирают популярность', matches: (event) => event.popularity_reason_codes?.includes('fast_growth') === true },
+    { key: 'multi_source', label: 'Встречается во множестве источников', matches: (event) => event.popularity_reason_codes?.includes('multi_source') === true },
     { key: 'discussed', label: 'Активно обсуждают', matches: (event) => event.popularity_reason_codes?.includes('discussed') === true },
-    { key: 'frequently_shared', label: 'Часто делятся', matches: (event) => event.popularity_reason_codes?.includes('frequently_shared') === true },
+    { key: 'frequently_shared', label: 'Часто делятся', matches: (event) => event.popularity_reason_codes?.includes('frequently_shared') === true, order: sharedEvidenceOrder },
     { key: 'score_fallback', label: 'Популярное сейчас', matches: () => true },
   ];
   const groups: PopularListingGroup[] = [];
@@ -103,7 +118,7 @@ export function buildPopularListingGroups(items: PreviewEvent[], perGroup = 5): 
     const events = candidates.filter((event) => {
       const key = familyKey(event);
       return !allocated.has(key) && definition.matches(event);
-    }).slice(0, limit);
+    }).sort(definition.order || stableInputOrder).slice(0, limit);
     if (!events.length || (definition.key !== 'score_fallback' && events.length < 3)) continue;
     events.forEach((event) => allocated.add(familyKey(event)));
     groups.push({ key: definition.key, label: definition.label, events });
