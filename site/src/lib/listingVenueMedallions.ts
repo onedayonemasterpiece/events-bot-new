@@ -95,9 +95,25 @@ export function getListingIdentityMedallions(event: PreviewEvent): ListingVenueM
  * the hard OCR safety gate; at most one medallion is returned.
  */
 export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: EventImageAsset | null): ListingVenueMedallion | null {
-  const primaryAsset = selectedAsset || event.image_assets?.[0];
+  // The selected listing presentation is the only media that may grant an
+  // overlay. Falling back to a rejected raw first asset made the rule appear
+  // random and could cover OCR/unknown posters that were not actually shown.
+  const primaryAsset = selectedAsset ?? null;
   const isNeutralFallback = !event.image_url && !primaryAsset;
-  if (!isNeutralFallback && (!primaryAsset || primaryAsset.image_text_mode !== 'visual_only')) return null;
+  const ratio = primaryAsset?.width && primaryAsset?.height
+    ? primaryAsset.width / primaryAsset.height
+    : 0;
+  const isSafeWidePhoto = Boolean(
+    primaryAsset
+    && primaryAsset.image_text_mode === 'visual_only'
+    && primaryAsset.media_semantic_status === 'classified'
+    && primaryAsset.media_role === 'event_photo'
+    && Number(primaryAsset.media_role_confidence || 0) >= 0.9
+    && primaryAsset.safe_crop === true
+    && primaryAsset.focal_point
+    && ratio >= 1.2
+  );
+  if (!isNeutralFallback && !isSafeWidePhoto) return null;
   const item = listingCandidates(event)[0];
   if (!item) return null;
   return toListingMedallion(item);

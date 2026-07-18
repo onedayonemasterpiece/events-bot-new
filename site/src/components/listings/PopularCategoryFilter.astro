@@ -1,0 +1,38 @@
+---
+import { cityKey } from '../../lib/listingPresentation';
+
+interface Category { value: string; count: number; }
+interface Props { categories: Category[]; total: number; }
+const { categories, total } = Astro.props;
+const labels: Record<string, string> = {
+  'концерт': 'Концерты',
+  'встреча': 'Встречи',
+  'лекция': 'Лекции',
+  'мастер-класс': 'Мастер-классы',
+  'спектакль': 'Спектакли',
+  'кинопоказ': 'Кинопоказы',
+  'ярмарка': 'Ярмарки',
+  'выставка': 'Выставки',
+};
+---
+<fieldset class="ke-popular-categories" data-ds-component="PopularCategoryFilter" data-ds-version="1" data-listing-type-filter>
+  <legend>Тип события</legend>
+  <label>
+    <input type="radio" name="popular-event-type" value="all" checked data-listing-type-input />
+    <span>Все</span><strong>{total}</strong>
+  </label>
+  {categories.map((category) => (
+    <label>
+      <input type="radio" name="popular-event-type" value={cityKey(category.value)} data-listing-type-input />
+      <span>{labels[category.value] || category.value}</span><strong>{category.count}</strong>
+    </label>
+  ))}
+</fieldset>
+
+<script>
+  const typeFilter = document.querySelector('[data-listing-type-filter]');
+  if (typeFilter && typeFilter.dataset.listingTypeReady !== 'true') {
+    typeFilter.dataset.listingTypeReady = 'true';
+    typeFilter.addEventListener('change', () => window.KEApplyListingFilters?.());
+  }
+</script>

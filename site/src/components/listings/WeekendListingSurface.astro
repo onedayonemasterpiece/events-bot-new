@@ -24,7 +24,7 @@ function dayDateLabel(date: string): string {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' }).format(new Date(`${date}T12:00:00+02:00`));
 }
 ---
-<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="DATE-LISTING-V16" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
+<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="DATE-LISTING-V17" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate}>
   <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
   {ranges.length ? <WeekendRangeNav ranges={ranges} placement="top" /> : null}
   <ListingDiscoveryRail cities={cities} total={events.length} label="на выходных">
@@ -76,13 +76,20 @@ function dayDateLabel(date: string): string {
       const date = group?.dataset.listingDate || '';
       const endAt = card.dataset.eventEndAt || '';
       const startAt = card.dataset.eventStartAt || '';
-      const explicitlyEnded = endAt && Number.isFinite(Date.parse(endAt)) && Date.parse(endAt) <= now;
+      const endMs = Date.parse(endAt);
+      const startMs = Date.parse(startAt);
+      const finiteEnd = Number.isFinite(endMs);
+      const explicitlyEnded = finiteEnd && endMs <= now;
       const pastDay = date && date < clock.date;
-      const knownOngoing = endAt && Number.isFinite(Date.parse(endAt)) && Date.parse(endAt) > now;
-      const startedEarlier = !pastDay && !explicitlyEnded && !knownOngoing
-        && startAt && Number.isFinite(Date.parse(startAt)) && Date.parse(startAt) <= now - 60 * 60 * 1000;
+      const startedEarlier = !pastDay && !explicitlyEnded && !finiteEnd && date === clock.date
+        && Number.isFinite(startMs) && startMs <= now - 60 * 60 * 1000;
       card.dataset.listingPast = explicitlyEnded || pastDay ? 'true' : 'false';
       card.dataset.listingStartedEarlier = startedEarlier ? 'true' : 'false';
+      const status = card.querySelector('[data-listing-temporal-status]');
+      if (status) {
+        status.hidden = !(explicitlyEnded || pastDay || startedEarlier);
+        status.textContent = explicitlyEnded ? 'Завершилось' : pastDay ? 'Прошло' : startedEarlier ? 'Началось ранее' : '';
+      }
     });
   }
   function maybePositionCurrentSunday() {
@@ -111,18 +118,16 @@ function dayDateLabel(date: string): string {
     }, 350);
   }
   weekendRoot?.querySelector('[data-weekend-back-to-top]')?.addEventListener('click', () => scrollTo({ top: 0, behavior: 'smooth' }));
-  function alignWeekendHashAfterLayout() {
+  async function alignWeekendHashAfterLayout() {
     if (!weekendRoot || !location.hash.startsWith('#weekend-time-')) return;
     const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
-    if (!target || target.dataset.hashRealigned === 'true') return;
-    target.dataset.hashRealigned = 'true';
-    requestAnimationFrame(() => requestAnimationFrame(() => target.scrollIntoView({ block: 'start', behavior: 'instant' })));
+    if (!target) return;
+    await window.KEAlignListingTarget?.(target, { preserveIfVisible: false });
   }
   applyWeekendPastState();
+  window.setInterval(applyWeekendPastState, 60_000);
   maybePositionCurrentSunday();
   document.fonts?.ready.then(alignWeekendHashAfterLayout);
-  addEventListener('hashchange', () => {
-    document.querySelectorAll('[data-hash-realigned]').forEach((item) => delete item.dataset.hashRealigned);
-    alignWeekendHashAfterLayout();
-  });
+  addEventListener('hashchange', alignWeekendHashAfterLayout);
+  addEventListener('kenigevents:listing-discovery-measured', alignWeekendHashAfterLayout);
 </script>

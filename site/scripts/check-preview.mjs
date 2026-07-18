@@ -80,7 +80,7 @@ function listingCard(html, id) {
   return html.match(new RegExp(`<article[^>]+data-event-id="${id}"[\\s\\S]*?<\\/article>`, 'u'))?.[0] || '';
 }
 
-async function checkDateListingsV16() {
+async function checkDateListingsV17() {
   const today = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
   const tomorrow = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
   const weekend = readFileSync(join(root, 'vyhodnye/index.html'), 'utf8');
@@ -88,10 +88,10 @@ async function checkDateListingsV16() {
   const css = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.css')).map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
   const compactCss = css.replace(/\s+/gu, '');
   for (const [name, html, timeline] of [['today', today, 'ExactTimeTimeline'], ['tomorrow', tomorrow, 'ExactTimeTimeline'], ['weekend', weekend, 'WeekendEditorialTimeline']]) {
-    const timelineVersion = timeline === 'WeekendEditorialTimeline' ? '3' : '2';
-    if (!html.includes(`data-ds-component="${timeline}" data-ds-version="${timelineVersion}"`) || !html.includes('data-ds-component="ListingTimeMarker" data-ds-version="2"') || !html.includes('data-ds-component="ListingEventCard" data-ds-version="6"') || !html.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="2"')) throw new Error(`${name} misses shared V16 listing components`);
+    const timelineVersion = timeline === 'WeekendEditorialTimeline' ? '4' : '2';
+    if (!html.includes(`data-ds-component="${timeline}" data-ds-version="${timelineVersion}"`) || !html.includes('data-ds-component="ListingTimeMarker" data-ds-version="3"') || !html.includes('data-ds-component="ListingEventCard" data-ds-version="7"') || !html.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="3"')) throw new Error(`${name} misses shared V17 listing components`);
   }
-  if (!popular.includes('data-listing-variant="POPULAR-V16"') || !popular.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="2"') || !popular.includes('data-ds-component="ListingEventCard" data-ds-version="6"')) throw new Error('Popular misses the shared V16 flow contract');
+  if (!popular.includes('data-listing-variant="POPULAR-V17"') || !popular.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="3"') || !popular.includes('data-ds-component="ListingEventCard" data-ds-version="7"') || !popular.includes('data-ds-component="PopularCategoryFilter" data-ds-version="1"')) throw new Error('Popular misses the shared V17 flow/type-filter contract');
   if (!weekend.includes('data-weekend-day-summary="sat"') || !weekend.includes('data-weekend-day-summary="sun"') || !weekend.includes('ke-weekend-weekday-chip')) throw new Error('Weekend misses the strong two-lane weekday-only head contract');
   const dateListings = `${today}\n${tomorrow}\n${weekend}`;
   const hufen = listingCard(dateListings, 6762);
@@ -133,15 +133,18 @@ async function checkDateListingsV16() {
     const like = card.indexOf('data-listing-like-proof');
     if (share >= 0 && like >= 0 && share > like) throw new Error(`Listing social proof must keep shared-system Share -> Like order: ${event.id}`);
   }
-  if (!compactCss.includes('--ke-listing-discovery-height:88px') || !compactCss.includes('--ke-content-listing-max:1600px') || !compactCss.includes('[data-stuck=true].ke-filter-chip')) throw new Error('V16 adaptive discovery geometry is missing');
-  if (!compactCss.includes('overflow:visible') || !compactCss.includes('flex-wrap:wrap') || !compactCss.includes('filter:saturate(.68)') || !compactCss.includes('opacity:.82') || !compactCss.includes('.ke-listing-card__side-rail{flex:0060px;width:60px') || !dateListings.includes('--ke-listing-tail-width:64px')) throw new Error('V16 compact identity/social-proof rail geometry is missing');
-  if (!weekend.includes('data-ds-component="WeekendRangeNav" data-ds-version="1"') || !weekend.includes('svgrepo-450220-long-arrow-right.svg') || !weekend.includes('data-listing-weekend-day-count-value')) throw new Error('Weekend misses V16 future-range navigation or lightweight day counts');
+  if (!compactCss.includes('--ke-listing-discovery-height:52px') || !compactCss.includes('--ke-content-listing-max:1720px') || !compactCss.includes('[data-stuck=true].ke-filter-chip')) throw new Error('V17 adaptive discovery geometry is missing');
+  if (!compactCss.includes('overflow:visible') || !compactCss.includes('flex-wrap:wrap') || !compactCss.includes('filter:saturate(.68)') || !compactCss.includes('opacity:.82') || !compactCss.includes('.ke-listing-card[data-listing-tail-layout=split].ke-listing-card__side-rail') || !dateListings.includes('--ke-listing-tail-width:100px')) throw new Error('V17 split identity/social-proof rail geometry is missing');
+  if (!weekend.includes('data-ds-component="WeekendRangeNav" data-ds-version="2"') || !weekend.includes('ke-weekend-ranges__continuation') || !weekend.includes('svgrepo-450220-long-arrow-right.svg') || !weekend.includes('data-listing-weekend-day-count-value')) throw new Error('Weekend misses V17 future-range navigation or lightweight day counts');
   if (!compactCss.includes('scroll-margin-top:calc(var(--ke-listing-sticky-stack-height)+var(--ke-weekend-heads-height)+12px)') || !compactCss.includes('.ke-weekend-time-rail{top:calc(var(--ke-listing-sticky-stack-height)+var(--ke-weekend-heads-height)+12px)')) throw new Error('Weekend sticky/hash landing must clear both sticky rails');
   if (!compactCss.includes('.ke-listing-time-marker,.ke-weekend-time-rail{z-index:7') || !compactCss.includes('position:sticky')) throw new Error('Exact-time markers must keep the proven sticky navigation context');
+  const identityControl = listingCard(dateListings, 6811);
+  if (!identityControl.includes('data-listing-identity-count="3"') || !identityControl.includes('data-listing-tail-layout="split"') || !identityControl.includes('data-listing-medallion-slug="konb"') || !identityControl.includes('data-listing-medallion-slug="kgd80-80-stories"') || !identityControl.includes('data-listing-medallion-slug="free"')) throw new Error('Event 6811 must retain all three listing identities beside proof');
+  if (!dateListings.includes('data-listing-overlay-kind="neutral-fallback"') || /data-listing-overlay-kind="reviewed-photo"[^>]*data-image-text-mode="(?:ocr_text|unknown)"/u.test(dateListings)) throw new Error('V17 systemic medallion overlay/fallback gate is missing or fail-open');
   const freeSvg = readFileSync(join(root, 'assets/badges/free-listing-medallion.svg'), 'utf8');
   if (!freeSvg.includes('0 ₽') || !freeSvg.includes('БЕСПЛАТНО') || /gradient|#d4af37|gold/iu.test(freeSvg)) throw new Error('Free medallion must remain the quiet monochrome deterministic V15 asset');
 }
-await checkDateListingsV16();
+await checkDateListingsV17();
 
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {

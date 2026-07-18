@@ -1,8 +1,10 @@
 ---
 import ListingEventCard from './ListingEventCard.astro';
 import ListingTimeMarker from './ListingTimeMarker.astro';
+import type { PreviewEvent } from '../../lib/types';
 import type { ListingTimeGroup } from '../../lib/listingPresentation';
-import { listingDaypart } from '../../lib/listingPresentation';
+import { listingDaypart, selectListingImage } from '../../lib/listingPresentation';
+import { getListingIdentityMedallions, getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 
 interface DayInput {
   key: 'sat' | 'sun';
@@ -15,8 +17,57 @@ const { days } = Astro.props;
 const groupMaps = new Map(days.map((day) => [day.key, new Map(day.groups.map((group) => [group.key, group]))]));
 const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.key)))]
   .sort((left, right) => left === 'untimed' ? 1 : right === 'untimed' ? -1 : left.localeCompare(right));
+
+const PACKING_LANE = 530;
+const PACKING_GAP = 16;
+function projectedWidth(event: PreviewEvent): number {
+  const image = selectListingImage(event, 4 / 3);
+  const mediaHeight = image.asset && image.asset.width < 320 ? Math.min(178, image.asset.height) : 178;
+  const overlay = getListingVenueMedallion(event, image.asset);
+  const identities = getListingIdentityMedallions(event)
+    .filter((item) => item.slug !== overlay?.slug);
+  const identityCount = Math.min(3, identities.length + (event.ticket?.is_free === true ? 1 : 0));
+  const hasProof = Number(event.likes_count || 0) > 0 || Number(event.shares_count || 0) > 0;
+  const tail = hasProof && identityCount === 3 ? 100 : identityCount > 0 || hasProof ? 64 : 0;
+  return mediaHeight * image.ratio + tail;
+}
+function rowCount(events: PreviewEvent[]): number {
+  let rows = 0;
+  let used = 0;
+  events.forEach((event) => {
+    const width = projectedWidth(event);
+    if (!rows || used + PACKING_GAP + width > PACKING_LANE + 0.5) {
+      rows += 1;
+      used = width;
+    } else used += PACKING_GAP + width;
+  });
+  return rows;
+}
+function packSameTime(events: PreviewEvent[]): PreviewEvent[] {
+  if (events.length < 3) return events;
+  const remaining = [...events];
+  const packed: PreviewEvent[] = [];
+  while (remaining.length) {
+    const anchor = remaining.shift();
+    if (!anchor) break;
+    packed.push(anchor);
+    let used = projectedWidth(anchor);
+    while (remaining.length) {
+      const candidates = remaining
+        .map((event, index) => ({ event, index, width: projectedWidth(event) }))
+        .filter((item) => used + PACKING_GAP + item.width <= PACKING_LANE + 0.5)
+        .sort((left, right) => right.width - left.width || left.index - right.index);
+      const next = candidates[0];
+      if (!next) break;
+      packed.push(next.event);
+      remaining.splice(next.index, 1);
+      used += PACKING_GAP + next.width;
+    }
+  }
+  return rowCount(packed) < rowCount(events) ? packed : events;
+}
 ---
-<div class="ke-weekend-timeline" data-ds-component="WeekendEditorialTimeline" data-ds-version="3">
+<div class="ke-weekend-timeline" data-ds-component="WeekendEditorialTimeline" data-ds-version="4">
   {keys.map((key, keyIndex) => {
     const groups = days.map((day) => groupMaps.get(day.key)?.get(key));
     const label = key === 'untimed' ? 'Время уточняется' : key;
@@ -42,6 +93,7 @@ const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.k
         />
         {days.map((day, index) => {
           const group = groups[index];
+          const packedEvents = group ? packSameTime(group.events) : [];
           return (
             <div
               class:list={['ke-weekend-time-cell', `ke-weekend-time-cell--${day.key}`]}
@@ -58,8 +110,8 @@ const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.k
                 data-listing-daypart={daypart}
                 hidden={!group?.events.length}
               >
-                <div class="ke-time-group__flow">
-                  {group?.events.map((event) => {
+                <div class="ke-time-group__flow" data-listing-packed={packedEvents !== group?.events ? 'true' : 'false'}>
+                  {packedEvents.map((event) => {
                     const priority = keyIndex === 0 && priorityIndex++ < 2;
                     return <ListingEventCard event={event} density="weekend" priority={priority} />;
                   })}

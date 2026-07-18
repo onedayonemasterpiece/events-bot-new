@@ -2521,13 +2521,17 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const filters = Array.from(document.querySelectorAll('[data-listing-filter]'));
           const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar]'));
           if (!items.length || (!filters.length && !bars.length)) return;
-          const prototypeQualified = (location.pathname.includes('/preview-') || ['127.0.0.1', 'localhost'].includes(location.hostname))
-            && new URLSearchParams(location.search).get('personalization') === 'qualified';
+          const prototypeQualified = (/^\/preview-[^/]+\//u.test(location.pathname) || ['127.0.0.1', 'localhost'].includes(location.hostname))
+            && new URLSearchParams(location.search).get('personalization') !== 'off';
           const profile = readProfile();
           const validProfile = isCompatibleProfile(profile);
           const prototypeHiddenIds = prototypeQualified
             ? new Set(items.filter((_, index) => index % 5 === 4).map((item) => asId(item.dataset.eventId)).filter(Boolean))
             : new Set();
+          if (prototypeQualified && prototypeHiddenIds.size === 0 && items.length > 1) {
+            const fallbackId = asId(items.at(-1)?.dataset.eventId);
+            if (fallbackId) prototypeHiddenIds.add(fallbackId);
+          }
           const hiddenIds = prototypeQualified ? prototypeHiddenIds : (validProfile ? hiddenSet(profile) : new Set());
           const explicitMode = prototypeQualified ? listingPrototypeMode : readListingMode();
           const hiddenCandidates = items.filter((item) => listingItemShouldHide(item, hiddenIds));
@@ -2578,8 +2582,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             root.classList.add('is-visible');
             root.querySelectorAll('[data-listing-mode-button]').forEach((button) => {
               const pressed = button.dataset.listingModeButton === mode;
-              button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
               button.setAttribute('aria-checked', pressed ? 'true' : 'false');
+              button.setAttribute('tabindex', pressed ? '0' : '-1');
             });
             root.querySelectorAll('[data-listing-total-count]').forEach((node) => { node.textContent = String(total); });
             root.querySelectorAll('[data-listing-visible-count]').forEach((node) => { node.textContent = String(visible); });
@@ -3848,15 +3852,24 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           if (!button) return;
           event.preventDefault();
           const mode = button.dataset.listingModeButton === 'personal' ? 'personal' : 'all';
-          const prototypeQualified = (location.pathname.includes('/preview-') || ['127.0.0.1', 'localhost'].includes(location.hostname))
-            && new URLSearchParams(location.search).get('personalization') === 'qualified';
+          const prototypeQualified = (/^\/preview-[^/]+\//u.test(location.pathname) || ['127.0.0.1', 'localhost'].includes(location.hostname))
+            && new URLSearchParams(location.search).get('personalization') !== 'off';
           if (prototypeQualified) listingPrototypeMode = mode;
           else writeListingMode(mode);
-          syncListingPersonalFilter({ focusSummary: true });
-          const firstList = document.querySelector('[data-listing-filter]');
-          if (firstList && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            firstList.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-          }
+          syncListingPersonalFilter();
+          button.focus({ preventScroll: true });
+        });
+
+        document.addEventListener('keydown', (event) => {
+          const button = event.target.closest('[data-listing-mode-button]');
+          if (!button || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+          event.preventDefault();
+          const group = button.closest('[role="radiogroup"]');
+          const buttons = Array.from(group?.querySelectorAll('[data-listing-mode-button]') || []);
+          const current = buttons.indexOf(button);
+          if (current < 0 || buttons.length < 2) return;
+          const backwards = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+          buttons[(current + (backwards ? -1 : 1) + buttons.length) % buttons.length]?.click();
         });
 
         document.addEventListener('click', async (event) => {

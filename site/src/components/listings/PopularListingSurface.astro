@@ -4,16 +4,22 @@ import { deduplicateListingEvents } from '../../lib/listingPresentation';
 import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingEventCard from './ListingEventCard.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
+import PopularCategoryFilter from './PopularCategoryFilter.astro';
 
 interface Props { events: PreviewEvent[]; }
 const events = deduplicateListingEvents(Astro.props.events);
 const cities = [...new Set(events.map((event) => event.city || 'Калининградская область'))]
   .map((name) => ({ name, count: events.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
+const categories = [...new Set(events.map((event) => event.event_type).filter(Boolean))]
+  .map((value) => ({ value: String(value), count: events.filter((event) => event.event_type === value).length }))
+  .filter((item) => item.count >= 3)
+  .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value, 'ru'));
 ---
-<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V16">
+<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V17">
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={events.length} current="popular" />
   <ListingDiscoveryRail cities={cities} total={events.length} label="популярное" hasTime={false} />
+  <PopularCategoryFilter categories={categories} total={events.length} />
   <section class="ke-popular-flow" aria-label="Популярные события">
     {events.map((event, index) => <ListingEventCard event={event} priority={index < 4} />)}
   </section>

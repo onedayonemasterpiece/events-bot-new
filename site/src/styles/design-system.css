@@ -969,6 +969,19 @@
 .ke-listing-discovery-rail[data-stuck="true"] .ke-city-filter--direct { gap-inline: 8px; }
 .ke-listing-discovery-rail[data-stuck="true"] .ke-filter-chip { font-size: .78rem; }
 .ke-listing-discovery-rail[data-stuck="true"] .ke-filter-chip strong { display: none; }
+.ke-listing-discovery-rail[data-stuck="true"] .listing-filter.is-visible,
+.ke-listing-discovery-rail[data-stuck="true"] .listing-mode-switch {
+  flex: 0 0 212px;
+  width: 212px;
+  min-width: 0;
+  max-width: 212px;
+}
+.ke-listing-discovery-rail[data-stuck="true"] .listing-mode-switch button {
+  min-width: 0;
+  padding-inline: 5px;
+  font-size: .72rem;
+}
+.ke-listing-discovery-rail[data-stuck="true"] .listing-mode-switch__count { display: none; }
 .ke-listing-discovery-rail[data-city-rows="1"] .ke-city-filter,
 .ke-listing-discovery-rail[data-city-rows="1"] .ke-city-filter--direct { flex-wrap: nowrap; }
 .ke-listing-discovery-rail .listing-filter.is-visible {
@@ -1137,3 +1150,214 @@
 .ke-weekend-range.is-selected { border-color: color-mix(in srgb, var(--ke-color-brand-700) 24%, transparent); background: color-mix(in srgb, var(--ke-color-brand-700) 9%, transparent); color: var(--ke-color-brand-800); font-weight: 880; }
 .ke-weekend-range--terminal img { width: 74px; height: 18px; object-fit: fill; opacity: .68; }
 .ke-weekend-adjacent { display: none; }
+
+/* V17 desktop listing repair. Discovery is one adaptive control plane rather
+   than two stacked subheaders; expanded labels are deliberately more legible,
+   while the pinned state keeps the proven compact V16 density. */
+:root {
+  --ke-listing-discovery-height: 52px;
+  --ke-listing-sticky-stack-height: calc(var(--ke-site-header-bar-height) + var(--ke-listing-discovery-height));
+}
+.ke-listing-discovery-rail { height: var(--ke-listing-discovery-height); }
+.ke-listing-discovery-rail__inner {
+  width: min(var(--ke-content-listing-max), calc(100% - clamp(3rem, 5vw, 6rem)));
+  min-height: 100%;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  column-gap: 20px;
+  box-sizing: border-box;
+}
+.ke-listing-discovery-rail--cities-only .ke-listing-discovery-rail__inner { grid-template-columns: minmax(0, 1fr); }
+.ke-listing-discovery-rail .ke-listing-controls,
+.ke-listing-discovery-rail > .ke-listing-controls {
+  min-width: 0;
+  width: auto;
+  height: var(--ke-listing-city-row-height, 52px);
+  margin-inline: 0;
+  padding: 0;
+}
+.ke-listing-discovery-rail__time {
+  width: max-content;
+  height: 44px;
+  border: 0;
+}
+.ke-listing-discovery-rail .ke-time-nav,
+.ke-listing-discovery-rail .ke-time-nav__inner {
+  width: max-content;
+  height: 44px;
+  padding: 0;
+}
+.ke-listing-discovery-rail .ke-city-filter,
+.ke-listing-discovery-rail .ke-city-filter--direct {
+  flex-wrap: wrap;
+  align-content: center;
+  column-gap: 16px;
+  row-gap: 0;
+}
+.ke-listing-discovery-rail .ke-filter-chip {
+  min-height: 52px;
+  font-size: .9375rem;
+  font-weight: 680;
+}
+.ke-listing-discovery-rail .ke-filter-chip strong { font-size: .72rem; }
+.ke-listing-discovery-rail[data-stuck="true"] .ke-listing-discovery-rail__inner { padding-left: 304px; }
+.ke-listing-discovery-rail[data-stuck="true"] .ke-city-filter,
+.ke-listing-discovery-rail[data-stuck="true"] .ke-city-filter--direct { column-gap: 8px; }
+.ke-listing-discovery-rail[data-stuck="true"] .ke-filter-chip {
+  min-height: 44px;
+  font-size: .78rem;
+}
+.ke-listing-discovery-rail[data-stuck="true"] .ke-filter-chip strong { display: none; }
+.ke-listing-discovery-rail .listing-filter.is-visible { min-height: 44px; }
+.ke-listing-discovery-rail .listing-mode-switch { min-width: 176px; }
+.ke-listing-discovery-rail .listing-mode-switch button { padding-inline: 7px; }
+
+/* A singleton keeps the same left scanning line as every other card. The
+   readable envelope may widen copy to 420px, but unused space stays right. */
+.ke-time-group__flow[data-listing-singleton="true"] { justify-content: flex-start; }
+.ke-time-group__flow[data-listing-singleton="true"] > .ke-listing-card {
+  flex-basis: var(--ke-listing-singleton-envelope);
+  width: var(--ke-listing-singleton-envelope);
+}
+.ke-time-group__flow[data-listing-singleton="true"] > .ke-listing-card .ke-listing-card__visual {
+  width: var(--ke-listing-singleton-visual);
+  margin-inline: 0;
+}
+
+/* One column remains the compact default. When three identities coexist with
+   audience proof, proof receives a second quiet 36px column instead of
+   deleting the third medallion. */
+.ke-listing-card[data-listing-tail-layout="split"] .ke-listing-card__side-rail {
+  flex: 0 0 96px;
+  width: 96px;
+  display: grid;
+  grid-template-columns: 56px 36px;
+  align-items: start;
+  gap: 4px;
+}
+.ke-listing-card[data-listing-tail-layout="split"] .ke-listing-card__identity-rail { width: 56px; }
+.ke-listing-card[data-listing-tail-layout="split"] .ke-listing-card__social-proof {
+  width: 36px;
+  min-width: 36px;
+  height: var(--ke-listing-media-height);
+  margin: 0;
+  padding: 0;
+  justify-content: flex-end;
+}
+.ke-listing-card[data-listing-tail-layout="split"][data-listing-side-identity-count="3"] .ke-listing-card__identity-medallion,
+.ke-listing-card[data-listing-tail-layout="split"][data-listing-side-identity-count="3"] .ke-listing-card__free-medallion {
+  width: clamp(48px, calc((var(--ke-listing-media-height) - 8px) / 3), 52px);
+  height: clamp(48px, calc((var(--ke-listing-media-height) - 8px) / 3), 52px);
+  flex-basis: clamp(48px, calc((var(--ke-listing-media-height) - 8px) / 3), 52px);
+}
+
+/* Temporal state is real DOM text. Only the main poster/fallback is muted;
+   identity marks, proof and readable copy remain trustworthy. */
+.ke-listing-card__temporal-status {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ke-color-muted);
+  font-size: .75rem;
+  font-weight: 820;
+  letter-spacing: .045em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+.ke-listing-card__temporal-status[hidden] { display: none; }
+[data-listing-past="true"] .ke-listing-card__media > img,
+[data-listing-started-earlier="true"] .ke-listing-card__media > img {
+  filter: grayscale(.72) saturate(.28);
+  opacity: .56;
+}
+[data-listing-past="true"] .ke-listing-card__fallback,
+[data-listing-started-earlier="true"] .ke-listing-card__fallback {
+  filter: grayscale(.7) saturate(.3);
+  opacity: .58;
+}
+[data-listing-past="true"] .ke-listing-card__medallion img,
+[data-listing-started-earlier="true"] .ke-listing-card__medallion img { filter: none; opacity: 1; }
+[data-listing-past="true"] .ke-listing-card__copy::before,
+[data-listing-started-earlier="true"] .ke-listing-card__copy::before,
+[data-listing-earlier] .ke-listing-card__copy::before { content: none; }
+
+/* Day chips are wayfinding, not CTAs or brand marks. */
+.ke-weekend-weekday-chip,
+.ke-weekend-day__head--sun .ke-weekend-weekday-chip,
+.ke-listing-time-marker__day-chip > b,
+.ke-listing-time-marker__day-chip--sun > b {
+  background: color-mix(in srgb, var(--ke-color-ink) 9%, var(--ke-color-canvas));
+  color: color-mix(in srgb, var(--ke-color-ink) 76%, var(--ke-color-canvas));
+  box-shadow: none;
+}
+
+@media (min-width: 1760px) {
+  :root { --ke-content-listing-max: 1720px; }
+}
+
+.ke-weekend-ranges__continuation {
+  flex: 0 0 90px;
+  width: 90px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: .58;
+}
+.ke-weekend-ranges__continuation::before {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: currentColor;
+}
+.ke-weekend-ranges__continuation img { width: 30px; height: 20px; object-fit: contain; }
+.ke-weekend-range { min-height: 44px; }
+
+.ke-popular-categories {
+  margin: 18px 0 0;
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+.ke-popular-categories legend {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  color: var(--ke-color-muted);
+  font-size: .76rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.ke-popular-categories label {
+  position: relative;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ke-color-muted);
+  font-size: .88rem;
+  cursor: pointer;
+}
+.ke-popular-categories input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
+.ke-popular-categories strong { color: color-mix(in srgb, var(--ke-color-muted) 72%, transparent); font-size: .7rem; }
+.ke-popular-categories label:has(input:checked) { color: var(--ke-color-brand-800); font-weight: 850; }
+.ke-popular-categories label:has(input:checked)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 3px;
+  left: 0;
+  height: 2px;
+  background: var(--ke-color-brand-600);
+}
+.ke-popular-categories label:has(input:focus-visible) { outline: 2px solid var(--ke-color-focus); outline-offset: 2px; }
+
+@media (max-width: 1450px) and (min-width: 981px) {
+  .ke-listing-discovery-rail__inner { column-gap: 14px; }
+  .ke-listing-discovery-rail[data-stuck="true"] .ke-listing-discovery-rail__inner { padding-left: 304px; }
+}

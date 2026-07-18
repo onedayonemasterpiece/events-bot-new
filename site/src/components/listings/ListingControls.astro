@@ -14,7 +14,7 @@ const showCities = cities.length > 1;
   class="ke-listing-controls"
   aria-label="Фильтры списка"
   data-ds-component="ListingControls"
-  data-ds-version="4"
+  data-ds-version="5"
   data-listing-controls
 >
   {showCities ? (
@@ -239,10 +239,24 @@ const showCities = cities.length > 1;
     const useAll = !all || all.checked;
     const enabled = new Set(cityInputs.filter((input) => input.checked).map((input) => input.value));
     const hasCityFilter = cityInputs.length > 0;
+    const selectedType = document.querySelector('[data-listing-type-input]:checked')?.value || 'all';
     document.querySelectorAll('[data-listing-item]').forEach((item) => {
       const cityMatch = !hasCityFilter || useAll || enabled.has(item.dataset.listingCity || '');
       const personalMatch = item.dataset.personalHidden !== 'true';
-      item.hidden = !(cityMatch && personalMatch);
+      const typeMatch = selectedType === 'all' || item.dataset.listingEventType === selectedType;
+      item.hidden = !(cityMatch && personalMatch && typeMatch);
+    });
+    const facetedItems = [...document.querySelectorAll('[data-listing-item]')]
+      .filter((item) => item.dataset.personalHidden !== 'true')
+      .filter((item) => selectedType === 'all' || item.dataset.listingEventType === selectedType);
+    controls.querySelectorAll('[data-listing-city-count]').forEach((label) => {
+      const input = label.querySelector('input');
+      const count = input?.matches('[data-listing-city-all]')
+        ? facetedItems.length
+        : facetedItems.filter((item) => item.dataset.listingCity === input?.value).length;
+      label.dataset.listingCityCount = String(count);
+      const value = label.querySelector('strong');
+      if (value) value.textContent = String(count);
     });
     if (all) all.indeterminate = false;
     syncTimeGroups();
@@ -300,6 +314,40 @@ const showCities = cities.length > 1;
       applyListingFilters();
     });
 
+    function stickyOffset(target) {
+      const header = document.querySelector('.site-header');
+      const discovery = document.querySelector('[data-listing-discovery-rail]');
+      const heads = target.closest('[data-date-listing="weekend"]')?.querySelector('.ke-weekend-heads');
+      return (header?.getBoundingClientRect().height || 0)
+        + (discovery?.getBoundingClientRect().height || 0)
+        + (heads?.getBoundingClientRect().height || 0)
+        + 12;
+    }
+
+    async function alignListingTarget(target, options = {}) {
+      if (!target) return;
+      const heading = target.querySelector('h2, h3');
+      const alignmentProbe = target.matches?.('[data-weekend-time-row]')
+        ? (target.querySelector('.ke-weekend-time-rail') || target)
+        : target;
+      const desired = stickyOffset(target);
+      const rect = target.getBoundingClientRect();
+      const alreadyUseful = options.preserveIfVisible !== false
+        && rect.top >= desired - 2
+        && rect.top < innerHeight * 0.72;
+      if (!alreadyUseful) {
+        target.scrollIntoView({ block: 'start', behavior: 'instant' });
+        for (let pass = 0; pass < 5; pass += 1) {
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const correction = alignmentProbe.getBoundingClientRect().top - stickyOffset(target);
+          if (Math.abs(correction) <= 1) break;
+          scrollBy({ top: correction, behavior: 'instant' });
+        }
+      }
+      heading?.focus({ preventScroll: true });
+    }
+    window.KEAlignListingTarget = alignListingTarget;
+
     document.addEventListener('click', (event) => {
       const earlierLink = event.target.closest('[data-listing-earlier-link]');
       if (earlierLink) {
@@ -308,11 +356,14 @@ const showCities = cities.length > 1;
       }
       const link = event.target.closest('[data-time-nav-exact-target], [data-listing-daypart-link]');
       if (!link) return;
+      event.preventDefault();
       const targetId = link.dataset.timeNavExactTarget || (link.getAttribute('href') || '').replace(/^#/, '');
       const target = document.getElementById(targetId);
-      const heading = target?.querySelector('h2, h3');
-      window.setTimeout(() => heading?.focus({ preventScroll: true }), 0);
       link.closest('details')?.removeAttribute('open');
+      if (target) {
+        history.pushState(null, '', `#${target.id}`);
+        alignListingTarget(target, { preserveIfVisible: Boolean(link.dataset.listingDaypartLink === 'morning') });
+      }
     });
     document.addEventListener('toggle', (event) => {
       const details = event.target;

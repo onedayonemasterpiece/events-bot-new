@@ -56,27 +56,26 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Текущий публичный preview
 
-Desktop listing consumer candidate `DATE-LISTING · V16`:
-[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v16/segodnya/),
-[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v16/zavtra/),
-[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v16/vyhodnye/),
-[Популярное](https://kenigevents.ru/preview-20260718-date-listings-v16/populyarnoe/) и
-[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v16/lab/design-system/).
+Desktop listing consumer candidate `DATE-LISTING · V17`:
+[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v17/segodnya/),
+[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v17/zavtra/),
+[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v17/vyhodnye/),
+[Популярное](https://kenigevents.ru/preview-20260718-date-listings-v17/populyarnoe/) и
+[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v17/lab/design-system/).
 Это immutable review prefix, а не production promotion.
 
-V16 сохраняет согласованную Weekend-композицию с одной сильной sticky-осью
-времени и двумя непрерывными day-lane, но ставит маркер ниже полного sticky
-stack и показывает под ним лёгкие `сб/вс + N событий`. Города имеют читаемое
-expanded и компактное sticky-состояния с измеряемым wrap. Medallion identity и
-ненулевые Share/Like proof объединены в один 60px rail; Calendar aggregate не
-выводится, пока нет privacy-safe deduplicated durable saved-event count — ICS
-traffic не называется людьми. Singleton центрируется полным painted envelope,
-не растягивая natural/OCR media; listing flow использует до 1600px и сохраняет
-relevance order. Weekend получает облако текущего и пяти будущих диапазонов,
-квалифицированное preview-состояние демонстрирует `Для меня / Полный список`, а
-Popular остаётся единым score-ordered потоком до появления контролируемой
-категорийной taxonomy. Product decisions and measured acceptance:
-[`listing-surfaces-v16-product.md`](listing-surfaces-v16-product.md).
+V17 исправляет V16 regression: singleton всегда начинается от общей левой
+линии, а не центрируется. Города и периоды объединены в одну адаптивную light
+surface с крупным expanded и компактным pinned-состоянием. Safe-photo/no-media
+overlay-медальоны применяются системно; до трёх identity сохраняются рядом с
+ненулевым Share/Like proof. Weekend получает нейтральные day chips, стабильную
+same-time packing-перестановку, широкий 1720px desktop token и отдельную
+декоративную стрелку после шести диапазонов. Popular снова имеет точные
+event-type фильтры, не нарушая score order; immutable preview показывает
+ревью-состояние персонализации, тогда как production ничего не синтезирует.
+Calendar aggregate по-прежнему не выводится без durable saved-event count.
+Product decisions and measured acceptance:
+[`listing-surfaces-v17-product.md`](listing-surfaces-v17-product.md).
 
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
 
