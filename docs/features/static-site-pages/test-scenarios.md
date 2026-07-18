@@ -332,6 +332,14 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 
 ### Related/vector barrier
 
+- **ADD-RELATED-05 — Единая геометрия continuation.** `Смотрите дальше` и
+  desktop `Ещё события` используют один three-card row contract: одинаковый
+  shell, `visual_only` cover, OCR/document crop не более 20%, skeleton без shift.
+- **ADD-RELATED-06 — Diverse mixed continuation.** Максимум шесть карточек;
+  current/prior/hidden/recent-served исключены, cap `3/category`, `2/venue`;
+  profile и non-rejected vector-adjacent interleave детерминированно. Raw/not-run
+  vector не называется LLM-approved/`Похожие`, explicit rejected не показывается.
+
 - **ADD-RELATED-01 — Revision barrier.** При включённом related mode manifest
   фиксирует ожидаемые `search_v3/related_v1` revisions/hashes и не публикует
   устаревшую verified projection.
@@ -378,6 +386,9 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-A11Y-02 — Screen reader semantics.** У controls корректные accessible names/state/live announcements; карточка не создаёт конфликтующих вложенных ссылок/кнопок, возраст и альтернативные даты читаются понятно.
 - **ADD-A11Y-03 — Reduced motion.** `prefers-reduced-motion` отключает parallax/автодвижение без потери контента или управления; autoplay не мешает чтению.
 - **ADD-A11Y-04 — No-JS.** Основные страницы, факты, ссылки, похожий static fallback, navigation и SEO-content остаются доступными без JS; enhancement не оставляет пустые обязательные блоки.
+- **ADD-A11Y-05 — Gallery targets.** Hover/focus над закрытым desktop hero
+  включает Left/Right; fullscreen CTA pointer/touch переходит по ссылке, а не
+  dismiss. Reduced motion запрещает timed advance, inactive slide не tabbable.
 - **ADD-UI-03 — Длинный и экстремальный контент.** Проверить длинные названия, площадки/адреса, несколько медальонов, отсутствие цены, пять возрастных вариантов, много дат и 1/10+ изображений.
 - **ADD-UI-04 — Browser/device matrix.** Финальный RC проверить минимум в актуальных Chrome/Edge/Firefox на Windows, Safari/Chrome/Firefox на macOS и Safari iOS/Chrome Android; native share/clipboard/calendar проверять на реальных ОС, не только Playwright mocks.
 - **ADD-UI-05 — CTA по фактической геометрии компонента.** Desktop action panel
@@ -395,6 +406,11 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-SEC-02 — Auth/admin boundaries.** Обычная авторизация, знание event id или `noindex` не открывают admin report/history; повторный report защищён от двойного запуска и показывает реальный статус/результат нескольких incidents.
 - **ADD-OBS-01 — Ошибки видимы и коррелируются.** Build/search/share/email/transport/personalization failure оставляет run/request correlation evidence без PII; UI не сообщает успех, если backend действие не принято.
 - **ADD-OBS-02 — Чистая клиентская сессия.** На каждой page family нет неожиданных console errors, unhandled rejections, failed first-party requests, hydration mismatch и повторяющегося telemetry spam.
+- **ADD-OBS-03 — Static build report.** Redacted 24h report различает outcomes,
+  channel pointers, page/object/byte counts и history ↔ ledger orphans без bearer.
+- **ADD-SEO-04 — Past-event lifecycle.** Полезный past URL остаётся 200 с
+  archive label; real move — 301/308, permanent removal — 404/410; noindex/test
+  URLs отсутствуют в sitemap и удаляются только manifest-bound cleanup.
 
 ## Правило исполнения
 

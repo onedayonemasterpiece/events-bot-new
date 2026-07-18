@@ -465,3 +465,12 @@ export/install/build/archive, `preflight_ok`, terminal `report_written` and
 The incident remains **open only for the user's visual acceptance**. Secret
 preproduction generation is now live and automatic; production-root promotion
 remains separately disabled pending explicit approval.
+
+## 2026-07-18 v13 review regressions
+
+The next review added real-event guards for crop-safe wide media (`6592`),
+two-stage Split CTA compaction and calendar-primary semantics (`6793`, `6811`,
+`6901`, `6959`), closed-hero arrows and fullscreen terminal CTA navigation
+(`5755`, `6408`), shared recommendation geometry/diversity (`3934`) and a
+redacted 24-hour build report. Closure requires a fresh automatic secret
+candidate and user visual acceptance; the previous candidate is superseded.

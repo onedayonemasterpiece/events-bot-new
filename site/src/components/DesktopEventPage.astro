@@ -20,6 +20,7 @@ import { eventImageUrl } from '../lib/assets';
 import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
 import { selectEventMediaByQuality } from '../lib/eventMediaQuality';
 import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
+import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
 
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
@@ -126,98 +127,17 @@ type DesktopRelatedLayout = {
   rowIndex:number;
   rowMode:string;
   mediaKind:'document' | 'visual';
-  mediaTreatment:'document-safe-cover' | 'visual-cover';
+  mediaTreatment:'document-safe-cover' | 'document-contain' | 'visual-cover';
   coverCrop:number;
+  potentialCoverCrop:number;
   rowWorstCrop:number;
 };
-const relatedRowLayout = (
-  row:Array<{ item:PreviewEvent; documentMedia:boolean; ratio:number }>,
-  rowIndex:number,
-):Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }> => {
-  const documents = row.filter(({ documentMedia }) => documentMedia);
-  const visuals = row.filter(({ documentMedia }) => !documentMedia);
-  const documentRatios = documents.map(({ ratio }) => ratio);
-  const visualRatios = visuals.map(({ ratio }) => ratio);
-  let targetRatio = 1;
-  let rowMode = 'visual-square';
-  if (documents.length === 0) {
-    const geometricMean = visualRatios.length
-      ? Math.exp(visualRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / visualRatios.length)
-      : 1;
-    targetRatio = Math.min(4 / 3, Math.max(1, geometricMean));
-    rowMode = 'visual-squareish';
-  } else if (visuals.length > 0) {
-    if (relatedMediaTreatment === 'cover') {
-      targetRatio = 1.12;
-      rowMode = 'mixed-compact-cover';
-    } else if (relatedMediaTreatment === 'ambient') {
-      targetRatio = 1;
-      rowMode = 'mixed-square-ambient';
-    } else {
-      const documentCenter = Math.exp(documentRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / documentRatios.length);
-      targetRatio = [.8, 1, 4 / 3]
-        .sort((left, right) => Math.abs(Math.log(left / documentCenter)) - Math.abs(Math.log(right / documentCenter)))[0];
-      rowMode = 'mixed-adaptive-ambient';
-    }
-  } else if (documentRatios.length === 1) {
-    targetRatio = Math.min(.9, documentRatios[0] * 1.1);
-    rowMode = 'document-bounded-vertical-crop';
-  } else if (documentRatios.length > 1) {
-    targetRatio = Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios));
-    rowMode = 'document-minimax-contained';
-  } else {
-    rowMode = 'document-pending-contained';
-  }
-  if (documentRatios.length > 0) {
-    const safeLower = Math.max(...documentRatios.map((documentRatio) => documentRatio * .8));
-    const safeUpper = Math.min(...documentRatios.map((documentRatio) => documentRatio / .8));
-    if (safeLower <= safeUpper) targetRatio = Math.min(safeUpper, Math.max(safeLower, targetRatio));
-  }
-  const rowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio)));
-  return row.map(({ item, documentMedia, ratio:mediaRatio }) => ({
-    item,
-    layout:{
-      mediaRatio,
-      rowRatio:targetRatio,
-      rowIndex,
-      rowMode,
-      mediaKind:documentMedia ? 'document' : 'visual',
-      mediaTreatment:documentMedia ? 'document-safe-cover' : 'visual-cover',
-      coverCrop:Math.max(0, 1 - Math.min(mediaRatio / targetRatio, targetRatio / mediaRatio)),
-      rowWorstCrop,
-    },
-  }));
-};
-const packRelatedRows = (items:PreviewEvent[], limit = 10) => {
-  const remaining = items.map((item) => ({ item, ...relatedMediaGeometry(item) }));
-  const packed:Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }> = [];
-  let rowIndex = 0;
-  while (remaining.length && packed.length < limit) {
-    const row = [remaining.shift()!];
-    let safeLower = row[0].documentMedia ? row[0].ratio * .8 : 0;
-    let safeUpper = row[0].documentMedia ? row[0].ratio / .8 : Number.POSITIVE_INFINITY;
-    while (row.length < 3 && remaining.length && packed.length + row.length < limit) {
-      const candidateIndex = remaining.findIndex((candidate) => {
-        if (!candidate.documentMedia) return true;
-        return Math.max(safeLower, candidate.ratio * .8) <= Math.min(safeUpper, candidate.ratio / .8);
-      });
-      if (candidateIndex < 0) break;
-      const [candidate] = remaining.splice(candidateIndex, 1);
-      row.push(candidate);
-      if (candidate.documentMedia) {
-        safeLower = Math.max(safeLower, candidate.ratio * .8);
-        safeUpper = Math.min(safeUpper, candidate.ratio / .8);
-      }
-    }
-    packed.push(...relatedRowLayout(row, rowIndex));
-    rowIndex += 1;
-    // Do not let an incompatible OCR family leak into the same CSS-grid row.
-    // A short final row is preferable to either fields or more than 20% crop.
-    if (row.length < 3) break;
-  }
-  return packed;
-};
-const relatedForRender = packRelatedRows(relatedWithRoles, 10);
+const relatedForRender = packRelatedCardRows(relatedWithRoles, {
+  limit:10,
+  rowSize:3,
+  mediaTreatment:relatedMediaTreatment,
+  geometry:relatedMediaGeometry,
+}) as Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }>;
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const rawAssets = event.image_assets || [];
 const qualitySelection = surface === 'production'
@@ -303,6 +223,7 @@ const galleryImages = (() => {
 })();
 const galleryId = `clean-hero-gallery-${event.id}`;
 const galleryTitleId = `${galleryId}-title`;
+const closedHeroStatusId = `closed-hero-status-${event.id}`;
 const photoCount = galleryImages.length;
 const indexedGalleryImages = galleryImages.map((image, galleryIndex) => ({ image, galleryIndex }));
 const ocrCompanion = ocrCompanionImageIndex === undefined
@@ -388,6 +309,8 @@ const descriptionHtml = (event.description_html || '')
   data-split-efficient-viewer={splitPortraitViewer ? 'true' : undefined}
   data-related-media-treatment={relatedMediaTreatment}
   data-auto-rotate={autoRotate ? 'true' : 'false'}
+  data-closed-hero-gallery={photoCount > 1 ? galleryId : undefined}
+  data-active-hero-gallery-index={photoCount > 1 ? '0' : undefined}
   data-event-id={event.id}
   data-event-surface={surface}
   data-presentation-reason={presentationReason}
@@ -414,6 +337,8 @@ const descriptionHtml = (event.description_html || '')
                   data-efficient-viewer-start={splitPortraitViewer ? String(galleryImages[0]?.sourceIndex ?? 'gallery-0') : undefined}
                   data-hero-gallery-open={splitPortraitViewer ? undefined : galleryId}
                   data-hero-gallery-index="0"
+                  aria-describedby={photoCount > 1 ? closedHeroStatusId : undefined}
+                  aria-keyshortcuts={photoCount > 1 ? 'ArrowLeft ArrowRight' : undefined}
                   aria-label={splitPortraitViewer ? `Открыть быстрый просмотр всех изображений события «${event.title}»` : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
                 >
                   <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
@@ -462,7 +387,7 @@ const descriptionHtml = (event.description_html || '')
         ) : (
           <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroIsOcr ? undefined : ''} data-editorial-media>
             {preferredUrl && (
-              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
+              <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-describedby={photoCount > 1 ? closedHeroStatusId : undefined} aria-keyshortcuts={photoCount > 1 ? 'ArrowLeft ArrowRight' : undefined} aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
                 <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
               </button>
             )}
@@ -473,6 +398,8 @@ const descriptionHtml = (event.description_html || '')
           </figure>
         )}
 
+        <p id={closedHeroStatusId} class="sr-only" data-closed-hero-status role="status" aria-live="polite" aria-atomic="true">{photoCount > 1 ? `Фото 1 из ${photoCount}` : ''}</p>
+
         {candidate === 'editorial' && (
           <aside class="desktop-editorial-side" data-editorial-side data-companion-arrival={ocrCompanionLayout === 'arrival' ? 'true' : undefined}>
             {editorialRail && editorialRailImages.length > 1 && ocrCompanionLayout !== 'arrival' && (
@@ -481,6 +408,7 @@ const descriptionHtml = (event.description_html || '')
                   <button
                     type="button"
                     class:list={[index === 0 && 'is-current']}
+                    aria-pressed={index === 0 ? 'true' : 'false'}
                     data-clean-hero-thumb
                     data-responsive-rail-item
                     data-src={image.src}
@@ -704,7 +632,7 @@ const descriptionHtml = (event.description_html || '')
         <div class="hero-gallery__track" data-hero-gallery-track>
           {galleryImages.map((image, index) => (
             <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} data-source-index={image.sourceIndex} aria-hidden={index === 0 ? 'false' : 'true'}>
-              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-media-semantic-status={image.media_semantic_status} data-desktop-gallery-fit={desktopGalleryFit(image)} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} style={image.position ? `object-position:${image.position}` : undefined} />
+              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-media-semantic-status={image.media_semantic_status} data-desktop-gallery-fit={desktopGalleryFit(image)} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} data-object-position={image.position} style={image.position ? `object-position:${image.position}` : undefined} />
               <figcaption class="sr-only">Фото события: {event.title}</figcaption>
             </figure>
           ))}
@@ -723,7 +651,7 @@ const descriptionHtml = (event.description_html || '')
       </div>
       <div class="hero-gallery__caption" aria-hidden="true"><span>Фото события</span><strong>{event.title}</strong></div>
       {gallerySlideCount > 1 && <><button type="button" class="hero-gallery__nav hero-gallery__nav--prev" data-hero-gallery-prev aria-label="Предыдущее фото">‹</button><button type="button" class="hero-gallery__nav hero-gallery__nav--next" data-hero-gallery-next aria-label="Следующее фото или похожее событие">›</button></>}
-      <div class="hero-gallery__counter" data-hero-gallery-counter>{`1 / ${gallerySlideCount}`}</div>
+      <div class="hero-gallery__counter" data-hero-gallery-counter role="status" aria-live="polite" aria-atomic="true">{`1 / ${gallerySlideCount}`}</div>
     </div>
   )}
 
@@ -734,26 +662,13 @@ const descriptionHtml = (event.description_html || '')
       document.body.classList.add('desktop-clean-event-page');
       const actionPanels = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-action-panel]'));
       const actionPanelWidths = new WeakMap<HTMLElement, number>();
-      const fitActionPanel = (panel:HTMLElement, force = false) => {
-        const width = panel.getBoundingClientRect().width;
-        const previousWidth = actionPanelWidths.get(panel);
-        if (!force && previousWidth !== undefined && Math.abs(previousWidth - width) < .5) return;
-        actionPanelWidths.set(panel, width);
-        const phonePanel = panel.dataset.primaryActionKind === 'phone';
-        const splitFamily = panel.dataset.actionFamily === 'split';
-        // The component family chooses the intended composition. Only Split
-        // attempts the accepted one-row geometry; Editorial keeps the tall
-        // three-row card. Measure actual rendered children before allowing the
-        // Split row so dynamic labels/counters can still fail closed.
-        panel.dataset.actionLayout = splitFamily ? 'inline' : 'stacked';
-        panel.dataset.actionDensity = phonePanel ? 'compact' : 'comfortable';
-        if (!splitFamily) return;
-
+      const measureInlineActionPanel = (panel:HTMLElement) => {
         const panelRect = panel.getBoundingClientRect();
         const styles = getComputedStyle(panel);
         const leftLimit = panelRect.left + (Number.parseFloat(styles.paddingLeft) || 0) - 2;
         const rightLimit = panelRect.right - (Number.parseFloat(styles.paddingRight) || 0) + 2;
         const primary = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__primary-action');
+        const primaryLabel = primary?.querySelector<HTMLElement>('[data-desktop-primary-label], [data-calendar-label], [data-desktop-phone-label]');
         const actionRow = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__action-row');
         const children = [
           panel.querySelector<HTMLElement>(':scope > p:first-child'),
@@ -769,13 +684,56 @@ const descriptionHtml = (event.description_html || '')
           const second = other.getBoundingClientRect();
           return Math.min(first.right, second.right) - Math.max(first.left, second.left) > 2;
         }));
+        const primaryLabelDoesNotFit = (() => {
+          if (!primary || !primaryLabel) return false;
+          const primaryRect = primary.getBoundingClientRect();
+          const labelRect = primaryLabel.getBoundingClientRect();
+          const labelStyle = getComputedStyle(primaryLabel);
+          const lineHeight = Number.parseFloat(labelStyle.lineHeight)
+            || Number.parseFloat(labelStyle.fontSize)
+            || 16;
+          const wrapped = labelRect.height > lineHeight * 1.35;
+          const clipped = labelRect.left < primaryRect.left - 1
+            || labelRect.right > primaryRect.right + 1
+            || primaryLabel.scrollWidth > primaryLabel.clientWidth + 1;
+          return wrapped || clipped;
+        })();
         const overflows = panel.scrollWidth > panel.clientWidth + 1
           || Boolean(primary && primary.scrollWidth > primary.clientWidth + 2)
           || Boolean(actionRow && actionRow.scrollWidth > actionRow.clientWidth + 2);
-        if (outside || overlaps || overflows) {
-          panel.dataset.actionLayout = 'stacked';
-          panel.dataset.actionDensity = 'compact';
+        return !(outside || overlaps || primaryLabelDoesNotFit || overflows);
+      };
+      const fitActionPanel = (panel:HTMLElement, force = false) => {
+        const width = panel.getBoundingClientRect().width;
+        const previousWidth = actionPanelWidths.get(panel);
+        if (!force && previousWidth !== undefined && Math.abs(previousWidth - width) < .5) return;
+        actionPanelWidths.set(panel, width);
+        const splitFamily = panel.dataset.actionFamily === 'split';
+        // The component family chooses the intended composition. Only Split
+        // attempts the accepted one-row geometry; Editorial keeps the tall
+        // three-row card. Measure actual rendered children before allowing the
+        // Split row so dynamic labels/counters can still fail closed.
+        panel.dataset.actionFit = splitFamily ? 'measuring' : 'stacked';
+        panel.dataset.actionLayout = splitFamily ? 'inline' : 'stacked';
+        panel.dataset.actionDensity = 'comfortable';
+        if (!splitFamily) return;
+        if (measureInlineActionPanel(panel)) {
+          panel.dataset.actionFit = 'comfortable';
+          return;
         }
+
+        // Preserve the compact Split hierarchy before giving up its one-row
+        // composition: both secondary utilities become icon controls first
+        // (share already is one; the calendar label is hidden synchronously),
+        // then the real children are measured again.
+        panel.dataset.actionDensity = 'compact';
+        if (measureInlineActionPanel(panel)) {
+          panel.dataset.actionFit = 'icons';
+          return;
+        }
+
+        panel.dataset.actionLayout = 'stacked';
+        panel.dataset.actionFit = 'stacked';
       };
       actionPanels.forEach((panel) => {
         fitActionPanel(panel, true);
@@ -786,10 +744,20 @@ const descriptionHtml = (event.description_html || '')
           subtree:true,
         });
       });
+      const refitActionPanels = () => actionPanels.forEach((panel) => fitActionPanel(panel, true));
+      window.requestAnimationFrame(refitActionPanels);
+      window.addEventListener('load', refitActionPanels, { once:true });
+      document.fonts?.ready.then(refitActionPanels);
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
       const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
       const thumbButtons = Array.from(cleanRoot.querySelectorAll<HTMLButtonElement>('[data-clean-hero-thumb]'));
+      const closedHeroGallery = cleanRoot.dataset.closedHeroGallery
+        ? document.getElementById(cleanRoot.dataset.closedHeroGallery)
+        : null;
+      const closedHeroSlides = Array.from(closedHeroGallery?.querySelectorAll<HTMLElement>('[data-hero-gallery-slide][data-gallery-slide-kind="image"]') || []);
+      const closedHeroStatus = cleanRoot.querySelector<HTMLElement>('[data-closed-hero-status]');
+      const closedHeroOpener = heroImage?.closest<HTMLElement>('.desktop-prototype__media-opener');
       const rotationButtons = thumbButtons.filter((button) => button.dataset.rotationEligible === 'true' && Boolean(button.dataset.src));
       const rotationToggle = cleanRoot.querySelector<HTMLButtonElement>('[data-hero-rotation-toggle]');
       const siteHeader = document.querySelector<HTMLElement>('.site-header');
@@ -1331,6 +1299,63 @@ const descriptionHtml = (event.description_html || '')
         markRotation('waiting-idle');
       };
 
+      const selectClosedHero = async (index:number) => {
+        if (!heroImage || closedHeroSlides.length < 2) return;
+        const next = ((index % closedHeroSlides.length) + closedHeroSlides.length) % closedHeroSlides.length;
+        const slide = closedHeroSlides[next];
+        const image = slide?.querySelector<HTMLImageElement>('.hero-gallery__image[data-gallery-src]');
+        const src = image?.dataset.gallerySrc;
+        if (!slide || !image || !src) return;
+        cleanRoot.dataset.activeHeroGalleryIndex = String(next);
+        noteRotationActivity('hero-keyboard-navigation');
+        const token = ++imageRequest;
+        const probe = new Image();
+        probe.src = src;
+        try { await probe.decode(); } catch {}
+        if (token !== imageRequest) return;
+        heroImage.src = src;
+        heroImage.alt = image.alt || heroImage.alt;
+        heroImage.width = Number(image.getAttribute('width') || probe.naturalWidth || heroImage.width);
+        heroImage.height = Number(image.getAttribute('height') || probe.naturalHeight || heroImage.height);
+        heroImage.style.objectPosition = image.dataset.objectPosition || '50% 50%';
+        cleanRoot.dataset.selectedMediaPolicy = image.dataset.imageTextMode || 'unknown';
+        const matchingThumbIndex = thumbButtons.findIndex((button) => button.dataset.src === src);
+        thumbButtons.forEach((button, buttonIndex) => {
+          const current = buttonIndex === matchingThumbIndex;
+          button.setAttribute('aria-pressed', current ? 'true' : 'false');
+          button.classList.toggle('is-current', current);
+        });
+        if (matchingThumbIndex >= 0) cleanRoot.dataset.activeHeroIndex = String(matchingThumbIndex);
+        if (closedHeroOpener?.hasAttribute('data-hero-gallery-open')) {
+          closedHeroOpener.dataset.heroGalleryIndex = String(next);
+        }
+        if (closedHeroOpener?.hasAttribute('data-efficient-viewer-open')) {
+          closedHeroOpener.dataset.efficientViewerStart = slide.dataset.sourceIndex || '';
+        }
+        if (closedHeroStatus) closedHeroStatus.textContent = `Фото ${next + 1} из ${closedHeroSlides.length}`;
+        updateOcrFrame();
+        measureEditorialCrop();
+        markRotation('waiting-idle');
+      };
+
+      let closedHeroHovered = false;
+      mediaFrame?.addEventListener('pointerenter', () => { closedHeroHovered = true; });
+      mediaFrame?.addEventListener('pointerleave', () => { closedHeroHovered = false; });
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        if (document.body.classList.contains('has-hero-gallery-open')) return;
+        if (efficientViewer && !efficientViewer.hidden) return;
+        if (closedHeroSlides.length < 2 || !mediaFrame) return;
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')) return;
+        const heroFocused = document.activeElement instanceof Element && mediaFrame.contains(document.activeElement);
+        if (!closedHeroHovered && !heroFocused) return;
+        event.preventDefault();
+        const current = Number(cleanRoot.dataset.activeHeroGalleryIndex || '0');
+        void selectClosedHero(current + (event.key === 'ArrowRight' ? 1 : -1));
+      });
+
       rotationToggle?.addEventListener('click', () => {
         if (rotationEnabled) {
           disableRotation('manual-toggle');
@@ -1638,121 +1663,9 @@ const descriptionHtml = (event.description_html || '')
       updateOcrFrame();
       window.addEventListener('resize', updateOcrFrame, { passive:true });
 
-      const relatedGrid = cleanRoot.querySelector<HTMLElement>('[data-lab-row-normalize]');
-      const relatedMediaTreatment = cleanRoot.dataset.relatedMediaTreatment || 'hybrid';
-      let normalizeFrame = 0;
-      const normalizeRelatedRows = () => {
-        normalizeFrame = 0;
-        if (!relatedGrid) return;
-        const cards = Array.from(relatedGrid.querySelectorAll<HTMLElement>(':scope > [data-event-card]'));
-        if (window.innerWidth < 1024) {
-          cards.forEach((card) => {
-            card.removeAttribute('data-lab-related-card');
-            card.removeAttribute('data-lab-media-kind');
-            card.removeAttribute('data-lab-row-media');
-            card.removeAttribute('data-lab-row-index');
-            card.removeAttribute('data-lab-row-worst-crop');
-            card.removeAttribute('data-lab-media-treatment');
-            card.removeAttribute('data-lab-cover-crop');
-            card.removeAttribute('data-media-text-mode');
-            card.style.removeProperty('--lab-row-media-ratio');
-          });
-          return;
-        }
-        cards.forEach((card) => {
-          card.dataset.labRelatedCard = 'true';
-          const shell = card.querySelector<HTMLElement>('.event-card__media-shell');
-          card.dataset.labMediaKind = shell?.classList.contains('event-card__media-shell--document') || shell?.classList.contains('event-card__media-shell--preserve') ? 'document' : 'visual';
-        });
-        const rows:Array<HTMLElement[]> = [];
-        cards.forEach((card) => {
-          const top = card.getBoundingClientRect().top;
-          const row = rows.find((items) => Math.abs(items[0].getBoundingClientRect().top - top) <= 2);
-          if (row) row.push(card); else rows.push([card]);
-        });
-        rows.forEach((row, rowIndex) => {
-          const documents = row.filter((card) => card.dataset.labMediaKind === 'document');
-          const visuals = row.filter((card) => card.dataset.labMediaKind === 'visual');
-          const ratiosOf = (items:HTMLElement[]) => items
-            .map((card) => {
-              const image = card.querySelector<HTMLImageElement>('.event-card__media');
-              const declaredRatio = Number(card.dataset.labMediaRatio);
-              const imageRatio = Number.isFinite(declaredRatio) && declaredRatio > 0
-                ? declaredRatio
-                : image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0;
-              return Number.isFinite(imageRatio) && imageRatio > 0 ? imageRatio : null;
-            })
-            .filter((value):value is number => value !== null);
-          const documentRatios = ratiosOf(documents);
-          const visualRatios = ratiosOf(visuals);
-          let targetRatio = 1;
-          let mode = 'visual-square';
-          if (documents.length === 0) {
-            const geometricMean = visualRatios.length
-              ? Math.exp(visualRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / visualRatios.length)
-              : 1;
-            targetRatio = Math.min(4 / 3, Math.max(1, geometricMean));
-            mode = 'visual-squareish';
-          } else if (visuals.length > 0) {
-            if (relatedMediaTreatment === 'cover') {
-              targetRatio = 1.12;
-              mode = 'mixed-compact-cover';
-            } else if (relatedMediaTreatment === 'ambient') {
-              targetRatio = 1;
-              mode = 'mixed-square-ambient';
-            } else {
-              const buckets = [.8, 1, 4 / 3];
-              const documentCenter = Math.exp(documentRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / documentRatios.length);
-              targetRatio = buckets.sort((a, b) => Math.abs(Math.log(a / documentCenter)) - Math.abs(Math.log(b / documentCenter)))[0];
-              mode = 'mixed-adaptive-ambient';
-            }
-          } else if (documentRatios.length === 1) {
-            targetRatio = Math.min(.9, documentRatios[0] * 1.1);
-            mode = 'document-bounded-vertical-crop';
-          } else if (documentRatios.length > 1) {
-            targetRatio = Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios));
-            mode = 'document-minimax-contained';
-          } else {
-            mode = 'document-pending-contained';
-          }
-          if (documentRatios.length > 0) {
-            // Server-side packing guarantees that every OCR family in this row has
-            // a shared frame whose cover crop is at most 20% of the poster area.
-            const safeLower = Math.max(...documentRatios.map((documentRatio) => documentRatio * .8));
-            const safeUpper = Math.min(...documentRatios.map((documentRatio) => documentRatio / .8));
-            if (safeLower <= safeUpper) targetRatio = Math.min(safeUpper, Math.max(safeLower, targetRatio));
-          }
-          row.forEach((card) => {
-            const image = card.querySelector<HTMLImageElement>('.event-card__media');
-            const declaredRatio = Number(card.dataset.labMediaRatio);
-            const imageRatio = Number.isFinite(declaredRatio) && declaredRatio > 0
-              ? declaredRatio
-              : image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
-            const isDocument = card.dataset.labMediaKind === 'document';
-            const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
-            const cardTreatment = isDocument ? 'document-safe-cover' : 'visual-cover';
-            card.style.setProperty('--lab-row-media-ratio', targetRatio.toFixed(5));
-            card.dataset.labRowMedia = mode;
-            card.dataset.labRowIndex = String(rowIndex);
-            card.dataset.labMediaTreatment = cardTreatment;
-            card.dataset.labCoverCrop = Math.max(0, coverCrop).toFixed(4);
-            card.dataset.labRowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio))).toFixed(4);
-          });
-        });
-      };
-      const scheduleNormalize = () => {
-        if (normalizeFrame) return;
-        normalizeFrame = window.requestAnimationFrame(normalizeRelatedRows);
-      };
-      if (relatedGrid) {
-        const images = Array.from(relatedGrid.querySelectorAll<HTMLImageElement>('.event-card__media'));
-        images.forEach((image) => image.addEventListener('load', scheduleNormalize, { once:true }));
-        Promise.allSettled(images.map((image) => image.decode?.())).then(scheduleNormalize);
-        new ResizeObserver(scheduleNormalize).observe(relatedGrid);
-        new MutationObserver(scheduleNormalize).observe(relatedGrid, { childList:true, subtree:true });
-        window.addEventListener('resize', scheduleNormalize, { passive:true });
-        scheduleNormalize();
-      }
+      // Related rows are fully resolved from exported dimensions before first paint.
+      // Do not re-measure intrinsic image sizes here: that would reintroduce
+      // post-load geometry jumps and could exceed the OCR crop budget.
     }
   </script>
 </main>
@@ -1921,6 +1834,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; object-fit:cover !important; }
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-cover"] .event-card__media),
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) { object-fit:cover !important; object-position:center center !important; }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-contain"] .event-card__media) { object-fit:contain !important; object-position:center center !important; background:#15110f !important; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }

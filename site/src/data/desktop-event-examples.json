@@ -3105,12 +3105,259 @@
       "shares_count": 0,
       "popularity_reason_codes": [],
       "popularity_signal_score": 0
+    },
+    {
+      "id": 6811,
+      "source_prod_id": 6811,
+      "title": "История образования и развития национального парка «Куршская коса»",
+      "slug": "istoriya-obrazovaniya-i-razvitiya-natsionalnogo-parka-kurshskaya-kosa-kaliningrad-6811",
+      "event_type": "лекция",
+      "festival": "80 историй о главном",
+      "status_label": "Бесплатно",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-19T18:30:00+02:00",
+      "start_date": "2026-07-19",
+      "start_time": "18:30",
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-19",
+      "display_time": "18:30",
+      "city": "Калининград",
+      "venue_name": "Научная библиотека",
+      "address": "Мира 9",
+      "map_query": "Калининград, Научная библиотека, Мира 9",
+      "ticket": {
+        "kind": "registration",
+        "label": "Зарегистрироваться",
+        "href": "https://kgd80.ru/sobytiya/istoriya-obrazovaniya-i-razvitiya-natsionalnogo-parka-kurshskaya-kosa/",
+        "status": "registration",
+        "is_free": true,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://t.me/kraftmarket39/340",
+      "source_urls": [
+        "https://t.me/kraftmarket39/340",
+        "https://vk.com/wall-231920894_6996",
+        "https://t.me/c/3954607218/2482",
+        "https://t.me/ecoklgd/3327",
+        "https://t.me/kenigeventscalendar/7410",
+        "https://vk.com/wall-30777579_15642"
+      ],
+      "source_count": 6,
+      "telegraph_url": "https://telegra.ph/Istoriya-obrazovaniya-i-razvitiya-nacionalnogo-parka-Kurshskaya-kosa-07-10",
+      "image_url": "https://static.kenigevents.ru/p/dh16/36/364c10b18868ca0e48ce10ce50ccc2d2c8fab23e8081c80081b2c010804c0080.webp",
+      "image_alt": "Афиша события «История образования и развития национального парка «Куршская коса»»",
+      "image_text_mode": "ocr_text",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/36/364c10b18868ca0e48ce10ce50ccc2d2c8fab23e8081c80081b2c010804c0080.webp",
+          "width": 1080,
+          "height": 1350,
+          "alt": "Фотография события «История образования и развития национального парка «Куршская коса»»",
+          "image_text_mode": "ocr_text",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0,
+          "media_semantic_status": "error",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/a8/a833c3e246f1d58b191d4027dfbc6ef94c90f1d3168acb4441cb53c92fd5f78b/256.webp",
+              "width": 205,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/a8/a833c3e246f1d58b191d4027dfbc6ef94c90f1d3168acb4441cb53c92fd5f78b/512.webp",
+              "width": 410,
+              "height": 512
+            }
+          ],
+          "asset_key": "a833c3e246f1d58b191d4027dfbc6ef94c90f1d3168acb4441cb53c92fd5f78b",
+          "quality_score": 14.1926
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/02/02211a13025b580b180428062b02709316b230bc109e599c801a509b70952013.webp",
+          "width": 1254,
+          "height": 1254,
+          "alt": "Фотография события «История образования и развития национального парка «Куршская коса»»",
+          "image_text_mode": "ocr_text",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 1,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/95/955f446e9aed5e3dcf6bc9c082ec1e22d7fdc026454f8695386fe327f95df651/256.webp",
+              "width": 256,
+              "height": 256
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/95/955f446e9aed5e3dcf6bc9c082ec1e22d7fdc026454f8695386fe327f95df651/512.webp",
+              "width": 512,
+              "height": 512
+            }
+          ],
+          "asset_key": "6559bf2329f112539d9e906ab6e79590cba5779ebabfd2c5738539a6da220996",
+          "quality_score": 14.2682
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Лекция посвящена истории создания национального парка и современным методам защиты его уникального природного ландшафта.",
+      "meta_description": "Лекция посвящена истории создания национального парка и современным методам защиты его уникального природного ландшафта.",
+      "description_html": "<blockquote>Событие: лекция «История образования и развития национального парка «Куршская коса»</blockquote>\n<p>Российское общество «Знание» представляет заключительную лекцию фестиваля «80 историй о главном». Публичная лекция Анастасии Скребцовой, экопросветителя и заместителя директора национального парка «Куршская коса», раскрывает историю создания и развития этой территории. 🌿</p>\n<h3>История и статус национального парка</h3>\n<p>Лектор расскажет об истории создания национального парка и причинах, по которым территории потребовался такой статус. В центре внимания — необходимость защиты хрупкого ландшафта и причины, требующие особого внимания к этой природной зоне.</p>\n<h3>Направления работы и защита ландшафта</h3>\n<p>В ходе встречи будут рассмотрены ключевые аспекты деятельности парка и методы защиты уязвимой природы в условиях растущего потока посетителей. Основные темы выступления:<br />- Зачем территории понадобился статус национального парка.<br />- Какие направления работы сегодня главные.<br />- Как защищать уязвимый ландшафт при растущем потоке посетителей.</p>",
+      "topics": [
+        "LECTURES",
+        "KRAEVEDENIE_KALININGRAD_OBLAST"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-10 23:37:43.358613",
+      "likes_count": 14,
+      "source_likes_count": 14,
+      "service_likes_count": 0,
+      "source_views_count": 911,
+      "source_engagement_sources_count": 3,
+      "shares_count": 8,
+      "popularity_reason_codes": [
+        "frequently_shared",
+        "multi_source"
+      ],
+      "popularity_signal_score": 3.5
+    },
+    {
+      "id": 6901,
+      "source_prod_id": 6901,
+      "title": "Презентация сборника «Поправка на дрейф»",
+      "slug": "prezentatsiya-sbornika-popravka-na-dreyf-kaliningrad-6901",
+      "event_type": "встреча",
+      "festival": null,
+      "status_label": "Бесплатно",
+      "lifecycle_status": "active",
+      "starts_at": "2026-07-23T18:30:00+02:00",
+      "start_date": "2026-07-23",
+      "start_time": "18:30",
+      "end_date": null,
+      "end_at": null,
+      "time_range_end": null,
+      "timezone": "Europe/Kaliningrad",
+      "display_date": "2026-07-23",
+      "display_time": "18:30",
+      "city": "Калининград",
+      "venue_name": "Научная библиотека",
+      "address": "Мира 9",
+      "map_query": "Калининград, Научная библиотека, Мира 9",
+      "ticket": {
+        "kind": "free",
+        "label": "Источник события",
+        "href": null,
+        "status": null,
+        "is_free": true,
+        "price_label": null,
+        "note": null
+      },
+      "age_restriction": null,
+      "age_restriction_status": "insufficient_evidence",
+      "age_restriction_provenance": null,
+      "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+      "age_recommendation": null,
+      "age_recommendation_label": null,
+      "source_url": "https://vk.com/wall-30777579_15633",
+      "source_urls": [
+        "https://vk.com/wall-30777579_15633",
+        "https://vk.com/wall-231920894_7567",
+        "https://t.me/c/3954607218/2497"
+      ],
+      "source_count": 3,
+      "telegraph_url": "https://telegra.ph/Prezentaciya-sbornika-Popravka-na-drejf-07-15",
+      "image_url": "https://static.kenigevents.ru/p/dh16/20/2061604150591030203300308030803345324933103126075a33180358010013.webp",
+      "image_alt": "Афиша события «Презентация сборника «Поправка на дрейф»»",
+      "image_text_mode": "ocr_text",
+      "image_media_role": "unknown_document",
+      "image_assets": [
+        {
+          "src": "https://static.kenigevents.ru/p/dh16/20/2061604150591030203300308030803345324933103126075a33180358010013.webp",
+          "width": 2236,
+          "height": 1521,
+          "alt": "Фотография события «Презентация сборника «Поправка на дрейф»»",
+          "image_text_mode": "ocr_text",
+          "media_role": "unknown_document",
+          "media_role_confidence": 0,
+          "media_semantic_status": "pending",
+          "image_kind": "mixed",
+          "recommended_hero_fit": "contain",
+          "safe_crop": false,
+          "source_order": 0,
+          "thumbnail_sources": [
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/0b/0bef4d3c20851a22499cb9beba9ad8c0fa8488ce3666006285e15e5cbcca05c2/256.webp",
+              "width": 256,
+              "height": 174
+            },
+            {
+              "src": "https://static.kenigevents.ru/p/thumb/v1/0b/0bef4d3c20851a22499cb9beba9ad8c0fa8488ce3666006285e15e5cbcca05c2/512.webp",
+              "width": 512,
+              "height": 348
+            }
+          ],
+          "asset_key": "0bef4d3c20851a22499cb9beba9ad8c0fa8488ce3666006285e15e5cbcca05c2",
+          "quality_score": 15.0396
+        }
+      ],
+      "face_boxes": [],
+      "ocr_boxes": [],
+      "focal_point": null,
+      "image_object_position": null,
+      "safe_crop": false,
+      "summary": "Презентация сборника историй о жизни флотских семей с терапевтическим эффектом от многих авторов.",
+      "meta_description": "Презентация сборника историй о жизни флотских семей с терапевтическим эффектом от многих авторов.",
+      "description_html": "<p>Презентация сборника историй о жизни флотских семей «Поправка на дрейф». Книга объединяет произведения более двадцати авторов, написанные от лица военных моряков и их жён. Издание позиционируется как сборник с терапевтическим эффектом.</p>\n<h3>О проекте</h3>\n<p>В основу книги легли личные истории, отражающие повседневность и специфику жизни семей военнослужащих. Сборник призван стать поддержкой для читателей, сталкивающихся с подобным опытом.</p>\n<h3>Ведущая встречи</h3>\n<p>Автор проекта — Анастасия Монклэр-Прокопьева, психолог, арт-терапевт и спикер образовательных конференций для жён военнослужащих.</p>",
+      "topics": [
+        "LECTURES",
+        "PSYCHOLOGY",
+        "FAMILY"
+      ],
+      "pushkin_card": false,
+      "other_date_ids": [],
+      "data_quality_notes": [],
+      "updated_at": "2026-07-15 17:06:00.631424",
+      "likes_count": 43,
+      "source_likes_count": 43,
+      "service_likes_count": 0,
+      "source_views_count": 1749,
+      "source_engagement_sources_count": 2,
+      "shares_count": 6,
+      "popularity_reason_codes": [
+        "frequently_shared",
+        "multi_source"
+      ],
+      "popularity_signal_score": 3.5
     }
   ],
   "build": {
     "notes": [
       "Frozen real-event fixtures for desktop lab scenarios; production event catalogs remain future-only.",
-      "Do not derive public listing freshness from this file."
+      "Do not derive public listing freshness from this file.",
+      "CTA semantics for registration and free calendar-primary cases are frozen for browser acceptance."
     ]
   }
 }

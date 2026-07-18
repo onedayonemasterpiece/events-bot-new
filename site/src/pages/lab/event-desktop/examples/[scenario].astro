@@ -74,6 +74,8 @@ const scenarios: Scenario[] = [
   { slug: 'split-ocr-with-photos', eventId: 6323, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0, heroWidth: 1179, heroHeight: 1523, ocrSourceIndexes: [0, 1], mediaRoleOverrides:kupalaRoles, mediaDimensionOverrides:kupalaDimensions },
   { slug: 'cta-phone-invariant', eventId: 6551, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0 },
   { slug: 'cta-ticket-invariant', eventId: 5374, candidate: 'split', mediaPolicy: 'non-ocr', heroImageIndex: 0 },
+  { slug: 'cta-registration-invariant', eventId: 6811, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0 },
+  { slug: 'cta-free-calendar-invariant', eventId: 6901, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0 },
   // The footer regression specimen must survive active-catalog expiry. Event
   // 5658 is frozen in desktop-event-examples.json; unlike preview-only 6589 it
   // is therefore available in every production-candidate build.
@@ -99,6 +101,8 @@ export function getStaticPaths() {
     'split-ocr-with-photos',
     'cta-phone-invariant',
     'cta-ticket-invariant',
+    'cta-registration-invariant',
+    'cta-free-calendar-invariant',
     'footer-service-v1',
     'related-cover',
     'related-ambient',

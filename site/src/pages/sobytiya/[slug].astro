@@ -191,7 +191,7 @@ const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
       </section>
     </div>
   </main>
-  <PersonalFeedSlot context="event-detail" />
+  <PersonalFeedSlot context="event-detail" currentEventId={event.id} relatedSrc={`/data/discovery/${event.id}.json`} />
   {stickyHref && (
     <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
       <div class="mobile-sticky-cta__inner">

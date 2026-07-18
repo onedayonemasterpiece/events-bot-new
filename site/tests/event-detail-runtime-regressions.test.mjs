@@ -100,9 +100,9 @@ test('desktop static continuation emits stable initial skeleton geometry', async
   const desktop = await read('src/components/DesktopEventPage.astro');
   const built = await readBuilt('sobytiya/spektakl-garazh-kaliningrad-5658/index.html');
 
-  assert.match(desktop, /relatedRowLayout/u);
+  assert.match(desktop, /packRelatedCardRows/u);
   assert.match(desktop, /desktopRelatedLayout=\{layout\}/u);
-  assert.match(desktop, /dataset\.labMediaRatio/u);
+  assert.match(card, /--lab-row-media-ratio:/u);
   assert.match(card, /desktopRelatedCrop && 'event-card__media-shell--dynamic'/u);
   assert.match(card, /desktopRelatedCrop && 'is-image-loading'/u);
   assert.match(card, /aria-busy=\{desktopRelatedCrop \? 'true' : undefined\}/u);
@@ -167,7 +167,7 @@ test('desktop action geometry follows the resolved media family', async () => {
   assert.match(desktop, /family="split"/u);
   assert.match(desktop, /const splitFamily = panel\.dataset\.actionFamily === 'split'/u);
   assert.match(desktop, /if \(!splitFamily\) return/u);
-  assert.match(desktop, /outside \|\| overlaps \|\| overflows/u);
+  assert.match(desktop, /return !\(outside \|\| overlaps \|\| primaryLabelDoesNotFit \|\| overflows\)/u);
   assert.doesNotMatch(panel, /data-primary-action-kind="phone"\] \{/u);
   assert.match(legacyPanel, /data-event-cta-action-row="calendar-share-like"/u);
   assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551/u);

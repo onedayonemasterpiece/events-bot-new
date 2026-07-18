@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Fixed v13 event-page review regressions: crop-safe wide unknown visuals now
+  use the horizontal detail family; Split CTA collapses both utilities before
+  stacking and promotes calendar for free one-day events; gallery pointer CTA,
+  hover arrows, focus and reduced-motion are hardened; both desktop continuation
+  blocks share OCR-safe geometry and current-event-aware fatigue/diversity.
+- Added a redacted static build diagnostics CLI and documented the one-build/
+  two-artifact secret+stable architecture plus past-event/redirect/410 and
+  manifest-bound test-prefix lifecycle policy.
+
 - Fixed the static-site Kaggle kernel status-helper discovery for mounted
   private datasets, reconciled host-validated terminal results without faking a
   heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.

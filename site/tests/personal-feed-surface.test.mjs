@@ -31,6 +31,8 @@ test('personal feed keeps listing hydration hidden and exposes a bounded event-d
   const source = await read('src/components/PersonalFeedSlot.astro');
   assert.match(source, /data-personal-feed-section/u);
   assert.match(source, /data-personal-feed-src/u);
+  assert.match(source, /data-personal-feed-related-src/u);
+  assert.match(source, /data-current-event-id/u);
   assert.match(source, /data-personal-feed-slot/u);
   assert.match(source, /data-personal-feed-status/u);
   assert.match(source, /!isEventDetail && <button[^>]*data-personal-feed-load-more/u);
@@ -57,10 +59,15 @@ test('event-detail continuation uses six diverse cards with an honest non-person
   assert.match(layout, /'catalog:upcoming_proximity'/u);
   assert.match(layout, /maxSameCategory: 3, maxSameVenue: 2/u);
   assert.match(layout, /personalFeedProfileIsReady\(profile\)/u);
-  assert.match(layout, /isPersonal \? rankPersonalFeedCandidates\(manifest, profile\) : rankPopularFallbackCandidates\(manifest, profile\)/u);
-  assert.match(layout, /slice\(0, isEventDetail \? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT\)/u);
+  assert.match(layout, /function rankAdjacentContinuationCandidates\(manifest, profile\)/u);
+  assert.match(layout, /verification_state !== 'llm_rejected'/u);
+  assert.match(layout, /EVENT_CONTINUATION_RECENT_TTL_MS = 6 \* 60 \* 60 \* 1000/u);
+  assert.match(layout, /readRecentContinuationIds\(\)/u);
+  assert.match(layout, /recordRecentContinuation\(personalFeedCurrentEventId\(section\), ranked\)/u);
+  assert.match(layout, /KenigEventsSelectEventContinuation/u);
+  assert.match(layout, /current_event_id: personalFeedCurrentEventId\(section\)/u);
   assert.match(layout, /section\.dataset\.personalFeedMode = isPersonal \? 'personal' : 'popular_fallback'/u);
-  assert.match(layout, /title\.textContent = isPersonal \? 'По вашим интересам' : 'Ещё события'/u);
+  assert.match(layout, /title\.textContent = 'Ещё события'/u);
   assert.match(layout, /if \(loadMore\) loadMore\.hidden = isEventDetail/u);
 });
 

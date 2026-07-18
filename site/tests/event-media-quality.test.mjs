@@ -83,6 +83,26 @@ test('a constrained landscape primary may promote a stronger classified landscap
   assert.equal(presentation.reason, 'editorial-promotes-qualified-landscape-photo');
 });
 
+test('a crop-safe classified unknown visual may use the wide event-detail family', () => {
+  const event = {
+    id:6592,
+    image_url:'film-still.webp',
+    image_text_mode:'visual_only',
+    image_assets:[{
+      src:'film-still.webp', width:1920, height:1080,
+      image_text_mode:'visual_only', media_semantic_status:'classified',
+      media_role:'unknown_visual', safe_crop:true, quality_score:14,
+    }],
+  };
+  const presentation = buildDesktopEventPresentation(event);
+  assert.equal(presentation.candidate, 'editorial');
+  assert.equal(presentation.reason, 'editorial-primary-qualified-landscape');
+
+  event.image_assets[0].safe_crop = false;
+  const unsafe = buildDesktopEventPresentation(event);
+  assert.equal(unsafe.candidate, 'split');
+});
+
 test('mobile hero marks a lone weak portrait for native-size contain rendering', async () => {
   const hero = await readFile(new URL('../src/components/EventHero.astro', import.meta.url), 'utf8');
   const layout = await readFile(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');

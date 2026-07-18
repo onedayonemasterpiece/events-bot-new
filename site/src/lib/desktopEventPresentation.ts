@@ -63,10 +63,22 @@ function isReliableEditorialPhoto(asset: EventImageAsset | undefined): boolean {
 }
 
 function isReliableNonIdentityDocument(asset: EventImageAsset | undefined): boolean {
+  // `unknown_visual` is the LLM's fail-closed label for a non-text visual whose
+  // exact relationship to the event is uncertain. It is not a positive
+  // document classification. On event-detail heroes, direct `visual_only`
+  // evidence plus a crop-safe landscape may therefore use the photo layout;
+  // discovery cards remain stricter and still require `event_photo`.
   return asset?.media_semantic_status === 'classified'
     && Boolean(asset.media_role)
     && asset.media_role !== 'event_photo'
-    && asset.media_role !== 'event_identity_poster';
+    && asset.media_role !== 'event_identity_poster'
+    && asset.media_role !== 'unknown_visual';
+}
+
+function isUnsafeClassifiedUnknownVisual(asset: EventImageAsset | undefined): boolean {
+  return asset?.media_semantic_status === 'classified'
+    && asset.media_role === 'unknown_visual'
+    && asset.safe_crop !== true;
 }
 
 function objectPosition(event: PreviewEvent, asset: EventImageAsset | undefined, bottomSafe: boolean): string {
@@ -215,7 +227,9 @@ export function buildDesktopEventPresentation(event: PreviewEvent): DesktopEvent
     }
   }
 
-  if (isEditorialLandscape(primary) && !isReliableNonIdentityDocument(primary)) {
+  if (isEditorialLandscape(primary)
+    && !isReliableNonIdentityDocument(primary)
+    && !isUnsafeClassifiedUnknownVisual(primary)) {
     const bottomSafe = primaryRatio < NEAR_SQUARE_MAX_RATIO;
     const rotationEligibleCount = distinctIndexes.filter((index) => isEditorialLandscape(assets[index])).length;
     return {
