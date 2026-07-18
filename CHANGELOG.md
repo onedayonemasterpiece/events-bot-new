@@ -23,6 +23,12 @@
   contradictory, and make editorial leads sentence-safe; restore the accepted
   KAUP A/B/C treatments with departure-board fallback instead of the rejected
   compact list and describe the official transfer as a bus or minibus.
+- **Dramatic Theatre occurrence identity (INC-2026-07-18)**: add an exact
+  `14:30` tour versus `18:00` performance replay and a narrow structural veto
+  requiring unrelated title/type plus two conflicting explicit times without a
+  strong shared identity anchor; preserve same-event, shared-ticket, missing-time
+  and legitimate multi-session positive controls. Production remains in shadow
+  pending the documented human precision audit before enforce.
 - **VK captcha publication cadence (INC-2026-07-18)**: replace indefinite
   unscoped JobOutbox pauses with persisted captcha cohorts, block new VK work
   from hammering a cached challenge, harmlessly probe and pace cohort recovery,

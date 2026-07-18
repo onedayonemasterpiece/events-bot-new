@@ -127,7 +127,7 @@ classification was projected.
 
 ## Corrective Actions
 
-- [ ] add exact negative and positive identity replay coverage;
+- [x] add exact negative and positive identity replay coverage (`15 passed`);
 - [ ] promote the proven identity gate to an enforcing production path with a
   bounded rollout/rollback after review;
 - [ ] repair canonical rows/sources/media for `5754`–`5757` and reconcile the
@@ -150,6 +150,17 @@ classification was projected.
 - deploy path: pending
 - regression checks: pending
 - post-deploy verification: pending
+
+### Prevention implementation evidence (not deployed)
+
+- source commit in integration: `fa1c5dd5`;
+- exact production-snapshot audit: `552` decisions (`402` allow, `150` skip),
+  all shadow; `48` exact tour→`5754..5757` skip verdicts, all shadow;
+- replay/positive suite: `tests/test_smart_update_merge_identity_gate.py` —
+  `15 passed`;
+- external Opus review: **CONDITIONAL PASS**, with production enforce blocked
+  until skip-decision precision and the same-ticket allow cohort receive manual
+  review. Therefore this change does not alter production env/mode.
 
 ## Prevention
 
