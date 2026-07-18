@@ -167,7 +167,7 @@ test('desktop action geometry follows the resolved media family', async () => {
   assert.match(desktop, /family="split"/u);
   assert.match(desktop, /const splitFamily = panel\.dataset\.actionFamily === 'split'/u);
   assert.match(desktop, /if \(!splitFamily\) return/u);
-  assert.match(desktop, /outside \|\| overlaps \|\| overflows/u);
+  assert.match(desktop, /return !\(outside \|\| overlaps \|\| primaryLabelDoesNotFit \|\| overflows\)/u);
   assert.doesNotMatch(panel, /data-primary-action-kind="phone"\] \{/u);
   assert.match(legacyPanel, /data-event-cta-action-row="calendar-share-like"/u);
   assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551/u);

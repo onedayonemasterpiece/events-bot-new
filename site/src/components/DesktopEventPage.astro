@@ -734,26 +734,13 @@ const descriptionHtml = (event.description_html || '')
       document.body.classList.add('desktop-clean-event-page');
       const actionPanels = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-action-panel]'));
       const actionPanelWidths = new WeakMap<HTMLElement, number>();
-      const fitActionPanel = (panel:HTMLElement, force = false) => {
-        const width = panel.getBoundingClientRect().width;
-        const previousWidth = actionPanelWidths.get(panel);
-        if (!force && previousWidth !== undefined && Math.abs(previousWidth - width) < .5) return;
-        actionPanelWidths.set(panel, width);
-        const phonePanel = panel.dataset.primaryActionKind === 'phone';
-        const splitFamily = panel.dataset.actionFamily === 'split';
-        // The component family chooses the intended composition. Only Split
-        // attempts the accepted one-row geometry; Editorial keeps the tall
-        // three-row card. Measure actual rendered children before allowing the
-        // Split row so dynamic labels/counters can still fail closed.
-        panel.dataset.actionLayout = splitFamily ? 'inline' : 'stacked';
-        panel.dataset.actionDensity = phonePanel ? 'compact' : 'comfortable';
-        if (!splitFamily) return;
-
+      const measureInlineActionPanel = (panel:HTMLElement) => {
         const panelRect = panel.getBoundingClientRect();
         const styles = getComputedStyle(panel);
         const leftLimit = panelRect.left + (Number.parseFloat(styles.paddingLeft) || 0) - 2;
         const rightLimit = panelRect.right - (Number.parseFloat(styles.paddingRight) || 0) + 2;
         const primary = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__primary-action');
+        const primaryLabel = primary?.querySelector<HTMLElement>('[data-desktop-primary-label], [data-calendar-label], [data-desktop-phone-label]');
         const actionRow = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__action-row');
         const children = [
           panel.querySelector<HTMLElement>(':scope > p:first-child'),
@@ -769,13 +756,56 @@ const descriptionHtml = (event.description_html || '')
           const second = other.getBoundingClientRect();
           return Math.min(first.right, second.right) - Math.max(first.left, second.left) > 2;
         }));
+        const primaryLabelDoesNotFit = (() => {
+          if (!primary || !primaryLabel) return false;
+          const primaryRect = primary.getBoundingClientRect();
+          const labelRect = primaryLabel.getBoundingClientRect();
+          const labelStyle = getComputedStyle(primaryLabel);
+          const lineHeight = Number.parseFloat(labelStyle.lineHeight)
+            || Number.parseFloat(labelStyle.fontSize)
+            || 16;
+          const wrapped = labelRect.height > lineHeight * 1.35;
+          const clipped = labelRect.left < primaryRect.left - 1
+            || labelRect.right > primaryRect.right + 1
+            || primaryLabel.scrollWidth > primaryLabel.clientWidth + 1;
+          return wrapped || clipped;
+        })();
         const overflows = panel.scrollWidth > panel.clientWidth + 1
           || Boolean(primary && primary.scrollWidth > primary.clientWidth + 2)
           || Boolean(actionRow && actionRow.scrollWidth > actionRow.clientWidth + 2);
-        if (outside || overlaps || overflows) {
-          panel.dataset.actionLayout = 'stacked';
-          panel.dataset.actionDensity = 'compact';
+        return !(outside || overlaps || primaryLabelDoesNotFit || overflows);
+      };
+      const fitActionPanel = (panel:HTMLElement, force = false) => {
+        const width = panel.getBoundingClientRect().width;
+        const previousWidth = actionPanelWidths.get(panel);
+        if (!force && previousWidth !== undefined && Math.abs(previousWidth - width) < .5) return;
+        actionPanelWidths.set(panel, width);
+        const splitFamily = panel.dataset.actionFamily === 'split';
+        // The component family chooses the intended composition. Only Split
+        // attempts the accepted one-row geometry; Editorial keeps the tall
+        // three-row card. Measure actual rendered children before allowing the
+        // Split row so dynamic labels/counters can still fail closed.
+        panel.dataset.actionFit = splitFamily ? 'measuring' : 'stacked';
+        panel.dataset.actionLayout = splitFamily ? 'inline' : 'stacked';
+        panel.dataset.actionDensity = 'comfortable';
+        if (!splitFamily) return;
+        if (measureInlineActionPanel(panel)) {
+          panel.dataset.actionFit = 'comfortable';
+          return;
         }
+
+        // Preserve the compact Split hierarchy before giving up its one-row
+        // composition: both secondary utilities become icon controls first
+        // (share already is one; the calendar label is hidden synchronously),
+        // then the real children are measured again.
+        panel.dataset.actionDensity = 'compact';
+        if (measureInlineActionPanel(panel)) {
+          panel.dataset.actionFit = 'icons';
+          return;
+        }
+
+        panel.dataset.actionLayout = 'stacked';
+        panel.dataset.actionFit = 'stacked';
       };
       actionPanels.forEach((panel) => {
         fitActionPanel(panel, true);
@@ -786,6 +816,10 @@ const descriptionHtml = (event.description_html || '')
           subtree:true,
         });
       });
+      const refitActionPanels = () => actionPanels.forEach((panel) => fitActionPanel(panel, true));
+      window.requestAnimationFrame(refitActionPanels);
+      window.addEventListener('load', refitActionPanels, { once:true });
+      document.fonts?.ready.then(refitActionPanels);
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
       const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
