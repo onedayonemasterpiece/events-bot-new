@@ -1,12 +1,24 @@
 ---
 import type { KaupBusOption } from '../../lib/eventKaupTransport';
 
-interface Props { route: string; arrivalStop: string; options: KaupBusOption[]; }
-const { route, arrivalStop, options } = Astro.props;
+interface Props {
+  route: string;
+  arrivalStop: string;
+  options: KaupBusOption[];
+  baseline?: boolean;
+  hidden?: boolean;
+}
+const { route, arrivalStop, options, baseline = false, hidden = true } = Astro.props;
 const visible = options.slice(0, 5);
 const additional = options.slice(5);
 ---
-<section class="transport-treatment transport-board" data-transport-treatment="departure_board_v1" hidden aria-label={`Расписание автобуса № ${route}`}>
+<section
+  class="transport-treatment transport-board"
+  data-transport-treatment="departure_board_v1"
+  data-transport-baseline={baseline ? '' : undefined}
+  hidden={hidden}
+  aria-label={`Расписание автобуса № ${route}`}
+>
   <table>
     <thead><tr><th scope="col">Северный</th><th scope="col">{arrivalStop}</th><th scope="col">Кауп</th></tr></thead>
     <tbody>

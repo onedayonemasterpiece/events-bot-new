@@ -196,6 +196,36 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   одиночные/серийные вертикальные изображения, low-resolution и
   quality-fallback. Все сценарии и реальные event pages используют один
   `DesktopEventPage`/`buildDesktopEventPresentation`, а не legacy desktop DOM.
+- **ADD-RECENT-06 — Один quality-admitted набор на desktop и mobile.** Если у
+  события есть технически сильные event-local фотографии, desktop hero/viewer
+  и mobile hero/gallery используют только этот набор и одинаковый hidden count;
+  слабые renditions сохраняются только в weak-only семье. Classified
+  OCR/document media не удаляются этим техническим gate и продолжают
+  показываться без crop. Контроль: событие `4783` содержит индексы
+  `0,4,6,8,9,10,11` и скрывает `1,2,3,5,7` на обеих поверхностях.
+- **ADD-RECENT-07 — Low-resolution portrait без разрушительного увеличения.**
+  Единственная слабая вертикальная фотография не исключается, но получает
+  viewport-bounded `contain` и открывает тот же эффективный viewer; она не
+  превращается в растянутый crop/длинный natural-size scroll. Контроль:
+  событие `6815`.
+- **ADD-RECENT-08 — Source-consistent occurrence projection.** Если точный
+  structured first-party source совпадает с canonical row по date, time и
+  ticket URL, но canonical type/copy загрязнены другим occurrence, статическая
+  страница fail-safe показывает подтверждённые source title/type/description.
+  Это не заменяет Smart Update repair и не является keyword/date-only merge
+  правилом. Некорректный OCR/non-identity document не может владеть hero при
+  наличии сильного event-local photo и никогда не crop-ится. Контроль: `5756`.
+- **ADD-RECENT-09 — Sentence-safe editorial lead.** Lead использует готовое
+  авторское summary, но обнаруженный ложный punctuated prefix заменяет полной
+  source-backed фразой; raw character cut раскрывается знаком `…`, а не
+  придуманной точкой. Контроль: `5658` заканчивает вводную словами
+  «превращается в остросюжетный конфликт.»
+- **ADD-RECENT-10 — Принятый transport fallback не откатывается в compact list.**
+  Все три arm `departure_board_v1|route_strips_v1|next_departure_queue_v1`
+  остаются принятыми A/B/C, а off/no-JS/automation/elapsed/ineligible состояние
+  показывает принятый `departure_board_v1`, не старую компактную таблицу.
+  Forced QA проверяет каждый arm, один рейс не выводит «Ещё 0 рейсов», а
+  официальный трансфер допускает «автобус или микроавтобус». Контроль: `4671`.
 
 ### Статическая публикация, CDN и устойчивость
 

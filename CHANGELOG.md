@@ -15,6 +15,20 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static event v11 review regressions (INC-2026-07-16/18)**: apply one
+  quality-admitted photo set to desktop and mobile while preserving weak-only
+  fallbacks, route a lone low-resolution portrait to a bounded contain viewer,
+  preserve stored OCR classification and prefer event-local classified media,
+  project exact structured occurrence content when a merged aggregate is
+  contradictory, and make editorial leads sentence-safe; restore the accepted
+  KAUP A/B/C treatments with departure-board fallback instead of the rejected
+  compact list and describe the official transfer as a bus or minibus.
+- **Dramatic Theatre occurrence identity (INC-2026-07-18)**: add an exact
+  `14:30` tour versus `18:00` performance replay and a narrow structural veto
+  requiring unrelated title/type plus two conflicting explicit times without a
+  strong shared identity anchor; preserve same-event, shared-ticket, missing-time
+  and legitimate multi-session positive controls. Production remains in shadow
+  pending the documented human precision audit before enforce.
 - **Popular metrics postponed-VK import outage (INC-2026-07-18)**: reject
   future-dated postponed rows returned by `wall.getById` as not-yet-public and
   continue bounded wall resolution, preventing one scheduled post from

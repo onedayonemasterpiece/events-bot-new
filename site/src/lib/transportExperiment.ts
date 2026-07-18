@@ -83,7 +83,7 @@ export function transportExperimentEligible(
   nowMs = Date.now(),
   boardingReserveMs = 10 * 60 * 1000,
 ): boolean {
-  if (departureTimestamps.length < 2 || departureTimestamps.length > 20) return false;
+  if (departureTimestamps.length < 1 || departureTimestamps.length > 20) return false;
   const parsed = departureTimestamps.map((value) => Date.parse(value));
   if (parsed.some((value) => !Number.isFinite(value))) return false;
   return parsed.some((value) => value > nowMs + boardingReserveMs);

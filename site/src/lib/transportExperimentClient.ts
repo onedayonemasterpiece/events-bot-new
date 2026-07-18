@@ -129,7 +129,9 @@ function renderVariant(root: HTMLElement, variant: TransportExperimentVariant, f
   treatmentSet.hidden = false;
   root.querySelectorAll<HTMLElement>('[data-transport-treatment]').forEach((node) => { node.hidden = node !== treatment; });
   treatment.hidden = false;
-  baseline.hidden = true;
+  // The accepted departure-board arm is also the resilient no-JS/ineligible
+  // fallback. Do not hide it when assignment selects that same arm.
+  baseline.hidden = treatment !== baseline;
   root.dataset.assignedVariant = variant;
   root.dataset.renderedVariant = variant;
   return treatment;

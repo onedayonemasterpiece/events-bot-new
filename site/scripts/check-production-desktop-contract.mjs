@@ -23,10 +23,14 @@ const eventFiles = fs.readdirSync(distRoot)
 // Slugs are editorial data and may change after Smart Update. Event ids are the
 // stable identities for the accepted real-event specimens.
 const expectedSpecimens = new Map([
-  [6815, ['split', 'split-portrait-or-square-visual']],
+  [6815, ['split', 'split-low-resolution-portrait-viewer']],
   [5658, ['editorial', 'editorial-primary-qualified-landscape']],
   [4671, ['editorial', 'editorial-with-classified-identity-poster']],
-  [5756, ['editorial', 'editorial-replaces-non-identity-document-with-classified-photo']],
+  // The first event-local classified photo is 1200×800: it is intentionally
+  // below the 1280px Editorial threshold. Keep the document contained and use
+  // the resolution-constrained Split family instead of promoting a shared
+  // cross-event gallery image merely to satisfy the old family marker.
+  [5756, ['split', 'split-resolution-constrained-landscape']],
 ]);
 
 const requiredRoutingFamilies = new Set([
@@ -110,7 +114,7 @@ for (const { slug, file } of eventFiles) {
       if (desktopHtml.includes(rejectedMarker)) failures.push(`${slug}: KAUP transport still exposes rejected map decoration ${rejectedMarker}`);
     }
     const originIndex = desktopHtml.indexOf('data-kaup-bus-origin');
-    const scheduleIndex = desktopHtml.indexOf('<ol', originIndex);
+    const scheduleIndex = desktopHtml.indexOf('data-transport-baseline', originIndex);
     const lastMileIndex = desktopHtml.indexOf('data-kaup-last-mile');
     const returnWarningIndex = desktopHtml.indexOf('kaup-transport__warning--strong');
     const carIndex = desktopHtml.indexOf('data-kaup-car-route');
@@ -125,7 +129,10 @@ for (const { slug, file } of eventFiles) {
         ['16:30', '16:45', '17:35', '18:28'],
         ['17:55', '18:10', '19:00', '19:53'],
       ]) {
-        const rowPattern = new RegExp(`data-terminal-departure="${terminal}"[^>]*>≈\\s*${north}<\\/strong>[\\s\\S]*?Романово[^<]*${romanovo}<\\/b>[\\s\\S]*?${venue}`, 'u');
+        // Accepted A uses table cells while the reviewed B/C arms use route
+        // strips/queue rows. Assert the source-parity chain without coupling
+        // release acceptance to the rejected compact-list tag names.
+        const rowPattern = new RegExp(`data-terminal-departure="${terminal}"[^>]*>≈?\\s*${north}<\\/(?:td|strong)>[\\s\\S]{0,700}?${romanovo}[\\s\\S]{0,700}?${venue}`, 'u');
         if (!rowPattern.test(surfaceHtml)) failures.push(`${slug}: ${surface} KAUP route must keep terminal ${terminal}, estimate North ${north}, Romanovo ${romanovo} and venue ${venue}`);
       }
       if (surfaceHtml.includes('Калининградский автовокзал') || surfaceHtml.includes('ул. Железнодорожная, 7')) {

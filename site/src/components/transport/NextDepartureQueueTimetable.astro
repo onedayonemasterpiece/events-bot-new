@@ -13,7 +13,7 @@ const suitableLabel = additionalCount === 1 ? 'подходящий' : 'подх
   <p class="transport-next__label">Ближайший подходящий · расчёт по расписанию</p>
   <div class="transport-next__primary" data-transport-next-slot></div>
   <details data-transport-queue-details>
-    <summary data-transport-action="schedule_expand">Ещё {additionalCount} {suitableLabel} {additionalLabel}</summary>
+    {additionalCount > 0 && <summary data-transport-action="schedule_expand">Ещё {additionalCount} {suitableLabel} {additionalLabel}</summary>}
     <ol data-transport-next-queue>
       {options.map((option) => <li data-transport-c-trip data-transport-trip-id={option.tripId} data-departure-at={option.departureAt}>
         <strong data-terminal-departure={option.terminalDeparture}>{option.departureEstimated ? '≈' : ''}{option.departure}</strong>

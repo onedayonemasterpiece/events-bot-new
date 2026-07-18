@@ -59,6 +59,70 @@ async def _seed_boyko_lecture(db: Database, event_id: int = 5077, event_date: st
         await session.commit()
 
 
+async def _seed_zhenitba_performance(db: Database, event_id: int = 5756) -> None:
+    async with db.get_session() as session:
+        session.add(
+            Event(
+                id=event_id,
+                title="Женитьба",
+                description="Спектакль по пьесе Николая Гоголя.",
+                date="2026-08-09",
+                time="18:00",
+                location_name="Драматический театр",
+                location_address="проспект Мира, 4",
+                city="Калининград",
+                event_type="спектакль",
+                ticket_link="https://dramteatr39.ru/spektakli/jenitba",
+                source_text="09.08 в 18:00 — спектакль «Женитьба».",
+                source_post_url="https://dramteatr39.ru/spektakli/jenitba",
+                identity_status="canonical",
+            )
+        )
+        await session.commit()
+
+
+def _theatre_tour_candidate() -> EventCandidate:
+    return EventCandidate(
+        source_type="parser:dramteatr",
+        source_url='https://dramteatr39.ru/spektakli/ekskursiya-"zakulise-teatra"',
+        source_text=(
+            "Название: Экскурсия «Закулисье театра»\n"
+            "Дата: 2026-08-09\n"
+            "Время: 14:30\n"
+            "Площадка: Драматический театр\n"
+            "Описание: экскурсия по сцене и закулисным помещениям театра."
+        ),
+        raw_excerpt="9 августа в 14:30 — экскурсия «Закулисье театра».",
+        title="Экскурсия «Закулисье театра»",
+        date="2026-08-09",
+        time="14:30",
+        location_name="Драматический театр",
+        location_address="проспект Мира, 4",
+        city="Калининград",
+        event_type="экскурсия",
+        ticket_link='https://dramteatr39.ru/spektakli/ekskursiya-"zakulise-teatra"',
+        trust_level="high",
+    )
+
+
+def _zhenitba_source_update_candidate() -> EventCandidate:
+    return EventCandidate(
+        source_type="parser:dramteatr",
+        source_url="https://dramteatr39.ru/spektakli/jenitba?source=august-update",
+        source_text="9 августа в 18:00 — спектакль «Женитьба». Обновлено описание постановки.",
+        raw_excerpt="9 августа в 18:00 — спектакль «Женитьба».",
+        title="Женитьба",
+        date="2026-08-09",
+        time="18:00",
+        location_name="Драматический театр",
+        location_address="проспект Мира, 4",
+        city="Калининград",
+        event_type="спектакль",
+        ticket_link="https://dramteatr39.ru/spektakli/jenitba",
+        trust_level="high",
+    )
+
+
 def _boyko_exhibition_candidate() -> EventCandidate:
     return EventCandidate(
         source_type="telegram",
@@ -179,6 +243,160 @@ def test_merge_gate_positive_same_event_update_allowed() -> None:
 
     assert verdict.action is MergeIdentityAction.ALLOW_MERGE
     assert not verdict.should_skip_side_effects
+
+
+def test_theatre_tour_vs_performance_explicit_slot_conflict_is_structural_veto() -> None:
+    """INC replay: same date/venue must not glue a 14:30 tour into an 18:00 play."""
+
+    verdict = build_merge_identity_gate_verdict(
+        _Obj(
+            title="Экскурсия «Закулисье театра»",
+            date="2026-08-09",
+            time="14:30",
+            location_name="Драматический театр",
+            event_type="экскурсия",
+            ticket_link='https://dramteatr39.ru/spektakli/ekskursiya-"zakulise-teatra"',
+        ),
+        _Obj(
+            id=5756,
+            title="Женитьба",
+            date="2026-08-09",
+            time="18:00",
+            location_name="Драматический театр",
+            event_type="спектакль",
+            ticket_link="https://dramteatr39.ru/spektakli/jenitba",
+        ),
+        mode=IdentityGateMode.ENFORCE,
+        # Even an erroneous high-confidence allow may not override four exact
+        # structural conflicts with no shared source/ticket/poster identity.
+        llm_data={
+            "action": "allow_merge",
+            "relation": "same_event",
+            "confidence": 0.99,
+            "reason_code": "same_event_update",
+            "reason": "same date and venue",
+            "blocking_conflicts": [],
+            "allowed_fields": ["source", "description"],
+        },
+    )
+
+    assert verdict.action is MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
+    assert verdict.should_skip_side_effects
+    assert verdict.deterministic
+    assert verdict.reason_code == "same_place_date_unrelated_type_time_conflict"
+
+
+def test_same_performance_time_correction_with_specific_ticket_anchor_stays_allowed() -> None:
+    """Positive control: explicit time drift alone must not block a grounded correction."""
+
+    verdict = build_merge_identity_gate_verdict(
+        _Obj(
+            title="Женитьба",
+            date="2026-08-09",
+            time="18:30",
+            location_name="Драматический театр",
+            event_type="спектакль",
+            ticket_link="https://dramteatr39.ru/spektakli/jenitba",
+        ),
+        _Obj(
+            id=5756,
+            title="Женитьба",
+            date="2026-08-09",
+            time="18:00",
+            location_name="Драматический театр",
+            event_type="спектакль",
+            ticket_link="https://dramteatr39.ru/spektakli/jenitba",
+        ),
+        mode=IdentityGateMode.ENFORCE,
+        llm_data={
+            "action": "allow_merge",
+            "relation": "same_event",
+            "confidence": 0.98,
+            "reason_code": "same_ticket_source_update",
+            "reason": "same title and specific ticket page; source corrects start time",
+            "blocking_conflicts": [],
+            "allowed_fields": ["time", "source"],
+        },
+    )
+
+    assert verdict.action is MergeIdentityAction.ALLOW_MERGE
+    assert not verdict.should_skip_side_effects
+
+
+def test_same_date_venue_without_two_explicit_times_is_not_a_structural_veto() -> None:
+    """The narrow rail must never degrade into a date-plus-venue rule."""
+
+    verdict = build_merge_identity_gate_verdict(
+        _Obj(
+            title="Экскурсия «Закулисье театра»",
+            date="2026-08-09",
+            time=None,
+            location_name="Драматический театр",
+            event_type="экскурсия",
+            ticket_link="https://dramteatr39.ru/tour",
+        ),
+        _Obj(
+            id=5756,
+            title="Женитьба",
+            date="2026-08-09",
+            time="18:00",
+            location_name="Драматический театр",
+            event_type="спектакль",
+            ticket_link="https://dramteatr39.ru/jenitba",
+        ),
+        mode=IdentityGateMode.ENFORCE,
+        llm_data={
+            "action": "allow_merge",
+            "relation": "same_event",
+            "confidence": 0.99,
+            "reason_code": "same_event_update",
+            "reason": "approved semantic positive control",
+            "blocking_conflicts": [],
+            "allowed_fields": ["source"],
+        },
+    )
+
+    assert verdict.action is MergeIdentityAction.ALLOW_MERGE
+    assert not verdict.should_skip_side_effects
+    assert not verdict.deterministic
+
+
+def test_same_programme_multi_session_same_place_date_stays_allowed() -> None:
+    """Legitimate same-date, same-venue sessions remain merge-eligible."""
+
+    verdict = build_merge_identity_gate_verdict(
+        _Obj(
+            title="Кураторская экскурсия по выставке",
+            date="2026-08-09",
+            time="15:00",
+            location_name="Музей",
+            event_type="экскурсия",
+            ticket_link="https://museum.example/tour",
+        ),
+        _Obj(
+            id=5426,
+            title="Кураторская экскурсия по выставке",
+            date="2026-08-09",
+            time="12:00",
+            location_name="Музей",
+            event_type="экскурсия",
+            ticket_link="https://museum.example/tour",
+        ),
+        mode=IdentityGateMode.ENFORCE,
+        llm_data={
+            "action": "allow_merge",
+            "relation": "source_update",
+            "confidence": 0.97,
+            "reason_code": "same_programme_source_update",
+            "reason": "same programme and specific source anchor",
+            "blocking_conflicts": [],
+            "allowed_fields": ["source"],
+        },
+    )
+
+    assert verdict.action is MergeIdentityAction.ALLOW_MERGE
+    assert not verdict.should_skip_side_effects
+    assert not verdict.deterministic
 
 
 def test_merge_gate_blocks_single_occurrence_into_recurring_series_even_with_ticket_anchor() -> None:
@@ -313,11 +531,146 @@ async def test_boyko_exhibition_regression_merge_gate_blocks_side_effects(tmp_pa
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "expected_status", "expected_source_delta"),
+    [
+        (IdentityGateMode.SHADOW, "merged_or_nochange", 1),
+        (IdentityGateMode.ENFORCE, "skipped_identity_gate", 0),
+    ],
+)
+async def test_theatre_tour_performance_incident_replay_requires_enforce(
+    tmp_path,
+    monkeypatch,
+    mode: IdentityGateMode,
+    expected_status: str,
+    expected_source_delta: int,
+) -> None:
+    """Replay the 5756 pollution path and prove shadow is observability-only."""
+
+    db = Database(str(tmp_path / f"theatre-{mode.value}.sqlite"))
+    await db.init()
+    try:
+        await _seed_zhenitba_performance(db)
+        candidate = _theatre_tour_candidate()
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", mode)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        async def _force_replayed_final_match(db_arg, _candidate):
+            async with db_arg.get_session() as session:
+                return await session.get(Event, 5756)
+
+        async def _gate(*_args, **_kwargs):
+            return {
+                "action": "skip_merge_side_effects",
+                "relation": "related_but_distinct",
+                "confidence": 0.99,
+                "reason_code": "theatre_tour_vs_performance_slot_conflict",
+                "reason": "14:30 theatre tour and 18:00 performance are separate occurrences",
+                "blocking_conflicts": ["title", "time", "event_type", "ticket_link"],
+                "allowed_fields": [],
+            }
+
+        monkeypatch.setattr(su, "_match_existing_event_by_source_anchor", _force_replayed_final_match)
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", _gate)
+
+        result = await smart_event_update(
+            db,
+            candidate,
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+
+        if expected_status == "merged_or_nochange":
+            assert result.status in {"merged", "skipped_nochange"}
+            assert result.status != "skipped_identity_gate"
+        else:
+            assert result.status == expected_status
+        async with db.get_session() as session:
+            event = await session.get(Event, 5756)
+            source_count = await session.scalar(
+                select(func.count()).select_from(EventSource).where(
+                    EventSource.event_id == 5756,
+                    EventSource.source_url == candidate.source_url,
+                )
+            )
+            logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
+        assert event is not None
+        assert source_count == expected_source_delta
+        assert logs
+        assert logs[-1].decision == "skip_merge_side_effects"
+        assert logs[-1].decision_payload["mode"] == mode.value
+        assert logs[-1].decision_payload["would_skip_side_effects"] is True
+        if mode is IdentityGateMode.ENFORCE:
+            assert event.title == "Женитьба"
+            assert event.event_type == "спектакль"
+            assert event.time == "18:00"
+            assert "экскурс" not in (event.description or "").lower()
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_theatre_same_performance_source_update_survives_enforce(tmp_path, monkeypatch) -> None:
+    db = Database(str(tmp_path / "theatre-positive.sqlite"))
+    await db.init()
+    try:
+        await _seed_zhenitba_performance(db)
+        candidate = _zhenitba_source_update_candidate()
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+        monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        async def _force_replayed_final_match(db_arg, _candidate):
+            async with db_arg.get_session() as session:
+                return await session.get(Event, 5756)
+
+        async def _gate(*_args, **_kwargs):
+            return {
+                "action": "allow_merge",
+                "relation": "same_event",
+                "confidence": 0.99,
+                "reason_code": "same_ticket_source_update",
+                "reason": "same title, slot and specific ticket page",
+                "blocking_conflicts": [],
+                "allowed_fields": ["source", "description"],
+            }
+
+        monkeypatch.setattr(su, "_match_existing_event_by_source_anchor", _force_replayed_final_match)
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", _gate)
+
+        result = await smart_event_update(
+            db,
+            candidate,
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+
+        assert result.status in {"merged", "skipped_nochange"}
+        assert result.status != "skipped_identity_gate"
+        async with db.get_session() as session:
+            source_count = await session.scalar(
+                select(func.count()).select_from(EventSource).where(
+                    EventSource.event_id == 5756,
+                    EventSource.source_url == candidate.source_url,
+                )
+            )
+            logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
+        assert source_count == 1
+        assert logs[-1].decision == "allow_merge"
+        assert logs[-1].decision_payload["mode"] == "enforce"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_merge_gate_allows_same_event_source_update(tmp_path, monkeypatch) -> None:
     db = Database(str(tmp_path / "same-event.sqlite"))
     await db.init()
     try:
-        await _seed_boyko_lecture(db, event_date="2026-07-13")
+        await _seed_boyko_lecture(db, event_date="2099-07-13")
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
         monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
@@ -338,9 +691,9 @@ async def test_merge_gate_allows_same_event_source_update(tmp_path, monkeypatch)
         candidate = EventCandidate(
             source_type="telegram",
             source_url="https://t.me/museum/5078",
-            source_text="13 июля в 19:00 Андрей Бойко прочитает лекцию «Калининград и область как кинодекорация».",
+            source_text="13 июля 2099 года в 19:00 Андрей Бойко прочитает лекцию «Калининград и область как кинодекорация».",
             title="Калининград и область как кинодекорация",
-            date="2026-07-13",
+            date="2099-07-13",
             time="19:00",
             location_name="Музей изобразительных искусств",
             location_address="Ленинский проспект, 83",
