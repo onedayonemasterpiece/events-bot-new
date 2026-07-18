@@ -1,0 +1,129 @@
+mode: feature_fanout
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: integration/static-event-v12-fidelity-idempotency-20260718
+global_constraints:
+  - Preserve accepted v11 visual contracts; no "inspired by" substitutions.
+  - Production data repairs require source evidence and authenticated post-repair verification.
+  - No paid image generation; use only supplied/existing deterministic assets.
+  - Canonical docs and CHANGELOG are owned by the integrator to avoid conflicts.
+  - Fresh candidate uses Kaliningrad local date and a latest read-only production snapshot.
+verification_owner: root integrator
+stop_conditions:
+  - ambiguous production source identity or location without authoritative evidence
+  - dirty worker worktree before implementation
+  - unavailable external consultant must be recorded, not silently downgraded
+lanes:
+  - id: transport_design
+    role: worker
+    effort: high
+    requirement_ids: [R01, R03, R06]
+    target: Exact accepted transport A/B/C components, shared icons/wording, branded footer, CTA geometry consistency
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v12/transport-design
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v12-transport-design
+    writable_files:
+      - site/src/components/**
+      - site/src/layouts/**
+      - site/src/styles/**
+      - site/src/pages/lab/**
+      - site/public/assets/icons/**
+      - site/tests/**
+      - site/scripts/check-preview.mjs
+      - .codex/lanes/transport_design/RESULTS.md
+    forbidden_files:
+      - main.py
+      - main_part2.py
+      - models.py
+      - smart_event_update.py
+      - kaggle/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed exact design-system implementation and responsive regression tests
+    verification_scope: full_local
+    status: planned
+
+  - id: content_media
+    role: worker
+    effort: high
+    requirement_ids: [R02, R07, R08]
+    target: Evidence-backed medallion controls and event repairs; typed no-image fallbacks; no-image inventory
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v12/content-media
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v12-content-media
+    writable_files:
+      - site/src/lib/**
+      - site/src/data/**
+      - site/public/assets/event-fallbacks/**
+      - site/scripts/export-production-preview-data.py
+      - tests/**static_site**
+      - scripts/**static_site**
+      - .codex/lanes/content_media/RESULTS.md
+      - artifacts/codex/static-event-v12-content-media/**
+    forbidden_files:
+      - site/src/components/**
+      - site/src/layouts/**
+      - main.py
+      - main_part2.py
+      - models.py
+      - smart_event_update.py
+      - kaggle/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed data guards/assets/audit tooling plus evidence bundle; production repair patch only if sources prove it
+    verification_scope: targeted
+    status: planned
+
+  - id: build_idempotency
+    role: worker
+    effort: extra-high
+    requirement_ids: [R04, R05]
+    target: Kaliningrad-date correctness and durable hash-based single-flight/coalescing for Smart Update to Kaggle static builds
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v12/build-idempotency
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v12-build-idempotency
+    writable_files:
+      - main.py
+      - main_part2.py
+      - models.py
+      - smart_event_update.py
+      - scheduling.py
+      - kaggle/StaticSiteBuilder/**
+      - scripts/run_static_site_builder_kaggle.py
+      - tests/**kaggle**
+      - tests/**static_site**
+      - tests/**smart_update**
+      - alembic/versions/**static_site**
+      - .codex/lanes/build_idempotency/RESULTS.md
+    forbidden_files:
+      - site/src/components/**
+      - site/src/layouts/**
+      - site/public/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed state-machine/fingerprint implementation with race/no-op/manual/date tests
+    verification_scope: full_local
+    status: planned
+
+  - id: integration_release
+    role: merge_reviewer
+    effort: extra-high
+    requirement_ids: []
+    target: Consultant review, integration, incident/docs/changelog, prod data verification, fresh secret build, Playwright and Telegram handoff
+    depends_on: [transport_design, content_media, build_idempotency]
+    execution_mode: serial_after_dependency
+    branch: integration/static-event-v12-fidelity-idempotency-20260718
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v12-integration
+    writable_files:
+      - docs/**
+      - CHANGELOG.md
+      - .codex/integration/**
+      - artifacts/codex/static-event-v12-fidelity-idempotency/**
+    forbidden_files: []
+    expected_output: integrated main-reachable changes, release evidence, closure matrix
+    verification_scope: full_local
+    status: planned
