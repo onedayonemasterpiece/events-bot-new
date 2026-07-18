@@ -27,6 +27,10 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static footer prototype polish**: replace the oversized share split-card
+  with an `84px` desktop / compact stacked mobile inline bar while preserving
+  two desktop intents, one mobile system-share intent and `44px+` controls; use
+  the official colored MAX mark on the graphite footer.
 - **Static-site Kaggle runner shutdown**: close the short-lived status-ledger
   `Database` after creating the callback dataset so its non-daemon `aiosqlite`
   worker cannot hold a completed runner at interpreter shutdown and strand the

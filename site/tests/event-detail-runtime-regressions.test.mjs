@@ -134,6 +134,8 @@ test('service share prompt uses the canonical inline announcements wordmark', as
 
 test('footer service prototype is isolated, cohesive and does not duplicate partnership navigation', async () => {
   const component = await read('src/components/SiteFooterPrototype.astro');
+  const socialIcon = await read('src/components/SocialIcon.astro');
+  const maxMetadata = JSON.parse(await read('public/assets/social/max-colored-official.svg.metadata.json'));
   const layout = await read('src/layouts/EventLayout.astro');
   const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
   const secretBuilder = await read('scripts/build-secret-candidate.mjs');
@@ -144,6 +146,13 @@ test('footer service prototype is isolated, cohesive and does not duplicate part
   assert.match(component, /Политика обработки персональных данных/u);
   assert.match(component, /role="link" aria-disabled="true" data-footer-future-document/u);
   assert.match(component, /showPrompt=\{false\}/u);
+  assert.match(component, /min-height: 84px/u);
+  assert.doesNotMatch(component, /min-height: 190px/u);
+  assert.match(component, /min-height: 48px/u);
+  assert.match(socialIcon, /import \{ withBase \} from '\.\.\/lib\/events'/u);
+  assert.match(socialIcon, /withBase\('\/assets\/social\/max-colored-official\.svg'\)/u);
+  assert.equal(maxMetadata.source_page, 'https://go.max.ru/brandbook');
+  assert.equal(maxMetadata.provider, 'Official MAX brandbook');
   assert.match(layout, /footerVariant\?: 'current' \| 'prototype-v1'/u);
   assert.match(layout, /footerVariant === 'prototype-v1'/u);
   assert.match(lab, /slug: 'footer-service-v1', eventId: 6589[^\r\n]*footerVariant: 'prototype-v1'/u);

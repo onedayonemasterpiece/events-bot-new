@@ -23,13 +23,11 @@ const { socialLinks } = Astro.props;
   <div class="page-shell site-footer-prototype">
     <section class="site-footer-prototype__share" aria-labelledby="footer-share-title">
       <div class="site-footer-prototype__share-copy">
-        <p>Расскажите о сервисе</p>
         <h2 id="footer-share-title">
           <span>Понравились</span>
           <AnnouncementsWordmark class="site-footer-prototype__share-wordmark" />
           <span aria-hidden="true">?</span>
         </h2>
-        <span>Отправьте друзьям карточку или ссылку — событие они выберут сами.</span>
       </div>
       <div class="site-footer-prototype__share-actions">
         <ServiceShareAction surface="footer" showPrompt={false} class="site-footer-prototype__share-control" />
@@ -104,37 +102,33 @@ const { socialLinks } = Astro.props;
   }
   .site-footer-prototype { display: grid; gap: clamp(2rem, 4vw, 3.5rem); }
   .site-footer-prototype__share {
-    display: grid;
-    grid-template-columns: minmax(18rem, .82fr) minmax(28rem, 1.18fr);
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 28px;
+    min-height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: clamp(1.25rem, 3vw, 2.5rem);
+    padding: .9rem 1.15rem .9rem 1.45rem;
+    border: 1px solid rgba(121,48,20,.18);
+    border-left: 5px solid #9b3f1d;
+    border-radius: 20px;
     background: #fff8ee;
     color: #251c17;
-    box-shadow: 0 24px 60px rgba(0,0,0,.2);
+    box-shadow: 0 16px 38px rgba(0,0,0,.16);
   }
   .site-footer-prototype__share-copy {
-    display: grid;
-    align-content: center;
-    gap: .65rem;
-    min-height: 190px;
-    padding: clamp(1.5rem, 3vw, 2.4rem);
-    background: #9b3f1d;
-    color: #fff7ed;
+    min-width: max-content;
+    display: flex;
+    align-items: center;
   }
-  .site-footer-prototype__share-copy p,
-  .site-footer-prototype__share-copy h2,
-  .site-footer-prototype__share-copy > span { margin: 0; }
-  .site-footer-prototype__share-copy p { font-size: .76rem; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; opacity: .8; }
-  .site-footer-prototype__share-copy h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: .28em; font-size: clamp(1.6rem, 2.4vw, 2.5rem); line-height: 1; letter-spacing: -.035em; }
-  .site-footer-prototype__share-copy > span { max-width: 42ch; color: rgba(255,247,237,.78); font-size: .9rem; line-height: 1.45; }
-  .site-footer-prototype__share-wordmark { width: auto; height: .88em; color: #fff; }
-  .site-footer-prototype__share-actions { display: flex; align-items: center; padding: clamp(1.25rem, 3vw, 2.4rem); }
+  .site-footer-prototype__share-copy h2 { margin: 0; display: flex; flex-wrap: nowrap; align-items: baseline; gap: .28em; color: #552414; font-size: clamp(1.05rem, 1.35vw, 1.28rem); line-height: 1; letter-spacing: -.02em; white-space: nowrap; }
+  .site-footer-prototype__share-copy h2 > span:first-child { font-weight: 620; }
+  .site-footer-prototype__share-copy :global(.site-footer-prototype__share-wordmark) { width: auto; height: 1.05em; flex: 0 0 auto; color: #9b3f1d; }
+  .site-footer-prototype__share-actions { min-width: 0; width: min(100%, 39rem); display: flex; align-items: center; }
   .site-footer-prototype__share-actions :global(.site-footer-prototype__share-control) { width: 100%; }
   .site-footer-prototype__share-actions :global(.service-share-action__controls) { flex-basis: auto; }
   .site-footer-prototype__share-actions :global(.service-share-action__button) {
-    flex: 1 1 13rem;
-    min-height: 52px;
+    flex: 1 1 12.5rem;
+    min-height: 48px;
     padding-inline: 1rem;
     border-color: rgba(121,48,20,.25);
     background: #fffdf8;
@@ -182,21 +176,18 @@ const { socialLinks } = Astro.props;
   .site-footer-prototype__utility :global(.personalization-reset-button) { color: #c9b8ad; border-bottom-color: rgba(255,255,255,.22); }
 
   @media (max-width: 980px) {
-    .site-footer-prototype__share { grid-template-columns: 1fr; }
-    .site-footer-prototype__share-copy { min-height: 0; }
+    .site-footer-prototype__share { align-items: stretch; flex-direction: column; gap: .85rem; }
+    .site-footer-prototype__share-copy { min-width: 0; }
+    .site-footer-prototype__share-actions { width: 100%; }
     .site-footer-prototype__main { grid-template-columns: repeat(3, minmax(0,1fr)); }
     .site-footer-prototype__brand { grid-column: 1 / -1; }
   }
   @media (max-width: 640px) {
     .site-footer--prototype { padding-block: 6.25rem calc(2rem + env(safe-area-inset-bottom)); }
     .site-footer-prototype { gap: 2rem; }
-    .site-footer-prototype__share { border-radius: 22px; }
-    .site-footer-prototype__share-copy { padding: 1.25rem; }
-    .site-footer-prototype__share-copy h2 { display: grid; justify-items: start; gap: .4rem; }
-    .site-footer-prototype__share-copy h2 > span:first-child { font-size: 1rem; }
-    .site-footer-prototype__share-wordmark { height: 1.12em; }
-    .site-footer-prototype__share-copy h2 > span:last-child { display: none; }
-    .site-footer-prototype__share-actions { padding: 1rem; }
+    .site-footer-prototype__share { min-height: 0; padding: 1rem; border-left-width: 4px; border-radius: 18px; }
+    .site-footer-prototype__share-copy h2 { font-size: 1rem; }
+    .site-footer-prototype__share-copy :global(.site-footer-prototype__share-wordmark) { height: 1.1em; }
     .site-footer-prototype__share-actions :global(.service-share-action__button) { width: 100%; flex-basis: 100%; }
     .site-footer-prototype__main { grid-template-columns: 1fr 1fr; gap: 2rem 1.25rem; }
     .site-footer-prototype__brand, .site-footer-prototype__documents { grid-column: 1 / -1; }
