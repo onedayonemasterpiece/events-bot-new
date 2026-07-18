@@ -5,7 +5,7 @@
 - Lane: `static-event-v13-build-observability`
 - Requirement: `R09`
 - Base SHA: `fb5a35ddec00157692d75e1610c8fd43f46b4c1e`
-- Implementation SHA: `29426b5eb5560832492b5879d97a6910f95c8820`
+- Head SHA (implementation): `29426b5eb5560832492b5879d97a6910f95c8820`
 - Branch: `agent/static-event-v13/build-observability`
 - Production DB, Object Storage and stable-channel mutations: none
 
