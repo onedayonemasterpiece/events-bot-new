@@ -89,7 +89,12 @@ Rules:
   Fly validates the exact downloaded result and completes publication, the
   host records one idempotent `host_result_validated` terminal event so the
   ledger cannot remain falsely `created`; it does not populate
-  `last_heartbeat_at` or pretend a kernel heartbeat occurred.
+  `last_heartbeat_at` or pretend a kernel heartbeat occurred. The same
+  transaction releases only active resource leases owned by that exact run.
+  SQLite lock contention is retried with bounded backoff, and the next static
+  build replays this idempotent reconciliation from the immutable current-review
+  receipt before remote recovery or push. A late receipt can therefore never
+  release a successor run's lease.
 - Data export: `site/scripts/export-production-preview-data.py`.
 - Fly handoff: `JobTask.static_site_build` and `main.py` `job_static_site_build_kaggle`.
 - Feature docs: `docs/features/static-site-pages/astro-preview.md`.
@@ -127,6 +132,11 @@ outbox state machine:
   --reason operator_secret_candidate \
   --correlation-id static-site:manual:<ticket>
 ```
+
+`INC-2026-07-19-static-site-stale-builder-lease` is a mandatory regression
+contract for this handoff: successful publication, ledger terminal state and
+exact-owner resource release must converge even when terminal callbacks are
+lost or Smart Update briefly holds the SQLite writer lock.
 
 All operator/bot link-producing paths must use
 `static_site_release.resolve_current_secret_candidate`; historical named

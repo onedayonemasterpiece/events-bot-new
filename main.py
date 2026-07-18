@@ -22910,6 +22910,37 @@ async def _recover_previous_static_site_attempt(
     return True, result
 
 
+async def _reconcile_current_static_site_candidate_status(db: Database) -> dict[str, Any] | None:
+    """Repair a completed candidate's status/lease before any new remote push.
+
+    The immutable current-candidate receipt is authoritative proof that the
+    host validated and published that exact run.  Replaying the idempotent host
+    reconciliation here prevents a lost terminal callback (or a transient
+    SQLite writer lock during the original reconciliation) from blocking the
+    next Smart Update build for the lease TTL.
+    """
+
+    current = await asyncio.to_thread(resolve_current_secret_candidate, db.path)
+    if current is None:
+        return None
+    from kaggle_status import reconcile_kaggle_run_terminal_from_host
+
+    result = await reconcile_kaggle_run_terminal_from_host(
+        db,
+        run_id=current.run_id,
+        message="static-site preflight reconciled current published candidate",
+    )
+    released = int(result.get("released_resource_count") or 0)
+    if released:
+        logging.warning(
+            "static_site_build: preflight released stale exact-owner Kaggle lease "
+            "run_id=%s count=%s",
+            current.run_id,
+            released,
+        )
+    return result
+
+
 async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool | str:
     """Coalesced static-site build after Smart Update.
 
@@ -22944,6 +22975,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     repo_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
         raise StaticSitePermanentError("STATIC_SITE_REPO_SHA must be the exact pushed 40-character SHA")
+    await _reconcile_current_static_site_candidate_status(db)
     recovered, recovered_result = await _recover_previous_static_site_attempt(
         db=db,
         job_id=job_id,

@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-19-static-site-stale-builder-lease.md`
+  - Scope: host-validated StaticSiteBuilder terminal reconciliation, exact-owner
+    `static_site:builder` lease release and pre-push Smart Update self-healing.
+  - Must not regress: a successful published candidate cannot retain its
+    exclusive lease after a lost callback or transient SQLite writer lock; a
+    late receipt never releases a successor's lease; the next build reconciles
+    the durable current candidate before any Kaggle push.
+
 - `INC-2026-07-18-static-snapshot-disk-pressure.md`
   - Scope: Smart Update/Kaggle immutable snapshot lifecycle, retry/recovery
     retention, Fly `/data` readiness and deploy health checks.
