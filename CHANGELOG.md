@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- **Related event occurrences in final static templates**: add a no-JavaScript
+  `Другое время` / `Другие даты N` selector inside the accepted desktop
+  Split/Continuous Editorial date owner and mobile accepted-v8 date strip,
+  group multiple times by date, link each alternative occurrence directly and
+  remove the duplicated mobile card section below the description.
 - **Static event-page secret release pipeline**: add effect-only 15-minute Smart
   Update coalescing, exactly-one running-build follow-up, durable manual requests,
   immutable SQLite backup manifests, checked full-catalog production and noindex

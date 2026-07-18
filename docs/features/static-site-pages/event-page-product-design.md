@@ -172,8 +172,8 @@ Typography:
    - on mobile use sticky bottom action only if it does not hide content.
 
 7. **Другие даты**
-   - separate from related events;
-   - same event occurrence group;
+   - belongs to the primary date/time owner, not to a second card below the description;
+   - same event occurrence group, separate from related events;
    - cancelled/postponed marked clearly.
 
 8. **Похожие события**
@@ -187,7 +187,44 @@ Typography:
 
 10. **Footer**
     - brand, canonical URL, contact/source policy;
-    - Telegraph compatibility link during dual-run if useful for admins, not as primary user CTA.
+   - Telegraph compatibility link during dual-run if useful for admins, not as primary user CTA.
+
+### Related dates and times in the accepted compositions
+
+The rejected first pass placed a new large `Когда` module into a legacy white
+hero/side-panel composition. That changed the accepted hierarchy, duplicated
+the date below the description and made the visitor interpret another block
+before reaching the ticket action. It is not a valid base for the final
+templates.
+
+The accepted solution keeps one owner for the fact:
+
+- **desktop Split:** the selector stays in the top-right date/time area of the
+  cream reading header;
+- **desktop Continuous Editorial:** it stays in the date/time area of the cream
+  information sheet;
+- **mobile accepted-v8:** it stays inside the existing compact weekday/date/time
+  strip below the dark action dock and above the venue row;
+- the graphite ticket/action dock is never made the owner of event dates;
+- the current occurrence remains ordinary primary text, not a new selected
+  chip; this preserves the accepted visual hierarchy;
+- a same-day alternative is exposed immediately as the underlined,
+  link-shaped `Другое время: 17:00`; several times remain on one line, separated
+  by commas;
+- alternatives on other days use the explicit underlined control
+  `Другие даты N`. It progressively reveals a compact list where every date is
+  one row and every time is a direct link to that occurrence page;
+- the list is server-rendered with native `<details>`, works without JavaScript,
+  keeps 44 px-class mobile rows and does not hide alternatives behind an
+  unlabeled chip;
+- the current slot and exact same-slot duplicates are excluded; only active,
+  eligible future occurrence URLs are offered;
+- the old full-size `Другие даты` card grid below the description is removed so
+  the same decision is not presented twice.
+
+This makes the label explicit without adding explanatory prose: the visitor can
+recognise that the program has another time/date, compare it in place, select
+the correct occurrence, and only then register or buy the corresponding ticket.
 
 ## 5. CTA contract
 
@@ -236,19 +273,18 @@ Mobile goal: decide quickly with one thumb.
 [Brand bar: Полюбить Калининград Анонсы]
 
 [Poster / image]
-[category chip] [date chip]
+[category]
 H1 Event title
-[date/time row]
-[venue/address row]
-[price/status row]
-
 [Primary CTA full width]
 [Calendar] [Share] [Copy]
 
+[weekday] [current date] [current time]
+[Другие даты N ▼] -> [date row: time link, time link]
+[venue/address row]
+[price/status row]
+
 [Short summary]
 [Details collapsed after 2-3 paragraphs if long]
-
-[Другие даты]
 
 [Похожие события]
   [vertical related card]

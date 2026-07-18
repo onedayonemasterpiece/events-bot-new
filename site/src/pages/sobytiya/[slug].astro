@@ -116,6 +116,7 @@ const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
     surface="production"
     presentationReason={desktopPresentation.reason}
     showTransport
+    occurrences={otherDates}
   />
   <main
     class="mobile-event-production"
@@ -130,7 +131,7 @@ const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
     <div class="page-shell page-shell--event-impact mobile-event-production__shell">
       <article class="main-col section-card section-card--hero section-card--impact-hero">
         <div class="section-card__inner section-card__inner--hero">
-          <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} metaTreatment="weekday-panel" />
+          <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} metaTreatment="weekday-panel" occurrences={otherDates} />
         </div>
       </article>
 
@@ -159,16 +160,6 @@ const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
           <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
         </section>
 
-        {otherDates.length > 0 && (
-          <section class="section-card mobile-event-production__other-dates" style="margin-top: 1rem;">
-            <div class="section-card__inner">
-              <h2>Другие даты</h2>
-              <div class="cards-grid cards-grid--immersive">
-                {otherDates.map((candidate) => <EventCard event={candidate} label="Другая дата" />)}
-              </div>
-            </div>
-          </section>
-        )}
       </div>
 
       <section id="discovery-feed" class="section-card mobile-event-production__discovery" style="margin-top: 1rem;" data-hide-sticky-after>

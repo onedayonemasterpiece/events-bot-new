@@ -1,9 +1,10 @@
 ---
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
+import EventOccurrenceNav from './EventOccurrenceNav.astro';
 import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
-import { displayDate, displayDateTime, displayDateWithWeekday, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { isLowResolutionPortraitEventMedia, selectEventMediaByQuality } from '../lib/eventMediaQuality';
 
@@ -23,6 +24,7 @@ interface Props {
   headingTag?: 'h1' | 'h2' | 'h3';
   galleryCta?: HeroGalleryCta;
   metaTreatment?: 'standard' | 'weekday-panel' | 'responsive-weekday-panel';
+  occurrences?: PreviewEvent[];
 }
 
 type HeroGalleryImage = {
@@ -37,7 +39,7 @@ type HeroGalleryImage = {
   low_resolution_portrait?: boolean;
 };
 
-const { event, modeOverride, composition, headingTag = 'h1', galleryCta, metaTreatment = 'standard' } = Astro.props;
+const { event, modeOverride, composition, headingTag = 'h1', galleryCta, metaTreatment = 'standard', occurrences = [] } = Astro.props;
 const HeadingTag = headingTag;
 const rawImageAssets = event.image_assets || [];
 const mediaQualitySelection = selectEventMediaByQuality(rawImageAssets);
@@ -57,11 +59,6 @@ const derivedComposition: HeroComposition = heroMode === 'fallback-art'
     : 'poster-billboard';
 const heroComposition = composition || derivedComposition;
 const dateTimeLabel = displayDateTime(event);
-const dateLabel = displayDate(event);
-const dateWithWeekdayLabel = displayDateWithWeekday(event);
-const weekdayLabel = dateWithWeekdayLabel.endsWith(dateLabel)
-  ? dateWithWeekdayLabel.slice(0, -dateLabel.length).replace(/,\s*$/u, '')
-  : '';
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'место уточняется';
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
@@ -223,14 +220,10 @@ const showTicketCta = Boolean(ctaHref);
       </button>
     </div>
     {metaTreatment !== 'standard' && (
-      <p class="event-hero__meta-line event-hero__meta-line--weekday-panel">
-        <span class="event-hero__when">
-          {weekdayLabel && <span class="event-hero__weekday">{weekdayLabel}</span>}
-          <span class="event-hero__date">{dateLabel}</span>
-          {event.display_time && <span class="event-hero__time">{event.display_time}</span>}
-        </span>
+      <div class="event-hero__meta-line event-hero__meta-line--weekday-panel">
+        <EventOccurrenceNav event={event} occurrences={occurrences} variant="mobile" />
         <span class="event-hero__where">{placeLabel}</span>
-      </p>
+      </div>
     )}
     {metaTreatment !== 'weekday-panel' && (
       <p class="event-hero__meta-line event-hero__meta-line--standard">

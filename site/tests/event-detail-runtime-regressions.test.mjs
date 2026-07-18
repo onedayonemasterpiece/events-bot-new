@@ -109,3 +109,29 @@ test('Dramatic Theatre medallion is present in the accepted manifest', async () 
   assert.match(built, /\/assets\/organizers\/dramteatr39\.svg/u);
   assert.match(built, /Калининградский драматический театр/u);
 });
+
+test('linked occurrences stay inside the accepted desktop and mobile date owners', async () => {
+  const route = await read('src/pages/sobytiya/[slug].astro');
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const hero = await read('src/components/EventHero.astro');
+  const occurrenceNav = await read('src/components/EventOccurrenceNav.astro');
+  const events = await read('src/lib/events.ts');
+
+  assert.match(route, /<DesktopEventPage[\s\S]*occurrences=\{otherDates\}/u);
+  assert.match(route, /<EventHero[^>]*metaTreatment="weekday-panel"[^>]*occurrences=\{otherDates\}/u);
+  assert.doesNotMatch(route, /mobile-event-production__other-dates/u);
+  assert.match(desktop, /<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="desktop" desktopContext=\{candidate\} \/>/u);
+  assert.match(hero, /<EventOccurrenceNav event=\{event\} occurrences=\{occurrences\} variant="mobile" \/>/u);
+  assert.match(occurrenceNav, />Другие даты</u);
+  assert.match(occurrenceNav, />Другое время</u);
+  assert.match(occurrenceNav, /const slotKey =/u);
+  assert.match(occurrenceNav, /if \(!unique\.has\(slot\)\) unique\.set\(slot, item\)/u);
+  assert.match(events, /export function collapseLinkedOccurrenceChoices/u);
+  assert.match(events, /if \(slot === currentSlot \|\| seenSlots\.has\(slot\)\) return false/u);
+
+  const built = await readBuilt('sobytiya/ekskursiya-oplot-nezavisimosti-i-piva-kaliningrad-6685/index.html');
+  assert.match(built, /data-occurrence-variant="desktop"[^>]*data-occurrence-alternative-count="2"/u);
+  assert.match(built, /data-occurrence-variant="mobile"[^>]*data-occurrence-alternative-count="2"/u);
+  assert.match(built, /ekskursiya-oplot-nezavisimosti-i-piva-kaliningrad-6686/u);
+  assert.match(built, /ekskursiya-oplot-nezavisimosti-i-piva-kaliningrad-6687/u);
+});

@@ -18,6 +18,14 @@ portrait series, low-resolution and quality-fallback combinations. The same
 production artifacts and secret candidates. A build that falls back to the
 legacy `EventHero + event-grid` desktop DOM fails closed.
 
+Linked occurrences use the same accepted compositions rather than a legacy
+schedule card: desktop Split/Continuous Editorial extend their existing
+date/time header owner, while mobile accepted-v8 extends its weekday/date/time
+strip. Explicit `Другое время` and `Другие даты N` links lead to the selected
+occurrence; the former duplicate card grid below the mobile description is not
+rendered. Product and grouping contract:
+[`event-page-product-design.md`](event-page-product-design.md#related-dates-and-times-in-the-accepted-compositions).
+
 В `events-bot-new` есть Astro SSG preview и отдельный checked production profile в `site/`: он строит
 статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` из
 production SQLite export и публикуется под noindex-prefix в bucket

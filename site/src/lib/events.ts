@@ -232,6 +232,27 @@ function eventTimeSortValue(event: Pick<PreviewEvent, 'start_time' | 'display_ti
   return match ? `${match[1].padStart(2, '0')}:${match[2]}` : `99:${String(event.id || 0).padStart(8, '0')}`;
 }
 
+function occurrenceSlotKey(event: Pick<PreviewEvent, 'start_date' | 'start_time' | 'display_time'>): string {
+  const raw = (event.start_time || event.display_time || '').trim().toLocaleLowerCase('ru-RU');
+  const match = /(\d{1,2}):(\d{2})/u.exec(raw);
+  const time = match ? `${match[1].padStart(2, '0')}:${match[2]}` : raw;
+  return `${event.start_date}|${time}`;
+}
+
+export function collapseLinkedOccurrenceChoices(current: PreviewEvent, candidates: PreviewEvent[]): PreviewEvent[] {
+  const currentSlot = occurrenceSlotKey(current);
+  const seenSlots = new Set<string>();
+  return candidates
+    .filter((candidate) => candidate.id !== current.id)
+    .sort((left, right) => left.start_date.localeCompare(right.start_date) || eventTimeSortValue(left).localeCompare(eventTimeSortValue(right)) || left.id - right.id)
+    .filter((candidate) => {
+      const slot = occurrenceSlotKey(candidate);
+      if (slot === currentSlot || seenSlots.has(slot)) return false;
+      seenSlots.add(slot);
+      return true;
+    });
+}
+
 export function getLinkedSessionIds(event: PreviewEvent): number[] {
   const explicit = event.other_date_ids.map(Number).filter((id) => Number.isFinite(id));
   const key = linkedSessionKey(event);
@@ -263,10 +284,10 @@ export function collapseLinkedSessionEvents(events: PreviewEvent[]): PreviewEven
 }
 
 export function getOtherDates(event: PreviewEvent): PreviewEvent[] {
-  return getLinkedSessionIds(event)
+  const candidates = getLinkedSessionIds(event)
     .map((id) => getEventById(id))
-    .filter((candidate): candidate is PreviewEvent => Boolean(candidate) && isFutureStartingEvent(candidate) && (!candidate.lifecycle_status || candidate.lifecycle_status === 'active'))
-    .sort((left, right) => (left.start_date.localeCompare(right.start_date) || eventTimeSortValue(left).localeCompare(eventTimeSortValue(right)) || left.id - right.id));
+    .filter((candidate): candidate is PreviewEvent => Boolean(candidate) && isFutureStartingEvent(candidate) && (!candidate.lifecycle_status || candidate.lifecycle_status === 'active'));
+  return collapseLinkedOccurrenceChoices(event, candidates);
 }
 
 export function getRelatedEvents(event: PreviewEvent, kind: 'similar' | 'explore'): PreviewEvent[] {

@@ -2,6 +2,7 @@
 import Icon from './Icon.astro';
 import EventCard from './EventCard.astro';
 import EventTokenMedallions from './EventTokenMedallions.astro';
+import EventOccurrenceNav from './EventOccurrenceNav.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
 import EventTransportSchedule from './EventTransportSchedule.astro';
 import EventBusTransportSchedule from './EventBusTransportSchedule.astro';
@@ -10,7 +11,6 @@ import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import type { EventImageAsset, EventImageDerivative, EventImageMediaRole, PreviewEvent } from '../lib/types';
 import templateContract from '../data/eventTemplateContract.json';
 import {
-  displayDate,
   displayDateTime,
   eventHref,
   siteHomeHref,
@@ -56,6 +56,7 @@ interface Props {
   surface?: 'lab' | 'production';
   presentationReason?: string;
   showTransport?: boolean;
+  occurrences?: PreviewEvent[];
 }
 
 type GalleryImage = {
@@ -102,6 +103,7 @@ const {
   surface = 'lab',
   presentationReason = 'lab-fixture',
   showTransport = false,
+  occurrences = [],
 } = Astro.props;
 const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
 const hiddenDuplicateSourceIndexes = new Set(duplicateSourceIndexes);
@@ -278,13 +280,6 @@ const splitRailSlotWidth = (image: GalleryImage) => Math.round(Math.max(88, Math
 const transparentRailPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const usesLongFlow = true;
 
-const dateLabel = displayDate(event);
-const weekdayLabel = (() => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(event.start_date || '');
-  if (!match) return null;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  return ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'][date.getUTCDay()] || null;
-})();
 const dateTimeLabel = displayDateTime(event);
 const addressLabel = event.address || event.city || 'Адрес уточняется';
 const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
@@ -481,10 +476,10 @@ const descriptionHtml = (event.description_html || '')
 
         <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long']} data-scroll-content={usesLongFlow ? '' : undefined} data-editorial-content-flow={candidate === 'editorial' ? '' : undefined}>
           <div class="desktop-prototype__info" data-title-panel>
-            <p class="desktop-prototype__kicker">
+            <div class="desktop-prototype__kicker">
               <span>{event.event_type || 'событие'}</span>
-              <time datetime={event.starts_at || event.start_date}><strong>{dateLabel}</strong>{weekdayLabel && <b>{weekdayLabel}</b>}{event.display_time && <strong>{event.display_time}</strong>}</time>
-            </p>
+              <EventOccurrenceNav event={event} occurrences={occurrences} variant="desktop" desktopContext={candidate} />
+            </div>
             <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
             {candidate === 'editorial' && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
             <p class="desktop-prototype__place"><Icon name="pin" /><span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span></p>
