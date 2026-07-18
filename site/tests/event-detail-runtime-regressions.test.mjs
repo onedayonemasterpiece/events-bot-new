@@ -26,6 +26,26 @@ async function readBuilt(relativePath) {
   return readFile(path.join(buildRoot, relativePath), 'utf8');
 }
 
+async function readBuiltEvent(eventId) {
+  const distRoot = path.join(siteRoot, 'dist');
+  const entries = await readdir(distRoot, { withFileTypes: true });
+  const previewBuilds = entries
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('preview-'))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+  const buildRoot = process.env.PREVIEW_BUILD_ID
+    ? path.join(distRoot, process.env.PREVIEW_BUILD_ID)
+    : previewBuilds.length > 0
+      ? path.join(distRoot, previewBuilds[0])
+      : distRoot;
+  const eventRoot = path.join(buildRoot, 'sobytiya');
+  const eventDirs = await readdir(eventRoot, { withFileTypes:true });
+  const match = eventDirs.find((entry) => entry.isDirectory() && entry.name.endsWith(`-${eventId}`));
+  assert.ok(match, `built event ${eventId} is missing`);
+  return readFile(path.join(eventRoot, match.name, 'index.html'), 'utf8');
+}
+
 test('desktop calendar label is driven by bounded use history, not event parity', async () => {
   const layout = await read('src/layouts/EventLayout.astro');
   const route = await read('src/pages/sobytiya/[slug].astro');
@@ -197,7 +217,9 @@ test('accepted service footer is global, cohesive and does not duplicate partner
   assert.match(layout, /import SiteFooter from '\.\.\/components\/SiteFooter\.astro'/u);
   assert.match(layout, /<SiteFooter socialLinks=\{FOOTER_SOCIAL_LINKS\} \/>/u);
   assert.doesNotMatch(layout, /footerVariant|SiteFooterPrototype/u);
-  assert.match(lab, /slug: 'footer-service-v1', eventId: 6589/u);
+  assert.match(lab, /slug: 'footer-service-v1', eventId: 5658, candidate: 'editorial'/u);
+  const examples = JSON.parse(await read('src/data/desktop-event-examples.json'));
+  assert.ok(examples.events.some((event) => event.id === 5658), 'footer specimen must use a frozen desktop fixture');
   assert.doesNotMatch(lab, /footerVariant/u);
   assert.match(secretBuilder, /const footerPrototypeRoute = 'lab\/event-desktop\/examples\/footer-service-v1'/u);
   assert.match(secretChecker, /data-site-footer="service-v1"/u);
@@ -211,7 +233,7 @@ test('Dramatic Theatre medallion is present in the accepted manifest', async () 
   assert.equal(item.avatarUrl, '/assets/organizers/dramteatr39.svg');
   assert.ok(item.aliases.includes('Драматический театр'));
 
-  const built = await readBuilt('sobytiya/zhenitba-i-ekskursiya-zakulise-teatra-kaliningrad-5756/index.html');
+  const built = await readBuiltEvent(5756);
   assert.match(built, /\/assets\/organizers\/dramteatr39\.svg/u);
   assert.match(built, /Калининградский драматический театр/u);
 });

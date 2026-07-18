@@ -266,7 +266,11 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   страница fail-safe показывает подтверждённые source title/type/description.
   Это не заменяет Smart Update repair и не является keyword/date-only merge
   правилом. Некорректный OCR/non-identity document не может владеть hero при
-  наличии сильного event-local photo и никогда не crop-ится. Контроль: `5756`.
+  наличии сильного event-local photo и никогда не crop-ится. После canonical
+  repair горизонтальная classified event photo чуть ниже Editorial-порога
+  также может уступить hero более сильной горизонтальной classified photo того
+  же события; portrait/square primary этим правилом не подменяется. Контроль:
+  `5756` в обоих source-consistent состояниях.
 - **ADD-RECENT-09 — Sentence-safe editorial lead.** Lead использует готовое
   авторское summary, но обнаруженный ложный punctuated prefix заменяет полной
   source-backed фразой; raw character cut раскрывается знаком `…`, а не

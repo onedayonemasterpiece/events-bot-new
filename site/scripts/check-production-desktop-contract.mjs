@@ -28,17 +28,16 @@ const expectedSpecimens = new Map([
   [4671, ['editorial', 'editorial-with-classified-identity-poster']],
   // The source-consistent classified event photo owns Editorial; the
   // non-identity document remains contained rather than becoming the hero.
-  [5756, ['editorial', 'editorial-replaces-non-identity-document-with-classified-photo']],
+  // Smart Update repaired 5756's canonical primary from the rejected document
+  // to an event photo. Both source-consistent states must stay Editorial: the
+  // old occurrence replaces the document, while the repaired occurrence may
+  // promote a stronger landscape photo from the same classified media set.
+  [5756, ['editorial', [
+    'editorial-replaces-non-identity-document-with-classified-photo',
+    'editorial-promotes-qualified-landscape-photo',
+  ]]],
 ]);
 
-// Live catalog membership is time-bounded. Keep hard routing coverage only for
-// specimens that remain eligible; expired accepted cases are preserved in
-// desktop-event-examples.json and the retained secret-candidate QA route.
-const requiredRoutingFamilies = new Set([
-  ...[...expectedSpecimens.entries()]
-    .filter(([eventId]) => eventFiles.some(({ slug }) => Number(slug.match(/-(\d+)$/u)?.[1] || 0) === eventId))
-    .map(([, [family, reason]]) => `${family}:${reason}`),
-]);
 const templateContract = JSON.parse(fs.readFileSync(path.resolve('src/data/eventTemplateContract.json'), 'utf8'));
 
 const counts = new Map();
@@ -66,8 +65,9 @@ for (const { slug, file } of eventFiles) {
   if (mobileParallax !== 'photo-continuous-crop') failures.push(`${slug}: mobile parallax changed from photo-continuous-crop to ${mobileParallax || 'missing'}`);
   if (html.includes('data-lab-media-treatment="document-natural"')) failures.push(`${slug}: related cards regressed to unequal document-natural media heights`);
   const expected = expectedSpecimens.get(eventId);
-  if (expected && (family !== expected[0] || reason !== expected[1])) {
-    failures.push(`${slug}: routed to ${family}/${reason}, expected ${expected[0]}/${expected[1]}`);
+  const expectedReasons = expected ? (Array.isArray(expected[1]) ? expected[1] : [expected[1]]) : [];
+  if (expected && (family !== expected[0] || !expectedReasons.includes(reason))) {
+    failures.push(`${slug}: routed to ${family}/${reason}, expected ${expected[0]}/${expectedReasons.join('|')}`);
   }
   if (eventId === 5658 && !html.includes('/p/thumb/v1/')) {
     failures.push(`${slug}: accepted compact rail lost its immutable thumbnail derivatives`);
@@ -186,8 +186,12 @@ for (const { slug, file } of eventFiles) {
   }
 }
 
-for (const key of requiredRoutingFamilies) {
-  if (!counts.has(key)) failures.push(`fresh event set has no representative for ${key}`);
+for (const [eventId, [family, reasons]] of expectedSpecimens) {
+  if (!eventFiles.some(({ slug }) => Number(slug.match(/-(\d+)$/u)?.[1] || 0) === eventId)) continue;
+  const acceptedReasons = Array.isArray(reasons) ? reasons : [reasons];
+  if (!acceptedReasons.some((reason) => counts.has(`${family}:${reason}`))) {
+    failures.push(`fresh event set has no representative for ${family}:${acceptedReasons.join('|')}`);
+  }
 }
 
 if (failures.length) {

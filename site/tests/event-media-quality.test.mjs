@@ -57,6 +57,32 @@ test('a lone low-resolution portrait stays available in viewport-contain efficie
   assert.equal(presentation.reason, 'split-low-resolution-portrait-viewer');
 });
 
+test('a constrained landscape primary may promote a stronger classified landscape photo', () => {
+  const event = {
+    id:5756,
+    image_url:'primary.webp',
+    image_text_mode:'visual_only',
+    image_assets:[
+      {
+        src:'primary.webp', width:1200, height:800,
+        image_text_mode:'visual_only', media_semantic_status:'classified',
+        media_role:'event_photo', safe_crop:true, recommended_hero_fit:'cover',
+        quality_score:14,
+      },
+      {
+        src:'stronger.webp', width:1280, height:853,
+        image_text_mode:'visual_only', media_semantic_status:'classified',
+        media_role:'event_photo', safe_crop:true, recommended_hero_fit:'cover',
+        quality_score:14.5,
+      },
+    ],
+  };
+  const presentation = buildDesktopEventPresentation(event);
+  assert.equal(presentation.candidate, 'editorial');
+  assert.equal(presentation.heroImageIndex, 1);
+  assert.equal(presentation.reason, 'editorial-promotes-qualified-landscape-photo');
+});
+
 test('mobile hero marks a lone weak portrait for native-size contain rendering', async () => {
   const hero = await readFile(new URL('../src/components/EventHero.astro', import.meta.url), 'utf8');
   const layout = await readFile(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
