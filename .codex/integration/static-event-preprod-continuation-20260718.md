@@ -1,7 +1,7 @@
 # Static event preproduction continuation — integration report
 
-Date: 2026-07-18  
-Branch: `integration/static-event-preprod-continuation-20260718`  
+Date: 2026-07-18
+Branch: `integration/static-event-preprod-continuation-20260718`
 Base: `38401787645584c2508579bd61dc3c345d0b207d`
 
 ## Requirement ledger
@@ -52,3 +52,12 @@ Pending final integration commands, clean-main deploy SHA, fresh Smart Update/Ka
 - Local browser acceptance at `390×844`: fallback continuation hidden, accepted mobile renderer visible, zero overflow — passed.
 
 Fresh public candidate, exact deployed SHA and Telegram handoff remain release-phase evidence and are intentionally not claimed by the source integration checks.
+
+### Checklist correction
+
+The final read-only checklist found stale footer and event `5756` acceptance
+assertions plus an inert static-score label. Hotfix
+`hotfix/static-event-preprod-gates-20260718` aligns the secret-candidate marker,
+the full desktop contract and the upcoming-date fallback signal before the
+compensating Smart Update/Kaggle build. This supersedes the earlier local claim
+that all candidate gates had already been exercised.

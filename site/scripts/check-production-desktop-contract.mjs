@@ -26,17 +26,15 @@ const expectedSpecimens = new Map([
   [6815, ['split', 'split-low-resolution-portrait-viewer']],
   [5658, ['editorial', 'editorial-primary-qualified-landscape']],
   [4671, ['editorial', 'editorial-with-classified-identity-poster']],
-  // The event-local classified landscape is still resolution-constrained.
-  // Split may contain the non-identity document; it must not crop that OCR
-  // material merely to manufacture an Editorial specimen.
-  [5756, ['split', 'split-resolution-constrained-landscape']],
+  // The source-consistent classified event photo owns Editorial; the
+  // non-identity document remains contained rather than becoming the hero.
+  [5756, ['editorial', 'editorial-replaces-non-identity-document-with-classified-photo']],
 ]);
 
 // Live catalog membership is time-bounded. Keep hard routing coverage only for
 // specimens that remain eligible; expired accepted cases are preserved in
 // desktop-event-examples.json and the retained secret-candidate QA route.
 const requiredRoutingFamilies = new Set([
-  'split:split-resolution-constrained-landscape',
   ...[...expectedSpecimens.entries()]
     .filter(([eventId]) => eventFiles.some(({ slug }) => Number(slug.match(/-(\d+)$/u)?.[1] || 0) === eventId))
     .map(([, [family, reason]]) => `${family}:${reason}`),

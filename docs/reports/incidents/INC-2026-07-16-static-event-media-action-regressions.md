@@ -76,6 +76,12 @@ The full-catalog static preview exposed several user-visible regressions around 
   pointer to the latest fully verified immutable noindex candidate. Failed,
   no-op, incomplete and artifact-only builds retain the previous pointer; root,
   current and stable ICS stay outside this preproduction path.
+- 2026-07-18: final checklist review caught two stale acceptance assertions
+  before the compensating candidate run: the retained footer specimen still
+  expected the removed prototype marker, and the full desktop checker still
+  expected the rejected Split route for event `5756`. Both gates were aligned
+  with the accepted global footer and source-consistent Editorial contract;
+  the popular fallback also received a real upcoming-date proximity signal.
 
 ## Root Cause
 
