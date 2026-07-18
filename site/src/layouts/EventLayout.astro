@@ -1,6 +1,5 @@
 ---
-import SocialIcon from '../components/SocialIcon.astro';
-import ServiceShareAction from '../components/ServiceShareAction.astro';
+import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
@@ -1606,7 +1605,6 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
       .site-footer__note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.92rem; }
       .social-icon { width: 1.28rem; height: 1.28rem; flex: 0 0 auto; display: block; }
-      .social-icon--max { color: #111; }
       .details-disclosure summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; font-weight: 900; font-size: 1.08rem; }
       .details-disclosure summary::marker { color: var(--primary); }
       .preview-warning { margin: 1rem 0; border: 1px solid rgba(161,98,7,0.24); background: #fff8db; color: #5a3b06; border-radius: 18px; padding: 0.8rem 1rem; }
@@ -2235,47 +2233,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       </div>
     </header>
     <slot />
-    <footer class="site-footer">
-      <div class="page-shell site-footer__inner">
-        <div class="site-footer__top">
-          <strong class="site-footer__title">{SITE_NAME}</strong>
-          <nav class="site-footer__nav" aria-label="Навигация по афише">
-            <a href={withBase('/segodnya/')}>Сегодня</a>
-            <a href={withBase('/zavtra/')}>Завтра</a>
-            <a href={withBase('/vyhodnye/')}>Выходные</a>
-            <a href={withBase('/vystavki/')}>Выставки</a>
-            <a href={withBase('/populyarnoe/')}>Популярное</a>
-            {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы по интересам</a>}
-            <a href={withBase('/poisk/')}>Поиск</a>
-            <a href={withBase('/partners/')}>Инфопартнёры</a>
-            <a href={siteHomeHref()}>Все анонсы</a>
-            <a href={withBase('/partnerstvo/')}>Информационное партнёрство</a>
-          </nav>
-        </div>
-        <ServiceShareAction surface="footer" />
-        <nav class="site-footer__social" aria-label="Соцсети Полюбить Калининград Анонсы">
-          {FOOTER_SOCIAL_LINKS.map((link) => (
-            <a
-              class="site-footer__social-link"
-              href={link.href}
-              target="_blank"
-              rel="me noopener noreferrer"
-              aria-label={`${link.network}: ${link.label}`}
-            >
-              <SocialIcon name={link.icon} />
-              <span class="site-footer__social-network">{link.network}</span>
-              <span class="site-footer__social-label">{link.label}</span>
-            </a>
-          ))}
-        </nav>
-        <a class="site-footer__contact" href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
-        <div class="site-footer__tools" data-nosnippet>
-          <button type="button" class="personalization-reset-button" data-reset-personalization>Сбросить персонализацию</button>
-          <span class="personalization-reset-status" data-personalization-reset-status hidden></span>
-        </div>
-        <p class="site-footer__note">{IS_PRODUCTION ? SITE_ORIGIN : <>Preview · noindex · {SITE_ORIGIN}</>}</p>
-      </div>
-    </footer>
+    <SiteFooter socialLinks={FOOTER_SOCIAL_LINKS} />
 
     <script is:inline>
       (() => {
@@ -3226,6 +3184,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               if (response.ok) return normalizePersonalFeedManifest(await response.json());
             } catch (_) {}
           }
+          if (!personalFeedProfileIsReady(profile)) return null;
           const config = personalFeedConfig();
           if (!config) return null;
           const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
@@ -3248,7 +3207,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
 
         async function getPersonalFeedManifest(section, { force = false } = {}) {
           const profile = readProfile();
-          if (!personalFeedProfileIsReady(profile)) return null;
+          const allowsPopularFallback = section?.dataset.listingContext === 'event-detail';
+          if (!personalFeedProfileIsReady(profile) && !allowsPopularFallback) return null;
           if (!force) {
             const cached = readPersonalFeedCache(profile);
             if (cached) return cached;
@@ -3310,8 +3270,36 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           }));
         }
 
+        function rankPopularFallbackCandidates(manifest, profile) {
+          const active = isCompatibleProfile(profile) ? profile : null;
+          const scored = [];
+          for (const candidate of toArray(manifest?.related_static)) {
+            if (!isEligibleCandidate(candidate, manifest, active)) continue;
+            const popularity = personalFeedPopularity(candidate);
+            const recency = staticCandidateScore(candidate);
+            const score = 0.68 * popularity + 0.32 * recency;
+            scored.push({
+              candidate,
+              score,
+              base_similarity: recency,
+              reason_codes: unique([...(toArray(candidate.reason_codes)), 'catalog:popular_fallback']),
+            });
+          }
+          scored.sort((left, right) => right.score - left.score || right.base_similarity - left.base_similarity || Number(candidateId(left.candidate) || 0) - Number(candidateId(right.candidate) || 0));
+          return applyDiversity(scored, { maxSameCategory: 3, maxSameVenue: 2 }).map((item, index) => ({
+            event_id: candidateId(item.candidate),
+            candidate: item.candidate,
+            rank: index,
+            personal_score: Number(item.score.toFixed(4)),
+            base_similarity: Number(item.base_similarity.toFixed(4)),
+            reason_codes: item.reason_codes,
+            diversity_postponed: Boolean(item.diversity_postponed),
+          }));
+        }
+
         const PERSONAL_FEED_CHUNK_SIZE = 6;
         const PERSONAL_FEED_RENDER_LIMIT = 18;
+        const EVENT_DETAIL_CONTINUATION_LIMIT = 6;
         const personalFeedStores = new WeakMap();
         const personalFeedReached = new WeakSet();
 
@@ -3356,17 +3344,33 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const refresh = section.querySelector('[data-personal-feed-refresh]');
           const loadMore = section.querySelector('[data-personal-feed-load-more]');
           const profile = readProfile();
-          if (!slot || !manifest || !personalFeedProfileIsReady(profile)) {
-            section.hidden = true;
+          const title = section.querySelector('[data-personal-feed-title]');
+          const explanation = section.querySelector('[data-personal-feed-explanation]');
+          const isEventDetail = section.dataset.listingContext === 'event-detail';
+          const isPersonal = personalFeedProfileIsReady(profile);
+          if (!slot || !manifest) {
+            if (isEventDetail) {
+              section.hidden = false;
+              section.dataset.personalFeedMode = 'unavailable';
+              if (status) status.textContent = 'Подборка временно недоступна — можно перейти ко всем анонсам.';
+            } else {
+              section.hidden = true;
+            }
             personalFeedStores.delete(section);
             return;
           }
           const excluded = eventIdsAlreadyOffered(section);
-          const ranked = rankPersonalFeedCandidates(manifest, profile)
+          const ranked = (isPersonal ? rankPersonalFeedCandidates(manifest, profile) : rankPopularFallbackCandidates(manifest, profile))
             .filter((item) => !excluded.has(asId(item.event_id)))
-            .slice(0, PERSONAL_FEED_RENDER_LIMIT);
+            .slice(0, isEventDetail ? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT);
           if (!ranked.length) {
-            section.hidden = true;
+            if (isEventDetail) {
+              section.hidden = false;
+              section.dataset.personalFeedMode = 'unavailable';
+              if (status) status.textContent = 'Других подходящих событий пока нет — откройте все анонсы.';
+            } else {
+              section.hidden = true;
+            }
             personalFeedStores.delete(section);
             return;
           }
@@ -3374,9 +3378,16 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           personalFeedStores.set(section, { items: ranked, rendered: 0, profile });
           section.hidden = false;
           section.dataset.personalFeedReady = 'true';
+          section.dataset.personalFeedMode = isPersonal ? 'personal' : 'popular_fallback';
+          if (isEventDetail && title) title.textContent = isPersonal ? 'По вашим интересам' : 'Ещё события';
+          if (isEventDetail && explanation) {
+            explanation.textContent = isPersonal
+              ? 'Подборка учитывает ваши лайки и отметки «Не интересно» на этом устройстве.'
+              : 'Шесть разных событий без бесконечной ленты.';
+          }
           if (status) status.hidden = true;
           if (refresh) refresh.hidden = true;
-          if (loadMore) loadMore.hidden = false;
+          if (loadMore) loadMore.hidden = isEventDetail;
           appendPersonalFeedChunk(section);
         }
 

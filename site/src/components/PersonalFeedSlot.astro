@@ -1,15 +1,15 @@
 ---
-import { withBase } from '../lib/events';
+import { siteHomeHref, withBase } from '../lib/events';
 
 interface Props {
   context: 'today' | 'tomorrow' | 'weekend' | 'event-detail' | 'exhibitions' | 'popular';
 }
 const { context } = Astro.props;
 const isEventDetail = context === 'event-detail';
-const eyebrow = isEventDetail ? 'Для вас' : 'Личная лента';
-const heading = isEventDetail ? 'По вашим интересам' : 'Дальше — под ваши интересы';
+const eyebrow = isEventDetail ? 'Продолжить выбор' : 'Личная лента';
+const heading = isEventDetail ? 'Ещё события' : 'Дальше — под ваши интересы';
 const explanation = isEventDetail
-  ? 'Подборка учитывает ваши лайки и отметки «Не интересно» на этом устройстве.'
+  ? 'Шесть разных событий без бесконечной ленты. Когда накопятся ваши оценки, подборка станет персональной.'
   : 'События меняются с учётом ваших лайков и отметок «Не интересно».';
 const headingId = `personal-feed-${context}-title`;
 ---
@@ -18,12 +18,13 @@ const headingId = `personal-feed-${context}-title`;
   data-personal-feed-section
   data-personal-feed-src={withBase('/data/personal-feed.json')}
   data-listing-context={context}
+  data-personal-feed-mode={isEventDetail ? 'pending' : undefined}
   aria-labelledby={headingId}
-  hidden
+  hidden={!isEventDetail}
 >
   <div class="section-card__inner">
     <p class="eyebrow">{eyebrow}</p>
-    <h2 id={headingId}>{heading}</h2>
+    <h2 id={headingId} data-personal-feed-title>{heading}</h2>
     <p class="muted-note personal-feed-section__explanation" data-personal-feed-explanation>{explanation}</p>
     <p class="muted-note personal-feed-section__status" data-personal-feed-status role="status" aria-live="polite">Подбираем события…</p>
     <div
@@ -33,8 +34,9 @@ const headingId = `personal-feed-${context}-title`;
       data-listing-context={context}
       aria-live="polite"
     ></div>
-    <button type="button" class="secondary-button personal-feed-section__load-more" data-personal-feed-load-more hidden>Показать ещё</button>
+    {!isEventDetail && <button type="button" class="secondary-button personal-feed-section__load-more" data-personal-feed-load-more hidden>Показать ещё</button>}
     <button type="button" class="secondary-button personal-feed-section__refresh" data-personal-feed-refresh hidden>Обновить ленту</button>
+    {isEventDetail && <a class="secondary-button personal-feed-section__all-events" data-personal-feed-all-events href={siteHomeHref()}>Все анонсы</a>}
   </div>
 </section>
 
@@ -82,8 +84,18 @@ const headingId = `personal-feed-${context}-title`;
   }
 
   .personal-feed-section__load-more,
-  .personal-feed-section__refresh {
+  .personal-feed-section__refresh,
+  .personal-feed-section__all-events {
     margin-top: 1rem;
+  }
+
+  .personal-feed-section__all-events {
+    width: fit-content;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
   }
 
   .personal-feed-section__refresh:not([hidden]) {
@@ -93,6 +105,14 @@ const headingId = `personal-feed-${context}-title`;
   @media (max-width: 960px) {
     .personal-feed-section__feed {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .personal-feed-section--event-detail[data-personal-feed-mode="pending"],
+    .personal-feed-section--event-detail[data-personal-feed-mode="popular_fallback"],
+    .personal-feed-section--event-detail[data-personal-feed-mode="unavailable"] {
+      display: none;
     }
   }
 
@@ -110,7 +130,8 @@ const headingId = `personal-feed-${context}-title`;
 
     .personal-feed-section__load-more,
     .personal-feed-section__refresh,
-    .personal-feed-section__refresh:not([hidden]) {
+    .personal-feed-section__refresh:not([hidden]),
+    .personal-feed-section__all-events {
       width: 100%;
       margin: 0.85rem 0 0;
     }

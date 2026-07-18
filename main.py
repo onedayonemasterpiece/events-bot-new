@@ -262,6 +262,7 @@ from sections import (
 from db import Database
 from static_site_release import (
     active_static_site_remote_run,
+    CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA,
     StaticSitePermanentError,
     StaticSiteRetryableError,
     StaticSiteSingleFlightDeferred,
@@ -276,6 +277,7 @@ from static_site_release import (
     max_attempts as static_site_max_attempts,
     merge_request_payload as merge_static_site_request_payload,
     publish_secret_candidate_archive,
+    resolve_current_secret_candidate,
     recoverable_static_site_build,
     finish_static_site_build_claim,
     resolve_build_clock as resolve_static_site_build_clock,
@@ -17985,6 +17987,12 @@ def job_outbox_worker_recent_error_status() -> str:
 
 
 async def _job_result_link(task: JobTask, event_id: int, db: Database) -> str | None:
+    if task == JobTask.static_site_build:
+        # Link-producing paths use the single durable resolver.  Never route a
+        # reviewer to an old named preview, an unchecked artifact, or a public
+        # stable redirect (none exists during preproduction).
+        current = await asyncio.to_thread(resolve_current_secret_candidate, db.path)
+        return current.public_url if current else None
     async with db.get_session() as session:
         ev = await session.get(Event, event_id)
         if not ev:
@@ -18739,8 +18747,15 @@ async def _run_due_jobs_once_locked(
                     "done",
                     job_id=obj.id,
                     task=obj.task.value,
-                    result_url=link,
-                    result="changed" if changed else "nochange",
+                    # The immutable review URL is a bearer secret. Deliver it
+                    # through the notifier, but never copy it into runtime
+                    # logs; the durable resolver remains the single source.
+                    result_url=(None if obj.task == JobTask.static_site_build else link),
+                    result=(
+                        "current_review_ready"
+                        if obj.task == JobTask.static_site_build and link
+                        else ("changed" if changed else "nochange")
+                    ),
                 )
             except StaticSiteSingleFlightDeferred as exc:
                 took_ms = (_time.perf_counter() - start) * 1000
@@ -18865,7 +18880,11 @@ async def _run_due_jobs_once_locked(
                     obj.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=5)
                     send = False
                 elif status == JobStatus.done:
-                    cur_res = link if link else ("ok" if changed else "nochange")
+                    cur_res = (
+                        "current_review_ready"
+                        if obj.task == JobTask.static_site_build and link
+                        else (link if link else ("ok" if changed else "nochange"))
+                    )
                     if cur_res == prev and not force_notify:
                         send = False
                     obj.last_result = cur_res
@@ -22594,6 +22613,7 @@ async def _finish_static_site_candidate(
         input_fingerprint=input_fingerprint,
         build_clock=clock,
     )
+    result_sha256 = hashlib.sha256(result_path.read_bytes()).hexdigest()
     publication_receipt = None
     if _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"):
         required_env = {
@@ -22645,6 +22665,38 @@ async def _finish_static_site_candidate(
             "last_success_at": static_site_iso_utc(),
         },
     )
+    success_receipt: dict[str, Any] = {
+        "schema_version": "static_site_success_receipt_v2",
+        "release_channel": "secret_preview",
+        "build_id": build_id,
+        "run_id": run_id,
+        "repo_sha": repo_sha,
+        "snapshot_id": snapshot_metadata.snapshot_id,
+        "input_fingerprint": input_fingerprint,
+        "effective_date": clock.effective_date,
+        "result_sha256": result_sha256,
+        "published": bool(publication_receipt),
+        "recovered_remote": recovered_remote,
+    }
+    if publication_receipt:
+        success_receipt["current_secret_candidate"] = {
+            "schema_version": CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA,
+            "release_channel": "secret_preview",
+            "build_id": build_id,
+            "run_id": run_id,
+            "repo_sha": repo_sha,
+            "snapshot_id": snapshot_metadata.snapshot_id,
+            "input_fingerprint": input_fingerprint,
+            "effective_date": clock.effective_date,
+            "result_sha256": result_sha256,
+            "manifest_sha256": publication_receipt.manifest_sha256,
+            "token_sha256": publication_receipt.token_sha256,
+            "object_count": publication_receipt.object_count,
+            "public_url": publication_receipt.public_url,
+            "verified_at": publication_receipt.verified_at,
+            "root_mutation": False,
+            "stable_ics_mutation": False,
+        }
     await asyncio.to_thread(
         finish_static_site_build_claim,
         db.path,
@@ -22653,15 +22705,7 @@ async def _finish_static_site_candidate(
         input_fingerprint=input_fingerprint,
         effective_date=clock.effective_date,
         success=True,
-        receipt={
-            "build_id": build_id,
-            "run_id": run_id,
-            "snapshot_id": snapshot_metadata.snapshot_id,
-            "input_fingerprint": input_fingerprint,
-            "effective_date": clock.effective_date,
-            "published": bool(publication_receipt),
-            "recovered_remote": recovered_remote,
-        },
+        receipt=success_receipt,
     )
     logging.info(
         "static_site_build: done build_id=%s run_id=%s snapshot_id=%s published=%s recovered_remote=%s token_sha256=%s",
@@ -22672,7 +22716,12 @@ async def _finish_static_site_candidate(
         recovered_remote,
         publication_receipt.token_sha256 if publication_receipt else None,
     )
-    return publication_receipt.public_url if publication_receipt else True
+    if publication_receipt:
+        current = await asyncio.to_thread(resolve_current_secret_candidate, db.path)
+        if current is None or current.run_id != run_id:
+            raise StaticSitePermanentError("current_secret_candidate_resolver_incomplete")
+        return current.public_url
+    return True
 
 
 async def _recover_previous_static_site_attempt(

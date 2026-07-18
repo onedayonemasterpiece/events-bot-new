@@ -348,22 +348,28 @@ Desktop header uses the shared announcement lockup at `240×88`, menu on the
 right, exact-listing active state only, and no selected item on event details.
 Keyboard navigation and visible focus remain required.
 
-The graphite desktop action panel is component-responsive, not only
-viewport-responsive. A phone action is a stricter exception: admission,
-branded phone CTA, calendar, share and like remain on one explicit grid row at
-`1366×768`, `1536×864` and `1920×1080`; it must never fall back to the generic
-stacked layout. The calendar is icon-only in this constrained phone panel even
-when bounded usage history would normally expand its wording. The desktop phone
-journey keeps the established branded primary CTA instead of plain contact text
-plus a detached utility icon. Its initial label is `Показать телефон`; the
-leading glyph is the standard copy icon, not a redundant handset. One click
-reveals the standard-size formatted number inside the same CTA and copies its
-normalized value. A transient non-layout toast says `Номер скопирован`, while a
-polite live region announces the same result. Subsequent clicks copy again. The
-outer CTA and graphite panel retain their dimensions through reveal and success.
-Browser acceptance compares child vertical
-centres/overlap and before/after-copy geometry; containment-only assertions are
-not sufficient.
+The graphite desktop action panel is component- and media-family-responsive,
+not viewport-guessed. The Split portrait/document family first composes
+admission, primary CTA and the calendar/share/like group in one compact row; it
+admits that row only after measuring the rendered children for containment,
+overlap and intrinsic overflow. If the actual Split component cannot fit, it
+fails closed to the stacked geometry. The Editorial wide-photo family always
+uses the accepted tall three-row card: admission, primary CTA, then the intact
+calendar/share/like row at the bottom. `1536×864` is the executable acceptance
+viewport for a `1920×1080` desktop at 125% scaling; the regression matrix must
+cover at least two real Split portrait events and two Editorial wide-photo
+events so a slug-specific or viewport-only rule cannot pass.
+
+The desktop phone journey keeps the established branded primary CTA instead of
+plain contact text plus a detached utility icon. Its initial label is
+`Показать телефон`; the leading glyph is the standard copy icon, not a
+redundant handset. One click reveals the standard-size formatted number inside
+the same CTA and copies its normalized value. A transient non-layout toast says
+`Номер скопирован`, while a polite live region announces the same result.
+Subsequent clicks copy again. The outer CTA and graphite panel retain their
+dimensions through reveal and success. Browser acceptance compares child
+vertical centres, ordering, overlap and before/after-copy geometry;
+containment-only assertions are not sufficient.
 
 The exact-venue KAUP journey is not desktop-only. On the accepted phone event
 surface it appears after `Коротко` as one flat compact block with the same

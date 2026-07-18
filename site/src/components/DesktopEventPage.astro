@@ -120,9 +120,78 @@ const relatedMediaGeometry = (item:PreviewEvent) => {
   const ratio = asset?.width && asset?.height ? asset.width / asset.height : (documentMedia ? .8 : 1);
   return { documentMedia, ratio:Number.isFinite(ratio) && ratio > 0 ? ratio : (documentMedia ? .8 : 1) };
 };
+type DesktopRelatedLayout = {
+  mediaRatio:number;
+  rowRatio:number;
+  rowIndex:number;
+  rowMode:string;
+  mediaKind:'document' | 'visual';
+  mediaTreatment:'document-safe-cover' | 'visual-cover';
+  coverCrop:number;
+  rowWorstCrop:number;
+};
+const relatedRowLayout = (
+  row:Array<{ item:PreviewEvent; documentMedia:boolean; ratio:number }>,
+  rowIndex:number,
+):Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }> => {
+  const documents = row.filter(({ documentMedia }) => documentMedia);
+  const visuals = row.filter(({ documentMedia }) => !documentMedia);
+  const documentRatios = documents.map(({ ratio }) => ratio);
+  const visualRatios = visuals.map(({ ratio }) => ratio);
+  let targetRatio = 1;
+  let rowMode = 'visual-square';
+  if (documents.length === 0) {
+    const geometricMean = visualRatios.length
+      ? Math.exp(visualRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / visualRatios.length)
+      : 1;
+    targetRatio = Math.min(4 / 3, Math.max(1, geometricMean));
+    rowMode = 'visual-squareish';
+  } else if (visuals.length > 0) {
+    if (relatedMediaTreatment === 'cover') {
+      targetRatio = 1.12;
+      rowMode = 'mixed-compact-cover';
+    } else if (relatedMediaTreatment === 'ambient') {
+      targetRatio = 1;
+      rowMode = 'mixed-square-ambient';
+    } else {
+      const documentCenter = Math.exp(documentRatios.reduce((sum, imageRatio) => sum + Math.log(imageRatio), 0) / documentRatios.length);
+      targetRatio = [.8, 1, 4 / 3]
+        .sort((left, right) => Math.abs(Math.log(left / documentCenter)) - Math.abs(Math.log(right / documentCenter)))[0];
+      rowMode = 'mixed-adaptive-ambient';
+    }
+  } else if (documentRatios.length === 1) {
+    targetRatio = Math.min(.9, documentRatios[0] * 1.1);
+    rowMode = 'document-bounded-vertical-crop';
+  } else if (documentRatios.length > 1) {
+    targetRatio = Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios));
+    rowMode = 'document-minimax-contained';
+  } else {
+    rowMode = 'document-pending-contained';
+  }
+  if (documentRatios.length > 0) {
+    const safeLower = Math.max(...documentRatios.map((documentRatio) => documentRatio * .8));
+    const safeUpper = Math.min(...documentRatios.map((documentRatio) => documentRatio / .8));
+    if (safeLower <= safeUpper) targetRatio = Math.min(safeUpper, Math.max(safeLower, targetRatio));
+  }
+  const rowWorstCrop = Math.max(0, ...documentRatios.map((documentRatio) => 1 - Math.min(documentRatio / targetRatio, targetRatio / documentRatio)));
+  return row.map(({ item, documentMedia, ratio:mediaRatio }) => ({
+    item,
+    layout:{
+      mediaRatio,
+      rowRatio:targetRatio,
+      rowIndex,
+      rowMode,
+      mediaKind:documentMedia ? 'document' : 'visual',
+      mediaTreatment:documentMedia ? 'document-safe-cover' : 'visual-cover',
+      coverCrop:Math.max(0, 1 - Math.min(mediaRatio / targetRatio, targetRatio / mediaRatio)),
+      rowWorstCrop,
+    },
+  }));
+};
 const packRelatedRows = (items:PreviewEvent[], limit = 10) => {
   const remaining = items.map((item) => ({ item, ...relatedMediaGeometry(item) }));
-  const packed:PreviewEvent[] = [];
+  const packed:Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }> = [];
+  let rowIndex = 0;
   while (remaining.length && packed.length < limit) {
     const row = [remaining.shift()!];
     let safeLower = row[0].documentMedia ? row[0].ratio * .8 : 0;
@@ -140,7 +209,8 @@ const packRelatedRows = (items:PreviewEvent[], limit = 10) => {
         safeUpper = Math.min(safeUpper, candidate.ratio / .8);
       }
     }
-    packed.push(...row.map(({ item }) => item));
+    packed.push(...relatedRowLayout(row, rowIndex));
+    rowIndex += 1;
     // Do not let an incompatible OCR family leak into the same CSS-grid row.
     // A short final row is preferable to either fields or more than 20% crop.
     if (row.length < 3) break;
@@ -436,7 +506,7 @@ const descriptionHtml = (event.description_html || '')
                 </button>
               </div>
             )}
-            <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" />
+            <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" family="editorial" />
             {ocrCompanion && ocrCompanionLayout === 'separate' && (
               <button
                 type="button"
@@ -504,7 +574,7 @@ const descriptionHtml = (event.description_html || '')
             <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} /></div>
           </div>
 
-          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--inline" />}
+          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--inline" family="split" />}
 
           {usesLongFlow && (
             <div class="desktop-prototype__flow-body" data-continuous-event-body>
@@ -532,7 +602,7 @@ const descriptionHtml = (event.description_html || '')
           )}
         </div>
 
-        {!usesLongFlow && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--flow" />}
+        {!usesLongFlow && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--flow" family={candidate} />}
       </section>
     </div>
   </article>
@@ -576,7 +646,7 @@ const descriptionHtml = (event.description_html || '')
         <h2 id={`related-${event.id}`}>Смотрите дальше</h2>
       </header>
       <div class="cards-grid cards-grid--immersive desktop-clean-related__grid" data-lab-row-normalize>
-        {relatedForRender.map((item) => <EventCard event={item} variant="split-actions" desktopRelatedCrop />)}
+        {relatedForRender.map(({ item, layout }) => <EventCard event={item} variant="split-actions" desktopRelatedCrop desktopRelatedLayout={layout} />)}
       </div>
     </div>
   </section>
@@ -670,14 +740,42 @@ const descriptionHtml = (event.description_html || '')
         if (!force && previousWidth !== undefined && Math.abs(previousWidth - width) < .5) return;
         actionPanelWidths.set(panel, width);
         const phonePanel = panel.dataset.primaryActionKind === 'phone';
-        // Measure the real inline composition, including the current calendar
-        // label and counters. CSS breakpoints cannot know this component width
-        // inside the half-canvas split family.
-        panel.dataset.actionLayout = 'inline';
+        const splitFamily = panel.dataset.actionFamily === 'split';
+        // The component family chooses the intended composition. Only Split
+        // attempts the accepted one-row geometry; Editorial keeps the tall
+        // three-row card. Measure actual rendered children before allowing the
+        // Split row so dynamic labels/counters can still fail closed.
+        panel.dataset.actionLayout = splitFamily ? 'inline' : 'stacked';
         panel.dataset.actionDensity = phonePanel ? 'compact' : 'comfortable';
-        const overflows = panel.scrollWidth > panel.clientWidth + 1;
-        panel.dataset.actionLayout = overflows ? 'stacked' : 'inline';
-        if (overflows) panel.dataset.actionDensity = 'compact';
+        if (!splitFamily) return;
+
+        const panelRect = panel.getBoundingClientRect();
+        const styles = getComputedStyle(panel);
+        const leftLimit = panelRect.left + (Number.parseFloat(styles.paddingLeft) || 0) - 2;
+        const rightLimit = panelRect.right - (Number.parseFloat(styles.paddingRight) || 0) + 2;
+        const primary = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__primary-action');
+        const actionRow = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__action-row');
+        const children = [
+          panel.querySelector<HTMLElement>(':scope > p:first-child'),
+          primary,
+          actionRow,
+        ].filter((item): item is HTMLElement => Boolean(item));
+        const outside = children.some((item) => {
+          const rect = item.getBoundingClientRect();
+          return rect.left < leftLimit || rect.right > rightLimit;
+        });
+        const overlaps = children.some((item, index) => children.slice(index + 1).some((other) => {
+          const first = item.getBoundingClientRect();
+          const second = other.getBoundingClientRect();
+          return Math.min(first.right, second.right) - Math.max(first.left, second.left) > 2;
+        }));
+        const overflows = panel.scrollWidth > panel.clientWidth + 1
+          || Boolean(primary && primary.scrollWidth > primary.clientWidth + 2)
+          || Boolean(actionRow && actionRow.scrollWidth > actionRow.clientWidth + 2);
+        if (outside || overlaps || overflows) {
+          panel.dataset.actionLayout = 'stacked';
+          panel.dataset.actionDensity = 'compact';
+        }
       };
       actionPanels.forEach((panel) => {
         fitActionPanel(panel, true);
@@ -1578,8 +1676,10 @@ const descriptionHtml = (event.description_html || '')
           const ratiosOf = (items:HTMLElement[]) => items
             .map((card) => {
               const image = card.querySelector<HTMLImageElement>('.event-card__media');
-              if (!image?.naturalWidth || !image.naturalHeight) return null;
-              const imageRatio = image.naturalWidth / image.naturalHeight;
+              const declaredRatio = Number(card.dataset.labMediaRatio);
+              const imageRatio = Number.isFinite(declaredRatio) && declaredRatio > 0
+                ? declaredRatio
+                : image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0;
               return Number.isFinite(imageRatio) && imageRatio > 0 ? imageRatio : null;
             })
             .filter((value):value is number => value !== null);
@@ -1624,7 +1724,10 @@ const descriptionHtml = (event.description_html || '')
           }
           row.forEach((card) => {
             const image = card.querySelector<HTMLImageElement>('.event-card__media');
-            const imageRatio = image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
+            const declaredRatio = Number(card.dataset.labMediaRatio);
+            const imageRatio = Number.isFinite(declaredRatio) && declaredRatio > 0
+              ? declaredRatio
+              : image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : targetRatio;
             const isDocument = card.dataset.labMediaKind === 'document';
             const coverCrop = 1 - Math.min(imageRatio / targetRatio, targetRatio / imageRatio);
             const cardTreatment = isDocument ? 'document-safe-cover' : 'visual-cover';
@@ -1680,9 +1783,9 @@ const descriptionHtml = (event.description_html || '')
   .desktop-prototype__place span { display:grid; gap:.06rem; }
   .desktop-prototype__place strong { font-size:clamp(.88rem,1.4vw,1.02rem); }
   .desktop-prototype__place small { color:#72645b; font-size:.8rem; font-weight:680; }
-  .desktop-prototype__medallions { min-height:0; overflow:hidden; }
+  .desktop-prototype__medallions { min-height:0; overflow:visible; }
   .desktop-prototype__medallions :global(.event-token-section) { margin:0; }
-  .desktop-prototype__medallions :global(.event-token-row) { gap:.55rem; overflow:hidden; padding:.1rem 0; }
+  .desktop-prototype__medallions :global(.event-token-row) { gap:.55rem; overflow:visible; padding:.1rem 0; }
   .desktop-prototype__medallions :global(.event-token--organizer),
   .desktop-prototype__medallions :global(.event-token--festival),
   .desktop-prototype__medallions :global(.event-token--source),
@@ -2460,16 +2563,9 @@ const descriptionHtml = (event.description_html || '')
     .desktop-portrait-viewer__track { box-sizing:border-box; }
     .desktop-portrait-viewer__item { max-height:100%; }
 
-    /* Component-responsive action geometry. The calendar wording still follows
-       the per-user usage state, but constrained phone panels never wrap or
-       push share/like controls outside their graphite surface. */
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"]) {
-      grid-template-columns:minmax(0,1fr) auto !important;
-      align-items:center;
-    }
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] > p:first-child) { grid-column:1; grid-row:1; }
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__primary-action) { grid-column:1/-1 !important; grid-row:2 !important; min-width:0; }
-    .desktop-clean-event :global(.desktop-prototype__action[data-action-layout="stacked"] .desktop-prototype__action-row) { grid-column:2 !important; grid-row:1 !important; justify-self:end; }
+    /* Action layout is owned by DesktopEventActionPanel: Editorial is the tall
+       three-row card, while Split may admit one row after measuring its own
+       rendered children. Keep only the phone clipping safety here. */
     .desktop-clean-event :global(.desktop-prototype__action[data-primary-action-kind="phone"] .desktop-prototype__primary-action) { overflow:hidden; }
   }
 

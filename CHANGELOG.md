@@ -3,6 +3,23 @@
 ## [Unreleased]
 
 ### Added
+- **Canonical static preproduction review routing**: persist the latest fully
+  checked immutable noindex candidate as a hash-bound internal SQLite receipt,
+  expose one fail-closed resolver to bot/operator link-producing paths, preserve
+  the previous review target across failed, unchanged/no-op and artifact-only
+  runs, and reject Kaggle results unless the accepted template matrix plus all
+  candidate noindex/no-referrer/prefix/root-isolation checks are complete;
+  production root/current/stable ICS remain untouched.
+- **Accepted static service footer**: roll the owner-approved compact graphite
+  footer out through the shared static layout, with a cohesive branded
+  service-share surface, one partnership link, reserved non-broken legal slots,
+  accessible social/contact controls and the official coloured MAX mark; keep
+  the secret lab route only as a regression specimen.
+- **Bounded desktop event continuation**: after `Смотрите дальше`, render exactly
+  six deduplicated/diverse cards, using local personalization only for a mature
+  profile and an honestly labelled popular/recency fallback otherwise; omit
+  load-more/infinite-scroll and end with `Все анонсы` while preserving the
+  established mobile discovery continuation.
 - **Static build idempotency and crash adoption**: add a Kaliningrad-date public
   projection fingerprint, durable SQLite single-flight/history, one coalesced
   follow-up, unchanged-input no-op, audited operator force and exact Kaggle
@@ -22,6 +39,21 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Desktop portrait event CTA regression**: route action geometry from the
+  resolved Split/Editorial media family instead of a viewport guess, restoring
+  the compact one-row admission/primary/calendar-share-like panel across real
+  portrait specimens while retaining the wide-photo Editorial three-row card
+  with its utility controls on the bottom row; add executable Playwright
+  geometry checks at the `1536×864` FHD/125%-equivalent viewport.
+- **Static event desktop media polish**: expose venue-medallion rings and
+  shadows beyond the title token-row bounds without changing the single-venue
+  fail-closed identity gate, and reserve server-rendered `Смотрите дальше`
+  skeleton geometry until every related image loads or fails while preserving
+  alt text, media crop/quality rules and the mobile renderer.
+- **Static footer prototype polish**: replace the oversized share split-card
+  with an `84px` desktop / compact stacked mobile inline bar while preserving
+  two desktop intents, one mobile system-share intent and `44px+` controls; use
+  the official colored MAX mark on the graphite footer.
 - **Static-site Kaggle runner shutdown**: close the short-lived status-ledger
   `Database` after creating the callback dataset so its non-daemon `aiosqlite`
   worker cannot hold a completed runner at interpreter shutdown and strand the

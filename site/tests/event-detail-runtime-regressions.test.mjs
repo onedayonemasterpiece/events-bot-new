@@ -75,6 +75,35 @@ test('dynamic recommendation media reserves geometry through load and failure', 
   assert.match(layout, /aspect-ratio: var\(--dynamic-media-ratio, 4 \/ 5\)/u);
 });
 
+test('desktop static continuation emits stable initial skeleton geometry', async () => {
+  const card = await read('src/components/EventCard.astro');
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const built = await readBuilt('sobytiya/spektakl-garazh-kaliningrad-5658/index.html');
+
+  assert.match(desktop, /relatedRowLayout/u);
+  assert.match(desktop, /desktopRelatedLayout=\{layout\}/u);
+  assert.match(desktop, /dataset\.labMediaRatio/u);
+  assert.match(card, /desktopRelatedCrop && 'event-card__media-shell--dynamic'/u);
+  assert.match(card, /desktopRelatedCrop && 'is-image-loading'/u);
+  assert.match(card, /aria-busy=\{desktopRelatedCrop \? 'true' : undefined\}/u);
+  assert.match(card, /onload=\{imageLoadHandler\}/u);
+  assert.match(card, /onerror=\{imageErrorHandler\}/u);
+  assert.match(built, /data-lab-related-card="true"/u);
+  assert.match(built, /event-card__media-shell--dynamic is-image-loading/u);
+  assert.match(built, /aria-busy="true"/u);
+  assert.match(built, /--lab-row-media-ratio:/u);
+});
+
+test('desktop medallion wrapper exposes venue ring and shadow without changing identity resolution', async () => {
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const medallions = await read('src/components/EventTokenMedallions.astro');
+
+  assert.match(desktop, /\.desktop-prototype__medallions \{ min-height:0; overflow:visible; \}/u);
+  assert.match(desktop, /\.desktop-prototype__medallions :global\(\.event-token-row\) \{ gap:\.55rem; overflow:visible;/u);
+  assert.match(medallions, /resolveEventMedallions\(event, manifest\.items \|\| \[\]\)/u);
+  assert.match(medallions, /data-identity-resolution=\{organizerResolution\.failClosedReason \|\| 'resolved'\}/u);
+});
+
 test('desktop telephone remains a branded reveal-and-copy CTA', async () => {
   const panel = await read('src/components/DesktopEventActionPanel.astro');
   const desktop = await read('src/components/DesktopEventPage.astro');
@@ -98,8 +127,9 @@ test('desktop telephone remains a branded reveal-and-copy CTA', async () => {
   assert.match(icon, /name === 'copy'/u);
 });
 
-test('desktop actions keep calendar, share and like in one invariant bottom row', async () => {
+test('desktop action geometry follows the resolved media family', async () => {
   const panel = await read('src/components/DesktopEventActionPanel.astro');
+  const desktop = await read('src/components/DesktopEventPage.astro');
   const legacyPanel = await read('src/components/EventCtaPanel.astro');
   const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
 
@@ -107,8 +137,17 @@ test('desktop actions keep calendar, share and like in one invariant bottom row'
   const panelRow = panel.slice(panel.indexOf('data-desktop-action-row="calendar-share-like"'));
   assert.ok(panelRow.indexOf('<CalendarLink') < panelRow.indexOf('data-native-share'));
   assert.ok(panelRow.indexOf('data-native-share') < panelRow.indexOf('data-feedback-action="like"'));
-  assert.match(panel, /grid-template-columns:minmax\(0,1fr\) !important/u);
-  assert.match(panel, /grid-template-rows:auto auto auto !important/u);
+  assert.match(panel, /family\?: 'split' \| 'editorial'/u);
+  assert.match(panel, /data-action-family=\{family\}/u);
+  assert.match(panel, /data-action-layout=\{family === 'split' \? 'inline' : 'stacked'\}/u);
+  assert.match(panel, /data-action-layout="inline"[^}]*grid-template-columns:minmax\(112px,max-content\) minmax\(0,1fr\) auto !important/su);
+  assert.match(panel, /data-action-layout="stacked"[^}]*grid-template-columns:minmax\(0,1fr\) !important/su);
+  assert.match(panel, /data-action-layout="stacked"[^}]*grid-template-rows:auto auto auto !important/su);
+  assert.match(desktop, /family="editorial"/u);
+  assert.match(desktop, /family="split"/u);
+  assert.match(desktop, /const splitFamily = panel\.dataset\.actionFamily === 'split'/u);
+  assert.match(desktop, /if \(!splitFamily\) return/u);
+  assert.match(desktop, /outside \|\| overlaps \|\| overflows/u);
   assert.doesNotMatch(panel, /data-primary-action-kind="phone"\] \{/u);
   assert.match(legacyPanel, /data-event-cta-action-row="calendar-share-like"/u);
   assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551/u);
@@ -130,6 +169,36 @@ test('service share prompt uses the canonical inline announcements wordmark', as
   assert.match(share, /width:auto/u);
   assert.match(share, /height:1em/u);
   assert.doesNotMatch(share, />Поделиться афишей</u);
+});
+
+test('accepted service footer is global, cohesive and does not duplicate partnership navigation', async () => {
+  const component = await read('src/components/SiteFooter.astro');
+  const socialIcon = await read('src/components/SocialIcon.astro');
+  const maxMetadata = JSON.parse(await read('public/assets/social/max-colored-official.svg.metadata.json'));
+  const layout = await read('src/layouts/EventLayout.astro');
+  const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
+  const secretBuilder = await read('scripts/build-secret-candidate.mjs');
+
+  assert.match(component, /data-site-footer="service-v1"/u);
+  assert.match(component, /site-footer--service-v1/u);
+  assert.equal((component.match(/>Информационное партнёрство</gu) || []).length, 1);
+  assert.match(component, /Пользовательское соглашение/u);
+  assert.match(component, /Политика обработки персональных данных/u);
+  assert.match(component, /role="link" aria-disabled="true" data-footer-future-document/u);
+  assert.match(component, /showPrompt=\{false\}/u);
+  assert.match(component, /min-height: 84px/u);
+  assert.doesNotMatch(component, /min-height: 190px/u);
+  assert.match(component, /min-height: 48px/u);
+  assert.match(socialIcon, /import \{ withBase \} from '\.\.\/lib\/events'/u);
+  assert.match(socialIcon, /withBase\('\/assets\/social\/max-colored-official\.svg'\)/u);
+  assert.equal(maxMetadata.source_page, 'https://go.max.ru/brandbook');
+  assert.equal(maxMetadata.provider, 'Official MAX brandbook');
+  assert.match(layout, /import SiteFooter from '\.\.\/components\/SiteFooter\.astro'/u);
+  assert.match(layout, /<SiteFooter socialLinks=\{FOOTER_SOCIAL_LINKS\} \/>/u);
+  assert.doesNotMatch(layout, /footerVariant|SiteFooterPrototype/u);
+  assert.match(lab, /slug: 'footer-service-v1', eventId: 6589/u);
+  assert.doesNotMatch(lab, /footerVariant/u);
+  assert.match(secretBuilder, /const footerPrototypeRoute = 'lab\/event-desktop\/examples\/footer-service-v1'/u);
 });
 
 test('Dramatic Theatre medallion is present in the accepted manifest', async () => {

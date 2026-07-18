@@ -27,9 +27,35 @@ from navigating a v10 reviewer back to an older event UI. Absolute URLs on a
 different origin remain untouched because they may be real organizer/ticket
 destinations rather than KenigEvents event navigation.
 
-On event-detail pages the same surface is intentionally delayed until the
+### Event-detail desktop continuation
+
+On event-detail pages the same engine is intentionally delayed until the
 visitor reaches `Смотрите дальше`; see
 [Personal feed architecture](../unsigned-personalization/personal-feed-architecture.md).
+It then renders one bounded continuation rather than an infinite feed:
+
+1. the hard limit is exactly six cards; there is no `Показать ещё` action;
+2. with at least three compatible local strong signals, cards use the personal
+   ranker and the honest heading `По вашим интересам`;
+3. before the profile is mature, the same-origin catalog is ranked by a
+   deterministic `0.68 × popularity + 0.32 × recency/static score` fallback,
+   labelled `Ещё события` rather than personalized;
+4. both modes exclude the current event, linked/hidden events and cards already
+   offered in `Смотрите дальше`, then enforce at most three cards per category
+   and two per venue;
+5. the section ends with `Все анонсы`; no genre/search chip is shown until a
+   useful unauthenticated destination exists;
+6. on mobile the immature/fallback continuation stays hidden because the
+   established discovery feed already provides continuation. Mature personal
+   results may still appear without duplicating the fallback.
+
+Three product alternatives were compared with Gemini 3.1 Pro: additional
+cards, routing chips and a hybrid. The accepted preproduction rule above passed
+the external product gate because it gives most desktop visitors a finite next
+step without falsely claiming personalization or routing them into the current
+authenticated-search dead end. Future measurement must distinguish
+`personal`/`popular_fallback`, rank, impressions, clicks and terminal
+`Все анонсы` use before changing the six-card limit.
 
 ## Why localStorage cache
 

@@ -6,6 +6,7 @@ interface Props {
   surface?: 'footer' | 'menu' | 'lab';
   desktopMode?: 'd0' | 'd1' | 'd2';
   manifestUrl?: string;
+  showPrompt?: boolean;
   class?: string;
 }
 
@@ -15,6 +16,7 @@ const requestedMode = String(Astro.props.desktopMode || import.meta.env.PUBLIC_S
 const desktopMode = ['d0', 'd1', 'd2'].includes(requestedMode) ? requestedMode as 'd0' | 'd1' | 'd2' : 'd0';
 const surface = Astro.props.surface || 'footer';
 const manifestUrl = Astro.props.manifestUrl || withBase('/service-share/current/manifest.json');
+const showPrompt = Astro.props.showPrompt !== false;
 const linkIconUrl = withBase('/assets/icons/link-minimalistic-svgrepo.svg');
 const className = Astro.props.class;
 const statusId = `service-share-status-${surface}-${desktopMode}`;
@@ -29,13 +31,15 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
   data-service-share-canonical-url="https://kenigevents.ru/"
   data-nosnippet
 >
-  <span class="service-share-action__prompt" aria-label="Понравились Анонсы? Поделитесь">
-    <span class="sr-only">Понравились Анонсы? Поделитесь</span>
-    <span aria-hidden="true">Понравились</span>
-    <AnnouncementsWordmark class="service-share-action__wordmark" />
-    <span aria-hidden="true">?</span>
-    <strong aria-hidden="true">Поделитесь</strong>
-  </span>
+  {showPrompt && (
+    <span class="service-share-action__prompt" aria-label="Понравились Анонсы? Поделитесь">
+      <span class="sr-only">Понравились Анонсы? Поделитесь</span>
+      <span aria-hidden="true">Понравились</span>
+      <AnnouncementsWordmark class="service-share-action__wordmark" />
+      <span aria-hidden="true">?</span>
+      <strong aria-hidden="true">Поделитесь</strong>
+    </span>
+  )}
   <div class="service-share-action__controls">
     <button
       type="button"

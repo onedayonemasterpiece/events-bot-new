@@ -4,8 +4,24 @@ import type { PreviewEvent } from '../lib/types';
 import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 type CardVariant = 'overlay-controls' | 'split-actions';
-interface Props { event: PreviewEvent; label?: string; variant?: CardVariant; desktopRelatedCrop?: boolean }
-const { event, label, variant = 'split-actions', desktopRelatedCrop = false } = Astro.props;
+interface DesktopRelatedLayout {
+  mediaRatio: number;
+  rowRatio: number;
+  rowIndex: number;
+  rowMode: string;
+  mediaKind: 'document' | 'visual';
+  mediaTreatment: 'document-safe-cover' | 'visual-cover';
+  coverCrop: number;
+  rowWorstCrop: number;
+}
+interface Props {
+  event: PreviewEvent;
+  label?: string;
+  variant?: CardVariant;
+  desktopRelatedCrop?: boolean;
+  desktopRelatedLayout?: DesktopRelatedLayout;
+}
+const { event, label, variant = 'split-actions', desktopRelatedCrop = false, desktopRelatedLayout } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const absolute = eventAbsoluteUrl(event);
@@ -38,7 +54,12 @@ const documentMedia = desktopRelatedCrop
   ? event.image_text_mode !== 'visual_only'
   : imageMediaRole !== 'event_photo';
 const primaryImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
-const mediaShellClass = ['event-card__media-shell', documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover'].join(' ');
+const mediaShellClass = [
+  'event-card__media-shell',
+  documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover',
+  desktopRelatedCrop && 'event-card__media-shell--dynamic',
+  desktopRelatedCrop && 'is-image-loading',
+].filter(Boolean).join(' ');
 const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
 const cardObjectPosition = !documentMedia ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
 const focalY = event.focal_point ? Math.max(0, Math.min(1, event.focal_point.y)) : 0.5;
@@ -56,11 +77,40 @@ const otherTimeLabels = getOtherDates(event)
   .filter((item) => item.start_date === event.start_date && item.display_time && item.display_time !== event.display_time)
   .map((item) => item.display_time)
   .filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
+const intrinsicMediaRatio = desktopRelatedLayout?.mediaRatio
+  || (primaryImageAsset?.width && primaryImageAsset?.height ? primaryImageAsset.width / primaryImageAsset.height : 4 / 5);
+const mediaShellStyle = [
+  documentMedia ? `--card-focal-y:${focalY};--card-focal-offset:${focalOffset}%` : null,
+  desktopRelatedCrop ? `--dynamic-media-ratio:${desktopRelatedLayout?.rowRatio || intrinsicMediaRatio}` : null,
+].filter(Boolean).join(';');
+const imageLoadHandler = desktopRelatedCrop
+  ? "this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-loaded'); this.closest('.event-card__media-shell')?.removeAttribute('aria-busy');"
+  : undefined;
+const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.closest('.event-card__media-shell')?.removeAttribute('aria-busy'); this.hidden = true; this.removeAttribute('src');";
 ---
-<article class={cardClass} data-event-card data-feed-card-variant={variant} data-calendar-eligible={canAddToCalendar ? "true" : "false"} data-event-id={event.id} data-event-title={event.title} data-card-href={href} tabindex="0" aria-label={`${event.title}: ${dateLabel}`}>
+<article
+  class={cardClass}
+  data-event-card
+  data-feed-card-variant={variant}
+  data-calendar-eligible={canAddToCalendar ? "true" : "false"}
+  data-event-id={event.id}
+  data-event-title={event.title}
+  data-card-href={href}
+  data-lab-related-card={desktopRelatedLayout ? 'true' : undefined}
+  data-lab-media-kind={desktopRelatedLayout?.mediaKind}
+  data-lab-media-ratio={desktopRelatedLayout?.mediaRatio.toFixed(5)}
+  data-lab-row-media={desktopRelatedLayout?.rowMode}
+  data-lab-row-index={desktopRelatedLayout ? String(desktopRelatedLayout.rowIndex) : undefined}
+  data-lab-media-treatment={desktopRelatedLayout?.mediaTreatment}
+  data-lab-cover-crop={desktopRelatedLayout?.coverCrop.toFixed(4)}
+  data-lab-row-worst-crop={desktopRelatedLayout?.rowWorstCrop.toFixed(4)}
+  style={desktopRelatedLayout ? `--lab-row-media-ratio:${desktopRelatedLayout.rowRatio.toFixed(5)}` : undefined}
+  tabindex="0"
+  aria-label={`${event.title}: ${dateLabel}`}
+>
   <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
-      <span class={mediaShellClass} data-media-role={imageMediaRole} style={documentMedia ? `--card-focal-y:${focalY};--card-focal-offset:${focalOffset}%` : undefined}>
+      <span class={mediaShellClass} data-media-role={imageMediaRole} style={mediaShellStyle || undefined} aria-busy={desktopRelatedCrop ? 'true' : undefined}>
         <span class="event-card__image-fallback" aria-hidden="true">
           <span>{dateLabel}</span>
           <strong>{event.event_type || 'событие'}</strong>
@@ -75,7 +125,8 @@ const otherTimeLabels = getOtherDates(event)
           width={primaryImageAsset?.width}
           height={primaryImageAsset?.height}
           style={cardObjectPosition ? `object-position: ${cardObjectPosition}` : undefined}
-          onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"
+          onload={imageLoadHandler}
+          onerror={imageErrorHandler}
         />
       </span>
     ) : (

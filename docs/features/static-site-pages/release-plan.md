@@ -50,6 +50,16 @@ snapshot hash/size, catalog ledger, checks, counts и оба archive hashes. Pub
 одного `_review/<token>/`; root, `current.json`, release-control objects и
 стабильные `/ics/*` невыразимы через его API.
 
+После успешного readback/public probe единственный внутренний current-review
+receipt сохраняется в `static_site_build_state`. Он hash-связывает bearer URL с
+build/run/repo/snapshot/result/manifest и используется всеми link-producing
+paths через `resolve_current_secret_candidate`. Failed/no-op/artifact-only run
+не сдвигает pointer; неполный receipt fail-closed. Это не публичный redirect и
+не production `current` object. Оператор читает его командой
+`scripts/request_static_site_build.py --db /data/db.sqlite --show-current-review`.
+Все именованные `preview-…` ссылки в документации — только историческое
+evidence.
+
 Secret URL — **не авторизация**. До его первой публикации anonymous ListObjects
 для bucket должен отвечать `403`, сохраняя public object read. `noindex`,
 `no-referrer` и `Cache-Control: private, no-store` уменьшают утечки, но не мешают
