@@ -106,6 +106,8 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
         profile="production-candidate",
         limit=5000,
         current_date="2026-07-17",
+        current_datetime="2026-07-17T00:00:00+02:00",
+        input_fingerprint="f" * 64,
         script_path="/repo/scripts/run_static_site_builder_kaggle.py",
         status_callback_url="https://events-bot.example/internal/kaggle/run-event",
     )
@@ -115,6 +117,8 @@ def test_add_build_08_production_candidate_binds_snapshot_repo_run_and_secret() 
     assert _arg_after(cmd, "--repo-sha") == "a" * 40
     assert _arg_after(cmd, "--run-id").startswith("static-site:")
     assert _arg_after(cmd, "--candidate-token") == "A" * 43
+    assert _arg_after(cmd, "--current-datetime") == "2026-07-17T00:00:00+02:00"
+    assert _arg_after(cmd, "--input-fingerprint") == "f" * 64
 
 
 def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:

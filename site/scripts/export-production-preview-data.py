@@ -26,13 +26,15 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 SCRIPT_PATH = Path(__file__).resolve()
 for _candidate in (SCRIPT_PATH.parents[1], SCRIPT_PATH.parents[2] if len(SCRIPT_PATH.parents) > 2 else SCRIPT_PATH.parents[1]):
     if (_candidate / "google_ai").exists() and str(_candidate) not in sys.path:
         sys.path.insert(0, str(_candidate))
 
-CURRENT_DATE_DEFAULT = "2026-06-28"
+BUILD_TIME_ZONE = ZoneInfo("Europe/Kaliningrad")
+CURRENT_DATE_DEFAULT = datetime.now(BUILD_TIME_ZONE).date().isoformat()
 CONTROL_EVENT_IDS = [
     5878, 5370, 6093, 6322, 4913, 4512, 5690, 6437, 6438, 3730, 698,
     # pgvector semantic retrieval golden anchors: urban-planning intent must
@@ -1426,10 +1428,17 @@ def split_current_datetime(value: str | None, current_date: str) -> tuple[str, s
     raw = str(value or "").strip()
     if not raw:
         return current_date, None
-    match = re.match(r"^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?", raw)
-    if not match:
-        return current_date, None
-    return match.group(1), match.group(2)
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("current_datetime must be ISO-8601") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=BUILD_TIME_ZONE)
+    local = parsed.astimezone(BUILD_TIME_ZONE)
+    effective_date = local.date().isoformat()
+    if effective_date != current_date:
+        raise ValueError("current_date/current_datetime mismatch")
+    return effective_date, local.strftime("%H:%M")
 
 
 def event_active_where(

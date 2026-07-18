@@ -23,12 +23,14 @@ import sys
 import tarfile
 import tempfile
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from static_site_release import resolve_build_clock
 KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
 SITE_SRC = ROOT / 'site'
 ARTIFACT_ROOT = ROOT / 'artifacts' / 'codex' / 'static-site-builder'
@@ -86,6 +88,10 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
             actual = result.get('snapshot', {}).get(key) if key.startswith('snapshot_') else result.get(key)
             if str(actual) != str(value):
                 raise RuntimeError(f'Kaggle result {key} mismatch: {actual!r} != {value!r}')
+        if result.get('input_fingerprint') != args.input_fingerprint:
+            raise RuntimeError('Kaggle result input fingerprint mismatch')
+        if result.get('build_clock') != args.build_clock:
+            raise RuntimeError('Kaggle result build clock mismatch')
         artifacts = result.get('artifacts')
         if not isinstance(artifacts, list) or len(artifacts) != 2:
             raise RuntimeError('production-candidate result must contain exactly root and secret artifacts')
@@ -489,7 +495,9 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'candidate_token': args.candidate_token or None,
         'snapshot': args.snapshot_contract or None,
         'current_date': args.current_date,
-        'current_datetime': args.current_datetime or None,
+        'current_datetime': args.current_datetime,
+        'build_clock': args.build_clock,
+        'input_fingerprint': args.input_fingerprint or None,
         'focus_date_from': args.focus_date_from or None,
         'focus_date_to': args.focus_date_to or None,
         'limit': args.limit,
@@ -565,8 +573,9 @@ def main() -> int:
     parser.add_argument('--run-id', default=os.getenv('STATIC_SITE_RUN_ID', ''))
     parser.add_argument('--candidate-token', default=os.getenv('STATIC_SITE_CANDIDATE_TOKEN', ''))
     parser.add_argument('--limit', type=int, default=int(os.getenv('STATIC_SITE_BUILDER_LIMIT', '50')))
-    parser.add_argument('--current-date', default=os.getenv('STATIC_SITE_CURRENT_DATE', '2026-06-28'))
+    parser.add_argument('--current-date', default=os.getenv('STATIC_SITE_CURRENT_DATE', ''))
     parser.add_argument('--current-datetime', default=os.getenv('STATIC_SITE_CURRENT_DATETIME', ''))
+    parser.add_argument('--input-fingerprint', default=os.getenv('STATIC_SITE_INPUT_FINGERPRINT', ''))
     parser.add_argument('--focus-date-from', default=os.getenv('STATIC_SITE_FOCUS_DATE_FROM', ''))
     parser.add_argument('--focus-date-to', default=os.getenv('STATIC_SITE_FOCUS_DATE_TO', ''))
     parser.add_argument('--build-id', default=os.getenv('STATIC_SITE_BUILD_ID'))
@@ -617,6 +626,13 @@ def main() -> int:
     parser.add_argument('--download-output', action='store_true')
     parser.add_argument('--keep-staging', action='store_true')
     args = parser.parse_args()
+    clock = resolve_build_clock(
+        current_date=args.current_date or None,
+        current_datetime=args.current_datetime or None,
+    )
+    args.current_date = clock.effective_date
+    args.current_datetime = clock.current_datetime
+    args.build_clock = asdict(clock)
 
     if args.profile == 'production-candidate':
         if args.catalog_mode != 'full' or not args.export_in_kaggle:
@@ -625,6 +641,8 @@ def main() -> int:
             raise SystemExit('production-candidate requires --repo-sha with a full 40-character SHA')
         if not args.run_id:
             raise SystemExit('production-candidate requires --run-id')
+        if not re.fullmatch(r'[0-9a-f]{64}', args.input_fingerprint or ''):
+            raise SystemExit('production-candidate requires --input-fingerprint SHA-256')
         if not args.build_id or not re.fullmatch(r'production-[A-Za-z0-9][A-Za-z0-9._-]*', args.build_id):
             raise SystemExit('production-candidate requires a production-* --build-id')
         if args.candidate_token and not re.fullmatch(r'[A-Za-z0-9_-]{43}', args.candidate_token):

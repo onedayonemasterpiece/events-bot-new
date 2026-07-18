@@ -47,6 +47,26 @@ def validate_snapshot_input(db_path: Path, config: dict) -> dict:
             raise RuntimeError(f'mounted production snapshot quick_check failed: {quick_check}')
     return snapshot
 
+
+def validate_build_clock(config: dict) -> dict:
+    clock = config.get('build_clock') if isinstance(config.get('build_clock'), dict) else {}
+    if clock.get('time_zone') != 'Europe/Kaliningrad':
+        raise RuntimeError('static site build clock timezone mismatch')
+    effective_date = str(clock.get('effective_date') or '')
+    current_datetime = str(clock.get('current_datetime') or '')
+    try:
+        parsed = datetime.fromisoformat(current_datetime.replace('Z', '+00:00'))
+    except ValueError as exc:
+        raise RuntimeError('static site build clock datetime invalid') from exc
+    if not effective_date or parsed.date().isoformat() != effective_date:
+        raise RuntimeError('static site build clock date mismatch')
+    if str(config.get('current_date') or '') != effective_date or str(config.get('current_datetime') or '') != current_datetime:
+        raise RuntimeError('static site build clock/config mismatch')
+    fingerprint = str(config.get('input_fingerprint') or '')
+    if config.get('profile') == 'production-candidate' and not re.fullmatch(r'[0-9a-f]{64}', fingerprint):
+        raise RuntimeError('production input fingerprint missing')
+    return clock
+
 try:
     from kaggle_status_client import load_status_client
 except Exception:  # pragma: no cover - local non-Kaggle fallback
@@ -257,12 +277,13 @@ def export_preview_data_if_configured(config: dict) -> None:
         load_kaggle_secret_to_env(key_env)
         for secret_name in ['SUPABASE_URL', 'SUPABASE_KEY', 'SUPABASE_SERVICE_KEY', 'SUPABASE_SERVICE_ROLE_KEY']:
             load_kaggle_secret_to_env(secret_name)
+    clock = validate_build_clock(config)
     cmd = [
         'python3',
         str(exporter),
         '--db', str(db_path),
         '--limit', str(config.get('limit') or 50),
-        '--current-date', str(config.get('current_date') or os.environ.get('STATIC_SITE_CURRENT_DATE') or '2026-06-28'),
+        '--current-date', str(clock['effective_date']),
         '--output-dir', str(SITE_DIR / 'src/data'),
         '--catalog-mode', str(config.get('catalog_mode') or 'slice'),
         '--related-cache', str(cache_path),
@@ -286,8 +307,7 @@ def export_preview_data_if_configured(config: dict) -> None:
             '--snapshot-sha256', str(snapshot.get('sha256') or ''),
             '--snapshot-size', str(snapshot.get('size') or 0),
         ])
-    if config.get('current_datetime'):
-        cmd.extend(['--current-datetime', str(config.get('current_datetime'))])
+    cmd.extend(['--current-datetime', str(clock['current_datetime'])])
     if config.get('focus_date_from'):
         cmd.extend(['--focus-date-from', str(config.get('focus_date_from'))])
     if config.get('focus_date_to'):
@@ -359,6 +379,7 @@ def main() -> int:
     started = datetime.now(timezone.utc).isoformat()
     try:
         config = read_config()
+        build_clock = validate_build_clock(config)
         build_id = config.get('build_id') or os.environ.get('PREVIEW_BUILD_ID') or 'preview-kaggle-static-site'
         status_event('alive', phase='preflight', status='alive', progress={'phase': 'preflight', 'progress_percent': 5, 'progress_label': 'распаковка сайта', 'build_id': build_id})
         ensure_site_source()
@@ -456,6 +477,8 @@ def main() -> int:
             'ok': True, 'profile': profile, 'build_id': build_id,
             'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
             'event_count': event_count, 'artifacts': artifacts, 'failure_class': None,
+            'input_fingerprint': config.get('input_fingerprint'),
+            'build_clock': build_clock,
             **result_details,
         }
         RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -469,6 +492,8 @@ def main() -> int:
             'build_id': locals().get('build_id'), 'profile': str(locals().get('config', {}).get('profile') or 'preview'),
             'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
             'failure_class': 'permanent_input' if isinstance(exc, (ValueError, FileNotFoundError)) else 'retryable_build',
+            'input_fingerprint': locals().get('config', {}).get('input_fingerprint'),
+            'build_clock': locals().get('config', {}).get('build_clock'),
             'error_type': exc.__class__.__name__, 'error': str(exc)[:1000],
         }
         try:

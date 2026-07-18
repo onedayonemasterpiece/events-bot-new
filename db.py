@@ -2703,6 +2703,51 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_kaggle_resource_lease_status ON kaggle_resource_lease(status, expires_at)"
             )
 
+            # Static site effect ledger.  The singleton state row is the
+            # cross-process no-op/single-flight authority; history is append-only
+            # operator evidence.  Both tables are additive for existing SQLite
+            # production databases.
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS static_site_build_state(
+                    release_channel TEXT PRIMARY KEY,
+                    schema_version TEXT NOT NULL,
+                    last_success_fingerprint TEXT,
+                    last_success_run_id TEXT,
+                    last_success_at TEXT,
+                    last_success_receipt_json TEXT NOT NULL DEFAULT '{}',
+                    active_claim_token TEXT,
+                    active_job_id INTEGER,
+                    active_run_id TEXT,
+                    active_fingerprint TEXT,
+                    active_effective_date TEXT,
+                    active_claimed_at TEXT,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS static_site_build_history(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    release_channel TEXT NOT NULL,
+                    job_id INTEGER,
+                    request_watermark TEXT,
+                    input_fingerprint TEXT NOT NULL,
+                    effective_date TEXT NOT NULL,
+                    force_rebuild INTEGER NOT NULL DEFAULT 0,
+                    outcome TEXT NOT NULL,
+                    run_id TEXT,
+                    evidence_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_static_site_build_history_fingerprint "
+                "ON static_site_build_history(input_fingerprint, outcome, created_at)"
+            )
+
             dbg("llm_daily_request_budget")
             await conn.execute(
                 """

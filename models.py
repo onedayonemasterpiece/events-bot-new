@@ -1617,6 +1617,50 @@ class JobOutbox(SQLModel, table=True):
     depends_on: Optional[str] = None
 
 
+class StaticSiteBuildState(SQLModel, table=True):
+    __tablename__ = "static_site_build_state"
+    __table_args__ = ({"extend_existing": True},)
+
+    release_channel: str = Field(primary_key=True)
+    schema_version: str
+    last_success_fingerprint: Optional[str] = None
+    last_success_run_id: Optional[str] = None
+    last_success_at: Optional[str] = None
+    last_success_receipt_json: str = "{}"
+    active_claim_token: Optional[str] = None
+    active_job_id: Optional[int] = None
+    active_run_id: Optional[str] = None
+    active_fingerprint: Optional[str] = None
+    active_effective_date: Optional[str] = None
+    active_claimed_at: Optional[str] = None
+    updated_at: str = Field(default_factory=lambda: utc_now().isoformat())
+
+
+class StaticSiteBuildHistory(SQLModel, table=True):
+    __tablename__ = "static_site_build_history"
+    __table_args__ = (
+        Index(
+            "ix_static_site_build_history_fingerprint",
+            "input_fingerprint",
+            "outcome",
+            "created_at",
+        ),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    release_channel: str
+    job_id: Optional[int] = None
+    request_watermark: Optional[str] = None
+    input_fingerprint: str
+    effective_date: str
+    force_rebuild: bool = False
+    outcome: str
+    run_id: Optional[str] = None
+    evidence_json: str = "{}"
+    created_at: str = Field(default_factory=lambda: utc_now().isoformat())
+
+
 class PosterOcrCache(SQLModel, table=True):
     hash: str = Field(primary_key=True)
     detail: str = Field(primary_key=True)
