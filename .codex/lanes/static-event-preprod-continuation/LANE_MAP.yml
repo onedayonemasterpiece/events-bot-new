@@ -27,7 +27,7 @@ lanes:
     forbidden_files: [production database]
     expected_output: global static footer using accepted prototype with no legacy partnership duplication
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: media_polish
     role: worker
     requirement_ids: [R02, R03]
@@ -40,7 +40,7 @@ lanes:
     forbidden_files: [main.py, static_site_release.py, production database]
     expected_output: committed bounded UI fix with Playwright geometry evidence
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: portrait_cta
     role: worker
     requirement_ids: [R04]
@@ -53,7 +53,7 @@ lanes:
     forbidden_files: [footer components, build orchestration, production database]
     expected_output: committed geometry-driven CTA correction and portrait/wide regression evidence
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: continuation_research
     role: planner
     requirement_ids: [R05]
@@ -66,7 +66,7 @@ lanes:
     forbidden_files: [all]
     expected_output: implementation map, measurement contract and 3 product alternatives
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: preprod_release
     role: worker
     requirement_ids: [R06, R07]
@@ -79,7 +79,7 @@ lanes:
     forbidden_files: [event UI components, production root publisher, production database mutation]
     expected_output: committed routing/orchestration corrections plus tests proving Smart Update to immutable secret candidate
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: final_review
     role: reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07]

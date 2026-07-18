@@ -10,11 +10,16 @@
   runs, and reject Kaggle results unless the accepted template matrix plus all
   candidate noindex/no-referrer/prefix/root-isolation checks are complete;
   production root/current/stable ICS remain untouched.
-- **Isolated static footer prototype**: add one secret-only noindex event
-  specimen with a cohesive branded service-share surface, deduplicated event /
-  project navigation, reserved non-broken legal-document slots and accessible
-  responsive social/contact controls; the existing site-wide footer remains
-  unchanged pending owner acceptance.
+- **Accepted static service footer**: roll the owner-approved compact graphite
+  footer out through the shared static layout, with a cohesive branded
+  service-share surface, one partnership link, reserved non-broken legal slots,
+  accessible social/contact controls and the official coloured MAX mark; keep
+  the secret lab route only as a regression specimen.
+- **Bounded desktop event continuation**: after `Смотрите дальше`, render exactly
+  six deduplicated/diverse cards, using local personalization only for a mature
+  profile and an honestly labelled popular/recency fallback otherwise; omit
+  load-more/infinite-scroll and end with `Все анонсы` while preserving the
+  established mobile discovery continuation.
 - **Static build idempotency and crash adoption**: add a Kaliningrad-date public
   projection fingerprint, durable SQLite single-flight/history, one coalesced
   follow-up, unchanged-input no-op, audited operator force and exact Kaggle

@@ -59,6 +59,23 @@ The full-catalog static preview exposed several user-visible regressions around 
   `dist/<production-build-id>/sobytiya` instead of `dist/sobytiya`. The checker
   was corrected to choose its tree from `PUBLIC_SITE_MODE`; no candidate from
   the failed run was published.
+- 2026-07-18: owner accepted the compact graphite footer specimen; it became the
+  single shared static footer while the lab route remained only as a regression
+  specimen. The same pass exposed medallion overflow, static related-card
+  loading geometry and portrait/OCR CTA-family regressions.
+- 2026-07-18: the accepted fixes exposed medallion rings/shadows without
+  changing identity resolution, emitted stable `Смотрите дальше` skeletons and
+  restored measured one-row CTA geometry for Split portrait/OCR pages while
+  retaining the Editorial wide-photo panel.
+- 2026-07-18: desktop continuation research compared additional cards, routing
+  chips and a hybrid with Gemini 3.1 Pro. The accepted preproduction rule is a
+  finite six-card continuation: personal for a mature local profile, otherwise
+  an honestly labelled diverse popular/recency fallback, followed by
+  `Все анонсы` and no load-more.
+- 2026-07-18: bot/operator review links were routed through a durable fail-closed
+  pointer to the latest fully verified immutable noindex candidate. Failed,
+  no-op, incomplete and artifact-only builds retain the previous pointer; root,
+  current and stable ICS stay outside this preproduction path.
 
 ## Root Cause
 
@@ -119,6 +136,21 @@ The full-catalog static preview exposed several user-visible regressions around 
     bookkeeping. The new production desktop checker treated that ambient value
     as a routing instruction even when `PUBLIC_SITE_MODE=production`, so its
     filesystem target differed from the root-form build it had just generated.
+22. The accepted footer existed behind a lab-only variant, leaving the legacy
+    footer as the default and allowing duplicated partnership/navigation copy to
+    survive after product acceptance.
+23. The desktop medallion container clipped decorative ring/shadow overflow;
+    the identity resolver was correct, but its visual wrapper was not.
+24. Static related cards added loading state only after client image handling,
+    so their first server-rendered frame did not reserve the accepted skeleton
+    state.
+25. CTA geometry was selected from viewport assumptions instead of the resolved
+    Split/Editorial media family, so portrait posters inherited the wide-photo
+    stacked panel.
+26. Event-detail continuation was gated entirely by a mature local profile;
+    most desktop visitors therefore reached the end of static related cards
+    with no finite next step, while mobile already had a separate discovery
+    continuation.
 
 ## Contributing Factors
 
@@ -186,6 +218,23 @@ The full-catalog static preview exposed several user-visible regressions around 
 - insufficient-feedback placeholder copy is absent.
 - at phone widths `320` and `390`, a crawl of at least 36 event pages preserves the exact current preview prefix and the accepted mobile hero/action surface; actual hero-related, other-date, initial/load-more discovery and personal-feed clicks must be exercised;
 - a valid stale v7/root personal-feed cache and an old-prefix Authorized Search payload are either rejected or rebased: their rendered event, absolute/share and local calendar URLs stay in the current preview, while foreign organizer/ticket origins remain unchanged;
+- every static page uses the accepted `service-v1` footer with one partnership
+  link, compact share, non-broken legal placeholders and the official coloured
+  MAX mark; no legacy/prototype switch remains;
+- venue medallion rings and shadows are not clipped, while fail-closed identity
+  resolution and the one-venue ceiling remain unchanged;
+- server-rendered desktop `Смотрите дальше` cards begin with reserved skeleton
+  geometry and clear it on both image load and error without layout shift;
+- at `1536×864`, Split portrait/OCR events `6876` and `4783` use the compact
+  one-row CTA, while Editorial wide-photo events `6551` and `5374` retain the
+  tall panel and bottom calendar/share/like row;
+- desktop event detail ends with exactly six deduplicated/diverse continuation
+  cards and `Все анонсы`, never load-more; the heading claims personalization
+  only for a mature local profile, and the immature fallback is not duplicated
+  on mobile;
+- bot/operator review links resolve only through the durable receipt for the
+  latest fully checked immutable noindex candidate; a failed, incomplete,
+  no-op or artifact-only run cannot advance that pointer or mutate root/current.
 
 ### Required evidence
 

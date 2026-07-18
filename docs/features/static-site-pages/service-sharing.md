@@ -1,10 +1,10 @@
 # F18: поделиться сервисом KenigEvents
 
-> Статус: **изолированный footer prototype v1, до product acceptance**. Он
-> включается только на noindex specimen
-> `/lab/event-desktop/examples/footer-service-v1/`; общий footer событий и
-> списочных страниц намеренно не изменён. После принятия прототип можно перенести
-> в design-system placement и только затем раскатывать на все страницы.
+> Статус: **accepted service footer v1**. После отдельной проверки noindex
+> specimen он принят владельцем продукта и подключён как общий footer событий,
+> списочных, поисковых и lab-страниц. Маршрут
+> `/lab/event-desktop/examples/footer-service-v1/` сохранён как regression
+> specimen, а не как отдельная ветка интерфейса.
 
 ## Назначение и граница
 
@@ -91,10 +91,10 @@ plain text + canonical URL. Они намеренно не объединяют�
 и footer. Footer-only preview — намеренно неполный срез, а не изменение этого
 целевого инварианта.
 
-### Footer prototype v1
+### Accepted service footer v1
 
-`SiteFooterPrototype.astro` проверяет новый информационный порядок отдельно от
-production footer:
+`SiteFooter.astro` является единым placement дизайн-системы и задаёт следующий
+информационный порядок на всех статических поверхностях:
 
 1. сервисный share вынесен в одну цельную компактную inline-поверхность:
    `84px` на desktop и около `116px` на mobile вместо крупного split-баннера;
@@ -116,9 +116,9 @@ production footer:
    монохромный glyph. Локальный asset сопровождается provenance metadata.
 
 Secret-candidate упаковщик сохраняет ровно два явных lab specimen: ранее
-согласованную транспортную A/B/C страницу и этот footer prototype. Остальные
-lab-маршруты по-прежнему исключаются. Это расширение review surface, а не
-разрешение глобального footer rollout.
+согласованную транспортную A/B/C страницу и footer regression specimen.
+Остальные lab-маршруты по-прежнему исключаются. Сам footer при этом одинаков на
+всех статических маршрутах и не имеет legacy/prototype-переключателя.
 
 Перед production нужны реальные тексты и правовая проверка состава документов.
 Политика обработки персональных данных должна быть доступна со страниц, где

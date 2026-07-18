@@ -171,15 +171,16 @@ test('service share prompt uses the canonical inline announcements wordmark', as
   assert.doesNotMatch(share, />Поделиться афишей</u);
 });
 
-test('footer service prototype is isolated, cohesive and does not duplicate partnership navigation', async () => {
-  const component = await read('src/components/SiteFooterPrototype.astro');
+test('accepted service footer is global, cohesive and does not duplicate partnership navigation', async () => {
+  const component = await read('src/components/SiteFooter.astro');
   const socialIcon = await read('src/components/SocialIcon.astro');
   const maxMetadata = JSON.parse(await read('public/assets/social/max-colored-official.svg.metadata.json'));
   const layout = await read('src/layouts/EventLayout.astro');
   const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
   const secretBuilder = await read('scripts/build-secret-candidate.mjs');
 
-  assert.match(component, /data-footer-prototype="service-v1"/u);
+  assert.match(component, /data-site-footer="service-v1"/u);
+  assert.match(component, /site-footer--service-v1/u);
   assert.equal((component.match(/>Информационное партнёрство</gu) || []).length, 1);
   assert.match(component, /Пользовательское соглашение/u);
   assert.match(component, /Политика обработки персональных данных/u);
@@ -192,9 +193,11 @@ test('footer service prototype is isolated, cohesive and does not duplicate part
   assert.match(socialIcon, /withBase\('\/assets\/social\/max-colored-official\.svg'\)/u);
   assert.equal(maxMetadata.source_page, 'https://go.max.ru/brandbook');
   assert.equal(maxMetadata.provider, 'Official MAX brandbook');
-  assert.match(layout, /footerVariant\?: 'current' \| 'prototype-v1'/u);
-  assert.match(layout, /footerVariant === 'prototype-v1'/u);
-  assert.match(lab, /slug: 'footer-service-v1', eventId: 6589[^\r\n]*footerVariant: 'prototype-v1'/u);
+  assert.match(layout, /import SiteFooter from '\.\.\/components\/SiteFooter\.astro'/u);
+  assert.match(layout, /<SiteFooter socialLinks=\{FOOTER_SOCIAL_LINKS\} \/>/u);
+  assert.doesNotMatch(layout, /footerVariant|SiteFooterPrototype/u);
+  assert.match(lab, /slug: 'footer-service-v1', eventId: 6589/u);
+  assert.doesNotMatch(lab, /footerVariant/u);
   assert.match(secretBuilder, /const footerPrototypeRoute = 'lab\/event-desktop\/examples\/footer-service-v1'/u);
 });
 

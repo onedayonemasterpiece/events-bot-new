@@ -27,20 +27,39 @@ async function readBuilt(relativePath) {
   return readFile(path.join(buildRoot, relativePath), 'utf8');
 }
 
-test('personal feed component exposes a hidden reusable hydration surface', async () => {
+test('personal feed keeps listing hydration hidden and exposes a bounded event-detail continuation', async () => {
   const source = await read('src/components/PersonalFeedSlot.astro');
   assert.match(source, /data-personal-feed-section/u);
   assert.match(source, /data-personal-feed-src/u);
   assert.match(source, /data-personal-feed-slot/u);
   assert.match(source, /data-personal-feed-status/u);
-  assert.match(source, /data-personal-feed-load-more/u);
+  assert.match(source, /!isEventDetail && <button[^>]*data-personal-feed-load-more/u);
+  assert.match(source, /data-personal-feed-mode=\{isEventDetail \? 'pending' : undefined\}/u);
   assert.match(source, /aria-live="polite"/u);
-  assert.match(source, /\bhidden\b/u);
-  assert.match(source, /Для вас/u);
-  assert.match(source, /По вашим интересам/u);
+  assert.match(source, /hidden=\{!isEventDetail\}/u);
+  assert.match(source, /Шесть разных событий без бесконечной ленты/u);
+  assert.match(source, /data-personal-feed-all-events[^>]*href=\{siteHomeHref\(\)\}>Все анонсы/u);
+  assert.match(source, /data-personal-feed-mode="pending"/u);
+  assert.match(source, /data-personal-feed-mode="popular_fallback"/u);
+  assert.match(source, /data-personal-feed-mode="unavailable"/u);
   assert.match(source, /repeat\(3, minmax\(0, 1fr\)\)/u);
   assert.match(source, /repeat\(2, minmax\(0, 1fr\)\)/u);
   assert.match(source, /grid-template-columns: minmax\(0, 1fr\)/u);
+});
+
+test('event-detail continuation uses six diverse cards with an honest non-personal fallback', async () => {
+  const layout = await read('src/layouts/EventLayout.astro');
+
+  assert.match(layout, /const EVENT_DETAIL_CONTINUATION_LIMIT = 6/u);
+  assert.match(layout, /function rankPopularFallbackCandidates\(manifest, profile\)/u);
+  assert.match(layout, /const score = 0\.68 \* popularity \+ 0\.32 \* recency/u);
+  assert.match(layout, /maxSameCategory: 3, maxSameVenue: 2/u);
+  assert.match(layout, /personalFeedProfileIsReady\(profile\)/u);
+  assert.match(layout, /isPersonal \? rankPersonalFeedCandidates\(manifest, profile\) : rankPopularFallbackCandidates\(manifest, profile\)/u);
+  assert.match(layout, /slice\(0, isEventDetail \? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT\)/u);
+  assert.match(layout, /section\.dataset\.personalFeedMode = isPersonal \? 'personal' : 'popular_fallback'/u);
+  assert.match(layout, /title\.textContent = isPersonal \? 'По вашим интересам' : 'Ещё события'/u);
+  assert.match(layout, /if \(loadMore\) loadMore\.hidden = isEventDetail/u);
 });
 
 test('personal feed endpoint is a bounded static catalog without a backend RPC', async () => {

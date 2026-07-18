@@ -33,6 +33,7 @@
 | Venue medallion conflict ceiling | `ADD-V12-03` | Unit + generated HTML | `npm --prefix site run test:content-media`; events `5295/6796` | canonical cleanup of ambiguous past rows |
 | Kaliningrad today + build single-flight | `ADD-V12-04..06` | State-machine/unit + fresh candidate | build clock boundary, no-op fingerprint, live/terminal orphan adoption, `/segodnya/` public check | production-run evidence |
 | Typed no-image fallbacks | `ADD-V12-07` | Unit + public candidate | fallback is visible but absent from gallery/OG/JSON-LD/share | inventory refresh after each snapshot |
+| Footer/media/continuation rollout | `ADD-V12-09..12` | Component + public Playwright | global service footer, related-card skeleton, portrait/wide CTA families, bounded desktop continuation | native share and long-session analytics |
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
@@ -66,6 +67,22 @@
   reviewed event expires must still build every design-system scenario from the
   frozen examples; current production membership is not a prerequisite for a
   lab contract.
+- **ADD-V12-09 — One accepted footer.** Event, listing, search and retained lab
+  pages render the same `service-v1` footer: one partnership link, compact share,
+  disabled non-404 legal placeholders and the official coloured MAX asset. No
+  legacy/prototype footer switch or duplicate partnership navigation remains.
+- **ADD-V12-10 — Related-card loading geometry.** Desktop `Смотрите дальше`
+  emits a server-rendered skeleton and `aria-busy=true`; successful and failed
+  image completion both clear the state without changing the reserved frame.
+- **ADD-V12-11 — CTA follows media family.** At `1536×864`, portrait/OCR Split
+  examples `6876` and `4783` keep one contained inline row, while wide Editorial
+  examples `6551` and `5374` keep the three-row panel with calendar/share/like
+  aligned on the bottom row.
+- **ADD-V12-12 — Finite desktop continuation.** Reaching `Смотрите дальше`
+  produces exactly six deduplicated cards and `Все анонсы`, never load-more or
+  infinite scroll. A mature profile uses `По вашим интересам`; an immature one
+  is honestly labelled `Ещё события`, respects 3/category and 2/venue, and is
+  not duplicated on the established mobile discovery surface.
 
 ### Release evidence row contract
 
