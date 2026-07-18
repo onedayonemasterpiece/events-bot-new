@@ -471,7 +471,12 @@ Contract:
 - the kernel extracts the site to `/tmp/kenigevents-static-site`, not read-only `/kaggle/src`;
 - Kaggle CPU currently provides Node 20, while Astro 6 requires Node `>=22.12.0`, so the kernel installs local `node@22.12.0` before build/check;
 - output is intentionally minimal: `<build_id>.tar.gz`, `static_site_build_result.json`, and the kernel log; `node_modules` is not left under `/kaggle/working`;
-- when `--status-db` and callback URL are provided, the launcher creates `kaggle_run.json` via `create_kaggle_run_config(...)`, uploads a status dataset via `create_kaggle_status_dataset(...)`, and adds it to `dataset_sources`; inside the kernel `kaggle_status_client` emits `kernel_started`, `preflight_ok`, `alive` progress, and `report_written`;
+- when `--status-db` and callback URL are provided, the launcher creates `kaggle_run.json` via `create_kaggle_run_config(...)`, uploads a status dataset via `create_kaggle_status_dataset(...)`, and adds it to `dataset_sources`; the kernel explicitly discovers `kaggle_status_client.py` below the mounted `/kaggle/input` tree (dataset sources are not automatically on `sys.path`) and emits `kernel_started`, `preflight_ok`, `alive` progress, and `report_written`;
+- after the host downloads and cryptographically validates the immutable result,
+  it reconciles a non-terminal ledger to a distinct
+  `host_result_validated/done` event. This is a delivery fail-safe, not a fake
+  heartbeat: a healthy status-aware run must still contain the real kernel
+  callbacks and `static_site:builder` lease lifecycle;
 - the resource lease key is `static_site:builder`, so a production status-aware run can block parallel static-site builds.
 
 Verified artifact on 2026-06-28: `preview-20260628-event-pages-prod50-kaggle-v44` built 50 real production-snapshot events on Kaggle CPU and passed `npm run check:preview`. This was a local manual run without production callback env, so status dataset creation was intentionally skipped; the production outbox path must pass `/data/db.sqlite` and the Fly callback to make it visible in `kaggle_run_ledger`/poller.

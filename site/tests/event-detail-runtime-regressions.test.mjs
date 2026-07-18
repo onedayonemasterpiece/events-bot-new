@@ -207,6 +207,8 @@ test('accepted service footer is global, cohesive and does not duplicate partner
   assert.match(component, /Политика обработки персональных данных/u);
   assert.match(component, /role="link" aria-disabled="true" data-footer-future-document/u);
   assert.match(component, /showPrompt=\{false\}/u);
+  assert.match(component, /<strong>Поделитесь<\/strong>/u);
+  assert.match(component, /id="footer-share-title" aria-label="Понравились Анонсы\? Поделитесь"/u);
   assert.match(component, /min-height: 84px/u);
   assert.doesNotMatch(component, /min-height: 190px/u);
   assert.match(component, /min-height: 48px/u);

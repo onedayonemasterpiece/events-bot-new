@@ -15,6 +15,7 @@ from kaggle_status import (
     create_kaggle_status_dataset,
     format_kaggle_status_label,
     make_kaggle_run_event_handler,
+    reconcile_kaggle_run_terminal_from_host,
     record_kaggle_run_event,
 )
 
@@ -79,6 +80,51 @@ async def test_run_config_can_atomically_reject_duplicate_slot(tmp_path, monkeyp
     )
     assert first is not None
     assert second is None
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_host_reconciliation_closes_created_run_without_faking_heartbeat(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    config = await create_kaggle_run_config(
+        db,
+        run_id="static-site:validated-result",
+        session_id=None,
+        kind="static_site_builder",
+        notebook="StaticSiteBuilder",
+    )
+    assert config
+
+    first = await reconcile_kaggle_run_terminal_from_host(
+        db,
+        run_id=config["run_id"],
+        message="validated sha256=abc",
+    )
+    second = await reconcile_kaggle_run_terminal_from_host(db, run_id=config["run_id"])
+
+    assert first["status"] == "reconciled"
+    assert first["callback_event_count"] == 0
+    assert second["status"] == "already_terminal"
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, phase, last_heartbeat_at, terminal_at, progress_json "
+            "FROM kaggle_run_ledger WHERE run_id=?",
+            (config["run_id"],),
+        )
+        ledger = await cur.fetchone()
+        await cur.close()
+        cur = await conn.execute(
+            "SELECT event_name, status, event_uid FROM kaggle_run_event WHERE run_id=?",
+            (config["run_id"],),
+        )
+        events = await cur.fetchall()
+        await cur.close()
+    assert ledger[0:3] == ("done", "report", None)
+    assert ledger[3]
+    assert json.loads(ledger[4])["host_reconciled"] is True
+    assert events == [("host_result_validated", "done", "host_result_validated")]
     await db.close()
 
 

@@ -23,10 +23,11 @@ const { socialLinks } = Astro.props;
   <div class="page-shell site-footer-prototype">
     <section class="site-footer-prototype__share" aria-labelledby="footer-share-title">
       <div class="site-footer-prototype__share-copy">
-        <h2 id="footer-share-title">
+        <h2 id="footer-share-title" aria-label="Понравились Анонсы? Поделитесь">
           <span>Понравились</span>
           <AnnouncementsWordmark class="site-footer-prototype__share-wordmark" />
-          <span aria-hidden="true">?</span>
+          <span>?</span>
+          <strong>Поделитесь</strong>
         </h2>
       </div>
       <div class="site-footer-prototype__share-actions">
@@ -122,6 +123,7 @@ const { socialLinks } = Astro.props;
   }
   .site-footer-prototype__share-copy h2 { margin: 0; display: flex; flex-wrap: nowrap; align-items: baseline; gap: .28em; color: #552414; font-size: clamp(1.05rem, 1.35vw, 1.28rem); line-height: 1; letter-spacing: -.02em; white-space: nowrap; }
   .site-footer-prototype__share-copy h2 > span:first-child { font-weight: 620; }
+  .site-footer-prototype__share-copy h2 > strong { color: #251c17; font-weight: 780; }
   .site-footer-prototype__share-copy :global(.site-footer-prototype__share-wordmark) { width: auto; height: 1.05em; flex: 0 0 auto; color: #9b3f1d; }
   .site-footer-prototype__share-actions { min-width: 0; width: min(100%, 39rem); display: flex; align-items: center; }
   .site-footer-prototype__share-actions :global(.site-footer-prototype__share-control) { width: 100%; }

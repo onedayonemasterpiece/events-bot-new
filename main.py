@@ -22751,6 +22751,30 @@ async def _finish_static_site_candidate(
         success=True,
         receipt=success_receipt,
     )
+    try:
+        from kaggle_status import reconcile_kaggle_run_terminal_from_host
+
+        status_reconciliation = await reconcile_kaggle_run_terminal_from_host(
+            db,
+            run_id=run_id,
+            message=(
+                "static-site host validated result receipt "
+                f"sha256={result_sha256} published={bool(publication_receipt)}"
+            ),
+        )
+        if status_reconciliation.get("status") == "missing":
+            logging.warning(
+                "static_site_build: Kaggle status ledger missing at host reconciliation run_id=%s",
+                run_id,
+            )
+    except Exception:
+        # Publication is already immutable and the durable static-site claim is
+        # complete.  Preserve that success while surfacing status drift for the
+        # next operational check instead of triggering a duplicate remote run.
+        logging.exception(
+            "static_site_build: Kaggle terminal status reconciliation failed run_id=%s",
+            run_id,
+        )
     logging.info(
         "static_site_build: done build_id=%s run_id=%s snapshot_id=%s published=%s recovered_remote=%s token_sha256=%s",
         build_id,

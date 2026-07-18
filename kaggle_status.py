@@ -759,6 +759,99 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
     return 200, body
 
 
+async def reconcile_kaggle_run_terminal_from_host(
+    db: Database,
+    *,
+    run_id: str,
+    message: str = "host validated downloaded Kaggle result",
+) -> dict[str, Any]:
+    """Close a run ledger after the host validates the immutable result.
+
+    Kernel callbacks remain the primary status signal.  This reconciliation is
+    a fail-safe for the narrow case where Kaggle completed and the host
+    cryptographically validated the downloaded result, but callback delivery
+    was unavailable.  It records that distinction instead of leaving a
+    successful run permanently in ``created``.
+    """
+
+    clean_run_id = _clean_text(run_id, limit=300)
+    if not clean_run_id:
+        raise ValueError("run_id is required")
+    now = utc_now_iso()
+    async with db.raw_conn() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await conn.execute(
+                "SELECT status, terminal_at FROM kaggle_run_ledger WHERE run_id=?",
+                (clean_run_id,),
+            )
+            ledger = await cur.fetchone()
+            await cur.close()
+            if not ledger:
+                await conn.rollback()
+                return {"status": "missing", "run_id": clean_run_id}
+            cur = await conn.execute(
+                "SELECT COUNT(*), COALESCE(MAX(seq), 0) FROM kaggle_run_event WHERE run_id=?",
+                (clean_run_id,),
+            )
+            callback_event_count, max_seq = await cur.fetchone()
+            await cur.close()
+            if ledger[1] and str(ledger[0] or "").lower() in TERMINAL_STATUSES:
+                await conn.commit()
+                return {
+                    "status": "already_terminal",
+                    "run_id": clean_run_id,
+                    "callback_event_count": int(callback_event_count or 0),
+                }
+            progress = {
+                "phase": "report",
+                "progress_percent": 100,
+                "progress_label": "результат проверен принимающим хостом",
+                "host_reconciled": True,
+                "callback_event_count": int(callback_event_count or 0),
+            }
+            event_uid = "host_result_validated"
+            await conn.execute(
+                """
+                INSERT OR IGNORE INTO kaggle_run_event(
+                    run_id, seq, event_name, phase, status, event_uid,
+                    progress_json, message, created_at
+                ) VALUES (?, ?, 'host_result_validated', 'report', 'done', ?, ?, ?, ?)
+                """,
+                (
+                    clean_run_id,
+                    int(max_seq or 0) + 1,
+                    event_uid,
+                    _json_dumps(progress),
+                    _clean_text(message, limit=2000),
+                    now,
+                ),
+            )
+            await conn.execute(
+                """
+                UPDATE kaggle_run_ledger
+                SET phase='report', status='done', progress_json=?, updated_at=?,
+                    terminal_at=COALESCE(terminal_at, ?), error=NULL
+                WHERE run_id=?
+                """,
+                (_json_dumps(progress), now, now, clean_run_id),
+            )
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+    logger.info(
+        "kaggle_status: host reconciled terminal run_id=%s callback_event_count=%s",
+        clean_run_id,
+        int(callback_event_count or 0),
+    )
+    return {
+        "status": "reconciled",
+        "run_id": clean_run_id,
+        "callback_event_count": int(callback_event_count or 0),
+    }
+
+
 def make_kaggle_run_event_handler(db: Database):
     from aiohttp import web
 

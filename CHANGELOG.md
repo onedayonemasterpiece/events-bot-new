@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed the static-site Kaggle kernel status-helper discovery for mounted
+  private datasets, reconciled host-validated terminal results without faking a
+  heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
+
 ### Added
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
