@@ -7,9 +7,16 @@
 
 ## Implementation status
 
+The accepted event-detail templates are the primary preproduction surface. A
+coalesced Smart Update rebuild publishes an immutable noindex
+`/_review/<token>/` candidate and advances a durable internal pointer only after
+the full candidate gate succeeds. Historical dated previews are evidence, not
+current review links; production root stays stable until atomic promotion, URL
+lifecycle and rollback gates pass.
+
 `static-event-detail-v11` is the mandatory baseline contract for automatic and
-on-demand builds; v12 is the current fidelity/idempotency correction layer on
-that same accepted family, not a competing lab template. Its accepted baseline is source SHA
+on-demand builds; v12/v13 are fidelity, idempotency and interaction corrections
+on that same accepted family, not competing lab templates. Its accepted baseline is source SHA
 `3b17e536e4dffa9c9fcebab6e641a7cd4ba99b6a`; the current build SHA may advance,
 but every event HTML and release manifest must retain that contract identity.
 The gate covers the complete accepted desktop scenario matrix, not three hand-picked pages:

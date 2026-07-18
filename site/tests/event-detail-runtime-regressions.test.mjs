@@ -100,9 +100,9 @@ test('desktop static continuation emits stable initial skeleton geometry', async
   const desktop = await read('src/components/DesktopEventPage.astro');
   const built = await readBuilt('sobytiya/spektakl-garazh-kaliningrad-5658/index.html');
 
-  assert.match(desktop, /relatedRowLayout/u);
+  assert.match(desktop, /packRelatedCardRows/u);
   assert.match(desktop, /desktopRelatedLayout=\{layout\}/u);
-  assert.match(desktop, /dataset\.labMediaRatio/u);
+  assert.match(card, /--lab-row-media-ratio:/u);
   assert.match(card, /desktopRelatedCrop && 'event-card__media-shell--dynamic'/u);
   assert.match(card, /desktopRelatedCrop && 'is-image-loading'/u);
   assert.match(card, /aria-busy=\{desktopRelatedCrop \? 'true' : undefined\}/u);

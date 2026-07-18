@@ -1,0 +1,102 @@
+mode: serial_integration_after_parallel_mapping
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_sha: fb5a35ddec00157692d75e1610c8fd43f46b4c1e
+base_branch: main
+integration_branch: integration/static-event-v13-review-fixes-20260718
+integration_worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v13-review-fixes
+global_constraints:
+  - secret candidates remain noindex and production root remains stable
+  - event semantics stay LLM-first; deterministic code is routing/geometry only
+  - no preview bearer token is committed
+  - all code changes update canonical docs and CHANGELOG.md
+verification_owner: root
+stop_conditions:
+  - production data mutation without a verified immutable snapshot
+  - candidate cannot pass public Playwright and root-isolation gates
+  - consultant/research evidence is lower than approved Pro/primary-source class
+lanes:
+  - id: R01_R04_media_cta
+    role: planner_then_worker
+    requirement_ids: [R01, R02, R03, R04]
+    target: media-family routing and invariant CTA geometry/semantics
+    depends_on: []
+    execution_mode: parallel_mapping_then_isolated_worker
+    branch: agent/static-event-v13/media-cta
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v13-media-cta
+    writable_files: [site/src, site/tests, site/scripts]
+    forbidden_files: [main.py, static_site_release.py, docs, CHANGELOG.md]
+    expected_output: committed patch and .codex/lanes/static-event-v13-media-cta/RESULTS.md
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: R05_R06_gallery_nav
+    role: planner_then_worker
+    requirement_ids: [R05, R06]
+    target: desktop keyboard gallery and reliable related-event navigation
+    depends_on: []
+    execution_mode: parallel_mapping_then_isolated_worker
+    branch: agent/static-event-v13/gallery-nav
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v13-gallery-nav
+    writable_files: [site/src, site/tests]
+    forbidden_files: [main.py, static_site_release.py, docs, CHANGELOG.md]
+    expected_output: committed patch and .codex/lanes/static-event-v13-gallery-nav/RESULTS.md
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: R07_R08_recommendations
+    role: planner_then_worker
+    requirement_ids: [R07, R08]
+    target: shared card geometry and diverse vector-plus-personal continuation
+    depends_on: []
+    execution_mode: parallel_mapping_then_isolated_worker
+    branch: agent/static-event-v13/recommendations
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v13-recommendations
+    writable_files: [site/src, site/tests, site/scripts/export-production-preview-data.py]
+    forbidden_files: [main.py, static_site_release.py, docs, CHANGELOG.md]
+    expected_output: committed patch and .codex/lanes/static-event-v13-recommendations/RESULTS.md
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: R09_build_observability
+    role: planner_then_worker
+    requirement_ids: [R09]
+    target: last-24h build diagnostics and channel inventories
+    depends_on: []
+    execution_mode: parallel_mapping_then_isolated_worker
+    branch: agent/static-event-v13/build-observability
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v13-build-observability
+    writable_files: [main.py, models.py, static_site_release.py, scripts, tests]
+    forbidden_files: [site/src, docs, CHANGELOG.md]
+    expected_output: committed patch and .codex/lanes/static-event-v13-build-observability/RESULTS.md
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: R10_dual_channel_archive
+    role: planner
+    requirement_ids: [R10]
+    target: dual secret/production generation plus archive and retention policy
+    depends_on: [R09_build_observability]
+    execution_mode: read_only_until_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: [all]
+    expected_output: primary-source policy and staged implementation contract
+    verification_scope: inspection_only
+    effort: high
+    status: completed_policy_design
+  - id: final_review
+    role: reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10]
+    target: requirement-by-requirement closure audit
+    depends_on: [R01_R04_media_cta, R05_R06_gallery_nav, R07_R08_recommendations, R09_build_observability, R10_dual_channel_archive]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: [all]
+    expected_output: Done/Partial/Blocked matrix and release verdict
+    verification_scope: full_local
+    effort: high
+    status: pending_review

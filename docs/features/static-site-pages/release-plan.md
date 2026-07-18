@@ -65,6 +65,47 @@ Secret URL — **не авторизация**. До его первой пуб�
 `no-referrer` и `Cache-Control: private, no-store` уменьшают утечки, но не мешают
 получателю переслать ссылку.
 
+### Диагностика, dual-channel и архив
+
+`scripts/static_site_build_diagnostics.py` формирует read-only redacted отчёт:
+24h outcomes, current channel pointers, event/page/file/object/byte counts и
+history ↔ Kaggle-ledger orphans. Bearer URL/tokens не выводятся.
+
+После production GO Smart Update не запускает два тяжёлых build. Один immutable
+snapshot/content cohort создаёт secret noindex и root-form production artifact;
+у них независимые publication state/pointers. Content, artifact и publication
+fingerprints разделены; failure одного publish lane не сдвигает другой.
+
+Past-event policy по Google Search Central, Schema.org и RFC 9110:
+
+- полезное завершившееся событие сохраняет тот же URL/HTTP 200, truthful dates,
+  видимую метку `Событие завершилось · Архив` и не показывает stale purchase CTA;
+- выдуманного `EventCompleted` нет; cancellation/postponement/reschedule используют
+  документированные `EventStatusType` и previous dates;
+- реальный 1:1 move получает 301/308 (redirect обычно хранится минимум год), а
+  permanent removal без близкой замены — настоящий 404/410, не soft-404/home redirect;
+- sitemap содержит только canonical indexable URLs. Фиксированного SEO-срока
+  хранения past-event pages нет: полезные сохраняются, thin/duplicate/empty
+  периодически удаляются;
+- secret/test prefixes не входят в sitemap/internal links и всегда noindex +
+  no-referrer. Non-current test prefixes удаляются только manifest-bound;
+  current/last-good/pinned evidence защищены;
+- до stable release обязателен URL lifecycle registry для current/previous/
+  retained/expired/deleted, aliases, redirects/410 и двухфазного cleanup plan/apply.
+  Последовательный root-wide copy/delete запрещён.
+
+Retain-in-place и archive hubs — продуктовая inference из этих правил, а не
+отдельное предписание Google.
+
+Primary references: [Google event structured data](https://developers.google.com/search/docs/appearance/structured-data/event),
+[structured-data policies](https://developers.google.com/search/docs/appearance/structured-data/sd-policies),
+[redirects](https://developers.google.com/search/docs/crawling-indexing/301-redirects),
+[site moves](https://developers.google.com/search/docs/crawling-indexing/site-move-with-url-changes),
+[sitemaps](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap),
+[`noindex`](https://developers.google.com/search/docs/crawling-indexing/block-indexing),
+[Schema.org EventStatusType](https://schema.org/EventStatusType) и
+[RFC 9110 §15.5](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.5).
+
 Флаги по умолчанию выключены:
 
 ```text
