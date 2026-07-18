@@ -50,6 +50,10 @@
   разрешает postponed ID в live ID. Fly повторно проверяет title/date/time/place
   evidence существующим строгим matcher перед `event_publication` и сразу
   сохраняет counters уже полученного VK item. Локальных provider reads нет.
+  `wall.getById` может вернуть ещё не опубликованную postponed-запись с будущим
+  `date`: такая запись не считается live, остаётся unresolved и допускает поиск
+  уже опубликованного эквивалента в bounded wall-scan. Это соответствует
+  Fly-side контракту, который запрещает импорт future-dated «published» rows.
 - Вторая собственная VK-группа `231828790` подключена независимо от перегруженных
   `VK_*_GROUP_ID`: учитываются только точные single-event ledgers
   `event.vk_repost_url` и `promo_exposure(surface=vk_repost,

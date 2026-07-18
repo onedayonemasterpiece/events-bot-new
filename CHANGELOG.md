@@ -29,6 +29,10 @@
   strong shared identity anchor; preserve same-event, shared-ticket, missing-time
   and legitimate multi-session positive controls. Production remains in shadow
   pending the documented human precision audit before enforce.
+- **Popular metrics postponed-VK import outage (INC-2026-07-18)**: reject
+  future-dated postponed rows returned by `wall.getById` as not-yet-public and
+  continue bounded wall resolution, preventing one scheduled post from
+  rejecting an otherwise complete Telegram/VK metrics batch.
 - **CherryFlash multi-day Stories outage (INC-2026-07-18)**: ship the approved
   guide True3D renderer in every per-session Kaggle bundle and require the exact
   `cherryflash_full_final.mp4` product artifact, preventing failed notebooks
