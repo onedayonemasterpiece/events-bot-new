@@ -5,6 +5,32 @@
 
 This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
 
+## 2026-07-18 v11 regression repair candidate
+
+The next immutable secret candidate supersedes the visually rejected
+`5roC…` candidate and must be produced from a fresh read-only Fly SQLite
+snapshot through `scripts/run_static_site_builder_kaggle.py`; a local Astro
+build is test evidence, not the handoff artifact. Production root, `current` and
+stable `/ics/` remain unchanged until explicit product acceptance.
+
+Release acceptance adds `ADD-RECENT-06..10`:
+
+- one quality-admitted photo family is shared by desktop/mobile; weak images are
+  removed only when strong event-local alternatives exist;
+- a weak-only low-resolution portrait is retained but bounded with `contain`
+  and the effective viewer instead of being enlarged/cropped;
+- stored OCR/document roles remain non-crop and exact structured source
+  occurrences fail safe when the canonical aggregate is contradictory;
+- editorial leads end at a real sentence or a disclosed ellipsis;
+- KAUP keeps all three accepted timetable arms, while the accepted departure
+  board replaces the old compact list in off/no-JS/elapsed/automation fallback.
+
+The review handoff must include the ordinary KAUP URL and all three forced
+`?ke-exp-transport=` URLs. Forced impressions/actions stay excluded from trusted
+experiment telemetry. The current production A/B/C mode remains `off`; a secret
+candidate is visual/product acceptance, not permission to promote root or start
+live experimentation.
+
 ## Public URLs
 
 Required URLs for the historical 2026-07-02 detailed review target:

@@ -269,3 +269,28 @@ The full-catalog static preview exposed several user-visible regressions around 
 ## Prevention
 
 - this record is a mandatory regression contract for future static-site catalog generation, event-media projection and secondary action work.
+
+## 2026-07-18 review regression addendum
+
+The replacement-candidate `30/30` statement above was insufficient acceptance
+evidence. Transport variants were exercised only through forced query values;
+the ordinary review URL stayed on a rejected compact fallback because the
+schedule had elapsed and automation deliberately skipped assignment. Geometry
+assertions therefore passed while the user-visible default was wrong. The
+candidate also used different desktop/mobile media admission, allowed a stale
+OCR classification to crop a generic advert, enlarged a single `180×320`
+portrait, and projected a false-terminal short description for event `5658`.
+
+The corrected regression contract is `ADD-RECENT-06..10` in
+`docs/features/static-site-pages/test-scenarios.md`: one admitted media set on
+both responsive surfaces with weak-only fallback, bounded low-resolution
+portrait presentation, stored OCR/source-consistency guards, sentence-safe
+leads, and the accepted departure board as the safe/default transport treatment
+while all three A/B/C arms remain force-reviewable. The canonical Dramatic
+Theatre occurrence glue is tracked separately by
+`INC-2026-07-18-dramteatr-same-day-event-glue.md`.
+
+This incident remains **open** until a newly generated immutable secret
+candidate is published through the production Kaggle rail, the named desktop
+and mobile specimens pass public Playwright, the links are read back from the
+existing Telegram review topic, and the user completes visual acceptance.

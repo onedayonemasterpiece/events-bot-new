@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-18-dramteatr-same-day-event-glue.md`
+  - Scope: Smart Update post-match identity enforcement, same-date Dramatic
+    Theatre occurrences, canonical/public repair and static source/media
+    projection.
+  - Must not regress: a `14:30` theatre tour and an `18:00` play on the same
+    venue/date remain distinct; a high-confidence
+    `skip_merge_side_effects` verdict blocks mutation in enforce mode while a
+    true same-event update still merges; OCR/non-identity documents do not own
+    or crop the hero when a strong event-local visual exists.
+
 - `INC-2026-07-18-vk-captcha-publication-cadence-gap.md`
   - Scope: managed VK `vk_sync`, captcha persistence/recovery, expired post
     edits, JobOutbox pause cohorts and postponed publication cadence.

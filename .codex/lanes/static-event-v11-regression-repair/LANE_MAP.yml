@@ -1,0 +1,135 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_sha: daf1527c
+base_branch: main
+integration_branch: integration/static-event-v11-regression-repair-20260718
+global_constraints:
+  - Preserve the accepted v11 event-detail contract across every media family, not only named specimens.
+  - Do not touch the public root; publish only a new immutable secret candidate until user acceptance.
+  - Keep OCR media uncropped; discard low-quality media only when a better event-local alternative exists.
+  - Use the three accepted transport treatments and production-ready deterministic A/B assignment with query override.
+  - Update canonical docs, incident record, tests, and CHANGELOG before release.
+verification_owner: /root
+stop_conditions:
+  - Missing source evidence for an event-content mutation.
+  - A worker needs to edit another lane's writable scope.
+  - Production snapshot or secret-candidate publisher cannot prove root immutability.
+lanes:
+  - id: media
+    role: worker
+    effort: high
+    requirement_ids: [R01, R05]
+    target: media quality selection and portrait gallery behavior
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v11-regression-repair/media
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v11-media-repair
+    writable_files:
+      - site/src/lib/**
+      - site/src/components/*Media*.astro
+      - site/src/components/*Gallery*.astro
+      - site/scripts/*media*
+      - site/tests/**
+      - tests/*static*media*
+      - .codex/lanes/media/RESULTS.md
+    forbidden_files:
+      - site/src/components/EventTransport*.astro
+      - site/src/components/*Transport*.astro
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed media-quality and portrait-gallery fix with targeted tests
+    verification_scope: targeted
+    status: merged
+  - id: content
+    role: worker
+    effort: extra-high
+    requirement_ids: [R02, R03]
+    target: OCR-safe classification, event type/title evidence, and non-truncated editorial lead
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v11-regression-repair/content
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v11-content-repair
+    writable_files:
+      - site/scripts/export-production-preview-data.py
+      - site/src/lib/events.ts
+      - site/src/components/DesktopEventPage.astro
+      - site/src/components/MobileEventPage.astro
+      - tests/test_static_site_*.py
+      - .codex/lanes/content/RESULTS.md
+    forbidden_files:
+      - site/src/components/EventTransport*.astro
+      - site/src/components/*Transport*.astro
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed root-cause fix and evidence for events 5658 and 5756
+    verification_scope: targeted
+    status: merged
+  - id: transport
+    role: worker
+    effort: high
+    requirement_ids: [R04]
+    target: restore the three accepted transport-infographic treatments and A/B mechanics
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-v11-regression-repair/transport
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v11-transport-repair
+    writable_files:
+      - site/src/components/EventTransport*.astro
+      - site/src/components/*Transport*.astro
+      - site/src/lib/*transport*
+      - site/src/styles/*transport*
+      - site/scripts/*transport*
+      - site/tests/**
+      - tests/*transport*
+      - .codex/lanes/transport/RESULTS.md
+    forbidden_files:
+      - site/src/lib/events.ts
+      - site/scripts/export-production-preview-data.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed accepted A/B/C transport implementation with stable assignment and query override
+    verification_scope: targeted
+    status: merged
+  - id: identity
+    role: worker
+    effort: extra-high
+    requirement_ids: [R07]
+    target: exact Smart Update occurrence-glue replay and safe enforcement rollout gate
+    depends_on: [content]
+    execution_mode: serial_after_dependency
+    branch: agent/static-event-v11-regression-repair/identity
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v11-identity-repair
+    writable_files:
+      - main.py
+      - smart_event_update.py
+      - tests/test_smart_update_merge_identity_gate.py
+      - tests/replays/**
+      - .codex/lanes/identity/RESULTS.md
+    forbidden_files:
+      - docs/**
+      - CHANGELOG.md
+      - site/**
+    expected_output: committed exact negative/positive replay plus bounded shadow-to-enforce recommendation
+    verification_scope: targeted
+    status: spawned
+  - id: integration_release
+    role: merge_reviewer
+    effort: extra-high
+    requirement_ids: [R06]
+    target: merge, full regression audit, production-rail Kaggle build, immutable secret publication, Telegram handoff
+    depends_on: [media, content, transport, identity]
+    execution_mode: serial_after_dependency
+    branch: integration/static-event-v11-regression-repair-20260718
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v11-regression-repair-20260718
+    writable_files:
+      - docs/features/static-site-pages/**
+      - docs/operations/e2e-scenarios.md
+      - docs/reports/incidents/**
+      - CHANGELOG.md
+      - integration conflict resolutions
+      - .codex/integration/INTEGRATION_REPORT.md
+    forbidden_files: []
+    expected_output: new verified secret candidate from production snapshot; root unchanged
+    verification_scope: full_local
+    status: in_progress

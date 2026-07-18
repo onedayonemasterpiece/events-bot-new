@@ -15,6 +15,14 @@
 - **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
 
 ### Fixed
+- **Static event v11 review regressions (INC-2026-07-16/18)**: apply one
+  quality-admitted photo set to desktop and mobile while preserving weak-only
+  fallbacks, route a lone low-resolution portrait to a bounded contain viewer,
+  preserve stored OCR classification and prefer event-local classified media,
+  project exact structured occurrence content when a merged aggregate is
+  contradictory, and make editorial leads sentence-safe; restore the accepted
+  KAUP A/B/C treatments with departure-board fallback instead of the rejected
+  compact list and describe the official transfer as a bus or minibus.
 - **VK captcha publication cadence (INC-2026-07-18)**: replace indefinite
   unscoped JobOutbox pauses with persisted captcha cohorts, block new VK work
   from hammering a cached challenge, harmlessly probe and pace cohort recovery,
