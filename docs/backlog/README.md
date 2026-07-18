@@ -15,7 +15,7 @@
 - Promo campaigns (редакторское продвижение событий/фестивалей): `docs/backlog/features/promo-campaigns/README.md`
 - Poll to Repost (опрос в TG -> репост события): `docs/backlog/features/poll-to-forward/README.md`
 - Festival monitoring technical debt (унификация `/start` add-event, фестивальная очередь/E2E, VK festival aggregate posts): `docs/backlog/features/festival-monitoring-debt/README.md`
-- Post-release видеогайды «Как быстро найти событие» для сайта «Полюбить Калининград Анонсы»: `docs/backlog/features/static-site-video-guides/README.md`
+- Post-release видео для сайта «Полюбить Калининград Анонсы»: пользовательские гайды «Как быстро найти событие» и отдельный план source-grounded видео в event page: `docs/backlog/features/static-site-video-guides/README.md`
 
 ## Implemented (для ориентира)
 
