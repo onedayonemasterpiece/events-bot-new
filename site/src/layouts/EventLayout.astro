@@ -1215,7 +1215,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       .listing-filter__copy span { color: var(--muted); font-size: 0.86rem; font-weight: 760; line-height: 1.22; }
       .listing-mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16rem; min-width: min(100%, 13.5rem); padding: 0.18rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 999px; background: rgba(121,48,20,0.08); box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset; white-space: nowrap; }
       .listing-mode-switch button { min-height: 40px; border: 0; border-radius: 999px; padding: 0.36rem 0.68rem; background: transparent; color: var(--primary-strong); font: inherit; font-size: 0.86rem; font-weight: 920; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.32rem; transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
-      .listing-mode-switch button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); box-shadow: 0 8px 18px rgba(121,48,20,0.18); }
+      .listing-mode-switch button[aria-checked="true"] { background: var(--primary); color: var(--primary-text); box-shadow: 0 8px 18px rgba(121,48,20,0.18); }
       .listing-mode-switch button:focus-visible { outline: 3px solid rgba(165,72,33,0.24); outline-offset: 2px; }
       .listing-mode-switch__count { min-width: 1.55rem; min-height: 1.55rem; display: inline-grid; place-items: center; border-radius: 999px; background: rgba(255,255,255,0.24); font-size: 0.78rem; line-height: 1; }
       .listing-filter-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 32; display: none; padding: 0.54rem max(0.82rem, env(safe-area-inset-right)) calc(0.54rem + env(safe-area-inset-bottom)) max(0.82rem, env(safe-area-inset-left)); border-top: 1px solid rgba(121,48,20,0.14); background: rgba(255,253,248,0.97); box-shadow: 0 -18px 42px rgba(72,45,25,0.18); transform: translateY(105%); transition: transform 260ms cubic-bezier(0.22,0.86,0.32,1), opacity 200ms ease; }
@@ -3937,7 +3937,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
 
 
         function hydrateListingFilterFooterGuard() {
-          const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar]'));
+          const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar], .listing-filter--floating'));
           if (!bars.length) return;
           const footer = document.querySelector('.site-footer');
           if (!footer || !('IntersectionObserver' in window)) return;

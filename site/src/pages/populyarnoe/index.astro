@@ -4,7 +4,7 @@ import PopularListingSurface from '../../components/listings/PopularListingSurfa
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import { absoluteUrl, getPopularEvents, SITE_NAME } from '../../lib/events';
 
-const events = getPopularEvents(60);
+const events = getPopularEvents(100);
 const canonicalUrl = absoluteUrl('/populyarnoe/');
 const title = `Популярные события Калининграда | ${SITE_NAME}`;
 const description = 'Лента популярных событий по социальной активности: лайки, репосты, просмотры и реакции источников нормализуются в компактный скоринг.';

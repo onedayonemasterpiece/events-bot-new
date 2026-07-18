@@ -109,11 +109,17 @@ encrypted/key datasets. Runtime обязан получить status leases
 orchestration/import failure переводит ledger в terminal `error`.
 
 Static exporter добавляет к событию объяснимые reason codes:
-`fast_growth`, `frequently_shared`, `discussed`, `multi_source`. Лента остаётся
-единой и ограниченной 20 событиями; сложные главы и ML-скоринг в MVP не входят.
-Оба Telegram-канала и обе VK-группы считаются одной owned-family: для raw totals
-и reason thresholds берётся component-wise максимум. Внутренний repost может
-усилить сигнал, но не удваивает аудиторию и не создаёт ложный `multi_source`.
+`fast_growth`, `frequently_shared`, `discussed`, `multi_source`. V18 потребляет
+их как короткий behavioral overview: до пяти одноярусных полок по пять событий
+(`fast_growth` → `multi_source` → `discussed` → `frequently_shared` → score
+fallback), причём event/program family выделяется только в одну приоритетную
+полку. Это заменяет отклонённый V17 exact-type filter и прежний single-20 UI,
+но не меняет исходный social score и reason thresholds. Оба Telegram-канала и
+обе VK-группы сервиса считаются одной owned-family: для raw totals и reason
+thresholds берётся component-wise максимум. Внутренний repost может усилить
+сигнал, но не удваивает аудиторию и не создаёт ложный `multi_source`; последний
+требует две независимые publisher families. Канонический UI allocation contract:
+[`../static-site-pages/listing-surfaces-v18-product.md`](../static-site-pages/listing-surfaces-v18-product.md).
 
 `age_day` означает “сколько суток прошло с публикации”:
 

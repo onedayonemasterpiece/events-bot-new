@@ -215,6 +215,28 @@ No OpenAI image generation/editing is used by the Telegram projection.
 
 ## Static export data contract
 
+### Listing placement V18
+
+Date/Popular listing cards use a stricter compact projection than event detail:
+
+- at most three visible identities including `Бесплатно`;
+- one medallion may move to a `right:10px; bottom:10px` overlay only on the
+  selected source-reviewed `visual_only` safe event photo or a real no-image
+  fallback; OCR/unknown media never inherits crop/overlay permission from a
+  different raw candidate;
+- regular `221px` media packs three `51px` identities and up to two non-zero
+  Share/Like proof rows into one `64px` rail; short Weekend `178px` media uses a
+  `56px + 36px` split rail (`96px` total);
+- medallions have no universal ring/shadow and render with quiet listing
+  saturation/opacity, strengthening only on hover/focus;
+- proof never evicts venue/festival/Free identity, and a zero proof metric has
+  no DOM node or reserved width.
+
+Controls: Tretyakovka photo `6950` and Zoo fallback `6957` prove the lower-right
+overlay; event `6811` proves all three identities plus two proof rows in both
+regular and Weekend densities. Canonical product contract:
+[`listing-surfaces-v18-product.md`](listing-surfaces-v18-product.md).
+
 Future static export should project a compact token model next to existing event fields:
 
 ```json

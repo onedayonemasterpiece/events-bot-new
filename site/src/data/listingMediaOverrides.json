@@ -88,6 +88,18 @@
       "imageTextMode": "visual_only",
       "cropEvidence": "source-still-reviewed",
       "objectPosition": "50% 45%"
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/06/06480e480e480e4a0e4a0e4b4f0a468ba646164603c603678366801e98749b80.webp",
+      "imageTextMode": "visual_only",
+      "cropEvidence": "source-still-reviewed-20260718",
+      "objectPosition": "50% 50%"
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/03/03820b8e0b1e4b0f9b1f1b1e0b0e396a991a1d904e808f08088843b083600070.webp",
+      "imageTextMode": "visual_only",
+      "cropEvidence": "source-still-reviewed-20260718",
+      "objectPosition": "85% 45%"
     }
   ]
 }

@@ -1,5 +1,4 @@
 ---
-import ListingPersonalFilter from '../ListingPersonalFilter.astro';
 import { cityKey } from '../../lib/listingPresentation';
 
 interface Props {
@@ -34,7 +33,6 @@ const showCities = cities.length > 1;
       ))}
     </fieldset>
   ) : null}
-  <ListingPersonalFilter total={total} label={label} version={2} />
   <p class="ke-visually-hidden" role="status" aria-live="polite" data-listing-result-status></p>
   <div class="ke-listing-empty" data-listing-empty hidden>
     <strong>Нет событий с такими фильтрами</strong>
@@ -141,6 +139,12 @@ const showCities = cities.length > 1;
   }
 
   function syncTimeGroups() {
+    document.querySelectorAll('[data-popular-behavior-group]').forEach((group) => {
+      const count = [...group.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
+      group.hidden = count === 0;
+      const countNode = group.querySelector('[data-popular-group-count]');
+      if (countNode) countNode.textContent = String(count);
+    });
     document.querySelectorAll('[data-listing-time-group]').forEach((group) => {
       const count = [...group.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
       group.hidden = count === 0;

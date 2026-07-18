@@ -7,10 +7,10 @@ import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingIdentityMedallions, getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 import { withBase } from '../../lib/events';
 
-interface Props { event: PreviewEvent; density?: 'regular' | 'weekend'; priority?: boolean }
+interface Props { event: PreviewEvent; density?: 'regular' | 'weekend' | 'popular'; priority?: boolean }
 const { event, density = 'regular', priority = false } = Astro.props;
 const href = eventHref(event);
-const targetRatio = density === 'weekend' ? 4 / 3 : 1.5;
+const targetRatio = density === 'weekend' ? 1.2 : density === 'popular' ? 1.25 : 1.35;
 const image = selectListingImage(event, targetRatio);
 const derivatives = [...(image.asset?.thumbnail_sources || [])]
   .filter((item) => item.src && item.width > 0 && item.height > 0)
@@ -38,7 +38,9 @@ const responsiveSizes = density === 'weekend'
   ? (image.asset?.listing_crop_evidence === 'source-reviewed'
       ? '(min-width: 1880px) 297px, (max-width: 720px) 38vw, 267px'
       : '(min-width: 1880px) 291px, (max-width: 720px) 38vw, 245px')
-  : '(min-width: 1880px) 396px, (max-width: 720px) 38vw, 332px';
+  : density === 'popular'
+    ? '(min-width: 1880px) 290px, (max-width: 720px) 38vw, 250px'
+    : '(min-width: 1880px) 396px, (max-width: 720px) 38vw, 332px';
 const overlayMedallion = getListingVenueMedallion(event, image.asset);
 const identityMedallions = getListingIdentityMedallions(event);
 const externalMedallions = overlayMedallion
@@ -48,12 +50,18 @@ const showFree = event.ticket?.is_free === true;
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count || 0;
 const hasSocialProof = likesCount > 0 || sharesCount > 0;
+const socialProofRows = Number(sharesCount > 0) + Number(likesCount > 0);
+const proofInside = hasSocialProof && image.mode === 'visual-crop' && image.adaptiveCrop;
 const identityLimit = 3;
-const visibleExternalMedallions = externalMedallions.slice(0, Math.max(0, identityLimit - (showFree ? 1 : 0)));
-const visibleIdentityCount = Math.min(identityLimit, visibleExternalMedallions.length + (showFree ? 1 : 0));
-const hasSideRail = visibleIdentityCount > 0 || hasSocialProof;
-const splitIdentityProofRail = hasSocialProof && visibleIdentityCount === 3;
-const tailWidth = splitIdentityProofRail ? 100 : hasSideRail ? 64 : 0;
+const sideIdentityBudget = Math.max(0, identityLimit - (overlayMedallion ? 1 : 0));
+const renderFree = showFree && sideIdentityBudget > 0;
+const visibleExternalMedallions = externalMedallions.slice(0, Math.max(0, sideIdentityBudget - (renderFree ? 1 : 0)));
+const visibleIdentityCount = visibleExternalMedallions.length + (renderFree ? 1 : 0);
+const totalIdentityCount = visibleIdentityCount + (overlayMedallion ? 1 : 0);
+const hasRailProof = hasSocialProof && !proofInside;
+const hasSideRail = visibleIdentityCount > 0 || hasRailProof;
+const splitIdentityProofRail = hasRailProof && visibleIdentityCount === 3 && density !== 'regular';
+const tailWidth = splitIdentityProofRail ? 96 : hasSideRail ? (visibleIdentityCount === 0 ? 40 : 64) : 0;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const style = [
   `--ke-listing-image-ratio:${image.ratio.toFixed(5)}`,
@@ -77,7 +85,7 @@ const socialProofLabel = [
   class="ke-listing-card"
   style={style}
   data-ds-component="ListingEventCard"
-  data-ds-version="7"
+  data-ds-version="8"
   data-feedback-scope
   data-listing-item
   data-event-id={event.id}
@@ -97,7 +105,9 @@ const socialProofLabel = [
   data-image-text-mode={image.asset?.image_text_mode || event.image_text_mode}
   data-venue-medallion={overlayMedallion?.slug || identityMedallions[0]?.slug}
   data-listing-has-social-proof={hasSocialProof ? 'true' : 'false'}
-  data-listing-identity-count={visibleIdentityCount}
+  data-listing-proof-placement={proofInside ? 'inside' : 'rail'}
+  data-listing-proof-rows={socialProofRows}
+  data-listing-identity-count={totalIdentityCount}
   data-listing-side-identity-count={visibleIdentityCount}
   data-listing-tail-layout={splitIdentityProofRail ? 'split' : 'compact'}
   data-listing-overlay-kind={overlayMedallion ? (imageUrl ? 'reviewed-photo' : 'neutral-fallback') : 'none'}
@@ -139,6 +149,12 @@ const socialProofLabel = [
       </span>
     ) : null}
   </a>
+  {proofInside ? (
+    <a class="ke-listing-card__social-proof ke-listing-card__social-proof--inside" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
+      {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
+      {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}
+    </a>
+  ) : null}
   {hasSideRail ? (
     <div class="ke-listing-card__side-rail">
       {visibleIdentityCount > 0 ? (
@@ -151,10 +167,10 @@ const socialProofLabel = [
               </picture>
             </span>
           ))}
-          {showFree && visibleIdentityCount > visibleExternalMedallions.length ? <span class="ke-listing-card__free-medallion" data-listing-medallion-slug="free" aria-label="Бесплатное событие"><img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" /></span> : null}
+          {renderFree ? <span class="ke-listing-card__free-medallion" data-listing-medallion-slug="free" aria-label="Бесплатное событие"><img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" /></span> : null}
         </div>
       ) : null}
-      {hasSocialProof ? (
+      {hasSocialProof && !proofInside ? (
         <a class="ke-listing-card__social-proof" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
           {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
           {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}

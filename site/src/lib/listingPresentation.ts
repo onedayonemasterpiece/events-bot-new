@@ -10,6 +10,14 @@ export interface ListingTimeGroup {
   events: PreviewEvent[];
 }
 
+export type PopularListingReason = 'fast_growth' | 'frequently_shared' | 'discussed' | 'multi_source' | 'score_fallback';
+
+export interface PopularListingGroup {
+  key: PopularListingReason;
+  label: string;
+  events: PreviewEvent[];
+}
+
 export interface ListingImagePresentation {
   asset: EventImageAsset | null;
   src: string | null;
@@ -67,6 +75,40 @@ export function deduplicateListingEvents(items: PreviewEvent[]): PreviewEvent[] 
     if (!current || event.id > current.id) byIdentity.set(key, event);
   }
   return [...byIdentity.values()];
+}
+
+/**
+ * Allocate behavioral Popular shelves once, in product priority order. A
+ * repeating production is one discovery object here even when separate dates
+ * have not yet been linked through other_date_ids.
+ */
+export function buildPopularListingGroups(items: PreviewEvent[], perGroup = 5): PopularListingGroup[] {
+  const limit = Math.max(1, perGroup);
+  const allocated = new Set<string>();
+  const candidates = deduplicateListingEvents(items);
+  const familyKey = (event: PreviewEvent) => [
+    normalizedIdentityPart(event.title),
+    normalizedIdentityPart(event.event_type),
+    normalizedIdentityPart(event.venue_name || event.city),
+  ].join('|');
+  const definitions: Array<{ key: PopularListingReason; label: string; matches: (event: PreviewEvent) => boolean }> = [
+    { key: 'fast_growth', label: 'Быстро набирают', matches: (event) => event.popularity_reason_codes?.includes('fast_growth') === true },
+    { key: 'multi_source', label: 'В разных источниках', matches: (event) => event.popularity_reason_codes?.includes('multi_source') === true },
+    { key: 'discussed', label: 'Активно обсуждают', matches: (event) => event.popularity_reason_codes?.includes('discussed') === true },
+    { key: 'frequently_shared', label: 'Часто делятся', matches: (event) => event.popularity_reason_codes?.includes('frequently_shared') === true },
+    { key: 'score_fallback', label: 'Популярное сейчас', matches: () => true },
+  ];
+  const groups: PopularListingGroup[] = [];
+  for (const definition of definitions) {
+    const events = candidates.filter((event) => {
+      const key = familyKey(event);
+      return !allocated.has(key) && definition.matches(event);
+    }).slice(0, limit);
+    if (!events.length || (definition.key !== 'score_fallback' && events.length < 3)) continue;
+    events.forEach((event) => allocated.add(familyKey(event)));
+    groups.push({ key: definition.key, label: definition.label, events });
+  }
+  return groups;
 }
 
 export function groupListingEvents(items: PreviewEvent[]): ListingTimeGroup[] {

@@ -1,7 +1,7 @@
 {
   "schema_version": "interest-clubs-static-v1",
   "projection_version": 1,
-  "generated_at": "2026-07-18T12:06:20.470387+00:00",
+  "generated_at": "2026-07-18T18:21:59.862991+00:00",
   "current_date": "2026-07-18",
   "source": "disabled-by-build-gate",
   "clubs": []

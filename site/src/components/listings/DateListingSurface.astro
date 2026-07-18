@@ -5,6 +5,7 @@ import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingTimeNav from './ListingTimeNav.astro';
 import ExactTimeTimeline from './ExactTimeTimeline.astro';
+import ListingPersonalFilter from '../ListingPersonalFilter.astro';
 
 interface Props {
   kind: 'today' | 'tomorrow';
@@ -19,9 +20,11 @@ const events = deduplicateListingEvents(rawEvents);
 const generatedAtMs = generatedAt ? Date.parse(generatedAt) : Number.NaN;
 
 function endedBeforeBuild(event: PreviewEvent): boolean {
-  if (kind !== 'today' || !Number.isFinite(generatedAtMs) || !event.end_at) return false;
-  const endMs = Date.parse(event.end_at);
-  return Number.isFinite(endMs) && endMs <= generatedAtMs;
+  if (kind !== 'today' || !Number.isFinite(generatedAtMs)) return false;
+  const endMs = Date.parse(event.end_at || '');
+  if (Number.isFinite(endMs)) return endMs <= generatedAtMs;
+  const startMs = Date.parse(event.starts_at || '');
+  return Number.isFinite(startMs) && startMs <= generatedAtMs - 60 * 60 * 1000;
 }
 
 const earlierEvents = kind === 'today' ? events.filter(endedBeforeBuild) : [];
@@ -37,7 +40,7 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
   class="ke-listing-shell"
   data-date-listing={kind}
   data-listing-date={date}
-  data-listing-variant="DATE-LISTING-V17"
+  data-listing-variant="DATE-LISTING-V18"
   data-listing-density={upcomingEvents.length > 0 && upcomingEvents.length <= 4 ? 'sparse' : 'regular'}
   data-listing-has-time-nav="true"
 >
@@ -72,6 +75,7 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
   <div class="ke-listing-empty" data-listing-no-events hidden={events.length > 0}>
     <strong>Событий на эту дату пока нет</strong>
   </div>
+  <ListingPersonalFilter total={events.length} label={kind === 'today' ? 'сегодня' : 'завтра'} version={2} placement="floating" />
 </div>
 
 {kind === 'today' ? (
@@ -102,6 +106,8 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
       if (!root) return;
       const clock = kaliningradClock();
       const listingDate = root.dataset.listingDate;
+      const nowMarker = root.querySelector('[data-listing-now-marker]');
+      if (nowMarker) nowMarker.hidden = clock.date !== listingDate;
       const earlier = root.querySelector('[data-listing-earlier]');
       const earlierHost = root.querySelector('[data-listing-earlier-groups]');
       const upcomingHost = root.querySelector('[data-listing-upcoming-groups]');

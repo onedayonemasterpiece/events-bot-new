@@ -1,6 +1,6 @@
 {
   "build": {
-    "generated_at": "2026-07-18T12:06:20.470387+00:00",
+    "generated_at": "2026-07-18T18:21:59.862991+00:00",
     "source": "prod-sqlite-static-site-export-v1",
     "source_snapshot_captured_at": "2026-07-18T09:52:41Z",
     "current_date": "2026-07-18",
@@ -195,10 +195,8 @@
       "source_views_count": 2218,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 4913,
@@ -987,10 +985,9 @@
       "source_engagement_sources_count": 12,
       "shares_count": 27,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6922,
@@ -1106,10 +1103,8 @@
       "source_views_count": 2087,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 4689,
@@ -1650,10 +1645,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 3,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6903,
@@ -2010,10 +2004,8 @@
       "source_views_count": 45,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6944,
@@ -2342,10 +2334,8 @@
       "source_views_count": 155,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6672,
@@ -2626,10 +2616,9 @@
       "source_engagement_sources_count": 5,
       "shares_count": 70,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6896,
@@ -2739,10 +2728,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 3,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6913,
@@ -2851,10 +2839,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 3,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6957,
@@ -3070,10 +3057,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 2,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6887,
@@ -3621,10 +3607,8 @@
       "source_views_count": 1460,
       "source_engagement_sources_count": 3,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6589,
@@ -4002,10 +3986,9 @@
       "shares_count": 6,
       "popularity_reason_codes": [
         "frequently_shared",
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 5.5
+      "popularity_signal_score": 4.5
     },
     {
       "id": 6848,
@@ -4141,10 +4124,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 3,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6876,
@@ -4250,10 +4232,8 @@
       "source_views_count": 223,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 3262,
@@ -4521,10 +4501,9 @@
       "source_engagement_sources_count": 10,
       "shares_count": 12,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 5169,
@@ -4630,10 +4609,8 @@
       "source_views_count": 2661,
       "source_engagement_sources_count": 6,
       "shares_count": 3,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 5733,
@@ -4740,10 +4717,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 8,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6708,
@@ -4984,10 +4960,8 @@
       "source_views_count": 570,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6816,
@@ -5299,10 +5273,9 @@
       "source_engagement_sources_count": 4,
       "shares_count": 0,
       "popularity_reason_codes": [
-        "fast_growth",
-        "multi_source"
+        "fast_growth"
       ],
-      "popularity_signal_score": 4.0
+      "popularity_signal_score": 3.0
     },
     {
       "id": 6877,
@@ -5410,10 +5383,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 4,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6893,
@@ -5521,10 +5493,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 2,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6931,
@@ -5985,10 +5956,8 @@
       "source_views_count": 328,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6476,
@@ -6095,10 +6064,9 @@
       "source_engagement_sources_count": 5,
       "shares_count": 31,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6642,
@@ -6843,10 +6811,8 @@
       "source_views_count": 1854,
       "source_engagement_sources_count": 2,
       "shares_count": 3,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6853,
@@ -7055,10 +7021,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 3,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6875,
@@ -7193,10 +7158,8 @@
       "source_views_count": 697,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6902,
@@ -7442,10 +7405,9 @@
       "shares_count": 20,
       "popularity_reason_codes": [
         "frequently_shared",
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 5.5
+      "popularity_signal_score": 4.5
     },
     {
       "id": 4785,
@@ -7813,10 +7775,8 @@
       "source_views_count": 1479,
       "source_engagement_sources_count": 3,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6855,
@@ -8026,10 +7986,8 @@
       "source_views_count": 908,
       "source_engagement_sources_count": 2,
       "shares_count": 2,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6899,
@@ -8140,10 +8098,8 @@
       "source_views_count": 456,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6950,
@@ -8676,10 +8632,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 6,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6395,
@@ -8924,10 +8879,9 @@
       "shares_count": 16,
       "popularity_reason_codes": [
         "frequently_shared",
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 5.5
+      "popularity_signal_score": 4.5
     },
     {
       "id": 6694,
@@ -9252,10 +9206,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 11,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6528,
@@ -9361,10 +9314,9 @@
       "source_engagement_sources_count": 4,
       "shares_count": 3,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6884,
@@ -10053,10 +10005,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 2,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6811,
@@ -10199,10 +10150,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 8,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6798,
@@ -10308,10 +10258,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 51,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6951,
@@ -10522,10 +10471,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 4,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6933,
@@ -10636,10 +10584,8 @@
       "source_views_count": 463,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 5855,
@@ -10775,10 +10721,9 @@
       "source_engagement_sources_count": 5,
       "shares_count": 4,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6867,
@@ -10994,10 +10939,8 @@
       "source_views_count": 761,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6890,
@@ -11182,10 +11125,8 @@
       "source_views_count": 2259,
       "source_engagement_sources_count": 5,
       "shares_count": 3,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6925,
@@ -11492,10 +11433,9 @@
       "source_engagement_sources_count": 4,
       "shares_count": 6,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6926,
@@ -11939,10 +11879,8 @@
       "source_views_count": 71,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6551,
@@ -12049,10 +11987,8 @@
       "source_views_count": 1920,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6703,
@@ -12155,10 +12091,8 @@
       "source_views_count": 233,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6947,
@@ -12369,10 +12303,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 6,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6900,
@@ -12480,10 +12413,8 @@
       "source_views_count": 304,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 5269,
@@ -13254,10 +13185,9 @@
       "source_engagement_sources_count": 4,
       "shares_count": 12,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6810,
@@ -13362,10 +13292,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 32,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6907,
@@ -13618,10 +13547,9 @@
       "source_engagement_sources_count": 4,
       "shares_count": 70,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 5296,
@@ -13938,10 +13866,8 @@
       "source_views_count": 220,
       "source_engagement_sources_count": 3,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 5374,
@@ -14168,10 +14094,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 14,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6856,
@@ -14275,10 +14200,8 @@
       "source_views_count": 429,
       "source_engagement_sources_count": 3,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6920,
@@ -14387,10 +14310,8 @@
       "source_views_count": 160,
       "source_engagement_sources_count": 3,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6547,
@@ -14595,10 +14516,8 @@
       "source_views_count": 1853,
       "source_engagement_sources_count": 2,
       "shares_count": 3,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6881,
@@ -14703,10 +14622,8 @@
       "source_views_count": 433,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6591,
@@ -14958,10 +14875,8 @@
       "source_views_count": 343,
       "source_engagement_sources_count": 4,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6710,
@@ -15070,10 +14985,9 @@
       "shares_count": 9,
       "popularity_reason_codes": [
         "frequently_shared",
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 5.5
+      "popularity_signal_score": 4.5
     },
     {
       "id": 6946,
@@ -15390,10 +15304,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 11,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6851,
@@ -15533,10 +15446,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 2,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6889,
@@ -15641,10 +15553,8 @@
       "source_views_count": 679,
       "source_engagement_sources_count": 2,
       "shares_count": 2,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 5130,
@@ -15785,10 +15695,9 @@
       "source_engagement_sources_count": 4,
       "shares_count": 69,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 5512,
@@ -16354,10 +16263,8 @@
       "source_views_count": 1760,
       "source_engagement_sources_count": 4,
       "shares_count": 6,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6709,
@@ -16530,10 +16437,8 @@
       "source_views_count": 389,
       "source_engagement_sources_count": 2,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6857,
@@ -16637,10 +16542,8 @@
       "source_views_count": 687,
       "source_engagement_sources_count": 3,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6548,
@@ -16846,10 +16749,8 @@
       "source_views_count": 1853,
       "source_engagement_sources_count": 2,
       "shares_count": 3,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6941,
@@ -16960,10 +16861,9 @@
       "shares_count": 7,
       "popularity_reason_codes": [
         "fast_growth",
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 6.5
+      "popularity_signal_score": 5.5
     },
     {
       "id": 6928,
@@ -17395,10 +17295,8 @@
       "source_views_count": 266,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6604,
@@ -17503,10 +17401,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 6,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6529,
@@ -17612,10 +17509,9 @@
       "source_engagement_sources_count": 4,
       "shares_count": 3,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6915,
@@ -17724,10 +17620,8 @@
       "source_views_count": 448,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6592,
@@ -17945,10 +17839,8 @@
       "source_views_count": 987,
       "source_engagement_sources_count": 3,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6261,
@@ -18297,10 +18189,8 @@
       "source_views_count": 507,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6365,
@@ -18405,10 +18295,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 2,
       "popularity_reason_codes": [
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 3.0
+      "popularity_signal_score": 2.0
     },
     {
       "id": 5375,
@@ -18553,10 +18442,8 @@
       "source_views_count": 2481,
       "source_engagement_sources_count": 5,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6484,
@@ -18661,10 +18548,8 @@
       "source_views_count": 799,
       "source_engagement_sources_count": 4,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6882,
@@ -18773,10 +18658,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 6,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 5664,
@@ -19142,10 +19026,8 @@
       "source_views_count": 1960,
       "source_engagement_sources_count": 5,
       "shares_count": 3,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6921,
@@ -19251,10 +19133,8 @@
       "source_views_count": 299,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6945,
@@ -19470,10 +19350,8 @@
       "source_views_count": 678,
       "source_engagement_sources_count": 4,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6938,
@@ -19586,10 +19464,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 0,
       "popularity_reason_codes": [
-        "fast_growth",
-        "multi_source"
+        "fast_growth"
       ],
-      "popularity_signal_score": 4.0
+      "popularity_signal_score": 3.0
     },
     {
       "id": 6955,
@@ -19912,10 +19789,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 11,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 5665,
@@ -20235,10 +20111,8 @@
       "source_views_count": 902,
       "source_engagement_sources_count": 3,
       "shares_count": 2,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6927,
@@ -20658,10 +20532,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 7,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6549,
@@ -20871,10 +20744,8 @@
       "source_views_count": 1853,
       "source_engagement_sources_count": 2,
       "shares_count": 3,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6898,
@@ -21580,10 +21451,8 @@
       "source_views_count": 1572,
       "source_engagement_sources_count": 4,
       "shares_count": 2,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6936,
@@ -21696,10 +21565,9 @@
       "shares_count": 5,
       "popularity_reason_codes": [
         "frequently_shared",
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 5.5
+      "popularity_signal_score": 4.5
     },
     {
       "id": 6917,
@@ -21808,10 +21676,8 @@
       "source_views_count": 559,
       "source_engagement_sources_count": 3,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6793,
@@ -22655,10 +22521,9 @@
       "shares_count": 6,
       "popularity_reason_codes": [
         "frequently_shared",
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 5.5
+      "popularity_signal_score": 4.5
     },
     {
       "id": 6805,
@@ -22852,10 +22717,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 6,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6937,
@@ -22963,10 +22827,9 @@
       "shares_count": 3,
       "popularity_reason_codes": [
         "fast_growth",
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 6.5
+      "popularity_signal_score": 5.5
     },
     {
       "id": 6610,
@@ -23078,10 +22941,8 @@
       "source_views_count": 1037,
       "source_engagement_sources_count": 4,
       "shares_count": 2,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6949,
@@ -24164,10 +24025,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 2,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6767,
@@ -25050,10 +24910,8 @@
       "source_views_count": 2195,
       "source_engagement_sources_count": 6,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 4962,
@@ -25164,10 +25022,9 @@
       "shares_count": 6,
       "popularity_reason_codes": [
         "frequently_shared",
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 5.5
+      "popularity_signal_score": 4.5
     },
     {
       "id": 6865,
@@ -26410,10 +26267,9 @@
       "source_engagement_sources_count": 3,
       "shares_count": 6,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 6436,
@@ -27514,10 +27370,8 @@
       "source_views_count": 1053,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 6885,
@@ -27783,10 +27637,8 @@
       "source_views_count": 156,
       "source_engagement_sources_count": 2,
       "shares_count": 1,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 5259,
@@ -28029,10 +27881,9 @@
       "source_engagement_sources_count": 4,
       "shares_count": 23,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 5668,
@@ -28361,10 +28212,9 @@
       "source_engagement_sources_count": 2,
       "shares_count": 5,
       "popularity_reason_codes": [
-        "frequently_shared",
-        "multi_source"
+        "frequently_shared"
       ],
-      "popularity_signal_score": 3.5
+      "popularity_signal_score": 2.5
     },
     {
       "id": 5835,
@@ -28585,10 +28435,9 @@
       "shares_count": 22,
       "popularity_reason_codes": [
         "frequently_shared",
-        "discussed",
-        "multi_source"
+        "discussed"
       ],
-      "popularity_signal_score": 5.5
+      "popularity_signal_score": 4.5
     },
     {
       "id": 5670,
@@ -28995,10 +28844,8 @@
       "source_views_count": 875,
       "source_engagement_sources_count": 3,
       "shares_count": 0,
-      "popularity_reason_codes": [
-        "multi_source"
-      ],
-      "popularity_signal_score": 1.0
+      "popularity_reason_codes": [],
+      "popularity_signal_score": 0
     },
     {
       "id": 5757,
