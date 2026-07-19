@@ -115,7 +115,7 @@ RUN INPUTS
 - blocked_domains: {{BLOCKED_DOMAINS_OR_EMPTY_ARRAY}}
 
 OUTPUT CONTRACT
-Return one JSON object and nothing else: no Markdown, commentary, citations outside JSON, or code fence. It must conform exactly to JSON Schema region_talk_external_research.v1. Do not invent hashes or candidate IDs; Region Talk computes them after import. Use null only where the schema allows it. Preserve uncertainties instead of guessing.
+Create a UTF-8 file named region-talk-external-research-result-{{REQUEST_ID}}.json and return it as a downloadable attachment. When file attachment is supported, do not paste the large JSON payload into chat. The file must contain one JSON object and nothing else: no Markdown, commentary, citations outside JSON, or code fence. It must conform exactly to JSON Schema region_talk_external_research.v1 and parse successfully with a standard strict JSON parser. Escape literal quotation marks inside query strings and other JSON string values. Do not invent hashes or candidate IDs; Region Talk computes them after import. Use null only where the schema allows it. Preserve uncertainties instead of guessing. If the interface truly cannot create a file, return the same single strict JSON object as the entire response so it can be saved without editing.
 
 OPERATIONAL DEFINITIONS
 1. A source is external/nonregional only when both are true: (a) its editorial scope is federal, supraregional, national, or international; (b) Kaliningrad is one subject/case among others, not the core of the outlet.
@@ -185,6 +185,7 @@ MEDIA AND RIGHTS
 Default to rights_policy=link_only, media_reuse_allowed=false, media_gate_status=not_evaluated. Include only direct candidate image URLs visible on the primary page. Set reuse_verified only when the exact asset licence/permission is explicitly evidenced. Image quality will be evaluated later by Region Talk; do not predict or fabricate its score.
 
 FINAL SELF-CHECK
+- The downloadable UTF-8 .json file was created, parses with a strict standard JSON parser, and contains no prose or Markdown outside the object.
 - JSON conforms exactly to the supplied schema.
 - Every candidate primary page was opened.
 - Every evidence reference resolves.
