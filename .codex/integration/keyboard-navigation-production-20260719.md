@@ -13,7 +13,8 @@
 | R07 | Report actual static build diagnostics for last 24h | observability | R06 | integrator/ops | redacted DB/log/object report with outcomes/counts/times |
 | R08 | Canonical docs, scenario index, incident regression evidence and CHANGELOG | docs | R01–R07 | integrator | no duplicate docs; release limitations explicit |
 | R09 | Never promote production root; candidate remains noindex/no-referrer | release safety | R06 | integrator/ops | secret checks and negative root mutation evidence pass |
-| R10 | Recover recurring Fly root-overlay exhaustion and prevent static/video temp accumulation from blocking Smart Update | incident/ops | production evidence | integrator/ops | root writable, tempfile/health/quick-check pass, retention regression guarded |
+| R10 | Recover recurring Fly root-overlay exhaustion; bound static outputs and detect root/temp failure before Smart Update retries | incident/static/health | production evidence | R10-static-disk | root writable, static output retention + health/tempfile regression guarded |
+| R11 | Bound terminal videoannounce frame trees without deleting active/recoverable output | incident/video | R10 evidence | R11-video-cleanup | published/terminal cleanup and recovery preservation tests |
 
 ## Lane map
 
@@ -72,9 +73,35 @@ lanes:
     expected_output: committed controller parity fix and targeted tests
     verification_scope: targeted
     status: spawned
+  - id: R10-static-disk
+    role: worker
+    requirement_ids: [R10]
+    target: static output retention and root scratch health/preflight
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/keyboard-navigation-production/R10-static-disk
+    worktree: /home/dev/.codex/worktrees/events-bot-new/keyboard-nav-prod-r10-static
+    writable_files: [main.py, main_part2.py, runtime_disk.py, scripts/run_static_site_builder_kaggle.py, static_site_release.py, static_site_diagnostics.py, tests, .env.example, fly.toml, .codex/lanes/R10-static-disk/RESULTS.md]
+    forbidden_files: [site/src, docs, CHANGELOG.md, video_announce/poller.py]
+    expected_output: bounded recognized-only artifact cleanup plus dual-disk/tempfile readiness
+    verification_scope: targeted
+    status: planned
+  - id: R11-video-cleanup
+    role: worker
+    requirement_ids: [R11]
+    target: terminal video output cleanup/preservation
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/keyboard-navigation-production/R11-video-cleanup
+    worktree: /home/dev/.codex/worktrees/events-bot-new/keyboard-nav-prod-r11-video
+    writable_files: [video_announce/poller.py, tests/test_video_announce_poller.py, tests/test_video_announce_v_pipeline.py, .codex/lanes/R11-video-cleanup/RESULTS.md]
+    forbidden_files: [site/src, docs, CHANGELOG.md, main.py, static_site_release.py]
+    expected_output: assertion-safe terminal cleanup with recovery preservation
+    verification_scope: targeted
+    status: planned
   - id: integration-ops
     role: merge_reviewer
-    requirement_ids: [R05, R06, R07, R08, R09, R10]
+    requirement_ids: [R05, R06, R07, R08, R09]
     target: reconcile, docs, CI, deploy, Smart Update secret build, diagnostics
     depends_on: [R01-router, R02-cards]
     execution_mode: serial_after_dependency
