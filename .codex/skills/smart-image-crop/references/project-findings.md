@@ -56,6 +56,10 @@ design-system CSS. Their best ideas are:
 The branch used approximate browse targets `1.35` (regular), `1.20` (weekend),
 and `1.25` (popular), plus adaptive safe-photo envelopes. These are packing
 experiments, not approved image-ratio tokens; do not ship them as new ratios.
+Their useful lesson is that geometry may follow a surface-level composition
+goal: a wide editorial row can intentionally request `W` or `L` even when `S`
+has lower crop loss. Keep that choice stable for the row/family and test the
+requested crop rather than silently optimizing every image to a different token.
 
 ### 3. Related cards contributed the 20% crop math
 
@@ -153,6 +157,9 @@ Do not run OCR/face/saliency analysis in the static page.
 
 - Normalize to one of `P 4:5`, `S 1:1`, `W 4:3`, `L 3:2`. Never create a raw
   source-ratio or experimental `1.20/1.25/1.35` card.
+- Select the token from surface role first when composition requires it. Use
+  minimum safe loss only as a baseline when there is no deliberate wide,
+  portrait, or square product treatment.
 - OCR/unknown: use an exact token match without crop. For a too-vertical source,
   a token may use the bounded crop exception below. If no token is safe, show a
   fixed-token designed fallback and keep the poster for detail/gallery.

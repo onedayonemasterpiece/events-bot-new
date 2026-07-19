@@ -11,6 +11,10 @@
   `L 3:2`. Detail heroes may additionally use `H 16:10`; share compositions use
   `P 4:5`, `S 1:1`, or `OG 40:21` (`1200:630`). Experimental packing values
   such as `1.20`, `1.25`, `1.35` and raw source ratios are not media tokens.
+- Token choice is surface/role-aware. Minimum crop loss is the default when no
+  stronger product composition exists, but a coherent editorial row or hero may
+  intentionally request a wider allowed token. The reason must be stable and
+  test-visible; the requested token still passes all OCR/face/loss gates.
 - OCR/text/unknown uses an exact token match without crop, the bounded vertical
   exception below, or a dedicated natural-ratio detail/gallery surface. If no
   token is safe for a card, use a fixed-token designed fallback rather than a
@@ -59,6 +63,7 @@ The browser/static renderer consumes metadata but does not run vision models.
 - golden corpus across posters, portraits, groups, architecture, text-heavy images and sparse photos;
 - no internal bars/fields in bounded previews;
 - every normalized preview exposes one approved ratio-token name;
+- every non-default token exposes a stable surface/composition selection reason;
 - exact source/target ratios, crop axis and removed-area fraction are test-visible;
 - OCR vertical crop is at most `20%` total and keeps every protected box;
 - no cut faces/heads or significant OCR text;

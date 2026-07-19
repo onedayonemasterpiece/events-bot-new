@@ -128,6 +128,7 @@ def plan_crop(
     target_ratio: float,
     image_text_mode: str,
     surface: str = "card",
+    selection_reason: str = "surface-default",
     safe_crop: bool = False,
     ocr_boxes: Iterable[Box] = (),
     face_boxes: Iterable[Box] = (),
@@ -143,6 +144,9 @@ def plan_crop(
         raise ValueError("invalid image_text_mode")
     if surface not in {*SURFACE_TOKENS, "document"}:
         raise ValueError("invalid surface")
+    selection_reason = selection_reason.strip()
+    if not selection_reason:
+        raise ValueError("selection_reason must be non-empty")
     target_token = ratio_token(target_ratio, surface)
     if surface != "document" and target_token is None:
         allowed = ", ".join(SURFACE_TOKENS[surface])
@@ -163,6 +167,7 @@ def plan_crop(
         "source": {"width": width, "height": height, "ratio": round(source_ratio, 8)},
         "requested_target_ratio": round(target_ratio, 8),
         "target_token": target_token,
+        "token_selection_reason": selection_reason,
         "surface": surface,
         "crop_axis": axis,
         "potential_crop_area_fraction": round(loss, 8),
@@ -282,6 +287,7 @@ def main() -> None:
     parser.add_argument("--target", type=parse_ratio, required=True, dest="target_ratio")
     parser.add_argument("--image-text-mode", choices=("ocr_text", "visual_only", "unknown"), required=True)
     parser.add_argument("--surface", choices=("card", "hero", "share", "document"), default="card")
+    parser.add_argument("--selection-reason", default="surface-default")
     parser.add_argument("--safe-crop", action="store_true")
     parser.add_argument("--ocr-box", action="append", default=[], type=parse_box, dest="ocr_boxes")
     parser.add_argument("--face-box", action="append", default=[], type=parse_box, dest="face_boxes")

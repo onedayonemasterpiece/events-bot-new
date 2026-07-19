@@ -96,12 +96,19 @@ normalized card. Those values may be packing measurements, not media contracts.
 | `H` | `16:10` (`1.6`) | hero only | cinematic detail hero |
 | `OG` | `40:21` (`1200:630`) | share only | Open Graph preview |
 
-For each surface, compute loss against every allowed token, discard unsafe
-candidates, then choose the lowest-loss token; use the surface default only as
-a tie-breaker. OCR candidates additionally discard every horizontal crop and
-every vertical crop above `20%` or intersecting protected boxes. If no token
-survives, do not create a fifth card ratio: render the fixed-token fallback or
-move the source poster to the natural-ratio detail/gallery surface.
+Token selection is **surface- and composition-aware**, not a per-image
+minimization contest. A listing family, editorial row, hero composition, or
+campaign may deliberately request a wider allowed token (`W`, `L`, or `H`) even
+when another token would remove fewer pixels. Record that intent as a stable
+surface/role rule and apply it consistently to the cohort.
+
+Use lowest crop loss as the safe baseline only when the surface has no stronger
+composition requirement. In all cases compute loss for the requested token and
+discard it if safety gates fail. OCR additionally rejects every horizontal crop
+and every vertical crop above `20%` or intersecting protected boxes. If the
+intentional token is unsafe, select another relevant asset, use another allowed
+token, or render the fixed-token fallback; never waive the evidence gates and
+never invent a fifth card ratio.
 
 ### 5. Implement no-field geometry
 
@@ -136,8 +143,10 @@ size at device pixel ratio.
 
 ### 6. Validate pixels and invariants
 
-- Assert the token name, rendered mode, source/target ratio, crop loss, crop
-  axis, retained OCR/face boxes, and object position in markup or tests.
+- Assert the token name, token-selection reason (`surface-default`,
+  `minimum-safe-loss`, or a named editorial/composition role), rendered mode,
+  source/target ratio, crop loss, crop axis, retained OCR/face boxes, and object
+  position in markup or tests.
 - Capture mobile, desktop, and the breakpoint where the geometry changes.
 - Inspect pixels: no bars, no missing poster text, no cut faces, no accidental
   upscale, no overflow, and no geometry-driven event reorder/drop.
@@ -157,6 +166,8 @@ python3 .codex/skills/smart-image-crop/scripts/test_plan_crop.py
 - `object-fit:cover` for every card or thumbnail.
 - `object-fit:contain` inside a mismatched fixed-ratio colored frame.
 - Raw source ratios or experimental packing ratios as new card media tokens.
+- Choosing a different token for every image solely to minimize crop when the
+  product surface requires a coherent shared composition.
 - Choosing a wide but unrelated image merely because it fills the slot.
 - Treating `safe_crop` as overlay-safe; text overlay needs a separate safe region
   plus OCR/face/saliency clearance and contrast evidence.

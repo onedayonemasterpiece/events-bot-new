@@ -14,9 +14,11 @@ class CropPlanTest(unittest.TestCase):
             target_ratio=1.5,
             image_text_mode="visual_only",
             safe_crop=True,
+            selection_reason="editorial-wide",
         )
         self.assertEqual(result["decision"], "cover")
         self.assertAlmostEqual(result["potential_crop_area_fraction"], 0.2)
+        self.assertEqual(result["token_selection_reason"], "editorial-wide")
 
     def test_ocr_vertical_crop_is_bounded_and_box_safe(self) -> None:
         result = plan_crop(
