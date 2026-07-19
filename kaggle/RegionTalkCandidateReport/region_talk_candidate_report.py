@@ -2573,6 +2573,8 @@ IMAGE_QUEUE_STATE_FIELDS = [
     "added_at", "added_from", "last_attempt_run_id", "last_attempt_at", "lease_run_id", "lease_at",
     "last_image_diag_run_id", "last_image_diag_stage", "last_image_diag_at", "post_id",
     "post_url", "platform_post_key", "source_id", "source_title", "source_url", "post_date",
+    "platform", "canonical_source_key", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
+    "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
     "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
     "source_surface_filter_reason", "monitoring_exclusion_reason",
     "text_region_confirmation_status", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
@@ -2630,6 +2632,8 @@ POST_LIVE_STATE_FIELDS = POST_STATE_FIELDS + [
 ]
 CANDIDATE_MEMORY_STATE_FIELDS = [
     "candidate_memory_id", "post_id", "source_id", "source_title", "platform", "post_url", "post_date",
+    "canonical_source_key", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
+    "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
     "platform_post_key", "source_url", "source_scope", "source_geo_class", "source_topic_class",
     "source_quick_class", "source_queue_status", "fetch_status", "source_surface_filter_reason", "monitoring_exclusion_reason",
     "current_stage", "current_lifecycle_status", "best_candidate_score_ever", "best_media_score_ever",
@@ -2652,6 +2656,8 @@ CANDIDATE_MEMORY_STATE_FIELDS = [
 PUBLICATION_CANDIDATE_STATE_FIELDS = [
     "publication_candidate_id", "publication_goal_id", "publication_rank", "publication_candidate_status",
     "post_id", "post_url", "source_id", "source_title", "source_geo_class", "source_topic_class",
+    "platform", "canonical_source_key", "source_url", "content_origin_type", "publication_content_type", "publication_language", "external_publication_id",
+    "external_research_quality_score", "source_overview", "diversity_topics", "rights_policy", "media_use_policy", "media_reuse_allowed",
     "post_date", "short_summary", "why_selected", "why_not_selected", "matched_place_names",
     "candidate_score", "publication_score", "visual_score", "text_story_score", "diversity_penalty",
     "overall_media_score", "postcardness_score", "aesthetic_score", "image_model_input_type",
@@ -4164,7 +4170,10 @@ def build_e5_text_vector_enrichment_rows(
 ) -> list[dict[str, Any]]:
     bank = semantic_bank_v1()
     semantic_bank_version, bank_hash = semantic_bank_version_and_hash(bank)
-    positive_labels = {"ko_visit_impression", "ko_route_useful", "ko_visual_place_card"}
+    positive_labels = {
+        "ko_visit_impression", "ko_route_useful", "ko_visual_place_card",
+        "ko_editorial_publication", "ko_academic_publication",
+    }
     negative_labels = set(bank) - positive_labels
     rows: list[dict[str, Any]] = []
     for idx, post in enumerate(posts):
@@ -4890,6 +4899,13 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                 comment_link_items = ydb_select_kind_items(session, ydb, table_path, "comment_link_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 post_link_items = ydb_select_kind_items(session, ydb, table_path, "post_link_queue_item", limit=getenv_int("REGION_TALK_YDB_MAX_CANDIDATE_ROWS", 5000))
                 text_vector_items = ydb_select_kind_items(session, ydb, table_path, "text_vector_enrichment_item", limit=getenv_int("REGION_TALK_YDB_MAX_TEXT_VECTOR_ROWS", 20000))
+                external_publication_items = ydb_select_kind_items(
+                    session,
+                    ydb,
+                    table_path,
+                    "external_publication_intake_item",
+                    limit=getenv_int("REGION_TALK_YDB_MAX_EXTERNAL_PUBLICATION_ROWS", 2000),
+                )
                 entity_cache_items = ydb_select_kind_items(session, ydb, table_path, "telegram_entity_cache_item", limit=getenv_int("REGION_TALK_YDB_MAX_ENTITY_CACHE_ROWS", 5000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
                 external_blogger_evidence: list[dict[str, Any]] = []
@@ -5027,6 +5043,18 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["text_vector_enrichment"] = q
                         data0["ydb_row_level_text_vector_enrichment_items_loaded"] = len(text_vector_items)
+                    if external_publication_items:
+                        q = data0.get("external_publication_intake") if isinstance(data0.get("external_publication_intake"), dict) else {}
+                        q = dict(q)
+                        for _pk, item in external_publication_items.items():
+                            key = str(
+                                item.get("external_publication_id")
+                                or _pk.replace("external_publication_intake_item:", "")
+                            )
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        data0["external_publication_intake"] = q
+                        data0["ydb_row_level_external_publication_items_loaded"] = len(external_publication_items)
                     if entity_cache_items:
                         q = data0.get("telegram_entity_cache") if isinstance(data0.get("telegram_entity_cache"), dict) else {}
                         q = dict(q)
@@ -6734,6 +6762,27 @@ ORIGINAL_PHOTO_PATTERN = re.compile(r"\b(мои фото|наши фото|фо�
 def infer_visit_semantic_fields(text: str, llm_gate: dict[str, Any], substance: dict[str, Any], post: dict[str, Any] | None = None) -> dict[str, Any]:
     low = (text or "").lower()
     llm_type = str(llm_gate.get("content_type") or llm_gate.get("llm_content_type") or "").strip()
+    origin_type = str((post or {}).get("content_origin_type") or "")
+    if origin_type in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
+        editorial = (post or {}).get("editorial_pack") if isinstance((post or {}).get("editorial_pack"), dict) else {}
+        quality_score = max(0.0, min(1.0, _rt_float((post or {}).get("external_research_quality_score"))))
+        has_analysis = bool(str(editorial.get("why_selected") or editorial.get("reader_takeaway") or "").strip())
+        has_detail = bool(str(editorial.get("teaser") or editorial.get("reader_takeaway") or "").strip())
+        return {
+            "has_firsthand_visit_evidence": "false",
+            "visit_evidence_type": origin_type,
+            "first_person_markers": "",
+            "emotion_or_impression_evidence": "false",
+            "review_or_opinion_evidence": str(has_analysis).lower(),
+            "useful_route_evidence": "false",
+            "memorable_detail_evidence": str(has_detail).lower(),
+            "original_photo_evidence": "false",
+            "evidence_or_expert_basis": "true",
+            "public_interest_insight": str(has_detail).lower(),
+            "nonlocal_blogger_visit_score": 0.0,
+            "publication_story_score": round(max(0.45 if has_analysis and has_detail else 0.0, quality_score), 3),
+            "text_bucket": "external_publication_candidate_text",
+        }
     positive_markers = [
         "мы приехали", "я был", "я была", "мы были", "нам понравилось", "советую", "делюсь маршрутом",
         "нашли место", "зашли", "прогулялись", "поехали на выходные", "мой отзыв", "впечатлило",
@@ -7293,7 +7342,10 @@ def candidate_lifecycle_status(row: dict[str, Any]) -> str:
 
 def is_candidate_memory_row(row: dict[str, Any]) -> bool:
     vector_status = str(row.get("vector_gate_status") or "")
-    vector_region_accept = vector_status == "vector_accept_candidate" and str(row.get("vector_content_type") or "") in {"visit_impression_candidate", "route_useful_candidate", "single_location_photo_card"}
+    vector_region_accept = vector_status == "vector_accept_candidate" and str(row.get("vector_content_type") or "") in {
+        "visit_impression_candidate", "route_useful_candidate", "single_location_photo_card",
+        *EXTERNAL_PUBLICATION_VECTOR_CONTENT_TYPES,
+    }
     if not row.get("kaliningrad_oblast_only_scope") and not vector_region_accept:
         return row.get("manual_decision") in {"manual_keep", "keep", "favorite"} and str(row.get("manual_region_override") or "").lower() == "true"
     if str(row.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject", "unclear"} and not vector_region_accept:
@@ -7453,6 +7505,18 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
             "best_candidate_score_ever": round(best_score, 3), "candidate_score_current": row.get("candidate_score", ""), "candidate_score_delta": score_delta,
             "best_media_score_ever": round(best_media, 3), "media_score_current": row.get("overall_media_score", ""), "media_score_delta": media_delta,
             "short_summary": row.get("short_summary", prev.get("short_summary", "")),
+            "content_origin_type": row.get("content_origin_type", prev.get("content_origin_type", "")),
+            "canonical_source_key": row.get("canonical_source_key", prev.get("canonical_source_key", "")),
+            "publication_content_type": row.get("publication_content_type", prev.get("publication_content_type", "")),
+            "publication_language": row.get("publication_language", prev.get("publication_language", "")),
+            "external_publication_id": row.get("external_publication_id", prev.get("external_publication_id", "")),
+            "external_research_quality_score": row.get("external_research_quality_score", prev.get("external_research_quality_score", "")),
+            "source_overview": row.get("source_overview", prev.get("source_overview", "")),
+            "why_selected": row.get("why_selected", prev.get("why_selected", "")),
+            "diversity_topics": row.get("diversity_topics", prev.get("diversity_topics", [])),
+            "rights_policy": row.get("rights_policy", prev.get("rights_policy", "")),
+            "media_use_policy": row.get("media_use_policy", prev.get("media_use_policy", "")),
+            "media_reuse_allowed": row.get("media_reuse_allowed", prev.get("media_reuse_allowed", False)),
             "full_text": row.get("text") or row.get("full_text") or prev.get("full_text", ""),
             "text_hash": row.get("text_hash") or prev.get("text_hash", ""),
             "kaliningrad_oblast_only_scope": row.get("kaliningrad_oblast_only_scope", prev.get("kaliningrad_oblast_only_scope", "")),
@@ -7542,7 +7606,10 @@ def build_candidate_memory(previous_state: dict[str, Any], current_rows: list[di
     for mid, rec in list(memory.items()):
         if rec.get("manual_decision") in {"manual_keep", "keep", "favorite"}:
             continue
-        vector_region_accept = str(rec.get("vector_gate_status") or "") == "vector_accept_candidate" and str(rec.get("vector_content_type") or "") in {"visit_impression_candidate", "route_useful_candidate", "single_location_photo_card"}
+        vector_region_accept = str(rec.get("vector_gate_status") or "") == "vector_accept_candidate" and str(rec.get("vector_content_type") or "") in {
+            "visit_impression_candidate", "route_useful_candidate", "single_location_photo_card",
+            *EXTERNAL_PUBLICATION_VECTOR_CONTENT_TYPES,
+        }
         if (str(rec.get("kaliningrad_oblast_only_scope") or "").lower() not in {"true", "1", "yes"} and not vector_region_accept) or (str(rec.get("kaliningrad_mention_role") or "main_subject") not in {"", "main_subject", "unclear"} and not vector_region_accept):
             if mid not in durable_memory_ids:
                 # Preserve the historical diagnostic sheet entry, but do not
@@ -9549,6 +9616,18 @@ def build_image_candidate_queue(
             "source_id": row.get("source_id", entries[key].get("source_id", "")),
             "source_title": row.get("source_title", entries[key].get("source_title", "")),
             "source_url": row.get("source_url", entries[key].get("source_url", "")),
+            "platform": row.get("platform", entries[key].get("platform", "")),
+            "canonical_source_key": row.get("canonical_source_key", entries[key].get("canonical_source_key", "")),
+            "content_origin_type": row.get("content_origin_type", entries[key].get("content_origin_type", "")),
+            "publication_content_type": row.get("publication_content_type", entries[key].get("publication_content_type", "")),
+            "publication_language": row.get("publication_language", entries[key].get("publication_language", "")),
+            "external_publication_id": row.get("external_publication_id", entries[key].get("external_publication_id", "")),
+            "external_research_quality_score": row.get("external_research_quality_score", entries[key].get("external_research_quality_score", "")),
+            "source_overview": row.get("source_overview", entries[key].get("source_overview", "")),
+            "diversity_topics": row.get("diversity_topics", entries[key].get("diversity_topics", [])),
+            "rights_policy": row.get("rights_policy", entries[key].get("rights_policy", "")),
+            "media_use_policy": row.get("media_use_policy", entries[key].get("media_use_policy", "")),
+            "media_reuse_allowed": row.get("media_reuse_allowed", entries[key].get("media_reuse_allowed", False)),
             "source_scope": row.get("source_scope", entries[key].get("source_scope", "")),
             "source_geo_class": row.get("source_geo_class", entries[key].get("source_geo_class", "")),
             "source_topic_class": row.get("source_topic_class", entries[key].get("source_topic_class", "")),
@@ -10239,8 +10318,21 @@ def build_publication_candidate_queue(
             "post_url": post_url,
             "source_id": row.get("source_id"),
             "source_title": row.get("source_title"),
+            "source_url": row.get("source_url"),
+            "platform": row.get("platform"),
+            "canonical_source_key": row.get("canonical_source_key"),
             "source_geo_class": row.get("source_geo_class"),
             "source_topic_class": row.get("source_topic_class"),
+            "content_origin_type": row.get("content_origin_type"),
+            "publication_content_type": row.get("publication_content_type"),
+            "publication_language": row.get("publication_language"),
+            "external_publication_id": row.get("external_publication_id"),
+            "external_research_quality_score": row.get("external_research_quality_score"),
+            "source_overview": row.get("source_overview"),
+            "diversity_topics": row.get("diversity_topics"),
+            "rights_policy": row.get("rights_policy"),
+            "media_use_policy": row.get("media_use_policy"),
+            "media_reuse_allowed": row.get("media_reuse_allowed"),
             "post_date": row.get("post_date"),
             "short_summary": row.get("short_summary"),
             "matched_place_names": row.get("matched_place_names"),
@@ -10262,7 +10354,7 @@ def build_publication_candidate_queue(
             "publication_llm_reason": llm_reason[:500],
             "publication_llm_model": llm_model_used,
             "visual_confirmation_source": "RegionTalkImageDiagnostic actual-image scoring" if base_ok else "",
-            "why_selected": why_selected if is_confirmed else "",
+            "why_selected": (row.get("why_selected") or why_selected) if is_confirmed else "",
             "why_not_selected": "" if is_confirmed else (row.get("_publication_base_reject_reason") or llm_reason),
             "goal_stop_candidate": "false",
             "sent_to_chat": str(post_url in sent_urls).lower(),
@@ -14077,11 +14169,13 @@ def _region_talk_llm_text(post: dict[str, Any]) -> str:
     return text[:max(300, limit)]
 
 
-REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v5"
+REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v6"
 
 
 def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
     text = _region_talk_llm_text(post)
+    content_origin_type = str(post.get("content_origin_type") or "external_social").strip()
+    external_publication_lane = content_origin_type in EXTERNAL_PUBLICATION_ORIGIN_TYPES
     slim_evidence = {
         key: evidence.get(key)
         for key in [
@@ -14101,28 +14195,47 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
         ]
         if evidence.get(key) not in (None, "")
     }
+    social_rules = [
+        "require firsthand visit or attributed subscriber report",
+        "require emotion/review and a memorable/useful detail",
+        "reject generic cards/coordinates/official routes/impersonal promotion",
+        "social footer != ad; media credit != visit proof",
+        "single-location cards still need story value",
+    ]
+    publication_rules = [
+        "this is an editorial/academic publication lane: do not require firsthand travel or subscriber-photo evidence",
+        "require attributed original analysis, criticism, research, or expert basis",
+        "require a concrete memorable/public-interest insight about Kaliningrad Oblast",
+        "reject sharply negative, stigmatizing, contemptuous, sensational or catastrophizing portrayals of the region",
+        "constructive neutral problem analysis is allowed only when balanced, evidence-based and useful",
+        "scientific claims must preserve scope, uncertainty and limitations",
+    ]
+    post_payload = {
+        "source_title": post.get("source_title"),
+        "post_url": post.get("post_url"),
+        "post_date": post.get("post_date"),
+        "text": text,
+    }
+    if external_publication_lane:
+        post_payload.update({
+            "content_origin_type": content_origin_type,
+            "publication_content_type": post.get("publication_content_type"),
+        })
+    social_schema = "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_single_location_card,is_ad_or_promo,is_news_or_trash,has_firsthand_visit_evidence,emotion_or_impression_evidence,review_or_opinion_evidence,memorable_detail_evidence,original_photo_evidence; content_type one of visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject; visit_evidence_type one of firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown; reason short ru"
+    publication_schema = "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_ad_or_promo,is_news_or_trash,review_or_opinion_evidence,memorable_detail_evidence,evidence_or_expert_basis,public_interest_insight,sharp_negative_region_image; content_type editorial_publication_candidate|academic_publication_candidate|news_or_event|low_substance|reject; reason short ru"
     payload = {
         "task": "Return JSON for one Region Talk post.",
         "prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,
         "rules": [
             "accept only if Kaliningrad Oblast is the main subject",
             "reject dominant sales offer/price/discount/promo/booking CTA; a short recurring footer linking author's excursions/services/socials alone is not ad",
-            "require firsthand visit or attributed subscriber report",
-            "require emotion/review and a memorable/useful detail",
-            "reject generic cards/coordinates/official routes/impersonal promotion",
-            "social footer != ad; media credit != visit proof",
             "needs_review if text/authorship is insufficient",
-            "single-location cards still need story value",
             "operator_video_review: judge text; video quality unverified",
+            *(publication_rules if external_publication_lane else social_rules),
         ],
         "evidence": slim_evidence,
-        "post": {
-            "source_title": post.get("source_title"),
-            "post_url": post.get("post_url"),
-            "post_date": post.get("post_date"),
-            "text": text,
-        },
-        "schema": "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_single_location_card,is_ad_or_promo,is_news_or_trash,has_firsthand_visit_evidence,emotion_or_impression_evidence,review_or_opinion_evidence,memorable_detail_evidence,original_photo_evidence; content_type one of visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject; visit_evidence_type one of firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown; reason short ru",
+        "post": post_payload,
+        "schema": publication_schema if external_publication_lane else social_schema,
     }
     return json.dumps(payload, ensure_ascii=False)
 
@@ -14144,7 +14257,7 @@ def _llm_json_bool(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _final_verifier_acceptance_violations(data: dict[str, Any]) -> list[str]:
+def _final_verifier_acceptance_violations(data: dict[str, Any], post: dict[str, Any] | None = None) -> list[str]:
     """Fail closed when an LLM `accept` contradicts its structured evidence."""
     violations: list[str] = []
     try:
@@ -14155,16 +14268,28 @@ def _final_verifier_acceptance_violations(data: dict[str, Any]) -> list[str]:
         violations.append("ko_not_confirmed_as_main_subject")
     if any(_llm_json_bool(data.get(key)) for key in ("is_ad_or_promo", "is_news_or_trash", "is_multi_region_roundup", "is_multi_topic_digest", "is_digest_or_roundup")):
         violations.append("promo_news_or_digest")
-    if not (
-        _llm_json_bool(data.get("has_firsthand_visit_evidence"))
-        or _llm_json_bool(data.get("is_photo_card_from_subscriber"))
-    ):
-        violations.append("no_grounded_visit_or_subscriber_report")
-    if not (
-        _llm_json_bool(data.get("emotion_or_impression_evidence"))
-        or _llm_json_bool(data.get("review_or_opinion_evidence"))
-    ):
-        violations.append("no_emotion_or_review")
+    external_publication_lane = str((post or {}).get("content_origin_type") or "") in EXTERNAL_PUBLICATION_ORIGIN_TYPES
+    if external_publication_lane:
+        if not _llm_json_bool(data.get("evidence_or_expert_basis")):
+            violations.append("no_evidence_or_expert_basis")
+        if not (
+            _llm_json_bool(data.get("review_or_opinion_evidence"))
+            or _llm_json_bool(data.get("public_interest_insight"))
+        ):
+            violations.append("no_public_interest_or_analysis")
+        if _llm_json_bool(data.get("sharp_negative_region_image")):
+            violations.append("sharp_negative_region_image")
+    else:
+        if not (
+            _llm_json_bool(data.get("has_firsthand_visit_evidence"))
+            or _llm_json_bool(data.get("is_photo_card_from_subscriber"))
+        ):
+            violations.append("no_grounded_visit_or_subscriber_report")
+        if not (
+            _llm_json_bool(data.get("emotion_or_impression_evidence"))
+            or _llm_json_bool(data.get("review_or_opinion_evidence"))
+        ):
+            violations.append("no_emotion_or_review")
     if not _llm_json_bool(data.get("memorable_detail_evidence")):
         violations.append("no_memorable_or_useful_detail")
     return violations
@@ -14411,7 +14536,7 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
         decision = str(data.get("decision") or "needs_review").strip().lower()
         if decision not in {"accept", "needs_review", "reject"}:
             decision = "needs_review"
-        acceptance_violations = _final_verifier_acceptance_violations(data) if decision == "accept" else []
+        acceptance_violations = _final_verifier_acceptance_violations(data, post) if decision == "accept" else []
         if acceptance_violations:
             decision = "needs_review"
         llm_reason = str(data.get("reason") or "")[:500]
@@ -14443,6 +14568,9 @@ def call_region_talk_semantic_llm(post: dict[str, Any], evidence: dict[str, Any]
             "review_or_opinion_evidence": str(_llm_json_bool(data.get("review_or_opinion_evidence"))).lower(),
             "memorable_detail_evidence": str(_llm_json_bool(data.get("memorable_detail_evidence"))).lower(),
             "original_photo_evidence": str(_llm_json_bool(data.get("original_photo_evidence"))).lower(),
+            "evidence_or_expert_basis": str(_llm_json_bool(data.get("evidence_or_expert_basis"))).lower(),
+            "public_interest_insight": str(_llm_json_bool(data.get("public_interest_insight"))).lower(),
+            "sharp_negative_region_image": str(_llm_json_bool(data.get("sharp_negative_region_image"))).lower(),
             "llm_reason": llm_reason,
             "llm_usage_input_tokens": getattr(usage, "input_tokens", ""),
             "llm_usage_output_tokens": getattr(usage, "output_tokens", ""),
@@ -14657,6 +14785,15 @@ def semantic_bank_v1() -> dict[str, list[str]]:
         "ko_visual_place_card": [
             "Красивое место Калининградской области с описанием вида, атмосферы, моря, пляжа, кирхи, форта, музея или природной локации.",
             "Один конкретный объект или локация в Калининградской области: чем интересен и почему стоит посмотреть.",
+        ],
+        "ko_editorial_publication": [
+            "Содержательная статья внешнего издания о культуре, архитектуре, природе, истории или людях Калининградской области с оригинальным анализом и полезными деталями.",
+            "Профессиональный обзор из нерегионального журнала раскрывает значимый калининградский проект и помогает широкой аудитории понять, чем он интересен.",
+            "Редакционный лонгрид формирует доказательный положительный или конструктивно-нейтральный образ Калининградской области без рекламы и новостной сенсационности.",
+        ],
+        "ko_academic_publication": [
+            "Научная публикация исследует природу, экологию, общество или наследие Калининградской области и содержит понятное широкой аудитории познавательное зерно.",
+            "Рецензируемое исследование использует Калининградскую область как центральный объект, объясняет методы, результаты и ограничения без преувеличений.",
         ],
         "other_region_travel": [
             "Пост о Москве, московских парках, пляжах, маршрутах и прогулках, не связанный с Калининградской областью.",
@@ -14897,7 +15034,10 @@ def _run_embedding_model_pass_bounded(
 
 def _fuse_dual_model_scores(per_model: dict[str, dict[str, float]], bank: dict[str, list[str]], semantic_bank_version: str, bank_hash: str, errors: list[str]) -> dict[str, Any]:
     labels = sorted(bank)
-    positive_labels = {"ko_visit_impression", "ko_route_useful", "ko_visual_place_card"}
+    positive_labels = {
+        "ko_visit_impression", "ko_route_useful", "ko_visual_place_card",
+        "ko_editorial_publication", "ko_academic_publication",
+    }
     negative_labels = set(labels) - positive_labels
     fused = {label: sum(scores.get(label, 0.0) for scores in per_model.values()) / max(1, len(per_model)) for label in labels}
     pos_label, pos_score = max(((l, fused.get(l, 0.0)) for l in positive_labels), key=lambda x: x[1])
@@ -15582,7 +15722,14 @@ def text_vector_gate(
         positive = float(embed.get("vector_positive_semantic_score") or 0)
         negative = float(embed.get("vector_negative_score") or 0)
         negative_class = str(embed.get("vector_negative_class") or "")
-        content_type = "visit_impression_candidate" if embed.get("vector_positive_semantic_class") == "ko_visit_impression" else ("route_useful_candidate" if embed.get("vector_positive_semantic_class") == "ko_route_useful" else "single_location_photo_card")
+        positive_class = str(embed.get("vector_positive_semantic_class") or "")
+        content_type = {
+            "ko_visit_impression": "visit_impression_candidate",
+            "ko_route_useful": "route_useful_candidate",
+            "ko_visual_place_card": "single_location_photo_card",
+            "ko_editorial_publication": "editorial_publication_candidate",
+            "ko_academic_publication": "academic_publication_candidate",
+        }.get(positive_class, "single_location_photo_card")
         runtime = str(embed.get("text_embedding_runtime") or "kaggle_local_dual_text_embeddings")
         model_id = str(embed.get("text_embedding_model_id") or "+".join(TEXT_EMBEDDING_MODELS))
     else:
@@ -15795,6 +15942,135 @@ def build_all_time_metrics(state_to_write: dict[str, Any], source_frontier_uniqu
     }
 
 
+EXTERNAL_PUBLICATION_ORIGIN_TYPES = {"editorial_publication", "academic_publication"}
+EXTERNAL_PUBLICATION_VECTOR_CONTENT_TYPES = {
+    "editorial_publication_candidate",
+    "academic_publication_candidate",
+}
+
+
+def external_publication_quality_score(row: dict[str, Any]) -> float:
+    """Normalize the seven research diagnostics without inventing a new LLM verdict."""
+    quality = row.get("quality_assessment") if isinstance(row.get("quality_assessment"), dict) else {}
+    scores: list[float] = []
+    for value in quality.values():
+        if not isinstance(value, dict) or value.get("score") in (None, ""):
+            continue
+        try:
+            score = float(value.get("score"))
+        except (TypeError, ValueError):
+            continue
+        scores.append(max(0.0, min(4.0, score)))
+    return round(sum(scores) / (4.0 * len(scores)), 3) if scores else 0.0
+
+
+def external_publication_intake_to_post(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Project one reviewed external-publication intake row into the scoring lane.
+
+    This adapter is deliberately strict: research output cannot enter the normal
+    E5/BGE/image/final-verifier funnel unless the importer marked it ready and no
+    later operator policy override blocked it.
+    """
+    if not isinstance(row, dict):
+        return None
+    decision = row.get("decision") if isinstance(row.get("decision"), dict) else {}
+    policy = row.get("policy_classification") if isinstance(row.get("policy_classification"), dict) else {}
+    override = row.get("operator_policy_override") if isinstance(row.get("operator_policy_override"), dict) else {}
+    hard_exclusions = [str(value).strip() for value in (policy.get("hard_exclusion_codes") or []) if str(value).strip()]
+    ready = (
+        str(decision.get("import_status") or "") == "ready_for_region_talk_scoring"
+        and str(decision.get("downstream_readiness") or "") == "candidate_report"
+        and bool(policy.get("product_policy_match"))
+        and not hard_exclusions
+        and str(override.get("decision") or "").lower() not in {"blocked", "reject", "excluded"}
+    )
+    if not ready:
+        return None
+    publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
+    editorial = row.get("editorial_pack") if isinstance(row.get("editorial_pack"), dict) else {}
+    relevance = row.get("region_relevance") if isinstance(row.get("region_relevance"), dict) else {}
+    quality = row.get("quality_assessment") if isinstance(row.get("quality_assessment"), dict) else {}
+    media = row.get("media_and_rights") if isinstance(row.get("media_and_rights"), dict) else {}
+    external_id = str(row.get("external_publication_id") or "").strip()
+    canonical_url = str(row.get("canonical_url") or "").strip()
+    if not external_id or not canonical_url:
+        return None
+    source_name = str(publication.get("source_name") or publication.get("source_domain") or "Внешнее издание").strip()
+    source_domain = str(publication.get("source_domain") or "").strip().lower()
+    track = str(quality.get("track") or "").strip()
+    origin_type = "academic_publication" if track == "scholarly" else "editorial_publication"
+    source_topic = origin_type
+    source_url = "https://" + source_domain if source_domain else canonical_url
+    text_parts = [
+        str(editorial.get("title_short") or publication.get("title") or "").strip(),
+        str(editorial.get("teaser") or "").strip(),
+        str(relevance.get("summary") or "").strip(),
+        str(editorial.get("reader_takeaway") or "").strip(),
+        str(editorial.get("why_selected") or "").strip(),
+        str(editorial.get("caveat") or "").strip(),
+    ]
+    text = "\n".join(part for part in text_parts if part)
+    candidate_urls = [
+        str(value).strip()
+        for value in (media.get("candidate_urls") or [])
+        if str(value).strip().startswith(("https://", "http://"))
+    ]
+    direct_image = candidate_urls[0] if candidate_urls else ""
+    topics = [str(value).strip() for value in (relevance.get("topics") or []) if str(value).strip()]
+    return {
+        "post_id": external_id,
+        "platform": "web",
+        "platform_post_key": "web:" + stable_hash(canonical_url),
+        "post_url": canonical_url,
+        "post_date": publication.get("published_at") or "",
+        "source_id": "web:" + stable_hash(source_domain or source_url),
+        "canonical_source_key": "web:" + (source_domain or stable_hash(source_url)),
+        "source_title": source_name,
+        "source_url": source_url,
+        "source_scope": "external",
+        "source_geo_class": "nonlocal_russia",
+        "source_topic_class": source_topic,
+        "source_quick_class": "candidate_keep",
+        "source_queue_status": "confirmed_external_publication_research",
+        "fetch_status": "confirmed_external_publication_research",
+        "content_origin_type": origin_type,
+        "publication_content_type": publication.get("content_type") or "",
+        "publication_language": publication.get("language") or "",
+        "publication": publication,
+        "editorial_pack": editorial,
+        "quality_assessment": quality,
+        "external_research_quality_score": external_publication_quality_score(row),
+        "external_publication_id": external_id,
+        "external_research_request_id": row.get("research_request_id") or "",
+        "text": text,
+        "text_excerpt": re.sub(r"\s+", " ", text)[:500],
+        "short_summary": editorial.get("teaser") or editorial.get("reader_takeaway") or "",
+        "why_selected": editorial.get("why_selected") or "",
+        "source_overview": editorial.get("source_overview") or "",
+        "diversity_topics": topics,
+        "has_media": bool(direct_image),
+        "media_count": len(candidate_urls),
+        "primary_media_path": direct_image,
+        "image_url_or_local_path": direct_image,
+        "rights_policy": media.get("rights_policy") or "link_only",
+        "media_use_policy": "score_only_no_reuse",
+        "media_reuse_allowed": bool(media.get("media_reuse_allowed")),
+        "research_policy_classification": policy,
+        "research_decision": decision,
+        "is_forwarded_or_repost": False,
+    }
+
+
+def external_publication_posts_from_state(previous_state: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = previous_state.get("external_publication_intake")
+    values = rows.values() if isinstance(rows, dict) else rows if isinstance(rows, list) else []
+    projected = [external_publication_intake_to_post(row) for row in values if isinstance(row, dict)]
+    return sorted(
+        [row for row in projected if row],
+        key=lambda row: (-float(row.get("external_research_quality_score") or 0), str(row.get("post_url") or "")),
+    )
+
+
 def build_report(
     seeds: list[Seed],
     source_rows: list[dict[str, Any]],
@@ -15860,7 +16136,16 @@ def build_report(
         "posts_actionable": len(posts),
         "post_work_reasons_json": json.dumps({"legacy_all_rows": len(posts)}, ensure_ascii=False),
     }
-    scoring_pool = list(posts)
+    external_publication_posts = external_publication_posts_from_state(previous_state)
+    scoring_pool = external_publication_posts + list(posts)
+    if external_publication_posts:
+        report_event(
+            "external_publication_intake_loaded",
+            phase="candidate_processing",
+            status="running",
+            external_publications_ready=len(external_publication_posts),
+            external_publication_urls=[row.get("post_url") for row in external_publication_posts[:20]],
+        )
     post_work_idempotency_enabled = (
         getenv_bool("REGION_TALK_ENABLE_POST_WORK_IDEMPOTENCY", True)
         and getenv_bool("REGION_TALK_ENABLE_VECTOR_GATES", True)
@@ -16126,7 +16411,10 @@ def build_report(
             break
         if idx == 1 or idx % vector_heartbeat_every == 0:
             report_event("vector_scoring_alive", phase="vector_scoring", status="running", progress_label=f"posts {idx}/{len(posts_for_scoring)}", posts_scored=idx, posts_to_score=len(posts_for_scoring), posts_deferred=len(runtime_deferred_posts), runtime_remaining_seconds=round(runtime_remaining_seconds(), 1))
-        seed_for_post = seed_by_id.get(str(p.get('source_seed_id') or '')) or (seeds[0] if seeds else None)
+        is_external_publication = str(p.get("content_origin_type") or "") in EXTERNAL_PUBLICATION_ORIGIN_TYPES
+        seed_for_post = seed_by_id.get(str(p.get('source_seed_id') or ''))
+        if seed_for_post is None and not is_external_publication:
+            seed_for_post = seeds[0] if seeds else None
         text = p.get("text") or ""
         ts = score_text(text)
         scope = kaliningrad_oblast_only_scope_gate(text, lexicon)
@@ -16359,7 +16647,11 @@ def build_report(
             if initial_image_status_fields.get("image_status") == "needs_actual_image_fetch":
                 ms = {**ms, **initial_image_status_fields}
             media_rows.append({"media_id": mid, "candidate_id": cid, "post_url": p.get("post_url"), "image_url_or_local_path": p.get("primary_media_path") or ((p.get("post_url") + "#media") if p.get("has_media") else ""), "thumbnail":"", **ms, **initial_image_status_fields})
-            score = candidate_score(ts, ms, seed_for_post) if seed_for_post else 0.0
+            if is_external_publication:
+                research_quality = max(0.0, min(1.0, _rt_float(p.get("external_research_quality_score"))))
+                score = round(max(0.0, min(1.0, 0.72 * research_quality + 0.28 * _rt_float(ms.get("overall_media_score")))), 3)
+            else:
+                score = candidate_score(ts, ms, seed_for_post) if seed_for_post else 0.0
             image_status_fields = normalize_image_status(current_stage, ms)
             if image_status_fields.get("current_stage") == "image_fetch_retry_needed":
                 current_stage, rejection, drop_gate = "image_fetch_retry_needed", "needs_actual_image_fetch", "image_fetch_gate"
@@ -18604,13 +18896,23 @@ async def amain() -> int:
         candidate_memory_loaded=len(previous_state.get('candidate_memory') or {}),
         progress_label='durable Region Talk state loaded once for acquisition and scoring',
     )
-    source_rows, posts = await fetch_telegram_posts(
-        seeds,
-        status,
-        out_dir,
-        previous_state=previous_state,
-        state_meta=state_meta,
-    )
+    if getenv_bool("REGION_TALK_EXTERNAL_PUBLICATIONS_ONLY", False):
+        source_rows, posts = [], []
+        status.event(
+            "social_acquisition_skipped_external_publications_only",
+            phase="fetch",
+            status="running",
+            run_id=run_id,
+            external_publications_loaded=len(previous_state.get("external_publication_intake") or {}),
+        )
+    else:
+        source_rows, posts = await fetch_telegram_posts(
+            seeds,
+            status,
+            out_dir,
+            previous_state=previous_state,
+            state_meta=state_meta,
+        )
     status.event('posts_fetched', phase='fetch', status='running', sources_scanned=len(source_rows), posts_fetched=len(posts))
     payload = build_report(
         seeds,

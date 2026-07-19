@@ -1,6 +1,6 @@
 # Внешние издания и научные публикации
 
-Status: **contract + staging importer + read-only diversified queue implemented**. Automatic promotion from staging into CandidateReport remains disabled until the editorial/academic semantic bank and final verifier are released. This is an extension of **Region Talk**, not a separate channel or crawler.
+Status: **contract + importer + guarded CandidateReport consumer + diversified queue implemented**. Only intake rows explicitly marked `ready_for_region_talk_scoring` can enter the existing E5/BGE/image/final-verifier funnel; manual-review and blocked research rows remain outside it. This is an extension of **Region Talk**, not a separate channel or crawler.
 
 ## Product decision
 
@@ -21,7 +21,7 @@ The attached 2025–2026 research is treated as a **map of discovery contours**,
 one broad external web-research request
   → strict region_talk_external_research.v1 JSON
   → local validation + DOI/canonical-URL dedupe
-  → YDB external_publication_intake_item (staging only)
+  → YDB external_publication_intake_item + external_publication_source_item
   → same Region Talk E5 + BGE-M3 text evaluation
   → same RegionTalkImageDiagnostic for direct article images
   → editorial/academic final verifier
@@ -90,7 +90,38 @@ The importer:
 - requires a clean candidate to have `strong|credible` quality tier and at least `2/4` for regional centrality, broad public interest, and accessibility; scholarly rows additionally require verified peer review with no correction/retraction flag;
 - validates direct candidate media URLs as public HTTP(S) URLs before any future image handoff;
 - never fetches pages and therefore is not an SSRF-capable crawler;
-- writes `external_publication_intake_item`, `external_publication_import_error_item`, and `external_publication_import_batch` only.
+- writes `external_publication_intake_item`, a compact publisher attestation as `external_publication_source_item`, row errors as `external_publication_import_error_item`, and `external_publication_import_batch`;
+- does not itself write `candidate_memory_item`, `image_queue_item`, or `publication_candidate_item`: only CandidateReport may promote a strictly ready row through the normal gates.
+
+### CandidateReport handoff
+
+`RegionTalkCandidateReport` reads `external_publication_intake_item` beside the
+existing row-level Region Talk state. Its adapter is fail-closed and admits a
+row only when all of these remain true at read time:
+
+- `decision.import_status=ready_for_region_talk_scoring`;
+- `decision.downstream_readiness=candidate_report`;
+- `product_policy_match=true` and there is no hard exclusion;
+- no later operator override blocks the row.
+
+The adapter creates a `platform=web` scoring projection, never a synthetic
+Telegram/VK post. It preserves `content_origin_type`, canonical publisher key,
+research quality, source overview, diversity topics and rights fields. A direct
+article image may be sent to ImageDiagnostic only as
+`score_only_no_reuse`; an image score is not permission to republish it.
+
+The E5 and BGE-M3 semantic bank contains separate
+`ko_editorial_publication` and `ko_academic_publication` positive classes. The
+final verifier uses the origin-aware `region_talk_final_verifier_v6` contract:
+editorial/academic work needs attributed analysis/research, an evidence or
+expert basis, a concrete public-interest insight and a memorable useful detail;
+it does not need a first-person trip. Sharp negative regional framing remains a
+hard rejection. The social lane keeps its former firsthand/emotion rules.
+
+For a bounded canary that does not touch Telegram/VK acquisition, launch
+CandidateReport with `REGION_TALK_EXTERNAL_PUBLICATIONS_ONLY=1`. This changes
+acquisition scope only; YDB, dual-vector, image, final-verifier and operator
+gates remain the same.
 
 ## Ready-to-run external prompt
 
@@ -218,14 +249,16 @@ Implemented now:
 - versioned external-search contract and ready-to-run prompt;
 - fail-closed, idempotent YDB staging importer with row-level error ledger;
 - review-card numeric evaluation fields and editorial wording;
-- read-only on-demand queue renderer with compatible-vector MMR and anti-adjacency.
+- read-only on-demand queue renderer with compatible-vector MMR and anti-adjacency;
+- strict intake-to-CandidateReport projection and external-publications-only canary mode;
+- editorial/academic E5+BGE positive prototypes and origin-aware final verifier;
+- compact publisher attestation join in the finalizer and rights-field propagation through candidate/image/publication state.
 
-Still required before automatic external-publication candidates can become confirmed:
+Still required for each imported external-publication candidate to become confirmed:
 
-- CandidateReport consumer for `external_publication_intake_item`;
-- editorial/academic positive prototypes for E5 and BGE-M3;
-- origin-aware final verifier requiring attributed analysis/research and a useful insight instead of firsthand travel/emotion;
-- publisher-source attestation join outside the Telegram/VK source scan queue;
-- end-to-end rights-field propagation and live operator acceptance run.
+- a real E5 pass followed by the isolated BGE-M3 pass for the same current text hash;
+- actual-image diagnostics when a direct article image exists; missing/weak imagery remains review/deferred rather than receiving an invented score;
+- final-verifier acceptance and human operator review before any queue/publication decision;
+- ongoing source-rights review if the teaser will use anything beyond a link and owned text.
 
-Until those gates ship, imported rows remain staging evidence and cannot appear in the confirmed/publication queue.
+Import alone never makes a row confirmed. Manual-review/blocked rows remain staging evidence; strictly ready rows can advance only by satisfying every normal downstream gate above.

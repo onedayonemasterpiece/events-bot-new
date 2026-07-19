@@ -469,7 +469,46 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         # One read per required kind. The removed post-snapshot pass used to
         # read candidate/source/status a second time and caused the live YDB
         # deadline failure.
-        self.assertEqual(select_mock.call_count, 7)
+        self.assertEqual(select_mock.call_count, 8)
+
+    def test_external_publication_source_is_authoritative_by_web_key(self) -> None:
+        mod = self.mod
+        source = {
+            "canonical_source_key": "web:archi.ru",
+            "platform": "web",
+            "source_title": "Архи.ру",
+            "source_url": "https://archi.ru",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": "editorial_publication",
+            "source_queue_status": "confirmed_external_publication_research",
+            "source_externality_basis": "Федеральное профессиональное издание.",
+        }
+        indexed = mod.authoritative_source_index({}, {}, {"external:archi": source})
+        self.assertEqual(indexed["web:archi.ru"]["source_title"], "Архи.ру")
+        evidence = mod.build_source_onboarding_evidence(source, [], {
+            "canonical_source_key": "web:archi.ru",
+            "post_url": "https://archi.ru/russia/101203/vsya-mudrost-okeana",
+        })
+        evidence_pack = json.loads(evidence["evidence_pack_json"])
+        self.assertTrue(any(row["kind"] == "external_publication_source" for row in evidence_pack))
+        self.assertEqual(evidence["evidence_status"], "sufficient")
+
+    def test_external_publication_onboarding_prompt_uses_publisher_language(self) -> None:
+        mod = self.mod
+        prompt = mod._candidate_onboarding_prompt(
+            {
+                "content_origin_type": "editorial_publication",
+                "post_url": "https://archi.ru/article",
+                "source_title": "Архи.ру",
+                "short_summary": "Обзор музейного комплекса.",
+            },
+            {"profile_summary": "Профессиональное архитектурное издание."},
+            {"evidence_pack": []},
+        )
+        self.assertIn("издании/журнале", prompt)
+        self.assertIn("чем интересна эта публикация", prompt)
+        self.assertNotIn("кто автор", prompt)
 
     def test_source_onboarding_evidence_is_compact_deduplicated_and_traceable(self) -> None:
         mod = self.mod

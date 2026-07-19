@@ -462,6 +462,45 @@ def prepare_import(payload: Any, *, imported_at: str | None = None) -> dict[str,
             "external_publication_intake_item",
             row,
         ))
+    sources_by_key: dict[str, dict[str, Any]] = {}
+    for row in valid:
+        publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
+        source_assessment = row.get("source_assessment") if isinstance(row.get("source_assessment"), dict) else {}
+        quality = row.get("quality_assessment") if isinstance(row.get("quality_assessment"), dict) else {}
+        domain = str(publication.get("source_domain") or "").strip().lower()
+        if not domain:
+            continue
+        canonical_key = "web:" + domain
+        topic = "academic_publication" if str(quality.get("track") or "") == "scholarly" else "editorial_publication"
+        source = sources_by_key.setdefault(canonical_key, {
+            "external_publication_source_id": "extpubsrc_" + stable_hash(canonical_key),
+            "canonical_source_key": canonical_key,
+            "platform": "web",
+            "source_title": publication.get("source_name") or domain,
+            "source_url": "https://" + domain,
+            "canonical_url": "https://" + domain,
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_topic_class": topic,
+            "source_quick_class": "candidate_keep",
+            "source_queue_status": "confirmed_external_publication_research",
+            "fetch_status": "confirmed_external_publication_research",
+            "source_externality_basis": source_assessment.get("externality_basis") or "",
+            "externality_evidence_refs": source_assessment.get("externality_evidence_refs") or [],
+            "research_request_ids": [],
+            "external_publication_ids": [],
+            "updated_at": imported_at,
+        })
+        if request_id not in source["research_request_ids"]:
+            source["research_request_ids"].append(request_id)
+        if row["external_publication_id"] not in source["external_publication_ids"]:
+            source["external_publication_ids"].append(row["external_publication_id"])
+    for canonical_key, source in sorted(sources_by_key.items()):
+        rows.append((
+            "external_publication_source_item:" + source["external_publication_source_id"],
+            "external_publication_source_item",
+            source,
+        ))
     for item in rejected:
         error_id = stable_hash(batch_id, item["index"], item.get("canonical_url"), item.get("errors"))
         rows.append((
@@ -478,6 +517,7 @@ def prepare_import(payload: Any, *, imported_at: str | None = None) -> dict[str,
         "candidate_rows_received": len(candidates),
         "candidate_rows_valid": len(valid),
         "candidate_rows_rejected": len(rejected),
+        "external_sources_staged": len(sources_by_key),
         "ready_for_region_talk_scoring": sum(1 for row in valid if row["decision"]["import_status"] == "ready_for_region_talk_scoring"),
         "manual_or_blocked": sum(1 for row in valid if row["decision"]["import_status"] != "ready_for_region_talk_scoring"),
         "coverage": payload.get("coverage") if isinstance(payload.get("coverage"), list) else [],

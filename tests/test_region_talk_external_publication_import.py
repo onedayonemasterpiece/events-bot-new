@@ -160,6 +160,11 @@ def test_valid_candidate_is_normalized_to_fail_closed_staging_row() -> None:
     assert row["media_and_rights"]["media_use_policy"] == "score_only_no_reuse"
     assert row["next_action"] == "run_region_talk_text_vector_and_image_scoring"
     assert all(kind != "publication_candidate_item" for _, kind, _ in result["ydb_rows"])
+    source_rows = [payload for _, kind, payload in result["ydb_rows"] if kind == "external_publication_source_item"]
+    assert len(source_rows) == 1
+    assert source_rows[0]["canonical_source_key"] == "web:example.org"
+    assert source_rows[0]["source_topic_class"] == "academic_publication"
+    assert result["batch"]["external_sources_staged"] == 1
 
 
 def test_one_invalid_candidate_does_not_abort_batch() -> None:

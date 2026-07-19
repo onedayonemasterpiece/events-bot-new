@@ -4770,6 +4770,69 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
             else:
                 os.environ["REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS"] = old
 
+    def test_external_publication_intake_projects_only_ready_policy_match(self) -> None:
+        mod = load_module()
+        row = {
+            "external_publication_id": "extpub_archi",
+            "canonical_url": "https://archi.example/ocean",
+            "research_request_id": "run-1",
+            "publication": {
+                "title": "Вся мудрость океана",
+                "source_name": "Архи.ру",
+                "source_domain": "archi.example",
+                "published_at": "2025-08-27",
+                "language": "ru",
+                "content_type": "architecture_criticism",
+            },
+            "source_assessment": {"scope": "external"},
+            "region_relevance": {"summary": "Обзор музея в Калининграде", "topics": ["архитектура", "наука"]},
+            "policy_classification": {"product_policy_match": True, "hard_exclusion_codes": []},
+            "quality_assessment": {
+                "track": "professional_editorial",
+                "source_authority": {"score": 3},
+                "evidence_depth": {"score": 4},
+            },
+            "editorial_pack": {
+                "title_short": "Архитектура как музейный маршрут",
+                "teaser": "Материал объясняет устройство нового корпуса.",
+                "reader_takeaway": "Форма и экспозиция образуют единый сценарий.",
+                "why_selected": "Центральная региональная тема.",
+                "source_overview": "Федеральная профессиональная платформа.",
+            },
+            "media_and_rights": {
+                "candidate_urls": ["https://i.example/ocean.jpg"],
+                "rights_policy": "link_only",
+                "media_reuse_allowed": False,
+            },
+            "decision": {
+                "import_status": "ready_for_region_talk_scoring",
+                "downstream_readiness": "candidate_report",
+            },
+        }
+        projected = mod.external_publication_intake_to_post(row)
+        self.assertIsNotNone(projected)
+        self.assertEqual(projected["content_origin_type"], "editorial_publication")
+        self.assertEqual(projected["canonical_source_key"], "web:archi.example")
+        self.assertEqual(projected["media_use_policy"], "score_only_no_reuse")
+        self.assertTrue(projected["has_media"])
+        row["operator_policy_override"] = {"decision": "blocked"}
+        self.assertIsNone(mod.external_publication_intake_to_post(row))
+
+    def test_external_publication_final_verifier_does_not_require_firsthand_visit(self) -> None:
+        mod = load_module()
+        post = {"content_origin_type": "editorial_publication"}
+        accepted = {
+            "whole_post_about_kaliningrad_oblast_score": 0.95,
+            "kaliningrad_mention_role": "main_subject",
+            "evidence_or_expert_basis": True,
+            "public_interest_insight": True,
+            "memorable_detail_evidence": True,
+            "sharp_negative_region_image": False,
+        }
+        self.assertEqual(mod._final_verifier_acceptance_violations(accepted, post), [])
+        accepted["sharp_negative_region_image"] = True
+        self.assertIn("sharp_negative_region_image", mod._final_verifier_acceptance_violations(accepted, post))
+
     def test_rich_text_media_attribution_is_discovered_and_persistable(self) -> None:
         mod = load_module()
         message = types.SimpleNamespace(
@@ -9027,7 +9090,7 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         }, {"stage": "final_publication_verifier"})
         self.assertIn("short recurring footer", prompt)
         self.assertIn("alone is not ad", prompt)
-        self.assertEqual(mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION, "region_talk_final_verifier_v5")
+        self.assertEqual(mod.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION, "region_talk_final_verifier_v6")
 
     def test_image_queue_rows_carry_preimage_publication_eligibility_attestation(self) -> None:
         mod = load_module()

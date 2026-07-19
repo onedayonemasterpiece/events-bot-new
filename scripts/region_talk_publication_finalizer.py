@@ -479,6 +479,14 @@ def build_source_onboarding_evidence(
 
     if title or source_url:
         add("authoritative_source_identity", f"Название: {title}. Публичный адрес: {source_url}.", url=source_url)
+    if str(source.get("source_topic_class") or "") in {"editorial_publication", "academic_publication"}:
+        add(
+            "external_publication_source",
+            "Тип источника: " + str(source.get("source_topic_class") or "")
+            + ". Внешний по отношению к Калининградской области источник. Основание: "
+            + str(source.get("source_externality_basis") or "проверено внешним research-контрактом"),
+            url=source_url,
+        )
 
     external_parts = []
     external_field_labels = [
@@ -546,7 +554,10 @@ def build_source_onboarding_evidence(
         json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     authored_count = sum(1 for item in evidence if item["kind"] == "authored_post_excerpt")
-    external_count = sum(1 for item in evidence if item["kind"] == "external_open_source_registry")
+    external_count = sum(
+        1 for item in evidence
+        if item["kind"] in {"external_open_source_registry", "external_publication_source"}
+    )
     status = "sufficient" if source_key and title and (authored_count >= 1 or external_count >= 1) else "insufficient"
     return {
         "source_profile_id": source_profile_id(source_key),
@@ -603,6 +614,7 @@ def read_live_rows(
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
         dict[str, dict[str, Any]],
+        dict[str, dict[str, Any]],
     ]:
         images = rt.ydb_select_kind_items(session, ydb, table, "image_queue_item", limit=limit_images)
         memory = rt.ydb_select_kind_items(session, ydb, table, "candidate_memory_item", limit=limit_memory)
@@ -610,8 +622,11 @@ def read_live_rows(
         sources = rt.ydb_select_kind_items(session, ydb, table, "source_queue_item", limit=limit_memory)
         source_statuses = rt.ydb_select_kind_items(session, ydb, table, "source_status_item", limit=limit_memory)
         online_sources = rt.ydb_select_kind_items(session, ydb, table, "online_source_item", limit=limit_memory)
+        external_publication_sources = rt.ydb_select_kind_items(
+            session, ydb, table, "external_publication_source_item", limit=limit_memory
+        )
         onboarding_profiles = rt.ydb_select_kind_items(session, ydb, table, "source_onboarding_profile_item", limit=limit_memory)
-        return images, memory, publications, sources, source_statuses, online_sources, onboarding_profiles
+        return images, memory, publications, sources, source_statuses, online_sources, external_publication_sources, onboarding_profiles
 
     (
         images_by_pk,
@@ -620,11 +635,16 @@ def read_live_rows(
         source_items,
         source_status_items,
         online_source_items,
+        external_publication_source_items,
         onboarding_profile_items,
     ) = pool.retry_operation_sync(op)
     memory_by_url = _publication_by_normalized_url(memory_by_pk)
     publication_by_url = _publication_by_normalized_url(publications_by_pk)
-    sources_by_key = authoritative_source_index(source_items, source_status_items, online_source_items)
+    sources_by_key = authoritative_source_index(
+        source_items,
+        source_status_items,
+        {**online_source_items, **external_publication_source_items},
+    )
     # Reuse the one paginated live snapshot for pre-image source-attestation
     # priority.  The previous implementation scanned candidate/source/status
     # kinds a second time after this complete read.  On the live compact table
@@ -1628,16 +1648,25 @@ def normalize_source_onboarding_profile(
 
 
 def _candidate_onboarding_prompt(row: dict[str, Any], profile: dict[str, Any], evidence_row: dict[str, Any]) -> str:
-    return """Напиши один доказательный вводный абзац о блогере/канале для редактора Region Talk.
-Длина строго 300–600 знаков, русский язык, без рекламы и превосходных степеней.
-Абзац должен объяснить, кто автор, его подтверждённый ракурс и почему именно этот пост интересен.
+    external_publication = str(row.get("content_origin_type") or "") in {
+        "editorial_publication", "academic_publication",
+    }
+    subject = "издании/журнале" if external_publication else "блогере/канале"
+    purpose = (
+        "Абзац должен кратко представить тип и тематический ракурс издания, а затем объяснить, чем интересна эта публикация."
+        if external_publication
+        else "Абзац должен объяснить, кто автор, его подтверждённый ракурс и почему именно этот пост интересен."
+    )
+    return "Напиши один доказательный вводный абзац о " + subject + " для редактора Region Talk.\n" + """Длина строго 300–600 знаков, русский язык, без рекламы и превосходных степеней.
+""" + purpose + """
 Используй ТОЛЬКО claims/angles профиля и evidence_pack. Не называй человека жителем региона без прямого доказательства.
 Верни только JSON:
 {"status":"ready|needs_review","onboarding_paragraph":"...","claim_ids":["C1"],"evidence_ids":["E1"],"selected_angle_id":"A1"}
 
 INPUT:
-""" + json.dumps({
+    """ + json.dumps({
         "candidate_post_url": row.get("post_url"),
+        "content_origin_type": row.get("content_origin_type"),
         "candidate_post_summary": row.get("short_summary") or row.get("llm_reason") or "",
         "source_title": row.get("source_title"),
         "profile_summary": profile.get("profile_summary"),
