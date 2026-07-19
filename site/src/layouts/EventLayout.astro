@@ -19,10 +19,13 @@ interface Props {
   structuredData?: unknown[];
   heroChrome?: 'standard' | 'immersive';
   headerCurrent?: HeaderCurrent;
+  noindex?: boolean;
 }
 
-const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent } = Astro.props;
-const robots = IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive');
+const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent, noindex = false } = Astro.props;
+const robots = noindex
+  ? 'noindex,nofollow,noarchive'
+  : (IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive'));
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');

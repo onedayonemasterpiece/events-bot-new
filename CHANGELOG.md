@@ -39,6 +39,11 @@
   heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
 
 ### Added
+- **Desktop keyboard event-surfing prototype:** add one noindex event-detail lab
+  for «Собака на сене» with a scoped current-event/related-card navigator,
+  spatial arrow movement, native `Space` scrolling, contextual `L`/`K`/`S`
+  actions, visible focus guidance and a focused Playwright acceptance check;
+  production event routes and mobile behavior remain unchanged.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
   expose one fail-closed resolver to bot/operator link-producing paths, preserve

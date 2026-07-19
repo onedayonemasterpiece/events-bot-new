@@ -66,6 +66,7 @@ captured_logs.txt
 logs_analysis.txt
 
 # Local test outputs
+.playwright-cli/
 test_result*.txt
 test_*.txt
 test_parser_output/
