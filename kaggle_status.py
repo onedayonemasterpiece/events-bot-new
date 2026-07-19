@@ -69,6 +69,41 @@ KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS = _read_positive_int_env(
 )
 
 
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "database is locked" in message or "database table is locked" in message
+
+
+async def _begin_immediate_with_retry(
+    conn: Any,
+    *,
+    run_id: str,
+    operation: str,
+    max_attempts: int = 5,
+) -> None:
+    """Acquire SQLite's single writer slot with bounded lock-only retries."""
+
+    attempts = max(1, int(max_attempts))
+    for attempt in range(1, attempts + 1):
+        try:
+            await conn.execute("BEGIN IMMEDIATE")
+            return
+        except sqlite3.OperationalError as exc:
+            if not _is_sqlite_lock_error(exc) or attempt >= attempts:
+                raise
+            delay = min(2 ** (attempt - 1), 8)
+            logger.warning(
+                "kaggle_status: SQLite writer lock operation=%s run_id=%s "
+                "attempt=%s/%s retry_in=%ss",
+                operation,
+                _clean_text(run_id, limit=300),
+                attempt,
+                attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -450,7 +485,11 @@ async def create_kaggle_run_config(
     token = generate_callback_token()
     now = utc_now_iso()
     async with db.raw_conn() as conn:
-        await conn.execute("BEGIN IMMEDIATE")
+        await _begin_immediate_with_retry(
+            conn,
+            run_id=run_id,
+            operation="create_run_config",
+        )
         try:
             await _expire_resource_leases(conn, now=now)
             if not replace_existing:
@@ -887,8 +926,7 @@ async def reconcile_kaggle_run_terminal_from_host(
                 message=message,
             )
         except sqlite3.OperationalError as exc:
-            locked = "database is locked" in str(exc).lower() or "database table is locked" in str(exc).lower()
-            if not locked or attempt >= max_attempts:
+            if not _is_sqlite_lock_error(exc) or attempt >= max_attempts:
                 raise
             delay = min(2 ** (attempt - 1), 8)
             logger.warning(

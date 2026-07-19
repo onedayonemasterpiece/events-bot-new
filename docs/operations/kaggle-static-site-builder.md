@@ -95,6 +95,11 @@ Rules:
   build replays this idempotent reconciliation from the immutable current-review
   receipt before remote recovery or push. A late receipt can therefore never
   release a successor run's lease.
+- Creating the per-run status ledger also acquires `BEGIN IMMEDIATE` with the
+  same bounded lock-only retry. SQLite officially permits `SQLITE_BUSY` when
+  another writer owns that slot; timeout expiry is handled as retryable
+  contention, while non-lock failures still fail immediately. See
+  <https://www.sqlite.org/lang_transaction.html>.
 - Data export: `site/scripts/export-production-preview-data.py`.
 - Fly handoff: `JobTask.static_site_build` and `main.py` `job_static_site_build_kaggle`.
 - Feature docs: `docs/features/static-site-pages/astro-preview.md`.
