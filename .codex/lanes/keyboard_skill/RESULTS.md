@@ -3,7 +3,7 @@
 - Requirement: R3
 - Branch: `agent/keyboard-nav-v7/skill`
 - Base SHA: `e7efbd434147b56e087244c9934d3d363c46df64`
-- Head SHA (validated implementation): `49d79484b43da6d65d9bca4db3a0874431570b6e`
+- Head SHA (validated implementation): `49d794848f26edd9fdcf95660d8833785aad439c`
 - Status: complete
 
 ## Evidence
