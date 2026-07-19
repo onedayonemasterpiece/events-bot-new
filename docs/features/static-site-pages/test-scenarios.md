@@ -90,12 +90,18 @@
   retained `footer-service-v1` Editorial fixture keeps the three-row panel with
   calendar/share/like aligned on the bottom row. Review may additionally sample
   live events, but expiry of `6876`, `4783`, `6551` or `5374` cannot remove or
-  false-fail this executable geometry contract.
+  false-fail this executable geometry contract. Editorial side motion and CTA
+  docking use that same state machine with one or many distinct photos; absence
+  of the optional thumbnail rail cannot disable motion or change the family.
 - **ADD-V12-12 — Finite desktop continuation.** Reaching `Смотрите дальше`
   produces exactly six deduplicated cards and `Все анонсы`, never load-more or
   infinite scroll. A mature profile uses `По вашим интересам`; an immature one
   is honestly labelled `Ещё события`, respects 3/category and 2/venue, and is
-  not duplicated on the established mobile discovery surface.
+  not duplicated on the established mobile discovery surface. The separate
+  heading is retained on desktop to mark the transition from explicit
+  similarity to wider anti-bubble discovery; the latter may mix profile,
+  non-rejected vector tail and diverse upcoming fallback rather than looping
+  within one theatre/event type.
 
 ### Release evidence row contract
 
@@ -345,6 +351,7 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 
 - **ADD-RELATED-05 — Единая геометрия continuation.** `Смотрите дальше` и
   desktop `Ещё события` используют один three-card row contract: одинаковый
+  canonical `EventCard` DOM/behavior renderer (не отдельный строковый HTML),
   shell, `visual_only` cover, OCR/document crop не более 20%, skeleton без shift.
 - **ADD-RELATED-06 — Diverse mixed continuation.** Максимум шесть карточек;
   current/prior/hidden/recent-served исключены, cap `3/category`, `2/venue`;

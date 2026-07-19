@@ -47,7 +47,7 @@ lanes:
       - keyboard shortcut and keydown handlers
     expected_output: committed focused fix plus targeted tests
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: R04-cards
     role: worker
     requirement_ids: [R04]
@@ -60,6 +60,7 @@ lanes:
       - site/src/layouts/EventLayout.astro
       - site/src/components/EventCard.astro
       - site/src/components/PersonalFeedSlot.astro
+      - site/src/components/AuthorizedEventSearch.astro
       - site/src/lib/personalFeed.ts
       - site/scripts
       - site/tests
@@ -69,7 +70,7 @@ lanes:
       - keyboard shortcut and gallery keydown handlers
     expected_output: committed shared-card implementation preserving a separate bounded desktop section
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: R05-R06-integration
     role: merge_reviewer
     requirement_ids: [R05, R06]
@@ -87,4 +88,4 @@ lanes:
       - site/src keyboard handlers
     expected_output: integrated commits, targeted verification, closure report
     verification_scope: targeted
-    status: planned
+    status: committed
