@@ -546,9 +546,11 @@ visibility.
 - kind `external_publication_source_item`, pk
   `external_publication_source_item:extpubsrc_<stable-id>` — compact external
   publisher identity and externality attestation, keyed in payload by
-  `canonical_source_key=web:<domain>`. CandidateReport carries this key through
-  the web candidate; the finalizer joins the row as authoritative source
-  evidence without inserting a publisher into the Telegram/VK scan queue;
+  `canonical_source_key=web:<domain>`. CandidateReport loads the row into a
+  separate publisher-attestation lookup and joins it before the pre-image
+  publication gate; the finalizer joins the same row again as authoritative
+  source evidence. Neither consumer inserts the publisher into the Telegram/VK
+  scan queue;
 - kind `external_publication_import_batch`, pk
   `external_publication_import_batch:extpubrun_<stable-id>` — idempotent input
   batch counts, research request/window and bounded coverage evidence;

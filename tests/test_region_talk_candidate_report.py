@@ -9258,6 +9258,69 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         sparse_reasons = json.loads(sparse_metrics["image_queue_product_block_reasons_json"])
         self.assertGreaterEqual(sparse_reasons["source_verdict_unknown"], 1)
 
+    def test_external_publication_source_attestation_unblocks_preimage_gate(self) -> None:
+        mod = load_module()
+        publication = {
+            "post_id": "extpub-1",
+            "post_url": "https://archi.example/article",
+            "platform": "web",
+            "source_id": "web:publisher-hash",
+            "source_title": "Archi Example",
+            "source_url": "https://archi.example",
+            "canonical_source_key": "web:archi.example",
+            "content_origin_type": "editorial_publication",
+            "current_stage": "semantic_candidate",
+            "current_lifecycle_status": "active_candidate",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "has_media": True,
+            "media_count": 1,
+            "primary_media_path": "https://cdn.archi.example/image.jpg",
+            "image_url_or_local_path": "https://cdn.archi.example/image.jpg",
+            # Simulate a thin/stale candidate-memory projection.  The compact
+            # publisher row below must be the authoritative source verdict.
+            "source_scope": "unknown",
+            "source_geo_class": "",
+        }
+        previous_state = {
+            "external_publication_sources": {
+                "extpubsrc-1": {
+                    "external_publication_source_id": "extpubsrc-1",
+                    "canonical_source_key": "web:archi.example",
+                    "platform": "web",
+                    "source_url": "https://archi.example",
+                    "source_scope": "external",
+                    "source_geo_class": "nonlocal_russia",
+                    "source_topic_class": "editorial_publication",
+                    "source_quick_class": "candidate_keep",
+                    "source_queue_status": "confirmed_external_publication_research",
+                }
+            },
+            # This collection is intentionally separate: the web publisher is
+            # never admitted to the Telegram/VK source scan queue.
+            "unified_source_queue": {},
+        }
+
+        queue, _top, metrics = mod.build_image_candidate_queue(
+            previous_state,
+            [],
+            [publication],
+            [],
+            "external-publication-image-run",
+            "2026-07-19T00:00:00+00:00",
+        )
+
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(queue[0]["publication_eligibility_decision"], "accept")
+        self.assertEqual(queue[0]["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(queue[0]["source_geo_class"], "nonlocal_russia")
+        self.assertEqual(queue[0]["selected_for_next_image_batch"], "true")
+        self.assertEqual(metrics["image_queue_selected_next_batch"], 1)
+        self.assertEqual(previous_state["unified_source_queue"], {})
+
 
 if __name__ == "__main__":
     unittest.main()

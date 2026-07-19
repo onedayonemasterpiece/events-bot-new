@@ -4906,6 +4906,13 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                     "external_publication_intake_item",
                     limit=getenv_int("REGION_TALK_YDB_MAX_EXTERNAL_PUBLICATION_ROWS", 2000),
                 )
+                external_publication_source_items = ydb_select_kind_items(
+                    session,
+                    ydb,
+                    table_path,
+                    "external_publication_source_item",
+                    limit=getenv_int("REGION_TALK_YDB_MAX_EXTERNAL_PUBLICATION_SOURCE_ROWS", 2000),
+                )
                 entity_cache_items = ydb_select_kind_items(session, ydb, table_path, "telegram_entity_cache_item", limit=getenv_int("REGION_TALK_YDB_MAX_ENTITY_CACHE_ROWS", 5000))
                 queue_cursors = ydb_select_kind_items(session, ydb, table_path, "queue_cursor", limit=20)
                 external_blogger_evidence: list[dict[str, Any]] = []
@@ -5055,6 +5062,29 @@ def load_region_talk_ydb_state() -> tuple[dict[str, Any], dict[str, Any]]:
                                 q[key] = {**q.get(key, {}), **item}
                         data0["external_publication_intake"] = q
                         data0["ydb_row_level_external_publication_items_loaded"] = len(external_publication_items)
+                    if external_publication_source_items:
+                        q = (
+                            data0.get("external_publication_sources")
+                            if isinstance(data0.get("external_publication_sources"), dict)
+                            else {}
+                        )
+                        q = dict(q)
+                        for _pk, item in external_publication_source_items.items():
+                            key = str(
+                                item.get("external_publication_source_id")
+                                or item.get("canonical_source_key")
+                                or _pk.replace("external_publication_source_item:", "")
+                            )
+                            if key:
+                                q[key] = {**q.get(key, {}), **item}
+                        # This is an authoritative publisher-attestation lookup,
+                        # not a Telegram/VK discovery queue.  Keep it separate
+                        # so a web publisher can satisfy the pre-image source
+                        # gate without ever entering source scanning.
+                        data0["external_publication_sources"] = q
+                        data0["ydb_row_level_external_publication_source_items_loaded"] = len(
+                            external_publication_source_items
+                        )
                     if entity_cache_items:
                         q = data0.get("telegram_entity_cache") if isinstance(data0.get("telegram_entity_cache"), dict) else {}
                         q = dict(q)
@@ -9389,11 +9419,18 @@ def build_image_candidate_queue(
     previous_post_rows = rows_from_state_keys("processed_posts", "posts", "post_live", "post_live_posts")
     previous_post_by_url = {str(r.get("post_url") or ""): r for r in previous_post_rows if str(r.get("post_url") or "")}
     previous_post_by_id = {str(r.get("post_id") or ""): r for r in previous_post_rows if str(r.get("post_id") or "")}
-    previous_source_rows = rows_from_state_keys("unified_source_queue", "sources", "source_frontier_unique", "source_candidates", "discovered_sources")
-    # The canonical source ledger is listed first and carries scanned-history
-    # counters required by the strict source verdict. Do not let a later
-    # frontier/source-candidate projection with the same URL but fewer fields
-    # overwrite it.
+    previous_source_rows = rows_from_state_keys(
+        "external_publication_sources",
+        "unified_source_queue",
+        "sources",
+        "source_frontier_unique",
+        "source_candidates",
+        "discovered_sources",
+    )
+    # External publisher attestations and then the canonical social-source
+    # ledger are listed first. They carry the authoritative externality or
+    # scanned-history evidence required by the strict source verdict. Do not
+    # let a later thin frontier/source-candidate projection overwrite them.
     previous_source_by_id: dict[str, dict[str, Any]] = {}
     previous_source_by_url: dict[str, dict[str, Any]] = {}
     previous_source_by_key: dict[str, dict[str, Any]] = {}
@@ -9699,8 +9736,13 @@ def build_image_candidate_queue(
                 int(_rt_float(row.get("images_scored_actual_count"))),
                 1 if actual else 0,
             ),
-            "last_attempt_run_id": run_id if media.get("post_url") else entries[key].get("last_attempt_run_id", ""),
-            "last_attempt_at": run_now if media.get("post_url") else entries[key].get("last_attempt_at", ""),
+            # Text/candidate-memory admission is a queue handoff, not an image
+            # diagnostic attempt.  Marking it attempted advanced the durable
+            # cursor past the brand-new row, so it could never be selected by
+            # ImageDiagnostic. Only an actual media-scoring handback owns the
+            # attempt marker.
+            "last_attempt_run_id": run_id if added_from == "media_scoring" else entries[key].get("last_attempt_run_id", ""),
+            "last_attempt_at": run_now if added_from == "media_scoring" else entries[key].get("last_attempt_at", ""),
             "next_action": "human_review_best_image" if status == "actual_scored" else ("wait_for_image_diagnostic" if status == "image_analysis_in_progress" else ("download_actual_image_bytes_next" if status == "needs_actual_image_fetch" else ("skip_unsupported_media" if status == "not_reviewable_unsupported_media" else "skip_or_manual_open"))),
             "queue_item_updated_at": run_now,
         })
@@ -9724,7 +9766,14 @@ def build_image_candidate_queue(
     ordered = sorted(entries.values(), key=lambda r: (int(r.get("image_queue_order") or 0)))
     pending_after_cursor = [
         r for r in ordered
-        if int(r.get("image_queue_order") or 0) > cursor_position
+        if (
+            int(r.get("image_queue_order") or 0) > cursor_position
+            or (
+                str(r.get("status_changed_this_run") or "").lower() == "true"
+                and str(r.get("previous_image_queue_status") or "")
+                in {"deferred_text_gate", "rejected_text_gate", "rejected_publication_eligibility"}
+            )
+        )
         and str(r.get("image_queue_status") or "") in {"", "needs_actual_image_fetch", "selected_for_next_image_batch"}
     ]
     target_ids = {str(r.get("image_queue_id")) for r in pending_after_cursor[:target]}
@@ -15256,7 +15305,7 @@ def post_processing_fingerprint(
         "bge_contract": BGE_M3_ENCODER_CONTRACT if require_bge_m3 else "disabled",
     }
     if str(content_origin_type or "") in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
-        payload["external_publication_scope_policy"] = "external_publication_scope_attestation_v1"
+        payload["external_publication_scope_policy"] = "external_publication_scope_and_source_attestation_v2"
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()

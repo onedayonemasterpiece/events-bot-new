@@ -252,7 +252,12 @@ Implemented now:
 - read-only on-demand queue renderer with compatible-vector MMR and anti-adjacency;
 - strict intake-to-CandidateReport projection and external-publications-only canary mode;
 - editorial/academic E5+BGE positive prototypes and origin-aware final verifier;
-- compact publisher attestation join in the finalizer and rights-field propagation through candidate/image/publication state.
+- compact publisher attestation joins in CandidateReport before image admission
+  and again in the finalizer, without adding web publishers to the Telegram/VK
+  scan queue, plus rights-field propagation through candidate/image/publication
+  state. A row reactivated from the old missing-attestation defer is explicitly
+  eligible for the next image batch even if the legacy cursor had already
+  advanced past its queue order.
 
 Still required for each imported external-publication candidate to become confirmed:
 
