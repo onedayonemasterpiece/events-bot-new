@@ -3460,6 +3460,12 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         const EVENT_DETAIL_CONTINUATION_LIMIT = 6;
         const personalFeedStores = new WeakMap();
         const personalFeedReached = new WeakSet();
+        const personalFeedDesktopMedia = typeof window.matchMedia === 'function' ? window.matchMedia('(min-width: 1024px)') : null;
+
+        function personalFeedSectionCanHydrate(section) {
+          if (section?.dataset.personalFeedDesktopOnly !== 'true') return true;
+          return personalFeedDesktopMedia ? personalFeedDesktopMedia.matches : Number(window.innerWidth || 0) >= 1024;
+        }
 
         function visibleHideStickyMarker() {
           const markers = Array.from(document.querySelectorAll('[data-hide-sticky-after]'));
@@ -3486,9 +3492,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const store = personalFeedStores.get(section);
           const slot = section.querySelector('[data-personal-feed-slot]');
           const loadMore = section.querySelector('[data-personal-feed-load-more]');
-          if (!store || !slot) return 0;
+          if (!store || !slot || !personalFeedSectionCanHydrate(section)) return 0;
           const end = Math.min(store.items.length, store.rendered + PERSONAL_FEED_CHUNK_SIZE);
           const chunk = store.items.slice(store.rendered, end);
+          let appended = 0;
           if (chunk.length) {
             const eventDetail = section.dataset.listingContext === 'event-detail';
             const packed = eventDetail && typeof window.KenigEventsPackRelatedCardRows === 'function'
@@ -3499,15 +3506,39 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
                   geometry: window.KenigEventsRelatedCardMediaGeometry,
                 })
               : chunk.map((item) => ({ item, layout: null }));
-            for (const { item, layout } of packed) appendEventCard(slot, item, slot.dataset.feedCardVariant || 'split-actions', layout);
+            for (const { item, layout } of packed) {
+              if (appendEventCard(slot, item, slot.dataset.feedCardVariant || 'split-actions', layout)) appended += 1;
+            }
           }
           store.rendered = end;
           if (loadMore) loadMore.hidden = store.rendered >= store.items.length;
           syncCardsFeedbackState(store.profile);
-          return chunk.length;
+          syncPersonalFeedController(section);
+          return appended;
+        }
+
+        function syncPersonalFeedController(section) {
+          if (section?.dataset.listingContext !== 'event-detail') return;
+          const slot = section?.querySelector('[data-personal-feed-slot]');
+          const store = personalFeedStores.get(section);
+          if (!slot || !store?.manifest) return;
+          const algorithmId = `${store.manifest.algorithm_id || 'static_personal_feed_catalog_v1'}:bounded_continuation_v1`;
+          slot.dataset.surface = SURFACE_EVENT_DETAIL_RELATED;
+          slot.dataset.layoutMode = relatedLayoutMode();
+          slot.dataset.presentationMode = relatedPresentationMode(window.innerWidth || 1024);
+          slot.dataset.effectiveAlgorithmId = algorithmId;
+          const visibleRanked = Array.from(slot.querySelectorAll(':scope > [data-event-card]'))
+            .filter((card) => !card.hidden)
+            .map((card) => cardRankedItem(card, store))
+            .filter(Boolean);
+          const context = contextForFeed(slot, store.manifest, store.profile, algorithmId);
+          context.servedListHash = createServedListHash(visibleRanked, store.manifest, context, store.profile);
+          context.servedListId = randomId('served');
+          servedListByFeed.set(slot, createServedListSummary(visibleRanked, store.manifest, context));
         }
 
         function renderPersonalFeedSection(section, manifest) {
+          if (!personalFeedSectionCanHydrate(section)) return;
           const slot = section.querySelector('[data-personal-feed-slot]');
           const status = section.querySelector('[data-personal-feed-status]');
           const refresh = section.querySelector('[data-personal-feed-refresh]');
@@ -3567,8 +3598,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             return;
           }
           slot.innerHTML = '';
-          personalFeedStores.set(section, { items: ranked, rendered: 0, profile });
-          if (isEventDetail) recordRecentContinuation(personalFeedCurrentEventId(section), ranked);
+          personalFeedStores.set(section, { items: ranked, ranked, rendered: 0, profile, manifest });
           section.hidden = false;
           section.dataset.personalFeedReady = 'true';
           section.dataset.personalFeedMode = isPersonal ? 'personal' : 'popular_fallback';
@@ -3581,37 +3611,54 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           if (status) status.hidden = true;
           if (refresh) refresh.hidden = true;
           if (loadMore) loadMore.hidden = isEventDetail;
-          appendPersonalFeedChunk(section);
+          const rendered = appendPersonalFeedChunk(section);
+          if (isEventDetail && rendered > 0) recordRecentContinuation(personalFeedCurrentEventId(section), ranked);
         }
 
         async function hydratePersonalFeedSlots({ force = false, sections = null } = {}) {
-          const candidates = sections || Array.from(document.querySelectorAll('[data-personal-feed-section]')).filter((section) => personalFeedReached.has(section));
+          const candidates = (sections || Array.from(document.querySelectorAll('[data-personal-feed-section]')).filter((section) => personalFeedReached.has(section)))
+            .filter(personalFeedSectionCanHydrate);
           for (const section of candidates) {
             const manifest = await getPersonalFeedManifest(section, { force });
-            renderPersonalFeedSection(section, manifest);
+            if (personalFeedSectionCanHydrate(section)) renderPersonalFeedSection(section, manifest);
           }
+        }
+
+        function startPersonalFeedHydration(section, { eager = false } = {}) {
+          if (!section || personalFeedReached.has(section) || !personalFeedSectionCanHydrate(section)) return;
+          const hydrateOnce = () => {
+            if (personalFeedReached.has(section) || !personalFeedSectionCanHydrate(section)) return;
+            personalFeedReached.add(section);
+            hydratePersonalFeedSlots({ sections: [section] });
+          };
+          if (eager) {
+            hydrateOnce();
+            return;
+          }
+          const context = section.dataset.listingContext || '';
+          const target = context === 'event-detail'
+            ? visibleHideStickyMarker()
+            : document.querySelector('main');
+          if (!target || !('IntersectionObserver' in window)) {
+            const idleLoad = window.requestIdleCallback || ((callback) => setTimeout(callback, 900));
+            idleLoad(hydrateOnce);
+            return;
+          }
+          const observer = new IntersectionObserver((entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            hydrateOnce();
+          }, { rootMargin: '320px 0px 320px 0px', threshold: 0.01 });
+          observer.observe(target);
         }
 
         function initializePersonalFeedObservers() {
           const sections = Array.from(document.querySelectorAll('[data-personal-feed-section]'));
-          sections.forEach((section) => {
-            const context = section.dataset.listingContext || '';
-            const target = context === 'event-detail'
-              ? visibleHideStickyMarker()
-              : document.querySelector('main');
-            if (!target || !('IntersectionObserver' in window)) {
-              personalFeedReached.add(section);
-              const idleLoad = window.requestIdleCallback || ((callback) => setTimeout(callback, 900));
-              idleLoad(() => hydratePersonalFeedSlots({ sections: [section] }));
-              return;
-            }
-            const observer = new IntersectionObserver((entries) => {
-              if (!entries.some((entry) => entry.isIntersecting)) return;
-              observer.disconnect();
-              personalFeedReached.add(section);
-              hydratePersonalFeedSlots({ sections: [section] });
-            }, { rootMargin: '320px 0px 320px 0px', threshold: 0.01 });
-            observer.observe(target);
+          sections.forEach((section) => startPersonalFeedHydration(section));
+          const desktopOnlySections = sections.filter((section) => section.dataset.personalFeedDesktopOnly === 'true');
+          personalFeedDesktopMedia?.addEventListener?.('change', (event) => {
+            if (!event.matches) return;
+            desktopOnlySections.forEach((section) => startPersonalFeedHydration(section, { eager: true }));
           });
         }
 
@@ -3636,7 +3683,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
 
         function candidateById(store, eventId) {
           const id = asId(eventId);
-          return toArray(store && store.manifest && store.manifest.related_static).find((candidate) => asId(candidateId(candidate)) === id) || null;
+          const ranked = toArray(store?.ranked || store?.items).find((item) => asId(item?.event_id) === id);
+          if (ranked?.candidate) return ranked.candidate;
+          return [...toArray(store?.manifest?.related_static), ...toArray(store?.manifest?.related_adjacent)]
+            .find((candidate) => asId(candidateId(candidate)) === id) || null;
         }
 
         function contextForFeed(feed, manifest, profile, algorithmId) {
@@ -4068,11 +4118,11 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
 
         function cardRankedItem(card, store) {
           const id = asId(card?.dataset.eventId);
-          return toArray(store?.ranked).find((item) => asId(item.event_id) === id) || null;
+          return toArray(store?.ranked || store?.items).find((item) => asId(item.event_id) === id) || null;
         }
 
         function contextForCard(card) {
-          const feed = card?.closest('[data-discovery-feed]');
+          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot]');
           const summary = feed ? servedListByFeed.get(feed) : null;
           return {
             servedListId: summary?.served_list_id || null,
@@ -4266,21 +4316,28 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           if (!options.skipDiscoveryHydration) {
             await hydrateDiscoveryFeeds({ automatic: true, anchorEventId: options.anchorEventId || null });
           }
-          const reachedPersonalSections = Array.from(document.querySelectorAll('[data-personal-feed-section]')).filter((section) => personalFeedReached.has(section));
-          if (reachedPersonalSections.length) await hydratePersonalFeedSlots({ force: false, sections: reachedPersonalSections });
           syncListingPersonalFilter();
           renderFeedbackReport();
         }
 
         window.applyFeedbackState = applyFeedbackState;
 
+        async function controllerForCard(card) {
+          const feed = card?.closest('[data-discovery-feed], [data-personal-feed-slot]');
+          if (!feed) return { feed: null, store: null };
+          if (feed.matches('[data-personal-feed-slot]')) {
+            const section = feed.closest('[data-personal-feed-section]');
+            return { feed, store: section ? personalFeedStores.get(section) || null : null };
+          }
+          return { feed, store: await ensureDiscoveryStore(feed) };
+        }
+
         async function handleFeedbackButton(button) {
           const scope = button.closest('[data-event-card], [data-feedback-scope]');
           const eventId = button.dataset.eventId || scope?.dataset.eventId;
           if (!eventId) return;
           const card = button.closest('[data-event-card]');
-          const feed = card?.closest('[data-discovery-feed]');
-          const store = feed ? await ensureDiscoveryStore(feed) : null;
+          const { store } = await controllerForCard(card);
           const profile = activeProfile(store?.manifest);
           if (!profile) {
             requestConsent(() => handleFeedbackButton(button));
@@ -4332,8 +4389,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const eventId = button.dataset.shareEventId || scope?.dataset.eventId;
           if (!eventId) return;
           const card = button.closest('[data-event-card]');
-          const feed = card?.closest('[data-discovery-feed]');
-          const store = feed ? await ensureDiscoveryStore(feed) : null;
+          const { store } = await controllerForCard(card);
           const profile = activeProfile(store?.manifest);
           if (!profile) return;
           const title = button.dataset.shareEventTitle || button.dataset.shareTitle || scope?.dataset.eventTitle || '';

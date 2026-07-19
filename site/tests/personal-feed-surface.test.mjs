@@ -194,3 +194,51 @@ test('desktop keeps a separate finite broad-discovery section after the similar-
   assert.match(layout, /maxSameCategory: 3, maxSameVenue: 2/u);
   assert.match(layout, /eventIdsAlreadyOffered\(section\)/u);
 });
+
+test('broad continuation uses the canonical card variant and discovery controller context', async () => {
+  const [slot, layout] = await Promise.all([
+    read('src/components/PersonalFeedSlot.astro'),
+    read('src/layouts/EventLayout.astro'),
+  ]);
+
+  assert.match(slot, /data-personal-feed-slot[\s\S]*data-feed-card-variant="split-actions"/u);
+  assert.match(layout, /appendEventCard\(slot, item, slot\.dataset\.feedCardVariant \|\| 'split-actions', layout\)/u);
+  assert.match(layout, /personalFeedStores\.set\(section, \{ items: ranked, ranked, rendered: 0, profile, manifest \}\)/u);
+  assert.match(layout, /const ranked = toArray\(store\?\.ranked \|\| store\?\.items\)/u, 'candidate and rank lookup share the controller store contract');
+  assert.match(layout, /if \(ranked\?\.candidate\) return ranked\.candidate/u, 'broad cards retain candidate tags for profile actions');
+  assert.match(layout, /servedListByFeed\.set\(slot, createServedListSummary/u, 'broad cards receive served-list context');
+  assert.match(layout, /card\?\.closest\('\[data-discovery-feed\], \[data-personal-feed-slot\]'\)/u, 'both card surfaces use the same controller lookup');
+  assert.match(layout, /const \{ store \} = await controllerForCard\(card\)/u);
+  assert.equal((layout.match(/document\.addEventListener\('click', async \(event\) => \{\s*const button = event\.target\.closest\('\[data-feedback-action\]'\)/gu) || []).length, 1, 'feedback retains one delegated handler');
+  assert.doesNotMatch(layout, /function eventCardHtml/u, 'controller parity does not reintroduce duplicate card markup');
+});
+
+test('feedback and share preserve the finite broad set and its undo plate', async () => {
+  const layout = await read('src/layouts/EventLayout.astro');
+  const applyStart = layout.indexOf('async function applyFeedbackState(options = {})');
+  const applyEnd = layout.indexOf('window.applyFeedbackState = applyFeedbackState;', applyStart);
+  const applyBody = layout.slice(applyStart, applyEnd);
+
+  assert.ok(applyStart >= 0 && applyEnd > applyStart);
+  assert.doesNotMatch(applyBody, /hydratePersonalFeedSlots/u, 'ordinary state sync cannot replace all six broad cards');
+  assert.match(layout, /syncNotInterestedPlate\(card, current\)/u);
+  assert.match(layout, /action = notInterested \? 'not_interested' : 'undo_not_interested'/u);
+  assert.match(layout, /await applyFeedbackState\(\{ anchorEventId: eventId \}\)/u, 'feedback/share still update the shared controller without a personal-feed rerender');
+});
+
+test('desktop-only continuation never fetches, renders or records on mobile and hydrates once after resize', async () => {
+  const [slot, layout] = await Promise.all([
+    read('src/components/PersonalFeedSlot.astro'),
+    read('src/layouts/EventLayout.astro'),
+  ]);
+
+  assert.match(slot, /data-personal-feed-desktop-only=\{isEventDetail \? 'true' : undefined\}/u);
+  assert.match(layout, /function personalFeedSectionCanHydrate\(section\)/u);
+  assert.match(layout, /if \(!section \|\| personalFeedReached\.has\(section\) \|\| !personalFeedSectionCanHydrate\(section\)\) return/u);
+  assert.match(layout, /const candidates = \(sections[\s\S]*\.filter\(personalFeedSectionCanHydrate\)/u, 'mobile sections are filtered before manifest fetch');
+  assert.match(layout, /if \(personalFeedSectionCanHydrate\(section\)\) renderPersonalFeedSection\(section, manifest\)/u, 'a resize during fetch cannot render unseen mobile cards');
+  assert.match(layout, /if \(isEventDetail && rendered > 0\) recordRecentContinuation/u, 'only rendered desktop cards enter the recent ring');
+  assert.match(layout, /personalFeedDesktopMedia\?\.addEventListener\?\.\('change'/u);
+  assert.match(layout, /startPersonalFeedHydration\(section, \{ eager: true \}\)/u);
+  assert.match(layout, /personalFeedReached\.add\(section\)/u, 'the WeakSet makes desktop hydration one-shot');
+});
