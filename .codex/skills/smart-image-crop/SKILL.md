@@ -12,21 +12,23 @@ verified photos sell the event, and never disguise a ratio mismatch with fields.
 
 1. **No fields in bounded media tiles.** No letterbox/pillarbox, decorative
    four-sided padding, blurred duplicate, or ambient fill. Either make the
-   container follow the source ratio or use an allowed crop. A fullscreen
-   viewer may have surrounding page canvas, but do not bake bars into the image.
+   container use an approved named ratio and apply an allowed crop, or route the
+   asset out of the normalized card family. A fullscreen/document viewer may
+   follow the source ratio, but do not bake bars into the image.
 2. **Fail closed on text.** Treat `ocr_text`, `unknown`, missing classification,
    posters, schedules, maps, menus, and attendee instructions as text-protected.
 3. **Crop only text-free media by default.** `visual_only` is necessary but not
    sufficient for aggressive cover: also require event relevance, adequate
    resolution, `safe_crop=true`, and focal/face evidence when available.
-4. **OCR normally stays uncropped.** Adapt the container to the natural ratio.
+4. **OCR normally stays uncropped.** Use an exact matching token or a dedicated
+   natural-ratio document/detail surface outside normalized card grids.
    For an excessively vertical OCR asset only, a vertical cover crop is allowed
    when the **combined source area removed from top and bottom is at most 20%**,
    every OCR/face box plus safety margin remains visible, and the crop is
    recorded. Never use the 20% exception for left/right OCR crop.
-5. **If those constraints cannot coexist, change the layout—not the evidence.**
-   Use a natural-ratio card, a separate poster companion, another approved
-   event-relevant asset, or an intentional text fallback.
+5. **Normalized cards never invent arbitrary ratios.** If no named token is
+   safe, use a separate poster companion/detail viewer, another approved
+   event-relevant asset, or an intentional fixed-token text fallback.
 
 ## Workflow
 
@@ -58,49 +60,67 @@ Use the deterministic planner for a single candidate:
 
 ```bash
 python3 .codex/skills/smart-image-crop/scripts/plan_crop.py \
-  --width 800 --height 1200 --target 4:5 \
+  --width 800 --height 1200 --target P \
   --image-text-mode ocr_text \
   --ocr-box 0.08,0.12,0.84,0.68 --pretty
 ```
 
-The planner never recommends fixed-frame `contain`. It returns either an exact
-or natural-ratio no-field layout, or an evidence-safe cover crop.
+The planner never recommends fixed-frame `contain`. For cards/heroes/share it
+returns an exact named-token frame, an evidence-safe named-token crop, or a
+fallback/route decision. Natural source ratios are reserved for explicit
+document/viewer surfaces.
 
 ### 3. Select the presentation mode
 
 | State | Presentation | Crop gate |
 |---|---|---|
 | `visual_only` event photo | nearest approved surface ratio + `cover` | relevant, adequate resolution, `safe_crop`, focal/face-safe |
-| OCR/document/unknown | natural-ratio, edge-to-edge | none |
+| OCR/document/unknown in a card | exact named token, or fixed-token fallback | no crop |
+| OCR/document/unknown in detail/viewer | natural-ratio, edge-to-edge | outside normalized card family |
 | excessively vertical OCR | bounded vertical `cover` | total loss `<= 0.20`, OCR/face boxes retained |
 | mixed gallery | safe event photo for browse; identity poster preserved in detail/gallery | selection precedes crop |
 | low resolution | another approved asset or intentional fallback | never upscale/pad |
 | no image | standard designed fallback | keep event rank/order |
 
-Use a finite token set for normalized text-free photos rather than arbitrary
-ratios: mobile portrait `4:5`, square `1:1`, browse-wide `4:3` or `3:2`, and
-wide hero/share `16:10` or `1.91:1` only when the surface requires it. Choose the
-token with the least safe loss; do not inherit desktop geometry blindly on mobile.
+### 4. Choose a named ratio token
 
-### 4. Implement no-field geometry
+Never emit arbitrary `1.20`, `1.25`, `1.35`, or a raw source ratio for a
+normalized card. Those values may be packing measurements, not media contracts.
 
-For protected media, the frame follows the source:
+| Token | Ratio | Allowed surfaces | Default use |
+|---|---:|---|---|
+| `P` | `4:5` (`0.8`) | card, hero, share | portrait poster/photo; mobile card |
+| `S` | `1:1` (`1.0`) | card, hero, share | square/neutral card |
+| `W` | `4:3` (`1.333…`) | card, hero | regular browse-wide card |
+| `L` | `3:2` (`1.5`) | card, hero | landscape/editorial card |
+| `H` | `16:10` (`1.6`) | hero only | cinematic detail hero |
+| `OG` | `40:21` (`1200:630`) | share only | Open Graph preview |
+
+For each surface, compute loss against every allowed token, discard unsafe
+candidates, then choose the lowest-loss token; use the surface default only as
+a tie-breaker. OCR candidates additionally discard every horizontal crop and
+every vertical crop above `20%` or intersecting protected boxes. If no token
+survives, do not create a fifth card ratio: render the fixed-token fallback or
+move the source poster to the natural-ratio detail/gallery surface.
+
+### 5. Implement no-field geometry
+
+Natural ratio is allowed only in a dedicated document/detail/viewer surface:
 
 ```css
 .media--natural { aspect-ratio: var(--source-w) / var(--source-h); }
 .media--natural > img { display:block; width:100%; height:auto; }
 ```
 
-For fixed-height desktop flows, derive card width from source ratio instead:
+For a normalized fixed-height card, derive width from the selected token:
 
 ```css
-.card { width: calc(var(--media-h) * var(--source-ratio)); }
+.card { width: calc(var(--media-h) * var(--ratio-token)); }
 .card__media { height: var(--media-h); }
 .card__media > img { width:100%; height:100%; }
 ```
 
-Because frame and source ratios match, `contain` is unnecessary and cannot
-create bars. For approved crop:
+For an exact token match, `contain` is unnecessary. For an approved crop:
 
 ```css
 .media--cover { overflow:hidden; aspect-ratio:var(--target-ratio); }
@@ -114,10 +134,10 @@ Emit real `width`/`height`, reserve geometry to prevent CLS, provide responsive
 derivatives and `srcset`, and never select a derivative smaller than its rendered
 size at device pixel ratio.
 
-### 5. Validate pixels and invariants
+### 6. Validate pixels and invariants
 
-- Assert the rendered mode, source/target ratio, crop loss, crop axis, retained
-  OCR/face boxes, and object position in markup or tests.
+- Assert the token name, rendered mode, source/target ratio, crop loss, crop
+  axis, retained OCR/face boxes, and object position in markup or tests.
 - Capture mobile, desktop, and the breakpoint where the geometry changes.
 - Inspect pixels: no bars, no missing poster text, no cut faces, no accidental
   upscale, no overflow, and no geometry-driven event reorder/drop.
@@ -136,6 +156,7 @@ python3 .codex/skills/smart-image-crop/scripts/test_plan_crop.py
 
 - `object-fit:cover` for every card or thumbnail.
 - `object-fit:contain` inside a mismatched fixed-ratio colored frame.
+- Raw source ratios or experimental packing ratios as new card media tokens.
 - Choosing a wide but unrelated image merely because it fills the slot.
 - Treating `safe_crop` as overlay-safe; text overlay needs a separate safe region
   plus OCR/face/saliency clearance and contrast evidence.

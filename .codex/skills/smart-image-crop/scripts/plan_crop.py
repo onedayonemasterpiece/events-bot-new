@@ -10,6 +10,34 @@ from typing import Iterable
 
 EPSILON = 1e-9
 
+RATIO_TOKENS = {
+    "P": 4 / 5,
+    "S": 1.0,
+    "W": 4 / 3,
+    "L": 3 / 2,
+    "H": 16 / 10,
+    "OG": 1200 / 630,
+}
+SURFACE_TOKENS = {
+    "card": ("P", "S", "W", "L"),
+    "hero": ("P", "S", "W", "L", "H"),
+    "share": ("P", "S", "OG"),
+}
+TOKEN_ALIASES = {
+    "p": "P",
+    "portrait-4x5": "P",
+    "s": "S",
+    "square-1x1": "S",
+    "w": "W",
+    "wide-4x3": "W",
+    "l": "L",
+    "landscape-3x2": "L",
+    "h": "H",
+    "hero-16x10": "H",
+    "og": "OG",
+    "og-40x21": "OG",
+}
+
 
 @dataclass(frozen=True)
 class Box:
@@ -29,6 +57,9 @@ class Box:
 
 def parse_ratio(value: str) -> float:
     raw = value.strip()
+    token = TOKEN_ALIASES.get(raw.lower())
+    if token:
+        return RATIO_TOKENS[token]
     if ":" in raw:
         left, right = raw.split(":", 1)
         ratio = float(left) / float(right)
@@ -40,6 +71,15 @@ def parse_ratio(value: str) -> float:
     if ratio <= 0:
         raise argparse.ArgumentTypeError("ratio must be positive")
     return ratio
+
+
+def ratio_token(target_ratio: float, surface: str) -> str | None:
+    if surface == "document":
+        return None
+    for token in SURFACE_TOKENS[surface]:
+        if abs(RATIO_TOKENS[token] - target_ratio) <= EPSILON:
+            return token
+    return None
 
 
 def parse_box(value: str) -> Box:
@@ -87,6 +127,7 @@ def plan_crop(
     height: int,
     target_ratio: float,
     image_text_mode: str,
+    surface: str = "card",
     safe_crop: bool = False,
     ocr_boxes: Iterable[Box] = (),
     face_boxes: Iterable[Box] = (),
@@ -100,6 +141,12 @@ def plan_crop(
         raise ValueError("width and height must be positive")
     if image_text_mode not in {"ocr_text", "visual_only", "unknown"}:
         raise ValueError("invalid image_text_mode")
+    if surface not in {*SURFACE_TOKENS, "document"}:
+        raise ValueError("invalid surface")
+    target_token = ratio_token(target_ratio, surface)
+    if surface != "document" and target_token is None:
+        allowed = ", ".join(SURFACE_TOKENS[surface])
+        raise ValueError(f"target ratio is not an approved {surface} token; use one of: {allowed}")
     if not (0 <= margin < 0.5 and 0 <= max_ocr_crop < 1 and 0 <= max_visual_crop < 1):
         raise ValueError("margins and crop limits must be within range")
     focal_x = _clamp(focal_x, 0, 1)
@@ -115,6 +162,8 @@ def plan_crop(
     base: dict[str, object] = {
         "source": {"width": width, "height": height, "ratio": round(source_ratio, 8)},
         "requested_target_ratio": round(target_ratio, 8),
+        "target_token": target_token,
+        "surface": surface,
         "crop_axis": axis,
         "potential_crop_area_fraction": round(loss, 8),
         "retained_area_fraction": round(retained, 8),
@@ -122,6 +171,24 @@ def plan_crop(
     }
 
     def natural(reason: str) -> dict[str, object]:
+        if surface != "document":
+            decision = {
+                "card": "fallback-required",
+                "hero": "route-to-document",
+                "share": "composition-required",
+            }[surface]
+            return {
+                **base,
+                "decision": decision,
+                "reason": reason,
+                "container_ratio": round(target_ratio, 8),
+                "render_source_image": False,
+                "css": {
+                    "container_aspect_ratio": str(round(target_ratio, 8)),
+                    "image_layout": "do-not-render-source-in-this-normalized-frame",
+                },
+                "crop": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+            }
         return {
             **base,
             "decision": "natural-ratio",
@@ -135,6 +202,19 @@ def plan_crop(
         }
 
     if axis == "none":
+        if surface != "document":
+            return {
+                **base,
+                "decision": "exact-ratio",
+                "reason": "source already matches approved target token",
+                "container_ratio": round(target_ratio, 8),
+                "render_source_image": True,
+                "crop": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+                "css": {
+                    "container_aspect_ratio": str(round(target_ratio, 8)),
+                    "image_layout": "display:block;width:100%;height:100%",
+                },
+            }
         return {
             **natural("source already matches target ratio"),
             "decision": "exact-ratio",
@@ -163,7 +243,7 @@ def plan_crop(
         reason = "bounded vertical OCR crop retains every protected box"
     else:
         if not safe_crop:
-            return natural("visual_only without safe_crop evidence stays natural")
+            return natural("visual_only without safe_crop evidence cannot enter normalized cover")
         if loss > max_visual_crop + EPSILON:
             return natural("visual crop would exceed the configured visual loss budget")
         if window is None:
@@ -201,6 +281,7 @@ def main() -> None:
     parser.add_argument("--height", type=int, required=True)
     parser.add_argument("--target", type=parse_ratio, required=True, dest="target_ratio")
     parser.add_argument("--image-text-mode", choices=("ocr_text", "visual_only", "unknown"), required=True)
+    parser.add_argument("--surface", choices=("card", "hero", "share", "document"), default="card")
     parser.add_argument("--safe-crop", action="store_true")
     parser.add_argument("--ocr-box", action="append", default=[], type=parse_box, dest="ocr_boxes")
     parser.add_argument("--face-box", action="append", default=[], type=parse_box, dest="face_boxes")

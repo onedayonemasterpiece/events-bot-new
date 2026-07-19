@@ -355,9 +355,12 @@ the renderer falls back to contain/natural rather than cutting text or faces.
 
 New and changed bounded preview surfaces must additionally follow the no-field
 smart-crop contract in [`image-framing.md`](image-framing.md): OCR/unknown uses a
-container matched to the source ratio rather than `contain` inside a mismatched
-fixed frame; a too-vertical OCR asset may lose at most `20%` of source area in a
-top/bottom crop, and only while all protected OCR/face boxes remain visible.
+matching named ratio or moves to a natural-ratio detail/viewer surface rather
+than `contain` inside a mismatched fixed frame; normalized cards use only
+`P 4:5`, `S 1:1`, `W 4:3`, or `L 3:2`. A too-vertical OCR asset may lose at
+most `20%` of source area in a top/bottom crop, and only while all protected
+OCR/face boxes remain visible. If no card token is safe, use the fixed-token
+fallback rather than inventing another aspect ratio.
 The implementation workflow and audited branch casebook live in project skill
 `.codex/skills/smart-image-crop/`. This is a target/release rule and does not
 claim that every historical preview CSS path already complies.

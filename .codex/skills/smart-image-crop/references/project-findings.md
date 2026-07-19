@@ -41,9 +41,11 @@ The `listing-surfaces-v19` through `v26` branches introduced
 design-system CSS. Their best ideas are:
 
 - choose by semantic role before geometry;
-- keep poster/unknown media at its measured natural ratio;
-- compute card width from fixed media height × source ratio, so the image stays
-  edge-to-edge without bars or crop;
+- preserve poster/unknown evidence instead of forcing photo behavior;
+- the branches computed card width from fixed media height × source ratio. This
+  was a strong no-field experiment, but the final normalized-card contract now
+  snaps safe media to named `P/S/W/L` tokens rather than exposing every raw
+  source ratio as a separate card width;
 - crop only a classified `event_photo` with `visual_only`, high role confidence,
   `safe_crop`, focal evidence, and enough retained area;
 - prefer a relevant wider candidate but do not pretend unknown media is a photo;
@@ -52,8 +54,8 @@ design-system CSS. Their best ideas are:
 - preserve rank order while flex-wrap absorbs different card widths.
 
 The branch used approximate browse targets `1.35` (regular), `1.20` (weekend),
-and `1.25` (popular), plus adaptive safe-photo envelopes. Treat those numbers as
-tested surface hints, not universal tokens.
+and `1.25` (popular), plus adaptive safe-photo envelopes. These are packing
+experiments, not approved image-ratio tokens; do not ship them as new ratios.
 
 ### 3. Related cards contributed the 20% crop math
 
@@ -149,8 +151,11 @@ Do not run OCR/face/saliency analysis in the static page.
 
 ### Listing/discovery card
 
-- OCR/unknown: fixed row height with card width derived from source ratio on
-  desktop; width `100%` + height `auto` on narrow mobile.
+- Normalize to one of `P 4:5`, `S 1:1`, `W 4:3`, `L 3:2`. Never create a raw
+  source-ratio or experimental `1.20/1.25/1.35` card.
+- OCR/unknown: use an exact token match without crop. For a too-vertical source,
+  a token may use the bounded crop exception below. If no token is safe, show a
+  fixed-token designed fallback and keep the poster for detail/gallery.
 - Excessively vertical OCR: first try the natural card. If density truly cannot
   work, allow top/bottom crop only when total loss is `<=20%` and protected
   boxes remain visible.
@@ -188,5 +193,6 @@ Do not run OCR/face/saliency analysis in the static page.
 - low-resolution upscale or padded rescue;
 - blur-fill/duplicated backdrop to hide ratio mismatch;
 - arbitrary per-card photo ratios that destroy row rhythm;
+- raw OCR/source ratios promoted into an unbounded family of card ratios;
 - geometry-driven reorder, drop, or rank-aware Bento packing;
 - parallax/zoom that changes the accepted crop after first paint.

@@ -7,9 +7,14 @@
 
 - Bounded hero/card/thumbnail previews have no letterbox/pillarbox fields,
   decorative four-sided padding, duplicated blur or ambient ratio fill.
-- OCR/text/unknown images use an edge-to-edge natural-ratio container. A
-  mismatched fixed frame with `object-fit: contain` is not an acceptable
-  no-crop solution because it creates fields.
+- Normalized card media uses only named tokens: `P 4:5`, `S 1:1`, `W 4:3`, and
+  `L 3:2`. Detail heroes may additionally use `H 16:10`; share compositions use
+  `P 4:5`, `S 1:1`, or `OG 40:21` (`1200:630`). Experimental packing values
+  such as `1.20`, `1.25`, `1.35` and raw source ratios are not media tokens.
+- OCR/text/unknown uses an exact token match without crop, the bounded vertical
+  exception below, or a dedicated natural-ratio detail/gallery surface. If no
+  token is safe for a card, use a fixed-token designed fallback rather than a
+  mismatched `contain` frame or a new arbitrary card ratio.
 - Visual-only images may use cover only when event relevance, resolution,
   `safe_crop`, focal/face metadata or a reviewed deterministic fallback supports
   it.
@@ -17,9 +22,9 @@
   top/bottom cover crop is allowed when the combined removed source area is at
   most `20%`, all OCR and face boxes plus safety margin remain visible, and the
   measured crop is exposed to acceptance tests. Left/right OCR crop is forbidden.
-- When safe crop cannot be proven, adapt the card/container to the source ratio,
-  choose another approved event-relevant asset, split poster and photo roles, or
-  render an intentional text fallback rather than cutting evidence.
+- When safe card crop cannot be proven, choose another approved event-relevant
+  asset, split poster and photo roles, route the poster to a natural-ratio
+  detail/gallery surface, or render an intentional fixed-token text fallback.
 - Framing metadata is versioned with the media/pixel hash and may be manually
   overridden.
 
@@ -53,6 +58,7 @@ The browser/static renderer consumes metadata but does not run vision models.
 
 - golden corpus across posters, portraits, groups, architecture, text-heavy images and sparse photos;
 - no internal bars/fields in bounded previews;
+- every normalized preview exposes one approved ratio-token name;
 - exact source/target ratios, crop axis and removed-area fraction are test-visible;
 - OCR vertical crop is at most `20%` total and keeps every protected box;
 - no cut faces/heads or significant OCR text;
