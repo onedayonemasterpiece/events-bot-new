@@ -27,6 +27,36 @@ export interface DesktopEventPresentation {
   reason: string;
 }
 
+export interface EditorialSideMotionGeometry {
+  holdTop: number;
+  dockTop: number;
+  maxTravel: number;
+  stickyTop: number;
+}
+
+/**
+ * Resolve the shared Editorial CTA motion geometry. The thumbnail rail changes
+ * the docking anchor when present, but it is not a prerequisite for the
+ * hold/join/docked/release state machine itself.
+ */
+export function resolveEditorialSideMotionGeometry({
+  holdTop,
+  stickyTop,
+  railBottom,
+}: {
+  holdTop: number;
+  stickyTop: number;
+  railBottom?: number;
+}): EditorialSideMotionGeometry {
+  const dockTop = railBottom === undefined ? stickyTop + 1 : railBottom + 12;
+  return {
+    holdTop,
+    dockTop,
+    maxTravel: Math.max(0, holdTop - dockTop),
+    stickyTop,
+  };
+}
+
 const EDITORIAL_MIN_WIDTH = 1280;
 const EDITORIAL_MIN_HEIGHT = 720;
 const EDITORIAL_MIN_RATIO = 1.25;

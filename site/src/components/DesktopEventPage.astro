@@ -656,6 +656,8 @@ const descriptionHtml = (event.description_html || '')
   )}
 
   <script>
+    import { resolveEditorialSideMotionGeometry } from '../lib/desktopEventPresentation';
+
     const cleanRoot = document.querySelector<HTMLElement>('[data-desktop-clean-event]');
     const desktopViewport = window.matchMedia('(min-width: 1024px)');
     if (cleanRoot && desktopViewport.matches) {
@@ -961,7 +963,7 @@ const descriptionHtml = (event.description_html || '')
         new ResizeObserver(scheduleCompanionLayout).observe(companionBoard);
         scheduleCompanionLayout();
       }
-      let editorialSideGeometry:{ holdTop:number; dockTop:number; maxTravel:number; stickyTop:number } | null = null;
+      let editorialSideGeometry:ReturnType<typeof resolveEditorialSideMotionGeometry> | null = null;
       let editorialSideLayoutFrame = 0;
       const applyEditorialReleaseHeight = (maxTravel:number) => {
         if (!editorialSide || !editorialAction) return;
@@ -995,7 +997,7 @@ const descriptionHtml = (event.description_html || '')
           if (companionBoard) companionBoard.dataset.companionPhase = phase === 'docked' || phase === 'release' ? 'docked' : phase === 'join' ? 'approaching' : 'waiting';
           return;
         }
-        if (!editorialSideGeometry || !editorialRail || !editorialContent || cleanRoot.dataset.mediaPolicy !== 'non-ocr') return;
+        if (!editorialSideGeometry || !editorialContent || cleanRoot.dataset.mediaPolicy !== 'non-ocr') return;
         const informationTop = editorialContent.getBoundingClientRect().top;
         const travel = clamp(editorialSideGeometry.holdTop - informationTop, 0, editorialSideGeometry.maxTravel);
         editorialAction.style.transform = `translate3d(0,${(-travel).toFixed(2)}px,0)`;
@@ -1022,14 +1024,16 @@ const descriptionHtml = (event.description_html || '')
           updateEditorialSideMotion();
           return;
         }
-        if (!editorialRail || !editorialContent || cleanRoot.dataset.mediaPolicy !== 'non-ocr') return;
+        if (!editorialContent || cleanRoot.dataset.mediaPolicy !== 'non-ocr') return;
         editorialAction.style.removeProperty('transform');
         const holdTop = editorialAction.getBoundingClientRect().top;
         const stickyTop = Number.parseFloat(getComputedStyle(editorialSide).top) || desktopHeaderHeight() + 24;
-        const dockTop = editorialRail.getBoundingClientRect().bottom + 12;
-        const maxTravel = Math.max(0, holdTop - dockTop);
-        editorialSideGeometry = { holdTop, dockTop, maxTravel, stickyTop };
-        applyEditorialReleaseHeight(maxTravel);
+        editorialSideGeometry = resolveEditorialSideMotionGeometry({
+          holdTop,
+          stickyTop,
+          railBottom:editorialRail?.getBoundingClientRect().bottom,
+        });
+        applyEditorialReleaseHeight(editorialSideGeometry.maxTravel);
         updateEditorialSideMotion();
       };
       const scheduleEditorialSideLayout = () => {
