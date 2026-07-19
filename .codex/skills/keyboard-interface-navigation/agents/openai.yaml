@@ -1,0 +1,4 @@
+interface:
+  display_name: "Keyboard Interface Navigation"
+  short_description: "Design reliable keyboard-first UI navigation"
+  default_prompt: "Use $keyboard-interface-navigation to design and test accessible keyboard navigation and hotkeys for this interface."
