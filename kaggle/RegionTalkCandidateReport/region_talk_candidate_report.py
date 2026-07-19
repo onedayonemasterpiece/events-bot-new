@@ -15238,7 +15238,12 @@ def text_vector_enrichment_is_current(
     )
 
 
-def post_processing_fingerprint(*, text_hash: str, require_bge_m3: bool) -> str:
+def post_processing_fingerprint(
+    *,
+    text_hash: str,
+    require_bge_m3: bool,
+    content_origin_type: str = "",
+) -> str:
     bank_version, bank_hash = semantic_bank_version_and_hash(semantic_bank_v1())
     payload = {
         "policy": POST_PROCESSING_POLICY_VERSION,
@@ -15250,6 +15255,8 @@ def post_processing_fingerprint(*, text_hash: str, require_bge_m3: bool) -> str:
         "bge_model": BGE_M3_TEXT_MODEL_ID if require_bge_m3 else "disabled",
         "bge_contract": BGE_M3_ENCODER_CONTRACT if require_bge_m3 else "disabled",
     }
+    if str(content_origin_type or "") in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
+        payload["external_publication_scope_policy"] = "external_publication_scope_attestation_v1"
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
@@ -15364,7 +15371,11 @@ def plan_posts_for_vector_scoring(
             text_vector_enrichment_is_current(bge_row, model="bge_m3", text_hash=text_hash)
             if require_bge_m3 else True
         )
-        fingerprint = post_processing_fingerprint(text_hash=text_hash, require_bge_m3=require_bge_m3)
+        fingerprint = post_processing_fingerprint(
+            text_hash=text_hash,
+            require_bge_m3=require_bge_m3,
+            content_origin_type=str(row.get("content_origin_type") or ""),
+        )
         previous_fingerprint = str((previous or {}).get("post_processing_fingerprint") or "")
         previous_stage = str((previous or {}).get("current_stage") or "")
         text_restore_requested = publication_text_restore_requested(row)
@@ -16744,7 +16755,11 @@ def build_report(
             "semantic_gate_mode": semantic_gate_mode,
             "deterministic_semantic_gate_override": str(deterministic_override).lower(),
             "post_processing_policy_version": POST_PROCESSING_POLICY_VERSION,
-            "post_processing_fingerprint": str(p.get("_rt_processing_fingerprint") or post_processing_fingerprint(text_hash=embedding_text_hash, require_bge_m3=external_bge_required)),
+            "post_processing_fingerprint": str(p.get("_rt_processing_fingerprint") or post_processing_fingerprint(
+                text_hash=embedding_text_hash,
+                require_bge_m3=external_bge_required,
+                content_origin_type=str(p.get("content_origin_type") or ""),
+            )),
             "processed_text_hash": embedding_text_hash,
             "post_work_kind": str(p.get("_rt_work_kind") or "needs_e5"),
             "e5_vector_status": "reused_current" if p.get("_rt_e5_row") else "computed_this_run",

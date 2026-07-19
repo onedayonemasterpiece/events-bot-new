@@ -4828,6 +4828,16 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(len(planned), 1)
         self.assertEqual(planned[0]["_rt_work_kind"], "needs_e5")
         self.assertEqual(work["posts_actionable"], 1)
+        external_fingerprint = mod.post_processing_fingerprint(
+            text_hash="same-text",
+            require_bge_m3=True,
+            content_origin_type="editorial_publication",
+        )
+        social_fingerprint = mod.post_processing_fingerprint(
+            text_hash="same-text",
+            require_bge_m3=True,
+        )
+        self.assertNotEqual(external_fingerprint, social_fingerprint)
         attested_scope = mod.apply_external_publication_scope_attestation(
             {
                 "kaliningrad_oblast_only_scope": False,
