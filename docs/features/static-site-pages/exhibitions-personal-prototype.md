@@ -121,11 +121,26 @@ marker. Адаптированы:
   общий header получил опциональный base-aware badge, который не меняет другие
   страницы и синхронизируется с тремя состояниями индикатора прототипа;
 - мелкий secondary text поднят до читаемого размера/контраста;
-- hover имеет равнозначный `:focus-within`;
-- photo deck сохраняет реальные `width/height`, ограничивает presentation-ratio
-  диапазоном `0.68..1.62` и показывает до четырёх целых `object-fit:contain`
-  изображений; portrait/OCR не обрезаются, а отдельный правый edge-stack и
-  круглый count делают границы следующих листов колоды явными;
+- hover имеет равнозначный `:focus-within`, но не меняет геометрию row, media,
+  текста или actions: нет подъёма, scale, rotate и раскрытия стопки; меняются
+  только opacity halo, edge-light, border и shadow;
+- photo deck следует `smart-image-crop`: сначала выбирается asset, затем
+  геометрия. Только classified `visual_only event_photo` с `safe_crop`, focal
+  evidence и достаточным разрешением входит в именованные `P/S/W/L` cover-
+  токены; для landscape discovery приоритетен широкий `L 3:2`. OCR, poster,
+  unknown и unsafe asset не получают скрытый center-crop: они остаются
+  отдельными edge-to-edge natural document cards, а исходный порядок доступен
+  в полноразмерной gallery;
+- deck не содержит `contain`, letterbox, четырёхстороннего padding, blur-fill
+  или пустого зарезервированного края. Frame width получается из media height и
+  принятого token/natural ratio, поэтому сама media-zone shrink-wrap-ится до
+  реальных карточек вместо большого чёрного поля;
+- колода появляется только при реальном переполнении текущей полосы. Полностью
+  поместившиеся карточки остаются видимы; до трёх следующих реальных images
+  укладываются вправо с последовательным offset `12px` desktop / `8px` mobile
+  и убывающим z-index, поэтому справа виден край каждого нижнего листа.
+  Счётчик `+N` означает все media, которые не показаны полностью; декоративных
+  пустых `i`-карт больше нет;
 - edge-light адаптирует локальный приём `farmapers` (`HoverGlow` / glass-card):
   отдельные неинтерактивные halo и border-ring слои, но без cyan-палитры,
   pointer tracking и бесконечного idle sweep на плотном списке;
@@ -138,7 +153,7 @@ marker. Адаптированы:
 - reduced-motion отключает transition/animation, но не обнуляет blanket-правилом
   позиционирующие transform у skip-link, live-region, timeline dots и deck
   layers; интерактивный подъём row/icon подавляется отдельными селекторами;
-- на ширине до `740px` row превращается в вертикальную карточку без
+- на ширине до `820px` row превращается в вертикальную карточку без
   горизонтального overflow, фильтр остаётся sticky, а стандартный мобильный
   discovery drawer заменяет самодельную нижнюю навигацию;
 - на `768px` остаётся компактный timeline row, на `1440px` используется полная
@@ -163,6 +178,13 @@ source/service и не должны выдаваться за текущий п�
 
 Прототип ничего не отправляет в Supabase и не заявляет production analytics.
 Local state нужен только для interaction review.
+
+Перед smart-crop итерацией выполнен свежий read-only production media audit на
+2026-07-19: `280` public active events, `590` canonical approved assets,
+`190` событий с одним image, `88` с несколькими, `113` all-OCR и только `42`
+события со strict sales-photo evidence. Поэтому blanket `cover` отклонён:
+широкий browse crop применяется только к доказанным фотографиям, а документы
+остаются полноформатными карточками без полей и без потери текста.
 
 ## Incident regression contract
 
@@ -216,6 +238,15 @@ halo/edges, aspect-aware multi-photo deck, границы колоды и motion
 immersive drawer на mobile, badge-extension отражает `headerCurrent`, а
 prototype-local диапазон `760..1020px` получил fluid gap/padding вместо скрытия
 навигации; базовая геометрия shared layout для production pages не менялась.
+
+Перед smart-crop / real-overflow итерацией отдельный критический review той же
+`Gemini 3.1 Pro (High)` линии подтвердил P1-дефекты: blanket `contain`, inset
+`7px 64px 7px 7px`, фиктивный stack при двух фотографиях и одновременные
+row/frame/image/metadata transforms на hover. Его предложение включить blanket
+`cover` для каждого poster не принято: новый `smart-image-crop` contract требует
+fail-closed OCR. Принята синтезированная схема: широкий `L/W` cover для
+evidence-safe photos, natural edge-to-edge document cards, реальный правый
+overflow stack и полностью световой hover.
 Рекомендация удалять mobile drawer вместе
 с overrides не применялась буквально: browser gate подтвердил, что drawer —
 канонический общий компонент, а не самодельная навигация.

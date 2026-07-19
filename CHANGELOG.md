@@ -42,11 +42,12 @@
 - **Personal exhibitions visual prototype**: replace its handwritten header
   with the shared base-aware static-site header and responsive new-exhibitions
   badge, including fluid tablet navigation and an `aria-current` shared mobile
-  drawer; preserve real photo ratios in multi-image contain decks, add distinct
-  stacked-card edges plus restrained `farmapers`-inspired halo lighting, and
-  move hover/filter/gallery feedback to cinematic transform/opacity motion with
-  full keyboard and reduced-motion parity without breaking positioning
-  transforms; single-photo decks no longer reserve an empty stack gutter.
+  drawer; apply evidence-gated smart crop with wider named `W/L` previews for
+  verified safe photos and edge-to-edge natural cards for protected documents;
+  replace the fake reserved stack with real right-overlapping image cards whose
+  `+N` means actual overflow, remove media letterboxing/padding, and make hover
+  and keyboard focus purely halo/edge-light states without row, image, metadata
+  or action movement.
 
 ### Added
 - **Personal exhibitions product prototype**: add a separate dark timeline

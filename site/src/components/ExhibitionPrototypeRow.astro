@@ -1,6 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import { withBase } from '../lib/events';
+import type { EventImageAsset } from '../lib/types';
 
 interface PrototypeSpec {
   id: number;
@@ -22,28 +23,99 @@ interface Props {
 
 const { item, rowIndex } = Astro.props;
 const { event } = item;
+const ratioTokens = { P: 4 / 5, S: 1, W: 4 / 3, L: 3 / 2 } as const;
+type RatioToken = keyof typeof ratioTokens;
+
+function safeObjectPosition(value: string | null | undefined) {
+  const raw = String(value || '').trim();
+  return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : null;
+}
+
+function objectPosition(asset: EventImageAsset) {
+  return safeObjectPosition(asset.recommended_object_position)
+    || (asset.focal_point ? `${Math.round(asset.focal_point.x * 100)}% ${Math.round(asset.focal_point.y * 100)}%` : null)
+    || safeObjectPosition(event.image_object_position)
+    || (event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null)
+    || '50% 50%';
+}
+
+function photoToken(sourceRatio: number): RatioToken {
+  if (sourceRatio < 0.95) return 'P';
+  if (sourceRatio < 1.18) return 'S';
+  return sourceRatio >= 1.2 ? 'L' : 'W';
+}
+
+const seenSources = new Set<string>();
 const media = (event.image_assets || [])
-  .filter((asset: any) => asset?.src)
-  .slice(0, 6)
-  .map((asset: any) => {
-    const width = Number(asset.width || 0);
-    const height = Number(asset.height || 0);
-    const sourceRatio = width > 0 && height > 0 ? width / height : 4 / 3;
-    const normalizedRatio = Math.max(0.68, Math.min(1.62, sourceRatio));
+  .filter((asset: EventImageAsset) => {
+    if (!asset?.src || seenSources.has(asset.src)) return false;
+    seenSources.add(asset.src);
+    return true;
+  })
+  .map((asset: EventImageAsset, sourceIndex: number) => {
+    const width = Number(asset.width || 0) || 1200;
+    const height = Number(asset.height || 0) || 900;
+    const sourceRatio = width / height;
+    const textMode = asset.image_text_mode || event.image_text_mode || 'unknown';
+    const cropSafePhoto = asset.media_semantic_status === 'classified'
+      && asset.media_role === 'event_photo'
+      && textMode === 'visual_only'
+      && asset.safe_crop === true
+      && Boolean(asset.recommended_object_position || asset.focal_point)
+      && width >= 640
+      && height >= 438;
+    const token = cropSafePhoto ? photoToken(sourceRatio) : null;
+    const presentationRatio = token ? ratioTokens[token] : sourceRatio;
+    const cropLoss = token ? 1 - Math.min(sourceRatio / presentationRatio, presentationRatio / sourceRatio) : 0;
+    const thumbnailSources = (asset.thumbnail_sources || [])
+      .filter((candidate) => candidate?.src && candidate.width && candidate.height)
+      .map((candidate) => `${candidate.src} ${candidate.width}w`);
+    if (!thumbnailSources.some((candidate) => candidate.startsWith(`${asset.src} `))) thumbnailSources.push(`${asset.src} ${width}w`);
     return {
       src: asset.src,
-      width: width || Math.round(900 * normalizedRatio),
-      height: height || 900,
-      normalizedRatio,
-      family: sourceRatio < 0.86 ? 'portrait' : sourceRatio > 1.2 ? 'landscape' : 'balanced',
-      textMode: asset.image_text_mode || event.image_text_mode || 'unknown',
+      width,
+      height,
+      sourceIndex,
+      sourceRatio,
+      presentationRatio,
+      token: token || 'NATURAL',
+      treatment: cropSafePhoto ? 'photo-cover' : 'document-natural',
+      cropLoss,
+      cropReason: cropSafePhoto ? 'surface-wide-safe-photo' : 'protected-natural-ratio',
+      objectPosition: objectPosition(asset),
+      textMode,
+      mediaRole: asset.media_role || 'unknown_document',
+      safeCrop: asset.safe_crop === true,
+      thumbnailSrcset: thumbnailSources.join(', '),
+      sortPriority: cropSafePhoto ? (presentationRatio >= ratioTokens.W ? 0 : 1) : 2,
     };
   });
 if (!media.length && event.image_url) {
-  media.push({ src: event.image_url, width: 1200, height: 900, normalizedRatio: 4 / 3, family: 'landscape', textMode: event.image_text_mode || 'unknown' });
+  media.push({
+    src: event.image_url,
+    width: 1200,
+    height: 900,
+    sourceIndex: 0,
+    sourceRatio: 4 / 3,
+    presentationRatio: 4 / 3,
+    token: 'NATURAL',
+    treatment: 'document-natural',
+    cropLoss: 0,
+    cropReason: 'protected-natural-ratio',
+    objectPosition: '50% 50%',
+    textMode: event.image_text_mode || 'unknown',
+    mediaRole: event.image_media_role || 'unknown_document',
+    safeCrop: false,
+    thumbnailSrcset: '',
+    sortPriority: 2,
+  });
 }
-const galleryImages = media.map((asset) => asset.src);
-const visibleMedia = media.slice(0, 4);
+const galleryImages = [...media].sort((a, b) => a.sourceIndex - b.sourceIndex).map((asset) => asset.src);
+// Discovery starts with verified, crop-safe event photos; the identity poster
+// remains intact and reachable in the source-order gallery.
+const visibleMedia = [...media]
+  .sort((a, b) => a.sortPriority - b.sortPriority || a.sourceIndex - b.sourceIndex)
+  .slice(0, 6);
 const detailHref = withBase(`/sobytiya/${event.slug}/`);
 const likeCount = Number(event.likes_count || 0);
 const titleId = `exhibition-title-${event.id}`;
@@ -76,32 +148,39 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     data-gallery-open
     data-gallery-title={event.title}
     data-gallery-images={JSON.stringify(galleryImages)}
-    aria-label={`Открыть фотографии выставки «${event.title}», ${media.length || 1}`}
+    data-media-total={String(galleryImages.length || 1)}
+    aria-label={`Открыть фотографии выставки «${event.title}», ${galleryImages.length || 1}`}
   >
-    <span class={`ex-deck__images ex-deck__images--${visibleMedia.length}`} aria-hidden="true">
+    <span class="ex-deck__images" data-deck-images aria-hidden="true">
       {visibleMedia.map((asset, index: number) => (
         <span
-          class={`ex-deck__frame ex-deck__frame--${asset.family}`}
-          style={`--deck-index:${index};--media-weight:${asset.normalizedRatio.toFixed(3)}`}
+          class="ex-deck__frame"
+          data-deck-frame
+          data-media-treatment={asset.treatment}
+          data-media-token={asset.token}
+          data-media-role={asset.mediaRole}
+          data-image-text-mode={asset.textMode}
+          data-safe-crop={asset.safeCrop ? 'true' : 'false'}
+          data-crop-reason={asset.cropReason}
+          data-crop-loss={asset.cropLoss.toFixed(5)}
+          data-source-ratio={asset.sourceRatio.toFixed(5)}
+          data-presentation-ratio={asset.presentationRatio.toFixed(5)}
+          style={`--deck-index:${index};--media-ratio:${asset.presentationRatio.toFixed(5)};--media-position:${asset.objectPosition}`}
         >
           <img
             src={asset.src}
+            srcset={asset.thumbnailSrcset || undefined}
+            sizes="(max-width: 740px) 48vw, 190px"
             alt=""
             width={asset.width}
             height={asset.height}
             loading={rowIndex > 2 ? 'lazy' : 'eager'}
             decoding="async"
-            data-image-text-mode={asset.textMode}
           />
         </span>
       ))}
     </span>
-    {media.length > 1 && (
-      <span class="ex-deck__edge-stack" aria-hidden="true">
-        <i></i><i></i><i></i><i></i>
-      </span>
-    )}
-    {media.length > 1 && <span class="ex-deck__count">{media.length}</span>}
+    <span class="ex-deck__count" data-deck-count hidden></span>
   </button>
 
   <div class="ex-row__body">
