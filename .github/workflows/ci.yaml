@@ -30,6 +30,8 @@ jobs:
           python -m pytest -vv
           tests/test_event_vector_sync.py
           tests/test_event_identity.py
+          tests/test_static_site_release.py
+          tests/test_static_site_build_debounce.py
           tests/test_static_site_build_handoff.py
           tests/test_vk_auto_queue_import.py
       - name: Run email release contracts

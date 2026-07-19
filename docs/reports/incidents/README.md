@@ -18,6 +18,62 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-19-static-site-stale-builder-lease.md`
+  - Scope: host-validated StaticSiteBuilder terminal reconciliation, exact-owner
+    `static_site:builder` lease release and pre-push Smart Update self-healing.
+  - Must not regress: a successful published candidate cannot retain its
+    exclusive lease after a lost callback or transient SQLite writer lock; a
+    late receipt never releases a successor's lease; the next build reconciles
+    the durable current candidate before any Kaggle push.
+
+- `INC-2026-07-18-static-snapshot-disk-pressure.md`
+  - Scope: Smart Update/Kaggle immutable snapshot lifecycle, retry/recovery
+    retention, Fly `/data` readiness and deploy health checks.
+  - Must not regress: terminal handoffs delete their exact snapshot pairs;
+    crash leftovers stay bounded while durable active inputs are preserved;
+    candidate retries cannot cross the disk-critical health floor.
+
+- `INC-2026-07-18-dramteatr-same-day-event-glue.md`
+  - Scope: Smart Update post-match identity enforcement, same-date Dramatic
+    Theatre occurrences, canonical/public repair and static source/media
+    projection.
+  - Must not regress: a `14:30` theatre tour and an `18:00` play on the same
+    venue/date remain distinct; a high-confidence
+    `skip_merge_side_effects` verdict blocks mutation in enforce mode while a
+    true same-event update still merges; OCR/non-identity documents do not own
+    or crop the hero when a strong event-local visual exists.
+- `INC-2026-07-18-social-metrics-postponed-vk-import.md`
+  - Scope: Kaggle SocialMetricsCollector postponed-to-live VK resolution and
+    strict Fly import of scheduled popularity batches.
+  - Must not regress: a future-dated postponed row returned by `wall.getById`
+    is never emitted as `published`; the collector must continue the bounded
+    live-wall lookup, and one unresolved scheduled post cannot discard valid
+    metrics observations from the same batch.
+
+- `INC-2026-07-18-cherryflash-missing-true3d-bundle.md`
+  - Scope: CherryFlash True3D runtime bundling, product-final output discovery,
+    failed-Kaggle output recovery and daily Telegram Stories catch-up.
+  - Must not regress: every invoked renderer ships in the per-session dataset;
+    intro-only mp4 output cannot become `PUBLISHED_TEST`; daily closure requires
+    a real `cherryflash_full_final.mp4` and verified public story fanout.
+
+- `INC-2026-07-18-vk-captcha-publication-cadence-gap.md`
+  - Scope: managed VK `vk_sync`, captcha persistence/recovery, expired post
+    edits, JobOutbox pause cohorts and postponed publication cadence.
+  - Must not regress: one VK captcha cannot strand the queue until 2036; only
+    the marked cohort resumes after a harmless probe, with bounded spacing;
+    historical/manual pauses remain untouched; expired edit windows do not
+    retry indefinitely; same-day gaps require a verified catch-up and non-empty
+    authenticated postponed queue.
+
+- `INC-2026-07-17-vk-auto-provider-quota-false-reject.md`
+  - Scope: manual/scheduled VK auto-import, Smart Update Google key allocation,
+    provider-side 429 handling, grounding and post-create image geometry.
+  - Must not regress: Smart Update uses KEY1–KEY5 as a normal pool from the
+    first reserve; one provider-exhausted member cannot turn a grounded event
+    into `create_bundle_grounding:llm_ungrounded`; explicit/unpooled lanes are
+    never widened; recovery replay must import the original VK post and enqueue
+    its geometry job.
 - `INC-2026-07-17-meow-source-medallion-telegram.md`
   - Scope: `@kldevents` RichMessage medallion selection and the boundary between static-page provenance badges and Telegram event attributes.
   - Must not regress: source/aggregator-channel badges such as `MEOW Афиша` never enter Telegram graphical strips; legitimate organizer, venue, festival, program and Pushkin-card medallions remain available; affected public posts are replaced through send-first/delete-after-success and DB mappings point only to the clean replacements.
@@ -28,6 +84,16 @@
 - `INC-2026-07-15-tg-rich-medallion-rendering-gaps.md`
   - Scope: canonical `@kldevents` RichMessage publishing, manifest-backed graphical medallion strips, footer spacing and retirement of custom-emoji medallion placement.
   - Must not regress: event `6811` semantics resolve KОНБ + KGD80 + Znanie; every approved event image is preserved above one standalone bottom strip; `Подробнее` and `Max` retain a 12-space non-collapsing one-row gap; RichMessages never enqueue or receive legacy emoji medallions.
+
+- `INC-2026-07-16-static-event-media-action-regressions.md`
+  - Scope: static event medallion/media inventory, exact KAUP A/B/C design-system fidelity, invariant desktop CTA geometry, Kaliningrad-date production generation and durable Smart Update→Kaggle single-flight/adoption.
+  - Must not regress: accepted transport is reproduced rather than reinterpreted and says `на Кауп`; ticket/phone variants keep the bottom calendar/share/like row; conflicting venue identities fail closed; delayed images reserve geometry; a stale Fly waiter never causes a duplicate Kaggle push; `/segodnya/` matches the receipt's Kaliningrad date.
+- `INC-2026-07-15-static-production-v2-secondary-surfaces.md`
+  - Scope: generated desktop recommendation geometry, rail transport media, exact accepted mobile V8 integration and full-catalog preview acceptance.
+  - Must not regress: recommendation rows use one media ratio without fields, OCR crops stay at or below 20%, rail examples retain the train image, and production mobile routes reuse the accepted V8 behavior from `fd8766b1` rather than an older approximation.
+- `INC-2026-07-15-static-desktop-template-regression.md`
+  - Scope: exact accepted desktop event component, production media-family routing, full-catalog static generation and truthful consultant/release acceptance.
+  - Must not regress: generated desktop pages must mount the accepted Continuous Editorial/Split component rather than a CSS imitation; portrait/low-resolution media must fail to Split; all-page and representative Playwright evidence must cover the actual generated preview URLs while mobile v4 stays unchanged.
 - `INC-2026-07-15-fly-volume-critical.md`
   - Scope: Fly `/data` capacity, SQLite/runtime evidence retention, `/healthz` readiness and `/webhook` routing during deploys.
   - Must not regress: production must retain bounded runtime evidence without crossing the disk-critical readiness floor; every deploy must verify free space, SQLite integrity, `/healthz`, Fly checks and fresh disk-full/proxy logs; volume auto-extension stays bounded and cannot replace retention or DB/media hygiene.
@@ -43,7 +109,7 @@
 
 - `INC-2026-07-13-runtime-logging-recurring-event-quality.md`
   - Scope: bounded permanent runtime logs, Fly volume hygiene, reversible production Telegram E2E authorization, complete future-event quality acceptance and vector/LLM evidence.
-  - Must not regress: production observability must be bounded rather than disabled; logs cannot exhaust SQLite storage; every live import acceptance needs correlated UI/log/ops/vector evidence; broad future quality claims require a complete source-adjudicated denominator.
+  - Must not regress: production observability must be bounded rather than disabled; logs cannot exhaust SQLite storage; every live import acceptance needs correlated UI/log/ops/vector evidence; broad future quality claims require a complete source-adjudicated denominator; known mappings such as `6774→2884` must be included before any event-local repair/public rearm.
 - `INC-2026-07-12-autoretro-one-day-exhibition-location-period.md`
   - Scope: source-grounded one-day outdoor exhibition date/venue semantics, Smart Update period/location merge safety, vector-first recall and all public projections.
   - Must not regress: a one-day street vehicle exhibition must not inherit a long-running exhibition period or unrelated indoor/default venue; vector similarity is recall only and cannot authorize semantic field transfer.

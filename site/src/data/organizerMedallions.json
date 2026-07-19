@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "organizer_medallion_assets_v1",
-  "generatedAt": "2026-07-02T00:00:00Z",
-  "usage": "Event-detail organizer medallions. SVG is preferred when source/vectorization allows; WebP is the browser primary for raster-only sources, with PNG fallback for QA/older clients.",
+  "schemaVersion": "organizer_medallion_assets_v2",
+  "generatedAt": "2026-07-18T00:00:00Z",
+  "usage": "Event-detail identity medallions. Every item declares organizer/festival/venue role for evidence-aware resolution; SVG is preferred, with WebP/PNG fallbacks where documented.",
   "items": [
     {
       "slug": "world-ocean-museum",
@@ -29,8 +29,7 @@
       "sourcePath": "site/src/assets/organizers/source/world-ocean-museum.logo_new_mobile_v2.svg",
       "retrievedAt": "2026-06-29",
       "assetFormat": "svg",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "category": "venue_brand"
     },
     {
       "slug": "history-art-museum",
@@ -58,8 +57,7 @@
       "sourcePath": "site/src/assets/organizers/source/history-art-museum.logo_koihm_white.png",
       "retrievedAt": "2026-06-29",
       "assetFormat": "svg",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "category": "venue_brand"
     },
     {
       "slug": "kaliningrad-philharmonic",
@@ -89,8 +87,7 @@
       "brandBackgroundSource": "https://t.me/filarmonia_39",
       "backgroundEvidence": "Telegram profile OG image uses yellow harp background; dominant sampled color #FAB534 on 2026-06-29.",
       "assetFormat": "svg",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "category": "venue_brand"
     },
     {
       "slug": "kant-island",
@@ -118,8 +115,7 @@
       "sourcePath": "site/src/assets/organizers/source/kant-island.sobor-logo.svg",
       "retrievedAt": "2026-06-29",
       "assetFormat": "svg",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "category": "venue_brand"
     },
     {
       "slug": "dom-kitoboya",
@@ -149,8 +145,7 @@
       "brandBackgroundSource": "https://t.me/domkitoboya",
       "backgroundEvidence": "Public Telegram profile avatar uses blue background with white handwritten mark; sampled 2026-07-01 from t.me/domkitoboya OG image: dominant bin #5060A0, average blue #4D62A0, light mark #D0D8E5. The medallion uses the source site logo words recomposed as a stacked mark over that palette.",
       "assetFormat": "webp-source-only",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "category": "venue_brand"
     },
     {
       "slug": "tretyakovka-kaliningrad",
@@ -182,8 +177,7 @@
       "brandBackgroundSource": "https://t.me/tretyakovka_kaliningrad",
       "backgroundEvidence": "Public Telegram profile avatar uses light warm background with gold Tretyakovka T mark; sampled/used source image from t.me/tretyakovka_kaliningrad OG image on 2026-07-01.",
       "assetFormat": "svg",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "category": "venue_brand"
     },
     {
       "slug": "konb",
@@ -212,8 +206,7 @@
       "sourcePath": "site/src/assets/organizers/source/konb.logo.png",
       "retrievedAt": "2026-07-01",
       "assetFormat": "webp-raster-exception",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "category": "venue_brand"
     },
     {
       "slug": "act-opus",
@@ -245,8 +238,7 @@
       "sourcePath": "site/src/assets/organizers/source/act-opus.logo_new_black.png",
       "retrievedAt": "2026-07-02",
       "assetFormat": "svg-embedded-source-png",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "category": "venue_brand"
     },
     {
       "slug": "znanie-russia",
@@ -280,8 +272,10 @@
       "assetFormat": "svg",
       "brandBackgroundSource": "https://znanierussia.ru/ production CSS --primary / --primary-default",
       "backgroundEvidence": "Official site CSS sampled 2026-07-02 exposes --primary-default / --primary as #0501D0; legacy --color-primary-old is #426FFF.",
-      "listingStatus": "blocked_missing_binding",
-      "listingBinding": "organizer"
+      "category": "organizer",
+      "impliedByFestivalAliases": [
+        "80 историй о главном"
+      ]
     },
     {
       "slug": "kgd80",
@@ -310,8 +304,7 @@
       "sourcePath": "site/src/assets/organizers/source/kgd80.logo-80-istorii-hero.svg",
       "retrievedAt": "2026-07-02",
       "assetFormat": "svg",
-      "listingStatus": "detail_only",
-      "listingBinding": "festival"
+      "category": "festival_brand"
     },
     {
       "slug": "kantata-festival",
@@ -341,69 +334,61 @@
       "sourcePath": "site/src/assets/partners/source/kantata-education.Kantata_logo_Black_R.png",
       "retrievedAt": "2026-07-02",
       "assetFormat": "webp-source-only",
-      "listingStatus": "listing_ready",
-      "listingBinding": "festival"
+      "category": "festival_brand"
     },
     {
-      "slug": "muzteatr39",
-      "name": "Калининградский музыкальный театр",
-      "shortName": "Музыкальный театр",
+      "slug": "kaup",
+      "name": "Поселение викингов «Кауп»",
+      "shortName": "Кауп",
       "aliases": [
-        "Музыкальный театр",
-        "Калининградский музыкальный театр",
-        "Калининградский областной музыкальный театр",
-        "muzteatr39",
-        "muztear39"
+        "Поселение викингов Кауп",
+        "поселение викингов «Кауп»",
+        "Кауп",
+        "kaup39.ru",
+        "nightkaup.ru"
       ],
-      "sourcePage": "https://muzteatr39.ru/",
-      "sourceUrl": "https://muzteatr39.ru/wp-content/uploads/image_theme/logo2.png",
-      "sourceFile": "muzteatr39.logo2.png",
-      "background": "#5B4427",
-      "ring": "#D8B982",
-      "logoCrop": "official-square-logo",
-      "fitBox": [
-        336,
-        336
-      ],
-      "ariaLabel": "Площадка: Калининградский музыкальный театр",
-      "renderNote": "Официальный квадратный PNG-логотип пересобран как WebP-primary медальон с PNG fallback; трассировка не используется.",
-      "avatarUrl": "/assets/organizers/muzteatr39.webp",
-      "sourcePath": "site/src/assets/organizers/source/muzteatr39.logo2.png",
+      "sourcePage": "https://www.kaup39.ru/",
+      "sourceUrl": "https://static.tildacdn.com/tild3166-3161-4133-a638-363932633936/Logo_wh_main.svg",
+      "sourceFile": "kaup-logo.svg",
+      "background": "#26372D",
+      "ring": "#B9A06A",
+      "ariaLabel": "Локация и бренд: поселение викингов «Кауп»",
+      "renderNote": "Официальный знак площадки «Кауп» возвращён в общий runtime-манифест как venue-brand; совпадение выполняется по нормализованным алиасам площадки/источника.",
+      "avatarUrl": "/assets/festivals/kaup.svg",
+      "sourcePath": "site/src/assets/organizers/source/kaup-logo.svg",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "webp-source-png",
-      "fallbackPngUrl": "/assets/organizers/muzteatr39.png",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "assetFormat": "svg",
+      "category": "venue_brand"
     },
     {
-      "slug": "kldzoo",
-      "name": "Калининградский зоопарк",
-      "shortName": "Зоопарк",
+      "slug": "dramteatr39",
+      "name": "Калининградский драматический театр",
+      "shortName": "Драмтеатр",
       "aliases": [
-        "Калининградский зоопарк",
-        "Зоопарк",
-        "kldzoo",
-        "Калининградский зоопарк, проспект Мира"
+        "Драматический театр",
+        "Драмтеатр",
+        "Калининградский драматический театр",
+        "Калининградский областной драматический театр",
+        "dramteatr39",
+        "dramteatr39.ru"
       ],
-      "sourcePage": "https://kldzoo.ru/",
-      "sourceUrl": "https://kldzoo.ru/local/templates/s1/img/logo.png",
-      "sourceFile": "kldzoo.logo.png",
-      "background": "#F7F5E9",
-      "ring": "#D8D1BE",
-      "logoCrop": "official-square-logo",
+      "sourcePage": "https://dramteatr39.ru/",
+      "sourceUrl": "https://dramteatr39.ru/img/logo.svg?v=2",
+      "sourceFile": "dramteatr39.logo.svg",
+      "background": "#8F151B",
+      "ring": "#F4EEE4",
+      "logoCrop": "left-emblem-from-official-horizontal-svg",
       "fitBox": [
-        452,
-        452
+        370,
+        370
       ],
-      "ariaLabel": "Площадка: Калининградский зоопарк",
-      "renderNote": "Официальный квадратный PNG-логотип зоопарка увеличен примерно на 30% относительно первой версии; конкурирующая салатовая внешняя обводка убрана, потому что у исходного знака есть собственная круговая рамка.",
-      "avatarUrl": "/assets/organizers/kldzoo.webp",
-      "sourcePath": "site/src/assets/organizers/source/kldzoo.logo.png",
+      "ariaLabel": "Площадка: Калининградский драматический театр",
+      "renderNote": "Официальный горизонтальный SVG-логотип масштабирован и кругом обрезан до левого театрального знака, чтобы медальон был читаемым на мобильном размере; текстовая часть намеренно выведена за круг.",
+      "avatarUrl": "/assets/organizers/dramteatr39.svg",
+      "sourcePath": "site/src/assets/organizers/source/dramteatr39.logo.svg",
       "retrievedAt": "2026-07-03",
-      "assetFormat": "webp-source-png",
-      "fallbackPngUrl": "/assets/organizers/kldzoo.png",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue"
+      "assetFormat": "svg-embedded-source-svg-cropped",
+      "category": "venue_brand"
     }
   ]
 }

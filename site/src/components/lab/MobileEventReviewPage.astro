@@ -1,0 +1,597 @@
+---
+import EventCard from '../EventCard.astro';
+import EventFacts from '../EventFacts.astro';
+import EventHero, { type HeroComposition, type HeroMode } from '../EventHero.astro';
+import EventTokenMedallions from '../EventTokenMedallions.astro';
+import Icon from '../Icon.astro';
+import type { PreviewEvent } from '../../lib/types';
+import type { MobileEventReviewVariant } from '../../lib/mobileEventReview';
+import {
+  displayDateTime,
+  displayUpdatedAtKaliningrad,
+  eventActionHref,
+  eventCalendarHref,
+  eventCalendarStateExpiryDay,
+  eventHref,
+  eventTicketActionLabel,
+  isCalendarEligible,
+  isTelephoneUrl,
+  withBase,
+} from '../../lib/events';
+import { eventImageUrl } from '../../lib/assets';
+
+interface Props {
+  event: PreviewEvent;
+  related: PreviewEvent[];
+  variant: MobileEventReviewVariant;
+  composition: HeroComposition;
+  modeOverride?: HeroMode;
+}
+
+const { event, related, variant, composition, modeOverride } = Astro.props;
+const ctaHref = eventActionHref(event);
+const ctaLabel = eventTicketActionLabel(event);
+const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
+const compactLabelAction = stickyCalendarPrimary && ctaHref
+  ? 'ticket'
+  : !stickyCalendarPrimary && isCalendarEligible(event)
+    ? (event.id % 2 === 0 ? 'calendar' : 'share')
+    : 'share';
+const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
+const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
+const calendarExpiryDay = eventCalendarStateExpiryDay(event);
+const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
+const stickyIsTelephone = isTelephoneUrl(stickyHref);
+const updatedAtLabel = displayUpdatedAtKaliningrad(event.updated_at);
+const sourceCount = Number(event.source_engagement_sources_count || 0);
+const sourceCountLabel = sourceCount > 0
+  ? `${sourceCount} ${sourceCount % 10 === 1 && sourceCount % 100 !== 11 ? 'источник' : [2, 3, 4].includes(sourceCount % 10) && ![12, 13, 14].includes(sourceCount % 100) ? 'источника' : 'источников'}`
+  : null;
+const descriptionMeta = [sourceCountLabel, updatedAtLabel ? `обновлено: ${updatedAtLabel} (Калининград)` : null].filter(Boolean);
+const galleryCtaEvent = related[0];
+const galleryCta = galleryCtaEvent ? {
+  title: galleryCtaEvent.title,
+  href: eventHref(galleryCtaEvent),
+  label: 'Смотреть похожее',
+  image_url: eventImageUrl(galleryCtaEvent.image_url),
+  meta: [displayDateTime(galleryCtaEvent), galleryCtaEvent.venue_name || galleryCtaEvent.city].filter(Boolean).join(' · '),
+} : undefined;
+---
+
+<main
+  id="main"
+  class="mobile-event-review"
+  data-mobile-event-review
+  data-mobile-review-variant={variant.slug}
+  data-prose-treatment={variant.proseTreatment}
+  data-actions-treatment={variant.actionsTreatment}
+  data-mobile-review-revision={variant.revision}
+  data-compact-label-action={compactLabelAction}
+  data-mobile-parallax-profile={variant.slug === 'accepted-v7' ? 'photo-velocity-matched' : variant.slug === 'accepted-v8' ? 'photo-continuous-crop' : undefined}
+>
+  <div class="page-shell page-shell--event-impact mobile-event-review__shell">
+    <article class="main-col section-card section-card--hero section-card--impact-hero">
+      <div class="section-card__inner section-card__inner--hero">
+        <EventHero event={event} composition={composition} modeOverride={modeOverride} galleryCta={galleryCta} metaTreatment={variant.revision === 'v3' || variant.revision === 'v4' ? 'weekday-panel' : 'standard'} />
+      </div>
+    </article>
+
+    <div class="mobile-event-review__continuation">
+      <nav class="crumbs crumbs--after-hero" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        {event.city && <span>{event.city}</span>}
+        {event.city && <span aria-hidden="true">/</span>}
+        {event.event_type && <span>{event.event_type}</span>}
+      </nav>
+
+      <div class="mobile-event-review__medallions"><EventTokenMedallions event={event} /></div>
+
+      <section class="section-card section-card--quiet section-card--event-details mobile-event-review__details" style="margin-top: 1rem;">
+        <div class="section-card__inner mobile-event-review__prose">
+          <h2>Описание</h2>
+          <div class="prose" set:html={event.description_html} />
+          <h2 style="margin-top: 1.2rem;">Коротко</h2>
+          <EventFacts event={event} />
+          {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
+        </div>
+        <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
+      </section>
+    </div>
+
+    <section id="discovery-feed" class="section-card mobile-event-review__discovery" style="margin-top: 1rem;" data-hide-sticky-after>
+      <div class="section-card__inner">
+        <h2>Смотрите дальше</h2>
+        <div class="cards-grid cards-grid--immersive" data-feed-card-variant="split-actions">
+          {related.map((candidate) => <EventCard event={candidate} variant="split-actions" />)}
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+{stickyHref && (
+  <div class="mobile-sticky-cta" data-sticky-cta aria-label="Быстрое действие события">
+    <div class="mobile-sticky-cta__inner">
+      <div class="mobile-sticky-cta__title"><strong>{event.title}</strong><span>{displayDateTime(event)}</span></div>
+      <a class="cta-button" href={stickyHref} type={stickyCalendarPrimary ? 'text/calendar' : undefined} target={stickyIsExternal && !stickyCalendarPrimary ? '_blank' : undefined} rel={stickyIsExternal && !stickyCalendarPrimary ? 'noopener noreferrer nofollow' : undefined} data-calendar-action={stickyCalendarPrimary ? true : undefined} data-calendar-event-id={stickyCalendarPrimary ? event.id : undefined} data-calendar-expiry-day={stickyCalendarPrimary ? calendarExpiryDay : undefined} data-calendar-event-title={stickyCalendarPrimary ? event.title : undefined} aria-label={stickyCalendarPrimary ? `Добавить в календарь: ${event.title}` : undefined}>{stickyIsTelephone && <Icon name="phone" />}<span data-calendar-label={stickyCalendarPrimary ? true : undefined}>{stickyLabel}</span></a>
+    </div>
+  </div>
+)}
+
+<style is:global>
+  [data-mobile-event-review] .mobile-event-review__shell { padding-bottom: 1.5rem; }
+  [data-mobile-event-review] .mobile-event-review__continuation { display: contents; }
+  [data-mobile-event-review] .mobile-event-review__medallions { margin-top: 0.25rem; }
+
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .section-card--impact-hero {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .section-card--impact-hero {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .section-card--impact-hero {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.45rem;
+    margin-top: 0.05rem;
+    padding: 0.72rem 0.82rem;
+    border: 1px solid rgba(121,48,20,0.12);
+    border-radius: 14px;
+    background: rgba(181,77,34,0.07);
+    color: #46372d;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__when {
+    color: #8f3517;
+    font-size: 1.05rem;
+    font-weight: 920;
+    line-height: 1.15;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__where {
+    flex-basis: 100%;
+    font-size: 0.92rem;
+    font-weight: 780;
+    line-height: 1.24;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v2"] .event-hero__meta-separator { display: none; }
+
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__meta-line {
+    display: grid;
+    gap: 0.58rem;
+    margin-top: 0.08rem;
+    padding: 0.78rem 0.08rem 0.82rem;
+    border-top: 1px solid rgba(121,48,20,0.22);
+    border-bottom: 1px solid rgba(121,48,20,0.14);
+    border-radius: 0;
+    background: transparent;
+    color: #34271f;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__when {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__weekday {
+    display: inline-flex;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.54rem;
+    border-radius: 9px;
+    background: #b54d22;
+    color: #fffaf2;
+    font-size: 0.74rem;
+    font-weight: 950;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__date {
+    color: #7e2d12;
+    font-size: 1.12rem;
+    font-weight: 950;
+    letter-spacing: -0.025em;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__time {
+    color: #241c17;
+    font-size: 1.2rem;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__where {
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(121,48,20,0.14);
+    font-size: 0.92rem;
+    font-weight: 820;
+    line-height: 1.22;
+  }
+
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__meta-line {
+    display: grid;
+    gap: 0.58rem;
+    margin-top: 0.08rem;
+    padding: 0.78rem 0.08rem 0.82rem;
+    border-top: 1px solid rgba(121,48,20,0.22);
+    border-bottom: 1px solid rgba(121,48,20,0.14);
+    border-radius: 0;
+    background: transparent;
+    color: #34271f;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__when {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__weekday {
+    display: inline-flex;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.54rem;
+    border-radius: 9px;
+    background: #b54d22;
+    color: #fffaf2;
+    font-size: 0.74rem;
+    font-weight: 950;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__date {
+    color: #7e2d12;
+    font-size: 1.12rem;
+    font-weight: 950;
+    letter-spacing: -0.025em;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__time {
+    color: #241c17;
+    font-size: 1.2rem;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__where {
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(121,48,20,0.14);
+    font-size: 0.92rem;
+    font-weight: 820;
+    line-height: 1.22;
+  }
+
+  [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero--poster-stage .event-hero__visual {
+    transform: translateX(-50%) !important;
+    will-change: auto;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero--poster-stage .event-hero__visual {
+    transform: translateX(-50%) !important;
+    overflow: hidden;
+    will-change: auto;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero--poster-stage .event-hero__image {
+    margin-bottom: calc(-1 * var(--hero-poster-travel, 42px));
+    transform: translate3d(0, var(--hero-poster-parallax-y, 0px), 0);
+    will-change: transform;
+  }
+  [data-mobile-event-review][data-mobile-parallax-profile="photo-continuous-crop"] .event-hero--poster-stage .event-hero__image {
+    margin-top: calc(-1 * var(--hero-poster-travel, 42px));
+  }
+
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .mobile-event-review__medallions {
+    margin-top: clamp(0.85rem, 3.8vw, 1.05rem);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"] .mobile-event-review__details {
+    margin-top: clamp(1.35rem, 5.5vw, 1.65rem) !important;
+  }
+
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .event-hero__decision {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .mobile-event-review__continuation {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100vw;
+    margin-top: -1.5rem;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    padding: calc(1.5rem + clamp(0.6rem, 2.8vw, 0.75rem)) 0.75rem 0;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(240,225,207,0.88) 0,
+      rgba(250,240,226,0.9) 6rem,
+      rgba(255,249,240,0.86) 16rem,
+      rgba(248,240,229,0) 32rem
+    );
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .mobile-event-review__medallions {
+    margin-top: 0;
+  }
+  [data-mobile-event-review][data-mobile-review-variant="accepted-v5"] .mobile-event-review__details {
+    margin-top: clamp(1.1rem, 4.6vw, 1.35rem) !important;
+  }
+
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .event-hero__decision {
+    border: 0;
+    box-shadow: none;
+  }
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .mobile-event-review__continuation {
+    --continuation-rise: clamp(28rem, 110vw, 32rem);
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
+    display: block;
+    width: 100vw;
+    margin-top: -1.5rem;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    padding: calc(1.5rem + clamp(0.6rem, 2.8vw, 0.75rem)) 0.75rem 0;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .mobile-event-review__continuation::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    left: 0;
+    right: 0;
+    top: calc(-1 * var(--continuation-rise));
+    height: calc(var(--continuation-rise) + 44rem);
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(242,231,215,0) 0,
+      rgba(242,231,215,0.22) calc(var(--continuation-rise) - 21rem),
+      rgba(240,225,207,0.7) calc(var(--continuation-rise) - 12rem),
+      rgba(250,240,226,0.9) var(--continuation-rise),
+      rgba(255,249,240,0.82) calc(var(--continuation-rise) + 16rem),
+      rgba(248,240,229,0) calc(var(--continuation-rise) + 44rem)
+    );
+  }
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .mobile-event-review__medallions {
+    margin-top: 0;
+  }
+  [data-mobile-event-review]:is([data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"]) .mobile-event-review__details {
+    margin-top: clamp(1.1rem, 4.6vw, 1.35rem) !important;
+  }
+
+  [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__details {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__prose {
+    width: min(100%, 66ch);
+    margin-inline: auto;
+    padding-inline: 0.25rem;
+    padding-top: 1.15rem;
+    padding-bottom: 0.35rem;
+  }
+  [data-mobile-event-review][data-prose-treatment="open"] .event-source-gate--section {
+    width: min(100%, 66ch);
+    margin: 0.85rem auto 0;
+    border: 1px solid rgba(121,48,20,0.12);
+    border-radius: 16px;
+    background: rgba(255,253,248,0.52);
+  }
+
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.42rem;
+    padding: 0.48rem;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    background: #292521;
+    box-shadow: 0 14px 28px rgba(41,37,33,0.18);
+    container-type: inline-size;
+    container-name: mobile-action-dock;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .cta-button {
+    flex: 1 0 100%;
+    width: 100%;
+    min-height: 52px;
+    border-radius: 14px;
+    box-shadow: none;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .secondary-button {
+    flex: 1 1 7.15rem;
+    width: auto;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0.55rem 0.48rem;
+    border-color: rgba(255,255,255,0.1);
+    border-radius: 13px;
+    background: rgba(255,255,255,0.08);
+    color: #fffaf2;
+    box-shadow: none;
+    font-size: 0.84rem;
+    line-height: 1.05;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:hover {
+    border-color: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.13);
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+    flex: 0 0 52px;
+    padding-inline: 0.42rem;
+    color: #fffaf2;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions .icon {
+    width: 1.28rem;
+    height: 1.28rem;
+  }
+  [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions .feedback-count:empty { display: none; }
+
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+    position: relative;
+    flex-basis: 56px;
+    width: 56px;
+    min-height: 52px;
+    overflow: visible;
+    transition: color 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] {
+    border-color: #ffad87 !important;
+    background: #b54d22 !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 3px #292521, 0 0 0 5px #ef9b72, 0 10px 22px rgba(181,77,34,0.38) !important;
+    transform: translateY(-1px);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"]::after {
+    content: "✓";
+    position: absolute;
+    top: -0.42rem;
+    right: -0.34rem;
+    width: 1.22rem;
+    height: 1.22rem;
+    display: grid;
+    place-items: center;
+    border: 2px solid #292521;
+    border-radius: 999px;
+    background: #fffaf2;
+    color: #8f3517;
+    font-size: 0.72rem;
+    font-weight: 1000;
+    line-height: 1;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon {
+    transform: scale(1.12);
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-outline {
+    display: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-solid {
+    display: block !important;
+  }
+
+  [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+    position: relative;
+    flex-basis: 56px;
+    width: 56px;
+    min-height: 52px;
+    overflow: hidden;
+    transition: color 180ms ease, background 180ms ease, border-color 180ms ease;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] {
+    border-color: transparent !important;
+    background: #b54d22 !important;
+    color: #fff !important;
+    box-shadow: none !important;
+    transform: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-outline {
+    display: none;
+  }
+  [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-solid {
+    display: block !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+      transition: none;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
+      transition: none;
+    }
+  }
+
+  @container mobile-action-dock (max-width: 400px) {
+    [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__actions > .secondary-button {
+      flex: 0 0 52px;
+      width: 52px;
+      padding-inline: 0.38rem;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__actions > .secondary-button {
+      flex: 0 0 52px;
+      width: 52px;
+      padding-inline: 0.38rem;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v3"] .event-hero__actions > .secondary-button > span:not(.feedback-count) {
+      display: none;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v4"] .event-hero__actions > .secondary-button > span:not(.feedback-count) {
+      display: none;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]),
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"],
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="share"] .event-hero__actions > .native-share-button {
+      flex: 1 1 0;
+      width: auto;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]),
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"],
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="share"] .event-hero__actions > .native-share-button {
+      flex: 1 1 0;
+      width: auto;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]) > span,
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"] > span,
+    [data-mobile-event-review][data-mobile-review-revision="v3"][data-compact-label-action="share"] .event-hero__actions > .native-share-button > span:not(.feedback-count) {
+      display: inline;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]) > span,
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"] > span,
+    [data-mobile-event-review][data-mobile-review-revision="v4"][data-compact-label-action="share"] .event-hero__actions > .native-share-button > span:not(.feedback-count) {
+      display: inline;
+    }
+  }
+
+  @media (max-width: 379px) {
+    [data-mobile-event-review][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:not(.feedback-button--like) {
+      flex-basis: 5.9rem;
+      padding-inline: 0.34rem;
+      font-size: 0.79rem;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-actions-treatment="dock"] .event-hero__actions > .secondary-button {
+      flex: 0 0 48px;
+      width: 48px;
+      padding-inline: 0.35rem;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-actions-treatment="dock"] .event-hero__actions > .secondary-button > span:not(.feedback-count) {
+      display: none;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]),
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"],
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="share"] .event-hero__actions > .native-share-button {
+      flex: 1 1 0;
+      width: auto;
+    }
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="ticket"] .event-hero__actions > a.secondary-button:not([type="text/calendar"]) > span,
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="calendar"] .event-hero__actions > a.secondary-button[type="text/calendar"] > span,
+    [data-mobile-event-review][data-mobile-review-revision="v2"][data-compact-label-action="share"] .event-hero__actions > .native-share-button > span:not(.feedback-count) {
+      display: inline;
+    }
+  }
+  @media (min-width: 760px) and (max-width: 1023px) {
+    [data-mobile-event-review][data-prose-treatment="open"] .mobile-event-review__prose,
+    [data-mobile-event-review][data-prose-treatment="open"] .event-source-gate--section {
+      width: min(100%, 66ch);
+    }
+  }
+</style>

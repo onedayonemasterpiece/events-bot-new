@@ -1,35 +1,151 @@
 # Astro SSG preview — event pages
 
-> **Status:** implemented preview vertical slice, production rollout pending.  
-> **Build ID:** current full-catalog review target `preview-20260702t1536-merged-vector-medallions` (399 active/future events from the 2026-07-02 production snapshot through event id `6613`, merged vector-identity gate + medallion SVG branches, `search_v3` + `related_v1`, Supabase pgvector, CDN media/ICS, smart-search UI). Historical same-day target: `preview-20260702t0755-fresh-ui-fixes`; historical full-catalog target: `preview-20260630-event-pages-v62-two-vector-gemma-full`; historical focus canary: `preview-20260629-event-pages-v59-related-gemma50`.
-> **Preview index target:** <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>. Public Object Storage/CDN access and `static.kenigevents.ru` TLS are part of the deploy verification gate; current preview HTML/CSS/JS, partner logos, medallion assets and stable `https://static.kenigevents.ru/ics/<event_id>.ics` files are publicly testable after `npm --prefix site run deploy:preview`.
+> **Status:** accepted v11 full-catalog baseline plus v12 fidelity/idempotency corrections are the primary preproduction event templates; checked immutable secret candidates are refreshed through Smart Update/Kaggle. Production-root rollout remains pending.
+> **Accepted template source:** `3b17e536` (`integration/static-event-v11-transport-phone-carousel`), including horizontal photo, photo+OCR companion, document-contain, portrait-series and quality-fallback families.
 
-This is the first real Astro SSG implementation for `kenigevents.ru` event detail pages in `events-bot-new`. It is intentionally a preview-only static slice: no Supabase page-view write path, no personalization telemetry persistence on ordinary views, and no LLM fragments in rendered HTML. The first event-detail discovery hydration is a static same-origin JSON manifest; v59 uses Supabase pgvector only during the offline build/search sidecar pipeline, not as a live page-view ranking service. The authorized search UI is enabled on the preview when built with browser-safe Supabase/Yandex envs and remains gated per user by a valid Supabase/Yandex session. Listing personal-feed slots are hidden unless a cached list or configured backend RPC returns compact card projections.
+This is the primary Astro SSG preproduction implementation for `kenigevents.ru`
+event-detail pages in `events-bot-new`, not a lab experiment. It remains
+noindex and prefix-contained: no Supabase page-view write path, no
+personalization telemetry persistence on ordinary views, and no LLM fragments
+in rendered HTML. Event-detail discovery hydration is a static same-origin JSON
+manifest; pgvector is used only during the offline build/search sidecar
+pipeline, not as a live page-view ranking service.
+
+Named `preview-…` URLs in this document are historical evidence only. The
+canonical current review link is resolved from the last fully checked published
+receipt, never hard-coded:
+
+```bash
+.venv/bin/python scripts/request_static_site_build.py \
+  --db /data/db.sqlite --show-current-review
+```
+
+The durable pointer is internal SQLite state, not a public redirect. A failed,
+no-op or artifact-only run preserves the previous immutable target; an
+incomplete receipt resolves to unavailable. Production `/`, `current.json` and
+stable `/ics/*` stay untouched.
+
+## 2026-07-18 v12 fidelity and production-rail contract
+
+V12 applies the accepted component system to automatic generation rather than
+recreating it per candidate:
+
+- transport A/B/C uses the exact Telegram `261–264` hierarchy/copy and shared
+  icons; a secret-only noindex specimen remains query-forceable after event
+  `4671` elapsed;
+- desktop ticket/telephone/information CTAs share the invariant bottom
+  calendar/share/like row; the phone remains a branded reveal-and-copy action;
+- the immutable candidate retains one Split phone-CTA fixture and one Editorial
+  footer/CTA fixture, so the live `1536×864` Playwright geometry gate remains
+  executable after the original acceptance events leave the active catalog;
+- venue medallions are evidence-aware, capped at one and fail closed on
+  conflicting structured identities;
+- supplied symphonic/lecture art is presentation-only fallback and never enters
+  gallery, Open Graph, JSON-LD, share media or the canonical media ledger;
+- `/segodnya/`, export, runner and receipt use one `Europe/Kaliningrad` clock;
+- Smart Update requests are coalesced, fingerprinted against the canonical
+  public projection and protected by a durable SQLite claim. A crashed Fly
+  waiter must reconcile/adopt the exact Kaggle dataset/output before another
+  push; automatic/operator requests no-op on an unchanged fingerprint unless
+  the operator explicitly requests `force_rebuild`.
+- immutable SQLite inputs live only for the handoff lifecycle. Success,
+  no-op, recovered success and failures without a durable remote dataset delete
+  the snapshot, manifest and SQLite sidecars. A pushed dataset keeps its exact
+  input and claim until adoption/recovery; a pre-build crash guard preserves it
+  plus at most `STATIC_SITE_SNAPSHOT_KEEP_LATEST_TERMINAL=1` newest unreferenced
+  complete pair. Snapshot accumulation is never allowed to consume the Fly
+  `/data` health reserve.
+- the 256-bit base64url candidate token is handed to the runner as
+  `--candidate-token=<value>`; a leading `-` is valid token entropy, not a new
+  CLI option and must not cause a retry loop.
+- recognized incomplete backup files are removed only after
+  `STATIC_SITE_SNAPSHOT_STALE_INCOMPLETE_SECONDS=900`; unknown files are never
+  touched, and an unreadable active handoff disables pruning fail-closed.
+
+Event `6774` is not a valid no-image specimen: incident evidence identifies it
+as the later teaser duplicate `6774→2884`. Production is repaired to the
+canonical `2884`; its official sources were merged, duplicate Telegram/VK
+surfaces removed and the duplicate Telegraph page redirects to the survivor.
+
+## 2026-07-18 v11 regression repair evidence
+
+The next immutable secret candidate supersedes the visually rejected
+`5roC…` candidate and must be produced from a fresh read-only Fly SQLite
+snapshot through `scripts/run_static_site_builder_kaggle.py`; a local Astro
+build is test evidence, not the handoff artifact. Production root, `current` and
+stable `/ics/` remain unchanged until explicit product acceptance.
+
+Release acceptance adds `ADD-RECENT-06..10`:
+
+- one quality-admitted photo family is shared by desktop/mobile; weak images are
+  removed only when strong event-local alternatives exist;
+- a weak-only low-resolution portrait is retained but source-size bounded with
+  `contain` in desktop/mobile hero and fullscreen viewer instead of being
+  enlarged/cropped;
+- stored OCR/document roles remain non-crop and exact structured source
+  occurrences fail safe when the canonical aggregate is contradictory;
+- editorial leads end at a real sentence or a disclosed ellipsis;
+- KAUP keeps all three accepted timetable arms, while the accepted departure
+  board replaces the old compact list in off/no-JS/elapsed/automation fallback.
+
+The review handoff must include the ordinary KAUP URL and all three forced
+`?ke-exp-transport=` URLs. Forced impressions/actions stay excluded from trusted
+experiment telemetry. The current production A/B/C mode remains `off`; a secret
+candidate is visual/product acceptance, not permission to promote root or start
+live experimentation.
+
+Final automated acceptance evidence for the corrected candidate:
+
+- source `a6ad22fba8b63e3dee7a71b8ca0837494c554033` is reachable from
+  `origin/main`; GitHub CI passed;
+- Kaggle build
+  `production-20260718t-static-event-v11-regression-repair-kaggle-v2b`
+  used snapshot `snapshot-20260718t-v11-regression-repair`, SHA-256
+  `8c784e2d14b34738a89f4cf0101645a46e470a2147c7752f73db7dcf83629972`,
+  `quick_check=ok`, and produced `323` event pages / `1172` files with all
+  required production and secret-candidate checks green;
+- durable docs identify the secret prefix only by token SHA-256
+  `4c906f92db3bbf5c448bf6b29fc650a40dbc2f7841008555657e84bdaec10b66`.
+  Authenticated inventory and public hash/MIME verification passed for all
+  `1173` objects. An interrupted upload was resumed only after verifying the
+  `745` already-created single-part objects; the remaining `428` were created
+  with `If-None-Match`, and no existing object was overwritten;
+- seven public HTTP specimens returned `200` with `noindex` and
+  `no-referrer`; Playwright passed `21` focused desktop/mobile checks, all three
+  forced transport arms, `36` event pages at both `320` and `390` px, and five
+  actual related-event transitions;
+- production root and sitemap body hashes stayed byte-identical. Stable ICS was
+  observation-only because that prefix has an independent writer; it also did
+  not change during this final candidate publication;
+- links were sent and read back as Telegram message `300` in chat
+  `4337049383`, topic `2`. Production root remains untouched pending visual
+  acceptance.
 
 ## Public URLs
 
-Required URLs for the current preview:
+Required URLs for the historical 2026-07-02 detailed review target:
 
-- Preview index: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/__preview/>
-- Today listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/segodnya/>
-- Tomorrow listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/zavtra/>
-- Weekend listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/vyhodnye/>
-- Search page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/poisk/>
-- Exhibitions/long-running listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/vystavki/>
-- Popular-by-source-engagement listing: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/populyarnoe/>
-- Information partnership/reference block page: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partnerstvo/>
-- Information partners directory: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/partners/>
-- Event-token medallion QA lab: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/lab/medallions/>
-- Broken-image regression event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/festival-pianissimo-kaliningrad-5264/>
-- Fresh merged-branch event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/detskaya-igrovaya-programma-s-animatorami-kaliningrad-6601/>
-- Fresh VK auto-import event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/semeynaya-sreda-atomy-semi-kaliningrad-6605/>
-- Latest snapshot event: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sobytiya/master-klass-po-igre-na-barabanah-ot-sergeya-lukinova-kaliningrad-6613/>
-- Golden related discovery JSON: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/data/discovery/5264.json>
-- Preview sitemap: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/sitemap.xml>
-- Preview robots: <https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/robots.txt>
-- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260702t1536-merged-vector-medallions/__preview/>
+- Preview index: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/__preview/>
+- Desktop/media regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/spektakl-garazh-kaliningrad-5658/>
+- Real photo/mobile V8 regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/kontsert-festival-pianissimo-maksim-miloslavskiy-kaliningrad-5294/>
+- OCR/mobile V8 regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/epidemiya-ognennaya-rukopis-kaliningrad-4671/>
+- Rail transport regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/joe-lynn-turner-i-j-l-t-band-svetlogorsk-5789/>
+- Bus transport regression: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sobytiya/slet-babok-ezhek-romanovo-6710/>
+- Today listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/segodnya/>
+- Tomorrow listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/zavtra/>
+- Weekend listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/vyhodnye/>
+- Search page: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/poisk/>
+- Exhibitions/long-running listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/vystavki/>
+- Popular-by-source-engagement listing: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/populyarnoe/>
+- Information partnership/reference block page: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/partnerstvo/>
+- Information partners directory: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/partners/>
+- Event-token medallion QA lab: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/lab/medallions/>
+- Historical related discovery JSON: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/data/discovery/5658.json>
+- Preview sitemap: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/sitemap.xml>
+- Preview robots: <https://kenigevents.ru/preview-20260715t-production-mobile-v8-related-transport-v3/robots.txt>
+- Yandex Object Storage website fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260715t-production-mobile-v8-related-transport-v3/__preview/>
 
-CDN media/ICS verification for current previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 and the 2026-07-02 recovery preview use `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`; the 2026-07-02 recovery preview has Gemma strict verification disabled for the fast end-of-day rebuild and keeps the pgvector chain/audit metadata transparent in `preview-related.json`.
+CDN media/ICS verification for those historical previews: event images in rendered HTML/JSON-LD use `https://static.kenigevents.ru/p/...`, raw legacy `https://storage.yandexcloud.net/kenigevents/...` image URLs do not leak into HTML, calendar CTAs point to stable `https://static.kenigevents.ru/ics/<event_id>.ics`. v59 discovery JSON uses `event_pgvector_related_chain_v1`; v62 and the 2026-07-02 recovery preview use `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`; the 2026-07-02 recovery preview has Gemma strict verification disabled for the fast end-of-day rebuild and keeps the pgvector chain/audit metadata transparent in `preview-related.json`.
 
 ## Code layout
 
@@ -154,7 +270,7 @@ Remaining production gate after v48 was automatic Smart Update → Kaggle → CD
 
 ## v59 strict pgvector + Gemma 4 related preview
 
-`preview-20260629-event-pages-v59-related-gemma50` is the current strict related-events canary. It was generated from a read-only production SQLite snapshot on 2026-06-29 with `--current-datetime 2026-06-29T21:30`, prioritising events starting on 2026-06-30 and 2026-07-01. The two-day focus window contained 21 eligible one-day/short events, so the exporter supplemented later active future events to reach a 50-event review slice.
+`preview-20260629-event-pages-v59-related-gemma50` is historical strict related-events canary evidence. It was generated from a read-only production SQLite snapshot on 2026-06-29 with `--current-datetime 2026-06-29T21:30`, prioritising events starting on 2026-06-30 and 2026-07-01. The two-day focus window contained 21 eligible one-day/short events, so the exporter supplemented later active future events to reach a 50-event review slice.
 
 Related/publication contract:
 
@@ -355,7 +471,12 @@ Contract:
 - the kernel extracts the site to `/tmp/kenigevents-static-site`, not read-only `/kaggle/src`;
 - Kaggle CPU currently provides Node 20, while Astro 6 requires Node `>=22.12.0`, so the kernel installs local `node@22.12.0` before build/check;
 - output is intentionally minimal: `<build_id>.tar.gz`, `static_site_build_result.json`, and the kernel log; `node_modules` is not left under `/kaggle/working`;
-- when `--status-db` and callback URL are provided, the launcher creates `kaggle_run.json` via `create_kaggle_run_config(...)`, uploads a status dataset via `create_kaggle_status_dataset(...)`, and adds it to `dataset_sources`; inside the kernel `kaggle_status_client` emits `kernel_started`, `preflight_ok`, `alive` progress, and `report_written`;
+- when `--status-db` and callback URL are provided, the launcher creates `kaggle_run.json` via `create_kaggle_run_config(...)`, uploads a status dataset via `create_kaggle_status_dataset(...)`, and adds it to `dataset_sources`; the kernel explicitly discovers `kaggle_status_client.py` below the mounted `/kaggle/input` tree (dataset sources are not automatically on `sys.path`) and emits `kernel_started`, `preflight_ok`, `alive` progress, and `report_written`;
+- after the host downloads and cryptographically validates the immutable result,
+  it reconciles a non-terminal ledger to a distinct
+  `host_result_validated/done` event. This is a delivery fail-safe, not a fake
+  heartbeat: a healthy status-aware run must still contain the real kernel
+  callbacks and `static_site:builder` lease lifecycle;
 - the resource lease key is `static_site:builder`, so a production status-aware run can block parallel static-site builds.
 
 Verified artifact on 2026-06-28: `preview-20260628-event-pages-prod50-kaggle-v44` built 50 real production-snapshot events on Kaggle CPU and passed `npm run check:preview`. This was a local manual run without production callback env, so status dataset creation was intentionally skipped; the production outbox path must pass `/data/db.sqlite` and the Fly callback to make it visible in `kaggle_run_ledger`/poller.

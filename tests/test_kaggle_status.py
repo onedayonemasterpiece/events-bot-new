@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -9,13 +10,17 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
+import kaggle_status
 from db import Database
 from kaggle_status import (
+    _begin_immediate_with_retry,
     create_kaggle_run_config,
     create_kaggle_status_dataset,
     format_kaggle_status_label,
     make_kaggle_run_event_handler,
+    reconcile_kaggle_run_terminal_from_host,
     record_kaggle_run_event,
+    validate_run_token,
 )
 
 
@@ -26,6 +31,89 @@ def _load_status_client_class():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.KaggleStatusClient
+
+
+@pytest.mark.asyncio
+async def test_begin_immediate_retries_only_transient_sqlite_writer_lock(monkeypatch):
+    class Connection:
+        calls = 0
+
+        async def execute(self, sql):  # noqa: ANN001
+            assert sql == "BEGIN IMMEDIATE"
+            self.calls += 1
+            if self.calls < 3:
+                raise sqlite3.OperationalError("database is locked")
+
+    sleeps: list[int] = []
+
+    async def fake_sleep(delay):  # noqa: ANN001
+        sleeps.append(delay)
+
+    monkeypatch.setattr(kaggle_status.asyncio, "sleep", fake_sleep)
+    connection = Connection()
+
+    await _begin_immediate_with_retry(
+        connection,
+        run_id="static-site:create-config",
+        operation="create_run_config",
+    )
+
+    assert connection.calls == 3
+    assert sleeps == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_callback_sees_external_run_config_despite_stale_shared_snapshot(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv(
+        "KAGGLE_STATUS_CALLBACK_URL",
+        "https://example.test/internal/kaggle/run-event",
+    )
+    path = str(tmp_path / "db.sqlite")
+    web_db = Database(path)
+    await web_db.init()
+    async with web_db.raw_conn() as stale_conn:
+        await stale_conn.execute("BEGIN")
+        cursor = await stale_conn.execute("SELECT COUNT(*) FROM kaggle_run_ledger")
+        assert (await cursor.fetchone())[0] == 0
+        await cursor.close()
+
+        runner_db = Database(path)
+        await runner_db.init()
+        config = await create_kaggle_run_config(
+            runner_db,
+            run_id="static-site:external-run-config",
+            session_id=None,
+            kind="static_site_builder",
+            notebook="StaticSiteBuilder",
+        )
+        assert config
+        await runner_db.close()
+
+        assert await validate_run_token(web_db, config["run_id"], config["token"])
+        status, body = await record_kaggle_run_event(
+            web_db,
+            {
+                "run_id": config["run_id"],
+                "token": config["token"],
+                "event": "kernel_started",
+                "event_uid": "kernel_started:1",
+                "phase": "preflight",
+                "status": "running",
+            },
+        )
+        assert status == 200
+        assert body["ok"] is True
+        await stale_conn.rollback()
+
+    with sqlite3.connect(path) as connection:
+        row = connection.execute(
+            "SELECT event_name, status FROM kaggle_run_event WHERE run_id=?",
+            (config["run_id"],),
+        ).fetchone()
+    assert row == ("kernel_started", "running")
+    await web_db.close()
 
 
 def test_create_kaggle_status_dataset_uses_kaggle_valid_title():
@@ -80,6 +168,182 @@ async def test_run_config_can_atomically_reject_duplicate_slot(tmp_path, monkeyp
     assert first is not None
     assert second is None
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_host_reconciliation_closes_created_run_without_faking_heartbeat(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    config = await create_kaggle_run_config(
+        db,
+        run_id="static-site:validated-result",
+        session_id=None,
+        kind="static_site_builder",
+        notebook="StaticSiteBuilder",
+    )
+    assert config
+
+    first = await reconcile_kaggle_run_terminal_from_host(
+        db,
+        run_id=config["run_id"],
+        message="validated sha256=abc",
+    )
+    second = await reconcile_kaggle_run_terminal_from_host(db, run_id=config["run_id"])
+
+    assert first["status"] == "reconciled"
+    assert first["callback_event_count"] == 0
+    assert first["released_resource_count"] == 0
+    assert second["status"] == "already_terminal"
+    assert second["released_resource_count"] == 0
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, phase, last_heartbeat_at, terminal_at, progress_json "
+            "FROM kaggle_run_ledger WHERE run_id=?",
+            (config["run_id"],),
+        )
+        ledger = await cur.fetchone()
+        await cur.close()
+        cur = await conn.execute(
+            "SELECT event_name, status, event_uid FROM kaggle_run_event WHERE run_id=?",
+            (config["run_id"],),
+        )
+        events = await cur.fetchall()
+        await cur.close()
+    assert ledger[0:3] == ("done", "report", None)
+    assert ledger[3]
+    assert json.loads(ledger[4])["host_reconciled"] is True
+    assert events == [("host_result_validated", "done", "host_result_validated")]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_host_reconciliation_releases_only_exact_run_resource_leases(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    config = await create_kaggle_run_config(
+        db,
+        run_id="static-site:validated-result",
+        session_id=None,
+        kind="static_site_builder",
+        notebook="StaticSiteBuilder",
+    )
+    assert config
+    now = datetime.now(timezone.utc)
+    expires = (now + timedelta(hours=3)).isoformat()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            ) VALUES (?, ?, 'kaggle', 'active', ?, ?, ?)
+            """,
+            ("static_site:builder", config["run_id"], now.isoformat(), expires, now.isoformat()),
+        )
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            ) VALUES (?, ?, 'kaggle', 'active', ?, ?, ?)
+            """,
+            ("other:resource", "successor-run", now.isoformat(), expires, now.isoformat()),
+        )
+        await conn.commit()
+
+    result = await reconcile_kaggle_run_terminal_from_host(db, run_id=config["run_id"])
+
+    assert result["status"] == "reconciled"
+    assert result["released_resource_count"] == 1
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT resource_key, run_id, status, released_at FROM kaggle_resource_lease ORDER BY resource_key"
+        )
+        leases = await cur.fetchall()
+        await cur.close()
+    assert leases[0][0:3] == ("other:resource", "successor-run", "active")
+    assert leases[0][3] is None
+    assert leases[1][0:3] == ("static_site:builder", config["run_id"], "released")
+    assert leases[1][3]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_host_reconciliation_releases_owned_lease_when_ledger_is_already_terminal(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    config = await create_kaggle_run_config(
+        db,
+        run_id="static-site:terminal-with-stale-lease",
+        session_id=None,
+        kind="static_site_builder",
+        notebook="StaticSiteBuilder",
+    )
+    assert config
+    now = datetime.now(timezone.utc)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "UPDATE kaggle_run_ledger SET status='done', phase='report', terminal_at=? WHERE run_id=?",
+            (now.isoformat(), config["run_id"]),
+        )
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            ) VALUES (?, ?, 'kaggle', 'active', ?, ?, ?)
+            """,
+            (
+                "static_site:builder",
+                config["run_id"],
+                now.isoformat(),
+                (now + timedelta(hours=3)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    result = await reconcile_kaggle_run_terminal_from_host(db, run_id=config["run_id"])
+
+    assert result["status"] == "already_terminal"
+    assert result["released_resource_count"] == 1
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, released_at FROM kaggle_resource_lease WHERE resource_key='static_site:builder'"
+        )
+        lease = await cur.fetchone()
+        await cur.close()
+    assert lease[0] == "released"
+    assert lease[1]
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_host_reconciliation_retries_transient_sqlite_writer_lock(monkeypatch):
+    calls = 0
+    sleeps: list[int] = []
+
+    async def fake_once(db, *, run_id, message):  # noqa: ANN001,ARG001
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise sqlite3.OperationalError("database is locked")
+        return {"status": "reconciled", "run_id": run_id, "released_resource_count": 1}
+
+    async def fake_sleep(delay):  # noqa: ANN001
+        sleeps.append(delay)
+
+    monkeypatch.setattr(kaggle_status, "_reconcile_kaggle_run_terminal_from_host_once", fake_once)
+    monkeypatch.setattr(kaggle_status.asyncio, "sleep", fake_sleep)
+
+    result = await reconcile_kaggle_run_terminal_from_host(
+        object(),
+        run_id="static-site:retry-lock",
+    )
+
+    assert result["status"] == "reconciled"
+    assert calls == 3
+    assert sleeps == [1, 2]
 
 
 def test_create_kaggle_status_dataset_keeps_long_run_ids_unique():

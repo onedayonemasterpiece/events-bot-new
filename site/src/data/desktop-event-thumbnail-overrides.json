@@ -1,0 +1,382 @@
+{
+  "events": {
+    "4671": {
+      "0": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/a1/a14f007fa2cc6a68413d38de040b16cf89770a0dedc9854cbddd303e523a090b/256.webp",
+          "width": 256,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/a1/a14f007fa2cc6a68413d38de040b16cf89770a0dedc9854cbddd303e523a090b/512.webp",
+          "width": 512,
+          "height": 512
+        }
+      ],
+      "1": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/a7/a795f9eeeedad19ebbe8fe60b1c23400770048b0192de87a76df04985ecce11f/256.webp",
+          "width": 256,
+          "height": 192
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/a7/a795f9eeeedad19ebbe8fe60b1c23400770048b0192de87a76df04985ecce11f/512.webp",
+          "width": 512,
+          "height": 384
+        }
+      ],
+      "2": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/76/76b4f72de43d2fe579bb4cbdf295907b533933690e21cdff146f0f9ff8b81722/256.webp",
+          "width": 256,
+          "height": 170
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/76/76b4f72de43d2fe579bb4cbdf295907b533933690e21cdff146f0f9ff8b81722/512.webp",
+          "width": 512,
+          "height": 340
+        }
+      ],
+      "3": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/63/63ec12c1a96b7aaa10af8a0624f6f5463cb547d00bcb4c95f095ed567cbeb539/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/63/63ec12c1a96b7aaa10af8a0624f6f5463cb547d00bcb4c95f095ed567cbeb539/512.webp",
+          "width": 512,
+          "height": 342
+        }
+      ],
+      "4": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/a0/a018d31e2685ddcd9d53bfe04f2510089619545b95db55291cfa09b824955b12/256.webp",
+          "width": 256,
+          "height": 127
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/a0/a018d31e2685ddcd9d53bfe04f2510089619545b95db55291cfa09b824955b12/512.webp",
+          "width": 512,
+          "height": 254
+        }
+      ],
+      "5": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/77/7715cb8f6d7a2181a41348680b800382a6ad569418d2eeed6363f5835c10f6da/256.webp",
+          "width": 256,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/77/7715cb8f6d7a2181a41348680b800382a6ad569418d2eeed6363f5835c10f6da/512.webp",
+          "width": 512,
+          "height": 512
+        }
+      ],
+      "6": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/07/074047623be8bf914c89a18b310117007ddd8fd073e44ba6e1aaf69147ab6317/256.webp",
+          "width": 256,
+          "height": 170
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/07/074047623be8bf914c89a18b310117007ddd8fd073e44ba6e1aaf69147ab6317/512.webp",
+          "width": 512,
+          "height": 341
+        }
+      ],
+      "7": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/83/83ad67d1cc682c1c62c802a579e86f62d6b0cab9f18a8e44dc1b07d354fef6b6/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/83/83ad67d1cc682c1c62c802a579e86f62d6b0cab9f18a8e44dc1b07d354fef6b6/512.webp",
+          "width": 512,
+          "height": 342
+        }
+      ],
+      "8": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/34/349dc6fff153834569a31ad9b3201ccc7437cba16a8368514424fe9a7c641f5f/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/34/349dc6fff153834569a31ad9b3201ccc7437cba16a8368514424fe9a7c641f5f/512.webp",
+          "width": 512,
+          "height": 342
+        }
+      ],
+      "9": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/cd/cdabe39caef8b42aeed71d9c33a28b0384d0e2367977c3cc72ca1381cdfceb58/256.webp",
+          "width": 256,
+          "height": 170
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/cd/cdabe39caef8b42aeed71d9c33a28b0384d0e2367977c3cc72ca1381cdfceb58/512.webp",
+          "width": 512,
+          "height": 340
+        }
+      ],
+      "10": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/13/135db2803dd581b067fc7add4c2c736a7cd7aea995f0e71bd9684491ed5abe58/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/13/135db2803dd581b067fc7add4c2c736a7cd7aea995f0e71bd9684491ed5abe58/512.webp",
+          "width": 512,
+          "height": 342
+        }
+      ],
+      "11": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/77/7748c07023469111248d7f25c639cf7f99cfc8b0cb1b4378e65dfd4383ae64db/256.webp",
+          "width": 256,
+          "height": 170
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/77/7748c07023469111248d7f25c639cf7f99cfc8b0cb1b4378e65dfd4383ae64db/512.webp",
+          "width": 512,
+          "height": 340
+        }
+      ]
+    },
+    "5658": {
+      "0": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/26/2673cec4badf00e0b7ea065e7d4ee054e8ba5347bdbdacb690f0035aa4aa7082/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/26/2673cec4badf00e0b7ea065e7d4ee054e8ba5347bdbdacb690f0035aa4aa7082/512.webp",
+          "width": 512,
+          "height": 341
+        }
+      ],
+      "1": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/21/2105220707b1b20bdd8787adb4a3aa1bb3a264fb52e83994f3abe9aa21d5ec28/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/21/2105220707b1b20bdd8787adb4a3aa1bb3a264fb52e83994f3abe9aa21d5ec28/512.webp",
+          "width": 512,
+          "height": 341
+        }
+      ],
+      "2": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/70/7009b4c4c95f62cb63d021d4324b5c57ba046877270f747bd236007b117c8570/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/70/7009b4c4c95f62cb63d021d4324b5c57ba046877270f747bd236007b117c8570/512.webp",
+          "width": 512,
+          "height": 341
+        }
+      ],
+      "3": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/86/86564a9ac3ff76e4e0e15430bab078cab6ef271a2faffcfb23275b6a671612db/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/86/86564a9ac3ff76e4e0e15430bab078cab6ef271a2faffcfb23275b6a671612db/512.webp",
+          "width": 512,
+          "height": 341
+        }
+      ],
+      "4": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/66/6622f05a9732f0d4366b47ecaf680e33a4997007160cff453803e85239f96d25/256.webp",
+          "width": 242,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/66/6622f05a9732f0d4366b47ecaf680e33a4997007160cff453803e85239f96d25/512.webp",
+          "width": 484,
+          "height": 512
+        }
+      ],
+      "5": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/57/57f3232674428caa23e846334e2c4538c689a29dffa54d94bb35dcf065959571/256.webp",
+          "width": 256,
+          "height": 144
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/57/57f3232674428caa23e846334e2c4538c689a29dffa54d94bb35dcf065959571/512.webp",
+          "width": 512,
+          "height": 288
+        }
+      ],
+      "6": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/9c/9c6c42c2e60a3dbb7dfdca38c135f997429a610c9c8a3b43f9d5eea101131361/256.webp",
+          "width": 256,
+          "height": 171
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/9c/9c6c42c2e60a3dbb7dfdca38c135f997429a610c9c8a3b43f9d5eea101131361/512.webp",
+          "width": 512,
+          "height": 341
+        }
+      ]
+    },
+    "5761": {
+      "0": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/ec/ec8c4921f9c393a793db8ebc2c7e1176c5247397cd0b78ebca94940452bf4377/256.webp",
+          "width": 256,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/ec/ec8c4921f9c393a793db8ebc2c7e1176c5247397cd0b78ebca94940452bf4377/512.webp",
+          "width": 512,
+          "height": 512
+        }
+      ],
+      "1": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/cf/cf2511e4cddc7c5624289ffbd96927907137003a59d357a2a5561ce8a55a89f2/256.webp",
+          "width": 192,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/cf/cf2511e4cddc7c5624289ffbd96927907137003a59d357a2a5561ce8a55a89f2/512.webp",
+          "width": 384,
+          "height": 512
+        }
+      ],
+      "2": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/94/948dbfdc56046da5846533621c536f7acee487e89ba27bd8788b39784b2db600/256.webp",
+          "width": 116,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/94/948dbfdc56046da5846533621c536f7acee487e89ba27bd8788b39784b2db600/512.webp",
+          "width": 231,
+          "height": 512
+        }
+      ],
+      "3": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/d1/d161719899b9d73691a6367b613a61fa6ab8dd86643dd1d051390c7c37716678/256.webp",
+          "width": 96,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/d1/d161719899b9d73691a6367b613a61fa6ab8dd86643dd1d051390c7c37716678/512.webp",
+          "width": 191,
+          "height": 512
+        }
+      ],
+      "4": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/d0/d0d8d15a27781932cdbff9033bbf882daede82a162040c81dd89f53e49056025/256.webp",
+          "width": 216,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/d0/d0d8d15a27781932cdbff9033bbf882daede82a162040c81dd89f53e49056025/512.webp",
+          "width": 431,
+          "height": 512
+        }
+      ],
+      "5": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/80/80001ec2d9d3a456aeb6803008bbd7f47eb26cda0219c46a85e33bb036dc41ef/256.webp",
+          "width": 256,
+          "height": 193
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/80/80001ec2d9d3a456aeb6803008bbd7f47eb26cda0219c46a85e33bb036dc41ef/512.webp",
+          "width": 512,
+          "height": 385
+        }
+      ],
+      "6": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/ba/bafd52626c7593d683c0b121b48e39ba21b25c1173bead6de9bc20f4bac8a616/256.webp",
+          "width": 256,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/ba/bafd52626c7593d683c0b121b48e39ba21b25c1173bead6de9bc20f4bac8a616/512.webp",
+          "width": 512,
+          "height": 512
+        }
+      ],
+      "7": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/6a/6a06f3dc168ea2b3b0eefa69c9f90324bd1b5277d61f136d2bd7db232ffc3a60/256.webp",
+          "width": 192,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/6a/6a06f3dc168ea2b3b0eefa69c9f90324bd1b5277d61f136d2bd7db232ffc3a60/512.webp",
+          "width": 384,
+          "height": 512
+        }
+      ],
+      "8": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/95/95721ac24290f573877030602bca38ba9fc8e7484c1efc9f4ef9ff6b2ba1b1a3/256.webp",
+          "width": 192,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/95/95721ac24290f573877030602bca38ba9fc8e7484c1efc9f4ef9ff6b2ba1b1a3/512.webp",
+          "width": 384,
+          "height": 512
+        }
+      ],
+      "9": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/4c/4c0eaa2abb80cac0534e7700e795dfbd69a28c03de16c2cdc780f52057b1fcd1/256.webp",
+          "width": 192,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/4c/4c0eaa2abb80cac0534e7700e795dfbd69a28c03de16c2cdc780f52057b1fcd1/512.webp",
+          "width": 384,
+          "height": 512
+        }
+      ],
+      "10": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/ca/ca30af8e58537d861a2b7646d99bb9e035e4386d9021fcf75a00f4ccba52c9d3/256.webp",
+          "width": 192,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/ca/ca30af8e58537d861a2b7646d99bb9e035e4386d9021fcf75a00f4ccba52c9d3/512.webp",
+          "width": 383,
+          "height": 512
+        }
+      ],
+      "11": [
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/93/9382514eee60e46051117a47725bfefe452528a7187d784048d75e346da2c9af/256.webp",
+          "width": 192,
+          "height": 256
+        },
+        {
+          "src": "https://static.kenigevents.ru/p/thumb/v1/93/9382514eee60e46051117a47725bfefe452528a7187d784048d75e346da2c9af/512.webp",
+          "width": 383,
+          "height": 512
+        }
+      ]
+    }
+  }
+}

@@ -2,40 +2,221 @@
 
 ## [Unreleased]
 
-### Changed
+- Fixed static event detail parity so a one-photo Editorial page keeps the same
+  CTA side-motion/docking state machine as a multi-photo page; the optional
+  thumbnail rail no longer controls the page-family behavior.
+- Fixed desktop broad discovery cards to reuse the canonical `EventCard`
+  DOM/interaction contract instead of a handwritten runtime clone, while
+  retaining the visibly separate, finite six-card anti-bubble section after
+  explicitly similar events and leaving the established mobile surface intact.
+- Fixed StaticSiteBuilder host reconciliation so a host-validated published run
+  releases only its own active Kaggle leases, retries transient SQLite writer
+  locks, and is replayed before the next Smart Update remote push; this prevents
+  a missed terminal callback from causing TTL stalls and blocked duplicate
+  kernels. Per-run status-ledger creation now applies the same bounded
+  lock-only retry instead of failing a build after one `BEGIN IMMEDIATE` timeout.
+  Rearming the exact active error job now preserves its recoverable remote
+  handoff and immutable snapshot while merging new Smart Update effects. Kaggle
+  callbacks now authenticate and write through fresh, bounded SQLite
+  transactions so a stale shared connection cannot reject a valid new token.
+  An exact active recovery row also runs before a newer pending coalesced
+  follow-up instead of being incorrectly marked superseded.
+- Fixed v13 event-page review regressions: crop-safe wide unknown visuals now
+  use the horizontal detail family; Split CTA collapses both utilities before
+  stacking and promotes calendar for free one-day events; gallery pointer CTA,
+  hover arrows, focus and reduced-motion are hardened; both desktop continuation
+  blocks share OCR-safe geometry and current-event-aware fatigue/diversity.
+- Fixed secret-candidate pruning so every v13 CTA geometry fixture used by the
+  public Playwright gate is retained and checked in the immutable candidate.
+- Fixed desktop free-event CTA parity with mobile: an official source URL no
+  longer displaces the primary `В календарь` action (event 6959 regression).
+- Added a redacted static build diagnostics CLI and documented the one-build/
+  two-artifact secret+stable architecture plus past-event/redirect/410 and
+  manifest-bound test-prefix lifecycle policy.
 
-- **Static Popular / V22 desktop restoration and vertical mobile densities**: restore the accepted V20/V19 heterogeneous `ListingEventCard` desktop rows after V21's unscoped `EventCard` regression; isolate the real shared `EventCard` to phones, replace the hidden horizontal large shelf with an ordinary one-card vertical flow, retain the two-column compact flow, and scope counts plus anchor preservation to the active responsive representation.
-- **Static Popular / V21 rejected EventCard rollout**: recorded the candidate that added a readonly shared `EventCard` listing variant but incorrectly applied it to desktop and put the large phone cards in a horizontal shelf; V22 supersedes its unscoped renderer while retaining the phone-only component work.
-- **Static Popular / V20 evidence ranking and mobile density**: clarified the growth and multi-source shelf labels, ranked the frequently-shared shelf by real share magnitude so high-evidence events such as BREAK SUMMER FEST 5130 are no longer lost in categorical-score ties, and added one-DOM mobile `Крупно / Компактно` presentation with an accessible safe-area switch, persisted local preference, viewport-anchor preservation and untouched native pinch zoom.
-- **Static listing surfaces / V19 chronological now + native media discovery**: move Today’s current-time marker into the exact-time axis after elapsed starts; keep overlay medallions fully opaque while external identities and audience proof stay quiet; replace the 200px JS-gated image URL handoff with parser-visible native lazy `src/srcset`, four globally prioritized Weekend cards, truthful 320/340px Weekend `sizes` and immutable build assets; and remove the unqualified generic personal-feed slot from Popular while documenting the gated personalized-plus-anti-bubble continuation as an experiment.
-- **Static listing surfaces / V18 ecological density**: consolidated V12–V17 media, packing and evidence rules into one canonical desktop contract; normalized regular/Weekend media heights without manual source substitution or preview fields; replaced observer-delayed header morphing with one stable 52px CSS-first city/daypart plane; made Weekend packing use actual lane width; packed medallions and non-zero proof contextually; restored Popular as five idempotent behavioral shelves; and moved the full-list-first personalization prototype to a footer-aware bottom-center lens.
-- **Popular multi-source truth**: exclude the service's owned Telegram/VK repost family from independent publisher families so `multi_source` requires two external source families while owned reposts may still strengthen raw totals.
-- **Static listing surfaces / V17 repair**: restored the common left scanning edge for every singleton, unified cities and dayparts into one measured adaptive plane, made reviewed-photo/no-media medallion overlays systemic, retained three identities beside split quiet proof, added deterministic same-time Weekend packing and a 1720px wide token, neutralized weekday chips, exposed exact Popular type filters, stabilized hash landing after discovery geometry changes and made immutable-preview personalization directly reviewable while preserving a full-list production default.
-- **Static listing surfaces / V16 compact evidence and time context**: unified medallions plus non-zero Share/Like evidence into one 60px side rail; added measured expanded/compact city navigation, whole-envelope singleton centering, a 1600px order-preserving listing width, complete Weekend sticky/hash offsets, lightweight per-day counts, unknown-end `Началось ранее` media treatment, qualified-preview personalization and a six-range Weekend date cloud with the local CC0 long-arrow asset. Calendar proof remains absent until a privacy-safe deduplicated durable saved-event aggregate exists; ICS traffic is explicitly not presented as people.
-- **Static listing surfaces / V15 product correction**: preserve exact-time labels as sticky reading context; replace the pill/graphite city-time stack with one light two-row discovery surface; classify missing OCR as unknown and protect short-text, identity-poster and document media from adaptive crop; keep every low-resolution natural frame at its own source ratio; render event `3794`'s existing 300×174 canonical photo as a no-upscale last resort; quiet and de-ring external medallions; add a deterministic monochrome Free token; remove Calendar/feedback/share actions from listings; and render only non-zero Share/Like aggregates as static social proof that navigates to detail.
-- **Static listing source scope / crawler correction**: retract the unapproved “general source crawler” follow-up introduced in V14 documentation. Listing generation continues to consume the existing event media/OCR/Smart Update projection and supported source adapters; renderer fixes must not invent a new ingestion subsystem or use event-id-specific media substitutions.
-- **Static listing surfaces / V14 consumer correction**: rebuilt Today, Tomorrow, Weekend and Popular from a fresh 2026-07-18 production snapshot; restored Weekend's single strong time axis and continuous Saturday/Sunday lanes; made direct city chips plus the graphite time rail one collision-free sticky stack; restored Popular as a vertically wrapping intrinsic stream; added explicit-end-only past treatment, adjacent-weekend navigation, 72px identity/free medallions and shared Share → Like actions; and added a conservative square floor for sufficiently large no-OCR portraits while refusing 180px-wide desktop upscale.
-- **Static listing media / automatic-source honesty**: removed the event-id-specific 1024×683 organ-concert substitution, reject `no_event_relevance` assets before generic fallback, apply reviewed replacements through stable source-page manifests before the quality gate, and prefer a fresh wide candidate from the same source inventory without presenting a manual result as automatic generation.
-- **Static date listings / V13 desktop adaptive correction**: closed the 31px sticky-header gap with a 57px opaque header and 56px full-bleed graphite time rail; unified Today/Tomorrow/Weekend on a strong shared time marker; replaced Weekend combined counts with Сб/Вс chips; enlarged media/copy and 56px medallions; made all 15 curated medallion assets explicitly listing-ready/detail-only/blocked through structured bindings; and added reviewed 1080×720 crops for Hufen and Red Tent instead of upscaled 180×320 Telegram thumbnails.
-- **Static listing media / geometry truth**: declare truthful 332/396px regular and density-aware Weekend responsive slots, retain the encoded original as a last-resort high-DPR candidate when the derivative inventory is physically too small, prefer probed intrinsic dimensions for unclassified primary media, cap already-reviewed 3:2 compositions against secondary over-cropping, replace the 300×174 organ-calendar thumbnail with a 1024×683 listing-only still from the Cathedral's official article about the same Assemblies, and add exact browser regression controls for 6762, 6867, 3794 and OCR event 6869.
-- **Static date listings / V12 desktop correction**: restored the exact 57px sticky header plus 88px protruding brand-tag clearance; replaced the Weekend centre-rail table treatment with a time-left union timeline over two continuous day lanes; enlarged desktop listing media/copy; added measured singleton/actual-row-end full-title expansion without changing card packing; and upgraded visible multi-city chips with explicit selected markers.
-- **Static listing media / responsive loading and geometry**: switched listing cards from full originals to intrinsic 256/512 `srcset` derivatives with bounded first-viewport priority, preserved known fallback ratios below the quality threshold (including event 3794), removed unsafe image stretching, and repaired positive venue-medallion eligibility for source-reviewed visual-only photos.
-- **Static date listings / V11 structural correction**: made the shared desktop header sticky with reserved height and tokenized stacked offsets; replaced the city disclosure with always-visible v2 chips; restored media-owned card widths and bounded copy; added conservative/adaptive no-OCR crop modes and final-frame skeletons; rebuilt Weekend on one union time axis with two persistent day surfaces; and made focus-range export include short multi-day starts before the bounded catalog fill.
-- **Static date listings / shared V10 candidate**: rebuilt Today, Tomorrow and Weekend on one global design-system surface with intrinsic exact-time flows, hybrid period/exact navigation and counts, collapsed earlier starts/current marker, compact city intersection, conditional full-list-first personalization v2, dense two-day weekend layout and sparse-result optical centering.
-- **Static listing media / semantic width priority**: prefer adequate classified wide identity posters, crop only safe focal classified photos to 3:2, keep unknown/poster-like media natural, and evaluate the fail-closed venue medallion against the selected asset rather than the first image.
-- **Static Today / intrinsic hour flow**: replaced the equal-column Today listing with an intrinsic-width exact-time flow, keeping earlier starts collapsed, excluding long-running exhibitions from the primary flow and removing exact title/time/venue duplicates.
-- **Static site / design-system copy action**: added a reusable tokenized icon-only `CopyAction` with exact Clipboard API/fallback behavior, fixed 44px secondary/inverse controls, copy-to-check success, non-colour-only error recovery and hidden live announcements, plus runtime catalog fixtures and regression contracts.
-- **Static site / design-system governance**: require the project-local design-system skill for every static UI change, version material component redesigns explicitly, render deprecated/replacement versions in the runtime registry, and block release until production consumers complete the migration or have a documented flagged rollout.
-- **Static site / design system**: centralized semantic UI tokens and approved Astro primitives, added a noindex runtime catalog with foundations, complete interaction/data states and real event product components, registered the split-actions card baseline and deprecated overlay variant, and added contrast/state/build regression checks plus release-documentation gates.
+- Fixed the static-site Kaggle kernel status-helper discovery for mounted
+  private datasets, reconciled host-validated terminal results without faking a
+  heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
+
+### Added
+- **Canonical static preproduction review routing**: persist the latest fully
+  checked immutable noindex candidate as a hash-bound internal SQLite receipt,
+  expose one fail-closed resolver to bot/operator link-producing paths, preserve
+  the previous review target across failed, unchanged/no-op and artifact-only
+  runs, and reject Kaggle results unless the accepted template matrix plus all
+  candidate noindex/no-referrer/prefix/root-isolation checks are complete;
+  production root/current/stable ICS remain untouched.
+- **Accepted static service footer**: roll the owner-approved compact graphite
+  footer out through the shared static layout, with a cohesive branded
+  service-share surface, one partnership link, reserved non-broken legal slots,
+  accessible social/contact controls and the official coloured MAX mark; keep
+  the secret lab route only as a regression specimen.
+- **Bounded desktop event continuation**: after `Смотрите дальше`, render exactly
+  six deduplicated/diverse cards, using local personalization only for a mature
+  profile and an honestly labelled popular/recency fallback otherwise; omit
+  load-more/infinite-scroll and end with `Все анонсы` while preserving the
+  established mobile discovery continuation.
+- **Static build idempotency and crash adoption**: add a Kaliningrad-date public
+  projection fingerprint, durable SQLite single-flight/history, one coalesced
+  follow-up, unchanged-input no-op, audited operator force and exact Kaggle
+  dataset/output adoption after a Fly waiter crash before any replacement push.
+- **Typed event image fallbacks**: add supplied presentation-only symphonic and
+  lecture artwork plus a read-only no-image reason/type inventory without
+  polluting canonical media, gallery, Open Graph, JSON-LD or share payloads.
+- **Static event-page secret release pipeline**: add effect-only 15-minute Smart
+  Update coalescing, exactly-one running-build follow-up, durable manual requests,
+  immutable SQLite backup manifests, checked full-catalog production and noindex
+  secret-candidate Kaggle artifacts, and a create-only prefix publisher that can
+  never address root/current/stable-ICS keys.
+- **Transport timetable A/B/C**: add three source-parity KAUP timetable
+  treatments, stable browser-subject SHA-256 allocation, QA/focus/live controls,
+  consent-gated exposure/action RPC contracts and fail-closed Supabase migration;
+  production root defaults to the unchanged baseline.
+- **Static event-page release plan and acceptance routing**: added one current main-based production readiness ledger, a dependency-ordered top-five non-UI backlog, explicit production-profile/manifest/rollback gates, a 10-day event-detail Telegraph coexistence state machine, and a routed scenario inventory with recent-change and cutover regression IDs.
+
+### Fixed
+- **Expiry-proof live CTA acceptance:** retain the frozen Split phone-CTA
+  specimen alongside the Editorial footer/CTA specimen in every immutable
+  secret candidate, and point the FHD/125%-equivalent Playwright gate at those
+  routes instead of elapsed event URLs that can legitimately return 404.
+- **Static snapshot volume retention**: delete immutable SQLite snapshot pairs
+  after every terminal Smart Update/Kaggle handoff, clean them after recovered
+  runs, and prune crash leftovers before a new build while preserving the exact
+  durable active handoff plus one newest terminal diagnostic pair. This prevents
+  failed candidate retries from crossing the Fly `/data` critical health floor;
+  pass candidate tokens with argparse's equals form so a valid base64url token
+  beginning with `-` cannot trigger four deterministic retry snapshots.
+- **Static footer candidate fixture**: make the retained footer regression
+  specimen use frozen desktop event `5658` instead of active-catalog-only event
+  `6589`, so normal event expiry cannot abort a Smart Update/Kaggle production
+  candidate before the global footer contract is checked.
+- **Static production media gate after canonical repair**: keep event `5756`
+  in the accepted Editorial family when Smart Update changes its primary from
+  a non-identity document to a resolution-constrained horizontal event photo;
+  a stronger classified horizontal photo from the same event is promoted,
+  while portrait/square routing remains unchanged.
+- **Static candidate acceptance gates**: align the retained footer specimen
+  checker with the globally accepted `service-v1` marker, update the desktop
+  `5756` contract to its incident-required source-consistent Editorial route,
+  and rank immature desktop continuation by a real upcoming-date proximity
+  signal instead of the catalog's intentionally neutral static score.
+- **Desktop portrait event CTA regression**: route action geometry from the
+  resolved Split/Editorial media family instead of a viewport guess, restoring
+  the compact one-row admission/primary/calendar-share-like panel across real
+  portrait specimens while retaining the wide-photo Editorial three-row card
+  with its utility controls on the bottom row; add executable Playwright
+  geometry checks at the `1536×864` FHD/125%-equivalent viewport.
+- **Static event desktop media polish**: expose venue-medallion rings and
+  shadows beyond the title token-row bounds without changing the single-venue
+  fail-closed identity gate, and reserve server-rendered `Смотрите дальше`
+  skeleton geometry until every related image loads or fails while preserving
+  alt text, media crop/quality rules and the mobile renderer.
+- **Static footer prototype polish**: replace the oversized share split-card
+  with an `84px` desktop / compact stacked mobile inline bar while preserving
+  two desktop intents, one mobile system-share intent and `44px+` controls; use
+  the official colored MAX mark on the graphite footer.
+- **Static-site Kaggle runner shutdown**: close the short-lived status-ledger
+  `Database` after creating the callback dataset so its non-daemon `aiosqlite`
+  worker cannot hold a completed runner at interpreter shutdown and strand the
+  durable Smart Update build claim before secret-candidate publication.
+- **Static event v12 fidelity**: reproduce the accepted Telegram transport
+  A/B/C hierarchy and arm-specific copy with shared icons and `на Кауп`
+  grammar; retain one secret-only noindex transport specimen with desktop and
+  mobile forced-arm review, freeze accepted examples so expired events cannot
+  break a later full-catalog build, restore the
+  invariant desktop calendar/share/like CTA row, use the branded footer prompt
+  `Понравились Анонсы? Поделитесь`, and cap venue-brand medallions at one with
+  fail-closed structured-evidence conflicts.
+- **Rachmaninoff duplicate recurrence (`6774→2884`)**: restore the established
+  official-ticket survivor, merge official/teaser sources into it, tombstone the
+  later duplicate, remove duplicate Telegram/VK publications and redirect its
+  Telegraph page; keep the survivor's verified 28 August, 20:00, Cathedral/Kant
+  location and festival identity.
+- **Static event v11 review regressions (INC-2026-07-16/18)**: apply one
+  quality-admitted photo set to desktop and mobile while preserving weak-only
+  fallbacks, route a lone low-resolution portrait to a source-size bounded
+  contain hero/viewer on both responsive surfaces,
+  preserve stored OCR classification and prefer event-local classified media,
+  project exact structured occurrence content when a merged aggregate is
+  contradictory, and make editorial leads sentence-safe; restore the accepted
+  KAUP A/B/C treatments with departure-board fallback instead of the rejected
+  compact list and describe the official transfer as a bus or minibus.
+- **Dramatic Theatre occurrence identity (INC-2026-07-18)**: add an exact
+  `14:30` tour versus `18:00` performance replay and a narrow structural veto
+  requiring unrelated title/type plus two conflicting explicit times without a
+  strong shared identity anchor; preserve same-event, shared-ticket, missing-time
+  and legitimate multi-session positive controls. Production remains in shadow
+  pending the documented human precision audit before enforce.
+- **Popular metrics postponed-VK import outage (INC-2026-07-18)**: reject
+  future-dated postponed rows returned by `wall.getById` as not-yet-public and
+  continue bounded wall resolution, preventing one scheduled post from
+  rejecting an otherwise complete Telegram/VK metrics batch.
+- **CherryFlash multi-day Stories outage (INC-2026-07-18)**: ship the approved
+  guide True3D renderer in every per-session Kaggle bundle and require the exact
+  `cherryflash_full_final.mp4` product artifact, preventing failed notebooks
+  with only an intro approval video from being marked `PUBLISHED_TEST`.
+- **VK captcha publication cadence (INC-2026-07-18)**: replace indefinite
+  unscoped JobOutbox pauses with persisted captcha cohorts, block new VK work
+  from hammering a cached challenge, harmlessly probe and pace cohort recovery,
+  preserve historical/manual paused rows, and stop retrying expired/deleted
+  `wall.edit` targets indefinitely.
+- **Static Smart Update template parity (INC-2026-07-16)**: integrate the
+  accepted v11 event-detail implementation into the automatic Kaggle source,
+  pin `static-event-detail-v11` plus its accepted source SHA in every generated
+  page and release manifest, and fail preview/production/secret checks unless
+  the complete horizontal, OCR-companion, document, portrait-series and
+  quality-fallback matrix is rendered by the accepted family router; identify
+  real-event acceptance specimens by stable event id instead of mutable slug,
+  and keep the fullscreen gallery brand link on the active site profile instead
+  of leaking production users into `__preview`; action panels now switch to the
+  stacked layout from their measured component geometry instead of a viewport
+  guess, preventing the split portrait family from overflowing at 1366px; the
+  Kaggle production-profile template gate now ignores an ambient legacy
+  `PREVIEW_BUILD_ID` and checks the root-form artifact.
+- **Secret candidate Astro assets**: keep candidate CSS/JS under the immutable
+  bearer prefix and resolve `{buildId}` for production asset templates; release
+  checks now reject unresolved or external candidate `_astro` references.
+- **Static event occurrence graph**: filter exported `other_date_ids` to mutual
+  links inside the eligible immutable catalog, so past/ineligible occurrences
+  cannot create dangling production-manifest edges.
+- **VK auto-import provider-quota false reject (INC-2026-07-17)**: allocate
+  Smart Update requests across the registered KEY1–KEY5 normal pool from the
+  first reserve and rotate to another pool member on provider-side `429`
+  without waiting or changing models, while keeping unpooled and explicit key
+  scopes fail-fast.
+- **Telegram source medallions (INC-2026-07-17)**: exclude `MEOW Афиша`
+  and every other source/aggregator-channel identity from `@kldevents`
+  graphical-medallion strips while retaining source-grounded organizer, venue,
+  festival, program and Pushkin-card marks; the MEOW badge remains available on
+  static event-detail pages only.
+- **KAUP boarding origin**: calculate route 119 guidance from
+  `Калининград-Северный` when the trip calls there, while retaining the terminal
+  departure as source provenance instead of sending the visitor to the terminal.
+- **Smart Update image geometry queue starvation**: let the independent Gemma
+  geometry stage proceed when the earlier semantic-role stage remains pending
+  because its separate daily budget is exhausted.
+
+### Changed
+- **Static-site documentation and E2E index**: linked the event-page release/test contracts from canonical feature/docs routing, distinguished preview component checks, mocked Playwright demo tests and draft Gherkin from missing production E2E, and replaced the open-ended one-month Telegraph wording with a D0-to-D10 cutover contract that preserves legacy URLs and keeps aggregate Telegraph surfaces separate.
+- **Smart Update image geometry crowd bound**: cap geometry responses at the 25
+  largest/clearest faces so crowd images keep crop-relevant boxes without
+  truncating the structured JSON at the bounded 768-token output ceiling.
+- **Smart Update image geometry deadline**: raise the single-attempt hosted
+  vision deadline from 45 to 90 seconds while keeping retries durable and paced
+  outside the item call, avoiding false failures without introducing bursts.
 - **Interest clubs / production rollout**: enabled the independently reversible relation pipeline, static projection and public club routes for the owner-approved 2026-07-17 rollout; the release runbook records the main-reachable SHA, additive database bootstrap, checked static build/publication and rollback evidence.
 
 ### Added
-- **Static listing venue medallions / Zoo**: restored the official-source Kaliningrad Zoo PNG/WebP medallion and added a narrow visual-only listing overlay opt-in shared with the reviewed Tretyakovka and Musical Theatre venues; OCR images remain excluded.
-- **Static date listings / runtime contracts**: registered ListingPageHeader, ListingControls, ListingTimeNav, ExactTimeTimeline and ListingEventCard candidates in the global catalog, added shared wide/listing tokens, component-version checks and real-data preview scenarios for filters, keyboard navigation, counts, media and overflow.
-- **Static date listings / gated venue medallion overlay**: added a curated bottom-right location medallion candidate only when both event and selected listing asset are visual-only and the selected asset is a semantically classified event photo; unknown and poster-like media fail closed.
+- **Smart Update image geometry**: add an asynchronous, content-addressed
+  `gemma-4-31b-it` stage that stores normalized face bboxes and a viewer-value
+  region for event images, plus a resumable externally paced backfill,
+  fingerprint-guarded import and visual contact-sheet QA.
 - **Static listing visual lab skill**: add a production-media-first workflow and reusable audit/contact-sheet/browser utilities for real-image Home, For You, Popular and compact-list card prototypes, including OCR/crop/overlay gates and independent agy formation plus validation.
 
 ### Changed
+- **Google AI key allocation**: add a fail-closed normal rotating key pool,
+  distinct from emergency overflow, and isolate image geometry on KEY4+KEY5 from
+  its first reservation with feature caps that do not assume per-key project quota.
 - **Interest clubs / gated implementation RC**: added additive versioned SQLite identity/relation/evaluation tables, an explicit shadow-only reviewed-fixture importer, bounded split-lane `gemma-4-31b-it` verification through the existing limiter with exact-quote validation and no Lite positive fallback, a default-off nonblocking Smart Update handoff, and a fail-closed `interest-clubs-static-v1` projection with gated `/kluby-po-interesam/` index/detail pages, recurrence/freshness filters, navigation, sitemap, SEO and a11y contracts. Production migrations, flags, Smart Update runtime and public promotion remain unchanged.
 - **Static listing visual lab acceptance**: add production p95/p99/max title stress tests, a visible `browse_title`/canonical-title contract, rounded edge-to-edge desktop media, finite crop-safe photo aspect tokens, fail-closed OCR/unknown/low-res handling, curated-only Bento, and separate mobile linear-feed evaluation.
 - **Static listing visual lab workflow**: define the 20–30-card personalization target as a cumulative cross-surface journey budget with success by touch 30, and require every visual proposal to carry a visible stable ID/name through screenshots, filenames, captions and acceptance tables.
@@ -58,6 +239,29 @@
 - **Telegram event graphical medallions (INC-2026-07-15)**: moved curated organizer/venue/festival/source/program/Pushkin identities from delayed custom-emoji mosaics into a deterministic `1300×330` bottom strip in Bot API RichMessage, versioned publication hashes with asset digests, preserved every approved poster and calendar button, edit existing RichMessages in place, skip stale emoji-editor jobs after migration, and keep legacy albums intact unless their complete message-id ledger is available for an audited replacement.
 - **Event age-rating acceptance and source repair**: distinguish terminal-state completeness from the owner's literal 100% numeric fill-rate gate; the full 291-event sweep plus source-by-source repair ended with 64 declared, 11 assessed-only and 216 terminal nonnumeric outcomes, including correction of two live BGE/source disagreements, so the approved high-confidence cascade is not described as completion of no-missing calibration.
 - **Kaggle run status isolation**: preserve a hash of the complete run id in every status-dataset slug, preventing concurrent/retried runs with the same long prefix from versioning one shared callback config and corrupting each other's ledger heartbeats.
+
+- **Static event desktop phone CTA restoration (INC-2026-07-16)**: restored the established branded primary action for phone-only booking: it initially says `Показать телефон` with a copy icon, then reveals and copies the normalized number in one click with non-shifting toast/live feedback, while preserving the icon-only calendar and action-row geometry.
+- **Static event carousel contract (INC-2026-07-16)**: restored bounded `cover` scaling/crop for wide `visual_only` event-detail photos even while media-role enrichment is pending, retained `contain` for OCR/documents, and added a named real-event height-fit multi-photo carousel example for vertical series with quality-filter disclosure.
+- **Static event v10 product/system correction (INC-2026-07-16)**: flattened the KAUP journey into concise transfer/bus/walk/warning/car rows with icon-only map actions while retaining North-derived departure and arrival math; replaced the desktop phone glyph/helper text with a standard-size number and shared fixed copy→check action, coordinated with the parallel design-system catalog.
+- **Static event bus preferred boarding (INC-2026-07-16)**: restored the reviewed rule that Romanovo buses serving `Северный вокзал` are planned from that stop, preserving official terminal timetable values as provenance while deriving estimated North departures at `terminal + 15 minutes` and keeping downstream Romanovo/venue arrival estimates invariant.
+- **Static mobile event routing (INC-2026-07-16)**: scope personal-feed caches to the current production/preview base and rebase same-site event, absolute/share and local-calendar paths from cached discovery/search manifests before rendering, so mobile exploration cannot fall back to an older preview UI while genuine external ticket links remain unchanged.
+- **Static KAUP mobile handoff (INC-2026-07-16)**: carried the accepted factual KAUP journey into the phone event page as a flat compact block after `Коротко`, keeping origin → departures → Romanovo walk → return warning → car visible while folding only official-transfer boarding fine print into a native disclosure.
+- **Static desktop KAUP/telephone acceptance correction (INC-2026-07-16)**: flattened the KAUP travel block into an explicit origin → bus timetable → Romanovo-to-venue walk → return warning → car flow with standard mode/location icons and no raw-coordinate pseudo-map, and made desktop phone actions a strict one-row geometry whose calendar is icon-only and whose copy confirmation cannot shift layout.
+- **Static desktop event product polish (INC-2026-07-16)**: separated the KAUP stop-to-venue walking route from the Kaliningrad car route, added venue-access time to exact-duration return-train selection, quality-filtered the efficient multi-portrait viewer with an honest fallback/disclosure, and made phone action panels component-responsive so adaptive calendar copy cannot force overflow; mobile rendering remains unchanged.
+- **Static event discovery/personalization v5 vector catalog (INC-2026-07-16)**: replaced the temporary sparse continuation catalog with a complete `303`-event Supabase pgvector/HNSW export (`40` candidates per event, no underfilled chains), rebuilt and publicly verified the immutable noindex preview without promoting the production root.
+- **Static event discovery/personalization v4 (INC-2026-07-16)**: restored the accepted Dramatic Theatre medallion, made only the desktop secondary calendar label adapt to bounded recent local use, added a lazy separate `Для вас` continuation after contextual `Смотрите дальше` with strict dedup/diversity and a 20–30-card product budget, reserved dynamic-card media geometry with shimmer/error fallback, added desktop gallery parity for the terminal related-event slide, and aligned the Supabase `event_search_documents` projection with canonical age-rating fields so full-catalog vector sync no longer fails on PostgREST schema drift.
+- **Static event pages / production v3 secondary-surface recovery (INC-2026-07-15)**: integrated the exact accepted mobile V8 implementation from `fd8766b1` into all `282` future/ongoing event routes, normalized every desktop `Смотрите дальше` row without fields (non-OCR always cover; OCR/document cover only within a measured `20%` crop budget), restored the Lastochka illustration at real desktop/mobile transport widths, added corpus-wide generated-page regression gates and publicly verified the replacement noindex preview `preview-20260715t-production-mobile-v8-related-transport-v3` without promoting the production root.
+- **Static event pages / replacement production-integration preview**: rejected the legacy-DOM v1 desktop candidate, mounted the exact accepted Continuous Editorial/Split component on all `282` generated desktop event routes through a geometry/semantic-state router, preserved mobile v4 as a separate unchanged breakpoint surface, kept rail/bus transport additive inside the accepted long reading flow, and publicly verified the replacement with a `12/12` viewport matrix plus exact interaction checks without promoting the production root.
+- **Static-site Smart Update debounce**: preserve one coalesced 15-minute follow-up build when new event updates arrive during an immutable running build, use the task-specific long runtime for stale-owner recovery instead of the obsolete ten-minute constant, and stage the Fly full-catalog pgvector/Kaggle builder enablement for activation with this branch's deploy.
+- **Static preview retention**: removed only 19 unreferenced pre-July preview prefixes (`1783` objects, `174481334` bytes), retaining documentation-linked milestones, every July review build, the current integration prefix, stable `/p/` media and stable `/ics/` calendars.
+- **Static event pages / desktop v14 delivery and release boundary**: delayed Continuous Editorial CTA release until its visual bottom reaches the continuation section with the accepted safe gap, corrected responsive rail `sizes`, activated only the visible thumbnail subset, and retained independent immutable CDN WebP thumbnails after measured sprite comparison and Gemini Pro review; mobile event composition and motion remain unchanged.
+- **Static footer / service share integration**: integrated the approved footer-only KenigEvents share action from the PR #44 line without changing the accepted header: one native mobile share action and separate desktop image-only / text+canonical-link clipboard intents, backed by the versioned validated service card manifest; preview publication is now prefix-only, dry-runnable, MIME-correct and no longer mirrors stable `/ics/*` objects.
+- **Static event pages / desktop v13 final media polish**: made Continuous Editorial autorotation start/resume after ten idle seconds with staged decoded-only preloading, an eight-second dwell and a calm 1.5-second cross-dissolve, centered the responsive Split preview subset, fixed exact poster gallery opening, restored the Кауп venue-brand medallion, and added event date/time to the efficient desktop viewer without changing mobile layout or motion.
+- **Static event mobile UI review v4**: preserved the accepted weekday/date/time hierarchy, restored a clipped no-zoom OCR poster parallax without transform-created layout air, simplified selected-like feedback to terracotta fill plus a white solid heart, and added explicit spacing between the hero/context and context/prose information surfaces.
+- **Task-channel execution + static event mobile UI review v3**: task/acceptance topics now require a complete feedback→implementation→QA→preview→single-handoff iteration instead of acknowledgement-only terminal turns; the new isolated mobile candidate adds an unmistakable selected-like state, larger secondary icons, container-aware single-label actions, weekday-first date/time hierarchy and removes the no-zoom OCR poster-parallax gap.
+- **Static event mobile UI review v2**: added an accepted-candidate pass that corrects the 12px full-bleed hero offset, strengthens mobile date/time hierarchy, renders the misclassified text poster without photo-cover zoom, and uses a server-deterministic compact action label below 380px.
+- **Static event pages / desktop v12 header and media motion**: unified noindex desktop sticky/parallax coordinates on the measured `57px` approved header, removed the legacy grey gap/text leak, aligned the `240×88` brand tag to a bounded viewport gutter, switched the OCR companion background to Continuous Editorial motion, added decoded-only hero autorotation after ten seconds, and moved Garage/Split/companion rails to independent CDN `256/512` WebP derivatives without changing mobile behavior.
+- **Static event pages / desktop v11 acceptance restoration**: restored the three agreed desktop-only laboratory compositions (continuous editorial photo, low-resolution multi-photo split and arriving OCR companion) on the approved shared header/favicon base, corrected grouped backward gallery navigation, enforced field-free cover for related photos and a measured `<=20%` crop budget only for excessively portrait OCR posters, and left production event/mobile templates unchanged.
 - **KОНБ CherryFlash VK fanout**: keep the direct `konb39` VK community story but stop publishing the KОНБ video announcement as a VK wall post; the Telegram channel story remains unchanged and both story targets stay best-effort.
 - **Event age-rating semantics and LLM budget**: piggyback a strict evidence-grounded age decision on existing Smart Update facts/create/merge calls with zero additional requests per event, keep automatic assessments internal by default, and fail unresolved source conflicts closed instead of choosing a numeric maximum.
 - **Event age-rating CPU batches**: coalesce missing/stale events for 25 minutes into one Kaggle CPU BGE run, put approved poster OCR title/body ahead of prose, persist terminal assessment/OCR states, reject stale or ungated imports, and replace manual classifier approval with hash-bound automatic official-holdout quality gates.
@@ -86,6 +290,7 @@
 - CherryFlash guide-excursion promo now uses the agreed `true3d-v4-approved-2026-07-11` Blender renderer from `scripts/render_cherryflash_guide_true3d_v4.py` inside production `render_cherryflash_full.py`, preserving month-text dates such as `10 июля 16:00` and the approved SVG icon/avatar/CTA composition instead of a reimplemented approximation.
 
 ### Added
+- **Static event mobile UI review lab**: added a noindex 2×2 prototype matrix for current/open editorial prose and current/grouped secondary actions across photo, free-like and OCR-poster events, while explicitly preserving the fixed brand tag, media policy, discovery polarity and sticky CTA.
 
 - **Popular feed / dedicated human-like Telegram reader**: the batch collector
   now accepts only `TELEGRAM_AUTH_BUNDLE_CHECK_POPULAR`, reads exact event
@@ -118,7 +323,11 @@
 
 ### Fixed
 
-- **Static date-listing preview / Эпидемия recurrence**: contained confirmed wrapper/time-drift duplicate `6859` in the auditable preview snapshot in favor of canonical `4671` without adding fuzzy UI dedup; production remediation remains owned by the open LLM-first duplicate-recall incident.
+- **Static popular feed / independent multi-source calibration**: require two
+  distinct external publisher families for the `multi_source` reason; owned
+  Telegram/VK distribution still contributes real growth, share and discussion
+  counters but no longer turns one external announcement into broad automatic
+  popularity evidence.
 
 - **Popular feed / terminal target rescan load**: reuse `post_ts` from compact
   social snapshots when old TG/VK posts have no legacy age-day row, and do not
@@ -142,6 +351,10 @@
 - **Event age-rating calibration closure**: make the manual Kaggle launcher expose partial reports, complete all 718 masked CPU vectors, continue iterative calibration over 531 scope-clean official labels, and pass the untouched grouped OOF gate with a raw-matrix TF-IDF safety cascade (51.4% coverage, 96.0% exact, 99.3% within-one, 0 severe-under); hash/logit self-test mismatch still fails closed.
 - **Event age-rating Kaggle CPU runtime**: probe the concrete BGE-M3 model symbol and upgrade an incompatible preinstalled FlagEmbedding 1.3.x to the pinned Transformers-5-compatible 1.4.0 before loading the encoder.
 - **Parser age preservation**: carry Qtickets/Pyramida/Dom Iskusstv/Philharmonia structured restrictions through `EventCandidate`, reconcile them on the repeated-source fast path, preserve Universal Festival program ratings, and stop the Dom Iskusstv kernel from treating the first arbitrary `N+` in page HTML as the event rating.
+
+- **Static desktop event media/transport follow-up (INC-2026-07-16)**: route a classified non-identity first document away from the hero when a safe horizontal event photo exists, contain OCR/documents in fullscreen with click-to-close and the shared accepted lockup, restore grouped multi-portrait viewing, add exact KAUP transfer/bus/map guidance, suppress irrelevant next-morning rail advice after an explicit duration while generating the deduplicated desktop/mobile transport-ICS union, expose copyable desktop phone numbers, and omit the insufficient-feedback placeholder; the accepted mobile composition is unchanged apart from the shared gallery lockup.
+- **Static event media/action regressions (INC-2026-07-16)**: backed up and reconciled Epidemia legacy approved poster row `8622` as a crop/overlay duplicate of canonical row `7824`, removed event-id-random mobile CTA labels, and added generated-page guards for medallion inventory, dynamic image layout stability and desktop/mobile discovery parity.
+- **Static event pages / desktop template regression (INC-2026-07-15)**: added an all-page production contract gate and full-catalog browser matrix so a CSS imitation of the lab component, portrait/low-resolution full-width heroes, unclassified OCR poster companions, hidden mobile revision changes, missing accepted thumbnail derivatives or short-height H1/CTA clipping cannot pass preview acceptance.
 - **Static media enrichment scope**: restrict the operational derivative/LLM backfill to active, non-silent current-or-ongoing events, preventing cancelled, postponed and incident-tombstoned rows from consuming media budgets or re-entering public fanout; align the documented poster confidence environment name with runtime.
 - **Static event cards / poster framing and ticket copy**: removed horizontal document crop and side fields from desktop related cards, preserved source width while bounding height through vertical overflow only, and replaced invented `По билетам`/`Открыть условия` copy with `Билеты`/`Источник события` while making calendar the primary action for free no-registration events.
 - **Telegram Monitoring TBD child time / source cursor (INC-2026-07-14)**: keep an explicitly unknown programme-item start distinct from the enclosing festival window through the Gemma producer, Smart Update LLM review and a narrow fail-closed server rail; let the confirmed review clear an already-persisted wrong merge time; advance successfully scanned legitimate zero-event tails without re-running their media/LLM work; re-arm an existing managed VK projection after a real canonical merge while retaining no-change duplicate prevention; invalidate stale ICS storage/shortlinks/calendar-channel documents before rebuilding public projections when a confirmed repair removes the only valid time; track/edit Telegram calendar documents with an independent content hash so a storage update cannot leave an older attached ICS behind; and include ICS URL state in managed VK identity so stale calendar lines are removed.

@@ -1,6 +1,13 @@
 # Kaggle static-site builder
 
-Status: implementation spike / production-publish gate pending.
+Status: immutable secret-candidate pipeline implemented; production-root
+promotion is blocked pending a reader-atomic origin switch and remains disabled.
+
+Current event-page release sequencing, top-five platform backlog and the planned
+10-day Telegraph coexistence/cutover are canonical in
+[`docs/features/static-site-pages/release-plan.md`](../features/static-site-pages/release-plan.md).
+The mode names described there are a required implementation contract, not
+already-existing production env flags.
 
 ## Position
 
@@ -12,13 +19,52 @@ It is acceptable for the Kaggle API actor to be a dedicated personal Kaggle user
 
 ## Production protocol
 
+### V12 single-flight, no-op and crash adoption
+
+The production rail is a durable state machine, not a local process lock:
+
+1. Smart Update and the operator endpoint coalesce effects into one singleton
+   outbox request; a changed effect during a run becomes one follow-up.
+2. A read-only immutable snapshot and one `Europe/Kaliningrad` build clock feed
+   a canonical public-projection SHA-256. Queue attempts, timestamps and elapsed
+   past-only churn are excluded; public event/media/config/repo/date/related
+   inputs are included.
+3. `BEGIN IMMEDIATE` claims `static_site_build_state` before any Kaggle push.
+   Equal successful fingerprints no-op for both automatic and ordinary manual
+   requests. Only `trigger=operator_request + force_rebuild=true` bypasses it.
+4. Before push, the running outbox payload stores the exact build/run/repo,
+   candidate-token, snapshot hash/path, fingerprint and clock handoff. The
+   Kaggle ledger stores the exact input dataset identity.
+5. If Fly dies after push, a retry first pulls the fixed kernel metadata. A
+   matching running kernel is deferred; a matching complete kernel is
+   downloaded and fully identity/hash validated, published once and adopted.
+   It is forbidden to push a replacement merely because the callback is stale.
+   Only a failed or different dataset identity releases the old claim.
+   If startup or Smart Update requeues the same terminal-looking outbox row
+   while it is still the exact `active_job_id`, the queue merge must preserve
+   its `remote_handoff` and immutable `snapshot`. Fresh effect reasons are
+   unioned into that payload; they never replace the identities required for
+   adoption. A stale handoff is discarded only when the state row no longer
+   points to that exact job. If a newer pending follow-up already exists, the
+   generic coalesce supersession rule must not discard the older exact active
+   job: its recovery/adoption runs first, then the follow-up consumes the newly
+   accumulated effects.
+6. Publication remains create-only under a fresh secret prefix. After full
+   result/manifest/object verification, the durable internal current-review
+   receipt advances atomically. Failed, no-op and artifact-only runs preserve
+   its previous value. Root/current and stable ICS are outside this state
+   machine.
+
+The local `fcntl` lock remains a same-process convenience only. Correctness is
+owned by SQLite claim/CAS, Kaggle dataset identity, result receipt and
+conditional Object Storage writes.
+
 ```text
 immutable Fly SQLite snapshot
   -> one Kaggle CPU build with status ledger
-  -> staging/release prefix
-  -> checks + release manifest
-  -> promotion to current release
-  -> rollback target retained
+  -> checked production-form artifact + release manifest
+  -> create-only unlisted secret prefix (current phase)
+  -X-> production current/root (separate reader-atomic redesign and GO)
 ```
 
 Rules:
@@ -27,19 +73,60 @@ Rules:
 - one immutable snapshot per build; new updates during a build queue a later build, they do not mutate the running build;
 - resource lease: `static_site:builder`; two production builds must not publish concurrently;
 - Kaggle writes only to a unique staging/release prefix, never directly to production root with `--delete`;
-- promotion requires machine-readable release manifest and passed checks;
+- secret publication requires the bounded result, machine-readable release
+  manifest and all production/secret checks to pass;
 - failed Kaggle jobs must not alter production;
 - secrets must be least-privileged for the target bucket/prefix and never printed.
+- anonymous Object Storage listing must be disabled before treating an unlisted
+  token as a bearer link; `noindex` is not access control;
+- the publisher refuses every root/current/stable-ICS key and uses create-only
+  writes (`If-None-Match: *`) below one immutable `_review/<token>/`
+  prefix.
 
 ## Current implementation path
 
 - Runner: `scripts/run_static_site_builder_kaggle.py`.
 - Kernel script: `kaggle/StaticSiteBuilder/static_site_builder.py`.
+- The runner must close its short-lived status-ledger `Database` immediately
+  after writing the callback config. Otherwise the non-daemon `aiosqlite`
+  worker can keep a successfully completed process alive at Python interpreter
+  shutdown, leaving the durable static-build claim stuck before publication.
+- The kernel must locate `kaggle_status_client.py` inside the mounted private
+  status dataset under `/kaggle/input`; Kaggle does not add dataset directories
+  to `sys.path`. A direct-import-only kernel silently loses all callbacks.
+- Kernel callbacks remain authoritative. If callback delivery is absent but
+  Fly validates the exact downloaded result and completes publication, the
+  host records one idempotent `host_result_validated` terminal event so the
+  ledger cannot remain falsely `created`; it does not populate
+  `last_heartbeat_at` or pretend a kernel heartbeat occurred. The same
+  transaction releases only active resource leases owned by that exact run.
+  SQLite lock contention is retried with bounded backoff, and the next static
+  build replays this idempotent reconciliation from the immutable current-review
+  receipt before remote recovery or push. A late receipt can therefore never
+  release a successor run's lease.
+- Creating the per-run status ledger also acquires `BEGIN IMMEDIATE` with the
+  same bounded lock-only retry. SQLite officially permits `SQLITE_BUSY` when
+  another writer owns that slot; timeout expiry is handled as retryable
+  contention, while non-lock failures still fail immediately. See
+  <https://www.sqlite.org/lang_transaction.html>.
+- Callback authentication reads each runner-created token from a fresh SQLite
+  connection, and each callback event uses its own bounded
+  `BEGIN IMMEDIATE` transaction with guaranteed rollback/close. The aiohttp
+  process must not authenticate against the reusable `Database.raw_conn`: a
+  stale read snapshot or an earlier failed write can otherwise hide a token
+  that a short-lived runner has already committed and make Kaggle report a
+  false `invalid token`/busy resource failure.
 - Data export: `site/scripts/export-production-preview-data.py`.
 - Fly handoff: `JobTask.static_site_build` and `main.py` `job_static_site_build_kaggle`.
 - Feature docs: `docs/features/static-site-pages/astro-preview.md`.
 
-The current verified path produces a checked tarball artifact. CDN host `static.kenigevents.ru` is now configured for the static-site bucket and also serves mirrored event media `/p/...` plus stable calendar files `/ics/<event_id>.ics`. Production promotion is still a separate gate: build into a unique prefix, verify the release manifest, then upload/promote. For preview/focus-group builds pass:
+The current path produces a checked tarball artifact and can publish it only as
+an immutable secret candidate. CDN host `static.kenigevents.ru` is configured for
+the static-site bucket and also serves mirrored event media `/p/...` plus stable
+calendar files `/ics/<event_id>.ics`. Production root/current promotion is not
+implemented: the existing website origin cannot resolve an object pointer
+atomically, while sequential root copies expose a mixed tree. For
+preview/focus-group builds pass:
 
 - `PUBLIC_ASTRO_ASSET_BASE_URL=https://static.kenigevents.ru/{buildId}` or runner `--astro-asset-base-url`;
 - `PUBLIC_ASSET_BASE_URL=https://static.kenigevents.ru` or runner `--asset-base-url`;
@@ -47,10 +134,119 @@ The current verified path produces a checked tarball artifact. CDN host `static.
 
 Before a CDN-enabled build, run/verify `scripts/migrate_static_media_to_cdn_bucket.py --db <snapshot> --active-on <date> --apply` so legacy `s3://kenigevents/p/...` objects referenced by active events exist in `s3://kenigevents.ru/p/...`.
 
+## Implemented automatic and on-demand flow
 
-## Current v59 strict pgvector evidence and open gate
+`effectful Smart Update` coalesces one `static_site_build` request for 15 minutes
+after the last public change. A change arriving during a running build records a
+deferred marker; completion schedules exactly one follow-up. The worker creates
+an online SQLite backup, runs `quick_check`, records SHA-256/size/max event
+revision and submits that immutable file as a unique Kaggle input. Retries,
+missed-build reconciliation and the feature-specific 5400-second runtime are
+bounded in `static_site_release.py`/`main.py`.
 
-`preview-20260629-event-pages-v59-related-gemma50` is the current strict related canary on real production-snapshot data: 50 events focused on 2026-06-30/2026-07-01, CDN-enabled assets/ICS, `npm run check:preview` passed, public Playwright smoke passed, and `/data/discovery/6447.json` shows `6310` “Архитектурно-урбанистическая студия...” as the strict Gemma-approved first related candidate (`llm_semantic_score=0.88`).
+The same durable request can be made manually without bypassing debounce or the
+outbox state machine:
+
+```bash
+.venv/bin/python scripts/request_static_site_build.py \
+  --db /data/db.sqlite \
+  --reason operator_secret_candidate \
+  --correlation-id static-site:manual:<ticket>
+```
+
+`INC-2026-07-19-static-site-stale-builder-lease` is a mandatory regression
+contract for this handoff: successful publication, ledger terminal state and
+exact-owner resource release must converge even when terminal callbacks are
+lost or Smart Update briefly holds the SQLite writer lock. The same contract
+also forbids startup catch-up from erasing an active recoverable handoff when
+it rearms an error outbox row.
+
+All operator/bot link-producing paths must use
+`static_site_release.resolve_current_secret_candidate`; historical named
+preview URLs are evidence, not routing. The current checked immutable target is
+read without enqueueing or mutating the DB:
+
+```bash
+.venv/bin/python scripts/request_static_site_build.py \
+  --db /data/db.sqlite --show-current-review
+```
+
+The resolver requires the exact build/run/repo/snapshot/input fingerprint,
+result/manifest/token hashes, verified object count, HTTPS bearer URL and
+negative root/stable-ICS mutation evidence. It returns unavailable for legacy
+or incomplete receipts. There is deliberately no public stable redirect.
+
+Automatic execution and upload are deliberately opt-in. Required identity and
+flags are documented in `.env.example`; defaults stay off:
+
+```text
+ENABLE_STATIC_SITE_KAGGLE_BUILDER=0
+ENABLE_STATIC_SITE_SECRET_PUBLISH=0
+STATIC_SITE_REPO_SHA=<exact clean pushed SHA>
+```
+
+The Kaggle production-candidate invocation must include
+`--profile production-candidate --catalog-mode full --snapshot-manifest ...
+--repo-sha ... --run-id ... --build-id production-... --candidate-token ...
+--export-in-kaggle`. The kernel runs Node 22, full export,
+`build:production/check:production`, then
+`build:secret-candidate/check:secret-candidate`, and returns the bounded v2
+result. The trusted boundary rejects the result unless the complete production
+template matrix and candidate noindex/no-referrer/prefix/root-isolation checks
+are all `ok`. Local gates are:
+
+```bash
+pytest -q tests/test_static_site_release.py \
+  tests/test_static_site_build_handoff.py tests/test_static_site_public_gate.py
+npm --prefix site run test:static-release
+npm --prefix site run build:preview
+npm --prefix site run check:preview
+# With full exported catalog + immutable snapshot identity env:
+npm --prefix site run build:production
+npm --prefix site run check:production
+npm --prefix site run build:secret-candidate
+npm --prefix site run check:secret-candidate
+```
+
+The Python Fly-side publisher validates/extracts the tar safely, checks the
+production-candidate result and manifest identity, rejects a bucket that still
+allows anonymous ListObjects, uploads create-only, then verifies every object
+hash/MIME plus a public `index.html` probe. It returns a receipt containing the
+bearer URL and tree hash. Never put the URL/token in public docs, sitemap,
+canonical, Telegram public channels or logs. Revocation in this phase means
+deleting that complete immutable prefix; root/current remain untouched.
+
+### Smart Update debounce and historical 2026-07-15 data evidence
+
+Smart Update enqueues `static_site_build:prod` for 15 minutes after the latest
+accepted event update. Repeated updates move the one pending job forward. If a
+build is already `running`, one deferred pending follow-up is retained instead
+of merging the update into the immutable running snapshot; later updates
+coalesce into that follow-up. Static-site builds use the task-specific maximum
+runtime rather than the historical ten-minute stale-owner constant, so a valid
+long Kaggle build is not rearmed as stale.
+
+The data/artifact portion of
+`preview-20260715t-production-transport-mobile-real-events-v1` exported `282`
+public future/ongoing events, refreshed both pgvector documents for every
+anchor, reused `564` unchanged embeddings (`0` provider calls) and generated
+`40` non-dangling candidates per event. Its desktop presentation evidence is
+**rejected** by `INC-2026-07-15-static-desktop-template-regression`: the build
+kept the legacy production DOM and the consultant did not review the generated
+mass-event URLs. The replacement
+`preview-20260715t-production-desktop-contract-v2` must pass
+`check:production-desktop`, full-catalog browser acceptance and exact public
+URL review. Either prefix proves only the noindex artifact path; neither removes
+the separate atomic production-root promotion gate described above.
+The integration branch stages the corresponding Fly non-secret env
+(`ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`, full-catalog limit, pgvector sync and
+CDN/ICS bases). It becomes active only after this branch is merged and deployed;
+the currently running Fly release does not contain that config yet.
+
+
+## Historical v59 strict pgvector evidence and open gate
+
+`preview-20260629-event-pages-v59-related-gemma50` is historical strict related canary evidence on real production-snapshot data: 50 events focused on 2026-06-30/2026-07-01, CDN-enabled assets/ICS, `npm run check:preview` passed, public Playwright smoke passed, and `/data/discovery/6447.json` shows `6310` “Архитектурно-урбанистическая студия...” as the strict Gemma-approved first related candidate (`llm_semantic_score=0.88`).
 
 Smart Update handoff now passes the pgvector/Gemma flags from environment into `scripts/run_static_site_builder_kaggle.py`: `--related-mode`, `--sync-pgvector-vectors`, `--pgvector-*`, `--gemma-related-*`, status DB/callback, CDN asset/ICS bases, browser-safe AuthorizedEventSearch public env (`--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`, `--public-yandex-auth-provider`) and the date-focus controls `--current-datetime`, `--focus-date-from`, `--focus-date-to`. This means the coalesced `static_site_build` job can reproduce the v59-style vector sync/retrieval/Gemma strict-verification process from `/data/db.sqlite` after Smart Update and can render the one-line authorized search UI in focus-group previews when Yandex/Supabase Auth is configured.
 
@@ -67,7 +263,10 @@ Static related publication policy:
 - same-day events that already started, past events and cancelled/deleted/duplicate rows are excluded at export/generation time;
 - static related generation retries Gemma 4 26B with backoff and does not fall back to Gemini/Flash-Lite, preserving Lite quota for runtime flows.
 
-This still does **not** mean Smart Update already publishes the production site to CDN automatically. The current production handoff schedules/runs the Kaggle builder and obtains a checked artifact. The remaining gate is automatic artifact upload/promotion to Object Storage/CDN with release manifest, non-concurrent promotion lock and rollback target.
+This still does **not** mean Smart Update publishes the production root. With all
+three flags enabled it can build and publish only a checked unlisted candidate.
+Root activation remains a separate NO-GO until a reader-atomic resolver/origin
+design, retained last-good pointer and rollback acceptance are implemented.
 
 ## Static-site Gemma/related secrets
 

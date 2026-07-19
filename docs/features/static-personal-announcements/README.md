@@ -2,6 +2,7 @@
 
 > Status: release umbrella; full-scope public release is not ready.
 > Canonical readiness checklist: [2026-07-11 release audit](../../reports/static-personal-announcements-release-readiness-2026-07-11.md).
+> Current event-page platform/cutover slice: [static event-page release plan](../static-site-pages/release-plan.md).
 
 ## Purpose
 
@@ -13,7 +14,7 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 
 | ID | Capability | Canonical home | Stage |
 |---|---|---|---|
-| F1 | Smart Update effect → coalesced static rebuild | [Static pages](../static-site-pages/README.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production disabled |
+| F1 | Smart Update effect → coalesced static rebuild | [Static pages](../static-site-pages/README.md), [event-page release plan](../static-site-pages/release-plan.md), [builder operations](../../operations/kaggle-static-site-builder.md) | partial / production disabled |
 | F2 | Vector-based related events | [Semantic retrieval](../unsigned-personalization/semantic-vector-retrieval.md) | canary / partial |
 | F3 | Smart authorized search | [Authorized search](../unsigned-personalization/authorized-event-search.md) | canary / production root pending |
 | F4 | Email with exactly three recommendations + published personal page, delivered through NotiSend to at most 200 actively consented users at launch | [Personal email announcements](../personal-email-announcements/README.md) | design / provider routing accepted |

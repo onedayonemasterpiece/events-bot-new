@@ -1,0 +1,51 @@
+---
+import EventLayout from '../../../../../layouts/EventLayout.astro';
+import MobileEventReviewPage from '../../../../../components/lab/MobileEventReviewPage.astro';
+import type { HeroComposition, HeroMode } from '../../../../../components/EventHero.astro';
+import {
+  MOBILE_EVENT_REVIEW_CASES,
+  mobileEventReviewPath,
+  type MobileEventReviewScenario,
+  type MobileEventReviewVariant,
+} from '../../../../../lib/mobileEventReview';
+import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../../../lib/events';
+import { eventImageUrl } from '../../../../../lib/assets';
+import examplesData from '../../../../../data/desktop-event-examples.json';
+import type { PreviewEvent } from '../../../../../lib/types';
+
+interface Props {
+  variant: MobileEventReviewVariant;
+  scenario: MobileEventReviewScenario;
+}
+
+export function getStaticPaths() {
+  return MOBILE_EVENT_REVIEW_CASES.map(({ variant, scenario }) => ({
+    params: { variant: variant.slug, scenario: scenario.slug },
+    props: { variant, scenario },
+  }));
+}
+
+const { variant, scenario } = Astro.props;
+const mergedEvents = new Map<number, PreviewEvent>();
+for (const item of getEvents()) mergedEvents.set(item.id, item);
+for (const item of examplesData.events as PreviewEvent[]) mergedEvents.set(item.id, item);
+const events = [...mergedEvents.values()];
+const event = mergedEvents.get(scenario.eventId);
+if (!event) return Astro.redirect(withBase('/lab/event-mobile/'));
+const preferredRelatedIds = [5658, 6472, 4671, 5259, 5783, 5761, 5382, 5703, 6510, 5370, 5878];
+const eventById = new Map(events.map((item) => [item.id, item]));
+const related = preferredRelatedIds
+  .map((id) => eventById.get(id))
+  .filter((item): item is NonNullable<typeof item> => Boolean(item && item.id !== event.id))
+  .slice(0, 6);
+const canonicalUrl = absoluteUrl(mobileEventReviewPath(variant.slug, scenario.slug));
+const title = `${variant.shortLabel} · ${event.title} | ${SITE_NAME}`;
+const description = `${variant.note} ${scenario.note}`;
+const hasAcceptedMediaCorrections = variant.revision === 'v2' || variant.revision === 'v3' || variant.revision === 'v4';
+const composition = hasAcceptedMediaCorrections ? (scenario.v2Composition || scenario.composition) : scenario.composition;
+const modeOverride = hasAcceptedMediaCorrections ? scenario.v2ModeOverride : undefined;
+---
+
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={eventImageUrl(event.image_url)} structuredData={[]} heroChrome="immersive">
+  <MobileEventReviewPage event={event} related={related} variant={variant} composition={composition as HeroComposition} modeOverride={modeOverride as HeroMode | undefined} />
+</EventLayout>

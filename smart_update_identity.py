@@ -503,8 +503,12 @@ def build_merge_identity_gate_verdict(
 
     deterministic_code = _deterministic_merge_identity_veto_reason(candidate_subject, existing_subject)
     deterministic = False
-    force_structural_veto = deterministic_code == "single_occurrence_vs_recurring_series"
-    if deterministic_code and (force_structural_veto or not _strong_shared_anchor(candidate_subject, existing_subject)):
+    has_strong_shared_anchor = _strong_shared_anchor(candidate_subject, existing_subject)
+    force_structural_veto = deterministic_code == "single_occurrence_vs_recurring_series" or (
+        deterministic_code == "same_place_date_unrelated_type_time_conflict"
+        and not has_strong_shared_anchor
+    )
+    if deterministic_code and (force_structural_veto or not has_strong_shared_anchor):
         # A high-confidence LLM can still allow genuinely same long-running events,
         # but not when it already says uncertainty/distinctness or has low confidence.
         if action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.REVIEW_REQUIRED}:
@@ -676,6 +680,7 @@ def _deterministic_merge_identity_veto_reason(
     location_related = _locations_related(candidate, existing)
     same_time = _same_known_time(candidate, existing)
     type_conflict = _event_types_conflict(candidate.event_type, existing.event_type)
+    explicit_time_conflict = _known_time_conflict(candidate, existing)
 
     if (
         candidate_long != existing_long
@@ -689,11 +694,11 @@ def _deterministic_merge_identity_veto_reason(
     if (
         type_conflict
         and not title_related
-        and not same_time
+        and explicit_time_conflict
         and location_related
         and _date_overlaps(candidate, existing)
     ):
-        return "same_place_date_unrelated_type_conflict"
+        return "same_place_date_unrelated_type_time_conflict"
 
     return None
 
@@ -811,6 +816,16 @@ def _same_known_time(left: IdentitySubject, right: IdentitySubject) -> bool:
     lt = _time_key(left.time)
     rt = _time_key(right.time)
     return bool(lt and rt and lt == rt)
+
+
+def _known_time_conflict(left: IdentitySubject, right: IdentitySubject) -> bool:
+    """Return true only for two explicit, valid and different start times."""
+
+    if left.time_is_default or right.time_is_default:
+        return False
+    lt = _time_key(left.time)
+    rt = _time_key(right.time)
+    return bool(lt and rt and lt != rt)
 
 
 def _time_key(value: str | None) -> str | None:

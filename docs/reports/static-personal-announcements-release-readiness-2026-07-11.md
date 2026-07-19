@@ -8,19 +8,12 @@
 >
 > Назначение: единый release-readiness checklist. Он связывает канонические feature/operations/incident-документы, но не заменяет их.
 
-## Обновление 2026-07-17 — design-system foundation
-
-Для F5 подготовлен main-based implementation candidate:
-
-- единые semantic tokens и compatibility boundary: `site/src/styles/design-system.css`;
-- approved primitives: `site/src/components/design-system/`;
-- runtime catalog всех foundations, interaction/data states и реальных product components: `/lab/design-system/`;
-- component promotion lifecycle и реестр: [design-system contract](../features/static-site-pages/design-system/README.md);
-- source/AA/state check: `npm run check:design-system`; generated route входит в `check:preview`;
-- обязательный version/migration contract: материальная переработка создаёт `vN+1`, а release блокируется до полного перехода production consumers;
-- `EventCard split-actions` зафиксирован как `v2` baseline, `overlay-controls v1` помечен deprecated/regression-only с явной заменой.
-
-Это закрывает архитектурную основу унификации UI, но **не переводит F5 в Done**: до release freeze всё ещё нужны merge в `origin/main`, immutable preview build id, visual baselines на acceptance matrix, real-device/a11y evidence и явный product/design sign-off SHA. Общий verdict полного релиза остаётся **NO-GO**.
+> **Актуализация 2026-07-17:** этот документ сохраняется как полный F1–F17 audit
+> baseline. Текущий event-page platform delta, изменения 15–17 июля, top-5
+> platform tasks и 10-дневный Telegraph cutover зафиксированы в
+> [`docs/features/static-site-pages/release-plan.md`](../features/static-site-pages/release-plan.md).
+> Они не снимают NO-GO полного umbrella release и не превращают side-branch work
+> в release truth.
 
 ## 1. Как читать статусы
 
@@ -69,7 +62,7 @@
 | **F2** | Качественные похожие события через vector search | **Partial** | pgvector `gemini-embedding-2/vector(768)`, v48 canary, sparse rollback | 95%+ current coverage, golden/hard-negative editorial gate, whole-catalog recompute, production static integration |
 | **F3** | Умный поиск | **Partial** | Search UI/Edge source/canary preview; unauth Edge request fail-closed | Production `/poisk/`, Yandex provider/Edge deploy, live mobile login→search E2E, quota/alert/fallback evidence |
 | **F4** | Email: 3 предложения + персональная static page | **Designed** | Canonical design v2 добавлен в release-doc branch; прежняя YDB-owned docs branch superseded | Subscription/double opt-in; issue/page generator; outbox; token security; canary/live delivery |
-| **F5** | UI отработан и зафиксирован | **Partial / candidate implemented** | Canonical tokens, primitives and `/lab/design-system/` runtime catalog with state/contrast checks; release UI contract updated | Merge to `origin/main`; immutable RC build/SHA owner sign-off; visual baselines 320–1920; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
+| **F5** | UI отработан и зафиксирован | **Partial** | Большой preview/check contract; отдельная UX V3 branch активна | Design freeze + owner sign-off; visual baselines 375/768/1366; a11y/keyboard/reduced-motion/real devices; no failing RC assertions |
 | **F6** | Views/list/detail/social-action personalization telemetry | **Partial** | Local profile/actions/served-list contract; remote browser writes запрещены/не включены | Consent-safe remote ingest, RLS/grants, bot/rate/dedupe/retention, list/detail/dwell/CTA/calendar/share/like/hide row evidence |
 | **F7** | Auth или verified-email user | **Partial** | Yandex PKCE login/logout code; email-only path design exists | Global identity layer; one-use email code/link with TTL/replay/rate limits; real-device proof |
 | **F8** | Sender subdomains, bounce/complaint handling | **Designed / Partial foundation** | Transactional email foundation находится в старой side branch и dry-run | Separate sender streams/subdomains; SPF/DKIM/DMARC; signed provider webhooks; suppression/unsubscribe/warmup/alerts; live canary |
@@ -193,7 +186,6 @@ Read-only срез на 2026-07-11:
 - [ ] Для каждой side branch записать owner, base/head SHA, rebase plan, tests, merge/reject decision.
 - [ ] Не переносить весь dirty checkout; cherry-pick/re-implement только проверяемые feature commits.
 - [ ] Зафиксировать UI release version и data/schema versions.
-- [x] Подготовить единый design-system source, live component catalog, status registry и promotion lifecycle; merge/immutable preview sign-off остаются в Stage 7.
 - [ ] Закрыть продуктовые решения из раздела 10.
 
 ### Stage 1 — Стабилизация качества Smart Update и incident burn-down
@@ -283,7 +275,6 @@ Smart Update является владельцем семантического 
 - [ ] Clean `origin/main`-reachable RC SHA; no release fixes only in side branches.
 - [ ] Full site build/check from clean checkout passes.
 - [ ] Playwright/mobile/desktop visual baselines, keyboard/a11y/reduced-motion, no-JS and slow/offline fallback pass.
-- [ ] `/lab/design-system/` на точном RC SHA принят product/design owner: все версии, replacements, migration statuses, approved/candidate/deprecated states совпадают с release UI contract; production consumer audit не находит старых callers после `migration complete`.
 - [ ] Security review: RLS/grants, auth callback, bearer tokens, admin allowlist, email webhooks, secret exposure, abuse limits.
 - [ ] Performance/load: static/CDN, Edge search quota, telemetry ingest, promotion under full catalog size.
 - [ ] 7-day limited canary with event-quality and availability dashboards.
@@ -315,7 +306,6 @@ Smart Update является владельцем семантического 
 - [ ] files changed and canonical docs updated;
 - [ ] unit/contract/replay/E2E commands with terminal result;
 - [ ] preview/canary URL and immutable build/release id;
-- [ ] design-system catalog URL, component version/replacement, production consumer migration evidence, `npm run check:design-system` result and owner sign-off for every changed approved component;
 - [ ] production config diff without secrets;
 - [ ] DB migration/RLS/grant evidence when applicable;
 - [ ] release manifest and catalog parity report;
@@ -330,7 +320,7 @@ Smart Update является владельцем семантического 
 3. **Identity — решено на product level:** email-only user becomes a Supabase Auth identity through code or link; anonymous profile links automatically/intelligently under eligible personalization consent.
 4. **Favorites:** favorite, like и calendar-follow — одна сущность или три связанные сущности?
 5. **Email:** cadence/quiet hours/fatigue, transactional vs recommendation classification, sender subdomains and legal unsubscribe policy.
-6. **UI freeze:** technical baseline теперь задают design-system catalog и release UI contract; всё ещё нужно выбрать immutable RC branch/preview и product/design owner, который подпишет точный SHA.
+6. **UI freeze:** какая ветка/preview является release baseline и кто даёт product/design sign-off?
 7. **Transport:** первый provider/city matrix, источник истины, лицензирование/кэширование и acceptable stale window.
 8. **Discussion signals:** допустимые источники комментариев, retention/PII/moderation и правила показа negative/price signals.
 9. **ArtKodex:** API/poller owner, task/thread contract, retry/idempotency and structured repair-result schema.

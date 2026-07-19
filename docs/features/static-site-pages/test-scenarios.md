@@ -2,6 +2,116 @@
 
 Идентификаторы нужны для стабильных ссылок из багов, Playwright/Gherkin-сценариев и release evidence. Сценарии пользователя сохранены отдельно от сценариев, добавленных по результатам анализа.
 
+> **Статус:** канонический acceptance inventory, а не журнал уже пройденных
+> тестов. Наличие ID не означает, что функция реализована, автоматизирована или
+> принята в production. Current release scope и gates определяет
+> [release-plan.md](release-plan.md).
+
+## Уровни доказательства
+
+- **Automated release** — выполняется против clean main-reachable production
+  candidate/public surface и выдаёт сохраняемое evidence.
+- **Automated component** — unit/build/fixture contract; полезен, но один не
+  закрывает release scenario.
+- **Demo-only** — исполняемый stand/mocked client, не текущий Astro/public site.
+- **Draft** — Gherkin/spec без полного runnable step/runtime path.
+- **Manual/native** — требуется реальная ОС, browser/app/email/calendar/maps или
+  визуальный review; mocks не заменяют evidence.
+- **Planned** — product/implementation ещё отсутствует в `origin/main`.
+
+## Карта текущего покрытия на 2026-07-18
+
+| Surface | Сценарии | Уровень сейчас | Канонический test/command | Что не доказано |
+|---|---|---|---|---|
+| Preview build, files, routes, JSON-LD, ICS, media/static related | `ADD-BUILD-*`, `ADD-SEO-*`, часть `ADD-EVENT/MEDIA-*` | Automated component | `npm --prefix site run build:preview && npm --prefix site run check:preview` | production root, full live catalog, interaction, promotion/rollback |
+| Public projection eligibility/media safety | `ADD-BUILD-03/04`, `ADD-MEDIA-*` | Automated component | `pytest -q tests/test_static_site_public_gate.py` | whole-catalog reconciliation and live HTTP |
+| Static build orchestration and immutable Kaggle handoff | `ADD-BUILD-01`, `ADD-BUILD-08/13`, `ADD-OBS-01` | Automated component | `pytest -q tests/test_static_site_release.py tests/test_static_site_build_handoff.py` | real Kaggle/status-ledger and enabled Fly flags |
+| Production/preview/secret artifact profiles | `ADD-BUILD-07/09/11/12` | Automated component | `npm --prefix site run test:static-release`; production/secret build+check commands from the runbook | live candidate HTTP and root promotion |
+| KAUP timetable A/B/C | `ADD-TR-06..10` | Automated component + manual visual | `pytest -q tests/test_static_site_bus_boarding.py tests/test_static_site_transport_experiment.py` | consented focus-group/live outcomes and statistical decision |
+| Exact KAUP reference fidelity | `ADD-V12-01` | Component + secret-candidate Playwright | exact A/B/C copy assertions; forced query URLs on the retained noindex specimen | user visual acceptance |
+| CTA invariant geometry | `ADD-V12-02` | Browser geometry | `STATIC_SITE_REVIEW_BASE_URL=… npm --prefix site run check:desktop-cta-geometry` at `1536×864` | additional browser matrix |
+| Venue medallion conflict ceiling | `ADD-V12-03` | Unit + generated HTML | `npm --prefix site run test:content-media`; events `5295/6796` | canonical cleanup of ambiguous past rows |
+| Kaliningrad today + build single-flight | `ADD-V12-04..06` | State-machine/unit + fresh candidate | build clock boundary, no-op fingerprint, live/terminal orphan adoption, `/segodnya/` public check | production-run evidence |
+| Typed no-image fallbacks | `ADD-V12-07` | Unit + public candidate | fallback is visible but absent from gallery/OG/JSON-LD/share | inventory refresh after each snapshot |
+| Footer/media/continuation rollout | `ADD-V12-09..12` | Component + public Playwright | global service footer, related-card skeleton, portrait/wide CTA families, bounded desktop continuation | native share and long-session analytics |
+| Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
+| Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
+| Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
+
+### V12 mandatory regressions
+
+- **ADD-V12-01 — Reference, not reinterpretation.** Arms A/B/C preserve their
+  distinct last-mile and warning copy from Telegram messages `261–264`, the
+  green route hierarchy, shared icons and `на Кауп` grammar. On the retained
+  noindex QA route, every forced arm must be visible and overflow-free at both
+  `1536×864` and `390×844`.
+- **ADD-V12-02 — CTA bottom row.** At `1536×864`, event `6551` and the positive
+  control `5374` each have exactly three aligned, contained bottom controls in
+  calendar/share/like order with no horizontal overflow.
+- **ADD-V12-03 — One venue medallion.** A short alias matches only at Unicode
+  token boundaries; equally strong conflicting venue/ticket evidence renders
+  zero venue marks, never two.
+- **ADD-V12-04 — Local day.** `21:59 UTC` remains the same Kaliningrad day and
+  `22:00 UTC` rolls to the next; `/segodnya/` must match the build receipt date.
+- **ADD-V12-05 — No duplicate remote push.** A live orphan is deferred; an
+  exact completed orphan is downloaded, hash/identity validated and adopted
+  without `kernels_push`; only mismatched/failed remote identity releases the
+  old claim for a replacement. If startup or Smart Update rearms the exact
+  active error job, its remote handoff and immutable snapshot survive the
+  payload merge; a non-active stale job does not leak those identities into a
+  new request. A callback token committed by the runner must also be visible to
+  the live aiohttp process even when its shared SQLite connection holds an old
+  snapshot; callback writes retry a bounded writer lock and cannot poison the
+  following callback transaction. A newer pending follow-up cannot supersede
+  the older error row while that row is still the exact active recovery owner;
+  recovery is ordered before follow-up generation.
+- **ADD-V12-06 — Content no-op.** Operational queue churn and already elapsed
+  rows do not change the public fingerprint; public fields, policy, repo SHA,
+  related cache or local date do. Explicit operator force is audited separately.
+- **ADD-V12-07 — Presentation-only art.** Symphonic/lecture fallback selection
+  is typed and deterministic; it cannot become event media or appear in machine
+  metadata/share payloads.
+- **ADD-V12-08 — Expiry-safe design fixtures.** Full-catalog generation after a
+  reviewed event expires must still build every design-system scenario from the
+  frozen examples; current production membership is not a prerequisite for a
+  lab contract.
+- **ADD-V12-09 — One accepted footer.** Event, listing, search and retained lab
+  pages render the same `service-v1` footer: one partnership link, compact share,
+  disabled non-404 legal placeholders and the official coloured MAX asset. No
+  legacy/prototype footer switch or duplicate partnership navigation remains.
+- **ADD-V12-10 — Related-card loading geometry.** Desktop `Смотрите дальше`
+  emits a server-rendered skeleton and `aria-busy=true`; successful and failed
+  image completion both clear the state without changing the reserved frame.
+- **ADD-V12-11 — CTA follows media family.** At `1536×864`, the retained Split
+  fixtures `cta-phone-invariant`, `cta-registration-invariant` and
+  `cta-free-calendar-invariant` keep one contained inline row, validate long
+  primary-label compaction and calendar-primary semantics (including a free
+  event with an official source URL), while the
+  retained `footer-service-v1` Editorial fixture keeps the three-row panel with
+  calendar/share/like aligned on the bottom row. Review may additionally sample
+  live events, but expiry of `6876`, `4783`, `6551` or `5374` cannot remove or
+  false-fail this executable geometry contract. Editorial side motion and CTA
+  docking use that same state machine with one or many distinct photos; absence
+  of the optional thumbnail rail cannot disable motion or change the family.
+- **ADD-V12-12 — Finite desktop continuation.** Reaching `Смотрите дальше`
+  produces exactly six deduplicated cards and `Все анонсы`, never load-more or
+  infinite scroll. A mature profile uses `По вашим интересам`; an immature one
+  is honestly labelled `Ещё события`, respects 3/category and 2/venue, and is
+  not duplicated on the established mobile discovery surface. The separate
+  heading is retained on desktop to mark the transition from explicit
+  similarity to wider anti-bubble discovery; the latter may mix profile,
+  non-rejected vector tail and diverse upcoming fallback rather than looping
+  within one theatre/event type.
+
+### Release evidence row contract
+
+При автоматизации или ручном приёмочном прогоне к ID добавляется отдельная
+evidence row/report со следующими полями: release tier, implementation status,
+automation level, canonical test/command, fixture/persona, URL/page family,
+viewport/device/OS/browser, production SHA, snapshot/build/manifest id, expected
+result, actual result, artifact/log link и reviewer. Эти поля не подменяются
+словом `passed` без привязки к конкретной сборке.
+
 ## Сценарии, добавленные пользователем
 
 - **USR-01 — Лайк события.**
@@ -63,7 +173,7 @@
 - **ADD-DISC-04 — Актуализация сохранённого тега.** После изменения каталога страница тега обновляет результаты одним штатным static rebuild и не сохраняет завершённые/отменённые события как актуальные.
 - **ADD-DISC-05 — Качество «Похожих событий».** Список действительно семантически похож, не содержит исходное событие, дубль или ту же программу из блока «Другие даты», не повторяет карточки и имеет безопасный fallback при отсутствии vectors/LLM verdict.
 - **ADD-DISC-06 — Автоматическое обновление похожих.** После effectful Smart Update нового/изменённого события, debounce и Kaggle-прохода новый verified related graph попадает в опубликованный static manifest; reverse-affected старые события также обновляются.
-- **ADD-DISC-07 — «Популярное» из общей статистики.** Порядок использует единую консолидированную статистику источников и сайта; проверить source-only, site-only и смешанный пример, freshness/last-good и отсутствие отдельной скрытой формулы страницы.
+- **ADD-DISC-07 — «Популярное» из общей статистики.** Порядок использует единую консолидированную статистику источников и сайта; проверить source-only, site-only и смешанный пример, freshness/last-good и отсутствие отдельной скрытой формулы страницы. Для `multi_source` нужны две независимые внешние publisher-family: собственные `kldevents`/`kenigevents` и VK `231920894`/`231828790` схлопываются в одну owned-family и не превращают один внешний анонс в ложное подтверждение «в нескольких источниках».
 
 ### Избранное, календарь и уведомления
 
@@ -107,6 +217,23 @@
 - **ADD-TR-03 — Provider stale/partial failure.** При недоступности КППК или автобусов показывается last-good с честной свежестью либо безопасное отсутствие блока; данные одного provider не затирают исправные данные другого.
 - **ADD-TR-04 — Транспортная карточка в галерее.** Если опция включена, «Как добраться» является отдельной понятной карточкой, не выдаёт себя за афишу и совпадает с detail route data.
 - **ADD-TR-05 — Избранный транспортный участок.** Повторное сохранение идемпотентно, относится к выбранному occurrence/направлению и не увеличивает event-favorite badge.
+- **ADD-TR-06 — Три лаконичных варианта расписания.** Для одной и той же
+  транспортной проекции доступны `departure_board_v1`, `route_strips_v1` и
+  `next_departure_queue_v1`; вариант меняет только представление, но не рейсы,
+  остановку посадки, маршруты или CTA.
+- **ADD-TR-07 — Стабильное распределение A/B/C.** Один browser subject получает
+  один вариант SHA-256-распределением и сохраняет его между событиями, rebuild и
+  secret-prefix; в каждой сессии отрисован ровно один arm.
+- **ADD-TR-08 — QA override не загрязняет эксперимент.** Query override позволяет
+  визуально проверить каждый arm, но forced/QA impression и action не попадают в
+  доверенную telemetry; production-root по умолчанию работает в `off`.
+- **ADD-TR-09 — Квалифицированная экспозиция и исход.** Impression засчитывается
+  только после не менее 50% видимости блока в течение одной секунды; outcome —
+  только осмысленный клик `transfer`, `map`, `walk` или `car`, связанный с тем же
+  experiment/variant/subject.
+- **ADD-TR-10 — Посадка на Северном вокзале.** Если рейс проходит остановку
+  «Калининград Северный», расчёт и видимая транспортная цепочка начинаются там,
+  а не с конечной остановки маршрута.
 
 ### Социальные действия и обратная связь по событию
 
@@ -116,6 +243,65 @@
 - **ADD-FEEDBACK-02 — Исправление и протухание факта.** Correction, retraction и TTL удаляют/заменяют публичный факт одним rebuild, не переписывают критические date/time/location поля и не оставляют старую формулировку в HTML/cache.
 - **ADD-FEEDBACK-03 — «Активно обсуждают».** Если post-release medallion включён, он появляется только при выполнении принятого human-discussion threshold, не учитывает ботов/официальные ответы/дубли/engagement bait и не влияет на ranking без отдельного решения.
 
+### Regression-сценарии изменений 15–17 июля
+
+- **ADD-RECENT-01 — Interest-club projection gate.** В public manifest и sitemap
+  попадают только approved/fresh club identities и accepted event relations;
+  deferred/review/festival-only/устаревшие identities не протекают, а failed club
+  projection не блокирует базовый event build.
+- **ADD-RECENT-02 — Desktop Editorial media-role contract.** На desktop строгий
+  `event_identity_poster` получает полный poster companion, photo сохраняет
+  принятую Editorial composition, а service/schedule/document/OCR/unknown media
+  не превращаются в crop-cover из-за размеров или наличия текста.
+- **ADD-RECENT-03 — Owned social popularity без двойного счёта.** Метрики всех
+  управляемых TG/VK event surfaces собираются, но repost одного события внутри
+  owned audience схлопывается по max-компонентам, а независимые внешние источники
+  продолжают учитываться отдельно.
+- **ADD-RECENT-04 — Возрастная маркировка.** Публично показывается только
+  подтверждённое declared значение `0+|6+|12+|16+|18+`; assessed-only/unknown не
+  превращается в выдуманное ограничение, а видимый факт совпадает с export и
+  structured data.
+- **ADD-RECENT-05 — Полная матрица event-detail v11.** Preview обязан собрать
+  каждый сценарий из `eventTemplateContract.json`: горизонтальное фото,
+  горизонтальное фото с отдельной OCR-афишей, OCR/document contain,
+  одиночные/серийные вертикальные изображения, low-resolution и
+  quality-fallback. Все сценарии и реальные event pages используют один
+  `DesktopEventPage`/`buildDesktopEventPresentation`, а не legacy desktop DOM.
+- **ADD-RECENT-06 — Один quality-admitted набор на desktop и mobile.** Если у
+  события есть технически сильные event-local фотографии, desktop hero/viewer
+  и mobile hero/gallery используют только этот набор и одинаковый hidden count;
+  слабые renditions сохраняются только в weak-only семье. Classified
+  OCR/document media не удаляются этим техническим gate и продолжают
+  показываться без crop. Контроль: событие `4783` содержит индексы
+  `0,4,6,8,9,10,11` и скрывает `1,2,3,5,7` на обеих поверхностях.
+- **ADD-RECENT-07 — Low-resolution portrait без разрушительного увеличения.**
+  Единственная слабая вертикальная фотография не исключается, но получает
+  source-size bounded `contain` на desktop и mobile и открывает тот же
+  эффективный viewer; она не превращается в растянутый crop/длинный
+  natural-size scroll ни в hero, ни в fullscreen. Контроль: событие `6815`.
+- **ADD-RECENT-08 — Source-consistent occurrence projection.** Если точный
+  structured first-party source совпадает с canonical row по date, time и
+  ticket URL, но canonical type/copy загрязнены другим occurrence, статическая
+  страница fail-safe показывает подтверждённые source title/type/description.
+  Это не заменяет Smart Update repair и не является keyword/date-only merge
+  правилом. Некорректный OCR/non-identity document не может владеть hero при
+  наличии сильного event-local photo и никогда не crop-ится. После canonical
+  repair горизонтальная classified event photo чуть ниже Editorial-порога
+  также может уступить hero более сильной горизонтальной classified photo того
+  же события; portrait/square primary этим правилом не подменяется. Контроль:
+  `5756` в обоих source-consistent состояниях.
+- **ADD-RECENT-09 — Sentence-safe editorial lead.** Lead использует готовое
+  авторское summary, но обнаруженный ложный punctuated prefix заменяет полной
+  source-backed фразой; raw character cut раскрывается знаком `…`, а не
+  придуманной точкой. Контроль: `5658` заканчивает вводную словами
+  «превращается в остросюжетный конфликт.»
+- **ADD-RECENT-10 — Принятый transport fallback не откатывается в compact list.**
+  Все три arm `departure_board_v1|route_strips_v1|next_departure_queue_v1`
+  остаются принятыми A/B/C, а off/no-JS/automation/elapsed/ineligible состояние
+  показывает принятый `departure_board_v1`, не старую компактную таблицу.
+  Forced QA проверяет каждый arm, один рейс не выводит «Ещё 0 рейсов», а
+  официальный трансфер допускает «автобус или микроавтобус». Контроль: `4671`.
+
 ### Статическая публикация, CDN и устойчивость
 
 - **ADD-BUILD-01 — Debounce после Smart Update.** Несколько effectful обновлений в пределах окна приводят к одному build через 15 минут после последнего эффекта; no-op update не запускает лишнюю сборку.
@@ -124,6 +310,91 @@
 - **ADD-BUILD-04 — CDN asset contract.** Canonical HTML/assets/ICS реально обслуживаются через принятый CDN path; runtime raster assets легковесные WebP, векторные — безопасные SVG, нет случайных тяжёлых PNG/JPEG или origin-only зависимостей.
 - **ADD-BUILD-05 — Degraded network.** Slow 3G, offline after first load, CDN image failure и временная недоступность personalization/search API не ломают статический контент, навигацию, detail и ICS.
 - **ADD-BUILD-06 — Cache/back/version transition.** После публикации новой версии reload/back/forward/service cache не возвращают несовместимые JS/data или состояние старого пользователя.
+- **ADD-BUILD-07 — Preview/production/secret isolation.** Preview и secret
+  candidate остаются `noindex`; production profile формирует root canonical,
+  indexable robots/sitemap и не включает preview/lab/fixture routes. Ссылка
+  бренда внутри fullscreen hero-gallery также ведёт в home текущего профиля, а
+  не возвращает production-пользователя в `__preview`.
+- **ADD-BUILD-08 — Immutable Kaggle handoff.** Kaggle получает отдельный
+  read-only SQLite snapshot с `quick_check`, SHA-256, размером, max revision и
+  уникальными `snapshot_id/run_id/build_id`; неверный hash/manifest останавливает
+  запуск.
+- **ADD-BUILD-09 — Manifest/tree/catalog parity.** Checked manifest доказывает
+  равенство eligible catalog, event pages, sitemap/ICS и фактического дерева,
+  отсутствие ineligible leaks, orphan references и dangling occurrence links.
+- **ADD-BUILD-10 — Immutable candidate и rollback boundary.** Failed build/check
+  не пишет ни одного объекта; accepted candidate загружается create-only только
+  в новый secret prefix. Изменение `root`, `current` и stable `/ics/` запрещено.
+  Reader-atomic root promotion/rollback остаётся отдельным blocked gate и не
+  подменяется последовательным копированием файлов.
+- **ADD-BUILD-11 — CDN/MIME/assets.** Все objects candidate имеют manifest hash,
+  корректный MIME/cache policy, допустимый CDN asset URL и после публикации
+  проверяются authenticated HEAD/GET; root/current не меняются.
+- **ADD-BUILD-12 — Capacity и privacy preflight.** До upload проверяются bounded
+  result/archive, свободное место/лимиты и запрет anonymous bucket listing;
+  secret token не попадает в sitemap, canonical, логи или внутренние ссылки.
+- **ADD-BUILD-13 — Freshness/retry/catch-up.** Feature runtime допускает до 5400
+  секунд; retry bounded и классифицирован, stale/missed/deferred request после
+  restart получает ровно один catch-up, а update во время running build — ровно
+  один follow-up с более новым snapshot.
+- **ADD-BUILD-14 — Template provenance.** Production и secret manifest фиксируют
+  `static-event-detail-v11` и accepted source SHA `3b17e536…`; каждая страница
+  несёт те же markers и один из разрешённых `editorial|split` результатов.
+  Real-event specimens привязаны к стабильному event id, а не к изменяемому
+  после Smart Update slug/title.
+  Отсутствие хотя бы одного marker, lab-сценария или real-event family
+  останавливает build до Kaggle artifact publication.
+  Production-profile check всегда читает root-form `dist/sobytiya`, даже если
+  Kaggle runtime унаследовал исторический `PREVIEW_BUILD_ID`.
+
+### Related/vector barrier
+
+- **ADD-RELATED-05 — Единая геометрия continuation.** `Смотрите дальше` и
+  desktop `Ещё события` используют один three-card row contract: одинаковый
+  canonical `EventCard` DOM/behavior renderer (не отдельный строковый HTML),
+  shell, `visual_only` cover, OCR/document crop не более 20%, skeleton без shift.
+- **ADD-RELATED-06 — Diverse mixed continuation.** Максимум шесть карточек;
+  current/prior/hidden/recent-served исключены, cap `3/category`, `2/venue`;
+  profile и non-rejected vector-adjacent interleave детерминированно. Raw/not-run
+  vector не называется LLM-approved/`Похожие`, explicit rejected не показывается.
+
+- **ADD-RELATED-01 — Revision barrier.** При включённом related mode manifest
+  фиксирует ожидаемые `search_v3/related_v1` revisions/hashes и не публикует
+  устаревшую verified projection.
+- **ADD-RELATED-02 — Reverse-affected anchors.** Изменение кандидата обновляет не
+  только его страницу, но и старые anchors, в related-выдачу которых он входит.
+- **ADD-RELATED-03 — Last-good или честное отсутствие.** Provider/vector failure
+  сохраняет совместимую last-good projection либо убирает optional block; raw
+  candidates не маркируются проверенными.
+- **ADD-RELATED-04 — Optional barrier не блокирует base pages.** При выключенной
+  related/personalization части базовый full-catalog export/build/check остаётся
+  работоспособным и явно записывает disabled revision state.
+
+### Telegraph coexistence и D10 cutover
+
+- **ADD-CUTOVER-01 — Dual-run создаёт оба event-detail артефакта.** В D0–D9
+  eligible событие попадает в current static release и в Telegraph shadow path;
+  отчёт связывает оба URL с одним event revision.
+- **ADD-CUTOVER-02 — Readiness до выдачи static URL.** Resolver возвращает static
+  URL только если current promoted manifest содержит нужные `event_id` и revision;
+  до D10 допускается явный existing-Telegraph fallback, после D10 — ожидание/catch-up,
+  но не создание Telegraph.
+- **ADD-CUTOVER-03 — D10 запрещает create и recreate.** В `existing_only` и `off`
+  новый event не вызывает Telegraph create, а failed edit старой страницы не
+  провоцирует fallback-recreate; счётчики попыток после cutoff равны нулю.
+- **ADD-CUTOVER-04 — Legacy Telegraph URLs сохраняются.** Cutover, rebuild,
+  rollback и cleanup не очищают `telegraph_url/path`; старые опубликованные ссылки
+  остаются доступными и не меняют canonical нового static event page.
+- **ADD-CUTOVER-05 — Все outbound surfaces используют resolver.** Telegram/VK
+  event posts, importer waits, digests и admin reports не зависят от успешного
+  `telegraph_build`, когда static revision ready; в dual report разрешены оба URL.
+- **ADD-CUTOVER-06 — Rollback обратим и ограничен.** До D10 outward mode можно
+  вернуть в Telegraph/dual и восстановить last-good static pointer; после D10
+  emergency `create_edit` включается только явно и выполняет bounded backfill без
+  удаления legacy URL/evidence.
+- **ADD-CUTOVER-07 — Aggregate scope не выключается случайно.** Event-detail D10
+  не останавливает month/weekend/festival Telegraph pages; их отдельный switch
+  разрешён только после static parity и собственного acceptance pack.
 
 ### UI, accessibility и browser matrix
 
@@ -133,8 +404,16 @@
 - **ADD-A11Y-02 — Screen reader semantics.** У controls корректные accessible names/state/live announcements; карточка не создаёт конфликтующих вложенных ссылок/кнопок, возраст и альтернативные даты читаются понятно.
 - **ADD-A11Y-03 — Reduced motion.** `prefers-reduced-motion` отключает parallax/автодвижение без потери контента или управления; autoplay не мешает чтению.
 - **ADD-A11Y-04 — No-JS.** Основные страницы, факты, ссылки, похожий static fallback, navigation и SEO-content остаются доступными без JS; enhancement не оставляет пустые обязательные блоки.
+- **ADD-A11Y-05 — Gallery targets.** Hover/focus над закрытым desktop hero
+  включает Left/Right; fullscreen CTA pointer/touch переходит по ссылке, а не
+  dismiss. Reduced motion запрещает timed advance, inactive slide не tabbable.
 - **ADD-UI-03 — Длинный и экстремальный контент.** Проверить длинные названия, площадки/адреса, несколько медальонов, отсутствие цены, пять возрастных вариантов, много дат и 1/10+ изображений.
 - **ADD-UI-04 — Browser/device matrix.** Финальный RC проверить минимум в актуальных Chrome/Edge/Firefox на Windows, Safari/Chrome/Firefox на macOS и Safari iOS/Chrome Android; native share/clipboard/calendar проверять на реальных ОС, не только Playwright mocks.
+- **ADD-UI-05 — CTA по фактической геометрии компонента.** Desktop action panel
+  измеряет собственную inline-композицию после рендера и при изменении ширины
+  или текста; если цена/основной CTA/calendar/share/like не помещаются, panel
+  переходит в stacked layout до появления horizontal overflow. Решение не
+  привязано только к viewport breakpoint.
 
 ### SEO/GEO, безопасность и наблюдаемость
 
@@ -145,6 +424,11 @@
 - **ADD-SEC-02 — Auth/admin boundaries.** Обычная авторизация, знание event id или `noindex` не открывают admin report/history; повторный report защищён от двойного запуска и показывает реальный статус/результат нескольких incidents.
 - **ADD-OBS-01 — Ошибки видимы и коррелируются.** Build/search/share/email/transport/personalization failure оставляет run/request correlation evidence без PII; UI не сообщает успех, если backend действие не принято.
 - **ADD-OBS-02 — Чистая клиентская сессия.** На каждой page family нет неожиданных console errors, unhandled rejections, failed first-party requests, hydration mismatch и повторяющегося telemetry spam.
+- **ADD-OBS-03 — Static build report.** Redacted 24h report различает outcomes,
+  channel pointers, page/object/byte counts и history ↔ ledger orphans без bearer.
+- **ADD-SEO-04 — Past-event lifecycle.** Полезный past URL остаётся 200 с
+  archive label; real move — 301/308, permanent removal — 404/410; noindex/test
+  URLs отсутствуют в sitemap и удаляются только manifest-bound cleanup.
 
 ## Правило исполнения
 
@@ -152,46 +436,3 @@
 - `ADD-*` — дополнительные сценарии аудита; при переносе в Gherkin/Playwright идентификатор сохраняется в названии scenario/test и в release evidence.
 - Для каждого применимого сценария фиксируются URL/page family, viewport/device/OS/browser, test identity/persona, catalog/build SHA, входное состояние, ожидаемый результат и фактическое evidence.
 - Автоматизация не заменяет native/manual evidence там, где проверяется системный share, clipboard/paste, email client, calendar/maps handoff или реальное визуальное качество.
-
-### Дизайн-система и недопущение визуального drift
-
-- **ADD-DS-01 — Каталог собирается из runtime-компонентов.** `/lab/design-system/` существует в immutable preview, содержит один H1, foundations, primitives, feedback states, product components и registry; карточки/hero/CTA импортированы из production source, а не скопированы как demo HTML.
-- **ADD-DS-02 — Полные состояния primitives.** Для Button видимы default/hover/focus/pressed/loading/disabled/selected; для Field — default/focus/filled/error/disabled; loading/error доступны screen reader через `aria-busy`, `aria-invalid` или live region.
-- **ADD-DS-03 — Token-only shared primitives.** Shared primitives не содержат raw hex и получают цвет, spacing, radius, elevation, motion и min target из `--ke-*`; пары текста/фона проходят AA contract check.
-- **ADD-DS-04 — Responsive component catalog.** На `320/360/390/430/768/1024/1366/1440/1920` нет page-level horizontal overflow; таблица registry имеет явно ограниченный focusable overflow; product fixtures не разваливаются.
-- **ADD-DS-05 — Promotion governance.** Новый утверждённый паттерн имеет status/owner/runtime path, все состояния, immutable preview/SHA sign-off, contract check, docs и changelog; page-local утверждённый дубль считается release blocker.
-- **ADD-DS-06 — Deprecated variant is explicit.** `EventCard overlay-controls` помечен deprecated и не возвращается на обычные event pages; `split-actions` остаётся release baseline до нового зафиксированного решения.
-- **ADD-DS-07 — Reduced motion and keyboard.** Все catalog actions доступны с клавиатуры, focus видим, порядок логичен; `prefers-reduced-motion` отключает shimmer и необязательное движение без потери статуса/контента.
-- **ADD-DS-08 — Icon-only copy action.** Видимое значение остаётся обычным выделяемым текстом, рядом одна copy-icon кнопка не меньше `44×44px` с точным accessible name. Клик кладёт в буфер точное значение; success меняет copy на check и озвучивает live-status, error даёт символ и recovery status, при этом bounding box кнопки и соседнего текста не меняется. Clipboard API и fallback проверяются отдельно на light/secondary и dark/inverse fixtures.
-- **ADD-DS-09 — Versioned component migration.** Материальная переработка `vN` создаёт видимую `vN+1`; `vN` помечена deprecated и содержит replacement, все production consumers переведены на `vN+1`, а незавершённое сосуществование имеет feature flag, owner, consumer inventory и срок удаления. Source/preview audit не допускает старых callers после статуса migration complete.
-
-### Списочные страницы по датам
-
-- **ADD-LIST-01 — Точное время и перенос.** События одного точного времени находятся в одной группе и заполняют доступную ширину intrinsic-карточками; `18:30` не смешивается с `18:00`, длинная группа переносится на следующие строки и не создаёт page-level horizontal overflow на `1366/1440/1920`.
-- **ADD-LIST-02 — Гибридная навигация.** Sticky-бар показывает периоды и количества. Точные часы раскрываются только у плотного периода, ведут на существующий заголовок и передают ему keyboard focus; Escape и клик снаружи закрывают disclosure. После фильтрации нулевой период остаётся на месте disabled, нулевой точный час скрывается.
-- **ADD-LIST-03 — Сегодня, завершение и текущее время V19.** В `Завершились` попадают только события с явным `end_at <= build/runtime now`; один лишь start time не делает идущее событие прошедшим. Секция закрыта по умолчанию. Маркер `Сейчас · HH:MM` начинает HTML скрытым и после вычисления калининградского времени вставляется **внутрь** основной временной оси: после всех групп с более ранним точным стартом, перед первой группой `>= HH:MM` и до `Время уточняется`. При минутном обновлении уже читаемые карточки динамически не переносятся в disclosure; меняются только temporal status/media treatment. Past-state обесцвечивает только media, но не снижает контраст текста.
-- **ADD-LIST-04 — Завтра без ложной срочности.** На `/zavtra/` отсутствуют `Сейчас` и `Начались ранее`; все группы идут по времени, а точная навигация появляется только при достаточной плотности.
-- **ADD-LIST-05 — Плотные выходные.** Десятки событий остаются на одной странице: DOM и visual order одинаковы `время слева → суббота → воскресенье`; одна union-ось печатает точное время один раз, две непрерывные lane-поверхности не разбиваются на клетки/строчные подложки/границы. Высота строки равна более высокой day-cell, пустая сторона не схлопывает композицию, крупное время остаётся видимым внутри длинного часа, sticky-заголовки дней не перекрывают общий бар. На реальных 62 карточках document height ≤7600px при 1440px, плотные 11:00/19:00 ≤720px и ничего не скрывается пагинацией.
-- **ADD-LIST-06 — Городской intersection.** Реальные города и counts постоянно видимы direct chips на desktop без dropdown: default `Все`, первый город изолирует выбор, следующие добавляются/убираются, `Все` сбрасывает. Выбранность имеет check-marker, а не только tint; wrap сохраняет ровное начало строк и 44px targets. Фильтр синхронно пересчитывает общий итог, периоды, точные часы, `Начались ранее` и обе day-surface; неизвестный сохранённый выбор не оставляет новую страницу пустой.
-- **ADD-LIST-07 — Полный список и персональный режим.** Без совместимого consented-профиля статический полный список остаётся видимым, переключатель не обещает несуществующую персонализацию. При реальной разнице `Для меня / Полный список` v2 меняет только client-enhancement visibility и повторно запускает единый пересчёт counts.
-- **ADD-LIST-08 — Семантический выбор медиа V15.** Wide candidate выигрывает только внутри допустимого existing event inventory; `unknown` wide source может быть выбран в собственном natural ratio без crop (control `6875`: 1280×960). `ocr_text`, `unknown`, identity poster, schedule и attendee document сохраняют natural ratio/vertical retention `1.0`; отсутствие OCR не становится разрешением на crop. Adaptive 3:2/4:3 получает только classified event photo с `safe_crop`, focal evidence и reviewed/high-confidence role. `no_event_relevance` (control `6904`) не возвращается generic fallback-ом. `3794` не содержит event-id override/V13 `bb778...`, но рендерит существующий canonical 300×174 как no-upscale last resort. Новый crawler в acceptance не входит. Skeleton занимает финальную рамку до load/decode.
-- **ADD-LIST-09 — Дубли не маскируются интерфейсом.** Exact identity dedup не скрывает разные сеансы. Семантический/time-drift дубль исправляется через incident-owned LLM-first merge flow; preview reconciliation имеет evidence, а production route не получает title-regex или id blacklist.
-- **ADD-LIST-10 — Общая дизайн-система.** Today/Tomorrow/Weekend используют зарегистрированные runtime-компоненты и глобальные `--ke-content-listing-max`/`--ke-listing-*` из общей DS; page-local копии shell/card/navigation geometry блокируют check.
-- **ADD-LIST-11 — Responsive media и быстрый scroll V19.** Listing card использует доступные WebP derivatives через parser-discoverable `src/srcset/sizes`, intrinsic `width/height` и нативный `loading=lazy`; URL картинки нельзя удерживать в `data-*` до JS/IntersectionObserver. Regular slot объявлен как 332px (396px на wide desktop), Weekend — 320px (340px на wide desktop, 44vw mobile), чтобы фактическая ширина 257–317px не выбирала 256w raster на DPR 1. Если inventory заканчивается на 512w, encoded original остаётся последним DPR safety candidate. Первые четыре реальные карточки Weekend в общей хронологии получают eager/high priority, даже если самый ранний час содержит только одну карточку; остальные lazy-решения остаются за браузером. На матрице DPR raster density ≥1; skeleton снимается после decode/error, CLS <0.05. Cold/warm profile отдельно доказывает, что повторная прокрутка не удаляет `src`, а warm reload не передаёт image body повторно.
-- **ADD-LIST-12 — Общая левая линия и полное название V17.** Canonical title целиком остаётся в DOM. Каждый singleton начинается от левого края своего flow: card left и visual left равны flow left с допуском 1px, включая controls `6685`, `6953`, `6590`; copy envelope получает до 420px без центрирования. В multi-card ряду enhancement получает только фактическая последняя видимая карточка при tail ≥72px и available ≥280px. После filter/resize/fonts actual rows пересчитываются; >4 строк, collision или overflow откатывают enhancement.
-- **ADD-LIST-13 — Одна стабильная discovery plane V18.** На desktop opaque sticky site header имеет 57px и переиспользует общий компонент. Под ним cities и time/daypart находятся в одной light `52px` grid-plane, не в двух последовательных подшапках. До и после scroll должны совпадать height/class/attributes/font; `IntersectionObserver`, `ResizeObserver`, `data-stuck` и delayed compact state отсутствуют. Counts скрыты на 1536 и видимы на 1920; dropdown и document X-overflow запрещены.
-- **ADD-LIST-14 — Weekend visual scale.** На 1366/1440/1536/1920 Weekend media height равен 178…198px, title 20px, meta 17px; нет искусственной min-height/пустых строк. При 1536×768 первая карточка целиком заканчивается не ниже y=720. При 200% text spacing selective full-title может отключиться, но controls/content не пересекаются.
-- **ADD-LIST-15 — Desktop adaptive matrix V18.** Playwright проверяет 1366×768, 1440×900, 1536×864 (FHD@125% CSS viewport) и 1920×1080. `6762`/`6867` остаются reviewed adaptive фото без полей; `3794` использует canonical `300×174`, не содержит replacement `bb778...`, но его media box имеет общую regular-height `221px` с bounded scale ≤1.30. Protected controls `6899`, `6876`, `6893`, `3262`, `5204`, `6732`, `6546`, `6849`, `6944` не входят в `visual-crop` и имеют vertical retention `1.0`. Меряются 51…64px quiet medallions без universal border/shadow, no-overflow cities, sticky stack, Weekend heads и counts. Row count при 1920 не ухудшается; фактические 3-up группы существуют.
-- **ADD-LIST-16 — Behavioral Popular V22.** `/populyarnoe/` использует одну deduplicated behavioral allocation для двух взаимоисключающих представлений: на desktop ≥721px принятую композицию `PopularBehaviorRows@2` + `ListingEventCard@9`, на phone ≤720px `PopularMobileBehaviorRows@1` + общий `EventCard@3` в readonly `listing-proof`. Должно быть 4–5 секций в приоритетном порядке `fast_growth` → `multi_source` (если ≥3) → `discussed` → `frequently_shared` → fallback, максимум пять карточек в одной desktop-строке. Потребительские названия первых двух секций точны: `Быстро набирают популярность` и `Встречается во множестве источников`. `frequently_shared` ранжируется по реальному `shares_count`, поэтому real-data control `5130` с 69 shares входит без ID override. ID/family не повторяются между секциями; desktop/mobile ID order совпадает, активные totals не удваиваются. Общий `PersonalFeedSlot` запрещён без единого fail-closed experiment wrapper.
-- **ADD-LIST-17 — Contextual identity/social-proof rail V19.** До трёх listing-ready identity/Free медальонов сохраняются и при proof. При regular-height `221px` event `6811` упаковывает три `51px` identity и Share/Like в один `64px` rail; при Weekend-height `178px` используется split rail `56px + 36px = 96px`. Overlay разрешён системно только selected source-reviewed `classified event_photo`, confidence ≥0.9, `visual_only`, `safe_crop`, focal, ratio ≥1.2; genuine no-media fallback может содержать identity. Controls `6950`/`6957` имеют overlay ровно `10px` справа/снизу. Медальон **на самом preview** имеет `opacity:1; filter:none`; внешняя identity-rail остаётся намеренно тихой, а social proof — полупрозрачным. OCR/unknown/rejected raw media fail closed. Calendar/Share/Like buttons отсутствуют; только ненулевые Share/Like — muted detail links, нули не занимают DOM/ширину.
-- **ADD-LIST-18 — Sticky exact-time context.** На `/segodnya/` и `/zavtra/` при прокрутке длинной группы маркер часа фиксируется непосредственно под discovery surface и остаётся видимым, пока следующий час не вытолкнет его. Проверка якоря `#tomorrow-time-17:00`: после последовательной прокрутки внутри группы top маркера равен sticky-stack bottom + `12px` (±2px), а следующий маркер не перекрывает предыдущий.
-- **ADD-LIST-19 — No preview fields V18.** Natural OCR/unknown cards сохраняют source ratio в media width при общей density-height и `object-fit:cover` без meaningful crop; vertical retention равен `1.0`. Низкоразрешённый control `3794` допускает bounded upscale до общей `221px` height, но не asset replacement, `contain` в несовпадающей рамке, UI side/top fields, repeated edges или backdrop filler. Safe adaptive cards обязаны иметь `source-reviewed` crop evidence.
-- **ADD-LIST-20 — Weekend complete sticky context V17.** Marker top равен `site header + measured discovery + Weekend day heads + 12px` (±2px). Прямая загрузка `#weekend-time-17:00` повторно выравнивается после fonts и каждого изменения discovery geometry; последовательные прогоны/scroll не дают промежуточного сдвига, верх media не обрезан.
-- **ADD-LIST-21 — Weekend day counts.** Под временем рендерится только маленький filled weekday chip `сб`/`вс`; число и грамматически корректная подпись (`1 событие`, `2 события`, `5 событий`) идут рядом обычной светлой типографикой. Нулевой день скрыт. После city/personal filter значения пересчитываются.
-- **ADD-LIST-22 — Unknown-end elapsed starts.** Явный `end_at <= now` получает completed state. Для текущей даты start `<= now - 1h` без end получает только `Началось ранее`: media muted, readable title/meta/proof, без утверждения «завершилось/недоступно». Событие с известным будущим end не мутится независимо от start.
-- **ADD-LIST-23 — Weekend range cloud V17.** Над и после расписания присутствуют шесть direct weekend range anchors. Текущий range имеет нецветовую selected-state; локальная длинная стрелка идёт отдельным `aria-hidden` non-anchor continuation sibling после облака, а не внутри terminal link. Ссылки ведут на существующие static routes.
-- **ADD-LIST-24 — Truthful calendar proof.** Listing не рендерит calendar aggregate из ICS URL/download/click. Календарик допустим только при ненулевом privacy-safe deduplicated durable `saved_event_count`; при нуле/отсутствии поля нет иконки/плейсхолдера/зарезервированной ширины. Save action на detail остаётся отдельным контрактом.
-- **ADD-LIST-25 — Reviewable personalization V17.** Immutable `/preview-*` автоматически показывает контролируемую реальную разницу `Для меня / Полный список`; `?personalization=off` выключает fixture. Full list остаётся default. Radio semantics (`aria-checked`, roving tabindex, arrows) и переключение пересчитывают city/daypart/exact/day counts; personal set <5 fail closed. Stable production URL не получает fixture.
-- **ADD-LIST-26 — Measured within-hour packing V18.** Только внутри одного day + exact time допускается best-fit permutation по фактическому `flow.clientWidth`, и только если projected row count уменьшается. Она не пересекает day/time; original order хранится для repeat/resize. На 1536 lane ≈641.6px и большинство совместимых групп используют 2-up; на 1920 присутствуют 3-up группы. Listing container растёт до `1720px`, без X overflow.
-- **ADD-LIST-27 — Floating personalization research V18.** `ListingPersonalFilter@3` существует одним bottom-center radio group вне discovery plane; full list выбран по умолчанию, control полностью помещается в viewport, исчезает при footer visibility и остаётся preview-only fixture. Mobile использует нижнее safe-area размещение, но явный `Комфортно / Компактно` density control и native-zoom acceptance остаются будущим отдельным pass.
-- **ADD-LIST-28 — Mobile Popular real EventCard vertical densities V22.** На `360×800`, `390×844`, `430×932` phone-представление Popular использует один ordered DOM реальных `EventCard` и `ListingMobileDensitySwitch@2`, а desktop `ListingEventCard` скрыт. Default `Крупно` показывает секции в обычном вертикальном потоке: одна центрированная карточка `Смотрите дальше` шириной `100vw - 58px` (302/332/372px ±2), row `scrollWidth == clientWidth`, `overflow-x` не auto/scroll. `2 в ряд` превращает те же mobile-узлы в row-major grid `repeat(2,minmax(0,1fr))` с gap 12px и колонками 150/165/185px ±2, без masonry/dense/reorder. IDs/counts/ranking совпадают; active totals не удваиваются, preference и vertical anchor сохраняются. OCR/document остаётся natural без fields; Calendar, `Не интересно` и mutable Share/Like CTA отсутствуют. Radio group имеет 48px targets, safe area и не отключает native zoom.

@@ -153,6 +153,31 @@ Every approved component change is reviewed at:
 
 Automated checks are necessary but do not replace real Safari iOS/Chrome Android review for native share, calendar and OS handoff.
 
+## Event-detail component contracts
+
+- **Transport A/B/C:** `site/src/components/transport/*` is the only canonical
+  implementation. It shares bus/walk/pin/car icons but deliberately keeps the
+  accepted arm-specific route, last-mile and return-warning copy documented in
+  [event-transport-schedule.md](../event-transport-schedule.md). The retained
+  secret-candidate specimen renders the same responsive component at desktop
+  and mobile widths; query forcing must select the visible arm on both.
+- **Desktop CTA:** geometry follows the resolved media family, not a viewport
+  guess. Split portrait/OCR pages keep admission, primary action and
+  `calendar-share-like` utilities in one compact row; Editorial wide-photo
+  pages keep the accepted three-row hierarchy with utilities on the bottom.
+  At `1536×864` (FHD at 125%) all controls must align and remain inside the
+  card. Run `STATIC_SITE_REVIEW_BASE_URL=… npm --prefix site run
+  check:desktop-cta-geometry`; the command targets retained expiry-proof Split
+  and Editorial candidate fixtures rather than elapsed event URLs.
+- **Service footer:** `Понравились ` + the canonical inline `Анонсы` wordmark +
+  `? Поделитесь` is one accessible prompt. Do not redraw the expanded `о` with
+  CSS or revert to the ambiguous `Поделиться афишей` copy.
+- **Frozen accepted specimens:** time-bounded production events used for design
+  acceptance (`4783`, `5374`, `6551`, `6815`) are also stored in
+  `desktop-event-examples.json`. Production eligibility may expire, but the
+  design-system route and regression tests must not disappear or break a later
+  full-catalog build.
+
 ## Governance
 
 1. New pages compose the registered system; they do not invent a second button, badge, card radius or feedback pattern.

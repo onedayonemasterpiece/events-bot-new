@@ -1,0 +1,30 @@
+{
+  "schema_version": "static_event_template_contract_v1",
+  "contract_id": "static-event-detail-v11",
+  "accepted_source_sha": "3b17e536e4dffa9c9fcebab6e641a7cd4ba99b6a",
+  "desktop_families": [
+    "editorial-horizontal-photo",
+    "editorial-horizontal-photo-with-ocr-companion",
+    "split-document-contain",
+    "split-portrait-series",
+    "split-quality-fallback"
+  ],
+  "lab_scenarios": [
+    "editorial-photo",
+    "editorial-photo-continuous",
+    "editorial-photo-continuous-wide",
+    "editorial-photo-continuous-near-square",
+    "editorial-ocr-companion",
+    "editorial-ocr-companion-arrival",
+    "split-ocr",
+    "split-portrait",
+    "split-low-resolution",
+    "split-multi-portrait",
+    "portrait-carousel-production",
+    "split-ocr-with-photos",
+    "related-cover",
+    "related-ambient",
+    "related-hybrid"
+  ],
+  "mobile_contract": "accepted-v8"
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -7,10 +8,14 @@ import os
 import re
 import secrets
 import shutil
+import sqlite3
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import aiosqlite
 
 from db import Database
 
@@ -65,6 +70,41 @@ KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS = _read_positive_int_env(
     "KAGGLE_STATUS_ALIVE_EVENT_MIN_INTERVAL_SECONDS",
     5 * 60,
 )
+
+
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "database is locked" in message or "database table is locked" in message
+
+
+async def _begin_immediate_with_retry(
+    conn: Any,
+    *,
+    run_id: str,
+    operation: str,
+    max_attempts: int = 5,
+) -> None:
+    """Acquire SQLite's single writer slot with bounded lock-only retries."""
+
+    attempts = max(1, int(max_attempts))
+    for attempt in range(1, attempts + 1):
+        try:
+            await conn.execute("BEGIN IMMEDIATE")
+            return
+        except sqlite3.OperationalError as exc:
+            if not _is_sqlite_lock_error(exc) or attempt >= attempts:
+                raise
+            delay = min(2 ** (attempt - 1), 8)
+            logger.warning(
+                "kaggle_status: SQLite writer lock operation=%s run_id=%s "
+                "attempt=%s/%s retry_in=%ss",
+                operation,
+                _clean_text(run_id, limit=300),
+                attempt,
+                attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
 
 def utc_now_iso() -> str:
@@ -448,7 +488,11 @@ async def create_kaggle_run_config(
     token = generate_callback_token()
     now = utc_now_iso()
     async with db.raw_conn() as conn:
-        await conn.execute("BEGIN IMMEDIATE")
+        await _begin_immediate_with_retry(
+            conn,
+            run_id=run_id,
+            operation="create_run_config",
+        )
         try:
             await _expire_resource_leases(conn, now=now)
             if not replace_existing:
@@ -509,14 +553,45 @@ async def create_kaggle_run_config(
 
 
 async def validate_run_token(db: Database, run_id: str, token: str) -> bool:
-    async with db.raw_conn() as conn:
+    # Run configs are written by short-lived runner processes.  The web app's
+    # shared Database.raw_conn may still own a read snapshot (or a failed write
+    # transaction) from an unrelated callback and therefore miss the new token.
+    # Authentication must observe the current durable ledger, not that cached
+    # connection state.
+    conn = await aiosqlite.connect(db.path, timeout=30)
+    try:
+        await conn.execute("PRAGMA busy_timeout=30000")
         cur = await conn.execute(
             "SELECT token_hash FROM kaggle_run_ledger WHERE run_id = ?",
             (run_id,),
         )
         row = await cur.fetchone()
         await cur.close()
+    finally:
+        await conn.close()
     return bool(row and row[0] and secrets.compare_digest(str(row[0]), hash_token(token)))
+
+
+@asynccontextmanager
+async def _fresh_status_write_transaction(db: Database, *, run_id: str):
+    """Isolate one callback from stale/failed shared SQLite transactions."""
+
+    conn = await aiosqlite.connect(db.path, timeout=30)
+    try:
+        await conn.execute("PRAGMA busy_timeout=30000")
+        await _begin_immediate_with_retry(
+            conn,
+            run_id=run_id,
+            operation="record_run_event",
+        )
+        try:
+            yield conn
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+    finally:
+        await conn.close()
 
 
 async def _expire_resource_leases(conn, *, now: str | None = None, resource_key: str | None = None) -> None:
@@ -677,7 +752,7 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
     now = utc_now_iso()
     resource_result: dict[str, Any] = {}
     progress = with_progress_percent(progress, event=event, status=status, phase=phase)
-    async with db.raw_conn() as conn:
+    async with _fresh_status_write_transaction(db, run_id=run_id) as conn:
         await _expire_resource_leases(conn, now=now)
         if isinstance(payload.get("resource"), dict):
             resource_result = await _record_resource(conn, run_id=run_id, resource=payload["resource"])
@@ -757,6 +832,145 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
         body["coalesced"] = True
     body.update(resource_result)
     return 200, body
+
+
+async def _reconcile_kaggle_run_terminal_from_host_once(
+    db: Database,
+    *,
+    run_id: str,
+    message: str,
+) -> dict[str, Any]:
+    clean_run_id = _clean_text(run_id, limit=300)
+    if not clean_run_id:
+        raise ValueError("run_id is required")
+    now = utc_now_iso()
+    async with db.raw_conn() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await conn.execute(
+                "SELECT status, terminal_at FROM kaggle_run_ledger WHERE run_id=?",
+                (clean_run_id,),
+            )
+            ledger = await cur.fetchone()
+            await cur.close()
+            if not ledger:
+                await conn.rollback()
+                return {"status": "missing", "run_id": clean_run_id}
+            cur = await conn.execute(
+                "SELECT COUNT(*), COALESCE(MAX(seq), 0) FROM kaggle_run_event WHERE run_id=?",
+                (clean_run_id,),
+            )
+            callback_event_count, max_seq = await cur.fetchone()
+            await cur.close()
+            release_cur = await conn.execute(
+                """
+                UPDATE kaggle_resource_lease
+                SET status='released', released_at=?, updated_at=?
+                WHERE run_id=? AND status='active'
+                """,
+                (now, now, clean_run_id),
+            )
+            released_resource_count = int(getattr(release_cur, "rowcount", 0) or 0)
+            if ledger[1] and str(ledger[0] or "").lower() in TERMINAL_STATUSES:
+                await conn.commit()
+                return {
+                    "status": "already_terminal",
+                    "run_id": clean_run_id,
+                    "callback_event_count": int(callback_event_count or 0),
+                    "released_resource_count": released_resource_count,
+                }
+            progress = {
+                "phase": "report",
+                "progress_percent": 100,
+                "progress_label": "результат проверен принимающим хостом",
+                "host_reconciled": True,
+                "callback_event_count": int(callback_event_count or 0),
+            }
+            event_uid = "host_result_validated"
+            await conn.execute(
+                """
+                INSERT OR IGNORE INTO kaggle_run_event(
+                    run_id, seq, event_name, phase, status, event_uid,
+                    progress_json, message, created_at
+                ) VALUES (?, ?, 'host_result_validated', 'report', 'done', ?, ?, ?, ?)
+                """,
+                (
+                    clean_run_id,
+                    int(max_seq or 0) + 1,
+                    event_uid,
+                    _json_dumps(progress),
+                    _clean_text(message, limit=2000),
+                    now,
+                ),
+            )
+            await conn.execute(
+                """
+                UPDATE kaggle_run_ledger
+                SET phase='report', status='done', progress_json=?, updated_at=?,
+                    terminal_at=COALESCE(terminal_at, ?), error=NULL
+                WHERE run_id=?
+                """,
+                (_json_dumps(progress), now, now, clean_run_id),
+            )
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+    logger.info(
+        "kaggle_status: host reconciled terminal run_id=%s callback_event_count=%s",
+        clean_run_id,
+        int(callback_event_count or 0),
+    )
+    return {
+        "status": "reconciled",
+        "run_id": clean_run_id,
+        "callback_event_count": int(callback_event_count or 0),
+        "released_resource_count": released_resource_count,
+    }
+
+
+async def reconcile_kaggle_run_terminal_from_host(
+    db: Database,
+    *,
+    run_id: str,
+    message: str = "host validated downloaded Kaggle result",
+) -> dict[str, Any]:
+    """Close a run ledger after the host validates the immutable result.
+
+    Kernel callbacks remain the primary status signal.  This reconciliation is
+    a fail-safe for the narrow case where Kaggle completed and the host
+    cryptographically validated the downloaded result, but callback delivery
+    was unavailable.  It records that distinction instead of leaving a
+    successful run permanently in ``created`` and releases only resource
+    leases still owned by this exact run.  The ownership predicate is critical:
+    a late host receipt must never release a successor run's lease.
+
+    Publication may finish while Smart Update owns a short SQLite writer lock.
+    A one-shot best-effort call can therefore strand a three-hour resource
+    lease after a successful build. Retry only SQLite lock contention; all
+    other failures remain visible immediately.
+    """
+
+    max_attempts = 5
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await _reconcile_kaggle_run_terminal_from_host_once(
+                db,
+                run_id=run_id,
+                message=message,
+            )
+        except sqlite3.OperationalError as exc:
+            if not _is_sqlite_lock_error(exc) or attempt >= max_attempts:
+                raise
+            delay = min(2 ** (attempt - 1), 8)
+            logger.warning(
+                "kaggle_status: host reconciliation SQLite lock run_id=%s attempt=%s/%s retry_in=%ss",
+                _clean_text(run_id, limit=300),
+                attempt,
+                max_attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
 
 def make_kaggle_run_event_handler(db: Database):

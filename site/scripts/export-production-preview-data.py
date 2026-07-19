@@ -23,16 +23,18 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 SCRIPT_PATH = Path(__file__).resolve()
 for _candidate in (SCRIPT_PATH.parents[1], SCRIPT_PATH.parents[2] if len(SCRIPT_PATH.parents) > 2 else SCRIPT_PATH.parents[1]):
     if (_candidate / "google_ai").exists() and str(_candidate) not in sys.path:
         sys.path.insert(0, str(_candidate))
 
-CURRENT_DATE_DEFAULT = "2026-06-28"
+BUILD_TIME_ZONE = ZoneInfo("Europe/Kaliningrad")
+CURRENT_DATE_DEFAULT = datetime.now(BUILD_TIME_ZONE).date().isoformat()
 CONTROL_EVENT_IDS = [
     5878, 5370, 6093, 6322, 4913, 4512, 5690, 6437, 6438, 3730, 698,
     # pgvector semantic retrieval golden anchors: urban-planning intent must
@@ -200,6 +202,130 @@ def description_looks_truncated(description: str, source_text: str) -> bool:
     if re.search(r"\b[а-яёa-z]{1,3}$", tail, re.I) and not re.search(r"[.!?…»)]$", text):
         return True
     return False
+
+
+def lead_excerpt(description: str, *, soft_limit: int = 320, hard_limit: int = 520) -> str:
+    """Return a sentence-safe lead without inventing or completing source prose.
+
+    Static event cards used to take ``description[:260]``.  That can turn a
+    perfectly complete LLM description into a grammatically false sentence by
+    appending a full stop at the cut boundary.  Prefer the first complete
+    source sentence; when the source itself has no bounded sentence, disclose
+    the excerpt with an ellipsis at a word boundary.
+    """
+
+    text = str(description or "").strip()
+    if not text:
+        return ""
+    # Leads are prose, not Markdown section markers or blockquote chrome.
+    text = re.sub(r"^(?:#{1,6}|>)\s*", "", text)
+    text = clean_text(text)
+    if not text:
+        return ""
+    for match in re.finditer(r"[.!?…](?=\s|$)", text):
+        end = match.end()
+        if end >= 48 and end <= hard_limit:
+            return text[:end].strip()
+        if end > hard_limit:
+            break
+    if len(text) <= soft_limit:
+        return text
+    prefix = text[:soft_limit + 1]
+    boundary = prefix.rfind(" ")
+    if boundary < max(48, soft_limit // 2):
+        boundary = soft_limit
+    return text[:boundary].rstrip(" ,;:.-") + "…"
+
+
+def summary_is_false_terminal_prefix(summary: str, description: str) -> bool:
+    """Detect a summary that is merely a punctuated cut of the description."""
+
+    short = clean_text(summary)
+    full = clean_text(description)
+    stem = short.rstrip(".!?… ")
+    if not stem or len(full) <= len(stem) or not full.startswith(stem):
+        return False
+    continuation = full[len(stem):].lstrip()
+    return bool(continuation and continuation[0].islower())
+
+
+def event_summary(short_description: Any, description: str) -> str:
+    """Keep an authored short description unless it is a proven false cut."""
+
+    short = clean_text(short_description)
+    if short and not summary_is_false_terminal_prefix(short, description):
+        return short
+    return lead_excerpt(description)
+
+
+STRUCTURED_SOURCE_TYPE_HEADINGS = {
+    "о спектакле": "спектакль",
+    "о концерте": "концерт",
+    "о выставке": "выставка",
+    "об экскурсии": "экскурсия",
+    "о лекции": "лекция",
+    "о мастер-классе": "мастер-класс",
+}
+
+
+def structured_occurrence_projection(row: sqlite3.Row) -> dict[str, str] | None:
+    """Project an exact structured source occurrence when canonical fields conflict.
+
+    This is deliberately a narrow source-consistency guard, not a keyword
+    classifier.  It activates only for a structured first-party source whose
+    date, time and ticket URL exactly match the canonical row.  The explicit
+    ``О спектакле``/equivalent heading is source data, so using it cannot invent
+    event meaning.
+    """
+
+    source = str(row_get(row, "source_text") or "").strip()
+    if not source or "Описание:" not in source:
+        return None
+    fields: dict[str, str] = {}
+    for label, key in (("Название", "title"), ("Дата", "date"), ("Время", "time"), ("Ссылка", "link")):
+        match = re.search(rf"(?m)^{label}:\s*(.+?)\s*$", source)
+        if not match:
+            return None
+        fields[key] = clean_text(match.group(1))
+    row_date = normalize_date(row_get(row, "date")) or clean_text(row_get(row, "date"))
+    row_time, _end_time, _display_time = split_time(row_get(row, "time"))
+    row_link = clean_text(row_get(row, "ticket_link")).rstrip("/")
+    if fields["date"] != row_date or fields["time"] != (row_time or ""):
+        return None
+    if not row_link or fields["link"].rstrip("/") != row_link:
+        return None
+    description = source.split("Описание:", 1)[1].strip()
+    lines = [line.strip() for line in description.splitlines()]
+    while lines and not lines[0]:
+        lines.pop(0)
+    heading = clean_text(lines[0]).lower() if lines else ""
+    source_type = STRUCTURED_SOURCE_TYPE_HEADINGS.get(heading)
+    if not source_type:
+        return None
+    lines = lines[1:]
+    while lines and not lines[-1]:
+        lines.pop()
+    if lines and re.match(r"^Сцена:\s*", lines[-1], flags=re.I):
+        lines.pop()
+    description = "\n".join(lines).strip()
+    if not fields["title"] or not description:
+        return None
+    return {**fields, "event_type": source_type, "description": description}
+
+
+def source_event_type_conflicts(stored_type: Any, source_type: str) -> bool:
+    stored = clean_text(stored_type).lower()
+    if not stored:
+        return False
+    compatible = {
+        "спектакль": {"спектакль", "театр", "театральное событие"},
+        "концерт": {"концерт", "музыка", "музыкальное событие"},
+        "выставка": {"выставка", "экспозиция"},
+        "экскурсия": {"экскурсия", "тур"},
+        "лекция": {"лекция"},
+        "мастер-класс": {"мастер-класс"},
+    }
+    return stored not in compatible.get(source_type, {source_type})
 
 
 def title_looks_prompt_leak(title: str) -> bool:
@@ -434,6 +560,39 @@ def split_time(value: Any) -> tuple[str | None, str | None, str | None]:
     return start, end, display
 
 
+def explicit_event_duration_minutes(*values: Any) -> int | None:
+    """Extract only a source-labeled event duration, never infer one from prose."""
+    for value in values:
+        text = clean_text(value)
+        if not text:
+            continue
+        match = re.search(
+            r"продолжительность\s*:\s*(?:(\d{1,2})\s*(?:ч(?:ас(?:а|ов)?)?|h))?\s*(?:(\d{1,3})\s*(?:мин(?:ут(?:а|ы)?)?|m))?",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if not match or not any(match.groups()):
+            continue
+        hours = int(match.group(1) or 0)
+        minutes = int(match.group(2) or 0)
+        duration = hours * 60 + minutes
+        if 0 < duration <= 24 * 60:
+            return duration
+    return None
+
+
+def event_end_from_duration(start_date: str, start_time: str | None, duration_minutes: int | None) -> tuple[str | None, str | None]:
+    """Return (end_date, end_time) only for a source-explicit duration."""
+    if not start_time or not duration_minutes:
+        return None, None
+    try:
+        start = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return None, None
+    end = start + timedelta(minutes=duration_minutes)
+    return end.strftime("%Y-%m-%d"), end.strftime("%H:%M")
+
+
 def price_label(row: sqlite3.Row) -> str | None:
     lo = row["ticket_price_min"]
     hi = row["ticket_price_max"]
@@ -581,13 +740,12 @@ def image_url_key(url: str) -> str:
 
 def meaningful_ocr(value: Any) -> bool:
     text = clean_text(value).lower()
+    if len(text) < 60:
+        return False
     if "no readable text" in text or "no text" in text:
         return False
     letters = re.findall(r"[a-zа-яё]", text, flags=re.I)
-    # A short date, venue name or price is still compositionally meaningful.
-    # The former 60-character threshold mislabeled real posters as
-    # `visual_only` and unlocked destructive listing crops.
-    return len(letters) >= 2
+    return len(letters) >= 20
 
 
 IMAGE_DIMENSION_CACHE: dict[str, tuple[int | None, int | None]] = {}
@@ -725,6 +883,43 @@ def choose_primary_image_asset(assets: list[dict[str, Any]]) -> dict[str, Any] |
     first = assets[0]
     first_area = image_area(first)
     first_score = hero_image_quality_score(first)
+    # Theatre/catalog parsers may attach the same monthly advert or generic
+    # venue gallery to many unrelated events.  When a row also has a strong
+    # event-exclusive visual, prefer that evidence over cross-event boilerplate.
+    # If no exclusive alternative exists we keep the shared asset, preserving
+    # recurring-event and weak-media fallbacks.
+    if int(first.get("_event_reuse_count") or first.get("event_reuse_count") or 1) > 1:
+        exclusive_candidates = [
+            candidate
+            for candidate in assets[1:]
+            if int(candidate.get("_event_reuse_count") or candidate.get("event_reuse_count") or 1) == 1
+            and candidate.get("image_text_mode") == "visual_only"
+            and min(int(candidate.get("width") or 0), int(candidate.get("height") or 0)) >= 720
+            and image_area(candidate) >= 900_000
+        ]
+        if exclusive_candidates:
+            return max(exclusive_candidates, key=hero_image_quality_score)
+    # A classified utility/advertising/document image is useful gallery
+    # material, but it must not monopolise the event hero when the same event
+    # has a separately classified, crop-safe, full-resolution photograph.
+    # This is a semantic-role guard supplied by the upstream LLM pass, not an
+    # OCR/filename guess.
+    first_is_non_photo_document = (
+        first.get("media_semantic_status") == "classified"
+        and first.get("media_role") not in {"event_photo", "event_identity_poster"}
+    )
+    if first_is_non_photo_document:
+        photo_candidates = [
+            candidate
+            for candidate in assets[1:]
+            if candidate.get("media_semantic_status") == "classified"
+            and candidate.get("media_role") == "event_photo"
+            and candidate.get("safe_crop") is True
+            and min(int(candidate.get("width") or 0), int(candidate.get("height") or 0)) >= 720
+            and image_area(candidate) >= 900_000
+        ]
+        if photo_candidates:
+            return max(photo_candidates, key=hero_image_quality_score)
     # If the first item is tiny, rescue it with the earliest adequate later image,
     # not necessarily the largest one: source order still carries editorial intent.
     if first_area < 300_000:
@@ -763,10 +958,10 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         optional_fields = [
             "width",
             "height",
+            "image_text_mode",
             "media_role",
             "media_role_confidence",
             "media_semantic_status",
-            "media_semantic_reason_code",
             "focal_x",
             "focal_y",
             "safe_crop",
@@ -808,10 +1003,27 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         canonical_ledger_present = bool(rows)
     metadata_by_url: dict[str, dict[str, Any]] = {}
     poster_urls: list[str] = []
+    approved_reuse_count_by_url: dict[str, int] = {}
+    approved_urls = [clean_text(row_get(row, "supabase_url")) for row in rows]
+    approved_urls = [url for url in approved_urls if url]
+    if approved_urls:
+        try:
+            placeholders = ",".join("?" for _ in approved_urls)
+            approved_reuse_count_by_url = {
+                clean_text(reuse_row["supabase_url"]): int(reuse_row["event_count"] or 1)
+                for reuse_row in con.execute(
+                    f"""
+                    select supabase_url, count(distinct event_id) as event_count
+                    from eventposter
+                    where review_status='approved' and supabase_url in ({placeholders})
+                    group by supabase_url
+                    """,
+                    approved_urls,
+                ).fetchall()
+            }
+        except sqlite3.OperationalError:
+            approved_reuse_count_by_url = {}
     for row in rows:
-        if clean_text(row_get(row, "media_semantic_reason_code")).lower() == "no_event_relevance":
-            log_stage("listing_media_rejected", event_id=event_id, reason="no_event_relevance")
-            continue
         # One EventPoster is one logical gallery item.  Its managed and source
         # URLs are alternate locations, never two public images.
         url = canonical_event_media_cdn_url(row["supabase_url"])
@@ -823,6 +1035,10 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             for key in row.keys()
             if key not in {"supabase_url", "catbox_url"}
         }
+        metadata_by_url[image_url_key(url)]["event_reuse_count"] = approved_reuse_count_by_url.get(
+            clean_text(row_get(row, "supabase_url")),
+            1,
+        )
     photo_urls = read_json(photo_urls_raw, [])
     urls = []
     seen = set()
@@ -854,31 +1070,27 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     for index, url in enumerate(urls[:12]):
         metadata = metadata_by_url.get(image_url_key(url), {})
         ocr = str(metadata.get("ocr_text") or "")
-        # Missing OCR is uncertainty, not proof that an image has no text.
-        # Only explicit curated exceptions or positive OCR evidence may make
-        # the stronger visual-only / text-bearing claims.
-        mode = "visual_only" if event_id in FORCE_VISUAL_IMAGE_MODE_IDS else ("ocr_text" if meaningful_ocr(ocr) else "unknown")
+        stored_mode = clean_text(metadata.get("image_text_mode")).lower()
+        mode = (
+            "visual_only"
+            if event_id in FORCE_VISUAL_IMAGE_MODE_IDS
+            else stored_mode
+            if stored_mode in {"ocr_text", "visual_only"}
+            else "ocr_text"
+            if meaningful_ocr(ocr)
+            else "visual_only"
+        )
         semantic_status = clean_text(metadata.get("media_semantic_status")).lower()
-        semantic_reason_code = clean_text(metadata.get("media_semantic_reason_code")).lower()
         raw_role = clean_text(metadata.get("media_role")).lower()
         media_role = raw_role if semantic_status == "classified" and raw_role in EVENT_IMAGE_MEDIA_ROLES else None
-        primary_geometry_untrusted = index == 0 and (
-            semantic_status != "classified"
-            or not metadata.get("width")
-            or not metadata.get("height")
-            or not metadata.get("thumbnail_512_url")
-        )
-        if primary_geometry_untrusted and not SKIP_IMAGE_PROBES:
-            probed_width, probed_height = (first_width, first_height) if first_width and first_height else probe_image_dimensions(url)
+        if index == 0 and not metadata.get("width"):
+            probed_width, probed_height = first_width, first_height
         elif not metadata.get("width") and needs_rescue_scan and not SKIP_IMAGE_PROBES:
             probed_width, probed_height = probe_image_dimensions(url)
         else:
             probed_width, probed_height = (None, None)
-        # A successful probe is the geometry source of truth. This prevents a
-        # stale 1080×1350 ledger row from creating visible `contain` fields for
-        # an actual 180×320 object (the Red Tent regression).
-        width = int(probed_width or metadata.get("width") or 1080)
-        height = int(probed_height or metadata.get("height") or 1350)
+        width = int(metadata.get("width") or probed_width or 1080)
+        height = int(metadata.get("height") or probed_height or 1350)
         # Unknown media is deliberately no-crop. OCR/no-OCR heuristics are not
         # semantic evidence: only the classified event_photo role may unlock
         # cover cropping in card/hero UI.
@@ -915,11 +1127,11 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             "media_role": role_for_ui,
             "media_role_confidence": round(float(metadata.get("media_role_confidence") or 0), 5),
             "media_semantic_status": semantic_status if semantic_status in {"pending", "classified", "error", "stale"} else "pending",
-            "media_semantic_reason_code": semantic_reason_code or None,
             "image_kind": "poster" if role_for_ui == "event_identity_poster" else ("photo" if role_for_ui == "event_photo" else "mixed"),
             "recommended_hero_fit": "cover" if role_for_ui == "event_photo" else "contain",
             "safe_crop": bool(metadata.get("safe_crop")) if metadata.get("safe_crop") is not None else False,
             "source_order": index,
+            "_event_reuse_count": max(1, int(metadata.get("event_reuse_count") or 1)),
         }
         if thumbnail_sources:
             asset["thumbnail_sources"] = thumbnail_sources
@@ -949,6 +1161,8 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
     primary = assets[0]["src"] if assets else None
     primary_mode = assets[0]["image_text_mode"] if assets else "unknown"
     primary_role = assets[0].get("media_role") if assets else None
+    for asset in assets:
+        asset.pop("_event_reuse_count", None)
     return primary, primary_mode, primary_role, assets
 
 
@@ -1196,9 +1410,10 @@ def popularity_signals(
         reasons.append("frequently_shared")
     if discussed:
         reasons.append("discussed")
-    # Our own Telegram/VK distribution is useful audience evidence, but it is
-    # not an independent source. A multi-source label needs two genuinely
-    # separate external publisher families.
+    # Publishing an imported event into our own distribution network is not
+    # independent evidence that the event is popular. Keep owned counters for
+    # growth/share/discussion thresholds, but require two distinct external
+    # publisher families for the "multi_source" reason.
     if len(independent_publishers) >= 2:
         reasons.append("multi_source")
     weights = {
@@ -1213,10 +1428,17 @@ def split_current_datetime(value: str | None, current_date: str) -> tuple[str, s
     raw = str(value or "").strip()
     if not raw:
         return current_date, None
-    match = re.match(r"^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?", raw)
-    if not match:
-        return current_date, None
-    return match.group(1), match.group(2)
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("current_datetime must be ISO-8601") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=BUILD_TIME_ZONE)
+    local = parsed.astimezone(BUILD_TIME_ZONE)
+    effective_date = local.date().isoformat()
+    if effective_date != current_date:
+        raise ValueError("current_date/current_datetime mismatch")
+    return effective_date, local.strftime("%H:%M")
 
 
 def event_active_where(
@@ -1251,7 +1473,7 @@ def event_active_where(
 
 def fetch_rows(
     con: sqlite3.Connection,
-    limit: int,
+    limit: int | None,
     current_date: str,
     include_ids: list[int],
     *,
@@ -1259,6 +1481,14 @@ def fetch_rows(
     focus_date_from: str | None = None,
     focus_date_to: str | None = None,
 ) -> list[sqlite3.Row]:
+    """Return the public projection in deterministic order.
+
+    ``limit=None`` is the only accepted full-catalog mode.  Keeping it distinct
+    from ``0`` prevents a production build from silently turning an accidental
+    zero into an empty but otherwise valid artifact.
+    """
+    if limit is not None and limit <= 0:
+        raise ValueError("preview limit must be positive; use catalog_mode=full")
     rows_by_id: dict[int, sqlite3.Row] = {}
     ordered_rows: list[sqlite3.Row] = []
 
@@ -1274,10 +1504,10 @@ def fetch_rows(
         ordered_rows.append(row)
         return True
 
-    def add_query(query: str, params: tuple[Any, ...] = (), *, stop_at_limit: bool = True) -> None:
+    def add_query(query: str, params: tuple[Any, ...] = ()) -> None:
         for row in con.execute(query, params):
             add_row(row)
-            if stop_at_limit and len(ordered_rows) >= limit:
+            if limit is not None and len(ordered_rows) >= limit:
                 break
 
     event_columns = {
@@ -1294,14 +1524,18 @@ def fetch_rows(
         "coalesce(nullif(time,''),'23:59') asc, " if "time" in event_columns else ""
     )
     today_time_order = f"{time_order}id asc"
-    # A focus range is a completeness contract for date listings, not merely a
-    # preference for single-day rows.  Short multi-day festivals may start in
-    # the range and must not be displaced by the later bounded future fill.
     single_day_clause = (
         "and (end_date is null or trim(end_date) = '' or end_date = date)"
         if "end_date" in event_columns
         else ""
     )
+    if limit is None:
+        for row in con.execute(
+            f"select * from event where {active} order by date asc, {time_order}id asc"
+        ):
+            add_row(row)
+        return ordered_rows
+
     focus_from = normalize_date(focus_date_from)
     focus_to = normalize_date(focus_date_to)
     if focus_from and focus_to:
@@ -1310,10 +1544,11 @@ def fetch_rows(
             select * from event
             where {active}
               and date between ? and ?
+              {single_day_clause}
             order by date asc, {time_order}id asc
+            limit ?
             """,
-            (focus_from, focus_to),
-            stop_at_limit=False,
+            (focus_from, focus_to, max(limit * 2, 80)),
         )
     elif focus_from:
         add_query(
@@ -1364,14 +1599,130 @@ def fetch_rows(
             f"select * from event where {active} order by date asc, {time_order}id asc limit ?",
             (max(limit * 3, limit + len(include_ids) + 20),),
         )
-    return ordered_rows if len(ordered_rows) > limit else ordered_rows[:limit]
+    return ordered_rows[:limit]
+
+
+CATALOG_LEDGER_SCHEMA_VERSION = "static_event_catalog_ledger_v1"
+ELIGIBILITY_PREDICATE_VERSION = "static_event_public_projection_v2"
+
+
+def _candidate_catalog_rows(
+    con: sqlite3.Connection,
+    current_date: str,
+    current_time: str | None,
+) -> list[sqlite3.Row]:
+    """Return date-relevant rows before public eligibility filtering."""
+    columns = {str(row[1]) for row in con.execute("pragma table_info('event')")}
+    start_not_elapsed = f"date >= '{current_date}'"
+    if current_time and "time" in columns:
+        start_not_elapsed = (
+            f"(date > '{current_date}' or (date = '{current_date}' and "
+            f"(time is null or trim(time) = '' or substr(time, 1, 5) >= '{current_time}')))"
+        )
+    if "end_date" in columns:
+        date_clause = (
+            f"({start_not_elapsed} or "
+            f"(end_date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' and end_date >= '{current_date}'))"
+        )
+    else:
+        date_clause = start_not_elapsed
+    return list(con.execute(f"select * from event where {date_clause} order by id asc"))
+
+
+def catalog_exclusion_reason(row: sqlite3.Row) -> str | None:
+    """Return one bounded reason code for a date-relevant non-public row."""
+    if row_has_key(row, "silent") and bool(row_get(row, "silent")):
+        return "silent"
+    if row_has_key(row, "lifecycle_status"):
+        # Match ``event_active_where`` exactly.  The source contract stores the
+        # canonical lowercase value; accepting a differently-cased value only
+        # in the ledger would make eligible/export parity impossible to prove.
+        lifecycle = clean_text(row_get(row, "lifecycle_status")) or "active"
+        if lifecycle != "active":
+            return "lifecycle:not_active"
+    reason = public_projection_gate_reason(row)
+    if reason:
+        return reason
+    if title_looks_prompt_leak(row_get(row, "title")):
+        return "title:prompt_leakage"
+    return None
+
+
+def build_catalog_ledger(
+    con: sqlite3.Connection,
+    exported_rows: list[sqlite3.Row],
+    *,
+    current_date: str,
+    current_time: str | None,
+    generated_at: str,
+    repo_sha: str,
+    run_id: str,
+    build_id: str,
+    snapshot_id: str,
+    snapshot_sha256: str,
+    snapshot_size: int | None,
+) -> dict[str, Any]:
+    exported_by_id = {int(row["id"]): row for row in exported_rows}
+    eligible: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
+    for row in _candidate_catalog_rows(con, current_date, current_time):
+        event_id = int(row["id"])
+        reason = catalog_exclusion_reason(row)
+        if reason is None:
+            if event_id not in exported_by_id:
+                raise RuntimeError(f"eligible event {event_id} missing from full-catalog export")
+            eligible.append({
+                "event_id": event_id,
+                "source_revision": clean_text(row_get(row, "revision")) or None,
+                "updated_at": clean_text(row_get(row, "updated_at")) or clean_text(row_get(row, "added_at")) or None,
+                # Record the accepted public projection, not an unaccepted raw
+                # candidate whose status is still unknown/review.
+                "age_restriction": event_age_projection(row)["age_restriction"],
+            })
+        else:
+            excluded.append({"event_id": event_id, "reason": reason})
+    extra = sorted(set(exported_by_id) - {item["event_id"] for item in eligible})
+    if extra:
+        raise RuntimeError(f"ineligible events leaked into full-catalog export: {extra[:20]}")
+    max_updated_at = max((str(item["updated_at"]) for item in eligible if item["updated_at"]), default=None)
+    numeric_revisions = [
+        int(item["source_revision"])
+        for item in eligible
+        if str(item.get("source_revision") or "").isdigit()
+    ]
+    return {
+        "schema_version": CATALOG_LEDGER_SCHEMA_VERSION,
+        "eligibility_predicate_version": ELIGIBILITY_PREDICATE_VERSION,
+        "generated_at": generated_at,
+        "current_date": current_date,
+        "current_time": current_time,
+        "repo_sha": repo_sha,
+        "run_id": run_id,
+        "build_id": build_id,
+        "snapshot": {
+            "snapshot_id": snapshot_id,
+            "sha256": snapshot_sha256,
+            "size": snapshot_size,
+            "max_event_revision": max(numeric_revisions, default=None),
+            "max_event_updated_at": max_updated_at,
+        },
+        "eligible_count": len(eligible),
+        "excluded_count": len(excluded),
+        "eligible": eligible,
+        "excluded": excluded,
+    }
 
 
 def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) -> dict[str, Any]:
     event_id = int(row["id"])
-    title = strip_emoji_prefix(row["title"]) or f"Событие {event_id}"
+    occurrence = structured_occurrence_projection(row)
+    occurrence_conflict = bool(
+        occurrence
+        and source_event_type_conflicts(row_get(row, "event_type"), occurrence["event_type"])
+    )
+    title = strip_emoji_prefix(occurrence["title"] if occurrence_conflict else row["title"]) or f"Событие {event_id}"
     topics = [str(item) for item in read_json(row["topics"], []) if str(item).strip()]
-    event_type = infer_event_type(row, topics)
+    event_type = occurrence["event_type"] if occurrence_conflict and occurrence else infer_event_type(row, topics)
     city = clean_place(row["city"])
     venue = clean_place(row["location_name"])
     venue = drop_city_only_venue(venue, city)
@@ -1379,6 +1730,19 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     start_date = normalize_date(row["date"]) or current_date
     end_date = normalize_date(row["end_date"])
     start_time, time_end, display_time = split_time(row["time"])
+    description = str(
+        occurrence["description"]
+        if occurrence_conflict and occurrence
+        else row["description"] or row["source_text"] or ""
+    ).strip()
+    if not occurrence_conflict and description_looks_truncated(description, str(row["source_text"] or "")):
+        description = str(row["source_text"] or description).strip()
+    if not time_end and (not end_date or end_date == start_date):
+        duration_minutes = explicit_event_duration_minutes(row["source_text"], description)
+        derived_end_date, derived_end_time = event_end_from_duration(start_date, start_time, duration_minutes)
+        if derived_end_time:
+            time_end = derived_end_time
+            end_date = derived_end_date if derived_end_date != start_date else end_date
     starts_at = f"{start_date}T{start_time}:00+02:00" if start_time else None
     end_at = f"{end_date or start_date}T{time_end}:00+02:00" if time_end else None
     ticket = ticket_info(row)
@@ -1388,10 +1752,10 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     source_urls = collect_source_urls(con, event_id, row)
     source_likes, source_views, source_shares, engagement_sources = source_metrics(con, source_urls)
     popularity_reason_codes, popularity_signal_score = popularity_signals(con, source_urls)
-    summary = clean_text(row["short_description"]) or clean_text(row["description"])[:260]
-    description = str(row["description"] or row["source_text"] or summary or "").strip()
-    if description_looks_truncated(description, str(row["source_text"] or "")):
-        description = str(row["source_text"] or description).strip()
+    summary = event_summary(None if occurrence_conflict else row["short_description"], description)
+    description = description or summary
+    primary_asset = next((asset for asset in image_assets if asset.get("src") == primary_image), image_assets[0] if image_assets else None)
+    primary_alt = primary_asset.get("alt") if primary_asset else f"Изображение события «{title}»"
     slug_parts = [slugify(title), slugify(city or venue or "kaliningrad")]
     slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
     source_url = source_urls[0] if source_urls else None
@@ -1425,7 +1789,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "source_count": len(source_urls),
         "telegraph_url": clean_text(row["telegraph_url"]) or None,
         "image_url": primary_image,
-        "image_alt": f"Афиша события «{title}»",
+        "image_alt": primary_alt,
         "image_text_mode": image_mode,
         "image_media_role": image_role,
         "image_assets": image_assets,
@@ -1433,14 +1797,18 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "ocr_boxes": [],
         "focal_point": None,
         "image_object_position": None,
-        "safe_crop": bool(image_assets and image_assets[0].get("safe_crop")),
+        "safe_crop": bool(primary_asset and primary_asset.get("safe_crop")),
         "summary": summary,
-        "meta_description": clean_text(row["short_description"]) or summary,
+        "meta_description": summary,
         "description_html": markdownish_to_html(description) or f"<p>{html.escape(summary or title)}</p>",
         "topics": topics,
         "pushkin_card": bool(row["pushkin_card"]),
-        "other_date_ids": [],
-        "data_quality_notes": [],
+        "other_date_ids": sorted({
+            int(item)
+            for item in read_json(row_get(row, "linked_event_ids"), [])
+            if str(item).isdigit() and int(item) != event_id
+        }),
+        "data_quality_notes": ["structured_source_occurrence_conflict_guard"] if occurrence_conflict else [],
         "updated_at": clean_text(row_get(row, "updated_at")) or clean_text(row_get(row, "added_at")) or None,
         "likes_count": source_likes,
         "source_likes_count": source_likes,
@@ -2945,16 +3313,41 @@ def build_related(
     }
 
 
+def normalize_linked_occurrences(events: list[dict[str, Any]]) -> None:
+    """Keep only mutual links inside the exported eligible catalog.
+
+    Canonical rows may retain links to past/ineligible occurrences.  Those
+    source links remain in SQLite, but a static release must not emit dangling
+    or one-way graph edges that point outside its immutable catalog.
+    """
+
+    by_id = {int(event["id"]): event for event in events}
+    raw_links = {
+        event_id: {
+            int(value)
+            for value in (event.get("other_date_ids") or [])
+            if str(value).isdigit() and int(value) != event_id
+        }
+        for event_id, event in by_id.items()
+    }
+    for event_id, event in by_id.items():
+        event["other_date_ids"] = sorted(
+            linked_id
+            for linked_id in raw_links[event_id]
+            if linked_id in by_id and event_id in raw_links.get(linked_id, set())
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
     parser.add_argument("--output-dir", default="site/src/data")
     parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument("--catalog-mode", choices=["slice", "full"], default="slice")
     parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
     parser.add_argument("--current-datetime", default=os.getenv("STATIC_SITE_CURRENT_DATETIME", ""), help="Optional local YYYY-MM-DDTHH:MM cutoff; same-day events that already started are excluded")
-    parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize all events starting on/after this date before the normal future fill")
-    parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize all events starting on/before this date before the normal future fill")
-    parser.add_argument("--source-snapshot-captured-at", default=os.getenv("STATIC_SITE_SOURCE_SNAPSHOT_CAPTURED_AT", ""), help="UTC timestamp of the source DB capture, distinct from JSON generation time")
+    parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize one-day events starting on/after this date before the normal future fill")
+    parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize one-day events starting on/before this date before the normal future fill")
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
     parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
     parser.add_argument("--related-mode", choices=["sparse", "pgvector"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
@@ -2965,6 +3358,12 @@ def main() -> int:
     parser.add_argument("--site-origin", default=os.getenv("PUBLIC_SITE_ORIGIN", "https://kenigevents.ru"))
     parser.add_argument("--base-path", default=os.getenv("PUBLIC_PREVIEW_BUILD_ID", ""))
     parser.add_argument("--ics-base-url", default=os.getenv("PUBLIC_ICS_BASE_URL", ""))
+    parser.add_argument("--repo-sha", default=os.getenv("STATIC_SITE_REPO_SHA", ""))
+    parser.add_argument("--run-id", default=os.getenv("STATIC_SITE_RUN_ID", ""))
+    parser.add_argument("--build-id", default=os.getenv("STATIC_SITE_BUILD_ID", ""))
+    parser.add_argument("--snapshot-id", default=os.getenv("STATIC_SITE_SNAPSHOT_ID", ""))
+    parser.add_argument("--snapshot-sha256", default=os.getenv("STATIC_SITE_SNAPSHOT_SHA256", ""))
+    parser.add_argument("--snapshot-size", type=int, default=int(os.getenv("STATIC_SITE_SNAPSHOT_SIZE", "0") or "0"))
     parser.add_argument("--gemma-related-verify", action="store_true", help="Run optional Gemma 4 26B audit for changed related chains")
     parser.add_argument("--gemma-related-model", default="models/gemma-4-26b-a4b-it")
     parser.add_argument("--gemma-related-key-env", default="GOOGLE_API_KEY4")
@@ -2987,10 +3386,29 @@ def main() -> int:
     con = sqlite3.connect(args.db)
     con.row_factory = sqlite3.Row
     include_ids = [int(part) for part in args.include_ids.split(",") if part.strip().isdigit()]
+    if args.catalog_mode == "full":
+        # Full production export is a single deterministic catalog query; the
+        # preview-only control-event priority must not affect its ordering.
+        include_ids = []
     effective_date, effective_time = split_current_datetime(args.current_datetime, args.current_date)
+    if args.catalog_mode == "full":
+        required_metadata = {
+            "repo_sha": args.repo_sha,
+            "run_id": args.run_id,
+            "build_id": args.build_id,
+            "snapshot_id": args.snapshot_id,
+            "snapshot_sha256": args.snapshot_sha256,
+        }
+        missing = [key for key, value in required_metadata.items() if not str(value or "").strip()]
+        if missing:
+            raise SystemExit(f"full catalog export requires metadata: {', '.join(missing)}")
+        if not re.fullmatch(r"[0-9a-f]{40}", args.repo_sha):
+            raise SystemExit("full catalog export requires a full 40-character repo SHA")
+        if not re.fullmatch(r"[0-9a-f]{64}", args.snapshot_sha256):
+            raise SystemExit("full catalog export requires a 64-character snapshot SHA-256")
     rows = fetch_rows(
         con,
-        args.limit,
+        None if args.catalog_mode == "full" else args.limit,
         effective_date,
         include_ids,
         current_time=effective_time,
@@ -2998,6 +3416,7 @@ def main() -> int:
         focus_date_to=args.focus_date_to,
     )
     events = [build_event(con, row, effective_date) for row in rows]
+    normalize_linked_occurrences(events)
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -3005,15 +3424,19 @@ def main() -> int:
         "build": {
             "generated_at": generated_at,
             "source": "prod-sqlite-static-site-export-v1",
-            "source_snapshot_captured_at": args.source_snapshot_captured_at or None,
             "current_date": args.current_date,
             "current_datetime": args.current_datetime or None,
             "effective_current_date": effective_date,
             "effective_current_time": effective_time,
             "focus_date_from": args.focus_date_from or None,
             "focus_date_to": args.focus_date_to or None,
+            "catalog_mode": args.catalog_mode,
             "notes": [
-                f"bounded production slice: {len(events)} real events",
+                (
+                    f"full eligible production catalog: {len(events)} real events"
+                    if args.catalog_mode == "full"
+                    else f"bounded production slice: {len(events)} real events"
+                ),
                 "source social likes/views are compact latest-metric aggregates",
                 "service likes remain 0 until first-party backend ingest is enabled",
             ],
@@ -3022,6 +3445,24 @@ def main() -> int:
     }
     preview_events_path = out_dir / "preview-events.json"
     preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.catalog_mode == "full":
+        ledger = build_catalog_ledger(
+            con,
+            rows,
+            current_date=effective_date,
+            current_time=effective_time,
+            generated_at=generated_at,
+            repo_sha=args.repo_sha,
+            run_id=args.run_id,
+            build_id=args.build_id,
+            snapshot_id=args.snapshot_id,
+            snapshot_sha256=args.snapshot_sha256,
+            snapshot_size=args.snapshot_size or None,
+        )
+        (out_dir / "production-catalog.json").write_text(
+            json.dumps(ledger, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     clubs_projection = build_interest_clubs_projection(
         con,
         current_date=effective_date,

@@ -32,6 +32,94 @@ def test_kaggle_vk_matcher_keeps_strict_title_date_anchor_contract():
     }) == (0, 0.0)
 
 
+@pytest.mark.asyncio
+async def test_kaggle_vk_resolver_does_not_publish_postponed_direct_row(monkeypatch):
+    observed = int(NOW.timestamp())
+    candidate = {
+        "candidate_id": "vkresolve:klgdevents:1",
+        "publisher_id": "231920894",
+        "stored_post_id": 1001,
+        "title": "Событие 1",
+        "date": "2026-07-20",
+        "time": "19:00",
+        "location_name": "Площадка",
+    }
+    scheduled = {
+        "id": 1001,
+        "date": observed + 60 * 60,
+        "text": "Событие 1\n20 июля 19:00\nПлощадка",
+    }
+    published = {
+        "id": 2001,
+        "date": observed - 60,
+        "text": "Событие 1\n20 июля 19:00\nПлощадка",
+    }
+
+    def fake_vk_request(method, _token, **_params):
+        if method == "wall.getById":
+            return [scheduled]
+        if method == "wall.get":
+            return {"items": [published]}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(collector.time, "time", lambda: observed)
+    monkeypatch.setattr(collector, "_vk_request", fake_vk_request)
+    resolved = await collector._resolve_vk([candidate], {"VK_TOKEN": "test"}, 100)
+
+    assert resolved == [{
+        "candidate_id": "vkresolve:klgdevents:1",
+        "status": "published",
+        "observed_ts": observed,
+        "match_method": "wall_scan",
+        "match_confidence": 1.0,
+        "live_post_id": 2001,
+        "post_ts": observed - 60,
+        "evidence_text": "Событие 1\n20 июля 19:00\nПлощадка",
+        "views": None,
+        "likes": None,
+        "comments": None,
+        "shares": None,
+    }]
+
+
+@pytest.mark.asyncio
+async def test_kaggle_vk_resolver_keeps_postponed_row_missing_until_public(monkeypatch):
+    observed = int(NOW.timestamp())
+    candidate = {
+        "candidate_id": "vkresolve:klgdevents:1",
+        "publisher_id": "231920894",
+        "stored_post_id": 1001,
+        "title": "Событие 1",
+        "date": "2026-07-20",
+        "time": "19:00",
+        "location_name": "Площадка",
+    }
+    scheduled = {
+        "id": 1001,
+        "date": observed + 60 * 60,
+        "text": "Событие 1\n20 июля 19:00\nПлощадка",
+    }
+
+    def fake_vk_request(method, _token, **_params):
+        if method == "wall.getById":
+            return [scheduled]
+        if method == "wall.get":
+            return {"items": []}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(collector.time, "time", lambda: observed)
+    monkeypatch.setattr(collector, "_vk_request", fake_vk_request)
+    resolved = await collector._resolve_vk([candidate], {"VK_TOKEN": "test"}, 100)
+
+    assert resolved == [{
+        "candidate_id": "vkresolve:klgdevents:1",
+        "status": "missing",
+        "observed_ts": observed,
+        "match_method": "unmatched",
+        "match_confidence": 0.0,
+    }]
+
+
 def _event(event_id: int, message_id: int) -> Event:
     return Event(
         id=event_id,

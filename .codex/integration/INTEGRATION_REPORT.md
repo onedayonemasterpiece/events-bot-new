@@ -1,53 +1,50 @@
-# Integration report — popular-all-owned-channels
+# Integration report — static-event-v12-fidelity-idempotency
 
 ## Integrated scope
 
 | Requirement | Status | Integration evidence |
 |---|---|---|
-| R01 | Done | Exact `231828790` event repost loader/exporter; structural exclusion tests |
-| R02 | Done | Manifest v2 + Kaggle grouped postponed/live resolver + Fly evidence revalidation |
-| R03 | Done | Exact result coverage, deterministic atomic slot claim, terminal failure ledger, exception-safe dataset cleanup |
-| R04 | Done | Four-key snapshots unchanged, 90-day rolling backfill/cleanup, minified ephemeral JSON, no raw wall persistence, owned-family max |
+| R01 | Done in source | Exact Telegram `261–264` A/B/C hierarchy, arm-specific last-mile/return copy, shared icons, `на Кауп`; one secret-only noindex QA route survives elapsed event `4671`. |
+| R02 | Done in source | Unicode alias boundaries, evidence-ranked one-venue ceiling and fail-closed conflicts; `6796` resolves only KAUP and `5295` resolves no disputed venue mark. |
+| R03 | Done in source | Footer uses canonical inline wide-`о` wordmark in `Понравились Анонсы? Поделитесь`. |
+| R04 | Done locally; awaiting public candidate | One Europe/Kaliningrad clock across scheduler/export/runner/receipt; boundary tests pass. Fresh-snapshot local candidate `/segodnya/` is 18 July; a 17–19 July ongoing event remains correctly visible. |
+| R05 | Done in source | Durable claim/history, canonical public fingerprint/no-op, one follow-up, operator force, remote liveness and exact completed-orphan adoption before any replacement Kaggle push. |
+| R06 | Done in source | Ticket/telephone variants keep a three-control bottom row; committed Playwright CLI geometry gate covers `6551/5374` at `1536×864`. |
+| R07 | Done after incident correction | Supplied typed fallback art is presentation-only. Incorrect independent repair of `6774` was reversed per known `6774→2884`: survivor/source/public surfaces reconciled and duplicate tombstoned. |
+| R08 | Done locally; awaiting release refresh | Read-only reason/type inventory uses Kaliningrad local day. Fresh post-repair snapshot has exactly two `no_ledger` rows: `5663` (concert) and `6890` (meeting); both receive typed presentation-only art. |
 
 ## Integration decisions
 
-- The separate env `SOCIAL_METRICS_VK_OFFICIAL_GROUP_ID` is authoritative for
-  metrics; the overloaded production `VK_AFISHA_GROUP_ID` is not reused.
-- A 90-day ledger-backed backfill is allowed; arbitrary wall history is not.
-- Match text is carried only as a bounded transient result field so Fly can run
-  the canonical matcher; it is discarded after validation and never stored.
-- Resolution mapping and snapshots are independently idempotent. If snapshot
-  persistence fails after mapping, the next interval sees the published target
-  and repairs the metric without another wall scan.
+- Accepted transport screenshots are a normative design-system reference, not
+  an inspiration board. Shared primitives may not collapse treatment-specific
+  content.
+- The safe secret-candidate QA route is allowlisted exactly; all other lab
+  routes remain forbidden and it stays absent from sitemap/indexing.
+- Build idempotency is server-side and crash-safe. A local file lock or stale
+  callback alone cannot authorize another fixed-kernel push.
+- Known incident duplicate mappings are mandatory context for event-local
+  semantic repair. Source-fact correctness alone is not identity correctness.
+- Fallback artwork is presentation, never canonical event media.
 
-## Verification
+## Verification completed before release
 
-- Combined collector/status/exporter and existing VK popularity matcher suite:
-  `42 passed`.
-- `a-gemini` (`Gemini 3.1 Pro (High)`) acceptance review: **APPROVE**;
-  no blockers, explicitly accepted exact attribution, owned-family collapse,
-  Fly evidence revalidation, atomic slot claim and failure cleanup.
-- Pending final CI/release evidence.
+- `pytest -q tests/test_static_site_*.py tests/test_static_no_image_inventory.py tests/test_smart_update_merge_identity_gate.py`: `78 passed`.
+- All static-site Node behavior suites against `preview-v12-final`: `27 passed`; content/media suite: `6 passed`; `check:preview` passed for `303` events and the preview build produced `379` pages.
+- Fresh production-snapshot contract build: `292` event pages / `1062` files; secret candidate: `1063` files with exactly one allowlisted noindex lab route.
+- Playwright: both CTA specimens passed the committed `1536×864` geometry gate; transport A/B/C each selected exactly one visible forced arm with no horizontal overflow at `1536×864` and `390×844`. Six element screenshots reproduce the accepted hierarchy/copy.
+- Local candidate checks: `6796` emits only structured KAUP evidence and no MMO text; `2884` has the verified Cathedral/Kant identity and image; fallback assets are `concert-symphonic.webp` for `5663` and `lecture-meeting.webp` for `6890`; footer exposes the branded `Понравились Анонсы? Поделитесь` prompt.
+- Production duplicate repair: `PRAGMA quick_check=ok`; survivor `2884`
+  active/canonical, duplicate `6774` merged/silent; Telegram duplicate `2152`
+  absent, rich survivor `2531` present; authenticated VK duplicate `7717`
+  `is_deleted=true`, survivor `7412` present; duplicate Telegraph redirects.
+- External consultation: `a-opus` was blocked by individual quota and is not
+  represented as completed. Gemini 3.1 Pro (High) completed the UI and
+  idempotency reviews and endorsed exact visual reproduction plus server-side
+  claim/fingerprint/adoption boundaries.
 
-## Production release
+## Remaining release gates
 
-- PR: `#57`; merge SHA: `0804df65bb86b901df21f715aa5f2c9989d102ed`.
-- Manual exact-main Fly deploy: release `v1686`, image
-  `deployment-01KXQRPXP1G30SRRABNE9SDJRC`, machine version `1686`.
-- Real canary `social-metrics:991268`: `224` due metric targets plus `272`
-  postponed/live candidates; imported `192` collected observations and resolved
-  `154 published`, `114 missing`, `4 ambiguous`, `0 resolver errors`.
-- Exact official-group backfill: all `36/36` ledger-backed posts collected in one
-  VK group batch; four bounded rows/post (`144` total = `36 collected` + `108
-  skipped_late`). No row-bound violations.
-- Current/future `klgdevents` metric coverage increased to `172/303` events.
-  Official group has zero current/future exact repost mappings at this instant,
-  so it correctly changes no current ranking yet; future exact reposts are now
-  collected automatically.
-- Status regression evidence: `kernel_started`, `preflight_ok`, multiple `alive`,
-  terminal `report_written`, and both resource releases recorded. All four
-  private temporary Kaggle datasets were absent after cleanup.
-- Post-deploy: `/healthz` HTTP 200 `ready=true`; Fly checks `1/1`; SQLite
-  `quick_check=ok`; `/data` about `920 MiB` free on 2 GiB; runtime mirror grew
-  within the 64 MiB budget; no fresh disk-full, proxy no-candidate or
-  `AuthKeyDuplicatedError` matches.
+- main-reachable commit, production deploy/health/schema verification;
+- fresh current-date production-Kaggle secret candidate, public checks and
+  refreshed no-image inventory;
+- Telegram review-topic link handoff/readback and user visual acceptance.

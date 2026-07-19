@@ -31,6 +31,92 @@ class _CompleteKernelClient:
         return [video.name]
 
 
+def test_cherryflash_requires_full_product_video_not_intro_approval(
+    tmp_path: Path,
+) -> None:
+    intro = tmp_path / "mobilefeed_intro_scene1_final.mp4"
+    intro.write_bytes(b"intro-only")
+    session_obj = VideoAnnounceSession(
+        profile_key="popular_review",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+    )
+
+    assert poller_module._find_session_video(session_obj, [intro]) is None
+
+    full = tmp_path / "cherryflash_full_final.mp4"
+    full.write_bytes(b"full-product")
+    assert poller_module._find_session_video(session_obj, [intro, full]) == full
+
+
+@pytest.mark.asyncio
+async def test_error_kernel_with_intro_only_output_does_not_false_green_cherryflash(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        obj = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            test_chat_id=123,
+            selection_params={"mode": "popular_review", "story_publish_enabled": True},
+        )
+        session.add(obj)
+        await session.commit()
+        await session.refresh(obj)
+        session_id = int(obj.id)
+
+    class ErrorWithIntroOnlyClient(_CompleteKernelClient):
+        def get_kernel_status(self, kernel_ref: str) -> dict:  # noqa: ARG002
+            return {
+                "status": "error",
+                "failureMessage": "approved true3d renderer dependency missing",
+            }
+
+        def download_kernel_output(
+            self,
+            kernel_ref: str,
+            *,
+            path: Path,
+            **kwargs,
+        ) -> list[str]:  # noqa: ARG002
+            intro = path / "mobilefeed_intro_scene1_final.mp4"
+            intro.write_bytes(b"intro-only")
+            return [intro.name]
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+
+    await poller_module.run_kernel_poller(
+        db,
+        ErrorWithIntroOnlyClient(),
+        VideoAnnounceSession(
+            id=session_id,
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+        ),
+        bot=_DummyBot(),
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
+        assert refreshed.video_url is None
+        assert "true3d renderer dependency missing" in (refreshed.error or "")
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def _close_databases_after_test():
     yield

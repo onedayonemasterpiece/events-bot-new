@@ -1,0 +1,75 @@
+---
+import type { KaupBusOption } from '../../lib/eventKaupTransport';
+import TransportRouteHeading from './TransportRouteHeading.astro';
+import TransportJourneyAlerts from './TransportJourneyAlerts.astro';
+
+interface Props { route: string; arrivalStop: string; originName: string; originMapUrl: string; walkRouteUrl: string; publicReturnAvailable: boolean; options: KaupBusOption[]; }
+const { route, arrivalStop, originName, originMapUrl, walkRouteUrl, publicReturnAvailable, options } = Astro.props;
+const additionalCount = Math.max(0, options.length - 1);
+---
+<section class="transport-treatment transport-next" data-transport-treatment="next_departure_queue_v1" hidden aria-label={`Ближайший подходящий автобус № ${route}`}>
+  <TransportRouteHeading
+    route={route}
+    title="Из Калининграда"
+    subtitle={`${originName} → КАУП`}
+    originMapUrl={originMapUrl}
+    originMapLabel={originName}
+  />
+  <div class="transport-next__primary">
+    <p class="transport-next__label">Ближайший подходящий · по расписанию</p>
+    <div data-transport-next-slot></div>
+  </div>
+  <details data-transport-queue-details open>
+    {additionalCount > 0 && <summary data-transport-action="schedule_expand">Следующие отправления</summary>}
+    <ol data-transport-next-queue>
+      {options.map((option) => <li data-transport-c-trip data-transport-trip-id={option.tripId} data-departure-at={option.departureAt} aria-label={`${option.departure} Северный, ${option.estimatedStopArrival} ${arrivalStop}, ${option.estimatedVenueArrival} КАУП`}>
+        <div class="transport-next__primary-line" aria-hidden="true">
+          <strong data-terminal-departure={option.terminalDeparture}>{option.departureEstimated ? '≈' : ''}{option.departure}</strong>
+          <span>→ ≈{option.estimatedVenueArrival}</span>
+        </div>
+        <div class="transport-next__timeline" aria-hidden="true">
+          <span><b>{option.departureEstimated ? '≈' : ''}{option.departure}</b><small>Северный</small></span>
+          <span><b>≈{option.estimatedStopArrival}</b><small>{arrivalStop}</small></span>
+          <span><b>≈{option.estimatedVenueArrival}</b><small>КАУП</small></span>
+        </div>
+        <div class="transport-next__queue-line" aria-hidden="true">
+          <strong>{option.departureEstimated ? '≈' : ''}{option.departure}</strong>
+          <span>Северный <b>→ {arrivalStop} ≈{option.estimatedStopArrival}</b><small>→ КАУП ≈{option.estimatedVenueArrival}</small></span>
+        </div>
+        {option.tight && <em>Небольшой запас</em>}
+      </li>)}
+    </ol>
+  </details>
+  <TransportJourneyAlerts arrivalStop={arrivalStop} walkRouteUrl={walkRouteUrl} publicReturnAvailable={publicReturnAvailable} treatment="next-departure" />
+</section>
+
+<style>
+  .transport-treatment[hidden] { display:none !important; }
+  .transport-next>:global(.transport-route-heading) { margin-bottom:.45rem; }
+  .transport-next__primary { min-height:0; padding:.72rem .8rem .6rem; border-radius:15px; color:#fff; background:#176653; }
+  .transport-next__label { margin:0 0 .2rem; color:#c7dad4; font-size:.65rem; font-weight:780; letter-spacing:.055em; text-transform:uppercase; }
+  .transport-next__primary li { display:grid; grid-template-columns:1fr; gap:.42rem; margin:0; padding:.1rem 0 0; border:0; color:#fff; background:transparent; }
+  .transport-next__primary .transport-next__queue-line { display:none; }
+  .transport-next__primary .transport-next__primary-line { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; color:#fff; }
+  .transport-next__primary .transport-next__primary-line strong { color:#fff; font-size:1.4rem; line-height:1; }
+  .transport-next__primary .transport-next__primary-line span { color:#fff !important; font-size:1rem; font-weight:850; }
+  .transport-next__primary .transport-next__timeline { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.28rem; }
+  .transport-next__primary .transport-next__timeline span { display:grid; gap:.08rem; padding-top:.25rem; border-top:3px solid #d8c76d; color:#fff; }
+  .transport-next__primary .transport-next__timeline span:not(:first-child) { border-color:rgba(219,233,228,.45); }
+  .transport-next__primary .transport-next__timeline b { color:#fff; font-size:.72rem; }
+  .transport-next__primary .transport-next__timeline small { color:#dbe9e4; font-size:.58rem; }
+  .transport-next__primary li em { color:#ffe19b; }
+  summary { display:flex; align-items:center; min-height:44px; cursor:pointer; color:#65706d; font-size:.67rem; font-weight:780; letter-spacing:.065em; list-style:none; text-transform:uppercase; }
+  summary::-webkit-details-marker { display:none; }
+  ol { display:grid; margin:0; padding:0; list-style:none; }
+  li { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.15rem .55rem; align-items:center; padding:.5rem .65rem; border-radius:11px; background:rgba(255,255,255,.74); font-variant-numeric:tabular-nums; }
+  .transport-next__primary-line,.transport-next__timeline { display:none; }
+  .transport-next__queue-line { display:grid; grid-template-columns:3.8rem minmax(0,1fr); gap:.55rem; align-items:center; }
+  .transport-next__queue-line>strong { font-size:.92rem; }
+  .transport-next__queue-line span { color:#51453d; font-size:.7rem; }
+  .transport-next__queue-line span b,.transport-next__queue-line span small { display:block; color:#292119; font-size:.76rem; }
+  .transport-next__queue-line span small { color:#6c5c51; }
+  li em { color:#8e3d1e; font-size:.65rem; font-style:normal; font-weight:800; }
+  li[data-transport-past="true"] { display:none; }
+  @container kaup-transport (max-width:390px) { li { padding-inline:.5rem; } .transport-next__queue-line { grid-template-columns:3.5rem minmax(0,1fr); } li em { grid-column:1; } }
+</style>

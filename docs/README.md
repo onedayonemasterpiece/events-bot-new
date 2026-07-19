@@ -31,6 +31,10 @@
 - Фичи: `docs/features/`
 - Interest clubs implementation RC, identity ADR and gated release plan: `docs/features/interest-clubs/README.md`
 - Static personal announcements release map: `docs/features/static-personal-announcements/README.md`
+- Static event-page production plan, 10-day Telegraph cutover and tests: `docs/features/static-site-pages/release-plan.md`, `docs/features/static-site-pages/test-scenarios.md`
+
+- Static-site service share: `docs/features/static-site-pages/service-sharing.md`
+- Service-share preview runbook: `docs/operations/service-sharing-preview.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)

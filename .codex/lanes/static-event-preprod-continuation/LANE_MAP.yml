@@ -1,0 +1,95 @@
+mode: worktree_worker
+repo: events-bot-new
+base_ref: 38401787645584c2508579bd61dc3c345d0b207d
+base_branch: integration/static-event-preprod-continuation-20260718
+integration_branch: integration/static-event-preprod-continuation-20260718
+global_constraints:
+  - preserve accepted v11/v12 event template families
+  - footer rollout only after the accepted isolated prototype
+  - secret/noindex preproduction only; do not publish site root
+  - code changes require canonical docs and CHANGELOG
+  - no production DB mutation without an explicit repair lane
+verification_owner: /root
+stop_conditions:
+  - any root/static production overwrite
+  - old template reintroduced into generated candidate
+  - Smart Update can launch duplicate concurrent Kaggle builders
+lanes:
+  - id: footer_rollout
+    role: integrator
+    requirement_ids: [R01]
+    target: roll the owner-accepted compact graphite footer from its isolated specimen to every static surface
+    depends_on: []
+    execution_mode: serial_after_dependency
+    branch: integration/static-event-preprod-continuation-20260718
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-v12-release-main
+    writable_files: [site/src/layouts/EventLayout.astro, site/src/components/SiteFooterPrototype.astro, site/tests, docs/features/static-site-pages, CHANGELOG.md]
+    forbidden_files: [production database]
+    expected_output: global static footer using accepted prototype with no legacy partnership duplication
+    verification_scope: full_local
+    status: completed
+  - id: media_polish
+    role: worker
+    requirement_ids: [R02, R03]
+    target: repair medallion edge/shadow clipping and add stable image skeletons in Смотреть далее
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-preprod/media-polish
+    worktree: managed by worker
+    writable_files: [site/src/components, site/src/layouts, site/tests, docs/features/static-site-pages, CHANGELOG.md]
+    forbidden_files: [main.py, static_site_release.py, production database]
+    expected_output: committed bounded UI fix with Playwright geometry evidence
+    verification_scope: targeted
+    status: completed
+  - id: portrait_cta
+    role: worker
+    requirement_ids: [R04]
+    target: restore compact one-row desktop CTA for portrait/OCR poster family without regressing wide hero CTA
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-preprod/portrait-cta
+    worktree: managed by worker
+    writable_files: [site/src/components/DesktopEventActionPanel.astro, site/src/components/DesktopEventPage.astro, site/src/layouts/EventLayout.astro, site/tests, docs/features/static-site-pages, CHANGELOG.md]
+    forbidden_files: [footer components, build orchestration, production database]
+    expected_output: committed geometry-driven CTA correction and portrait/wide regression evidence
+    verification_scope: targeted
+    status: completed
+  - id: continuation_research
+    role: planner
+    requirement_ids: [R05]
+    target: map current desktop/mobile continuation and form several bounded non-infinite alternatives for agy validation
+    depends_on: []
+    execution_mode: read_only_until_dependency
+    branch: none
+    worktree: current code read-only
+    writable_files: []
+    forbidden_files: [all]
+    expected_output: implementation map, measurement contract and 3 product alternatives
+    verification_scope: inspection_only
+    status: completed
+  - id: preprod_release
+    role: worker
+    requirement_ids: [R06, R07]
+    target: make accepted templates and secret candidate canonical for generated links/docs and complete Smart Update preproduction rebuild handoff
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-event-preprod/release-routing
+    worktree: managed by worker
+    writable_files: [main.py, main_part2.py, static_site_release.py, scripts, site/scripts, docs/features/static-site-pages, docs/operations, tests, CHANGELOG.md]
+    forbidden_files: [event UI components, production root publisher, production database mutation]
+    expected_output: committed routing/orchestration corrections plus tests proving Smart Update to immutable secret candidate
+    verification_scope: full_local
+    status: completed
+  - id: final_review
+    role: reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07]
+    target: requirement-by-requirement final diff and live candidate audit
+    depends_on: [footer_rollout, media_polish, portrait_cta, continuation_research, preprod_release]
+    execution_mode: serial_after_dependency
+    branch: none
+    worktree: integration read-only
+    writable_files: []
+    forbidden_files: [all]
+    expected_output: closure matrix with release evidence
+    verification_scope: full_local
+    status: planned

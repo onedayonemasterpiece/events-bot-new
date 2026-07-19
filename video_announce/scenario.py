@@ -4494,6 +4494,10 @@ class VideoAnnounceScenario:
                 "scripts/render_cherryflash_full.py",
             ),
             (
+                project_root / "scripts" / "render_cherryflash_guide_true3d_v4.py",
+                "scripts/render_cherryflash_guide_true3d_v4.py",
+            ),
+            (
                 project_root / "video_announce" / "__init__.py",
                 "video_announce/__init__.py",
             ),

@@ -1,9 +1,10 @@
 ---
-import SocialIcon from '../components/SocialIcon.astro';
-import '../styles/design-system.css';
+import EventCard from '../components/EventCard.astro';
+import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
-import { getCurrentDate, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
+import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
+import type { PreviewEvent } from '../lib/types';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular' | 'clubs';
 
@@ -21,12 +22,64 @@ interface Props {
 }
 
 const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent } = Astro.props;
-const robots = 'noindex,nofollow,noarchive';
+const robots = IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive');
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const personalFeedRpcName = import.meta.env.PUBLIC_PERSONAL_FEED_RPC_NAME || 'get_listing_personal_feed_v1';
+// Inert source data for the canonical runtime-card templates below. Dynamic
+// manifests only populate clones of EventCard's DOM; they never build a second
+// handwritten card tree in the browser.
+const runtimeTemplateEvent: PreviewEvent = {
+  id: 0,
+  title: 'Шаблон события',
+  slug: '__runtime-event-card-template__',
+  event_type: 'событие',
+  festival: null,
+  status_label: 'Условия уточняются',
+  lifecycle_status: 'active',
+  starts_at: '2099-01-01T12:00:00+02:00',
+  start_date: '2099-01-01',
+  start_time: '12:00',
+  end_date: '2099-01-01',
+  end_at: '2099-01-01T14:00:00+02:00',
+  time_range_end: null,
+  timezone: 'Europe/Kaliningrad',
+  display_date: '1 января 2099',
+  display_time: '12:00',
+  city: 'Калининград',
+  venue_name: 'Площадка',
+  address: null,
+  map_query: null,
+  ticket: { kind: 'status', label: 'Условия уточняются', href: null, status: null, is_free: false, price_label: null },
+  age_restriction: null,
+  age_restriction_status: 'unknown',
+  age_restriction_provenance: null,
+  age_restriction_decision_version: null,
+  age_recommendation: null,
+  age_recommendation_label: null,
+  source_url: null,
+  telegraph_url: null,
+  image_url: withBase('/favicon.svg'),
+  image_alt: 'Шаблон изображения события',
+  image_text_mode: 'visual_only',
+  image_media_role: 'event_photo',
+  image_assets: [{ src: withBase('/favicon.svg'), width: 512, height: 512, alt: 'Шаблон изображения события', image_text_mode: 'visual_only', media_role: 'event_photo' }],
+  summary: '',
+  meta_description: '',
+  description_html: '',
+  topics: [],
+  likes_count: 0,
+  source_likes_count: 0,
+  service_likes_count: 0,
+  shares_count: 0,
+  pushkin_card: false,
+  other_date_ids: [],
+  source_prod_id: 0,
+  data_quality_notes: [],
+  updated_at: null,
+};
 
 const FOOTER_SOCIAL_LINKS = [
   { network: 'Telegram', label: 'Анонсы', href: 'https://t.me/kenigevents', icon: 'telegram' },
@@ -52,6 +105,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content={robots} />
+    {IS_SECRET_CANDIDATE && <meta name="referrer" content="no-referrer" />}
     <title>{title}</title>
     <meta name="description" content={safeDescription} />
     <link rel="canonical" href={canonicalUrl} />
@@ -69,14 +123,30 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
     <meta name="theme-color" content="#f7efe3" />
     <meta name="format-detection" content="telephone=yes" />
-    <link rel="preconnect" href="https://static.kenigevents.ru" crossorigin="anonymous" />
     {structuredData.map((item) => (
       <script type="application/ld+json" set:html={JSON.stringify(item)} />
     ))}
     <style is:global>
       :root {
+        --bg: #fbf7ef;
+        --bg-soft: #f2e7d7;
+        --surface: #fffdf8;
+        --surface-strong: #ffffff;
+        --text: #221a14;
+        --muted: #6d6259;
+        --line: #e1d3c2;
+        --primary: #a54821;
+        --primary-strong: #793014;
+        --primary-text: #ffffff;
+        --accent: #0f766e;
+        --accent-soft: #d7f0ec;
+        --warning: #a16207;
+        --shadow: 0 18px 45px rgba(72, 45, 25, 0.12);
+        --radius-xl: 28px;
+        --radius-lg: 20px;
+        --radius-md: 14px;
         color-scheme: light;
-        font-family: var(--ke-font-sans);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
       * { box-sizing: border-box; }
@@ -118,18 +188,15 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
       .skip-link:focus { transform: translateY(0); }
       .site-header {
-        position: sticky;
-        top: 0;
-        height: var(--ke-site-header-bar-height);
-        min-height: var(--ke-site-header-bar-height);
-        z-index: 60;
+        position: relative;
+        z-index: 20;
         border-bottom: 1px solid rgba(121, 48, 20, 0.12);
-        background: var(--ke-color-header);
+        background: rgba(255, 250, 242, 0.96);
         box-shadow: 0 6px 22px rgba(69,45,28,0.035);
       }
       .site-header__inner {
         position: relative;
-        width: min(var(--ke-content-wide-max), calc(100% - clamp(3rem, 5vw, 6rem)));
+        width: min(1440px, calc(100% - clamp(3rem, 5vw, 6rem)));
         margin: 0 auto;
         height: 56px;
         min-height: 56px;
@@ -146,12 +213,12 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         display: block;
         padding: 18px 24px 16px;
         border-radius: 0 0 12px 12px;
-        background: var(--ke-color-brand-tag);
+        background: #98401f;
         color: #fffaf2;
         text-decoration: none;
         transition: background-color 160ms ease;
       }
-      .site-header__brand-tag:hover { background: var(--ke-color-brand-tag-hover); }
+      .site-header__brand-tag:hover { background: #893719; }
       .site-header__desktop-lockup { display: grid; grid-template-rows: 12px auto; align-content: start; gap: 4px; }
       .site-header__desktop-lockup .announcements-lockup__endorsement { overflow: visible; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; line-height: 12px; text-transform: uppercase; white-space: nowrap; }
       .site-header__desktop-lockup .announcements-lockup__wordmark { display: block; width: 192px; height: auto; color: #fff; overflow: visible; }
@@ -590,33 +657,48 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         border: 0;
       }
       .hero-gallery__brand {
-        width: 7.45rem;
-        min-height: calc(5.35rem + env(safe-area-inset-top));
+        width: 128px;
+        min-height: calc(96px + env(safe-area-inset-top));
         display: inline-grid;
         align-content: end;
-        gap: 0.04rem;
-        padding: max(1.32rem, calc(env(safe-area-inset-top) + 0.92rem)) 0.72rem 0.58rem;
-        border-radius: 0 0 10px 10px;
-        background: linear-gradient(160deg, #793014 0%, #a54821 100%);
+        padding: max(18px, calc(env(safe-area-inset-top) + 14px)) 12px 12px;
+        border-radius: 0 0 12px 12px;
+        background: #98401f;
         color: #fffdf8;
         text-decoration: none;
         box-shadow: 0 20px 42px rgba(0,0,0,0.28), 0 1px 0 rgba(255,255,255,0.12) inset;
         pointer-events: auto;
         touch-action: manipulation;
       }
-      .hero-gallery__brand span {
-        font-size: 0.54rem;
-        font-weight: 850;
-        line-height: 1.05;
-        letter-spacing: 0.055em;
+      .hero-gallery__lockup {
+        display: grid;
+        grid-template-rows: 18px auto;
+        align-content: end;
+        gap: 6px;
+        width: 104px;
+      }
+      .hero-gallery__lockup .announcements-lockup__endorsement {
+        display: grid;
+        gap: 0;
+        font-size: 8px;
+        font-weight: 600;
+        line-height: 9px;
+        letter-spacing: 0.09em;
         text-transform: uppercase;
         opacity: 0.9;
       }
-      .hero-gallery__brand strong {
-        font-size: 1.24rem;
-        font-weight: 950;
-        line-height: 0.9;
-        letter-spacing: -0.065em;
+      .hero-gallery__lockup .announcements-lockup__wordmark {
+        display: block;
+        width: 104px;
+        height: auto;
+        color: #fff;
+        overflow: visible;
+      }
+      @media (min-width: 1024px) {
+        .hero-gallery__brand { width:240px; min-height:88px; padding:18px 24px 16px; }
+        .hero-gallery__lockup { width:192px; grid-template-rows:12px auto; gap:4px; }
+        .hero-gallery__lockup .announcements-lockup__endorsement { display:block; font-size:11px; line-height:12px; white-space:nowrap; }
+        .hero-gallery__lockup .announcements-lockup__wordmark { width:192px; }
       }
       .hero-gallery__close,
       .hero-gallery__nav {
@@ -679,6 +761,16 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         min-height: 100%;
         object-fit: cover;
         object-position: 38% center;
+      }
+      .hero-gallery__image[data-low-resolution-portrait="true"] {
+        width: auto;
+        height: auto;
+        min-height: 0;
+        max-width: min(100%, var(--gallery-source-width));
+        max-height: min(100svh, var(--gallery-source-height));
+        object-fit: contain;
+        object-position: center;
+        animation: none !important;
       }
       .hero-gallery__viewport,
       .hero-gallery__track { touch-action: none; }
@@ -1076,6 +1168,14 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       .cta-button:hover { background: var(--primary-strong); }
       .secondary-button { background: #fff; color: var(--primary-strong); border-color: var(--line); }
       .secondary-button:hover { background: #fff6ea; }
+      [data-calendar-action].is-calendar-added,
+      [data-calendar-action].is-calendar-added:hover {
+        color: #fffaf2 !important;
+        background: #302b27 !important;
+        border-color: #302b27 !important;
+        box-shadow: none !important;
+      }
+      [data-calendar-action].is-calendar-added .icon { color: currentColor; }
       .cta-button--disabled,
       .cta-button--disabled:hover {
         cursor: not-allowed;
@@ -1124,6 +1224,33 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       .event-card__media-shell--cover .event-card__media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
       .event-card__media-shell--document { background: #15110f; }
       .event-card__media-shell--document .event-card__media { display: block; width: 100%; height: auto; }
+      .event-card__media-shell--dynamic {
+        aspect-ratio: var(--dynamic-media-ratio, 4 / 5);
+        min-height: 1px;
+      }
+      .event-card__media-shell--dynamic.event-card__media-shell--document .event-card__media {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .event-card__media-shell--dynamic::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        background: linear-gradient(105deg, transparent 18%, rgba(255,255,255,.2) 38%, rgba(255,255,255,.34) 50%, rgba(255,255,255,.2) 62%, transparent 82%);
+        background-size: 220% 100%;
+        animation: event-card-shimmer 1.35s ease-in-out infinite;
+      }
+      .event-card__media-shell--dynamic.is-image-loaded::after,
+      .event-card__media-shell--dynamic.is-image-missing::after { display: none; }
+      @keyframes event-card-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        .event-card__media-shell--dynamic::after { animation: none; background-position: 50% 0; }
+      }
       .event-card__media { position: relative; z-index: 1; background: #15110f; }
       .event-card__image-fallback {
         position: absolute;
@@ -1144,7 +1271,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
       .event-card__image-fallback strong { font-size: clamp(1.15rem, 5vw, 1.55rem); line-height: 1; letter-spacing: -0.04em; }
       .event-card__media-shell.is-image-missing {
-        aspect-ratio: 4 / 5;
+        aspect-ratio: var(--dynamic-media-ratio, 4 / 5);
         background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 15rem), linear-gradient(135deg, #8a3f23, #0f766e);
       }
       .event-card__media-shell.is-image-missing .event-card__media { display: none; }
@@ -1215,7 +1342,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       .listing-filter__copy span { color: var(--muted); font-size: 0.86rem; font-weight: 760; line-height: 1.22; }
       .listing-mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16rem; min-width: min(100%, 13.5rem); padding: 0.18rem; border: 1px solid rgba(121,48,20,0.13); border-radius: 999px; background: rgba(121,48,20,0.08); box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset; white-space: nowrap; }
       .listing-mode-switch button { min-height: 40px; border: 0; border-radius: 999px; padding: 0.36rem 0.68rem; background: transparent; color: var(--primary-strong); font: inherit; font-size: 0.86rem; font-weight: 920; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.32rem; transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
-      .listing-mode-switch button[aria-checked="true"] { background: var(--primary); color: var(--primary-text); box-shadow: 0 8px 18px rgba(121,48,20,0.18); }
+      .listing-mode-switch button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); box-shadow: 0 8px 18px rgba(121,48,20,0.18); }
       .listing-mode-switch button:focus-visible { outline: 3px solid rgba(165,72,33,0.24); outline-offset: 2px; }
       .listing-mode-switch__count { min-width: 1.55rem; min-height: 1.55rem; display: inline-grid; place-items: center; border-radius: 999px; background: rgba(255,255,255,0.24); font-size: 0.78rem; line-height: 1; }
       .listing-filter-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 32; display: none; padding: 0.54rem max(0.82rem, env(safe-area-inset-right)) calc(0.54rem + env(safe-area-inset-bottom)) max(0.82rem, env(safe-area-inset-left)); border-top: 1px solid rgba(121,48,20,0.14); background: rgba(255,253,248,0.97); box-shadow: 0 -18px 42px rgba(72,45,25,0.18); transform: translateY(105%); transition: transform 260ms cubic-bezier(0.22,0.86,0.32,1), opacity 200ms ease; }
@@ -1532,7 +1659,6 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
       .site-footer__note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.92rem; }
       .social-icon { width: 1.28rem; height: 1.28rem; flex: 0 0 auto; display: block; }
-      .social-icon--max { color: #111; }
       .details-disclosure summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; font-weight: 900; font-size: 1.08rem; }
       .details-disclosure summary::marker { color: var(--primary); }
       .preview-warning { margin: 1rem 0; border: 1px solid rgba(161,98,7,0.24); background: #fff8db; color: #5a3b06; border-radius: 18px; padding: 0.8rem 1rem; }
@@ -1541,6 +1667,12 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       .feedback-report__list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
       .feedback-report__list li { padding: 0.6rem 0.7rem; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
 
+      @media (min-width: 1024px) {
+        .site-header__inner {
+          width: calc(100% - 2 * clamp(24px, 3vw, 48px));
+          max-width: none;
+        }
+      }
       @media (min-width: 760px) {
         .facts-quick { grid-template-columns: repeat(2, 1fr); }
         .event-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1rem; }
@@ -1558,14 +1690,6 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         .site-header__inner { gap: 2rem; }
         .site-nav { gap: 0; }
         .site-nav a { padding-inline: 0.7rem; font-size: 0.86rem; }
-      }
-      @media (min-width: 1024px) {
-        .site-header { min-height: var(--ke-site-header-bar-height); height: var(--ke-site-header-bar-height); }
-        .site-header__inner {
-          width: calc(100% - (2 * clamp(24px, 3vw, 48px)));
-          height: var(--ke-site-header-bar-height);
-          min-height: var(--ke-site-header-bar-height);
-        }
       }
       @media (max-width: 1023px) {
         .side-col { display: none; }
@@ -1610,7 +1734,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           padding: max(1.35rem, calc(env(safe-area-inset-top) + 0.95rem)) 0.75rem 1rem;
           border: 0;
           border-radius: 0 0 12px 12px;
-          background: var(--ke-color-brand-tag);
+          background: #98401f;
           color: #fffdf8;
           box-shadow: 0 12px 28px rgba(72, 45, 25, 0.24);
           text-decoration: none;
@@ -1622,7 +1746,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           box-shadow: 0 10px 24px rgba(72, 45, 25, 0.22);
         }
         @media (hover:hover) and (pointer:fine) {
-          .mobile-discovery-menu__summary:hover { background:var(--ke-color-brand-tag-hover); }
+          .mobile-discovery-menu__summary:hover { background:#893719; }
         }
         .mobile-discovery-menu__lockup {
           position: relative;
@@ -1806,6 +1930,25 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           transform: translate3d(0, var(--hero-parallax-y, -64px), 0) scale(1.14);
           transform-origin: center;
           will-change: transform;
+        }
+        .event-hero--low-resolution-portrait.event-hero--photo-cover .event-hero__visual {
+          min-height: 0;
+          max-height: none;
+          aspect-ratio: auto;
+          padding: 1rem;
+        }
+        .event-hero--low-resolution-portrait.event-hero--photo-cover .event-hero__image {
+          position: relative;
+          inset: auto;
+          width: auto;
+          height: auto;
+          min-width: 0;
+          max-width: min(calc(100vw - 2rem), var(--hero-source-width));
+          max-height: min(72svh, var(--hero-source-height));
+          object-fit: contain;
+          object-position: center;
+          transform: none;
+          will-change: auto;
         }
         .event-hero--compact-ticketing {
           border-radius: 24px;
@@ -2109,11 +2252,11 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
     </style>
   </head>
-  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
-        <a class="site-header__brand-tag" href={withBase('/__preview/')} aria-label="Полюбить Калининград Анонсы — на главную">
+        <a class="site-header__brand-tag" href={siteHomeHref()} aria-label="Полюбить Калининград Анонсы — на главную">
           <AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" />
         </a>
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
@@ -2131,7 +2274,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
                 {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы</a>}
                 <a href={withBase('/poisk/')}>Поиск</a>
                 <a href={withBase('/partners/')}>Инфопартнёры</a>
-                <a href={withBase('/__preview/')}>Все анонсы</a>
+                <a href={siteHomeHref()}>Все анонсы</a>
               </div>
             </nav>
           </div>
@@ -2144,47 +2287,24 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       </div>
     </header>
     <slot />
-    <footer class="site-footer">
-      <div class="page-shell site-footer__inner">
-        <div class="site-footer__top">
-          <strong class="site-footer__title">{SITE_NAME}</strong>
-          <nav class="site-footer__nav" aria-label="Навигация по афише">
-            <a href={withBase('/segodnya/')}>Сегодня</a>
-            <a href={withBase('/zavtra/')}>Завтра</a>
-            <a href={withBase('/vyhodnye/')}>Выходные</a>
-            <a href={withBase('/vystavki/')}>Выставки</a>
-            <a href={withBase('/populyarnoe/')}>Популярное</a>
-            {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы по интересам</a>}
-            <a href={withBase('/poisk/')}>Поиск</a>
-            <a href={withBase('/partners/')}>Инфопартнёры</a>
-            <a href={withBase('/__preview/')}>Все анонсы</a>
-            <a href={withBase('/partnerstvo/')}>Информационное партнёрство</a>
-          </nav>
-        </div>
-        <nav class="site-footer__social" aria-label="Соцсети Полюбить Калининград Анонсы">
-          {FOOTER_SOCIAL_LINKS.map((link) => (
-            <a
-              class="site-footer__social-link"
-              href={link.href}
-              target="_blank"
-              rel="me noopener noreferrer"
-              aria-label={`${link.network}: ${link.label}`}
-            >
-              <SocialIcon name={link.icon} />
-              <span class="site-footer__social-network">{link.network}</span>
-              <span class="site-footer__social-label">{link.label}</span>
-            </a>
-          ))}
-        </nav>
-        <a class="site-footer__contact" href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
-        <div class="site-footer__tools" data-nosnippet>
-          <button type="button" class="personalization-reset-button" data-reset-personalization>Сбросить персонализацию</button>
-          <span class="personalization-reset-status" data-personalization-reset-status hidden></span>
-        </div>
-        <p class="site-footer__note">Preview · noindex · {SITE_ORIGIN}</p>
-      </div>
-    </footer>
+    <!-- EventCard is the single DOM/interaction source for every client-added card. -->
+    <template data-event-card-template="split-actions">
+      <EventCard event={runtimeTemplateEvent} variant="split-actions" desktopRelatedCrop runtimeTemplate />
+    </template>
+    <template data-event-card-template="overlay-controls">
+      <EventCard event={runtimeTemplateEvent} variant="overlay-controls" desktopRelatedCrop runtimeTemplate />
+    </template>
+    <SiteFooter socialLinks={FOOTER_SOCIAL_LINKS} />
 
+    <script>
+      import { packRelatedCardRows, relatedCardMediaGeometry } from '../lib/relatedCardLayout.mjs';
+      import { selectEventContinuation } from '../lib/eventContinuation.mjs';
+      Object.assign(window, {
+        KenigEventsPackRelatedCardRows: packRelatedCardRows,
+        KenigEventsRelatedCardMediaGeometry: relatedCardMediaGeometry,
+        KenigEventsSelectEventContinuation: selectEventContinuation,
+      });
+    </script>
     <script is:inline>
       (() => {
         const PROFILE_KEY = 'ke_personalization_profile';
@@ -2201,13 +2321,27 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         const MAX_LOG = 240;
         const MAX_SHARE_PROMPTS_PER_SESSION = 2;
         const DEFAULT_PRELOAD_TARGET = 10;
-        const PERSONAL_FEED_CACHE_KEY = 'ke_listing_personal_feed_cache_v1';
+        const CURRENT_BASE_PATH = String(document.body?.dataset.siteBasePath || '/').replace(/\/+$/u, '') || '';
+        const SITE_INTERNAL_ORIGIN = (() => {
+          try { return new URL(document.body?.dataset.siteOrigin || location.origin).origin; }
+          catch (_) { return location.origin; }
+        })();
+        const PERSONAL_FEED_CACHE_KEY = `ke_listing_personal_feed_cache_v1:${CURRENT_BASE_PATH || '/'}`;
         const PERSONAL_FEED_SURFACE = 'listing_personal_feed';
         const PERSONAL_FEED_SCHEMA_VERSION = 'listing-personal-feed-v1';
         const PERSONAL_FEED_LIMIT = 30;
         const PERSONAL_FEED_TTL_MS = 30 * 60 * 1000;
+        const EVENT_CONTINUATION_RECENT_KEY = `ke_event_continuation_recent_v1:${CURRENT_BASE_PATH || '/'}`;
+        const EVENT_CONTINUATION_RECENT_TTL_MS = 6 * 60 * 60 * 1000;
+        const EVENT_CONTINUATION_RECENT_BLOCKS = 12;
         const LISTING_MODE_KEY = 'ke_listing_mode_v1';
-        let listingPrototypeMode = null;
+        const CALENDAR_STATE_KEY = 'ke_calendar_saved_v1';
+        const CALENDAR_STATE_VERSION = 1;
+        const CALENDAR_STATE_LIMIT = 256;
+        const CALENDAR_USAGE_KEY = 'ke_calendar_usage_v1';
+        const CALENDAR_USAGE_VERSION = 1;
+        const CALENDAR_USAGE_REGULAR_THRESHOLD = 3;
+        const CALENDAR_USAGE_RECENT_MS = 30 * 24 * 60 * 60 * 1000;
         const NEGATIVE_HARD_FILTER_THRESHOLD = 0.95;
         const DEFAULT_WEIGHTS = {
           staticContext: 0.80,
@@ -2243,6 +2377,201 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           } catch (_) {
             return false;
           }
+        }
+
+        // Dynamic manifests and localStorage outlive an individual preview build.
+        // Treat their links as data, not trusted navigation: same-site event paths
+        // always belong to the currently open preview, while genuine external
+        // ticket URLs must remain untouched.
+        function rebaseInternalEventUrl(value, options = {}) {
+          const raw = typeof value === 'string' ? value.trim() : '';
+          if (!raw || raw === '#') return raw || '#';
+          let url;
+          try {
+            const hasScheme = /^[a-z][a-z0-9+.-]*:/iu.test(raw) || raw.startsWith('//');
+            url = new URL(hasScheme || raw.startsWith('/') ? raw : `/${raw}`, location.origin);
+          } catch (_) {
+            return raw;
+          }
+          if (url.origin !== location.origin && url.origin !== SITE_INTERNAL_ORIGIN) return raw;
+          const eventMarker = '/sobytiya/';
+          const eventIndex = url.pathname.lastIndexOf(eventMarker);
+          if (eventIndex < 0) return raw;
+          const eventSuffix = url.pathname.slice(eventIndex);
+          if (!/^\/sobytiya\/[^/]+\/(?:.*)?$/u.test(eventSuffix)) return raw;
+          const rebased = `${CURRENT_BASE_PATH}${eventSuffix}${url.search}${url.hash}`;
+          return options.absolute ? `${SITE_INTERNAL_ORIGIN}${rebased}` : rebased;
+        }
+
+        window.KenigEventsNormalizeInternalEventUrl = rebaseInternalEventUrl;
+
+        function kaliningradEpochDay() {
+          return Math.floor((Date.now() + 2 * 60 * 60 * 1000) / 86400000);
+        }
+
+        function calendarExpiryDayFromIso(value) {
+          const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(String(value || '').trim());
+          if (!match) return 0;
+          const day = Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000);
+          return Number.isFinite(day) ? day + 1 : 0;
+        }
+
+        function normalizeCalendarState(value) {
+          const today = kaliningradEpochDay();
+          const entries = value && value.v === CALENDAR_STATE_VERSION && value.e && typeof value.e === 'object' && !Array.isArray(value.e)
+            ? Object.entries(value.e)
+                .filter(([id, expiry]) => /^\d+$/u.test(id) && Number.isInteger(expiry) && expiry > today)
+                .sort((a, b) => a[1] - b[1])
+                .slice(0, CALENDAR_STATE_LIMIT)
+            : [];
+          return { v: CALENDAR_STATE_VERSION, e: Object.fromEntries(entries) };
+        }
+
+        function persistCalendarState(state) {
+          const normalized = normalizeCalendarState(state);
+          const hasEntries = Object.keys(normalized.e).length > 0;
+          try {
+            if (hasEntries) localStorage.setItem(CALENDAR_STATE_KEY, JSON.stringify(normalized));
+            else localStorage.removeItem(CALENDAR_STATE_KEY);
+          } catch (_) {}
+          return normalized;
+        }
+
+        function readCalendarState() {
+          const raw = readJson(CALENDAR_STATE_KEY, null);
+          const normalized = normalizeCalendarState(raw);
+          const serialized = Object.keys(normalized.e).length > 0 ? JSON.stringify(normalized) : '';
+          try {
+            const current = localStorage.getItem(CALENDAR_STATE_KEY) || '';
+            if (serialized !== current) {
+              if (serialized) localStorage.setItem(CALENDAR_STATE_KEY, serialized);
+              else localStorage.removeItem(CALENDAR_STATE_KEY);
+            }
+          } catch (_) {}
+          return normalized;
+        }
+
+        function markCalendarAdded(eventId, expiryDay) {
+          const id = String(eventId || '').trim();
+          const expiry = Number(expiryDay);
+          if (!/^\d+$/u.test(id) || !Number.isInteger(expiry) || expiry <= kaliningradEpochDay()) return false;
+          const state = readCalendarState();
+          if (!state.e[id] && Object.keys(state.e).length >= CALENDAR_STATE_LIMIT) {
+            const farthest = Object.entries(state.e).sort((a, b) => b[1] - a[1])[0];
+            if (farthest) delete state.e[farthest[0]];
+          }
+          state.e[id] = expiry;
+          persistCalendarState(state);
+          return true;
+        }
+
+        function normalizeCalendarUsage(value) {
+          const count = value && value.v === CALENDAR_USAGE_VERSION
+            ? Math.max(0, Math.min(9999, Number(value.count || 0)))
+            : 0;
+          const lastUsedAt = value && value.v === CALENDAR_USAGE_VERSION
+            ? Math.max(0, Number(value.last_used_at || 0))
+            : 0;
+          return {
+            v: CALENDAR_USAGE_VERSION,
+            count: Number.isFinite(count) ? Math.floor(count) : 0,
+            last_used_at: Number.isFinite(lastUsedAt) ? lastUsedAt : 0,
+          };
+        }
+
+        function readCalendarUsage() {
+          return normalizeCalendarUsage(readJson(CALENDAR_USAGE_KEY, null));
+        }
+
+        function markCalendarUsed() {
+          const usage = readCalendarUsage();
+          writeJson(CALENDAR_USAGE_KEY, {
+            v: CALENDAR_USAGE_VERSION,
+            count: Math.min(9999, usage.count + 1),
+            last_used_at: Date.now(),
+          });
+        }
+
+        function calendarLabelMayCollapse(usage = readCalendarUsage()) {
+          if (usage.count < CALENDAR_USAGE_REGULAR_THRESHOLD) return false;
+          if (!usage.last_used_at) return false;
+          return Date.now() - usage.last_used_at <= CALENDAR_USAGE_RECENT_MS;
+        }
+
+        function syncCalendarControls() {
+          const state = readCalendarState();
+          const collapseAdaptiveLabels = calendarLabelMayCollapse();
+          document.querySelectorAll('a[data-calendar-action]').forEach((anchor) => {
+            const label = anchor.querySelector('[data-calendar-label]');
+            if (label && !label.dataset.calendarOriginalLabel) label.dataset.calendarOriginalLabel = label.textContent?.trim() || 'В календарь';
+            const added = Boolean(state.e[String(anchor.dataset.calendarEventId || '')]);
+            anchor.classList.toggle('is-calendar-added', added);
+            anchor.dataset.calendarState = added ? 'added' : 'available';
+            if (label) label.textContent = added ? 'Добавлено' : (label.dataset.calendarOriginalLabel || 'В календарь');
+            const title = anchor.dataset.calendarEventTitle || 'событие';
+            anchor.setAttribute('aria-label', added ? `Скачать файл календаря ещё раз: ${title}` : `Добавить в календарь: ${title}`);
+            const adaptive = anchor.hasAttribute('data-calendar-adaptive-label');
+            const collapsed = adaptive && collapseAdaptiveLabels;
+            anchor.classList.toggle('is-calendar-label-compact', collapsed);
+            anchor.dataset.calendarLabelMode = collapsed ? 'icon' : 'text';
+          });
+        }
+
+        function triggerCalendarDownload(blob, eventId) {
+          const objectUrl = URL.createObjectURL(blob);
+          const download = document.createElement('a');
+          download.href = objectUrl;
+          download.download = `kenigevents-event-${eventId}.ics`;
+          download.hidden = true;
+          document.body.appendChild(download);
+          download.click();
+          download.remove();
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+        }
+
+        function fallbackCalendarNavigation(anchor) {
+          const fallback = document.createElement('a');
+          fallback.href = anchor.href;
+          fallback.target = anchor.target || '';
+          fallback.rel = anchor.rel || '';
+          fallback.hidden = true;
+          document.body.appendChild(fallback);
+          fallback.click();
+          fallback.remove();
+        }
+
+        let calendarActionsHydrated = false;
+        function hydrateCalendarActions() {
+          syncCalendarControls();
+          if (calendarActionsHydrated) return;
+          calendarActionsHydrated = true;
+          document.addEventListener('click', async (event) => {
+            const anchor = event.target.closest('a[data-calendar-action]');
+            if (!anchor || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const eventId = String(anchor.dataset.calendarEventId || '').trim();
+            const expiryDay = Number(anchor.dataset.calendarExpiryDay || 0);
+            if (!eventId || !Number.isInteger(expiryDay) || anchor.dataset.calendarPending === 'true') return;
+            event.preventDefault();
+            anchor.dataset.calendarPending = 'true';
+            markCalendarUsed();
+            syncCalendarControls();
+            try {
+              const response = await fetch(anchor.href, { credentials: 'omit' });
+              if (!response.ok) throw new Error(`ICS HTTP ${response.status}`);
+              const blob = await response.blob();
+              triggerCalendarDownload(blob, eventId);
+              markCalendarAdded(eventId, expiryDay);
+              syncCalendarControls();
+            } catch (_) {
+              fallbackCalendarNavigation(anchor);
+            } finally {
+              delete anchor.dataset.calendarPending;
+            }
+          }, true);
+          window.addEventListener('storage', (event) => {
+            if (event.key === CALENDAR_STATE_KEY || event.key === CALENDAR_USAGE_KEY) syncCalendarControls();
+          });
+          window.addEventListener('pageshow', syncCalendarControls);
         }
 
         function formatLocalResetTime(value) {
@@ -2521,31 +2850,20 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const filters = Array.from(document.querySelectorAll('[data-listing-filter]'));
           const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar]'));
           if (!items.length || (!filters.length && !bars.length)) return;
-          const prototypeQualified = (/^\/preview-[^/]+\//u.test(location.pathname) || ['127.0.0.1', 'localhost'].includes(location.hostname))
-            && new URLSearchParams(location.search).get('personalization') !== 'off';
           const profile = readProfile();
           const validProfile = isCompatibleProfile(profile);
-          const prototypeHiddenIds = prototypeQualified
-            ? new Set(items.filter((_, index) => index % 5 === 4).map((item) => asId(item.dataset.eventId)).filter(Boolean))
-            : new Set();
-          if (prototypeQualified && prototypeHiddenIds.size === 0 && items.length > 1) {
-            const fallbackId = asId(items.at(-1)?.dataset.eventId);
-            if (fallbackId) prototypeHiddenIds.add(fallbackId);
-          }
-          const hiddenIds = prototypeQualified ? prototypeHiddenIds : (validProfile ? hiddenSet(profile) : new Set());
-          const explicitMode = prototypeQualified ? listingPrototypeMode : readListingMode();
+          const hiddenIds = validProfile ? hiddenSet(profile) : new Set();
+          const explicitMode = readListingMode();
           const hiddenCandidates = items.filter((item) => listingItemShouldHide(item, hiddenIds));
           const hiddenCount = hiddenCandidates.length;
           const total = items.length;
-          const usesExplicitFullDefault = filters.some((filter) => filter.dataset.listingFilterVersion === '2');
-          const mode = explicitMode || (usesExplicitFullDefault ? 'all' : (hiddenCount > 0 ? 'personal' : 'all'));
+          const mode = explicitMode || (hiddenCount > 0 ? 'personal' : 'all');
           const personalMode = mode === 'personal';
           if (hiddenCount <= 0) {
             items.forEach((item) => {
               item.hidden = false;
               item.dataset.personalHidden = 'false';
             });
-            document.dispatchEvent(new CustomEvent('kenigevents:listing-personal-filter'));
             document.querySelectorAll('[data-listing-daypart]').forEach((section) => {
               const count = section.querySelectorAll('[data-listing-item]').length;
               const badge = section.querySelector('[data-listing-daypart-count]');
@@ -2563,7 +2881,6 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             item.hidden = shouldHide;
             item.dataset.personalHidden = shouldHide ? 'true' : 'false';
           });
-          document.dispatchEvent(new CustomEvent('kenigevents:listing-personal-filter'));
           document.querySelectorAll('[data-listing-daypart]').forEach((section) => {
             const count = Array.from(section.querySelectorAll('[data-listing-item]')).filter((item) => !item.hidden).length;
             const badge = section.querySelector('[data-listing-daypart-count]');
@@ -2577,13 +2894,12 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               : `Показаны все ${total}. Пока нечего скрывать по вашим отметкам.`;
           const titleText = personalMode ? 'Для меня' : 'Все события';
           [...filters, ...bars].forEach((root) => {
-            root.dataset.personalizationPrototype = prototypeQualified ? 'qualified' : '';
             root.hidden = false;
             root.classList.add('is-visible');
             root.querySelectorAll('[data-listing-mode-button]').forEach((button) => {
               const pressed = button.dataset.listingModeButton === mode;
+              button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
               button.setAttribute('aria-checked', pressed ? 'true' : 'false');
-              button.setAttribute('tabindex', pressed ? '0' : '-1');
             });
             root.querySelectorAll('[data-listing-total-count]').forEach((node) => { node.textContent = String(total); });
             root.querySelectorAll('[data-listing-visible-count]').forEach((node) => { node.textContent = String(visible); });
@@ -2805,6 +3121,21 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           });
         }
 
+        function personalFeedSignalCount(profile) {
+          if (!isCompatibleProfile(profile)) return 0;
+          const explicitIds = new Set([
+            ...toArray(profile.liked_event_ids).map(asId),
+            ...toArray(profile.not_interested_event_ids).map(asId),
+            ...toArray(profile.hidden_event_ids).map(asId),
+          ].filter(Boolean));
+          const shareSignals = Object.values(profile.share_counts || {}).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+          return explicitIds.size + Math.min(3, shareSignals);
+        }
+
+        function personalFeedProfileIsReady(profile) {
+          return isCompatibleProfile(profile) && personalFeedSignalCount(profile) >= 3;
+        }
+
         function normalizePersonalFeedItem(item, index) {
           const candidate = item && item.candidate ? item.candidate : item;
           const display = displayOf(candidate);
@@ -2821,20 +3152,28 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             status: candidate?.status || display.status_label || 'available',
             lifecycle_status: candidate?.lifecycle_status || 'active',
             is_free: Boolean(candidate?.is_free) || /бесплат|свободн/iu.test(display.price_label || ''),
-            base_similarity: Number(candidate?.base_similarity ?? candidate?.personal_score ?? Math.max(0, 1 - index * 0.01)),
-            static_score: Number(candidate?.static_score ?? candidate?.base_similarity ?? Math.max(0, 1 - index * 0.01)),
-            reason_codes: unique([...(toArray(candidate?.reason_codes)), 'backend:listing_personal_feed']),
+            base_similarity: Number(candidate?.base_similarity ?? candidate?.personal_score ?? Math.max(0, 1 - index * 0.001)),
+            static_score: Number(candidate?.static_score ?? candidate?.base_similarity ?? Math.max(0, 1 - index * 0.001)),
+            reason_codes: unique([...(toArray(candidate?.reason_codes)), 'catalog:personal_feed']),
             exploration_candidate: Boolean(candidate?.exploration_candidate),
+            slot_type: candidate?.slot_type || null,
+            vector_similarity: Number.isFinite(Number(candidate?.vector_similarity)) ? Number(candidate.vector_similarity) : null,
+            llm_semantic_score: Number.isFinite(Number(candidate?.llm_semantic_score)) ? Number(candidate.llm_semantic_score) : null,
+            verification_state: candidate?.verification_state || 'not_run',
+            gemma_reject: candidate?.gemma_reject === true,
+            retrieval_sources: toArray(candidate?.retrieval_sources).map(String),
             display: {
               ...display,
               id,
-              href: display.href || candidate?.href || '#',
-              absolute_url: display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href,
+              href: rebaseInternalEventUrl(display.href || candidate?.href || '#'),
+              absolute_url: rebaseInternalEventUrl(display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href, { absolute: true }),
               title: display.title || candidate?.title || 'Событие',
               image_url: display.image_url || candidate?.image_url || null,
               image_alt: display.image_alt || candidate?.image_alt || `Афиша события «${display.title || candidate?.title || 'событие'}»`,
               image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
               image_media_role: display.image_media_role || candidate?.image_media_role || 'unknown_document',
+              image_width: Number(display.image_width || candidate?.image_width || 0),
+              image_height: Number(display.image_height || candidate?.image_height || 0),
               focal_y: Number.isFinite(Number(display.focal_y)) ? Math.max(0, Math.min(1, Number(display.focal_y))) : 0.5,
               display_date: display.display_date || candidate?.date || '',
               display_date_time: display.display_date_time || display.display_date || candidate?.date || '',
@@ -2845,43 +3184,55 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               price_label: display.price_label || null,
               likes_count: Number(display.likes_count || 0),
               shares_count: Number(display.shares_count || 0),
-              calendar_href: display.calendar_href || candidate?.calendar_href || '#',
+              calendar_href: rebaseInternalEventUrl(display.calendar_href || candidate?.calendar_href || '#'),
               calendar_eligible: Boolean(display.calendar_eligible || candidate?.calendar_eligible),
             },
           };
         }
 
-        function normalizePersonalFeedManifest(payload) {
+        function normalizePersonalFeedManifest(payload, options = {}) {
           const items = toArray(payload?.related_static || payload?.items || payload?.events || payload?.recommendations);
+          const relatedItems = toArray(options.relatedPayload?.related_static);
+          const currentEventId = asId(options.currentEventId || options.relatedPayload?.event_id || options.relatedPayload?.current_event?.event_id);
           return {
             version: payload?.version || 1,
             schema_version: payload?.schema_version || PERSONAL_FEED_SCHEMA_VERSION,
             feature_schema_version: payload?.feature_schema_version || FEATURE_SCHEMA_VERSION,
             taxonomy_version: payload?.taxonomy_version || TAXONOMY_VERSION,
             surface: payload?.surface || PERSONAL_FEED_SURFACE,
-            algorithm_id: payload?.algorithm_id || 'supabase_rpc_personal_feed_v1',
+            algorithm_id: payload?.algorithm_id || 'static_personal_feed_catalog_v1',
             generated_at: payload?.generated_at || new Date().toISOString(),
             preload_target: Number(payload?.preload_target || PERSONAL_FEED_LIMIT),
             page_size: Number(payload?.page_size || PERSONAL_FEED_LIMIT),
-            current_event: null,
+            current_event: currentEventId ? { event_id: currentEventId } : null,
+            current_event_id: currentEventId || null,
             related_static: items.map(normalizePersonalFeedItem).filter((item) => item.event_id != null),
+            related_adjacent: relatedItems.map(normalizePersonalFeedItem).filter((item) => item.event_id != null),
           };
         }
 
-        function readPersonalFeedCache(profile) {
+        function personalFeedCurrentEventId(section) {
+          return asId(section?.dataset.currentEventId);
+        }
+
+        function readPersonalFeedCache(profile, section) {
           const cache = readJson(PERSONAL_FEED_CACHE_KEY, null);
           if (!cache || cache.schema_version !== PERSONAL_FEED_SCHEMA_VERSION) return null;
+          if (cache.base_path !== CURRENT_BASE_PATH) return null;
           if (Number(cache.expires_at || 0) <= Date.now()) return null;
           if (cache.profile_hash !== personalFeedProfileHash(profile)) return null;
+          if (asId(cache.current_event_id) !== personalFeedCurrentEventId(section)) return null;
           if (!cache.manifest || !Array.isArray(cache.manifest.related_static)) return null;
           return cache.manifest;
         }
 
-        function writePersonalFeedCache(manifest, profile) {
+        function writePersonalFeedCache(manifest, profile, section) {
           if (!manifest || !Array.isArray(manifest.related_static) || !manifest.related_static.length) return;
           writeJson(PERSONAL_FEED_CACHE_KEY, {
             schema_version: PERSONAL_FEED_SCHEMA_VERSION,
+            base_path: CURRENT_BASE_PATH,
             profile_hash: personalFeedProfileHash(profile),
+            current_event_id: personalFeedCurrentEventId(section),
             saved_at: Date.now(),
             expires_at: Date.now() + PERSONAL_FEED_TTL_MS,
             manifest,
@@ -2914,72 +3265,351 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           };
         }
 
-        async function fetchPersonalFeedManifest(profile) {
-          const config = personalFeedConfig();
-          if (!config) return null;
-          const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
-            method: 'POST',
-            headers: {
-              Accept: 'application/json',
-              'Content-Type': 'application/json',
-              apikey: config.key,
-              Authorization: `Bearer ${config.key}`,
-            },
-            body: JSON.stringify({
-              p_surface: PERSONAL_FEED_SURFACE,
-              p_limit: PERSONAL_FEED_LIMIT,
-              p_profile: compactProfileForRpc(profile),
-            }),
+        async function fetchPersonalFeedManifest(profile, section) {
+          const source = String(section?.dataset.personalFeedSrc || '').trim();
+          let payload = null;
+          if (source) {
+            try {
+              const response = await fetch(source, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+              if (response.ok) payload = await response.json();
+            } catch (_) {}
+          }
+          if (!payload && personalFeedProfileIsReady(profile)) {
+            const config = personalFeedConfig();
+            if (config) {
+              const response = await fetch(`${config.url}/rest/v1/rpc/${encodeURIComponent(config.rpc)}`, {
+                method: 'POST',
+                headers: {
+                  Accept: 'application/json',
+                  'Content-Type': 'application/json',
+                  apikey: config.key,
+                  Authorization: `Bearer ${config.key}`,
+                },
+                body: JSON.stringify({
+                  p_surface: PERSONAL_FEED_SURFACE,
+                  p_limit: PERSONAL_FEED_LIMIT,
+                  p_profile: compactProfileForRpc(profile),
+                }),
+              });
+              if (response.ok) payload = await response.json();
+            }
+          }
+          if (!payload) return null;
+          let relatedPayload = null;
+          const relatedSource = String(section?.dataset.personalFeedRelatedSrc || '').trim();
+          if (relatedSource) {
+            try {
+              const response = await fetch(relatedSource, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+              if (response.ok) relatedPayload = await response.json();
+            } catch (_) {}
+          }
+          return normalizePersonalFeedManifest(payload, {
+            currentEventId: personalFeedCurrentEventId(section),
+            relatedPayload,
           });
-          if (!response.ok) return null;
-          return normalizePersonalFeedManifest(await response.json());
         }
 
-        async function getPersonalFeedManifest({ force = false } = {}) {
+        async function getPersonalFeedManifest(section, { force = false } = {}) {
           const profile = readProfile();
+          const allowsPopularFallback = section?.dataset.listingContext === 'event-detail';
+          if (!personalFeedProfileIsReady(profile) && !allowsPopularFallback) return null;
           if (!force) {
-            const cached = readPersonalFeedCache(profile);
+            const cached = readPersonalFeedCache(profile, section);
             if (cached) return cached;
           }
-          if (!personalFeedConfig()) return null;
-          if (personalFeedRequest && !force) return personalFeedRequest;
-          personalFeedRequest = fetchPersonalFeedManifest(profile)
+          const requestKey = `${personalFeedProfileHash(profile)}:${personalFeedCurrentEventId(section)}`;
+          if (personalFeedRequest?.key === requestKey && !force) return personalFeedRequest.promise;
+          const promise = fetchPersonalFeedManifest(profile, section)
             .then((manifest) => {
-              if (manifest) writePersonalFeedCache(manifest, profile);
+              if (manifest) writePersonalFeedCache(manifest, profile, section);
               return manifest;
             })
             .catch(() => null)
-            .finally(() => { personalFeedRequest = null; });
-          return personalFeedRequest;
+            .finally(() => { if (personalFeedRequest?.key === requestKey) personalFeedRequest = null; });
+          personalFeedRequest = { key: requestKey, promise };
+          return promise;
+        }
+
+        function personalFeedPopularity(candidate) {
+          const display = displayOf(candidate);
+          const likes = Math.max(0, Number(display.likes_count || 0));
+          const shares = Math.max(0, Number(display.shares_count || 0));
+          return Math.min(1, Math.log1p(likes + shares * 1.5) / Math.log(80));
+        }
+
+        function rankPersonalFeedCandidates(manifest, profile) {
+          if (!personalFeedProfileIsReady(profile)) return [];
+          const scored = [];
+          for (const candidate of toArray(manifest?.related_static)) {
+            if (!isEligibleCandidate(candidate, manifest, profile)) continue;
+            const affinity = tagAffinity(candidate, profile);
+            const negative = negativeInterestPenalty(candidate, profile);
+            const fatigue = fatiguePenalty(candidate, profile);
+            const price = priceMatch(candidate, profile);
+            const time = timeMatch(candidate, profile);
+            const popularity = personalFeedPopularity(candidate);
+            const exploration = candidate?.exploration_candidate ? 1 : 0;
+            const score =
+              0.60 * affinity +
+              0.16 * popularity +
+              0.09 * price +
+              0.06 * time +
+              0.05 * staticCandidateScore(candidate) +
+              0.04 * exploration -
+              0.62 * negative -
+              0.16 * fatigue;
+            const reasonCodes = toArray(candidate.reason_codes).slice();
+            if (affinity > 0) reasonCodes.push('profile:positive_affinity');
+            if (popularity > 0) reasonCodes.push('catalog:popularity');
+            if (price > 0) reasonCodes.push('profile:price_match');
+            scored.push({ candidate, score, base_similarity: staticCandidateScore(candidate), reason_codes: unique(reasonCodes) });
+          }
+          scored.sort((left, right) => right.score - left.score || right.base_similarity - left.base_similarity || Number(candidateId(left.candidate) || 0) - Number(candidateId(right.candidate) || 0));
+          return applyDiversity(scored, { maxSameCategory: 3, maxSameVenue: 2 }).map((item, index) => ({
+            event_id: candidateId(item.candidate),
+            candidate: item.candidate,
+            rank: index,
+            personal_score: Number(item.score.toFixed(4)),
+            base_similarity: Number(item.base_similarity.toFixed(4)),
+            reason_codes: item.reason_codes,
+            diversity_postponed: Boolean(item.diversity_postponed),
+          }));
+        }
+
+        function rankPopularFallbackCandidates(manifest, profile) {
+          const active = isCompatibleProfile(profile) ? profile : null;
+          const scored = [];
+          for (const candidate of toArray(manifest?.related_static)) {
+            if (!isEligibleCandidate(candidate, manifest, active)) continue;
+            const popularity = personalFeedPopularity(candidate);
+            const currentDay = Date.parse(`${String(manifest?.current_date || '').slice(0, 10)}T00:00:00Z`);
+            const candidateDay = Date.parse(`${String(candidate?.date || candidate?.start_date || '').slice(0, 10)}T00:00:00Z`);
+            const daysAway = Number.isFinite(currentDay) && Number.isFinite(candidateDay)
+              ? Math.max(0, Math.round((candidateDay - currentDay) / 86400000))
+              : 30;
+            const upcomingProximity = 1 / (1 + daysAway / 7);
+            const score = 0.68 * popularity + 0.32 * upcomingProximity;
+            scored.push({
+              candidate,
+              score,
+              base_similarity: upcomingProximity,
+              reason_codes: unique([...(toArray(candidate.reason_codes)), 'catalog:popular_fallback', 'catalog:upcoming_proximity']),
+            });
+          }
+          scored.sort((left, right) => right.score - left.score || right.base_similarity - left.base_similarity || Number(candidateId(left.candidate) || 0) - Number(candidateId(right.candidate) || 0));
+          return applyDiversity(scored, { maxSameCategory: 3, maxSameVenue: 2 }).map((item, index) => ({
+            event_id: candidateId(item.candidate),
+            candidate: item.candidate,
+            rank: index,
+            personal_score: Number(item.score.toFixed(4)),
+            base_similarity: Number(item.base_similarity.toFixed(4)),
+            reason_codes: item.reason_codes,
+            diversity_postponed: Boolean(item.diversity_postponed),
+          }));
+        }
+
+        function rankAdjacentContinuationCandidates(manifest, profile) {
+          const active = isCompatibleProfile(profile) ? profile : null;
+          return toArray(manifest?.related_adjacent)
+            .filter((candidate) => isEligibleCandidate(candidate, manifest, active))
+            .filter((candidate) => candidate?.verification_state !== 'llm_rejected' && candidate?.gemma_reject !== true)
+            .filter((candidate) => candidate?.vector_similarity != null || candidate?.slot_type === 'adjacent_discovery' || toArray(candidate?.retrieval_sources).some((source) => /pgvector|event_embedding/iu.test(String(source))))
+            .map((candidate, index) => ({
+              event_id: candidateId(candidate),
+              candidate,
+              rank: index,
+              personal_score: Number(staticCandidateScore(candidate).toFixed(4)),
+              base_similarity: Number(staticCandidateScore(candidate).toFixed(4)),
+              reason_codes: unique([...(toArray(candidate.reason_codes)), 'continuation:current_event_tail']),
+            }));
+        }
+
+        function normalizeRecentContinuationRing(value) {
+          const now = Date.now();
+          const blocks = toArray(value?.blocks)
+            .filter((block) => Number(block?.served_at || 0) > now - EVENT_CONTINUATION_RECENT_TTL_MS)
+            .slice(-EVENT_CONTINUATION_RECENT_BLOCKS)
+            .map((block) => ({
+              served_at: Number(block.served_at),
+              current_event_id: asId(block.current_event_id),
+              event_ids: unique(toArray(block.event_ids).map(asId).filter(Boolean)).slice(0, EVENT_DETAIL_CONTINUATION_LIMIT),
+            }));
+          return { version: 1, blocks };
+        }
+
+        function readRecentContinuationIds() {
+          const ring = normalizeRecentContinuationRing(readJson(EVENT_CONTINUATION_RECENT_KEY, null));
+          writeJson(EVENT_CONTINUATION_RECENT_KEY, ring);
+          return new Set(ring.blocks.flatMap((block) => block.event_ids));
+        }
+
+        function recordRecentContinuation(currentEventId, ranked) {
+          const ring = normalizeRecentContinuationRing(readJson(EVENT_CONTINUATION_RECENT_KEY, null));
+          const eventIds = unique(toArray(ranked).map((item) => asId(item?.event_id)).filter(Boolean)).slice(0, EVENT_DETAIL_CONTINUATION_LIMIT);
+          if (!eventIds.length) return;
+          ring.blocks.push({ served_at: Date.now(), current_event_id: asId(currentEventId), event_ids: eventIds });
+          ring.blocks = ring.blocks.slice(-EVENT_CONTINUATION_RECENT_BLOCKS);
+          writeJson(EVENT_CONTINUATION_RECENT_KEY, ring);
+        }
+
+        const PERSONAL_FEED_CHUNK_SIZE = 6;
+        const PERSONAL_FEED_RENDER_LIMIT = 18;
+        const EVENT_DETAIL_CONTINUATION_LIMIT = 6;
+        const personalFeedStores = new WeakMap();
+        const personalFeedReached = new WeakSet();
+
+        function visibleHideStickyMarker() {
+          const markers = Array.from(document.querySelectorAll('[data-hide-sticky-after]'));
+          return markers.find((marker) => marker.getClientRects().length > 0) || markers[0] || null;
+        }
+
+        function eventIdsAlreadyOffered(section) {
+          const ids = new Set();
+          document.querySelectorAll('[data-related-start] [data-event-card], [data-discovery-feed] [data-event-card]').forEach((card) => {
+            const id = asId(card.dataset.eventId);
+            if (id) ids.add(id);
+          });
+          const discoveryFeed = document.querySelector('[data-discovery-feed]');
+          const currentId = asId(discoveryFeed?.dataset.currentEventId);
+          if (currentId) ids.add(currentId);
+          section?.querySelectorAll('[data-event-card]').forEach((card) => {
+            const id = asId(card.dataset.eventId);
+            if (id) ids.add(id);
+          });
+          return ids;
+        }
+
+        function appendPersonalFeedChunk(section) {
+          const store = personalFeedStores.get(section);
+          const slot = section.querySelector('[data-personal-feed-slot]');
+          const loadMore = section.querySelector('[data-personal-feed-load-more]');
+          if (!store || !slot) return 0;
+          const end = Math.min(store.items.length, store.rendered + PERSONAL_FEED_CHUNK_SIZE);
+          const chunk = store.items.slice(store.rendered, end);
+          if (chunk.length) {
+            const eventDetail = section.dataset.listingContext === 'event-detail';
+            const packed = eventDetail && typeof window.KenigEventsPackRelatedCardRows === 'function'
+              ? window.KenigEventsPackRelatedCardRows(chunk, {
+                  limit: EVENT_DETAIL_CONTINUATION_LIMIT,
+                  rowSize: 3,
+                  mediaTreatment: 'hybrid',
+                  geometry: window.KenigEventsRelatedCardMediaGeometry,
+                })
+              : chunk.map((item) => ({ item, layout: null }));
+            for (const { item, layout } of packed) appendEventCard(slot, item, slot.dataset.feedCardVariant || 'split-actions', layout);
+          }
+          store.rendered = end;
+          if (loadMore) loadMore.hidden = store.rendered >= store.items.length;
+          syncCardsFeedbackState(store.profile);
+          return chunk.length;
         }
 
         function renderPersonalFeedSection(section, manifest) {
           const slot = section.querySelector('[data-personal-feed-slot]');
           const status = section.querySelector('[data-personal-feed-status]');
           const refresh = section.querySelector('[data-personal-feed-refresh]');
-          if (!slot || !manifest || !toArray(manifest.related_static).length) {
-            section.hidden = true;
+          const loadMore = section.querySelector('[data-personal-feed-load-more]');
+          const profile = readProfile();
+          const title = section.querySelector('[data-personal-feed-title]');
+          const explanation = section.querySelector('[data-personal-feed-explanation]');
+          const isEventDetail = section.dataset.listingContext === 'event-detail';
+          const isPersonal = personalFeedProfileIsReady(profile);
+          if (!slot || !manifest) {
+            if (isEventDetail) {
+              section.hidden = false;
+              section.dataset.personalFeedMode = 'unavailable';
+              if (status) status.textContent = 'Подборка временно недоступна — можно перейти ко всем анонсам.';
+            } else {
+              section.hidden = true;
+            }
+            personalFeedStores.delete(section);
             return;
           }
-          const profile = activeProfile(manifest);
-          const ranked = rankEventDetailRelated(manifest, profile, { maxSameCategory: 4, maxSameVenue: 3 }).slice(0, PERSONAL_FEED_LIMIT);
-          const eligible = ranked.filter((item) => isEligibleCandidate(item.candidate, manifest, profile));
-          if (!eligible.length) {
-            section.hidden = true;
+          if (isEventDetail && (typeof window.KenigEventsSelectEventContinuation !== 'function' || typeof window.KenigEventsPackRelatedCardRows !== 'function')) {
+            section.hidden = false;
+            section.dataset.personalFeedMode = 'unavailable';
+            if (status) status.textContent = 'Подборка временно недоступна — можно перейти ко всем анонсам.';
+            personalFeedStores.delete(section);
             return;
           }
-          slot.innerHTML = eligible.map((item) => eventCardHtml(item, slot.dataset.feedCardVariant || 'split-actions')).join('');
+          const excluded = eventIdsAlreadyOffered(section);
+          const profileRanked = isPersonal ? rankPersonalFeedCandidates(manifest, profile) : [];
+          const genericRanked = rankPopularFallbackCandidates(manifest, profile);
+          const adjacentRanked = isEventDetail ? rankAdjacentContinuationCandidates(manifest, profile) : [];
+          const recentServed = isEventDetail ? readRecentContinuationIds() : new Set();
+          const ranked = isEventDetail
+            ? window.KenigEventsSelectEventContinuation({
+                currentEventId: personalFeedCurrentEventId(section),
+                profileCandidates: profileRanked,
+                adjacentCandidates: adjacentRanked,
+                genericCandidates: genericRanked,
+                excludedIds: [...excluded],
+                recentServedIds: [...recentServed],
+                limit: EVENT_DETAIL_CONTINUATION_LIMIT,
+                maxSameCategory: 3,
+                maxSameVenue: 2,
+              })
+            : (isPersonal ? profileRanked : genericRanked)
+                .filter((item) => !excluded.has(asId(item.event_id)))
+                .slice(0, isEventDetail ? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT);
+          if (!ranked.length) {
+            if (isEventDetail) {
+              section.hidden = false;
+              section.dataset.personalFeedMode = 'unavailable';
+              if (status) status.textContent = 'Других подходящих событий пока нет — откройте все анонсы.';
+            } else {
+              section.hidden = true;
+            }
+            personalFeedStores.delete(section);
+            return;
+          }
+          slot.innerHTML = '';
+          personalFeedStores.set(section, { items: ranked, rendered: 0, profile });
+          if (isEventDetail) recordRecentContinuation(personalFeedCurrentEventId(section), ranked);
           section.hidden = false;
+          section.dataset.personalFeedReady = 'true';
+          section.dataset.personalFeedMode = isPersonal ? 'personal' : 'popular_fallback';
+          if (isEventDetail && title) title.textContent = isPersonal ? 'По вашим интересам' : 'Ещё события';
+          if (isEventDetail && explanation) {
+            explanation.textContent = isPersonal
+              ? 'Подборка учитывает ваши лайки и отметки «Не интересно» на этом устройстве.'
+              : 'Шесть разных событий без бесконечной ленты.';
+          }
           if (status) status.hidden = true;
-          if (refresh) refresh.hidden = !personalFeedConfig();
-          syncCardsFeedbackState(profile);
+          if (refresh) refresh.hidden = true;
+          if (loadMore) loadMore.hidden = isEventDetail;
+          appendPersonalFeedChunk(section);
         }
 
-        async function hydratePersonalFeedSlots({ force = false } = {}) {
+        async function hydratePersonalFeedSlots({ force = false, sections = null } = {}) {
+          const candidates = sections || Array.from(document.querySelectorAll('[data-personal-feed-section]')).filter((section) => personalFeedReached.has(section));
+          for (const section of candidates) {
+            const manifest = await getPersonalFeedManifest(section, { force });
+            renderPersonalFeedSection(section, manifest);
+          }
+        }
+
+        function initializePersonalFeedObservers() {
           const sections = Array.from(document.querySelectorAll('[data-personal-feed-section]'));
-          if (!sections.length) return;
-          const manifest = await getPersonalFeedManifest({ force });
-          sections.forEach((section) => renderPersonalFeedSection(section, manifest));
+          sections.forEach((section) => {
+            const context = section.dataset.listingContext || '';
+            const target = context === 'event-detail'
+              ? visibleHideStickyMarker()
+              : document.querySelector('main');
+            if (!target || !('IntersectionObserver' in window)) {
+              personalFeedReached.add(section);
+              const idleLoad = window.requestIdleCallback || ((callback) => setTimeout(callback, 900));
+              idleLoad(() => hydratePersonalFeedSlots({ sections: [section] }));
+              return;
+            }
+            const observer = new IntersectionObserver((entries) => {
+              if (!entries.some((entry) => entry.isIntersecting)) return;
+              observer.disconnect();
+              personalFeedReached.add(section);
+              hydratePersonalFeedSlots({ sections: [section] });
+            }, { rootMargin: '320px 0px 320px 0px', threshold: 0.01 });
+            observer.observe(target);
+          });
         }
 
         async function ensureDiscoveryStore(feed) {
@@ -3093,10 +3723,6 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           return number > 0 ? String(number) : '';
         }
 
-        function escapeHtml(value) {
-          return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] || char));
-        }
-
         const RU_MONTHS_CLIENT = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
         function formatDateForUi(value) {
           const raw = String(value || '').trim();
@@ -3118,13 +3744,15 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           return {
             id,
             title,
-            href: display.href || candidate?.href || '#',
-            absolute_url: display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href,
+            href: rebaseInternalEventUrl(display.href || candidate?.href || '#'),
+            absolute_url: rebaseInternalEventUrl(display.absolute_url || candidate?.absolute_url || display.href || candidate?.href || location.href, { absolute: true }),
             event_type: display.event_type || candidate?.category || 'событие',
             image_url: display.image_url || null,
             image_alt: display.image_alt || `Афиша события «${title}»`,
             image_text_mode: display.image_text_mode || candidate?.image_text_mode || 'unknown',
             image_media_role: display.image_media_role || candidate?.image_media_role || 'unknown_document',
+            image_width: Number(display.image_width || candidate?.image_width || 0),
+            image_height: Number(display.image_height || candidate?.image_height || 0),
             focal_y: Number.isFinite(Number(display.focal_y)) ? Math.max(0, Math.min(1, Number(display.focal_y))) : 0.5,
             display_date: display.display_date || formatDateForUi(candidate?.date || ''),
             display_time: display.display_time || null,
@@ -3136,58 +3764,208 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             price_label: display.price_label || null,
             likes_count: Number(display.likes_count || 0),
             shares_count: Number(display.shares_count || 0),
-            calendar_href: display.calendar_href || candidate?.calendar_href || '#',
+            calendar_href: rebaseInternalEventUrl(display.calendar_href || candidate?.calendar_href || '#'),
             calendar_eligible: Boolean(display.calendar_eligible || candidate?.calendar_eligible),
+            calendar_expiry_day: calendarExpiryDayFromIso(display.end_date || candidate?.end_date || candidate?.date || ''),
             rank: item && item.rank != null ? item.rank : '',
             personal_score: item && item.personal_score != null ? item.personal_score : '',
           };
         }
 
-        function eventCardHtml(item, variant = 'split-actions') {
-          const data = normalizeDisplayCandidate(item);
-          const cardVariant = variant === 'split-actions' ? 'split-actions' : 'overlay-controls';
-          const documentMedia = data.image_media_role !== 'event_photo';
-          const mediaClass = documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover';
-          const likes = Number(data.likes_count || 0);
-          const shares = Number(data.shares_count || 0);
-          const likeCount = formatCount(likes);
-          const shareCount = formatCount(shares);
-          const status = data.price_label || data.status_label || '';
-          const typeTag = String(data.event_type || '').trim().replace(/\s+/gu, ' ').toLowerCase();
-          const shareText = [data.title, [data.display_date, data.display_time, data.venue_name || data.city].filter(Boolean).join(' · '), status].filter(Boolean).join('\n');
-          const shareImageType = data.image_url && String(data.image_url).toLowerCase().includes('.webp') ? 'image/webp' : data.image_url && String(data.image_url).toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
-          const cardClass = `event-card event-card--${cardVariant}`;
-          const feedbackClass = `event-card__feedback ${cardVariant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'}`;
-          const dislikeIcon = '<svg class="icon icon--dislike" aria-hidden="true" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M335.003,63.091v278.283h93.308V63.091H335.003z M393.245,303.962h-21.439v-19.534h21.439V303.962z"></path><polygon points="459.307,105.002 459.307,316.643 512,316.643 512,105.002"></polygon><path d="M302.309,263.539V115.813l-67.165-27.147c0,0-22.86-7.855-47.864-7.855H30.249c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244c-16.704,0-30.244,13.541-30.244,30.244v1.316c0,16.704,13.541,30.244,30.244,30.244H61.17v0.002H30.244C13.546,266.22,0,279.756,0,296.463v1.318c0,16.704,13.541,30.245,30.244,30.245h108.455l-45.595,74.1c-8.745,14.222-4.308,32.848,9.914,41.605l1.115,0.686c14.232,8.756,32.859,4.319,41.615-9.903l59.966-97.461c1.396-2.268,3.405-4.094,5.796-5.266l90.748-44.473l0.057-0.028v-23.746H302.309z"></path></svg>';
-          const shareIcon = '<svg class="icon icon--share" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M11.996 3.725A2.15 2.15 0 0 0 10 5.87l-.001 2.117-.02.005a9.904 9.904 0 0 0-7.827 10.721c.083.811 1.116 1.103 1.611.455l.187-.237a9.08 9.08 0 0 1 5.836-3.265l.213-.026.001 2.494a2.15 2.15 0 0 0 3.476 1.692l7.824-6.132a2.15 2.15 0 0 0 0-3.384l-7.824-6.132a2.15 2.15 0 0 0-1.326-.458zm.154 1.795a.35.35 0 0 1 .216.075l7.824 6.132a.35.35 0 0 1 0 .55l-7.824 6.133a.35.35 0 0 1-.566-.276l-.001-3.447a.9.9 0 0 0-.915-.9l-.233.004-.342.017a10.9 10.9 0 0 0-6.119 2.365l-.174.144.024-.135a8.1 8.1 0 0 1 6.968-6.537.9.9 0 0 0 .791-.893L11.8 5.87a.35.35 0 0 1 .35-.35"></path></svg>';
-          const heartIcon = '<svg class="icon icon--heart" aria-hidden="true" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16.5 4.5c2.206 0 4 1.794 4 4 0 4.67-5.543 8.94-8.5 11.023C9.043 17.44 3.5 13.17 3.5 8.5c0-2.206 1.794-4 4-4 1.298 0 2.522.638 3.273 1.706L12 7.953l1.227-1.746c.75-1.07 1.975-1.707 3.273-1.707m0-1.5c-1.862 0-3.505.928-4.5 2.344C11.005 3.928 9.362 3 7.5 3 4.462 3 2 5.462 2 8.5c0 5.72 6.5 10.438 10 12.85 3.5-2.412 10-7.13 10-12.85C22 5.462 19.538 3 16.5 3z"></path></svg>';
-          const calendarIcon = '<svg class="icon icon--calendar" aria-hidden="true" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><path d="M21,30a8,8,0,1,1,8-8A8,8,0,0,1,21,30Zm0-14a6,6,0,1,0,6,6A6,6,0,0,0,21,16Z"></path><polygon points="22.59 25 20 22.41 20 18 22 18 22 21.59 24 23.59 22.59 25"></polygon><path d="M28,6a2,2,0,0,0-2-2H22V2H20V4H12V2H10V4H6A2,2,0,0,0,4,6V26a2,2,0,0,0,2,2h4V26H6V6h4V8h2V6h8V8h2V6h4v6h2Z"></path></svg>';
-          const negativeButton = `<button type="button" class="feedback-button feedback-button--negative" data-nosnippet data-feedback-action="not_interested" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" aria-pressed="false" aria-label="${escapeHtml(`Не интересно: ${data.title}`)}">${dislikeIcon}<span>Не интересно</span></button>`;
-          const shareButton = `<button type="button" class="feedback-button feedback-button--share" data-nosnippet data-native-share data-share-event-id="${escapeHtml(data.id)}" data-share-event-title="${escapeHtml(data.title)}" data-share-base-count="${shares}" data-share-title="${escapeHtml(data.title)}" data-share-text="${escapeHtml(shareText)}" data-share-url="${escapeHtml(data.absolute_url)}" data-share-image="${escapeHtml(data.image_url || '')}" data-share-image-type="${escapeHtml(shareImageType)}" data-share-file-name="${escapeHtml(`kenigevents-${data.id}`)}" data-share-date-time="${escapeHtml(data.display_date_time)}" data-share-place="${escapeHtml(data.venue_name || data.city || '')}" data-share-admission="${escapeHtml(status)}" aria-label="${escapeHtml(`Поделиться событием: ${data.title}`)}">${shareIcon}<span class="share-label" data-share-label>Поделиться</span><span class="feedback-count" data-share-count>${shareCount}</span></button>`;
-          const likeButton = `<button type="button" class="feedback-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-base-count="${likes}" aria-pressed="false" aria-label="${escapeHtml(likes > 0 ? `Поставить лайк: ${data.title}. Сейчас ${likes}` : `Поставить лайк: ${data.title}`)}">${heartIcon}<span class="feedback-count" data-feedback-count>${likeCount}</span></button>`;
-          const calendarButton = data.calendar_eligible && data.calendar_href
-            ? `<a class="feedback-button feedback-button--calendar" href="${escapeHtml(data.calendar_href)}" type="text/calendar" aria-label="${escapeHtml(`Добавить в календарь: ${data.title}`)}">${calendarIcon}<span>В календарь</span></a>`
-            : '';
-          const imageFallback = `<span class="event-card__image-fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
-          const image = data.image_url
-            ? `<span class="event-card__media-shell ${mediaClass}" data-media-role="${escapeHtml(data.image_media_role)}" style="--card-focal-y:${escapeHtml(data.focal_y)};--card-focal-offset:${escapeHtml(Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24)))}%">${imageFallback}<img class="event-card__media" src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.image_alt)}" loading="lazy" decoding="async" onerror="this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.hidden = true; this.removeAttribute('src');"></span>`
-            : `<span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true"><span>${escapeHtml(data.display_date)}</span><strong>${escapeHtml(data.event_type || 'событие')}</strong>${data.city ? `<span>${escapeHtml(data.city)}</span>` : ''}</span>`;
-          const overlayFeedback = cardVariant === 'overlay-controls'
-            ? `<div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${negativeButton}${shareButton}${likeButton}</div>`
-            : '';
-          const splitUtility = cardVariant === 'split-actions'
-            ? `<div class="event-card__utility-row" data-nosnippet aria-label="${escapeHtml(`Дополнительные действия: ${data.title}`)}">${negativeButton}${calendarButton}</div><div class="${feedbackClass}" data-nosnippet aria-label="${escapeHtml(`Оценить событие: ${data.title}`)}">${shareButton}${likeButton}</div>`
-            : '';
-          return `<article class="${cardClass}" data-event-card data-feed-card-variant="${cardVariant}" data-calendar-eligible="${data.calendar_eligible ? 'true' : 'false'}" data-event-id="${escapeHtml(data.id)}" data-event-title="${escapeHtml(data.title)}" data-card-href="${escapeHtml(data.href)}" data-rank="${escapeHtml(data.rank)}" data-score="${escapeHtml(data.personal_score)}" tabindex="0" aria-label="${escapeHtml(`${data.title}: ${data.display_date}`)}">
-            <a class="event-card__media-link" href="${escapeHtml(data.href)}" data-prefetch aria-label="${escapeHtml(`Открыть событие: ${data.title}`)}">${image}</a>
-            ${overlayFeedback}
-            <div class="event-card__body"><a class="event-card__title" href="${escapeHtml(data.href)}" data-prefetch>${escapeHtml(data.title)}</a><div class="event-card__meta-row">${typeTag ? `<span class="event-card__tag">${escapeHtml(typeTag)}</span>` : ''}<span class="event-card__meta">${escapeHtml(data.display_date_time)}</span>${status ? `<span class="event-card__status">${escapeHtml(status)}</span>` : ''}</div>${data.place ? `<span class="event-card__footer">${escapeHtml(data.place)}</span>` : ''}</div>
-            ${splitUtility}
-          </article>`;
+        function setRuntimeCardText(card, selector, value, { hideWhenEmpty = false } = {}) {
+          const node = card.querySelector(selector);
+          if (!node) return;
+          const text = String(value == null ? '' : value);
+          node.textContent = text;
+          if (hideWhenEmpty) node.hidden = !text.trim();
         }
 
-        window.KenigEventsRenderEventCard = eventCardHtml;
+        function safeRuntimeCardUrl(value, fallback = '#') {
+          const raw = typeof value === 'string' ? value.trim() : '';
+          if (!raw || raw === '#') return fallback;
+          try {
+            const parsed = new URL(raw, location.href);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? raw : fallback;
+          } catch (_) {
+            return fallback;
+          }
+        }
 
+        function runtimeEventCardTemplate(variant) {
+          const cardVariant = variant === 'overlay-controls' ? 'overlay-controls' : 'split-actions';
+          return document.querySelector(`template[data-event-card-template="${cardVariant}"]`);
+        }
+
+        function setRuntimeCardDataset(node, key, value) {
+          if (!node) return;
+          node.dataset[key] = String(value == null ? '' : value);
+        }
+
+        function createEventCardElement(item, variant = 'split-actions', relatedLayout = null) {
+          const data = normalizeDisplayCandidate(item);
+          const cardVariant = variant === 'overlay-controls' ? 'overlay-controls' : 'split-actions';
+          const template = runtimeEventCardTemplate(cardVariant);
+          const sourceCard = template?.content?.querySelector('[data-event-card]');
+          if (!sourceCard) return null;
+          const card = sourceCard.cloneNode(true);
+          const documentMedia = relatedLayout ? data.image_text_mode !== 'visual_only' : data.image_media_role !== 'event_photo';
+          const likes = Number(data.likes_count || 0);
+          const shares = Number(data.shares_count || 0);
+          const status = data.price_label || data.status_label || '';
+          const typeTag = String(data.event_type || '').trim().replace(/\s+/gu, ' ').toLowerCase();
+          const href = safeRuntimeCardUrl(data.href);
+          const absoluteUrl = safeRuntimeCardUrl(data.absolute_url, location.href);
+          const imageUrl = safeRuntimeCardUrl(data.image_url || '', '');
+          const calendarHref = safeRuntimeCardUrl(data.calendar_href || '', '');
+          const shareText = [data.title, [data.display_date, data.display_time, data.venue_name || data.city].filter(Boolean).join(' · '), status].filter(Boolean).join('\n');
+          const shareImageType = imageUrl.toLowerCase().includes('.webp')
+            ? 'image/webp'
+            : /\.png(?:[?#]|$)/u.test(imageUrl.toLowerCase()) ? 'image/png' : 'image/jpeg';
+
+          card.className = `event-card event-card--${cardVariant}`;
+          setRuntimeCardDataset(card, 'feedCardVariant', cardVariant);
+          setRuntimeCardDataset(card, 'calendarEligible', data.calendar_eligible ? 'true' : 'false');
+          setRuntimeCardDataset(card, 'eventId', data.id);
+          setRuntimeCardDataset(card, 'eventTitle', data.title);
+          setRuntimeCardDataset(card, 'cardHref', href);
+          setRuntimeCardDataset(card, 'rank', data.rank);
+          setRuntimeCardDataset(card, 'score', data.personal_score);
+          card.setAttribute('aria-label', `${data.title}: ${data.display_date}`);
+
+          const mediaLink = card.querySelector('[data-card-media-link]');
+          if (mediaLink) {
+            mediaLink.setAttribute('href', href);
+            mediaLink.setAttribute('aria-label', `Открыть событие: ${data.title}`);
+          }
+          const mediaShell = card.querySelector('[data-card-media-shell]');
+          const image = card.querySelector('[data-card-image]');
+          const mediaRatio = data.image_width > 0 && data.image_height > 0
+            ? `${Math.max(1, data.image_width)} / ${Math.max(1, data.image_height)}`
+            : '4 / 5';
+          const rowRatio = relatedLayout ? Number(relatedLayout.rowRatio).toFixed(5) : mediaRatio;
+          const focalOffset = Math.max(-12, Math.min(12, (0.5 - data.focal_y) * 24));
+          if (mediaShell) {
+            mediaShell.className = [
+              'event-card__media-shell',
+              'event-card__media-shell--dynamic',
+              documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover',
+              imageUrl ? 'is-image-loading' : 'event-card__fallback',
+            ].join(' ');
+            mediaShell.dataset.mediaRole = data.image_media_role;
+            mediaShell.style.cssText = '';
+            mediaShell.style.setProperty('--dynamic-media-ratio', rowRatio);
+            mediaShell.style.setProperty('--card-focal-y', String(data.focal_y));
+            mediaShell.style.setProperty('--card-focal-offset', `${focalOffset}%`);
+            if (imageUrl) {
+              mediaShell.setAttribute('aria-busy', 'true');
+              mediaShell.removeAttribute('aria-hidden');
+            } else {
+              mediaShell.removeAttribute('aria-busy');
+              mediaShell.setAttribute('aria-hidden', 'true');
+            }
+          }
+          setRuntimeCardText(card, '[data-card-fallback-date]', data.display_date);
+          setRuntimeCardText(card, '[data-card-fallback-type]', data.event_type || 'событие');
+          setRuntimeCardText(card, '[data-card-fallback-city]', data.city || '', { hideWhenEmpty: true });
+          if (image) {
+            image.hidden = !imageUrl;
+            if (imageUrl) {
+              image.setAttribute('src', imageUrl);
+              image.setAttribute('alt', data.image_alt);
+              if (data.image_width > 0) image.setAttribute('width', String(data.image_width));
+              else image.removeAttribute('width');
+              if (data.image_height > 0) image.setAttribute('height', String(data.image_height));
+              else image.removeAttribute('height');
+            } else {
+              image.removeAttribute('src');
+              image.removeAttribute('width');
+              image.removeAttribute('height');
+              image.setAttribute('alt', '');
+            }
+          }
+
+          const title = card.querySelector('[data-card-title]');
+          if (title) {
+            title.textContent = data.title;
+            title.setAttribute('href', href);
+          }
+          setRuntimeCardText(card, '[data-card-type]', typeTag, { hideWhenEmpty: true });
+          setRuntimeCardText(card, '[data-card-meta]', data.display_date_time);
+          setRuntimeCardText(card, '[data-card-status]', status, { hideWhenEmpty: true });
+          setRuntimeCardText(card, '[data-card-place]', data.place, { hideWhenEmpty: true });
+
+          card.querySelectorAll('[data-feedback-action="not_interested"]').forEach((button) => {
+            setRuntimeCardDataset(button, 'eventId', data.id);
+            setRuntimeCardDataset(button, 'eventTitle', data.title);
+            button.setAttribute('aria-pressed', 'false');
+            button.setAttribute('aria-label', `Не интересно: ${data.title}`);
+          });
+          card.querySelectorAll('[data-feedback-action="like"]').forEach((button) => {
+            setRuntimeCardDataset(button, 'eventId', data.id);
+            setRuntimeCardDataset(button, 'eventTitle', data.title);
+            setRuntimeCardDataset(button, 'baseCount', likes);
+            button.setAttribute('aria-pressed', 'false');
+            button.setAttribute('aria-label', likes > 0 ? `Поставить лайк: ${data.title}. Сейчас ${likes}` : `Поставить лайк: ${data.title}`);
+            setRuntimeCardText(button, '[data-feedback-count]', formatCount(likes));
+          });
+          card.querySelectorAll('[data-native-share]').forEach((button) => {
+            setRuntimeCardDataset(button, 'shareEventId', data.id);
+            setRuntimeCardDataset(button, 'shareEventTitle', data.title);
+            setRuntimeCardDataset(button, 'shareBaseCount', shares);
+            setRuntimeCardDataset(button, 'shareTitle', data.title);
+            setRuntimeCardDataset(button, 'shareText', shareText);
+            setRuntimeCardDataset(button, 'shareUrl', absoluteUrl);
+            setRuntimeCardDataset(button, 'shareImage', imageUrl);
+            setRuntimeCardDataset(button, 'shareImageType', shareImageType);
+            setRuntimeCardDataset(button, 'shareFileName', `kenigevents-${data.id}`);
+            setRuntimeCardDataset(button, 'shareDateTime', data.display_date_time);
+            setRuntimeCardDataset(button, 'sharePlace', data.venue_name || data.city || '');
+            setRuntimeCardDataset(button, 'shareAdmission', status);
+            button.setAttribute('aria-label', `Поделиться событием: ${data.title}`);
+            setRuntimeCardText(button, '[data-share-count]', formatCount(shares));
+          });
+          card.querySelectorAll('[data-calendar-action]').forEach((link) => {
+            const calendarAvailable = Boolean(data.calendar_eligible && calendarHref);
+            link.hidden = !calendarAvailable;
+            link.setAttribute('href', calendarAvailable ? calendarHref : '#');
+            setRuntimeCardDataset(link, 'calendarEventId', data.id);
+            setRuntimeCardDataset(link, 'calendarExpiryDay', data.calendar_expiry_day);
+            setRuntimeCardDataset(link, 'calendarEventTitle', data.title);
+            link.setAttribute('aria-label', `Добавить в календарь: ${data.title}`);
+          });
+          card.querySelectorAll('.event-card__feedback').forEach((group) => group.setAttribute('aria-label', `Оценить событие: ${data.title}`));
+          card.querySelectorAll('.event-card__utility-row').forEach((group) => group.setAttribute('aria-label', `Дополнительные действия: ${data.title}`));
+
+          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowIndex', 'labMediaTreatment', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop'];
+          for (const key of relatedKeys) delete card.dataset[key];
+          card.style.removeProperty('--lab-row-media-ratio');
+          if (relatedLayout) {
+            setRuntimeCardDataset(card, 'labRelatedCard', 'true');
+            setRuntimeCardDataset(card, 'labMediaKind', relatedLayout.mediaKind);
+            setRuntimeCardDataset(card, 'labMediaRatio', Number(relatedLayout.mediaRatio).toFixed(5));
+            setRuntimeCardDataset(card, 'labRowMedia', relatedLayout.rowMode);
+            setRuntimeCardDataset(card, 'labRowIndex', relatedLayout.rowIndex);
+            setRuntimeCardDataset(card, 'labMediaTreatment', relatedLayout.mediaTreatment);
+            setRuntimeCardDataset(card, 'labCoverCrop', Number(relatedLayout.coverCrop).toFixed(4));
+            setRuntimeCardDataset(card, 'labPotentialCoverCrop', Number(relatedLayout.potentialCoverCrop).toFixed(4));
+            setRuntimeCardDataset(card, 'labRowWorstCrop', Number(relatedLayout.rowWorstCrop).toFixed(4));
+            card.style.setProperty('--lab-row-media-ratio', Number(relatedLayout.rowRatio).toFixed(5));
+          }
+          return card;
+        }
+
+        function appendEventCard(target, item, variant = 'split-actions', relatedLayout = null) {
+          const card = createEventCardElement(item, variant, relatedLayout);
+          if (!card) return false;
+          target.appendChild(card);
+          return true;
+        }
+
+        window.KenigEventsCreateEventCard = createEventCardElement;
+        // Compatibility for the authorized-search surface: its result container
+        // still accepts a string, but the serialized tree is cloned from and
+        // safely populated through the canonical EventCard component template.
+        window.KenigEventsRenderEventCard = (...args) => createEventCardElement(...args)?.outerHTML || '';
         function visibleFeedCardCount(feed) {
           return Array.from(feed.querySelectorAll(':scope > [data-event-card]')).filter((card) => !card.hidden).length;
         }
@@ -3358,27 +4136,13 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               const base = Number(shareButton?.dataset.shareBaseCount || '0');
               count.textContent = formatCount(base + Number(current.shares || 0));
             });
-            card.querySelectorAll('[data-listing-like-proof]').forEach((proof) => {
-              const base = Number(proof.dataset.baseCount || '0');
-              const total = base + (current.liked ? 1 : 0);
-              proof.dataset.liked = current.liked ? 'true' : 'false';
-              const count = proof.querySelector('[data-listing-like-count]');
-              if (count) count.textContent = formatCount(total);
-              proof.setAttribute('aria-label', `${total} отметок нравится${current.liked ? ', включая вашу' : ''}`);
-            });
-            card.querySelectorAll('[data-listing-share-proof]').forEach((proof) => {
-              const base = Number(proof.dataset.baseCount || '0');
-              const total = base + Number(current.shares || 0);
-              const count = proof.querySelector('[data-listing-share-count]');
-              if (count) count.textContent = formatCount(total);
-              proof.setAttribute('aria-label', `${total} поделились`);
-            });
             card.querySelectorAll('[data-feedback-action="not_interested"]').forEach((button) => {
               button.setAttribute('aria-pressed', current.not_interested ? 'true' : 'false');
               const title = current.not_interested ? 'Вернуть в рекомендации' : 'Не интересно';
               button.setAttribute('aria-label', `${title}: ${card.dataset.eventTitle || 'событие'}`);
             });
           });
+          syncCalendarControls();
         }
 
         function cardEligibleAfterProfile(card, store, profile, anchorEventId) {
@@ -3420,7 +4184,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             const id = asId(item.event_id);
             if (!id || existingIds.has(id)) continue;
             if (!isEligibleCandidate(item.candidate, store.manifest, profile)) continue;
-            feed.insertAdjacentHTML('beforeend', eventCardHtml(item, feed.dataset.feedCardVariant || 'split-actions'));
+            if (!appendEventCard(feed, item, feed.dataset.feedCardVariant || 'split-actions')) continue;
             existingIds.add(id);
             added += 1;
           }
@@ -3499,7 +4263,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           if (!options.skipDiscoveryHydration) {
             await hydrateDiscoveryFeeds({ automatic: true, anchorEventId: options.anchorEventId || null });
           }
-          await hydratePersonalFeedSlots({ force: false });
+          const reachedPersonalSections = Array.from(document.querySelectorAll('[data-personal-feed-section]')).filter((section) => personalFeedReached.has(section));
+          if (reachedPersonalSections.length) await hydratePersonalFeedSlots({ force: false, sections: reachedPersonalSections });
           syncListingPersonalFilter();
           renderFeedbackReport();
         }
@@ -3841,10 +4606,19 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         });
 
         document.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-personal-feed-load-more]');
+          if (!button) return;
+          event.preventDefault();
+          const section = button.closest('[data-personal-feed-section]');
+          if (section) appendPersonalFeedChunk(section);
+        });
+
+        document.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-personal-feed-refresh]');
           if (!button) return;
           event.preventDefault();
-          await hydratePersonalFeedSlots({ force: true });
+          const section = button.closest('[data-personal-feed-section]');
+          if (section) await hydratePersonalFeedSlots({ force: true, sections: [section] });
         });
 
         document.addEventListener('click', (event) => {
@@ -3852,31 +4626,19 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           if (!button) return;
           event.preventDefault();
           const mode = button.dataset.listingModeButton === 'personal' ? 'personal' : 'all';
-          const prototypeQualified = (/^\/preview-[^/]+\//u.test(location.pathname) || ['127.0.0.1', 'localhost'].includes(location.hostname))
-            && new URLSearchParams(location.search).get('personalization') !== 'off';
-          if (prototypeQualified) listingPrototypeMode = mode;
-          else writeListingMode(mode);
-          syncListingPersonalFilter();
-          button.focus({ preventScroll: true });
-        });
-
-        document.addEventListener('keydown', (event) => {
-          const button = event.target.closest('[data-listing-mode-button]');
-          if (!button || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
-          event.preventDefault();
-          const group = button.closest('[role="radiogroup"]');
-          const buttons = Array.from(group?.querySelectorAll('[data-listing-mode-button]') || []);
-          const current = buttons.indexOf(button);
-          if (current < 0 || buttons.length < 2) return;
-          const backwards = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
-          buttons[(current + (backwards ? -1 : 1) + buttons.length) % buttons.length]?.click();
+          writeListingMode(mode);
+          syncListingPersonalFilter({ focusSummary: true });
+          const firstList = document.querySelector('[data-listing-filter]');
+          if (firstList && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            firstList.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
         });
 
         document.addEventListener('click', async (event) => {
           const button = event.target.closest('[data-reset-personalization]');
           if (!button) return;
           event.preventDefault();
-          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, LISTING_MODE_KEY];
+          const keys = [PROFILE_KEY, LOG_KEY, SHARE_PROMPT_KEY, PERSONAL_FEED_CACHE_KEY, EVENT_CONTINUATION_RECENT_KEY, LISTING_MODE_KEY, CALENDAR_STATE_KEY, CALENDAR_USAGE_KEY];
           keys.forEach((key) => {
             try { localStorage.removeItem(key); } catch (_) {}
           });
@@ -3891,7 +4653,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         });
 
         const sticky = document.querySelector('[data-sticky-cta]');
-        const marker = document.querySelector('[data-hide-sticky-after]');
+        const marker = visibleHideStickyMarker();
         let stickyHiddenByFeed = false;
         let stickyHiddenByHero = false;
         const updateStickyCtaVisibility = () => {
@@ -3937,7 +4699,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
 
 
         function hydrateListingFilterFooterGuard() {
-          const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar], .listing-filter--floating, [data-listing-mobile-density-dock]'));
+          const bars = Array.from(document.querySelectorAll('[data-listing-filter-bar]'));
           if (!bars.length) return;
           const footer = document.querySelector('.site-footer');
           if (!footer || !('IntersectionObserver' in window)) return;
@@ -4037,13 +4799,32 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               const images = Array.from(visual.querySelectorAll('.event-hero__image'));
               if (!images.length) return;
               const isPosterStage = Boolean(visual.closest('.event-hero--poster-stage'));
+              const usesGapSafePosterParallax = isPosterStage && Boolean(visual.closest('[data-mobile-review-revision="v4"], [data-mobile-event-production]'));
+              const usesReverseGapSafePosterParallax = usesGapSafePosterParallax && Boolean(visual.closest('[data-mobile-review-variant="accepted-v5"], [data-mobile-review-variant="accepted-v6"], [data-mobile-review-variant="accepted-v7"], [data-mobile-review-variant="accepted-v8"], [data-mobile-event-production][data-mobile-parallax-profile]'));
+              const usesPhotoVelocityMatchedPosterParallax = usesReverseGapSafePosterParallax && Boolean(visual.closest('[data-mobile-parallax-profile="photo-velocity-matched"]'));
+              const usesPhotoContinuousPosterParallax = usesReverseGapSafePosterParallax && Boolean(visual.closest('[data-mobile-parallax-profile="photo-continuous-crop"]'));
               const rect = visual.getBoundingClientRect();
               const viewport = window.innerHeight || 800;
               if (rect.bottom < -120 || rect.top > viewport + 120) return;
               const progress = Math.max(0, Math.min(1, -rect.top / Math.max(rect.height, 1)));
-              const maxOffset = isPosterStage ? 56 : 64;
-              const offset = -maxOffset + progress * maxOffset * 2;
+              const gapSafePosterTravel = Math.min(48, Math.max(36, window.innerWidth * 0.11));
+              const continuousPosterTravel = Math.min(44, Math.max(32, window.innerWidth * 0.10));
+              const maxOffset = isPosterStage
+                ? (usesGapSafePosterParallax ? (usesPhotoContinuousPosterParallax ? continuousPosterTravel : gapSafePosterTravel) : 56)
+                : 64;
+              const referencePhotoHeroHeight = Math.max(1, Math.min(viewport * 0.64, 560));
+              const referencePhotoVelocity = (64 * 2) / referencePhotoHeroHeight;
+              const matchedPosterProgress = Math.min(1, Math.max(0, -rect.top) * referencePhotoVelocity / maxOffset);
+              const continuousPosterProgress = Math.min(1, Math.max(0, -rect.top) * referencePhotoVelocity / (maxOffset * 2));
+              const offset = usesGapSafePosterParallax
+                ? (usesReverseGapSafePosterParallax
+                  ? -maxOffset + (usesPhotoContinuousPosterParallax
+                    ? continuousPosterProgress * maxOffset * 2
+                    : (usesPhotoVelocityMatchedPosterParallax ? matchedPosterProgress : progress) * maxOffset)
+                  : -progress * maxOffset)
+                : -maxOffset + progress * maxOffset * 2;
               if (isPosterStage) {
+                if (usesGapSafePosterParallax) visual.style.setProperty('--hero-poster-travel', `${maxOffset.toFixed(1)}px`);
                 visual.style.setProperty('--hero-poster-parallax-y', `${offset.toFixed(1)}px`);
               } else {
                 images.forEach((image) => image.style.setProperty('--hero-parallax-y', `${offset.toFixed(1)}px`));
@@ -4112,6 +4893,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         function hydrateHeroGallery() {
           const openers = Array.from(document.querySelectorAll('[data-hero-gallery-open]'));
           if (!openers.length) return;
+          const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
           let activeGallery = null;
           let activeOpener = null;
           let galleryPanTimer = 0;
@@ -4120,6 +4902,13 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             if (galleryPanTimer) window.clearTimeout(galleryPanTimer);
             galleryPanTimer = 0;
           };
+          reducedMotion.addEventListener?.('change', () => {
+            if (!reducedMotion.matches) return;
+            clearGalleryPanTimer();
+            if (activeGallery) activeGallery.dataset.autoAdvance = 'false';
+            activeGallery?.removeAttribute('data-auto-pan');
+            activeGallery?.removeAttribute('data-pan-token');
+          });
 
           const loadGalleryMedia = (slide) => {
             if (!slide) return;
@@ -4194,13 +4983,16 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const activeSlideIsVisualPhoto = (gallery) => {
             const slide = activeSlide(gallery);
             const image = slide?.querySelector('.hero-gallery__image[data-image-text-mode="visual_only"]');
-            return Boolean(image && slide?.dataset.gallerySlideKind === 'image');
+            if (!image || slide?.dataset.gallerySlideKind !== 'image') return false;
+            if (gallery.dataset.desktopGalleryDismiss === 'true' && image.dataset.desktopGalleryFit !== 'cover') return false;
+            return true;
           };
 
           const scheduleGalleryPan = (gallery, direction) => {
             clearGalleryPanTimer();
             delete gallery.dataset.autoPan;
             delete gallery.dataset.panToken;
+            if (reducedMotion.matches) return;
             const mode = direction === 'backward' ? 'backward' : 'forward';
             if (!activeSlideIsVisualPhoto(gallery)) return;
             window.requestAnimationFrame(() => {
@@ -4247,6 +5039,23 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             }
           };
 
+          const syncSlideTabbability = (slide, interactive) => {
+            slide.querySelectorAll('a[href],button,input,select,textarea,[tabindex]').forEach((control) => {
+              if (interactive) {
+                if (!control.hasAttribute('data-gallery-previous-tabindex')) return;
+                const previous = control.getAttribute('data-gallery-previous-tabindex');
+                control.removeAttribute('data-gallery-previous-tabindex');
+                if (previous) control.setAttribute('tabindex', previous);
+                else control.removeAttribute('tabindex');
+                return;
+              }
+              if (!control.hasAttribute('data-gallery-previous-tabindex')) {
+                control.setAttribute('data-gallery-previous-tabindex', control.getAttribute('tabindex') || '');
+              }
+              control.setAttribute('tabindex', '-1');
+            });
+          };
+
           const showSlide = (gallery, index, options = {}) => {
             const slides = Array.from(gallery.querySelectorAll('[data-hero-gallery-slide]'));
             const track = gallery.querySelector('[data-hero-gallery-track]');
@@ -4258,14 +5067,19 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             if (isEfficientGallery(gallery)) {
               gallery.dataset.activeIndex = String(next);
               scrollEfficientGalleryTo(gallery, slides[next], options.behavior || 'auto');
-              slides.forEach((slide) => slide.setAttribute('aria-hidden', 'false'));
+              slides.forEach((slide) => {
+                slide.setAttribute('aria-hidden', 'false');
+                syncSlideTabbability(slide, true);
+              });
               return;
             }
             loadGalleryMedia(slides[next]);
             gallery.dataset.activeIndex = String(next);
             track.style.transform = `translate3d(${-next * 100}%, 0, 0)`;
             slides.forEach((slide, slideIndex) => {
-              slide.setAttribute('aria-hidden', slideIndex === next ? 'false' : 'true');
+              const current = slideIndex === next;
+              slide.setAttribute('aria-hidden', current ? 'false' : 'true');
+              syncSlideTabbability(slide, current);
             });
             const counter = gallery.querySelector('[data-hero-gallery-counter]');
             if (counter) counter.textContent = `${next + 1} / ${slides.length}`;
@@ -4295,7 +5109,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             activeOpener = opener;
             if (gallery.parentElement !== document.body) document.body.appendChild(gallery);
             gallery.hidden = false;
-            gallery.dataset.autoAdvance = 'true';
+            gallery.dataset.autoAdvance = reducedMotion.matches ? 'false' : 'true';
             const requestedIndex = Math.max(0, Number(opener?.dataset.heroGalleryIndex || 0));
             showSlide(gallery, requestedIndex, { direction: 'forward', behavior: 'auto' });
             document.body.classList.add('has-hero-gallery-open');
@@ -4345,28 +5159,38 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               if (!isEfficientGallery(gallery)) return;
               window.requestAnimationFrame(() => updateEfficientGalleryState(gallery));
             }, { passive: true });
+            const resetSwipe = () => {
+              delete gallery.dataset.pointerTracking;
+              delete gallery.dataset.pointerStartX;
+              delete gallery.dataset.pointerStartY;
+              delete gallery.dataset.pointerLastX;
+              delete gallery.dataset.pointerLastY;
+            };
+            const isInteractiveGalleryTarget = (target) => target instanceof Element
+              && Boolean(target.closest('a,button,input,select,textarea,[contenteditable="true"],.hero-gallery__slide--cta,[data-gallery-keep-open]'));
             const swipeStart = (clientX, clientY) => {
+              gallery.dataset.pointerTracking = 'true';
               gallery.dataset.pointerStartX = String(clientX || 0);
               gallery.dataset.pointerStartY = String(clientY || 0);
               gallery.dataset.pointerLastX = String(clientX || 0);
               gallery.dataset.pointerLastY = String(clientY || 0);
             };
             const swipeMove = (clientX, clientY) => {
-              if (!gallery.dataset.pointerStartX) return;
+              if (gallery.dataset.pointerTracking !== 'true') return false;
               gallery.dataset.pointerLastX = String(clientX || 0);
               gallery.dataset.pointerLastY = String(clientY || 0);
+              return true;
             };
             const swipeEnd = (clientX, clientY) => {
+              if (gallery.dataset.pointerTracking !== 'true') return;
               const startX = Number(gallery.dataset.pointerStartX || 0);
               const startY = Number(gallery.dataset.pointerStartY || 0);
               const endX = clientX == null ? Number(gallery.dataset.pointerLastX || startX) : Number(clientX || 0);
               const endY = clientY == null ? Number(gallery.dataset.pointerLastY || startY) : Number(clientY || 0);
-              delete gallery.dataset.pointerStartX;
-              delete gallery.dataset.pointerStartY;
-              delete gallery.dataset.pointerLastX;
-              delete gallery.dataset.pointerLastY;
+              resetSwipe();
               const deltaX = endX - startX;
               const deltaY = endY - startY;
+              gallery.dataset.pointerMoved = Math.hypot(deltaX, deltaY) > 8 ? 'true' : 'false';
               if (Math.abs(deltaX) < 38 || Math.abs(deltaX) < Math.abs(deltaY) * 1.15) return;
               const direction = deltaX < 0 ? 'forward' : 'backward';
               if (isEfficientGallery(gallery)) {
@@ -4377,6 +5201,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               showSlide(gallery, Number(gallery.dataset.activeIndex || 0) + (deltaX < 0 ? 1 : -1), { direction });
             };
             swipeSurface.addEventListener('pointerdown', (event) => {
+              if (isInteractiveGalleryTarget(event.target)) {
+                resetSwipe();
+                return;
+              }
               swipeStart(event.clientX, event.clientY);
               if (swipeSurface.setPointerCapture && event.pointerId != null) {
                 try { swipeSurface.setPointerCapture(event.pointerId); } catch (_) {}
@@ -4392,13 +5220,17 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
               swipeEnd(null, null);
             }, { passive: true });
             swipeSurface.addEventListener('touchstart', (event) => {
+              if (isInteractiveGalleryTarget(event.target)) {
+                resetSwipe();
+                return;
+              }
               const touch = event.changedTouches && event.changedTouches[0];
               if (touch) swipeStart(touch.clientX, touch.clientY);
             }, { passive: true });
             swipeSurface.addEventListener('touchmove', (event) => {
               const touch = event.changedTouches && event.changedTouches[0];
-              if (touch) swipeMove(touch.clientX, touch.clientY);
-              if (event.cancelable) event.preventDefault();
+              const tracking = touch ? swipeMove(touch.clientX, touch.clientY) : false;
+              if (tracking && event.cancelable) event.preventDefault();
             }, { passive: false });
             swipeSurface.addEventListener('touchend', (event) => {
               const touch = event.changedTouches && event.changedTouches[0];
@@ -4408,11 +5240,45 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             swipeSurface.addEventListener('touchcancel', () => {
               swipeEnd(null, null);
             }, { passive: true });
+            swipeSurface.addEventListener('click', (event) => {
+              if (gallery.dataset.desktopGalleryDismiss !== 'true' || !window.matchMedia('(min-width: 1024px)').matches) return;
+              if (gallery.dataset.pointerMoved === 'true') {
+                delete gallery.dataset.pointerMoved;
+                return;
+              }
+              delete gallery.dataset.pointerMoved;
+              const target = event.target instanceof Element ? event.target : null;
+              if (target?.closest('a,button,.hero-gallery__slide--cta,[data-gallery-keep-open]')) return;
+              closeGallery();
+            });
           });
 
           document.addEventListener('keydown', (event) => {
             if (!activeGallery) return;
-            if (event.key === 'Escape') {
+            if (event.key === 'Tab') {
+              const focusable = Array.from(activeGallery.querySelectorAll('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]'))
+                .filter((control) => control.getAttribute('tabindex') !== '-1'
+                  && !control.hasAttribute('hidden')
+                  && !control.closest('[aria-hidden="true"]'));
+              if (!focusable.length) {
+                event.preventDefault();
+                activeGallery.focus({ preventScroll: true });
+                return;
+              }
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              const current = document.activeElement;
+              if (!activeGallery.contains(current) || current === activeGallery) {
+                event.preventDefault();
+                (event.shiftKey ? last : first).focus({ preventScroll: true });
+              } else if (event.shiftKey && current === first) {
+                event.preventDefault();
+                last.focus({ preventScroll: true });
+              } else if (!event.shiftKey && current === last) {
+                event.preventDefault();
+                first.focus({ preventScroll: true });
+              }
+            } else if (event.key === 'Escape') {
               event.preventDefault();
               closeGallery();
             } else if (event.key === 'ArrowLeft') {
@@ -4439,6 +5305,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         hydrateMobileDiscoveryMenu();
         hydrateListingFilterFooterGuard();
         updatePersonalizationResetStatus();
+        hydrateCalendarActions();
+        initializePersonalFeedObservers();
         hydrateHeroParallax();
         hydrateDesktopEventReading();
         hydrateHeroGallery();

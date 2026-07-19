@@ -45,8 +45,6 @@ export interface EventImageAsset {
   media_role?: EventImageMediaRole;
   media_role_confidence?: number;
   media_semantic_status?: 'pending' | 'classified' | 'error' | 'stale';
-  /** Event-relative semantic rejection emitted by the media classifier. */
-  media_semantic_reason_code?: string | null;
   image_kind?: 'poster' | 'photo' | 'mixed' | 'fallback';
   /** Content-addressed rail/card derivatives, smallest first. */
   thumbnail_sources?: EventImageDerivative[];
@@ -58,10 +56,8 @@ export interface EventImageAsset {
   recommended_object_position?: string;
   recommended_hero_fit?: 'contain' | 'cover';
   safe_crop?: boolean;
-  /** Source-reviewed list-card crop evidence; never inferred from OCR absence alone. */
-  listing_crop_evidence?: 'classified-focal' | 'source-reviewed';
-  /** Listing-only source already has the accepted composition; do not crop/grow it again. */
-  listing_use_natural?: boolean;
+  /** Build-time technical quality signal; it never replaces semantic LLM media classification. */
+  quality_score?: number;
 }
 
 export interface TicketInfo {

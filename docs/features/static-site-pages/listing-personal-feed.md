@@ -1,6 +1,6 @@
 # Listing personal feed
 
-> **Status:** client contract prepared; backend/RPC not enabled yet.
+> **Status:** client contract and same-origin static-catalog MVP implemented; backend/RPC remains an optional fallback, not the default read path.
 
 ## Product rule
 
@@ -20,16 +20,55 @@ This keeps SEO-safe deterministic listing content first, then adds a personal co
 ## Runtime behavior
 
 1. Page renders static listing sections only.
-2. JS looks for a cached `ke_listing_personal_feed_cache_v1` manifest in `localStorage`.
-3. Cache is shared across listing pages and has a short TTL of 30 minutes.
+2. JS looks for a base-scoped `ke_listing_personal_feed_cache_v1:<base-path>` manifest in `localStorage`.
+3. Cache is shared across listing/event pages only inside the same production or immutable-preview base and has a short TTL of 30 minutes. A manifest whose stored `base_path` differs from the current page is rejected.
 4. If cache is valid for the current compatible profile hash, the personal section renders immediately without another network call.
-5. If there is no cache and public Supabase RPC config is present, the page makes one RPC request for up to 30 card projections.
+5. If there is no cache, the browser first loads the bounded same-origin `/data/personal-feed.json` catalog and ranks it locally. A public Supabase RPC, when explicitly configured, is only a fallback if that static request fails.
 6. While browsing across listing pages, the same localStorage list is reused; “Обновить ленту” can force a refresh when backend config exists.
-7. If backend/RPC is absent or fails, the section remains hidden; static listing UX is not degraded.
+7. If both sources fail, the section remains hidden; static listing UX is not degraded.
+
+Every dynamic event-card boundary rebases same-site `/sobytiya/<slug>/...`
+links to the base of the page that is currently open. This applies to cached
+personal feeds, discovery load-more manifests and Authorized Search results,
+including their absolute/share and local calendar projections. It prevents a
+manifest retained from preview v7 (or a search snapshot produced for the root)
+from navigating a v10 reviewer back to an older event UI. Absolute URLs on a
+different origin remain untouched because they may be real organizer/ticket
+destinations rather than KenigEvents event navigation.
+
+### Event-detail desktop continuation
+
+On event-detail pages the same engine is intentionally delayed until the
+visitor reaches `Смотрите дальше`; see
+[Personal feed architecture](../unsigned-personalization/personal-feed-architecture.md).
+It then renders one bounded continuation rather than an infinite feed:
+
+1. the hard limit is exactly six cards; there is no `Показать ещё` action;
+2. with at least three compatible local strong signals, cards use the personal
+   ranker and the honest heading `По вашим интересам`;
+3. before the profile is mature, the same-origin catalog is ranked by a
+   deterministic `0.68 × popularity + 0.32 × upcoming-date proximity` fallback,
+   labelled `Ещё события` rather than personalized;
+4. both modes exclude the current event, linked/hidden events and cards already
+   offered in `Смотрите дальше`, then enforce at most three cards per category
+   and two per venue;
+5. the section ends with `Все анонсы`; no genre/search chip is shown until a
+   useful unauthenticated destination exists;
+6. on mobile the immature/fallback continuation stays hidden because the
+   established discovery feed already provides continuation. Mature personal
+   results may still appear without duplicating the fallback.
+
+Three product alternatives were compared with Gemini 3.1 Pro: additional
+cards, routing chips and a hybrid. The accepted preproduction rule above passed
+the external product gate because it gives most desktop visitors a finite next
+step without falsely claiming personalization or routing them into the current
+authenticated-search dead end. Future measurement must distinguish
+`personal`/`popular_fallback`, rank, impressions, clicks and terminal
+`Все анонсы` use before changing the six-card limit.
 
 ## Why localStorage cache
 
-The goal is to avoid repeated Supabase reads on every static-page navigation. The feed is a **starter list** for the browsing session, not an exact real-time ranking. Local strong actions (`like`, `not_interested`, `share`) still update the local profile and can filter/reorder cached cards client-side.
+The goal is to avoid repeated Supabase reads on every static-page navigation without allowing a build-specific URL to outlive its preview. The feed is a **starter list** for the browsing session, not an exact real-time ranking. Local strong actions (`like`, `not_interested`, `share`) still update the local profile and can filter/reorder cached cards client-side.
 
 ## Supabase RPC option
 

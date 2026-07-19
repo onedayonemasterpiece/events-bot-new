@@ -1,0 +1,84 @@
+---
+import DepartureBoardTimetable from './DepartureBoardTimetable.astro';
+import RouteStripsTimetable from './RouteStripsTimetable.astro';
+import NextDepartureQueueTimetable from './NextDepartureQueueTimetable.astro';
+import type { KaupTransportSuggestion } from '../../lib/eventKaupTransport';
+import {
+  TRANSPORT_EXPERIMENT_ALGORITHM,
+  TRANSPORT_EXPERIMENT_CONFIG_HASH,
+  TRANSPORT_EXPERIMENT_KEY,
+  TRANSPORT_EXPERIMENT_VERSION,
+  normalizeTransportExperimentMode,
+} from '../../lib/transportExperiment';
+
+interface Props {
+  eventId: number;
+  suggestion: KaupTransportSuggestion;
+  mode?: string;
+  releaseId?: string;
+  supabaseUrl?: string;
+  supabaseKey?: string;
+}
+
+const { eventId, suggestion } = Astro.props;
+const mode = normalizeTransportExperimentMode(Astro.props.mode);
+const releaseId = String(Astro.props.releaseId || 'unversioned').slice(0, 160);
+const supabaseUrl = String(Astro.props.supabaseUrl || '').replace(/\/+$/u, '');
+const supabaseKey = String(Astro.props.supabaseKey || '');
+const options = suggestion.outbound;
+---
+{mode === 'off' ? (
+  <DepartureBoardTimetable
+    route={suggestion.busRoute}
+    arrivalStop={suggestion.busArrivalStop}
+    originName={suggestion.busOriginName}
+    originMapUrl={suggestion.busOriginMapUrl}
+    walkRouteUrl={suggestion.stopToVenueDirectionsUrl}
+    publicReturnAvailable={suggestion.publicReturnAvailable}
+    options={options}
+    baseline={true}
+    hidden={false}
+  />
+) : (
+  <div
+    class="transport-experiment"
+    data-transport-experiment
+    data-experiment-key={TRANSPORT_EXPERIMENT_KEY}
+    data-experiment-version={TRANSPORT_EXPERIMENT_VERSION}
+    data-experiment-algorithm={TRANSPORT_EXPERIMENT_ALGORITHM}
+    data-experiment-config-hash={TRANSPORT_EXPERIMENT_CONFIG_HASH}
+    data-experiment-mode={mode}
+    data-event-id={eventId}
+    data-release-id={releaseId}
+    data-transport-snapshot-hash={suggestion.scheduleSnapshotHash}
+    data-supabase-url={supabaseUrl || undefined}
+    data-supabase-key={supabaseKey || undefined}
+  >
+    <DepartureBoardTimetable
+      route={suggestion.busRoute}
+      arrivalStop={suggestion.busArrivalStop}
+      originName={suggestion.busOriginName}
+      originMapUrl={suggestion.busOriginMapUrl}
+      walkRouteUrl={suggestion.stopToVenueDirectionsUrl}
+      publicReturnAvailable={suggestion.publicReturnAvailable}
+      options={options}
+      baseline={true}
+      hidden={false}
+    />
+    <div data-transport-treatment-set hidden>
+      <RouteStripsTimetable route={suggestion.busRoute} arrivalStop={suggestion.busArrivalStop} originName={suggestion.busOriginName} originMapUrl={suggestion.busOriginMapUrl} walkRouteUrl={suggestion.stopToVenueDirectionsUrl} publicReturnAvailable={suggestion.publicReturnAvailable} options={options} />
+      <NextDepartureQueueTimetable route={suggestion.busRoute} arrivalStop={suggestion.busArrivalStop} originName={suggestion.busOriginName} originMapUrl={suggestion.busOriginMapUrl} walkRouteUrl={suggestion.stopToVenueDirectionsUrl} publicReturnAvailable={suggestion.publicReturnAvailable} options={options} />
+    </div>
+  </div>
+)}
+
+<script>
+  import { initTransportTimetableExperiments } from '../../lib/transportExperimentClient';
+  initTransportTimetableExperiments();
+</script>
+
+<style>
+  .transport-experiment [data-transport-treatment-set][hidden],
+  .transport-experiment [data-transport-treatment][hidden],
+  .transport-experiment .transport-baseline[hidden] { display:none !important; }
+</style>

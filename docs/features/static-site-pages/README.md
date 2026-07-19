@@ -1,12 +1,140 @@
 # Static Site Event Pages
 
-> **Status:** Astro SSG production integration candidate locally verified; desktop continuous Editorial composition and media-role safety implemented, production promotion pending
+> **Status:** accepted v11 baseline plus v12 fidelity corrections are the primary preproduction event-page family, integrated with the checked Smart Update/Kaggle secret-candidate pipeline; root promotion remains blocked/disabled
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
+> **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
 ## Implementation status
 
-В `events-bot-new` теперь есть первый **Astro SSG preview vertical slice** в `site/`: он строит статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` и опубликован под noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout: fixture пока компактный, canonical preview-safe, а корневые production URL `/sobytiya/<slug>/` не включены.
+The accepted event-detail templates are the primary preproduction surface. A
+coalesced Smart Update rebuild publishes an immutable noindex
+`/_review/<token>/` candidate and advances a durable internal pointer only after
+the full candidate gate succeeds. Historical dated previews are evidence, not
+current review links; production root stays stable until atomic promotion, URL
+lifecycle and rollback gates pass.
+
+`static-event-detail-v11` is the mandatory baseline contract for automatic and
+on-demand builds; v12/v13 are fidelity, idempotency and interaction corrections
+on that same accepted family, not competing lab templates. Its accepted baseline is source SHA
+`3b17e536e4dffa9c9fcebab6e641a7cd4ba99b6a`; the current build SHA may advance,
+but every event HTML and release manifest must retain that contract identity.
+The gate covers the complete accepted desktop scenario matrix, not three hand-picked pages:
+horizontal photo, horizontal photo plus OCR companion, OCR/document contain,
+portrait series, low-resolution and quality-fallback combinations. The same
+`buildDesktopEventPresentation()` router is used for preview, checked
+production artifacts and secret candidates. A build that falls back to the
+legacy `EventHero + event-grid` desktop DOM fails closed.
+
+В `events-bot-new` есть Astro SSG preview и отдельный checked production profile в `site/`: он строит
+статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` из
+production SQLite export и публикуется под noindex-prefix в bucket
+`kenigevents.ru`. Production root-form artifact уже проверяет indexable canonical
+output и полный eligible catalog, но это ещё не event-page production rollout:
+Object Storage website не умеет reader-atomic переключать целое дерево через
+`current.json`, поэтому root promotion отсутствует и остаётся `NO-GO`.
+
+Принятый промежуточный release mode — один immutable noindex candidate под
+`/_review/<256-bit-token>/`. Он собирается из того же snapshot/repo SHA, что и
+checked root-form artifact, загружается create-only и никогда не меняет `/`,
+`current.json` или стабильные `/ics/*`. Это неперечисляемая bearer-ссылка только
+после отключения anonymous bucket listing; она не является авторизацией и может
+быть переслана получателем.
+
+### Каноническая preproduction-ссылка
+
+Ссылки вида `preview-2026…` ниже сохранены только как датированное acceptance
+evidence. Код, бот, operator scripts и новые review-документы не должны выбирать
+из них «последнюю». Единственный текущий review target — последний полностью
+проверенный и опубликованный immutable candidate в durable
+`static_site_build_state.current_secret_candidate_receipt_json`. Он содержит
+build/run/repo/snapshot/result/manifest/token hashes и bearer URL; failed,
+unchanged/no-op и artifact-only build не могут заменить его. Публичного
+`current` redirect/object нет и не будет на preproduction-этапе.
+
+Получить target через общий read-only resolver:
+
+```bash
+.venv/bin/python scripts/request_static_site_build.py \
+  --db /data/db.sqlite --show-current-review
+```
+
+Resolver fail-closed возвращает `current_review_unavailable`, если receipt
+неполон или не доказывает noindex/prefix/root-isolation публикацию. Bearer URL
+нельзя коммитить, добавлять в sitemap или отправлять в публичные каналы.
+
+### Historical acceptance evidence: 2026-07-15 replacement candidate
+
+`preview-20260715t-production-desktop-contract-v2` is the replacement noindex
+review surface. Unlike the rejected v1 build, every generated desktop event
+route mounts the **same** `DesktopEventPage.astro` implementation used by the
+accepted laboratory scenarios; there is no legacy `EventHero + event-grid`
+desktop imitation. A geometry- and semantic-state-aware router selects only
+the accepted Continuous Editorial or Split family. Portrait and
+resolution-constrained media fail to Split; only a classified
+`event_identity_poster` can create an OCR companion. The unchanged mobile v4
+DOM is retained as a separate breakpoint surface. Rail/bus transport is added
+inside the accepted long reading flow rather than replacing its composition.
+
+The source snapshot contains `282` public future or ongoing events. The
+mandatory gate checks all `282` generated routes and pins four real specimens:
+Pianissimo `5294` (low-resolution Split), Blogger bus `6815` (portrait Split),
+«Гараж» `5658` (Continuous Editorial) and «Эпидемия» `4671` (Editorial with a
+classified poster companion).
+
+- index: <https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/__preview/>;
+- [Pianissimo](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/kontsert-festival-pianissimo-maksim-miloslavskiy-kaliningrad-5294/);
+- [Блогерский автобус](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/blogerskiy-avtobus-splav-na-baydarkah-kaliningrad-6815/);
+- [«Гараж»](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/spektakl-garazh-kaliningrad-5658/);
+- [«Эпидемия. Огненная рукопись»](https://kenigevents.ru/preview-20260715t-production-desktop-contract-v2/sobytiya/epidemiya-ognennaya-rukopis-kaliningrad-4671/).
+
+`preview-20260715t-production-transport-mobile-real-events-v1` is rejected by
+`INC-2026-07-15-static-desktop-template-regression`: it rendered the legacy
+production desktop DOM with approximation CSS, routed a `180×320` image into a
+full-width hero, and was never reviewed by Gemini against the mass-generated
+URLs. It must not be cited as desktop acceptance evidence.
+
+The offline related graph is `event_pgvector_related_chain_v2_two_doc`: all
+`282` anchors have `40` current candidates, no dangling ids, and the refresh
+reused `564` unchanged embeddings with `0` provider calls. Browser page views
+still consume only same-origin static discovery JSON. The replacement local
+acceptance covers the whole `282/282` catalog with no page errors, plus a
+`4 events × 3 viewports` (`1536×864`, `1920×1080`, `1440×650`) matrix with
+visible H1/CTA, action-panel child geometry and zero horizontal overflow.
+Phone variants must prove a one-line number and every calendar/share/like
+control inside the graphite panel; text presence alone is not acceptance.
+Interaction checks cover exact
+gallery indices, classified-poster opening, idle autorotation, CTA safe
+release, immutable thumbnail derivatives and both transport types. Public HTTP
+is `200` for the preview index, four pinned events and both transport examples;
+the public `4 × 3` matrix is `12/12` and the exact interaction suite has no
+failures. Gemini 3.1 Pro's direct browser attempt was correctly recorded as
+`BLOCKED` after its isolated Chromium crashed. It was not mislabeled as a pass;
+the follow-up screenshot-based review inspected exact public Playwright
+captures and evidence JSON and returned `ACCEPT`.
+
+This is a prefix-only review release. It does not promote or delete the
+production root and does not modify stable `/p/` media or `/ics/` calendars.
+Automatic root promotion remains the release-protocol gate.
+
+Mobile event-detail UI был отработан в контролируемом preview lab: четыре исходных
+варианта образуют матрицу `current/open prose × current/grouped actions`,
+`accepted-v2` сохраняет первый исправленный проход, `accepted-v3` — первый
+Android feedback, а `accepted-v4` фиксирует поправку владельца: сохраняет
+принятую weekday/date/time hierarchy, возвращает OCR-parallax без zoom и
+layout gap, упрощает selected-like до терракотовой заливки и белого solid
+heart и вводит явный вертикальный ритм между информационными поверхностями.
+V4 перенесён в общий integration preview; бирка, discovery cards и sticky CTA
+намеренно зафиксированы. Канонический scope
+и acceptance gate:
+[`event-mobile-ui-lab-2026-07-15.md`](event-mobile-ui-lab-2026-07-15.md).
+
+В `events-bot-new` есть **Astro SSG production-integration preview** в `site/`:
+он строит статические страницы полного текущего публичного каталога,
+`event.ics`, transport ICS, `sitemap.xml`, `robots.txt` и публикуется под
+noindex-prefix в bucket `kenigevents.ru`. Это ещё не production rollout:
+canonical остаётся preview-safe, а корневые production URL
+`/sobytiya/<slug>/` не продвигаются автоматически.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 Для медиа export обязан передавать не только `image_text_mode`, но и LLM-first
@@ -22,6 +150,13 @@ Event gallery media имеет отдельный fail-closed CDN contract: expo
 не откатывается к `catbox_url`, source CDN, Supabase или legacy bucket. Silent
 rows исключаются тем же static predicate; продолжающиеся события остаются
 eligible по `end_date`.
+
+Footer service share использует отдельный от event-share контракт: на mobile —
+одна system-share action, на desktop — независимые `image/png` и plain-text +
+canonical URL intents. Каноника: [service-sharing.md](service-sharing.md),
+[desktop clipboard research](service-sharing-desktop-clipboard-research.md),
+[manual matrix](service-sharing-desktop-clipboard-manual-matrix.md) и
+[preview runbook](../../operations/service-sharing-preview.md).
 
 
 
@@ -43,7 +178,20 @@ and historical ПК/favicon variants are rejected. Canonical geometry and usage:
 
 ### Kaggle CPU build handoff
 
-Static-site generation is now prepared as a Kaggle CPU job reusing the existing CherryFlash/TelegramMonitor infrastructure: per-run private input dataset, `KaggleClient.push_kernel(...)`, optional `kaggle_run.json` status dataset, `kaggle_status_client` heartbeat/progress from inside the kernel, and a `static_site:builder` resource lease. The first verified 50-event production-snapshot Kaggle build is `preview-20260628-event-pages-prod50-kaggle-v44` (artifact only, not bucket-published): it produced a tar.gz static site archive, `static_site_build_result.json`, and passed `check:preview`. Production Smart Update handoff is a coalesced `static_site_build` outbox job 15 minutes after the last event update, gated by `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`; object-storage/CDN publication is now available for preview/focus-group builds after the media mirror gate; production promotion still requires a separate release gate. Operational publisher protocol: `docs/operations/kaggle-static-site-builder.md`; build notes: `docs/features/static-site-pages/astro-preview.md#kaggle-cpu-builder--smart-update-handoff`.
+Static-site generation reuses the Kaggle CPU/status-ledger infrastructure: one
+private input dataset, `static_site:builder` lease and heartbeat per run. Smart
+Update records one bounded request payload and debounces until 15 minutes after
+the latest effect. A new effect during a running build produces exactly one
+merged follow-up. Fly creates an online-backup SQLite snapshot, runs
+`quick_check`, records SHA/size/watermark, and only that immutable file reaches
+Kaggle. The same outbox is used by `scripts/request_static_site_build.py`.
+
+Kaggle returns exactly two hash-checked artifacts plus bounded result JSON: an
+indexable root-form proof and a prefix-contained noindex candidate. Publication
+is a trusted Fly/operator-side create-only step guarded by
+`ENABLE_STATIC_SITE_SECRET_PUBLISH`; Kaggle receives no bucket credentials.
+Both generation flags default off until the controlled canary is accepted.
+Operational protocol: `docs/operations/kaggle-static-site-builder.md`.
 
 Interest-club pages are an additional versioned consumer of this checked build,
 not a second publisher.  Only the accepted club projection may create
@@ -54,47 +202,15 @@ parity before promotion.  Canonical identity and staged production gates:
 [Interest clubs](../interest-clubs/README.md) and its
 [release plan](../interest-clubs/release-plan.md).
 
-## Текущий публичный preview
+## Historical public preview evidence
 
-Desktop listing consumer candidate `DATE-LISTING · V19`:
-[Сегодня](https://kenigevents.ru/preview-20260718-date-listings-v19/segodnya/),
-[Завтра](https://kenigevents.ru/preview-20260718-date-listings-v19/zavtra/),
-[Выходные](https://kenigevents.ru/preview-20260718-date-listings-v19/vyhodnye/),
-[Популярное](https://kenigevents.ru/preview-20260718-date-listings-v19/populyarnoe/) и
-[общий DS catalog](https://kenigevents.ru/preview-20260718-date-listings-v19/lab/design-system/).
-Это immutable review prefix, а не production promotion.
+Latest main-reachable checked public preview evidence as of 2026-07-17 is
+`preview-20260717-interest-clubs-prod-canary`: 303 current/future events, checked
+Astro output and the gated club projection. Exact SHA/counts/manifest/HTTP evidence
+is recorded in `docs/features/interest-clubs/release-plan.md#production-evidence-2026-07-17`.
+It is still a noindex preview and does not close the event-page production gates.
 
-V18 консолидировал правила V12–V17: общая высота media без ручной подмены
-низкоразрешённого источника, bounded adaptive crop только для source-reviewed
-visual-only фото, одна стабильная CSS-first discovery plane без delayed JS morph,
-width-aware Weekend packing по фактической ширине lane, contextual compact/split
-rail для медальонов и ненулевого social proof и отдельный bottom-center research
-prototype персонализации. V19 помещает `Сейчас` внутрь реальной временной оси,
-делает медальон поверх preview полностью читаемым и заменяет позднюю 200px
-JS-выдачу image URL на parser-visible native lazy loading с проверенной raster
-density и immutable build assets. `Популярное` остаётся коротким обзором причин
-интереса: до пяти одноярусных поведенческих полок, а event/program family
-выделяется только в одну приоритетную полку; персонализированное продолжение
-зафиксировано как gated experiment, но не подменено generic feed. Подробный
-продуктовый и измеряемый контракт:
-[`listing-surfaces-v19-product.md`](listing-surfaces-v19-product.md).
-
-V20 делает названия двух поведенческих полок `Популярного` явными, исправляет
-грубую ничью категориального score через сортировку `Часто делятся` по реальным
-share-count (поэтому BREAK SUMMER FEST 5130 входит системно, без ID override) и
-добавляет первый мобильный контракт списочных страниц: один DOM карточек,
-режимы `Крупно / Компактно`, явный bottom safe-area switch, сохранение viewport
-anchor и нативного pinch zoom. Подробный контракт:
-[`listing-surfaces-v20-mobile-popular.md`](listing-surfaces-v20-mobile-popular.md).
-
-V21 отклонён: он распространил мобильный `EventCard` на десктоп и спрятал
-крупные карточки телефона в горизонтальную полку. V22 восстанавливает принятый
-десктоп V20/V19 без изменений и изолирует настоящий `EventCard@3` брейкпоинтом
-до 720px. На телефоне обе плотности теперь вертикальны: одна крупная карточка
-в строке либо те же карточки `2 в ряд`. Подробный актуальный контракт:
-[`listing-surfaces-v22-popular-breakpoint-restore.md`](listing-surfaces-v22-popular-breakpoint-restore.md).
-
-Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
+Historical v44 CDN/Kaggle baseline: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
 
 
 - Preview index: <https://kenigevents.ru/preview-20260628-event-pages-v44-cdn-kaggle/__preview/>
@@ -112,7 +228,7 @@ Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cd
 - Robots: <https://kenigevents.ru/preview-20260628-event-pages-v44-cdn-kaggle/robots.txt>
 - Website endpoint fallback: <http://kenigevents.ru.website.yandexcloud.net/preview-20260628-event-pages-v44-cdn-kaggle/__preview/>
 
-Current v44 preview scale/evidence (Kaggle CPU build from the 2026-06-28 production snapshot):
+Historical v44 preview scale/evidence (Kaggle CPU build from the 2026-06-28 production snapshot):
 
 - preview fixture: `80` real active events, including `49` events starting on 2026-06-28 across `14` event types;
 - generated output: `95` static pages, `261` files, `28 MiB`;
@@ -121,9 +237,29 @@ Current v44 preview scale/evidence (Kaggle CPU build from the 2026-06-28 product
 - media CDN verification: `957` active legacy `/p/...` keys from `kenigevents` are present in `kenigevents.ru`; sample CDN image and `https://static.kenigevents.ru/ics/5878.ics` return `200`; rendered v44 HTML contains CDN `/p/...` and stable `/ics/...` links, not raw legacy image URLs.
 - media CDN verification: `957` active legacy `/p/...` keys from `kenigevents` are present in `kenigevents.ru`, sample CDN image and `https://static.kenigevents.ru/ics/5878.ics` return `200`; rendered v44 HTML contains CDN `/p/...` and stable `/ics/...` links, not raw legacy image URLs.
 
-Preview `v39` keeps the consultant P0 hardening, explicit discovery feedback and feed-card comparison, and adds the current UI/data refinements: the mobile brand tag removes the rejected icon and keeps only a subtle periodic title sway; the fullscreen gallery uses a slower/farther `38%→64%` pan and advances before the pan fully stops; `Фото события` and the event title are forced onto separate caption lines; `Пушкинская карта` is rendered as a green check property, not a text value; admission/free states use compact property labels instead of bare `Бесплатно`; and the desktop event nav no longer exposes `Sitemap`. It also keeps date-listing/navigation refinements: `/segodnya/` is grouped into `Утро / День / Вечер / Ночь`, `/zavtra/` exists as a separate tomorrow page with the same sections, date-listing cards use a compact mobile plaque with a cropped left photo column and a straight separator to the text column, and list cards no longer expose mass external ticket/source links; users go through the internal event page first. The mobile discovery drawer handle no longer shows the icon; it uses only a subtle title sway in the site palette. Preview `v39` also hardens the event hero into a stronger mobile-first surface: the hero **image itself** is guarded by preview checks at bbox-style full-width contract (`x=0,width=viewport`) with no layout side gutters; the normal mobile header is replaced over the hero by a TASS-like terracotta drawer handle (`Полюбить Калининград / Анонсы`). Tapping it opens a no-JS `<details>` discovery drawer implemented as one monolithic sliding object: the full-width navigation rail and handle move together, overlap by a few pixels, have no transitional gap, no chevron/up-down icon, no rounded dropdown panel and no pill-buttons inside the rail. Visual-only hero variants use stable `svh` sizing plus constant-scale vertical parallax so mobile browser chrome changes should not cause a post-scroll scale jump. The current event page itself exposes first-party like/unlike with the honest aggregate like count, and share counters are present but stay empty when the total is zero. Feed cards use `split-actions` as the baseline, not an A/B on normal event pages: `Поделиться` is clustered near the right-thumb like action below the card, while `Не интересно` is demoted to a quieter utility action. The fullscreen hero viewer now uses a visible on-image photo CTA (`Фото N` when multiple images exist), lazy-hydrates gallery images from `data-gallery-src` only after opening/navigating, uses full-viewport-height `cover` + one-way right-to-left auto-pan for `visual_only` photos to avoid black side fields, auto-advances to the next photo after the pan, pauses forward auto-advance after a manual backward swipe, keeps OCR/text images in the base `contain` mode, keeps the service tag visible in the gallery, and places the event title in a readable bottom stripe. JSON-LD offer `validFrom` is emitted as ISO 8601 with timezone and JSON-LD `image[]` includes the event gallery assets so lazy images remain connected to the event for SEO/GEO. The historical comparison is in `docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md`; hero decisions are in `docs/features/static-site-pages/event-hero-lab-2026-06-27.md`. The inherited v32 interaction/SEO hardening remains: in fullscreen gallery the service tag is a real top-flush navigation link, not a floating label; visual-photo pan starts at `38%` and moves to `64%` over `17.9s`, which gives a slower/farther right-to-left image motion; manual backward motion uses `64% → 38%`; the event title in the fullscreen viewer uses inline/subline stripes via `box-decoration-break`, not a full-width bottom slab. Event cards now place the title before time/status meta because the feed scan task starts from “what is this?”, then date/conditions; service controls (`Не интересно`, share, like/undo plate) are marked `data-nosnippet` and remain buttons, not crawlable links. Phone-only CTAs use a selected SVG Repo handset-with-ringing-arcs phone icon (`533283/phone-call`) adapted into the shared inline icon system.
+Preview `v39` keeps the consultant P0 hardening, explicit discovery feedback and feed-card comparison, and adds the current UI/data refinements: the mobile brand tag removes the rejected icon and keeps only a subtle periodic title sway; the fullscreen gallery uses a slower/farther `38%→64%` pan and advances before the pan fully stops; `Фото события` and the event title are forced onto separate caption lines; `Пушкинская карта` is rendered as a green check property, not a text value; admission/free states use compact property labels instead of bare `Бесплатно`; and the desktop event nav no longer exposes `Sitemap`. It also keeps date-listing/navigation refinements: `/segodnya/` is grouped into `Утро / День / Вечер / Ночь`, `/zavtra/` exists as a separate tomorrow page with the same sections, date-listing cards use a compact mobile plaque with a cropped left photo column and a straight separator to the text column, and list cards no longer expose mass external ticket/source links; users go through the internal event page first. The mobile discovery drawer handle no longer shows the icon; it uses only a subtle title sway in the site palette. Preview `v39` also hardens the event hero into a stronger mobile-first surface: the hero **image itself** is guarded by preview checks at bbox-style full-width contract (`x=0,width=viewport`) with no layout side gutters; the normal mobile header is replaced over the hero by a TASS-like terracotta drawer handle (`Полюбить Калининград / Анонсы`). Tapping it opens a no-JS `<details>` discovery drawer implemented as one monolithic sliding object: the full-width navigation rail and handle move together, overlap by a few pixels, have no transitional gap, no chevron/up-down icon, no rounded dropdown panel and no pill-buttons inside the rail. Visual-only hero variants use stable `svh` sizing plus constant-scale vertical parallax so mobile browser chrome changes should not cause a post-scroll scale jump. The current event page itself exposes first-party like/unlike with the honest aggregate like count, and share counters are present but stay empty when the total is zero. Feed cards use `split-actions` as the baseline, not an A/B on normal event pages: `Поделиться` is clustered near the right-thumb like action below the card, while `Не интересно` is demoted to a quieter utility action. The fullscreen hero viewer now uses a visible on-image photo CTA (`Фото N` when multiple images exist), lazy-hydrates gallery images from `data-gallery-src` only after opening/navigating, uses full-viewport-height `cover` + one-way right-to-left auto-pan for `visual_only` photos to avoid black side fields, auto-advances to the next photo after the pan, pauses forward auto-advance after a manual backward swipe, keeps OCR/text images in the base `contain` mode, keeps the service tag visible in the gallery, and places the event title in a readable bottom stripe. JSON-LD offer `validFrom` is emitted as ISO 8601 with timezone and JSON-LD `image[]` includes the event gallery assets so lazy images remain connected to the event for SEO/GEO. The historical comparison is in `docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md`; hero decisions are in `docs/features/static-site-pages/event-hero-lab-2026-06-27.md`. The inherited v32 interaction/SEO hardening remains: in fullscreen gallery the service tag is a real top-flush navigation link, not a floating label; visual-photo pan starts at `38%` and moves to `64%` over `17.9s`, which gives a slower/farther right-to-left image motion; manual backward motion uses `64% → 38%`; the event title in the fullscreen viewer uses inline/subline stripes via `box-decoration-break`, not a full-width bottom slab. Event cards now place the title before time/status meta because the feed scan task starts from “what is this?”, then date/conditions; service controls (`Не интересно`, share, like/undo plate) are marked `data-nosnippet` and remain buttons, not crawlable links. Phone-only desktop CTAs keep the branded primary button, use the shared copy icon instead of a redundant phone pictogram, reveal the number on click, copy it to the clipboard and announce success without adding a layout-shifting helper row.
 
-Other v39 contracts remain: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, native-share-first button, transparent terracotta wide-«о» tag favicon, prefetch for static links, and sticky CTA hiding while the hero is visible and again when the user reaches the feed. The after-hero drawer handle remains visible when closed so navigation is never lost while scrolling; the monolithic root transform keeps the panel off-screen and only the handle protrudes. Current media rule: only the explicit LLM-authored `event_photo` role may use a cover frame in discovery cards; OCR, missing/unknown roles and legacy `visual_only` render width-fit without horizontal crop. Compact date-listing thumbnails remain a separate navigation-preview exception. Desktop event detail uses the continuous Editorial composition for a classified photo hero and a split/contained fallback for documents; a dedicated companion is reserved for strict `event_identity_poster`. There is no crop for OCR, no duplicate underlay, no blur/backdrop fill and no repeated image edges. Each event page statically preloads up to 10 continuation candidates in HTML; after JS starts, the page uses only a consented compatible local profile (`ke_personalization_profile`, UUID `anon_id/session_id`, `event-detail-related-v1` + `event-taxonomy-v1`) to filter/rerank. The client removes already hidden / `not_interested` / strong negative-interest matches from the preloaded cards, performs one same-origin JSON hydration from `/data/discovery/<event_id>.json`, where the payload is an `event_detail_related` manifest with `related_static[]`, and top-ups relevant candidates; subsequent expansion is only by `Показать ещё`. Local strong actions currently write a compact browser log with `served_list_id` / `served_list_hash` context for future Supabase telemetry mapping. Important status: the v39 static preview does **not** persist first-party likes/profile snapshots to Supabase yet; the preview contract keeps like/profile writes local-only and forbids treating this as Supabase persistence. Source counters are already synced to Supabase by the production metric pipeline, but browser feedback remains same-browser/local until the dedicated gated write path (same-origin endpoint or append-only Supabase RPC with RLS/grants) is implemented. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. `Не интересно` turns the acted-on card into a grey explanatory plate with an explicit `Отменить` action; tapping the plate itself must not navigate to detail. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split. The hero no longer duplicates facts as a second info block; it keeps only a compact meta line, while the single `Коротко` block owns icon facts (`Где` combines venue + address, `Вход`, optional `Пушкинская карта`/festival), no longer links to Telegraph, and no longer exposes source count/views in public HTML. The registered-user sources/mentions notice belongs to the parent details section as a bottom strip, not to the `Коротко` fact block. Footer is now a compact navigation block: top links (`Сегодня`, `Завтра`, `Выходные`, `Все анонсы`), crawlable editorial social links with icons + short labels, and contact email `info@kenigevents.ru`.
+Other v39 contracts remain: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, native-share-first button, transparent terracotta wide-«о» tag favicon, prefetch for static links, and sticky CTA hiding while the hero is visible and again when the user reaches the feed. The after-hero drawer handle remains visible when closed so navigation is never lost while scrolling; the monolithic root transform keeps the panel off-screen and only the handle protrudes. Current media rule: only the explicit LLM-authored `event_photo` role may use a cover frame in discovery cards; OCR, missing/unknown roles and legacy `visual_only` render width-fit without horizontal crop. Compact date-listing thumbnails remain a separate navigation-preview exception. Desktop event detail uses the continuous Editorial composition for a strong
+`visual_only` landscape and a split/contained fallback for documents; a
+dedicated companion remains reserved for strict `event_identity_poster`.
+Within the detail hero/fullscreen gallery a positive `visual_only` result is
+the display crop boundary even while asynchronous `media_role` enrichment is
+pending: ordinary photos use bounded `cover`, while OCR/unknown-text documents
+and positively classified non-photo documents use `contain`. There is no crop for OCR, no duplicate underlay, no
+blur/backdrop fill and no repeated image edges. Each event page statically preloads up to 10 continuation candidates in HTML; after JS starts, the page uses only a consented compatible local profile (`ke_personalization_profile`, UUID `anon_id/session_id`, `event-detail-related-v1` + `event-taxonomy-v1`) to filter/rerank. The client removes already hidden / `not_interested` / strong negative-interest matches from the preloaded cards, performs one same-origin JSON hydration from `/data/discovery/<event_id>.json`, where the payload is an `event_detail_related` manifest with `related_static[]`, and top-ups relevant candidates; subsequent expansion is only by `Показать ещё`. Local strong actions currently write a compact browser log with `served_list_id` / `served_list_hash` context for future Supabase telemetry mapping. Important status: the v39 static preview does **not** persist first-party likes/profile snapshots to Supabase yet; the preview contract keeps like/profile writes local-only and forbids treating this as Supabase persistence. Source counters are already synced to Supabase by the production metric pipeline, but browser feedback remains same-browser/local until the dedicated gated write path (same-origin endpoint or append-only Supabase RPC with RLS/grants) is implemented. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. `Не интересно` turns the acted-on card into a grey explanatory plate with an explicit `Отменить` action; tapping the plate itself must not navigate to detail. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split. The hero no longer duplicates facts as a second info block; it keeps only a compact meta line, while the single `Коротко` block owns icon facts (`Где` combines venue + address, `Вход`, optional `Пушкинская карта`/festival), no longer links to Telegraph, and no longer exposes source count/views in public HTML. The registered-user sources/mentions notice belongs to the parent details section as a bottom strip, not to the `Коротко` fact block. Footer is now a compact navigation block: top links (`Сегодня`, `Завтра`, `Выходные`, `Все анонсы`), crawlable editorial social links with icons + short labels, and contact email `info@kenigevents.ru`.
+
+Desktop deliberately keeps a visible semantic boundary after the explicitly
+similar `Смотрите дальше` set. The following `Ещё события` / mature-profile
+`По вашим интересам` section is a finite broad-discovery module, not another
+similarity claim and not an infinite feed: it renders at most six deduplicated
+cards (a few desktop rows according to the resolved grid), then `Все анонсы`.
+Its candidate mix may interleave compatible profile results, non-rejected
+vector-adjacent tail and a diverse upcoming fallback under category/venue caps,
+so a user is not trapped in a theatre/type bubble. Mobile keeps the established
+single continuation surface and must not duplicate this desktop-only module.
+Both server-rendered related cards and runtime-selected broad cards use the same
+canonical `EventCard` DOM contract and interaction controller; sharing only row
+geometry while maintaining a second handwritten card renderer is forbidden.
 
 Preview `v40` closes the share experiment: temporary `Поделиться эксперимент`, `Поделиться эксперимент 2` and rich-clipboard controls are not production UI. The single visible `Поделиться` button is now the production baseline: it attempts Web Share with image file + plain text + URL, then falls back to generated 1080×1350 image + text + URL, and finally to text/URL copy when the browser or target app cannot accept files. Rich hidden hyperlinks inside share text are documented as impossible to guarantee from a mobile browser.
 
@@ -160,7 +296,7 @@ Event detail pages render large quick-read **medallions** after the hero/title a
 
 ## Listing personalization on static lists
 
-P0 list personalization is a local **filter**, not a second SEO page and not a backend dependency. `/segodnya/`, `/zavtra/` and `/vyhodnye/` keep the full static list in HTML for users without JS and for crawlers. After JS starts, a `Для меня / Полный список` segmented switch appears only if the compatible consented local profile can actually hide at least one event (`Скрыто N > 0`). Full inventory is always the initial/default state; personal mode requires explicit selection and never silently narrows a first visit. On mobile the qualified control may use a fixed bottom placement with footer-overlap guard; when nothing differs it is not shown. `Для меня` reads only `ke_personalization_profile` and hides exact events / linked date variants already marked `Не интересно`; it does not create a crawlable personalized route, affect canonical/sitemap/JSON-LD, or expose controls to snippets. The V16 review build permits `?personalization=qualified` only under preview/localhost to inspect the future qualified composition without claiming production readiness.
+P0 list personalization is a local **filter**, not a second SEO page and not a backend dependency. `/segodnya/`, `/zavtra/` and `/vyhodnye/` keep the full static list in HTML for users without JS and for crawlers. After JS starts, a `Все / Для меня` segmented switch appears only if the compatible local profile can actually hide at least one event (`Скрыто N > 0`). On mobile it is a fixed bottom switch with footer-overlap guard; when nothing is hidden it is not shown. If the user has not explicitly selected a mode and there are local `Не интересно` marks, the list defaults to `Для меня`; choosing `Все` is an explicit override. `Для меня` reads only the consented local profile (`ke_personalization_profile`) and hides exact events / linked date variants that the user already marked as `Не интересно`; it does not create `?personal=1`, does not affect canonical/sitemap/JSON-LD, and all controls are `data-nosnippet` buttons, not crawlable links.
 
 ## Browser notifications / Web Push planning
 
@@ -209,7 +345,13 @@ Smart Update / image preparation must enrich image assets in batch/offline, not 
 - `focal_point` / `recommended_object_position` in normalized 0..1 coordinates or CSS object-position form;
 - `safe_crop` / crop guards: do not crop OCR text, and do not cut detected faces, especially top face bounds.
 
-Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, with face/focal metadata when available. `ocr_text`, missing roles, `unknown_document`, `unknown_visual`, and legacy `visual_only` remain contain/natural/width-fit with no horizontal crop. If safe face-aware cover is impossible, renderer falls back to contain/natural presentation rather than cutting heads or important text.
+Runtime policy is surface-specific. Discovery cards remain role-first: only an
+explicit LLM-authored `event_photo` may use cover there. The event-detail hero
+and fullscreen gallery also have direct OCR evidence, so `visual_only` is a
+positive permission for bounded photo cover even if `media_role` is still
+pending; `ocr_text`/`unknown` and a positively classified non-photo document remain contain. Reviewed focal metadata controls
+`object-position` when present. If OCR or face/crop evidence makes cover unsafe,
+the renderer falls back to contain/natural rather than cutting text or faces.
 
 ## Цель продукта
 
@@ -228,16 +370,17 @@ Runtime policy: only an explicit LLM-authored `event_photo` role may use cover, 
 - Публикуем только **будущие активные события**.
 - Публичный static fallback не требует авторизации; optional authorized search/identity surfaces do not change crawlable HTML availability.
 - Anonymous local personalization допустима только после consent; remote telemetry/profile materialization remains a separate gated capability.
-- Telegraph остаётся временным compatibility/fallback layer примерно на **1 месяц** после включения статических страниц.
+- Telegraph event-detail остаётся временным compatibility/fallback layer на
+  **10 дней после фактического T0**, затем новые event Telegraph pages больше не
+  создаются; month/weekend/festival surfaces выключаются отдельно после появления
+  static replacements.
 - Доступы к Yandex Cloud/Object Storage будут выданы отдельным шагом; до этого проектируем контракт и пайплайн без привязки к конкретным credentials.
 
 ## Связанные документы
 
-- [Каноническая дизайн-система и runtime-каталог](design-system/README.md) — токены, lifecycle, реестр компонентов и маршрут `/lab/design-system/`.
-- [Release UI contract](release-ui-contract.md) — обязательные surfaces, viewport/state matrix и immutable SHA/build sign-off.
-- [Сценарии проверки](test-scenarios.md) — пользовательские сценарии и отдельные `ADD-DS-*` regression contracts.
-
 - Release umbrella and F1–F17 map: `docs/features/static-personal-announcements/README.md`.
+- Event-page production release and 10-day Telegraph cutover: `docs/features/static-site-pages/release-plan.md`.
+- Test/release scenario inventory: `docs/features/static-site-pages/test-scenarios.md`.
 - Release UI contract: `docs/features/static-site-pages/release-ui-contract.md`.
 - Event sharing/generated images: `docs/features/static-site-pages/event-sharing.md`.
 - Image framing/focal metadata: `docs/features/static-site-pages/image-framing.md`.
@@ -439,38 +582,6 @@ Operational rule:
 
 Date listing pages (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) should be indexable in production: they answer real date-intent queries and provide internal links to canonical event pages. The SEO risk is not the listings themselves, but mass outbound links from every card to ticket/social/source services. Therefore listing cards should not show direct external ticket/source CTAs. They keep internal event links and optional same-origin `.ics`; the external ticket/registration/source action lives on the event detail page, where context, JSON-LD and `rel="noopener noreferrer nofollow"` can be controlled. Do **not** solve outbound-link concerns by `noindex` for production listing pages. Preview builds remain `noindex,nofollow` only because they are preview prefixes.
 
-The current desktop product candidate is `DATE-LISTING TH-P1 · V11`:
-
-- time groups use intrinsic-width, wrapping event cards rather than equal grid
-  columns or a row that escapes the viewport;
-- exact minutes are canonical content groups; the navigation above them uses
-  periods with counts and reveals exact times only for dense periods;
-- Today keeps completed/started groups above the current-time marker in a
-  collapsed block. Tomorrow has no meaningless `Начались ранее` affordance;
-- Weekend uses one union exact-time axis between persistent Saturday/Sunday
-  background surfaces. Each time is printed once and every next row stays
-  aligned even when the two day cells contain different numbers of cards;
-- exhibitions are omitted from these primary date flows when ordinary events
-  provide enough inventory. Short multi-day festivals are retained when they
-  start on the selected date;
-- always-visible direct city chips and the conditional `Для меня / Полный
-  список` v2 enhancement intersect client-side. Full inventory is always the
-  initial state and static/no-JS fallback;
-- card, media and base copy widths are identical and derive only from selected
-  media geometry. Wide no-OCR alternatives have priority; safe+focal visuals
-  may expand adaptively, while unverified no-OCR visuals use a conservative
-  fixed crop and OCR media keeps its natural ratio. A final-frame skeleton is
-  visible until load/decode;
-- focus-window rows are exported exhaustively before the general bounded fill;
-  QA records source snapshot time separately from generated JSON time. The V11
-  fixture therefore restores the short multi-day House Vibe ONEGIN start and
-  yields 17 Today, 37 Tomorrow and 62 Weekend consumer cards after route rules;
-- reusable layout, navigation, filtering and card rules belong to the global
-  design-system catalog and checks, not to a local three-page stylesheet.
-
-The complete build/QA/evidence contract is recorded in
-[Astro preview](astro-preview.md) and the `ADD-LIST-*` scenarios below.
-
 ## SEO/GEO contract
 
 Для каждой event page:
@@ -539,6 +650,12 @@ Google Event structured data требует добавлять required properti
 - “Другие даты” рендерятся отдельным блоком и не смешиваются с “Похожие события”;
 - client island может после consent переупорядочить уже полезный block, но не должен ломать CTA/SEO;
 - mobile рендерит related как вертикальную continuation/feed-секцию `Смотрите дальше`, не горизонтальный rail; desktop остаётся desktop-native grid/module, а не растянутой мобильной лентой;
+- после явно похожих карточек desktop отдельно и честно обозначает переход к
+  конечной широкой выдаче `Ещё события` / `По вашим интересам`: максимум шесть
+  карточек без load-more/infinite scroll, с anti-bubble diversity; этот модуль
+  не дублируется на mobile;
+- статическая и runtime-персонализированная выдача используют один `EventCard`
+  DOM/behavior contract; отдельный строковый `eventCardHtml` не допускается;
 - cards внутри static fallback сохраняют crawlable media/title links, но служебные feedback controls остаются button-only и `data-nosnippet`;
 - `static_related_v1` уже реализован в `site/src/lib/events.ts`: seed `preview-related.json` + deterministic scoring by category/tag overlap/city/date/venue/price/status + hard exclusions for current/other-date/past/inactive. Это достаточный MVP baseline for preview, но не финальная product-quality рекомендация без expanded catalog/golden top-10 review.
 
@@ -611,23 +728,19 @@ Rebuild triggers:
 
 ## Telegraph coexistence
 
-Период dual-run: ориентир **1 месяц**.
+Канонический период dual-run для **event-detail pages** — 10 дней после
+фактического production `T0`, а не месяц и не десять дней от даты написания
+документа. D0 начинается только после production profile, stable URL registry,
+catalog parity, manifest/promotion/rollback и downstream resolver gates.
 
-На период coexistence:
+Переход: D0 10% static links → D2 25% → D4 50% → D6 100% → D7–D9 72-hour
+soak → D10 static-only outward links и Telegraph `existing_only`. На D10 запрещены
+create и fallback-recreate новых event pages, но старые `telegraph_url/path` и
+старые Telegram/VK посты сохраняются. Aggregate month/weekend/festival Telegraph
+pages остаются отдельным scope до появления их static replacements.
 
-- Telegraph остаётся fallback/compatibility для уже опубликованных постов и админских flows;
-- новые публичные links должны постепенно переключаться на `kenigevents.ru` canonical URL;
-- отчёты должны показывать оба URL, пока migration flag не выключит Telegraph;
-- старые Telegram/VK посты не переписываются массово без отдельной задачи.
-
-Exit criteria для отключения Telegraph как основного event page target:
-
-- event pages успешно генерируются и публикуются для будущих событий;
-- sitemap/robots работают;
-- Rich Results/URL Inspection smoke на нескольких страницах пройден;
-- Telegram/VK preview не хуже текущего;
-- fallback/error handling проверен;
-- 1 месяц dual-run не выявил критических регрессий.
+Flags, измеримые go/no-go thresholds, rollback и обязательные cutover-тесты
+зафиксированы в [release-plan.md](release-plan.md#десятидневный-telegraph-coexistence).
 
 ## Yandex Cloud/Object Storage notes
 
