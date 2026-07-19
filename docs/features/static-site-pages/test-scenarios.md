@@ -398,6 +398,18 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 
 ### Mobile Popular density comparison
 
+- **ADD-LISTING-05 — Compact packing without scale regression.** На
+  `360/390px` больше половины ranked events участвуют в парных рядах, но media
+  height побайтно/геометрически совпадает с V23. Разрешены только mobile
+  Popular gutter/gap corrections; OCR crop, rank reorder и masonry запрещены.
+- **ADD-LISTING-06 — Pinch mirrors the visible density control.** Только
+  `/populyarnoe/` запрещает browser zoom; pinch-in включает `Компактно`,
+  pinch-out — `Крупно`, изменяя те же `aria-checked/hidden/inert` состояния.
+  Один жест срабатывает один раз, single-touch scroll не отменяется, dock
+  остаётся доступным для keyboard/screen-reader пользователей.
+- **ADD-LISTING-07 — Compact pictogram truth.** Пиктограмма `Компактно`
+  содержит ровно две контурные плитки и не меняет доступное текстовое имя
+  кнопки.
 - **ADD-LISTING-01 — Exact canonical large card.** На `/populyarnoe/` при
   ширине до `720px` режим `Крупно` рендерит общий `EventCard.astro` с
   `split-actions`, совпадающий с `Смотрите дальше`; отдельный

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Improved only the mobile Popular density layer: reclaimed unused shell width
+  so a majority of ranked events can pack two-up without smaller media, changed
+  the compact pictogram to two tiles, and added a route-scoped pinch-in/out
+  shortcut that mirrors the still-visible accessible density dock.
 - Fixed mobile Popular density prototyping without regressing desktop: the
   large mode now renders the exact shared `EventCard split-actions` component,
   the compact mode uses an ordered intrinsic-width one/two-card wrap, and a

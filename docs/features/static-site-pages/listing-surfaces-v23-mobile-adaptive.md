@@ -1,5 +1,9 @@
 # Listing surfaces V23 — mobile Popular density comparison
 
+> **Superseded for mobile packing by V24.** Canonical component reuse and the
+> unchanged desktop baseline remain valid; V24 corrects phone gutters, icon and
+> adds the owner-requested pinch shortcut.
+
 **Status:** implementation candidate; desktop contract is inherited unchanged
 from V22, while the two mobile representations remain a product comparison.
 

@@ -9,7 +9,7 @@ const canonicalUrl = absoluteUrl('/populyarnoe/');
 const title = `Популярные события Калининграда | ${SITE_NAME}`;
 const description = 'Лента популярных событий по социальной активности: лайки, репосты, просмотры и реакции источников нормализуются в компактный скоринг.';
 ---
-<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="popular">
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="popular" disableViewportZoom>
   <main id="main" class="ke-listing-page">
     <PopularListingSurface events={events} />
   </main>

@@ -1,7 +1,7 @@
 <div
   class="ke-listing-mobile-density-dock"
   data-ds-component="ListingMobileDensitySwitch"
-  data-ds-version="3"
+  data-ds-version="4"
   data-listing-mobile-density-dock
   data-nosnippet
 >
@@ -39,6 +39,12 @@
 
       const representationFor = (density) => density === 'adaptive' ? 'mobile-adaptive' : 'mobile-large';
       const layoutFor = (density) => surface.querySelector(`[data-popular-mobile-layout="${density}"]`);
+      const mobileDensityMedia = window.matchMedia('(max-width: 720px)');
+      const pinchDistance = (touches) => {
+        if (touches.length < 2) return null;
+        const [first, second] = touches;
+        return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+      };
 
       const visibleAnchor = (density = surface.dataset.mobileCardDensity) => {
         const floor = Math.max(0, Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ke-listing-sticky-stack-height')) || 0);
@@ -99,6 +105,36 @@
           setDensity(next.dataset.listingDensityButton);
         });
       });
+
+      let pinchStart = null;
+      let pinchCommitted = false;
+      const resetPinch = (event) => {
+        if (event.touches?.length >= 2) return;
+        pinchStart = null;
+        pinchCommitted = false;
+      };
+      surface.addEventListener('touchstart', (event) => {
+        if (!mobileDensityMedia.matches) return;
+        const distance = pinchDistance(event.touches);
+        if (!distance) return;
+        pinchStart = distance;
+        pinchCommitted = false;
+      }, { passive: true });
+      surface.addEventListener('touchmove', (event) => {
+        if (!mobileDensityMedia.matches) return;
+        const distance = pinchDistance(event.touches);
+        if (!distance || !pinchStart) return;
+        event.preventDefault();
+        if (pinchCommitted) return;
+        const ratio = distance / pinchStart;
+        const nextDensity = ratio <= 0.84 ? 'adaptive' : ratio >= 1.16 ? 'large' : null;
+        if (!nextDensity) return;
+        pinchCommitted = true;
+        if (surface.dataset.mobileCardDensity !== nextDensity) setDensity(nextDensity);
+      }, { passive: false });
+      surface.addEventListener('touchend', resetPinch, { passive: true });
+      surface.addEventListener('touchcancel', resetPinch, { passive: true });
+      surface.dataset.listingPinchReady = 'true';
     });
   }
 

@@ -205,6 +205,10 @@ parity before promotion.  Canonical identity and staged production gates:
 ## Historical public preview evidence
 
 The current mobile `Популярное` density comparison is documented in
+[`listing-surfaces-v24-mobile-pinch.md`](listing-surfaces-v24-mobile-pinch.md):
+it increases real two-up packing without reducing media scale and adds the
+owner-requested pinch shortcut while keeping the visible density dock. The V23
+component-reuse baseline remains documented in
 [`listing-surfaces-v23-mobile-adaptive.md`](listing-surfaces-v23-mobile-adaptive.md):
 the large phone mode directly reuses canonical `EventCard split-actions`, the
 adaptive compact mode keeps intrinsic listing-card geometry and immutable rank

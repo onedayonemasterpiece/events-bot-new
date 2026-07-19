@@ -1171,7 +1171,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .listing-filter--floating { transition: none; }
 }
 
-/* Popular V23: desktop keeps the accepted V20/V22 intrinsic flow unchanged.
+/* Popular V24: desktop keeps the accepted V20/V22 intrinsic flow unchanged.
    Phones switch between the canonical EventCard from "Смотрите дальше" and
    an intrinsic-width ListingEventCard wrap derived from the desktop system. */
 .ke-listing-mobile-density-dock { display: none; }
@@ -1180,7 +1180,9 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .ke-popular-desktop { display: none !important; }
   .ke-popular-behavior--mobile:not([hidden]) { display: grid; }
   .ke-popular-listing {
+    width: min(calc(100% - 24px), var(--ke-content-listing-max));
     padding-bottom: calc(92px + env(safe-area-inset-bottom));
+    touch-action: pan-y;
   }
   .ke-popular-listing .ke-listing-head h1 {
     font-size: clamp(3.2rem, 14vw, 3.7rem);
@@ -1236,7 +1238,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     align-items: start;
     align-content: start;
     justify-content: flex-start;
-    gap: 20px 12px;
+    gap: 20px 10px;
     overflow: visible;
     scroll-snap-type: none;
   }
@@ -1354,14 +1356,22 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     border-top: 5px solid currentColor;
     border-bottom: 2px solid currentColor;
   }
-  .ke-listing-mobile-density-switch__icon--compact::before {
+  .ke-listing-mobile-density-switch__icon--compact {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 0;
+  }
+  .ke-listing-mobile-density-switch__icon--compact::before,
+  .ke-listing-mobile-density-switch__icon--compact::after {
     content: "";
-    margin: 3px;
-    background:
-      linear-gradient(currentColor 0 0) 0 0 / 4px 4px no-repeat,
-      linear-gradient(currentColor 0 0) 100% 0 / 4px 4px no-repeat,
-      linear-gradient(currentColor 0 0) 0 100% / 4px 4px no-repeat,
-      linear-gradient(currentColor 0 0) 100% 100% / 4px 4px no-repeat;
+    box-sizing: border-box;
+    flex: 0 0 7px;
+    width: 7px;
+    height: 7px;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
   }
   body.is-footer-visible .ke-listing-mobile-density-dock {
     opacity: 0;
