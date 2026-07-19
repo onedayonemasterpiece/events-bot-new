@@ -261,7 +261,9 @@ Implemented now:
   that authoritative text/source row and cannot erase an existing fused-vector
   accept merely because the sidecar omits vector fields; its later no-op merge
   also preserves the same-run defer-to-fetch transition used by changed-only
-  YDB persistence and cursor recovery.
+  YDB persistence and cursor recovery. ImageDiagnostic consumes
+  `selected_for_next_image_batch=true` ahead of older unselected backlog, so
+  the CandidateReport handoff is operational rather than display-only.
 
 Still required for each imported external-publication candidate to become confirmed:
 

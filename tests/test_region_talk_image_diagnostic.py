@@ -472,6 +472,34 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_ydb_queue_prioritizes_candidate_report_selected_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+
+            def row(queue_id: str, order: int, selected: bool) -> dict:
+                return {
+                    "image_queue_id": queue_id,
+                    "image_queue_order": order,
+                    "image_queue_status": "needs_actual_image_fetch",
+                    "post_url": f"https://example.test/{queue_id}",
+                    "kaliningrad_oblast_only_scope": "true",
+                    "kaliningrad_mention_role": "main_subject",
+                    "publication_eligibility_decision": "accept",
+                    "publication_eligibility_gate_version": "publication-gate-test-v1",
+                    "selected_for_next_image_batch": str(selected).lower(),
+                }
+
+            mod.ydb_select_image_queue = lambda _limit: [
+                row("older-unselected", 1, False),
+                row("candidate-report-selected", 140, True),
+            ]
+            mod.ydb_upsert_image_rows = lambda _batch, *, stage: None
+
+            leased, total = mod.ydb_rows_for_diagnostic(1)
+
+            self.assertEqual(total, 2)
+            self.assertEqual([item["image_queue_id"] for item in leased], ["candidate-report-selected"])
+
     def test_unchanged_historical_eligibility_row_is_not_rewritten(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             mod = self._load_in_temp_output(td)

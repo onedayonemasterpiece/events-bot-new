@@ -1608,7 +1608,14 @@ def ydb_rows_for_diagnostic(limit_n: int):
     )
     ordinary_pending = [row for row in pending if str(row.get("vlm_revisit_requested") or "").lower() != "true"]
     vlm_pending = [row for row in pending if str(row.get("vlm_revisit_requested") or "").lower() == "true"]
-    ordinary_pending = sorted(ordinary_pending, key=lambda r: (int(r.get("image_queue_order") or 10**9), str(r.get("post_url") or "")))
+    ordinary_pending = sorted(
+        ordinary_pending,
+        key=lambda r: (
+            0 if str(r.get("selected_for_next_image_batch") or "").lower() in {"1", "true", "yes"} else 1,
+            int(r.get("image_queue_order") or 10**9),
+            str(r.get("post_url") or ""),
+        ),
+    )
     vlm_slots = max(0, image_vlm_max_calls_per_run() - int(IMAGE_VLM_STATS["attempted"]))
     vlm_pending = sorted(vlm_pending, key=image_vlm_priority, reverse=True)[:vlm_slots]
     # Reserve at most the bounded VLM slots for historical re-downloads while
