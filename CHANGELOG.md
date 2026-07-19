@@ -46,8 +46,13 @@
   in-flow pre-footer quick-start section; remove the obstructive fixed help
   overlay and title-panel focus ring; add `ArrowDown` recovery after focus loss,
   `Escape`/`Enter` consent handling, native shortcut hover titles, adaptive CTA
-  badges and inline `P`/`S` service-copy hints; cover the clean UI with Playwright;
-  publish the accepted one-page lab under an immutable noindex preview prefix;
+  badges and inline `P`/`S` service-copy hints; in V4 add green saved-calendar
+  and red consent-replayed like states, deterministic desktop event-link copy
+  with an auto-dismissing toast, `ArrowUp` fullscreen gallery entry,
+  `Enter`/`Space` activation of its final related-event slide, and Russian-layout
+  physical footer copy shortcuts; cover the clean UI with Playwright and an
+  approved agy Gemini 3.1 Pro review; publish the accepted one-page lab under an
+  immutable noindex preview prefix;
   production event routes and mobile behavior remain unchanged.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,

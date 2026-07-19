@@ -10,10 +10,11 @@
     </button>
     <ul aria-label="Клавиши быстрой навигации">
       <li><kbd>← ↑ → ↓</kbd><span>выбирать события</span></li>
+      <li><kbd>↑</kbd><span>открыть фото наверху</span></li>
       <li><kbd>Enter</kbd><span>открыть</span></li>
       <li><kbd>L</kbd><span>лайк</span></li>
       <li><kbd>K</kbd><span>календарь</span></li>
-      <li><kbd>S</kbd><span>поделиться</span></li>
+      <li><kbd>S</kbd><span>скопировать событие</span></li>
       <li><kbd>Space</kbd><span>прокрутка</span></li>
     </ul>
   </div>
@@ -23,13 +24,20 @@
   Быстрая навигация по событиям. Стрелка вниз переводит к похожим событиям.
   На карточках используйте стрелки для перехода между событиями. Пробел прокручивает страницу.
   Enter открывает событие или основное действие. L ставит лайк, K добавляет в календарь,
-  S делится ссылкой. Стрелки влево и вправо в верхнем блоке листают фотографии.
+  S копирует название и ссылку. Стрелки влево и вправо в верхнем блоке листают фотографии,
+  стрелка вверх открывает полноэкранную галерею.
 </p>
 <p class="sr-only" data-keyboard-prototype-status role="status" aria-live="polite" aria-atomic="true"></p>
+<div class="keyboard-action-toast" data-keyboard-action-toast aria-hidden="true" hidden>
+  <span data-keyboard-action-toast-icon>✓</span><strong data-keyboard-action-toast-text></strong>
+</div>
 
 <script is:inline>
   const root = document.querySelector('[data-desktop-clean-event]');
   const status = document.querySelector('[data-keyboard-prototype-status]');
+  const actionToast = document.querySelector('[data-keyboard-action-toast]');
+  const actionToastIcon = actionToast?.querySelector('[data-keyboard-action-toast-icon]');
+  const actionToastText = actionToast?.querySelector('[data-keyboard-action-toast-text]');
   const startButton = document.querySelector('[data-keyboard-prototype-start]');
 
   const isVisible = (element) => {
@@ -49,9 +57,16 @@
     surface.tabIndex = 0;
     surface.setAttribute('data-keyboard-event-surface', '');
     surface.setAttribute('aria-describedby', 'keyboard-prototype-instructions');
-    surface.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowDown Enter L K S');
+    surface.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowUp ArrowDown Enter L K S');
 
     const primary = surface.querySelector('.desktop-prototype__primary-action:not(.is-disabled)');
+    const currentLike = surface.querySelector('[data-feedback-action="like"]');
+    if (currentLike instanceof HTMLElement) {
+      // The shared feedback renderer reads identity from its scope. Keep this
+      // one-page prototype self-contained while making consent replay visible.
+      surface.dataset.eventId = currentLike.dataset.eventId || '';
+      surface.dataset.eventTitle = currentLike.dataset.eventTitle || '';
+    }
     const shortcutUsageKey = 'ke_keyboard_shortcut_usage_v1';
     const regularUseCount = 6;
     const regularUseWindowMs = 14 * 24 * 60 * 60 * 1000;
@@ -86,7 +101,7 @@
     const shortcutTargets = [
       [primary, 'Enter', 'Основное действие — клавиша Enter'],
       [surface.querySelector('[data-calendar-action]:not(.desktop-prototype__primary-action)'), 'K', 'Добавить в календарь — клавиша K'],
-      [surface.querySelector('[data-native-share]'), 'S', 'Поделиться событием — клавиша S'],
+      [surface.querySelector('[data-native-share]'), 'S', 'Скопировать название и ссылку события — клавиша S'],
       [surface.querySelector('[data-feedback-action="like"]'), 'L', 'Поставить лайк — клавиша L'],
     ];
     shortcutTargets.forEach(([target, key, title]) => {
@@ -106,6 +121,7 @@
     let footerShare = null;
     let footerImageAction = null;
     let footerTextAction = null;
+    let footerStatusObserver = null;
     const enhanceFooterShare = () => {
       footerShare = document.querySelector('[data-service-share-root][data-service-share-surface="footer"]');
       footerImageAction = footerShare?.querySelector('[data-service-share-button][data-service-share-intent="image"]') || null;
@@ -126,6 +142,14 @@
         keycap.textContent = key;
         label.after(keycap);
       });
+      const footerStatus = footerShare?.querySelector('[data-service-share-status]');
+      if (footerStatus instanceof HTMLElement && !footerStatusObserver) {
+        footerStatusObserver = new MutationObserver(() => {
+          const message = footerStatus.textContent?.trim();
+          if (message) showActionToast(message, /не удалось|ошиб/iu.test(message) ? 'error' : 'success');
+        });
+        footerStatusObserver.observe(footerStatus, { childList:true, characterData:true, subtree:true });
+      }
     };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enhanceFooterShare, { once:true });
     else enhanceFooterShare();
@@ -137,12 +161,92 @@
     const heroStatus = root.querySelector('[data-closed-hero-status]');
 
     let statusTimer;
+    let actionToastTimer;
+    let gallerySpaceArm = null;
     const setStatus = (message) => {
       if (!(status instanceof HTMLElement)) return;
       window.clearTimeout(statusTimer);
       status.textContent = '';
       statusTimer = window.setTimeout(() => { status.textContent = message; }, 20);
     };
+
+    function showActionToast(message, state = 'success') {
+      if (!(actionToast instanceof HTMLElement) || !(actionToastText instanceof HTMLElement)) return;
+      window.clearTimeout(actionToastTimer);
+      actionToastText.textContent = message;
+      actionToast.dataset.state = state;
+      if (actionToastIcon instanceof HTMLElement) actionToastIcon.textContent = state === 'error' ? '!' : '✓';
+      actionToast.hidden = false;
+      window.requestAnimationFrame(() => actionToast.classList.add('is-visible'));
+      actionToastTimer = window.setTimeout(() => {
+        actionToast.classList.remove('is-visible');
+        window.setTimeout(() => { actionToast.hidden = true; }, 180);
+      }, 2600);
+    }
+
+    const fallbackCopyText = (value) => {
+      const previousFocus = document.activeElement;
+      const field = document.createElement('textarea');
+      field.value = value;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+      const copied = document.execCommand('copy');
+      field.remove();
+      if (previousFocus instanceof HTMLElement && document.contains(previousFocus)) previousFocus.focus({ preventScroll:true });
+      if (!copied) throw new Error('clipboard unavailable');
+    };
+
+    const copyText = async (value) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(value);
+          return;
+        } catch {}
+      }
+      fallbackCopyText(value);
+    };
+
+    const copyEventLink = async (button) => {
+      if (!(button instanceof HTMLElement) || button.dataset.keyboardCopyPending === 'true') return;
+      const title = String(button.dataset.shareEventTitle || button.dataset.shareTitle || '').trim();
+      const url = String(button.dataset.shareUrl || '').trim();
+      if (!title || !url) {
+        button.dataset.keyboardCopyState = 'error';
+        showActionToast('Не удалось определить ссылку события', 'error');
+        setStatus('Не удалось определить ссылку выбранного события.');
+        window.setTimeout(() => { delete button.dataset.keyboardCopyState; }, 2600);
+        return;
+      }
+      button.dataset.keyboardCopyPending = 'true';
+      button.setAttribute('aria-busy', 'true');
+      try {
+        await copyText(`${title}\n${url}`);
+        button.dataset.keyboardCopyState = 'success';
+        showActionToast('Название и ссылка на событие скопированы');
+        setStatus('Название и ссылка на событие скопированы.');
+      } catch {
+        button.dataset.keyboardCopyState = 'error';
+        showActionToast('Не удалось скопировать ссылку', 'error');
+        setStatus('Не удалось скопировать ссылку на событие.');
+      } finally {
+        delete button.dataset.keyboardCopyPending;
+        button.setAttribute('aria-busy', 'false');
+        window.setTimeout(() => { delete button.dataset.keyboardCopyState; }, 2600);
+      }
+    };
+
+    // On desktop the event share control is deliberately a deterministic copy
+    // action. It never enters Web Share or image generation in this prototype.
+    document.addEventListener('click', (event) => {
+      const button = event.target instanceof Element ? event.target.closest('[data-native-share]') : null;
+      if (!(button instanceof HTMLElement) || !root.contains(button)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void copyEventLink(button);
+    }, true);
 
     const focusSurface = () => {
       surface.focus({ preventScroll: true });
@@ -237,6 +341,32 @@
       '[role="dialog"]:not([hidden])',
     ].some((selector) => Array.from(document.querySelectorAll(selector)).some(isVisible));
 
+    const activeHeroGallery = () => Array.from(document.querySelectorAll('[data-hero-gallery]:not([hidden])'))
+      .find((gallery) => gallery instanceof HTMLElement && gallery.classList.contains('is-open') && isVisible(gallery));
+
+    const activeGalleryRecommendation = (gallery) => {
+      if (!(gallery instanceof HTMLElement)) return null;
+      const slides = Array.from(gallery.querySelectorAll('[data-hero-gallery-slide]'));
+      const slide = slides[Number(gallery.dataset.activeIndex || '0')];
+      if (!(slide instanceof HTMLElement) || slide.dataset.gallerySlideKind !== 'cta') return null;
+      return slide.querySelector('a[href]');
+    };
+
+    const elementIntersectsViewport = (element) => {
+      if (!(element instanceof HTMLElement)) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth;
+    };
+
+    const footerOwnsShortcut = (target, code) => {
+      if (!(footerShare instanceof HTMLElement) || !['KeyP', 'KeyS'].includes(code)) return false;
+      if (footerShare.contains(target)) return true;
+      if (!elementIntersectsViewport(footerShare)) return false;
+      // Scrolling does not move DOM focus. At the footer, allow its shortcuts
+      // when the previously focused event control has left the viewport.
+      return target === document.body || target === document.documentElement || !elementIntersectsViewport(target);
+    };
+
     const isEditing = (target) => target instanceof HTMLElement && (
       target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
     );
@@ -245,6 +375,24 @@
       if (!desktopKeyboard.matches || event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isEditing(event.target)) return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+
+      const gallery = activeHeroGallery();
+      if (gallery instanceof HTMLElement) {
+        const recommendation = activeGalleryRecommendation(gallery);
+        if (event.code !== 'Space') gallerySpaceArm = null;
+        if (recommendation instanceof HTMLAnchorElement && event.code === 'Enter' && !event.repeat) {
+          if (target === gallery) {
+            event.preventDefault();
+            recommendation.click();
+          }
+        } else if (recommendation instanceof HTMLAnchorElement && event.code === 'Space' && !event.repeat) {
+          if (target === gallery || target === recommendation) {
+            event.preventDefault();
+            gallerySpaceArm = { gallery, recommendation, target };
+          }
+        }
+        return;
+      }
 
       const consent = document.querySelector('[data-personalization-consent].is-visible');
       if (consent instanceof HTMLElement) {
@@ -265,7 +413,7 @@
         return;
       }
 
-      if (footerShare instanceof HTMLElement && footerShare.contains(target)) {
+      if (footerOwnsShortcut(target, event.code)) {
         const serviceAction = event.code === 'KeyP' ? footerImageAction : event.code === 'KeyS' ? footerTextAction : null;
         if (serviceAction instanceof HTMLElement && !event.repeat) {
           event.preventDefault();
@@ -283,6 +431,14 @@
         if (event.code === 'ArrowDown') {
           event.preventDefault();
           focusFirstCard();
+          return;
+        }
+        if (event.code === 'ArrowUp') {
+          if (heroOpener instanceof HTMLElement) {
+            event.preventDefault();
+            heroOpener.click();
+            recordShortcutUse();
+          }
           return;
         }
         if (event.code === 'Enter' && target === surface) {
@@ -338,6 +494,22 @@
       }
     });
 
+    document.addEventListener('keyup', (event) => {
+      if (!desktopKeyboard.matches || event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.code !== 'Space' || !gallerySpaceArm) return;
+      const arm = gallerySpaceArm;
+      gallerySpaceArm = null;
+      const gallery = activeHeroGallery();
+      const recommendation = activeGalleryRecommendation(gallery);
+      if (gallery !== arm.gallery || recommendation !== arm.recommendation || event.target !== arm.target || document.activeElement !== arm.target) return;
+      event.preventDefault();
+      recommendation.click();
+    });
+
+    document.addEventListener('focusin', () => {
+      if (gallerySpaceArm && document.activeElement !== gallerySpaceArm.target) gallerySpaceArm = null;
+    });
+
     startButton?.addEventListener('click', focusFirstCard);
     window.requestAnimationFrame(() => surface.focus({ preventScroll: true }));
   }
@@ -387,6 +559,47 @@
       color:#793014;
       box-shadow:0 1px 0 rgba(34,26,20,.12);
       font:800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .desktop-clean-event [data-calendar-action].is-calendar-added,
+    .desktop-clean-event [data-calendar-action].is-calendar-added:hover {
+      border-color:#267848 !important;
+      background:#267848 !important;
+      color:#fff !important;
+      box-shadow:0 8px 20px rgba(38,120,72,.28) !important;
+    }
+    .desktop-clean-event [data-feedback-action="like"][aria-pressed="true"],
+    .desktop-clean-event [data-feedback-action="like"][aria-pressed="true"]:hover {
+      border-color:#c93434 !important;
+      background:#c93434 !important;
+      color:#fff !important;
+      box-shadow:0 8px 20px rgba(201,52,52,.3) !important;
+    }
+    .keyboard-action-toast {
+      position:fixed;
+      z-index:10080;
+      left:50%;
+      bottom:clamp(1.25rem,4vh,2.5rem);
+      display:flex;
+      align-items:center;
+      gap:.65rem;
+      max-width:min(92vw,580px);
+      padding:.8rem 1rem;
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:14px;
+      background:#24211e;
+      color:#fff;
+      box-shadow:0 18px 48px rgba(30,22,17,.28);
+      opacity:0;
+      transform:translate(-50%,12px);
+      pointer-events:none;
+    }
+    .keyboard-action-toast[hidden] { display:none; }
+    .keyboard-action-toast.is-visible { opacity:1; transform:translate(-50%,0); }
+    .keyboard-action-toast>span { display:grid; width:24px; height:24px; place-items:center; border-radius:50%; background:#267848; font-weight:900; }
+    .keyboard-action-toast[data-state="error"]>span { background:#a43b2f; }
+    .keyboard-action-toast strong { font-size:.9rem; line-height:1.3; }
+    @media (prefers-reduced-motion:no-preference) {
+      .keyboard-action-toast { transition:opacity .16s ease, transform .16s ease; }
     }
     .keyboard-quickstart {
       display:block;
