@@ -1,6 +1,6 @@
 # INC-2026-07-19 Static-site host reconciliation left a stale builder lease
 
-Status: mitigated
+Status: monitoring
 Severity: sev2
 Service: Smart Update → Kaggle StaticSiteBuilder → immutable secret candidate
 Opened: 2026-07-18
@@ -17,7 +17,9 @@ callbacks were absent. The existing host reconciliation then hit a concurrent
 SQLite writer lock and was treated as best-effort. Its generic implementation
 also did not release resource leases. The completed run therefore retained the
 exclusive `static_site:builder` lease and two later Kaggle kernels were pushed
-only to fail at resource acquisition.
+only to fail at resource acquisition. During recovery, startup catch-up exposed
+a second lifecycle defect: rearming the error outbox row replaced its payload
+and erased the still-active remote handoff needed for exact-run adoption.
 
 ## User / Business Impact
 
@@ -70,6 +72,10 @@ only to fail at resource acquisition.
 5. The same single-writer contention could also abort creation of the next
    run's status ledger before kernel push because that `BEGIN IMMEDIATE` path
    had no bounded retry.
+6. The generic error-row requeue path replaced the complete outbox payload.
+   When `static_site_build_state.active_job_id` still pointed at that exact job,
+   this destroyed `remote_handoff` and `snapshot`, so the next worker could no
+   longer adopt or terminally reconcile the already-submitted kernel.
 
 This is a mechanical idempotency/status-lifecycle failure; it does not make an
 event-semantic decision and does not require an LLM-first repair.
@@ -90,6 +96,7 @@ event-semantic decision and does not require an LLM-first repair.
 - changing `main.py` static-site finish/preflight/recovery paths;
 - changing Smart Update static-site single-flight, Kaggle callbacks or deploy
   catch-up behavior.
+- changing static-site outbox requeue/merge semantics.
 
 ### Affected surfaces
 
@@ -107,6 +114,8 @@ event-semantic decision and does not require an LLM-first repair.
 - an unrelated/successor lease remains active;
 - already-terminal ledgers with a stale exact-owner lease are repaired;
 - transient `database is locked` is retried with bounded backoff;
+- requeue of the exact active job preserves its recoverable handoff/snapshot,
+  while a non-active stale job starts from the fresh request payload;
 - static-site preflight replays reconciliation for the durable current
   candidate before remote recovery/push;
 - Python Kaggle-status/static-handoff regression suites pass;
@@ -144,6 +153,10 @@ event-semantic decision and does not require an LLM-first repair.
   policy before creating the callback dataset.
 - Every static-site job preflight replays the idempotent reconciliation for the
   immutable current-candidate receipt before remote recovery or push.
+- Startup/Smart Update requeue now merges new effect evidence into an exact
+  active job's recoverable payload instead of replacing its remote handoff and
+  immutable snapshot. Non-active historical failures keep the old replacement
+  behavior.
 
 ## Follow-up Actions
 

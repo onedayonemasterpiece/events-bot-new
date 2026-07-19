@@ -14502,7 +14502,7 @@ async def _enqueue_static_site_build_atomic(
             return "merged-rearmed"
         cursor = await connection.execute(
             """
-            SELECT id FROM joboutbox
+            SELECT id, payload FROM joboutbox
             WHERE task='static_site_build' AND coalesce_key=?
             ORDER BY id DESC LIMIT 1
             """,
@@ -14511,13 +14511,42 @@ async def _enqueue_static_site_build_atomic(
         prior = await cursor.fetchone()
         await cursor.close()
         if prior is not None:
+            requeued_payload = encoded_payload
+            state_cursor = await connection.execute(
+                """
+                SELECT active_job_id FROM static_site_build_state
+                WHERE release_channel='secret_preview'
+                """
+            )
+            active_state = await state_cursor.fetchone()
+            await state_cursor.close()
+            active_job_id = (
+                int(active_state["active_job_id"])
+                if active_state and active_state["active_job_id"]
+                else None
+            )
+            if active_job_id == int(prior["id"]):
+                try:
+                    prior_payload = json.loads(prior["payload"] or "null")
+                except (TypeError, ValueError):
+                    prior_payload = None
+                if (
+                    isinstance(prior_payload, dict)
+                    and isinstance(prior_payload.get("remote_handoff"), dict)
+                ):
+                    # A terminal-looking outbox row can still own a recoverable
+                    # remote Kaggle run.  Startup/Smart Update must add its new
+                    # effects without erasing the immutable handoff and snapshot
+                    # needed by the adoption preflight.
+                    merged = merge_static_site_request_payload(prior_payload, payload)
+                    requeued_payload = json.dumps(merged, ensure_ascii=False)
             await connection.execute(
                 """
                 UPDATE joboutbox SET event_id=?, payload=?, status='pending', attempts=0,
                     last_error=NULL, updated_at=?, next_run_at=? WHERE id=?
                 """,
                 (
-                    event_id, encoded_payload, _sqlite_datetime(now),
+                    event_id, requeued_payload, _sqlite_datetime(now),
                     _sqlite_datetime(requested), int(prior["id"]),
                 ),
             )

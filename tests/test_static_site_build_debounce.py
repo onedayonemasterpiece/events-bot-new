@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -15,6 +16,127 @@ from static_site_release import (
 
 def _utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+async def _seed_failed_static_build(
+    db: Database,
+    *,
+    payload: dict,
+    active_claim_matches: bool,
+) -> int:
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        job = JobOutbox(
+            event_id=0,
+            task=JobTask.static_site_build,
+            payload=payload,
+            status=JobStatus.error,
+            coalesce_key="static_site_build:prod",
+            updated_at=now,
+            next_run_at=now,
+        )
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
+        job_id = int(job.id)
+    with sqlite3.connect(db.path) as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO static_site_build_state(
+                release_channel, schema_version, active_job_id, active_run_id,
+                active_claim_token, updated_at
+            ) VALUES('secret_preview', 'static_site_build_state_v1', ?, ?, ?, ?)
+            """,
+            (
+                job_id if active_claim_matches else job_id + 1,
+                "static-site:recoverable-run",
+                "recoverable-claim",
+                now.isoformat(),
+            ),
+        )
+    return job_id
+
+
+@pytest.mark.asyncio
+async def test_requeue_preserves_remote_handoff_for_exact_active_claim(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    failed_payload = make_request_payload(
+        reason="remote push", event_ids=[11], correlation_id="remote-run"
+    )
+    failed_payload["remote_handoff"] = {
+        "run_id": "static-site:recoverable-run",
+        "kernel_ref": "owner/static-site-builder",
+        "dataset_ref": "owner/static-site-input",
+    }
+    failed_payload["snapshot"] = {
+        "sqlite_path": "/immutable/input.sqlite",
+        "manifest_path": "/immutable/input.manifest.json",
+    }
+    job_id = await _seed_failed_static_build(
+        db, payload=failed_payload, active_claim_matches=True
+    )
+    incoming = make_request_payload(
+        reason="startup catchup", event_ids=[12], correlation_id="startup"
+    )
+
+    action = await main.enqueue_job(
+        db,
+        12,
+        JobTask.static_site_build,
+        payload=incoming,
+        coalesce_key="static_site_build:prod",
+        next_run_at=datetime.now(timezone.utc),
+    )
+
+    assert action == "requeued"
+    async with db.get_session() as session:
+        row = await session.get(JobOutbox, job_id)
+    assert row is not None
+    assert row.status == JobStatus.pending
+    assert row.payload["remote_handoff"] == failed_payload["remote_handoff"]
+    assert row.payload["snapshot"] == failed_payload["snapshot"]
+    assert row.payload["event_ids"] == [11, 12]
+    assert row.payload["reasons"] == ["remote push", "startup catchup"]
+
+
+@pytest.mark.asyncio
+async def test_requeue_drops_stale_handoff_without_exact_active_claim(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    failed_payload = make_request_payload(
+        reason="old failed build", event_ids=[21], correlation_id="old-run"
+    )
+    failed_payload["remote_handoff"] = {
+        "run_id": "static-site:stale-run",
+        "kernel_ref": "owner/stale-kernel",
+    }
+    failed_payload["snapshot"] = {"sqlite_path": "/stale/input.sqlite"}
+    job_id = await _seed_failed_static_build(
+        db, payload=failed_payload, active_claim_matches=False
+    )
+    incoming = make_request_payload(
+        reason="operator replacement", event_ids=[22], correlation_id="operator"
+    )
+
+    action = await main.enqueue_job(
+        db,
+        22,
+        JobTask.static_site_build,
+        payload=incoming,
+        coalesce_key="static_site_build:prod",
+        next_run_at=datetime.now(timezone.utc),
+    )
+
+    assert action == "requeued"
+    async with db.get_session() as session:
+        row = await session.get(JobOutbox, job_id)
+    assert row is not None
+    assert row.status == JobStatus.pending
+    assert "remote_handoff" not in row.payload
+    assert "snapshot" not in row.payload
+    assert row.payload["event_ids"] == [22]
+    assert row.payload["reasons"] == ["operator replacement"]
 
 
 @pytest.mark.asyncio
