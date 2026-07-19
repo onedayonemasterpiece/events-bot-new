@@ -9580,6 +9580,20 @@ def build_image_candidate_queue(
         key = post_url or str(row.get("post_id") or "")
         if not key:
             return
+        if added_from == "media_scoring" and key in entries:
+            # A media sidecar owns image evidence, not the text/source verdict.
+            # It is intentionally thin and often omits vector fields.  Evaluate
+            # it on top of the current authoritative queue row; otherwise the
+            # final media-scoring pass can turn a fused text accept back into
+            # ``vector_accept_candidate_required`` merely through omission.
+            merged_media = dict(entries[key])
+            merged_media.update({
+                field: value
+                for field, value in row.items()
+                if value not in (None, "")
+            })
+            row = enrich_image_queue_input(merged_media)
+            post_url = str(row.get("post_url") or post_url)
         block_reason = image_queue_product_gate_reason(row)
         if added_from != "media_scoring" and block_reason:
             image_queue_rejected_non_region_inputs += 1
@@ -9741,8 +9755,8 @@ def build_image_candidate_queue(
             # cursor past the brand-new row, so it could never be selected by
             # ImageDiagnostic. Only an actual media-scoring handback owns the
             # attempt marker.
-            "last_attempt_run_id": run_id if added_from == "media_scoring" else entries[key].get("last_attempt_run_id", ""),
-            "last_attempt_at": run_now if added_from == "media_scoring" else entries[key].get("last_attempt_at", ""),
+            "last_attempt_run_id": run_id if added_from == "media_scoring" and actual else entries[key].get("last_attempt_run_id", ""),
+            "last_attempt_at": run_now if added_from == "media_scoring" and actual else entries[key].get("last_attempt_at", ""),
             "next_action": "human_review_best_image" if status == "actual_scored" else ("wait_for_image_diagnostic" if status == "image_analysis_in_progress" else ("download_actual_image_bytes_next" if status == "needs_actual_image_fetch" else ("skip_unsupported_media" if status == "not_reviewable_unsupported_media" else "skip_or_manual_open"))),
             "queue_item_updated_at": run_now,
         })

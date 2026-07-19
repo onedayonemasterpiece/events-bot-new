@@ -257,7 +257,9 @@ Implemented now:
   scan queue, plus rights-field propagation through candidate/image/publication
   state. A row reactivated from the old missing-attestation defer is explicitly
   eligible for the next image batch even if the legacy cursor had already
-  advanced past its queue order.
+  advanced past its queue order. The metadata-only media sidecar is merged over
+  that authoritative text/source row and cannot erase an existing fused-vector
+  accept merely because the sidecar omits vector fields.
 
 Still required for each imported external-publication candidate to become confirmed:
 

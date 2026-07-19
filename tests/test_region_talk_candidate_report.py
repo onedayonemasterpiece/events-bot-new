@@ -9308,7 +9308,13 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             previous_state,
             [],
             [publication],
-            [],
+            [{
+                "post_id": "extpub-1",
+                "post_url": "https://archi.example/article",
+                "image_model_input_type": "metadata_only",
+                "image_url_or_local_path": "https://cdn.archi.example/image.jpg",
+                # Real media sidecars do not repeat the text-vector verdict.
+            }],
             "external-publication-image-run",
             "2026-07-19T00:00:00+00:00",
         )
