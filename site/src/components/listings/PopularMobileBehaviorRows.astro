@@ -9,7 +9,7 @@ const { groups } = Astro.props;
 <div
   class="ke-popular-behavior ke-popular-behavior--mobile"
   data-ds-component="PopularMobileBehaviorRows"
-  data-ds-version="3"
+  data-ds-version="4"
   data-popular-representation="mobile-large"
   data-popular-mobile-layout="large"
 >
@@ -20,9 +20,12 @@ const { groups } = Astro.props;
       data-popular-reason={group.key}
       aria-labelledby={`popular-mobile-large-${group.key}`}
     >
+      <i class="ke-popular-behavior__sentinel" data-popular-group-sentinel aria-hidden="true"></i>
       <header class="ke-popular-behavior__head">
-        <h2 id={`popular-mobile-large-${group.key}`}>{group.label}</h2>
-        <span data-popular-group-count>{group.events.length}</span>
+        <div class="ke-popular-behavior__head-label">
+          <h2 id={`popular-mobile-large-${group.key}`}>{group.label}</h2>
+          <span data-popular-group-count>{group.events.length}</span>
+        </div>
       </header>
       <div class="ke-popular-behavior__row">
         {group.events.map((event) => (

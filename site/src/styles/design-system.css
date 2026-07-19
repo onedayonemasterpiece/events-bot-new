@@ -1080,6 +1080,7 @@
 .ke-popular-behavior__group { min-width: 0; }
 .ke-popular-behavior__group[hidden] { display: none; }
 .ke-popular-behavior__head { min-height: 42px; display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid color-mix(in srgb, var(--ke-color-line) 64%, transparent); }
+.ke-popular-behavior__head-label { display: contents; }
 .ke-popular-behavior__head h2 { margin: 0; font-size: 1.35rem; line-height: 1.1; }
 .ke-popular-behavior__head span { color: var(--ke-color-muted); font-size: .76rem; font-variant-numeric: tabular-nums; }
 .ke-popular-behavior__row {
@@ -1171,7 +1172,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .listing-filter--floating { transition: none; }
 }
 
-/* Popular V25: desktop keeps the accepted V20/V22 intrinsic flow unchanged.
+/* Popular V26: desktop keeps the accepted V20/V22 intrinsic flow unchanged.
    Phones switch between the canonical EventCard from "Смотрите дальше" and
    an intrinsic-width ListingEventCard wrap derived from the desktop system. */
 .ke-listing-mobile-density-dock { display: none; }
@@ -1184,6 +1185,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .ke-popular-behavior--mobile:not([hidden]) { display: grid; }
   .ke-popular-listing {
     --ke-listing-discovery-height: 48px;
+    --ke-popular-group-sticky-top: max(8px, env(safe-area-inset-top));
     width: min(calc(100% - 24px), var(--ke-content-listing-max));
     padding-bottom: calc(92px + env(safe-area-inset-bottom));
     touch-action: pan-y;
@@ -1255,20 +1257,50 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     padding: 20px 0 28px;
   }
   .ke-popular-listing [data-popular-representation^="mobile-"] .ke-popular-behavior__group + .ke-popular-behavior__group {
-    margin-top: 40px;
+    margin-top: 0;
     border-top: 2px solid color-mix(in srgb, var(--ke-color-brand-700) 18%, var(--ke-color-line));
-    padding-top: 32px;
+    padding-top: 0;
+  }
+  .ke-popular-listing [data-popular-representation^="mobile-"] .ke-popular-behavior__group:not(:last-child) {
+    padding-bottom: 72px;
   }
   .ke-popular-behavior__head {
+    position: sticky;
+    top: var(--ke-popular-group-sticky-top);
+    z-index: 18;
     min-height: 52px;
+    display: flex;
     align-items: flex-end;
-    justify-content: space-between;
-    gap: 12px;
+    justify-content: flex-end;
     border-bottom: 0;
     padding-bottom: 12px;
+    pointer-events: none;
+  }
+  .ke-popular-behavior__sentinel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+  .ke-popular-listing [data-popular-representation^="mobile-"] .ke-popular-behavior__group {
+    position: relative;
+  }
+  .ke-popular-behavior__head-label {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-left: auto;
+    text-align: right;
+    transition: background-color 180ms var(--ke-ease-standard), color 180ms var(--ke-ease-standard), padding 180ms var(--ke-ease-standard);
   }
   .ke-popular-behavior__head h2 {
     max-width: min(82vw, 34rem);
+    margin-left: auto;
     font-size: 1.5rem;
     font-weight: 900;
     line-height: 1.05;
@@ -1283,6 +1315,39 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     background: color-mix(in srgb, var(--ke-color-ink) 7%, transparent);
     font-size: .72rem;
     font-weight: 820;
+  }
+  .ke-popular-behavior__head.is-stuck {
+    align-items: flex-start;
+    padding-bottom: 0;
+  }
+  .ke-popular-behavior__head.is-stuck .ke-popular-behavior__head-label {
+    width: fit-content;
+    max-width: min(calc(100vw - 156px), 288px);
+    min-height: 34px;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid color-mix(in srgb, var(--ke-color-line) 74%, transparent);
+    border-radius: 11px;
+    padding: 4px 7px 4px 10px;
+    background: color-mix(in srgb, var(--ke-color-canvas) 94%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .ke-popular-behavior__head.is-stuck h2 {
+    min-width: 0;
+    max-width: none;
+    overflow: hidden;
+    font-size: .875rem;
+    font-weight: 820;
+    line-height: 1.05;
+    letter-spacing: -.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ke-popular-behavior__head.is-stuck span {
+    min-width: 24px;
+    min-height: 24px;
+    font-size: .66rem;
   }
   .ke-popular-behavior__row {
     padding-top: 16px;
@@ -1438,6 +1503,9 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     backdrop-filter: blur(12px);
     pointer-events: none;
     transition: opacity 180ms ease, transform 180ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ke-popular-behavior__head-label { transition: none; }
   }
   .ke-listing-mobile-density-switch {
     width: 100%;

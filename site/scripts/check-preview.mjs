@@ -62,21 +62,24 @@ for (const rel of required) {
 
 const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
 for (const marker of [
-  'data-listing-variant="POPULAR-V25"',
+  'data-listing-variant="POPULAR-V26"',
   'data-popular-representation="desktop"',
   'data-popular-representation="mobile-large"',
   'data-popular-representation="mobile-adaptive"',
   'data-ds-component="ListingMobileDensitySwitch"',
-  'data-ds-version="5"',
+  'data-ds-version="6"',
+  'data-ds-component="PopularMobileGroupContext"',
+  'data-popular-group-sentinel',
+  'ke-popular-behavior__head-label',
 ]) {
-  if (!popularHtml.includes(marker)) throw new Error(`Popular V25 misses ${marker}`);
+  if (!popularHtml.includes(marker)) throw new Error(`Popular V26 misses ${marker}`);
 }
 const popularDesktopAt = popularHtml.indexOf('data-popular-representation="desktop"');
 const popularLargeAt = popularHtml.indexOf('data-popular-representation="mobile-large"');
 const popularAdaptiveAt = popularHtml.indexOf('data-popular-representation="mobile-adaptive"');
 const popularDockAt = popularHtml.indexOf('data-listing-mobile-density-dock');
 if (!(popularDesktopAt < popularLargeAt && popularLargeAt < popularAdaptiveAt && popularAdaptiveAt < popularDockAt)) {
-  throw new Error('Popular V25 representations are not isolated in desktop / large / adaptive order');
+  throw new Error('Popular V26 representations are not isolated in desktop / large / adaptive order');
 }
 const popularDesktopHtml = popularHtml.slice(popularDesktopAt, popularLargeAt);
 const popularLargeHtml = popularHtml.slice(popularLargeAt, popularAdaptiveAt);
@@ -86,18 +89,18 @@ const popularDesktopIds = listingIds(popularDesktopHtml);
 const popularLargeIds = listingIds(popularLargeHtml);
 const popularAdaptiveIds = listingIds(popularAdaptiveHtml);
 if (popularDesktopIds.length === 0 || new Set(popularDesktopIds).size !== popularDesktopIds.length) {
-  throw new Error('Popular V25 desktop ranking must be present and deduplicated');
+  throw new Error('Popular V26 desktop ranking must be present and deduplicated');
 }
 if (popularDesktopIds.join(',') !== popularLargeIds.join(',') || popularDesktopIds.join(',') !== popularAdaptiveIds.join(',')) {
-  throw new Error('Popular V25 density representations must preserve identical ranked event order');
+  throw new Error('Popular V26 density representations must preserve identical ranked event order');
 }
 if (!popularLargeHtml.includes('event-card--split-actions') || popularLargeHtml.includes('listing-proof')) {
-  throw new Error('Popular V25 large mode must reuse canonical EventCard split-actions without listing-proof');
+  throw new Error('Popular V26 large mode must reuse canonical EventCard split-actions without listing-proof');
 }
 if (!popularAdaptiveHtml.includes('data-ds-component="ListingEventCard"') || !/data-popular-mobile-layout="adaptive"[^>]*hidden[^>]*inert/u.test(popularAdaptiveHtml)) {
-  throw new Error('Popular V25 adaptive mode must use inactive-by-default ListingEventCard rows');
+  throw new Error('Popular V26 adaptive mode must use inactive-by-default ListingEventCard rows');
 }
-if (!popularHtml.includes('maximum-scale=1, user-scalable=no')) throw new Error('Popular V25 must disable page zoom only on its gesture-enabled listing route');
+if (!popularHtml.includes('maximum-scale=1, user-scalable=no')) throw new Error('Popular V26 must disable page zoom only on its gesture-enabled listing route');
 const popularCss = readFileSync(join(siteDir, 'src/styles/design-system.css'), 'utf8');
 for (const cssContract of [
   '[data-popular-representation="mobile-adaptive"] .ke-popular-behavior__row',
@@ -111,12 +114,23 @@ for (const cssContract of [
   '--ke-listing-mobile-tail-width: 28px;',
   '--ke-listing-mobile-tail-width: 44px;',
   'body:has(.ke-popular-listing) .site-nav { display: none; }',
+  'position: sticky;',
+  'top: var(--ke-popular-group-sticky-top);',
+  'max-width: min(calc(100vw - 156px), 288px);',
+  '.ke-popular-behavior__group:not(:last-child)',
+  'padding-bottom: 72px;',
+  'text-align: right;',
+  'pointer-events: none;',
 ]) {
-  if (!popularCss.includes(cssContract)) throw new Error(`Popular V25 CSS misses ${cssContract}`);
+  if (!popularCss.includes(cssContract)) throw new Error(`Popular V26 CSS misses ${cssContract}`);
 }
 const densitySource = readFileSync(join(siteDir, 'src/components/listings/ListingMobileDensitySwitch.astro'), 'utf8');
-for (const gestureContract of ['pinchDistance', "matchMedia('(max-width: 720px)')", "ratio <= 0.84 ? 'adaptive'", "ratio >= 1.16 ? 'large'", "{ passive: false }", "dataset.listingPinchReady = 'true'", 'preferredEventId', 'dataset.listingContextEventId = anchorId']) {
-  if (!densitySource.includes(gestureContract)) throw new Error(`Popular V25 pinch/context contract misses ${gestureContract}`);
+for (const gestureContract of ['pinchDistance', "matchMedia('(max-width: 720px)')", "ratio <= 0.84 ? 'adaptive'", "ratio >= 1.16 ? 'large'", "{ passive: false }", "dataset.listingPinchReady = 'true'", 'preferredEventId', 'dataset.listingContextEventId = anchorId', "new CustomEvent('listing:density-change'"]) {
+  if (!densitySource.includes(gestureContract)) throw new Error(`Popular V26 pinch/context contract misses ${gestureContract}`);
+}
+const groupContextSource = readFileSync(join(siteDir, 'src/components/listings/PopularMobileGroupContext.astro'), 'utf8');
+for (const stickyContract of ['IntersectionObserver', 'data-popular-group-sentinel', "querySelectorAll('[data-popular-mobile-layout] [data-popular-behavior-group]')", 'observer.observe(group)', "matchMedia('(max-width: 720px)')", "addEventListener('listing:density-change'", "classList.toggle('is-stuck'", 'getBoundingClientRect']) {
+  if (!groupContextSource.includes(stickyContract)) throw new Error(`Popular V26 sticky group context misses ${stickyContract}`);
 }
 for (const scenario of templateContract.lab_scenarios) {
   const scenarioHtml = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');

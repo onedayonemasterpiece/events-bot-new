@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added mobile-only sticky context for Popular groups: the existing strong
+  category heading compacts into a right-aligned, non-interactive label after
+  it reaches the viewport, remains section-bounded, and refreshes across both
+  density modes without changing desktop Popular geometry.
 - Improved only mobile Popular context and scan hierarchy: density buttons and
   pinch now preserve the same viewed event, the existing mobile drawer replaces
   duplicate phone navigation, routes/cities collapse into light single rows,

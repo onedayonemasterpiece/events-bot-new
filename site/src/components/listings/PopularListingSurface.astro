@@ -7,6 +7,7 @@ import PopularBehaviorRows from './PopularBehaviorRows.astro';
 import PopularMobileBehaviorRows from './PopularMobileBehaviorRows.astro';
 import PopularMobileAdaptiveRows from './PopularMobileAdaptiveRows.astro';
 import ListingMobileDensitySwitch from './ListingMobileDensitySwitch.astro';
+import PopularMobileGroupContext from './PopularMobileGroupContext.astro';
 
 interface Props { events: PreviewEvent[]; }
 const events = deduplicateListingEvents(Astro.props.events);
@@ -16,7 +17,7 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
   .map((name) => ({ name, count: visibleEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
 ---
-<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V25" data-mobile-card-density="large">
+<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V26" data-mobile-card-density="large">
   <script is:inline>
     try {
       const surface = document.currentScript.closest('[data-date-listing="popular"]');
@@ -31,6 +32,7 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
   </div>
   <PopularMobileBehaviorRows groups={groups} />
   <PopularMobileAdaptiveRows groups={groups} />
+  <PopularMobileGroupContext />
   <div class="ke-listing-empty" data-listing-no-events hidden={visibleEvents.length > 0}>
     <strong>Пока нет событий с подтверждённой активностью</strong>
   </div>

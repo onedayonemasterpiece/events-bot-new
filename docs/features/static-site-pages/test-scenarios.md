@@ -438,14 +438,21 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   высотой 48px без пустого второго уровня и overlap с мобильной биркой.
 - **ADD-LISTING-09 — Popular group hierarchy is visible.** В обоих мобильных
   режимах заголовок каждой категории имеет минимум `24px/900`, спокойный счётчик
-  и явный смысловой разрыв перед следующей группой; заголовки не sticky и не
-  создают дополнительный слой chrome.
+  и явный смысловой разрыв перед следующей группой. После ухода исходного заголовка
+  он становится компактной sticky-меткой справа, а не полноширинным слоем chrome.
 - **ADD-LISTING-10 — Compact evidence does not defeat scan density.** В compact
   режиме внешняя evidence-ось занимает 28px только для ненулевых social proof и
   44px при наличии медальона. Медальоны 40px непрозрачны, безопасный overlay
   остаётся внутри wide non-OCR. На `390px` paired share не хуже V24, media
   height/ratio неизменны, а полный документ не становится выше универсального
   under-photo прототипа.
+- **ADD-LISTING-11 — Mobile sticky group context.** На `360/390/430px` текущий
+  подзаголовок после прилипания занимает не более `min(100vw - 156px, 288px)`, прижат
+  вправо, не перекрывает ручку mobile drawer и не перехватывает pointer events. Следующая
+  группа нативно выталкивает предыдущую без double-label frame; переключение density
+  сохраняет и event anchor, и активную категорию. Исходящий header не сбрасывает
+  compact-стиль по приближённому bottom-threshold, а уходит только за нативной границей секции.
+  На `721px+` sticky-контракт не применяется.
 
 ### UI, accessibility и browser matrix
 

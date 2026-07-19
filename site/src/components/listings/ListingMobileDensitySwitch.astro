@@ -1,7 +1,7 @@
 <div
   class="ke-listing-mobile-density-dock"
   data-ds-component="ListingMobileDensitySwitch"
-  data-ds-version="5"
+  data-ds-version="6"
   data-listing-mobile-density-dock
   data-nosnippet
 >
@@ -85,6 +85,7 @@
         });
         surface.dataset.mobileCardDensity = density;
         syncButtons(density);
+        surface.dispatchEvent(new CustomEvent('listing:density-change', { detail: { density } }));
         if (persist) {
           try { window.localStorage.setItem(DENSITY_STORAGE_KEY, density); } catch {}
         }

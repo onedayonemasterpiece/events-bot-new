@@ -204,7 +204,11 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Historical public preview evidence
 
-The current mobile `Популярное` context and hierarchy pass is documented in
+The current mobile `Популярное` sticky group-context pass is documented in
+[`listing-surfaces-v26-mobile-sticky-groups.md`](listing-surfaces-v26-mobile-sticky-groups.md):
+it keeps the full semantic category heading, then compacts that same heading
+into a right-aligned sticky label while its group is being scanned. The V25
+context and hierarchy baseline remains documented in
 [`listing-surfaces-v25-mobile-context.md`](listing-surfaces-v25-mobile-context.md):
 it preserves the same viewed event across both density controls, replaces the
 desktop-like phone header stack with the existing mobile navigation contract,
