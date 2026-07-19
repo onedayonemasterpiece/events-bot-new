@@ -397,15 +397,12 @@ const HeadingTag = headingLevel;
 
     function renderCards(items, rankBase = offset) {
       const renderer = window.KenigEventsRenderEventCard;
-      if (typeof renderer === 'function') {
-        return items.map((candidate, index) => renderer({ candidate: { ...candidate, base_similarity: candidate.semantic_score || candidate.base_similarity || 0 }, rank: rankBase + index, personal_score: candidate.semantic_score || candidate.base_similarity || 0 }, 'split-actions')).join('');
-      }
-      return items.map((candidate) => {
-        const display = candidate.display || candidate;
-        const href = currentPreviewEventUrl(display.href || candidate.href || '#');
-        const title = display.title || candidate.title || 'Событие';
-        return `<article class="event-card event-card--split-actions" data-event-card data-event-id="${String(candidate.event_id || candidate.id || '')}" data-event-title="${escapeHtml(title)}" data-card-href="${escapeHtml(href)}" tabindex="0"><div class="event-card__body"><a class="event-card__title" href="${escapeHtml(href)}">${escapeHtml(title)}</a><div class="event-card__meta-row"><span class="event-card__meta">${escapeHtml(display.display_date_time || '')}</span></div></div></article>`;
-      }).join('');
+      const rendered = typeof renderer === 'function'
+        ? items.map((candidate, index) => renderer({ candidate: { ...candidate, base_similarity: candidate.semantic_score || candidate.base_similarity || 0 }, rank: rankBase + index, personal_score: candidate.semantic_score || candidate.base_similarity || 0 }, 'split-actions')).filter(Boolean).join('')
+        : '';
+      if (rendered) return rendered;
+      setStatus('Результаты найдены, но карточки временно недоступны. Обновите страницу и попробуйте снова.', 'error');
+      return '<p class="authorized-search__card-render-unavailable" data-search-card-render-unavailable role="status">Карточки результатов временно недоступны.</p>';
     }
 
     function vectorPreviewDisplay(candidate) {

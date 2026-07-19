@@ -3569,7 +3569,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           section.hidden = false;
           section.dataset.personalFeedReady = 'true';
           section.dataset.personalFeedMode = isPersonal ? 'personal' : 'popular_fallback';
-          if (isEventDetail && title) title.textContent = 'Ещё события';
+          if (isEventDetail && title) title.textContent = isPersonal ? 'По вашим интересам' : 'Ещё события';
           if (isEventDetail && explanation) {
             explanation.textContent = isPersonal
               ? 'Подборка учитывает ваши лайки и отметки «Не интересно» на этом устройстве.'

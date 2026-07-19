@@ -67,7 +67,7 @@ test('event-detail continuation uses six diverse cards with an honest non-person
   assert.match(layout, /KenigEventsSelectEventContinuation/u);
   assert.match(layout, /current_event_id: personalFeedCurrentEventId\(section\)/u);
   assert.match(layout, /section\.dataset\.personalFeedMode = isPersonal \? 'personal' : 'popular_fallback'/u);
-  assert.match(layout, /title\.textContent = 'Ещё события'/u);
+  assert.match(layout, /title\.textContent = isPersonal \? 'По вашим интересам' : 'Ещё события'/u);
   assert.match(layout, /if \(loadMore\) loadMore\.hidden = isEventDetail/u);
 });
 
@@ -129,10 +129,11 @@ test('built personal feed manifest is compact, public, and card-compatible', asy
 });
 
 test('runtime cards clone the canonical EventCard DOM and safely populate its interaction hooks', async () => {
-  const [card, slot, layout] = await Promise.all([
+  const [card, slot, layout, search] = await Promise.all([
     read('src/components/EventCard.astro'),
     read('src/components/PersonalFeedSlot.astro'),
     read('src/layouts/EventLayout.astro'),
+    read('src/components/AuthorizedEventSearch.astro'),
   ]);
 
   assert.match(layout, /import EventCard from '\.\.\/components\/EventCard\.astro'/u);
@@ -155,6 +156,20 @@ test('runtime cards clone the canonical EventCard DOM and safely populate its in
   assert.doesNotMatch(layout, /function eventCardHtml/u);
   assert.doesNotMatch(layout, /const (?:dislike|share|heart|calendar)Icon = '<svg/u);
   assert.doesNotMatch(layout, /insertAdjacentHTML\('beforeend',\s*(?:eventCardHtml|packed\.map)/u);
+  assert.match(search, /window\.KenigEventsRenderEventCard/u, 'normal authorized-search results use the canonical renderer');
+  assert.match(search, /data-search-card-render-unavailable/u, 'renderer failure is an explicit non-card status');
+  assert.doesNotMatch(search, /<article class="event-card/u, 'search has no handwritten EventCard lookalike fallback');
+});
+
+test('mature personalization changes only the desktop broad heading and stays hidden on mobile', async () => {
+  const [slot, layout] = await Promise.all([
+    read('src/components/PersonalFeedSlot.astro'),
+    read('src/layouts/EventLayout.astro'),
+  ]);
+
+  assert.match(slot, /@media \(max-width: 1023px\)[\s\S]*data-personal-feed-mode="personal"[\s\S]*display: none/u, 'mature personal continuation is never a second mobile module');
+  assert.match(layout, /section\.dataset\.personalFeedMode = isPersonal \? 'personal' : 'popular_fallback'/u);
+  assert.match(layout, /title\.textContent = isPersonal \? 'По вашим интересам' : 'Ещё события'/u, 'desktop labels mature personalization honestly while fallback remains broad discovery');
 });
 
 test('desktop keeps a separate finite broad-discovery section after the similar-events surface', async () => {
