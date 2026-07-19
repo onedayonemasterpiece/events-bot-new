@@ -1,0 +1,138 @@
+mode: serial_integrator
+repo: events-bot-new
+base_ref: origin/agent/region-talk/R04-live-canary
+base_sha: dff55929923f3e55e2ce8fe188b19b530ec56088
+base_branch: agent/region-talk/R04-live-canary
+integration_branch: integration/region-talk-publications-20260719
+global_constraints:
+  - no crawler or automatic public publishing
+  - external research output is untrusted staging evidence
+  - preserve social-candidate behavior
+  - YDB sidecar only
+  - image rights default to link_only
+verification_owner: root
+stop_conditions:
+  - external result can directly enter publication queue
+  - source externality or evidence references are unverifiable
+  - unrelated dirty work is encountered in the isolated worktree
+requirement_matrix:
+  - id: R01
+    requirement: extend the existing Region Talk concept from nonregional social posts to nonregional editorial and academic publications
+    primary_lane: INT
+    done_when: the origin model and policy boundary are canonical and do not create a separate channel
+  - id: R02
+    requirement: provide a broad external web-research prompt that is not limited to named sources
+    primary_lane: INT
+    done_when: a ready-to-run prompt covers diverse contours, page verification, exclusions, evidence, and uncertainty
+  - id: R03
+    requirement: define a machine-readable result contract and low-friction import
+    primary_lane: INT
+    done_when: versioned JSON Schema and fail-closed idempotent staging importer exist
+  - id: R04
+    requirement: reuse Region Talk evaluation and image-ranking pipeline
+    primary_lane: INT
+    done_when: staging handoff and safety boundary are specified; automatic consumer remains gated until origin-aware scoring/verifier is released
+  - id: R05
+    requirement: show publication links and visible scores for human review in the operator chat
+    primary_lane: INT
+    done_when: candidate rendering exposes source/article links and numeric overall/image/postcardness fields
+  - id: R06
+    requirement: publish a ranked publication queue on explicit request
+    primary_lane: INT
+    done_when: read-only one-shot queue rendering is available without mutating sent state
+  - id: R07
+    requirement: prevent similar publications from appearing next to each other using an anti-vector
+    primary_lane: INT
+    done_when: compatible BGE vectors drive MMR and an explicit adjacency guard with disclosed fallback
+  - id: R08
+    requirement: require broad-public interest/science-pop value and produce an outlet overview plus article teaser
+    primary_lane: INT
+    done_when: contract/prompt separate scientific rigor from reader value and require grounded editorial copy
+lanes:
+  - id: L1
+    role: planner
+    primary: false
+    requirement_ids: [R01, R02, R08]
+    target: external-publication concept, prompt, and schema recommendations
+    depends_on: []
+    execution_mode: read_only_until_dependency
+    effort: high
+    branch: integration/region-talk-publications-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/region-talk-publications-20260719
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: architecture and contract recommendations
+    verification_scope: inspection_only
+    status: committed
+  - id: L2
+    role: planner
+    primary: false
+    requirement_ids: [R03, R04]
+    target: current intake, scoring, image, and YDB integration map
+    depends_on: []
+    execution_mode: read_only_until_dependency
+    effort: medium
+    branch: integration/region-talk-publications-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/region-talk-publications-20260719
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: minimal staging/import bridge
+    verification_scope: inspection_only
+    status: committed
+  - id: L3
+    role: planner
+    primary: false
+    requirement_ids: [R05, R06, R07]
+    target: operator chat and anti-vector queue map
+    depends_on: []
+    execution_mode: read_only_until_dependency
+    effort: medium
+    branch: integration/region-talk-publications-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/region-talk-publications-20260719
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: read-only queue UX and MMR contract
+    verification_scope: inspection_only
+    status: committed
+  - id: L4
+    role: reviewer
+    primary: false
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
+    target: final requirement and safety checklist
+    depends_on: [INT]
+    execution_mode: serial_after_dependency
+    effort: high
+    branch: integration/region-talk-publications-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/region-talk-publications-20260719
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: requirement statuses and concrete blockers
+    verification_scope: inspection_only
+    status: committed
+  - id: INT
+    role: merge_reviewer
+    primary: true
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
+    target: integrated implementation, docs, tests, and closure audit
+    depends_on: [L1, L2, L3]
+    execution_mode: serial_after_dependency
+    effort: high
+    branch: integration/region-talk-publications-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/region-talk-publications-20260719
+    writable_files:
+      - scripts/region_talk_external_publication_import.py
+      - scripts/region_talk_review_queue.py
+      - scripts/region_talk_goal_notify.py
+      - tests/test_region_talk_external_publication_import.py
+      - tests/test_region_talk_review_queue.py
+      - tests/test_region_talk_goal_notify.py
+      - requirements.txt
+      - docs/features/region-talk-channel/**
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .codex/lanes/region-talk-publications-20260719/**
+      - .codex/integration/region-talk-publications-20260719/**
+    forbidden_files: []
+    expected_output: versioned external contract, fail-closed importer, review messages, diversified queue
+    verification_scope: full_local
+    status: committed

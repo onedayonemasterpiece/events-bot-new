@@ -228,6 +228,82 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         })
         self.assertNotIn("О блогере:", review)
 
+    def test_editorial_candidate_message_includes_scores_and_publication_label(self) -> None:
+        mod = load_module()
+        message = mod.candidate_message({
+            "publication_rank": 4,
+            "post_url": "https://example.org/article",
+            "source_url": "https://example.org",
+            "content_origin_type": "editorial_publication",
+            "publication_pre_score": 0.81,
+            "overall_media_score": 0.74,
+            "postcardness_score": 0.77,
+            "source_onboarding_status": "ready",
+            "source_onboarding_paragraph": "Федеральное издание о культуре и науке.",
+        })
+        self.assertIn("Оценка: итог 0.81", message)
+        self.assertIn("О публикации:", message)
+        self.assertIn("Источник: https://example.org", message)
+        self.assertNotIn("О блогере:", message)
+
+    def test_candidate_message_preserves_zero_scores(self) -> None:
+        mod = load_module()
+        message = mod.candidate_message({
+            "post_url": "https://example.org/article",
+            "publication_score": 0,
+            "overall_media_score": 0,
+            "postcardness_score": 0,
+        })
+        self.assertIn("Оценка: итог 0 · изображение 0 · открыточность 0", message)
+
+    def test_candidate_message_accepts_nested_external_intake_fields(self) -> None:
+        mod = load_module()
+        message = mod.candidate_message({
+            "canonical_url": "https://example.org/article",
+            "content_origin_type": "academic_publication",
+            "publication": {"source_domain": "example.org"},
+            "quality_assessment": {"track": "scholarly", "normalized_score": 0.79},
+            "editorial_pack": {
+                "source_overview": "Нерегиональный научный журнал.",
+                "teaser": "Исследование объясняет заметный природный процесс.",
+                "why_selected": "Есть понятное научно-популярное зерно.",
+            },
+            "decision": {"reason_short": "Подтверждено первичной страницей."},
+        })
+        self.assertIn("https://example.org/article", message)
+        self.assertIn("Источник: https://example.org", message)
+        self.assertIn("Оценка: итог 0.79", message)
+        self.assertIn("О публикации: Нерегиональный научный журнал.", message)
+        self.assertIn("Кратко: Исследование объясняет", message)
+
+    def test_latest_bge_vector_is_attached_by_canonical_url(self) -> None:
+        mod = load_module()
+        publications = [{"post_url": "https://example.org/a/"}]
+        vectors = [
+            {
+                "post_url": "https://example.org/a",
+                "model_id": "BAAI/bge-m3",
+                "model_short": "bge_m3",
+                "created_at": "2026-07-18T00:00:00Z",
+                "embedding_vector_f16_b64": "old",
+                "embedding_vector_encoding": "f16_le_base64",
+                "embedding_dim": 2,
+                "encoder_contract": "v1",
+            },
+            {
+                "post_url": "https://example.org/a",
+                "model_id": "BAAI/bge-m3",
+                "model_short": "bge_m3",
+                "created_at": "2026-07-19T00:00:00Z",
+                "embedding_vector_f16_b64": "new",
+                "embedding_vector_encoding": "f16_le_base64",
+                "embedding_dim": 2,
+                "encoder_contract": "v1",
+            },
+        ]
+        mod.attach_latest_bge_vectors(publications, vectors)
+        self.assertEqual(publications[0]["embedding_vector_f16_b64"], "new")
+
 
 if __name__ == "__main__":
     unittest.main()

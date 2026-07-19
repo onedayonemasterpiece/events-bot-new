@@ -23,8 +23,18 @@ from pathlib import Path
 from typing import Any
 
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
 AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION = "region_talk_source_fingerprint_v3"
+
+from scripts.region_talk_review_queue import (  # noqa: E402
+    queue_messages,
+    queue_snapshot,
+    rank_publication_queue,
+)
 DEFAULT_NOTIFY_CHAT = "https://t.me/+kfaIRh98oHVkYWFi"
 DEFAULT_NOTIFY_CHAT_ID = "-5563945596"
 DEFAULT_PUBLICATION_SCAN_LIMIT = 5000
@@ -335,6 +345,33 @@ def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str
     return ydb, driver, pool, table, out
 
 
+def attach_latest_bge_vectors(publications: list[dict[str, Any]], vector_rows: list[dict[str, Any]]) -> None:
+    """Attach only the newest durable compatible-looking BGE row per URL.
+
+    Full contract compatibility is checked later by the queue ranker.  Keeping
+    that check in one place prevents a missing/mismatched vector from silently
+    being called semantic diversity.
+    """
+    latest: dict[str, dict[str, Any]] = {}
+    for row in vector_rows:
+        if str(row.get("model_short") or "").lower() != "bge_m3" and "bge-m3" not in str(row.get("model_id") or "").lower():
+            continue
+        url = canonical_post_url(row)
+        if not url or not row.get("embedding_vector_f16_b64"):
+            continue
+        current = latest.get(url)
+        if current is None or str(row.get("created_at") or row.get("updated_at") or "") >= str(current.get("created_at") or current.get("updated_at") or ""):
+            latest[url] = row
+    fields = (
+        "embedding_vector_f16_b64", "embedding_vector_encoding", "embedding_dim",
+        "model_id", "encoder_contract", "text_hash", "semantic_bank_version",
+    )
+    for publication in publications:
+        vector = latest.get(canonical_post_url(publication))
+        if vector:
+            publication.update({field: vector.get(field) for field in fields if vector.get(field) not in (None, "")})
+
+
 def _json_row_payload(row: Any) -> dict[str, Any]:
     payload = row.payload_json
     return json.loads(payload) if isinstance(payload, str) else dict(payload or {})
@@ -571,25 +608,54 @@ VALUES ($pk, $kind, $payload_json, $updated_at);
 
 def candidate_message(row: dict[str, Any]) -> str:
     rank = row.get("publication_rank") or "?"
-    url = row.get("post_url") or ""
+    publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
+    editorial_pack = row.get("editorial_pack") if isinstance(row.get("editorial_pack"), dict) else {}
+    decision = row.get("decision") if isinstance(row.get("decision"), dict) else {}
+    quality = row.get("quality_assessment") if isinstance(row.get("quality_assessment"), dict) else {}
+    url = row.get("post_url") or row.get("canonical_url") or ""
     video_manual = str(row.get("media_review_mode") or "") == "operator_video_review" or str(row.get("media_kind") or "") == "video"
-    why = row.get("why_selected") or (
+    why = row.get("why_selected") or editorial_pack.get("why_selected") or (
         "текст прошёл строгую E5+BGE и Gemini-проверку; качество видео нужно оценить вручную"
         if video_manual
         else "выбран по тексту, визуальному score и Gemini-проверке"
     )
-    summary = row.get("short_summary") or ""
-    reason = str(row.get("publication_llm_reason") or row.get("llm_reason") or row.get("final_verifier_reason") or "")[:280]
+    summary = row.get("short_summary") or editorial_pack.get("teaser") or ""
+    reason = str(row.get("publication_llm_reason") or row.get("llm_reason") or row.get("final_verifier_reason") or decision.get("reason_short") or "")[:280]
     onboarding = (
         str(row.get("source_onboarding_paragraph") or "").strip()
         if str(row.get("source_onboarding_status") or "") == "ready"
         else ""
     )
+    editorial = (
+        str(row.get("content_origin_type") or "") in {"editorial_publication", "academic_publication"}
+        or str(quality.get("track") or "") in {"scholarly", "professional_editorial", "popular_editorial", "reference_or_project_catalog"}
+    )
+    if editorial and not onboarding:
+        onboarding = str(editorial_pack.get("source_overview") or "").strip()
+    source_label = "О публикации" if editorial else "О блогере"
+
+    def display_metric(*fields: str) -> Any:
+        for field in fields:
+            value = row.get(field)
+            if value is not None and str(value).strip() != "":
+                return value
+        return "—"
+
+    publication_score = display_metric("publication_score", "publication_pre_score", "candidate_score")
+    if publication_score == "—" and quality.get("normalized_score") is not None:
+        publication_score = quality["normalized_score"]
+    media_score = display_metric("overall_media_score", "final_visual_score")
+    postcard_score = display_metric("postcardness_score", "clip_postcardness_score")
+    source_url = str(row.get("source_url") or "").strip()
+    if not source_url and publication.get("source_domain"):
+        source_url = "https://" + str(publication["source_domain"]).strip().lstrip("/")
     return "\n".join([
         f"✅ Region Talk candidate #{rank}",
         str(url),
+        f"Источник: {source_url}" if source_url and source_url != url else "",
+        f"Оценка: итог {publication_score} · изображение {media_score} · открыточность {postcard_score}",
         f"Почему: {why}",
-        f"О блогере: {onboarding}" if onboarding else "",
+        f"{source_label}: {onboarding}" if onboarding else "",
         "🎬 Видео: требуется ручной просмотр" if video_manual else "",
         f"Кратко: {summary}" if summary else "",
         f"Gemini: {reason}" if reason else "",
@@ -646,6 +712,25 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
         messages = [build_stats_message(args.stats_limit)]
     elif args.message:
         messages = [args.message]
+    elif args.queue:
+        ydb, driver, pool, table, publications = read_publication_rows(max(args.limit, 20))
+        vectors = read_kind_rows(pool, ydb, table, "text_vector_enrichment_item", int(args.vector_scan_limit))
+        history = read_kind_rows(pool, ydb, table, "publication_semantic_history_item", int(args.history_limit))
+        attach_latest_bge_vectors(publications, vectors)
+        attach_latest_bge_vectors(history, vectors)
+        eligible = [row for row in publications if is_confirmed_publication(row)]
+        ranked = rank_publication_queue(
+            eligible,
+            history=history,
+            limit=args.limit,
+            diversity_weight=args.diversity_weight,
+            adjacency_threshold=args.adjacency_threshold,
+        )
+        snapshot = queue_snapshot(ranked, requested_by="region_talk_goal_notify")
+        messages = queue_messages(snapshot)
+        # Queue rendering is deliberately read-only: it must not mutate the
+        # candidate delivery ledger or mark any item sent_to_chat.
+        rows = []
     else:
         ydb, driver, pool, table, rows = read_publication_rows(args.limit)
         deduped: dict[str, dict[str, Any]] = {}
@@ -754,7 +839,12 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--message", default="", help="Send a single status message instead of YDB publication candidates")
     ap.add_argument("--stats", action="store_true", help="Send live Region Talk YDB statistics instead of candidate links")
+    ap.add_argument("--queue", action="store_true", help="Send a read-only diversified publication queue snapshot")
     ap.add_argument("--stats-limit", type=int, default=20000)
+    ap.add_argument("--vector-scan-limit", type=int, default=20000)
+    ap.add_argument("--history-limit", type=int, default=5000)
+    ap.add_argument("--diversity-weight", type=float, default=0.28)
+    ap.add_argument("--adjacency-threshold", type=float, default=0.86)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     load_env(args.env_file)

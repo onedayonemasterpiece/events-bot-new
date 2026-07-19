@@ -539,6 +539,17 @@ visibility.
   overlap instead of only same-source/place heuristics. If Qwen3 is promoted
   after the research gate, its fingerprint may be stored here as an additional
   or replacement model slot; the anti-vector is not E5-only;
+- kind `external_publication_intake_item`, pk
+  `external_publication_intake_item:extpub_<stable-id>` — validated external
+  editorial/academic research staging. It is not a publication candidate and
+  cannot bypass the E5+BGE/image/final-verifier/operator gates;
+- kind `external_publication_import_batch`, pk
+  `external_publication_import_batch:extpubrun_<stable-id>` — idempotent input
+  batch counts, research request/window and bounded coverage evidence;
+- kind `external_publication_import_error_item`, pk
+  `external_publication_import_error_item:<stable-error-id>` — row-level
+  contract errors. One bad result remains auditable without discarding the
+  valid part of the external research batch;
 - kind `queue_cursor`, pk `queue_cursor:source|image` — cursor position/key and
   quick counts for source and image queues;
 - kind `queue_metrics`, pk `queue_metrics:latest` — latest compact queue counters.

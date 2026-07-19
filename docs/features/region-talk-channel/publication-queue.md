@@ -274,6 +274,17 @@ This makes the next selected post meaningfully farther from what is already in
 the shortlist, while the full text/source/image/Gemini gates still decide
 whether it is eligible at all.
 
+The implemented on-demand operator view uses
+`scripts/region_talk_review_queue.py` policy
+`region_talk_mmr_adjacency_v1`. It is an iterative MMR order, not one static
+penalty: each next row is compared with recent durable history and the rows
+already placed in the current snapshot. An explicit previous-neighbour
+threshold keeps a near-duplicate out of the next slot whenever an alternative
+exists. If no alternative exists, the snapshot records
+`adjacency_relaxed=true` rather than hiding the homogeneous tail. Only equal
+model/encoder/dimension/encoding vector contracts are comparable; missing or
+incompatible vectors use a visible source/topic/content fallback.
+
 ## YDB state
 
 CandidateReport writes:
@@ -329,6 +340,17 @@ row. Finalizer/CandidateReport writers preserve these sent markers.
 The small per-run send limit is applied only after scanning the durable
 publication ledger. YDB primary-key order is not a readiness order, so older
 tombstones cannot hide a later confirmed unsent candidate from notification.
+
+For an explicit, read-only ranked snapshot use:
+
+```bash
+python3 scripts/region_talk_goal_notify.py --queue --limit 20 --dry-run
+```
+
+Removing `--dry-run` sends the snapshot to the same pinned operator chat. This
+mode does not set `sent_to_chat` and does not alter the candidate delivery
+ledger. Each snapshot exposes rank/quality/max-similarity, fallback status and
+unavoidable adjacency relaxation.
 
 Before delivery, the notifier reconstructs the authoritative source with the
 same monotonic merge semantics as the finalizer: scan/KO/candidate counters use

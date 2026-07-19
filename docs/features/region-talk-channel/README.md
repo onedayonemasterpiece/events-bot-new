@@ -17,6 +17,7 @@
 - [LLM/VLM verifier contract](llm-verifier-contract.md) — Gemini Flash-Lite verifier/post-writer только для top candidates.
 - [Publication queue](publication-queue.md) — queue, slots, idempotency, diversity caps, dry-run.
 - [Source onboarding profile](source-onboarding-profile.md) — доказательный профиль автора/канала и абзац `О блогере` для финального кандидата.
+- [External publications](external-publications.md) — broad-web prompt, JSON Schema, staging importer, public-interest contract и on-demand anti-vector queue для материалов изданий.
 - [To-Be orchestration and vector queues](orchestration-to-be.md) — короткие queue-driven прогоны, отдельный BGE-M3 worker, YDB triggers, non-region geo bank и semantic anti-vector diversity.
 - [Telegram/VK publishing](telegram-vk-publishing.md) — future publishing contracts, VK carousel/card risk, Telegram Bot API modes.
 - [Risk register](risk-register.md) — legal/media, VK token, Telegram read, autonomy, cost and reliability risks.
@@ -27,7 +28,7 @@
 
 ## Product intent
 
-**«О Калининграде говорят»** — автономный discovery/publishing pipeline, который показывает, как о Калининградской области говорят за пределами региона: тревел-блогеры, авторские каналы, travel/architecture/history/nature/city-life сообщества, маршруты выходного дня, море, гастрономия и визуально красивые места.
+**«О Калининграде говорят»** — автономный discovery/publishing pipeline, который показывает, как о Калининградской области говорят за пределами региона: тревел-блогеры, авторские каналы, а также нерегиональные журналы, научные издания, профессиональные платформы и культурные медиа. Темы включают travel/architecture/history/nature/city-life, науку с понятным широкому читателю зерном, маршруты, море, гастрономию и визуально красивые места.
 
 Формат канала **не** должен выглядеть как “мы украли чужой пост”. Целевой формат:
 
@@ -54,6 +55,7 @@ Pipeline должен уметь:
 9. Запускать final LLM/VLM verifier только на top candidates.
 10. Для финального кандидата собирать компактный публичный evidence pack, переиспользуемый профиль источника и один проверяемый абзац `О блогере`.
 11. В будущем генерировать короткий пост, ставить в очередь, публиковать в Telegram и VK и вести ledger.
+12. Принимать результаты широкого внешнего web-research по строгому JSON-контракту без собственного crawler и держать их в staging до штатных Region Talk gates.
 
 ## Non-goals for MVP
 

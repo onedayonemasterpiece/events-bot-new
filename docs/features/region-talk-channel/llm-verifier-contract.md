@@ -2,6 +2,15 @@
 
 Status: design. Use Gemini Flash-Lite / current configured lite/flash-lite model via env for final verifier/post writer. Do not call it for every post.
 
+The external-publication research and intake contract is canonical in
+[`external-publications.md`](external-publications.md). Imported rows remain
+staging until an origin-aware final-verifier branch is implemented. That branch
+must require attributed original analysis/research, evidence depth, a concrete
+useful or memorable regional insight, broad-reader value and grounded teaser
+claims. It must not reuse the social-only firsthand-visit/emotion requirement,
+and it must not weaken the current news/politics/military/ad/local-source hard
+exclusions.
+
 ## Call policy
 
 Call verifier only for:
