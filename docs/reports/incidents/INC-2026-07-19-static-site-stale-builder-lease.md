@@ -19,7 +19,11 @@ also did not release resource leases. The completed run therefore retained the
 exclusive `static_site:builder` lease and two later Kaggle kernels were pushed
 only to fail at resource acquisition. During recovery, startup catch-up exposed
 a second lifecycle defect: rearming the error outbox row replaced its payload
-and erased the still-active remote handoff needed for exact-run adoption.
+and erased the still-active remote handoff needed for exact-run adoption. A
+subsequent compensating run exposed a third defect: the live callback handler
+authenticated against a reusable SQLite connection whose stale transaction
+could not see the runner's newly committed token, so a valid resource-acquire
+callback was rejected as `invalid token`.
 
 ## User / Business Impact
 
@@ -76,6 +80,12 @@ and erased the still-active remote handoff needed for exact-run adoption.
    When `static_site_build_state.active_job_id` still pointed at that exact job,
    this destroyed `remote_handoff` and `snapshot`, so the next worker could no
    longer adopt or terminally reconcile the already-submitted kernel.
+7. `validate_run_token` and callback writes reused `Database.raw_conn`. That
+   process-wide aiosqlite connection could retain a read snapshot or failed
+   write transaction from another callback. Because the status config is
+   committed by a separate runner process, the web handler could then miss the
+   new token even though a fresh connection and the mounted status dataset had
+   identical SHA-256 hashes.
 
 This is a mechanical idempotency/status-lifecycle failure; it does not make an
 event-semantic decision and does not require an LLM-first repair.
@@ -114,6 +124,9 @@ event-semantic decision and does not require an LLM-first repair.
 - an unrelated/successor lease remains active;
 - already-terminal ledgers with a stale exact-owner lease are repaired;
 - transient `database is locked` is retried with bounded backoff;
+- externally committed callback tokens remain visible despite a deliberately
+  stale shared SQLite snapshot, and a failed callback transaction cannot poison
+  the next request;
 - requeue of the exact active job preserves its recoverable handoff/snapshot,
   while a non-active stale job starts from the fresh request payload;
 - static-site preflight replays reconciliation for the durable current
@@ -157,6 +170,9 @@ event-semantic decision and does not require an LLM-first repair.
   active job's recoverable payload instead of replacing its remote handoff and
   immutable snapshot. Non-active historical failures keep the old replacement
   behavior.
+- Callback token validation now reads through a fresh connection, while every
+  callback event owns one fresh bounded `BEGIN IMMEDIATE` transaction with
+  rollback and close on failure.
 
 ## Follow-up Actions
 

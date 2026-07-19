@@ -10,9 +10,12 @@ import secrets
 import shutil
 import sqlite3
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import aiosqlite
 
 from db import Database
 
@@ -550,14 +553,45 @@ async def create_kaggle_run_config(
 
 
 async def validate_run_token(db: Database, run_id: str, token: str) -> bool:
-    async with db.raw_conn() as conn:
+    # Run configs are written by short-lived runner processes.  The web app's
+    # shared Database.raw_conn may still own a read snapshot (or a failed write
+    # transaction) from an unrelated callback and therefore miss the new token.
+    # Authentication must observe the current durable ledger, not that cached
+    # connection state.
+    conn = await aiosqlite.connect(db.path, timeout=30)
+    try:
+        await conn.execute("PRAGMA busy_timeout=30000")
         cur = await conn.execute(
             "SELECT token_hash FROM kaggle_run_ledger WHERE run_id = ?",
             (run_id,),
         )
         row = await cur.fetchone()
         await cur.close()
+    finally:
+        await conn.close()
     return bool(row and row[0] and secrets.compare_digest(str(row[0]), hash_token(token)))
+
+
+@asynccontextmanager
+async def _fresh_status_write_transaction(db: Database, *, run_id: str):
+    """Isolate one callback from stale/failed shared SQLite transactions."""
+
+    conn = await aiosqlite.connect(db.path, timeout=30)
+    try:
+        await conn.execute("PRAGMA busy_timeout=30000")
+        await _begin_immediate_with_retry(
+            conn,
+            run_id=run_id,
+            operation="record_run_event",
+        )
+        try:
+            yield conn
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+    finally:
+        await conn.close()
 
 
 async def _expire_resource_leases(conn, *, now: str | None = None, resource_key: str | None = None) -> None:
@@ -718,7 +752,7 @@ async def record_kaggle_run_event(db: Database, payload: dict[str, Any]) -> tupl
     now = utc_now_iso()
     resource_result: dict[str, Any] = {}
     progress = with_progress_percent(progress, event=event, status=status, phase=phase)
-    async with db.raw_conn() as conn:
+    async with _fresh_status_write_transaction(db, run_id=run_id) as conn:
         await _expire_resource_leases(conn, now=now)
         if isinstance(payload.get("resource"), dict):
             resource_result = await _record_resource(conn, run_id=run_id, resource=payload["resource"])

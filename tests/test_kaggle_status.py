@@ -20,6 +20,7 @@ from kaggle_status import (
     make_kaggle_run_event_handler,
     reconcile_kaggle_run_terminal_from_host,
     record_kaggle_run_event,
+    validate_run_token,
 )
 
 
@@ -59,6 +60,60 @@ async def test_begin_immediate_retries_only_transient_sqlite_writer_lock(monkeyp
 
     assert connection.calls == 3
     assert sleeps == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_callback_sees_external_run_config_despite_stale_shared_snapshot(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv(
+        "KAGGLE_STATUS_CALLBACK_URL",
+        "https://example.test/internal/kaggle/run-event",
+    )
+    path = str(tmp_path / "db.sqlite")
+    web_db = Database(path)
+    await web_db.init()
+    async with web_db.raw_conn() as stale_conn:
+        await stale_conn.execute("BEGIN")
+        cursor = await stale_conn.execute("SELECT COUNT(*) FROM kaggle_run_ledger")
+        assert (await cursor.fetchone())[0] == 0
+        await cursor.close()
+
+        runner_db = Database(path)
+        await runner_db.init()
+        config = await create_kaggle_run_config(
+            runner_db,
+            run_id="static-site:external-run-config",
+            session_id=None,
+            kind="static_site_builder",
+            notebook="StaticSiteBuilder",
+        )
+        assert config
+        await runner_db.close()
+
+        assert await validate_run_token(web_db, config["run_id"], config["token"])
+        status, body = await record_kaggle_run_event(
+            web_db,
+            {
+                "run_id": config["run_id"],
+                "token": config["token"],
+                "event": "kernel_started",
+                "event_uid": "kernel_started:1",
+                "phase": "preflight",
+                "status": "running",
+            },
+        )
+        assert status == 200
+        assert body["ok"] is True
+        await stale_conn.rollback()
+
+    with sqlite3.connect(path) as connection:
+        row = connection.execute(
+            "SELECT event_name, status FROM kaggle_run_event WHERE run_id=?",
+            (config["run_id"],),
+        ).fetchone()
+    assert row == ("kernel_started", "running")
+    await web_db.close()
 
 
 def test_create_kaggle_status_dataset_uses_kaggle_valid_title():
