@@ -9,9 +9,10 @@
 
 Current public noindex prototype:
 
-<https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v2/lab/keyboard-event-navigation/>
+<https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v3/lab/keyboard-event-navigation/>
 
-V2 supersedes the visually obstructed v1 review. Its preview prefix contains
+V3 supersedes the visually obstructed v1 review and the initial clean v2
+interaction pass. Its preview prefix contains
 exactly one new HTML object and reuses the immutable v1 page assets; it does not
 publish listing/event catalogs, modify production root or touch stable
 `/ics/*`. The floating service dock and title-panel hint are removed.
@@ -39,6 +40,7 @@ after an explicit keyboard entry or restored listing-to-detail journey.
 | --- | --- | --- |
 | Current-event CTA | `ArrowLeft` / `ArrowRight` | Previous / next hero image |
 | Current-event CTA | `ArrowDown` | Focus the first related event |
+| No focused control (`body`) | `ArrowDown` | Re-enter navigation at the first related event |
 | Current-event surface | `Enter` | Run the visible primary CTA |
 | Current-event surface | `L` / `K` / `S` | Like / calendar / share for the current event |
 | Related card or its inner action | `ArrowLeft` / `ArrowRight` | Previous / next card in visual DOM order, including row wrap |
@@ -47,6 +49,8 @@ after an explicit keyboard entry or restored listing-to-detail journey.
 | Related card inner action | `Escape` | Return focus to the card root |
 | Related card | `Home` / `End` | First / last related card |
 | Related card | `L` / `K` / `S` | Like / calendar / share for that card |
+| Like consent dialog | `Escape` / `Enter` | Activate `Пока нет` / `ОК` through the existing dialog actions |
+| Footer service-share action | `P` / `S` | Copy the service card / copy its text and link |
 | Any navigator surface | `Space` | Native page scroll; never intercepted |
 
 Letter shortcuts use physical key codes (`KeyL`, `KeyK`, `KeyS`) so the
@@ -66,6 +70,13 @@ success logic.
   the event title block;
 - tiny low-contrast `Enter`/`K`/`S`/`L` badges live inside the CTA controls and
   remain visible in full-label and compact-icon layouts;
+- every CTA action keeps native `title` hover help naming its shortcut, even
+  when its visual badge is hidden;
+- CTA badges are adaptive: they stay visible while learning, hide after six
+  shortcut uses within 14 days, and return after a 14-day lapse; a post-lapse
+  action starts a fresh learning count;
+- the footer's existing service-copy actions show inline `P` (card) and `S`
+  (text plus link) keycaps next to their labels;
 - no fixed or overlapping prototype overlay is rendered;
 - an in-flow `Попробуй быструю навигацию` section immediately before the footer
   explains the keys and provides one `↓` start action;
@@ -90,10 +101,13 @@ STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321 \
 ```
 
 The check proves CTA-panel initial focus, closed-hero left/right navigation,
-absence of floating service UI, CTA shortcut badges, the in-flow quick-start
-section, one-keystroke entry into related events, spatial movement, first-row
-return, native `Space` scrolling, untouched focus outside the navigator,
-noindex metadata and zero horizontal overflow at `1536×864`.
+absence of floating service UI, CTA shortcut badges and native hover titles,
+the in-flow quick-start section, one-keystroke entry and lost-focus re-entry
+into related events, spatial movement, first-row return, consent-dialog
+`Escape`/`Enter`, contextual action dispatch, footer `P`/`S` dispatch, adaptive
+badge hide-and-return behavior, native `Space` scrolling, untouched focus
+outside the navigator, noindex metadata and zero horizontal overflow at
+`1536×864`.
 
 ## Deliberate non-goals
 

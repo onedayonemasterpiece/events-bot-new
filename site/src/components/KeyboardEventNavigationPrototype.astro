@@ -42,8 +42,9 @@
   const surface = root instanceof HTMLElement
     ? Array.from(root.querySelectorAll('[data-desktop-action-panel]')).find(isVisible)
     : null;
+  const desktopKeyboard = window.matchMedia('(min-width:1024px)');
 
-  if (root instanceof HTMLElement && surface instanceof HTMLElement) {
+  if (root instanceof HTMLElement && surface instanceof HTMLElement && desktopKeyboard.matches) {
     root.setAttribute('data-closed-hero-keyboard-scope', '');
     surface.tabIndex = 0;
     surface.setAttribute('data-keyboard-event-surface', '');
@@ -51,15 +52,48 @@
     surface.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowDown Enter L K S');
 
     const primary = surface.querySelector('.desktop-prototype__primary-action:not(.is-disabled)');
+    const shortcutUsageKey = 'ke_keyboard_shortcut_usage_v1';
+    const regularUseCount = 6;
+    const regularUseWindowMs = 14 * 24 * 60 * 60 * 1000;
+    const readShortcutUsage = () => {
+      try {
+        const value = JSON.parse(localStorage.getItem(shortcutUsageKey) || 'null');
+        return {
+          count: Math.max(0, Number(value?.count || 0)),
+          lastUsedAt: Math.max(0, Number(value?.lastUsedAt || 0)),
+        };
+      } catch {
+        return { count: 0, lastUsedAt: 0 };
+      }
+    };
+    const shortcutHintsAreCompact = () => {
+      const usage = readShortcutUsage();
+      return usage.count >= regularUseCount && Date.now() - usage.lastUsedAt <= regularUseWindowMs;
+    };
+    const updateShortcutHintVisibility = () => {
+      const compact = shortcutHintsAreCompact();
+      surface.dataset.keyboardShortcutHints = compact ? 'hidden' : 'visible';
+      surface.querySelectorAll('[data-keyboard-shortcut-badge]').forEach((badge) => { badge.hidden = compact; });
+    };
+    const recordShortcutUse = () => {
+      const usage = readShortcutUsage();
+      const isRecent = Date.now() - usage.lastUsedAt <= regularUseWindowMs;
+      try {
+        localStorage.setItem(shortcutUsageKey, JSON.stringify({ count: isRecent ? usage.count + 1 : 1, lastUsedAt: Date.now() }));
+      } catch {}
+      updateShortcutHintVisibility();
+    };
     const shortcutTargets = [
-      [primary, 'Enter'],
-      [surface.querySelector('[data-calendar-action]:not(.desktop-prototype__primary-action)'), 'K'],
-      [surface.querySelector('[data-native-share]'), 'S'],
-      [surface.querySelector('[data-feedback-action="like"]'), 'L'],
+      [primary, 'Enter', 'Основное действие — клавиша Enter'],
+      [surface.querySelector('[data-calendar-action]:not(.desktop-prototype__primary-action)'), 'K', 'Добавить в календарь — клавиша K'],
+      [surface.querySelector('[data-native-share]'), 'S', 'Поделиться событием — клавиша S'],
+      [surface.querySelector('[data-feedback-action="like"]'), 'L', 'Поставить лайк — клавиша L'],
     ];
-    shortcutTargets.forEach(([target, key]) => {
+    shortcutTargets.forEach(([target, key, title]) => {
       if (!(target instanceof HTMLElement) || target.querySelector('[data-keyboard-shortcut-badge]')) return;
       target.setAttribute('data-keyboard-shortcut-target', '');
+      target.setAttribute('aria-keyshortcuts', key);
+      target.setAttribute('title', title);
       const badge = document.createElement('span');
       badge.className = 'keyboard-shortcut-badge';
       badge.dataset.keyboardShortcutBadge = '';
@@ -67,6 +101,34 @@
       badge.textContent = key;
       target.append(badge);
     });
+    updateShortcutHintVisibility();
+
+    let footerShare = null;
+    let footerImageAction = null;
+    let footerTextAction = null;
+    const enhanceFooterShare = () => {
+      footerShare = document.querySelector('[data-service-share-root][data-service-share-surface="footer"]');
+      footerImageAction = footerShare?.querySelector('[data-service-share-button][data-service-share-intent="image"]') || null;
+      footerTextAction = footerShare?.querySelector('[data-service-share-button][data-service-share-intent="text"]') || null;
+      [
+        [footerImageAction, 'P', 'Скопировать карточку сервиса — клавиша P'],
+        [footerTextAction, 'S', 'Скопировать текст и ссылку сервиса — клавиша S'],
+      ].forEach(([target, key, title]) => {
+        if (!(target instanceof HTMLElement)) return;
+        target.setAttribute('title', title);
+        target.setAttribute('aria-keyshortcuts', key);
+        const label = target.querySelector('span:last-of-type');
+        if (!(label instanceof HTMLElement) || target.querySelector('[data-service-shortcut-badge]')) return;
+        const keycap = document.createElement('kbd');
+        keycap.className = 'service-share-inline-shortcut';
+        keycap.dataset.serviceShortcutBadge = '';
+        keycap.setAttribute('aria-hidden', 'true');
+        keycap.textContent = key;
+        label.after(keycap);
+      });
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enhanceFooterShare, { once:true });
+    else enhanceFooterShare();
 
     const cards = () => Array.from(root.querySelectorAll('[data-related-start] [data-event-card]')).filter(isVisible);
     const gallerySlides = Array.from(root.querySelectorAll('[data-hero-gallery-slide][data-gallery-slide-kind="image"]'));
@@ -144,6 +206,7 @@
         return;
       }
       action.click();
+      recordShortcutUse();
       setStatus(`${actionLabel(event.code)}: команда передана для выбранного события.`);
     };
 
@@ -179,9 +242,38 @@
     );
 
     document.addEventListener('keydown', (event) => {
-      if (event.defaultPrevented || event.isComposing || dialogIsOpen() || isEditing(event.target)) return;
+      if (!desktopKeyboard.matches || event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isEditing(event.target)) return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+
+      const consent = document.querySelector('[data-personalization-consent].is-visible');
+      if (consent instanceof HTMLElement) {
+        if (event.code === 'Escape') {
+          event.preventDefault();
+          consent.querySelector('[data-personalization-consent-dismiss]')?.click();
+        } else if (event.code === 'Enter') {
+          event.preventDefault();
+          consent.querySelector('[data-personalization-consent-accept]')?.click();
+        }
+        return;
+      }
+      if (dialogIsOpen()) return;
+
+      if (event.code === 'ArrowDown' && (target === document.body || target === document.documentElement)) {
+        event.preventDefault();
+        focusFirstCard();
+        return;
+      }
+
+      if (footerShare instanceof HTMLElement && footerShare.contains(target)) {
+        const serviceAction = event.code === 'KeyP' ? footerImageAction : event.code === 'KeyS' ? footerTextAction : null;
+        if (serviceAction instanceof HTMLElement && !event.repeat) {
+          event.preventDefault();
+          serviceAction.click();
+          recordShortcutUse();
+        }
+        return;
+      }
 
       if (target === surface || surface.contains(target)) {
         if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
@@ -197,6 +289,7 @@
           if (primary instanceof HTMLElement) {
             event.preventDefault();
             primary.click();
+            recordShortcutUse();
           }
           return;
         }
@@ -280,6 +373,20 @@
       text-align:center;
       opacity:.46;
       pointer-events:none;
+    }
+    .service-share-inline-shortcut {
+      display:inline-grid;
+      min-width:20px;
+      min-height:20px;
+      place-items:center;
+      margin-left:.2rem;
+      padding:1px 5px;
+      border:1px solid rgba(121,48,20,.22);
+      border-radius:6px;
+      background:#fffaf2;
+      color:#793014;
+      box-shadow:0 1px 0 rgba(34,26,20,.12);
+      font:800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
     }
     .keyboard-quickstart {
       display:block;

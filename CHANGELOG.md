@@ -44,7 +44,9 @@
   spatial arrow movement, native `Space` scrolling, contextual `L`/`K`/`S`
   actions, CTA-integrated shortcut badges, top-level photo arrows and an
   in-flow pre-footer quick-start section; remove the obstructive fixed help
-  overlay and title-panel focus ring, and cover the clean UI with Playwright;
+  overlay and title-panel focus ring; add `ArrowDown` recovery after focus loss,
+  `Escape`/`Enter` consent handling, native shortcut hover titles, adaptive CTA
+  badges and inline `P`/`S` service-copy hints; cover the clean UI with Playwright;
   publish the accepted one-page lab under an immutable noindex preview prefix;
   production event routes and mobile behavior remain unchanged.
 - **Canonical static preproduction review routing**: persist the latest fully

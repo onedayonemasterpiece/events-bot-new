@@ -48,6 +48,8 @@ RUN_OUTPUT="$(playwright-cli -s="$SESSION" run-code 'async page => {
   assert(await page.locator(".keyboard-prototype-surface-hint").count() === 0, "Service hint inside the event title must not exist");
   assert(await page.locator("[data-keyboard-quickstart]").count() === 1, "Expected the in-flow quick navigation explainer before the footer");
   assert(await page.locator("[data-desktop-action-panel] [data-keyboard-shortcut-badge]").count() >= 4, "CTA controls must expose subtle shortcut badges");
+  assert(await page.locator("[data-desktop-action-panel] [title*=клавиша]").count() >= 4, "CTA controls must expose native hover text with the shortcut key");
+  assert(await page.locator("[data-service-share-surface=footer] [data-service-shortcut-badge]").count() === 2, "Footer copy actions must show inline P/S keycaps");
   assert(await page.locator(cardSelector).count() >= 6, "Expected a useful related-event grid");
   assert(await page.locator("meta[name=robots]").getAttribute("content") === "noindex,nofollow,noarchive", "Lab route must remain noindex");
 
@@ -79,6 +81,13 @@ RUN_OUTPUT="$(playwright-cli -s="$SESSION" run-code 'async page => {
   await page.keyboard.press("ArrowUp");
   report.surfaceReturn = await activeState();
   assert(report.surfaceReturn.surface, "ArrowUp from the first row must return to the current event");
+
+  await page.evaluate(() => document.activeElement?.blur());
+  report.lostFocus = await activeState();
+  assert(!report.lostFocus.surface && !report.lostFocus.cardId, "Test setup must clear navigator focus");
+  await page.keyboard.press("ArrowDown");
+  report.reentry = await activeState();
+  assert(report.reentry.cardRoot, "ArrowDown must re-enter related-event navigation after focus is lost");
 
   await page.locator(`${cardSelector} [data-native-share]`).first().focus();
   const innerCard = await activeState();
@@ -113,6 +122,23 @@ RUN_OUTPUT="$(playwright-cli -s="$SESSION" run-code 'async page => {
     return page.evaluate(() => window.__keyboardPrototypeAction);
   };
 
+  await page.evaluate(() => {
+    localStorage.removeItem("ke_personalization_profile");
+    document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true });
+  });
+  await page.keyboard.press("l");
+  const consent = page.locator("[data-personalization-consent].is-visible");
+  await consent.waitFor();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(50);
+  assert(await page.locator("[data-personalization-consent].is-visible").count() === 0, "Escape must activate the consent decline action");
+  await page.keyboard.press("l");
+  await consent.waitFor();
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  assert(await page.locator("[data-personalization-consent].is-visible").count() === 0, "Enter must activate the consent accept action");
+  assert(await page.evaluate(() => JSON.parse(localStorage.getItem("ke_personalization_profile") || "null")?.consent_ok === true), "Enter acceptance must create the consented local profile");
+
   report.currentLike = await interceptAction(
     "[data-desktop-clean-event] [data-desktop-action-panel]",
     "[data-feedback-action=like]",
@@ -136,6 +162,21 @@ RUN_OUTPUT="$(playwright-cli -s="$SESSION" run-code 'async page => {
   );
   assert(report.primaryCta, "Enter on the current-event surface must dispatch the visible primary CTA");
 
+  report.serviceImage = await interceptAction(
+    "[data-service-share-root][data-service-share-surface=footer]",
+    "[data-service-share-intent=image]",
+    "[data-service-share-root][data-service-share-surface=footer] [data-service-share-intent=image]",
+    "p",
+  );
+  assert(report.serviceImage, "P must dispatch the footer service-card copy action");
+  report.serviceText = await interceptAction(
+    "[data-service-share-root][data-service-share-surface=footer]",
+    "[data-service-share-intent=text]",
+    "[data-service-share-root][data-service-share-surface=footer] [data-service-share-intent=text]",
+    "s",
+  );
+  assert(report.serviceText, "S must dispatch the footer service-link copy action");
+
   await page.evaluate(() => {
     window.scrollTo(0, 0);
     document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true });
@@ -158,6 +199,20 @@ RUN_OUTPUT="$(playwright-cli -s="$SESSION" run-code 'async page => {
 
   report.horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(report.horizontalOverflow <= 1, "Prototype must not add horizontal overflow");
+
+  await page.evaluate(() => localStorage.setItem("ke_keyboard_shortcut_usage_v1", JSON.stringify({ count: 6, lastUsedAt: Date.now() })));
+  await page.reload();
+  await page.waitForSelector(surfaceSelector);
+  assert(await page.locator(surfaceSelector).getAttribute("data-keyboard-shortcut-hints") === "hidden", "Frequent recent shortcut use must hide CTA key badges");
+  assert(await page.locator("[data-desktop-action-panel] [data-keyboard-shortcut-badge]:visible").count() === 0, "Adaptive cleanup must leave no visible CTA badges for regular users");
+  assert(await page.locator("[data-desktop-action-panel] [title*=клавиша]").count() >= 4, "Native hover help must remain available when visual badges are hidden");
+
+  await page.evaluate(() => localStorage.setItem("ke_keyboard_shortcut_usage_v1", JSON.stringify({ count: 20, lastUsedAt: Date.now() - 15 * 24 * 60 * 60 * 1000 })));
+  await page.reload();
+  await page.waitForSelector(surfaceSelector);
+  assert(await page.locator(surfaceSelector).getAttribute("data-keyboard-shortcut-hints") === "visible", "CTA key badges must return after shortcut use lapses");
+  await page.keyboard.press("k");
+  assert(await page.locator(surfaceSelector).getAttribute("data-keyboard-shortcut-hints") === "visible", "One shortcut after a lapse must restart learning instead of immediately hiding badges");
   return report;
 }')"
 echo "$RUN_OUTPUT"
