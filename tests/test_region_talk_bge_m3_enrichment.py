@@ -230,6 +230,14 @@ class RegionTalkBgeM3EnrichmentTests(unittest.TestCase):
         self.assertEqual(mod.LAST_COLLECT_STATS["selected_missing_current_bge"], 1)
         self.assertEqual(mod.LAST_COLLECT_STATS["selected_stale_rescore"], 4)
 
+    def test_external_publication_e5_row_uses_product_priority_lane(self) -> None:
+        mod = load_bge_module()
+        row = {
+            "source_queue_status": "confirmed_external_publication_research",
+            "source_topic_class": "editorial_publication",
+        }
+        self.assertTrue(mod._is_product_priority_row(row))
+
     def test_collect_text_rows_skips_bge_vector_rows_by_default(self) -> None:
         mod = load_bge_module()
         text = "BGE result should not be re-embedded as BGE input."

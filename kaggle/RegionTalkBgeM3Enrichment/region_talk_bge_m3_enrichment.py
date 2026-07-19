@@ -768,6 +768,8 @@ def _source_terminal_excluded(row: dict[str, Any]) -> bool:
 def _is_product_priority_row(row: dict[str, Any]) -> bool:
     method = str(row.get("discovery_method") or "").lower()
     reason = str(row.get("priority_reason") or "").lower()
+    source_status = str(row.get("source_queue_status") or "").lower()
+    source_topic = str(row.get("source_topic_class") or "").lower()
     try:
         exact_priority = int(row.get("post_link_priority")) == 0
     except (TypeError, ValueError):
@@ -779,6 +781,8 @@ def _is_product_priority_row(row: dict[str, Any]) -> bool:
         or row.get("keyword_hit_hashtag")
         or "keyword" in reason
         or "fast_check" in reason
+        or source_status == "confirmed_external_publication_research"
+        or source_topic in {"editorial_publication", "academic_publication"}
     )
 
 
