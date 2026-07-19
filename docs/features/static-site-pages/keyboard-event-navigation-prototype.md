@@ -5,6 +5,16 @@
 > **Fixture:** event `6408`, «Спектакль „Собака на сене“»  
 > **Scope:** one desktop event-detail page (`min-width: 1024px`)
 
+## Published review
+
+Public noindex prototype:
+
+<https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v1/lab/keyboard-event-navigation/>
+
+The immutable preview prefix was built from source commit `da4e2cae` and does
+not modify production root or stable `/ics/*`. Public HTTP returned `200`; the
+focused Playwright contract passed again against the public URL at `1536×864`.
+
 ## Product hypothesis
 
 The prototype tests one narrow question: can a visitor reject the current event
