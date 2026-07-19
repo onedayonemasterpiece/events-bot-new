@@ -106,6 +106,13 @@ Rules:
   another writer owns that slot; timeout expiry is handled as retryable
   contention, while non-lock failures still fail immediately. See
   <https://www.sqlite.org/lang_transaction.html>.
+- Callback authentication reads each runner-created token from a fresh SQLite
+  connection, and each callback event uses its own bounded
+  `BEGIN IMMEDIATE` transaction with guaranteed rollback/close. The aiohttp
+  process must not authenticate against the reusable `Database.raw_conn`: a
+  stale read snapshot or an earlier failed write can otherwise hide a token
+  that a short-lived runner has already committed and make Kaggle report a
+  false `invalid token`/busy resource failure.
 - Data export: `site/scripts/export-production-preview-data.py`.
 - Fly handoff: `JobTask.static_site_build` and `main.py` `job_static_site_build_kaggle`.
 - Feature docs: `docs/features/static-site-pages/astro-preview.md`.

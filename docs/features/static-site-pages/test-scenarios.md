@@ -59,7 +59,10 @@
   old claim for a replacement. If startup or Smart Update rearms the exact
   active error job, its remote handoff and immutable snapshot survive the
   payload merge; a non-active stale job does not leak those identities into a
-  new request.
+  new request. A callback token committed by the runner must also be visible to
+  the live aiohttp process even when its shared SQLite connection holds an old
+  snapshot; callback writes retry a bounded writer lock and cannot poison the
+  following callback transaction.
 - **ADD-V12-06 — Content no-op.** Operational queue churn and already elapsed
   rows do not change the public fingerprint; public fields, policy, repo SHA,
   related cache or local date do. Explicit operator force is audited separately.

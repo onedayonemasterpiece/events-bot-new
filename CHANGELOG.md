@@ -9,7 +9,9 @@
   kernels. Per-run status-ledger creation now applies the same bounded
   lock-only retry instead of failing a build after one `BEGIN IMMEDIATE` timeout.
   Rearming the exact active error job now preserves its recoverable remote
-  handoff and immutable snapshot while merging new Smart Update effects.
+  handoff and immutable snapshot while merging new Smart Update effects. Kaggle
+  callbacks now authenticate and write through fresh, bounded SQLite
+  transactions so a stale shared connection cannot reject a valid new token.
 - Fixed v13 event-page review regressions: crop-safe wide unknown visuals now
   use the horizontal detail family; Split CTA collapses both utilities before
   stacking and promotes calendar for free one-day events; gallery pointer CTA,
