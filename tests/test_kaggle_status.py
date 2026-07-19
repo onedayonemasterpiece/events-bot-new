@@ -13,6 +13,7 @@ from aiohttp.test_utils import TestClient, TestServer
 import kaggle_status
 from db import Database
 from kaggle_status import (
+    _begin_immediate_with_retry,
     create_kaggle_run_config,
     create_kaggle_status_dataset,
     format_kaggle_status_label,
@@ -29,6 +30,35 @@ def _load_status_client_class():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.KaggleStatusClient
+
+
+@pytest.mark.asyncio
+async def test_begin_immediate_retries_only_transient_sqlite_writer_lock(monkeypatch):
+    class Connection:
+        calls = 0
+
+        async def execute(self, sql):  # noqa: ANN001
+            assert sql == "BEGIN IMMEDIATE"
+            self.calls += 1
+            if self.calls < 3:
+                raise sqlite3.OperationalError("database is locked")
+
+    sleeps: list[int] = []
+
+    async def fake_sleep(delay):  # noqa: ANN001
+        sleeps.append(delay)
+
+    monkeypatch.setattr(kaggle_status.asyncio, "sleep", fake_sleep)
+    connection = Connection()
+
+    await _begin_immediate_with_retry(
+        connection,
+        run_id="static-site:create-config",
+        operation="create_run_config",
+    )
+
+    assert connection.calls == 3
+    assert sleeps == [1, 2]
 
 
 def test_create_kaggle_status_dataset_uses_kaggle_valid_title():

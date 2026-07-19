@@ -67,6 +67,9 @@ only to fail at resource acquisition.
    while only logging the status drift.
 4. The next static build did not replay reconciliation for the durable current
    candidate before pushing a new kernel.
+5. The same single-writer contention could also abort creation of the next
+   run's status ledger before kernel push because that `BEGIN IMMEDIATE` path
+   had no bounded retry.
 
 This is a mechanical idempotency/status-lifecycle failure; it does not make an
 event-semantic decision and does not require an LLM-first repair.
@@ -137,6 +140,8 @@ event-semantic decision and does not require an LLM-first repair.
   still-active leases owned by that exact run ID.
 - It retries only SQLite lock contention with bounded backoff; other failures
   still fail visibly.
+- Status-ledger configuration uses the same bounded lock-only acquisition
+  policy before creating the callback dataset.
 - Every static-site job preflight replays the idempotent reconciliation for the
   immutable current-candidate receipt before remote recovery or push.
 
@@ -160,3 +165,10 @@ The accepted host receipt is now a replayable recovery authority for status
 and exact-owner lease cleanup. A missing callback or transient writer lock can
 no longer make the next Smart Update wait for TTL or launch a knowingly blocked
 replacement kernel.
+
+The concurrency contract follows the official SQLite documentation: only one
+write transaction is active at a time and `BEGIN IMMEDIATE` may return
+`SQLITE_BUSY`; callers must keep the transaction short and retry boundedly:
+<https://www.sqlite.org/lang_transaction.html>. Python's connection timeout is
+only a wait limit before `OperationalError`, not a guarantee that a busy writer
+will clear: <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>.

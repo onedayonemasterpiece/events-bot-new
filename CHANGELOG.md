@@ -6,7 +6,8 @@
   releases only its own active Kaggle leases, retries transient SQLite writer
   locks, and is replayed before the next Smart Update remote push; this prevents
   a missed terminal callback from causing TTL stalls and blocked duplicate
-  kernels.
+  kernels. Per-run status-ledger creation now applies the same bounded
+  lock-only retry instead of failing a build after one `BEGIN IMMEDIATE` timeout.
 - Fixed v13 event-page review regressions: crop-safe wide unknown visuals now
   use the horizontal detail family; Split CTA collapses both utilities before
   stacking and promotes calendar for free one-day events; gallery pointer CTA,
