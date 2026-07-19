@@ -39,6 +39,10 @@
   heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
 
 ### Added
+- **Smart image crop skill and framing contract**: audit static event/detail,
+  listing, gallery and image-geometry branches; codify no-field natural-ratio
+  rendering, evidence-gated text-free cover, and the OCR-only bounded vertical
+  crop limit of `20%`; add a deterministic crop planner and regression tests.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
   expose one fail-closed resolver to bot/operator link-producing paths, preserve

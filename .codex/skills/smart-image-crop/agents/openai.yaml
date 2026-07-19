@@ -1,0 +1,4 @@
+interface:
+  display_name: "Smart Image Crop"
+  short_description: "OCR-safe, no-letterbox image framing"
+  default_prompt: "Use $smart-image-crop to select and validate crop and aspect-ratio behavior for event images."

@@ -353,6 +353,15 @@ pending; `ocr_text`/`unknown` and a positively classified non-photo document rem
 `object-position` when present. If OCR or face/crop evidence makes cover unsafe,
 the renderer falls back to contain/natural rather than cutting text or faces.
 
+New and changed bounded preview surfaces must additionally follow the no-field
+smart-crop contract in [`image-framing.md`](image-framing.md): OCR/unknown uses a
+container matched to the source ratio rather than `contain` inside a mismatched
+fixed frame; a too-vertical OCR asset may lose at most `20%` of source area in a
+top/bottom crop, and only while all protected OCR/face boxes remain visible.
+The implementation workflow and audited branch casebook live in project skill
+`.codex/skills/smart-image-crop/`. This is a target/release rule and does not
+claim that every historical preview CSS path already complies.
+
 ## Цель продукта
 
 Перейти от ограниченных `telegra.ph`-страниц к собственным статическим страницам событий на `kenigevents.ru`, чтобы:

@@ -321,6 +321,7 @@ features:
     service_sharing_desktop_clipboard_manual_matrix: docs/features/static-site-pages/service-sharing-desktop-clipboard-manual-matrix.md
     service_sharing_preview_runbook: docs/operations/service-sharing-preview.md
     image_framing: docs/features/static-site-pages/image-framing.md
+    smart_image_crop_skill: .codex/skills/smart-image-crop/SKILL.md
     event_transport_schedule: docs/features/static-site-pages/event-transport-schedule.md
     bus_transport_directory: docs/features/static-site-pages/bus-transport-directory.md
     listing_personal_feed: docs/features/static-site-pages/listing-personal-feed.md
