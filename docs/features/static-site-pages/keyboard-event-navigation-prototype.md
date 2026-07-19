@@ -1,7 +1,7 @@
-# Desktop keyboard event navigation prototype
+# Desktop keyboard event navigation V7
 
-> **Status:** V7 lab prototype, not a production-wide keyboard override
-> **Scope:** two desktop event-detail fixtures at `min-width: 1024px`
+> **Status:** reviewed V7 is integrated into the primary event template for immutable noindex secret candidates; production-root rollout remains disabled
+> **Scope:** every secret-candidate event detail at `min-width: 1024px`, plus two frozen regression fixtures
 > **Fixtures:** `6408` Split / multi-image and `6593` Editorial / one-image
 
 ## Published review
@@ -23,9 +23,10 @@ continuation form one scoped desktop navigator.
 Letter shortcuts use physical `KeyboardEvent.code`, so Latin/Russian layout
 changes do not break `L/K/S/C/P` positions.
 
-The lab deliberately focuses the CTA surface on load. Production must instead
-enter the mode after explicit keyboard intent or a restored listing-to-detail
-journey.
+The historical lab deliberately focuses the CTA surface on load. The shared
+secret-candidate production mount does not: it enters the mode only after
+meaningful keyboard intent. The same command router drives both surfaces; the
+production wrapper does not reimplement a second “similar” navigator.
 
 ## Key contract
 
@@ -211,14 +212,44 @@ priority, dynamic graph focus, lost-focus re-entry, repeat latches, visible and
 accessible hints, privacy-minimal daily facts and the required acceptance
 matrix. Its `agents/openai.yaml` makes it discoverable in future Codex work.
 
-## Production pipeline handoff
+## Secret-candidate production integration
+
+The reviewed source commit is `d0027a53`; branch head `db5310e8` retains the
+review evidence. Production uses the shared router in
+`site/src/lib/keyboardEventNavigation.mjs`. Both
+`KeyboardEventNavigationPrototype.astro` and the event-route wrapper
+`KeyboardEventNavigation.astro` mount that exact implementation. Generated lab
+HTML is not copied into the SSG.
+
+The primary `/sobytiya/<slug>/` template mounts the wrapper only when all of
+these are true:
+
+- the build is an immutable secret candidate;
+- the route is an event detail;
+- the desktop media query matches;
+- `PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED` is not `0`.
+
+The current preproduction default is enabled for the complete secret candidate;
+setting the flag to `0` is the immediate rollback. Root-form production builds,
+listings and mobile install no keyboard router. There is no remote shortcut
+collector: the allowlisted daily facts remain local and contain no event, URL,
+title, key history or precise timestamp.
+
+The module exposes an explicit `init()`/`destroy()` controller, owns global
+listeners with `AbortController`, disconnects mutation observers and cancels
+timers/animation frames on teardown. Production removes prototype autofocus and
+disarms lost-focus `L` provenance after blur/hidden until a new managed
+focus/pointer owner exists.
+
+### Reviewed source and historical handoff
 
 ### What to integrate
 
-Use branch `agent/keyboard-event-navigation-prototype` as the reviewed source.
-The reusable behavior is in
-`site/src/components/KeyboardEventNavigationPrototype.astro`; the builder and
-two generated pages are lab packaging, not production architecture. The
+Use branch `agent/keyboard-event-navigation-prototype` as the immutable reviewed
+source when auditing parity. The reusable behavior has been extracted from
+`site/src/components/KeyboardEventNavigationPrototype.astro` into the shared
+module above; the builder and two generated pages remain lab packaging, not
+production architecture. The
 parameterized regression is
 `site/scripts/check-keyboard-event-navigation-playwright.sh`, and the canonical
 product/engineering contract is this document.
@@ -265,21 +296,22 @@ observed: the renderer can replace the slot itself. Re-enhance new cards
 idempotently, normalize their canonical URLs, reconnect action-state observers,
 and restore focus in `requestAnimationFrame` after the mutation batch settles.
 
-### Recommended extraction sequence
+### Implemented extraction contract
 
-1. Extract the inline router into a production module with an explicit
+1. The inline router is extracted into a production module with an explicit
    `init(root, options)` / `destroy()` lifecycle. Use an `AbortController` or
    equivalent cleanup for document listeners and disconnect all observers.
-2. Derive executable commands, displayed keycaps, `title`,
+2. Executable commands, displayed keycaps, `title`,
    `aria-keyshortcuts`, help copy and analytics IDs from one command registry.
-3. Remove prototype-only autofocus. Activate on the first recognized keyboard
+3. Prototype-only autofocus is removed. Activate on the first recognized keyboard
    intent, explicit `Перейти к похожим`, or a restored listing→detail journey.
-4. Keep the navigator behind a desktop feature flag and gradual cohort gate;
+4. Keep the navigator behind the desktop build flag during secret-candidate
+   acceptance and a later gradual root cohort gate;
    do not enable it on listing pages or mobile as a side effect.
 5. Reuse the current gallery, feedback, calendar, clipboard and service-share
    implementations. Add lifecycle events to those shared components where a
    stable event is safer than observing classes.
-6. Port the two-fixture test unchanged first, then add production URLs as a
+6. The two-fixture regression remains the oracle and production routes add a
    separate live smoke suite. Preserve both the Split/multi-image and
    Editorial/single-image fixtures.
 
@@ -306,12 +338,15 @@ production change.
   screen-reader commands, high contrast, zoom/reflow or reduced motion;
 - feature-flag rollback, cleanup on navigation and telemetry privacy review.
 
-Until these gates and the collector decision are complete, V7 is a noindex lab
-prototype and not production-rollout approval.
+The Chromium fixture and secret-candidate route gate is required for every
+candidate containing the router. Firefox/Safari, screen-reader, high-contrast
+and zoom/reflow evidence are still required before any production-root rollout;
+secret-candidate integration is not that approval. A collector is optional and
+must be separately reviewed rather than blocking the current local-only facts.
 
 ## Deliberate non-goals
 
 - no listing-page keyboard changes;
-- no production event-route integration or remote telemetry collector;
+- no production-root event-route rollout or remote telemetry collector;
 - no mobile behavior;
 - no removal/replacement of native `Tab` navigation.

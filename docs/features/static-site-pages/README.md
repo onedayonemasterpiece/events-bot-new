@@ -26,10 +26,13 @@ portrait series, low-resolution and quality-fallback combinations. The same
 production artifacts and secret candidates. A build that falls back to the
 legacy `EventHero + event-grid` desktop DOM fails closed.
 
-The isolated, desktop-only experiment for one-keystroke movement from an event
-detail to related cards is documented in
+The reviewed desktop keyboard navigator V7 is documented in
 [keyboard-event-navigation-prototype.md](keyboard-event-navigation-prototype.md).
-It is a noindex one-page lab and does not change production event routes.
+Its exact command router is shared by the historical lab and the primary event
+template. It is enabled only in checked noindex secret candidates, only at the
+desktop breakpoint, and only after meaningful keyboard intent; root event pages
+and listing/mobile routes remain untouched while the wider browser,
+accessibility and rollout gates are open.
 
 В `events-bot-new` есть Astro SSG preview и отдельный checked production profile в `site/`: он строит
 статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` из
@@ -265,6 +268,11 @@ single continuation surface and must not duplicate this desktop-only module.
 Both server-rendered related cards and runtime-selected broad cards use the same
 canonical `EventCard` DOM contract and interaction controller; sharing only row
 geometry while maintaining a second handwritten card renderer is forbidden.
+The keyboard graph treats these as two explicit zones: arrows may bridge from
+the last row of `Смотрите дальше` to the finite broader section, while headings
+and selection semantics keep “clearly similar” separate from anti-bubble
+discovery. Runtime feedback, share and rerank operations must preserve the same
+card controller and logical focus owner rather than recreating card markup.
 
 Preview `v40` closes the share experiment: temporary `Поделиться эксперимент`, `Поделиться эксперимент 2` and rich-clipboard controls are not production UI. The single visible `Поделиться` button is now the production baseline: it attempts Web Share with image file + plain text + URL, then falls back to generated 1080×1350 image + text + URL, and finally to text/URL copy when the browser or target app cannot accept files. Rich hidden hyperlinks inside share text are documented as impossible to guarantee from a mobile browser.
 

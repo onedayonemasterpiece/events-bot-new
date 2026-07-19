@@ -81,8 +81,20 @@ Production file mirror **включён постоянно** и пишет root 
 После очистки/деплоя обязательны:
 
 - `df -h /data` и root overlay;
+- отдельный application-equivalent create/write/`fsync`/remove probe в
+  configured root scratch (`RUNTIME_SCRATCH_PATH`, production `/tmp`), потому
+  что свободный `/data` не доказывает работоспособность Python `tempfile`;
 - `PRAGMA quick_check=ok` и write probe через обычный application path;
 - `/healthz ready=true`;
 - active runtime log exists, grows, and contains the startup budget line;
 - total `events-bot.log* <= RUNTIME_LOG_MAX_TOTAL_MB`;
 - no `Errno 28` / `database or disk is full` in fresh logs.
+
+Static-site artifacts live only below configured
+`STATIC_SITE_ARTIFACT_ROOT=/data/static_site_builder`. Automatic retention may
+delete a recognized terminal `output-production-*` tree only after its durable
+receipt/evidence was persisted and only when it is not the exact
+active/recoverable handoff. Unknown directories, symlinks, paths outside that
+root and failed/nonterminal output are manual incident decisions. Default
+successful-output retention is zero; historical counts/times come from the
+build history/ledger/receipt rather than from keeping duplicate archives.
