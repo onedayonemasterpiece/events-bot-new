@@ -127,3 +127,55 @@ test('built personal feed manifest is compact, public, and card-compatible', asy
 
   assert.ok(Buffer.byteLength(JSON.stringify(payload)) < 2_000_000, 'manifest should stay below 2 MB');
 });
+
+test('runtime cards clone the canonical EventCard DOM and safely populate its interaction hooks', async () => {
+  const [card, slot, layout] = await Promise.all([
+    read('src/components/EventCard.astro'),
+    read('src/components/PersonalFeedSlot.astro'),
+    read('src/layouts/EventLayout.astro'),
+  ]);
+
+  assert.match(layout, /import EventCard from '\.\.\/components\/EventCard\.astro'/u);
+  assert.match(layout, /<template data-event-card-template="split-actions">\s*<EventCard[^>]*variant="split-actions"[^>]*desktopRelatedCrop[^>]*runtimeTemplate/u);
+  assert.match(layout, /<template data-event-card-template="overlay-controls">\s*<EventCard[^>]*variant="overlay-controls"[^>]*desktopRelatedCrop[^>]*runtimeTemplate/u);
+  assert.match(card, /runtimeTemplate\?: boolean/u);
+  assert.match(card, /const calendarHref = runtimeTemplate \? '#' : eventCalendarHref\(event\)/u, 'inert template never emits a stable calendar URL');
+  assert.match(layout, /image_url: withBase\('\/favicon\.svg'\)/u, 'template media remains inside the active preview/candidate prefix');
+  for (const hook of ['data-card-media-link', 'data-card-media-shell', 'data-card-image', 'data-card-title', 'data-card-type', 'data-card-meta', 'data-card-status', 'data-card-place']) {
+    assert.match(card, new RegExp(hook, 'u'), `canonical EventCard exposes ${hook} for safe clone population`);
+  }
+  for (const interaction of ['data-feedback-action="not_interested"', 'data-feedback-action="like"', 'data-native-share', 'data-calendar-action']) {
+    assert.match(card, new RegExp(interaction, 'u'), `canonical EventCard owns ${interaction}`);
+  }
+  assert.match(layout, /template\?\.content\?\.querySelector\('\[data-event-card\]'\)/u);
+  assert.match(layout, /const card = sourceCard\.cloneNode\(true\)/u);
+  assert.match(layout, /node\.textContent = text/u);
+  assert.match(layout, /target\.appendChild\(card\)/u);
+  assert.match(layout, /safeRuntimeCardUrl/u);
+  assert.doesNotMatch(layout, /function eventCardHtml/u);
+  assert.doesNotMatch(layout, /const (?:dislike|share|heart|calendar)Icon = '<svg/u);
+  assert.doesNotMatch(layout, /insertAdjacentHTML\('beforeend',\s*(?:eventCardHtml|packed\.map)/u);
+});
+
+test('desktop keeps a separate finite broad-discovery section after the similar-events surface', async () => {
+  const [page, desktop, slot, layout] = await Promise.all([
+    read('src/pages/sobytiya/[slug].astro'),
+    read('src/components/DesktopEventPage.astro'),
+    read('src/components/PersonalFeedSlot.astro'),
+    read('src/layouts/EventLayout.astro'),
+  ]);
+
+  assert.match(desktop, /Смотрите дальше/u, 'desktop retains the explicit similar-events block');
+  const desktopPageIndex = page.indexOf('<DesktopEventPage');
+  const mainEndIndex = page.indexOf('</main>');
+  const broadSectionIndex = page.indexOf('<PersonalFeedSlot context="event-detail"');
+  assert.ok(desktopPageIndex >= 0 && mainEndIndex > desktopPageIndex && broadSectionIndex > mainEndIndex, 'Ещё события remains a separate sibling after the desktop detail/similar surface');
+  assert.match(slot, /<section[\s\S]*personal-feed-section--event-detail/u);
+  assert.match(slot, /const heading = isEventDetail \? 'Ещё события'/u);
+  assert.match(slot, /Шесть разных событий без бесконечной ленты/u);
+  assert.match(slot, /isEventDetail && <a[^>]*data-personal-feed-all-events/u);
+  assert.match(slot, /!isEventDetail && <button[^>]*data-personal-feed-load-more/u, 'event detail has no load-more control');
+  assert.match(layout, /const EVENT_DETAIL_CONTINUATION_LIMIT = 6/u);
+  assert.match(layout, /maxSameCategory: 3, maxSameVenue: 2/u);
+  assert.match(layout, /eventIdsAlreadyOffered\(section\)/u);
+});

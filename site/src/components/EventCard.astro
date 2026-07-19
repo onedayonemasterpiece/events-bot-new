@@ -21,8 +21,9 @@ interface Props {
   variant?: CardVariant;
   desktopRelatedCrop?: boolean;
   desktopRelatedLayout?: DesktopRelatedLayout;
+  runtimeTemplate?: boolean;
 }
-const { event, label, variant = 'split-actions', desktopRelatedCrop = false, desktopRelatedLayout } = Astro.props;
+const { event, label, variant = 'split-actions', desktopRelatedCrop = false, desktopRelatedLayout, runtimeTemplate = false } = Astro.props;
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const absolute = eventAbsoluteUrl(event);
@@ -69,7 +70,7 @@ const likeCountLabel = likesCount > 0 ? String(likesCount) : '';
 const shareCountLabel = sharesCount > 0 ? String(sharesCount) : '';
 const likeAria = likesCount > 0 ? `Поставить лайк: ${event.title}. Сейчас ${likesCount}` : `Поставить лайк: ${event.title}`;
 const canAddToCalendar = isCalendarEligible(event);
-const calendarHref = eventCalendarHref(event);
+const calendarHref = runtimeTemplate ? '#' : eventCalendarHref(event);
 const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const cardClass = ['event-card', `event-card--${variant}`].join(' ');
 const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'].join(' ');
@@ -110,16 +111,17 @@ const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.r
   tabindex="0"
   aria-label={`${event.title}: ${dateLabel}`}
 >
-  <a class="event-card__media-link" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
+  <a class="event-card__media-link" href={href} data-card-media-link data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
-      <span class={mediaShellClass} data-media-role={imageMediaRole} style={mediaShellStyle || undefined} aria-busy={desktopRelatedCrop ? 'true' : undefined}>
-        <span class="event-card__image-fallback" aria-hidden="true">
-          <span>{dateLabel}</span>
-          <strong>{event.event_type || 'событие'}</strong>
-          {event.city && <span>{event.city}</span>}
+      <span class={mediaShellClass} data-card-media-shell data-media-role={imageMediaRole} style={mediaShellStyle || undefined} aria-busy={desktopRelatedCrop ? 'true' : undefined}>
+        <span class="event-card__image-fallback" data-card-image-fallback aria-hidden="true">
+          <span data-card-fallback-date>{dateLabel}</span>
+          <strong data-card-fallback-type>{event.event_type || 'событие'}</strong>
+          {event.city && <span data-card-fallback-city>{event.city}</span>}
         </span>
         <img
           class="event-card__media"
+          data-card-image
           src={imageUrl}
           alt={event.image_alt || `Афиша события «${event.title}»`}
           loading="lazy"
@@ -132,22 +134,22 @@ const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.r
         />
       </span>
     ) : (
-      <span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" aria-hidden="true">
-        <span>{dateLabel}</span>
-        <strong>{event.event_type || 'событие'}</strong>
-        {event.city && <span>{event.city}</span>}
+      <span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" data-card-media-shell aria-hidden="true">
+        <span data-card-fallback-date>{dateLabel}</span>
+        <strong data-card-fallback-type>{event.event_type || 'событие'}</strong>
+        {event.city && <span data-card-fallback-city>{event.city}</span>}
       </span>
     )}
   </a>
   <div class="event-card__body">
-    <a class="event-card__title" href={href} data-prefetch>{event.title}</a>
+    <a class="event-card__title" href={href} data-card-title data-prefetch>{event.title}</a>
     <div class="event-card__meta-row">
-      {eventTypeTag && <span class="event-card__tag">{eventTypeTag}</span>}
-      <span class="event-card__meta">{metaLabel}</span>
-      <span class="event-card__status">{statusLabel}</span>
+      {eventTypeTag && <span class="event-card__tag" data-card-type>{eventTypeTag}</span>}
+      <span class="event-card__meta" data-card-meta>{metaLabel}</span>
+      <span class="event-card__status" data-card-status>{statusLabel}</span>
     </div>
-    {otherTimeLabels.length > 0 && <div class="event-card__other-times" aria-label="Другие сеансы">Также: {otherTimeLabels.join(' · ')}</div>}
-    {place && <span class="event-card__footer">{place}</span>}
+    {otherTimeLabels.length > 0 && <div class="event-card__other-times" data-card-other-times aria-label="Другие сеансы">Также: {otherTimeLabels.join(' · ')}</div>}
+    {place && <span class="event-card__footer" data-card-place>{place}</span>}
   </div>
 
   {variant === 'overlay-controls' && (
