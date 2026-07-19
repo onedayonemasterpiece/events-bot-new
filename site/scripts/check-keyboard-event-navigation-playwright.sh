@@ -82,12 +82,17 @@ async page => {
   assert(await page.locator("meta[name=robots]").getAttribute("content") === "noindex,nofollow,noarchive", "Prototype must remain noindex");
   assert(await page.locator("[data-keyboard-quickstart]").count() === 1, "Expected one situational quick-navigation block");
   assert(await page.locator("[data-keyboard-quickstart] .keyboard-quickstart__contexts > p").count() === 3, "Quickstart must explain three concise contexts");
+  const learningCopy = await page.locator("[data-keyboard-quickstart] .keyboard-quickstart__contexts").innerText();
+  for (const phrase of ["Событие", "L нравится", "K в календарь", "S ссылка", "C описание", "P афиша", "Выбранная карточка", "Поделиться сервисом", "скопировать карточку «Анонсов»", "скопировать текст и ссылку"]) {
+    assert(learningCopy.includes(phrase), `Learning block is missing: ${phrase}`);
+  }
   assert(await page.locator(".keyboard-prototype-dock").count() === 0, "No floating service dock is allowed");
   assert(await page.locator(cardSelector).count() === 10, "Both fixtures must expose ten related cards");
   assert(await page.locator("[data-related-start] [data-calendar-action] [data-related-calendar-shortcut]").count() === 10, "Every eligible related calendar must receive one K hint");
   assert(await page.locator("[data-related-start] [data-calendar-action] [data-related-calendar-shortcut]:visible").count() >= 1, "Roomy cards must visibly show the K hint");
   assert(await page.locator("[data-event-content-copy-actions]").count() === 1, "Expected one description action group in the desktop description");
   assert(await page.locator(".desktop-clean-description__text + [data-event-content-copy-actions]").count() === 1, "Copy controls must follow the full description text");
+  assert(await page.locator("[data-copy-event-poster][aria-keyshortcuts=P] kbd", { hasText: "P" }).count() === 1, "Poster control must visibly and accessibly expose P");
 
   // A single Down remains native; a released second Down within 430 ms jumps.
   await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true }); });
@@ -96,6 +101,14 @@ async page => {
   await page.waitForTimeout(80);
   report.singleDown = { before: beforeSingleDown, after: await page.evaluate(() => scrollY), active: await activeState() };
   assert(report.singleDown.after > report.singleDown.before && report.singleDown.active.surface, "One Down must keep focus and perform native scrolling");
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true }); });
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(520);
+  await page.keyboard.press("ArrowDown");
+  report.slowDoubleDown = await activeState();
+  assert(report.slowDoubleDown.surface && !report.slowDoubleDown.cardRoot, "A slow second Down must remain ordinary native scrolling");
+  await page.keyboard.press("Escape");
   await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true }); });
   await page.keyboard.press("ArrowDown");
   await page.waitForTimeout(40);
@@ -106,14 +119,16 @@ async page => {
   // First-row Up returns to the real page top and a held repeat cannot open the gallery.
   const firstCard = page.locator(cardSelector).first();
   await firstCard.focus();
-  await firstCard.evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", key: "ArrowUp", bubbles: true })));
-  await page.locator(surfaceSelector).evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", key: "ArrowUp", repeat: true, bubbles: true })));
+  await firstCard.evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", key: "ArrowUp", bubbles: true, cancelable: true })));
+  await page.locator(surfaceSelector).evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", key: "ArrowUp", repeat: true, bubbles: true, cancelable: true })));
+  await page.waitForTimeout(50);
   report.returnTop = await page.evaluate(() => ({
     surface: document.activeElement?.hasAttribute?.("data-keyboard-event-surface"),
     rootTop: document.querySelector("[data-desktop-clean-event]")?.getBoundingClientRect().top,
+    scrollY: window.scrollY,
     galleryOpen: Boolean(document.querySelector("[data-hero-gallery]:not([hidden]).is-open")),
   }));
-  assert(report.returnTop.surface && Math.abs(report.returnTop.rootTop) < 8 && !report.returnTop.galleryOpen, `Up from first row failed: ${JSON.stringify(report.returnTop)}`);
+  assert(report.returnTop.surface && report.returnTop.scrollY <= 64 && report.returnTop.rootTop >= -8 && !report.returnTop.galleryOpen, `Up from first row failed: ${JSON.stringify(report.returnTop)}`);
   await page.locator(surfaceSelector).evaluate((node) => node.dispatchEvent(new KeyboardEvent("keyup", { code: "ArrowUp", key: "ArrowUp", bubbles: true })));
 
   // Closed hero arrows support both multi-image and single-image templates.
@@ -135,6 +150,19 @@ async page => {
   await gallery.waitFor();
   report.galleryOpen = await gallery.evaluate((node) => ({ ownsFocus: node.contains(document.activeElement), parentIsBody: node.parentElement === document.body }));
   assert(report.galleryOpen.ownsFocus && report.galleryOpen.parentIsBody, "Fresh Up at event top must open and focus the fullscreen gallery");
+  await page.keyboard.press("Escape");
+  await waitFor("gallery Escape close", () => !document.querySelector("[data-hero-gallery].is-open"));
+  await waitFor("gallery Escape focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  const postEscapeDownBefore = await page.evaluate(() => window.scrollY);
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(60);
+  assert((await activeState()).surface && await page.evaluate((before) => window.scrollY > before, postEscapeDownBefore), "Native Down must resume immediately after gallery Escape");
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.keyboard.press("ArrowUp");
+  await gallery.waitFor();
+  assert(await gallery.evaluate((node) => node.contains(document.activeElement)), "ArrowUp must work immediately after gallery Escape restoration");
   const gallerySlideCount = await gallery.locator("[data-hero-gallery-slide]").count();
   for (let index = 1; index < gallerySlideCount; index += 1) await page.keyboard.press("ArrowRight");
   const galleryCta = gallery.locator("[data-hero-gallery-slide][data-gallery-slide-kind=cta][aria-hidden=false]");
@@ -155,13 +183,11 @@ async page => {
   report.galleryEnter = await armGalleryActivation("Enter");
   report.gallerySpace = await armGalleryActivation("Space");
   assert(report.galleryEnter?.href && report.gallerySpace?.href === report.galleryEnter.href, "Enter and Space must activate the same final recommendation");
-  const galleryClose = gallery.locator("[data-hero-gallery-close]");
-  await galleryClose.focus();
-  await page.keyboard.press("Enter");
-  await waitFor("gallery close", () => !document.querySelector("[data-hero-gallery]:not([hidden])"));
-  await page.locator(surfaceSelector).focus();
+  await page.keyboard.press("Escape");
+  await waitFor("gallery close", () => !document.querySelector("[data-hero-gallery].is-open"));
+  await waitFor("gallery logical focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
 
-  // C copies title, rendered lead/body and the canonical event URL; poster is button-only.
+  // C copies title, rendered lead/body and URL; scoped P copies the canonical poster.
   const expectedDescription = await page.evaluate(() => {
     const surface = document.querySelector("[data-keyboard-event-surface]");
     const description = document.querySelector("[data-desktop-clean-event] .desktop-clean-description");
@@ -181,11 +207,16 @@ async page => {
   const currentFactActions = Object.values(factsAfterDescription.days).flat();
   assert(currentFactActions.filter((value) => value === "copy_description").length === 1, "Repeated C use must leave one daily description fact");
   assert(!JSON.stringify(factsAfterDescription).match(/6408|6593|https?:|title|url|timestamp|route/iu), "Daily fact storage must not contain event identity, URL, route or raw timestamps");
-  const posterButton = page.locator("[data-copy-event-poster]");
-  await posterButton.click();
+  await page.locator(surfaceSelector).focus();
+  await page.keyboard.press("p");
   await waitFor("poster clipboard", () => window.__keyboardClipboardImages.length > 0);
   report.posterCopy = await page.evaluate(() => window.__keyboardClipboardImages.at(-1));
-  assert(report.posterCopy.length === 1 && report.posterCopy[0].length === 1 && report.posterCopy[0][0] === "image/png", "Poster button must write exactly one PNG ClipboardItem");
+  assert(report.posterCopy.length === 1 && report.posterCopy[0].length === 1 && report.posterCopy[0][0] === "image/png", "Scoped P must write exactly one PNG ClipboardItem");
+  const posterWrites = await page.evaluate(() => window.__keyboardClipboardImages.length);
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyP", key: "з", bubbles: true, cancelable: true })));
+  await waitFor("Russian-layout event poster", (count) => window.__keyboardClipboardImages.length === count + 1, posterWrites);
+  const posterFacts = await page.evaluate(() => JSON.parse(localStorage.getItem("ke_keyboard_shortcut_daily_v2") || "null"));
+  assert(Object.values(posterFacts.days).flat().filter((value) => value === "copy_event_poster").length === 1, "Repeated event P must leave one completed daily poster fact");
   assert(await page.evaluate(() => window.__keyboardNativeShareCalls) === 0, "Event copy actions must never call navigator.share on desktop");
 
   // Consent keyboard flow and visible CTA states are fixture-independent.
@@ -193,12 +224,17 @@ async page => {
   await page.keyboard.press("l");
   const consent = page.locator("[data-personalization-consent].is-visible");
   await consent.waitFor();
+  await waitFor("consent focus entry", () => document.activeElement?.hasAttribute?.("data-personalization-consent-accept"));
+  assert(await consent.evaluate((node) => node.contains(document.activeElement)), "L must move focus into the lazy consent dialog");
   await page.keyboard.press("Escape");
   assert(await page.locator("[data-personalization-consent].is-visible").count() === 0, "Escape must decline consent");
+  await waitFor("consent decline focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
   await page.keyboard.press("l");
   await consent.waitFor();
+  await waitFor("reopened consent focus entry", () => document.activeElement?.hasAttribute?.("data-personalization-consent-accept"));
   await page.keyboard.press("Enter");
   await waitFor("like consent replay", () => document.querySelector("[data-keyboard-event-surface] [data-feedback-action=like]")?.getAttribute("aria-pressed") === "true");
+  await waitFor("consent accept focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
   report.currentLike = await page.locator(`${surfaceSelector} [data-feedback-action=like]`).evaluate((button) => ({
     pressed: button.getAttribute("aria-pressed"), color: getComputedStyle(button).backgroundColor,
     eventId: button.getAttribute("data-event-id"), base: Number(button.getAttribute("data-base-count") || 0),
@@ -240,6 +276,28 @@ async page => {
   // Related spatial navigation, K action and lost-focus re-entry.
   await firstCard.focus();
   const firstCardId = await firstCard.getAttribute("data-event-id");
+  await firstCard.evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight", key: "ArrowRight", bubbles: true, cancelable: true })));
+  const oneRightId = (await activeState()).cardId;
+  for (let index = 0; index < 4; index += 1) {
+    await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight", key: "ArrowRight", repeat: true, bubbles: true, cancelable: true })));
+  }
+  assert((await activeState()).cardId === oneRightId, "Held/repeated Right must produce at most one semantic card step");
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keyup", { code: "ArrowRight", key: "ArrowRight", bubbles: true })));
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowLeft", key: "ArrowLeft", bubbles: true, cancelable: true })));
+  for (let index = 0; index < 4; index += 1) {
+    await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowLeft", key: "ArrowLeft", repeat: true, bubbles: true, cancelable: true })));
+  }
+  assert((await activeState()).cardId === firstCardId, "Held/repeated Left must also produce at most one semantic card step");
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keyup", { code: "ArrowLeft", key: "ArrowLeft", bubbles: true })));
+  await firstCard.focus();
+  await firstCard.evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", key: "ArrowDown", bubbles: true, cancelable: true })));
+  const oneDownId = (await activeState()).cardId;
+  for (let index = 0; index < 4; index += 1) {
+    await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", key: "ArrowDown", repeat: true, bubbles: true, cancelable: true })));
+  }
+  assert((await activeState()).cardId === oneDownId, "Held/repeated Down must produce at most one semantic card step");
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keyup", { code: "ArrowDown", key: "ArrowDown", bubbles: true })));
+  await firstCard.focus();
   await page.keyboard.press("ArrowRight");
   report.rightCard = await activeState();
   assert(report.rightCard.cardRoot && report.rightCard.cardId !== firstCardId, "Right must move to the adjacent card");
@@ -259,6 +317,86 @@ async page => {
   await page.keyboard.press("k");
   await waitFor("related calendar success", (id) => document.querySelector(`[data-related-start] [data-event-card][data-event-id="${id}"] [data-calendar-action]`)?.getAttribute("data-calendar-state") === "added", calendarCardId);
   assert(await calendarCard.locator("[data-related-calendar-shortcut]").count() === 1, "Calendar success must preserve the related K hint");
+
+  // The graph continues through the dynamically hydrated “Ещё события” zone.
+  const lastRelated = page.locator(cardSelector).last();
+  await lastRelated.focus();
+  await page.keyboard.press("ArrowDown");
+  await waitFor("continuation bridge", () => Boolean(document.activeElement?.closest?.('[data-personal-feed-section][data-listing-context="event-detail"] [data-event-card]')));
+  report.continuation = await page.evaluate(() => ({
+    count: document.querySelectorAll('[data-personal-feed-slot] [data-event-card]').length,
+    activeId: document.activeElement?.closest?.('[data-event-card]')?.getAttribute('data-event-id'),
+    href: document.activeElement?.closest?.('[data-event-card]')?.getAttribute('data-card-href'),
+    inZone: Boolean(document.activeElement?.closest?.('[data-personal-feed-section]')),
+  }));
+  assert(report.continuation.count === 6 && report.continuation.inZone && report.continuation.href.includes('/sobytiya/') && !report.continuation.href.includes('/preview-'), "Down must bridge into six canonical continuation cards");
+  const visibleContinuationCalendars = await page.locator('[data-personal-feed-slot] [data-calendar-action]:visible').count();
+  assert(visibleContinuationCalendars > 0 && await page.locator('[data-personal-feed-slot] [data-calendar-action]:visible [data-related-calendar-shortcut]').count() === visibleContinuationCalendars, "Every visible continuation calendar must receive the same K hint");
+  await page.keyboard.press("ArrowUp");
+  assert((await activeState()).cardId === await lastRelated.getAttribute("data-event-id"), "Up from the first continuation row must bridge to the last related row");
+
+  const firstContinuation = page.locator('[data-personal-feed-slot] [data-event-card]').first();
+  await firstContinuation.focus();
+  const continuationShare = firstContinuation.locator('[data-native-share]');
+  const expectedContinuationCopy = await continuationShare.evaluate((button) => `${button.getAttribute('data-share-event-title')}\n${button.getAttribute('data-share-url')}`);
+  await page.keyboard.press("s");
+  await waitFor("continuation share copy", (expected) => window.__keyboardClipboardText?.at(-1) === expected, expectedContinuationCopy);
+  await continuationShare.focus();
+  await page.keyboard.press("Escape");
+  assert((await activeState()).cardRoot, "Escape inside a continuation action must return to its card root");
+  const continuationCalendarId = await page.evaluate(() => {
+    const today = Math.floor((Date.now() + 2 * 60 * 60 * 1000) / 86400000);
+    return Array.from(document.querySelectorAll('[data-personal-feed-slot] [data-event-card]')).find((card) => Number(card.querySelector('[data-calendar-action]')?.getAttribute('data-calendar-expiry-day') || 0) > today)?.getAttribute('data-event-id');
+  });
+  assert(continuationCalendarId, "Expected one eligible continuation calendar");
+  const continuationCalendarCard = page.locator(`[data-personal-feed-slot] [data-event-card][data-event-id="${continuationCalendarId}"]`).first();
+  await continuationCalendarCard.focus();
+  await page.keyboard.press("k");
+  await waitFor("continuation calendar success", (id) => document.querySelector(`[data-personal-feed-slot] [data-event-card][data-event-id="${id}"] [data-calendar-action]`)?.getAttribute('data-calendar-state') === 'added', continuationCalendarId);
+  await page.evaluate(() => {
+    const card = document.querySelector('[data-personal-feed-slot] [data-event-card]');
+    const link = card?.querySelector('[data-card-title][href], [data-card-media-link][href]');
+    window.__keyboardContinuationEnter = null;
+    link?.addEventListener('click', (event) => {
+      window.__keyboardContinuationEnter = link.href;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, { capture: true, once: true });
+    card?.focus({ preventScroll: true });
+  });
+  await page.keyboard.press("Enter");
+  assert(await page.evaluate(() => Boolean(window.__keyboardContinuationEnter?.includes('/sobytiya/'))), "Enter must open the selected continuation card through its canonical link");
+  assert(await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('ke_keyboard_shortcut_daily_v2') || '{"days":{}}').days).flat().includes('card_open')), "Continuation Enter must record one completed card-open fact");
+  await firstContinuation.focus();
+  const focusedContinuationId = (await activeState()).cardId;
+  await page.evaluate(() => {
+    const slot = document.querySelector('[data-personal-feed-slot]');
+    if (!slot) return;
+    slot.replaceChildren(...Array.from(slot.children).map((card) => card.cloneNode(true)));
+  });
+  await waitFor("continuation rerender focus restoration", (id) => document.activeElement?.closest?.('[data-personal-feed-slot] [data-event-card]')?.getAttribute('data-event-id') === id, focusedContinuationId);
+  await page.waitForTimeout(80);
+  await waitFor("continuation rerender settled focus", (id) => document.activeElement?.closest?.('[data-personal-feed-slot] [data-event-card]')?.getAttribute('data-event-id') === id, focusedContinuationId);
+
+  // A real feedback action may rerank the feed. Restore the same event when it
+  // survives, otherwise the nearest card at the saved zone/index.
+  await page.keyboard.press("l");
+  await waitFor("continuation like focus preservation", () => Boolean(document.activeElement?.closest?.('[data-personal-feed-slot] [data-event-card]')));
+  await page.waitForTimeout(80);
+  const feedbackRestore = await page.evaluate((previousId) => {
+    const cards = Array.from(document.querySelectorAll('[data-personal-feed-slot] [data-event-card]'));
+    const active = document.activeElement?.closest?.('[data-personal-feed-slot] [data-event-card]');
+    return {
+      activeId: active?.getAttribute('data-event-id') || null,
+      expectedId: (cards.find((card) => card.getAttribute('data-event-id') === previousId) || cards[0])?.getAttribute('data-event-id') || null,
+    };
+  }, focusedContinuationId);
+  assert(feedbackRestore.activeId === feedbackRestore.expectedId, `Feedback rerender must preserve the logical card owner: ${JSON.stringify(feedbackRestore)}`);
+  await page.keyboard.press("Home");
+  const homeState = await activeState();
+  assert(homeState.cardId === firstCardId, `Home must reach the first card across both zones: ${JSON.stringify({ homeState, firstCardId })}`);
+  await page.keyboard.press("End");
+  assert(Boolean(await page.evaluate(() => document.activeElement?.closest?.('[data-personal-feed-slot] [data-event-card]'))), "End must reach the final continuation card across both zones");
 
   // Boundary Down: when the related section has entered the viewport, one press focuses card 1.
   await page.evaluate(() => {
@@ -280,9 +418,23 @@ async page => {
   await waitFor("footer hydration", () => document.querySelector("[data-service-share-surface=footer]")?.getAttribute("data-service-share-hydrated") === "true");
   await waitFor("footer readiness", () => ["file", "text"].includes(document.querySelector("[data-service-share-surface=footer]")?.getAttribute("data-service-share-ready")));
   const imageWritesBeforeFooter = await page.evaluate(() => window.__keyboardClipboardImages.length);
-  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyP", key: "з", bubbles: true })));
+  await page.evaluate(() => {
+    document.activeElement?.blur();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyP", key: "з", bubbles: true, cancelable: true }));
+  });
+  await page.waitForTimeout(80);
+  assert(await page.evaluate((count) => window.__keyboardClipboardImages.length === count, imageWritesBeforeFooter), "Body P must not ambiguously copy either event or service image");
+  await firstCard.focus();
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyP", key: "з", bubbles: true, cancelable: true })));
+  await page.waitForTimeout(80);
+  assert(await page.evaluate((count) => window.__keyboardClipboardImages.length === count, imageWritesBeforeFooter), "Card P must remain unassigned");
+  const footerImageButton = footerShare.locator('[data-service-share-intent="image"]');
+  await footerImageButton.focus();
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyP", key: "з", bubbles: true, cancelable: true })));
   await waitFor("footer image clipboard", (count) => window.__keyboardClipboardImages.length === count + 1, imageWritesBeforeFooter);
-  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "ы", bubbles: true })));
+  const footerTextButton = footerShare.locator('[data-service-share-intent="text"]');
+  await footerTextButton.focus();
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "ы", bubbles: true, cancelable: true })));
   await waitFor("footer text clipboard", () => window.__keyboardClipboardText?.at(-1)?.endsWith("\nhttps://kenigevents.ru/"));
   assert(await page.evaluate(() => window.__keyboardNativeShareCalls) === 0, "Footer P/S must also avoid native share");
 

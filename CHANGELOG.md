@@ -51,14 +51,20 @@
   with an auto-dismissing toast, `ArrowUp` fullscreen gallery entry,
   `Enter`/`Space` activation of its final related-event slide, and Russian-layout
   physical footer copy shortcuts; in V5 extend the shared component to the
-  Split 6408 and one-image Editorial 6593 fixtures, restore native single-Down
+  Split 6408 and one-image Editorial 6593 fixtures, preserve ordinary single-Down
   scrolling with released double-Down acceleration, return first-row Up to the
   true event top without held-repeat gallery chaining, add roomy related-card K
   hints, compact description/poster copy controls, situational teaching, and a
   35-day daily-deduped local shortcut-fact ledger with per-action mastery plus a
   consent-gated minimal collector event; add an exact two-object builder and a
-  parameterized dual-fixture Playwright gate; production event routes, remote
-  telemetry and mobile behavior remain unchanged.
+  parameterized dual-fixture Playwright gate; in V6 restore the logical keyboard
+  owner after gallery/consent Escape/accept (including a lazy-created focused
+  consent dialog), latch each physical arrow until keyup and use one controlled
+  single-Down step to eliminate dropped/cascading motion, bridge the related grid into the hydrated
+  six-card `Ещё события` continuation with the same Enter/L/K/S/Escape and K
+  hints, add scoped event-poster `P`, canonicalize dynamic continuation links,
+  and rewrite the teaching block with explicit action names; production event
+  routes, remote telemetry and mobile behavior remain unchanged.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
   expose one fail-closed resolver to bot/operator link-producing paths, preserve

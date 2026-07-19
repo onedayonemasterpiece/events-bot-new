@@ -9,9 +9,9 @@
       <span>Перейти к похожим</span><kbd>↓↓</kbd>
     </button>
     <div class="keyboard-quickstart__contexts" aria-label="Ситуативные клавиши быстрой навигации">
-      <p><strong>Наверху</strong><span><kbd>← →</kbd> фото · <kbd>↑</kbd> галерея · <kbd>C</kbd> описание</span></p>
-      <p><strong>На похожем</strong><span><kbd>Стрелки</kbd> выбор · <kbd>Enter</kbd> открыть · <kbd>L K S</kbd> действия</span></p>
-      <p><strong>У подвала</strong><span><kbd>P</kbd> карточка сервиса · <kbd>S</kbd> текст и ссылка</span></p>
+      <p><strong>Событие</strong><span><kbd>↓</kbd> прокрутка · <kbd>↓↓</kbd> к карточкам · <kbd>↑</kbd> галерея · <kbd>← →</kbd> фото</span><span><kbd>L</kbd> нравится · <kbd>K</kbd> в календарь · <kbd>S</kbd> ссылка · <kbd>C</kbd> описание · <kbd>P</kbd> афиша</span></p>
+      <p><strong>Выбранная карточка</strong><span><kbd>Стрелки</kbd> между «Похожими» и «Ещё событиями» · <kbd>Enter</kbd> открыть</span><span><kbd>L</kbd> нравится · <kbd>K</kbd> в календарь · <kbd>S</kbd> ссылка</span></p>
+      <p><strong>Поделиться сервисом</strong><span><kbd>P</kbd> скопировать карточку «Анонсов» · <kbd>S</kbd> скопировать текст и ссылку</span></p>
     </div>
   </div>
 </section>
@@ -20,7 +20,7 @@
   Быстрая навигация по событиям. Одна стрелка вниз прокручивает страницу, две быстрые стрелки вниз переводят к похожим событиям.
   На карточках используйте стрелки для перехода между событиями. Пробел также прокручивает страницу.
   Enter открывает событие или основное действие. L ставит лайк, K добавляет в календарь,
-  S копирует название и ссылку, C копирует полное описание текущего события. Стрелки влево и вправо в верхнем блоке листают фотографии,
+  S копирует название и ссылку, C копирует полное описание, P копирует афишу текущего события. Стрелки влево и вправо в верхнем блоке листают фотографии,
   стрелка вверх открывает полноэкранную галерею.
 </p>
 <p class="sr-only" data-keyboard-prototype-status role="status" aria-live="polite" aria-atomic="true"></p>
@@ -53,7 +53,7 @@
     surface.tabIndex = 0;
     surface.setAttribute('data-keyboard-event-surface', '');
     surface.setAttribute('aria-describedby', 'keyboard-prototype-instructions');
-    surface.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowUp ArrowDown Enter L K S C');
+    surface.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowUp ArrowDown Enter L K S C P');
 
     const primary = surface.querySelector('.desktop-prototype__primary-action:not(.is-disabled)');
     const currentLike = surface.querySelector('[data-feedback-action="like"]');
@@ -71,8 +71,8 @@
     const shortcutActionAllowlist = new Set([
       'primary_cta', 'hero_previous', 'hero_next', 'gallery_open', 'gallery_recommendation_enter',
       'gallery_recommendation_space', 'related_jump', 'related_boundary_focus', 'related_reentry',
-      'return_event_top', 'card_previous', 'card_next', 'card_row_up', 'card_row_down',
-      'like_toggle', 'calendar_add', 'copy_event', 'copy_description', 'service_copy_poster', 'service_copy_text',
+      'return_event_top', 'card_open', 'card_previous', 'card_next', 'card_row_up', 'card_row_down',
+      'like_toggle', 'calendar_add', 'copy_event', 'copy_description', 'copy_event_poster', 'service_copy_poster', 'service_copy_text',
     ]);
     const kaliningradDay = (date = new Date()) => {
       const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
@@ -116,7 +116,7 @@
       }).length >= shortcutMasteryDays;
     };
     const updateShortcutHintVisibility = () => {
-      const badges = root.querySelectorAll('[data-keyboard-shortcut-badge]');
+      const badges = document.querySelectorAll('[data-keyboard-shortcut-badge]');
       badges.forEach((badge) => {
         const action = badge instanceof HTMLElement ? badge.dataset.shortcutAction : '';
         badge.hidden = Boolean(action && shortcutIsMastered(action));
@@ -219,12 +219,30 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enhanceFooterShare, { once:true });
     else enhanceFooterShare();
 
-    const cards = () => Array.from(root.querySelectorAll('[data-related-start] [data-event-card]')).filter(isVisible);
+    const graphRoot = root.closest('#main') || document;
+    const relatedSection = root.querySelector('[data-related-start]');
+    const continuationSection = graphRoot.querySelector('[data-personal-feed-section][data-listing-context="event-detail"]');
+    // The personalization renderer may replace the slot element itself, so
+    // never retain it as the identity of the continuation zone.
+    const continuationSlot = () => continuationSection?.querySelector('[data-personal-feed-slot]');
+    if (continuationSection instanceof HTMLElement) {
+      continuationSection.tabIndex = -1;
+      continuationSection.setAttribute('aria-describedby', 'keyboard-prototype-instructions');
+    }
+    const zoneCards = (zone) => {
+      const scope = zone === 'related' ? relatedSection : continuationSlot();
+      return scope instanceof HTMLElement ? Array.from(scope.querySelectorAll('[data-event-card]')).filter(isVisible) : [];
+    };
+    const cards = () => [...zoneCards('related'), ...zoneCards('continuation')];
+    const zoneForCard = (card) => relatedSection?.contains(card) ? 'related' : continuationSlot()?.contains(card) ? 'continuation' : '';
+    const managedCardFor = (target) => {
+      const card = target instanceof Element ? target.closest('[data-event-card]') : null;
+      return card instanceof HTMLElement && (relatedSection?.contains(card) || continuationSlot()?.contains(card)) ? card : null;
+    };
     const gallerySlides = Array.from(root.querySelectorAll('[data-hero-gallery-slide][data-gallery-slide-kind="image"]'));
     const heroImage = root.querySelector('[data-clean-hero-image]');
     const heroOpener = heroImage?.closest('[data-hero-gallery-open]');
     const heroStatus = root.querySelector('[data-closed-hero-status]');
-    const relatedSection = root.querySelector('[data-related-start]');
     const description = root.querySelector('.desktop-clean-description');
     const descriptionText = description?.querySelector('.desktop-clean-description__text');
     const currentShare = surface.querySelector('[data-native-share]');
@@ -232,8 +250,30 @@
     const currentEventUrl = String(currentShare?.dataset.shareUrl || '').trim();
     const canonicalPosterUrl = heroImage instanceof HTMLImageElement ? String(heroImage.currentSrc || heroImage.src || '').trim() : '';
 
-    const enhanceRelatedCalendarBadges = () => {
+    const normalizeManagedCardLinks = (card) => {
+      if (!(card instanceof HTMLElement) || zoneForCard(card) !== 'continuation') return;
+      const legacyBase = String(document.body.dataset.siteBasePath || '').replace(/\/$/u, '');
+      const normalize = (value) => {
+        if (!legacyBase || !value) return value;
+        try {
+          const url = new URL(value, location.href);
+          const legacyEvents = `${legacyBase}/sobytiya/`;
+          if (url.origin === location.origin && url.pathname.startsWith(legacyEvents)) {
+            url.pathname = url.pathname.slice(legacyBase.length);
+          }
+          return url.href;
+        } catch { return value; }
+      };
+      card.dataset.cardHref = normalize(card.dataset.cardHref || '');
+      card.querySelectorAll('a[href]').forEach((anchor) => { anchor.href = normalize(anchor.href); });
+      card.querySelectorAll('[data-native-share]').forEach((button) => {
+        if (button instanceof HTMLElement) button.dataset.shareUrl = normalize(button.dataset.shareUrl || '');
+      });
+    };
+
+    const enhanceManagedCards = () => {
       cards().forEach((card) => {
+        normalizeManagedCardLinks(card);
         const calendar = card.querySelector('[data-calendar-action]:not([hidden])');
         if (!(calendar instanceof HTMLElement)) return;
         calendar.setAttribute('aria-keyshortcuts', 'K');
@@ -250,9 +290,12 @@
       });
       updateShortcutHintVisibility();
     };
-    enhanceRelatedCalendarBadges();
+    enhanceManagedCards();
     if (relatedSection instanceof HTMLElement) {
-      new MutationObserver(enhanceRelatedCalendarBadges).observe(relatedSection, { childList: true, subtree: true });
+      new MutationObserver(enhanceManagedCards).observe(relatedSection, { childList: true, subtree: true });
+    }
+    if (continuationSection instanceof HTMLElement) {
+      new MutationObserver(enhanceManagedCards).observe(continuationSection, { childList: true, subtree: true });
     }
 
     let descriptionCopyButton = null;
@@ -266,8 +309,8 @@
         <button type="button" data-copy-event-description aria-keyshortcuts="C" title="Скопировать полное описание — клавиша C">
           <span>Скопировать описание</span><kbd aria-hidden="true">C</kbd>
         </button>
-        <button type="button" data-copy-event-poster title="Скопировать афишу события">
-          <span>Скопировать афишу</span>
+        <button type="button" data-copy-event-poster aria-keyshortcuts="P" title="Скопировать афишу события — клавиша P">
+          <span>Скопировать афишу</span><kbd aria-hidden="true">P</kbd>
         </button>`;
       description.append(actions);
       descriptionCopyButton = actions.querySelector('[data-copy-event-description]');
@@ -280,6 +323,12 @@
     let downGesture = null;
     let downGestureTimer = null;
     let suppressGalleryUntilArrowUpRelease = false;
+    const pressedArrows = new Set();
+    let logicalOwner = { kind: 'surface', node: surface, eventId: '', zone: '', index: 0 };
+    let overlayReturn = null;
+    let overlaySequence = 0;
+    let pendingContinuationEntry = false;
+    let continuationRestoreFrame = 0;
     let posterPngPromise = null;
     const setStatus = (message) => {
       if (!(status instanceof HTMLElement)) return;
@@ -397,7 +446,7 @@
       else window.setTimeout(startPosterPreparation, 250);
     }
 
-    const copyPoster = async () => {
+    const copyPoster = async ({ keyboard = false } = {}) => {
       if (!(posterCopyButton instanceof HTMLButtonElement) || posterCopyButton.disabled) return;
       const clipboardItem = window.ClipboardItem;
       if (!navigator.clipboard?.write || typeof clipboardItem !== 'function' || (clipboardItem.supports && !clipboardItem.supports('image/png'))) {
@@ -413,6 +462,7 @@
         posterCopyButton.dataset.copyState = 'success';
         showActionToast('Афиша скопирована в буфер');
         setStatus('Афиша события скопирована в буфер обмена.');
+        if (keyboard) recordShortcutUse('copy_event_poster');
       } catch {
         posterCopyButton.dataset.copyState = 'error';
         showActionToast('Не удалось скопировать афишу', 'error');
@@ -462,33 +512,133 @@
     // action. It never enters Web Share or image generation in this prototype.
     document.addEventListener('click', (event) => {
       const button = event.target instanceof Element ? event.target.closest('[data-native-share]') : null;
-      if (!(button instanceof HTMLElement) || !root.contains(button)) return;
+      const managedCard = managedCardFor(button);
+      if (!(button instanceof HTMLElement) || (!root.contains(button) && !(managedCard instanceof HTMLElement))) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       void copyEventLink(button);
     }, true);
 
+    const snapshotOwner = (node = document.activeElement) => {
+      if (node === surface || (node instanceof Node && surface.contains(node))) {
+        return { kind: 'surface', node: surface, eventId: '', zone: '', index: 0 };
+      }
+      const card = managedCardFor(node);
+      if (card instanceof HTMLElement) {
+        const zone = zoneForCard(card);
+        return {
+          kind: 'card', node: card, eventId: card.dataset.eventId || '', zone,
+          index: Math.max(0, zoneCards(zone).indexOf(card)),
+        };
+      }
+      return logicalOwner;
+    };
+
+    const captureLogicalOwner = (node = document.activeElement) => {
+      logicalOwner = snapshotOwner(node);
+      return logicalOwner;
+    };
+
+    const resolveLogicalOwner = (snapshot = logicalOwner) => {
+      if (snapshot?.node instanceof HTMLElement && document.contains(snapshot.node)) return snapshot.node;
+      if (snapshot?.kind === 'card' && snapshot.eventId) {
+        const sameEvent = cards().find((card) => card.dataset.eventId === snapshot.eventId);
+        if (sameEvent) return sameEvent;
+      }
+      if (snapshot?.kind === 'card' && snapshot.zone) {
+        const candidates = zoneCards(snapshot.zone);
+        if (candidates.length) return candidates[Math.min(snapshot.index || 0, candidates.length - 1)];
+      }
+      return surface;
+    };
+
+    const restoreLogicalOwner = (snapshot, token, allowedFocus = []) => {
+      // Closing an overlay starts a new keyboard gesture context. Never carry
+      // held/repeat or double-Down state from the obscured page into it.
+      pressedArrows.clear();
+      suppressGalleryUntilArrowUpRelease = false;
+      resetDownGesture();
+      window.requestAnimationFrame(() => {
+        if (token !== overlaySequence || activeHeroGallery() || document.querySelector('[data-personalization-consent].is-visible')) return;
+        const active = document.activeElement;
+        const mayRestore = active === document.body || active === document.documentElement
+          || allowedFocus.some((element) => element instanceof HTMLElement && (active === element || element.contains(active)))
+          || (snapshot?.node instanceof HTMLElement && (active === snapshot.node || snapshot.node.contains(active)));
+        if (!mayRestore) return;
+        const target = resolveLogicalOwner(snapshot);
+        if (target === surface) surface.focus({ preventScroll: true });
+        else if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+        captureLogicalOwner(target);
+        resetDownGesture();
+      });
+    };
+
     const focusSurface = () => {
       surface.focus({ preventScroll: true });
+      captureLogicalOwner(surface);
       surface.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
     };
 
     const focusSurfaceTop = () => {
       surface.focus({ preventScroll: true });
-      const top = root.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({ top, left: 0, behavior: 'instant' });
+      captureLogicalOwner(surface);
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
     };
 
     const focusCard = (card) => {
       if (!(card instanceof HTMLElement)) return;
       card.focus({ preventScroll: true });
+      captureLogicalOwner(card);
       card.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
     };
 
     const focusFirstCard = () => {
-      const first = cards()[0];
+      const first = zoneCards('related')[0];
       if (first) focusCard(first);
     };
+
+    const enterContinuation = () => {
+      const first = zoneCards('continuation')[0];
+      if (first) {
+        pendingContinuationEntry = false;
+        focusCard(first);
+        return true;
+      }
+      if (!(continuationSection instanceof HTMLElement)) return false;
+      pendingContinuationEntry = true;
+      continuationSection.focus({ preventScroll: true });
+      continuationSection.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'instant' });
+      setStatus('Подбираем ещё события. Первая карточка получит фокус автоматически.');
+      return true;
+    };
+
+    if (continuationSection instanceof HTMLElement) {
+      new MutationObserver(() => {
+        enhanceManagedCards();
+        if (pendingContinuationEntry && zoneCards('continuation')[0]) {
+          pendingContinuationEntry = false;
+          focusCard(zoneCards('continuation')[0]);
+          recordShortcutUse('card_row_down');
+          return;
+        }
+        const snapshot = logicalOwner;
+        if (snapshot.kind !== 'card' || snapshot.zone !== 'continuation' || document.contains(snapshot.node)) return;
+        window.cancelAnimationFrame(continuationRestoreFrame);
+        // Personal-feed renderers can replace a batch more than once. Restore
+        // after all MutationObservers for this frame, resolving by event id
+        // against the final DOM rather than focusing an intermediate clone.
+        continuationRestoreFrame = window.requestAnimationFrame(() => {
+          continuationRestoreFrame = 0;
+          const current = logicalOwner.kind === 'card' && logicalOwner.zone === 'continuation' ? logicalOwner : snapshot;
+          const active = document.activeElement;
+          if (active !== document.body && active !== document.documentElement
+            && !(continuationSection instanceof HTMLElement && continuationSection.contains(active))) return;
+          const target = resolveLogicalOwner(current);
+          if (target instanceof HTMLElement) focusCard(target);
+        });
+      }).observe(continuationSection, { childList: true, subtree: true });
+    }
 
     const relatedBoundaryIsVisible = () => {
       if (!(relatedSection instanceof HTMLElement)) return false;
@@ -503,10 +653,6 @@
     };
 
     const handleSurfaceArrowDown = (event) => {
-      if (event.repeat) {
-        resetDownGesture();
-        return;
-      }
       if (relatedBoundaryIsVisible()) {
         event.preventDefault();
         resetDownGesture();
@@ -524,7 +670,11 @@
       resetDownGesture();
       downGesture = { at: event.timeStamp, released: false };
       downGestureTimer = window.setTimeout(resetDownGesture, 430);
-      // First discrete press remains completely native.
+      // Keep the platform meaning (one ordinary scroll step), but perform the
+      // step explicitly. Chromium can otherwise drop the first default scroll
+      // while a fullscreen gallery is finishing its close transition.
+      event.preventDefault();
+      window.scrollBy({ top: Math.max(40, Math.min(72, window.innerHeight * 0.075)), left: 0, behavior: 'instant' });
     };
 
     const rowsFor = (allCards) => {
@@ -543,17 +693,31 @@
       return rows;
     };
 
-    const verticalNeighbor = (current, direction, allCards) => {
-      const rows = rowsFor(allCards);
+    const nearestCardInRow = (current, row) => {
+      if (!row?.cards?.length) return null;
+      const rect = current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      return row.cards.reduce((best, entry) => Math.abs(entry.centerX - centerX) < Math.abs(best.centerX - centerX) ? entry : best).card;
+    };
+
+    const verticalNeighbor = (current, direction) => {
+      const zone = zoneForCard(current);
+      const rows = rowsFor(zoneCards(zone));
       const rowIndex = rows.findIndex((row) => row.cards.some((entry) => entry.card === current));
       if (rowIndex < 0) return null;
       const targetRowIndex = rowIndex + direction;
-      if (targetRowIndex < 0) return surface;
+      if (targetRowIndex < 0) {
+        if (zone === 'related') return surface;
+        const relatedRows = rowsFor(zoneCards('related'));
+        return nearestCardInRow(current, relatedRows.at(-1));
+      }
       const targetRow = rows[targetRowIndex];
-      if (!targetRow) return null;
-      const rect = current.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      return targetRow.cards.reduce((best, entry) => Math.abs(entry.centerX - centerX) < Math.abs(best.centerX - centerX) ? entry : best).card;
+      if (targetRow) return nearestCardInRow(current, targetRow);
+      if (zone === 'related' && direction > 0) {
+        const continuationRows = rowsFor(zoneCards('continuation'));
+        return nearestCardInRow(current, continuationRows[0]) || continuationSection;
+      }
+      return null;
     };
 
     const actionFor = (scope, code) => {
@@ -572,9 +736,25 @@
         setStatus(`${actionLabel(event.code)}: действие недоступно для выбранного события.`);
         return;
       }
+      const owner = snapshotOwner(scope);
+      logicalOwner = owner;
       const shortcutAction = event.code === 'KeyL' ? 'like_toggle' : event.code === 'KeyK' ? 'calendar_add' : 'copy_event';
       action.dataset.keyboardShortcutPending = shortcutAction;
       action.click();
+      const consent = document.querySelector('[data-personalization-consent].is-visible');
+      if (consent instanceof HTMLElement) {
+        const token = ++overlaySequence;
+        overlayReturn = { token, type: 'consent', owner, overlay: consent, opener: action };
+        observeConsentOverlay(consent);
+        pressedArrows.clear();
+        resetDownGesture();
+        window.requestAnimationFrame(() => {
+          if (token !== overlaySequence || !consent.classList.contains('is-visible')) return;
+          const accept = consent.querySelector('[data-personalization-consent-accept]');
+          if (accept instanceof HTMLElement) accept.focus({ preventScroll: true });
+          else consent.focus({ preventScroll: true });
+        });
+      }
       if (shortcutAction === 'calendar_add' && action.dataset.calendarState === 'added') {
         recordShortcutUse(shortcutAction);
         delete action.dataset.keyboardShortcutPending;
@@ -596,9 +776,20 @@
         }
       });
     });
-    root.querySelectorAll('[data-calendar-action], [data-feedback-action="like"]').forEach((action) => {
-      actionCompletionObserver.observe(action, { attributes: true, attributeFilter: ['data-calendar-state', 'aria-pressed'] });
-    });
+    const observedActions = new WeakSet();
+    const observeManagedActions = () => {
+      [surface, ...cards()].forEach((scope) => {
+        scope.querySelectorAll('[data-calendar-action], [data-feedback-action="like"]').forEach((action) => {
+          if (observedActions.has(action)) return;
+          observedActions.add(action);
+          actionCompletionObserver.observe(action, { attributes: true, attributeFilter: ['data-calendar-state', 'aria-pressed'] });
+        });
+      });
+    };
+    observeManagedActions();
+    if (continuationSection instanceof HTMLElement) {
+      new MutationObserver(observeManagedActions).observe(continuationSection, { childList: true, subtree: true });
+    }
 
     const selectHero = (direction) => {
       if (!(heroImage instanceof HTMLImageElement) || gallerySlides.length < 2) return false;
@@ -622,13 +813,54 @@
     };
 
     const dialogIsOpen = () => [
-      '[data-hero-gallery]:not([hidden])',
+      '[data-hero-gallery].is-open:not([hidden])',
       '[data-efficient-viewer]:not([hidden])',
-      '[role="dialog"]:not([hidden])',
+      '[role="dialog"]:not([hidden]):not([data-hero-gallery])',
     ].some((selector) => Array.from(document.querySelectorAll(selector)).some(isVisible));
 
     const activeHeroGallery = () => Array.from(document.querySelectorAll('[data-hero-gallery]:not([hidden])'))
       .find((gallery) => gallery instanceof HTMLElement && gallery.classList.contains('is-open') && isVisible(gallery));
+
+    document.querySelectorAll('[data-hero-gallery]').forEach((gallery) => {
+      let wasOpen = gallery instanceof HTMLElement && gallery.classList.contains('is-open') && !gallery.hidden;
+      new MutationObserver(() => {
+        const open = gallery instanceof HTMLElement && gallery.classList.contains('is-open') && !gallery.hidden;
+        if (open === wasOpen) return;
+        wasOpen = open;
+        gallery.dispatchEvent(new CustomEvent(open ? 'kenigevents:hero-gallery-opened' : 'kenigevents:hero-gallery-closed', { bubbles: true }));
+      }).observe(gallery, { attributes: true, attributeFilter: ['class', 'hidden'] });
+    });
+
+    document.addEventListener('kenigevents:hero-gallery-closed', (event) => {
+      if (!overlayReturn || overlayReturn.type !== 'gallery') return;
+      const session = overlayReturn;
+      overlayReturn = null;
+      restoreLogicalOwner(session.owner, session.token, [event.target, session.opener]);
+    });
+
+    const observedConsentOverlays = new WeakSet();
+    const observeConsentOverlay = (consentOverlay) => {
+      if (!(consentOverlay instanceof HTMLElement) || observedConsentOverlays.has(consentOverlay)) return;
+      observedConsentOverlays.add(consentOverlay);
+      let consentWasVisible = consentOverlay.classList.contains('is-visible');
+      new MutationObserver(() => {
+        const visible = consentOverlay.classList.contains('is-visible');
+        if (visible === consentWasVisible) return;
+        consentWasVisible = visible;
+        if (visible || !overlayReturn || overlayReturn.type !== 'consent') return;
+        const session = overlayReturn;
+        overlayReturn = null;
+        restoreLogicalOwner(session.owner, session.token, [consentOverlay, session.opener]);
+      }).observe(consentOverlay, { attributes: true, attributeFilter: ['class', 'hidden'] });
+    };
+    observeConsentOverlay(document.querySelector('[data-personalization-consent]'));
+    new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => {
+        if (!(node instanceof HTMLElement)) return;
+        if (node.matches('[data-personalization-consent]')) observeConsentOverlay(node);
+        node.querySelectorAll?.('[data-personalization-consent]').forEach(observeConsentOverlay);
+      }));
+    }).observe(document.body, { childList: true, subtree: true });
 
     const activeGalleryRecommendation = (gallery) => {
       if (!(gallery instanceof HTMLElement)) return null;
@@ -638,24 +870,31 @@
       return slide.querySelector('a[href]');
     };
 
-    const elementIntersectsViewport = (element) => {
-      if (!(element instanceof HTMLElement)) return false;
-      const rect = element.getBoundingClientRect();
-      return rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth;
-    };
-
     const footerOwnsShortcut = (target, code) => {
       if (!(footerShare instanceof HTMLElement) || !['KeyP', 'KeyS'].includes(code)) return false;
-      if (footerShare.contains(target)) return true;
-      if (!elementIntersectsViewport(footerShare)) return false;
-      // Scrolling does not move DOM focus. At the footer, allow its shortcuts
-      // when the previously focused event control has left the viewport.
-      return target === document.body || target === document.documentElement || !elementIntersectsViewport(target);
+      return footerShare.contains(target);
     };
 
     const isEditing = (target) => target instanceof HTMLElement && (
       target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
     );
+
+    // The shared card renderer also handles Enter on document bubbling. Own
+    // managed-card Enter in capture so normalized continuation links and one
+    // activation contract win before that generic handler can navigate.
+    document.addEventListener('keydown', (event) => {
+      if (!desktopKeyboard.matches || event.code !== 'Enter' || event.repeat || event.isComposing
+        || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isEditing(event.target)
+        || dialogIsOpen()) return;
+      const card = managedCardFor(event.target);
+      if (!(card instanceof HTMLElement) || event.target !== card) return;
+      const link = card.querySelector('[data-card-title][href], [data-card-media-link][href]');
+      if (!(link instanceof HTMLAnchorElement)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      recordShortcutUse('card_open');
+      link.click();
+    }, true);
 
     document.addEventListener('keydown', (event) => {
       if (!desktopKeyboard.matches || event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isEditing(event.target)) return;
@@ -695,6 +934,14 @@
       }
       if (dialogIsOpen()) return;
 
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
+        if (pressedArrows.has(event.code) || event.repeat) {
+          event.preventDefault();
+          return;
+        }
+        pressedArrows.add(event.code);
+      }
+
       if (event.code === 'ArrowDown' && (target === document.body || target === document.documentElement)) {
         event.preventDefault();
         focusFirstCard();
@@ -729,6 +976,9 @@
             event.preventDefault();
           } else if (heroOpener instanceof HTMLElement) {
             event.preventDefault();
+            const token = ++overlaySequence;
+            overlayReturn = { token, type: 'gallery', owner: snapshotOwner(surface), opener: heroOpener };
+            resetDownGesture();
             heroOpener.click();
             recordShortcutUse('gallery_open');
           }
@@ -737,6 +987,11 @@
         if (event.code === 'KeyC' && !event.repeat) {
           event.preventDefault();
           void copyDescription({ keyboard: true });
+          return;
+        }
+        if (event.code === 'KeyP' && !event.repeat) {
+          event.preventDefault();
+          void copyPoster({ keyboard: true });
           return;
         }
         if (event.code === 'Enter' && target === surface) {
@@ -756,8 +1011,28 @@
         void copyDescription({ keyboard: true });
         return;
       }
+      if (event.code === 'KeyP' && !event.repeat && posterCopyButton instanceof HTMLElement && target.closest('[data-event-content-copy-actions]')) {
+        event.preventDefault();
+        void copyPoster({ keyboard: true });
+        return;
+      }
 
-      const current = target.closest('[data-related-start] [data-event-card]');
+      if (target === continuationSection) {
+        if (event.code === 'ArrowDown') {
+          event.preventDefault();
+          enterContinuation();
+        } else if (event.code === 'ArrowUp') {
+          const lastRelated = zoneCards('related').at(-1);
+          if (lastRelated) {
+            event.preventDefault();
+            pendingContinuationEntry = false;
+            focusCard(lastRelated);
+          }
+        }
+        return;
+      }
+
+      const current = managedCardFor(target);
       if (!(current instanceof HTMLElement)) return;
       const allCards = cards();
       const index = allCards.indexOf(current);
@@ -791,13 +1066,15 @@
         return;
       }
       if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
-        const neighbor = verticalNeighbor(current, event.code === 'ArrowUp' ? -1 : 1, allCards);
+        const neighbor = verticalNeighbor(current, event.code === 'ArrowUp' ? -1 : 1);
         if (neighbor) {
           event.preventDefault();
           if (neighbor === surface) {
             suppressGalleryUntilArrowUpRelease = true;
             focusSurfaceTop();
             recordShortcutUse('return_event_top');
+          } else if (neighbor === continuationSection) {
+            enterContinuation();
           } else {
             focusCard(neighbor);
             recordShortcutUse(event.code === 'ArrowUp' ? 'card_row_up' : 'card_row_down');
@@ -807,7 +1084,9 @@
     });
 
     document.addEventListener('keyup', (event) => {
-      if (!desktopKeyboard.matches || event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (!desktopKeyboard.matches) return;
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) pressedArrows.delete(event.code);
+      if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       if (event.code === 'ArrowDown' && downGesture) {
         downGesture.released = true;
         return;
@@ -830,8 +1109,22 @@
     document.addEventListener('focusin', () => {
       if (gallerySpaceArm && document.activeElement !== gallerySpaceArm.target) gallerySpaceArm = null;
       if (downGesture && document.activeElement !== surface) resetDownGesture();
+      const active = document.activeElement;
+      if (active === surface || surface.contains(active) || managedCardFor(active)) captureLogicalOwner(active);
     });
-    document.addEventListener('pointerdown', resetDownGesture, { passive: true });
+    document.addEventListener('pointerdown', () => {
+      resetDownGesture();
+      pressedArrows.clear();
+    }, { passive: true });
+    window.addEventListener('blur', () => {
+      resetDownGesture();
+      pressedArrows.clear();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) return;
+      resetDownGesture();
+      pressedArrows.clear();
+    });
 
     startButton?.addEventListener('click', focusFirstCard);
     window.requestAnimationFrame(() => surface.focus({ preventScroll: true }));
@@ -847,12 +1140,19 @@
       outline-offset:3px;
     }
     [data-related-start] [data-event-card]:focus-visible,
-    [data-related-start] [data-event-card]:has(:focus-visible) {
+    [data-related-start] [data-event-card]:has(:focus-visible),
+    [data-personal-feed-section][data-listing-context="event-detail"] [data-event-card]:focus-visible,
+    [data-personal-feed-section][data-listing-context="event-detail"] [data-event-card]:has(:focus-visible) {
       outline:3px solid #f4b942;
       outline-offset:5px;
       box-shadow:0 12px 36px rgba(46,31,22,.2);
     }
-    [data-related-start] [data-event-card] { container-type:inline-size; }
+    [data-related-start] [data-event-card],
+    [data-personal-feed-section][data-listing-context="event-detail"] [data-event-card] { container-type:inline-size; }
+    [data-personal-feed-section][data-listing-context="event-detail"]:focus-visible {
+      outline:3px solid #f4b942;
+      outline-offset:-3px;
+    }
     .related-calendar-shortcut {
       display:none;
       min-width:20px;

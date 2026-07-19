@@ -16,7 +16,7 @@ EVENT_SLUGS = (
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-prefix", default="preview-20260719-keyboard-event-navigation-v1")
-    parser.add_argument("--target-prefix", default="preview-20260719-keyboard-event-navigation-v5")
+    parser.add_argument("--target-prefix", default="preview-20260719-keyboard-event-navigation-v6")
     args = parser.parse_args()
 
     site = Path(__file__).resolve().parents[1]
