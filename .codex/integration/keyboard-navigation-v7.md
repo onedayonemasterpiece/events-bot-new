@@ -24,6 +24,9 @@
 - local 6408: PASS (`artifacts/codex/keyboard-navigation-v7-local/local-6408.log`)
 - local 6593: PASS (`artifacts/codex/keyboard-navigation-v7-local/local-6593.log`)
 - 1024px learning-block visual QA: no horizontal overflow
+- public 6408 and 6593: HTTP 200, exact noindex meta and live Playwright PASS
+- Object Storage prefix contains exactly two HTML objects with source SHA
+  `517119a3`
 
 ## Requirement closure
 
@@ -32,4 +35,4 @@
 | R1 | Close gallery with ArrowDown | Done | held-key/no-background-scroll and fresh-Down tests on both fixtures | Production lifecycle extraction still gated |
 | R2 | Make L resilient after managed focus loss | Done | surface/card BODY recovery plus header/footer/editor negatives on both fixtures | Production should disarm provenance on blur/hidden |
 | R3 | Create reusable keyboard-interface skill | Done | skill, UI metadata and validator PASS | Future consumers must execute its full acceptance matrix |
-| R4 | Branch, detailed production handoff and public prototypes | Done after publish/live gate | canonical doc plus branch and immutable V7 prefix | Production rollout intentionally separate |
+| R4 | Branch, detailed production handoff and public prototypes | Done | canonical doc, pushed branch, exactly two immutable V7 objects and dual live PASS | Production rollout intentionally separate |
