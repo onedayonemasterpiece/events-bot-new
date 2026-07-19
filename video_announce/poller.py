@@ -1569,6 +1569,116 @@ async def _cleanup_dataset(client: KaggleClient, dataset_slug: str | None) -> No
     except Exception:
         logger.exception("video_announce: failed to delete dataset %s", dataset_slug)
 
+
+_LOCAL_OUTPUT_CLEANUP_STATUSES = frozenset(
+    {
+        VideoAnnounceSessionStatus.PUBLISHED_TEST,
+        VideoAnnounceSessionStatus.PUBLISHED_MAIN,
+    }
+)
+
+
+def _recognized_local_output_dir(
+    *,
+    session_id: int | None,
+    output_dir: Path,
+    temp_root: Path,
+) -> Path | None:
+    """Return an assertion-checked local output tree, or refuse the path.
+
+    Cleanup is intentionally limited to the exact directory created by
+    ``run_kernel_poller``.  In particular, a caller cannot use a different
+    basename, a different session id, a sibling tree, or a symlink as a bulk
+    deletion target.
+    """
+
+    if not isinstance(session_id, int) or session_id <= 0:
+        return None
+    expected_name = f"videoannounce-{session_id}"
+    output_dir = Path(output_dir)
+    temp_root = Path(temp_root)
+    if output_dir.name != expected_name or output_dir.is_symlink():
+        return None
+    try:
+        resolved_root = temp_root.resolve(strict=True)
+        resolved_output = output_dir.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if not resolved_root.is_dir() or not resolved_output.is_dir():
+        return None
+    if resolved_output.parent != resolved_root or resolved_output.name != expected_name:
+        return None
+    return resolved_output
+
+
+async def _cleanup_terminal_local_output(
+    db: Database,
+    session_id: int | None,
+    output_dir: Path,
+    *,
+    temp_root: Path,
+) -> bool:
+    """Remove a published session's recognized local Kaggle output tree.
+
+    The durable DB row is reloaded immediately before deletion.  ``DONE`` is
+    deliberately not eligible: it is a transitional, publish-recoverable state.
+    A test publication with a configured main target is also non-terminal until
+    main publication succeeds.  Failed and publish-blocked output is preserved
+    for narrow recovery.
+    """
+
+    recognized = _recognized_local_output_dir(
+        session_id=session_id,
+        output_dir=output_dir,
+        temp_root=temp_root,
+    )
+    if recognized is None:
+        logger.warning(
+            "video_announce: refusing unrecognized local output cleanup session=%s path=%s root=%s",
+            session_id,
+            output_dir,
+            temp_root,
+        )
+        return False
+    try:
+        async with db.get_session() as session:
+            fresh = await session.get(VideoAnnounceSession, session_id)
+        published_test_still_needs_main = (
+            fresh is not None
+            and fresh.status == VideoAnnounceSessionStatus.PUBLISHED_TEST
+            and fresh.main_chat_id is not None
+        )
+        if (
+            fresh is None
+            or fresh.status not in _LOCAL_OUTPUT_CLEANUP_STATUSES
+            or published_test_still_needs_main
+            or fresh.finished_at is None
+            or fresh.published_at is None
+            or not fresh.video_url
+        ):
+            logger.info(
+                "video_announce: preserving local output session=%s status=%s path=%s",
+                session_id,
+                getattr(fresh, "status", None),
+                recognized,
+            )
+            return False
+        await asyncio.to_thread(shutil.rmtree, recognized)
+        logger.info(
+            "video_announce: deleted terminal published local output session=%s status=%s path=%s",
+            session_id,
+            fresh.status,
+            recognized,
+        )
+        return True
+    except Exception:
+        logger.exception(
+            "video_announce: failed to clean terminal local output session=%s path=%s",
+            session_id,
+            recognized,
+        )
+        return False
+
 async def run_kernel_poller(
     db: Database,
     client: KaggleClient,
@@ -2353,6 +2463,12 @@ async def run_kernel_poller(
         )
     finally:
         await _cleanup_dataset(client, dataset_slug)
+        await _cleanup_terminal_local_output(
+            db,
+            session_obj.id,
+            output_dir,
+            temp_root=tmp_dir,
+        )
 
 
 async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = None) -> int:
