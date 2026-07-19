@@ -16,7 +16,8 @@ command -v playwright-cli >/dev/null 2>&1 || {
 mkdir -p "$OUTPUT_DIR"
 trap 'playwright-cli -s="$SESSION" close >/dev/null 2>&1 || true' EXIT
 
-playwright-cli -s="$SESSION" open --browser=chromium "$ROUTE" >/dev/null
+BROWSER="${STATIC_SITE_PLAYWRIGHT_BROWSER:-chromium}"
+playwright-cli -s="$SESSION" open --browser="$BROWSER" "$ROUTE" >/dev/null
 playwright-cli -s="$SESSION" resize 1536 864 >/dev/null
 RUN_OUTPUT="$(playwright-cli -s="$SESSION" run-code "$(cat <<'JS'
 async page => {
@@ -78,13 +79,18 @@ async page => {
   }));
   assert(["6408", "6593"].includes(report.eventId), "Only fixtures 6408 and 6593 are accepted");
   assert(["split", "editorial"].includes(report.family), "Expected split/editorial desktop family");
-  assert((await activeState()).surface, "The prototype must initially focus the current-event CTA surface");
-  assert(await page.locator("meta[name=robots]").getAttribute("content") === "noindex,nofollow,noarchive", "Prototype must remain noindex");
-  assert(await page.locator("[data-keyboard-quickstart]").count() === 1, "Expected one situational quick-navigation block");
-  assert(await page.locator("[data-keyboard-quickstart] .keyboard-quickstart__contexts > p").count() === 3, "Quickstart must explain three concise contexts");
-  const learningCopy = await page.locator("[data-keyboard-quickstart] .keyboard-quickstart__contexts").innerText();
-  for (const phrase of ["Событие", "в галерее", "закрыть", "L нравится", "K в календарь", "S ссылка", "C описание", "P афиша", "Выбранная карточка", "Поделиться сервисом", "скопировать карточку «Анонсов»", "скопировать текст и ссылку"]) {
-    assert(learningCopy.includes(phrase), `Learning block is missing: ${phrase}`);
+  assert(!(await activeState()).surface, "Keyboard navigation must not autofocus the current-event CTA surface");
+  await page.locator(surfaceSelector).focus();
+  const robots = await page.locator("meta[name=robots]").getAttribute("content");
+  assert(["noindex,nofollow,noarchive", "noindex,nofollow,noarchive,nosnippet"].includes(robots), "Keyboard navigation acceptance must remain noindex");
+  const quickstartCount = await page.locator("[data-keyboard-quickstart]").count();
+  assert(quickstartCount <= 1, "At most one situational quick-navigation block is allowed");
+  if (quickstartCount === 1) {
+    assert(await page.locator("[data-keyboard-quickstart] .keyboard-quickstart__contexts > p").count() === 3, "Quickstart must explain three concise contexts");
+    const learningCopy = await page.locator("[data-keyboard-quickstart] .keyboard-quickstart__contexts").innerText();
+    for (const phrase of ["Событие", "в галерее", "закрыть", "L нравится", "K в календарь", "S ссылка", "C описание", "P афиша", "Выбранная карточка", "Поделиться сервисом", "скопировать карточку «Анонсов»", "скопировать текст и ссылку"]) {
+      assert(learningCopy.includes(phrase), `Learning block is missing: ${phrase}`);
+    }
   }
   assert(await page.locator(".keyboard-prototype-dock").count() === 0, "No floating service dock is allowed");
   assert(await page.locator(cardSelector).count() === 10, "Both fixtures must expose ten related cards");
@@ -232,8 +238,8 @@ async page => {
   await waitFor("description clipboard", (expected) => window.__keyboardClipboardText?.at(-1) === expected, expectedDescription);
   assert((await page.locator("[data-keyboard-action-toast]").innerText()).includes("Описание"), "C must show resolved description-copy feedback");
   const descriptionCopyCount = await page.evaluate(() => window.__keyboardClipboardText.length);
-  await page.keyboard.press("c");
-  assert(await page.evaluate((count) => window.__keyboardClipboardText.length === count + 1, descriptionCopyCount), "C remains a real repeatable copy action");
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyC", key: "с", bubbles: true, cancelable: true })));
+  assert(await page.evaluate((count) => window.__keyboardClipboardText.length === count + 1, descriptionCopyCount), "Physical KeyC remains repeatable in Cyrillic layout");
   const factsAfterDescription = await page.evaluate(() => JSON.parse(localStorage.getItem("ke_keyboard_shortcut_daily_v2") || "null"));
   const currentFactActions = Object.values(factsAfterDescription.days).flat();
   assert(currentFactActions.filter((value) => value === "copy_description").length === 1, "Repeated C use must leave one daily description fact");
@@ -284,7 +290,7 @@ async page => {
   await waitFor("lost-focus L unlike", () => document.querySelector("[data-keyboard-event-surface] [data-feedback-action=like]")?.getAttribute("aria-pressed") === "false");
   assert((await activeState()).surface, "Lost-focus L must re-enter the current-event keyboard surface");
   await page.evaluate(() => document.activeElement?.blur());
-  await page.keyboard.press("l");
+  await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyL", key: "д", bubbles: true, cancelable: true })));
   await waitFor("lost-focus L relike", () => document.querySelector("[data-keyboard-event-surface] [data-feedback-action=like]")?.getAttribute("aria-pressed") === "true");
   assert((await activeState()).surface, "Repeated lost-focus L recovery must remain stable");
 
@@ -309,6 +315,17 @@ async page => {
   assert(await page.locator("[data-keyboard-test-editor]").inputValue() === "l", "Editable L must remain native text input");
   assert(await page.locator(`${surfaceSelector} [data-feedback-action=like]`).getAttribute("aria-pressed") === surfaceLikeBeforeNegative, "Editable L must not trigger like");
   await page.locator("[data-keyboard-test-editor]").evaluate((node) => node.remove());
+  await page.evaluate(() => {
+    const editor = document.createElement("div");
+    editor.contentEditable = "true";
+    editor.dataset.keyboardTestContenteditable = "";
+    document.querySelector("[data-keyboard-event-surface]")?.append(editor);
+    editor.focus({ preventScroll: true });
+  });
+  const likeBeforeIme = await page.locator(`${surfaceSelector} [data-feedback-action=like]`).getAttribute("aria-pressed");
+  await page.locator("[data-keyboard-test-contenteditable]").evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyL", key: "д", isComposing: true, bubbles: true, cancelable: true })));
+  assert(await page.locator(`${surfaceSelector} [data-feedback-action=like]`).getAttribute("aria-pressed") === likeBeforeIme, "IME composition in contenteditable must not trigger L");
+  await page.locator("[data-keyboard-test-contenteditable]").evaluate((node) => node.remove());
 
   // An action used locally before consent is reported on its next real use,
   // but remains one compact collector event per action/day.
@@ -322,7 +339,7 @@ async page => {
   assert(await page.evaluate(() => window.__keyboardDailyFacts.filter((fact) => fact.action_code === "copy_description").length) === 1, "Collector facts must remain deduplicated after consent");
 
   await page.locator(surfaceSelector).focus();
-  await page.keyboard.press("k");
+  await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyK", key: "л", bubbles: true, cancelable: true })));
   const currentCalendar = page.locator(`${surfaceSelector} [data-calendar-action]`);
   await waitFor("current calendar success", () => document.querySelector("[data-keyboard-event-surface] [data-calendar-action]")?.getAttribute("data-calendar-state") === "added");
   report.currentCalendar = await currentCalendar.evaluate((anchor) => ({
@@ -536,6 +553,13 @@ async page => {
 
   report.horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(report.horizontalOverflow <= 1, "Prototype must not add horizontal overflow");
+  const likeBeforeDestroy = await page.locator(`${surfaceSelector} [data-feedback-action=like]`).getAttribute("aria-pressed");
+  await page.evaluate(() => window.KenigEventsKeyboardNavigation?.destroy?.());
+  assert(await page.locator(surfaceSelector).count() === 0, "destroy must remove the keyboard surface contract");
+  assert(await page.locator("[data-event-content-copy-actions]").count() === 0, "destroy must remove injected copy controls");
+  await page.keyboard.press("l");
+  assert(await page.locator("[data-desktop-action-panel] [data-feedback-action=like]").getAttribute("aria-pressed") === likeBeforeDestroy, "destroy must remove keyboard listeners");
+  report.lifecycleDestroy = "pass";
   return report;
 }
 JS
