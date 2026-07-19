@@ -1,0 +1,48 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import DesktopEventPage from '../../../components/DesktopEventPage.astro';
+import KeyboardEventNavigationPrototype from '../../../components/KeyboardEventNavigationPrototype.astro';
+import { buildDesktopEventPresentation } from '../../../lib/desktopEventPresentation';
+import { eventAbsoluteUrl, getEventById, getPreloadedDiscoveryEvents } from '../../../lib/events';
+
+const event = getEventById(6408);
+if (!event) throw new Error('Keyboard navigation prototype fixture 6408 is missing');
+const related = getPreloadedDiscoveryEvents(event, 30);
+const presentation = buildDesktopEventPresentation(event);
+---
+
+<EventLayout
+  title={`Прототип клавиатурной навигации — ${event.title}`}
+  description="Одностраничный desktop-прототип быстрой клавиатурной навигации по событиям."
+  canonicalUrl={eventAbsoluteUrl(event)}
+  heroChrome="immersive"
+  noindex
+>
+  <DesktopEventPage
+    event={event}
+    related={related}
+    candidate={presentation.candidate}
+    mediaPolicy={presentation.mediaPolicy}
+    heroImageIndex={presentation.heroImageIndex}
+    heroWidth={presentation.heroWidth}
+    heroHeight={presentation.heroHeight}
+    heroObjectPosition={presentation.heroObjectPosition}
+    editorialRail={presentation.editorialRail}
+    editorialMotion={presentation.editorialMotion}
+    editorialCropPolicy={presentation.editorialCropPolicy}
+    ocrCompanionImageIndex={presentation.ocrCompanionImageIndex}
+    ocrCompanionLayout={presentation.ocrCompanionLayout}
+    autoRotate={presentation.autoRotate}
+    ocrSourceIndexes={presentation.ocrSourceIndexes}
+    duplicateSourceIndexes={presentation.duplicateSourceIndexes}
+    splitMediaFit={presentation.splitMediaFit}
+    splitPortraitViewer={presentation.splitPortraitViewer}
+    splitPortraitSourceIndexes={presentation.splitPortraitSourceIndexes}
+    splitViewerHiddenSourceIndexes={presentation.splitViewerHiddenSourceIndexes}
+    relatedMediaTreatment={presentation.relatedMediaTreatment}
+    surface="production"
+    presentationReason={presentation.reason}
+    showTransport
+  />
+  <KeyboardEventNavigationPrototype />
+</EventLayout>

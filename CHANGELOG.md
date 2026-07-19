@@ -39,6 +39,40 @@
   heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
 
 ### Added
+- **Desktop keyboard event-surfing prototype:** add one noindex event-detail lab
+  for «Собака на сене» with a scoped current-event/related-card navigator,
+  spatial arrow movement, native `Space` scrolling, contextual `L`/`K`/`S`
+  actions, CTA-integrated shortcut badges, top-level photo arrows and an
+  in-flow pre-footer quick-start section; remove the obstructive fixed help
+  overlay and title-panel focus ring; add `ArrowDown` recovery after focus loss,
+  `Escape`/`Enter` consent handling, native shortcut hover titles, adaptive CTA
+  badges and inline `P`/`S` service-copy hints; in V4 add green saved-calendar
+  and red consent-replayed like states, deterministic desktop event-link copy
+  with an auto-dismissing toast, `ArrowUp` fullscreen gallery entry,
+  `Enter`/`Space` activation of its final related-event slide, and Russian-layout
+  physical footer copy shortcuts; in V5 extend the shared component to the
+  Split 6408 and one-image Editorial 6593 fixtures, preserve ordinary single-Down
+  scrolling with released double-Down acceleration, return first-row Up to the
+  true event top without held-repeat gallery chaining, add roomy related-card K
+  hints, compact description/poster copy controls, situational teaching, and a
+  35-day daily-deduped local shortcut-fact ledger with per-action mastery plus a
+  consent-gated minimal collector event; add an exact two-object builder and a
+  parameterized dual-fixture Playwright gate; in V6 restore the logical keyboard
+  owner after gallery/consent Escape/accept (including a lazy-created focused
+  consent dialog), latch each physical arrow until keyup and use one controlled
+  single-Down step to eliminate dropped/cascading motion, bridge the related grid into the hydrated
+  six-card `Ещё события` continuation with the same Enter/L/K/S/Escape and K
+  hints, add scoped event-poster `P`, canonicalize dynamic continuation links,
+  and rewrite the teaching block with explicit action names; in V7 close the
+  active gallery with an isolated `ArrowDown` gesture and recover `L` from lost
+  document focus only with managed surface/card provenance and logical ownership;
+  production event
+  routes, remote telemetry and mobile behavior remain unchanged.
+- **Keyboard interface navigation skill:** add the reusable project
+  `.codex/skills/keyboard-interface-navigation` workflow for scoped command
+  routing, physical key codes, modal focus restoration, dynamic card graphs,
+  repeat latches, accessible shortcut discovery, privacy-minimal daily facts
+  and cross-input/browser acceptance.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
   expose one fail-closed resolver to bot/operator link-producing paths, preserve

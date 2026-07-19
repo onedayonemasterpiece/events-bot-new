@@ -26,6 +26,11 @@ portrait series, low-resolution and quality-fallback combinations. The same
 production artifacts and secret candidates. A build that falls back to the
 legacy `EventHero + event-grid` desktop DOM fails closed.
 
+The isolated, desktop-only experiment for one-keystroke movement from an event
+detail to related cards is documented in
+[keyboard-event-navigation-prototype.md](keyboard-event-navigation-prototype.md).
+It is a noindex one-page lab and does not change production event routes.
+
 В `events-bot-new` есть Astro SSG preview и отдельный checked production profile в `site/`: он строит
 статические страницы событий, `event.ics`, `sitemap.xml`, `robots.txt` из
 production SQLite export и публикуется под noindex-prefix в bucket
