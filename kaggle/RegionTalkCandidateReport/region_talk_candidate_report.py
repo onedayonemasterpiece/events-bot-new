@@ -16071,6 +16071,35 @@ def external_publication_posts_from_state(previous_state: dict[str, Any]) -> lis
     )
 
 
+def apply_external_publication_scope_attestation(
+    scope: dict[str, Any],
+    post: dict[str, Any],
+) -> dict[str, Any]:
+    """Use the verified intake centrality as region evidence for the web lane.
+
+    The social lexicon gate is deliberately conservative about a bare
+    ``Калининград`` token. A ready external-publication row has already passed
+    the stricter page-level research/import contract (primary page opened,
+    region centrality checked, policy match true), so losing it here would make
+    the guarded handoff impossible. Preserve any detected external geography,
+    but mark the Region Talk main-subject attestation explicitly.
+    """
+    if str(post.get("content_origin_type") or "") not in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
+        return scope
+    out = dict(scope or {})
+    out.update({
+        "kaliningrad_oblast_only_scope": True,
+        "matched_place_names": out.get("matched_place_names") or "Калининградская область",
+        "matched_place_accepted_as_region_evidence": out.get("matched_place_accepted_as_region_evidence") or "Калининградская область",
+        "mentioned_kaliningrad_places": out.get("mentioned_kaliningrad_places") or "Калининградская область",
+        "kaliningrad_reference_role": "external_research_main_subject",
+        "region_scope_decision": "accept_external_research_main_subject",
+        "region_scope_reason": "accepted: main-subject centrality verified by external publication research/import contract",
+        "external_research_main_subject": "true",
+    })
+    return out
+
+
 def build_report(
     seeds: list[Seed],
     source_rows: list[dict[str, Any]],
@@ -16417,7 +16446,10 @@ def build_report(
             seed_for_post = seeds[0] if seeds else None
         text = p.get("text") or ""
         ts = score_text(text)
-        scope = kaliningrad_oblast_only_scope_gate(text, lexicon)
+        scope = apply_external_publication_scope_attestation(
+            kaliningrad_oblast_only_scope_gate(text, lexicon),
+            p,
+        )
         fresh = freshness_gate(p.get("post_date"))
         ad_gate = ad_promo_gate(text)
         substance = score_substance(text)

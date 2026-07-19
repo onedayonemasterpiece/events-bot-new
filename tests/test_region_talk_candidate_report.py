@@ -4828,6 +4828,18 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(len(planned), 1)
         self.assertEqual(planned[0]["_rt_work_kind"], "needs_e5")
         self.assertEqual(work["posts_actionable"], 1)
+        attested_scope = mod.apply_external_publication_scope_attestation(
+            {
+                "kaliningrad_oblast_only_scope": False,
+                "matched_place_names": "",
+                "external_geo_mentions": "",
+                "region_scope_reason": "reject: no lexicon place evidence",
+            },
+            projected,
+        )
+        self.assertTrue(attested_scope["kaliningrad_oblast_only_scope"])
+        self.assertEqual(attested_scope["kaliningrad_reference_role"], "external_research_main_subject")
+        self.assertIn("research/import contract", attested_scope["region_scope_reason"])
         row["operator_policy_override"] = {"decision": "blocked"}
         self.assertIsNone(mod.external_publication_intake_to_post(row))
 
