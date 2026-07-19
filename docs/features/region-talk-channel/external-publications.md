@@ -50,6 +50,8 @@ Every candidate is scored 0–4, with evidence, on source authority for this con
 
 Scientific rigor and public interest are separate. A technically sound paper is not automatically a channel candidate. It needs a comprehensible insight: what was studied, what was found within the stated limits, and why a resident or curious reader might care. Preserve methods/sample limits, uncertainty, corrections, retractions, funding/conflict disclosures, and association-versus-causation boundaries.
 
+Region Talk additionally prioritizes materials that form an **evidence-based positive image of the region**: discovery, culture, heritage, nature, science, architecture, creative work, civic initiative, distinctive places, and achievements. This is not a demand for praise or PR. Neutral and problem-focused work may remain eligible when it is respectful, balanced, explanatory, and has a constructive reader value. A dominantly hostile, stigmatizing, contemptuous, sensational, or catastrophizing portrayal is not sought and is blocked as `sharp_negative_region_image`; uncertainty about the dominant effect requires manual review rather than optimistic guessing.
+
 ### Text-only and rights policy
 
 - Default article-image policy is `link_only` + `score_only_no_reuse`.
@@ -157,6 +159,15 @@ Set product_policy_match=false, downstream_readiness=blocked, and a precise hard
 - retracted paper;
 - unsafe or deceptive material.
 
+REGIONAL IMAGE AND TONE POLICY
+Prioritize evidence-based materials whose dominant reader effect is positive: they reveal something valuable, distinctive, beautiful, intellectually interesting, inventive, or human about the region. Especially prefer science and discovery with a clear popular-science insight; culture and heritage; nature and the Baltic coast; thoughtful architecture and urban projects; creative communities; responsible travel; and achievements that connect Kaliningrad with a wider Russian or international context.
+
+Do not search for or promote sharply negative portrayals. If the dominant framing stigmatizes the region or its residents, presents it chiefly as hopeless, dangerous, hostile, backward, ugly, absurd, or merely a threat, uses contempt/ridicule, or relies on sensational/catastrophizing language, do not include it in candidates[]. Put it in excluded[] with reason_codes=["sharp_negative_region_image"].
+
+Do not confuse honest caveats with sharp negativity. A neutral or problem-focused scientific/editorial material can remain eligible only when it is respectful and balanced, explains causes/evidence/limits, offers a meaningful or constructive reader takeaway, and does not leave the region with a dominantly negative image. Mark such a row with boundary_flags=["constructive_neutral_image"] or ["mixed_region_image"]. `mixed_region_image` or uncertain dominant effect requires research_decision=needs_review and downstream_readiness=manual_review_required.
+
+Positive priority never permits propaganda, invented achievements, hidden advertising, suppressed scientific limitations, or removal of material caveats. Factual accuracy and evidence remain mandatory. Within otherwise equally strong candidates, order candidates[] by: positive regional-image effect, public interest, evidence quality, originality, source diversity, then accessibility.
+
 QUALITY TRACKS
 Assign exactly one: scholarly, professional_editorial, popular_editorial, reference_or_project_catalog. Score each required quality dimension 0..4 with a reason and evidence_refs. Scores are diagnostic integers, not probabilities and not an automatic accept formula.
 
@@ -178,6 +189,7 @@ FINAL SELF-CHECK
 - Every candidate primary page was opened.
 - Every evidence reference resolves.
 - Every clean candidate is external, central/substantial, in-window, non-news, noncommercial, language-compatible, and has no hard exclusion.
+- Every clean candidate has a positive or clearly constructive-neutral dominant effect on the image of the region; sharp-negative material is excluded and mixed/uncertain effect is manual review.
 - Unknowns remain needs_review/unresolved.
 - Deduplicate DOI, then canonical URL, then normalized title+authors; preserve relationships.
 - Keep excluded and unresolved rows so the next run does not rediscover the same noise.
