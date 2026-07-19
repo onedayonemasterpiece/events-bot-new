@@ -5,6 +5,7 @@ import process from 'node:process';
 const siteRoot = path.resolve(import.meta.dirname, '..');
 const pageSource = fs.readFileSync(path.join(siteRoot, 'src/pages/lab/exhibitions-personal/index.astro'), 'utf8');
 const rowSource = fs.readFileSync(path.join(siteRoot, 'src/components/ExhibitionPrototypeRow.astro'), 'utf8');
+const layoutSource = fs.readFileSync(path.join(siteRoot, 'src/layouts/EventLayout.astro'), 'utf8');
 const outputPath = path.join(siteRoot, 'dist/lab/exhibitions-personal/index.html');
 
 if (!fs.existsSync(outputPath)) throw new Error(`Build output is missing: ${outputPath}`);
@@ -24,11 +25,19 @@ const checks = [
   ['like and reject expose pressed state', rowSource.includes('data-like aria-pressed="false"') && rowSource.includes('data-reject aria-pressed="false"')],
   ['rejection keeps an undo stub', rowSource.includes('data-hidden-stub') && rowSource.includes('data-undo')],
   ['gallery uses native modal dialog', /<dialog[^>]+data-gallery/u.test(html) && pageSource.includes('showModal()')],
-  ['notification has visible accessible copy', /data-exhibition-badge[^>]*aria-live="polite"/u.test(html) && html.includes('3 новых')],
+  ['shared header is selected for exhibitions', pageSource.includes('headerCurrent="exhibitions"') && !pageSource.includes('<header class="ex-header"')],
+  ['shared header owns the responsive badge', pageSource.includes("headerBadge={{ key: 'exhibitions'") && layoutSource.includes('data-header-badge={item.key}') && html.includes('data-header-badge="exhibitions"') && html.includes('3 новых')],
   ['responsive and reduced-motion contracts exist', pageSource.includes('@media (max-width:740px)') && pageSource.includes('@media (prefers-reduced-motion:reduce)')],
-  ['mobile restores all five navigation targets', pageSource.includes('.ex-header__nav>a:not(.is-current) { display:flex; }')],
-  ['photo deck keeps the lead image on top', pageSource.includes('z-index:calc(10 - var(--deck-index))')],
-  ['collapsed hover metadata leaves the accessibility tree', pageSource.includes('.ex-row__expanded { visibility:hidden;') && pageSource.includes('visibility:visible; grid-template-rows:1fr')],
+  ['mobile uses the shared immersive discovery drawer', layoutSource.includes('data-mobile-discovery-menu') && pageSource.includes('heroChrome="immersive"') && !pageSource.includes('>.site-header .site-nav { display:none; }')],
+  ['shared mobile navigation exposes current section for badge extension', layoutSource.includes("aria-current={headerBadge && headerCurrent === 'exhibitions' ? 'page' : undefined}")],
+  ['photo deck keeps real source geometry', rowSource.includes('width={asset.width}') && rowSource.includes('height={asset.height}') && rowSource.includes('normalizedRatio')],
+  ['photo deck avoids poster and OCR cropping', pageSource.includes('.ex-deck__frame img') && pageSource.includes('object-fit:contain') && rowSource.includes('data-image-text-mode')],
+  ['single-image deck does not reserve a missing stack', pageSource.includes('.ex-deck__images--1 { right:7px; }') && pageSource.includes('.ex-deck__images--1 { right:8px; }')],
+  ['deck exposes distinct card and edge layers', rowSource.includes('ex-deck__frame') && rowSource.includes('ex-deck__edge-stack') && pageSource.includes('.ex-deck__edge-stack i:nth-child(4)')],
+  ['row halo has hover and keyboard parity', rowSource.includes('ex-row__halo') && rowSource.includes('ex-row__edge-light') && pageSource.includes('.ex-row:focus-within .ex-row__halo')],
+  ['metadata motion avoids grid-row reflow', pageSource.includes('.ex-row__expanded { display:grid; opacity:') && !pageSource.includes('transition:grid-template-rows')],
+  ['cinematic motion and reduced-motion scrolling exist', pageSource.includes('cubic-bezier(.16,1,.3,1)') && pageSource.includes("behavior:reducedMotion.matches ? 'auto' : 'smooth'")],
+  ['reduced motion keeps positioning transforms intact', !pageSource.includes('animation:none!important; transform:none!important')],
   ['roving tabindex follows arrow focus', pageSource.includes('links.forEach((link) => { link.tabIndex = -1; })') && pageSource.includes('next.tabIndex = 0')],
 ];
 

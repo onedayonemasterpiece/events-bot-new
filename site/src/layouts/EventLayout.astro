@@ -8,6 +8,11 @@ import type { PreviewEvent } from '../lib/types';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular' | 'clubs';
 
+interface HeaderBadge {
+  key: HeaderCurrent;
+  text: string;
+}
+
 interface Props {
   title: string;
   description: string;
@@ -19,9 +24,10 @@ interface Props {
   structuredData?: unknown[];
   heroChrome?: 'standard' | 'immersive';
   headerCurrent?: HeaderCurrent;
+  headerBadge?: HeaderBadge;
 }
 
-const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent } = Astro.props;
+const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent, headerBadge } = Astro.props;
 const robots = IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive');
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
@@ -265,6 +271,33 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       .site-nav a:hover { color: var(--text); background: #f5eadc; }
       .site-nav a[aria-current="page"] { color: var(--primary-strong); font-weight: 760; }
       .site-nav a[aria-current="page"]::after { opacity: 1; transform: scaleX(1); }
+      .site-header__badge {
+        min-width: 1.25rem;
+        min-height: 1.25rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 0.38rem;
+        padding: 0.08rem 0.38rem;
+        border-radius: 999px;
+        background: #d93b48;
+        color: #fff;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.72), 0 5px 16px rgba(217,59,72,0.3);
+        font-size: 0.66rem;
+        font-weight: 900;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .site-header__badge.is-soft { background: #746b65; box-shadow: 0 0 0 1px rgba(255,255,255,0.62), 0 5px 14px rgba(58,47,40,0.16); }
+      .mobile-discovery-menu__summary > .site-header__badge {
+        position: absolute;
+        z-index: 3;
+        top: max(0.42rem, env(safe-area-inset-top));
+        right: 0.42rem;
+        margin: 0;
+        box-shadow: 0 0 0 2px #98401f, 0 5px 16px rgba(217,59,72,0.32);
+      }
+      .mobile-discovery-menu__links .site-header__badge { margin-left: 0.3rem; }
       .page-shell { position: relative; z-index: 1; width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
       main { padding: 1.2rem 0 5.5rem; }
       .crumbs { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; margin: 0.5rem 0 1rem; color: var(--muted); font-size: 0.92rem; }
@@ -2262,15 +2295,27 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         <details class="mobile-discovery-menu" data-mobile-discovery-menu>
           <summary class="mobile-discovery-menu__summary" aria-label="Открыть навигацию афиши">
             <AnnouncementsLockup variant="mobile" class="mobile-discovery-menu__lockup" />
+            {headerBadge && (
+              <span class="site-header__badge" data-header-badge={headerBadge.key} aria-hidden="true">
+                <span data-header-badge-count>{headerBadge.text}</span>
+              </span>
+            )}
           </summary>
           <div class="mobile-discovery-menu__panel" aria-label="Дополнительная навигация афиши">
             <nav class="mobile-discovery-menu__nav" aria-label="Быстрая навигация по афише">
               <div class="mobile-discovery-menu__links">
-                <a href={withBase('/segodnya/')}>Сегодня</a>
-                <a href={withBase('/zavtra/')}>Завтра</a>
-                <a href={withBase('/vyhodnye/')}>Выходные</a>
-                <a href={withBase('/vystavki/')}>Выставки</a>
-                <a href={withBase('/populyarnoe/')}>Популярное</a>
+                <a href={withBase('/segodnya/')} aria-current={headerBadge && headerCurrent === 'today' ? 'page' : undefined}>Сегодня</a>
+                <a href={withBase('/zavtra/')} aria-current={headerBadge && headerCurrent === 'tomorrow' ? 'page' : undefined}>Завтра</a>
+                <a href={withBase('/vyhodnye/')} aria-current={headerBadge && headerCurrent === 'weekend' ? 'page' : undefined}>Выходные</a>
+                <a href={withBase('/vystavki/')} aria-current={headerBadge && headerCurrent === 'exhibitions' ? 'page' : undefined}>
+                  Выставки
+                  {headerBadge?.key === 'exhibitions' && (
+                    <span class="site-header__badge" data-header-badge="exhibitions" aria-hidden="true">
+                      <span data-header-badge-count>{headerBadge.text}</span>
+                    </span>
+                  )}
+                </a>
+                <a href={withBase('/populyarnoe/')} aria-current={headerBadge && headerCurrent === 'popular' ? 'page' : undefined}>Популярное</a>
                 {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы</a>}
                 <a href={withBase('/poisk/')}>Поиск</a>
                 <a href={withBase('/partners/')}>Инфопартнёры</a>
@@ -2281,7 +2326,14 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         </details>
         <nav class="site-nav" aria-label="Основная навигация">
           {visibleHeaderNavigation.map((item) => (
-            <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined}>{item.label}</a>
+            <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined}>
+              {item.label}
+              {headerBadge?.key === item.key && (
+                <span class="site-header__badge" data-header-badge={item.key} aria-live="polite">
+                  <span data-header-badge-count>{headerBadge.text}</span>
+                </span>
+              )}
+            </a>
           ))}
         </nav>
       </div>

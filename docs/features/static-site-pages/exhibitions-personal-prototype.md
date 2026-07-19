@@ -114,12 +114,33 @@ else:
 границы, фотоколоды, orange/gray/blue lifecycle-сигналы и yellow discussion
 marker. Адаптированы:
 
+- страница использует каноническую шапку `EventLayout` с
+  `headerCurrent="exhibitions"` и штатным `heroChrome="immersive"` для общего
+  mobile discovery drawer; отдельная реконструкция brand/nav и локальные
+  правила, скрывающие пункты общей навигации, запрещены;
+  общий header получил опциональный base-aware badge, который не меняет другие
+  страницы и синхронизируется с тремя состояниями индикатора прототипа;
 - мелкий secondary text поднят до читаемого размера/контраста;
 - hover имеет равнозначный `:focus-within`;
-- photo deck — лёгкое наложение кадров, не тяжёлая 3D-анимация;
+- photo deck сохраняет реальные `width/height`, ограничивает presentation-ratio
+  диапазоном `0.68..1.62` и показывает до четырёх целых `object-fit:contain`
+  изображений; portrait/OCR не обрезаются, а отдельный правый edge-stack и
+  круглый count делают границы следующих листов колоды явными;
+- edge-light адаптирует локальный приём `farmapers` (`HoverGlow` / glass-card):
+  отдельные неинтерактивные halo и border-ring слои, но без cyan-палитры,
+  pointer tracking и бесконечного idle sweep на плотном списке;
+- единый motion rhythm использует `cubic-bezier(.16,1,.3,1)`, `240ms` для
+  press/action и `420ms` для row/deck/dialog; движутся только
+  `transform/opacity/filter`, metadata больше не анимирует grid rows;
+- filter/mode changes используют progressive View Transitions, gallery имеет
+  разные enter/exit длительности, а keyboard scroll переключается на `auto`
+  при `prefers-reduced-motion`;
+- reduced-motion отключает transition/animation, но не обнуляет blanket-правилом
+  позиционирующие transform у skip-link, live-region, timeline dots и deck
+  layers; интерактивный подъём row/icon подавляется отдельными селекторами;
 - на ширине до `740px` row превращается в вертикальную карточку без
-  горизонтального overflow, фильтр остаётся sticky, активный раздел уходит в
-  нижнюю навигацию;
+  горизонтального overflow, фильтр остаётся sticky, а стандартный мобильный
+  discovery drawer заменяет самодельную нижнюю навигацию;
 - на `768px` остаётся компактный timeline row, на `1440px` используется полная
   rail/deck/title/action-композиция.
 
@@ -180,6 +201,31 @@ P0 не осталось. Отдельно сохранён продуктовы
 stubs нельзя напрямую сравнивать со следующими production-сеансами, где
 отклонённые карточки уже не будут выданы.
 
+В итерации shared-header / deck-depth повторный pre-design review той же
+`Gemini 3.1 Pro (High)` линии подтвердил проблемы исходной `object-fit:cover`
+геометрии, слабых границ листов и `grid-template-rows` motion. Его предложение
+перевести весь prototype на светлую scroll-snap ленту не принято буквально:
+оно ломало заданные dark-reference и метафору колоды. Приняты shared header,
+aspect-aware contain, reflow-free metadata, cinematic easing и reduced-motion;
+отдельный public screenshot gate выполняется после интеграции.
+
+Финальный acceptance-review через `agy` (`Gemini 3.1 Pro (High)`) оценил
+halo/edges, aspect-aware multi-photo deck, границы колоды и motion как `Pass`,
+но нашёл P0 в page-local responsive overrides общей шапки: на промежуточной
+ширине они оставляли только текущий раздел. Prototype теперь использует штатный
+immersive drawer на mobile, badge-extension отражает `headerCurrent`, а
+prototype-local диапазон `760..1020px` получил fluid gap/padding вместо скрытия
+навигации; базовая геометрия shared layout для production pages не менялась.
+Рекомендация удалять mobile drawer вместе
+с overrides не применялась буквально: browser gate подтвердил, что drawer —
+канонический общий компонент, а не самодельная навигация.
+
+Независимый checklist-review дополнительно поймал два P1, пропущенных первым
+source-string gate: blanket `transform:none!important` ломал позиционирование в
+reduced-motion, а single-image deck сохранял пустой reserve правого edge-stack.
+Оба устранены отдельными targeted reduced-motion states и
+`.ex-deck__images--1`; browser interaction gate после исправления обязателен.
+
 ## Проверка
 
 ```bash
@@ -193,4 +239,9 @@ python3 -m http.server 4321 --directory dist
 Browser QA должен покрывать `375×812`, `768×1024` и `1440×1000`: zero
 horizontal overflow, 12 уникальных exhibition rows, 3 new rows, no console
 errors, keyboard movement, like/reject/undo, input shortcut guard, gallery and
-badge clearing.
+badge clearing. Последний gate: Astro build `381` pages, prototype contract
+`25/25`, ArrowDown/gallery/Escape/reject/undo/like/mobile drawer — pass без
+console errors; reduced-motion сохраняет позиционирующие transforms при `0s`
+transition и `auto` scroll. Отдельный regression-smoke `/vystavki/` подтвердил
+`51/51` уникальную listing row, прежний H1, все пять desktop destinations,
+mobile drawer и отсутствие horizontal overflow; route/data/ranking не менялись.

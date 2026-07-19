@@ -65,3 +65,18 @@ The prior slow side-to-side title sway is removed. A permanent identity should r
 ## Accessibility
 
 The outer tag link/summary owns the accessible action label. The outlined wordmark SVG is decorative (`aria-hidden`). The summary remains a native `<summary>` with keyboard activation and at least a `44px` target. Exact listing pages may expose one `aria-current="page"`; individual events expose none.
+
+## Optional section badge
+
+`EventLayout` may receive one optional `headerBadge` for a real navigation
+section. It is rendered by the shared header beside that desktop navigation
+link and, on mobile, on the discovery handle and matching drawer link. This is
+status chrome, not part of `AnnouncementsLockup`: it must not change the tag,
+wordmark geometry or base-aware link destinations. The desktop instance owns
+live accessible copy; mobile duplicates are visual mirrors (`aria-hidden`) to
+avoid repeated announcements. Red communicates unseen/urgent content only
+with text such as `3 новых`; the soft neutral state may say `загляните`.
+When the optional badge extension is active, its matching mobile drawer link
+mirrors `headerCurrent` with `aria-current="page"`; responsive prototype
+layouts may compact shared gap/padding locally or switch to the shared drawer,
+but must never hide every non-current global destination.

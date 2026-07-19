@@ -22,8 +22,28 @@ interface Props {
 
 const { item, rowIndex } = Astro.props;
 const { event } = item;
-const images = (event.image_assets || []).map((asset: any) => asset.src).filter(Boolean).slice(0, 6);
-if (!images.length && event.image_url) images.push(event.image_url);
+const media = (event.image_assets || [])
+  .filter((asset: any) => asset?.src)
+  .slice(0, 6)
+  .map((asset: any) => {
+    const width = Number(asset.width || 0);
+    const height = Number(asset.height || 0);
+    const sourceRatio = width > 0 && height > 0 ? width / height : 4 / 3;
+    const normalizedRatio = Math.max(0.68, Math.min(1.62, sourceRatio));
+    return {
+      src: asset.src,
+      width: width || Math.round(900 * normalizedRatio),
+      height: height || 900,
+      normalizedRatio,
+      family: sourceRatio < 0.86 ? 'portrait' : sourceRatio > 1.2 ? 'landscape' : 'balanced',
+      textMode: asset.image_text_mode || event.image_text_mode || 'unknown',
+    };
+  });
+if (!media.length && event.image_url) {
+  media.push({ src: event.image_url, width: 1200, height: 900, normalizedRatio: 4 / 3, family: 'landscape', textMode: event.image_text_mode || 'unknown' });
+}
+const galleryImages = media.map((asset) => asset.src);
+const visibleMedia = media.slice(0, 4);
 const detailHref = withBase(`/sobytiya/${event.slug}/`);
 const likeCount = Number(event.likes_count || 0);
 const titleId = `exhibition-title-${event.id}`;
@@ -38,8 +58,12 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
   data-tags={item.tags.join(',')}
   data-category={item.category}
   data-new={item.bucket === 'new' ? 'true' : 'false'}
+  style={`--row-transition-name:exhibition-${event.id}`}
   aria-labelledby={titleId}
 >
+  <span class="ex-row__halo" aria-hidden="true"></span>
+  <span class="ex-row__edge-light" aria-hidden="true"></span>
+
   <div class="ex-row__rail" aria-label={item.status}>
     <span class="ex-row__dot" aria-hidden="true"></span>
     <strong>{item.dateLabel}</strong>
@@ -51,15 +75,33 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     type="button"
     data-gallery-open
     data-gallery-title={event.title}
-    data-gallery-images={JSON.stringify(images)}
-    aria-label={`Открыть фотографии выставки «${event.title}», ${images.length || 1}`}
+    data-gallery-images={JSON.stringify(galleryImages)}
+    aria-label={`Открыть фотографии выставки «${event.title}», ${media.length || 1}`}
   >
-    <span class="ex-deck__images" aria-hidden="true">
-      {images.slice(0, 4).map((src: string, index: number) => (
-        <img src={src} alt="" width="320" height="220" loading={rowIndex > 2 ? 'lazy' : 'eager'} decoding="async" style={`--deck-index:${index}`} />
+    <span class={`ex-deck__images ex-deck__images--${visibleMedia.length}`} aria-hidden="true">
+      {visibleMedia.map((asset, index: number) => (
+        <span
+          class={`ex-deck__frame ex-deck__frame--${asset.family}`}
+          style={`--deck-index:${index};--media-weight:${asset.normalizedRatio.toFixed(3)}`}
+        >
+          <img
+            src={asset.src}
+            alt=""
+            width={asset.width}
+            height={asset.height}
+            loading={rowIndex > 2 ? 'lazy' : 'eager'}
+            decoding="async"
+            data-image-text-mode={asset.textMode}
+          />
+        </span>
       ))}
     </span>
-    {images.length > 1 && <span class="ex-deck__count">Фото {images.length}</span>}
+    {media.length > 1 && (
+      <span class="ex-deck__edge-stack" aria-hidden="true">
+        <i></i><i></i><i></i><i></i>
+      </span>
+    )}
+    {media.length > 1 && <span class="ex-deck__count">{media.length}</span>}
   </button>
 
   <div class="ex-row__body">
