@@ -1,0 +1,64 @@
+mode: serial_integrator
+repo: events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: integration/exhibitions-personal-discovery-prototype-20260719
+global_constraints:
+  - keep the production /vystavki/ surface unchanged
+  - create a separate prototype route
+  - reuse the supplied exhibition UX reference without copying it blindly
+  - local-only prototype personalization; no production telemetry claims
+verification_owner: root integrator
+stop_conditions:
+  - conflicting writes in the integration worktree
+  - unresolvable build or accessibility regression
+lanes:
+  - id: map
+    role: planner
+    requirement_ids: [R01, R03, R04, R05, R06, R07]
+    target: static-site architecture and personalization mapping
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: repository path and reuse report
+    verification_scope: inspection_only
+    status: spawned
+  - id: ux-audit
+    role: reviewer
+    requirement_ids: [R02, R08, R09]
+    target: visual reference, responsive and accessibility audit
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: actionable design specification
+    verification_scope: inspection_only
+    status: spawned
+  - id: integration
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09]
+    target: separate interactive exhibitions prototype, tests and canonical docs
+    depends_on: [map, ux-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/**
+      - site/src/components/ExhibitionPrototypeRow.astro
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - docs/features/static-site-pages/README.md
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    forbidden_files:
+      - site/src/pages/vystavki/**
+      - database and production runtime files
+    expected_output: committed prototype with visual and interaction evidence
+    verification_scope: full_local
+    status: in_progress

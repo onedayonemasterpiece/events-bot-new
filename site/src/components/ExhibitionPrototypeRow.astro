@@ -1,0 +1,117 @@
+---
+import Icon from './Icon.astro';
+import { withBase } from '../lib/events';
+
+interface PrototypeSpec {
+  id: number;
+  bucket: 'new' | 'priority' | 'tail';
+  lifecycle: 'recent' | 'ending' | 'popular' | 'upcoming' | 'long';
+  status: string;
+  dateLabel: string;
+  category: string;
+  tags: string[];
+  reasons: string[];
+  discussions: number;
+  mentions: number;
+}
+
+interface Props {
+  item: PrototypeSpec & { event: any };
+  rowIndex: number;
+}
+
+const { item, rowIndex } = Astro.props;
+const { event } = item;
+const images = (event.image_assets || []).map((asset: any) => asset.src).filter(Boolean).slice(0, 6);
+if (!images.length && event.image_url) images.push(event.image_url);
+const detailHref = withBase(`/sobytiya/${event.slug}/`);
+const likeCount = Number(event.likes_count || 0);
+const titleId = `exhibition-title-${event.id}`;
+const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`;
+---
+
+<article
+  class={`ex-row ex-row--${item.lifecycle}`}
+  data-exhibition-row
+  data-event-id={String(event.id)}
+  data-bucket={item.bucket}
+  data-tags={item.tags.join(',')}
+  data-category={item.category}
+  data-new={item.bucket === 'new' ? 'true' : 'false'}
+  aria-labelledby={titleId}
+>
+  <div class="ex-row__rail" aria-label={item.status}>
+    <span class="ex-row__dot" aria-hidden="true"></span>
+    <strong>{item.dateLabel}</strong>
+    <span>{item.status}</span>
+  </div>
+
+  <button
+    class="ex-deck"
+    type="button"
+    data-gallery-open
+    data-gallery-title={event.title}
+    data-gallery-images={JSON.stringify(images)}
+    aria-label={`Открыть фотографии выставки «${event.title}», ${images.length || 1}`}
+  >
+    <span class="ex-deck__images" aria-hidden="true">
+      {images.slice(0, 4).map((src: string, index: number) => (
+        <img src={src} alt="" width="320" height="220" loading={rowIndex > 2 ? 'lazy' : 'eager'} decoding="async" style={`--deck-index:${index}`} />
+      ))}
+    </span>
+    {images.length > 1 && <span class="ex-deck__count">Фото {images.length}</span>}
+  </button>
+
+  <div class="ex-row__body">
+    <div class="ex-row__title-line">
+      <a
+        id={titleId}
+        class="ex-row__title"
+        href={detailHref}
+        data-row-focus
+        tabindex={rowIndex === 0 ? '0' : '-1'}
+        aria-keyshortcuts="ArrowUp ArrowDown Enter L X G"
+        aria-label={actionLabel}
+      >{event.title}</a>
+      {item.discussions >= 20 && (
+        <span class="ex-discussed" aria-label={`Активно обсуждают: ${item.discussions} обсуждений`} title="Активно обсуждают">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.72 5.52 6.1.88-4.41 4.3 1.04 6.08L12 16.61l-5.45 2.87 1.04-6.08-4.41-4.3 6.1-.88L12 2.7Z" /></svg>
+          <span>Обсуждают</span>
+        </span>
+      )}
+    </div>
+    <p class="ex-row__venue">{event.venue_name || event.city}</p>
+    <div class="ex-row__reasons" aria-label="Почему выставка здесь">
+      {item.bucket === 'new' && <span class="ex-reason ex-reason--new">Новое</span>}
+      {item.reasons.map((reason) => <span class="ex-reason">{reason}</span>)}
+    </div>
+    <div class="ex-row__expanded">
+      <div class="ex-row__tags" aria-label="Темы выставки">
+        {item.tags.slice(0, 3).map((tag) => <span>{tag}</span>)}
+      </div>
+      <p class="ex-row__social" aria-label="Сводные сигналы интереса из открытых источников">
+        <span><strong data-like-count>{likeCount}</strong> отметок</span>
+        <span><strong>{item.discussions}</strong> обсуждений</span>
+        <span><strong>{item.mentions}</strong> упоминаний</span>
+      </p>
+    </div>
+  </div>
+
+  <div class="ex-row__actions" aria-label={`Действия с выставкой «${event.title}»`}>
+    <button type="button" class="ex-action ex-action--like" data-like aria-pressed="false" aria-label={`Нравится: ${event.title}`}>
+      <Icon name="heart" />
+      <span class="ex-action__label">Нравится</span>
+      <kbd aria-hidden="true">L</kbd>
+    </button>
+    <button type="button" class="ex-action ex-action--reject" data-reject aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
+      <Icon name="dislike" />
+      <span class="ex-action__label">Не интересно</span>
+      <kbd aria-hidden="true">X</kbd>
+    </button>
+  </div>
+
+  <div class="ex-row__hidden" data-hidden-stub hidden>
+    <span>Скрыто из «Для меня»</span>
+    <button type="button" data-undo>Отменить</button>
+  </div>
+</article>

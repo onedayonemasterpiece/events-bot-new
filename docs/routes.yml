@@ -324,6 +324,7 @@ features:
     event_transport_schedule: docs/features/static-site-pages/event-transport-schedule.md
     bus_transport_directory: docs/features/static-site-pages/bus-transport-directory.md
     listing_personal_feed: docs/features/static-site-pages/listing-personal-feed.md
+    exhibitions_personal_prototype: docs/features/static-site-pages/exhibitions-personal-prototype.md
     related_event_transport: docs/features/event-transport/README.md
     related_event_comment_feedback: docs/features/event-comment-feedback/README.md
     related_event_issue_reporting: docs/features/event-issue-reporting/README.md

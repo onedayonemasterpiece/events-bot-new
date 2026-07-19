@@ -39,6 +39,12 @@
   heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
 
 ### Added
+- **Personal exhibitions product prototype**: add a separate dark timeline
+  `/lab/exhibitions-personal/` route with a hard-pinned new-exhibition inbox,
+  `Для меня` before `Все`, local like/not-interested/undo interest shaping,
+  source-interest/discussion and ending-soon reasons, a collapsed old long-run
+  tail, accessible photo dialog, notification-state demo, responsive layouts
+  and keyboard-first list navigation; production `/vystavki/` remains unchanged.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
   expose one fail-closed resolver to bot/operator link-producing paths, preserve

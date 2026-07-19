@@ -137,6 +137,13 @@ canonical остаётся preview-safe, а корневые production URL
 `/sobytiya/<slug>/` не продвигаются автоматически.
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
+
+Отдельный interactive product prototype страницы выставок доступен на
+`/lab/exhibitions-personal/`. Он сохраняет production `/vystavki/` без изменений
+и проверяет dark timeline/photo-deck подход, new-inbox, `Для меня / Все`,
+like/`Не интересно`/undo, объяснимое recent/popular/ending ранжирование,
+progressive disclosure старого хвоста и keyboard navigation. Канонический
+контракт и ограничения: [exhibitions-personal-prototype.md](exhibitions-personal-prototype.md).
 Для медиа export обязан передавать не только `image_text_mode`, но и LLM-first
 `media_role`, semantic status/confidence, dimensions, focal metadata и
 content-addressed 256/512 WebP derivatives. Только строгая роль
