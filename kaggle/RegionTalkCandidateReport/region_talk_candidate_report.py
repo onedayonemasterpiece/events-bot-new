@@ -15319,7 +15319,7 @@ def post_processing_fingerprint(
         "bge_contract": BGE_M3_ENCODER_CONTRACT if require_bge_m3 else "disabled",
     }
     if str(content_origin_type or "") in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
-        payload["external_publication_scope_policy"] = "external_publication_scope_and_source_attestation_v2"
+        payload["external_publication_scope_policy"] = "external_publication_scope_source_and_media_handoff_v3"
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
