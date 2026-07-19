@@ -1,134 +1,177 @@
 # Desktop keyboard event navigation prototype
 
-> **Status:** lab prototype, not a production-wide keyboard override  
-> **Route:** `/lab/keyboard-event-navigation/`  
-> **Fixture:** event `6408`, «Спектакль „Собака на сене“»  
-> **Scope:** one desktop event-detail page (`min-width: 1024px`)
+> **Status:** V5 lab prototype, not a production-wide keyboard override
+> **Scope:** two desktop event-detail fixtures at `min-width: 1024px`
+> **Fixtures:** `6408` Split / multi-image and `6593` Editorial / one-image
 
 ## Published review
 
-Current public noindex prototype:
+Current public noindex prototypes:
 
-<https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v4/lab/keyboard-event-navigation/>
+- <https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v5/sobytiya/spektakl-sobaka-na-sene-kaliningrad-6408/>
+- <https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v5/sobytiya/spektakl-elementarno-hadson-delo-o-sobake-b-kaliningrad-6593/>
 
-V4 supersedes the visually obstructed v1 review and the v2/v3 interaction
-passes. Its preview prefix contains exactly one new HTML object and reuses the
-immutable v1 page assets; it does not publish listing/event catalogs, modify
-production root or touch stable `/ics/*`.
+The immutable prefix contains exactly these two new HTML objects and reuses V1
+assets. It does not publish a catalog, change production event pages, touch
+stable `/ics/*`, or enable behavior below `1024px`.
 
-## Product hypothesis
+## Product model
 
-The prototype tests whether a visitor can reject the current event and start
-surfing alternatives with one keystroke, without turning the whole site into a
-custom keyboard application.
+The CTA panel and the related-event grid form one scoped desktop navigator.
+`Tab`, ordinary links, native scrolling, inputs and modal controls stay intact.
+Letter shortcuts use physical `KeyboardEvent.code`, so Latin/Russian layout
+changes do not break `L/K/S/C/P` positions.
 
-The current-event CTA panel and each related-event card form a scoped composite
-navigator. Header, footer controls, form controls and other page regions keep
-their native browser behavior. `Tab` remains available for links and card
-actions. `Space` remains native page scrolling except for the deliberately
-active final recommendation slide inside the fullscreen gallery.
-
-The lab route intentionally focuses the current-event CTA surface on load. A
-production rollout must not auto-focus arbitrary direct visits; it should
-activate only after explicit keyboard entry or a restored listing-to-detail
+The lab deliberately focuses the CTA surface on load. Production must instead
+enter the mode after explicit keyboard intent or a restored listing-to-detail
 journey.
 
 ## Key contract
 
-| Focus context | Key | Result |
+| Context | Key | Result |
 | --- | --- | --- |
-| Current-event CTA | `ArrowLeft` / `ArrowRight` | Previous / next hero image |
-| Current-event CTA | `ArrowUp` | Open the existing fullscreen hero gallery |
-| Current-event CTA | `ArrowDown` | Focus the first related event |
-| No focused control (`body`) | `ArrowDown` | Re-enter navigation at the first related event |
-| Current-event CTA | `Enter` | Run the visible primary CTA |
-| Current-event CTA | `L` / `K` | Like / calendar for the current event |
-| Current-event CTA | `S` | Copy exactly the event title and canonical URL; never open Web Share |
-| Related card or inner action | `ArrowLeft` / `ArrowRight` | Previous / next card in visual DOM order, including row wrap |
-| Related card or inner action | `ArrowUp` / `ArrowDown` | Nearest card in the adjacent visual row |
-| First related row | `ArrowUp` | Return to the current-event CTA |
-| Related-card inner action | `Escape` | Return focus to the card root |
-| Related card | `Home` / `End` | First / last related card |
-| Related card | `L` / `K` | Like / calendar for that card |
-| Related card | `S` | Copy that card's title and canonical URL |
-| Like consent dialog | `Escape` / `Enter` | Activate `Пока нет` / `ОК` through the existing dialog actions |
-| Fullscreen gallery final CTA slide | `Enter` / `Space` | Follow the real `Смотреть похожее` event link |
-| Footer service-share context | `P` / `S` | Copy the PNG service card / copy service text and canonical link |
-| Any ordinary navigator surface | `Space` | Native page scroll; never intercepted |
+| Current-event CTA | one fresh `ArrowDown` | Native browser scroll; no cancellation |
+| Current-event CTA | second released `ArrowDown` within `430 ms` | Focus first related card |
+| Related section already at the viewport boundary | one `ArrowDown` | Focus first related card |
+| No focused control (`body`) | `ArrowDown` | Re-enter at first related card |
+| Current-event CTA | `ArrowLeft` / `ArrowRight` | Previous / next hero image; safe no-op for one-image Editorial |
+| Current-event CTA | fresh `ArrowUp` | Open existing fullscreen gallery |
+| First related row | `ArrowUp` | Focus CTA and scroll to the true event top; held repeat cannot open gallery |
+| Current-event CTA | `Enter` | Visible primary CTA |
+| Current-event CTA | `L` / `K` / `S` | Like / calendar / copy title plus canonical URL |
+| Current-event CTA or description copy group | `C` | Copy title, rendered lead/body and canonical URL |
+| Related card | arrows | Spatial card movement, including row changes |
+| Related card | `Enter` / `L` / `K` / `S` | Open / like / calendar / copy selected event |
+| Related-card inner action | `Escape` | Return focus to card root |
+| Gallery final recommendation | `Enter` / `Space` | Follow the real related-event link |
+| Consent dialog | `Escape` / `Enter` | Existing decline / accept actions |
+| Footer context | physical `P` / `S` | Copy service PNG / service text and link |
+| Ordinary document context | `Space` | Native page scroll |
 
-Letter shortcuts use physical key codes (`KeyL`, `KeyK`, `KeyS`, `KeyP`) so
-they work with Russian and Latin layouts. Repeated keydown and modified
-shortcuts are ignored. Inputs, textareas, selects, editable content and IME
-composition are excluded. The consent dialog and fullscreen gallery receive
-priority over page-level shortcuts.
+The Down burst accepts only two distinct key gestures separated by keyup.
+`event.repeat`, IME composition, modifiers, editing controls and open dialogs do
+not qualify. One normal Down never calls `preventDefault()`. The visible
+`Перейти к похожим` button remains the timing-independent alternative.
 
-Existing components remain the source of truth for like, consent, calendar and
-footer copying. On desktop only, the prototype intentionally replaces event
-Web Share with deterministic text copy (`title + newline + URL`) and reports
-clipboard completion itself.
+## Copy controls and visual feedback
 
-## Visual feedback and accessibility
+A small secondary action group is appended in normal flow immediately after the
+rendered desktop description:
 
-- initial focus is on the existing dark CTA panel, not the title block;
-- tiny low-contrast `Enter`/`K`/`S`/`L` badges live inside CTA controls;
-- each CTA action retains native `title` hover help naming its shortcut;
-- CTA badges stay visible while learning, hide after six uses within 14 days,
-  and return after a 14-day lapse;
-- a calendar becomes green only after the existing ICS path records it as added,
-  and its label becomes `Добавлено`;
-- a consent-replayed like remains `aria-pressed="true"`, increments its local
-  count and becomes red in the current CTA panel;
-- successful event and footer copies show a small auto-dismissing toast while
-  preserving focus; no persistent fixed help overlay exists;
-- footer actions show inline `P` (service PNG card) and `S` (service text plus
-  canonical link) keycaps;
-- the in-flow `Попробуй быструю навигацию` section remains immediately before
-  the footer;
-- the route is always `noindex,nofollow,noarchive`;
-- widths below `1024px` receive no prototype UI or keyboard behavior.
+- `Скопировать описание C` copies title, visible lead, complete visible prose,
+  then the canonical event URL;
+- `Скопировать афишу` is button-only, keeps one canonical initial hero even if
+  the closed carousel later moves, prefetches through CORS, converts to PNG and
+  writes exactly one `ClipboardItem`;
+- unsupported or failed image clipboard fails closed and says so; it never
+  silently copies a URL or opens Web Share.
 
-Footer context normally follows focus. To recover the user-observed scroll case,
-when the footer is visible and the previously focused event control is now
-offscreen, `P`/`S` target the visible footer without requiring a hidden Tab step.
-A visibly focused event/card still owns its event shortcuts.
+The CTA keeps subtle `Enter/K/S/L` keycaps and hover/focus titles. Related
+calendar controls receive one non-focusable `K` keycap only when their card
+container is at least `310px`; the badge survives the green `Добавлено` state.
+Likes remain red after consent replay. Successful copy operations use the
+existing short visual toast plus one polite hidden status without replacing
+icons/counts or moving focus.
 
-## Local acceptance
+The footer learning block is split into three concise situations: `Наверху`,
+`На похожем`, `У подвала`. It is in normal flow, not an overlay.
+
+## Privacy-minimal shortcut facts
+
+The prototype replaces the raw use counter with a bounded local fact ledger:
+
+```json
+{
+  "v": 2,
+  "days": { "2026-07-19": ["calendar_add", "copy_description"] },
+  "reported_days": { "2026-07-19": ["calendar_add"] }
+}
+```
+
+Contract:
+
+- key: `ke_keyboard_shortcut_daily_v2`;
+- day: `Europe/Kaliningrad` calendar day;
+- value: allowlisted completed key-action facts only, set semantics, no counts;
+- retention: 35 days;
+- no event/card ID, title, URL, copied content, route, timestamp, interval,
+  scroll position, UA or error details;
+- per-action mastery: three distinct usage days in the trailing 14 days hides
+  that action's visual CTA/card badge; a lapse restores it;
+- before consent, facts are local only and are never retroactively uploaded;
+- after a compatible personalization consent, the first completed use of an
+  action/day emits one `kenigevents:shortcut-daily-fact` event containing only
+  `{schema_version, action_code}`. A future trusted same-origin collector must
+  derive subject/day server-side and upsert a boolean `(subject, day, action)`
+  fact. The preview intentionally has no remote collector, so prototype traffic
+  cannot pollute production analytics.
+
+Production storage must be a daily-deduped fact table, not a raw event log or a
+browser-direct table write. Use a dataset-scoped server HMAC subject, a closed
+smallint action dictionary, `INSERT ... ON CONFLICT DO NOTHING`, 30-day normal
+retention / hard delete by day 35, no public SELECT, and an independently
+reviewed same-origin/RPC abuse gate. Pseudonymous behavior is not described as
+anonymous data.
+
+## Two-template compatibility
+
+The shared component attaches only to semantic desktop landmarks under
+`[data-desktop-clean-event]`:
+
+| Fixture | Family | CTA | Hero/gallery | Shared downstream contract |
+| --- | --- | --- | --- | --- |
+| 6408 | Split | inline in long flow | 7 images + CTA | description, facts, 10 related cards |
+| 6593 | Editorial | side panel | 1 image + CTA | same description, facts, 10 related cards |
+
+This avoids depending on hero geometry. One-image left/right is a stable no-op;
+all other keyboard, clipboard, fact and adaptive-hint behavior is identical.
+
+## Build and acceptance
+
+Build only the two allowlisted objects:
+
+```bash
+python3 site/scripts/build-keyboard-event-navigation-prototypes.py
+python3 -m http.server 4321 --directory site/dist
+```
+
+Run the same full regression on each route:
 
 ```bash
 cd site
-npm run build
-python3 -m http.server 4321 --directory dist
+STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321/preview-20260719-keyboard-event-navigation-v5 \
+KEYBOARD_NAVIGATION_ROUTE=sobytiya/spektakl-sobaka-na-sene-kaliningrad-6408/ \
+  npm run check:keyboard-event-navigation
 
-# in another shell
-STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321 \
+STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321/preview-20260719-keyboard-event-navigation-v5 \
+KEYBOARD_NAVIGATION_ROUTE=sobytiya/spektakl-elementarno-hadson-delo-o-sobake-b-kaliningrad-6593/ \
   npm run check:keyboard-event-navigation
 ```
 
-The focused Playwright check proves CTA initial focus, closed-hero arrows,
-ArrowUp fullscreen opening, Enter/Space activation of the final related-event
-link, lost-focus re-entry, spatial card movement, consent `Escape`/`Enter`, red
-persisted like state, green persisted calendar state, exact event-copy payload
-with zero Web Share calls and a timed toast, Russian-layout physical
-`KeyP`/`KeyS` footer clipboard results, adaptive badge hide/return behavior,
-native ordinary `Space` scrolling, untouched focus outside the navigator,
-noindex metadata and zero horizontal overflow at `1536×864`.
+The parameterized Playwright gate covers single/double/boundary Down, released
+ArrowUp return, held-repeat suppression, single/multi-image hero behavior,
+gallery recommendation Enter/Space, exact description/event/service payloads,
+real PNG poster preparation, consent, red like, green calendar, card K badges,
+layout-independent footer keys, local daily dedupe, consent-gated compact event,
+per-action mastery/lapse, no Web Share, noindex and horizontal overflow.
 
-## External product review
+## External review and project-skill gate
 
-All V4 requirements were reviewed together through agy using approved
-`gemini-3.1-pro-preview` (`Gemini 3.1 Pro (High)`). Accepted conditions include
-physical key codes, modal/gallery priority, a real anchor for the final
-recommendation, clipboard-success-only feedback, `aria-pressed` for likes and
-non-ambiguous calendar wording. The stale-offscreen-focus footer recovery above
-is the narrow product-led exception to Gemini's stricter focus-only preference.
+V5 received final agy acceptance from approved `gemini-3.1-pro-preview`
+(`Gemini 3.1 Pro (High)`) on 2026-07-19. R1–R8 were all accepted and the verdict
+was `SHIP` for exactly the two immutable noindex prototypes, with no P0 blocker.
+This is not production-rollout approval: the remote collector/RPC, live human
+acceptance and additional compact-K / held-Down hardening stay separate gates.
+
+Do **not** create a project keyboard-navigation skill yet. The user proposed it
+after successful live testing; Gemini agreed to wait. After both public fixtures
+receive user acceptance, extract the stable rules: scoped ownership, physical
+key codes, visible keycaps/tooltips, layout-safe hints, teaching blocks, compact
+daily facts, modal priority and dual-template regression.
 
 ## Deliberate non-goals
 
-- no keyboard changes on listing pages;
-- no production event-route integration;
+- no listing-page keyboard changes;
+- no production event-route integration or remote telemetry collector;
 - no mobile behavior;
-- no replacement of native `Tab` navigation.
-
-Production acceptance should be based on time-to-next-interesting-event,
-shortcut discovery, clipboard success and accidental-trigger rate, not only
-technical key tests.
+- no removal/replacement of native `Tab` navigation.
