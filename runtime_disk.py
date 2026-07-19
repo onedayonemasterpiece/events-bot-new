@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -14,10 +15,22 @@ def _env_nonnegative_int(name: str, default: int) -> int:
         return max(0, int(default))
 
 
-def runtime_disk_health(path: str | Path | None = None) -> dict[str, Any]:
-    target = Path(path or (os.getenv("RUNTIME_DISK_PATH") or "/data"))
-    warn_mb = _env_nonnegative_int("RUNTIME_DISK_WARN_FREE_MB", 350)
-    critical_mb = _env_nonnegative_int("RUNTIME_DISK_CRITICAL_FREE_MB", 256)
+def writable_disk_health(
+    path: str | Path,
+    *,
+    warn_free_mb: int,
+    critical_free_mb: int,
+    tempfile_probe: bool = False,
+) -> dict[str, Any]:
+    """Return capacity and optional real write/fsync/remove readiness.
+
+    Only exception class names are exposed.  Filesystem paths can be included
+    in health output, but neither file contents nor environment values are.
+    """
+
+    target = Path(path)
+    warn_mb = max(0, int(warn_free_mb))
+    critical_mb = max(0, int(critical_free_mb))
     if warn_mb < critical_mb:
         warn_mb = critical_mb
     payload: dict[str, Any] = {
@@ -50,4 +63,43 @@ def runtime_disk_health(path: str | Path | None = None) -> dict[str, Any]:
             "used_percent": used_percent,
         }
     )
+    if tempfile_probe:
+        payload["tempfile_status"] = "unknown"
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="w+b",
+                prefix=".runtime-write-probe-",
+                dir=target,
+                delete=True,
+            ) as handle:
+                handle.write(b"ok")
+                handle.flush()
+                os.fsync(handle.fileno())
+            payload["tempfile_status"] = "ok"
+        except Exception as exc:
+            payload["tempfile_status"] = "error"
+            payload["tempfile_error"] = type(exc).__name__
+            payload["status"] = "critical"
     return payload
+
+
+def runtime_disk_health(path: str | Path | None = None) -> dict[str, Any]:
+    """Persistent runtime volume capacity (normally ``/data``)."""
+
+    return writable_disk_health(
+        path or (os.getenv("RUNTIME_DISK_PATH") or "/data"),
+        warn_free_mb=_env_nonnegative_int("RUNTIME_DISK_WARN_FREE_MB", 350),
+        critical_free_mb=_env_nonnegative_int("RUNTIME_DISK_CRITICAL_FREE_MB", 256),
+    )
+
+
+def runtime_scratch_health(path: str | Path | None = None) -> dict[str, Any]:
+    """Root/scratch filesystem capacity plus an actual tempfile write probe."""
+
+    return writable_disk_health(
+        path or (os.getenv("RUNTIME_SCRATCH_PATH") or "/tmp"),
+        warn_free_mb=_env_nonnegative_int("RUNTIME_SCRATCH_WARN_FREE_MB", 1024),
+        critical_free_mb=_env_nonnegative_int("RUNTIME_SCRATCH_CRITICAL_FREE_MB", 512),
+        tempfile_probe=True,
+    )

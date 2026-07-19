@@ -43,7 +43,7 @@ from sqlalchemy import select, update, delete, text, func, or_, and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 from scheduling import MONTHS_GEN
 from event_utils import format_event_md, is_recent
-from runtime_disk import runtime_disk_health
+from runtime_disk import runtime_disk_health, runtime_scratch_health
 from festival_queue import festival_queue_effective_limit, festival_queue_info_text, process_festival_queue
 from vk_location_marker import (
     location_marker_param_keys,
@@ -9290,6 +9290,12 @@ async def _runtime_health_report(
     disk_health = runtime_disk_health()
     if ready and disk_health.get("status") == "critical":
         issues.append("disk:critical_free_space")
+    scratch_health = runtime_scratch_health()
+    if ready and (
+        scratch_health.get("status") not in {"ok", "warning"}
+        or scratch_health.get("tempfile_status") != "ok"
+    ):
+        issues.append("scratch_disk:critical_or_unwritable")
 
     scheduler_health = scheduler_runtime_health_status()
     scheduler_status = str(scheduler_health.get("scheduler") or "").strip() or "unknown"
@@ -9330,6 +9336,7 @@ async def _runtime_health_report(
         "db": db_status,
         "bot_session_closed": session_closed,
         "disk": disk_health,
+        "scratch_disk": scratch_health,
         "scheduler": scheduler_health,
         "tasks": tasks,
         "issues": issues,

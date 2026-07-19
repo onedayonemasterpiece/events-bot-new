@@ -13,6 +13,7 @@ from static_site_diagnostics import (
     format_static_site_diagnostics,
     redact,
 )
+from static_site_release import delete_static_site_output
 
 
 NOW = datetime(2026, 7, 18, 12, 0, tzinfo=timezone.utc)
@@ -292,6 +293,57 @@ def test_missing_tables_are_reported_without_mutating_database(tmp_path: Path) -
         "kaggle_run_ledger": False,
     }
     assert report["last_24h"]["requests"] == 0
+
+
+def test_durable_counts_survive_terminal_full_output_removal(tmp_path: Path) -> None:
+    database = tmp_path / "db.sqlite"
+    run_id = "run-durable-counts"
+    counts = {
+        "event_count": 10,
+        "event_page_count": 10,
+        "page_count": 20,
+        "file_count": 30,
+        "object_count": 42,
+        "bytes": 1000,
+    }
+    with sqlite3.connect(database) as connection:
+        _schema(connection)
+        _insert_history(connection, job_id=1, outcome="success", run_id=run_id)
+        _insert_ledger(connection, run_id, "done")
+        current = _current_receipt(hashlib.sha256(TOKEN.encode()).hexdigest())
+        current["run_id"] = run_id
+        connection.execute(
+            """
+            INSERT INTO static_site_build_state(
+                release_channel, schema_version, last_success_run_id,
+                last_success_at, last_success_receipt_json,
+                current_secret_candidate_receipt_json, updated_at
+            ) VALUES('secret_preview', 'static_site_build_state_v1', ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                "2026-07-18T11:00:00Z",
+                json.dumps({"run_id": run_id, "counts": counts}),
+                json.dumps(current),
+                "2026-07-18T11:00:00Z",
+            ),
+        )
+
+    artifact_root = tmp_path / "builder"
+    output = artifact_root / "output-production-durable-counts"
+    output.mkdir(parents=True)
+    (output / "full-output.bin").write_bytes(b"full-output")
+    assert delete_static_site_output(
+        artifact_root, "production-durable-counts"
+    ) == len(b"full-output")
+    assert not output.exists()
+
+    report = collect_static_site_diagnostics(database, now=NOW)
+
+    assert report["last_24h"]["generated_totals"] == counts
+    serialized = json.dumps(report)
+    assert TOKEN not in serialized
+    assert "https://" not in serialized
 
 
 def test_cli_json_is_redacted_and_read_only(tmp_path: Path) -> None:

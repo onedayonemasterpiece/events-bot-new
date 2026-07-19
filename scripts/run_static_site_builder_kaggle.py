@@ -30,13 +30,55 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from static_site_release import resolve_build_clock
+from runtime_disk import runtime_scratch_health, writable_disk_health
+from static_site_release import (
+    resolve_build_clock,
+    static_site_artifact_root,
+    static_site_scratch_root,
+)
 KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
 SITE_SRC = ROOT / 'site'
-ARTIFACT_ROOT = ROOT / 'artifacts' / 'codex' / 'static-site-builder'
+ARTIFACT_ROOT = static_site_artifact_root(ROOT)
+SCRATCH_ROOT = static_site_scratch_root(ARTIFACT_ROOT)
 LOCK_PATH = ARTIFACT_ROOT / 'static-site-kaggle.lock'
 ADOPT_REMOTE_LIVE_EXIT = 75
 ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
+
+
+def _env_nonnegative_int(name: str, default: int) -> int:
+    raw = (os.getenv(name) or '').strip()
+    try:
+        return max(0, int(raw) if raw else int(default))
+    except (TypeError, ValueError):
+        return max(0, int(default))
+
+
+def require_static_site_storage_ready() -> None:
+    """Fail before Kaggle submission when root temp or durable work is unusable."""
+
+    root_scratch = runtime_scratch_health()
+    if (
+        root_scratch.get('status') not in {'ok', 'warning'}
+        or root_scratch.get('tempfile_status') != 'ok'
+    ):
+        raise RuntimeError(
+            'root scratch preflight failed: '
+            f"status={root_scratch.get('status')} "
+            f"error={root_scratch.get('tempfile_error') or root_scratch.get('error') or 'none'}"
+        )
+    SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+    work = writable_disk_health(
+        SCRATCH_ROOT,
+        warn_free_mb=_env_nonnegative_int('STATIC_SITE_STORAGE_WARN_FREE_MB', 1536),
+        critical_free_mb=_env_nonnegative_int('STATIC_SITE_STORAGE_CRITICAL_FREE_MB', 1024),
+        tempfile_probe=True,
+    )
+    if work.get('status') not in {'ok', 'warning'} or work.get('tempfile_status') != 'ok':
+        raise RuntimeError(
+            'static-site storage preflight failed: '
+            f"status={work.get('status')} "
+            f"error={work.get('tempfile_error') or work.get('error') or 'none'}"
+        )
 
 
 def sha256_file(path: Path) -> str:
@@ -720,6 +762,7 @@ def main() -> int:
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise SystemExit('static-site Kaggle builder is already running locally')
+        require_static_site_storage_ready()
         # Import after --help parsing so optional Kaggle deps are not required for docs.
         from video_announce.kaggle_client import KaggleClient
 
@@ -731,7 +774,9 @@ def main() -> int:
         if args.adopt_existing:
             return adopt_existing_kernel_output(args, client, kernel_ref)
 
-        with tempfile.TemporaryDirectory(prefix='static-site-kaggle-') as tmp:
+        with tempfile.TemporaryDirectory(
+            prefix='static-site-kaggle-', dir=SCRATCH_ROOT
+        ) as tmp:
             tmp_root = Path(tmp)
             staging = tmp_root / 'kernel'
             dataset_dir = tmp_root / 'dataset'
@@ -781,6 +826,7 @@ def main() -> int:
                     if raw == 'COMPLETE':
                         if args.download_output:
                             out_dir = ARTIFACT_ROOT / f'output-{build_id}'
+                            shutil.rmtree(out_dir, ignore_errors=True)
                             out_dir.mkdir(parents=True, exist_ok=True)
                             files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
                             print(f"[static-site-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)

@@ -320,3 +320,68 @@ async def test_runtime_health_reports_recent_job_outbox_loop_errors(tmp_path, mo
 
     main._mark_job_outbox_worker_cycle_ok()
     assert main.job_outbox_worker_recent_error_status() == "ok"
+
+
+@pytest.mark.asyncio
+async def test_runtime_health_fails_for_unwritable_scratch_and_recovers(
+    tmp_path, monkeypatch
+):
+    import asyncio
+
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async def sleeper():
+        await asyncio.sleep(3600)
+
+    tasks = [asyncio.create_task(sleeper()) for _ in range(2)]
+
+    class DummyBot:
+        session = type("Session", (), {"closed": False})()
+
+    monkeypatch.setattr(
+        main,
+        "scheduler_runtime_health_status",
+        lambda: {
+            "scheduler": "ok",
+            "video_tomorrow": "disabled",
+            "guide_excursions_light": "disabled",
+            "guide_excursions_full": "disabled",
+            "email_outbox_worker": "disabled",
+            "email_outbox_monitor": "disabled",
+        },
+    )
+    monkeypatch.setattr(main, "scheduler_video_tomorrow_watchdog_enabled", lambda: False)
+    monkeypatch.setattr(main, "runtime_disk_health", lambda: {"status": "ok"})
+    scratch = {
+        "status": "critical",
+        "tempfile_status": "error",
+        "tempfile_error": "OSError",
+    }
+    monkeypatch.setattr(main, "runtime_scratch_health", lambda: dict(scratch))
+    now = main._time.monotonic()
+    app = {
+        "runtime_health": {
+            "boot_monotonic": now - 10,
+            "last_tick_monotonic": now,
+            "ready": True,
+        },
+        "daily_scheduler": tasks[0],
+        "add_event_watch": tasks[1],
+    }
+
+    try:
+        status, payload = await main._runtime_health_report(app, db, DummyBot())
+        assert status == 503
+        assert "scratch_disk:critical_or_unwritable" in payload["issues"]
+        assert payload["scratch_disk"]["tempfile_error"] == "OSError"
+
+        scratch.update({"status": "ok", "tempfile_status": "ok"})
+        scratch.pop("tempfile_error")
+        status, payload = await main._runtime_health_report(app, db, DummyBot())
+        assert status == 200
+        assert payload["scratch_disk"]["tempfile_status"] == "ok"
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
