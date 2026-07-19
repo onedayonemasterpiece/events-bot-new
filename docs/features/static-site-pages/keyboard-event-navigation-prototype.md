@@ -7,13 +7,14 @@
 
 ## Published review
 
-Public noindex prototype:
+Current public noindex prototype:
 
-<https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v1/lab/keyboard-event-navigation/>
+<https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v2/lab/keyboard-event-navigation/>
 
-The immutable preview prefix was built from source commit `da4e2cae` and does
-not modify production root or stable `/ics/*`. Public HTTP returned `200`; the
-focused Playwright contract passed again against the public URL at `1536×864`.
+V2 supersedes the visually obstructed v1 review. Its preview prefix contains
+exactly one new HTML object and reuses the immutable v1 page assets; it does not
+publish listing/event catalogs, modify production root or touch stable
+`/ics/*`. The floating service dock and title-panel hint are removed.
 
 ## Product hypothesis
 
@@ -21,7 +22,7 @@ The prototype tests one narrow question: can a visitor reject the current event
 and start surfing alternatives with one keystroke, without turning the whole
 site into a custom keyboard application?
 
-The current-event title panel and each related-event card form a scoped
+The current-event CTA panel and each related-event card form a scoped
 composite navigator. Arrow keys are intercepted only while focus is inside this
 navigator. Header, footer, form controls and other page regions keep their
 native browser behavior. `Tab` remains available for links and card actions;
@@ -36,7 +37,8 @@ after an explicit keyboard entry or restored listing-to-detail journey.
 
 | Focus context | Key | Result |
 | --- | --- | --- |
-| Current-event surface | `ArrowDown` | Focus the first related event |
+| Current-event CTA | `ArrowLeft` / `ArrowRight` | Previous / next hero image |
+| Current-event CTA | `ArrowDown` | Focus the first related event |
 | Current-event surface | `Enter` | Run the visible primary CTA |
 | Current-event surface | `L` / `K` / `S` | Like / calendar / share for the current event |
 | Related card or its inner action | `ArrowLeft` / `ArrowRight` | Previous / next card in visual DOM order, including row wrap |
@@ -60,14 +62,18 @@ success logic.
 
 ## Visual feedback and accessibility
 
-- the current event and selected card receive a strong visible focus ring;
-- a fixed desktop-only cheat sheet explains the nonstandard keys;
+- the initial focus moves to the existing dark CTA panel instead of outlining
+  the event title block;
+- tiny low-contrast `Enter`/`K`/`S`/`L` badges live inside the CTA controls and
+  remain visible in full-label and compact-icon layouts;
+- no fixed or overlapping prototype overlay is rendered;
+- an in-flow `Попробуй быструю навигацию` section immediately before the footer
+  explains the keys and provides one `↓` start action;
 - a visually hidden instruction block is connected to the current-event group;
 - action availability/results are reported through the existing action UI plus
   a polite prototype status region;
 - the route is always `noindex,nofollow,noarchive`, including production builds;
-- widths below `1024px` show a desktop-only note instead of pretending the
-  keyboard experiment applies to mobile.
+- widths below `1024px` receive no prototype UI or keyboard behavior.
 
 ## Local acceptance
 
@@ -83,9 +89,10 @@ STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321 \
   npm run check:keyboard-event-navigation
 ```
 
-The check proves initial focus, one-keystroke entry into related events,
-horizontal and vertical spatial movement, first-row return, inner-control
-collapse, native `Space` scrolling, untouched focus outside the navigator,
+The check proves CTA-panel initial focus, closed-hero left/right navigation,
+absence of floating service UI, CTA shortcut badges, the in-flow quick-start
+section, one-keystroke entry into related events, spatial movement, first-row
+return, native `Space` scrolling, untouched focus outside the navigator,
 noindex metadata and zero horizontal overflow at `1536×864`.
 
 ## Deliberate non-goals

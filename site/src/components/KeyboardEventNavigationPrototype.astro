@@ -1,52 +1,78 @@
-<div class="keyboard-prototype-mobile-note" role="note">
-  Этот прототип предназначен для десктопа с физической клавиатурой.
-</div>
-
-<aside class="keyboard-prototype-dock" data-keyboard-prototype-dock aria-label="Подсказка по быстрой навигации">
-  <strong>Быстрый просмотр событий</strong>
-  <p><kbd>↓</kbd> похожие <kbd>← ↑ → ↓</kbd> карточки <kbd>Space</kbd> прокрутка</p>
-  <p><kbd>Enter</kbd> открыть · <kbd>L</kbd> лайк · <kbd>K</kbd> календарь · <kbd>S</kbd> ссылка</p>
-  <button type="button" data-keyboard-prototype-home>К текущему событию</button>
-  <span class="keyboard-prototype-dock__state" data-keyboard-prototype-state aria-hidden="true">Текущее событие</span>
-</aside>
+<section class="keyboard-quickstart" data-keyboard-quickstart aria-labelledby="keyboard-quickstart-title">
+  <div class="page-shell keyboard-quickstart__inner">
+    <div>
+      <p class="eyebrow">Попробуй быструю навигацию</p>
+      <h2 id="keyboard-quickstart-title">Ищи следующее событие без мышки</h2>
+      <p>Начни со стрелки вниз: она сразу выберет первое похожее событие. Дальше перемещайся по карточкам стрелками.</p>
+    </div>
+    <button type="button" class="keyboard-quickstart__start" data-keyboard-prototype-start>
+      <span>Начать с похожих</span><kbd>↓</kbd>
+    </button>
+    <ul aria-label="Клавиши быстрой навигации">
+      <li><kbd>← ↑ → ↓</kbd><span>выбирать события</span></li>
+      <li><kbd>Enter</kbd><span>открыть</span></li>
+      <li><kbd>L</kbd><span>лайк</span></li>
+      <li><kbd>K</kbd><span>календарь</span></li>
+      <li><kbd>S</kbd><span>поделиться</span></li>
+      <li><kbd>Space</kbd><span>прокрутка</span></li>
+    </ul>
+  </div>
+</section>
 
 <p class="sr-only" id="keyboard-prototype-instructions">
   Быстрая навигация по событиям. Стрелка вниз переводит к похожим событиям.
   На карточках используйте стрелки для перехода между событиями. Пробел прокручивает страницу.
   Enter открывает событие или основное действие. L ставит лайк, K добавляет в календарь,
-  S делится ссылкой. Escape возвращает фокус с действия карточки на карточку.
+  S делится ссылкой. Стрелки влево и вправо в верхнем блоке листают фотографии.
 </p>
 <p class="sr-only" data-keyboard-prototype-status role="status" aria-live="polite" aria-atomic="true"></p>
 
-<script>
+<script is:inline>
   const root = document.querySelector('[data-desktop-clean-event]');
-  const surface = root?.querySelector('[data-title-panel]');
   const status = document.querySelector('[data-keyboard-prototype-status]');
-  const dockState = document.querySelector('[data-keyboard-prototype-state]');
-  const homeButton = document.querySelector('[data-keyboard-prototype-home]');
+  const startButton = document.querySelector('[data-keyboard-prototype-start]');
+
+  const isVisible = (element) => {
+    if (!(element instanceof HTMLElement) || element.hidden) return false;
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+  };
+
+  const surface = root instanceof HTMLElement
+    ? Array.from(root.querySelectorAll('[data-desktop-action-panel]')).find(isVisible)
+    : null;
 
   if (root instanceof HTMLElement && surface instanceof HTMLElement) {
+    root.setAttribute('data-closed-hero-keyboard-scope', '');
     surface.tabIndex = 0;
-    surface.setAttribute('role', 'group');
     surface.setAttribute('data-keyboard-event-surface', '');
-    surface.setAttribute('aria-label', 'Текущее событие. Быстрая навигация');
     surface.setAttribute('aria-describedby', 'keyboard-prototype-instructions');
-    surface.setAttribute('aria-keyshortcuts', 'ArrowDown Enter L K S');
+    surface.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowDown Enter L K S');
 
-    const hint = document.createElement('p');
-    hint.className = 'keyboard-prototype-surface-hint';
-    hint.setAttribute('aria-hidden', 'true');
-    hint.innerHTML = '<kbd>↓</kbd> похожие <span>·</span> <kbd>Space</kbd> читать <span>·</span> <kbd>Enter</kbd> билеты <span>·</span> <kbd>L</kbd><kbd>K</kbd><kbd>S</kbd>';
-    surface.append(hint);
-
-    const isVisible = (element) => {
-      if (!(element instanceof HTMLElement) || element.hidden) return false;
-      const rect = element.getBoundingClientRect();
-      const style = window.getComputedStyle(element);
-      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
-    };
+    const primary = surface.querySelector('.desktop-prototype__primary-action:not(.is-disabled)');
+    const shortcutTargets = [
+      [primary, 'Enter'],
+      [surface.querySelector('[data-calendar-action]:not(.desktop-prototype__primary-action)'), 'K'],
+      [surface.querySelector('[data-native-share]'), 'S'],
+      [surface.querySelector('[data-feedback-action="like"]'), 'L'],
+    ];
+    shortcutTargets.forEach(([target, key]) => {
+      if (!(target instanceof HTMLElement) || target.querySelector('[data-keyboard-shortcut-badge]')) return;
+      target.setAttribute('data-keyboard-shortcut-target', '');
+      const badge = document.createElement('span');
+      badge.className = 'keyboard-shortcut-badge';
+      badge.dataset.keyboardShortcutBadge = '';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.textContent = key;
+      target.append(badge);
+    });
 
     const cards = () => Array.from(root.querySelectorAll('[data-related-start] [data-event-card]')).filter(isVisible);
+    const gallerySlides = Array.from(root.querySelectorAll('[data-hero-gallery-slide][data-gallery-slide-kind="image"]'));
+    const heroImage = root.querySelector('[data-clean-hero-image]');
+    const heroOpener = heroImage?.closest('[data-hero-gallery-open]');
+    const heroStatus = root.querySelector('[data-closed-hero-status]');
 
     let statusTimer;
     const setStatus = (message) => {
@@ -56,25 +82,20 @@
       statusTimer = window.setTimeout(() => { status.textContent = message; }, 20);
     };
 
-    const cardTitle = (card) => card.getAttribute('data-event-title') || card.querySelector('[data-card-title]')?.textContent?.trim() || 'Событие';
-
-    const updateDock = (element) => {
-      if (!(dockState instanceof HTMLElement)) return;
-      const card = element?.closest?.('[data-event-card]');
-      dockState.textContent = card instanceof HTMLElement ? cardTitle(card) : 'Текущее событие';
-    };
-
     const focusSurface = () => {
       surface.focus({ preventScroll: true });
       surface.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
-      updateDock(surface);
     };
 
     const focusCard = (card) => {
       if (!(card instanceof HTMLElement)) return;
       card.focus({ preventScroll: true });
       card.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
-      updateDock(card);
+    };
+
+    const focusFirstCard = () => {
+      const first = cards()[0];
+      if (first) focusCard(first);
     };
 
     const rowsFor = (allCards) => {
@@ -115,7 +136,6 @@
     };
 
     const actionLabel = (code) => ({ KeyL: 'Лайк', KeyK: 'Календарь', KeyS: 'Поделиться' })[code] || 'Действие';
-
     const runAction = (scope, event) => {
       const action = actionFor(scope, event.code);
       event.preventDefault();
@@ -125,6 +145,27 @@
       }
       action.click();
       setStatus(`${actionLabel(event.code)}: команда передана для выбранного события.`);
+    };
+
+    const selectHero = (direction) => {
+      if (!(heroImage instanceof HTMLImageElement) || gallerySlides.length < 2) return false;
+      const current = Number(root.dataset.activeHeroGalleryIndex || '0');
+      const next = (current + direction + gallerySlides.length) % gallerySlides.length;
+      const slide = gallerySlides[next];
+      const image = slide?.querySelector('.hero-gallery__image[data-gallery-src]');
+      const src = image?.dataset.gallerySrc;
+      if (!(image instanceof HTMLImageElement) || !src) return false;
+      root.dataset.activeHeroGalleryIndex = String(next);
+      heroImage.src = src;
+      heroImage.alt = image.alt || heroImage.alt;
+      const width = Number(image.getAttribute('width') || 0);
+      const height = Number(image.getAttribute('height') || 0);
+      if (width) heroImage.width = width;
+      if (height) heroImage.height = height;
+      heroImage.style.objectPosition = image.dataset.objectPosition || '50% 50%';
+      if (heroOpener instanceof HTMLElement) heroOpener.dataset.heroGalleryIndex = String(next);
+      if (heroStatus instanceof HTMLElement) heroStatus.textContent = `Фото ${next + 1} из ${gallerySlides.length}`;
+      return true;
     };
 
     const dialogIsOpen = () => [
@@ -137,38 +178,29 @@
       target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
     );
 
-    document.addEventListener('focusin', (event) => {
-      if (event.target instanceof HTMLElement && (event.target === surface || event.target.closest('[data-event-card]'))) {
-        updateDock(event.target);
-      }
-    });
-
     document.addEventListener('keydown', (event) => {
       if (event.defaultPrevented || event.isComposing || dialogIsOpen() || isEditing(event.target)) return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
 
-      if (target === surface) {
-        if (event.code === 'ArrowDown') {
-          const first = cards()[0];
-          if (first) {
-            event.preventDefault();
-            focusCard(first);
-          }
+      if (target === surface || surface.contains(target)) {
+        if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+          if (selectHero(event.code === 'ArrowRight' ? 1 : -1)) event.preventDefault();
           return;
         }
-        if (event.code === 'Enter') {
-          const primary = Array.from(root.querySelectorAll('.desktop-prototype__primary-action:not(.is-disabled)')).find(isVisible);
+        if (event.code === 'ArrowDown') {
+          event.preventDefault();
+          focusFirstCard();
+          return;
+        }
+        if (event.code === 'Enter' && target === surface) {
           if (primary instanceof HTMLElement) {
             event.preventDefault();
             primary.click();
           }
           return;
         }
-        if (['KeyL', 'KeyK', 'KeyS'].includes(event.code) && !event.repeat) {
-          const panel = Array.from(root.querySelectorAll('[data-desktop-action-panel]')).find(isVisible);
-          runAction(panel, event);
-        }
+        if (['KeyL', 'KeyK', 'KeyS'].includes(event.code) && !event.repeat) runAction(surface, event);
         return;
       }
 
@@ -197,8 +229,7 @@
         return;
       }
       if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
-        const step = event.code === 'ArrowLeft' ? -1 : 1;
-        const neighbor = allCards[index + step];
+        const neighbor = allCards[index + (event.code === 'ArrowLeft' ? -1 : 1)];
         if (neighbor) {
           event.preventDefault();
           focusCard(neighbor);
@@ -214,25 +245,18 @@
       }
     });
 
-    homeButton?.addEventListener('click', focusSurface);
-    window.requestAnimationFrame(focusSurface);
+    startButton?.addEventListener('click', focusFirstCard);
+    window.requestAnimationFrame(() => surface.focus({ preventScroll: true }));
   }
 </script>
 
-<style is:global>
-  .keyboard-prototype-mobile-note { display:none; }
-  .keyboard-prototype-dock { display:none; }
+<style is:global is:inline>
+  .keyboard-quickstart { display:none; }
 
-  @media (min-width: 1024px) {
-    [data-keyboard-event-surface] {
-      border-radius:1.2rem;
-      outline:3px solid transparent;
-      outline-offset:.5rem;
-      transition:outline-color 140ms ease, box-shadow 140ms ease;
-    }
+  @media (min-width:1024px) {
     [data-keyboard-event-surface]:focus-visible {
-      outline-color:#f4b942;
-      box-shadow:0 0 0 .8rem rgba(244,185,66,.16);
+      outline:2px solid rgba(244,185,66,.34);
+      outline-offset:3px;
     }
     [data-related-start] [data-event-card]:focus-visible,
     [data-related-start] [data-event-card]:has(:focus-visible) {
@@ -240,88 +264,63 @@
       outline-offset:5px;
       box-shadow:0 12px 36px rgba(46,31,22,.2);
     }
-    .keyboard-prototype-surface-hint {
-      display:flex;
-      flex-wrap:wrap;
-      align-items:center;
-      gap:.4rem;
-      margin:1rem 0 0;
-      color:#6d6259;
-      font-size:.78rem;
-      font-weight:700;
-      letter-spacing:.01em;
-    }
-    .keyboard-prototype-surface-hint kbd,
-    .keyboard-prototype-dock kbd {
-      min-width:1.55rem;
-      padding:.13rem .38rem;
-      border:1px solid rgba(255,255,255,.26);
-      border-radius:.38rem;
-      background:#fffdf8;
-      color:#35251c;
-      box-shadow:0 1px 0 rgba(34,26,20,.2);
-      font:700 .74rem/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+    [data-keyboard-shortcut-target] { position:relative; }
+    .keyboard-shortcut-badge {
+      position:absolute;
+      right:5px;
+      bottom:4px;
+      z-index:2;
+      min-width:14px;
+      padding:1px 3px;
+      border:1px solid currentColor;
+      border-radius:4px;
+      color:inherit;
+      font:700 8px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing:0;
       text-align:center;
+      opacity:.46;
+      pointer-events:none;
     }
-    .keyboard-prototype-surface-hint kbd { border-color:#d8c8b6; }
-    .keyboard-prototype-dock {
-      position:fixed;
-      right:1rem;
-      bottom:1rem;
-      z-index:80;
+    .keyboard-quickstart {
+      display:block;
+      padding:clamp(3rem,6vw,5.5rem) 0;
+      border-top:1px solid rgba(255,255,255,.1);
+      background:#241f1b;
+      color:#fffaf2;
+    }
+    .keyboard-quickstart__inner {
       display:grid;
-      width:min(31rem, calc(100vw - 2rem));
-      grid-template-columns:1fr auto;
-      gap:.4rem .85rem;
-      padding:.85rem 1rem;
-      border:1px solid rgba(255,255,255,.14);
-      border-radius:1rem;
-      background:rgba(34,26,20,.94);
-      color:#fffaf1;
-      box-shadow:0 18px 50px rgba(25,16,10,.3);
-      backdrop-filter:blur(14px);
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:2rem 3rem;
+      align-items:center;
     }
-    .keyboard-prototype-dock strong { grid-column:1; font-size:.88rem; }
-    .keyboard-prototype-dock p { grid-column:1; margin:0; color:#ddd0c2; font-size:.72rem; line-height:1.5; }
-    .keyboard-prototype-dock button {
-      grid-column:2;
-      grid-row:1 / span 3;
-      align-self:stretch;
-      padding:.55rem .7rem;
-      border:1px solid rgba(255,255,255,.22);
-      border-radius:.65rem;
-      background:#a54821;
+    .keyboard-quickstart .eyebrow { margin:0 0 .75rem; color:#d77a4f; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+    .keyboard-quickstart h2 { max-width:18ch; margin:0; font-size:clamp(2rem,3.6vw,4rem); line-height:.96; letter-spacing:-.045em; }
+    .keyboard-quickstart h2 + p { max-width:60ch; margin:1rem 0 0; color:#cfc2b6; font-size:1rem; line-height:1.6; }
+    .keyboard-quickstart__start {
+      display:flex;
+      align-items:center;
+      gap:1rem;
+      min-height:72px;
+      padding:.8rem .9rem .8rem 1.25rem;
+      border:0;
+      border-radius:18px;
+      background:#b54d22;
       color:white;
-      font:700 .74rem/1.25 inherit;
+      font:900 1rem/1.1 inherit;
       cursor:pointer;
     }
-    .keyboard-prototype-dock button:focus-visible { outline:3px solid #f4b942; outline-offset:3px; }
-    .keyboard-prototype-dock__state {
-      grid-column:1 / -1;
-      overflow:hidden;
-      color:#f4b942;
-      font-size:.72rem;
-      font-weight:750;
-      text-overflow:ellipsis;
-      white-space:nowrap;
+    .keyboard-quickstart__start kbd { min-width:48px; padding:.65rem; border-radius:12px; background:#fffaf2; color:#2a211b; font-size:1.35rem; }
+    .keyboard-quickstart ul { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:.65rem; margin:0; padding:0; list-style:none; }
+    .keyboard-quickstart li { display:flex; align-items:center; gap:.5rem; color:#bfb1a5; font-size:.8rem; }
+    .keyboard-quickstart li kbd {
+      padding:.28rem .48rem;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:7px;
+      background:#332c27;
+      color:#fffaf2;
+      box-shadow:0 2px 0 #171310;
+      font:800 .72rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
     }
-  }
-
-  @media (max-width: 1023px) {
-    .keyboard-prototype-mobile-note {
-      display:block;
-      max-width:34rem;
-      margin:7rem auto 2rem;
-      padding:1.25rem;
-      border:1px solid #e1d3c2;
-      border-radius:1rem;
-      background:#fffdf8;
-      color:#221a14;
-      text-align:center;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    [data-keyboard-event-surface] { transition:none; }
   }
 </style>

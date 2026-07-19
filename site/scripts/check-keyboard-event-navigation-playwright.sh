@@ -43,8 +43,23 @@ RUN_OUTPUT="$(playwright-cli -s="$SESSION" run-code 'async page => {
   const report = { route: page.url() };
   report.initial = await activeState();
   assert(report.initial.surface, "The prototype must initially focus the current-event surface");
+  assert(await page.locator("[data-keyboard-event-surface]").getAttribute("data-desktop-action-panel") !== null, "Initial keyboard context must be the CTA panel");
+  assert(await page.locator(".keyboard-prototype-dock").count() === 0, "Floating service dock must not exist");
+  assert(await page.locator(".keyboard-prototype-surface-hint").count() === 0, "Service hint inside the event title must not exist");
+  assert(await page.locator("[data-keyboard-quickstart]").count() === 1, "Expected the in-flow quick navigation explainer before the footer");
+  assert(await page.locator("[data-desktop-action-panel] [data-keyboard-shortcut-badge]").count() >= 4, "CTA controls must expose subtle shortcut badges");
   assert(await page.locator(cardSelector).count() >= 6, "Expected a useful related-event grid");
   assert(await page.locator("meta[name=robots]").getAttribute("content") === "noindex,nofollow,noarchive", "Lab route must remain noindex");
+
+  const heroBefore = await page.locator("[data-clean-hero-image]").getAttribute("src");
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(100);
+  report.heroRight = await page.locator("[data-clean-hero-image]").getAttribute("src");
+  assert(report.heroRight && report.heroRight !== heroBefore, "ArrowRight in the CTA context must advance the closed hero carousel");
+  await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(100);
+  report.heroLeft = await page.locator("[data-clean-hero-image]").getAttribute("src");
+  assert(report.heroLeft === heroBefore, "ArrowLeft must restore the previous hero image");
 
   await page.keyboard.press("ArrowDown");
   report.firstCard = await activeState();

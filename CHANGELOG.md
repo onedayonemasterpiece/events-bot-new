@@ -42,7 +42,9 @@
 - **Desktop keyboard event-surfing prototype:** add one noindex event-detail lab
   for «Собака на сене» with a scoped current-event/related-card navigator,
   spatial arrow movement, native `Space` scrolling, contextual `L`/`K`/`S`
-  actions, visible focus guidance and a focused Playwright acceptance check;
+  actions, CTA-integrated shortcut badges, top-level photo arrows and an
+  in-flow pre-footer quick-start section; remove the obstructive fixed help
+  overlay and title-panel focus ring, and cover the clean UI with Playwright;
   publish the accepted one-page lab under an immutable noindex preview prefix;
   production event routes and mobile behavior remain unchanged.
 - **Canonical static preproduction review routing**: persist the latest fully
