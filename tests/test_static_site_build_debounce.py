@@ -140,6 +140,82 @@ async def test_requeue_drops_stale_handoff_without_exact_active_claim(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_active_error_recovery_runs_before_newer_pending_followup(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        event = Event(
+            title="Future event",
+            description="Description",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Venue",
+            source_text="source",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        active = JobOutbox(
+            event_id=event.id,
+            task=JobTask.static_site_build,
+            payload=make_request_payload(reason="recover active run"),
+            status=JobStatus.error,
+            coalesce_key="static_site_build:prod",
+            updated_at=now,
+            next_run_at=now - timedelta(seconds=1),
+        )
+        session.add(active)
+        await session.commit()
+        await session.refresh(active)
+        followup = JobOutbox(
+            event_id=event.id,
+            task=JobTask.static_site_build,
+            payload=make_request_payload(reason="new Smart Update effect"),
+            status=JobStatus.pending,
+            coalesce_key="static_site_build:prod",
+            updated_at=now,
+            next_run_at=now + timedelta(minutes=10),
+        )
+        session.add(followup)
+        await session.commit()
+        active_id = int(active.id)
+        followup_id = int(followup.id)
+    with sqlite3.connect(db.path) as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO static_site_build_state(
+                release_channel, schema_version, active_job_id, active_run_id,
+                active_claim_token, updated_at
+            ) VALUES('secret_preview', 'static_site_build_state_v1', ?, ?, ?, ?)
+            """,
+            (active_id, "static-site:active-recovery", "claim", now.isoformat()),
+        )
+
+    calls: list[int] = []
+
+    async def recover(event_id, _db, _bot):
+        calls.append(event_id)
+        return False
+
+    monkeypatch.setitem(main.JOB_HANDLERS, "static_site_build", recover)
+    processed = await main._run_due_jobs_once(
+        db, None, allowed_tasks={JobTask.static_site_build}
+    )
+
+    assert processed == 1
+    assert calls == [event.id]
+    async with db.get_session() as session:
+        recovered = await session.get(JobOutbox, active_id)
+        pending = await session.get(JobOutbox, followup_id)
+    assert recovered is not None and recovered.status == JobStatus.done
+    assert recovered.last_error is None
+    assert pending is not None and pending.status == JobStatus.pending
+
+
+@pytest.mark.asyncio
 async def test_static_build_running_owner_gets_one_deferred_followup(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

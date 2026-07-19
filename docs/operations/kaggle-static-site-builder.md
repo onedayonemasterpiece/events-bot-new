@@ -45,7 +45,10 @@ The production rail is a durable state machine, not a local process lock:
    its `remote_handoff` and immutable `snapshot`. Fresh effect reasons are
    unioned into that payload; they never replace the identities required for
    adoption. A stale handoff is discarded only when the state row no longer
-   points to that exact job.
+   points to that exact job. If a newer pending follow-up already exists, the
+   generic coalesce supersession rule must not discard the older exact active
+   job: its recovery/adoption runs first, then the follow-up consumes the newly
+   accumulated effects.
 6. Publication remains create-only under a fresh secret prefix. After full
    result/manifest/object verification, the durable internal current-review
    receipt advances atomically. Failed, no-op and artifact-only runs preserve
