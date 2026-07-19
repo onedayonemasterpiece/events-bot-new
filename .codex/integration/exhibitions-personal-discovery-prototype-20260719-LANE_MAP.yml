@@ -25,7 +25,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: repository path and reuse report
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: ux-audit
     role: reviewer
     requirement_ids: [R02, R08, R09]
@@ -38,7 +38,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: actionable design specification
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: integration
     role: worker
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09]
@@ -61,4 +61,4 @@ lanes:
       - database and production runtime files
     expected_output: committed prototype with visual and interaction evidence
     verification_scope: full_local
-    status: in_progress
+    status: completed
