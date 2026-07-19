@@ -9651,6 +9651,11 @@ def build_image_candidate_queue(
         )
         color = "green_found_ko" if status == "actual_scored" else ("blue_cursor" if status == "image_analysis_in_progress" else ("yellow_retry" if status == "needs_actual_image_fetch" else "red_no_ko"))
         status_changed = bool(previous_status and previous_status != status)
+        changed_earlier_this_run = bool(
+            str(entries[key].get("status_changed_this_run") or "").lower() == "true"
+            and str(entries[key].get("last_status_changed_at") or "") == str(run_now or "")
+        )
+        status_changed_this_run = status_changed or changed_earlier_this_run
         direct_image_ref = (
             media.get("image_url_or_local_path")
             or row.get("image_url_or_local_path")
@@ -9659,8 +9664,12 @@ def build_image_candidate_queue(
         )
         entries[key].update({
             "previous_image_queue_status": previous_status if status_changed else entries[key].get("previous_image_queue_status", ""),
-            "status_changed_this_run": str(status_changed).lower(),
-            "last_status_changed_at": run_now if status_changed or not entries[key].get("last_status_changed_at") else entries[key].get("last_status_changed_at"),
+            # Several projections of one post are merged in order (text,
+            # candidate memory, then media). A later no-op media overlay must
+            # not erase the transition recorded earlier in this same build;
+            # changed-only YDB persistence and cursor recovery depend on it.
+            "status_changed_this_run": str(status_changed_this_run).lower(),
+            "last_status_changed_at": run_now if status_changed_this_run or not entries[key].get("last_status_changed_at") else entries[key].get("last_status_changed_at"),
             "post_id": row.get("post_id", entries[key].get("post_id", "")),
             "post_url": post_url,
             "platform_post_key": row.get("platform_post_key", entries[key].get("platform_post_key", "")),
@@ -15319,7 +15328,7 @@ def post_processing_fingerprint(
         "bge_contract": BGE_M3_ENCODER_CONTRACT if require_bge_m3 else "disabled",
     }
     if str(content_origin_type or "") in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
-        payload["external_publication_scope_policy"] = "external_publication_scope_source_and_media_handoff_v3"
+        payload["external_publication_scope_policy"] = "external_publication_scope_source_media_transition_v4"
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()

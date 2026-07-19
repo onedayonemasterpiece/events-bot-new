@@ -259,7 +259,9 @@ Implemented now:
   eligible for the next image batch even if the legacy cursor had already
   advanced past its queue order. The metadata-only media sidecar is merged over
   that authoritative text/source row and cannot erase an existing fused-vector
-  accept merely because the sidecar omits vector fields.
+  accept merely because the sidecar omits vector fields; its later no-op merge
+  also preserves the same-run defer-to-fetch transition used by changed-only
+  YDB persistence and cursor recovery.
 
 Still required for each imported external-publication candidate to become confirmed:
 

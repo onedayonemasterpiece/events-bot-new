@@ -9302,6 +9302,28 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
             # This collection is intentionally separate: the web publisher is
             # never admitted to the Telegram/VK source scan queue.
             "unified_source_queue": {},
+            "image_candidate_queue_cursor_position": 1,
+            "image_candidate_queue": {
+                "old-deferred": {
+                    "image_queue_id": "old-deferred",
+                    "image_queue_order": 1,
+                    "post_id": "extpub-1",
+                    "post_url": "https://archi.example/article",
+                    "source_id": "web:publisher-hash",
+                    "source_url": "https://archi.example",
+                    "current_stage": "image_fetch_retry_needed",
+                    "kaliningrad_oblast_only_scope": True,
+                    "kaliningrad_mention_role": "main_subject",
+                    "vector_gate_status": "vector_accept_candidate",
+                    "text_vector_fusion_status": "fused_e5_bge_m3",
+                    "has_media": "true",
+                    "media_count": 1,
+                    "image_model_input_type": "metadata_only",
+                    "image_url_or_local_path": "https://cdn.archi.example/image.jpg",
+                    "image_queue_status": "deferred_text_gate",
+                    "publication_eligibility_decision": "needs_source_review",
+                }
+            },
         }
 
         queue, _top, metrics = mod.build_image_candidate_queue(
@@ -9322,6 +9344,8 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertEqual(len(queue), 1)
         self.assertEqual(queue[0]["publication_eligibility_decision"], "accept")
         self.assertEqual(queue[0]["image_queue_status"], "needs_actual_image_fetch")
+        self.assertEqual(queue[0]["previous_image_queue_status"], "deferred_text_gate")
+        self.assertEqual(queue[0]["status_changed_this_run"], "true")
         self.assertEqual(queue[0]["source_geo_class"], "nonlocal_russia")
         self.assertEqual(queue[0]["selected_for_next_image_batch"], "true")
         self.assertEqual(metrics["image_queue_selected_next_batch"], 1)
