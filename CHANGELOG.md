@@ -63,8 +63,16 @@
   single-Down step to eliminate dropped/cascading motion, bridge the related grid into the hydrated
   six-card `Ещё события` continuation with the same Enter/L/K/S/Escape and K
   hints, add scoped event-poster `P`, canonicalize dynamic continuation links,
-  and rewrite the teaching block with explicit action names; production event
+  and rewrite the teaching block with explicit action names; in V7 close the
+  active gallery with an isolated `ArrowDown` gesture and recover `L` from lost
+  document focus only with managed surface/card provenance and logical ownership;
+  production event
   routes, remote telemetry and mobile behavior remain unchanged.
+- **Keyboard interface navigation skill:** add the reusable project
+  `.codex/skills/keyboard-interface-navigation` workflow for scoped command
+  routing, physical key codes, modal focus restoration, dynamic card graphs,
+  repeat latches, accessible shortcut discovery, privacy-minimal daily facts
+  and cross-input/browser acceptance.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
   expose one fail-closed resolver to bot/operator link-producing paths, preserve

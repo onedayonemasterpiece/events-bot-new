@@ -83,7 +83,7 @@ async page => {
   assert(await page.locator("[data-keyboard-quickstart]").count() === 1, "Expected one situational quick-navigation block");
   assert(await page.locator("[data-keyboard-quickstart] .keyboard-quickstart__contexts > p").count() === 3, "Quickstart must explain three concise contexts");
   const learningCopy = await page.locator("[data-keyboard-quickstart] .keyboard-quickstart__contexts").innerText();
-  for (const phrase of ["Событие", "L нравится", "K в календарь", "S ссылка", "C описание", "P афиша", "Выбранная карточка", "Поделиться сервисом", "скопировать карточку «Анонсов»", "скопировать текст и ссылку"]) {
+  for (const phrase of ["Событие", "в галерее", "закрыть", "L нравится", "K в календарь", "S ссылка", "C описание", "P афиша", "Выбранная карточка", "Поделиться сервисом", "скопировать карточку «Анонсов»", "скопировать текст и ссылку"]) {
     assert(learningCopy.includes(phrase), `Learning block is missing: ${phrase}`);
   }
   assert(await page.locator(".keyboard-prototype-dock").count() === 0, "No floating service dock is allowed");
@@ -144,12 +144,33 @@ async page => {
     assert(await page.locator("[data-clean-hero-image]").getAttribute("src") === heroBefore, "ArrowLeft must restore the prior hero");
   }
 
-  // Fresh Up opens the gallery; Enter/Space activate the final related-event CTA.
+  // Fresh Up opens the gallery. Down closes it as one isolated gesture and
+  // returns the logical owner without leaking into page scrolling.
   await page.keyboard.press("ArrowUp");
   const gallery = page.locator("[data-hero-gallery]:not([hidden]).is-open");
   await gallery.waitFor();
   report.galleryOpen = await gallery.evaluate((node) => ({ ownsFocus: node.contains(document.activeElement), parentIsBody: node.parentElement === document.body }));
   assert(report.galleryOpen.ownsFocus && report.galleryOpen.parentIsBody, "Fresh Up at event top must open and focus the fullscreen gallery");
+  const galleryDownScroll = await page.evaluate(() => window.scrollY);
+  await page.keyboard.down("ArrowDown");
+  await waitFor("gallery ArrowDown close", () => !document.querySelector("[data-hero-gallery].is-open"));
+  await waitFor("gallery ArrowDown focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
+  assert(await page.evaluate((before) => window.scrollY === before, galleryDownScroll), "Gallery ArrowDown must close without scrolling the page beneath it");
+  await page.locator(surfaceSelector).evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowDown", key: "ArrowDown", bubbles: true, cancelable: true })));
+  await page.waitForTimeout(60);
+  assert(await page.evaluate((before) => window.scrollY === before, galleryDownScroll), "A held gallery Down must not leak into a page step after focus restoration");
+  await page.keyboard.up("ArrowDown");
+  assert(await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem("ke_keyboard_shortcut_daily_v2") || '{"days":{}}').days).flat().includes("gallery_close_down")), "Completed gallery ArrowDown close must record one compact daily fact");
+  const afterGalleryDown = await page.evaluate(() => window.scrollY);
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(60);
+  assert((await activeState()).surface && await page.evaluate((before) => window.scrollY > before, afterGalleryDown), "A new Down after gallery close must perform one ordinary page step");
+  await page.evaluate(() => { window.scrollTo({ top: 0, behavior: "instant" }); document.querySelector("[data-keyboard-event-surface]")?.focus({ preventScroll: true }); });
+
+  // Escape remains an equivalent gallery exit and Enter/Space activate the
+  // final related-event CTA.
+  await page.keyboard.press("ArrowUp");
+  await gallery.waitFor();
   await page.keyboard.press("Escape");
   await waitFor("gallery Escape close", () => !document.querySelector("[data-hero-gallery].is-open"));
   await waitFor("gallery Escape focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
@@ -186,6 +207,16 @@ async page => {
   await page.keyboard.press("Escape");
   await waitFor("gallery close", () => !document.querySelector("[data-hero-gallery].is-open"));
   await waitFor("gallery logical focus return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
+
+  // A pointer-opened gallery that switches to keyboard Down also receives a
+  // logical keyboard owner and returns to the surface without background scroll.
+  const pointerGalleryScroll = await page.evaluate(() => window.scrollY);
+  await page.locator("[data-hero-gallery-open]").first().click();
+  await gallery.waitFor();
+  await page.keyboard.press("ArrowDown");
+  await waitFor("pointer gallery ArrowDown close", () => !document.querySelector("[data-hero-gallery].is-open"));
+  await waitFor("pointer gallery ArrowDown owner return", () => document.activeElement?.hasAttribute?.("data-keyboard-event-surface"));
+  assert(await page.evaluate((before) => window.scrollY === before, pointerGalleryScroll), "Pointer-opened gallery Down must not scroll the covered page");
 
   // C copies title, rendered lead/body and URL; scoped P copies the canonical poster.
   const expectedDescription = await page.evaluate(() => {
@@ -245,6 +276,40 @@ async page => {
   const remoteFact = await page.evaluate(() => window.__keyboardDailyFacts.find((fact) => fact.action_code === "like_toggle"));
   assert(Object.keys(remoteFact).sort().join(",") === "action_code,schema_version", "Consent-gated collector event must contain only schema and allowlisted action");
 
+  // If a managed DOM transition leaves BODY active, L recovers the logical
+  // event owner instead of becoming a silent no-op.
+  await page.evaluate(() => document.activeElement?.blur());
+  assert((await activeState()).tag === "BODY", "Lost-focus fixture must put focus on BODY");
+  await page.keyboard.press("l");
+  await waitFor("lost-focus L unlike", () => document.querySelector("[data-keyboard-event-surface] [data-feedback-action=like]")?.getAttribute("aria-pressed") === "false");
+  assert((await activeState()).surface, "Lost-focus L must re-enter the current-event keyboard surface");
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("l");
+  await waitFor("lost-focus L relike", () => document.querySelector("[data-keyboard-event-surface] [data-feedback-action=like]")?.getAttribute("aria-pressed") === "true");
+  assert((await activeState()).surface, "Repeated lost-focus L recovery must remain stable");
+
+  // Explicit unrelated pointer ownership disarms BODY recovery, and editable
+  // targets keep character input native.
+  const surfaceLikeBeforeNegative = await page.locator(`${surfaceSelector} [data-feedback-action=like]`).getAttribute("aria-pressed");
+  for (const unrelated of [".site-header", ".site-footer"]) {
+    await page.locator(surfaceSelector).focus();
+    await page.locator(unrelated).dispatchEvent("pointerdown");
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press("l");
+    await page.waitForTimeout(60);
+    assert(await page.locator(`${surfaceSelector} [data-feedback-action=like]`).getAttribute("aria-pressed") === surfaceLikeBeforeNegative, `BODY L must remain unowned after ${unrelated} pointer ownership`);
+  }
+  await page.evaluate(() => {
+    const input = document.createElement("input");
+    input.dataset.keyboardTestEditor = "";
+    document.querySelector("[data-keyboard-event-surface]")?.append(input);
+    input.focus({ preventScroll: true });
+  });
+  await page.keyboard.type("l");
+  assert(await page.locator("[data-keyboard-test-editor]").inputValue() === "l", "Editable L must remain native text input");
+  assert(await page.locator(`${surfaceSelector} [data-feedback-action=like]`).getAttribute("aria-pressed") === surfaceLikeBeforeNegative, "Editable L must not trigger like");
+  await page.locator("[data-keyboard-test-editor]").evaluate((node) => node.remove());
+
   // An action used locally before consent is reported on its next real use,
   // but remains one compact collector event per action/day.
   await page.locator(surfaceSelector).focus();
@@ -276,6 +341,14 @@ async page => {
   // Related spatial navigation, K action and lost-focus re-entry.
   await firstCard.focus();
   const firstCardId = await firstCard.getAttribute("data-event-id");
+  const firstCardLikeBeforeRecovery = await firstCard.locator('[data-feedback-action="like"]').getAttribute("aria-pressed");
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("l");
+  await waitFor("card lost-focus L recovery", ([id, before]) => {
+    const card = document.querySelector(`[data-related-start] [data-event-card][data-event-id="${id}"]`);
+    return document.activeElement === card && card?.querySelector('[data-feedback-action="like"]')?.getAttribute('aria-pressed') !== before;
+  }, [firstCardId, firstCardLikeBeforeRecovery]);
+  assert((await activeState()).cardId === firstCardId && (await activeState()).cardRoot, "Lost-focus card L must restore and act on the same logical card");
   await firstCard.evaluate((node) => node.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight", key: "ArrowRight", bubbles: true, cancelable: true })));
   const oneRightId = (await activeState()).cardId;
   for (let index = 0; index < 4; index += 1) {

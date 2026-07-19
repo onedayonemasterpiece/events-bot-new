@@ -43,7 +43,7 @@ Represent logical focus with a stable item ID plus a containing surface ID; do n
 
 - Before an update, retain the logical focus identity when the active element belongs to the managed surface.
 - After rendering, resolve that identity to the current element. If it vanished, choose the documented deterministic fallback: nearest surviving neighbor, surface heading/control, then container.
-- Recover only from focus loss caused by the managed transition. Do not steal focus after a pointer action, explicit blur, browser chrome transition, or assistive-technology movement.
+- Restore focus automatically only after a managed transition. Separately, define an explicit lost-focus re-entry command when product scope is unambiguous: execute only on the user's recognized keypress, prefer a hovered managed item, then a still-visible logical owner, then the page surface. Never re-enter from editors, dialogs, browser chrome transitions, or assistive-technology movement.
 - Clear or suspend held-key state on `window.blur`, hidden `visibilitychange`, surface unmount, route change, and overlay transfer.
 
 ### Enter and leave overlays
@@ -93,7 +93,7 @@ Make situational learning improve discovery, never secretly change control meani
 
 - Keep the documented key map stable. Use recent successful actions to rank shortcut hints or suggest a command in relevant surfaces; require explicit confirmation for any remap.
 - Apply minimum evidence and cooldowns so one accidental use does not produce persistent UI churn. Provide dismiss, opt-out, and reset controls.
-- Prefer on-device aggregation. If daily usage facts must be stored or sent, keep one coarse aggregate per day, surface, and action ID (for example `{day, surface, action_id, count}`), cap counts, and use short documented retention.
+- Prefer on-device aggregation. If daily usage facts must be stored or sent, default to one boolean fact per subject/day/action ID with set semantics; omit counts, route, surface, and object identity unless a separately reviewed decision requires them. Derive subject and day server-side, deduplicate on write, and use short documented retention.
 - Do not collect raw key streams, typed content, search terms, card titles, full URLs, DOM text, precise event timestamps, clipboard data, or focus trails. Do not use shortcut facts for advertising or unrelated profiling.
 - Record only successful command execution, never every keydown. Treat accessibility settings and failed input as especially sensitive.
 - Verify consent, deletion, retention, and data-contract requirements before adding remote telemetry.

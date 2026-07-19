@@ -1,6 +1,6 @@
 # Desktop keyboard event navigation prototype
 
-> **Status:** V6 lab prototype, not a production-wide keyboard override
+> **Status:** V7 lab prototype, not a production-wide keyboard override
 > **Scope:** two desktop event-detail fixtures at `min-width: 1024px`
 > **Fixtures:** `6408` Split / multi-image and `6593` Editorial / one-image
 
@@ -8,8 +8,8 @@
 
 Current public noindex prototypes:
 
-- <https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v6/sobytiya/spektakl-sobaka-na-sene-kaliningrad-6408/>
-- <https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v6/sobytiya/spektakl-elementarno-hadson-delo-o-sobake-b-kaliningrad-6593/>
+- <https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v7/sobytiya/spektakl-sobaka-na-sene-kaliningrad-6408/>
+- <https://kenigevents.ru/preview-20260719-keyboard-event-navigation-v7/sobytiya/spektakl-elementarno-hadson-delo-o-sobake-b-kaliningrad-6593/>
 
 The immutable prefix contains exactly these two new HTML objects and reuses V1
 assets. It does not publish a catalog, change production event pages, touch
@@ -38,9 +38,11 @@ journey.
 | Current-event CTA | `ArrowLeft` / `ArrowRight` | Previous / next hero image; safe no-op for one-image Editorial |
 | Current-event CTA | fresh `ArrowUp` | Open existing fullscreen gallery |
 | Keyboard-opened gallery | `Escape` | Close and restore the logical CTA owner; arrows work again immediately |
+| Open gallery | fresh `ArrowDown` | Close, restore the logical owner and do not scroll the covered page |
 | First related row | `ArrowUp` | Focus CTA and scroll to page top; held repeat cannot open gallery |
 | Current-event CTA | `Enter` | Visible primary CTA |
 | Current-event CTA | `L` / `K` / `S` | Like / calendar / copy title plus canonical URL |
+| Lost DOM focus (`body`) after a managed surface/card | `L` | Re-enter the recorded logical owner and execute once |
 | Current-event CTA or description copy group | `C` | Copy title, rendered lead/body and canonical URL |
 | Current-event CTA or description copy group | physical `P` | Copy the canonical event poster as PNG |
 | Related or `Ещё события` card | arrows | One spatial step per released press; bridge between both card zones |
@@ -61,6 +63,15 @@ qualify. One normal surface Down performs exactly one controlled 40–72 px
 scroll step; this avoids Chromium dropping the first default scroll while a
 fullscreen overlay finishes closing. The visible `Перейти к похожим` button
 remains the timing-independent alternative.
+
+Lost-focus recovery is deliberately narrower than ordinary global hotkeys. It
+accepts only `L` from `body`/the document element, after modal, IME, modifier
+and editor exclusions, and only while provenance is armed by the last meaningful
+focus/pointer owner being the CTA surface or a managed card. A pointer/focus in
+the header, footer, editor or unrelated control disarms it. The logical owner is
+resolved and focused without scrolling before the action runs. `K`, `S`, `C`
+and `P` retain their stricter ownership because their result or payload can be
+ambiguous without an explicit context.
 
 The continuation is a separate semantic zone outside
 `[data-desktop-clean-event]`. Its section is observed idempotently because the
@@ -158,44 +169,145 @@ Run the same full regression on each route:
 
 ```bash
 cd site
-STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321/preview-20260719-keyboard-event-navigation-v6 \
+STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321/preview-20260719-keyboard-event-navigation-v7 \
 KEYBOARD_NAVIGATION_ROUTE=sobytiya/spektakl-sobaka-na-sene-kaliningrad-6408/ \
   npm run check:keyboard-event-navigation
 
-STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321/preview-20260719-keyboard-event-navigation-v6 \
+STATIC_SITE_REVIEW_BASE_URL=http://127.0.0.1:4321/preview-20260719-keyboard-event-navigation-v7 \
 KEYBOARD_NAVIGATION_ROUTE=sobytiya/spektakl-elementarno-hadson-delo-o-sobake-b-kaliningrad-6593/ \
   npm run check:keyboard-event-navigation
 ```
 
 The parameterized Playwright gate covers single/slow-double/quick-double/
 boundary Down, per-arrow held-repeat suppression, page-top return without
-gallery escalation, gallery Escape focus restoration and immediate reopening,
+gallery escalation, gallery Down close without background scroll, gallery
+Escape focus restoration and immediate reopening,
 single/multi-image hero behavior, gallery recommendation Enter/Space, scoped
 event/service/body P, exact description/event/service payloads, real PNG poster
 preparation, real focus entry into the lazy consent dialog plus decline/accept
-owner restoration, red like, green calendar,
+owner restoration, repeatable lost-focus `L` recovery from `body`, red like,
+green calendar,
 related→continuation hydration and reverse bridge, unified continuation
 Enter/L/K/S/Escape/Home/End, slot replacement and feedback-rerank owner
 restoration, dynamic K badges, canonical links, daily dedupe,
 adaptive mastery/lapse, no Web Share, noindex and horizontal overflow.
 
-## External review and project-skill gate
+## External review and project skill
 
-V6 received product/engineering consultation and a stable-diff final acceptance
-through agy from approved `gemini-3.1-pro-preview` (`Gemini 3.1 Pro (High)`) on
-2026-07-19. The final run (`13:22:41Z–13:24:10Z`, exit 0, stderr 0) accepted
-R1–R6 and returned **SHIP** for exactly these two immutable noindex prototypes,
-with no pre-publication P0. Its required contract—logical overlay owner
-restoration, per-code pressed arrows, explicit two-zone bridging, strict-focus
-P ownership and exact Russian learning copy—is implemented. This is not
-production-rollout approval: the remote collector/RPC and live human acceptance
-stay separate gates.
+V7 received a new stable-diff acceptance through agy from approved
+`gemini-3.1-pro-preview` (`Gemini 3.1 Pro (High)`) on 2026-07-19. The primary
+run (`14:11:15Z–14:12:24Z`) and same-model clarification
+(`14:14:22Z–14:14:51Z`) both exited 0 with empty stderr. The reviewed diff
+`5bc932aaaf3eb4185d1d48c449a0e1076701ad2c9a392cb452bddafa460e1a29`
+passed R1–R4 and received **SHIP** for exactly two immutable noindex V7
+objects. Production remains **NOT READY** pending the lifecycle, cross-browser,
+accessibility and telemetry gates below. The publication contract requires the
+exact HTML robots meta; an `X-Robots-Tag` header is not required.
 
-Do **not** create a project keyboard-navigation skill yet. The user proposed it
-after successful live testing; Gemini agreed to wait. After both public fixtures
-receive user acceptance, extract the stable rules: scoped ownership, physical
-key codes, visible keycaps/tooltips, layout-safe hints, teaching blocks, compact
-daily facts, modal priority and dual-template regression.
+The reusable project skill now lives at
+`.codex/skills/keyboard-interface-navigation/`. It is intentionally broader
+than this prototype and covers command ownership, physical key codes, modal
+priority, dynamic graph focus, lost-focus re-entry, repeat latches, visible and
+accessible hints, privacy-minimal daily facts and the required acceptance
+matrix. Its `agents/openai.yaml` makes it discoverable in future Codex work.
+
+## Production pipeline handoff
+
+### What to integrate
+
+Use branch `agent/keyboard-event-navigation-prototype` as the reviewed source.
+The reusable behavior is in
+`site/src/components/KeyboardEventNavigationPrototype.astro`; the builder and
+two generated pages are lab packaging, not production architecture. The
+parameterized regression is
+`site/scripts/check-keyboard-event-navigation-playwright.sh`, and the canonical
+product/engineering contract is this document.
+
+Production integration should retain these semantic DOM contracts rather than
+hero geometry or copied markup:
+
+- `[data-desktop-clean-event]` — current event root;
+- visible `[data-desktop-action-panel]` — current-event keyboard surface;
+- `[data-related-start] [data-event-card]` — explicit similar-event zone;
+- `[data-personal-feed-section][data-listing-context="event-detail"]` and its
+  replaceable `[data-personal-feed-slot]` — continuation zone;
+- `[data-hero-gallery-open]` / `[data-hero-gallery]` /
+  `[data-hero-gallery-close]` — existing gallery lifecycle;
+- existing like, calendar and share data actions — the shortcut router calls
+  real controls and does not implement parallel business state.
+
+### Resolver priority and state
+
+Keep one ordered command router with this priority:
+
+1. desktop/media eligibility, composition, modifier and editable exclusions;
+2. active gallery or consent/other topmost dialog;
+3. explicitly focused service-share control;
+4. current-event CTA surface;
+5. managed related/continuation card;
+6. provenance-gated `body` re-entry for `L` only;
+7. otherwise leave the event untouched and preserve browser behavior.
+
+Persist logical owner as `{kind, eventId, zone, index}` plus a connected node
+only as a fast path. Resolve after every rerender by connected node → same event
+ID → nearest surviving zone/index → CTA. Overlay sessions need a monotonic token,
+logical owner and opener. On every overlay close clear pressed-arrow and
+double-Down state before restoring focus. Keep a per-physical-code pressed latch
+until matching `keyup`; also clear it on pointer ownership changes, window blur
+and hidden `visibilitychange`.
+In the production extraction, also disarm lost-focus action provenance on
+window blur/hidden visibility and re-arm only from a new managed focus/pointer
+owner; this is a lifecycle/assistive-technology hardening gate rather than a
+prototype publication blocker.
+
+The dynamic personal-feed **section**, not its current slot node, must be
+observed: the renderer can replace the slot itself. Re-enhance new cards
+idempotently, normalize their canonical URLs, reconnect action-state observers,
+and restore focus in `requestAnimationFrame` after the mutation batch settles.
+
+### Recommended extraction sequence
+
+1. Extract the inline router into a production module with an explicit
+   `init(root, options)` / `destroy()` lifecycle. Use an `AbortController` or
+   equivalent cleanup for document listeners and disconnect all observers.
+2. Derive executable commands, displayed keycaps, `title`,
+   `aria-keyshortcuts`, help copy and analytics IDs from one command registry.
+3. Remove prototype-only autofocus. Activate on the first recognized keyboard
+   intent, explicit `Перейти к похожим`, or a restored listing→detail journey.
+4. Keep the navigator behind a desktop feature flag and gradual cohort gate;
+   do not enable it on listing pages or mobile as a side effect.
+5. Reuse the current gallery, feedback, calendar, clipboard and service-share
+   implementations. Add lifecycle events to those shared components where a
+   stable event is safer than observing classes.
+6. Port the two-fixture test unchanged first, then add production URLs as a
+   separate live smoke suite. Preserve both the Split/multi-image and
+   Editorial/single-image fixtures.
+
+### Analytics boundary
+
+The browser ledger remains an allowlisted boolean set of successful actions per
+Kaliningrad day with 35-day maximum local retention. It must not include event
+ID, card ID, title, URL, route, copied content, raw key, count, precise time,
+focus trail, scroll position, UA or failure payload. Before consent it stays
+local. A future same-origin collector should derive day and a dataset-scoped
+HMAC subject server-side and insert one boolean `(subject, day, action)` fact via
+`ON CONFLICT DO NOTHING`; never expose direct browser table writes or public
+reads. Collector/RPC schema, abuse controls and deletion are a separate reviewed
+production change.
+
+### Production release gates
+
+- dual-fixture Chromium regression plus manual Firefox/Safari desktop checks;
+- Latin and Cyrillic physical-code checks;
+- keyboard-only and mouse→keyboard mixed journeys, including intentional blur;
+- gallery close through `Down`, `Escape`, close button and route change;
+- consent accept/decline, rerank and slot replacement with focus evidence;
+- no regression to `Tab`, `Shift+Tab`, `Space`, editors, OS/browser chords,
+  screen-reader commands, high contrast, zoom/reflow or reduced motion;
+- feature-flag rollback, cleanup on navigation and telemetry privacy review.
+
+Until these gates and the collector decision are complete, V7 is a noindex lab
+prototype and not production-rollout approval.
 
 ## Deliberate non-goals
 

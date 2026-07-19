@@ -9,7 +9,7 @@
       <span>Перейти к похожим</span><kbd>↓↓</kbd>
     </button>
     <div class="keyboard-quickstart__contexts" aria-label="Ситуативные клавиши быстрой навигации">
-      <p><strong>Событие</strong><span><kbd>↓</kbd> прокрутка · <kbd>↓↓</kbd> к карточкам · <kbd>↑</kbd> галерея · <kbd>← →</kbd> фото</span><span><kbd>L</kbd> нравится · <kbd>K</kbd> в календарь · <kbd>S</kbd> ссылка · <kbd>C</kbd> описание · <kbd>P</kbd> афиша</span></p>
+      <p><strong>Событие</strong><span><kbd>↓</kbd> прокрутка · <kbd>↓↓</kbd> к карточкам · <kbd>↑</kbd> галерея · в галерее <kbd>↓</kbd> закрыть · <kbd>← →</kbd> фото</span><span><kbd>L</kbd> нравится · <kbd>K</kbd> в календарь · <kbd>S</kbd> ссылка · <kbd>C</kbd> описание · <kbd>P</kbd> афиша</span></p>
       <p><strong>Выбранная карточка</strong><span><kbd>Стрелки</kbd> между «Похожими» и «Ещё событиями» · <kbd>Enter</kbd> открыть</span><span><kbd>L</kbd> нравится · <kbd>K</kbd> в календарь · <kbd>S</kbd> ссылка</span></p>
       <p><strong>Поделиться сервисом</strong><span><kbd>P</kbd> скопировать карточку «Анонсов» · <kbd>S</kbd> скопировать текст и ссылку</span></p>
     </div>
@@ -21,7 +21,7 @@
   На карточках используйте стрелки для перехода между событиями. Пробел также прокручивает страницу.
   Enter открывает событие или основное действие. L ставит лайк, K добавляет в календарь,
   S копирует название и ссылку, C копирует полное описание, P копирует афишу текущего события. Стрелки влево и вправо в верхнем блоке листают фотографии,
-  стрелка вверх открывает полноэкранную галерею.
+  стрелка вверх открывает полноэкранную галерею, а стрелка вниз закрывает её и возвращает к событию.
 </p>
 <p class="sr-only" data-keyboard-prototype-status role="status" aria-live="polite" aria-atomic="true"></p>
 <div class="keyboard-action-toast" data-keyboard-action-toast aria-hidden="true" hidden>
@@ -69,7 +69,7 @@
     const shortcutMasteryDays = 3;
     const shortcutMasteryWindowDays = 14;
     const shortcutActionAllowlist = new Set([
-      'primary_cta', 'hero_previous', 'hero_next', 'gallery_open', 'gallery_recommendation_enter',
+      'primary_cta', 'hero_previous', 'hero_next', 'gallery_open', 'gallery_close_down', 'gallery_recommendation_enter',
       'gallery_recommendation_space', 'related_jump', 'related_boundary_focus', 'related_reentry',
       'return_event_top', 'card_open', 'card_previous', 'card_next', 'card_row_up', 'card_row_down',
       'like_toggle', 'calendar_add', 'copy_event', 'copy_description', 'copy_event_poster', 'service_copy_poster', 'service_copy_text',
@@ -323,8 +323,10 @@
     let downGesture = null;
     let downGestureTimer = null;
     let suppressGalleryUntilArrowUpRelease = false;
+    let suppressPageDownUntilArrowDownRelease = false;
     const pressedArrows = new Set();
     let logicalOwner = { kind: 'surface', node: surface, eventId: '', zone: '', index: 0 };
+    let bodyRecoveryArmed = false;
     let overlayReturn = null;
     let overlaySequence = 0;
     let pendingContinuationEntry = false;
@@ -906,7 +908,24 @@
       if (gallery instanceof HTMLElement) {
         const recommendation = activeGalleryRecommendation(gallery);
         if (event.code !== 'Space') gallerySpaceArm = null;
-        if (recommendation instanceof HTMLAnchorElement && event.code === 'Enter' && !event.repeat) {
+        if (event.code === 'ArrowDown') {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (!event.repeat) {
+            const close = gallery.querySelector('[data-hero-gallery-close]');
+            if (close instanceof HTMLElement) {
+              if (!overlayReturn || overlayReturn.type !== 'gallery') {
+                const token = ++overlaySequence;
+                overlayReturn = { token, type: 'gallery', owner: logicalOwner, opener: heroOpener };
+              }
+              suppressPageDownUntilArrowDownRelease = true;
+              pressedArrows.clear();
+              resetDownGesture();
+              close.click();
+              recordShortcutUse('gallery_close_down');
+            }
+          }
+        } else if (recommendation instanceof HTMLAnchorElement && event.code === 'Enter' && !event.repeat) {
           if (target === gallery) {
             event.preventDefault();
             recordShortcutUse('gallery_recommendation_enter');
@@ -934,6 +953,11 @@
       }
       if (dialogIsOpen()) return;
 
+      if (event.code === 'ArrowDown' && suppressPageDownUntilArrowDownRelease) {
+        event.preventDefault();
+        return;
+      }
+
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
         if (pressedArrows.has(event.code) || event.repeat) {
           event.preventDefault();
@@ -946,6 +970,17 @@
         event.preventDefault();
         focusFirstCard();
         recordShortcutUse('related_reentry');
+        return;
+      }
+
+      if (event.code === 'KeyL' && !event.repeat && bodyRecoveryArmed
+        && (target === document.body || target === document.documentElement)) {
+        const scope = resolveLogicalOwner();
+        if (scope instanceof HTMLElement && isVisible(scope)) {
+          scope.focus({ preventScroll: true });
+          captureLogicalOwner(scope);
+          runAction(scope, event);
+        }
         return;
       }
 
@@ -1086,9 +1121,10 @@
     document.addEventListener('keyup', (event) => {
       if (!desktopKeyboard.matches) return;
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) pressedArrows.delete(event.code);
+      if (event.code === 'ArrowDown') suppressPageDownUntilArrowDownRelease = false;
       if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      if (event.code === 'ArrowDown' && downGesture) {
-        downGesture.released = true;
+      if (event.code === 'ArrowDown') {
+        if (downGesture) downGesture.released = true;
         return;
       }
       if (event.code === 'ArrowUp') {
@@ -1110,20 +1146,36 @@
       if (gallerySpaceArm && document.activeElement !== gallerySpaceArm.target) gallerySpaceArm = null;
       if (downGesture && document.activeElement !== surface) resetDownGesture();
       const active = document.activeElement;
-      if (active === surface || surface.contains(active) || managedCardFor(active)) captureLogicalOwner(active);
+      if (active === surface || surface.contains(active) || managedCardFor(active)) {
+        captureLogicalOwner(active);
+        bodyRecoveryArmed = true;
+      } else if (active !== document.body && active !== document.documentElement) {
+        bodyRecoveryArmed = false;
+      }
     });
-    document.addEventListener('pointerdown', () => {
+    document.addEventListener('pointerdown', (event) => {
       resetDownGesture();
       pressedArrows.clear();
+      suppressPageDownUntilArrowDownRelease = false;
+      const pointerOwner = event.target === surface || (event.target instanceof Node && surface.contains(event.target))
+        ? surface : managedCardFor(event.target);
+      if (pointerOwner instanceof HTMLElement) {
+        captureLogicalOwner(pointerOwner);
+        bodyRecoveryArmed = true;
+      } else {
+        bodyRecoveryArmed = false;
+      }
     }, { passive: true });
     window.addEventListener('blur', () => {
       resetDownGesture();
       pressedArrows.clear();
+      suppressPageDownUntilArrowDownRelease = false;
     });
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) return;
       resetDownGesture();
       pressedArrows.clear();
+      suppressPageDownUntilArrowDownRelease = false;
     });
 
     startButton?.addEventListener('click', focusFirstCard);
