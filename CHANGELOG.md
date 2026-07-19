@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fixed static event detail parity so a one-photo Editorial page keeps the same
+  CTA side-motion/docking state machine as a multi-photo page; the optional
+  thumbnail rail no longer controls the page-family behavior.
+- Fixed desktop broad discovery cards to reuse the canonical `EventCard`
+  DOM/interaction contract instead of a handwritten runtime clone, while
+  retaining the visibly separate, finite six-card anti-bubble section after
+  explicitly similar events and leaving the established mobile surface intact.
 - Fixed StaticSiteBuilder host reconciliation so a host-validated published run
   releases only its own active Kaggle leases, retries transient SQLite writer
   locks, and is replayed before the next Smart Update remote push; this prevents

@@ -1,0 +1,91 @@
+mode: worktree_worker
+repo: events-bot-new
+base_ref: origin/main
+base_sha: a4faf9a2a2c4d2f9318b3a534b6fb3e57993aa54
+base_branch: main
+integration_branch: integration/static-event-continuation-parity-20260719
+global_constraints:
+  - Do not change keyboard shortcuts or gallery key handling pending product concept.
+  - Do not rebuild or publish the full static-site catalog.
+  - Preserve a distinct finite desktop broad-recommendation section after explicitly similar events.
+  - Mobile continuation behavior is unchanged in this code pass except where canonical card reuse requires parity.
+verification_owner: root integrator
+stop_conditions:
+  - Any requirement needs a full production rebuild or publish.
+  - The two code lanes need to edit the same component.
+lanes:
+  - id: R01-R02-cleanup
+    role: integrator
+    requirement_ids: [R01, R02]
+    target: local worktrees/artifacts and Yandex Object Storage obsolete preview prefixes
+    depends_on: []
+    execution_mode: serial_after_dependency
+    branch: integration/static-event-continuation-parity-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-continuation-parity-integration
+    writable_files: [artifacts/codex/static-event-followup-analysis-20260719]
+    forbidden_files: [production root objects, p/, ics/, _review/]
+    expected_output: cleanup evidence and protected retention boundary
+    verification_scope: targeted
+    status: committed
+  - id: R03-editorial
+    role: worker
+    requirement_ids: [R03]
+    target: one-photo and multi-photo Editorial behavioral parity
+    depends_on: [R01-R02-cleanup]
+    execution_mode: parallel
+    branch: agent/static-event-continuation-parity/editorial
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-continuation-parity-editorial
+    writable_files:
+      - site/src/components/DesktopEventPage.astro
+      - site/src/lib/desktopEventPresentation.ts
+      - site/scripts/check-production-desktop-contract.mjs
+      - site/scripts/check-desktop-cta-geometry-playwright.sh
+      - .codex/lanes/R03-editorial/RESULTS.md
+    forbidden_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/components/EventCard.astro
+      - keyboard shortcut and keydown handlers
+    expected_output: committed focused fix plus targeted tests
+    verification_scope: targeted
+    status: merged
+  - id: R04-cards
+    role: worker
+    requirement_ids: [R04]
+    target: canonical EventCard reuse and finite distinct desktop broad recommendations
+    depends_on: [R01-R02-cleanup]
+    execution_mode: parallel
+    branch: agent/static-event-continuation-parity/cards
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-continuation-parity-cards
+    writable_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/components/EventCard.astro
+      - site/src/components/PersonalFeedSlot.astro
+      - site/src/components/AuthorizedEventSearch.astro
+      - site/src/lib/personalFeed.ts
+      - site/scripts
+      - site/tests
+      - .codex/lanes/R04-cards/RESULTS.md
+    forbidden_files:
+      - site/src/components/DesktopEventPage.astro
+      - keyboard shortcut and gallery keydown handlers
+    expected_output: committed shared-card implementation preserving a separate bounded desktop section
+    verification_scope: targeted
+    status: merged
+  - id: R05-R06-integration
+    role: merge_reviewer
+    requirement_ids: [R05, R06]
+    target: documentation, changelog, integration and no-regeneration verification
+    depends_on: [R03-editorial, R04-cards]
+    execution_mode: serial_after_dependency
+    branch: integration/static-event-continuation-parity-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-event-continuation-parity-integration
+    writable_files:
+      - docs/features/static-site-pages/README.md
+      - docs/features/static-site-pages/test-scenarios.md
+      - CHANGELOG.md
+      - .codex/integration/INTEGRATION_REPORT.md
+    forbidden_files:
+      - site/src keyboard handlers
+    expected_output: integrated commits, targeted verification, closure report
+    verification_scope: targeted
+    status: committed

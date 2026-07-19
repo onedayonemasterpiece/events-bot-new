@@ -85,3 +85,42 @@ test('event continuation excludes current, prior, recent and rejected while inte
   assert.ok(Math.max(...[...new Set(venues)].map((value) => venues.filter((item) => item === value).length)) <= 2);
   assert.ok(selected.some(({ candidate }) => candidate.verification_state === 'not_run'), 'raw vector candidates may appear only in the mixed continuation');
 });
+
+test('broad continuation escapes a same-type bubble while remaining finite and deduplicated', () => {
+  const item = (eventId, category, venue) => ({
+    event_id: eventId,
+    personal_score: 1 - eventId / 1000,
+    candidate: { event_id: eventId, category, location_name: venue },
+  });
+  const selected = selectEventContinuation({
+    currentEventId: 1,
+    excludedIds: [2],
+    profileCandidates: [
+      item(2, 'theatre', 'stage-a'),
+      item(3, 'theatre', 'stage-a'),
+      item(4, 'theatre', 'stage-b'),
+      item(5, 'theatre', 'stage-c'),
+      item(6, 'theatre', 'stage-d'),
+    ],
+    adjacentCandidates: [
+      item(3, 'theatre', 'stage-a'),
+      item(7, 'music', 'hall-a'),
+      item(8, 'exhibition', 'museum-a'),
+      item(9, 'lecture', 'library-a'),
+    ],
+    genericCandidates: [
+      item(10, 'cinema', 'screen-a'),
+      item(11, 'market', 'square-a'),
+    ],
+    limit: 6,
+    maxSameCategory: 3,
+    maxSameVenue: 2,
+  });
+
+  const ids = selected.map(({ event_id }) => event_id);
+  assert.equal(selected.length, 6, 'desktop broad discovery is capped to exactly two three-card rows when supply exists');
+  assert.equal(new Set(ids).size, ids.length, 'the same event never appears twice across ranking lanes');
+  assert.ok(!ids.includes(2), 'events already offered by the similar section stay excluded');
+  assert.ok(selected.filter(({ candidate }) => candidate.category === 'theatre').length <= 3, 'at least half of the finite section escapes the theatre/type bubble');
+  assert.ok(new Set(selected.map(({ candidate }) => candidate.category)).size >= 4, 'the continuation deliberately broadens across event types');
+});

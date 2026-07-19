@@ -248,6 +248,19 @@ pending: ordinary photos use bounded `cover`, while OCR/unknown-text documents
 and positively classified non-photo documents use `contain`. There is no crop for OCR, no duplicate underlay, no
 blur/backdrop fill and no repeated image edges. Each event page statically preloads up to 10 continuation candidates in HTML; after JS starts, the page uses only a consented compatible local profile (`ke_personalization_profile`, UUID `anon_id/session_id`, `event-detail-related-v1` + `event-taxonomy-v1`) to filter/rerank. The client removes already hidden / `not_interested` / strong negative-interest matches from the preloaded cards, performs one same-origin JSON hydration from `/data/discovery/<event_id>.json`, where the payload is an `event_detail_related` manifest with `related_static[]`, and top-ups relevant candidates; subsequent expansion is only by `Показать ещё`. Local strong actions currently write a compact browser log with `served_list_id` / `served_list_hash` context for future Supabase telemetry mapping. Important status: the v39 static preview does **not** persist first-party likes/profile snapshots to Supabase yet; the preview contract keeps like/profile writes local-only and forbids treating this as Supabase persistence. Source counters are already synced to Supabase by the production metric pipeline, but browser feedback remains same-browser/local until the dedicated gated write path (same-origin endpoint or append-only Supabase RPC with RLS/grants) is implemented. Cards are full-clickable for users while keeping real HTML links on media/title for SEO/GEO; double-tap like is disabled because it conflicted with navigation. `Не интересно` turns the acted-on card into a grey explanatory plate with an explicit `Отменить` action; tapping the plate itself must not navigate to detail. Visible like/share counters are hidden when the total is zero. Visible like counts are honest totals: `likes_count = source_likes_count + service_likes_count`, where source likes come from production TG/VK post metrics and service likes are first-party KenigEvents likes; public HTML/UI shows only this total, not the technical source/service split. The hero no longer duplicates facts as a second info block; it keeps only a compact meta line, while the single `Коротко` block owns icon facts (`Где` combines venue + address, `Вход`, optional `Пушкинская карта`/festival), no longer links to Telegraph, and no longer exposes source count/views in public HTML. The registered-user sources/mentions notice belongs to the parent details section as a bottom strip, not to the `Коротко` fact block. Footer is now a compact navigation block: top links (`Сегодня`, `Завтра`, `Выходные`, `Все анонсы`), crawlable editorial social links with icons + short labels, and contact email `info@kenigevents.ru`.
 
+Desktop deliberately keeps a visible semantic boundary after the explicitly
+similar `Смотрите дальше` set. The following `Ещё события` / mature-profile
+`По вашим интересам` section is a finite broad-discovery module, not another
+similarity claim and not an infinite feed: it renders at most six deduplicated
+cards (a few desktop rows according to the resolved grid), then `Все анонсы`.
+Its candidate mix may interleave compatible profile results, non-rejected
+vector-adjacent tail and a diverse upcoming fallback under category/venue caps,
+so a user is not trapped in a theatre/type bubble. Mobile keeps the established
+single continuation surface and must not duplicate this desktop-only module.
+Both server-rendered related cards and runtime-selected broad cards use the same
+canonical `EventCard` DOM contract and interaction controller; sharing only row
+geometry while maintaining a second handwritten card renderer is forbidden.
+
 Preview `v40` closes the share experiment: temporary `Поделиться эксперимент`, `Поделиться эксперимент 2` and rich-clipboard controls are not production UI. The single visible `Поделиться` button is now the production baseline: it attempts Web Share with image file + plain text + URL, then falls back to generated 1080×1350 image + text + URL, and finally to text/URL copy when the browser or target app cannot accept files. Rich hidden hyperlinks inside share text are documented as impossible to guarantee from a mobile browser.
 
 Preview fixture note: production row `5370` («Точка и линия») currently has a false-free state (`is_free=1`, `ticket_status=бесплатно по регистрации`) because a free curator round-table source was merged into the long-running paid exhibition. The v40 fixture intentionally overrides the preview event to `ticket / paid / is_free=false` and attaches five real exhibition photos for gallery testing; production source-of-truth repair remains a separate event-quality task under the existing false-free incident family.
@@ -637,6 +650,12 @@ Google Event structured data требует добавлять required properti
 - “Другие даты” рендерятся отдельным блоком и не смешиваются с “Похожие события”;
 - client island может после consent переупорядочить уже полезный block, но не должен ломать CTA/SEO;
 - mobile рендерит related как вертикальную continuation/feed-секцию `Смотрите дальше`, не горизонтальный rail; desktop остаётся desktop-native grid/module, а не растянутой мобильной лентой;
+- после явно похожих карточек desktop отдельно и честно обозначает переход к
+  конечной широкой выдаче `Ещё события` / `По вашим интересам`: максимум шесть
+  карточек без load-more/infinite scroll, с anti-bubble diversity; этот модуль
+  не дублируется на mobile;
+- статическая и runtime-персонализированная выдача используют один `EventCard`
+  DOM/behavior contract; отдельный строковый `eventCardHtml` не допускается;
 - cards внутри static fallback сохраняют crawlable media/title links, но служебные feedback controls остаются button-only и `data-nosnippet`;
 - `static_related_v1` уже реализован в `site/src/lib/events.ts`: seed `preview-related.json` + deterministic scoring by category/tag overlap/city/date/venue/price/status + hard exclusions for current/other-date/past/inactive. Это достаточный MVP baseline for preview, но не финальная product-quality рекомендация без expanded catalog/golden top-10 review.
 
