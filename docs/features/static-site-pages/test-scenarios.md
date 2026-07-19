@@ -62,7 +62,9 @@
   new request. A callback token committed by the runner must also be visible to
   the live aiohttp process even when its shared SQLite connection holds an old
   snapshot; callback writes retry a bounded writer lock and cannot poison the
-  following callback transaction.
+  following callback transaction. A newer pending follow-up cannot supersede
+  the older error row while that row is still the exact active recovery owner;
+  recovery is ordered before follow-up generation.
 - **ADD-V12-06 — Content no-op.** Operational queue churn and already elapsed
   rows do not change the public fingerprint; public fields, policy, repo SHA,
   related cache or local date do. Explicit operator force is audited separately.

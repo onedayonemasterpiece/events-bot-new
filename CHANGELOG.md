@@ -12,6 +12,8 @@
   handoff and immutable snapshot while merging new Smart Update effects. Kaggle
   callbacks now authenticate and write through fresh, bounded SQLite
   transactions so a stale shared connection cannot reject a valid new token.
+  An exact active recovery row also runs before a newer pending coalesced
+  follow-up instead of being incorrectly marked superseded.
 - Fixed v13 event-page review regressions: crop-safe wide unknown visuals now
   use the horizontal detail family; Split CTA collapses both utilities before
   stacking and promotes calendar for free one-day events; gallery pointer CTA,

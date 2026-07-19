@@ -300,7 +300,7 @@ from scheduling import (
     runtime_health_status as scheduler_runtime_health_status,
     video_tomorrow_watchdog_enabled as scheduler_video_tomorrow_watchdog_enabled,
 )
-from sqlalchemy import select, update, delete, text, func, or_, and_, case
+from sqlalchemy import select, update, delete, text, text as sql_text, func, or_, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from festival_queue import (
@@ -8502,7 +8502,7 @@ async def _invalidate_ics_storage_projection(db: Database, event_id: int) -> boo
                 if parsed:
                     bucket, path = parsed
                     await session.execute(
-                        text(
+                        sql_text(
                             "INSERT OR IGNORE INTO supabase_delete_queue(bucket, path) "
                             "VALUES(:bucket, :path)"
                         ),
@@ -18506,7 +18506,29 @@ async def _run_due_jobs_once_locked(
                         )
                         .limit(1)
                 )
-                if later.first():
+                later_row = later.first()
+                active_static_recovery = False
+                if later_row and obj.task == JobTask.static_site_build:
+                    active_job_result = await session.execute(
+                        sql_text(
+                            """
+                            SELECT active_job_id FROM static_site_build_state
+                            WHERE release_channel='secret_preview'
+                            """
+                        )
+                    )
+                    active_job_id = active_job_result.scalar_one_or_none()
+                    active_static_recovery = bool(
+                        active_job_id and int(active_job_id) == int(obj.id)
+                    )
+                    if active_static_recovery:
+                        logging.info(
+                            "STATIC_SITE_ACTIVE_RECOVERY_PRECEDES_FOLLOWUP "
+                            "active_job_id=%s followup_job_id=%s",
+                            obj.id,
+                            int(later_row[0]),
+                        )
+                if later_row and not active_static_recovery:
                     obj.status = JobStatus.error
                     obj.last_error = "superseded"
                     obj.updated_at = now

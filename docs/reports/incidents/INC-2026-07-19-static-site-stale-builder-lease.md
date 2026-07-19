@@ -86,6 +86,10 @@ callback was rejected as `invalid token`.
    committed by a separate runner process, the web handler could then miss the
    new token even though a fresh connection and the mounted status dataset had
    identical SHA-256 hashes.
+8. The generic coalesced-outbox supersession check preferred a newer pending
+   static follow-up over the older error row even when the durable state still
+   named that older row as `active_job_id`. It therefore skipped the only job
+   allowed to reconcile the exact remote run.
 
 This is a mechanical idempotency/status-lifecycle failure; it does not make an
 event-semantic decision and does not require an LLM-first repair.
@@ -129,6 +133,8 @@ event-semantic decision and does not require an LLM-first repair.
   the next request;
 - requeue of the exact active job preserves its recoverable handoff/snapshot,
   while a non-active stale job starts from the fresh request payload;
+- an exact active recovery row runs before any newer pending coalesced
+  follow-up instead of being marked `superseded`;
 - static-site preflight replays reconciliation for the durable current
   candidate before remote recovery/push;
 - Python Kaggle-status/static-handoff regression suites pass;
@@ -173,6 +179,9 @@ event-semantic decision and does not require an LLM-first repair.
 - Callback token validation now reads through a fresh connection, while every
   callback event owns one fresh bounded `BEGIN IMMEDIATE` transaction with
   rollback and close on failure.
+- Generic outbox supersession now yields to the exact static-site active owner;
+  the accumulated pending follow-up remains queued and runs only after remote
+  recovery completes.
 
 ## Follow-up Actions
 
