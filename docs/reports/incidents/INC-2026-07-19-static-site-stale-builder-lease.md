@@ -59,6 +59,12 @@ callback was rejected as `invalid token`.
   receipt/history/job identity, backed up the affected rows, released only the
   exact owner's lease, recorded `host_result_validated`, and expedited the
   pending Smart Update follow-up.
+- 2026-07-19 01:18 UTC — the first current-main compensating build completed
+  and published successfully; the queued Smart Update follow-up then started,
+  rather than superseding the active recovery row.
+- 2026-07-19 01:40 UTC — the queued follow-up completed from the same current
+  main SHA and fresh production snapshot, atomically replaced the secret
+  candidate, and left `static_site:builder` released.
 
 ## Root Cause
 
@@ -185,17 +191,39 @@ event-semantic decision and does not require an LLM-first repair.
 
 ## Follow-up Actions
 
-- [ ] Complete and publicly validate a current-main compensating candidate.
+- [x] Complete and publicly validate a current-main compensating candidate.
 - [ ] Add an operator alert when a successful static build owns an active lease
   or when a non-terminal Kaggle ledger has a successful host receipt.
 - [ ] Close only after user visual acceptance of the replacement candidate.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending manual `flyctl deploy` from clean main-based worktree
-- regression checks: targeted suites pass locally; production catch-up pending
-- post-deploy verification: pending
+- deployed SHA: `ed93a35aa55de4fb7110945facb2d05eee336578`, reachable
+  from `origin/main`; Fly image
+  `deployment-01KXVXSYS8K2HXBT9RJTAXZN81`.
+- deploy path: manual `flyctl deploy` from a clean, main-based worktree after
+  PRs #91–#95 were merged.
+- regression checks: 71 focused Python tests passed; public Playwright checks
+  passed for the five reported CTA/media fixtures, both requested gallery
+  fixtures, desktop/mobile terminal-gallery navigation, and the six-card
+  continuation component. All checked candidate routes returned `200` with
+  `noindex,nofollow,noarchive,nosnippet` and `no-referrer`.
+- compensating build: `production-secret-20260719T025527-89a6739b` completed,
+  followed by the accumulated Smart Update build
+  `production-secret-20260719T031810-5367ab9b`; the latter published `268`
+  event pages / `906` generated pages / `982` files (`983` published objects)
+  from the deployed SHA.
+- root isolation: the public root SHA-256 remained
+  `e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`
+  before and after publication; stable/current/ICS activation remained off.
+- post-deploy verification: `/healthz` ready, `PRAGMA quick_check=ok`, runtime
+  file mirror present, `/data` free space `1.66 GB`, and the exact final run's
+  `static_site:builder` lease is `released`.
+- review handoff: Telegram chat `-1004337049383`, reply to topic message `261`,
+  new message `375`; read-back confirmed nine secret-candidate link entities.
+- redacted/local evidence: `artifacts/codex/static-event-v13-final/` and
+  `artifacts/codex/INC-2026-07-19-static-site-stale-builder-lease/` (ignored by
+  Git).
 
 ## Prevention
 
