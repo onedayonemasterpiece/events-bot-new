@@ -4818,6 +4818,16 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertEqual(projected["canonical_source_key"], "web:archi.example")
         self.assertEqual(projected["media_use_policy"], "score_only_no_reuse")
         self.assertTrue(projected["has_media"])
+        planned, work = mod.plan_posts_for_vector_scoring(
+            [projected],
+            previous_posts={},
+            e5_index={},
+            bge_m3_index={},
+            require_bge_m3=True,
+        )
+        self.assertEqual(len(planned), 1)
+        self.assertEqual(planned[0]["_rt_work_kind"], "needs_e5")
+        self.assertEqual(work["posts_actionable"], 1)
         row["operator_policy_override"] = {"decision": "blocked"}
         self.assertIsNone(mod.external_publication_intake_to_post(row))
 

@@ -16153,7 +16153,7 @@ def build_report(
     )
     if post_work_idempotency_enabled:
         scoring_pool, post_work_plan = plan_posts_for_vector_scoring(
-            posts,
+            scoring_pool,
             previous_posts=previous_posts,
             e5_index=e5_enrichment_index,
             bge_m3_index=bge_m3_enrichment_index,
