@@ -1171,39 +1171,121 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .listing-filter--floating { transition: none; }
 }
 
-/* Popular V24: desktop keeps the accepted V20/V22 intrinsic flow unchanged.
+/* Popular V25: desktop keeps the accepted V20/V22 intrinsic flow unchanged.
    Phones switch between the canonical EventCard from "Смотрите дальше" and
    an intrinsic-width ListingEventCard wrap derived from the desktop system. */
 .ke-listing-mobile-density-dock { display: none; }
 
 @media (max-width: 720px) {
+  /* Popular mobile chrome reuses the canonical drawer. The ordinary desktop
+     nav must not remain visible behind its fixed brand handle. */
+  body:has(.ke-popular-listing) .site-nav { display: none; }
   .ke-popular-desktop { display: none !important; }
   .ke-popular-behavior--mobile:not([hidden]) { display: grid; }
   .ke-popular-listing {
+    --ke-listing-discovery-height: 48px;
     width: min(calc(100% - 24px), var(--ke-content-listing-max));
     padding-bottom: calc(92px + env(safe-area-inset-bottom));
     touch-action: pan-y;
+  }
+  .ke-popular-listing .ke-listing-head {
+    min-height: 0;
+    gap: 12px;
+    padding: 32px 0 10px;
   }
   .ke-popular-listing .ke-listing-head h1 {
     font-size: clamp(3.2rem, 14vw, 3.7rem);
     overflow-wrap: normal;
     word-break: normal;
   }
+  .ke-popular-listing .ke-listing-date-nav {
+    min-width: 0;
+    min-height: 44px;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ke-popular-listing .ke-listing-date-nav::-webkit-scrollbar { display: none; }
+  .ke-popular-listing .ke-listing-date-nav a {
+    position: relative;
+    flex: 0 0 auto;
+    min-height: 44px;
+    justify-content: center;
+    border: 0;
+    border-radius: 0;
+    padding: 4px 0;
+    background: transparent;
+    color: var(--ke-color-muted);
+    font-size: .84rem;
+  }
+  .ke-popular-listing .ke-listing-date-nav a::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 1px;
+    left: 0;
+    height: 2px;
+    transform: scaleX(0);
+    transform-origin: left;
+    background: var(--ke-color-brand-700);
+  }
+  .ke-popular-listing .ke-listing-date-nav a[aria-current="page"] {
+    background: transparent;
+    color: var(--ke-color-brand-800);
+  }
+  .ke-popular-listing .ke-listing-date-nav a[aria-current="page"]::after { transform: scaleX(1); }
+  .ke-popular-listing .ke-listing-date-nav a > span { display: none; }
+  .ke-popular-listing .ke-listing-discovery-rail--cities-only {
+    position: relative;
+    top: auto;
+    height: 48px;
+  }
+  .ke-popular-listing .ke-listing-discovery-rail--cities-only .ke-listing-discovery-rail__inner {
+    height: 48px;
+    grid-template-rows: 48px;
+  }
+  .ke-popular-listing .ke-listing-discovery-rail--cities-only .ke-listing-controls,
+  .ke-popular-listing .ke-listing-discovery-rail--cities-only .ke-filter-chip { min-height: 48px; height: 48px; }
   .ke-popular-behavior {
-    gap: 30px;
+    gap: 0;
     padding: 20px 0 28px;
   }
+  .ke-popular-listing [data-popular-representation^="mobile-"] .ke-popular-behavior__group + .ke-popular-behavior__group {
+    margin-top: 40px;
+    border-top: 2px solid color-mix(in srgb, var(--ke-color-brand-700) 18%, var(--ke-color-line));
+    padding-top: 32px;
+  }
   .ke-popular-behavior__head {
-    min-height: 38px;
-    gap: 8px;
+    min-height: 52px;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 0;
+    padding-bottom: 12px;
   }
   .ke-popular-behavior__head h2 {
-    max-width: min(84vw, 34rem);
-    font-size: 1.18rem;
-    line-height: 1.12;
+    max-width: min(82vw, 34rem);
+    font-size: 1.5rem;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -.025em;
+  }
+  .ke-popular-behavior__head span {
+    min-width: 28px;
+    min-height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--ke-color-ink) 7%, transparent);
+    font-size: .72rem;
+    font-weight: 820;
   }
   .ke-popular-behavior__row {
-    padding-top: 12px;
+    padding-top: 16px;
   }
 
   /* Large is the actual EventCard used by the mobile "Смотрите дальше"
@@ -1229,7 +1311,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
      A fixed media height plus intrinsic ratio/rail width naturally yields one
      or two cards per line without masonry reordering or OCR normalization. */
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] {
-    gap: 24px;
+    gap: 0;
   }
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-popular-behavior__row {
     --ke-listing-media-height: clamp(118px, 33.7vw, 145px);
@@ -1238,25 +1320,33 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     align-items: start;
     align-content: start;
     justify-content: flex-start;
-    gap: 20px 10px;
+    gap: 20px 8px;
     overflow: visible;
     scroll-snap-type: none;
   }
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card {
+    --ke-listing-mobile-tail-width: 0px;
     display: block;
     grid-template-columns: none;
     gap: 0;
-    flex: 0 0 min(100%, calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px)));
-    width: min(100%, calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px)));
+    flex: 0 0 min(100%, calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-mobile-tail-width)));
+    width: min(100%, calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-mobile-tail-width)));
     max-width: 100%;
     min-width: 0;
     align-self: flex-start;
   }
-  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card[data-listing-image-mode="visual-crop"][data-listing-crop-adaptive="true"] {
-    flex: 1 1 calc(var(--ke-listing-media-height) * 1.05 + var(--ke-listing-tail-width, 0px));
-    min-width: min(100%, calc(var(--ke-listing-media-height) * 1.05 + var(--ke-listing-tail-width, 0px)));
-    max-width: min(100%, calc(var(--ke-listing-media-height) * 1.55 + var(--ke-listing-tail-width, 0px)));
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card[data-listing-proof-placement="rail"][data-listing-side-identity-count="0"] {
+    --ke-listing-mobile-tail-width: 28px;
   }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card:not([data-listing-side-identity-count="0"]) {
+    --ke-listing-mobile-tail-width: 44px;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card[data-listing-image-mode="visual-crop"][data-listing-crop-adaptive="true"] {
+    flex: 1 1 calc(var(--ke-listing-media-height) * 1.05 + var(--ke-listing-mobile-tail-width));
+    min-width: min(100%, calc(var(--ke-listing-media-height) * 1.05 + var(--ke-listing-mobile-tail-width)));
+    max-width: min(100%, calc(var(--ke-listing-media-height) * 1.55 + var(--ke-listing-mobile-tail-width)));
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__visual { gap: 2px; }
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__media {
     width: auto;
     height: var(--ke-listing-media-height);
@@ -1283,13 +1373,54 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     height: 46px;
   }
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__side-rail {
+    flex: 0 0 var(--ke-listing-mobile-tail-width);
+    width: var(--ke-listing-mobile-tail-width);
     height: var(--ke-listing-media-height);
+    gap: 2px;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card[data-listing-tail-layout="split"] .ke-listing-card__side-rail {
+    width: var(--ke-listing-mobile-tail-width);
+    display: flex;
+    grid-template-columns: none;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__side-rail .ke-listing-card__identity-rail,
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card[data-listing-tail-layout="split"] .ke-listing-card__identity-rail {
+    width: 44px;
+    gap: 2px;
   }
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__identity-medallion,
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__free-medallion {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    filter: none;
+    opacity: 1;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside),
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card[data-listing-tail-layout="split"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) {
+    width: 28px;
+    min-width: 28px;
+    height: auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    margin: auto 0 0;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) > span {
+    min-height: 25px;
+    grid-template-columns: 1fr;
+    grid-template-rows: 14px auto;
+    justify-items: center;
+    gap: 0;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) .icon {
+    width: 14px;
+    height: 14px;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) b {
+    font-size: .6rem;
   }
 
   .ke-listing-mobile-density-dock {

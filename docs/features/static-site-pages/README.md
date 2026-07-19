@@ -204,10 +204,15 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Historical public preview evidence
 
-The current mobile `Популярное` density comparison is documented in
-[`listing-surfaces-v24-mobile-pinch.md`](listing-surfaces-v24-mobile-pinch.md):
-it increases real two-up packing without reducing media scale and adds the
-owner-requested pinch shortcut while keeping the visible density dock. The V23
+The current mobile `Популярное` context and hierarchy pass is documented in
+[`listing-surfaces-v25-mobile-context.md`](listing-surfaces-v25-mobile-context.md):
+it preserves the same viewed event across both density controls, replaces the
+desktop-like phone header stack with the existing mobile navigation contract,
+makes ranked categories visually explicit and narrows compact evidence rails
+after measuring the rejected all-under-photo alternative. The V24 density and
+pinch baseline remains documented in
+[`listing-surfaces-v24-mobile-pinch.md`](listing-surfaces-v24-mobile-pinch.md).
+The V23
 component-reuse baseline remains documented in
 [`listing-surfaces-v23-mobile-adaptive.md`](listing-surfaces-v23-mobile-adaptive.md):
 the large phone mode directly reuses canonical `EventCard split-actions`, the

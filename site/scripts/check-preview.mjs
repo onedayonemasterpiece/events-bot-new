@@ -62,21 +62,21 @@ for (const rel of required) {
 
 const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
 for (const marker of [
-  'data-listing-variant="POPULAR-V24"',
+  'data-listing-variant="POPULAR-V25"',
   'data-popular-representation="desktop"',
   'data-popular-representation="mobile-large"',
   'data-popular-representation="mobile-adaptive"',
   'data-ds-component="ListingMobileDensitySwitch"',
-  'data-ds-version="4"',
+  'data-ds-version="5"',
 ]) {
-  if (!popularHtml.includes(marker)) throw new Error(`Popular V24 misses ${marker}`);
+  if (!popularHtml.includes(marker)) throw new Error(`Popular V25 misses ${marker}`);
 }
 const popularDesktopAt = popularHtml.indexOf('data-popular-representation="desktop"');
 const popularLargeAt = popularHtml.indexOf('data-popular-representation="mobile-large"');
 const popularAdaptiveAt = popularHtml.indexOf('data-popular-representation="mobile-adaptive"');
 const popularDockAt = popularHtml.indexOf('data-listing-mobile-density-dock');
 if (!(popularDesktopAt < popularLargeAt && popularLargeAt < popularAdaptiveAt && popularAdaptiveAt < popularDockAt)) {
-  throw new Error('Popular V24 representations are not isolated in desktop / large / adaptive order');
+  throw new Error('Popular V25 representations are not isolated in desktop / large / adaptive order');
 }
 const popularDesktopHtml = popularHtml.slice(popularDesktopAt, popularLargeAt);
 const popularLargeHtml = popularHtml.slice(popularLargeAt, popularAdaptiveAt);
@@ -86,18 +86,18 @@ const popularDesktopIds = listingIds(popularDesktopHtml);
 const popularLargeIds = listingIds(popularLargeHtml);
 const popularAdaptiveIds = listingIds(popularAdaptiveHtml);
 if (popularDesktopIds.length === 0 || new Set(popularDesktopIds).size !== popularDesktopIds.length) {
-  throw new Error('Popular V24 desktop ranking must be present and deduplicated');
+  throw new Error('Popular V25 desktop ranking must be present and deduplicated');
 }
 if (popularDesktopIds.join(',') !== popularLargeIds.join(',') || popularDesktopIds.join(',') !== popularAdaptiveIds.join(',')) {
-  throw new Error('Popular V24 density representations must preserve identical ranked event order');
+  throw new Error('Popular V25 density representations must preserve identical ranked event order');
 }
 if (!popularLargeHtml.includes('event-card--split-actions') || popularLargeHtml.includes('listing-proof')) {
-  throw new Error('Popular V24 large mode must reuse canonical EventCard split-actions without listing-proof');
+  throw new Error('Popular V25 large mode must reuse canonical EventCard split-actions without listing-proof');
 }
 if (!popularAdaptiveHtml.includes('data-ds-component="ListingEventCard"') || !/data-popular-mobile-layout="adaptive"[^>]*hidden[^>]*inert/u.test(popularAdaptiveHtml)) {
-  throw new Error('Popular V24 adaptive mode must use inactive-by-default ListingEventCard rows');
+  throw new Error('Popular V25 adaptive mode must use inactive-by-default ListingEventCard rows');
 }
-if (!popularHtml.includes('maximum-scale=1, user-scalable=no')) throw new Error('Popular V24 must disable page zoom only on its gesture-enabled listing route');
+if (!popularHtml.includes('maximum-scale=1, user-scalable=no')) throw new Error('Popular V25 must disable page zoom only on its gesture-enabled listing route');
 const popularCss = readFileSync(join(siteDir, 'src/styles/design-system.css'), 'utf8');
 for (const cssContract of [
   '[data-popular-representation="mobile-adaptive"] .ke-popular-behavior__row',
@@ -106,14 +106,17 @@ for (const cssContract of [
   'left: 0;',
   'width: 100%;',
   'width: min(calc(100% - 24px), var(--ke-content-listing-max));',
-  'gap: 20px 10px;',
+  'gap: 20px 8px;',
   'touch-action: pan-y;',
+  '--ke-listing-mobile-tail-width: 28px;',
+  '--ke-listing-mobile-tail-width: 44px;',
+  'body:has(.ke-popular-listing) .site-nav { display: none; }',
 ]) {
-  if (!popularCss.includes(cssContract)) throw new Error(`Popular V24 CSS misses ${cssContract}`);
+  if (!popularCss.includes(cssContract)) throw new Error(`Popular V25 CSS misses ${cssContract}`);
 }
 const densitySource = readFileSync(join(siteDir, 'src/components/listings/ListingMobileDensitySwitch.astro'), 'utf8');
-for (const gestureContract of ['pinchDistance', "matchMedia('(max-width: 720px)')", "ratio <= 0.84 ? 'adaptive'", "ratio >= 1.16 ? 'large'", "{ passive: false }", "dataset.listingPinchReady = 'true'"]) {
-  if (!densitySource.includes(gestureContract)) throw new Error(`Popular V24 pinch contract misses ${gestureContract}`);
+for (const gestureContract of ['pinchDistance', "matchMedia('(max-width: 720px)')", "ratio <= 0.84 ? 'adaptive'", "ratio >= 1.16 ? 'large'", "{ passive: false }", "dataset.listingPinchReady = 'true'", 'preferredEventId', 'dataset.listingContextEventId = anchorId']) {
+  if (!densitySource.includes(gestureContract)) throw new Error(`Popular V25 pinch/context contract misses ${gestureContract}`);
 }
 for (const scenario of templateContract.lab_scenarios) {
   const scenarioHtml = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');

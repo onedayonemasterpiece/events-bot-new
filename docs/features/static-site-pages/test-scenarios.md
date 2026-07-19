@@ -423,11 +423,29 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   переключатель закреплён в `bottom:0`, занимает всю ширину viewport, имеет две
   цели минимум 48px и safe-area/padding compensation. Неактивное представление
   одновременно `hidden` и `inert`, выбранное состояние и ближайший event anchor
-  сохраняются.
+  сохраняются. При переключении в обе стороны остаётся тот же просматриваемый
+  `event_id` и его верхняя координата с допуском 1px; контрольный пример —
+  `4689`, `Фестиваль добровольчества #МЫВМЕСТЕ`. Щипок над карточкой обязан
+  предпочесть именно затронутый `event_id`.
 - **ADD-LISTING-04 — Breakpoint and desktop non-regression.** На `720px` видны
   только mobile family и dock, на `721px` — только desktop family без dock. На
   `1366/1536/1920px` геометрия десктопного Popular совпадает с V22 при одном
   snapshot; режимы телефона не влияют на фильтры и их счётчики.
+- **ADD-LISTING-08 — Mobile chrome uses one navigation hierarchy.** На
+  `360/390/430px` обычная `.site-nav` скрыта только для mobile Popular, а общий
+  `.mobile-discovery-menu` остаётся доступен. Четыре listing routes занимают
+  один ряд высотой 44px без стрелок, cities-only rail — один статический ряд
+  высотой 48px без пустого второго уровня и overlap с мобильной биркой.
+- **ADD-LISTING-09 — Popular group hierarchy is visible.** В обоих мобильных
+  режимах заголовок каждой категории имеет минимум `24px/900`, спокойный счётчик
+  и явный смысловой разрыв перед следующей группой; заголовки не sticky и не
+  создают дополнительный слой chrome.
+- **ADD-LISTING-10 — Compact evidence does not defeat scan density.** В compact
+  режиме внешняя evidence-ось занимает 28px только для ненулевых social proof и
+  44px при наличии медальона. Медальоны 40px непрозрачны, безопасный overlay
+  остаётся внутри wide non-OCR. На `390px` paired share не хуже V24, media
+  height/ratio неизменны, а полный документ не становится выше универсального
+  under-photo прототипа.
 
 ### UI, accessibility и browser matrix
 

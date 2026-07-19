@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Improved only mobile Popular context and scan hierarchy: density buttons and
+  pinch now preserve the same viewed event, the existing mobile drawer replaces
+  duplicate phone navigation, routes/cities collapse into light single rows,
+  category boundaries become explicit, and measured 28/44px evidence spines
+  improve compact packing without the vertical cost of universal under-photo
+  metadata. Desktop Popular geometry remains unchanged.
 - Improved only the mobile Popular density layer: reclaimed unused shell width
   so a majority of ranked events can pack two-up without smaller media, changed
   the compact pictogram to two tiles, and added a route-scoped pinch-in/out
