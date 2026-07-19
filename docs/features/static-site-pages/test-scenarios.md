@@ -396,6 +396,27 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   не останавливает month/weekend/festival Telegraph pages; их отдельный switch
   разрешён только после static parity и собственного acceptance pack.
 
+### Mobile Popular density comparison
+
+- **ADD-LISTING-01 — Exact canonical large card.** На `/populyarnoe/` при
+  ширине до `720px` режим `Крупно` рендерит общий `EventCard.astro` с
+  `split-actions`, совпадающий с `Смотрите дальше`; отдельный
+  `listing-proof`/копия DOM запрещены.
+- **ADD-LISTING-02 — Ordered adaptive compact flow.** `Компактно` сохраняет тот
+  же дедуплицированный порядок event IDs, использует существующий
+  `ListingEventCard`, одинаковую media height и последовательный flex-wrap без
+  masonry/order: на реальной выборке есть и парный ряд, и singleton, без
+  horizontal overflow и нового crop правила для OCR.
+- **ADD-LISTING-03 — Full-width accessible dock.** На `360/390/430px` нижний
+  переключатель закреплён в `bottom:0`, занимает всю ширину viewport, имеет две
+  цели минимум 48px и safe-area/padding compensation. Неактивное представление
+  одновременно `hidden` и `inert`, выбранное состояние и ближайший event anchor
+  сохраняются.
+- **ADD-LISTING-04 — Breakpoint and desktop non-regression.** На `720px` видны
+  только mobile family и dock, на `721px` — только desktop family без dock. На
+  `1366/1536/1920px` геометрия десктопного Popular совпадает с V22 при одном
+  snapshot; режимы телефона не влияют на фильтры и их счётчики.
+
 ### UI, accessibility и browser matrix
 
 - **ADD-UI-01 — Единая навигационная модель.** Mobile tag/menu и desktop header сохраняют одинаковые destinations, labels, порядок, active state, избранное и identity semantics.

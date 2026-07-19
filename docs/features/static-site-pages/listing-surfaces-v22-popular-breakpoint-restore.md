@@ -1,5 +1,9 @@
 # Listing surfaces V22: breakpoint-isolated Popular
 
+> **Comparison-only correction:** V22 remains the immutable equal two-column
+> mobile specimen and accepted desktop baseline. Its mobile large-card claim is
+> superseded by V23, which reuses the canonical `EventCard.astro` directly.
+
 > **Status:** immutable preview candidate, 2026-07-19.
 > **Corrects:** the V21 desktop replacement and horizontal phone shelf.
 

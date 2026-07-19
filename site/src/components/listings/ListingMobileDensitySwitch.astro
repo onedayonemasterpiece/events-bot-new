@@ -1,7 +1,7 @@
 <div
   class="ke-listing-mobile-density-dock"
   data-ds-component="ListingMobileDensitySwitch"
-  data-ds-version="2"
+  data-ds-version="3"
   data-listing-mobile-density-dock
   data-nosnippet
 >
@@ -10,16 +10,16 @@
       <span class="ke-listing-mobile-density-switch__icon ke-listing-mobile-density-switch__icon--large" aria-hidden="true"></span>
       Крупно
     </button>
-    <button type="button" role="radio" aria-checked="false" tabindex="-1" aria-label="Компактно, две карточки в ряд" data-listing-density-button="compact">
+    <button type="button" role="radio" aria-checked="false" tabindex="-1" aria-label="Компактный адаптивный поток" data-listing-density-button="adaptive">
       <span class="ke-listing-mobile-density-switch__icon ke-listing-mobile-density-switch__icon--compact" aria-hidden="true"></span>
-      2 в ряд
+      Компактно
     </button>
   </div>
 </div>
 
 <script>
-  const DENSITY_STORAGE_KEY = 'ke_listing_density_v1';
-  const DENSITIES = ['large', 'compact'];
+  const DENSITY_STORAGE_KEY = 'ke_listing_density_v2';
+  const DENSITIES = ['large', 'adaptive'];
 
   function initListingMobileDensitySwitch() {
     document.querySelectorAll('[data-listing-mobile-density-dock]').forEach((dock) => {
@@ -37,9 +37,12 @@
         });
       };
 
-      const visibleAnchor = () => {
+      const representationFor = (density) => density === 'adaptive' ? 'mobile-adaptive' : 'mobile-large';
+      const layoutFor = (density) => surface.querySelector(`[data-popular-mobile-layout="${density}"]`);
+
+      const visibleAnchor = (density = surface.dataset.mobileCardDensity) => {
         const floor = Math.max(0, Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ke-listing-sticky-stack-height')) || 0);
-        return Array.from(surface.querySelectorAll('[data-popular-representation="mobile"] [data-listing-item]'))
+        return Array.from(surface.querySelectorAll(`[data-popular-representation="${representationFor(density)}"] [data-listing-item]`))
           .map((card) => ({ card, rect: card.getBoundingClientRect() }))
           .filter(({ rect }) => (
             rect.bottom > floor + 8
@@ -58,6 +61,12 @@
         const anchor = preserveAnchor ? visibleAnchor() : null;
         const anchorId = anchor?.card.dataset.eventId;
         const anchorTop = anchor?.rect.top;
+        surface.querySelectorAll('[data-popular-mobile-layout]').forEach((layout) => {
+          const active = layout === layoutFor(density);
+          layout.toggleAttribute('hidden', !active);
+          layout.toggleAttribute('inert', !active);
+          layout.setAttribute('aria-hidden', active ? 'false' : 'true');
+        });
         surface.dataset.mobileCardDensity = density;
         syncButtons(density);
         if (persist) {
@@ -65,7 +74,7 @@
         }
         if (!anchorId || !Number.isFinite(anchorTop)) return;
         window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-          const current = surface.querySelector(`[data-popular-representation="mobile"] [data-listing-item][data-event-id="${CSS.escape(anchorId)}"]`);
+          const current = surface.querySelector(`[data-popular-representation="${representationFor(density)}"] [data-listing-item][data-event-id="${CSS.escape(anchorId)}"]`);
           if (!current) return;
           const delta = current.getBoundingClientRect().top - anchorTop;
           if (Math.abs(delta) > 1) window.scrollBy({ top: delta, left: 0, behavior: 'instant' });

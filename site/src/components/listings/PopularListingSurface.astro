@@ -5,6 +5,7 @@ import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import PopularBehaviorRows from './PopularBehaviorRows.astro';
 import PopularMobileBehaviorRows from './PopularMobileBehaviorRows.astro';
+import PopularMobileAdaptiveRows from './PopularMobileAdaptiveRows.astro';
 import ListingMobileDensitySwitch from './ListingMobileDensitySwitch.astro';
 
 interface Props { events: PreviewEvent[]; }
@@ -15,12 +16,12 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
   .map((name) => ({ name, count: visibleEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
 ---
-<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V22" data-mobile-card-density="large">
+<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V23" data-mobile-card-density="large">
   <script is:inline>
     try {
       const surface = document.currentScript.closest('[data-date-listing="popular"]');
-      const saved = window.localStorage.getItem('ke_listing_density_v1');
-      if (surface && (saved === 'large' || saved === 'compact')) surface.dataset.mobileCardDensity = saved;
+      const saved = window.localStorage.getItem('ke_listing_density_v2');
+      if (surface && (saved === 'large' || saved === 'adaptive')) surface.dataset.mobileCardDensity = saved;
     } catch {}
   </script>
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={visibleEvents.length} current="popular" />
@@ -29,6 +30,7 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
     <PopularBehaviorRows groups={groups} />
   </div>
   <PopularMobileBehaviorRows groups={groups} />
+  <PopularMobileAdaptiveRows groups={groups} />
   <div class="ke-listing-empty" data-listing-no-events hidden={visibleEvents.length > 0}>
     <strong>Пока нет событий с подтверждённой активностью</strong>
   </div>

@@ -61,7 +61,9 @@ const showCities = cities.length > 1;
   function primaryListingItems() {
     const popular = document.querySelector('[data-date-listing="popular"]');
     if (!popular) return [...document.querySelectorAll('[data-listing-item]')];
-    const representation = window.matchMedia('(max-width: 720px)').matches ? 'mobile' : 'desktop';
+    const representation = window.matchMedia('(max-width: 720px)').matches
+      ? (popular.dataset.mobileCardDensity === 'adaptive' ? 'mobile-adaptive' : 'mobile-large')
+      : 'desktop';
     return [...popular.querySelectorAll(`[data-popular-representation="${representation}"] [data-listing-item]`)];
   }
 

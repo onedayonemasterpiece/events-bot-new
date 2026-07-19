@@ -1104,62 +1104,6 @@
 .ke-popular-behavior__row .ke-listing-card__copy p { font-size: .9rem; }
 .ke-popular-behavior__row .ke-listing-card__medallion { width: 56px; height: 56px; }
 .ke-popular-behavior--mobile { display: none; }
-.event-card--listing-proof .event-card__body { padding-bottom: .72rem; }
-.event-card--listing-proof .event-card__listing-identities {
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  border-right: 1px solid rgba(121,48,20,.13);
-  border-left: 1px solid rgba(121,48,20,.13);
-  padding: 5px 10px;
-  background: #15110f;
-}
-.event-card--listing-proof .event-card__listing-identities > span,
-.event-card--listing-proof .event-card__listing-medallion {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  border: 0;
-  border-radius: 50%;
-  background: var(--event-card-medallion-bg, transparent);
-  box-shadow: none;
-}
-.event-card--listing-proof .event-card__listing-identities picture,
-.event-card--listing-proof .event-card__listing-identities img,
-.event-card--listing-proof .event-card__listing-medallion picture,
-.event-card--listing-proof .event-card__listing-medallion img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.event-card--listing-proof .event-card__listing-medallion {
-  position: absolute;
-  z-index: 4;
-  right: 8px;
-  bottom: 8px;
-  width: 52px;
-  height: 52px;
-  opacity: 1;
-  filter: none;
-}
-.event-card--listing-proof .event-card__listing-proof {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 9px;
-  border: 1px solid rgba(121,48,20,.13);
-  border-top: 0;
-  border-radius: 0 0 24px 24px;
-  padding: 4px 10px;
-  background: #15110f;
-  color: rgba(255,255,255,.58);
-  text-decoration: none;
-}
-.event-card--listing-proof .event-card__listing-proof > span { display: inline-flex; align-items: center; gap: 3px; }
-.event-card--listing-proof .event-card__listing-proof .icon { width: 17px; height: 17px; }
-.event-card--listing-proof .event-card__listing-proof b { font-size: .76rem; font-weight: 780; font-variant-numeric: tabular-nums; }
-.event-card--listing-proof:not(:has(.event-card__listing-proof)) .event-card__body { border-bottom: 1px solid rgba(121,48,20,.13); border-radius: 0 0 24px 24px; }
 
 /* Product research prototype: personalization is optional context, so it is
    separated from discovery navigation and yields to the footer. */
@@ -1227,16 +1171,16 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .listing-filter--floating { transition: none; }
 }
 
-/* Popular V22: the accepted desktop V20 ListingEventCard composition remains
-   a separate, unchanged representation. Only phones render the real
-   EventCard density surface below; both phone modes follow document flow. */
+/* Popular V23: desktop keeps the accepted V20/V22 intrinsic flow unchanged.
+   Phones switch between the canonical EventCard from "Смотрите дальше" and
+   an intrinsic-width ListingEventCard wrap derived from the desktop system. */
 .ke-listing-mobile-density-dock { display: none; }
 
 @media (max-width: 720px) {
   .ke-popular-desktop { display: none !important; }
-  .ke-popular-behavior--mobile { display: grid; }
+  .ke-popular-behavior--mobile:not([hidden]) { display: grid; }
   .ke-popular-listing {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
   }
   .ke-popular-listing .ke-listing-head h1 {
     font-size: clamp(3.2rem, 14vw, 3.7rem);
@@ -1262,7 +1206,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
 
   /* Large is the actual EventCard used by the mobile "Смотрите дальше"
      surface, stacked in ordinary vertical document flow. */
-  .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row {
+  .ke-popular-listing [data-popular-representation="mobile-large"] .ke-popular-behavior__row {
     display: grid;
     grid-template-columns: minmax(0, calc(100vw - 58px));
     justify-content: center;
@@ -1271,108 +1215,106 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     overflow: visible;
     scroll-snap-type: none;
   }
-  .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row .event-card {
+  .ke-popular-listing [data-popular-representation="mobile-large"] .ke-popular-mobile-card-slot,
+  .ke-popular-listing [data-popular-representation="mobile-large"] .event-card {
     width: 100%;
     max-width: 100%;
     min-width: 0;
     align-self: start;
   }
 
-  /* Compact reflows the same EventCard DOM into a row-major two-column feed.
-     Documents retain their authored ratio; only already-safe photo media use
-     the tighter square frame. */
-  .ke-popular-listing[data-mobile-card-density="compact"] .ke-popular-behavior {
+  /* Compact keeps ranking order and the desktop card's media-truth width.
+     A fixed media height plus intrinsic ratio/rail width naturally yields one
+     or two cards per line without masonry reordering or OCR normalization. */
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] {
     gap: 24px;
   }
-  .ke-popular-listing[data-mobile-card-density="compact"] .ke-popular-behavior__row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-popular-behavior__row {
+    --ke-listing-media-height: clamp(118px, 33.7vw, 145px);
+    display: flex;
+    flex-wrap: wrap;
     align-items: start;
-    grid-auto-flow: row;
-    gap: 12px;
+    align-content: start;
+    justify-content: flex-start;
+    gap: 20px 12px;
     overflow: visible;
     scroll-snap-type: none;
   }
-  .ke-popular-listing[data-mobile-card-density="compact"] .ke-popular-behavior__row .event-card {
-    flex: none;
-    width: 100%;
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card {
+    display: block;
+    grid-template-columns: none;
+    gap: 0;
+    flex: 0 0 min(100%, calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px)));
+    width: min(100%, calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px)));
     max-width: 100%;
     min-width: 0;
-    border-radius: 16px;
-    align-self: start;
+    align-self: flex-start;
   }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__media-link { border-radius: 16px 16px 0 0; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__media-link,
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__media-shell,
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__body,
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-identities,
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-proof {
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card[data-listing-image-mode="visual-crop"][data-listing-crop-adaptive="true"] {
+    flex: 1 1 calc(var(--ke-listing-media-height) * 1.05 + var(--ke-listing-tail-width, 0px));
+    min-width: min(100%, calc(var(--ke-listing-media-height) * 1.05 + var(--ke-listing-tail-width, 0px)));
+    max-width: min(100%, calc(var(--ke-listing-media-height) * 1.55 + var(--ke-listing-tail-width, 0px)));
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__media {
+    width: auto;
+    height: var(--ke-listing-media-height);
+    min-height: 0;
+    aspect-ratio: auto;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__copy {
     width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    box-sizing: border-box;
+    padding: 8px 0 0;
   }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__media { max-width: 100%; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__media-shell--cover { aspect-ratio: 1 / 1; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__body {
-    gap: 6px;
-    padding: 9px 9px 8px;
-  }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-identities {
-    min-height: 44px;
-    gap: 4px;
-    padding: 3px 8px;
-  }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-identities > span,
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-medallion {
-    width: 38px;
-    height: 38px;
-    flex-basis: 38px;
-  }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-medallion { right: 6px; bottom: 6px; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__title {
-    font-size: clamp(.88rem, 3.9vw, 1rem);
-    line-height: 1.12;
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__title {
+    font-size: clamp(.92rem, 4vw, 1.02rem);
+    line-height: 1.16;
     -webkit-line-clamp: 3;
   }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__tag { display: none; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__meta { font-size: .7rem; line-height: 1.18; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__status { min-height: 24px; padding: 2px 6px; font-size: .66rem; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__status { width: fit-content; white-space: normal; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__other-times { display: none; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__footer { font-size: .72rem; line-height: 1.18; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-proof {
-    min-height: 34px;
-    gap: 7px;
-    border-radius: 0 0 16px 16px;
-    padding: 2px 8px;
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__copy p {
+    font-size: .75rem;
+    line-height: 1.2;
   }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-proof .icon { width: 14px; height: 14px; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card__listing-proof b { font-size: .68rem; }
-  .ke-popular-listing[data-mobile-card-density="compact"] .event-card--listing-proof:not(:has(.event-card__listing-proof)) .event-card__body { border-radius: 0 0 16px 16px; }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__medallion {
+    right: 7px;
+    bottom: 7px;
+    width: 46px;
+    height: 46px;
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__side-rail {
+    height: var(--ke-listing-media-height);
+  }
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__identity-medallion,
+  .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__free-medallion {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
 
   .ke-listing-mobile-density-dock {
     position: fixed;
     z-index: 52;
-    right: 12px;
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    left: 12px;
+    right: 0;
+    bottom: 0;
+    left: 0;
     display: flex;
     justify-content: center;
+    border-top: 1px solid color-mix(in srgb, var(--ke-color-line) 82%, transparent);
+    padding: 6px max(12px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    background: color-mix(in srgb, var(--ke-color-canvas) 94%, transparent);
+    box-shadow: 0 -8px 24px rgba(43,31,23,.1);
+    backdrop-filter: blur(12px);
     pointer-events: none;
     transition: opacity 180ms ease, transform 180ms ease;
   }
   .ke-listing-mobile-density-switch {
-    width: min(272px, 100%);
+    width: 100%;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 3px;
-    border: 1px solid color-mix(in srgb, var(--ke-color-line) 82%, transparent);
-    border-radius: 999px;
+    border: 0;
+    border-radius: 14px;
     padding: 3px;
-    background: color-mix(in srgb, var(--ke-color-canvas) 94%, transparent);
-    box-shadow: 0 5px 18px rgba(43,31,23,.1);
-    backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--ke-color-ink) 7%, transparent);
     pointer-events: auto;
   }
   .ke-listing-mobile-density-switch button {
@@ -1382,7 +1324,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     justify-content: center;
     gap: 7px;
     border: 0;
-    border-radius: 999px;
+    border-radius: 11px;
     padding: 5px 12px;
     background: transparent;
     color: var(--ke-color-copy);

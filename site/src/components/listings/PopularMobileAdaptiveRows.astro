@@ -1,0 +1,36 @@
+---
+import type { PopularListingGroup } from '../../lib/listingPresentation';
+import ListingEventCard from './ListingEventCard.astro';
+
+interface Props { groups: PopularListingGroup[]; }
+const { groups } = Astro.props;
+let priorityIndex = 0;
+---
+<div
+  class="ke-popular-behavior ke-popular-behavior--mobile"
+  data-ds-component="PopularMobileAdaptiveRows"
+  data-ds-version="1"
+  data-popular-representation="mobile-adaptive"
+  data-popular-mobile-layout="adaptive"
+  hidden
+  inert
+>
+  {groups.map((group) => (
+    <section
+      class="ke-popular-behavior__group"
+      data-popular-behavior-group
+      data-popular-reason={group.key}
+      aria-labelledby={`popular-mobile-adaptive-${group.key}`}
+    >
+      <header class="ke-popular-behavior__head">
+        <h2 id={`popular-mobile-adaptive-${group.key}`}>{group.label}</h2>
+        <span data-popular-group-count>{group.events.length}</span>
+      </header>
+      <div class="ke-popular-behavior__row">
+        {group.events.map((event) => (
+          <ListingEventCard event={event} density="popular" priority={priorityIndex++ < 4} />
+        ))}
+      </div>
+    </section>
+  ))}
+</div>

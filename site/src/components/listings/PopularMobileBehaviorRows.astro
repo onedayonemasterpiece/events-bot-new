@@ -1,5 +1,6 @@
 ---
 import type { PopularListingGroup } from '../../lib/listingPresentation';
+import { cityKey } from '../../lib/listingPresentation';
 import EventCard from '../EventCard.astro';
 
 interface Props { groups: PopularListingGroup[]; }
@@ -8,27 +9,32 @@ const { groups } = Astro.props;
 <div
   class="ke-popular-behavior ke-popular-behavior--mobile"
   data-ds-component="PopularMobileBehaviorRows"
-  data-ds-version="1"
-  data-popular-representation="mobile"
+  data-ds-version="2"
+  data-popular-representation="mobile-large"
+  data-popular-mobile-layout="large"
 >
   {groups.map((group) => (
     <section
       class="ke-popular-behavior__group"
       data-popular-behavior-group
       data-popular-reason={group.key}
-      aria-labelledby={`popular-mobile-${group.key}`}
+      aria-labelledby={`popular-mobile-large-${group.key}`}
     >
       <header class="ke-popular-behavior__head">
-        <h2 id={`popular-mobile-${group.key}`}>{group.label}</h2>
+        <h2 id={`popular-mobile-large-${group.key}`}>{group.label}</h2>
         <span data-popular-group-count>{group.events.length}</span>
       </header>
       <div class="ke-popular-behavior__row">
         {group.events.map((event) => (
-          <EventCard
-            event={event}
-            variant="listing-proof"
-            listingItem
-          />
+          <div
+            class="ke-popular-mobile-card-slot"
+            data-listing-item
+            data-event-id={event.id}
+            data-listing-city={cityKey(event.city)}
+            data-listing-event-type={cityKey(event.event_type || 'other')}
+          >
+            <EventCard event={event} variant="split-actions" />
+          </div>
         ))}
       </div>
     </section>

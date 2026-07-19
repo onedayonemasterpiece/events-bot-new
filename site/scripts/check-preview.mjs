@@ -59,6 +59,54 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+
+const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
+for (const marker of [
+  'data-listing-variant="POPULAR-V23"',
+  'data-popular-representation="desktop"',
+  'data-popular-representation="mobile-large"',
+  'data-popular-representation="mobile-adaptive"',
+  'data-ds-component="ListingMobileDensitySwitch"',
+  'data-ds-version="3"',
+]) {
+  if (!popularHtml.includes(marker)) throw new Error(`Popular V23 misses ${marker}`);
+}
+const popularDesktopAt = popularHtml.indexOf('data-popular-representation="desktop"');
+const popularLargeAt = popularHtml.indexOf('data-popular-representation="mobile-large"');
+const popularAdaptiveAt = popularHtml.indexOf('data-popular-representation="mobile-adaptive"');
+const popularDockAt = popularHtml.indexOf('data-listing-mobile-density-dock');
+if (!(popularDesktopAt < popularLargeAt && popularLargeAt < popularAdaptiveAt && popularAdaptiveAt < popularDockAt)) {
+  throw new Error('Popular V23 representations are not isolated in desktop / large / adaptive order');
+}
+const popularDesktopHtml = popularHtml.slice(popularDesktopAt, popularLargeAt);
+const popularLargeHtml = popularHtml.slice(popularLargeAt, popularAdaptiveAt);
+const popularAdaptiveHtml = popularHtml.slice(popularAdaptiveAt, popularDockAt);
+const listingIds = (html) => [...html.matchAll(/data-listing-item(?:="")?[^>]*data-event-id="(\d+)"/gu)].map((match) => match[1]);
+const popularDesktopIds = listingIds(popularDesktopHtml);
+const popularLargeIds = listingIds(popularLargeHtml);
+const popularAdaptiveIds = listingIds(popularAdaptiveHtml);
+if (popularDesktopIds.length === 0 || new Set(popularDesktopIds).size !== popularDesktopIds.length) {
+  throw new Error('Popular V23 desktop ranking must be present and deduplicated');
+}
+if (popularDesktopIds.join(',') !== popularLargeIds.join(',') || popularDesktopIds.join(',') !== popularAdaptiveIds.join(',')) {
+  throw new Error('Popular V23 density representations must preserve identical ranked event order');
+}
+if (!popularLargeHtml.includes('event-card--split-actions') || popularLargeHtml.includes('listing-proof')) {
+  throw new Error('Popular V23 large mode must reuse canonical EventCard split-actions without listing-proof');
+}
+if (!popularAdaptiveHtml.includes('data-ds-component="ListingEventCard"') || !/data-popular-mobile-layout="adaptive"[^>]*hidden[^>]*inert/u.test(popularAdaptiveHtml)) {
+  throw new Error('Popular V23 adaptive mode must use inactive-by-default ListingEventCard rows');
+}
+const popularCss = readFileSync(join(siteDir, 'src/styles/design-system.css'), 'utf8');
+for (const cssContract of [
+  '[data-popular-representation="mobile-adaptive"] .ke-popular-behavior__row',
+  'flex-wrap: wrap',
+  'right: 0;',
+  'left: 0;',
+  'width: 100%;',
+]) {
+  if (!popularCss.includes(cssContract)) throw new Error(`Popular V23 CSS misses ${cssContract}`);
+}
 for (const scenario of templateContract.lab_scenarios) {
   const scenarioHtml = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
   if (!scenarioHtml.includes(`data-event-template-contract="${templateContract.contract_id}"`)) {
@@ -585,8 +633,8 @@ if (!compactPartnersCss.includes('@media(min-width:980px)') || !compactPartnersC
 if (!partnersHtml.includes('--partner-col-start: 1') || !partnersHtml.includes('--partner-col-span: 4') || !partnersHtml.includes('--partner-row-span: 2') || !partnersHtml.includes('--partner-mobile-col-start: 3') || !partnersHtml.includes('--partner-mobile-col-span: 2')) throw new Error('Info partners tiles must keep explicit bento placement variables for greedy logo spans');
 const exhibitionsHtml = readFileSync(join(root, 'vystavki/index.html'), 'utf8');
 if (!exhibitionsHtml.includes('Выставки и долгие форматы') || !exhibitionsHtml.includes('listing-stack')) throw new Error('Exhibitions listing must exist as a separate section/page');
-const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
-if (!popularHtml.includes('Популярное') || !popularHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
+const popularListingHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
+if (!popularListingHtml.includes('Популярное') || !popularListingHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
 const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
 if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
 

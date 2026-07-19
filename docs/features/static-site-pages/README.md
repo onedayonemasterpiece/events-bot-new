@@ -204,6 +204,13 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Historical public preview evidence
 
+The current mobile `Популярное` density comparison is documented in
+[`listing-surfaces-v23-mobile-adaptive.md`](listing-surfaces-v23-mobile-adaptive.md):
+the large phone mode directly reuses canonical `EventCard split-actions`, the
+adaptive compact mode keeps intrinsic listing-card geometry and immutable rank
+order, and the accepted V22 desktop plus equal two-column phone specimen remains
+available separately for regression/comparison.
+
 Latest main-reachable checked public preview evidence as of 2026-07-17 is
 `preview-20260717-interest-clubs-prod-canary`: 303 current/future events, checked
 Astro output and the gated club projection. Exact SHA/counts/manifest/HTTP evidence

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed mobile Popular density prototyping without regressing desktop: the
+  large mode now renders the exact shared `EventCard split-actions` component,
+  the compact mode uses an ordered intrinsic-width one/two-card wrap, and a
+  full-viewport-width bottom dock switches only the active accessible tree;
+  the prior equal two-column specimen remains a separate comparison URL.
 - Fixed static event detail parity so a one-photo Editorial page keeps the same
   CTA side-motion/docking state machine as a multi-photo page; the optional
   thumbnail rail no longer controls the page-family behavior.

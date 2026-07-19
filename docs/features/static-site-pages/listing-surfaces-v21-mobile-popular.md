@@ -1,5 +1,9 @@
 # Listing surfaces V21: real EventCard mobile Popular
 
+> **Additional correction:** the V21 `listing-proof` large card was a
+> Popular-only reconstruction and is rejected. V23 large mode directly renders
+> the shared canonical `EventCard.astro` `split-actions` component.
+
 > **Rejected and superseded by V22.** V21 incorrectly replaced the accepted
 > desktop `ListingEventCard` composition and made the large phone mode a
 > horizontally scrolling shelf. Keep this file only as regression evidence;
