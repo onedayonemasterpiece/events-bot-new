@@ -18,8 +18,8 @@
 
 ## Активные regression contracts
 
-- `INC-2026-07-08-prod-root-overlay-disk-full.md`
-  - Scope: Fly root writable overlay, `/tmp` Kaggle outputs, retained static-site artifacts and scratch readiness.
+- `INC-2026-07-19-static-builder-root-overlay-recurrence.md`
+  - Scope: Fly root writable overlay, `/tmp` Kaggle video outputs, retained static-site artifacts and scratch readiness.
   - Must not regress: terminal outputs remain bounded, active/recoverable handoffs are preserved, `/healthz`/preflight detects an unwritable root scratch filesystem before scheduled jobs dead-letter.
 
 - `INC-2026-07-19-static-site-stale-builder-lease.md`

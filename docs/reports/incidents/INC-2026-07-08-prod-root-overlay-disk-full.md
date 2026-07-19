@@ -1,6 +1,6 @@
 # INC-2026-07-08 Prod Root Overlay Disk Full From Temporary Kaggle Outputs
 
-Status: open
+Status: mitigated
 Severity: sev1
 Service: Fly production bot `events-bot-new-wngqia` / root overlay `/tmp` / scheduled Kaggle-backed jobs
 Opened: 2026-07-08
@@ -42,17 +42,11 @@ Visible disk pressure came from temporary Kaggle output directories such as `/tm
 - `2026-07-08 13:21 UTC`: Fly machine `2860d45f312248` was restarted; root overlay recovered to about `57M` used / `7.4G` free, `/tmp` writes succeeded, and SQLite `PRAGMA quick_check` returned `ok`.
 - `2026-07-08 13:22 UTC`: production secret `ENABLE_RUNTIME_FILE_LOGGING` was reset to `0` to match `fly.toml`/runtime-log policy.
 
-- `2026-07-19 17:11 UTC`: static-site job `38162` exhausted its fourth attempt before Kaggle push with `FileNotFoundError: No usable temporary directory`; the checked candidate pointer stayed on the 05:55 UTC success.
-- `2026-07-19 20:31 UTC`: recurrence triage found `/` at `100%` with zero free bytes while `/data` retained about `1.55 GiB`; `/.fly-upper-layer/tmp` held about `6.45 GiB` in terminal-looking `videoannounce-919` through `922`, and `/app/artifacts/codex/static-site-builder` held about `1.85 GiB` in retained outputs. The builder lease and static claim were idle, and no deleted-open file descriptors existed.
-- The recurrence again bypassed `/healthz`, which measured `/data` but not the root scratch filesystem.
-
 ## Root Cause
 
 1. Large temporary Kaggle output bundles accumulated on the Fly root overlay under `/tmp`, especially `videoannounce-*` outputs.
 2. The current cleanup/retention contract protected `/data` better than the root overlay; `/tmp` did not have a sufficient budget/retention guard for video output downloads.
 3. After deleting visible files directly through the Fly upper-layer view, the filesystem did not report free blocks to new `/tmp` writes until the machine was restarted/remounted.
-4. Static candidate results were retained under `/app/artifacts` on the same bounded root overlay; repeated successful builds added roughly 440 MiB each without a root-overlay retention budget.
-5. `/healthz` checked the persistent `/data` volume only, so the service stayed green while Python could not allocate any temporary directory and Smart Update static refreshes dead-lettered.
 
 ## Contributing Factors
 
@@ -79,8 +73,6 @@ Visible disk pressure came from temporary Kaggle output directories such as `/tm
 ### Mandatory checks before closure or deploy
 
 - Verify `df -hT / /.fly-upper-layer /tmp /data` has enough free space.
-- Verify the static-site preflight observes the root/temp scratch floor, not only `/data`, and fails before claiming/retrying work when scratch is unwritable.
-- Verify terminal static output directories and terminal video output directories are bounded without deleting an active/recoverable handoff.
 - Verify `/tmp` write probe succeeds.
 - Verify `/healthz` returns `ok=true`, `ready=true`, `db=ok`.
 - Verify SQLite `PRAGMA quick_check` returns `ok`.
@@ -106,8 +98,6 @@ Visible disk pressure came from temporary Kaggle output directories such as `/tm
 ## Corrective Actions
 
 - Pending: add explicit retention/free-space guard for Fly root-overlay `/tmp` Kaggle output downloads.
-- Pending: move or bound retained static-site result artifacts so successful secret candidates cannot fill `/app` across repeated Smart Update builds.
-- Pending: extend readiness/diagnostics to report root scratch capacity and an actual temporary-file probe.
 - Pending: make disk-pressure recovery avoid re-downloading large completed outputs repeatedly when a session is already known `COMPLETE`.
 - Pending: add/verify alerting before root overlay `/tmp` reaches write failure.
 
