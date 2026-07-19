@@ -1,12 +1,12 @@
 ---
 import type { PopularListingGroup } from '../../lib/listingPresentation';
-import EventCard from '../EventCard.astro';
+import ListingEventCard from './ListingEventCard.astro';
 
 interface Props { groups: PopularListingGroup[]; }
 const { groups } = Astro.props;
 let priorityIndex = 0;
 ---
-<div class="ke-popular-behavior" data-ds-component="PopularBehaviorRows" data-ds-version="3">
+<div class="ke-popular-behavior" data-ds-component="PopularBehaviorRows" data-ds-version="2">
   {groups.map((group) => (
     <section class="ke-popular-behavior__group" data-popular-behavior-group data-popular-reason={group.key} aria-labelledby={`popular-${group.key}`}>
       <header class="ke-popular-behavior__head">
@@ -14,14 +14,7 @@ let priorityIndex = 0;
         <span data-popular-group-count>{group.events.length}</span>
       </header>
       <div class="ke-popular-behavior__row">
-        {group.events.map((event) => (
-          <EventCard
-            event={event}
-            variant="listing-proof"
-            listingItem
-            priority={priorityIndex++ < 4}
-          />
-        ))}
+        {group.events.map((event) => <ListingEventCard event={event} density="popular" priority={priorityIndex++ < 4} />)}
       </div>
     </section>
   ))}

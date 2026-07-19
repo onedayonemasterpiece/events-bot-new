@@ -1083,14 +1083,27 @@
 .ke-popular-behavior__head h2 { margin: 0; font-size: 1.35rem; line-height: 1.1; }
 .ke-popular-behavior__head span { color: var(--ke-color-muted); font-size: .76rem; font-variant-numeric: tabular-nums; }
 .ke-popular-behavior__row {
+  --ke-listing-media-height: 180px;
   min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: stretch;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
   gap: 16px;
   padding-top: 14px;
 }
-.ke-popular-behavior__row .event-card { min-width: 0; align-self: start; }
+.ke-popular-behavior__row .ke-listing-card {
+  flex: 0 0 calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px));
+  width: calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px));
+}
+.ke-popular-behavior__row .ke-listing-card[data-listing-image-mode="visual-crop"][data-listing-crop-adaptive="true"] {
+  flex: 1 1 calc(var(--ke-listing-media-height) * 1.18 + var(--ke-listing-tail-width, 0px));
+  min-width: calc(var(--ke-listing-media-height) * 1.05 + var(--ke-listing-tail-width, 0px));
+  max-width: calc(var(--ke-listing-media-height) * 1.45 + var(--ke-listing-tail-width, 0px));
+}
+.ke-popular-behavior__row .ke-listing-card__title { font-size: 1.08rem; -webkit-line-clamp: 3; }
+.ke-popular-behavior__row .ke-listing-card__copy p { font-size: .9rem; }
+.ke-popular-behavior__row .ke-listing-card__medallion { width: 56px; height: 56px; }
+.ke-popular-behavior--mobile { display: none; }
 .event-card--listing-proof .event-card__body { padding-bottom: .72rem; }
 .event-card--listing-proof .event-card__listing-identities {
   min-height: 48px;
@@ -1180,6 +1193,7 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
 @media (min-width: 1760px) {
   :root { --ke-content-listing-max: 1720px; --ke-listing-media-height: 232px; --ke-weekend-media-height: 188px; }
   .ke-listing-discovery-rail .ke-filter-chip strong { display: inline; }
+  .ke-popular-behavior__row { --ke-listing-media-height: 190px; }
 }
 @media (max-width: 1759px) and (min-width: 981px) {
   .ke-listing-discovery-rail .ke-filter-chip strong { display: none; }
@@ -1202,8 +1216,8 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .ke-listing-discovery-rail .ke-time-nav a { min-height: 48px; }
   .listing-filter--floating { right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); left: 12px; justify-content: center; transform: none; }
   body.is-footer-visible .listing-filter--floating { transform: translateY(120%); }
-  .ke-popular-behavior__row { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
-  .ke-popular-behavior__row .event-card { flex: 0 0 min(78vw, 320px); scroll-snap-align: start; }
+  .ke-popular-behavior__row { overflow-x: auto; scroll-snap-type: x mandatory; }
+  .ke-popular-behavior__row .ke-listing-card { flex: 0 0 min(78vw, 320px); scroll-snap-align: start; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ke-listing-discovery-rail .ke-filter-chip,
@@ -1213,12 +1227,14 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .listing-filter--floating { transition: none; }
 }
 
-/* Popular V20 mobile: one ranked DOM, two explicit presentation densities.
-   Native browser zoom remains untouched; the visible bottom control is the
-   only density affordance. */
+/* Popular V22: the accepted desktop V20 ListingEventCard composition remains
+   a separate, unchanged representation. Only phones render the real
+   EventCard density surface below; both phone modes follow document flow. */
 .ke-listing-mobile-density-dock { display: none; }
 
 @media (max-width: 720px) {
+  .ke-popular-desktop { display: none !important; }
+  .ke-popular-behavior--mobile { display: grid; }
   .ke-popular-listing {
     padding-bottom: calc(84px + env(safe-area-inset-bottom));
   }
@@ -1245,25 +1261,21 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   }
 
   /* Large is the actual EventCard used by the mobile "Смотрите дальше"
-     surface. The shelf controls only placement; it does not reproduce the
-     component's media, copy or metadata markup. */
+     surface, stacked in ordinary vertical document flow. */
   .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-padding-inline: 0 24px;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-    overscroll-behavior-inline: contain;
+    display: grid;
+    grid-template-columns: minmax(0, calc(100vw - 58px));
+    justify-content: center;
+    align-items: start;
+    gap: 16px;
+    overflow: visible;
+    scroll-snap-type: none;
   }
-  .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row::-webkit-scrollbar { display: none; }
   .ke-popular-listing[data-mobile-card-density="large"] .ke-popular-behavior__row .event-card {
-    flex: 0 0 calc(100vw - 58px);
-    width: calc(100vw - 58px);
-    max-width: calc(100vw - 58px);
-    scroll-snap-align: start;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    align-self: start;
   }
 
   /* Compact reflows the same EventCard DOM into a row-major two-column feed.

@@ -80,7 +80,7 @@ function listingCard(html, id) {
   return html.match(new RegExp(`<article[^>]+data-event-id="${id}"[\\s\\S]*?<\\/article>`, 'u'))?.[0] || '';
 }
 
-async function checkDateListingsV21() {
+async function checkDateListingsV22() {
   const today = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
   const tomorrow = readFileSync(join(root, 'zavtra/index.html'), 'utf8');
   const weekend = readFileSync(join(root, 'vyhodnye/index.html'), 'utf8');
@@ -91,14 +91,16 @@ async function checkDateListingsV21() {
     const timelineVersion = timeline === 'WeekendEditorialTimeline' ? '5' : '2';
     if (!html.includes(`data-ds-component="${timeline}" data-ds-version="${timelineVersion}"`) || !html.includes('data-ds-component="ListingTimeMarker" data-ds-version="3"') || !html.includes('data-ds-component="ListingEventCard" data-ds-version="9"') || !html.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !html.includes('data-ds-component="ListingPersonalFilter" data-ds-version="3"')) throw new Error(`${name} misses shared V19 listing components`);
   }
-  if (!popular.includes('data-listing-variant="POPULAR-V21"') || !popular.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !popular.includes('data-ds-component="EventCard" data-ds-version="3"') || popular.includes('data-ds-component="ListingEventCard"') || !popular.includes('data-ds-component="PopularBehaviorRows" data-ds-version="3"') || !popular.includes('data-ds-component="ListingMobileDensitySwitch" data-ds-version="2"') || popular.includes('data-ds-component="PopularCategoryFilter"') || popular.includes('data-ds-component="ListingPersonalFilter"') || /<section[^>]+data-personal-feed-section/u.test(popular)) throw new Error('Popular misses the V21 real-EventCard dual-density contract or exposes a competing card/filter/feed implementation');
+  if (!popular.includes('data-listing-variant="POPULAR-V22"') || !popular.includes('data-ds-component="ListingDiscoveryRail" data-ds-version="4"') || !popular.includes('data-ds-component="EventCard" data-ds-version="3"') || !popular.includes('data-ds-component="ListingEventCard" data-ds-version="9"') || !popular.includes('data-ds-component="PopularBehaviorRows" data-ds-version="2"') || !popular.includes('data-ds-component="PopularMobileBehaviorRows" data-ds-version="1"') || !popular.includes('data-ds-component="ListingMobileDensitySwitch" data-ds-version="2"') || popular.includes('data-ds-component="PopularCategoryFilter"') || popular.includes('data-ds-component="ListingPersonalFilter"') || /<section[^>]+data-personal-feed-section/u.test(popular)) throw new Error('Popular misses the V22 breakpoint-isolated desktop/mobile card contract or exposes a competing filter/feed implementation');
   if (!popular.includes('Быстро набирают популярность') || !popular.includes('Встречается во множестве источников') || popular.includes('>Быстро набирают<') || popular.includes('>В разных источниках<')) throw new Error('Popular misses the explicit V20 behavioral shelf labels');
   const popularReasons = [...popular.matchAll(/data-popular-reason="([^"]+)"/gu)].map((match) => match[1]);
-  if (popularReasons.length < 4 || popularReasons.length > 5 || popularReasons[0] !== 'fast_growth' || popularReasons.at(-1) !== 'score_fallback' || !popularReasons.includes('discussed') || !popularReasons.includes('frequently_shared')) throw new Error(`Popular needs 4-5 priority-ordered behavioral shelves, got: ${popularReasons.join(', ')}`);
-  const popularIds = [...popular.matchAll(/data-event-id="(\d+)"/gu)].map((match) => match[1]);
-  if (new Set(popularIds).size !== popularIds.length) throw new Error('Popular repeats an event across behavioral shelves');
-  const popularArticles = [...popular.matchAll(/<article[^>]+class="[^"]*event-card[^"]*"[^>]*data-event-id="(\d+)"/gu)].map((match) => match[1]);
-  if (popularArticles.length !== popularIds.length || popularArticles.some((id, index) => id !== popularIds[index]) || !popular.includes('data-feed-card-variant="listing-proof"')) throw new Error('Popular must render one real EventCard article per allocated id in the same ranked DOM');
+  const reasonCount = popularReasons.length / 2;
+  const desktopReasons = popularReasons.slice(0, reasonCount);
+  const mobileReasons = popularReasons.slice(reasonCount);
+  if (!Number.isInteger(reasonCount) || reasonCount < 4 || reasonCount > 5 || desktopReasons[0] !== 'fast_growth' || desktopReasons.at(-1) !== 'score_fallback' || !desktopReasons.includes('discussed') || !desktopReasons.includes('frequently_shared') || desktopReasons.some((reason, index) => reason !== mobileReasons[index])) throw new Error(`Popular needs matching desktop/mobile copies of 4-5 priority-ordered behavioral sections, got: ${popularReasons.join(', ')}`);
+  const desktopIds = [...popular.matchAll(/<article[^>]+class="ke-listing-card"[^>]*data-event-id="(\d+)"/gu)].map((match) => match[1]);
+  const mobileIds = [...popular.matchAll(/<article[^>]+class="[^"]*event-card--listing-proof[^"]*"[^>]*data-event-id="(\d+)"/gu)].map((match) => match[1]);
+  if (!desktopIds.length || desktopIds.length !== mobileIds.length || new Set(desktopIds).size !== desktopIds.length || desktopIds.some((id, index) => id !== mobileIds[index]) || !popular.includes('data-feed-card-variant="listing-proof"')) throw new Error('Popular desktop ListingEventCard and mobile EventCard representations must have the same deduplicated ranked ids');
   const frequentlySharedShelf = popular.match(/<section[^>]+data-popular-reason="frequently_shared"[\s\S]*?<\/section>/u)?.[0] || '';
   if (!frequentlySharedShelf.includes('data-event-id="5130"')) throw new Error('Popular frequently-shared shelf must rank BREAK SUMMER FEST 5130 by its 69 real shares without an id override');
   if (!popular.includes('data-mobile-card-density="large"') || !popular.includes('role="radiogroup" aria-label="Размер карточек"') || !popular.includes('data-listing-density-button="large"') || !popular.includes('data-listing-density-button="compact"')) throw new Error('Popular misses the accessible large/compact mobile control and large no-JS default');
@@ -145,7 +147,7 @@ async function checkDateListingsV21() {
     if (share >= 0 && like >= 0 && share > like) throw new Error(`Listing social proof must keep shared-system Share -> Like order: ${event.id}`);
   }
   if (!compactCss.includes('--ke-listing-discovery-height:52px') || !compactCss.includes('--ke-content-listing-max:1720px') || compactCss.includes('[data-stuck=true].ke-filter-chip') || compactCss.includes('data-listing-discovery-stuck')) throw new Error('V20 stable CSS-first discovery geometry is missing or the rejected delayed JS compaction returned');
-  if (!compactCss.includes('.ke-popular-listing[data-mobile-card-density=large]') || !compactCss.includes('.ke-popular-listing[data-mobile-card-density=compact]') || !compactCss.includes('.ke-listing-mobile-density-dock{display:none') || !compactCss.includes('scroll-snap-type:xproximity') || !compactCss.includes('grid-template-columns:repeat(2,minmax(0,1fr))') || !compactCss.includes('width:calc(100vw-58px)')) throw new Error('Popular V21 real-EventCard large shelf / two-column compact CSS is missing or not scoped to Popular');
+  if (!compactCss.includes('.ke-popular-desktop{display:none!important') || !compactCss.includes('.ke-popular-behavior--mobile{display:grid') || !compactCss.includes('.ke-popular-listing[data-mobile-card-density=large]') || !compactCss.includes('.ke-popular-listing[data-mobile-card-density=compact]') || !compactCss.includes('.ke-listing-mobile-density-dock{display:none') || !compactCss.includes('grid-template-columns:minmax(0,calc(100vw-58px))') || !compactCss.includes('grid-template-columns:repeat(2,minmax(0,1fr))') || compactCss.includes('overflow-x:auto;overflow-y:hidden;scroll-padding-inline:024px')) throw new Error('Popular V22 needs desktop isolation plus vertical one-column/two-column EventCard modes without the rejected horizontal shelf');
   const layoutSource = readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8');
   if (/user-scalable\s*=\s*no|maximum-scale\s*=\s*1/iu.test(layoutSource)) throw new Error('Mobile density must not disable native browser zoom');
   if (!compactCss.includes('flex-wrap:wrap') || !compactCss.includes('.ke-listing-card__medallion{right:10px;bottom:10px;width:64px;height:64px;border:0;background:transparent;box-shadow:none;filter:none;opacity:1') || !compactCss.includes('.ke-listing-card__social-proof{') || !compactCss.includes('opacity:.58') || !compactCss.includes('.ke-listing-card[data-listing-tail-layout=split].ke-listing-card__side-rail') || !dateListings.includes('--ke-listing-tail-width:96px')) throw new Error('V19 opaque overlay plus quiet proof/split rail geometry is missing');
@@ -163,7 +165,7 @@ async function checkDateListingsV21() {
   const freeSvg = readFileSync(join(root, 'assets/badges/free-listing-medallion.svg'), 'utf8');
   if (!freeSvg.includes('0 ₽') || !freeSvg.includes('БЕСПЛАТНО') || /gradient|#d4af37|gold/iu.test(freeSvg)) throw new Error('Free medallion must remain the quiet monochrome deterministic V15 asset');
 }
-await checkDateListingsV21();
+await checkDateListingsV22();
 
 const control = eventsData.events.find((event) => event.id === 5878);
 if (!control) {

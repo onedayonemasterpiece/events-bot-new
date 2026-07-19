@@ -58,8 +58,15 @@ const showCities = cities.length > 1;
     try { localStorage.setItem(CITY_STORAGE_KEY, JSON.stringify([...values])); } catch (_) {}
   }
 
+  function primaryListingItems() {
+    const popular = document.querySelector('[data-date-listing="popular"]');
+    if (!popular) return [...document.querySelectorAll('[data-listing-item]')];
+    const representation = window.matchMedia('(max-width: 720px)').matches ? 'mobile' : 'desktop';
+    return [...popular.querySelectorAll(`[data-popular-representation="${representation}"] [data-listing-item]`)];
+  }
+
   function visibleListingItems() {
-    return [...document.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden);
+    return primaryListingItems().filter((item) => !item.hidden);
   }
 
   let rowEndFrame = 0;
@@ -250,7 +257,7 @@ const showCities = cities.length > 1;
       const typeMatch = selectedType === 'all' || item.dataset.listingEventType === selectedType;
       item.hidden = !(cityMatch && personalMatch && typeMatch);
     });
-    const facetedItems = [...document.querySelectorAll('[data-listing-item]')]
+    const facetedItems = primaryListingItems()
       .filter((item) => item.dataset.personalHidden !== 'true')
       .filter((item) => selectedType === 'all' || item.dataset.listingEventType === selectedType);
     controls.querySelectorAll('[data-listing-city-count]').forEach((label) => {
@@ -265,7 +272,7 @@ const showCities = cities.length > 1;
     if (all) all.indeterminate = false;
     syncTimeGroups();
     const visible = visibleListingItems().length;
-    const total = document.querySelectorAll('[data-listing-item]').length;
+    const total = primaryListingItems().length;
     document.querySelectorAll('[data-listing-page-count]').forEach((node) => {
       const value = node.querySelector('[data-listing-page-count-value]');
       const label = node.querySelector('[data-listing-page-count-label]');

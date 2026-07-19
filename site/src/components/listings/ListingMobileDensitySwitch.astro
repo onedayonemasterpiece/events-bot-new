@@ -39,7 +39,7 @@
 
       const visibleAnchor = () => {
         const floor = Math.max(0, Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ke-listing-sticky-stack-height')) || 0);
-        return Array.from(surface.querySelectorAll('[data-listing-item]'))
+        return Array.from(surface.querySelectorAll('[data-popular-representation="mobile"] [data-listing-item]'))
           .map((card) => ({ card, rect: card.getBoundingClientRect() }))
           .filter(({ rect }) => (
             rect.bottom > floor + 8
@@ -65,7 +65,7 @@
         }
         if (!anchorId || !Number.isFinite(anchorTop)) return;
         window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-          const current = surface.querySelector(`[data-listing-item][data-event-id="${CSS.escape(anchorId)}"]`);
+          const current = surface.querySelector(`[data-popular-representation="mobile"] [data-listing-item][data-event-id="${CSS.escape(anchorId)}"]`);
           if (!current) return;
           const delta = current.getBoundingClientRect().top - anchorTop;
           if (Math.abs(delta) > 1) window.scrollBy({ top: delta, left: 0, behavior: 'instant' });

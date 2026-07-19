@@ -1,5 +1,10 @@
 # Listing surfaces V21: real EventCard mobile Popular
 
+> **Rejected and superseded by V22.** V21 incorrectly replaced the accepted
+> desktop `ListingEventCard` composition and made the large phone mode a
+> horizontally scrolling shelf. Keep this file only as regression evidence;
+> the current contract is `listing-surfaces-v22-popular-breakpoint-restore.md`.
+
 > **Status:** immutable preview candidate, 2026-07-18.
 > **Surface in focus:** `/populyarnoe/` on phone; desktop behavioral allocation and all date listings keep the V20/V19 regression baseline.
 > **Supersedes:** the V20 mobile card implementation, not its labels or evidence ranking.

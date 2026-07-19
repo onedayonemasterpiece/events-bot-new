@@ -87,13 +87,12 @@ share-count (поэтому BREAK SUMMER FEST 5130 входит системно
 anchor и нативного pinch zoom. Подробный контракт:
 [`listing-surfaces-v20-mobile-popular.md`](listing-surfaces-v20-mobile-popular.md).
 
-V21 исправляет трактовку двух мобильных плотностей без ещё одной карточки «по
-мотивам»: `Популярное` теперь непосредственно рендерит общий `EventCard@3` из
-мобильного `Смотрите дальше`. `Крупно` оставляет полный компонент в горизонтальной
-поведенческой полке, а `2 в ряд` перестраивает те же DOM-узлы в двухколоночную
-вертикальную ленту. `ListingEventCard` остаётся только у временных страниц.
-Подробный контракт:
-[`listing-surfaces-v21-mobile-popular.md`](listing-surfaces-v21-mobile-popular.md).
+V21 отклонён: он распространил мобильный `EventCard` на десктоп и спрятал
+крупные карточки телефона в горизонтальную полку. V22 восстанавливает принятый
+десктоп V20/V19 без изменений и изолирует настоящий `EventCard@3` брейкпоинтом
+до 720px. На телефоне обе плотности теперь вертикальны: одна крупная карточка
+в строке либо те же карточки `2 в ряд`. Подробный актуальный контракт:
+[`listing-surfaces-v22-popular-breakpoint-restore.md`](listing-surfaces-v22-popular-breakpoint-restore.md).
 
 Latest v44 CDN/Kaggle fixes: public preview `preview-20260628-event-pages-v44-cdn-kaggle` was built by Kaggle CPU from the 2026-06-28 production snapshot (80 real events), event images now render through `https://static.kenigevents.ru/p/...`, stable calendar CTAs use `https://static.kenigevents.ru/ics/<event_id>.ics`, and deploy copied 80 `.ics` files to the CDN bucket. The v43 UI/gallery fixes remain: wrapped mobile tag geometry, adjacent gallery preload/decode, paid real price links with `rel="nofollow"`, and a diverse same-day `/segodnya/` slice.
 
