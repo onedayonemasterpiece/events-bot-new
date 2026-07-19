@@ -13,6 +13,7 @@
 | R07 | Report actual static build diagnostics for last 24h | observability | R06 | integrator/ops | redacted DB/log/object report with outcomes/counts/times |
 | R08 | Canonical docs, scenario index, incident regression evidence and CHANGELOG | docs | R01–R07 | integrator | no duplicate docs; release limitations explicit |
 | R09 | Never promote production root; candidate remains noindex/no-referrer | release safety | R06 | integrator/ops | secret checks and negative root mutation evidence pass |
+| R10 | Recover recurring Fly root-overlay exhaustion and prevent static/video temp accumulation from blocking Smart Update | incident/ops | production evidence | integrator/ops | root writable, tempfile/health/quick-check pass, retention regression guarded |
 
 ## Lane map
 
@@ -73,7 +74,7 @@ lanes:
     status: spawned
   - id: integration-ops
     role: merge_reviewer
-    requirement_ids: [R05, R06, R07, R08, R09]
+    requirement_ids: [R05, R06, R07, R08, R09, R10]
     target: reconcile, docs, CI, deploy, Smart Update secret build, diagnostics
     depends_on: [R01-router, R02-cards]
     execution_mode: serial_after_dependency
