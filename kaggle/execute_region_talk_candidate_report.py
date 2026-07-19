@@ -358,6 +358,7 @@ def build_input_datasets(client: Any, *, run_id: str, username: str) -> list[str
         # writes none of the shared funnel, so JSON must now be an explicit
         # opt-in for offline experiments.
         "REGION_TALK_STATE_BACKEND": os.environ.get("REGION_TALK_STATE_BACKEND", "ydb"),
+        "REGION_TALK_EXTERNAL_PUBLICATIONS_ONLY": os.environ.get("REGION_TALK_EXTERNAL_PUBLICATIONS_ONLY", "0"),
         "REGION_TALK_VECTOR_PROBE_ONLY": os.environ.get("REGION_TALK_VECTOR_PROBE_ONLY", "0"),
         "REGION_TALK_VECTOR_PROBE_TEXT_LIMIT": os.environ.get("REGION_TALK_VECTOR_PROBE_TEXT_LIMIT", "6"),
         "REGION_TALK_REQUIRE_YDB_STATE": os.environ.get(
