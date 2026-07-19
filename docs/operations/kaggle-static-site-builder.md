@@ -40,6 +40,12 @@ The production rail is a durable state machine, not a local process lock:
    downloaded and fully identity/hash validated, published once and adopted.
    It is forbidden to push a replacement merely because the callback is stale.
    Only a failed or different dataset identity releases the old claim.
+   If startup or Smart Update requeues the same terminal-looking outbox row
+   while it is still the exact `active_job_id`, the queue merge must preserve
+   its `remote_handoff` and immutable `snapshot`. Fresh effect reasons are
+   unioned into that payload; they never replace the identities required for
+   adoption. A stale handoff is discarded only when the state row no longer
+   points to that exact job.
 6. Publication remains create-only under a fresh secret prefix. After full
    result/manifest/object verification, the durable internal current-review
    receipt advances atomically. Failed, no-op and artifact-only runs preserve
@@ -141,7 +147,9 @@ outbox state machine:
 `INC-2026-07-19-static-site-stale-builder-lease` is a mandatory regression
 contract for this handoff: successful publication, ledger terminal state and
 exact-owner resource release must converge even when terminal callbacks are
-lost or Smart Update briefly holds the SQLite writer lock.
+lost or Smart Update briefly holds the SQLite writer lock. The same contract
+also forbids startup catch-up from erasing an active recoverable handoff when
+it rearms an error outbox row.
 
 All operator/bot link-producing paths must use
 `static_site_release.resolve_current_secret_candidate`; historical named

@@ -56,7 +56,10 @@
 - **ADD-V12-05 — No duplicate remote push.** A live orphan is deferred; an
   exact completed orphan is downloaded, hash/identity validated and adopted
   without `kernels_push`; only mismatched/failed remote identity releases the
-  old claim for a replacement.
+  old claim for a replacement. If startup or Smart Update rearms the exact
+  active error job, its remote handoff and immutable snapshot survive the
+  payload merge; a non-active stale job does not leak those identities into a
+  new request.
 - **ADD-V12-06 — Content no-op.** Operational queue churn and already elapsed
   rows do not change the public fingerprint; public fields, policy, repo SHA,
   related cache or local date do. Explicit operator force is audited separately.
