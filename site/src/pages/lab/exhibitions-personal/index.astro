@@ -504,7 +504,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   }
   @media (prefers-reduced-motion:reduce) {
     .ex-page *,.ex-page *::before,.ex-page *::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; }
-    .ex-row:is(:hover,:focus-within),.ex-like.is-liked svg,.ex-reject.is-active svg { transform:none; }
+    .ex-row:is(:hover,:focus-within),.ex-action--like[aria-pressed="true"] svg,.ex-action--reject[aria-pressed="true"] svg { transform:none; }
     .ex-row__edge-light { opacity:.55; filter:none!important; }
   }
 </style>

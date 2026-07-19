@@ -37,7 +37,7 @@ const checks = [
   ['row halo has hover and keyboard parity', rowSource.includes('ex-row__halo') && rowSource.includes('ex-row__edge-light') && pageSource.includes('.ex-row:focus-within .ex-row__halo')],
   ['metadata motion avoids grid-row reflow', pageSource.includes('.ex-row__expanded { display:grid; opacity:') && !pageSource.includes('transition:grid-template-rows')],
   ['cinematic motion and reduced-motion scrolling exist', pageSource.includes('cubic-bezier(.16,1,.3,1)') && pageSource.includes("behavior:reducedMotion.matches ? 'auto' : 'smooth'")],
-  ['reduced motion keeps positioning transforms intact', !pageSource.includes('animation:none!important; transform:none!important')],
+  ['reduced motion keeps positioning transforms intact', !pageSource.includes('animation:none!important; transform:none!important') && pageSource.includes('.ex-action--like[aria-pressed="true"] svg')],
   ['roving tabindex follows arrow focus', pageSource.includes('links.forEach((link) => { link.tabIndex = -1; })') && pageSource.includes('next.tabIndex = 0')],
 ];
 
