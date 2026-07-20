@@ -6,7 +6,11 @@ At the beginning of every run, before any search, fetch this stable public URL:
 
 https://static.kenigevents.ru/region-talk/external-publications/research-registry.json
 
-Open that exact URL without adding query parameters. The registry is published with `no-cache`/`no-store` response headers, so a cache-busting URL is neither required nor permitted by this contract. The response must be a strict JSON object with schema_version=region_talk_external_research_registry.v1. It contains the current search_policy, blocked_domains, duplicate_guard and the current result_contract.schema_url. Fetch the result schema from the exact URL declared there and verify its SHA-256 against result_contract.sha256 when your environment supports hashing.
+The exact result-schema URL is also declared here so restricted browsing environments may open it directly:
+
+https://static.kenigevents.ru/region-talk/external-publications/result.schema.json
+
+Open both exact URLs without adding query parameters. The files are published with `no-cache`/`no-store` response headers, so cache-busting URLs are neither required nor permitted by this contract. The registry response must be a strict JSON object with schema_version=region_talk_external_research_registry.v1. It contains the current search_policy, blocked_domains, duplicate_guard and result_contract. Require result_contract.schema_url to equal the exact schema URL written above and result_contract.schema_version to equal region_talk_external_research.v1. Parse the schema from that exact URL and verify its SHA-256 against result_contract.sha256 when your environment supports hashing.
 
 This saved prompt is deliberately self-contained. Do not ask the operator to generate, update or attach a runtime JSON file. Do not use a duplicate list copied into the prompt. If the live registry cannot be fetched or parsed, or its declared result schema cannot be fetched, stop without searching and report the exact access error; never continue with an empty or remembered exclusion list.
 

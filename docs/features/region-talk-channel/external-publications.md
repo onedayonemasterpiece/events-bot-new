@@ -142,6 +142,10 @@ must fetch the exact stable URL of the live read-only registry:
 
 `https://static.kenigevents.ru/region-talk/external-publications/research-registry.json`
 
+The exact result-schema URL is written directly into the saved prompt as well:
+
+`https://static.kenigevents.ru/region-talk/external-publications/result.schema.json`
+
 The registry contains non-secret policy plus the current projection of prior
 candidates, exclusions and unresolved leads. It also points to the current
 result JSON Schema. If the registry or result schema is unavailable, the agent
@@ -150,7 +154,10 @@ must stop rather than search without duplicate protection.
 Do not append a cache-busting query parameter. The object is already served
 with `Cache-Control: no-cache, no-store, must-revalidate`; keeping the exact URL
 also satisfies research environments that only permit URLs already present in
-the prompt or a preceding page.
+the prompt. The agent must additionally verify that the schema URL and version
+declared by the live registry equal the literal schema URL and contract version
+in the prompt. This avoids relying on a URL discovered only inside a fetched
+JSON document, which some restricted research environments refuse to open.
 
 The registry is rebuilt from YDB and published automatically after every
 successful `--execute` import by

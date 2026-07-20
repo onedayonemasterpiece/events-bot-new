@@ -45,7 +45,8 @@ def test_saved_prompt_requires_exact_registry_url_without_cache_busting() -> Non
     prompt = mod.PROMPT_PATH.read_text(encoding="utf-8")
 
     assert mod._url(mod.REGISTRY_OBJECT_PATH) in prompt
-    assert "Open that exact URL without adding query parameters" in prompt
+    assert mod._url(mod.RESULT_SCHEMA_OBJECT_PATH) in prompt
+    assert "Open both exact URLs without adding query parameters" in prompt
     assert "Append a cache-busting query parameter" not in prompt
 
 
