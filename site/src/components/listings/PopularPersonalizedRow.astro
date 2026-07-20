@@ -1,0 +1,66 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+import { eventCategory, eventPopularityScore, eventTags, popularDesktopTemporalLabel } from '../../lib/events';
+import { listingEventFamilyKey } from '../../lib/listingPresentation';
+import ListingEventCard from './ListingEventCard.astro';
+
+interface Props { events: PreviewEvent[]; }
+const { events } = Astro.props;
+---
+<section
+  class="ke-popular-behavior__group ke-popular-personalized"
+  data-popular-personalized
+  aria-labelledby="popular-personalized"
+  hidden
+>
+  <header class="ke-popular-behavior__head">
+    <h2 id="popular-personalized">Вам может быть интересно</h2>
+    <span data-popular-personalized-count>5</span>
+  </header>
+  <div class="ke-popular-behavior__row" data-popular-personalized-candidates>
+    {events.map((event) => (
+      <div
+        data-popular-personalized-candidate
+        data-event-id={event.id}
+        data-category={eventCategory(event)}
+        data-tags={JSON.stringify(eventTags(event))}
+        data-base-score={eventPopularityScore(event)}
+        hidden
+      >
+        <ListingEventCard event={event} density="popular" temporalLabel={popularDesktopTemporalLabel(event)} familyKey={listingEventFamilyKey(event)} supplemental />
+      </div>
+    ))}
+  </div>
+</section>
+
+<script>
+  import { selectPopularPersonalizedCandidates } from '../../lib/popularPersonalization.mjs';
+
+  function initPopularPersonalizedRow() {
+    if (!matchMedia('(min-width: 981px)').matches) return;
+    document.querySelectorAll('[data-popular-personalized]').forEach((section) => {
+      if (section.dataset.popularPersonalizedReady === 'true') return;
+      section.dataset.popularPersonalizedReady = 'true';
+      let profile = null;
+      try { profile = JSON.parse(localStorage.getItem('ke_personalization_profile') || 'null'); } catch {}
+      const nodes = [...section.querySelectorAll('[data-popular-personalized-candidate]')];
+      const candidates = nodes.map((node) => ({
+        id: node.dataset.eventId,
+        category: node.dataset.category || 'event',
+        tags: JSON.parse(node.dataset.tags || '[]'),
+        baseScore: Number(node.dataset.baseScore || 0),
+      }));
+      const selectedIds = selectPopularPersonalizedCandidates(candidates, profile);
+      if (selectedIds.length !== 5) return;
+      const selected = new Set(selectedIds);
+      nodes.forEach((node) => { node.hidden = !selected.has(String(node.dataset.eventId)); });
+      const row = section.querySelector('[data-popular-personalized-candidates]');
+      selectedIds.forEach((id) => {
+        const node = nodes.find((candidate) => String(candidate.dataset.eventId) === id);
+        if (node && row) row.append(node);
+      });
+      section.hidden = false;
+    });
+  }
+  initPopularPersonalizedRow();
+</script>

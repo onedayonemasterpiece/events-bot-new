@@ -1,5 +1,6 @@
 ---
-import type { PopularListingGroup } from '../../lib/listingPresentation';
+import { listingEventFamilyKey, type PopularListingGroup } from '../../lib/listingPresentation';
+import { popularDesktopTemporalLabel } from '../../lib/events';
 import ListingEventCard from './ListingEventCard.astro';
 
 interface Props { groups: PopularListingGroup[]; }
@@ -14,8 +15,9 @@ let priorityIndex = 0;
         <span data-popular-group-count>{group.events.length}</span>
       </header>
       <div class="ke-popular-behavior__row">
-        {group.events.map((event) => <ListingEventCard event={event} density="popular" priority={priorityIndex++ < 4} />)}
+        {group.events.map((event) => <ListingEventCard event={event} density="popular" priority={priorityIndex++ < 4} temporalLabel={popularDesktopTemporalLabel(event)} familyKey={listingEventFamilyKey(event)} />)}
       </div>
     </section>
   ))}
+  <slot />
 </div>

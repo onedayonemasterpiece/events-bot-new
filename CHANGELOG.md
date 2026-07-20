@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Improved desktop-only Popular without changing its parallel mobile trees:
+  already unavailable one-off events fail closed, repeating occurrences share
+  one card with compact date context, the five evidence shelves deduplicate
+  families page-wide, and a sixth `Вам может быть интересно` shelf appears only
+  as an honest warm-profile 4+1 affinity/anti-bubble set.
 - Fixed the shared static listing shell after a divergent integration dropped
   its design-system import and sticky header contract: Today, Tomorrow,
   Weekend and Popular now ship the same styled desktop surface, keep the real

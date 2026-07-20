@@ -1,6 +1,11 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
-import { buildPopularListingGroups, deduplicateListingEvents } from '../../lib/listingPresentation';
+import {
+  buildPopularDesktopListing,
+  buildPopularDesktopPersonalizationCandidates,
+  buildPopularListingGroups,
+  deduplicateListingEvents,
+} from '../../lib/listingPresentation';
 import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import PopularBehaviorRows from './PopularBehaviorRows.astro';
@@ -8,16 +13,23 @@ import PopularMobileBehaviorRows from './PopularMobileBehaviorRows.astro';
 import PopularMobileAdaptiveRows from './PopularMobileAdaptiveRows.astro';
 import ListingMobileDensitySwitch from './ListingMobileDensitySwitch.astro';
 import PopularMobileGroupContext from './PopularMobileGroupContext.astro';
+import PopularPersonalizedRow from './PopularPersonalizedRow.astro';
 
-interface Props { events: PreviewEvent[]; }
+interface Props { events: PreviewEvent[]; desktopEvents: PreviewEvent[]; }
 const events = deduplicateListingEvents(Astro.props.events);
 const groups = buildPopularListingGroups(events, 5);
+const desktop = buildPopularDesktopListing(Astro.props.desktopEvents, 5);
+const desktopPersonalizationCandidates = buildPopularDesktopPersonalizationCandidates(
+  Astro.props.desktopEvents,
+  desktop.allocatedFamilyKeys,
+  30,
+);
 const visibleEvents = groups.flatMap((group) => group.events);
 const cities = [...new Set(visibleEvents.map((event) => event.city || 'Калининградская область'))]
   .map((name) => ({ name, count: visibleEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
 ---
-<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V26" data-mobile-card-density="large">
+<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V26" data-desktop-popular-version="V28" data-mobile-card-density="large">
   <script is:inline>
     try {
       const surface = document.currentScript.closest('[data-date-listing="popular"]');
@@ -28,7 +40,9 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={visibleEvents.length} current="popular" />
   <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} />
   <div class="ke-popular-desktop" data-popular-representation="desktop">
-    <PopularBehaviorRows groups={groups} />
+    <PopularBehaviorRows groups={desktop.groups}>
+      <PopularPersonalizedRow events={desktopPersonalizationCandidates} />
+    </PopularBehaviorRows>
   </div>
   <PopularMobileBehaviorRows groups={groups} />
   <PopularMobileAdaptiveRows groups={groups} />

@@ -1,15 +1,16 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import PopularListingSurface from '../../components/listings/PopularListingSurface.astro';
-import { absoluteUrl, getPopularEvents, SITE_NAME } from '../../lib/events';
+import { absoluteUrl, getPopularDesktopEvents, getPopularEvents, SITE_NAME } from '../../lib/events';
 
 const events = getPopularEvents(100);
+const desktopEvents = getPopularDesktopEvents(160);
 const canonicalUrl = absoluteUrl('/populyarnoe/');
 const title = `Популярные события Калининграда | ${SITE_NAME}`;
 const description = 'Лента популярных событий по социальной активности: лайки, репосты, просмотры и реакции источников нормализуются в компактный скоринг.';
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="popular" disableViewportZoom>
   <main id="main" class="ke-listing-page">
-    <PopularListingSurface events={events} />
+    <PopularListingSurface events={events} desktopEvents={desktopEvents} />
   </main>
 </EventLayout>

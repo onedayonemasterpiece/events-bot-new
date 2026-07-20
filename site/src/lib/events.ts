@@ -705,6 +705,63 @@ export function getPopularEvents(limit = 20): PreviewEvent[] {
     .map((item) => item.event);
 }
 
+const INELIGIBLE_POPULAR_LIFECYCLES = new Set(['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive']);
+
+/**
+ * Desktop Popular is a decision shortcut, so it must not surface a one-off
+ * event the visitor can no longer attend. Mobile keeps its existing ranked
+ * projection until the parallel mobile listing work is reconciled.
+ */
+export function isPopularDesktopEligible(event: PreviewEvent, referenceIso = getPreviewBuild().generated_at): boolean {
+  const lifecycle = String(event.lifecycle_status || '').toLowerCase();
+  if (INELIGIBLE_POPULAR_LIFECYCLES.has(lifecycle)) return false;
+  if (!eventIntersectsDateRange(event, getCurrentDate(), '9999-12-31')) return false;
+
+  const reference = Date.parse(referenceIso);
+  if (!Number.isFinite(reference)) return true;
+
+  const endAt = Date.parse(event.end_at || '');
+  if (Number.isFinite(endAt)) return endAt > reference;
+
+  // A multi-day festival or exhibition remains useful until its final day
+  // even when the export has no trustworthy closing hour.
+  if (isMultiDayEvent(event)) return (event.end_date || event.start_date) >= getCurrentDate();
+
+  const startsAt = Date.parse(event.starts_at || '');
+  if (Number.isFinite(startsAt)) return startsAt >= reference;
+
+  if (event.start_date !== getCurrentDate() || !event.start_time) return event.start_date >= getCurrentDate();
+  const localStart = Date.parse(`${event.start_date}T${event.start_time}:00+02:00`);
+  return !Number.isFinite(localStart) || localStart >= reference;
+}
+
+export function getPopularDesktopEvents(limit = 100): PreviewEvent[] {
+  return getEvents()
+    .filter((event) => isPopularDesktopEligible(event))
+    .map((event) => ({ event, score: eventPopularityScore(event) }))
+    .filter((item) => item.score > 0 || (item.event.likes_count || 0) > 0 || (item.event.source_views_count || 0) > 0)
+    .sort((left, right) => right.score - left.score || (left.event.starts_at || left.event.start_date).localeCompare(right.event.starts_at || right.event.start_date) || left.event.id - right.event.id)
+    .slice(0, Math.max(0, limit))
+    .map((item) => item.event);
+}
+
+function repeatCountLabel(count: number): string {
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  if (mod100 >= 11 && mod100 <= 14) return `${count} показов`;
+  if (mod10 === 1) return `${count} показ`;
+  if (mod10 >= 2 && mod10 <= 4) return `${count} показа`;
+  return `${count} показов`;
+}
+
+export function popularDesktopTemporalLabel(event: PreviewEvent): string {
+  const dateLabel = isMultiDayEvent(event)
+    ? `Идёт до ${displayDateValue(event.end_date || event.start_date)}`
+    : displayDateTime(event);
+  const repeatCount = new Set((event.other_date_ids || []).filter((id) => id !== event.id)).size;
+  return repeatCount > 0 ? `${dateLabel} · ещё ${repeatCountLabel(repeatCount)}` : dateLabel;
+}
+
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);

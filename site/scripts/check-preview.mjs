@@ -97,6 +97,7 @@ for (const headerContract of [
 const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
 for (const marker of [
   'data-listing-variant="POPULAR-V26"',
+  'data-desktop-popular-version="V28"',
   'data-popular-representation="desktop"',
   'data-popular-representation="mobile-large"',
   'data-popular-representation="mobile-adaptive"',
@@ -116,17 +117,72 @@ if (!(popularDesktopAt < popularLargeAt && popularLargeAt < popularAdaptiveAt &&
   throw new Error('Popular V26 representations are not isolated in desktop / large / adaptive order');
 }
 const popularDesktopHtml = popularHtml.slice(popularDesktopAt, popularLargeAt);
+const popularPersonalizedAt = popularDesktopHtml.indexOf('data-popular-personalized');
+if (popularPersonalizedAt < 0) throw new Error('Popular desktop V28 misses the optional personalized shelf');
+const popularDesktopGlobalHtml = popularDesktopHtml.slice(0, popularPersonalizedAt);
 const popularLargeHtml = popularHtml.slice(popularLargeAt, popularAdaptiveAt);
 const popularAdaptiveHtml = popularHtml.slice(popularAdaptiveAt, popularDockAt);
 const listingIds = (html) => [...html.matchAll(/data-listing-item(?:="")?[^>]*data-event-id="(\d+)"/gu)].map((match) => match[1]);
-const popularDesktopIds = listingIds(popularDesktopHtml);
+const popularDesktopIds = listingIds(popularDesktopGlobalHtml);
 const popularLargeIds = listingIds(popularLargeHtml);
 const popularAdaptiveIds = listingIds(popularAdaptiveHtml);
 if (popularDesktopIds.length === 0 || new Set(popularDesktopIds).size !== popularDesktopIds.length) {
-  throw new Error('Popular V26 desktop ranking must be present and deduplicated');
+  throw new Error('Popular desktop V28 ranking must be present and event-id deduplicated');
 }
-if (popularDesktopIds.join(',') !== popularLargeIds.join(',') || popularDesktopIds.join(',') !== popularAdaptiveIds.join(',')) {
-  throw new Error('Popular V26 density representations must preserve identical ranked event order');
+if (popularLargeIds.join(',') !== popularAdaptiveIds.join(',')) {
+  throw new Error('Popular V26 mobile density representations must preserve identical ranked event order');
+}
+const popularDesktopFamilyKeys = [...popularDesktopGlobalHtml.matchAll(/data-listing-family-key="([^"]+)"/gu)].map((match) => match[1]);
+if (popularDesktopFamilyKeys.length !== popularDesktopIds.length || new Set(popularDesktopFamilyKeys).size !== popularDesktopFamilyKeys.length) {
+  throw new Error('Popular desktop V28 must allocate every event family only once across global shelves');
+}
+const popularDesktopReasons = [...popularDesktopGlobalHtml.matchAll(/data-popular-reason="([^"]+)"/gu)].map((match) => match[1]);
+if (popularDesktopReasons.join(',') !== 'fast_growth,multi_source,discussed,frequently_shared,score_fallback') {
+  throw new Error(`Popular desktop V28 shelf order drifted: ${popularDesktopReasons.join(',')}`);
+}
+const popularDesktopGroupCounts = [...popularDesktopGlobalHtml.matchAll(/data-popular-group-count(?:="")?[^>]*>(\d+)</gu)].map((match) => Number(match[1]));
+if (popularDesktopGroupCounts.length !== 5 || popularDesktopGroupCounts.some((count) => count < 3 || count > 5)) {
+  throw new Error(`Popular desktop V28 shelves must remain one short evidence row (3–5 cards): ${popularDesktopGroupCounts.join(',')}`);
+}
+const temporalLabels = [...popularDesktopGlobalHtml.matchAll(/data-listing-temporal-status(?:="")?[^>]*>([^<]+)</gu)].map((match) => match[1]);
+if (temporalLabels.length !== popularDesktopIds.length || temporalLabels.some((label) => !label.trim())) {
+  throw new Error('Popular desktop V28 cards must expose compact lifecycle/date context');
+}
+if (!popularDesktopGlobalHtml.includes('ещё 1 показ')) {
+  throw new Error('Popular desktop V28 must collapse repeated dates into one family card');
+}
+if (!popularDesktopIds.includes('5130')) {
+  throw new Error('Popular desktop V28 regression: Break Summer Fest must remain discoverable');
+}
+const popularEventById = new Map(eventsData.events.map((event) => [String(event.id), event]));
+const popularReference = Date.parse(eventsData.build.generated_at);
+const popularDesktopEligible = (event) => {
+  if (!event || ['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive'].includes(String(event.lifecycle_status || '').toLowerCase())) return false;
+  const endAt = Date.parse(event.end_at || '');
+  if (Number.isFinite(endAt)) return endAt > popularReference;
+  if (event.end_date && event.end_date !== event.start_date) return event.end_date >= eventsData.build.current_date;
+  const startsAt = Date.parse(event.starts_at || '');
+  if (Number.isFinite(startsAt)) return startsAt >= popularReference;
+  return event.start_date >= eventsData.build.current_date;
+};
+if (popularDesktopIds.some((id) => !popularDesktopEligible(popularEventById.get(id)))) {
+  throw new Error('Popular desktop V28 includes an already unavailable event at build time');
+}
+const elapsedMobileIds = popularLargeIds.filter((id) => !popularDesktopEligible(popularEventById.get(id)));
+if (!elapsedMobileIds.length || elapsedMobileIds.some((id) => popularDesktopIds.includes(id))) {
+  throw new Error('Popular desktop V28 must be stricter than the preserved mobile projection at the time boundary');
+}
+const personalPoolHtml = popularDesktopHtml.slice(popularPersonalizedAt);
+const personalIds = listingIds(personalPoolHtml);
+const personalFamilies = [...personalPoolHtml.matchAll(/data-listing-family-key="([^"]+)"/gu)].map((match) => match[1]);
+if (personalIds.length < 5 || personalFamilies.length !== personalIds.length || new Set(personalFamilies).size !== personalFamilies.length) {
+  throw new Error('Popular desktop V28 personal candidate pool must be family-deduplicated and sufficiently deep');
+}
+if (personalFamilies.some((key) => popularDesktopFamilyKeys.includes(key))) {
+  throw new Error('Popular desktop V28 personal candidate pool must exclude globally visible families');
+}
+if (!/data-popular-personalized[^>]*hidden/u.test(popularDesktopHtml)) {
+  throw new Error('Popular desktop V28 personal shelf must remain absent for cold start');
 }
 if (!popularLargeHtml.includes('event-card--split-actions') || popularLargeHtml.includes('listing-proof')) {
   throw new Error('Popular V26 large mode must reuse canonical EventCard split-actions without listing-proof');

@@ -7,8 +7,8 @@ import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingIdentityMedallions, getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 import { withBase } from '../../lib/events';
 
-interface Props { event: PreviewEvent; density?: 'regular' | 'weekend' | 'popular'; priority?: boolean }
-const { event, density = 'regular', priority = false } = Astro.props;
+interface Props { event: PreviewEvent; density?: 'regular' | 'weekend' | 'popular'; priority?: boolean; temporalLabel?: string; familyKey?: string; supplemental?: boolean }
+const { event, density = 'regular', priority = false, temporalLabel, familyKey, supplemental = false } = Astro.props;
 const href = eventHref(event);
 const targetRatio = density === 'weekend' ? 1.2 : density === 'popular' ? 1.25 : 1.35;
 const image = selectListingImage(event, targetRatio);
@@ -90,7 +90,9 @@ const socialProofLabel = [
   data-ds-version="9"
   data-feedback-scope
   data-listing-item
+  data-listing-supplemental={supplemental ? 'true' : undefined}
   data-event-id={event.id}
+  data-listing-family-key={familyKey}
   data-event-title={event.title}
   data-linked-event-ids={(event.other_date_ids || []).join(',')}
   data-listing-city={cityKey(event.city)}
@@ -176,7 +178,9 @@ const socialProofLabel = [
   ) : null}
   </div>
   <div class="ke-listing-card__copy">
-    <span class="ke-listing-card__temporal-status" data-listing-temporal-status hidden></span>
+    {temporalLabel
+      ? <span class="ke-listing-card__temporal-status" data-listing-temporal-status>{temporalLabel}</span>
+      : <span class="ke-listing-card__temporal-status" data-listing-temporal-status hidden></span>}
     <a class="ke-listing-card__title" href={href} data-prefetch>{event.title}</a>
     {place ? <p>{place}</p> : null}
   </div>

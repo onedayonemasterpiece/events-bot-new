@@ -18,6 +18,11 @@ export interface PopularListingGroup {
   events: PreviewEvent[];
 }
 
+export interface PopularDesktopListingResult {
+  groups: PopularListingGroup[];
+  allocatedFamilyKeys: string[];
+}
+
 export interface ListingImagePresentation {
   asset: EventImageAsset | null;
   src: string | null;
@@ -60,6 +65,14 @@ export function eventCountLabel(count: number): string {
 
 function normalizedIdentityPart(value: unknown): string {
   return String(value || '').toLocaleLowerCase('ru-RU').replace(/[^a-zа-яё0-9]+/gu, ' ').trim();
+}
+
+export function listingEventFamilyKey(event: PreviewEvent): string {
+  return [
+    normalizedIdentityPart(event.title),
+    normalizedIdentityPart(event.event_type),
+    normalizedIdentityPart(event.venue_name || event.city),
+  ].join('|');
 }
 
 export function deduplicateListingEvents(items: PreviewEvent[]): PreviewEvent[] {
@@ -124,6 +137,99 @@ export function buildPopularListingGroups(items: PreviewEvent[], perGroup = 5): 
     groups.push({ key: definition.key, label: definition.label, events });
   }
   return groups;
+}
+
+interface PopularFamily {
+  key: string;
+  events: PreviewEvent[];
+  representative: PreviewEvent;
+  rank: number;
+  reasons: Set<PopularListingReason>;
+}
+
+function aggregatePopularFamilies(items: PreviewEvent[]): PopularFamily[] {
+  const candidates = deduplicateListingEvents(items);
+  const families = new Map<string, PopularFamily>();
+  candidates.forEach((event, rank) => {
+    const key = listingEventFamilyKey(event);
+    const current = families.get(key);
+    const reasons = new Set<PopularListingReason>(event.popularity_reason_codes || []);
+    if (!current) {
+      families.set(key, { key, events: [event], representative: event, rank, reasons });
+      return;
+    }
+    current.events.push(event);
+    reasons.forEach((reason) => current.reasons.add(reason));
+  });
+  return [...families.values()];
+}
+
+function representativeWithFamilyDates(family: PopularFamily): PreviewEvent {
+  const linkedIds = new Set<number>(family.representative.other_date_ids || []);
+  family.events.forEach((event) => {
+    if (event.id !== family.representative.id) linkedIds.add(event.id);
+    (event.other_date_ids || []).forEach((id) => {
+      if (id !== family.representative.id) linkedIds.add(id);
+    });
+  });
+  return { ...family.representative, other_date_ids: [...linkedIds].sort((left, right) => left - right) };
+}
+
+/** Desktop-only family allocation. Mobile retains buildPopularListingGroups. */
+export function buildPopularDesktopListing(items: PreviewEvent[], perGroup = 5): PopularDesktopListingResult {
+  const limit = Math.max(1, perGroup);
+  const families = aggregatePopularFamilies(items);
+  const allocated = new Set<string>();
+  const stableOrder = (left: PopularFamily, right: PopularFamily) => left.rank - right.rank;
+  const sharedEvidenceOrder = (left: PopularFamily, right: PopularFamily) => {
+    const peak = (family: PopularFamily, key: 'shares_count' | 'likes_count' | 'source_views_count') => (
+      Math.max(0, ...family.events.map((event) => Number(event[key] || 0)))
+    );
+    return peak(right, 'shares_count') - peak(left, 'shares_count')
+      || peak(right, 'likes_count') - peak(left, 'likes_count')
+      || peak(right, 'source_views_count') - peak(left, 'source_views_count')
+      || stableOrder(left, right);
+  };
+  const definitions: Array<{
+    key: PopularListingReason;
+    label: string;
+    matches: (family: PopularFamily) => boolean;
+    order?: (left: PopularFamily, right: PopularFamily) => number;
+  }> = [
+    { key: 'fast_growth', label: 'Быстро набирают популярность', matches: (family) => family.reasons.has('fast_growth') },
+    { key: 'multi_source', label: 'Встречается во множестве источников', matches: (family) => family.reasons.has('multi_source') },
+    { key: 'discussed', label: 'Активно обсуждают', matches: (family) => family.reasons.has('discussed') },
+    { key: 'frequently_shared', label: 'Часто делятся', matches: (family) => family.reasons.has('frequently_shared'), order: sharedEvidenceOrder },
+    { key: 'score_fallback', label: 'Популярное сейчас', matches: () => true },
+  ];
+  const groups: PopularListingGroup[] = [];
+  for (const definition of definitions) {
+    const selected = families
+      .filter((family) => !allocated.has(family.key) && definition.matches(family))
+      .sort(definition.order || stableOrder)
+      .slice(0, limit);
+    if (!selected.length || (definition.key !== 'score_fallback' && selected.length < 3)) continue;
+    selected.forEach((family) => allocated.add(family.key));
+    groups.push({
+      key: definition.key,
+      label: definition.label,
+      events: selected.map(representativeWithFamilyDates),
+    });
+  }
+  return { groups, allocatedFamilyKeys: [...allocated] };
+}
+
+export function buildPopularDesktopPersonalizationCandidates(
+  items: PreviewEvent[],
+  allocatedFamilyKeys: Iterable<string>,
+  limit = 30,
+): PreviewEvent[] {
+  const allocated = new Set(allocatedFamilyKeys);
+  return aggregatePopularFamilies(items)
+    .filter((family) => !allocated.has(family.key))
+    .sort((left, right) => left.rank - right.rank)
+    .slice(0, Math.max(0, limit))
+    .map(representativeWithFamilyDates);
 }
 
 export function groupListingEvents(items: PreviewEvent[]): ListingTimeGroup[] {

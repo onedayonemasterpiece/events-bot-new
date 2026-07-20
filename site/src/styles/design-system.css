@@ -1104,6 +1104,8 @@
 .ke-popular-behavior__row .ke-listing-card__title { font-size: 1.08rem; -webkit-line-clamp: 3; }
 .ke-popular-behavior__row .ke-listing-card__copy p { font-size: .9rem; }
 .ke-popular-behavior__row .ke-listing-card__medallion { width: 56px; height: 56px; }
+.ke-popular-personalized [data-popular-personalized-candidate][hidden] { display: none; }
+.ke-popular-personalized [data-popular-personalized-candidate]:not([hidden]) { display: contents; }
 .ke-popular-behavior--mobile { display: none; }
 
 /* Product research prototype: personalization is optional context, so it is

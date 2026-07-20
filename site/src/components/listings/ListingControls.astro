@@ -64,7 +64,7 @@ const showCities = cities.length > 1;
     const representation = window.matchMedia('(max-width: 720px)').matches
       ? (popular.dataset.mobileCardDensity === 'adaptive' ? 'mobile-adaptive' : 'mobile-large')
       : 'desktop';
-    return [...popular.querySelectorAll(`[data-popular-representation="${representation}"] [data-listing-item]`)];
+    return [...popular.querySelectorAll(`[data-popular-representation="${representation}"] [data-listing-item]:not([data-listing-supplemental="true"])`)];
   }
 
   function visibleListingItems() {

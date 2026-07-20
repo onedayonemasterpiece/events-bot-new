@@ -204,6 +204,13 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Historical public preview evidence
 
+The current desktop `Популярное` contract is documented in
+[`listing-surfaces-v28-desktop-popular.md`](listing-surfaces-v28-desktop-popular.md):
+five short evidence shelves use a stricter build-time availability cutoff and
+page-wide family deduplication, while an optional sixth 4+1 shelf applies the
+existing local profile only for warm consented visitors. Mobile V26 rendering
+is deliberately unchanged.
+
 The current mobile `Популярное` sticky group-context pass is documented in
 [`listing-surfaces-v26-mobile-sticky-groups.md`](listing-surfaces-v26-mobile-sticky-groups.md):
 it keeps the full semantic category heading, then compacts that same heading

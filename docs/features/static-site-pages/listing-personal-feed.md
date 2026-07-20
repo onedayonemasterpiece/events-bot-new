@@ -6,14 +6,15 @@
 
 Static date listing pages (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) may end with a dynamic “Личная лента” section. The section is **not pre-rendered with personal cards** in static HTML. It stays hidden until the browser can use a cached personal list or fetch one from a backend.
 
-`/populyarnoe/` is intentionally excluded from this generic slot. Its primary
-job is a bounded behavioral overview. A future continuation is a separate
-experiment: one wrapper containing `Вам может быть интересно` (popular ×
-affinity) and `Откройте новое` (anti-bubble exploration). The wrapper appears
-only with explicit consent, compatible meaningful profile, experiment bucket,
-fresh normalized popularity score, page-wide exact/family exclusions and enough
-qualified candidates for **both** lanes; otherwise the whole continuation stays
-absent. A generic personal response must never render under either heading.
+`/populyarnoe/` remains excluded from this generic slot. Its primary job is a
+bounded behavioral overview. Desktop V28 adds one compact continuation,
+`Вам может быть интересно`: it uses the same cross-site local profile only with
+explicit consent and at least three strong signals, then reveals exactly four
+affinity candidates plus one anti-bubble candidate. Page-wide family
+exclusions apply; if the honest 4+1 set cannot be formed, the whole shelf stays
+absent. It has no independent Popular profile, backend read or generic personal
+response. See
+[`listing-surfaces-v28-desktop-popular.md`](listing-surfaces-v28-desktop-popular.md).
 
 This keeps SEO-safe deterministic listing content first, then adds a personal continuation only for real users.
 
