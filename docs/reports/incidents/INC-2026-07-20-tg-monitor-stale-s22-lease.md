@@ -123,8 +123,9 @@ Telegram slot.
 
 ## Immediate Mitigation
 
-- Pending: release only the stale failed guide-owned lease after confirming the
-  guide kernel is terminal, then run the compensating Telegram scan.
+- Released only the stale failed guide-owned lease after confirming the guide
+  kernel was terminal, then started compensating Telegram run
+  `inc-20260720-tg-stale-s22-catchup-r3`.
 - Do not borrow `TELEGRAM_AUTH_BUNDLE_E2E` or bypass the S22 resource guard.
 
 ## Corrective Actions
@@ -146,10 +147,18 @@ Telegram slot.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `3c79c342` (reachable from `origin/main`)
+- deploy path: Fly image `deployment-01KY0VJEKB0EHR0ZB26290B0V2`
+- regression checks: four focused scheduling/guide tests passed, including the
+  new after-local-midnight remote-busy cooldown and the two mandatory
+  `INC-2026-06-10` watchdog guards; the known pytest interpreter-shutdown hang
+  occurred only after the green summary.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`; after
+  two critical-watchdog ticks there were zero new guide `ops_run` rows after
+  `22:52 UTC` (last spam row remained `4296` at `22:51:23 UTC`). Telegram
+  catch-up remained alive with current heartbeat and exact-owned active S22
+  lease. Incident stays open until its terminal import and `@klassster` cursor
+  are verified.
 
 ## Prevention
 
