@@ -83,14 +83,19 @@ test('personal continuation loads only near a visible similar-events boundary', 
 
 test('dynamic recommendation media reserves geometry through load and failure', async () => {
   const layout = await read('src/layouts/EventLayout.astro');
+  const card = await read('src/components/EventCard.astro');
   const events = await read('src/lib/events.ts');
 
   assert.match(events, /image_width\?: number \| null/u);
   assert.match(events, /image_height\?: number \| null/u);
-  assert.match(layout, /event-card__media-shell--dynamic is-image-loading/u);
+  assert.match(layout, /<EventCard event=\{runtimeTemplateEvent\} variant="split-actions" desktopRelatedCrop runtimeTemplate/u);
+  assert.match(layout, /sourceCard\.cloneNode\(true\)/u);
+  assert.match(layout, /'event-card__media-shell--dynamic'[\s\S]*imageUrl \? 'is-image-loading'/u);
   assert.match(layout, /--dynamic-media-ratio/u);
-  assert.match(layout, /onload="[^"]*is-image-loaded/u);
-  assert.match(layout, /onerror="[^"]*is-image-missing/u);
+  assert.match(card, /const imageLoadHandler = desktopRelatedCrop[\s\S]*is-image-loaded/u);
+  assert.match(card, /const imageErrorHandler = [\s\S]*is-image-missing/u);
+  assert.match(card, /onload=\{imageLoadHandler\}/u);
+  assert.match(card, /onerror=\{imageErrorHandler\}/u);
   assert.match(layout, /prefers-reduced-motion: reduce/u);
   assert.match(layout, /aspect-ratio: var\(--dynamic-media-ratio, 4 \/ 5\)/u);
 });

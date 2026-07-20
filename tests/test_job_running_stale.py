@@ -258,7 +258,11 @@ async def test_running_vk_sync_stale_retries_instead_of_terminal_dependency_bloc
     assert job.status == JobStatus.error
     assert job.last_error == "stale"
     assert job.attempts == 1
-    assert before < job.next_run_at < before + timedelta(minutes=2)
+    due = job.next_run_at
+    if due.tzinfo is None:
+        due = due.replace(tzinfo=timezone.utc)
+    assert before < due < before + timedelta(minutes=2)
+    await db.close()
 
 
 @pytest.mark.asyncio

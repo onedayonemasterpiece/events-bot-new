@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Added the exact reviewed keyboard-navigation V7 router to every desktop event
+  route in immutable noindex secret candidates: the lab and primary template
+  now share one lifecycle-managed implementation, without autofocus, mobile or
+  production-root activation, and without a remote shortcut collector.
+- Fixed related/broad desktop discovery parity so both zones clone the same
+  canonical `EventCard` markup and keep feedback, share, rerank and keyboard
+  focus semantics instead of maintaining look-alike controllers.
+- Fixed recurring Fly root-overlay exhaustion around static builds: builder
+  artifacts and working scratch now live under bounded persistent storage,
+  recognized successful outputs are removed after durable receipts, and
+  readiness/preflight independently prove `/data` capacity and real `/tmp`
+  tempfile writability. Fully published video-render trees are likewise
+  removed only after assertion-validated terminal persistence.
 - Fixed static event detail parity so a one-photo Editorial page keeps the same
   CTA side-motion/docking state machine as a multi-photo page; the optional
   thumbnail rail no longer controls the page-family behavior.
