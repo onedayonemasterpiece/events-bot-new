@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: mitigated / awaiting immutable-candidate verification
+Status: mitigated / immutable secret candidate verified
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -29,9 +29,11 @@ Gemini 3.1 Pro `SHIP` verdict applied only to two frozen noindex V7 prototype
 objects and explicitly marked production integration `NOT READY`; it was not a
 visual acceptance of this generated candidate.
 
-The corrective implementation now exists on the integration branch; no
-production-root promotion is allowed. Closure still requires the immutable
-production-data candidate, its browser receipt and consultant acceptance.
+The corrective implementation is merged into `origin/main`, deployed to the
+Smart Update producer and verified in a new immutable production-data secret
+candidate. No production-root promotion was performed. Native cross-browser
+and accessibility checks remain rollout blockers, so the incident stays
+mitigated rather than closed.
 
 ## User / Business Impact
 
@@ -71,6 +73,23 @@ secret preproduction candidate family.
   `gemini-3.1-pro-preview` completed with clean process provenance and returned
   `REJECT` for the current candidate: the cross-page failure is P0 for candidate
   acceptance; recommendation geometry and footer ownership gaps are P1.
+- 2026-07-20 18:07 UTC — Fly release `v1734` deployed exact `origin/main` SHA
+  `1e7594d22c545f535c131aef3e9f9e5bddddd9f3` with the production browser-gate
+  and Kaggle Playwright dependency fixes.
+- 2026-07-20 18:12–18:33 UTC — Smart Update job `39104` generated, checked and
+  published `production-secret-20260720T201154-77720953`; the coalesced startup
+  request `39115` then completed as a fingerprint no-op rather than rebuilding
+  the same input.
+- 2026-07-20 18:33 UTC — immutable review prefix `RHOg…` became the checked
+  current candidate. Both root-form and secret-candidate generated trees carry
+  `browser_visual=ok`; the public candidate remains `noindex`, `no-referrer`,
+  root-isolated and stable-ICS-isolated.
+- 2026-07-20 18:39 UTC — an independent live Chromium run repeated the real
+  `6408` → gallery → `6407` → hero-arrow journey, canonical card geometry,
+  bounded continuation and footer `P`/`S` clipboard/toast flows successfully.
+- 2026-07-20 18:40 UTC — agy Gemini 3.1 Pro reviewed the actual immutable URL
+  and retained screenshots and returned `SHIP` with all five acceptance groups
+  marked `PASS`.
 
 ## Root Cause
 
@@ -223,7 +242,8 @@ secret preproduction candidate family.
   local fixture without waiting for the outer watchdog.
 - [x] Bound related caches to the atomic vector-corpus receipt and added exact-
   normalized-title reciprocity plus fail-closed graph topology checks.
-- [ ] Publish and verify a fresh immutable secret candidate from `origin/main`.
+- [x] Published and verified a fresh immutable secret candidate from
+  `origin/main` without mutating the stable root or stable ICS namespace.
 - [ ] Complete native Firefox/Safari, screen-reader, high-contrast and
   zoom/reflow checks before any later root rollout.
 
@@ -237,20 +257,37 @@ secret preproduction candidate family.
   the off-screen-focus ambiguity case and mandatory feedback.
 - [x] Add the missing live visual and multi-page/mixed-input scenarios to the
   canonical Playwright matrix.
-- [ ] Run candidate-wide visual acceptance and Gemini Pro review before any
-  future rollout claim.
-- [ ] Repair 17 static-build observability consistency warnings identified in
-  the 48-hour diagnostics window.
+- [x] Ran generated-tree plus live immutable-candidate Chromium acceptance and
+  obtained a Gemini 3.1 Pro `SHIP` review for the actual URL/screenshots.
+- [ ] Repair the 28 static-build observability consistency issues reported in
+  the final 48-hour diagnostic window. These historical reconciliation issues
+  do not invalidate the exact successful receipt, but they remain operational
+  debt and must not be hidden by aggregate success counts.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending merge to `origin/main`
-- deploy path: pending Fly deployment and Smart Update secret-candidate rebuild;
+- deployed SHA: `1e7594d22c545f535c131aef3e9f9e5bddddd9f3`, reachable from
+  `origin/main`; Fly release `v1734`
+- deploy path: Smart Update/Kaggle secret candidate only; immutable URL
+  `https://kenigevents.ru/_review/RHOgBCJMl527-JF5Cke3gF-n7Zsmyi_0gkC9tor_Bek/`;
   stable root promotion remains forbidden
-- regression checks: unit/integration and generated-tree Chromium checks are
-  required; exact command/report and immutable candidate receipt are recorded
-  at release time
-- post-deploy verification: pending new secret candidate and Gemini Pro review
+- build receipt: build `production-secret-20260720T201154-77720953`, run
+  `static-site:production-secret-20260720T201154-77720953:9b135cf41b8c`,
+  snapshot `snapshot-20260720T181200-aee8fedca5`, `248` event pages, `937`
+  published objects, `root_mutation=false`, `stable_ics_mutation=false`
+- generated-tree regression checks: production and secret candidate both
+  passed `related_geometry_crop`, canonical `EventCard` Enter navigation, real
+  gallery cross-document navigation and footer shortcuts; both manifests have
+  `browser_visual=ok`
+- live post-publish checks: `16` related/continuation cards inspected, bounded
+  continuation count `6`, gallery target `starshiy-syn-kaliningrad-6407`, hero
+  Right/Left source change/restore, and footer clipboard/toasts all passed
+- consultant acceptance: agy `Gemini 3.1 Pro`, verdict `SHIP`, acceptance groups
+  `5/5 PASS`
+- production health after completion: `/healthz` reports `ok=true`,
+  `ready=true`, no issues; current 48-hour diagnostic reports `60` requests,
+  `19` successes, `25` failed attempts, `13` busy deferrals and `2` no-ops,
+  plus `28` historical consistency issues requiring follow-up
 
 ## Prevention
 
