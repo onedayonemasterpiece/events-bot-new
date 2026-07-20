@@ -11,6 +11,8 @@ const REQUIRED_CHECKS = Object.freeze([
   'gallery_cross_document',
   'footer_shortcuts',
 ]);
+export const BROWSER_GATE_ACTION_TIMEOUT_MS = 8_000;
+export const BROWSER_GATE_NAVIGATION_TIMEOUT_MS = 12_000;
 
 function invariant(condition, message) {
   if (!condition) throw new Error(`Browser release gate failed: ${message}`);
@@ -111,8 +113,20 @@ export async function startReleaseServer(rootPath, basePath = '') {
   invariant(address && typeof address === 'object', 'static server did not bind');
   return {
     origin: `http://127.0.0.1:${address.port}`,
-    close: () => new Promise((accept, reject) => server.close((error) => error ? reject(error) : accept())),
+    close: () => new Promise((accept, reject) => {
+      server.close((error) => error ? reject(error) : accept());
+      // A release page can still be streaming an image when Chromium closes.
+      // Do not let that socket keep the mandatory gate alive indefinitely.
+      server.closeIdleConnections?.();
+      server.closeAllConnections?.();
+    }),
   };
+}
+
+function configureGatePage(page) {
+  page.setDefaultTimeout(BROWSER_GATE_ACTION_TIMEOUT_MS);
+  page.setDefaultNavigationTimeout(BROWSER_GATE_NAVIGATION_TIMEOUT_MS);
+  return page;
 }
 
 function eventRoutes(root, basePath) {
@@ -172,7 +186,7 @@ async function waitForContinuation(page) {
 }
 
 async function chooseSpecimen(browser, origin, candidates) {
-  const page = await browser.newPage({ viewport: { width: 1536, height: 864 } });
+  const page = configureGatePage(await browser.newPage({ viewport: { width: 1536, height: 864 } }));
   try {
     for (const candidate of candidates.slice(0, 12)) {
       const { route, targetPath } = candidate;
@@ -189,7 +203,7 @@ async function chooseSpecimen(browser, origin, candidates) {
       const targetUrl = new URL(target, `${origin}${route}`);
       if (targetUrl.origin !== origin) continue;
       if (targetUrl.pathname !== targetPath) continue;
-      const probe = await browser.newPage({ viewport: { width: 1536, height: 864 } });
+      const probe = configureGatePage(await browser.newPage({ viewport: { width: 1536, height: 864 } }));
       try {
         await probe.goto(targetUrl.href, { waitUntil: 'domcontentloaded' });
         const targetSlides = await probe.locator('[data-hero-gallery]').first().locator('[data-hero-gallery-slide][data-gallery-slide-kind="image"]').count();
@@ -359,8 +373,12 @@ async function runBrowserGate({ root, basePath, origin, browser }) {
   const routes = eventRoutes(root, basePath);
   const candidates = staticSpecimenCandidates(root, basePath, routes);
   invariant(candidates.length > 0, 'generated release has no static multi-image recommendation journey');
+  console.log(`[browser-release-gate] static candidates=${candidates.length}`);
   const specimen = await chooseSpecimen(browser, origin, candidates);
+  console.log(`[browser-release-gate] specimen=${specimen.route} target=${specimen.targetPath}`);
   const context = await browser.newContext({ viewport: { width: 1536, height: 864 } });
+  context.setDefaultTimeout(BROWSER_GATE_ACTION_TIMEOUT_MS);
+  context.setDefaultNavigationTimeout(BROWSER_GATE_NAVIGATION_TIMEOUT_MS);
   await context.addInitScript(() => {
     window.__releaseGateClipboard = { text: [], images: [] };
     Object.defineProperty(navigator, 'clipboard', {
@@ -381,7 +399,6 @@ async function runBrowserGate({ root, basePath, origin, browser }) {
     let continuation = [];
     for (const route of cropRoutes) {
       await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('networkidle').catch(() => {});
       await waitForContinuation(page);
       const routeRelated = await assertRecommendationGeometry(page, '[data-related-start] [data-event-card]', 3);
       const routeContinuation = await assertRecommendationGeometry(page, '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot] > [data-event-card]', 1);
@@ -390,14 +407,18 @@ async function runBrowserGate({ root, basePath, origin, browser }) {
       continuation.push(...routeContinuation);
     }
     checks.related_geometry_crop = 'ok';
+    console.log('[browser-release-gate] related_geometry_crop=ok');
     invariant(await page.evaluate(() => typeof window.KenigEventsCreateEventCard === 'function'), 'canonical EventCard runtime renderer is missing');
     await assertRealCardEnter(page, origin, specimen.route, '[data-related-start]');
     await assertRealCardEnter(page, origin, specimen.route, '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot]');
     checks.canonical_event_cards = 'ok';
+    console.log('[browser-release-gate] canonical_event_cards=ok');
     await assertGalleryCrossDocument(page, origin, specimen.route);
     checks.gallery_cross_document = 'ok';
+    console.log('[browser-release-gate] gallery_cross_document=ok');
     await assertFooterShortcuts(page, origin, specimen.route);
     checks.footer_shortcuts = 'ok';
+    console.log('[browser-release-gate] footer_shortcuts=ok');
     return {
       ok: true, checks,
       specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes },

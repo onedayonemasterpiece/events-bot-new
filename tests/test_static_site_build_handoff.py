@@ -545,6 +545,33 @@ def test_static_site_kernel_loads_status_helper_from_mounted_dataset(tmp_path: P
     assert loader(output_dir="/tmp/output") == ("mounted", {"output_dir": "/tmp/output"})
 
 
+def test_static_site_kernel_browser_command_deadline_is_forwarded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location("static_site_builder_timeout_test", kernel_path)
+    assert spec and spec.loader
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured.update({"command": command, **kwargs})
+
+    monkeypatch.setattr(kernel.subprocess, "run", fake_run)
+    kernel.run(["npm", "run", "check:browser-release"], tmp_path, timeout_seconds=300)
+
+    assert captured["timeout"] == 300
+    assert captured["check"] is True
+
+
 def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
     from scripts.run_static_site_builder_kaggle import resolve_build_template
 
