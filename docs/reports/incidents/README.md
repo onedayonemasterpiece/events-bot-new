@@ -18,6 +18,12 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-20-static-claim-lost-health.md`
+  - Scope: deploy/restart while a static-site Kaggle job owns the coalesced
+    outbox row, CAS-loss logging and `/healthz` availability.
+  - Must not regress: a lost static-site CAS uses pre-rollback scalar evidence;
+    it cannot lazy-load an expired ORM object or stop the outbox/health loop.
+
 - `INC-2026-07-20-static-event-keyboard-visual-regressions.md`
   - Scope: recommendation-card crop/row agreement, real cross-document gallery
     navigation, footer shortcut ownership and production-candidate browser gates.
