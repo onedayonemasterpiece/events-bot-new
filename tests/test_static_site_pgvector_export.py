@@ -215,3 +215,29 @@ def test_pgvector_cache_is_invalidated_by_related_corpus_revision() -> None:
     assert third["cache"]["state"] == "miss_rebuilt"
     assert third["related_corpus_revision"] == "b" * 64
     assert calls == ["gemini-embedding-2", "gemini-embedding-2"]
+
+
+def test_pgvector_release_gate_rejects_dark_or_underfilled_graph() -> None:
+    exporter = _load_exporter_module()
+    try:
+        exporter.validate_pgvector_graph_release({
+            "zero_incoming_rate": 0.1,
+            "exact_title_pairs_missing": [[4327, 5382]],
+            "underfilled_event_ids": [99],
+        })
+    except RuntimeError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("unhealthy graph unexpectedly passed")
+    assert "zero_incoming_rate" in message
+    assert "exact_title_pairs_missing" in message
+    assert "underfilled_event_ids" in message
+
+
+def test_pgvector_release_gate_accepts_healthy_graph() -> None:
+    exporter = _load_exporter_module()
+    exporter.validate_pgvector_graph_release({
+        "zero_incoming_rate": 0.0,
+        "exact_title_pairs_missing": [],
+        "underfilled_event_ids": [],
+    })

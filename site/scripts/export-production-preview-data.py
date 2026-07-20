@@ -2472,17 +2472,47 @@ def apply_pgvector_graph_reciprocity(
         if len(ids) != 2:
             continue
         left_id, right_id = ids
+        if not eligible_related_pair(by_id[left_id], by_id[right_id]) or not eligible_related_pair(by_id[right_id], by_id[left_id]):
+            continue
         if not forward_item(left_id, right_id) or not forward_item(right_id, left_id):
             exact_missing.append(sorted([left_id, right_id]))
+    zero_incoming_event_ids = sorted(event_id for event_id in by_id if final_incoming.get(event_id, 0) == 0)
+    required_chain_size = min(4, max(0, len(events) - 1))
+    underfilled_event_ids = sorted(
+        event_id
+        for event_id in by_id
+        if len(chains.get(str(event_id), [])) < required_chain_size
+    )
     return {
         "policy": "pgvector_selective_reciprocity_v1",
+        "event_count": len(by_id),
         "high_confidence_threshold": high_confidence_threshold,
         "exact_title_links_added": exact_links,
         "high_confidence_links_added": high_confidence_links,
         "zero_incoming_rescue_links_added": rescue_links,
-        "zero_incoming_event_ids": sorted(event_id for event_id in by_id if final_incoming.get(event_id, 0) == 0),
+        "zero_incoming_event_ids": zero_incoming_event_ids,
+        "zero_incoming_rate": round(len(zero_incoming_event_ids) / max(1, len(by_id)), 6),
+        "required_chain_size": required_chain_size,
+        "underfilled_event_ids": underfilled_event_ids,
         "exact_title_pairs_missing": exact_missing,
     }
+
+
+def validate_pgvector_graph_release(graph_meta: dict[str, Any]) -> None:
+    """Fail a production candidate before publication on unhealthy topology."""
+
+    failures: list[str] = []
+    zero_rate = float(graph_meta.get("zero_incoming_rate") or 0.0)
+    if zero_rate >= 0.05:
+        failures.append(f"zero_incoming_rate={zero_rate:.4f} must be <0.05")
+    exact_missing = graph_meta.get("exact_title_pairs_missing") or []
+    if exact_missing:
+        failures.append(f"exact_title_pairs_missing={exact_missing[:10]}")
+    underfilled = graph_meta.get("underfilled_event_ids") or []
+    if underfilled:
+        failures.append(f"underfilled_event_ids={underfilled[:20]}")
+    if failures:
+        raise RuntimeError("pgvector related graph release gate failed: " + "; ".join(failures))
 
 
 FACET_PATTERNS: dict[str, list[str]] = {
@@ -3839,6 +3869,8 @@ def main() -> int:
         embedding_model=args.pgvector_embedding_model,
         related_corpus_revision=args.related_corpus_revision,
     )
+    if args.catalog_mode == "full" and args.related_mode == "pgvector":
+        validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")
     print("IDs:", ",".join(str(event["id"]) for event in events))
