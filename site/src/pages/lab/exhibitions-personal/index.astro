@@ -8,18 +8,18 @@ const title = `Прототип персональной страницы выс
 const description = 'Отдельный noindex-прототип: новые, персональные, популярные и завершающиеся выставки в компактном timeline-интерфейсе.';
 
 const specs = [
-  { id: 6902, bucket: 'new', lifecycle: 'recent', dateLabel: '18 июля', status: 'Открылась вчера', category: 'Искусство', tags: ['живопись', 'современное искусство'], reasons: ['Недавно открылась', 'Рядом со Светлогорском'], discussions: 12, mentions: 4 },
-  { id: 6894, bucket: 'new', lifecycle: 'recent', dateLabel: '15 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['живопись', 'локальные авторы'], reasons: ['Открылась 4 дня назад', 'Новая в каталоге'], discussions: 18, mentions: 7 },
-  { id: 6871, bucket: 'new', lifecycle: 'upcoming', dateLabel: '8 августа', status: 'Откроется скоро', category: 'Фотография', tags: ['фотография', 'город', 'под открытым небом'], reasons: ['Недавно анонсирована', 'Только два дня'], discussions: 26, mentions: 11 },
-  { id: 5370, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 28 марта', status: 'Идёт сейчас', category: 'Искусство', tags: ['современное искусство', 'графика', 'Третьяковка'], reasons: ['373 лайка', 'Часто обсуждают'], discussions: 84, mentions: 31 },
-  { id: 6222, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 19 июля', status: 'Последний день', category: 'История', tags: ['история', 'путешествия', 'музей'], reasons: ['Заканчивается сегодня', 'Успеть посмотреть'], discussions: 9, mentions: 5 },
-  { id: 5459, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 30 августа', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'натюрморт', 'XX век'], reasons: ['157 лайков', 'Популярно в источниках'], discussions: 47, mentions: 22 },
-  { id: 6560, bucket: 'priority', lifecycle: 'recent', dateLabel: '5—31 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['локальные авторы', 'иллюстрация', 'истории'], reasons: ['Открылась две недели назад', '79 лайков'], discussions: 32, mentions: 14 },
-  { id: 4913, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 31 июля', status: 'Скоро закроется', category: 'История', tags: ['археология', 'история', 'Пруссия'], reasons: ['Осталось 12 дней', '58 лайков'], discussions: 21, mentions: 9 },
-  { id: 3216, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 27 сентября', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'классика', 'Третьяковка'], reasons: ['244 лайка', 'Высокий интерес'], discussions: 63, mentions: 28 },
-  { id: 698, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 30 сентября', status: 'Идёт давно', category: 'История', tags: ['археология', 'краеведение', 'музей'], reasons: ['Долгий формат'], discussions: 15, mentions: 8 },
-  { id: 2601, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 31 декабря', status: 'Идёт давно', category: 'История', tags: ['история', 'военная история'], reasons: ['Долгий формат'], discussions: 4, mentions: 2 },
-  { id: 2182, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 31 декабря', status: 'Идёт давно', category: 'Искусство', tags: ['живопись', 'природа', 'краеведение'], reasons: ['Долгий формат'], discussions: 3, mentions: 2 },
+  { id: 6902, bucket: 'new', lifecycle: 'recent', dateLabel: '18 июля', status: 'Открылась вчера', category: 'Искусство', tags: ['живопись', 'современное искусство'], reasons: ['Недавно открылась', 'Рядом со Светлогорском'] },
+  { id: 6894, bucket: 'new', lifecycle: 'recent', dateLabel: '15 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['живопись', 'локальные авторы'], reasons: ['Открылась 4 дня назад', 'Новая в каталоге'] },
+  { id: 6871, bucket: 'new', lifecycle: 'upcoming', dateLabel: '8 августа', status: 'Откроется скоро', category: 'Фотография', tags: ['фотография', 'город', 'под открытым небом'], reasons: ['Недавно анонсирована', 'Только два дня'] },
+  { id: 5370, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 28 марта', status: 'Идёт сейчас', category: 'Искусство', tags: ['современное искусство', 'графика', 'Третьяковка'], reasons: ['Популярно в источниках', 'Высокий интерес'] },
+  { id: 6222, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 19 июля', status: 'Последний день', category: 'История', tags: ['история', 'путешествия', 'музей'], reasons: ['Заканчивается сегодня', 'Успеть посмотреть'] },
+  { id: 5459, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 30 августа', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'натюрморт', 'XX век'], reasons: ['Популярно в источниках'] },
+  { id: 6560, bucket: 'priority', lifecycle: 'recent', dateLabel: '5—31 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['локальные авторы', 'иллюстрация', 'истории'], reasons: ['Открылась две недели назад', 'Высокий интерес'] },
+  { id: 4913, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 31 июля', status: 'Скоро закроется', category: 'История', tags: ['археология', 'история', 'Пруссия'], reasons: ['Осталось 12 дней'] },
+  { id: 3216, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 27 сентября', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'классика', 'Третьяковка'], reasons: ['Популярно в источниках', 'Высокий интерес'] },
+  { id: 698, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 30 сентября', status: 'Идёт давно', category: 'История', tags: ['археология', 'краеведение', 'музей'], reasons: ['Долгий формат'] },
+  { id: 2601, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 31 декабря', status: 'Идёт давно', category: 'История', tags: ['история', 'военная история'], reasons: ['Долгий формат'] },
+  { id: 2182, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 31 декабря', status: 'Идёт давно', category: 'Искусство', tags: ['живопись', 'природа', 'краеведение'], reasons: ['Долгий формат'] },
 ] as const;
 
 const ids = specs.map((spec) => spec.id);
@@ -318,9 +318,6 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     text-decoration:none;
     transition:filter var(--ex-motion-base) var(--ex-ease-cinematic);
   }
-  .ex-gallery-trigger { position:absolute; z-index:85; left:10px; bottom:10px; width:44px; height:44px; display:grid; place-items:center; padding:0; border:1px solid rgba(255,255,255,.42); border-radius:6px; background:rgba(7,9,10,.88); color:var(--ex-text); box-shadow:0 6px 18px rgba(0,0,0,.58); backdrop-filter:blur(8px); cursor:pointer; }
-  .ex-gallery-trigger svg { width:17px; height:17px; fill:currentColor; }
-  .ex-gallery-trigger span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
   .ex-row:hover .ex-deck,.ex-row:focus-within .ex-deck { filter:drop-shadow(0 0 11px rgba(84,172,247,.12)); }
   .ex-deck__images {
     position:absolute;
@@ -509,12 +506,11 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-row__halo { inset:-18px -14px; }
     .ex-row__edge-light { inset:-1px; }
     .ex-row__rail { grid-area:rail; grid-template-columns:auto 1fr; gap:.25rem .65rem; padding:0; }
-    .ex-row__rail::after { top:.55rem; left:-12px; width:12px; height:2px; }
-    .ex-row__dot { top:.55rem; left:-18px; width:14px; height:14px; box-shadow:0 0 0 1px var(--ex-rail-color),0 0 16px color-mix(in srgb,var(--ex-rail-color),transparent 10%),0 0 28px color-mix(in srgb,var(--ex-rail-color),transparent 52%); }
+    .ex-row__rail::after { top:.55rem; left:calc(-10.5px - .65rem); width:calc(10.5px + .65rem); height:2px; }
+    .ex-row__dot { top:.55rem; left:calc(-17.5px - .65rem); width:14px; height:14px; box-shadow:0 0 0 1px var(--ex-rail-color),0 0 16px color-mix(in srgb,var(--ex-rail-color),transparent 10%),0 0 28px color-mix(in srgb,var(--ex-rail-color),transparent 52%); }
     .ex-row__rail span:last-child { text-align:right; }
     .ex-row__media { grid-area:deck; }
     .ex-deck { inline-size:100%; max-inline-size:100%; block-size:clamp(160px,48vw,228px); cursor:pointer; }
-    .ex-gallery-trigger { display:none; }
     .ex-deck__count { right:14px; }
     .ex-row__body { grid-area:body; }
     .ex-row__aside { grid-area:aside; align-content:start; }
@@ -884,8 +880,17 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       if (target.closest('[data-like]')) { toggleLike(row); return; }
       if (target.closest('[data-reject]')) { rejectRow(row); return; }
       if (target.closest('[data-undo]')) { undoReject(row); return; }
-      if (target.closest('[data-gallery-open]')) { openGallery(target.closest('[data-gallery-open]'), row); return; }
-      if (target.closest('[data-deck]')) { markSeen(row); return; }
+      const galleryOpener = target.closest('[data-gallery-open]');
+      if (galleryOpener instanceof HTMLElement) {
+        const modifiedClick = event instanceof MouseEvent && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0);
+        if (!compactDeck.matches && !modifiedClick) {
+          event.preventDefault();
+          openGallery(galleryOpener,row);
+        } else {
+          markSeen(row);
+        }
+        return;
+      }
       if (target.closest('[data-row-focus]')) markSeen(row);
     });
 

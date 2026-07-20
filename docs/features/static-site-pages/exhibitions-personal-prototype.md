@@ -45,8 +45,9 @@
 5. `Давно идут` — progressive disclosure длинного хвоста.
 
 Вместо нескольких одинаково громких секций карточка показывает причины
-позиции: `Открылась 4 дня назад`, `373 отметки`, `Часто обсуждают`,
-`Заканчивается сегодня`. Raw score пользователю не показывается.
+позиции: `Открылась 4 дня назад`, `Популярно в источниках`,
+`Заканчивается сегодня`. Raw score пользователю не показывается; like/share
+counts не дублируются в reason chips.
 
 ## Ranking contract для следующей production-итерации
 
@@ -59,15 +60,16 @@ if newly_detected && unseen && relevant_for_current_mode:
 else:
     score = 0.34 * personal_affinity
           + 0.24 * normalized_source_interest
-          + 0.16 * discussion_and_mentions
+          + 0.16 * verified_shares_and_discussion_signal
           + 0.14 * recently_opened_boost
           + 0.12 * verified_ending_soon_boost
           - fatigue_penalty
           - old_long_running_penalty
 ```
 
-- `normalized_source_interest` использует агрегированные честные отметки,
-  обсуждения и упоминания, а не один канал;
+- `normalized_source_interest` использует экспортированные `likes_count`,
+  `shares_count` и качественные reason codes, а не выдуманные numeric
+  discussions/mentions;
 - `recently_opened` затухает после 14–21 дня;
 - `ending_soon` применяется только к source-grounded `end_date`, не к
   inferred/сомнительной дате;
@@ -105,10 +107,11 @@ else:
   или editable content;
 - все действия имеют target не меньше `44×44`, `aria-pressed` и polite live
   feedback;
-- gallery — native modal `dialog`, поддерживает `←/→`, `Esc`, возвращает фокус
-  на отдельную desktop-кнопку фотографий. Сам media deck, как и title, является
-  честной ссылкой на detail; на mobile gallery-trigger скрыт и tap по фотографии
-  сразу открывает событие;
+- gallery — native modal `dialog`, поддерживает `←/→`, `Esc` и возвращает фокус
+  на media deck. Deck остаётся честной ссылкой на detail без отдельной
+  нарисованной кнопки: обычный desktop click/Enter открывает фотографии,
+  modified click сохраняет native link, а до `820px` tap/Enter сразу открывает
+  событие и не вызывает gallery;
 - цветовые точки всегда сопровождаются текстовым статусом;
 - `prefers-reduced-motion` отключает декоративные transition.
 - до `820px` скрыты все визуальные keyboard affordances: `kbd`, help-trigger и
@@ -165,8 +168,9 @@ marker. Адаптированы:
   доводит линию до карточки, как в исходном референсе;
 - timeline connector теперь физически заканчивается до date copy, а dot
   центрируется по первой строке даты; desktop/tablet rejected stub начинается
-  только от bordered exhibition surface и не перекрывает rail. На mobile ось
-  сдвинута на несколько пикселей внутрь и получила усиленный цветной glow;
+  только от bordered exhibition surface и не перекрывает rail. На mobile
+  padding карточки отдельно компенсируется в offsets dot/connector: центр dot
+  совпадает с центром vertical spine; цветной glow усилен;
 - deck и полноэкранная gallery имеют стабильные shimmer-skeleton states. Для
   cached image отдельно проверяется `complete/naturalWidth`; success и error
   всегда снимают skeleton, а ошибка оставляет устойчивую серую поверхность без
@@ -194,15 +198,18 @@ marker. Адаптированы:
 
 ## Данные, аналитика и ограничения
 
-Сводные `обсуждения/упоминания` в prototype fixture — presentation-only
-сценарии для проверки иерархии. Они показаны read-only стандартными comment и
-mention icons с точным accessible label `в открытых источниках`; в production
-им потребуются определение единицы, dedupe и version/provenance. Общий
-`likes_count` показан ровно один раз — внутри стандартной интерактивной
-heart-button, как в остальных static-site карточках. Локальная персональная
-отметка меняет `aria-pressed`/заливку сердца, но намеренно не прибавляет `+1` к
-агрегату: browser-only предпочтение ещё не является сохранённым общим лайком.
-Visible likes не делятся в UI на source/service.
+Numeric `обсуждения/упоминания` удалены: таких public полей в `PreviewEvent` и
+export нет, прежние числа были неподтверждёнными prototype literals. В UI
+остались только честные build-time данные: `likes_count` один раз внутри
+heart-button и optional `shares_count > 0` с share icon и подписью/tooltip
+`Пересылки и репосты исходных публикаций`. Это сумма доступных Telegram
+forwards, VK reposts и generic source shares после exporter dedupe; она не
+выдаётся за число уникальных людей. `Обсуждают` может появиться без числа только
+при exporter reason code `popularity_reason_codes.includes('discussed')`.
+Локальная персональная отметка меняет `aria-pressed`/заливку сердца, но
+намеренно не прибавляет `+1` к агрегату: browser-only предпочтение ещё не
+является сохранённым общим лайком. Visible likes не делятся в UI на
+source/service.
 
 Основные продуктовые метрики следующего эксперимента:
 
@@ -327,7 +334,18 @@ heart + aggregate count. Совет удалить presentation-only обсуж�
 сохранены как пассивные сигналы открытых источников с иконками comment/@ и
 точными aria-label, а не выдаются за production telemetry. Финальный
 screenshot/code/Playwright gate той же Pro-линии дал `ACCEPT` по R1–R7, без
-P0/P1/P2.
+P0/P1/P2. Это решение позже superseded data-truth итерацией: числа оказались
+не связанными с exporter fields и полностью удалены.
+
+Перед data-truth / mobile-axis коррекцией выполнены три read-only аудита и
+критический review через `agy`, `Gemini 3.1 Pro (High)`. Консультант дал
+`ACCEPT`: убрать нарисованную gallery-icon, удалить invented numeric
+discussions/mentions, показывать только exported `shares_count` и qualitative
+`discussed`, а mobile dot/connector сдвинуть на точную величину row padding.
+Playwright после реализации подтвердил на `375`, `390` и `768px`: dot/spine
+delta `0`, connector rounding не больше `0.01px`, zero overflow; desktop media
+открывает gallery без отдельной иконки, mobile media — detail. Финальный
+повторный gate той же Pro-линии дал `ACCEPT` по R1–R3 без P0/P1/P2.
 
 ## Проверка
 
@@ -346,9 +364,11 @@ errors, одинаковую desktop media-column/body vertical alignment, вы�
 planes, серый tail без image, неподвижный hover, keyboard movement и gallery.
 Loading gate задерживает первый image: skeleton виден до ответа, исчезает после
 load, а deck geometry имеет delta `0`. Последний source/build gate: Astro build
-`381` pages и prototype contract `43/43`; production route/data/ranking не
+`381` pages и prototype contract `45/45`; production route/data/ranking не
 менялись. V6 Playwright дополнительно проверяет: short timeline connector,
 единственный roving target, Up/Down с body/media/actions, нативный Enter,
 центровку rejected stub по surface, отсутствие keyboard/gallery affordances на
-mobile, прямую media navigation, один like count и пассивные comment/mention
-signals.
+mobile и прямую media navigation. V7 gate дополнительно проверяет отсутствие
+painted gallery icon, real share values, отсутствие numeric mentions/comments,
+qualitative `Обсуждают`, desktop gallery/media-link fallback и совпадение осей
+dot/spine/connector на трёх mobile widths.

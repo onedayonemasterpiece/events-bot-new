@@ -124,3 +124,47 @@ v6_lanes:
     branch: integration/exhibitions-personal-discovery-prototype-20260719
     verification_scope: full_local
     status: completed
+v7_lanes:
+  - id: v7-media-audit
+    role: planner
+    requirement_ids: [V7-R1]
+    target: remove the visible gallery overlay without regressing desktop gallery or mobile detail navigation
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v7-counter-truth-audit
+    role: planner
+    requirement_ids: [V7-R2]
+    target: trace prototype counters to exported source data and define honest like/share/discussed semantics
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v7-mobile-geometry-audit
+    role: planner
+    requirement_ids: [V7-R3]
+    target: measure spine, dot and connector x-axes at mobile widths and derive exact correction
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v7-integration
+    role: worker
+    requirement_ids: [V7-R1, V7-R2, V7-R3]
+    target: integrate media, counter-truth and mobile timeline corrections with Playwright verification
+    depends_on: [v7-media-audit, v7-counter-truth-audit, v7-mobile-geometry-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/index.astro
+      - site/src/components/ExhibitionPrototypeRow.astro
+      - site/src/components/Icon.astro
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    verification_scope: full_local
+    effort: high
+    status: completed

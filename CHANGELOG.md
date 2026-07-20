@@ -60,8 +60,12 @@
   make Up/Down establish a visible row selection from page, media or actions
   with native Enter detail navigation; confine rejected undo content to the
   bordered exhibition surface; remove keyboard chrome and photo-preview detours
-  on mobile; and unify engagement into one canonical heart+aggregate action
-  plus accessible read-only discussion/mention icon metrics.
+  on mobile; and unify engagement into one canonical heart+aggregate action.
+  Remove the parasitic desktop gallery-icon overlay while retaining gallery-on-media for
+  plain desktop activation and native detail navigation on mobile; delete the
+  invented numeric discussion/mention fixtures, show only exported share counts
+  and a qualitative source-grounded `Обсуждают` reason, and compensate mobile
+  row padding so lifecycle bullets sit exactly on the vertical spine.
 
 ### Added
 - **Personal exhibitions product prototype**: add a separate dark timeline

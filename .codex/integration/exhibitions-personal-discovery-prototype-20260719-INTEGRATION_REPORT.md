@@ -16,7 +16,7 @@
 | R04 | Like / not interested form interests | Done | Local like tags, exact rejection, zero-shift undo stub and persistence | No Supabase write by design. |
 | R05 | New/relevant navigation indicator | Done | Cold `3 новых`, personalized `2 новых`, soft `загляните`, meaningful-review clearing | Global site visit count needs integration later. |
 | R06 | New first, then popular/ending, old tail demoted | Done | Hard-pinned inbox, explained priority mix, collapsed long tail | Production ranker remains a documented next slice. |
-| R07 | Source likes/discussions/mentions | Done | Visible aggregate reason/signals and product-metric contract | Discussion/mention counts are presentation-only in prototype. |
+| R07 | Source likes/discussions/mentions | Done | Real exported likes/shares plus qualitative discussed reason; invented numeric discussion/mention fixtures removed | `shares_count` is source forwards/reposts, not guaranteed unique people. |
 | R08 | Keyboard-first section navigation | Done | Skip link, roving ↑/↓, Enter/G/L/X/F/A, dialog arrows/Escape, input guard | Future dedicated keyboard skill can refine without changing baseline. |
 | R09 | Responsive and visual verification | Done | 375/768/1440 screenshots, zero overflow, 44px targets, no console errors | Browser evidence stays ignored under artifacts. |
 
@@ -48,7 +48,17 @@ V5 verification: Astro build `381` pages; prototype contract `38/38`; Playwright
 | R16 | Up/down visibly selects a row; Enter opens it | Done | Global and in-row arrows move the single roving title link and apply whole-row halo; native Enter navigates to the event URL. |
 | R17 | Rejection message stays centered inside exhibition surface | Done | Hidden stub begins at `--ex-surface-start`; desktop text and surface centers both measure `792.1953125px`; undo stays inside. |
 | R18 | Mobile hides keyboard UI and strengthens timeline accents | Done | At `768px` and `375px`, keyboard/help counts are zero; dots are `14px` with two-layer colored glow; no overflow. |
-| R19 | Explain and unify engagement metrics | Done | One heart action owns the immutable aggregate like count; comments and mentions use canonical comment/@ icons with explicit source aria labels. |
+| R19 | Explain and unify engagement metrics | Superseded | V6 used comment/@ presentation metrics; V7-R2 replaces them with exported shares and qualitative discussion only. |
 | R20 | Mobile media opens event rather than image preview | Done | Media and title share the same honest event href; gallery trigger is desktop-only; Playwright confirms direct navigation and closed dialog on mobile. |
 
 V6 local verification: Astro build `381` pages; prototype contract `43/43`; Playwright at `1440×1000`, `900×900`, `768×1024`, and `375×812` reported zero horizontal overflow and no console/page errors. Hover geometry delta is `0`; the local heart preference does not falsely increment the presentation aggregate. Final `agy` acceptance with `Gemini 3.1 Pro (High)`: `ACCEPT` across R1–R7, no P0/P1/P2.
+
+## v7 media / counter truth / mobile-axis closure
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| V7-R1 | Remove parasitic bottom-left image icon | Done | `.ex-gallery-trigger` and row image icon removed; Playwright finds zero painted triggers. Plain desktop media activation still opens gallery; modified click preserves href; mobile opens detail. |
+| V7-R2 | Explain/remove mentions and show grounded shares | Done | Hard-coded numeric discussions/mentions removed. `likes_count` remains in heart; `shares_count > 0` renders as source repost/forward count; `Обсуждают` is numberless and gated by `popularity_reason_codes`. |
+| V7-R3 | Align mobile bullet to the vertical line | Done | At `375`, `390`, `768px`, every visible row measures `dotX-spineX=0`; connector start/end rounding is under `0.01px`; overflow is zero. |
+
+V7 local verification: Astro build `381` pages; prototype contract `45/45`; Playwright desktop/mobile interaction and screenshot gate reported zero console/page errors and hover geometry delta `0`. Predesign and final `agy` gates with `Gemini 3.1 Pro (High)`: `ACCEPT`; final R1–R3 had no P0/P1/P2.

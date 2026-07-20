@@ -12,8 +12,6 @@ interface PrototypeSpec {
   category: string;
   tags: string[];
   reasons: string[];
-  discussions: number;
-  mentions: number;
 }
 
 interface Props {
@@ -29,6 +27,15 @@ type RatioToken = keyof typeof ratioTokens;
 function safeObjectPosition(value: string | null | undefined) {
   const raw = String(value || '').trim();
   return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : null;
+}
+
+function russianShareNoun(value: number) {
+  const mod100 = value % 100;
+  const mod10 = value % 10;
+  if (mod100 >= 11 && mod100 <= 14) return 'репостов';
+  if (mod10 === 1) return 'репост';
+  if (mod10 >= 2 && mod10 <= 4) return 'репоста';
+  return 'репостов';
 }
 
 function objectPosition(asset: EventImageAsset) {
@@ -122,6 +129,9 @@ const visibleMedia = [...media]
   .slice(0, 6);
 const detailHref = withBase(`/sobytiya/${event.slug}/`);
 const likeCount = Number(event.likes_count || 0);
+const shareCount = Number(event.shares_count || 0);
+const shareNoun = russianShareNoun(shareCount);
+const discussed = Array.isArray(event.popularity_reason_codes) && event.popularity_reason_codes.includes('discussed');
 const titleId = `exhibition-title-${event.id}`;
 const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`;
 ---
@@ -151,6 +161,9 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     class="ex-deck"
     href={detailHref}
     data-deck
+    data-gallery-open
+    data-gallery-title={event.title}
+    data-gallery-images={JSON.stringify(galleryImages)}
     data-media-total={String(galleryImages.length || 1)}
     aria-label={`Подробнее о выставке «${event.title}», ${galleryImages.length || 1} фото`}
   >
@@ -195,19 +208,6 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     </span>
     <span class="ex-deck__count" data-deck-count hidden></span>
   </a>
-  {galleryImages.length > 0 && (
-    <button
-      class="ex-gallery-trigger"
-      type="button"
-      data-gallery-open
-      data-gallery-title={event.title}
-      data-gallery-images={JSON.stringify(galleryImages)}
-      aria-label={`Открыть фотографии выставки «${event.title}», ${galleryImages.length}`}
-    >
-      <Icon name="image" />
-      <span>Фото</span>
-    </button>
-  )}
   </div>
 
   <div class="ex-row__body">
@@ -231,16 +231,17 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
       <div class="ex-row__tags" aria-label="Темы выставки">
         {item.tags.slice(0, 3).map((tag) => <span>{tag}</span>)}
       </div>
-      <p class="ex-row__social" aria-label="Сводные сигналы интереса из открытых источников">
-        <span class="ex-signal" aria-label={`${item.discussions} обсуждений в открытых источниках`} title="Обсуждения в открытых источниках"><Icon name="comment" /><strong>{item.discussions}</strong><span>обсуждений</span></span>
-        <span class="ex-signal" aria-label={`${item.mentions} упоминаний выставки в открытых источниках`} title="Упоминания в открытых источниках"><Icon name="mention" /><strong>{item.mentions}</strong><span>упоминаний</span></span>
-      </p>
+      {shareCount > 0 && (
+        <p class="ex-row__social" aria-label="Поделились исходными публикациями">
+          <span class="ex-signal" aria-label={`Репостов и пересылок исходных публикаций: ${shareCount}`} title="Пересылки и репосты исходных публикаций"><Icon name="share" /><strong>{shareCount}</strong><span>{shareNoun}</span></span>
+        </p>
+      )}
     </div>
   </div>
 
   <div class="ex-row__aside">
-    {item.discussions >= 20 && (
-      <span class="ex-discussed" aria-label={`Активно обсуждают: ${item.discussions} обсуждений`} title="Активно обсуждают">
+    {discussed && (
+      <span class="ex-discussed" aria-label="Выставку обсуждают в источниках" title="Обсуждают в источниках">
         <Icon name="comment" />
         <span>Обсуждают</span>
       </span>
