@@ -113,3 +113,11 @@ lanes:
     verification_scope: full_local_and_live_secret
     status: in_progress
 ```
+
+## Live secret-candidate evidence — 2026-07-20
+
+- PR #99 merged as `11cbef1751d5c7af1705d1c42e9a3f615d31a263`; Fly release `v1721` deployed the clean main tree. Concurrent bbox release `v1722` is a main descendant and retains the keyboard integration.
+- Smart Update startup catch-up completed `production-secret-20260720T130141-937a3d18` from the exact merge SHA: 248 event pages, 853 total pages, 930 files and 936 verified secret objects.
+- All production and secret-candidate checks passed; publication advanced only the internal `/_review/<token>/` receipt. Public root and stable ICS SHA-256 values were unchanged.
+- Live Chromium gates passed on both canonical fixtures, `6408` (Split) and `6593` (Editorial), including canonical similar/continuation cards and `destroy()` restoration.
+- The redacted 24-hour diagnostic window ending `2026-07-20T11:24:18Z` contains 18 requests, 7 successes, 10 historical failures and 1 busy/coalesced request. The current successful build is fully count-backed; seven older pre-ledger failures remain warnings.
