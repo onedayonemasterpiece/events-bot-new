@@ -23,6 +23,14 @@ CONFIG_PATH = ROOT / 'build_config.json'
 RESULT_PATH = WORKING / 'static_site_build_result.json'
 EMBEDDED_SITE_SOURCE_B64 = ''
 EMBEDDED_BUILD_CONFIG_JSON = ''
+PLAYWRIGHT_CHROMIUM_INSTALL_COMMAND = (
+    'npx',
+    'playwright',
+    'install',
+    '--with-deps',
+    '--only-shell',
+    'chromium',
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -472,7 +480,12 @@ def main() -> int:
         profile = str(config.get('profile') or 'preview')
         if profile == 'production-candidate':
             status_event('alive', phase='install', status='alive', progress={'phase': 'install', 'progress_percent': 31, 'progress_label': 'установка pinned Chromium для release gate'})
-            run(['npx', 'playwright', 'install', 'chromium'], cwd=SITE_DIR, env=env)
+            # Kaggle's CPU image does not include Playwright's Linux shared
+            # libraries (for example libatk-1.0.so.0).  Installing only the
+            # browser binary makes the mandatory gate fail before Chromium can
+            # start.  Playwright's documented CI contract installs both the
+            # pinned headless shell and its OS dependencies.
+            run(list(PLAYWRIGHT_CHROMIUM_INSTALL_COMMAND), cwd=SITE_DIR, env=env)
         event_count = len(json.loads((SITE_DIR / 'src/data/preview-events.json').read_text(encoding='utf-8')).get('events', []))
         artifacts: list[dict] = []
         result_details: dict = {}

@@ -572,6 +572,30 @@ def test_static_site_kernel_browser_command_deadline_is_forwarded(
     assert captured["check"] is True
 
 
+def test_static_site_kernel_installs_chromium_with_linux_dependencies() -> None:
+    import importlib.util
+
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location("static_site_builder_playwright_deps_test", kernel_path)
+    assert spec and spec.loader
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+
+    assert kernel.PLAYWRIGHT_CHROMIUM_INSTALL_COMMAND == (
+        "npx",
+        "playwright",
+        "install",
+        "--with-deps",
+        "--only-shell",
+        "chromium",
+    )
+
+
 def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
     from scripts.run_static_site_builder_kaggle import resolve_build_template
 

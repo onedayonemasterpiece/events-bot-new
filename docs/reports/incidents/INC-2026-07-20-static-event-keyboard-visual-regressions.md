@@ -216,6 +216,11 @@ secret preproduction candidate family.
   requests from the checked tree itself. The CDN build prefix is create-only
   and intentionally does not exist until the gate passes; testing its 404s
   left interaction code unloaded and could never certify the user journey.
+- [x] Corrected the Kaggle browser bootstrap after the first exact-main rerun
+  proved that binary-only Playwright installation left `libatk-1.0.so.0`
+  missing. Production candidates now install the pinned headless shell with
+  Playwright's documented Linux dependencies, and launch failure cleans up the
+  local fixture without waiting for the outer watchdog.
 - [x] Bound related caches to the atomic vector-corpus receipt and added exact-
   normalized-title reciprocity plus fail-closed graph topology checks.
 - [ ] Publish and verify a fresh immutable secret candidate from `origin/main`.
