@@ -351,6 +351,11 @@ Smart Update является владельцем семантического 
 - [ ] Shared mobile/desktop navigation contains one `Моё избранное` item on every interactive static HTML family; after restore its accessible numeric badge appears only for distinct durable saved-event count `N>0` and never reuses likes, downloads, reminders or transport legs.
 - [ ] `/izbrannoe/` is a `noindex` static shell with no user data in CDN HTML/cache; authenticated batch/RLS loading shows all saved upcoming/rescheduled/cancelled/merged/past rows without silent disappearance or per-card remote loops.
 - [ ] Add-to-calendar/favorite is atomic/idempotent; repeat/undo/cross-device/lifecycle cases pass.
+- [ ] `listing_row_swipe_commit` учитывает только завершённый физический горизонтальный жест с реальным изменением позиции; hint/programmatic/restoration scroll исключены, ingest consent-aware и idempotent по `client_event_id`.
+- [ ] Посуточный (`Europe/Kaliningrad`) swipe KPI показывает distinct committed swipers / distinct eligible viewers плюс gestures/sessions/sample size; raw coordinates, PII, tokens и referrer не сохраняются.
+- [ ] `like_event`/`unlike_event` создаются только на canonical state transition и содержат allowlisted `page_type × surface × placement × component`; daily report показывает likes/unlikes/unique actors/net-current по типам страниц и viewport.
+- [ ] Shared Supabase profile/controller остаётся owner current like state; browser не пишет напрямую в YDB, de-identified bounded history передаётся асинхронно; no-consent и privacy suppression доказаны тестами.
+- [ ] Contextual bottom date rail показывается только при активном разделе `Даты`, имеет targets `>=48×48`, не содержит прошедших дат и использует canonical `/daty/YYYY-MM-DD/`; accidental activations `<2%`, а `>5%` или fixed stack `>25%` короткого viewport — hard reject.
 - [ ] Playwright `FAV-MENU/PAGE/LINK/PRIVACY/DEGRADED` scenarios prove count/list updates, cross-tab/device convergence, Yandex/email merge, logout/account-switch isolation and ICS independence during favorite-backend failure.
 - [ ] После save UI показывает либо `Напомним за день на a***@domain`, либо inline action для email verification/transactional consent; при старте менее чем через 24 часа обещание D-1 не показывается.
 
