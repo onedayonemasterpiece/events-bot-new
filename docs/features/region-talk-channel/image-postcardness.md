@@ -53,6 +53,20 @@ visual suitability only: source, geography, text/vector, rights and final
 Gemini gates remain mandatory. Media rights stay `score_only_no_reuse` unless
 separately cleared.
 
+### Live editorial-gallery canary, 2026-07-20
+
+The real Archi.ru candidate `https://archi.ru/russia/101203/vsya-mudrost-okeana`
+was rerun under v3. The generic lightbox extractor acquired and decoded the
+full bounded sample **20/20**, not only the old OG preview. The structured
+`architecture_criticism` metadata selected
+`architecture_interior_editorial`; the anchor/best frame produced overall
+`0.720`, genre visual fit `0.987`, aesthetic `0.680` and technical `0.705`.
+The unchanged legacy positive path therefore accepted the complete gallery
+even before applying the owner's manifest-bound visual approval. The approval
+was then persisted, the normal final Gemini verifier accepted the candidate,
+and the anti-vector queue ranked it first. Telegram operator evidence:
+candidate message `32424`, queue snapshot `32425`.
+
 - Telegram media with the same exact `grouped_id` and all VK photo
   attachments are acquired as one bounded post/album manifest. The default
   cap is 20 images, which covers a complete Telegram album and the practical
