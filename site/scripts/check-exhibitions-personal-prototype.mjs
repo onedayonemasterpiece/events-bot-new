@@ -5,6 +5,7 @@ import process from 'node:process';
 const siteRoot = path.resolve(import.meta.dirname, '..');
 const pageSource = fs.readFileSync(path.join(siteRoot, 'src/pages/lab/exhibitions-personal/index.astro'), 'utf8');
 const rowSource = fs.readFileSync(path.join(siteRoot, 'src/components/ExhibitionPrototypeRow.astro'), 'utf8');
+const iconSource = fs.readFileSync(path.join(siteRoot, 'src/components/Icon.astro'), 'utf8');
 const layoutSource = fs.readFileSync(path.join(siteRoot, 'src/layouts/EventLayout.astro'), 'utf8');
 const outputPath = path.join(siteRoot, 'dist/lab/exhibitions-personal/index.html');
 
@@ -21,8 +22,8 @@ const checks = [
   ['new inbox precedes priority and tail', html.indexOf('data-list-section="new"') < html.indexOf('data-list-section="priority"') && html.indexOf('data-list-section="priority"') < html.indexOf('data-list-section="tail"')],
   ['tail is progressively disclosed', /data-tail-toggle[^>]+aria-expanded="false"/u.test(html) && /data-list-section="tail" hidden/u.test(html)],
   ['mode switch is a complete radio group', /role="radiogroup"/u.test(html) && /role="radio"/u.test(html) && pageSource.includes("['ArrowLeft','ArrowRight','Home','End']")],
-  ['keyboard safeguards editable controls', pageSource.includes("input,textarea,select,button,[contenteditable=\"true\"]")],
-  ['like and reject expose pressed state', rowSource.includes('data-like aria-pressed="false"') && rowSource.includes('data-reject aria-pressed="false"')],
+  ['keyboard safeguards editable controls', pageSource.includes("input,textarea,select,[contenteditable=\"true\"]") && pageSource.includes("target?.closest('button')")],
+  ['like and reject expose pressed state', rowSource.includes('data-aggregate-count={String(likeCount)} aria-pressed="false"') && rowSource.includes('data-reject aria-pressed="false"')],
   ['rejection keeps an undo stub', rowSource.includes('data-hidden-stub') && rowSource.includes('data-undo')],
   ['gallery uses native modal dialog', /<dialog[^>]+data-gallery/u.test(html) && pageSource.includes('showModal()')],
   ['shared header is selected for exhibitions', pageSource.includes('headerCurrent="exhibitions"') && !pageSource.includes('<header class="ex-header"')],
@@ -43,6 +44,11 @@ const checks = [
   ['long desktop rows stretch media height without changing column width', pageSource.includes('min-block-size:114px') && pageSource.includes('block-size:auto') && pageSource.includes('new ResizeObserver(scheduleDeckLayout)') && pageSource.includes('document.fonts?.ready.then(scheduleDeckLayout)')],
   ['discussion marker is outside title flow in the fixed aside', rowSource.indexOf('<div class="ex-row__aside">') < rowSource.indexOf('<span class="ex-discussed"') && rowSource.indexOf('<span class="ex-discussed"') > rowSource.indexOf('</div>\n\n  <div class="ex-row__aside">') && pageSource.includes('.ex-row__aside { width:98px;')],
   ['timeline rail is visually outside the row surface', rowSource.includes('ex-row__dot') && pageSource.includes('--ex-surface-start:calc(112px') && pageSource.includes('inset:0 0 0 var(--ex-surface-start)') && pageSource.includes('.ex-row__rail::after') && !pageSource.includes('.ex-row::before { content:')],
+  ['timeline connector is short and cannot cross date copy', pageSource.includes('left:-14px; width:20px; height:2px') && pageSource.includes('.ex-row__rail>* { position:relative; z-index:1; }')],
+  ['rejected stub is clipped to the exhibition surface', pageSource.includes('.ex-row.is-rejected { min-height:132px; background:transparent; }') && pageSource.includes('.ex-row__hidden { position:absolute; inset:0 0 0 var(--ex-surface-start)') && pageSource.includes('--ex-surface-start:calc(95px')],
+  ['mobile removes keyboard affordances', pageSource.includes('.ex-page kbd,.ex-help-open,.ex-keyboard-help { display:none!important; }')],
+  ['media and title are honest matching detail links', rowSource.includes('class="ex-deck"\n    href={detailHref}\n    data-deck') && rowSource.includes('class="ex-row__title"\n        href={detailHref}') && rowSource.includes('class="ex-gallery-trigger"')],
+  ['social signals use canonical icons and one aggregate like count', (rowSource.match(/data-like-count/gu) || []).length === 1 && rowSource.includes('<Icon name="comment" />') && rowSource.includes('<Icon name="mention" />') && iconSource.includes("name: 'heart' | 'comment' | 'mention'")],
   ['deck images expose skeleton, cached-load, and error lifecycle', rowSource.includes('data-image-state={index >= 5') && rowSource.includes('data-image-skeleton') && pageSource.includes('if (image.complete) finish(image.naturalWidth > 0') && pageSource.includes("finish('error')")],
   ['gallery image loading is skeleton-backed without empty src', !pageSource.includes('data-gallery-image src=""') && pageSource.includes('data-gallery-media data-image-state="idle"') && pageSource.includes("galleryMedia.dataset.imageState = 'loading'") && pageSource.includes("galleryMedia.dataset.imageState = state")],
   ['deck counter means actual non-full media', rowSource.includes('data-media-total') && pageSource.includes('total - fullCount') && pageSource.includes('count.textContent = `+${overflowCount}`')],
@@ -51,7 +57,7 @@ const checks = [
   ['metadata emphasis avoids movement and grid-row reflow', pageSource.includes('.ex-row__expanded { display:grid; opacity:') && !pageSource.includes('.ex-row:hover .ex-row__expanded,.ex-row:focus-within .ex-row__expanded { opacity:1; transform:') && !pageSource.includes('transition:grid-template-rows')],
   ['cinematic motion and reduced-motion scrolling exist', pageSource.includes('cubic-bezier(.16,1,.3,1)') && pageSource.includes("behavior:reducedMotion.matches ? 'auto' : 'smooth'")],
   ['reduced motion keeps positioning transforms intact', !pageSource.includes('animation:none!important; transform:none!important') && pageSource.includes('.ex-row__edge-light { opacity:.55;')],
-  ['roving tabindex follows arrow focus', pageSource.includes('links.forEach((link) => { link.tabIndex = -1; })') && pageSource.includes('next.tabIndex = 0')],
+  ['roving tabindex follows global and inner arrow focus', pageSource.includes('const setRovingTitle = (preferred = null)') && pageSource.includes('const focusAdjacentRow = (direction)') && pageSource.includes("event.key === 'ArrowDown' || event.key === 'ArrowUp'") && pageSource.includes("row.classList.add('is-keyboard-active')")],
 ];
 
 const failures = checks.filter(([, passed]) => !passed);

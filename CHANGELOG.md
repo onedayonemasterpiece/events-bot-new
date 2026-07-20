@@ -56,6 +56,12 @@
   the bordered card surface, add cache/error-safe image skeletons, and replace
   flat overflow with progressively smaller depth planes plus a gray image-free
   sixth layer while preserving zero hover geometry movement.
+  Shorten and realign timeline connectors so they cannot cross date labels;
+  make Up/Down establish a visible row selection from page, media or actions
+  with native Enter detail navigation; confine rejected undo content to the
+  bordered exhibition surface; remove keyboard chrome and photo-preview detours
+  on mobile; and unify engagement into one canonical heart+aggregate action
+  plus accessible read-only discussion/mention icon metrics.
 
 ### Added
 - **Personal exhibitions product prototype**: add a separate dark timeline

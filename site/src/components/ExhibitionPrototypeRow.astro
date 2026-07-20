@@ -146,14 +146,13 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     <span>{item.status}</span>
   </div>
 
-  <button
+  <div class="ex-row__media">
+  <a
     class="ex-deck"
-    type="button"
-    data-gallery-open
-    data-gallery-title={event.title}
-    data-gallery-images={JSON.stringify(galleryImages)}
+    href={detailHref}
+    data-deck
     data-media-total={String(galleryImages.length || 1)}
-    aria-label={`Открыть фотографии выставки «${event.title}», ${galleryImages.length || 1}`}
+    aria-label={`Подробнее о выставке «${event.title}», ${galleryImages.length || 1} фото`}
   >
     <span class="ex-deck__images" data-deck-images aria-hidden="true">
       {visibleMedia.map((asset, index: number) => (
@@ -195,7 +194,21 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
       ))}
     </span>
     <span class="ex-deck__count" data-deck-count hidden></span>
-  </button>
+  </a>
+  {galleryImages.length > 0 && (
+    <button
+      class="ex-gallery-trigger"
+      type="button"
+      data-gallery-open
+      data-gallery-title={event.title}
+      data-gallery-images={JSON.stringify(galleryImages)}
+      aria-label={`Открыть фотографии выставки «${event.title}», ${galleryImages.length}`}
+    >
+      <Icon name="image" />
+      <span>Фото</span>
+    </button>
+  )}
+  </div>
 
   <div class="ex-row__body">
     <div class="ex-row__title-line">
@@ -219,9 +232,8 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
         {item.tags.slice(0, 3).map((tag) => <span>{tag}</span>)}
       </div>
       <p class="ex-row__social" aria-label="Сводные сигналы интереса из открытых источников">
-        <span><strong data-like-count>{likeCount}</strong> отметок</span>
-        <span><strong>{item.discussions}</strong> обсуждений</span>
-        <span><strong>{item.mentions}</strong> упоминаний</span>
+        <span class="ex-signal" aria-label={`${item.discussions} обсуждений в открытых источниках`} title="Обсуждения в открытых источниках"><Icon name="comment" /><strong>{item.discussions}</strong><span>обсуждений</span></span>
+        <span class="ex-signal" aria-label={`${item.mentions} упоминаний выставки в открытых источниках`} title="Упоминания в открытых источниках"><Icon name="mention" /><strong>{item.mentions}</strong><span>упоминаний</span></span>
       </p>
     </div>
   </div>
@@ -229,13 +241,14 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
   <div class="ex-row__aside">
     {item.discussions >= 20 && (
       <span class="ex-discussed" aria-label={`Активно обсуждают: ${item.discussions} обсуждений`} title="Активно обсуждают">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.72 5.52 6.1.88-4.41 4.3 1.04 6.08L12 16.61l-5.45 2.87 1.04-6.08-4.41-4.3 6.1-.88L12 2.7Z" /></svg>
+        <Icon name="comment" />
         <span>Обсуждают</span>
       </span>
     )}
     <div class="ex-row__actions" aria-label={`Действия с выставкой «${event.title}»`}>
-      <button type="button" class="ex-action ex-action--like" data-like aria-pressed="false" aria-label={`Нравится: ${event.title}`}>
+      <button type="button" class="ex-action ex-action--like" data-like data-aggregate-count={String(likeCount)} aria-pressed="false" aria-label={`Нравится: ${event.title}. Общих отметок: ${likeCount}`}>
         <Icon name="heart" />
+        <strong data-like-count>{likeCount}</strong>
         <span class="ex-action__label">Нравится</span>
         <kbd aria-hidden="true">L</kbd>
       </button>

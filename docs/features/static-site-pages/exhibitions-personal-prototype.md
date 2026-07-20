@@ -95,8 +95,10 @@ else:
 - отдельная skip-link ведёт к результатам;
 - `Для меня / Все` — завершённый `radiogroup`: `←/→`, `Home/End`, click и
   `Space/Enter` работают через native buttons;
-- обычный Tab сохраняется; `↑/↓` перемещают только между видимыми title links,
-  когда фокус уже находится внутри списка;
+- обычный Tab сохраняется; `↑/↓` из страницы, media, title или row-action
+  выбирают предыдущую/следующую видимую выставку, переносят roving focus на её
+  native title link и подсвечивают всю surface карточки. Поэтому следующий
+  `Enter` нативно открывает detail без отдельной JS-эмуляции ссылки;
 - `Enter` открывает страницу выставки, `G` — её фотографии, `L` — like,
   `X` — `Не интересно`, `F/A` — режимы;
 - shortcuts не перехватываются внутри `input`, `textarea`, `select`, `button`
@@ -104,9 +106,13 @@ else:
 - все действия имеют target не меньше `44×44`, `aria-pressed` и polite live
   feedback;
 - gallery — native modal `dialog`, поддерживает `←/→`, `Esc`, возвращает фокус
-  на исходную фотоколоду;
+  на отдельную desktop-кнопку фотографий. Сам media deck, как и title, является
+  честной ссылкой на detail; на mobile gallery-trigger скрыт и tap по фотографии
+  сразу открывает событие;
 - цветовые точки всегда сопровождаются текстовым статусом;
 - `prefers-reduced-motion` отключает декоративные transition.
+- до `820px` скрыты все визуальные keyboard affordances: `kbd`, help-trigger и
+  help-panel; desktop shortcuts при этом не удаляются.
 
 ## Визуальная система
 
@@ -157,6 +163,10 @@ marker. Адаптированы:
   отнимает строку у title. Timeline rail, date/status и светящаяся lifecycle-dot
   визуально находятся слева от bordered surface; короткий цветной connector
   доводит линию до карточки, как в исходном референсе;
+- timeline connector теперь физически заканчивается до date copy, а dot
+  центрируется по первой строке даты; desktop/tablet rejected stub начинается
+  только от bordered exhibition surface и не перекрывает rail. На mobile ось
+  сдвинута на несколько пикселей внутрь и получила усиленный цветной glow;
 - deck и полноэкранная gallery имеют стабильные shimmer-skeleton states. Для
   cached image отдельно проверяется `complete/naturalWidth`; success и error
   всегда снимают skeleton, а ошибка оставляет устойчивую серую поверхность без
@@ -185,9 +195,14 @@ marker. Адаптированы:
 ## Данные, аналитика и ограничения
 
 Сводные `обсуждения/упоминания` в prototype fixture — presentation-only
-сценарии для проверки иерархии. Production UI должен получать их из
-версионированной агрегированной проекции. Visible likes не делятся в UI на
-source/service и не должны выдаваться за текущий пользовательский like.
+сценарии для проверки иерархии. Они показаны read-only стандартными comment и
+mention icons с точным accessible label `в открытых источниках`; в production
+им потребуются определение единицы, dedupe и version/provenance. Общий
+`likes_count` показан ровно один раз — внутри стандартной интерактивной
+heart-button, как в остальных static-site карточках. Локальная персональная
+отметка меняет `aria-pressed`/заливку сердца, но намеренно не прибавляет `+1` к
+агрегату: browser-only предпочтение ещё не является сохранённым общим лайком.
+Visible likes не делятся в UI на source/service.
 
 Основные продуктовые метрики следующего эксперимента:
 
@@ -302,6 +317,18 @@ reduced-motion, а single-image deck сохранял пустой reserve пр�
 Оба устранены отдельными targeted reduced-motion states и
 `.ex-deck__images--1`; browser interaction gate после исправления обязателен.
 
+Перед итерацией timeline / keyboard / engagement выполнены критический
+pre-design review через `agy`, `Gemini 3.1 Pro (High)`, и три независимых
+read-only lane-а по keyboard/reject, timeline/mobile и social/product. Приняты
+физически короткий connector, глобальный roving focus с whole-row halo,
+surface-confined reject stub, усиленный mobile glow, прямой media-link и единый
+heart + aggregate count. Совет удалить presentation-only обсуждения и
+упоминания не применён буквально: по явному продуктовому вопросу владельца они
+сохранены как пассивные сигналы открытых источников с иконками comment/@ и
+точными aria-label, а не выдаются за production telemetry. Финальный
+screenshot/code/Playwright gate той же Pro-линии дал `ACCEPT` по R1–R7, без
+P0/P1/P2.
+
 ## Проверка
 
 ```bash
@@ -319,5 +346,9 @@ errors, одинаковую desktop media-column/body vertical alignment, вы�
 planes, серый tail без image, неподвижный hover, keyboard movement и gallery.
 Loading gate задерживает первый image: skeleton виден до ответа, исчезает после
 load, а deck geometry имеет delta `0`. Последний source/build gate: Astro build
-`381` pages и prototype contract `38/38`; production route/data/ranking не
-менялись.
+`381` pages и prototype contract `43/43`; production route/data/ranking не
+менялись. V6 Playwright дополнительно проверяет: short timeline connector,
+единственный roving target, Up/Down с body/media/actions, нативный Enter,
+центровку rejected stub по surface, отсутствие keyboard/gallery affordances на
+mobile, прямую media navigation, один like count и пассивные comment/mention
+signals.

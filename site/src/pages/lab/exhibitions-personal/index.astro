@@ -11,12 +11,12 @@ const specs = [
   { id: 6902, bucket: 'new', lifecycle: 'recent', dateLabel: '18 июля', status: 'Открылась вчера', category: 'Искусство', tags: ['живопись', 'современное искусство'], reasons: ['Недавно открылась', 'Рядом со Светлогорском'], discussions: 12, mentions: 4 },
   { id: 6894, bucket: 'new', lifecycle: 'recent', dateLabel: '15 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['живопись', 'локальные авторы'], reasons: ['Открылась 4 дня назад', 'Новая в каталоге'], discussions: 18, mentions: 7 },
   { id: 6871, bucket: 'new', lifecycle: 'upcoming', dateLabel: '8 августа', status: 'Откроется скоро', category: 'Фотография', tags: ['фотография', 'город', 'под открытым небом'], reasons: ['Недавно анонсирована', 'Только два дня'], discussions: 26, mentions: 11 },
-  { id: 5370, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 28 марта', status: 'Идёт сейчас', category: 'Искусство', tags: ['современное искусство', 'графика', 'Третьяковка'], reasons: ['373 отметки', 'Часто обсуждают'], discussions: 84, mentions: 31 },
+  { id: 5370, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 28 марта', status: 'Идёт сейчас', category: 'Искусство', tags: ['современное искусство', 'графика', 'Третьяковка'], reasons: ['373 лайка', 'Часто обсуждают'], discussions: 84, mentions: 31 },
   { id: 6222, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 19 июля', status: 'Последний день', category: 'История', tags: ['история', 'путешествия', 'музей'], reasons: ['Заканчивается сегодня', 'Успеть посмотреть'], discussions: 9, mentions: 5 },
-  { id: 5459, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 30 августа', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'натюрморт', 'XX век'], reasons: ['157 отметок', 'Популярно в источниках'], discussions: 47, mentions: 22 },
-  { id: 6560, bucket: 'priority', lifecycle: 'recent', dateLabel: '5—31 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['локальные авторы', 'иллюстрация', 'истории'], reasons: ['Открылась две недели назад', '79 отметок'], discussions: 32, mentions: 14 },
-  { id: 4913, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 31 июля', status: 'Скоро закроется', category: 'История', tags: ['археология', 'история', 'Пруссия'], reasons: ['Осталось 12 дней', '58 отметок'], discussions: 21, mentions: 9 },
-  { id: 3216, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 27 сентября', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'классика', 'Третьяковка'], reasons: ['244 отметки', 'Высокий интерес'], discussions: 63, mentions: 28 },
+  { id: 5459, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 30 августа', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'натюрморт', 'XX век'], reasons: ['157 лайков', 'Популярно в источниках'], discussions: 47, mentions: 22 },
+  { id: 6560, bucket: 'priority', lifecycle: 'recent', dateLabel: '5—31 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['локальные авторы', 'иллюстрация', 'истории'], reasons: ['Открылась две недели назад', '79 лайков'], discussions: 32, mentions: 14 },
+  { id: 4913, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 31 июля', status: 'Скоро закроется', category: 'История', tags: ['археология', 'история', 'Пруссия'], reasons: ['Осталось 12 дней', '58 лайков'], discussions: 21, mentions: 9 },
+  { id: 3216, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 27 сентября', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'классика', 'Третьяковка'], reasons: ['244 лайка', 'Высокий интерес'], discussions: 63, mentions: 28 },
   { id: 698, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 30 сентября', status: 'Идёт давно', category: 'История', tags: ['археология', 'краеведение', 'музей'], reasons: ['Долгий формат'], discussions: 15, mentions: 8 },
   { id: 2601, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 31 декабря', status: 'Идёт давно', category: 'История', tags: ['история', 'военная история'], reasons: ['Долгий формат'], discussions: 4, mentions: 2 },
   { id: 2182, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 31 декабря', status: 'Идёт давно', category: 'Искусство', tags: ['живопись', 'природа', 'краеведение'], reasons: ['Долгий формат'], discussions: 3, mentions: 2 },
@@ -154,7 +154,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
 
     <dialog class="ex-gallery" data-gallery aria-labelledby="gallery-title">
       <div class="ex-gallery__bar">
-        <div><p>Фотографии выставки</p><h2 id="gallery-title" data-gallery-title></h2></div>
+        <div><p>Фотографии выставки</p><h2 id="gallery-title" data-gallery-heading></h2></div>
         <button type="button" data-gallery-close aria-label="Закрыть галерею">Закрыть <kbd aria-hidden="true">Esc</kbd></button>
       </div>
       <div class="ex-gallery__stage">
@@ -227,7 +227,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-legend .is-ending i { background:var(--ex-red); color:var(--ex-red); }
   .ex-legend .is-popular i { background:var(--ex-yellow); color:var(--ex-yellow); }
   .ex-list { position:relative; display:grid; gap:7px; padding-left:22px; }
-  .ex-list::before { content:""; position:absolute; top:1.45rem; bottom:1.45rem; left:7px; width:1px; background:linear-gradient(180deg,rgba(84,172,247,.06),#50575c 7%,#3d4348 93%,rgba(84,172,247,.06)); box-shadow:0 0 8px rgba(255,255,255,.035); }
+  .ex-list::before { content:""; position:absolute; top:1.6rem; bottom:1.6rem; left:6.5px; width:2px; border-radius:999px; background:linear-gradient(180deg,rgba(84,172,247,.1),#626a70 7%,#4d555b 93%,rgba(84,172,247,.1)); box-shadow:0 0 8px rgba(255,255,255,.05),0 0 14px rgba(84,172,247,.045); }
   .ex-row {
     --ex-media-column:clamp(420px,42vw,680px);
     --ex-row-gap:clamp(.75rem,1.5vw,1.25rem);
@@ -258,6 +258,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-row:hover::after,.ex-row:focus-within::after {
     box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 18px 52px rgba(0,0,0,.38),0 0 34px rgba(84,172,247,.1),0 0 0 1px rgba(84,172,247,.18);
   }
+  .ex-row.is-keyboard-active::after { box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 18px 52px rgba(0,0,0,.4),0 0 34px rgba(84,172,247,.16),0 0 0 2px rgba(84,172,247,.72); }
+  .ex-row.is-keyboard-active .ex-row__halo { opacity:.88; }
+  .ex-row.is-keyboard-active .ex-row__edge-light { opacity:1; filter:drop-shadow(0 0 10px rgba(84,172,247,.34)); }
+  body:has(.ex-page) .ex-row__title:focus-visible { outline:none; }
   .ex-row__halo {
     position:absolute;
     z-index:-1;
@@ -289,10 +293,12 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-row--ending { --ex-rail-color:var(--ex-red); }
   .ex-row--upcoming,.ex-row--long { --ex-rail-color:var(--ex-gray); }
   .ex-row--popular { --ex-rail-color:var(--ex-yellow); }
-  .ex-row__rail { position:relative; display:grid; align-content:start; gap:.18rem; padding:.75rem 0 0 .65rem; color:var(--ex-muted); font-size:.7rem; font-variant-numeric:tabular-nums; }
-  .ex-row__rail::after { content:""; position:absolute; z-index:-1; top:1.06rem; left:-14px; right:calc(var(--ex-row-gap) * -1 + .15rem); height:1px; background:linear-gradient(90deg,color-mix(in srgb,var(--ex-rail-color),transparent 34%),color-mix(in srgb,var(--ex-rail-color),transparent 74%) 55%,transparent); }
-  .ex-row__rail strong { color:var(--ex-text); font-size:.78rem; }
-  .ex-row__dot { position:absolute; z-index:4; top:1.06rem; left:-20px; width:11px; height:11px; display:block; transform:translate3d(0,-50%,0); border:2px solid #0d0f10; border-radius:50%; background:var(--ex-rail-color); box-shadow:0 0 0 1px var(--ex-rail-color),0 0 14px color-mix(in srgb,var(--ex-rail-color),transparent 18%); }
+  .ex-row__rail { position:relative; display:grid; align-content:start; gap:.2rem; padding:.75rem 0 0 .75rem; color:var(--ex-muted); font-size:.7rem; font-variant-numeric:tabular-nums; }
+  .ex-row__rail::after { content:""; position:absolute; z-index:0; top:1.01rem; left:-14px; width:20px; height:2px; border-radius:999px; background:linear-gradient(90deg,var(--ex-rail-color),color-mix(in srgb,var(--ex-rail-color),transparent 62%)); pointer-events:none; }
+  .ex-row__rail>* { position:relative; z-index:1; }
+  .ex-row__rail strong { color:var(--ex-text); font-size:.8rem; font-weight:820; line-height:1.1; }
+  .ex-row__dot { position:absolute; z-index:4; top:1.01rem; left:-21px; width:13px; height:13px; display:block; transform:translate3d(0,-50%,0); border:2px solid #0d0f10; border-radius:50%; background:var(--ex-rail-color); box-shadow:0 0 0 1px color-mix(in srgb,var(--ex-rail-color),white 10%),0 0 15px color-mix(in srgb,var(--ex-rail-color),transparent 16%); }
+  .ex-row__media { position:relative; min-width:0; display:grid; align-self:stretch; }
   .ex-deck {
     position:relative;
     inline-size:100%;
@@ -308,9 +314,13 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     border-radius:6px;
     background:transparent;
     box-shadow:none;
-    cursor:zoom-in;
+    cursor:pointer;
+    text-decoration:none;
     transition:filter var(--ex-motion-base) var(--ex-ease-cinematic);
   }
+  .ex-gallery-trigger { position:absolute; z-index:85; left:10px; bottom:10px; width:44px; height:44px; display:grid; place-items:center; padding:0; border:1px solid rgba(255,255,255,.42); border-radius:6px; background:rgba(7,9,10,.88); color:var(--ex-text); box-shadow:0 6px 18px rgba(0,0,0,.58); backdrop-filter:blur(8px); cursor:pointer; }
+  .ex-gallery-trigger svg { width:17px; height:17px; fill:currentColor; }
+  .ex-gallery-trigger span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
   .ex-row:hover .ex-deck,.ex-row:focus-within .ex-deck { filter:drop-shadow(0 0 11px rgba(84,172,247,.12)); }
   .ex-deck__images {
     position:absolute;
@@ -406,13 +416,18 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-row:hover .ex-row__expanded,.ex-row:focus-within .ex-row__expanded { opacity:1; }
   .ex-row__tags { margin-top:.25rem; }
   .ex-row__tags span { background:#211c2b; color:#c2a6fa; }
-  .ex-row__social { display:flex; flex-wrap:wrap; gap:.6rem; margin:.3rem 0 0; color:var(--ex-muted); font-size:.68rem; }
+  .ex-row__social { display:flex; flex-wrap:wrap; gap:.38rem .75rem; margin:.3rem 0 0; color:var(--ex-muted); font-size:.68rem; }
   .ex-row__social strong { color:var(--ex-text); }
+  .ex-signal { display:inline-flex; align-items:center; gap:.25rem; white-space:nowrap; }
+  .ex-signal svg { width:14px; height:14px; flex:0 0 auto; fill:currentColor; }
   .ex-row__aside { width:98px; min-width:0; display:grid; align-content:center; justify-items:end; gap:.5rem; }
   .ex-row__actions { display:flex; align-items:center; gap:.35rem; }
   .ex-action { position:relative; min-width:46px; min-height:46px; display:grid; place-items:center; border:1px solid var(--ex-border); border-radius:5px; background:#121416; color:var(--ex-muted); cursor:pointer; transition:border-color var(--ex-motion-fast) var(--ex-ease-cinematic),background-color var(--ex-motion-fast) var(--ex-ease-cinematic),color var(--ex-motion-fast) var(--ex-ease-cinematic),box-shadow var(--ex-motion-fast) var(--ex-ease-cinematic); }
   .ex-action:hover,.ex-action:focus-visible { border-color:rgba(187,222,249,.72); color:var(--ex-text); box-shadow:0 0 14px rgba(84,172,247,.13); }
   .ex-action svg { width:21px; height:21px; fill:currentColor; }
+  .ex-action--like { min-width:46px; grid-template-rows:20px 11px; align-content:center; gap:0; padding:.16rem; }
+  .ex-action--like svg { width:19px; height:19px; }
+  .ex-action--like strong { font-size:.62rem; line-height:1; font-variant-numeric:tabular-nums; }
   .ex-action--reject svg { width:18px; height:18px; }
   .ex-action__label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
   .ex-action kbd { position:absolute; right:-3px; bottom:-3px; min-width:1.1rem; min-height:1.1rem; font-size:.58rem; }
@@ -422,9 +437,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-action--reject[aria-pressed="true"] { border-color:#72777b; background:#2b2e30; color:#e0e2e4; }
   .ex-row>*:not(.ex-row__hidden,.ex-row__halo,.ex-row__edge-light) { transition:opacity var(--ex-motion-fast) var(--ex-ease-cinematic),transform var(--ex-motion-base) var(--ex-ease-cinematic),visibility 0s linear 0s; }
   .ex-row.is-rejected>*:not(.ex-row__hidden,.ex-row__halo,.ex-row__edge-light) { visibility:hidden; opacity:0; transform:translate3d(-10px,0,0) scale(.985); transition:opacity var(--ex-motion-fast) var(--ex-ease-cinematic),transform var(--ex-motion-fast) var(--ex-ease-cinematic),visibility 0s linear var(--ex-motion-fast); }
-  .ex-row.is-rejected { min-height:132px; background:#17191a; }
+  .ex-row.is-rejected { min-height:132px; background:transparent; }
   .ex-row.is-rejected::after { background:#17191a; }
-  .ex-row__hidden { position:absolute; inset:0; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.25rem; color:var(--ex-muted); opacity:0; transform:translate3d(10px,0,0); transition:opacity var(--ex-motion-base) var(--ex-ease-cinematic),transform var(--ex-motion-base) var(--ex-ease-cinematic); }
+  .ex-row__hidden { position:absolute; inset:0 0 0 var(--ex-surface-start); display:flex; align-items:center; justify-content:center; gap:1rem; padding:1rem 7rem; color:var(--ex-muted); text-align:center; opacity:0; transform:translate3d(10px,0,0); transition:opacity var(--ex-motion-base) var(--ex-ease-cinematic),transform var(--ex-motion-base) var(--ex-ease-cinematic); }
+  .ex-row__hidden button { position:absolute; right:1.25rem; }
   .ex-row.is-rejected .ex-row__hidden { opacity:1; transform:translate3d(0,0,0); }
   .ex-row__hidden button { min-height:44px; padding:.5rem .8rem; border:1px solid #565b5f; border-radius:4px; background:#232629; color:var(--ex-text); font:inherit; font-weight:800; cursor:pointer; }
   .ex-row.is-filtered { display:none; }
@@ -464,7 +480,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-intro { align-items:start; flex-direction:column; }
     .ex-controls { grid-template-columns:auto 1fr; }
     .ex-controls__end { grid-column:1/-1; justify-content:space-between; }
-    .ex-row { --ex-media-column:clamp(320px,39vw,410px); grid-template-columns:95px var(--ex-media-column) minmax(190px,1fr) auto; }
+    .ex-row { --ex-media-column:clamp(320px,39vw,410px); --ex-surface-start:calc(95px + var(--ex-row-gap) - .6rem); grid-template-columns:95px var(--ex-media-column) minmax(190px,1fr) auto; }
     .ex-deck { min-block-size:114px; block-size:114px; }
     .ex-discussed span { position:absolute; width:1px; height:1px; overflow:hidden; }
   }
@@ -486,16 +502,19 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-group__heading { align-items:start; flex-direction:column; gap:1rem; }
     .ex-mark-seen { width:100%; }
     .ex-legend { justify-content:flex-start; }
-    .ex-list { gap:.7rem; padding-left:12px; }
-    .ex-list::before { left:3px; }
+    .ex-page kbd,.ex-help-open,.ex-keyboard-help { display:none!important; }
+    .ex-list { gap:.7rem; padding-left:18px; }
+    .ex-list::before { top:1.1rem; bottom:1.1rem; left:6.5px; width:2px; background:linear-gradient(180deg,rgba(84,172,247,.16),#6d767d 6%,#555e64 94%,rgba(84,172,247,.16)); box-shadow:0 0 9px rgba(255,255,255,.08),0 0 16px rgba(84,172,247,.1); }
     .ex-row { --ex-surface-start:0px; min-height:0; grid-template-columns:1fr auto; grid-template-areas:"rail rail" "deck deck" "body aside"; gap:.65rem; padding:.65rem; border-radius:8px; }
     .ex-row__halo { inset:-18px -14px; }
     .ex-row__edge-light { inset:-1px; }
     .ex-row__rail { grid-area:rail; grid-template-columns:auto 1fr; gap:.25rem .65rem; padding:0; }
-    .ex-row__rail::after { top:.52rem; left:-1.25rem; right:auto; width:1.25rem; }
-    .ex-row__dot { top:.52rem; left:-1.25rem; }
+    .ex-row__rail::after { top:.55rem; left:-12px; width:12px; height:2px; }
+    .ex-row__dot { top:.55rem; left:-18px; width:14px; height:14px; box-shadow:0 0 0 1px var(--ex-rail-color),0 0 16px color-mix(in srgb,var(--ex-rail-color),transparent 10%),0 0 28px color-mix(in srgb,var(--ex-rail-color),transparent 52%); }
     .ex-row__rail span:last-child { text-align:right; }
-    .ex-deck { grid-area:deck; inline-size:100%; max-inline-size:100%; block-size:clamp(160px,48vw,228px); }
+    .ex-row__media { grid-area:deck; }
+    .ex-deck { inline-size:100%; max-inline-size:100%; block-size:clamp(160px,48vw,228px); cursor:pointer; }
+    .ex-gallery-trigger { display:none; }
     .ex-deck__count { right:14px; }
     .ex-row__body { grid-area:body; }
     .ex-row__aside { grid-area:aside; align-content:start; }
@@ -507,6 +526,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-gallery { width:100%; height:100dvh; max-height:none; margin:0; border:0; border-radius:0; }
     .ex-gallery__stage { min-height:calc(100dvh - 150px); grid-template-columns:48px 1fr 48px; }
     .ex-gallery__media { height:calc(100dvh - 150px); }
+    .ex-row__hidden { flex-direction:column; padding:1rem; }
+    .ex-row__hidden button { position:static; }
+    .ex-controls__end { justify-content:flex-start; gap:0; }
+    .ex-categories { inline-size:100%; }
   }
   @media (prefers-reduced-motion:no-preference) {
     .ex-deck__frame[data-image-state="loading"] .ex-deck__skeleton,.ex-gallery__media[data-image-state="loading"] .ex-gallery__skeleton { animation:ex-skeleton-shimmer 1.35s linear infinite; }
@@ -655,7 +678,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         count.setAttribute('aria-label', `Ещё ${overflowCount} фото`);
       }
     };
-    const layoutDecks = () => root.querySelectorAll('[data-gallery-open]').forEach(layoutDeck);
+    const layoutDecks = () => root.querySelectorAll('[data-deck]').forEach(layoutDeck);
     let deckResizeFrame = 0;
     const scheduleDeckLayout = () => {
       window.cancelAnimationFrame(deckResizeFrame);
@@ -663,7 +686,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     };
     window.addEventListener('resize', scheduleDeckLayout, { passive:true });
     const deckResizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleDeckLayout) : null;
-    root.querySelectorAll('[data-gallery-open]').forEach((deck) => deckResizeObserver?.observe(deck));
+    root.querySelectorAll('[data-deck]').forEach((deck) => deckResizeObserver?.observe(deck));
     document.fonts?.ready.then(scheduleDeckLayout);
 
     root.querySelectorAll('[data-deck-image]').forEach((image) => {
@@ -745,13 +768,45 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         const like = row.querySelector('[data-like]');
         const reject = row.querySelector('[data-reject]');
         const stub = row.querySelector('[data-hidden-stub]');
-        if (like instanceof HTMLElement) like.setAttribute('aria-pressed', String(liked));
+        if (like instanceof HTMLElement) {
+          const aggregateCount = Number(like.dataset.aggregateCount || 0);
+          const eventTitle = row.querySelector('[data-row-focus]')?.textContent?.trim() || 'выставка';
+          like.setAttribute('aria-pressed', String(liked));
+          like.setAttribute('aria-label', liked
+            ? `Убрать отметку «Нравится»: ${eventTitle}. Общих отметок: ${aggregateCount}. Ваша отметка сохранена в этом браузере.`
+            : `Отметить как понравившееся: ${eventTitle}. Общих отметок: ${aggregateCount}.`);
+        }
         if (reject instanceof HTMLElement) reject.setAttribute('aria-pressed', String(rejected));
         row.classList.toggle('is-rejected', rejected);
         if (stub instanceof HTMLElement) stub.hidden = !rejected;
       });
     };
-    const syncFilters = () => {
+    const setRovingTitle = (preferred = null) => {
+      const links = focusLinks();
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement.closest('[data-row-focus]') : null;
+      const chosen = links.includes(preferred) ? preferred : links.includes(focused) ? focused : links[0];
+      links.forEach((link) => { link.tabIndex = link === chosen ? 0 : -1; });
+      return chosen;
+    };
+    const setKeyboardActive = (link) => {
+      rows().forEach((row) => row.classList.toggle('is-keyboard-active', link instanceof Element && row.contains(link)));
+    };
+    const focusAdjacentRow = (direction) => {
+      const links = focusLinks();
+      if (!links.length) return null;
+      const activeRow = document.activeElement instanceof Element ? document.activeElement.closest('[data-exhibition-row]') : null;
+      const selectedRow = root.querySelector('.ex-row.is-keyboard-active');
+      const current = activeRow?.querySelector('[data-row-focus]') || selectedRow?.querySelector('[data-row-focus]');
+      const currentIndex = links.indexOf(current);
+      const nextIndex = currentIndex < 0 ? (direction > 0 ? 0 : links.length - 1) : Math.max(0,Math.min(links.length - 1,currentIndex + direction));
+      const next = links[nextIndex];
+      setRovingTitle(next);
+      setKeyboardActive(next);
+      next?.focus({ preventScroll:true });
+      next?.scrollIntoView({ block:'center', behavior:reducedMotion.matches ? 'auto' : 'smooth' });
+      return next;
+    };
+    const syncFilters = (preferred = null) => {
       let count = 0;
       rows().forEach((row) => {
         const rejected = state.negative.includes(row.dataset.eventId);
@@ -768,8 +823,8 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
           ? `<strong>Подборка уточнена.</strong> Учитываем темы ваших ${state.likes.length} отметок; отклонённые выставки не показываем.`
           : '<strong>Начните с 2–3 оценок.</strong> Пока профиль пуст, «Для меня» показывает новое и общее главное.';
       }
-      const links = focusLinks();
-      links.forEach((link, index) => { link.tabIndex = index === 0 ? 0 : -1; });
+      const chosen = setRovingTitle(preferred);
+      if (document.activeElement?.closest?.('[data-exhibition-row]')) setKeyboardActive(chosen);
       updateBadge();
       scheduleDeckLayout();
     };
@@ -830,6 +885,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       if (target.closest('[data-reject]')) { rejectRow(row); return; }
       if (target.closest('[data-undo]')) { undoReject(row); return; }
       if (target.closest('[data-gallery-open]')) { openGallery(target.closest('[data-gallery-open]'), row); return; }
+      if (target.closest('[data-deck]')) { markSeen(row); return; }
       if (target.closest('[data-row-focus]')) markSeen(row);
     });
 
@@ -851,6 +907,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       if (!state.negative.includes(id)) state.negative.push(id);
       state.likes = state.likes.filter((value) => value !== id);
       markSeen(row); writeState(); syncActionState();
+      const rejectedLink = row.querySelector('[data-row-focus]');
+      if (rejectedLink instanceof HTMLElement) rejectedLink.tabIndex = -1;
+      setRovingTitle();
+      setKeyboardActive(null);
       const undo = row.querySelector('[data-undo]');
       if (undo instanceof HTMLElement) undo.focus();
       announce('Выставка скрыта из «Для меня». Можно отменить.');
@@ -858,9 +918,13 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const undoReject = (row) => {
       const id = row.dataset.eventId;
       state.negative = state.negative.filter((value) => value !== id);
-      writeState(); syncActionState(); transitionDOM(syncFilters);
       const link = row.querySelector('[data-row-focus]');
-      if (link instanceof HTMLElement) link.focus();
+      writeState(); syncActionState(); transitionDOM(() => syncFilters(link));
+      if (link instanceof HTMLElement) {
+        setRovingTitle(link);
+        setKeyboardActive(link);
+        link.focus();
+      }
       announce('Отметка «не интересно» отменена.');
     };
 
@@ -871,30 +935,41 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       const next = event.key === 'ArrowLeft' || event.key === 'Home' ? 'personal' : 'all';
       switchMode(next, true);
     });
+    root.addEventListener('focusin', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const row = target?.closest('[data-exhibition-row]');
+      if (row instanceof HTMLElement) {
+        row.classList.add('is-keyboard-active');
+        rows().filter((candidate) => candidate !== row).forEach((candidate) => candidate.classList.remove('is-keyboard-active'));
+      }
+    });
     root.querySelector('[data-results]')?.addEventListener('keydown', (event) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (!target || target.closest('button,input,textarea,select,[contenteditable="true"]')) return;
+      if (!target || target.closest('input,textarea,select,[contenteditable="true"]')) return;
       const row = target.closest('[data-exhibition-row]');
       if (!(row instanceof HTMLElement)) return;
-      const links = focusLinks();
-      const current = row.querySelector('[data-row-focus]');
-      const index = links.indexOf(current);
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
-        const next = links[Math.max(0,Math.min(links.length-1,index+(event.key === 'ArrowDown' ? 1 : -1)))];
-        links.forEach((link) => { link.tabIndex = -1; });
-        if (next instanceof HTMLElement) next.tabIndex = 0;
-        next?.focus({ preventScroll:true }); next?.scrollIntoView({ block:'center', behavior:reducedMotion.matches ? 'auto' : 'smooth' });
+        focusAdjacentRow(event.key === 'ArrowDown' ? 1 : -1);
+      } else if (target.closest('button')) {
+        return;
       } else if (event.key.toLowerCase() === 'l') { event.preventDefault(); toggleLike(row); }
       else if (event.key.toLowerCase() === 'x') { event.preventDefault(); rejectRow(row); }
       else if (event.key.toLowerCase() === 'g') {
+        if (compactDeck.matches) return;
         event.preventDefault(); const opener = row.querySelector('[data-gallery-open]'); if (opener instanceof HTMLElement) openGallery(opener,row);
       }
     });
     document.addEventListener('keydown', (event) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest('input,textarea,select,button,[contenteditable="true"]')) return;
+      if (target?.closest('input,textarea,select,[contenteditable="true"]')) return;
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !root.querySelector('[data-gallery][open]')) {
+        event.preventDefault();
+        focusAdjacentRow(event.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if (target?.closest('button')) return;
       if (event.key.toLowerCase() === 'f') { event.preventDefault(); switchMode('personal',true); }
       if (event.key.toLowerCase() === 'a') { event.preventDefault(); switchMode('all',true); }
     });
@@ -902,7 +977,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const dialog = root.querySelector('[data-gallery]');
     const galleryImage = root.querySelector('[data-gallery-image]');
     const galleryMedia = root.querySelector('[data-gallery-media]');
-    const galleryTitle = root.querySelector('[data-gallery-title]');
+    const galleryTitle = root.querySelector('[data-gallery-heading]');
     const galleryCount = root.querySelector('[data-gallery-count]');
     const gallerySkeleton = root.querySelector('[data-gallery-skeleton]');
     const galleryError = root.querySelector('[data-gallery-error]');
@@ -939,6 +1014,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     };
     const openGallery = (opener,row) => {
       if (!(dialog instanceof HTMLDialogElement) || !(opener instanceof HTMLElement)) return;
+      if (compactDeck.matches) return;
       try { galleryImages = JSON.parse(opener.dataset.galleryImages || '[]'); } catch { galleryImages = []; }
       if (!galleryImages.length) return;
       galleryIndex = 0; galleryOpener = opener;

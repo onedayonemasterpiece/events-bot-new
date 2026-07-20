@@ -93,3 +93,34 @@ v5_lanes:
     branch: integration/exhibitions-personal-discovery-prototype-20260719
     verification_scope: full_local
     status: completed
+v6_lanes:
+  - id: v6-keyboard-reject-audit
+    role: planner
+    requirement_ids: [R16, R17]
+    target: global roving focus, native Enter navigation, and surface-confined rejection stub
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v6-timeline-mobile-audit
+    role: planner
+    requirement_ids: [R15, R18, R20]
+    target: non-crossing timeline geometry, mobile glow, and direct media navigation
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v6-social-product-audit
+    role: planner
+    requirement_ids: [R19]
+    target: canonical engagement icons and single honest aggregate-like control
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v6-integration
+    role: worker
+    requirement_ids: [R15, R16, R17, R18, R19, R20]
+    target: coherent timeline, keyboard, rejection, mobile, and engagement implementation
+    depends_on: [v6-keyboard-reject-audit, v6-timeline-mobile-audit, v6-social-product-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    verification_scope: full_local
+    status: completed

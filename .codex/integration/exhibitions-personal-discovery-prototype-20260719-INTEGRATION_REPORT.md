@@ -39,3 +39,16 @@ Gemini 3.1 Pro (High) via `agy` was used before implementation, for critical acc
 | R14 | Perspective overflow and gray terminal plane | Done | Right edges/z are monotonic, depth heights decrease, first five previews contain images, sixth plane does not; hover delta `0`. |
 
 V5 verification: Astro build `381` pages; prototype contract `38/38`; Playwright at `1440×1000`, `900×900`, `768×1024`, and `375×812` reported zero horizontal overflow and no console/page errors. Final `agy` review with Gemini 3.1 Pro (High): `ACCEPT`, no P0/P1. Its sole P2 about retained rejected-row height is superseded by the intentional zero-jump undo-stub contract.
+
+## v6 timeline / keyboard / engagement closure
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| R15 | Colored timeline must not cross date copy | Done | Connector is a bounded `20px` segment ending before the date; dot and spine share one x-axis; Playwright confirms `connectorStartsAtDot=0.5px`. |
+| R16 | Up/down visibly selects a row; Enter opens it | Done | Global and in-row arrows move the single roving title link and apply whole-row halo; native Enter navigates to the event URL. |
+| R17 | Rejection message stays centered inside exhibition surface | Done | Hidden stub begins at `--ex-surface-start`; desktop text and surface centers both measure `792.1953125px`; undo stays inside. |
+| R18 | Mobile hides keyboard UI and strengthens timeline accents | Done | At `768px` and `375px`, keyboard/help counts are zero; dots are `14px` with two-layer colored glow; no overflow. |
+| R19 | Explain and unify engagement metrics | Done | One heart action owns the immutable aggregate like count; comments and mentions use canonical comment/@ icons with explicit source aria labels. |
+| R20 | Mobile media opens event rather than image preview | Done | Media and title share the same honest event href; gallery trigger is desktop-only; Playwright confirms direct navigation and closed dialog on mobile. |
+
+V6 local verification: Astro build `381` pages; prototype contract `43/43`; Playwright at `1440×1000`, `900×900`, `768×1024`, and `375×812` reported zero horizontal overflow and no console/page errors. Hover geometry delta is `0`; the local heart preference does not falsely increment the presentation aggregate. Final `agy` acceptance with `Gemini 3.1 Pro (High)`: `ACCEPT` across R1–R7, no P0/P1/P2.
