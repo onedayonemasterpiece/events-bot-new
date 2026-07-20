@@ -3421,6 +3421,7 @@ def build_related(
     gemma_key_env: str = "GOOGLE_API_KEY4",
     gemma_max_anchors: int = 0,
     embedding_model: str = "gemini-embedding-2",
+    related_corpus_revision: str = "",
 ) -> dict[str, Any]:
     related_mode = "pgvector" if str(related_mode or "").strip().lower() == "pgvector" else "sparse"
     algorithm = PGVECTOR_RELATED_ALGORITHM if related_mode == "pgvector" else SPARSE_RELATED_ALGORITHM
@@ -3428,6 +3429,7 @@ def build_related(
     retrieval_method = PGVECTOR_RELATED_RETRIEVAL_METHOD if related_mode == "pgvector" else SPARSE_RELATED_RETRIEVAL_METHOD
     cache_schema_version = PGVECTOR_RELATED_CACHE_SCHEMA_VERSION if related_mode == "pgvector" else RELATED_CACHE_SCHEMA_VERSION
     embedding_doc_version = os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") if related_mode == "pgvector" else "event_embedding_doc_v1"
+    related_corpus_revision = str(related_corpus_revision or "").strip()
     generated_at = datetime.now(timezone.utc).isoformat()
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
     event_ids = [int(event["id"]) for event in events]
@@ -3450,6 +3452,7 @@ def build_related(
         and cache.get("algorithm") == algorithm
         and (related_mode != "pgvector" or cache.get("embedding_model") == embedding_model)
         and (related_mode != "pgvector" or cache.get("embedding_document_version") == embedding_doc_version)
+        and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
         and cache.get("event_fingerprints") == fingerprints
         and cache.get("event_ids") == event_ids
         and isinstance(cache.get("chains"), dict)
@@ -3558,6 +3561,7 @@ def build_related(
         "retrieval_method": retrieval_method,
         "embedding_document_version": embedding_doc_version,
         "embedding_model": embedding_model if related_mode == "pgvector" else None,
+        "related_corpus_revision": related_corpus_revision if related_mode == "pgvector" else None,
         "semantic_embeddings": related_mode == "pgvector",
         "event_ids": event_ids,
         "event_fingerprints": fingerprints,
@@ -3629,6 +3633,7 @@ def build_related(
         "semantic_embeddings": related_mode == "pgvector",
         "embedding_model": embedding_model if related_mode == "pgvector" else None,
         "embedding_document_version": embedding_doc_version,
+        "related_corpus_revision": related_corpus_revision if related_mode == "pgvector" else None,
         "graph_reciprocity": graph_meta,
         "gemma_verification": gemma_meta,
         "strict_verified_related": bool(gemma_verify),
@@ -3683,6 +3688,7 @@ def main() -> int:
     parser.add_argument("--sync-pgvector-vectors", action="store_true", default=(os.getenv("STATIC_SITE_SYNC_PGVECTOR_VECTORS", "").strip().lower() in {"1", "true", "yes", "on"}), help="Upsert event search docs/embeddings before pgvector related build")
     parser.add_argument("--pgvector-embedding-model", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL", "gemini-embedding-2"))
     parser.add_argument("--pgvector-embedding-key-env", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV", "GOOGLE_API_KEY4"))
+    parser.add_argument("--related-corpus-revision", default=os.getenv("STATIC_SITE_RELATED_CORPUS_REVISION", ""), help="SHA-256 revision from the completed related_v1 vector-sync receipt")
     parser.add_argument("--pgvector-max-provider-calls", type=int, default=int(os.getenv("STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS", "1000") or "1000"))
     parser.add_argument("--site-origin", default=os.getenv("PUBLIC_SITE_ORIGIN", "https://kenigevents.ru"))
     parser.add_argument("--base-path", default=os.getenv("PUBLIC_PREVIEW_BUILD_ID", ""))
@@ -3735,6 +3741,8 @@ def main() -> int:
             raise SystemExit("full catalog export requires a full 40-character repo SHA")
         if not re.fullmatch(r"[0-9a-f]{64}", args.snapshot_sha256):
             raise SystemExit("full catalog export requires a 64-character snapshot SHA-256")
+        if args.related_mode == "pgvector" and not re.fullmatch(r"[0-9a-f]{64}", str(args.related_corpus_revision or "")):
+            raise SystemExit("full pgvector export requires --related-corpus-revision from the completed vector receipt")
     rows = fetch_rows(
         con,
         None if args.catalog_mode == "full" else args.limit,
@@ -3829,6 +3837,7 @@ def main() -> int:
         gemma_key_env=args.gemma_related_key_env,
         gemma_max_anchors=max(0, int(args.gemma_related_max_anchors or 0)),
         embedding_model=args.pgvector_embedding_model,
+        related_corpus_revision=args.related_corpus_revision,
     )
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")

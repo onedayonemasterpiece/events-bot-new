@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import tempfile
 
 
 def _load_exporter_module():
@@ -156,3 +157,61 @@ def test_pgvector_graph_reciprocity_restores_only_strong_reverse_edges() -> None
     # node may still be rescued as adjacent discovery, but never pure_related.
     weak_reverse = next((item for item in chains["3"] if item["event_id"] == 1), None)
     assert weak_reverse is None or weak_reverse["slot_type"] == "adjacent_discovery"
+
+
+def test_pgvector_cache_is_invalidated_by_related_corpus_revision() -> None:
+    exporter = _load_exporter_module()
+    events = [
+        _related_event(1, "Первое", day=1),
+        _related_event(2, "Второе", day=2),
+    ]
+    calls: list[str] = []
+
+    def fake_build(items, **kwargs):
+        calls.append(kwargs.get("embedding_model"))
+        chains = {
+            "1": [{
+                "event_id": 2,
+                "related_score": 0.9,
+                "vector_similarity": 0.9,
+                "slot_type": "pure_related",
+                "reason_codes": [],
+                "retrieval_sources": ["supabase_pgvector"],
+            }],
+            "2": [],
+        }
+        meta_out = kwargs.get("graph_meta_out")
+        if meta_out is not None:
+            meta_out.update({"policy": "test"})
+        return chains
+
+    exporter.build_pgvector_related_chain = fake_build
+    with tempfile.TemporaryDirectory() as directory:
+        cache_path = Path(directory) / "related.json"
+        first = exporter.build_related(
+            events,
+            current_date="2026-07-20",
+            related_mode="pgvector",
+            cache_path=cache_path,
+            related_corpus_revision="a" * 64,
+        )
+        second = exporter.build_related(
+            events,
+            current_date="2026-07-20",
+            related_mode="pgvector",
+            cache_path=cache_path,
+            related_corpus_revision="a" * 64,
+        )
+        third = exporter.build_related(
+            events,
+            current_date="2026-07-20",
+            related_mode="pgvector",
+            cache_path=cache_path,
+            related_corpus_revision="b" * 64,
+        )
+
+    assert first["cache"]["state"] == "miss_rebuilt"
+    assert second["cache"]["state"] == "hit"
+    assert third["cache"]["state"] == "miss_rebuilt"
+    assert third["related_corpus_revision"] == "b" * 64
+    assert calls == ["gemini-embedding-2", "gemini-embedding-2"]
