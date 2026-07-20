@@ -30,8 +30,9 @@ class ImageFingerprints:
     """Content fingerprints used by the event-media identity gate.
 
     ``dhash_hex`` intentionally matches the historical ``EventPoster.phash``
-    value and the managed-storage ``p/dh16`` object key.  ``phash_hex`` is a
-    real DCT perceptual hash and therefore has a separate name.
+    value. It is similarity evidence only and must not be used as immutable
+    object identity. ``phash_hex`` is a real DCT perceptual hash and therefore
+    has a separate name.
     """
 
     raw_sha256: str
@@ -326,20 +327,34 @@ def build_supabase_poster_object_path(
     prefix: str = "p",
     dhash_size: int = 16,
 ) -> str:
-    """Build a deterministic Storage path for a poster.
+    """Build the legacy perceptual-hash poster path (read compatibility)."""
 
-    Format:
-      <prefix>/dh<dhash_size>/<first2>/<dhash>.webp
-    """
-
-    pfx = (prefix or "").strip().strip("/")
-    if not pfx:
-        pfx = "p"
+    pfx = (prefix or "").strip().strip("/") or "p"
     h = (dhash_hex or "").strip().lower()
     if not h:
         raise ValueError("dhash_hex is required")
     algo = f"dh{int(dhash_size)}"
     return f"{pfx}/{algo}/{h[:2]}/{h}.webp"
+
+
+def build_content_addressed_poster_object_path(
+    encoded_sha256: str,
+    *,
+    prefix: str = "p",
+) -> str:
+    """Build an immutable exact-content Storage path for a canonical WebP.
+
+    Format:
+      <prefix>/image/v2/<first2>/<encoded_sha256>.webp
+    """
+
+    pfx = (prefix or "").strip().strip("/")
+    if not pfx:
+        pfx = "p"
+    digest = str(encoded_sha256 or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("encoded_sha256 must be a 64-character hex digest")
+    return f"{pfx}/image/v2/{digest[:2]}/{digest}.webp"
 
 
 def build_event_thumbnail_object_path(

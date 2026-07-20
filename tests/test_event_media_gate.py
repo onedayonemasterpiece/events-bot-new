@@ -6,6 +6,7 @@ import io
 import json
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image, PngImagePlugin
@@ -22,7 +23,15 @@ from event_media import (
     review_next_event_media_pair,
 )
 from media_dedup import compute_image_fingerprints
-from models import Event, EventMediaPairReview, EventPoster, JobOutbox, JobTask
+from media_dedup import prepare_image_for_supabase
+from models import (
+    Event,
+    EventImageGeometry,
+    EventMediaPairReview,
+    EventPoster,
+    JobOutbox,
+    JobTask,
+)
 from smart_event_update import PosterCandidate, _apply_posters
 
 
@@ -96,7 +105,9 @@ async def test_cdn_retry_preserves_unique_raw_sha_survivor(
     monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
     monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
     source_bytes = _pattern_png_bytes()
-    digest = hashlib.sha256(source_bytes).hexdigest()
+    prepared = prepare_image_for_supabase(source_bytes)
+    assert prepared is not None
+    digest = prepared.encoded_sha256
 
     def download(_url: str, *, max_bytes: int, timeout: float) -> DownloadedPoster:
         del max_bytes, timeout
@@ -150,8 +161,142 @@ async def test_cdn_retry_preserves_unique_raw_sha_survivor(
     await db.engine.dispose()
     assert updated == 2
     assert failed == 0
-    assert retry.supabase_url.startswith("https://static.kenigevents.ru/p/dh16/")
+    assert retry.supabase_url.startswith("https://static.kenigevents.ru/p/image/v2/")
     assert retry.raw_sha256 is None
+
+
+@pytest.mark.asyncio
+async def test_cdn_object_path_uses_exact_encoded_hash_not_shared_dhash(monkeypatch) -> None:
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    source_payloads = {
+        "https://source.example/one.png": b"source-one",
+        "https://source.example/two.png": b"source-two",
+    }
+    prepared_payloads = {
+        b"source-one": b"encoded-one",
+        b"source-two": b"encoded-two",
+    }
+
+    def download(url: str, *, max_bytes: int, timeout: float) -> DownloadedPoster:
+        del max_bytes, timeout
+        return DownloadedPoster(source_payloads[url], "image/png", url)
+
+    def prepare(payload: bytes, **_kwargs):
+        encoded = prepared_payloads[payload]
+        return SimpleNamespace(
+            dhash_hex="ab" * 32,
+            webp_bytes=encoded,
+            encoded_sha256=hashlib.sha256(encoded).hexdigest(),
+            width=64,
+            height=48,
+            thumbnails=(),
+        )
+
+    uploaded_paths: list[str] = []
+
+    def upload(_data, *, object_path, content_type, **_kwargs):
+        del content_type
+        uploaded_paths.append(object_path)
+        return f"https://static.kenigevents.ru/{object_path}"
+
+    monkeypatch.setattr(event_media, "_download_url", download)
+    monkeypatch.setattr("media_dedup.prepare_image_for_supabase", prepare)
+    monkeypatch.setattr("yandex_storage.upload_yandex_public_bytes", upload)
+    first = PosterCandidate(
+        catbox_url="https://source.example/one.png", sha256="f" * 64
+    )
+    second = PosterCandidate(catbox_url="https://source.example/two.png")
+
+    assert await event_media.materialize_event_media_candidate_to_cdn(first)
+    assert await event_media.materialize_event_media_candidate_to_cdn(second)
+
+    assert first.phash == second.phash == "ab" * 32
+    assert first.sha256 == "f" * 64
+    assert first.raw_sha256 == hashlib.sha256(b"encoded-one").hexdigest()
+    assert second.raw_sha256 == hashlib.sha256(b"encoded-two").hexdigest()
+    assert first.supabase_path != second.supabase_path
+    assert uploaded_paths == [first.supabase_path, second.supabase_path]
+    assert all(path.startswith("p/image/v2/") for path in uploaded_paths)
+
+
+@pytest.mark.asyncio
+async def test_smart_update_display_identity_change_invalidates_visual_evidence(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "0")
+    db = Database(str(tmp_path / "identity-change.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        geometry = EventImageGeometry(
+            pixel_sha256="1" * 64,
+            model=event_media.image_geometry_model(),
+            prompt_version=event_media.IMAGE_GEOMETRY_PROMPT_VERSION,
+            status="classified",
+        )
+        session.add(geometry)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="a" * 64,
+            raw_sha256="a" * 64,
+            pixel_sha256="1" * 64,
+            perceptual_hash="2" * 64,
+            phash="3" * 64,
+            supabase_url="https://static.example/old.webp",
+            supabase_path="p/image/v2/old.webp",
+            review_status=APPROVED,
+            width=1200,
+            height=800,
+            mime_type="image/webp",
+            image_geometry_id=int(geometry.id),
+            media_semantic_status="classified",
+            media_semantic_prompt_version=event_media.MEDIA_ROLE_PROMPT_VERSION,
+            media_semantic_context_hash=event_media._context_hash(event),
+            media_role="event_photo",
+            focal_x=0.4,
+            focal_y=0.5,
+            safe_crop=True,
+            thumbnail_256_url="https://static.example/old-256.webp",
+            thumbnail_512_url="https://static.example/old-512.webp",
+        )
+        session.add(poster)
+        await session.commit()
+
+        await _apply_posters(
+            session,
+            int(event.id),
+            [
+                PosterCandidate(
+                    supabase_url="https://static.example/new.webp",
+                    supabase_path="p/image/v2/new.webp",
+                    sha256="a" * 64,
+                )
+            ],
+        )
+        await session.commit()
+        await session.refresh(poster)
+        job = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == int(event.id),
+                    JobOutbox.task == JobTask.event_media_review,
+                )
+            )
+        ).scalar_one_or_none()
+
+    await db.engine.dispose()
+    assert poster.supabase_url == "https://static.example/new.webp"
+    assert poster.pixel_sha256 is None
+    assert poster.image_geometry_id is None
+    assert poster.media_semantic_status == "pending"
+    assert poster.media_semantic_reason_code == "display_identity_changed"
+    assert poster.focal_x is None and poster.focal_y is None
+    assert poster.safe_crop is False
+    assert poster.thumbnail_256_url is None and poster.thumbnail_512_url is None
+    assert job is not None
 
 
 @pytest.mark.asyncio
@@ -550,6 +695,103 @@ async def test_exact_pixel_duplicate_is_resolved_without_provider_call(tmp_path,
     assert review.reason_code == "pixel_sha256_equal"
     assert review.provider_calls == 0
     assert event.photo_urls == ["https://static.example/a.png"]
+
+
+@pytest.mark.asyncio
+async def test_final_distinct_pair_promotes_and_enqueues_geometry_accumulation(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "final-pair-geometry.sqlite"))
+    await db.init()
+    payloads = {
+        "https://static.example/a.png": _pattern_png_bytes(invert=False),
+        "https://static.example/b.png": _pattern_png_bytes(invert=True),
+    }
+
+    async def fake_download(poster: EventPoster) -> DownloadedPoster:
+        url = str(poster.supabase_url)
+        return DownloadedPoster(payloads[url], "image/png", url)
+
+    async def distinct_reviewer(**_kwargs):
+        return (
+            {
+                "decision": "distinct",
+                "duplicate_kind": "none",
+                "confidence": 0.99,
+                "semantic_conflict": False,
+                "canonical_side": "either",
+                "reason_code": "different_photos",
+            },
+            1,
+        )
+
+    monkeypatch.setattr(event_media, "_download_poster", fake_download)
+    monkeypatch.setattr(event_media, "_call_reviewer", distinct_reviewer)
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        event_id = int(event.id)
+        await _apply_posters(
+            session,
+            event_id,
+            [
+                PosterCandidate(
+                    supabase_url="https://static.example/a.png", sha256="a" * 64
+                ),
+                PosterCandidate(
+                    supabase_url="https://static.example/b.png", sha256="b" * 64
+                ),
+            ],
+        )
+        await session.flush()
+        rows = (
+            await session.execute(
+                select(EventPoster)
+                .where(EventPoster.event_id == event_id)
+                .order_by(EventPoster.id)
+            )
+        ).scalars().all()
+        first_fp = compute_image_fingerprints(payloads[str(rows[0].supabase_url)])
+        assert first_fp is not None
+        geometry = EventImageGeometry(
+            pixel_sha256=first_fp.pixel_sha256,
+            model=event_media.image_geometry_model(),
+            prompt_version=event_media.IMAGE_GEOMETRY_PROMPT_VERSION,
+            status="classified",
+        )
+        session.add(geometry)
+        await session.flush()
+        rows[0].pixel_sha256 = first_fp.pixel_sha256
+        rows[0].image_geometry_id = int(geometry.id)
+        for job in (
+            await session.execute(
+                select(JobOutbox).where(JobOutbox.event_id == event_id)
+            )
+        ).scalars().all():
+            await session.delete(job)
+        await session.commit()
+        second_id = int(rows[1].id)
+
+    await review_next_event_media_pair(event_id, db)
+    async with db.get_session() as session:
+        second = await session.get(EventPoster, second_id)
+        jobs = (
+            await session.execute(
+                select(JobOutbox).where(
+                    JobOutbox.event_id == event_id,
+                    JobOutbox.task == JobTask.event_media_review,
+                )
+            )
+        ).scalars().all()
+        candidate_id = await event_media._next_geometry_candidate_id(
+            session, event_id
+        )
+
+    await db.engine.dispose()
+    assert second.review_status == APPROVED
+    assert candidate_id == second_id
+    assert len(jobs) == 1
 
 
 @pytest.mark.asyncio
