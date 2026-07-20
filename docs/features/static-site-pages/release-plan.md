@@ -284,20 +284,24 @@ v10-прототип не является источником production-да�
 
 ### Фактический горизонтальный сдвиг строки
 
-- [ ] Каноническое событие `listing_row_swipe_commit` создаётся только после завершённого
-  физического touch/pointer-жеста: горизонтальная ось доминирует, пройден утверждённый
-  threshold и позиция строки действительно изменилась. Hint-анимация, `scrollIntoView`,
-  restoration и иной programmatic scroll событие не создают.
-- [ ] Payload содержит `client_event_id`, `page_view_id`, consented actor/session key,
-  `event_id`, `page_type`, `surface=listing_row`, `placement=event_strip`, `component`,
-  `input_type`, `from_state`, `to_state`, `content_direction`, viewport/layout, schema/build
-  version и `occurred_at`; сырые координаты/траектория, referrer, token и PII не сохраняются.
-- [ ] Ingest применяет consent gate, schema allowlist, rate limit, exact-once по
-  `client_event_id` и semantic debounce одного жеста; session меняется после 30 минут
-  неактивности.
-- [ ] Посуточный отчёт считается в `Europe/Kaliningrad`: distinct пользователей,
-  совершивших хотя бы один commit, / distinct eligible viewers; рядом показываются gestures,
-  sessions и sample size. Нулевой denominator не превращается в `0%`.
+- [ ] Завершённый физический touch/pointer-жест определяется локально: горизонтальная ось
+  доминирует, пройден утверждённый threshold и позиция строки действительно изменилась.
+  Hint-анимация, `scrollIntoView`, restoration и иной programmatic scroll не учитываются.
+- [ ] Raw `listing_row_swipe_commit`, координаты, `event_id`, последовательность жестов и
+  scroll trace **не отправляются и не хранятся**. Клиент накапливает только bounded counters
+  и один раз обновляет `feed_rail_actor_day_summary_v1` для consented actor × календарный
+  день × `page_type` (idempotent upsert, а не append-only stream).
+- [ ] Actor-day summary содержит `did_swipe`, capped `pageviews`/eligible rows,
+  `rows_swiped`, committed gestures, direction changes, `revisited_offset_rows`,
+  `rewound_after_revisit`, `opens_after_revisit`, viewport/layout и schema/build version.
+  Счётчики имеют документированные caps; позиция конкретной строки хранится только bounded
+  session-local map по `event_id` и в analytics/backend не попадает.
+- [ ] Ingest применяет consent gate, schema allowlist, rate limit и exact-once/upsert key;
+  backend деидентифицирует actor до asynchronous YDB aggregation. Browser не пишет в YDB,
+  raw referrer/token/PII и per-gesture history отсутствуют, actor-day rows имеют TTL/retention.
+- [ ] Посуточный отчёт в `Europe/Kaliningrad` считает distinct actor-day rows с
+  `did_swipe=true` / distinct eligible actor-day rows; рядом показываются capped commits,
+  revisit/rewind/open counters и sample size. Нулевой denominator не превращается в `0%`.
 
 ### Где пользователи ставят лайк
 

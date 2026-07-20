@@ -249,8 +249,9 @@ Smart Update является владельцем семантического 
 - [ ] Anonymous→authorized merge explicit, idempotent, auditable, reversible; logout behavior defined.
 - [ ] Favorite, like and calendar semantics no longer conflated.
 - [ ] Add-to-calendar/favorite is atomic/idempotent; repeat/undo/cross-device/lifecycle cases pass.
-- [ ] `listing_row_swipe_commit` учитывает только завершённый физический горизонтальный жест с реальным изменением позиции; hint/programmatic/restoration scroll исключены, ingest consent-aware и idempotent по `client_event_id`.
-- [ ] Посуточный (`Europe/Kaliningrad`) swipe KPI показывает distinct committed swipers / distinct eligible viewers плюс gestures/sessions/sample size; raw coordinates, PII, tokens и referrer не сохраняются.
+- [ ] Физический swipe определяется локально только после dominant-axis threshold и реального изменения позиции; raw gestures/event ids/coordinates не отправляются, hint/programmatic/restoration scroll исключены.
+- [ ] Один bounded `feed_rail_actor_day_summary_v1` upsert на consented actor × day × page type хранит только `did_swipe` и capped eligible/swipe/revisit/rewind/open counters; session-local positions не попадают в backend/YDB.
+- [ ] Посуточный (`Europe/Kaliningrad`) KPI показывает distinct actor-day `did_swipe` / distinct eligible actor-day плюс sample size; browser не пишет в YDB, backend de-identification, TTL и no-PII/no-token contract доказаны.
 - [ ] `like_event`/`unlike_event` создаются только на canonical state transition и содержат allowlisted `page_type × surface × placement × component`; daily report показывает likes/unlikes/unique actors/net-current по типам страниц и viewport.
 - [ ] Shared Supabase profile/controller остаётся owner current like state; browser не пишет напрямую в YDB, de-identified bounded history передаётся асинхронно; no-consent и privacy suppression доказаны тестами.
 - [ ] Contextual bottom date rail показывается только при активном разделе `Даты`, имеет targets `>=48×48`, не содержит прошедших дат и использует canonical `/daty/YYYY-MM-DD/`; accidental activations `<2%`, а `>5%` или fixed stack `>25%` короткого viewport — hard reject.
