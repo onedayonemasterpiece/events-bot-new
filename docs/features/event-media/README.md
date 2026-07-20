@@ -108,6 +108,10 @@ candidate hash, а URL считается weak identity только для lega
 `raw_sha256`/`p/image/v2/...`. Один mutable VK/TG/source URL может со временем
 вернуть другую rendition; она создаёт/находит отдельную exact row и проходит
 обычный pair gate, но не перезаписывает уже классифицированный exact-v2 объект.
+Если при этом source-level `poster_hash` остался прежним, новая rendition
+получает стабильный производный row hash от `source hash + exact encoded SHA`.
+Это сохраняет историческую exact-row, соблюдает уникальность
+`(event_id, poster_hash)` и делает повтор той же rendition идемпотентным.
 Identity index перестраивается после каждого merge внутри batch, поэтому
 повторный reconcile с теми же кандидатами идемпотентен и не сбрасывает semantic
 role/geometry, не создаёт tight-loop и не повторяет платный VLM-вызов.

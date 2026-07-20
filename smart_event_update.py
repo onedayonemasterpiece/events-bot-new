@@ -18537,17 +18537,41 @@ def _poster_identity_keys(
 
 
 def _poster_has_exact_content_identity(poster: PosterCandidate | EventPoster) -> bool:
+    return _poster_exact_content_identity(poster) is not None
+
+
+def _poster_exact_content_identity(
+    poster: PosterCandidate | EventPoster,
+) -> str | None:
+    """Return the immutable encoded-byte identity carried by a poster."""
+
     raw_sha256 = str(getattr(poster, "raw_sha256", "") or "").strip().lower()
     if re.fullmatch(r"[0-9a-f]{64}", raw_sha256):
-        return True
+        return raw_sha256
     path = str(getattr(poster, "supabase_path", "") or "").strip().lstrip("/")
-    return bool(
-        re.fullmatch(
-            r"[^/]+/image/v2/[0-9a-f]{2}/[0-9a-f]{64}\.webp",
-            path,
-            flags=re.IGNORECASE,
-        )
+    match = re.fullmatch(
+        r"[^/]+/image/v2/(?P<prefix>[0-9a-f]{2})/(?P<digest>[0-9a-f]{64})\.webp",
+        path,
+        flags=re.IGNORECASE,
     )
+    if match is None:
+        return None
+    digest = match.group("digest").lower()
+    return digest if digest.startswith(match.group("prefix").lower()) else None
+
+
+def _poster_source_exact_variant_hash(source_hash: str, exact_digest: str) -> str:
+    """Stable row identity when one mutable source hash yields new exact bytes.
+
+    ``EventPoster`` historically has a unique ``(event_id, poster_hash)``
+    constraint.  A source URL/hash is provenance rather than immutable content,
+    so the same source may legitimately yield several exact-v2 renditions over
+    time.  Namespacing the later rendition prevents both a uniqueness failure
+    and replacement of pixel-bound geometry on the earlier row.
+    """
+
+    payload = f"event-poster-source-exact-v1\n{source_hash}\n{exact_digest}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _build_eventposter_identity_index(
@@ -18743,6 +18767,42 @@ async def _apply_posters(
             poster,
             existing_identity_index,
         )
+        # The database uniqueness constraint is the final source-hash guard.
+        # Keep an explicit lookup even though poster_hash normally participates
+        # in the identity index: it also makes a just-persisted/race-recovered
+        # source row converge instead of surfacing an IntegrityError.
+        if row is None:
+            row = existing_map.get(digest)
+            if row is not None:
+                duplicate_reason = "poster_hash"
+
+        if row is not None and duplicate_reason == "poster_hash":
+            existing_exact = _poster_exact_content_identity(row)
+            candidate_exact = _poster_exact_content_identity(poster)
+            if (
+                existing_exact is not None
+                and candidate_exact is not None
+                and existing_exact != candidate_exact
+            ):
+                source_digest = digest
+                digest = _poster_source_exact_variant_hash(
+                    source_digest,
+                    candidate_exact,
+                )
+                variant_row = existing_map.get(digest)
+                if variant_row is not None:
+                    row = variant_row
+                    duplicate_reason = "source_exact_variant"
+                else:
+                    # Do not mutate the old exact row: its semantic/geometry
+                    # evidence belongs to different bytes.  The derived hash is
+                    # stable, so the same rendition is inserted at most once.
+                    logger.info(
+                        "smart_update: split mutable source identity by exact rendition event_id=%s",
+                        event_id,
+                    )
+                    row = None
+                    duplicate_reason = None
         if row is not None:
             previous_display_url = resolve_poster_display_url(row)
             previous_path = str(row.supabase_path or "").strip()

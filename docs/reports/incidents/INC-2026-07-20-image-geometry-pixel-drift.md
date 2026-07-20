@@ -61,6 +61,14 @@ prove that a crop referred to the current pixels.
 - 2026-07-20 10:04 UTC — StaticSiteBuilder built all Astro pages but its stale
   desktop post-build check rejected 372 safe `contain` decisions as legacy
   `expected cover`; only that retry was deferred while the contract was fixed.
+- 2026-07-20 10:38–10:57 UTC — deployed convergence retry built 248 pages,
+  passed both production and secret-candidate contracts and published 935
+  immutable review objects after the stale resource lease was reconciled.
+- 2026-07-20 11:00 UTC — bounded event `6956` canary created current geometry
+  `566` for poster `14758` with exact poster/geometry pixel-hash equality in one
+  KEY4 Gemma call. Its automatic source follow-up then exposed a final edge:
+  the source-level poster hash stayed stable while exact encoded bytes changed,
+  causing the per-event poster-hash unique constraint to reject a new row.
 
 ## Root Cause
 
@@ -84,6 +92,10 @@ prove that a crop referred to the current pixels.
 8. The static production desktop check still inferred `cover` from
    `visual_only`, contradicting the new protected-region rule that responsive
    unknown-aspect surfaces must fail closed to `contain`.
+9. The exact-first reconciliation path allowed a new exact rendition to be
+   inserted under its unchanged source-level `poster_hash`. The schema correctly
+   rejected the duplicate `(event_id, poster_hash)`, so the follow-up could not
+   converge even though the approved poster and its new geometry stayed intact.
 
 ## Contributing Factors
 
@@ -159,6 +171,8 @@ prove that a crop referred to the current pixels.
   legacy rows so repeated source reconciliation converges.
 - [x] Align the production desktop build contract with protected-crop
   `cover`/reason evidence and fail-closed responsive `contain`.
+- [x] Namespace an unchanged mutable source hash by exact encoded digest when it
+  yields a new rendition, preserving old visual evidence and DB uniqueness.
 
 ## Follow-up Actions
 
@@ -168,15 +182,19 @@ prove that a crop referred to the current pixels.
 ## Release And Closure Evidence
 
 - first deployed SHA: `82fb5ba12dfc1181a358044cc060c19d441378dd`, Fly
-  release `v1719`; convergence hotfix deploy pending
-- deploy path: clean `origin/main` Fly deploy; convergence hotfix pending
+  release `v1719`; convergence SHA `66b4f129719c02c90420e6c56801f7fa65509bf5`,
+  Fly release `v1720`; stable-source/exact uniqueness follow-up pending
+- deploy path: clean `origin/main` Fly deploy; final uniqueness follow-up pending
 - source regression checks: 146 Python tests and 20 focused Node tests passed;
   Astro built 380 pages. The broad Node suite remained 43/44 because of a
   pre-existing literal class-token assertion in an unchanged layout file.
 - convergence regression: 55 focused Python tests passed; a full local
   production-profile export/build from the retained failed snapshot passed the
   corrected desktop post-build contract with zero provider calls.
-- post-deploy verification: pending
+- post-deploy static verification: build
+  `production-secret-20260720T123645-19876d03`, 248 events, 935 published
+  objects, production and secret-candidate checks all `ok`; final canary
+  convergence and exact-SHA receipt refresh pending
 
 ## Prevention
 

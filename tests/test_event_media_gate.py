@@ -32,7 +32,11 @@ from models import (
     JobOutbox,
     JobTask,
 )
-from smart_event_update import PosterCandidate, _apply_posters
+from smart_event_update import (
+    PosterCandidate,
+    _apply_posters,
+    _poster_source_exact_variant_hash,
+)
 
 
 def _png_bytes(*, metadata: str) -> bytes:
@@ -461,6 +465,116 @@ async def test_repeated_source_reconcile_does_not_replace_classified_exact_v2_ro
     assert canonical.safe_crop is True
     assert rows[1].supabase_url == new_url
     assert rows[1].raw_sha256 == new_raw
+
+
+@pytest.mark.asyncio
+async def test_stable_source_hash_with_new_exact_rendition_uses_stable_variant(
+    tmp_path, monkeypatch
+) -> None:
+    """A mutable source hash may not violate the per-event unique constraint."""
+
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "0")
+    source_hash = "source-hash-stays-stable"
+    old_raw = "a" * 64
+    new_raw = "b" * 64
+    canonical_raw = "c" * 64
+
+    def exact_path(digest: str) -> str:
+        return f"p/image/v2/{digest[:2]}/{digest}.webp"
+
+    def exact_url(digest: str) -> str:
+        return f"https://static.kenigevents.ru/{exact_path(digest)}"
+
+    db = Database(str(tmp_path / "stable-source-new-exact.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        geometry = EventImageGeometry(
+            pixel_sha256="1" * 64,
+            model=event_media.image_geometry_model(),
+            prompt_version=event_media.IMAGE_GEOMETRY_PROMPT_VERSION,
+            status="classified",
+        )
+        session.add(geometry)
+        await session.flush()
+        canonical = EventPoster(
+            event_id=int(event.id),
+            poster_hash="canonical",
+            supabase_url=exact_url(canonical_raw),
+            supabase_path=exact_path(canonical_raw),
+            raw_sha256=canonical_raw,
+            pixel_sha256="1" * 64,
+            image_geometry_id=int(geometry.id),
+            review_status=APPROVED,
+            display_order=0,
+        )
+        old_source_alias = EventPoster(
+            event_id=int(event.id),
+            poster_hash=source_hash,
+            catbox_url="https://source.example/mutable.jpg",
+            supabase_url=exact_url(old_raw),
+            supabase_path=exact_path(old_raw),
+            raw_sha256=old_raw,
+            pixel_sha256="1" * 64,
+            image_geometry_id=int(geometry.id),
+            review_status=DUPLICATE,
+            duplicate_of_id=None,
+            display_order=1,
+            media_semantic_status="classified",
+            media_role="event_photo",
+            safe_crop=True,
+        )
+        session.add(canonical)
+        session.add(old_source_alias)
+        await session.commit()
+
+        def candidate() -> PosterCandidate:
+            return PosterCandidate(
+                sha256=source_hash,
+                catbox_url="https://source.example/mutable.jpg",
+                supabase_url=exact_url(new_raw),
+                supabase_path=exact_path(new_raw),
+                raw_sha256=new_raw,
+            )
+
+        first_added, *_ = await _apply_posters(
+            session, int(event.id), [candidate()]
+        )
+        await session.commit()
+        second_added, *_ = await _apply_posters(
+            session, int(event.id), [candidate()]
+        )
+        await session.commit()
+        await session.refresh(old_source_alias)
+        rows = list(
+            (
+                await session.execute(
+                    select(EventPoster)
+                    .where(EventPoster.event_id == int(event.id))
+                    .order_by(EventPoster.id.asc())
+                )
+            ).scalars()
+        )
+
+    await db.engine.dispose()
+    assert first_added == 1
+    assert second_added == 0
+    assert len(rows) == 3
+    assert old_source_alias.poster_hash == source_hash
+    assert old_source_alias.supabase_path == exact_path(old_raw)
+    assert old_source_alias.raw_sha256 == old_raw
+    assert old_source_alias.image_geometry_id == geometry.id
+    assert old_source_alias.media_semantic_status == "classified"
+    assert old_source_alias.safe_crop is True
+    variant = rows[2]
+    assert variant.poster_hash == _poster_source_exact_variant_hash(
+        source_hash, new_raw
+    )
+    assert variant.poster_hash != source_hash
+    assert variant.supabase_path == exact_path(new_raw)
+    assert variant.raw_sha256 == new_raw
 
 
 @pytest.mark.asyncio

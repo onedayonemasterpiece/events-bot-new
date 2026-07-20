@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Fixed the remaining mutable-source convergence edge: when one stable source
+  poster hash yields a different immutable exact-v2 rendition, Smart Update now
+  assigns a deterministic source+exact row identity instead of overwriting
+  pixel-bound evidence or violating the per-event poster-hash constraint.
 - Fixed repeated Smart Update source reconciliation so exact-v2/raw identity
   outranks mutable source hashes and weak URLs are used only for legacy rows;
   classified geometry no longer resets into a paid semantic-role loop. The
