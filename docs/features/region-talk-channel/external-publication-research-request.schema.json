@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/contracts/region-talk/external-publication-research-request.v1.schema.json",
+  "title": "Region Talk external publication research runtime request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "request", "duplicate_guard", "blocked_domains"],
+  "properties": {
+    "schema_version": {"const": "region_talk_external_research_request.v1"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "as_of_date", "window_start", "window_end", "target_region", "output_language", "research_languages", "product_language_policy", "maximum_candidates", "maximum_candidates_per_contour"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "as_of_date": {"type": "string", "format": "date"},
+        "window_start": {"type": "string", "format": "date"},
+        "window_end": {"type": "string", "format": "date"},
+        "target_region": {"const": "Калининградская область, Россия"},
+        "output_language": {"const": "ru"},
+        "research_languages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z]{2,3}$"}},
+        "product_language_policy": {"enum": ["ru_only", "ru_or_mostly_ru", "multilingual_manual_review"]},
+        "maximum_candidates": {"type": "integer", "minimum": 1, "maximum": 200},
+        "maximum_candidates_per_contour": {"type": "integer", "minimum": 1, "maximum": 50}
+      }
+    },
+    "duplicate_guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_version", "snapshot_id", "seen_publication_count", "seen_publications"],
+      "properties": {
+        "policy_version": {"const": "region_talk_external_seen_guard_v1"},
+        "snapshot_id": {"type": "string", "pattern": "^rtseen_[a-f0-9]{24}$"},
+        "seen_publication_count": {"type": "integer", "minimum": 0},
+        "seen_publications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["canonical_url", "doi", "title", "source_name", "disposition"],
+            "properties": {
+              "canonical_url": {"anyOf": [{"type": "string", "format": "uri", "pattern": "^https?://"}, {"type": "null"}]},
+              "doi": {"type": ["string", "null"], "maxLength": 300},
+              "title": {"type": "string", "maxLength": 500},
+              "source_name": {"type": "string", "maxLength": 300},
+              "disposition": {"enum": ["candidate", "manual_review", "excluded", "unresolved"]}
+            },
+            "anyOf": [
+              {"properties": {"canonical_url": {"type": "string"}}},
+              {"properties": {"doi": {"type": "string"}}}
+            ]
+          }
+        }
+      }
+    },
+    "blocked_domains": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 255}}
+  }
+}

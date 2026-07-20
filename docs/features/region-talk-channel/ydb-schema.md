@@ -551,6 +551,13 @@ visibility.
   publication gate; the finalizer joins the same row again as authoritative
   source evidence. Neither consumer inserts the publisher into the Telegram/VK
   scan queue;
+- kind `external_publication_seen_item`, pk
+  `external_publication_seen_item:extseen_<stable-doi-or-url-id>` — durable
+  cross-run duplicate ledger for every valid candidate, explicit exclusion and
+  unresolved lead. It stores normalized DOI/canonical URL, compact title/source,
+  disposition and request lineage. The read-only request generator merges this
+  ledger with legacy intake rows and emits the complete immutable seen snapshot
+  supplied to the next external research agent;
 - kind `external_publication_import_batch`, pk
   `external_publication_import_batch:extpubrun_<stable-id>` — idempotent input
   batch counts, research request/window and bounded coverage evidence;

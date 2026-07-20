@@ -39,6 +39,9 @@ from scripts.region_talk_goal_notify import (  # noqa: E402
 SCHEMA_VERSION = "region_talk_external_research.v1"
 IMPORT_VERSION = "region_talk_external_publication_import.v1"
 SCHEMA_PATH = ROOT / "docs" / "features" / "region-talk-channel" / "external-publication-research.schema.json"
+REQUEST_SCHEMA_VERSION = "region_talk_external_research_request.v1"
+REQUEST_SCHEMA_PATH = ROOT / "docs" / "features" / "region-talk-channel" / "external-publication-research-request.schema.json"
+SEEN_GUARD_VERSION = "region_talk_external_seen_guard_v1"
 TRACKS = {"scholarly", "professional_editorial", "popular_editorial", "reference_or_project_catalog"}
 RESEARCH_DECISIONS = {"candidate", "needs_review", "exclude"}
 READINESS = {"candidate_report", "manual_review_required", "blocked"}
@@ -147,6 +150,39 @@ def normalize_doi(value: Any) -> str:
     if not re.fullmatch(r"10\.\d{4,9}/\S+", raw):
         raise ContractError("invalid DOI")
     return raw.rstrip(".,; ")
+
+
+def load_duplicate_guard(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    schema = json.loads(REQUEST_SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(payload)
+    if payload.get("schema_version") != REQUEST_SCHEMA_VERSION:
+        raise ContractError(f"request sidecar schema_version must be {REQUEST_SCHEMA_VERSION}")
+    guard = payload.get("duplicate_guard") if isinstance(payload.get("duplicate_guard"), dict) else {}
+    seen = guard.get("seen_publications") if isinstance(guard.get("seen_publications"), list) else []
+    canonical_seen = sorted(seen, key=lambda item: (str(item.get("doi") or ""), str(item.get("canonical_url") or "")))
+    raw = json.dumps(canonical_seen, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    expected_snapshot = "rtseen_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+    if str(guard.get("snapshot_id") or "") != expected_snapshot:
+        raise ContractError("request sidecar duplicate_guard.snapshot_id does not match its seen_publications")
+    if int(guard.get("seen_publication_count") or 0) != len(canonical_seen):
+        raise ContractError("request sidecar seen_publication_count mismatch")
+    urls: set[str] = set()
+    dois: set[str] = set()
+    for item in canonical_seen:
+        try:
+            if item.get("canonical_url"):
+                urls.add(canonicalize_http_url(item.get("canonical_url")))
+            if item.get("doi"):
+                dois.add(normalize_doi(item.get("doi")))
+        except ContractError as exc:
+            raise ContractError(f"invalid identity in request duplicate guard: {exc}") from exc
+    return {
+        "snapshot_id": expected_snapshot,
+        "request": payload.get("request") or {},
+        "urls": urls,
+        "dois": dois,
+    }
 
 
 def _require_mapping(value: Any, field: str, errors: list[str]) -> dict[str, Any]:
@@ -391,7 +427,12 @@ def validate_candidate(candidate: Any, run: dict[str, Any]) -> tuple[dict[str, A
     return normalized, []
 
 
-def prepare_import(payload: Any, *, imported_at: str | None = None) -> dict[str, Any]:
+def prepare_import(
+    payload: Any,
+    *,
+    imported_at: str | None = None,
+    duplicate_guard: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     imported_at = imported_at or utc_now_iso()
     if not isinstance(payload, dict):
         raise ContractError("top-level JSON must be an object")
@@ -411,6 +452,24 @@ def prepare_import(payload: Any, *, imported_at: str | None = None) -> dict[str,
         raise ContractError("run window must use YYYY-MM-DD") from exc
     if str(run.get("window_start")) > str(run.get("window_end")):
         raise ContractError("run.window_start must not be after window_end")
+    if duplicate_guard:
+        request = duplicate_guard.get("request") if isinstance(duplicate_guard.get("request"), dict) else {}
+        expected = {
+            "request_id": request.get("request_id"),
+            "window_start": request.get("window_start"),
+            "window_end": request.get("window_end"),
+            "research_languages": request.get("research_languages"),
+            "product_language_policy": request.get("product_language_policy"),
+        }
+        actual = {
+            "request_id": run.get("request_id"),
+            "window_start": run.get("window_start"),
+            "window_end": run.get("window_end"),
+            "research_languages": run.get("research_languages"),
+            "product_language_policy": run.get("product_language_policy"),
+        }
+        if actual != expected:
+            raise ContractError("research result run fields do not match the generated request sidecar")
 
     candidates = payload.get("candidates")
     if not isinstance(candidates, list):
@@ -418,6 +477,7 @@ def prepare_import(payload: Any, *, imported_at: str | None = None) -> dict[str,
     valid: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     seen_identity: dict[str, str] = {}
+    duplicate_seen_count = 0
     for index, raw in enumerate(candidates):
         if candidate_schema_errors.get(index):
             rejected.append({
@@ -435,6 +495,21 @@ def prepare_import(payload: Any, *, imported_at: str | None = None) -> dict[str,
             })
             continue
         identity = "doi:" + str(normalized.get("doi") or "") if normalized.get("doi") else "url:" + normalized["canonical_url"]
+        guard_urls = duplicate_guard.get("urls", set()) if duplicate_guard else set()
+        guard_dois = duplicate_guard.get("dois", set()) if duplicate_guard else set()
+        if normalized["canonical_url"] in guard_urls or (
+            normalized.get("doi") and str(normalized.get("doi")) in guard_dois
+        ):
+            duplicate_seen_count += 1
+            rejected.append({
+                "index": index,
+                "canonical_url": normalized["canonical_url"],
+                "errors": [
+                    "already seen in duplicate guard snapshot "
+                    + str(duplicate_guard.get("snapshot_id") or "unknown")
+                ],
+            })
+            continue
         if identity in seen_identity:
             rejected.append({"index": index, "canonical_url": normalized["canonical_url"], "errors": [f"duplicate of {seen_identity[identity]}"]})
             continue
@@ -461,6 +536,77 @@ def prepare_import(payload: Any, *, imported_at: str | None = None) -> dict[str,
             "external_publication_intake_item:" + row["external_publication_id"],
             "external_publication_intake_item",
             row,
+        ))
+    seen_rows: dict[str, dict[str, Any]] = {}
+
+    def add_seen(
+        *,
+        canonical_url: Any,
+        doi: Any = None,
+        title: Any = "",
+        source_name: Any = "",
+        disposition: str,
+    ) -> None:
+        try:
+            url = canonicalize_http_url(canonical_url) if canonical_url else ""
+            normalized_doi = normalize_doi(doi) if doi else ""
+        except ContractError:
+            return
+        if not url and not normalized_doi:
+            return
+        identity = "doi:" + normalized_doi if normalized_doi else "url:" + url
+        seen_id = "extseen_" + stable_hash(identity)
+        seen_rows.setdefault(seen_id, {
+            "external_publication_seen_id": seen_id,
+            "identity": identity,
+            "canonical_url": url or None,
+            "doi": normalized_doi or None,
+            "title": str(title or "")[:500],
+            "source_name": str(source_name or "")[:300],
+            "seen_disposition": disposition,
+            "first_research_request_id": request_id,
+            "latest_research_request_id": request_id,
+            "first_seen_at": imported_at,
+            "last_seen_at": imported_at,
+            "seen_guard_version": SEEN_GUARD_VERSION,
+            "updated_at": imported_at,
+        })
+
+    for row in valid:
+        publication = row.get("publication") if isinstance(row.get("publication"), dict) else {}
+        status = str((row.get("decision") or {}).get("import_status") or "")
+        disposition = (
+            "candidate" if status == "ready_for_region_talk_scoring"
+            else "manual_review" if status == "manual_review_required"
+            else "excluded"
+        )
+        add_seen(
+            canonical_url=row.get("canonical_url"),
+            doi=row.get("doi"),
+            title=publication.get("title"),
+            source_name=publication.get("source_name"),
+            disposition=disposition,
+        )
+    for item in payload.get("excluded") or []:
+        if isinstance(item, dict):
+            add_seen(
+                canonical_url=item.get("canonical_url"),
+                title=item.get("title"),
+                source_name=item.get("source_name"),
+                disposition="excluded",
+            )
+    for item in payload.get("unresolved") or []:
+        if isinstance(item, dict):
+            add_seen(
+                canonical_url=item.get("url"),
+                title=item.get("title_guess"),
+                disposition="unresolved",
+            )
+    for seen_id, seen_row in sorted(seen_rows.items()):
+        rows.append((
+            "external_publication_seen_item:" + seen_id,
+            "external_publication_seen_item",
+            seen_row,
         ))
     sources_by_key: dict[str, dict[str, Any]] = {}
     for row in valid:
@@ -520,6 +666,9 @@ def prepare_import(payload: Any, *, imported_at: str | None = None) -> dict[str,
         "external_sources_staged": len(sources_by_key),
         "ready_for_region_talk_scoring": sum(1 for row in valid if row["decision"]["import_status"] == "ready_for_region_talk_scoring"),
         "manual_or_blocked": sum(1 for row in valid if row["decision"]["import_status"] != "ready_for_region_talk_scoring"),
+        "duplicate_seen_rejected": duplicate_seen_count,
+        "seen_publication_rows_staged": len(seen_rows),
+        "seen_guard_snapshot_id": str(duplicate_guard.get("snapshot_id") or "") if duplicate_guard else "",
         "coverage": payload.get("coverage") if isinstance(payload.get("coverage"), list) else [],
         "run_uncertainties": payload.get("run_uncertainties") if isinstance(payload.get("run_uncertainties"), list) else [],
     }
@@ -566,6 +715,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("input", type=Path, help="JSON result conforming to region_talk_external_research.v1")
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--report", type=Path, default=ROOT / "artifacts" / "codex" / "region-talk-external-publication-import.json")
+    parser.add_argument("--request-input", type=Path, help="Generated region_talk_external_research_request.v1 sidecar used by the research agent")
     parser.add_argument("--execute", action="store_true", help="Write idempotent staging rows to YDB; default is validation/dry-run")
     return parser.parse_args()
 
@@ -573,8 +723,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     load_env(args.env_file)
+    if args.execute and args.request_input is None:
+        raise ContractError("--execute requires --request-input so cross-run duplicate protection cannot be bypassed")
+    duplicate_guard = load_duplicate_guard(args.request_input) if args.request_input else None
     payload = json.loads(args.input.read_text(encoding="utf-8"))
-    result = prepare_import(payload)
+    result = prepare_import(payload, duplicate_guard=duplicate_guard)
     written = write_ydb(result["ydb_rows"]) if args.execute else 0
     report = {
         "batch": result["batch"],

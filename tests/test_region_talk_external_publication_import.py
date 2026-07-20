@@ -282,3 +282,61 @@ def test_wrong_schema_is_rejected_before_row_processing() -> None:
     payload["schema_version"] = "unknown"
     with pytest.raises(mod.ContractError, match="schema_version"):
         mod.prepare_import(payload)
+
+
+def test_generated_duplicate_guard_rejects_seen_candidate_before_staging() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    guard = {
+        "snapshot_id": "rtseen_1234567890abcdef12345678",
+        "request": dict(payload["run"]),
+        "urls": {"https://example.org/articles/kaliningrad"},
+        "dois": set(),
+    }
+    result = mod.prepare_import(payload, duplicate_guard=guard)
+
+    assert not result["valid"]
+    assert result["batch"]["duplicate_seen_rejected"] == 1
+    assert "already seen" in " ".join(result["rejected"][0]["errors"])
+    assert all(kind != "external_publication_intake_item" for _, kind, _ in result["ydb_rows"])
+
+
+def test_duplicate_guard_request_must_match_research_result() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    guard = {
+        "snapshot_id": "rtseen_1234567890abcdef12345678",
+        "request": {**payload["run"], "request_id": "different-run"},
+        "urls": set(),
+        "dois": set(),
+    }
+    with pytest.raises(mod.ContractError, match="do not match"):
+        mod.prepare_import(payload, duplicate_guard=guard)
+
+
+def test_import_stages_seen_ledger_for_candidates_exclusions_and_unresolved() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    payload["excluded"] = [{
+        "canonical_url": "https://example.net/local-story?utm_source=search",
+        "title": "Локальная заметка",
+        "source_name": "Местное издание",
+        "reason_codes": ["regional_local_outlet"],
+        "reason_short": "Региональный источник",
+        "checked_at": "2026-07-19T10:00:00Z",
+        "evidence": [],
+    }]
+    payload["unresolved"] = [{
+        "url": "https://example.com/uncertain#abstract",
+        "title_guess": "Неясная публикация",
+        "blocking_unknowns": ["publication_date"],
+        "next_check": "Открыть выпуск журнала",
+    }]
+
+    result = mod.prepare_import(payload, imported_at="2026-07-19T11:00:00+00:00")
+    seen = [row for _, kind, row in result["ydb_rows"] if kind == "external_publication_seen_item"]
+
+    assert result["batch"]["seen_publication_rows_staged"] == 3
+    assert {row["seen_disposition"] for row in seen} == {"candidate", "excluded", "unresolved"}
+    assert any(row["canonical_url"] == "https://example.net/local-story" for row in seen)
+    assert any(row["canonical_url"] == "https://example.com/uncertain" for row in seen)
