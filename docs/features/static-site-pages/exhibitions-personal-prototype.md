@@ -623,10 +623,11 @@ debounce `250ms` и мгновенным reduced-motion режимом. Toast с
 кинематическим easing, а смена сообщения — crossfade без предварительного
 очищения текста.
 
-Локальный acceptance прошёл source-contract `65/65` на 22 уникальных
-выставках и Playwright-проверку desktop/mobile: одна curated-печать находится
-вне photo semantics, имеет `44/36px`, не перекрывает `+N`, корректно скрывается
-при ошибке загрузки и не создаёт horizontal overflow. Проверены также тихое
-листание с delayed screen-reader status, transition у action toast и
-межгодовая дата. Финальный gate `Gemini 3.1 Pro (High)` дал `ACCEPT` без
+Acceptance прошёл source-contract `65/65` на 22 уникальных выставках и
+одинаковую Playwright-проверку local/public desktop/mobile: одна
+curated-печать находится вне photo semantics, имеет `44/36px`, не перекрывает
+`+N`, корректно скрывается при ошибке загрузки и не создаёт horizontal
+overflow. Проверены также тихое листание с delayed screen-reader status,
+transition у action toast и межгодовая дата. Публичный immutable preview
+ответил `HTTP 200`. Финальный gate `Gemini 3.1 Pro (High)` дал `ACCEPT` без
 P0/P1/P2 замечаний.
