@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed the personal-exhibitions long-running deck so fully dealt and near-stack
+  cards always render their real exported media instead of becoming empty
+  bordered planes after the third image; cumulative four-row disclosure,
+  bounded reusable shells and viewport media unbinding still cap browser work.
+- Changed the bulk new-exhibition reset from the misleading
+  `Отметить просмотренными` to the secondary `Снять «новое» у всех`: it now
+  clears only new indicators and the header badge, keeps cards and interests in
+  place, gives explicit feedback and offers exact-state undo.
 - Fixed static event detail parity so a one-photo Editorial page keeps the same
   CTA side-motion/docking state machine as a multi-photo page; the optional
   thumbnail rail no longer controls the page-family behavior.

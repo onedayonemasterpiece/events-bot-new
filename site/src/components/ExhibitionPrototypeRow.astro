@@ -144,11 +144,12 @@ const deckMedia = [...media]
     cropLoss: asset.cropLoss,
     objectPosition: asset.objectPosition,
   }));
-// Seven reusable shells are enough for the widest page (up to four full
-// photographs plus three depth cards). Logical media are rebound into these
-// shells as the deck is paged, rather than rendering every source image in
-// every row of a long listing.
-const deckSlotCount = Math.min(7, Math.max(1, deckMedia.length));
+// Four wide photographs can fit before the pile on large desktops. Keep five
+// additional shells so the last one remains an unmistakably neutral depth
+// plane instead of silently truncating the perspective. Logical media are
+// rebound into these shells as the deck is paged rather than rendering every
+// source image in every row of a long listing.
+const deckSlotCount = Math.min(9, Math.max(1, deckMedia.length));
 const detailHref = withBase(`/sobytiya/${event.slug}/`);
 const likeCount = Number(event.likes_count || 0);
 const shareCount = Number(event.shares_count || 0);
@@ -235,7 +236,7 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     </div>
     <p class="ex-row__venue">{event.venue_name || event.city}</p>
     <div class="ex-row__reasons" aria-label="Почему выставка здесь">
-      {item.bucket === 'new' && <span class="ex-reason ex-reason--new">Новое</span>}
+      {item.bucket === 'new' && <span class="ex-reason ex-reason--new" data-new-status>Новое</span>}
       {item.reasons.map((reason) => <span class="ex-reason">{reason}</span>)}
     </div>
     <div class="ex-row__expanded">

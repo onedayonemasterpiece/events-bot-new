@@ -159,7 +159,12 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
               <h2 id="new-heading">Новое для вас</h2>
               <p>Поставьте лайк, отметьте «не интересно» или откройте — и новинка уйдёт из красного счётчика.</p>
             </div>
-            <button type="button" class="ex-mark-seen" data-mark-new-seen>Отметить просмотренными</button>
+            <button
+              type="button"
+              class="ex-mark-seen"
+              data-mark-new-seen
+              aria-label="Снять отметку «Новое» со всех новых выставок. Карточки останутся в списке."
+            >Снять «новое» у всех</button>
           </div>
           <div class="ex-list" data-list-section="new">
             {newItems.map((item, index) => <ExhibitionPrototypeRow item={item as any} rowIndex={index} />)}
@@ -226,7 +231,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       </div>
       <p class="ex-gallery__count" data-gallery-count aria-live="polite"></p>
     </dialog>
-    <p class="ex-live" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    <div class="ex-live" data-live>
+      <span data-live-message role="status" aria-live="polite" aria-atomic="true"></span>
+      <button type="button" data-live-undo hidden>Отменить</button>
+    </div>
   </main>
 </EventLayout>
 
@@ -278,6 +286,8 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-group__heading h2,.ex-tail-callout h2 { margin:0; font-size:clamp(1.75rem,3vw,2.7rem); line-height:1; }
   .ex-group__heading p:not(.ex-group__eyebrow),.ex-tail-callout p:not(.ex-group__eyebrow) { max-width:68ch; margin:.55rem 0 0; color:var(--ex-muted); font-size:.9rem; }
   .ex-mark-seen,.ex-tail-toggle,.ex-tail-more,.ex-empty button { min-height:44px; padding:.55rem .85rem; border:1px solid #52585d; border-radius:5px; background:var(--ex-raised); color:var(--ex-text); font:inherit; font-weight:800; cursor:pointer; }
+  .ex-mark-seen { border-color:transparent; background:transparent; color:var(--ex-muted); font-size:.78rem; font-weight:720; text-decoration:underline; text-decoration-color:rgba(168,173,178,.35); text-underline-offset:.22em; }
+  .ex-mark-seen:hover { border-color:#3c4247; background:#131619; color:var(--ex-text); text-decoration-color:transparent; }
   .ex-legend { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.55rem 1rem; color:var(--ex-muted); font-size:.72rem; }
   .ex-legend span { display:inline-flex; align-items:center; gap:.38rem; }
   .ex-legend i { width:9px; height:9px; border-radius:50%; background:var(--ex-blue); box-shadow:0 0 10px currentColor; }
@@ -526,8 +536,9 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-gallery__error { position:relative; z-index:2; margin:0; color:var(--ex-muted); }
   .ex-gallery__stage button { border:0; background:#111416; color:var(--ex-text); font-size:2rem; cursor:pointer; }
   .ex-gallery__count { margin:0; padding:.7rem; color:var(--ex-muted); text-align:center; }
-  .ex-live { position:fixed; left:50%; bottom:1rem; z-index:80; transform:translateX(-50%); min-width:min(420px,calc(100% - 2rem)); margin:0; padding:.7rem 1rem; border:1px solid #4d5358; border-radius:6px; background:#191c1e; color:var(--ex-text); text-align:center; box-shadow:0 12px 34px rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity 160ms ease; }
-  .ex-live:not(:empty) { opacity:1; }
+  .ex-live { position:fixed; left:50%; bottom:1rem; z-index:80; transform:translateX(-50%); min-width:min(420px,calc(100% - 2rem)); display:flex; align-items:center; justify-content:center; gap:.8rem; margin:0; padding:.7rem 1rem; border:1px solid #4d5358; border-radius:6px; background:#191c1e; color:var(--ex-text); text-align:center; box-shadow:0 12px 34px rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity 160ms ease; }
+  .ex-live.is-visible { opacity:1; }
+  .ex-live [data-live-undo] { min-height:36px; padding:.35rem .65rem; border:1px solid #656c72; border-radius:4px; background:#272b2e; color:var(--ex-text); font:inherit; font-size:.78rem; font-weight:800; cursor:pointer; pointer-events:auto; }
   @keyframes ex-gallery-in { from { opacity:0; transform:translate3d(0,14px,0) scale(.982); } to { opacity:1; transform:translate3d(0,0,0) scale(1); } }
   @keyframes ex-gallery-out { from { opacity:1; transform:translate3d(0,0,0) scale(1); } to { opacity:0; transform:translate3d(0,8px,0) scale(.988); } }
   @keyframes ex-backdrop-in { from { background:rgba(0,0,0,0); backdrop-filter:blur(0); } to { background:rgba(0,0,0,.84); backdrop-filter:blur(5px); } }
@@ -623,6 +634,8 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         .filter((node) => node instanceof HTMLElement);
     };
     const live = root.querySelector('[data-live]');
+    const liveMessage = root.querySelector('[data-live-message]');
+    const liveUndo = root.querySelector('[data-live-undo]');
     const badges = () => Array.from(document.querySelectorAll('[data-header-badge="exhibitions"]'));
     const personalNote = root.querySelector('[data-personal-note]');
     const visibleCount = root.querySelector('[data-visible-count]');
@@ -633,7 +646,6 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const deckManifests = new WeakMap();
     const MAX_STACK_DEPTH = 5;
     const TAIL_BATCH_SIZE = 4;
-    const MAX_TAIL_MEDIA_PER_DECK = 3;
     const PROFILE_MIN_LIKES = 3;
     const DECK_EASE = 'cubic-bezier(.16,1,.3,1)';
     let imageRequestId = 0;
@@ -855,8 +867,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         const frame = slotByIndex.get(placement.index);
         const asset = manifest[placement.index];
         if (!(frame instanceof HTMLElement) || !asset) return;
-        const mediaCandidate = placement.state === 'full' || placement.depth < MAX_STACK_DEPTH;
-        const showImage = mediaCandidate && (!deck.closest('[data-list-section="tail"]') || placementIndex < MAX_TAIL_MEDIA_PER_DECK);
+        const showImage = placement.state === 'full' || placement.depth < MAX_STACK_DEPTH;
         bindFrame(frame,asset,showImage);
         frame.hidden = false;
         frame.dataset.deckState = placement.state;
@@ -1043,7 +1054,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       transition.updateCallbackDone.catch(() => {});
       transition.finished.catch(() => {});
     };
-    let liveTimer;
+    let liveTimer; let liveShowTimer;
     let mode = 'personal';
     let category = 'Все темы';
     const tagsFor = (row) => String(row.dataset.tags || '').split(',').filter(Boolean);
@@ -1065,13 +1076,37 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const writeState = () => { try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch {} };
     writeState();
 
-    const announce = (message) => {
-      if (!(live instanceof HTMLElement)) return;
-      window.clearTimeout(liveTimer);
-      live.textContent = '';
-      window.setTimeout(() => { live.textContent = message; }, 20);
-      liveTimer = window.setTimeout(() => { live.textContent = ''; }, 3200);
+    let liveUndoAction = null;
+    const hideAnnouncement = () => {
+      if (!(live instanceof HTMLElement) || !(liveMessage instanceof HTMLElement)) return;
+      live.classList.remove('is-visible');
+      liveMessage.textContent = '';
+      liveUndoAction = null;
+      if (liveUndo instanceof HTMLButtonElement) liveUndo.hidden = true;
     };
+    const announce = (message,options = {}) => {
+      if (!(live instanceof HTMLElement) || !(liveMessage instanceof HTMLElement)) return;
+      const hasUndo = typeof options.undo === 'function';
+      window.clearTimeout(liveTimer);
+      window.clearTimeout(liveShowTimer);
+      hideAnnouncement();
+      liveShowTimer = window.setTimeout(() => {
+        liveMessage.textContent = message;
+        liveUndoAction = hasUndo ? options.undo : null;
+        if (liveUndo instanceof HTMLButtonElement) liveUndo.hidden = !liveUndoAction;
+        live.classList.add('is-visible');
+        if (options.focusUndo && liveUndoAction && liveUndo instanceof HTMLButtonElement) liveUndo.focus({ preventScroll:true });
+      },20);
+      liveTimer = window.setTimeout(() => {
+        if (live.contains(document.activeElement)) focusRowLink(root.querySelector('[data-list-section="new"] [data-row-focus]'));
+        hideAnnouncement();
+      },hasUndo ? 7000 : 3200);
+    };
+    liveUndo?.addEventListener('click',() => {
+      const undo = liveUndoAction;
+      hideAnnouncement();
+      if (typeof undo === 'function') undo();
+    });
     const hasProfile = () => currentLikes().length >= PROFILE_MIN_LIKES && Array.isArray(state.likedTags) && state.likedTags.length > 0;
     const matchesProfile = (row) => tagsFor(row).some((tag) => state.likedTags.includes(tag)) || state.likes.includes(row.dataset.eventId);
     const profileScore = (row) => tagsFor(row).filter((tag) => state.likedTags.includes(tag)).length;
@@ -1096,6 +1131,16 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       return changed;
     };
     const unseenRelevantNewRows = () => rows().filter((row) => row.dataset.new === 'true' && !state.seenNew.includes(row.dataset.eventId) && !state.negative.includes(row.dataset.eventId));
+    const syncNewState = () => {
+      rows().filter((row) => row.dataset.new === 'true').forEach((row) => {
+        const seen = state.seenNew.includes(row.dataset.eventId);
+        row.classList.toggle('is-seen-new',seen);
+        const status = row.querySelector('[data-new-status]');
+        if (status instanceof HTMLElement) status.hidden = seen;
+      });
+      const bulk = root.querySelector('[data-mark-new-seen]');
+      if (bulk instanceof HTMLButtonElement) bulk.hidden = unseenRelevantNewRows().length === 0;
+    };
 
     const updateBadge = () => {
       const count = unseenRelevantNewRows().length;
@@ -1113,6 +1158,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
           badgeCount.textContent = 'загляните';
         } else badge.hidden = true;
       });
+      syncNewState();
     };
     const markSeen = (row) => {
       if (!(row instanceof HTMLElement) || row.dataset.new !== 'true') return;
@@ -1333,8 +1379,24 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       }
       if (target.closest('[data-empty-all]')) { switchMode('all'); return; }
       if (target.closest('[data-mark-new-seen]')) {
-        rows().filter((row) => row.dataset.new === 'true').forEach(markSeen);
-        announce('Новинки отмечены просмотренными. Красный счётчик очищен.');
+        const previousSeenNew = [...state.seenNew];
+        const previousVisited = state.hasVisitedExhibitions;
+        state.seenNew = [...new Set([...state.seenNew,...rows().filter((row) => row.dataset.new === 'true').map((row) => row.dataset.eventId)])];
+        state.hasVisitedExhibitions = true;
+        writeState();
+        updateBadge();
+        announce('Отметки «новое» сняты. Карточки остались в ленте.',{
+          focusUndo:true,
+          undo:() => {
+            state.seenNew = previousSeenNew;
+            state.hasVisitedExhibitions = previousVisited;
+            writeState();
+            updateBadge();
+            const bulk = root.querySelector('[data-mark-new-seen]');
+            if (bulk instanceof HTMLElement) bulk.focus({ preventScroll:true });
+            announce('Отметки «новое» восстановлены.');
+          },
+        });
         return;
       }
       const row = target.closest('[data-exhibition-row]');
