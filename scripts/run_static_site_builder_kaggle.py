@@ -43,6 +43,7 @@ SCRATCH_ROOT = static_site_scratch_root(ARTIFACT_ROOT)
 LOCK_PATH = ARTIFACT_ROOT / 'static-site-kaggle.lock'
 ADOPT_REMOTE_LIVE_EXIT = 75
 ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
+BUILD_ID_RE = re.compile(r'(?:preview|production)-[A-Za-z0-9][A-Za-z0-9._-]{0,191}')
 
 
 def _env_nonnegative_int(name: str, default: int) -> int:
@@ -79,6 +80,27 @@ def require_static_site_storage_ready() -> None:
             f"status={work.get('status')} "
             f"error={work.get('tempfile_error') or work.get('error') or 'none'}"
         )
+
+
+def prepare_output_directory(artifact_root: Path, build_id: str) -> Path:
+    """Create one exact runner output directory without path/symlink escape."""
+
+    clean_build_id = str(build_id or '').strip()
+    if not BUILD_ID_RE.fullmatch(clean_build_id):
+        raise ValueError('static-site output build id is invalid')
+    root = Path(artifact_root).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    candidate = root / f'output-{clean_build_id}'
+    if candidate.parent != root:
+        raise ValueError('static-site output path escaped artifact root')
+    if candidate.is_symlink():
+        raise RuntimeError('static-site output symlink is refused')
+    if candidate.exists():
+        if not candidate.is_dir():
+            raise RuntimeError('static-site output path is not a directory')
+        shutil.rmtree(candidate)
+    candidate.mkdir(mode=0o700)
+    return candidate
 
 
 def sha256_file(path: Path) -> str:
@@ -645,9 +667,7 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
         return ADOPT_REMOTE_LIVE_EXIT
     if raw != 'COMPLETE':
         return ADOPT_REMOTE_UNAVAILABLE_EXIT
-    out_dir = ARTIFACT_ROOT / f'output-{args.build_id}'
-    shutil.rmtree(out_dir, ignore_errors=True)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = prepare_output_directory(ARTIFACT_ROOT, args.build_id)
     files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
     print(f'[static-site-kaggle] adopted and downloaded {len(files)} files to {out_dir}', flush=True)
     validated = validate_downloaded_result(out_dir, args)
@@ -737,6 +757,9 @@ def main() -> int:
     args.current_date = clock.effective_date
     args.current_datetime = clock.current_datetime
     args.build_clock = asdict(clock)
+    args.build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
+    if not BUILD_ID_RE.fullmatch(args.build_id):
+        raise SystemExit('--build-id must be one bounded preview-* or production-* identity')
 
     if args.profile == 'production-candidate':
         if args.catalog_mode != 'full' or not args.export_in_kaggle:
@@ -747,7 +770,7 @@ def main() -> int:
             raise SystemExit('production-candidate requires --run-id')
         if not re.fullmatch(r'[0-9a-f]{64}', args.input_fingerprint or ''):
             raise SystemExit('production-candidate requires --input-fingerprint SHA-256')
-        if not args.build_id or not re.fullmatch(r'production-[A-Za-z0-9][A-Za-z0-9._-]*', args.build_id):
+        if not re.fullmatch(r'production-[A-Za-z0-9][A-Za-z0-9._-]{0,191}', args.build_id):
             raise SystemExit('production-candidate requires a production-* --build-id')
         if args.candidate_token and not re.fullmatch(r'[A-Za-z0-9_-]{43}', args.candidate_token):
             raise SystemExit('--candidate-token must be one 256-bit base64url value')
@@ -825,9 +848,7 @@ def main() -> int:
                     print(f"[static-site-kaggle] status={raw} raw={status}", flush=True)
                     if raw == 'COMPLETE':
                         if args.download_output:
-                            out_dir = ARTIFACT_ROOT / f'output-{build_id}'
-                            shutil.rmtree(out_dir, ignore_errors=True)
-                            out_dir.mkdir(parents=True, exist_ok=True)
+                            out_dir = prepare_output_directory(ARTIFACT_ROOT, build_id)
                             files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
                             print(f"[static-site-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
                             validated = validate_downloaded_result(out_dir, args)

@@ -237,6 +237,12 @@ file create, write, `fsync` and remove probe before a remote push. A writable
 `/data` therefore cannot mask an exhausted root overlay that makes Python
 `tempfile` unusable.
 
+Runner build identities are bounded to `preview-*` or `production-*` before
+constructing any filesystem path. Output creation uses one assertion-safe
+helper that rejects traversal, a non-directory target and any pre-existing
+symlink before download/adoption; it never calls permissive `rmtree(...,
+ignore_errors=True)` on a derived path.
+
 After a durable terminal receipt, the runner prunes only recognized
 `output-production-*` trees below the configured artifact root. Default
 terminal retention is zero because counts/hashes needed for diagnostics are
@@ -248,8 +254,9 @@ success artifacts.
 
 Production health reports persistent and scratch disk separately. A critical
 or unwritable `/tmp` keeps `/healthz` not ready and blocks the static preflight
-until cleanup or deploy restores it; it must not be bypassed by sending another
-Kaggle attempt.
+even during startup grace. The coalesced request is deferred without incrementing
+its finite attempt counter until cleanup or deploy restores capacity; it must
+not be bypassed by sending another Kaggle attempt.
 
 ### Smart Update debounce and historical 2026-07-15 data evidence
 

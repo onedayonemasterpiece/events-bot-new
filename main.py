@@ -23160,7 +23160,13 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     # to remove only recognized terminal outputs not named by the exact active
     # handoff in durable state.
     await _prune_static_site_terminal_outputs(db)
-    await asyncio.to_thread(_static_site_storage_preflight)
+    try:
+        await asyncio.to_thread(_static_site_storage_preflight)
+    except StaticSiteRetryableError as exc:
+        # Capacity is an environmental gate, not a failed immutable input.
+        # Keep the coalesced request pending without spending its finite build
+        # attempt budget; the next healthy probe can run the same payload.
+        raise StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}") from exc
     force_rebuild = bool(request_payload.get("force_rebuild"))
     if force_rebuild and request_payload.get("trigger") != "operator_request":
         raise StaticSitePermanentError("force_rebuild_requires_operator_request")

@@ -11,18 +11,24 @@
   exact encoded identity, provider results are discarded on mid-call pixel
   drift, and per-event raw-SHA ownership is conflict-safe during retry/merge.
 - Added the exact reviewed keyboard-navigation V7 router to every desktop event
-  route in immutable noindex secret candidates: the lab and primary template
-  now share one lifecycle-managed implementation, without autofocus, mobile or
-  production-root activation, and without a remote shortcut collector.
+  route in immutable noindex secret candidates: frozen prototype pages and the
+  primary template share one lifecycle-managed implementation, while no lab
+  route ships in production artifacts. Teardown restores pre-existing ARIA/title
+  attributes, slow consent remains transition-owned, and there is no autofocus,
+  mobile/root activation or remote shortcut collector.
 - Fixed related/broad desktop discovery parity so both zones clone the same
-  canonical `EventCard` markup and keep feedback, share, rerank and keyboard
-  focus semantics instead of maintaining look-alike controllers.
+  canonical `EventCard` markup and run inside the same discovery controller,
+  keeping feedback attribution, share, rerank and keyboard focus semantics.
+  Desktop-only broad hydration now retries after an in-flight mobile resize.
 - Fixed recurring Fly root-overlay exhaustion around static builds: builder
   artifacts and working scratch now live under bounded persistent storage,
   recognized successful outputs are removed after durable receipts, and
   readiness/preflight independently prove `/data` capacity and real `/tmp`
-  tempfile writability. Fully published video-render trees are likewise
-  removed only after assertion-validated terminal persistence.
+  tempfile writability; capacity defers without consuming the finite build
+  attempt budget, and runner output paths reject traversal and symlinks. Fully
+  published video-render trees are removed only after assertion-validated
+  terminal persistence, with startup reconciliation; publish-only and log
+  download trees are also bounded and cleaned.
 - Fixed static event detail parity so a one-photo Editorial page keeps the same
   CTA side-motion/docking state machine as a multi-photo page; the optional
   thumbnail rail no longer controls the page-family behavior.

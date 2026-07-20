@@ -299,6 +299,54 @@ def test_runner_adopts_exact_complete_output_without_push(tmp_path: Path) -> Non
     assert Client.pushes == 0
 
 
+def test_runner_output_directory_rejects_traversal_and_symlinks(tmp_path: Path) -> None:
+    from scripts.run_static_site_builder_kaggle import prepare_output_directory
+
+    with pytest.raises(ValueError, match="build id"):
+        prepare_output_directory(tmp_path, "preview-../../operator")
+    outside = tmp_path / "operator"
+    outside.mkdir()
+    link = tmp_path / "output-preview-linked"
+    link.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(RuntimeError, match="symlink"):
+        prepare_output_directory(tmp_path, "preview-linked")
+    assert outside.is_dir()
+
+
+def test_runner_storage_preflight_checks_root_and_durable_scratch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import scripts.run_static_site_builder_kaggle as runner
+
+    scratch = tmp_path / "static-scratch"
+    probes: list[Path] = []
+    monkeypatch.setattr(runner, "SCRATCH_ROOT", scratch)
+    monkeypatch.setattr(
+        runner,
+        "runtime_scratch_health",
+        lambda: {"status": "ok", "tempfile_status": "ok"},
+    )
+    monkeypatch.setattr(
+        runner,
+        "writable_disk_health",
+        lambda path, **_kwargs: probes.append(Path(path))
+        or {"status": "ok", "tempfile_status": "ok"},
+    )
+
+    runner.require_static_site_storage_ready()
+
+    assert scratch.is_dir()
+    assert probes == [scratch]
+
+
+def test_static_site_storage_capacity_defers_without_consuming_attempt_budget() -> None:
+    import main
+
+    source = Path(main.__file__).read_text(encoding="utf-8")
+    assert 'StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}")' in source
+
+
 def test_runner_closes_status_database_after_config_creation() -> None:
     import asyncio
     from scripts.run_static_site_builder_kaggle import _create_status_config_and_close

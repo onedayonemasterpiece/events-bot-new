@@ -13,8 +13,10 @@ import templateContract from '../data/eventTemplateContract.json';
 import {
   displayDate,
   displayDateTime,
+  eventDetailRelatedAlgorithmId,
   eventHref,
   siteHomeHref,
+  withBase,
 } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
@@ -589,7 +591,17 @@ const descriptionHtml = (event.description_html || '')
         <p class="eyebrow">Продолжить выбор</p>
         <h2 id={`related-${event.id}`}>Смотрите дальше</h2>
       </header>
-      <div class="cards-grid cards-grid--immersive desktop-clean-related__grid" data-lab-row-normalize>
+      <div
+        class="cards-grid cards-grid--immersive desktop-clean-related__grid"
+        data-lab-row-normalize
+        data-discovery-feed
+        data-surface="event_detail_related"
+        data-layout-mode="module"
+        data-algorithm-id={eventDetailRelatedAlgorithmId()}
+        data-current-event-id={event.id}
+        data-discovery-src={withBase(`/data/discovery/${event.id}.json`)}
+        data-feed-card-variant="split-actions"
+      >
         {relatedForRender.map(({ item, layout }) => <EventCard event={item} variant="split-actions" desktopRelatedCrop desktopRelatedLayout={layout} />)}
       </div>
     </div>

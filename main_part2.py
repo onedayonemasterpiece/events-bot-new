@@ -9291,7 +9291,7 @@ async def _runtime_health_report(
     if ready and disk_health.get("status") == "critical":
         issues.append("disk:critical_free_space")
     scratch_health = runtime_scratch_health()
-    if ready and (
+    if (
         scratch_health.get("status") not in {"ok", "warning"}
         or scratch_health.get("tempfile_status") != "ok"
     ):

@@ -554,9 +554,31 @@ async page => {
   report.horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(report.horizontalOverflow <= 1, "Prototype must not add horizontal overflow");
   const likeBeforeDestroy = await page.locator(`${surfaceSelector} [data-feedback-action=like]`).getAttribute("aria-pressed");
+  const originalPrimaryTitle = await page.locator(`${surfaceSelector} .desktop-prototype__primary-action`).evaluate((node) => node.hasAttribute("data-desktop-phone-copy") ? "Показать телефон" : null);
   await page.evaluate(() => window.KenigEventsKeyboardNavigation?.destroy?.());
   assert(await page.locator(surfaceSelector).count() === 0, "destroy must remove the keyboard surface contract");
   assert(await page.locator("[data-event-content-copy-actions]").count() === 0, "destroy must remove injected copy controls");
+  const teardown = await page.evaluate(() => {
+    const panel = document.querySelector("[data-desktop-action-panel]");
+    const primary = panel?.querySelector(".desktop-prototype__primary-action");
+    const compactCalendar = panel?.querySelector("[data-desktop-action-row] [data-calendar-action]");
+    const relatedCalendars = Array.from(document.querySelectorAll("[data-related-start] [data-calendar-action]"));
+    return {
+      rootScope: document.querySelector("[data-desktop-clean-event]")?.hasAttribute("data-closed-hero-keyboard-scope"),
+      panelTabindex: panel?.getAttribute("tabindex"),
+      panelShortcuts: panel?.getAttribute("aria-keyshortcuts"),
+      panelEventId: panel?.getAttribute("data-event-id"),
+      primaryTitle: primary?.getAttribute("title"),
+      primaryShortcuts: primary?.getAttribute("aria-keyshortcuts"),
+      compactCalendarTitle: compactCalendar?.getAttribute("title") ?? null,
+      compactCalendarShortcuts: compactCalendar?.getAttribute("aria-keyshortcuts") ?? null,
+      relatedDecorations: relatedCalendars.filter((node) => node.hasAttribute("aria-keyshortcuts") || node.hasAttribute("title") || node.hasAttribute("data-keyboard-shortcut-target")).length,
+    };
+  });
+  assert(teardown.rootScope === false && teardown.panelTabindex === null && teardown.panelShortcuts === null && teardown.panelEventId === null, `destroy must restore the original surface attributes: ${JSON.stringify(teardown)}`);
+  assert(teardown.primaryTitle === originalPrimaryTitle && teardown.primaryShortcuts === null, `destroy must restore the original primary CTA attributes: ${JSON.stringify(teardown)}`);
+  assert(teardown.compactCalendarTitle === "В календарь" && teardown.compactCalendarShortcuts === null, `destroy must preserve the compact calendar's authored title: ${JSON.stringify(teardown)}`);
+  assert(teardown.relatedDecorations === 0, `destroy must remove router-only related-card attributes: ${JSON.stringify(teardown)}`);
   await page.keyboard.press("l");
   assert(await page.locator("[data-desktop-action-panel] [data-feedback-action=like]").getAttribute("aria-pressed") === likeBeforeDestroy, "destroy must remove keyboard listeners");
   report.lifecycleDestroy = "pass";

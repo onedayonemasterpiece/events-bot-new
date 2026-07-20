@@ -98,3 +98,10 @@ active/recoverable handoff. Unknown directories, symlinks, paths outside that
 root and failed/nonterminal output are manual incident decisions. Default
 successful-output retention is zero; historical counts/times come from the
 build history/ledger/receipt rather than from keeping duplicate archives.
+
+Video cleanup follows the same assertion boundary. Published terminal render
+trees use exact `videoannounce-<session>` names plus durable DB evidence and are
+retried by startup reconciliation; active/ledger-live, failed, blocked and
+pending-main sessions stay intact. Temporary publish-only source/result and log
+download families are exact-name checked and removed in their own `finally`
+paths. Symlinks and unknown directories are never followed or bulk-deleted.

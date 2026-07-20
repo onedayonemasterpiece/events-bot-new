@@ -89,15 +89,23 @@ the production root was not changed.
 
 ## Immediate Mitigation
 
-- pending: assertion-gated cleanup or clean deploy after preserving bounded metadata;
+- 2026-07-19: assertion-gated deletion removed only fully published sessions
+  `920`/`921`; failed `919`/`922` were preserved. Root scratch recovered and a
+  real tempfile fsync probe, `/data` SQLite quick check and `/healthz` passed
+  (local evidence: `artifacts/codex/keyboard-navigation-production-20260719/root-overlay-cleanup-20260719.json`);
 - do not enqueue another static build until root/tempfile preflight passes;
 - preserve failed video sessions `919` and `922` until explicit recovery/supersede decisions.
 
 ## Corrective Actions
 
-- pending: bound/delete terminal static runner outputs after durable receipt/history adoption;
-- pending: delete terminal published video frame trees and retain only a bounded recovery bundle where recovery is actionable;
-- pending: add root-scratch capacity/tempfile checks to health and large-download preflight.
+- implemented on the integration branch, deployment pending: bound/delete
+  terminal static runner outputs after durable receipt/history adoption, reject
+  output symlink/traversal and defer capacity without consuming retry budget;
+- implemented on the integration branch, deployment pending: delete terminal
+  published video frame trees, publish-only/log side trees and reconcile a
+  failed cleanup on startup while preserving actionable recovery;
+- implemented on the integration branch, deployment pending: root-scratch
+  capacity/tempfile checks in health and large-download preflight.
 
 ## Follow-up Actions
 

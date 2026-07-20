@@ -54,7 +54,7 @@ lanes:
     forbidden_files: [site/src/layouts/EventLayout.astro, site/src/components/PersonalFeedSlot.astro, docs, CHANGELOG.md]
     expected_output: committed exact-source production extraction plus targeted tests
     verification_scope: targeted
-    status: spawned
+    status: implemented_and_review_hardened
   - id: R02-cards
     role: worker
     requirement_ids: [R02]
@@ -72,7 +72,7 @@ lanes:
     forbidden_files: [site/src/components/KeyboardEventNavigationPrototype.astro, site/src/pages/sobytiya/[slug].astro, docs, CHANGELOG.md]
     expected_output: committed controller parity fix and targeted tests
     verification_scope: targeted
-    status: spawned
+    status: implemented_and_review_hardened
   - id: R10-static-disk
     role: worker
     requirement_ids: [R10]
@@ -85,7 +85,7 @@ lanes:
     forbidden_files: [site/src, docs, CHANGELOG.md, video_announce/poller.py]
     expected_output: bounded recognized-only artifact cleanup plus dual-disk/tempfile readiness
     verification_scope: targeted
-    status: planned
+    status: implemented_and_review_hardened
   - id: R11-video-cleanup
     role: worker
     requirement_ids: [R11]
@@ -98,7 +98,7 @@ lanes:
     forbidden_files: [site/src, docs, CHANGELOG.md, main.py, static_site_release.py]
     expected_output: assertion-safe terminal cleanup with recovery preservation
     verification_scope: targeted
-    status: planned
+    status: implemented_and_review_hardened
   - id: integration-ops
     role: merge_reviewer
     requirement_ids: [R05, R06, R07, R08, R09]

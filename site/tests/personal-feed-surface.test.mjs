@@ -234,11 +234,12 @@ test('desktop-only continuation never fetches, renders or records on mobile and 
 
   assert.match(slot, /data-personal-feed-desktop-only=\{isEventDetail \? 'true' : undefined\}/u);
   assert.match(layout, /function personalFeedSectionCanHydrate\(section\)/u);
-  assert.match(layout, /if \(!section \|\| personalFeedReached\.has\(section\) \|\| !personalFeedSectionCanHydrate\(section\)\) return/u);
+  assert.match(layout, /if \(!section \|\| personalFeedReached\.has\(section\) \|\| personalFeedHydrationInFlight\.has\(section\) \|\| !personalFeedSectionCanHydrate\(section\)\) return/u);
   assert.match(layout, /const candidates = \(sections[\s\S]*\.filter\(personalFeedSectionCanHydrate\)/u, 'mobile sections are filtered before manifest fetch');
   assert.match(layout, /if \(personalFeedSectionCanHydrate\(section\)\) renderPersonalFeedSection\(section, manifest\)/u, 'a resize during fetch cannot render unseen mobile cards');
   assert.match(layout, /if \(isEventDetail && rendered > 0\) recordRecentContinuation/u, 'only rendered desktop cards enter the recent ring');
   assert.match(layout, /personalFeedDesktopMedia\?\.addEventListener\?\.\('change'/u);
   assert.match(layout, /startPersonalFeedHydration\(section, \{ eager: true \}\)/u);
-  assert.match(layout, /personalFeedReached\.add\(section\)/u, 'the WeakSet makes desktop hydration one-shot');
+  assert.match(layout, /if \(personalFeedSectionCanHydrate\(section\)\) personalFeedReached\.add\(section\)/u, 'only a still-desktop completion makes hydration one-shot');
+  assert.match(layout, /personalFeedHydrationInFlight\.delete\(section\)/u, 'a mobile transition during fetch allows the next desktop transition to retry');
 });

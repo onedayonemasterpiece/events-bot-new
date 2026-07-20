@@ -9,6 +9,7 @@ export function initKeyboardEventNavigation(options = {}) {
   const observers = new Set();
   const timeouts = new Set();
   const frames = new Set();
+  const attributeSnapshots = new Map();
   let destroyed = false;
   let activated = false;
   const observe = (callback) => {
@@ -28,6 +29,32 @@ export function initKeyboardEventNavigation(options = {}) {
     const id = win.requestAnimationFrame((time) => { frames.delete(id); callback(time); });
     frames.add(id);
     return id;
+  };
+  const rememberAttribute = (element, name) => {
+    if (!(element instanceof win.Element)) return;
+    let snapshot = attributeSnapshots.get(element);
+    if (!snapshot) {
+      snapshot = new Map();
+      attributeSnapshots.set(element, snapshot);
+    }
+    if (!snapshot.has(name)) {
+      snapshot.set(name, element.hasAttribute(name) ? element.getAttribute(name) : null);
+    }
+  };
+  const setManagedAttribute = (element, name, value = '') => {
+    if (!(element instanceof win.Element)) return;
+    rememberAttribute(element, name);
+    element.setAttribute(name, String(value));
+  };
+  const restoreManagedAttributes = () => {
+    attributeSnapshots.forEach((snapshot, element) => {
+      if (!(element instanceof win.Element)) return;
+      snapshot.forEach((value, name) => {
+        if (value === null) element.removeAttribute(name);
+        else element.setAttribute(name, value);
+      });
+    });
+    attributeSnapshots.clear();
   };
   const meaningfulCodes = new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter','KeyL','KeyK','KeyS','KeyC','KeyP','Home','End']);
   const activateForIntent = (event) => {
@@ -63,19 +90,19 @@ export function initKeyboardEventNavigation(options = {}) {
   const desktopKeyboard = win.matchMedia('(min-width:1024px)');
 
   if (root instanceof win.HTMLElement && surface instanceof win.HTMLElement && desktopKeyboard.matches) {
-    root.setAttribute('data-closed-hero-keyboard-scope', '');
-    surface.tabIndex = 0;
-    surface.setAttribute('data-keyboard-event-surface', '');
-    surface.setAttribute('aria-describedby', 'keyboard-prototype-instructions');
-    surface.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowUp ArrowDown Enter L K S C P');
+    setManagedAttribute(root, 'data-closed-hero-keyboard-scope', '');
+    setManagedAttribute(surface, 'tabindex', '0');
+    setManagedAttribute(surface, 'data-keyboard-event-surface', '');
+    setManagedAttribute(surface, 'aria-describedby', 'keyboard-prototype-instructions');
+    setManagedAttribute(surface, 'aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowUp ArrowDown Enter L K S C P');
 
     const primary = surface.querySelector('.desktop-prototype__primary-action:not(.is-disabled)');
     const currentLike = surface.querySelector('[data-feedback-action="like"]');
     if (currentLike instanceof win.HTMLElement) {
       // The shared feedback renderer reads identity from its scope. Keep this
       // one-page prototype self-contained while making consent replay visible.
-      surface.dataset.eventId = currentLike.dataset.eventId || '';
-      surface.dataset.eventTitle = currentLike.dataset.eventTitle || '';
+      setManagedAttribute(surface, 'data-event-id', currentLike.dataset.eventId || '');
+      setManagedAttribute(surface, 'data-event-title', currentLike.dataset.eventTitle || '');
     }
     const shortcutFactsKey = 'ke_keyboard_shortcut_daily_v2';
     const shortcutFactVersion = 2;
@@ -136,7 +163,7 @@ export function initKeyboardEventNavigation(options = {}) {
         badge.hidden = Boolean(action && shortcutIsMastered(action));
       });
       const coreActions = ['primary_cta', 'calendar_add', 'copy_event', 'like_toggle'];
-      surface.dataset.keyboardShortcutHints = coreActions.every(shortcutIsMastered) ? 'hidden' : 'visible';
+      setManagedAttribute(surface, 'data-keyboard-shortcut-hints', coreActions.every(shortcutIsMastered) ? 'hidden' : 'visible');
     };
     const recordShortcutUse = (action) => {
       if (!shortcutActionAllowlist.has(action)) return false;
@@ -179,9 +206,9 @@ export function initKeyboardEventNavigation(options = {}) {
     ];
     shortcutTargets.forEach(([target, key, title, action]) => {
       if (!(target instanceof win.HTMLElement) || target.querySelector('[data-keyboard-shortcut-badge]')) return;
-      target.setAttribute('data-keyboard-shortcut-target', '');
-      target.setAttribute('aria-keyshortcuts', key);
-      target.setAttribute('title', title);
+      setManagedAttribute(target, 'data-keyboard-shortcut-target', '');
+      setManagedAttribute(target, 'aria-keyshortcuts', key);
+      setManagedAttribute(target, 'title', title);
       const badge = doc.createElement('span');
       badge.className = 'keyboard-shortcut-badge';
       badge.dataset.keyboardShortcutBadge = '';
@@ -205,8 +232,8 @@ export function initKeyboardEventNavigation(options = {}) {
         [footerTextAction, 'S', 'Скопировать текст и ссылку сервиса — клавиша S'],
       ].forEach(([target, key, title]) => {
         if (!(target instanceof win.HTMLElement)) return;
-        target.setAttribute('title', title);
-        target.setAttribute('aria-keyshortcuts', key);
+        setManagedAttribute(target, 'title', title);
+        setManagedAttribute(target, 'aria-keyshortcuts', key);
         const label = target.querySelector('span:last-of-type');
         if (!(label instanceof win.HTMLElement) || target.querySelector('[data-service-shortcut-badge]')) return;
         const keycap = doc.createElement('kbd');
@@ -240,8 +267,8 @@ export function initKeyboardEventNavigation(options = {}) {
     // never retain it as the identity of the continuation zone.
     const continuationSlot = () => continuationSection?.querySelector('[data-personal-feed-slot]');
     if (continuationSection instanceof win.HTMLElement) {
-      continuationSection.tabIndex = -1;
-      continuationSection.setAttribute('aria-describedby', 'keyboard-prototype-instructions');
+      setManagedAttribute(continuationSection, 'tabindex', '-1');
+      setManagedAttribute(continuationSection, 'aria-describedby', 'keyboard-prototype-instructions');
     }
     const zoneCards = (zone) => {
       const scope = zone === 'related' ? relatedSection : continuationSlot();
@@ -290,8 +317,8 @@ export function initKeyboardEventNavigation(options = {}) {
         normalizeManagedCardLinks(card);
         const calendar = card.querySelector('[data-calendar-action]:not([hidden])');
         if (!(calendar instanceof win.HTMLElement)) return;
-        calendar.setAttribute('aria-keyshortcuts', 'K');
-        calendar.setAttribute('title', 'Добавить выбранное событие в календарь — клавиша K');
+        setManagedAttribute(calendar, 'aria-keyshortcuts', 'K');
+        setManagedAttribute(calendar, 'title', 'Добавить выбранное событие в календарь — клавиша K');
         if (calendar.querySelector('[data-related-calendar-shortcut]')) return;
         const keycap = doc.createElement('kbd');
         keycap.className = 'related-calendar-shortcut';
@@ -784,12 +811,6 @@ export function initKeyboardEventNavigation(options = {}) {
       if (shortcutAction === 'like_toggle') pendingConsentOwner = { owner, opener: action };
       action.click();
       captureVisibleConsent();
-      if (shortcutAction === 'like_toggle') {
-        scheduleTimeout(() => {
-          captureVisibleConsent();
-          if (pendingConsentOwner?.opener === action) pendingConsentOwner = null;
-        }, 2000);
-      }
       if (shortcutAction === 'calendar_add' && action.dataset.calendarState === 'added') {
         recordShortcutUse(shortcutAction);
         delete action.dataset.keyboardShortcutPending;
@@ -806,6 +827,7 @@ export function initKeyboardEventNavigation(options = {}) {
           recordShortcutUse(pending);
           delete action.dataset.keyboardShortcutPending;
         } else if (pending === 'like_toggle' && mutation.attributeName === 'aria-pressed') {
+          if (pendingConsentOwner?.opener === action) pendingConsentOwner = null;
           recordShortcutUse(pending);
           delete action.dataset.keyboardShortcutPending;
         }
@@ -1186,6 +1208,7 @@ export function initKeyboardEventNavigation(options = {}) {
         captureLogicalOwner(active);
         bodyRecoveryArmed = true;
       } else if (active !== doc.body && active !== doc.documentElement) {
+        if (!doc.querySelector('[data-personalization-consent].is-visible')) pendingConsentOwner = null;
         bodyRecoveryArmed = false;
       }
     });
@@ -1199,6 +1222,7 @@ export function initKeyboardEventNavigation(options = {}) {
         captureLogicalOwner(pointerOwner);
         bodyRecoveryArmed = true;
       } else {
+        pendingConsentOwner = null;
         bodyRecoveryArmed = false;
       }
     }, { passive: true });
@@ -1207,6 +1231,7 @@ export function initKeyboardEventNavigation(options = {}) {
       pressedArrows.clear();
       suppressPageDownUntilArrowDownRelease = false;
       bodyRecoveryArmed = false;
+      pendingConsentOwner = null;
     });
     listen(doc, 'visibilitychange', () => {
       if (!doc.hidden) return;
@@ -1214,6 +1239,7 @@ export function initKeyboardEventNavigation(options = {}) {
       pressedArrows.clear();
       suppressPageDownUntilArrowDownRelease = false;
       bodyRecoveryArmed = false;
+      pendingConsentOwner = null;
     });
 
     listen(startButton, 'click', () => { activated = true; focusFirstCard(); });
@@ -1230,23 +1256,9 @@ export function initKeyboardEventNavigation(options = {}) {
     timeouts.clear();
     frames.forEach((id) => win.cancelAnimationFrame(id));
     frames.clear();
-    root?.removeAttribute('data-closed-hero-keyboard-scope');
-    if (surface instanceof win.HTMLElement) {
-      surface.removeAttribute('data-keyboard-event-surface');
-      surface.removeAttribute('aria-describedby');
-      surface.removeAttribute('aria-keyshortcuts');
-      surface.removeAttribute('data-keyboard-shortcut-hints');
-      surface.removeAttribute('tabindex');
-    }
     doc.querySelectorAll('[data-keyboard-shortcut-badge],[data-related-calendar-shortcut],[data-service-shortcut-badge],[data-event-content-copy-actions]').forEach((node) => node.remove());
-    doc.querySelectorAll('[data-keyboard-shortcut-target]').forEach((node) => {
-      node.removeAttribute('data-keyboard-shortcut-target');
-      node.removeAttribute('aria-keyshortcuts');
-      node.removeAttribute('title');
-    });
-    const continuation = doc.querySelector('[data-personal-feed-section][data-listing-context="event-detail"]');
-    continuation?.removeAttribute('tabindex');
-    continuation?.removeAttribute('aria-describedby');
+    doc.querySelectorAll('[data-keyboard-shortcut-pending]').forEach((node) => node.removeAttribute('data-keyboard-shortcut-pending'));
+    restoreManagedAttributes();
   };
   return { destroy, get active() { return activated; } };
 }

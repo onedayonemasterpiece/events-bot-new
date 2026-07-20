@@ -12,6 +12,24 @@ test('production route mounts reviewed keyboard navigation only on secret candid
   assert.doesNotMatch(route, /KeyboardEventNavigationPrototype/u);
 });
 
+test('prototype-only lab route is not shipped by either production artifact profile', async () => {
+  await assert.rejects(read('src/pages/lab/keyboard-event-navigation/index.astro'), /ENOENT/u);
+  const productionCheck = await read('scripts/check-production.mjs');
+  const secretCheck = await read('scripts/check-secret-candidate.mjs');
+  assert.match(productionCheck, /preview\/fixture route leaked/u);
+  assert.match(secretCheck, /QA route leaked/u);
+  assert.doesNotMatch(secretCheck, /keyboard-event-navigation/u);
+});
+
+test('desktop similar cards use the same discovery controller and broad hydration survives a resize race', async () => {
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const layout = await read('src/layouts/EventLayout.astro');
+  assert.match(desktop, /data-related-start[\s\S]*data-discovery-feed[\s\S]*data-discovery-src/u);
+  assert.match(layout, /personalFeedHydrationInFlight = new WeakSet\(\)/u);
+  assert.match(layout, /if \(personalFeedSectionCanHydrate\(section\)\) personalFeedReached\.add\(section\)/u);
+  assert.doesNotMatch(layout, /personalFeedReached\.add\(section\);\s*\n\s*hydratePersonalFeedSlots/u);
+});
+
 test('prototype and production share the exact extracted V7 router', async () => {
   const prototype = await read('src/components/KeyboardEventNavigationPrototype.astro');
   const production = await read('src/components/KeyboardEventNavigation.astro');
@@ -41,6 +59,10 @@ test('router has reversible lifecycle and disarms lost-focus provenance on page 
   assert.match(router, /pendingConsentOwner = \{ owner, opener: action \}/u);
   assert.match(router, /captureVisibleConsent\(\);\s*\n\s*\}\)\.observe\(doc\.body/u,
     'production consent may appear asynchronously after the real feedback controller yields');
+  assert.doesNotMatch(router, /pendingConsentOwner\?\.opener === action\) pendingConsentOwner = null;\s*\n\s*\}, 2000/u,
+    'consent ownership must be transition-driven, not discarded by a fixed timeout');
+  assert.match(router, /const attributeSnapshots = new Map\(\)/u);
+  assert.match(router, /restoreManagedAttributes\(\)/u);
   assert.match(router, /return \{ destroy, get active\(\)/u);
 });
 

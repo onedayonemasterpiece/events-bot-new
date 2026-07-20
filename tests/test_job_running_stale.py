@@ -380,6 +380,12 @@ async def test_runtime_health_fails_for_unwritable_scratch_and_recovers(
         assert "scratch_disk:critical_or_unwritable" in payload["issues"]
         assert payload["scratch_disk"]["tempfile_error"] == "OSError"
 
+        app["runtime_health"]["ready"] = False
+        status, payload = await main._runtime_health_report(app, db, DummyBot())
+        assert status == 503
+        assert "scratch_disk:critical_or_unwritable" in payload["issues"]
+        app["runtime_health"]["ready"] = True
+
         scratch.update({"status": "ok", "tempfile_status": "ok"})
         scratch.pop("tempfile_error")
         status, payload = await main._runtime_health_report(app, db, DummyBot())

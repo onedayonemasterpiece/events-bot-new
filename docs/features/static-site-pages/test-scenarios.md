@@ -126,7 +126,9 @@
   explicit zones; Enter/L/K/S and rerender focus restoration behave identically
   without erasing feedback state or rotating unrelated cards.
 - **ADD-KEY-06 — Lifecycle/privacy.** `destroy()` aborts listeners, disconnects
-  observers and clears timers/RAF/latches. Daily local facts are boolean,
+  observers, clears timers/RAF/latches and restores every pre-existing
+  title/ARIA/tabindex attribute. Slow async consent is transition-owned rather
+  than dropped after a timer. Daily local facts are boolean,
   allowlisted, deduplicated and URL/event/title/key/count/time-free; no remote
   collector is enabled.
 - **ADD-KEY-07 — Release boundary.** Every newly checked immutable secret
@@ -384,8 +386,17 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   configured `/data/static_site_builder`; после durable terminal receipt
   удаляются лишь распознанные `output-production-*` сверх retention, точный
   active/recoverable handoff сохраняется, symlink/unknown path остаётся
-  нетронутым. Broken `/tmp` делает health/preflight красным, а не запускает
-  повторные Kaggle retries вслепую.
+  нетронутым. Любой runner `preview-*|production-*` build id валидируется до
+  построения пути; pre-existing symlink и traversal отклоняются. Broken `/tmp`
+  делает health/preflight красным, а запрос остаётся pending без расходования
+  конечного retry budget.
+- **ADD-BUILD-16 — Bounded video side outputs.** После отправки удаляются только
+  exact non-symlink `videoannounce-publish-only-source-<id>`,
+  `videoannounce-publish-only-<id>` и `videoannounce-logs-<id>` внутри
+  configured temp root. Основной `videoannounce-<id>` удаляется лишь по
+  persisted published terminal state без ожидающего main target; active,
+  ledger-live, failed и publish-blocked сохраняются. Startup reconciliation
+  повторяет только это assertion-safe удаление после прошлой ошибки cleanup.
 
 ### Related/vector barrier
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -1159,24 +1161,25 @@ async def run_story_publish_only_recovery(
 
     dataset_slug: str | None = None
     kernel_ref = STORY_PUBLISH_ONLY_KERNEL_REF
+    source_output_dir: Path | None = None
+    recovery_output_dir: Path | None = None
     try:
         source_video = video_path
-        output_dir: Path | None = None
         if source_video is None:
             source_kernel_ref = str(session_obj.kaggle_kernel_ref or "").strip()
             if not source_kernel_ref:
                 return False
             tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
-            output_dir = tmp_dir / f"videoannounce-publish-only-source-{session_obj.id}"
-            output_dir.mkdir(parents=True, exist_ok=True)
+            source_output_dir = tmp_dir / f"videoannounce-publish-only-source-{session_obj.id}"
+            source_output_dir.mkdir(parents=True, exist_ok=True)
             files = await asyncio.to_thread(
                 client.download_kernel_output,
                 source_kernel_ref,
-                path=output_dir,
+                path=source_output_dir,
                 force=True,
                 quiet=True,
             )
-            output_files = _expand_output_paths([output_dir / item for item in files])
+            output_files = _expand_output_paths([source_output_dir / item for item in files])
             source_video = _find_video(output_files)
             if story_report is None:
                 story_report = _load_story_report(_find_story_report(output_files))
@@ -1277,6 +1280,19 @@ async def run_story_publish_only_recovery(
     finally:
         if dataset_slug:
             await _cleanup_dataset(client, dataset_slug)
+        temp_root = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
+        for family, path in (
+            ("publish-only-source", source_output_dir),
+            ("publish-only", recovery_output_dir),
+        ):
+            if path is not None:
+                await asyncio.to_thread(
+                    _cleanup_ephemeral_local_output,
+                    session_obj.id,
+                    path,
+                    temp_root,
+                    family,
+                )
         _release_story_publish_only_lock(lock_handle)
 
 
@@ -1556,6 +1572,14 @@ async def _download_and_send_logs(
         await bot.send_message(
             chat_id, f"⚠️ Не удалось скачать логи Kaggle для сессии #{session_id}"
         )
+    finally:
+        await asyncio.to_thread(
+            _cleanup_ephemeral_local_output,
+            session_id,
+            output_dir,
+            tmp_dir,
+            "logs",
+        )
 
 
 async def _cleanup_dataset(client: KaggleClient, dataset_slug: str | None) -> None:
@@ -1583,6 +1607,7 @@ def _recognized_local_output_dir(
     session_id: int | None,
     output_dir: Path,
     temp_root: Path,
+    family: str = "render",
 ) -> Path | None:
     """Return an assertion-checked local output tree, or refuse the path.
 
@@ -1594,7 +1619,15 @@ def _recognized_local_output_dir(
 
     if not isinstance(session_id, int) or session_id <= 0:
         return None
-    expected_name = f"videoannounce-{session_id}"
+    names = {
+        "render": f"videoannounce-{session_id}",
+        "publish-only-source": f"videoannounce-publish-only-source-{session_id}",
+        "publish-only": f"videoannounce-publish-only-{session_id}",
+        "logs": f"videoannounce-logs-{session_id}",
+    }
+    expected_name = names.get(family)
+    if expected_name is None:
+        return None
     output_dir = Path(output_dir)
     temp_root = Path(temp_root)
     if output_dir.name != expected_name or output_dir.is_symlink():
@@ -1611,12 +1644,74 @@ def _recognized_local_output_dir(
     return resolved_output
 
 
+def _cleanup_ephemeral_local_output(
+    session_id: int,
+    output_dir: Path,
+    temp_root: Path,
+    family: str,
+) -> bool:
+    recognized = _recognized_local_output_dir(
+        session_id=session_id,
+        output_dir=output_dir,
+        temp_root=temp_root,
+        family=family,
+    )
+    if recognized is None:
+        logger.warning(
+            "video_announce: refusing unrecognized ephemeral output cleanup session=%s family=%s path=%s",
+            session_id,
+            family,
+            output_dir,
+        )
+        return False
+    try:
+        shutil.rmtree(recognized)
+        logger.info(
+            "video_announce: deleted ephemeral local output session=%s family=%s path=%s",
+            session_id,
+            family,
+            recognized,
+        )
+        return True
+    except Exception:
+        logger.exception(
+            "video_announce: failed to delete ephemeral local output session=%s family=%s path=%s",
+            session_id,
+            family,
+            recognized,
+        )
+        return False
+
+
+def _acquire_local_output_lock(session_id: int, temp_root: Path):
+    if not isinstance(session_id, int) or session_id <= 0:
+        return None
+    temp_root.mkdir(parents=True, exist_ok=True)
+    handle = (temp_root / f".videoannounce-{session_id}.output.lock").open("a+")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    return handle
+
+
+def _release_local_output_lock(handle) -> None:
+    if handle is None:
+        return
+    try:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
 async def _cleanup_terminal_local_output(
     db: Database,
     session_id: int | None,
     output_dir: Path,
     *,
     temp_root: Path,
+    output_lock=None,
 ) -> bool:
     """Remove a published session's recognized local Kaggle output tree.
 
@@ -1627,6 +1722,17 @@ async def _cleanup_terminal_local_output(
     for narrow recovery.
     """
 
+    owned_lock = None
+    if output_lock is None:
+        owned_lock = _acquire_local_output_lock(int(session_id or 0), Path(temp_root))
+        if owned_lock is None:
+            logger.info(
+                "video_announce: preserving local output owned by another poller session=%s path=%s",
+                session_id,
+                output_dir,
+            )
+            return False
+        output_lock = owned_lock
     recognized = _recognized_local_output_dir(
         session_id=session_id,
         output_dir=output_dir,
@@ -1639,6 +1745,7 @@ async def _cleanup_terminal_local_output(
             output_dir,
             temp_root,
         )
+        _release_local_output_lock(owned_lock)
         return False
     try:
         async with db.get_session() as session:
@@ -1678,6 +1785,38 @@ async def _cleanup_terminal_local_output(
             recognized,
         )
         return False
+    finally:
+        _release_local_output_lock(owned_lock)
+
+
+async def reconcile_terminal_local_outputs(
+    db: Database,
+    *,
+    temp_root: Path | None = None,
+    live_session_ids: set[int] | None = None,
+) -> int:
+    """Retry bounded cleanup of published render trees after a restart."""
+
+    root = Path(temp_root or os.getenv("TMPDIR", "/tmp"))
+    if not root.is_dir() or root.is_symlink():
+        return 0
+    live = live_session_ids if live_session_ids is not None else await _live_video_ledger_session_ids(db)
+    removed = 0
+    for path in sorted(root.iterdir()):
+        match = re.fullmatch(r"videoannounce-([1-9][0-9]*)", path.name)
+        if not match or path.is_symlink() or not path.is_dir():
+            continue
+        session_id = int(match.group(1))
+        if session_id in live or _poller_active(session_id):
+            continue
+        if await _cleanup_terminal_local_output(
+            db,
+            session_id,
+            path,
+            temp_root=root,
+        ):
+            removed += 1
+    return removed
 
 async def run_kernel_poller(
     db: Database,
@@ -2071,10 +2210,18 @@ async def run_kernel_poller(
 
     tmp_dir = download_dir or Path(os.getenv("TMPDIR", "/tmp"))
     output_dir = tmp_dir / f"videoannounce-{session_obj.id}"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_lock = _acquire_local_output_lock(session_obj.id, tmp_dir)
+    if output_lock is None:
+        logger.warning(
+            "video_announce: output phase already owned by another poller session=%s",
+            session_obj.id,
+        )
+        await _cleanup_dataset(client, dataset_slug)
+        return
     render_output_ready = False
     ready_video_name: str | None = None
     try:
+        output_dir.mkdir(parents=True, exist_ok=True)
         max_attempts = 3
         files: list[str] = []
         for attempt in range(1, max_attempts + 1):
@@ -2468,11 +2615,17 @@ async def run_kernel_poller(
             session_obj.id,
             output_dir,
             temp_root=tmp_dir,
+            output_lock=output_lock,
         )
+        _release_local_output_lock(output_lock)
 
 
 async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = None) -> int:
     live_ledger_session_ids = await _live_video_ledger_session_ids(db)
+    await reconcile_terminal_local_outputs(
+        db,
+        live_session_ids=live_ledger_session_ids,
+    )
     resumable_live_statuses = {
         VideoAnnounceSessionStatus.RENDERING,
         VideoAnnounceSessionStatus.FAILED,

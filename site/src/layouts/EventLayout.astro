@@ -3460,6 +3460,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         const EVENT_DETAIL_CONTINUATION_LIMIT = 6;
         const personalFeedStores = new WeakMap();
         const personalFeedReached = new WeakSet();
+        const personalFeedHydrationInFlight = new WeakSet();
         const personalFeedDesktopMedia = typeof window.matchMedia === 'function' ? window.matchMedia('(min-width: 1024px)') : null;
 
         function personalFeedSectionCanHydrate(section) {
@@ -3625,11 +3626,18 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         }
 
         function startPersonalFeedHydration(section, { eager = false } = {}) {
-          if (!section || personalFeedReached.has(section) || !personalFeedSectionCanHydrate(section)) return;
+          if (!section || personalFeedReached.has(section) || personalFeedHydrationInFlight.has(section) || !personalFeedSectionCanHydrate(section)) return;
           const hydrateOnce = () => {
-            if (personalFeedReached.has(section) || !personalFeedSectionCanHydrate(section)) return;
-            personalFeedReached.add(section);
-            hydratePersonalFeedSlots({ sections: [section] });
+            if (personalFeedReached.has(section) || personalFeedHydrationInFlight.has(section) || !personalFeedSectionCanHydrate(section)) return;
+            personalFeedHydrationInFlight.add(section);
+            void hydratePersonalFeedSlots({ sections: [section] }).then(() => {
+              // A desktop-only section may cross the media-query boundary while
+              // its manifest is in flight. Mark it consumed only if it is still
+              // eligible; otherwise the next desktop transition must retry.
+              if (personalFeedSectionCanHydrate(section)) personalFeedReached.add(section);
+            }).finally(() => {
+              personalFeedHydrationInFlight.delete(section);
+            });
           };
           if (eager) {
             hydrateOnce();

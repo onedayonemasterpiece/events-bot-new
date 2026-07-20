@@ -219,7 +219,8 @@ review evidence. Production uses the shared router in
 `site/src/lib/keyboardEventNavigation.mjs`. Both
 `KeyboardEventNavigationPrototype.astro` and the event-route wrapper
 `KeyboardEventNavigation.astro` mount that exact implementation. Generated lab
-HTML is not copied into the SSG.
+HTML is not copied into the SSG, and the prototype-only Astro lab route is not
+part of either the production or secret-candidate artifact tree.
 
 The primary `/sobytiya/<slug>/` template mounts the wrapper only when all of
 these are true:
@@ -244,6 +245,12 @@ card/feed state before it creates the consent dialog, the router arms the
 logical owner before clicking the existing like control and captures the real
 dialog from the shared DOM lifecycle; it does not create parallel consent
 state.
+
+Every mutated pre-existing `title`, `aria-keyshortcuts`, focusability and scope
+attribute is snapshotted and restored by `destroy()`; teardown therefore does
+not erase component-owned labels such as the phone CTA title. Consent ownership
+has no fixed timeout: it ends when the real dialog is captured, the like action
+completes, or focus/pointer/page lifecycle establishes a different owner.
 
 ### Reviewed source and historical handoff
 
@@ -299,6 +306,11 @@ The dynamic personal-feed **section**, not its current slot node, must be
 observed: the renderer can replace the slot itself. Re-enhance new cards
 idempotently, normalize their canonical URLs, reconnect action-state observers,
 and restore focus in `requestAnimationFrame` after the mutation batch settles.
+The desktop similar grid is itself a canonical `[data-discovery-feed]`, so the
+same candidate store, served-list attribution and feedback controller used by
+the mobile/continuation cards applies there. An in-flight desktop-only manifest
+request may be marked consumed only while its media query still matches; a
+mobile resize must leave it eligible for the next desktop retry.
 
 ### Implemented extraction contract
 

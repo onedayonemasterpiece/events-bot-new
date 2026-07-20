@@ -764,6 +764,59 @@ async def test_cleanup_refuses_unknown_or_symlinked_output_paths(tmp_path: Path)
     assert outside_sentinel.exists()
 
 
+def test_cleanup_covers_publish_only_and_log_output_families(tmp_path: Path):
+    session_id = 77
+    for family, name in (
+        ("publish-only-source", f"videoannounce-publish-only-source-{session_id}"),
+        ("publish-only", f"videoannounce-publish-only-{session_id}"),
+        ("logs", f"videoannounce-logs-{session_id}"),
+    ):
+        output = tmp_path / name
+        output.mkdir()
+        (output / "payload.bin").write_bytes(b"x")
+        assert poller_module._cleanup_ephemeral_local_output(
+            session_id, output, tmp_path, family
+        ) is True
+        assert not output.exists()
+
+
+@pytest.mark.asyncio
+async def test_startup_reconciles_only_terminal_published_render_trees(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        published = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_MAIN,
+            profile_key="popular_review",
+            finished_at=now,
+            published_at=now,
+            video_url="cherryflash_full_final.mp4",
+        )
+        failed = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.FAILED,
+            profile_key="popular_review",
+            finished_at=now,
+            video_url="cherryflash_full_final.mp4",
+        )
+        session.add_all([published, failed])
+        await session.commit()
+        await session.refresh(published)
+        await session.refresh(failed)
+    published_dir = tmp_path / f"videoannounce-{published.id}"
+    failed_dir = tmp_path / f"videoannounce-{failed.id}"
+    published_dir.mkdir()
+    failed_dir.mkdir()
+    (published_dir / "published.mp4").write_bytes(b"done")
+    (failed_dir / "recover.mp4").write_bytes(b"keep")
+
+    assert await poller_module.reconcile_terminal_local_outputs(
+        db, temp_root=tmp_path, live_session_ids=set()
+    ) == 1
+    assert not published_dir.exists()
+    assert failed_dir.exists()
+
+
 @pytest.mark.asyncio
 async def test_completed_published_kernel_cleans_recognized_output_tree(
     monkeypatch,
