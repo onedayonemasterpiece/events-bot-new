@@ -3,6 +3,7 @@
 > **Статус:** отдельный интерактивный product/UI prototype; production `/vystavki/` не изменён.
 > **Маршрут:** `/lab/exhibitions-personal/` в обычной Astro-сборке.
 > **Источник визуального подхода:** `docs/reference/Выставки UI UX.png`.
+> **Последний immutable preview:** `preview-20260720-exhibitions-personal-v9-a6b4d662`.
 
 ## Зачем нужен отдельный прототип
 

@@ -118,3 +118,12 @@ Shared-footer tech debt is recorded but not duplicated into this fix:
 production-wide `check-production.mjs` does not yet mirror the secret-candidate
 `service-v1` assertions, and the accepted component retains legacy
 `site-footer-prototype__*` CSS names.
+
+Published from clean pushed commit `a6b4d662` as immutable noindex preview
+`preview-20260720-exhibitions-personal-v9-a6b4d662`. Preview build produced
+`383` pages; `check:preview` passed for `303` events and deployment reported
+`Public preview verification: ok`. The public lab route returned HTTP `200`.
+Public Chromium Playwright repeated the 22-row one-like/no-hide and
+three-like/rerank states, the 13-row unique tail disclosure, retained terminal
+batch at `900/1020px`, exact reverse history, footer-local arrow focus and
+mobile cursor `0`, with zero console/page errors.
