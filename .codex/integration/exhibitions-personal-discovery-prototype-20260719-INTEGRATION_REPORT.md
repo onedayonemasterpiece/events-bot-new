@@ -87,3 +87,12 @@ cursor and counter state, stable row/deck/hover rectangles, responsive no-gap
 geometry, bounded rapid input, instant reduced motion, delayed-image skeleton
 without geometry shift, mobile direct-detail behavior, zero horizontal overflow
 and zero prototype console/page errors.
+
+Published from clean pushed commit `56f4ac91` as immutable noindex preview
+`preview-20260720-exhibitions-personal-v8-56f4ac91`. Preview build produced
+`383` pages, `check:preview` passed for `303` exported events, deployment
+reported `Public preview verification: ok`, and the public lab route returned
+HTTP `200`. Public Playwright repeated the `0 → 2` cursor / `+10 → +8`
+transition, Russian-layout like, `-7.98px` deck contact, zero overflow and zero
+console/page errors; mobile kept cursor `0`, hid all keyboard chrome, preserved
+dot delta `0` and did not open the gallery.
