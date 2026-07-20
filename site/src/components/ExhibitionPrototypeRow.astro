@@ -40,9 +40,13 @@ function objectPosition(asset: EventImageAsset) {
 }
 
 function photoToken(sourceRatio: number): RatioToken {
-  if (sourceRatio < 0.95) return 'P';
-  if (sourceRatio < 1.18) return 'S';
-  return sourceRatio >= 1.2 ? 'L' : 'W';
+  // Use the nearest named listing token. The previous 1.20 L threshold sent
+  // ordinary 4:3 photographs into a 3:2 frame and removed roughly 11% of the
+  // source even though W was an exact match.
+  if (sourceRatio < Math.sqrt(ratioTokens.P * ratioTokens.S)) return 'P';
+  if (sourceRatio < Math.sqrt(ratioTokens.S * ratioTokens.W)) return 'S';
+  if (sourceRatio < Math.sqrt(ratioTokens.W * ratioTokens.L)) return 'W';
+  return 'L';
 }
 
 const seenSources = new Set<string>();

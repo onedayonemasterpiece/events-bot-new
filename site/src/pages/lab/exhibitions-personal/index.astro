@@ -225,10 +225,11 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-list { position:relative; display:grid; gap:7px; padding-left:22px; }
   .ex-list::before { content:""; position:absolute; top:0; bottom:0; left:7px; width:1px; background:linear-gradient(var(--ex-border),#454a4e,var(--ex-border)); }
   .ex-row {
+    --ex-media-column:clamp(420px,42vw,680px);
     position:relative;
     min-height:132px;
     display:grid;
-    grid-template-columns:112px auto minmax(250px,1fr) auto;
+    grid-template-columns:112px var(--ex-media-column) minmax(250px,1fr) auto;
     gap:clamp(.75rem,1.5vw,1.25rem);
     align-items:stretch;
     isolation:isolate;
@@ -283,21 +284,21 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-row__dot { display:none; }
   .ex-deck {
     position:relative;
-    inline-size:min(44vw,720px);
-    min-inline-size:86px;
+    inline-size:100%;
+    min-inline-size:0;
     block-size:114px;
     overflow:hidden;
     contain:layout paint;
     isolation:isolate;
     padding:0;
-    border:1px solid rgba(188,201,211,.48);
-    border-radius:7px;
-    background:#080a0b;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.24);
+    border:0;
+    border-radius:6px;
+    background:transparent;
+    box-shadow:none;
     cursor:zoom-in;
-    transition:border-color var(--ex-motion-base) var(--ex-ease-cinematic),box-shadow var(--ex-motion-base) var(--ex-ease-cinematic);
+    transition:filter var(--ex-motion-base) var(--ex-ease-cinematic);
   }
-  .ex-row:hover .ex-deck,.ex-row:focus-within .ex-deck { border-color:rgba(187,222,249,.76); box-shadow:inset 0 0 0 1px rgba(255,255,255,.1),0 8px 24px rgba(0,0,0,.24),0 0 18px rgba(84,172,247,.13); }
+  .ex-row:hover .ex-deck,.ex-row:focus-within .ex-deck { filter:drop-shadow(0 0 11px rgba(84,172,247,.12)); }
   .ex-deck__images {
     position:absolute;
     z-index:1;
@@ -311,11 +312,24 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     inset-inline-start:0;
     inline-size:calc(114px * var(--media-ratio));
     overflow:hidden;
-    border:1px solid rgba(211,220,228,.48);
+    border:1px solid rgba(220,229,236,.62);
     border-radius:4px;
     background:#0b0d0e;
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.045),0 6px 18px rgba(0,0,0,.3);
+    box-shadow:inset -1px 0 0 rgba(255,255,255,.14),4px 0 12px -3px rgba(0,0,0,.82),0 6px 18px rgba(0,0,0,.3);
     transition:border-color var(--ex-motion-base) var(--ex-ease-cinematic),box-shadow var(--ex-motion-base) var(--ex-ease-cinematic);
+  }
+  .ex-deck__frame::after {
+    content:"";
+    position:absolute;
+    z-index:2;
+    inset:0;
+    border-radius:inherit;
+    box-shadow:inset -1px 0 0 rgba(255,255,255,.22),inset 1px 0 0 rgba(255,255,255,.08);
+    pointer-events:none;
+  }
+  .ex-deck__frame[data-deck-state="stack"] {
+    border-color:rgba(230,238,244,.78);
+    box-shadow:inset -1px 0 0 rgba(255,255,255,.22),6px 0 16px -2px rgba(0,0,0,.94),0 8px 20px rgba(0,0,0,.42);
   }
   .ex-deck__frame img {
     width:100%;
@@ -328,8 +342,11 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     object-position:50% 50%;
   }
   .ex-row:hover .ex-deck__frame,.ex-row:focus-within .ex-deck__frame {
-    border-color:rgba(224,237,247,.72);
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 6px 18px rgba(0,0,0,.34);
+    border-color:rgba(235,244,250,.84);
+    box-shadow:inset -1px 0 0 rgba(255,255,255,.2),5px 0 14px -3px rgba(0,0,0,.88),0 6px 18px rgba(0,0,0,.36);
+  }
+  .ex-row:hover .ex-deck__frame[data-deck-state="stack"],.ex-row:focus-within .ex-deck__frame[data-deck-state="stack"] {
+    box-shadow:inset -1px 0 0 rgba(255,255,255,.3),7px 0 18px -2px rgba(0,0,0,.96),0 8px 22px rgba(0,0,0,.46);
   }
   .ex-deck__count {
     position:absolute;
@@ -341,11 +358,12 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     display:grid;
     place-items:center;
     transform:translate3d(0,-50%,0);
-    border:1px solid rgba(255,255,255,.23);
+    border:1px solid rgba(255,255,255,.42);
     border-radius:50%;
-    background:rgba(7,9,10,.84);
+    background:rgba(7,9,10,.9);
     color:#f4f7f8;
-    box-shadow:0 0 0 4px rgba(7,9,10,.35),0 0 22px rgba(84,172,247,.14);
+    box-shadow:0 4px 14px rgba(0,0,0,.78),0 0 0 4px rgba(7,9,10,.42),inset 0 0 0 1px rgba(255,255,255,.18),0 0 22px rgba(84,172,247,.16);
+    backdrop-filter:blur(8px);
     font-size:.72rem;
     font-weight:900;
     pointer-events:none;
@@ -417,7 +435,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-intro { align-items:start; flex-direction:column; }
     .ex-controls { grid-template-columns:auto 1fr; }
     .ex-controls__end { grid-column:1/-1; justify-content:space-between; }
-    .ex-row { grid-template-columns:95px auto minmax(190px,1fr) auto; }
+    .ex-row { --ex-media-column:clamp(320px,39vw,410px); grid-template-columns:95px var(--ex-media-column) minmax(190px,1fr) auto; }
     .ex-discussed span { position:absolute; width:1px; height:1px; overflow:hidden; }
   }
   @media (max-width:820px) {
@@ -483,17 +501,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       const count = deck.querySelector('[data-deck-count]');
       if (!(row instanceof HTMLElement) || !frames.length) return;
       const height = deck.clientHeight;
-      const rowWidth = row.clientWidth;
-      if (!height || !rowWidth) return;
-      const gap = 2;
-      const sliver = compactDeck.matches ? 8 : 12;
-      const compactContainerWidth = row.parentElement instanceof HTMLElement
-        ? row.parentElement.clientWidth
-        : rowWidth;
-      const compactViewportWidth = Math.max(86, window.innerWidth - row.getBoundingClientRect().left - 12);
-      const available = compactDeck.matches
-        ? Math.max(86, Math.min(compactContainerWidth, compactViewportWidth) - 22)
-        : Math.max(86, Math.min(720, rowWidth * .44));
+      const available = deck.clientWidth;
+      if (!height || !available) return;
+      const gap = compactDeck.matches ? 3 : 4;
+      const sliver = compactDeck.matches ? 9 : 13;
       const widths = frames.map((frame) => {
         const ratio = Number(frame.dataset.presentationRatio || 1);
         return Math.max(52, height * (Number.isFinite(ratio) && ratio > 0 ? ratio : 1));
@@ -504,19 +515,23 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         frame.hidden = true;
         frame.dataset.deckState = 'hidden';
         frame.style.removeProperty('inset-inline-start');
+        frame.style.removeProperty('inset-block-start');
         frame.style.removeProperty('inline-size');
+        frame.style.removeProperty('block-size');
         frame.style.removeProperty('z-index');
       });
 
       if (total === 1) {
         const width = Math.min(widths[0], available);
+        const scale = Math.min(1, available / widths[0]);
         const frame = frames[0];
         frame.hidden = false;
         frame.dataset.deckState = 'full';
-        frame.style.insetInlineStart = '0px';
+        frame.style.insetInlineStart = `${Math.max(0, (available - width) / 2)}px`;
+        frame.style.insetBlockStart = `${Math.max(0, (height - height * scale) / 2)}px`;
         frame.style.inlineSize = `${width}px`;
-        frame.style.zIndex = '10';
-        deck.style.inlineSize = `${Math.ceil(width)}px`;
+        frame.style.blockSize = `${height * scale}px`;
+        frame.style.zIndex = '100';
         deck.dataset.deckFullCount = '1';
         deck.dataset.deckOverflow = 'false';
         if (count instanceof HTMLElement) count.hidden = true;
@@ -524,27 +539,29 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       }
 
       if (naturalWidth <= available && total === frames.length) {
-        let left = 0;
+        let left = Math.max(0, (available - naturalWidth) / 2);
         frames.forEach((frame, index) => {
           frame.hidden = false;
           frame.dataset.deckState = 'full';
           frame.style.insetInlineStart = `${left}px`;
           frame.style.inlineSize = `${widths[index]}px`;
-          frame.style.zIndex = String(10 + index);
+          frame.style.zIndex = String(100 + index);
           left += widths[index] + gap;
         });
-        deck.style.inlineSize = `${Math.ceil(naturalWidth)}px`;
         deck.dataset.deckFullCount = String(frames.length);
         deck.dataset.deckOverflow = 'false';
         if (count instanceof HTMLElement) count.hidden = true;
         return;
       }
 
-      const stackReserve = Math.min(compactDeck.matches ? 142 : 194, available * (compactDeck.matches ? .46 : .34));
       let fullCount = 0;
       let fullWidth = 0;
       while (fullCount < frames.length - 1) {
         const nextWidth = widths[fullCount] + (fullCount ? gap : 0);
+        const remainingStackCount = Math.min(3, frames.length - (fullCount + 1));
+        // The stack only needs room for its exposed right edges and count badge;
+        // most of each lower card may sit beneath the last fully visible card.
+        const stackReserve = 50 + Math.max(0, remainingStackCount - 1) * sliver;
         if (fullWidth + nextWidth + gap + stackReserve > available) break;
         fullWidth += nextWidth;
         fullCount += 1;
@@ -560,24 +577,21 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         frame.dataset.deckState = 'full';
         frame.style.insetInlineStart = `${left}px`;
         frame.style.inlineSize = `${width}px`;
-        frame.style.zIndex = String(10 + index);
+        frame.style.zIndex = String(100 + index);
         left += width + gap;
       }
       const stackFrames = frames.slice(fullCount, fullCount + 3);
-      const stackLeft = Math.min(fullWidth + gap, available - 54);
-      let rightEdge = stackLeft;
       stackFrames.forEach((frame, index) => {
         const sourceIndex = fullCount + index;
+        const rightEdge = available - (stackFrames.length - 1 - index) * sliver;
         frame.hidden = false;
         frame.dataset.deckState = 'stack';
-        frame.style.insetInlineStart = `${stackLeft + index * sliver}px`;
+        frame.style.insetInlineStart = `${rightEdge - widths[sourceIndex]}px`;
         frame.style.inlineSize = `${widths[sourceIndex]}px`;
         // Earlier cards stay above later cards, exposing each later right edge.
         frame.style.zIndex = String(50 - index);
-        rightEdge = Math.max(rightEdge, stackLeft + index * sliver + widths[sourceIndex]);
       });
       const overflowCount = Math.max(1, total - fullCount);
-      deck.style.inlineSize = `${Math.ceil(Math.min(available, Math.max(fullWidth, rightEdge)))}px`;
       deck.dataset.deckFullCount = String(fullCount);
       deck.dataset.deckOverflow = 'true';
       if (count instanceof HTMLElement) {

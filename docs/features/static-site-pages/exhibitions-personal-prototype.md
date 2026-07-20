@@ -131,16 +131,26 @@ marker. Адаптированы:
   unknown и unsafe asset не получают скрытый center-crop: они остаются
   отдельными edge-to-edge natural document cards, а исходный порядок доступен
   в полноразмерной gallery;
-- deck не содержит `contain`, letterbox, четырёхстороннего padding, blur-fill
-  или пустого зарезервированного края. Frame width получается из media height и
-  принятого token/natural ratio, поэтому сама media-zone shrink-wrap-ится до
-  реальных карточек вместо большого чёрного поля;
+- deck не содержит image `contain`, letterbox, четырёхстороннего padding или
+  blur-fill. Desktop grid резервирует одну общую адаптивную media-column
+  `420..680px`, поэтому начало всех title/body образует устойчивую вертикаль и
+  `+N` не двигает текст. Сам viewport прозрачный и не изображает пустое место
+  рамкой/заливкой: только реальные edge-to-edge frames имеют границу. Одиночные
+  natural documents и полностью поместившиеся группы центрируются внутри
+  колонки без изменения их пропорций; если natural card шире mobile viewport,
+  одновременно уменьшаются её width и height, а не обрезается содержимое;
 - колода появляется только при реальном переполнении текущей полосы. Полностью
   поместившиеся карточки остаются видимы; до трёх следующих реальных images
-  укладываются вправо с последовательным offset `12px` desktop / `8px` mobile
-  и убывающим z-index, поэтому справа виден край каждого нижнего листа.
+  укладываются вправо с последовательным offset `13px` desktop / `9px` mobile
+  и убывающим z-index, а их правые края привязаны к общей границе media-column.
+  Верхние fully-visible cards лежат над началом stack: это убирает зазор и
+  оставляет справа настоящие последовательные корешки. Направленные вправо
+  shadow и светлый rim отделяют листы даже на тёмных фотографиях.
   Счётчик `+N` означает все media, которые не показаны полностью; декоративных
   пустых `i`-карт больше нет;
+- безопасные photos выбирают ближайший именованный token по геометрическим
+  midpoint-границам. В частности, исходные `4:3` больше не форсируются в `L
+  3:2`: они получают точный `W 4:3` без прежней потери около `11%` кадра;
 - edge-light адаптирует локальный приём `farmapers` (`HoverGlow` / glass-card):
   отдельные неинтерактивные halo и border-ring слои, но без cyan-палитры,
   pointer tracking и бесконечного idle sweep на плотном списке;
@@ -251,6 +261,15 @@ overflow stack и полностью световой hover.
 с overrides не применялась буквально: browser gate подтвердил, что drawer —
 канонический общий компонент, а не самодельная навигация.
 
+В итерации fixed-column / stronger-deck отдельный pre-design review через
+`agy`, `Gemini 3.1 Pro (High)`, правильно локализовал две причины обратной
+связи: content-sized `auto` media-column двигала начало текста, а порог `1.20`
+почти не оставлял шанса токену `W` и резал обычные `4:3` photos до `L`. Приняты
+фиксированная адаптивная колонка, midpoint token selection, направленные тени и
+усиленный `+N`. Предложенные консультантом hover fan-out и `scale(1.04)` явно
+отклонены: они противоречат повторному требованию владельца о неподвижной
+геометрии; hover остаётся только light/halo state.
+
 Независимый checklist-review дополнительно поймал два P1, пропущенных первым
 source-string gate: blanket `transform:none!important` ломал позиционирование в
 reduced-motion, а single-image deck сохранял пустой reserve правого edge-stack.
@@ -269,9 +288,10 @@ python3 -m http.server 4321 --directory dist
 
 Browser QA должен покрывать `375×812`, `768×1024` и `1440×1000`: zero
 horizontal overflow, 12 уникальных exhibition rows, 3 new rows, no console
-errors, keyboard movement, like/reject/undo, input shortcut guard, gallery and
+errors, одинаковую desktop media/body vertical alignment, честные right-edge
+stack/count, keyboard movement, like/reject/undo, input shortcut guard, gallery and
 badge clearing. Последний gate: Astro build `381` pages, prototype contract
-`25/25`, ArrowDown/gallery/Escape/reject/undo/like/mobile drawer — pass без
+`31/31`, ArrowDown/gallery/Escape/reject/undo/like/mobile drawer — pass без
 console errors; reduced-motion сохраняет позиционирующие transforms при `0s`
 transition и `auto` scroll. Отдельный regression-smoke `/vystavki/` подтвердил
 `51/51` уникальную listing row, прежний H1, все пять desktop destinations,

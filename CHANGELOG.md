@@ -47,7 +47,10 @@
   replace the fake reserved stack with real right-overlapping image cards whose
   `+N` means actual overflow, remove media letterboxing/padding, and make hover
   and keyboard focus purely halo/edge-light states without row, image, metadata
-  or action movement.
+  or action movement; normalize desktop media into one adaptive column so every
+  title starts on the same vertical, strengthen real right-edge deck depth with
+  directional shadows/rims, and select the nearest named crop token so `4:3`
+  photos remain exact `W` instead of being unnecessarily cut to `3:2`.
 
 ### Added
 - **Personal exhibitions product prototype**: add a separate dark timeline
