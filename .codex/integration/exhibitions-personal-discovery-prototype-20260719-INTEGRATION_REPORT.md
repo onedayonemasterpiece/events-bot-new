@@ -27,3 +27,15 @@ Gemini 3.1 Pro (High) via `agy` was used before implementation, for critical acc
 ## Incident regression evidence
 
 `INC-2026-07-02-exhibition-duplicates-static-site` was treated as a regression guard because the feature concerns the exhibition surface. This change does not alter import, Smart Update, production filters or production `/vystavki/`; therefore full replay/DB/public-surface incident closure is out of scope. Prototype-specific checks passed: unique curated ids, exact `event_type=выставка`, committed fixture presence, no duplicate DOM rows, and unchanged production route.
+
+## v5 adaptive-height / perspective / loading closure
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| R10 | Fixed desktop media width; tall row grows media height | Done | All visible desktop decks are `604.796875px`; event 4913 is `210.515625px` high vs `123.703125px` regular. |
+| R11 | `Обсуждают` does not reduce title width | Done | Marker moved to fixed right aside; `markerInTitle=false`; title width is `412.328125px` across desktop rows. |
+| R12 | Left timeline closer to reference | Done | Date rail outside bordered surface; date-pinned lifecycle dot and colored connector. |
+| R13 | Skeleton during image loading | Done | Delayed response shows skeleton; cached/load cleanup; gallery error fallback; geometry delta `0`. |
+| R14 | Perspective overflow and gray terminal plane | Done | Right edges/z are monotonic, depth heights decrease, first five previews contain images, sixth plane does not; hover delta `0`. |
+
+V5 verification: Astro build `381` pages; prototype contract `38/38`; Playwright at `1440×1000`, `900×900`, `768×1024`, and `375×812` reported zero horizontal overflow and no console/page errors. Final `agy` review with Gemini 3.1 Pro (High): `ACCEPT`, no P0/P1. Its sole P2 about retained rejected-row height is superseded by the intentional zero-jump undo-stub contract.

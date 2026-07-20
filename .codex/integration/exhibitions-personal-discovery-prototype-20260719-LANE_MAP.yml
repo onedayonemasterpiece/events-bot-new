@@ -62,3 +62,34 @@ lanes:
     expected_output: committed prototype with visual and interaction evidence
     verification_scope: full_local
     status: completed
+v5_lanes:
+  - id: v5-layout-title
+    role: planner
+    requirement_ids: [R10, R11]
+    target: fixed-column adaptive height and non-competing discussed marker
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v5-reference-depth
+    role: planner
+    requirement_ids: [R12, R14]
+    target: reference timeline and perspective deck specification
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v5-loading-qa
+    role: planner
+    requirement_ids: [R13]
+    target: skeleton/cache/error lifecycle and QA contract
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v5-integration
+    role: worker
+    requirement_ids: [R10, R11, R12, R13, R14]
+    target: coherent Astro/CSS/JS implementation, verification and preview deploy
+    depends_on: [v5-layout-title, v5-reference-depth, v5-loading-qa]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    verification_scope: full_local
+    status: completed
