@@ -46,6 +46,10 @@
   root continuation anchors from relative to absolute URLs; static similar and
   hydrated broad cards now retain one identical `data-card-href`/anchor URL
   representation as well as one shared component behaviour.
+- Fixed the Kaggle production-candidate Playwright bootstrap to install the
+  pinned Chromium headless shell together with its Linux system dependencies;
+  browser-launch failures now close the local fixture immediately instead of
+  being masked by the outer five-minute release-gate timeout.
 - Fixed the static-site outbox CAS-loss path so a deploy during an active
   Kaggle build logs the cached job id instead of triggering SQLAlchemy
   `MissingGreenlet` repeatedly and making `/healthz` unavailable.

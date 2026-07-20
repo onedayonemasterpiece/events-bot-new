@@ -61,6 +61,12 @@ The keyboard compatibility migration rewrites continuation links only for
 legacy prefixed candidates. Root-form cards retain the canonical component's
 relative `href` in both `data-card-href` and media/title anchors, so keyboard
 enhancement cannot create a second URL representation or behaviour.
+The Kaggle production-candidate install uses Playwright's CI form
+`install --with-deps --only-shell chromium`: downloading Chromium alone is not
+enough on the Kaggle CPU image, which does not ship Linux libraries such as
+`libatk-1.0.so.0`. Browser-launch failure also tears down the local release
+fixture immediately, so an environment defect is reported directly rather
+than being misclassified as a five-minute journey timeout.
 
 The reviewed desktop keyboard navigator V7 is documented in
 [keyboard-event-navigation-prototype.md](keyboard-event-navigation-prototype.md).

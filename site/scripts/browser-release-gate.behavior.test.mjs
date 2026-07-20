@@ -23,6 +23,8 @@ test('R03 mandatory browser gate has bounded action/navigation waits and no netw
   assert.match(source, /data-hide-sticky-after/gu);
   assert.match(source, /page\.mouse\.wheel\(0, 320\)/gu);
   assert.match(source, /closeAllConnections/u);
+  assert.match(source, /let server = null;[\s\S]*let browser = null;/u);
+  assert.match(source, /if \(browser\)[\s\S]*if \(server\)/u);
 });
 
 test('R03 prepublication gate maps only immutable CDN Astro runtime back to the checked tree', () => {

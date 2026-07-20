@@ -483,18 +483,23 @@ async function runBrowserGate({ root, basePath, origin, browser }) {
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const metadata = releaseRootMetadata(args.root || join(SITE_DIR, 'dist'), args.manifest || '');
-  const server = await startReleaseServer(metadata.root, metadata.basePath);
   const { chromium } = await import('playwright');
-  const browser = await chromium.launch({ headless: true });
+  let server = null;
+  let browser = null;
   try {
+    browser = await chromium.launch({ headless: true });
+    server = await startReleaseServer(metadata.root, metadata.basePath);
     const report = await runBrowserGate({ root: metadata.root, basePath: metadata.basePath, origin: server.origin, browser });
     if (metadata.manifestPath) recordBrowserVisualSuccess(metadata.manifestPath, report);
     if (args.report) writeFileSync(resolve(args.report), `${JSON.stringify(report, null, 2)}\n`);
     console.log(`Browser release gate passed: ${JSON.stringify(report)}`);
     return report;
   } finally {
-    await browser.close();
-    await server.close();
+    // Launch failures are release failures too.  Always tear down whichever
+    // resource was acquired so a missing CI library exits immediately instead
+    // of leaving the local fixture alive until the outer five-minute watchdog.
+    if (browser) await browser.close().catch(() => {});
+    if (server) await server.close().catch(() => {});
   }
 }
 
