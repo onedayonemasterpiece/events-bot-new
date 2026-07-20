@@ -6,7 +6,7 @@ Service: managed VK event publication / JobOutbox
 Opened: 2026-07-18
 Closed: 2026-07-18
 Owners: events-bot
-Related incidents: `INC-2026-07-03-current-import-vector-vk-publication`, `INC-2026-07-17-vk-auto-provider-quota-false-reject`
+Related incidents: `INC-2026-07-03-current-import-vector-vk-publication`, `INC-2026-07-17-vk-auto-provider-quota-false-reject`, `INC-2026-07-20-image-geometry-pixel-drift`
 Related docs: `docs/features/vk-publishing/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -185,6 +185,11 @@ automatic probe/resume path and the database pause survived indefinitely.
   illustrated human face; the full-frame valuable region is appropriate for
   the distributed title/date/people composition. The import preserved a
   production backup row and matched `poster_hash` plus exact `pixel_sha256`.
+- post-closure correction (2026-07-20): the geometry acceptance was valid for
+  the pixels inspected on 2026-07-18, but the managed dHash object was overwritten
+  on 2026-07-19 23:55 UTC and row `14758` retained stale geometry `477`. The VK
+  captcha/cadence closure remains valid; geometry continuity is now governed by
+  `INC-2026-07-20-image-geometry-pixel-drift` and must be re-canary-verified.
 - post-deploy verification: `/healthz` returned `200`, `ready=true`, DB and
   scheduler (including `vk_auto_import`) were `ok`; SQLite `quick_check=ok`;
   no persisted `captcha_wait:*` marker and no new captcha/code-14 log entry

@@ -62,9 +62,11 @@
   - key: `event-<event_id>-<YYYY-MM-DD>.ics` (или `event-<event_id>.ics` при невалидной дате)
   - хранится как публичный URL в `event.ics_url`.
 - Постеры (Kaggle `TelegramMonitor`, Supabase fallback):
-  - key: `<prefix>/dh16/<first2>/<dhash>.webp`, где `prefix` default `p`
-  - `dhash` — перцептивный dHash16 (content‑addressed ключ): одинаковая картинка с разным разрешением/реэнкодом
-    должна попадать в один и тот же ключ → storage backend не хранит дубли.
+  - новый key: `<prefix>/image/v2/<first2>/<encoded_sha256>.webp`, где `prefix` default `p`;
+  - `encoded_sha256` считается по точным сохранённым WebP-байтам, поэтому
+    immutable URL не может объединить разные пиксели; legacy
+    `<prefix>/dh16/**` остаётся read-only;
+  - dHash16 хранится как fuzzy duplicate evidence, но не является object identity.
   - В Storage сохраняются только WebP (без JPEG); качество: `TG_MONITORING_POSTERS_WEBP_QUALITY` (Kaggle) /
     `SUPABASE_POSTERS_WEBP_QUALITY` (server-side), default `82`.
   - сохраняется как `eventposter.supabase_url` + `eventposter.supabase_path` (legacy names, URL может быть Yandex).
@@ -271,5 +273,7 @@ Runtime-диагностика:
 
 Скрипт проверяет инварианты:
 
-- Постеры: `*.webp`, каноничный key `<prefix>/dh16/<first2>/<dhash>.webp`, согласованность `eventposter.phash` и `eventposter.supabase_path`.
+- Постеры: `*.webp`, новый каноничный key
+  `<prefix>/image/v2/<first2>/<encoded_sha256>.webp`; legacy `dh16` учитывается
+  отдельно и не должен появляться у новых записей.
 - Видео: отсутствие конфликтов `sha256 → path`, корректный `Content-Type` в Storage; legacy `v/tg/*` допускается как reuse, но новые `v/tg/*` за окно подсвечиваются при `--check-storage`.

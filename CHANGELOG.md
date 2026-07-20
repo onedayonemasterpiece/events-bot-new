@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed Smart Update image geometry so managed posters use immutable exact-byte
+  object paths, pixel changes invalidate stale face/value and crop evidence,
+  final pair approval schedules enrichment, and transient semantic-role calls
+  rotate through the normal key pool with bounded retries. Static export now
+  exposes only exact-current geometry, and exact-ratio card crops preserve its
+  protected regions or fail closed to `contain`. TelegramMonitor uses the same
+  exact encoded identity, provider results are discarded on mid-call pixel
+  drift, and per-event raw-SHA ownership is conflict-safe during retry/merge.
 - Added the exact reviewed keyboard-navigation V7 router to every desktop event
   route in immutable noindex secret candidates: the lab and primary template
   now share one lifecycle-managed implementation, without autofocus, mobile or

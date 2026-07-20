@@ -17,6 +17,11 @@ paths и rollout: [Event media](../event-media/README.md).
 `_apply_posters()` явно ставит durable geometry follow-up. Worker асинхронно
 сохраняет bbox всех лиц и viewer-value region в versioned pixel cache; никакого
 provider-вызова и скачивания картинки внутри транзакции Smart Update нет.
+Последняя картинка, повышенная до `approved` после pair review, получает такой
+же follow-up. Display URL и visual fingerprints образуют один exact-pixel
+contract: смена URL/path или пикселей инвалидирует старые role/focal/safe-crop/
+geometry evidence. Новые managed writes адресуются точным SHA-256 закодированных
+WebP-байтов и не перезаписывают perceptual-dHash URL.
 
 ## Fact-first (внедрено)
 

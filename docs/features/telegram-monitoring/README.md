@@ -23,8 +23,11 @@
 - Если Yandex не настроен, legacy Supabase fallback берёт bucket из `SUPABASE_MEDIA_BUCKET` (не из `SUPABASE_BUCKET`), чтобы медиа не смешивались с ICS.
 - При загрузке афиш в managed storage:
   - объект сохраняется **в WebP** (только WebP, без JPEG) для экономии объёма;
-  - ключ объекта content‑addressed по перцептивному хешу (dHash16), чтобы одно и то же изображение (даже при разном разрешении/реэнкоде) не загружалось повторно:
-    - `supabase_path`: `<prefix>/dh16/<first2>/<dhash>.webp` (prefix по умолчанию `p`, настраивается через `TG_MONITORING_POSTERS_PREFIX`);
+  - новый ключ объекта content-addressed по SHA-256 **закодированных WebP-байтов**:
+    - `supabase_path`: `<prefix>/image/v2/<first2>/<encoded_sha256>.webp` (prefix по умолчанию `p`, настраивается через `TG_MONITORING_POSTERS_PREFIX`);
+    - dHash остаётся только признаком похожести/дедупликации в payload и никогда
+      не определяет публичный immutable URL; старые `<prefix>/dh16/**` доступны
+      только для чтения;
   - качество WebP: `TG_MONITORING_POSTERS_WEBP_QUALITY` (default `82`).
 - Empty-caption poster-only posts remain part of the normal LLM-first extraction path:
   when Telegram text/caption is empty but OCR contains event facts (title/date/time/venue/price/registration),

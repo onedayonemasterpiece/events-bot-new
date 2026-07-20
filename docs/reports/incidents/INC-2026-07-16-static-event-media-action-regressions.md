@@ -82,6 +82,10 @@ The full-catalog static preview exposed several user-visible regressions around 
   expected the rejected Split route for event `5756`. Both gates were aligned
   with the accepted global footer and source-consistent Editorial contract;
   the popular fallback also received a real upcoming-date proximity signal.
+- 2026-07-20: `INC-2026-07-20-image-geometry-pixel-drift` proved that managed
+  pixels and image-dependent evidence could drift behind one URL. Its stricter
+  exact-pixel bbox gate intentionally supersedes the temporary rule that allowed
+  pending `visual_only` media to cover: missing/stale geometry now contains.
 
 ## Root Cause
 
@@ -219,7 +223,10 @@ The full-catalog static preview exposed several user-visible regressions around 
 - event `6851` initially exposes the established branded primary CTA `Показать телефон` with a copy icon and no handset/helper line; one click reveals the standard-size formatted number inside that same CTA, copies the normalized value and shows both transient `Номер скопирован` toast and polite live feedback;
 - event `6851` keeps admission, the one-line branded CTA and all action controls on the same visual row at `1366×768`, `1536×864` and `1920×1080`; its calendar is icon-only and the CTA/panel rectangles are stable before and after reveal/copy success;
 - desktop OCR/documents are contained in fullscreen, click/backdrop close works, and both responsive galleries use the shared accepted lockup;
-- wide `visual_only` event-detail photos, including event `5658`, use a viewport-bounded `cover` hero and `cover` fullscreen slides even while semantic role enrichment is pending; OCR/unknown-text slides remain `contain` across the complete generated catalog;
+- superseded by `INC-2026-07-20-image-geometry-pixel-drift`: wide visual media,
+  including event `5658`, may use `cover` only with classified `event_photo`,
+  positive semantic crop permission and exact-current protected geometry for a
+  known target ratio; pending/OCR/unknown/stale rows remain `contain`;
 - the desktop lab exposes the real event `4783` as a named efficient vertical-series carousel with exactly seven quality-admitted items, `7 из 12` disclosure, height-fit multi-photo viewport and symmetric navigation;
 - insufficient-feedback placeholder copy is absent.
 - at phone widths `320` and `390`, a crawl of at least 36 event pages preserves the exact current preview prefix and the accepted mobile hero/action surface; actual hero-related, other-date, initial/load-more discovery and personal-feed clicks must be exercised;

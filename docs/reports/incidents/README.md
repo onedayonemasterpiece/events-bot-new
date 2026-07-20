@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-20-image-geometry-pixel-drift.md`
+  - Scope: Smart Update media materialization, exact pixel/geometry identity,
+    transient enrichment recovery, static bbox export and safe crop consumption.
+  - Must not regress: pixel-distinct posters never overwrite one managed object;
+    stale geometry is invalidated and re-enqueued; only pixel-current boxes
+    reach renderers, and an unsafe protected-region crop falls back to `contain`.
+
 - `INC-2026-07-19-static-builder-root-overlay-recurrence.md`
   - Scope: Fly root writable overlay, `/tmp` Kaggle video outputs, retained static-site artifacts and scratch readiness.
   - Must not regress: terminal outputs remain bounded, active/recoverable handoffs are preserved, `/healthz`/preflight detects an unwritable root scratch filesystem before scheduled jobs dead-letter.
