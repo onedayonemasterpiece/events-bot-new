@@ -41,3 +41,10 @@ The executable desktop gate is
 `site/scripts/check-listing-desktop-geometry-playwright.sh` (`ADD-V12-13`).
 It also focuses the skip link before scrolling and requires it to remain above
 the restored sticky header rather than becoming a keyboard-only hidden control.
+
+## Published review build
+
+The immutable V27 candidate is available under
+`https://kenigevents.ru/preview-20260720-date-listings-v27-desktop-recovery/`.
+Its four public routes passed the same executable desktop matrix after deploy;
+the review links were delivered to Telegram forum topic `122` as message `411`.

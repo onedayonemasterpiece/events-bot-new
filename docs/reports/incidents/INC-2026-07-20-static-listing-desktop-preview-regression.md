@@ -1,10 +1,10 @@
 # INC-2026-07-20-static-listing-desktop-preview-regression
 
-Status: open
+Status: closed
 Severity: sev2
 Service: KenigEvents static-site public review previews
 Opened: 2026-07-20
-Closed: —
+Closed: 2026-07-20
 Owners: static-site delivery / Codex incident owner
 Related incidents: `INC-2026-07-15-static-desktop-template-regression.md`
 Related docs: `docs/features/static-site-pages/listing-surfaces-v27-desktop-recovery.md`
@@ -37,6 +37,10 @@ above the discovery rail.
 - 2026-07-20: owner reports broken desktop Popular and date routes.
 - 2026-07-20: HTTP, screenshot and built-asset comparison reproduces two
   independent regressions against V18/V22.
+- 2026-07-20: shared layout ownership and sticky geometry restored in
+  `5d31d58a`; immutable V27 published and verified on all four routes.
+- 2026-07-20: review links delivered to Telegram forum topic `122` as message
+  `411` and read back through the approved local E2E session.
 
 ## Root Cause
 
@@ -108,17 +112,27 @@ boundary, then publish a new immutable preview instead of mutating V26.
 
 ## Follow-up Actions
 
-- [ ] Close after public V27 desktop/mobile regression matrix and Telegram receipt.
-- [ ] Keep compiled CSS route coverage in every future preview check.
+- [x] Close after public V27 desktop/mobile regression matrix and Telegram receipt.
+- [x] Keep compiled CSS route coverage in every future preview check.
 - [ ] Repair the independent `check-design-system.mjs` assertion debt and then
   restore it to the package-level preview chain.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending immutable V27 public preview
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `5d31d58aefebdcca7a0953ab5c4cd19213b3ee00` on pushed branch
+  `hotfix/static-listing-desktop-preview-regression-20260720`; this was an
+  immutable review-preview publication, not a production-root promotion.
+- deploy path:
+  `https://kenigevents.ru/preview-20260720-date-listings-v27-desktop-recovery/`
+- regression checks: `npm run check:preview` passed for `220` real events;
+  local and public browser gates passed all `12/12` desktop route/viewport
+  combinations at `1366×768`, `1536×864` and `1920×1080`; Popular mobile
+  preservation passed at `360/390/430`; focused skip link is above the sticky
+  header; final Gemini 3.1 Pro review verdict is `PASS` with no P0/P1 finding.
+- post-deploy verification: Today, Tomorrow, Weekend and Popular returned HTTP
+  `200`; the public Playwright gate found `header top=0`, `rail top=57`, bounded
+  card media and zero horizontal overflow on every desktop combination;
+  Telegram receipt is forum-topic message `411` under anchor `122`.
 
 ## Prevention
 

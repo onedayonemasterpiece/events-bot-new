@@ -37,4 +37,4 @@ lanes:
       - site/src/components/listings/ListingMobileDensitySwitch.astro
     expected_output: immutable V27 preview with four repaired desktop listing routes
     verification_scope: full_local
-    status: planned
+    status: committed_and_published
