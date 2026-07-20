@@ -14,6 +14,12 @@ the full candidate gate succeeds. Historical dated previews are evidence, not
 current review links; production root stays stable until atomic promotion, URL
 lifecycle and rollback gates pass.
 
+The durable single-flight lock follows the remote Kaggle ledger rather than
+the age of the local claim alone. A terminal remote run remains available to
+the exact same job's recovery pass, but a later coalesced Smart Update may
+supersede that orphaned claim immediately and records the supersession in build
+history. A live or non-terminal fresh run still blocks duplicate generation.
+
 `static-event-detail-v11` is the mandatory baseline contract for automatic and
 on-demand builds; v12/v13 are fidelity, idempotency and interaction corrections
 on that same accepted family, not competing lab templates. Its accepted baseline is source SHA

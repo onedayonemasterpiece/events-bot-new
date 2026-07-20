@@ -19,6 +19,9 @@
   topology. The former per-anchor Gemma verifier stays outside the synchronous
   publication path because it costs hundreds of calls per full catalog;
   targeted offline LLM audits remain the quality-review path.
+- Fixed Smart Update static-site single-flight recovery so a fresh local claim
+  whose Kaggle ledger is already terminal cannot block the next coalesced build
+  for the two-hour claim TTL; the supersession is recorded as failed history.
 - Fixed event-media deferred-pair convergence: an early/no-op media worker now
   re-arms exactly one durable job for the earliest future pair retry, without
   spending provider budget early or losing the quarantined review wake-up.

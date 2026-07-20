@@ -905,6 +905,32 @@ def _kaggle_run_is_live(connection: sqlite3.Connection, run_id: str, *, now: dat
     return bool(freshest and (now - freshest).total_seconds() <= stale_seconds)
 
 
+def _kaggle_run_terminal_status(connection: sqlite3.Connection, run_id: str) -> str | None:
+    """Return durable terminal evidence for a remote run, when available.
+
+    A fresh local claim is not proof of live work after Kaggle has already
+    written a terminal ledger row. This distinction lets a later coalesced
+    Smart Update replace an orphaned claim immediately instead of waiting for
+    the two-hour claim TTL.
+    """
+
+    exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='kaggle_run_ledger'"
+    ).fetchone()
+    if not exists:
+        return None
+    row = connection.execute(
+        "SELECT status, terminal_at FROM kaggle_run_ledger WHERE run_id=?",
+        (run_id,),
+    ).fetchone()
+    if not row:
+        return None
+    status = str(row[0] or "").strip().lower()
+    if row[1] or status in {"done", "failed", "error", "cancelled", "complete"}:
+        return status or "terminal"
+    return None
+
+
 def active_static_site_remote_run(
     database_path: str | os.PathLike[str],
     *,
@@ -1029,7 +1055,8 @@ def claim_static_site_build(
         row = connection.execute(
             """
             SELECT last_success_fingerprint, last_success_run_id, active_claim_token,
-                   active_run_id, active_fingerprint, active_claimed_at
+                   active_run_id, active_fingerprint, active_claimed_at,
+                   active_job_id, active_effective_date
             FROM static_site_build_state WHERE release_channel=?
             """,
             (RELEASE_CHANNEL_SECRET,),
@@ -1042,17 +1069,24 @@ def claim_static_site_build(
             active_run_id,
             active_fingerprint,
             active_claimed_at,
+            active_job_id,
+            active_effective_date,
         ) = row
         if active_token:
             claimed_at = _parse_db_timestamp(active_claimed_at)
             claim_fresh = bool(claimed_at and (now_utc - claimed_at).total_seconds() <= stale_seconds)
+            terminal_status = (
+                _kaggle_run_terminal_status(connection, str(active_run_id))
+                if active_run_id
+                else None
+            )
             remote_live = bool(
                 active_run_id
                 and _kaggle_run_is_live(
                     connection, str(active_run_id), now=now_utc, stale_seconds=stale_seconds
                 )
             )
-            if claim_fresh or remote_live:
+            if not terminal_status and (claim_fresh or remote_live):
                 evidence = {"reason": "active_single_flight", "blocking_run_id": active_run_id}
                 connection.execute(
                     """
@@ -1073,6 +1107,29 @@ def claim_static_site_build(
                     input_fingerprint,
                     blocking_run_id=str(active_run_id or "") or None,
                     blocking_fingerprint=str(active_fingerprint or "") or None,
+                )
+            if terminal_status:
+                evidence = {
+                    "reason": "terminal_remote_claim_superseded",
+                    "remote_status": terminal_status,
+                    "superseded_by_run_id": run_id,
+                }
+                connection.execute(
+                    """
+                    INSERT INTO static_site_build_history(
+                        release_channel, job_id, request_watermark, input_fingerprint,
+                        effective_date, force_rebuild, outcome, run_id, evidence_json, created_at
+                    ) VALUES(?, ?, NULL, ?, ?, 0, 'failed', ?, ?, ?)
+                    """,
+                    (
+                        RELEASE_CHANNEL_SECRET,
+                        int(active_job_id or 0) or None,
+                        str(active_fingerprint or "") or None,
+                        str(active_effective_date or "") or None,
+                        str(active_run_id or "") or None,
+                        json.dumps(evidence, sort_keys=True),
+                        now_iso,
+                    ),
                 )
         if not force_rebuild and last_fingerprint == input_fingerprint:
             evidence = {"reason": "unchanged_public_inputs", "previous_run_id": last_run_id}
