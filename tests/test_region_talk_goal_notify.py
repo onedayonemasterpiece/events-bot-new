@@ -246,6 +246,54 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertIn("Источник: https://example.org", message)
         self.assertNotIn("О блогере:", message)
 
+    def test_publication_reader_joins_external_publisher_attestation(self) -> None:
+        mod = load_module()
+        publication = {
+            "post_url": "https://publisher.example/article",
+            "canonical_source_key": "web:publisher.example",
+            "publication_status": "gemini_accept",
+            "publication_candidate_status": "llm_confirmed",
+        }
+        publisher = {
+            "canonical_source_key": "web:publisher.example",
+            "source_url": "https://publisher.example",
+            "source_scope": "external",
+            "source_geo_class": "nonlocal_russia",
+            "source_queue_status": "confirmed_external_publication_research",
+        }
+        calls: list[str] = []
+
+        def fake_read(_pool, _ydb, _table, kind, _limit):
+            calls.append(kind)
+            if kind == "publication_candidate_item":
+                return [dict(publication)]
+            if kind == "external_publication_source_item":
+                return [dict(publisher)]
+            return []
+
+        mod.ensure_ydb_module = lambda: object()
+        mod.ydb_endpoint_database = lambda: ("endpoint", "database")
+        mod.ydb_credentials = lambda _ydb: object()
+        mod.ydb_table_path = lambda _database: "table"
+        mod.read_kind_rows = fake_read
+
+        class Driver:
+            def wait(self, **_kwargs):
+                return None
+
+        class Ydb:
+            Driver = staticmethod(lambda **_kwargs: Driver())
+            SessionPool = staticmethod(lambda _driver: object())
+
+        mod.ensure_ydb_module = lambda: Ydb
+        _ydb, _driver, _pool, _table, rows = mod.read_publication_rows(3)
+
+        self.assertIn("external_publication_source_item", calls)
+        self.assertEqual(
+            rows[0]["_live_authoritative_source_fingerprint"],
+            mod.authoritative_source_fingerprint(publisher),
+        )
+
     def test_candidate_message_preserves_zero_scores(self) -> None:
         mod = load_module()
         message = mod.candidate_message({

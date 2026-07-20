@@ -340,6 +340,10 @@ def read_publication_rows(limit: int) -> tuple[Any, Any, Any, str, list[dict[str
     source_rows = read_kind_rows(pool, ydb, table, "source_queue_item", source_limit)
     source_rows += read_kind_rows(pool, ydb, table, "source_status_item", source_limit)
     source_rows += read_kind_rows(pool, ydb, table, "online_source_item", source_limit)
+    # Editorial/academic publishers live in their own attestation kind and are
+    # intentionally not added to the Telegram/VK source scan queue. They must
+    # still participate in the same live fingerprint check before delivery.
+    source_rows += read_kind_rows(pool, ydb, table, "external_publication_source_item", source_limit)
     attach_live_source_fingerprints(out, source_rows)
     out.sort(key=lambda r: (int(r.get("publication_rank") or 999999), -float(r.get("publication_score") or 0)))
     return ydb, driver, pool, table, out
