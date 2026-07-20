@@ -746,6 +746,26 @@ export function initKeyboardEventNavigation(options = {}) {
     };
 
     const actionLabel = (code) => ({ KeyL: 'Лайк', KeyK: 'Календарь', KeyS: 'Поделиться' })[code] || 'Действие';
+    let pendingConsentOwner = null;
+    const captureVisibleConsent = () => {
+      if (!pendingConsentOwner) return false;
+      const consent = doc.querySelector('[data-personalization-consent].is-visible');
+      if (!(consent instanceof win.HTMLElement)) return false;
+      const pending = pendingConsentOwner;
+      pendingConsentOwner = null;
+      const token = ++overlaySequence;
+      overlayReturn = { token, type: 'consent', owner: pending.owner, overlay: consent, opener: pending.opener };
+      observeConsentOverlay(consent);
+      pressedArrows.clear();
+      resetDownGesture();
+      scheduleFrame(() => {
+        if (token !== overlaySequence || !consent.classList.contains('is-visible')) return;
+        const accept = consent.querySelector('[data-personalization-consent-accept]');
+        if (accept instanceof win.HTMLElement) accept.focus({ preventScroll: true });
+        else consent.focus({ preventScroll: true });
+      });
+      return true;
+    };
     const runAction = (scope, event) => {
       const action = actionFor(scope, event.code);
       event.preventDefault();
@@ -757,20 +777,18 @@ export function initKeyboardEventNavigation(options = {}) {
       logicalOwner = owner;
       const shortcutAction = event.code === 'KeyL' ? 'like_toggle' : event.code === 'KeyK' ? 'calendar_add' : 'copy_event';
       action.dataset.keyboardShortcutPending = shortcutAction;
+      // The production feedback controller may await card/feed state before it
+      // creates the consent dialog. Arm ownership before delegating to the real
+      // control, then capture either synchronously or from the existing body
+      // mutation observer; do not implement a parallel consent state.
+      if (shortcutAction === 'like_toggle') pendingConsentOwner = { owner, opener: action };
       action.click();
-      const consent = doc.querySelector('[data-personalization-consent].is-visible');
-      if (consent instanceof win.HTMLElement) {
-        const token = ++overlaySequence;
-        overlayReturn = { token, type: 'consent', owner, overlay: consent, opener: action };
-        observeConsentOverlay(consent);
-        pressedArrows.clear();
-        resetDownGesture();
-        scheduleFrame(() => {
-          if (token !== overlaySequence || !consent.classList.contains('is-visible')) return;
-          const accept = consent.querySelector('[data-personalization-consent-accept]');
-          if (accept instanceof win.HTMLElement) accept.focus({ preventScroll: true });
-          else consent.focus({ preventScroll: true });
-        });
+      captureVisibleConsent();
+      if (shortcutAction === 'like_toggle') {
+        scheduleTimeout(() => {
+          captureVisibleConsent();
+          if (pendingConsentOwner?.opener === action) pendingConsentOwner = null;
+        }, 2000);
       }
       if (shortcutAction === 'calendar_add' && action.dataset.calendarState === 'added') {
         recordShortcutUse(shortcutAction);
@@ -877,6 +895,7 @@ export function initKeyboardEventNavigation(options = {}) {
         if (node.matches('[data-personalization-consent]')) observeConsentOverlay(node);
         node.querySelectorAll?.('[data-personalization-consent]').forEach(observeConsentOverlay);
       }));
+      captureVisibleConsent();
     }).observe(doc.body, { childList: true, subtree: true });
 
     const activeGalleryRecommendation = (gallery) => {

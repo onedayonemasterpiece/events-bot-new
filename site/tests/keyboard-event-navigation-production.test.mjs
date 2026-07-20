@@ -38,6 +38,9 @@ test('router has reversible lifecycle and disarms lost-focus provenance on page 
   assert.match(router, /frames\.forEach\(\(id\) => win\.cancelAnimationFrame\(id\)\)/u);
   assert.match(router, /listen\(win, 'blur',[\s\S]*bodyRecoveryArmed = false/u);
   assert.match(router, /listen\(doc, 'visibilitychange',[\s\S]*bodyRecoveryArmed = false/u);
+  assert.match(router, /pendingConsentOwner = \{ owner, opener: action \}/u);
+  assert.match(router, /captureVisibleConsent\(\);\s*\n\s*\}\)\.observe\(doc\.body/u,
+    'production consent may appear asynchronously after the real feedback controller yields');
   assert.match(router, /return \{ destroy, get active\(\)/u);
 });
 

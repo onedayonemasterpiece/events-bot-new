@@ -239,7 +239,11 @@ The module exposes an explicit `init()`/`destroy()` controller, owns global
 listeners with `AbortController`, disconnects mutation observers and cancels
 timers/animation frames on teardown. Production removes prototype autofocus and
 disarms lost-focus `L` provenance after blur/hidden until a new managed
-focus/pointer owner exists.
+focus/pointer owner exists. Because the canonical feedback controller may await
+card/feed state before it creates the consent dialog, the router arms the
+logical owner before clicking the existing like control and captures the real
+dialog from the shared DOM lifecycle; it does not create parallel consent
+state.
 
 ### Reviewed source and historical handoff
 
