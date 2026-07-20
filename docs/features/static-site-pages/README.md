@@ -43,7 +43,24 @@ readiness contract rather than Playwright's discouraged `networkidle` state,
 and each root/candidate subprocess is killed after five minutes. The local
 HTTP fixture also force-closes residual image sockets after Chromium exits, so
 the required visual gate fails closed instead of occupying the Kaggle
-single-flight lease indefinitely.
+single-flight lease indefinitely. Continuation readiness is exercised by
+crossing the actual end-of-related `IntersectionObserver` boundary with a
+wheel-like scroll; the gate never jumps directly to `scrollHeight`, which can
+skip the trigger in one frame and produce a false timeout.
+Because immutable CDN assets are create-only and do not exist until after this
+gate passes, Playwright maps only the candidate's `/_astro/**` requests back to
+the checked generated tree. Event media remains on the real CDN. This ordering
+ensures the prepublication gate executes the exact generated JS/CSS without
+requiring or mutating a public build prefix first.
+Document crop acceptance is card-local: `coverCrop` and computed `object-fit`
+must prove the concrete card safe. A mixed row's `rowWorstCrop` is retained as
+diagnostic evidence but is not attributed to a `document-contain` neighbour,
+because that value describes the row's worst *potential* cover crop rather
+than an applied crop on every card.
+The keyboard compatibility migration rewrites continuation links only for
+legacy prefixed candidates. Root-form cards retain the canonical component's
+relative `href` in both `data-card-href` and media/title anchors, so keyboard
+enhancement cannot create a second URL representation or behaviour.
 
 The reviewed desktop keyboard navigator V7 is documented in
 [keyboard-event-navigation-prototype.md](keyboard-event-navigation-prototype.md).

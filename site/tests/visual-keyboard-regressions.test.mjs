@@ -133,4 +133,6 @@ test('router persists one bounded gallery handoff and consumes it for body arrow
   assert.match(router, /const targetKind = footerShare\.contains\(target\)[\s\S]*managed-card/u);
   assert.match(router, /targetKind === 'event-surface' \? surface\.getBoundingClientRect\(\) : null/u);
   assert.match(router, /footerViewportShortcutOwnership/u);
+  assert.match(router, /if \(!legacyBase\) return;[\s\S]*anchor\.href = normalize\(anchor\.href\)/u,
+    'root continuation cards must retain the same relative canonical links as static cards');
 });

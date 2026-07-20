@@ -22,6 +22,18 @@ export function expectedObjectFitForTreatment(treatment) {
   return String(treatment || '').endsWith('-contain') ? 'contain' : 'cover';
 }
 
+export function localReleaseAssetPath(value) {
+  let url;
+  try {
+    url = new URL(String(value || ''));
+  } catch (_) {
+    return null;
+  }
+  if (url.hostname !== 'static.kenigevents.ru') return null;
+  const marker = url.pathname.indexOf('/_astro/');
+  return marker >= 0 ? url.pathname.slice(marker) : null;
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -181,8 +193,25 @@ export function staticSpecimenCandidates(root, basePath, routes) {
 }
 
 async function waitForContinuation(page) {
-  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
-  await page.waitForFunction(() => document.querySelectorAll('[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot] > [data-event-card]').length > 0, null, { timeout: 15_000 });
+  // Hydration intentionally starts when the end-of-related marker approaches
+  // the viewport. Jumping straight to scrollHeight can skip that marker in one
+  // frame and never fire IntersectionObserver. Exercise the same boundary a
+  // wheel/touchpad user crosses, then wait on the rendered-card contract.
+  const trigger = page.locator('[data-hide-sticky-after]:visible').first();
+  invariant(await trigger.count() === 1, 'event continuation trigger is missing');
+  await trigger.scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 320);
+  await page.waitForFunction(() => {
+    const section = document.querySelector('[data-personal-feed-section][data-listing-context="event-detail"]');
+    const cards = section?.querySelectorAll('[data-personal-feed-slot] > [data-event-card]').length || 0;
+    return cards > 0 || section?.getAttribute('data-personal-feed-mode') === 'unavailable';
+  }, null, { timeout: 15_000 });
+  const state = await page.locator('[data-personal-feed-section][data-listing-context="event-detail"]').evaluate((section) => ({
+    cards: section.querySelectorAll('[data-personal-feed-slot] > [data-event-card]').length,
+    mode: section.getAttribute('data-personal-feed-mode'),
+    status: section.querySelector('[data-personal-feed-status]')?.textContent?.trim() || '',
+  }));
+  invariant(state.cards > 0, `event continuation did not render cards: mode=${state.mode} status=${state.status}`);
 }
 
 async function chooseSpecimen(browser, origin, candidates) {
@@ -259,7 +288,10 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     const expectedFit = expectedObjectFitForTreatment(item.treatment);
     invariant(item.objectFit === expectedFit, `card ${item.id} crop mode ${item.objectFit} != ${expectedFit}`);
     if (item.mediaKind === 'document') {
-      invariant(item.coverCrop <= 0.2001 && item.rowWorstCrop <= 0.2001, `card ${item.id} exceeds the 20% document crop contract`);
+      // rowWorstCrop describes the worst *potential* cover crop anywhere in a
+      // mixed row. It may be high because of a neighbouring visual photo and
+      // is not a crop applied to this fail-closed document card.
+      invariant(item.coverCrop <= 0.2001, `card ${item.id} exceeds the 20% document crop contract: cover=${item.coverCrop}`);
       if (item.objectFit === 'cover') invariant(item.actualCrop <= 0.205, `card ${item.id} visually crops ${item.actualCrop}`);
     }
   }
@@ -379,6 +411,25 @@ async function runBrowserGate({ root, basePath, origin, browser }) {
   const context = await browser.newContext({ viewport: { width: 1536, height: 864 } });
   context.setDefaultTimeout(BROWSER_GATE_ACTION_TIMEOUT_MS);
   context.setDefaultNavigationTimeout(BROWSER_GATE_NAVIGATION_TIMEOUT_MS);
+  // Production HTML intentionally points at the immutable CDN build prefix,
+  // but the prefix is published only after this fail-closed gate succeeds.
+  // Serve its generated Astro runtime from the checked tree itself; otherwise
+  // every script is a pre-publication 404 and the gate tests static markup
+  // rather than the real interactions it is supposed to certify.
+  await context.route('https://static.kenigevents.ru/**', async (route) => {
+    const localPath = localReleaseAssetPath(route.request().url());
+    if (!localPath) {
+      await route.continue();
+      return;
+    }
+    const response = await fetch(`${origin}${localPath}`);
+    invariant(response.ok, `generated local asset is missing: ${localPath}`);
+    await route.fulfill({
+      status: response.status,
+      contentType: response.headers.get('content-type') || undefined,
+      body: Buffer.from(await response.arrayBuffer()),
+    });
+  });
   await context.addInitScript(() => {
     window.__releaseGateClipboard = { text: [], images: [] };
     Object.defineProperty(navigator, 'clipboard', {

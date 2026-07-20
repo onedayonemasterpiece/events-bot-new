@@ -7,6 +7,7 @@ import {
   BROWSER_GATE_ACTION_TIMEOUT_MS,
   BROWSER_GATE_NAVIGATION_TIMEOUT_MS,
   expectedObjectFitForTreatment,
+  localReleaseAssetPath,
   recordBrowserVisualSuccess,
   releaseRootMetadata,
   staticSpecimenCandidates,
@@ -18,13 +19,32 @@ test('R03 mandatory browser gate has bounded action/navigation waits and no netw
   assert.equal(BROWSER_GATE_NAVIGATION_TIMEOUT_MS, 12_000);
   const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /waitForLoadState\(['"]networkidle['"]\)/u);
+  assert.doesNotMatch(source, /window\.scrollTo\(\{\s*top:\s*document\.documentElement\.scrollHeight/gu);
+  assert.match(source, /data-hide-sticky-after/gu);
+  assert.match(source, /page\.mouse\.wheel\(0, 320\)/gu);
   assert.match(source, /closeAllConnections/u);
+});
+
+test('R03 prepublication gate maps only immutable CDN Astro runtime back to the checked tree', () => {
+  assert.equal(
+    localReleaseAssetPath('https://static.kenigevents.ru/build-123/_astro/EventLayout.hash.js'),
+    '/_astro/EventLayout.hash.js',
+  );
+  assert.equal(localReleaseAssetPath('https://static.kenigevents.ru/p/event.webp'), null);
+  assert.equal(localReleaseAssetPath('https://kenigevents.ru/_astro/app.js'), null);
+  assert.equal(localReleaseAssetPath('not-a-url'), null);
 });
 
 test('R01 crop assertion preserves both document and visual contain decisions', () => {
   assert.equal(expectedObjectFitForTreatment('document-contain'), 'contain');
   assert.equal(expectedObjectFitForTreatment('visual-contain'), 'contain');
   assert.equal(expectedObjectFitForTreatment('visual-cover'), 'cover');
+});
+
+test('R01 document acceptance is card-local and does not mistake a mixed row potential for applied crop', () => {
+  const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
+  assert.match(source, /item\.coverCrop <= 0\.2001/gu);
+  assert.doesNotMatch(source, /item\.coverCrop <= 0\.2001 && item\.rowWorstCrop <= 0\.2001/gu);
 });
 
 const successfulReport = {

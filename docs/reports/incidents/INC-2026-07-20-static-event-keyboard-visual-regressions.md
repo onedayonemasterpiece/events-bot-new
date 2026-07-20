@@ -208,6 +208,14 @@ secret preproduction candidate family.
   browser actions/navigation and the Kaggle browser-gate subprocess, and
   force-close residual local HTTP sockets so the visual gate cannot hold the
   production single-flight claim indefinitely.
+- [x] Made the generated-tree gate cross the real end-of-related observer
+  boundary with wheel-like scrolling before asserting `Ещё события`; a direct
+  jump to `scrollHeight` could skip the trigger and was not the reported user
+  journey.
+- [x] Made the prepublication browser gate serve immutable `/_astro/**` runtime
+  requests from the checked tree itself. The CDN build prefix is create-only
+  and intentionally does not exist until the gate passes; testing its 404s
+  left interaction code unloaded and could never certify the user journey.
 - [x] Bound related caches to the atomic vector-corpus receipt and added exact-
   normalized-title reciprocity plus fail-closed graph topology checks.
 - [ ] Publish and verify a fresh immutable secret candidate from `origin/main`.
