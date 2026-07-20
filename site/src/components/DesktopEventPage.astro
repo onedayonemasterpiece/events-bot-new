@@ -117,21 +117,16 @@ const hiddenDuplicateSourceIndexes = new Set(duplicateSourceIndexes);
 const relatedWithRoles = surface === 'lab' ? related.map((item) => item.image_media_role
   ? item
   : ({ ...item, image_media_role:item.image_text_mode === 'visual_only' ? 'event_photo' : 'unknown_document' } as PreviewEvent)) : related;
-const relatedMediaGeometry = (item:PreviewEvent) => {
-  const documentMedia = item.image_text_mode !== 'visual_only';
-  const primaryUrl = eventImageUrl(item.image_url) || item.image_url;
-  const asset = (item.image_assets || []).find((candidate) => (eventImageUrl(candidate.src) || candidate.src) === primaryUrl)
-    || item.image_assets?.[0];
-  const ratio = asset?.width && asset?.height ? asset.width / asset.height : (documentMedia ? .8 : 1);
-  return { documentMedia, ratio:Number.isFinite(ratio) && ratio > 0 ? ratio : (documentMedia ? .8 : 1) };
-};
 type DesktopRelatedLayout = {
   mediaRatio:number;
   rowRatio:number;
   rowIndex:number;
   rowMode:string;
   mediaKind:'document' | 'visual';
-  mediaTreatment:'document-safe-cover' | 'document-contain' | 'visual-cover';
+  mediaTreatment:'document-contain' | 'visual-cover' | 'visual-contain';
+  fit:'contain' | 'cover';
+  objectPosition:string;
+  cropReason:string;
   coverCrop:number;
   potentialCoverCrop:number;
   rowWorstCrop:number;
@@ -140,7 +135,6 @@ const relatedForRender = packRelatedCardRows(relatedWithRoles, {
   limit:10,
   rowSize:3,
   mediaTreatment:relatedMediaTreatment,
-  geometry:relatedMediaGeometry,
 }) as Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }>;
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const rawAssets = event.image_assets || [];
@@ -1866,17 +1860,15 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--reading .desktop-clean-travel { grid-column:2; grid-row:5; width:auto; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(5rem,9vw,9rem); grid-template-columns:1fr; }
     .desktop-clean-event--reading .desktop-prototype__media-rail { right:1rem; bottom:1rem; }
 
-    /* Shared desktop related rows: one ratio per row; visual fit comes from the
-       exact-geometry solver, while document treatments retain their reviewed rules. */
+    /* Shared desktop related rows: EventCard owns exact fit/position; this
+       surface supplies geometry only and never overrides the crop decision. */
     .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto minmax(0,1fr) minmax(58px,auto) minmax(56px,auto); }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-link) { display:block; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; isolation:isolate; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; background:#d2c5b7; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; z-index:2; inset:0; width:100% !important; height:100% !important; }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; }
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-cover"] .event-card__media),
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media),
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-contain"] .event-card__media) { object-fit:contain !important; object-position:center center !important; background:#15110f !important; }
+    .desktop-clean-related__grid :global([data-card-authoritative-fit="contain"]) { background:#15110f; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }
@@ -2257,12 +2249,6 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event :global(.desktop-prototype__icon-action) { min-width:56px; min-height:56px; padding:.45rem; }
 
     .desktop-prototype__media-rail--poster { justify-content:safe center; }
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) {
-      object-fit:contain !important;
-      object-position:50% 50% !important;
-      background:#15110f !important;
-    }
-
     .desktop-portrait-viewer {
       position:fixed;
       z-index:10020;

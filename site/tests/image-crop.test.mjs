@@ -80,8 +80,9 @@ test('responsive surfaces fail closed and only an exact resolved card ratio invo
     read('DesktopEventPage.astro'),
   ]);
 
-  assert.match(card, /desktopRelatedCrop\s*\? resolveEventImageCrop\(primaryImageAsset, cardTargetAspect\)/u);
-  assert.match(card, /reason:'responsive_target_unknown'/u);
+  assert.match(card, /desktopRelatedCrop\s*\? resolveRelatedCardMediaTreatment\(event, cardTargetAspect\)/u);
+  assert.match(card, /data-card-authoritative-fit=\{cardCrop\.fit\}/u);
+  assert.match(card, /cropReason:'responsive_target_unknown'/u);
   assert.doesNotMatch(
     desktop,
     /\[data-lab-media-kind="visual"\] \.event-card__media\) \{[^}]*object-fit:cover !important;/u,

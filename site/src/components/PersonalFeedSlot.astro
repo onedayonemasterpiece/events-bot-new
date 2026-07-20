@@ -111,19 +111,10 @@ const headingId = `personal-feed-${context}-title`;
     height: 100% !important;
   }
 
-  .personal-feed-section--event-detail :global([data-lab-media-kind="visual"] .event-card__media) {
-    object-fit: cover !important;
-  }
-
-  .personal-feed-section--event-detail :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) {
-    object-fit: cover !important;
-    object-position: center center !important;
-  }
-
-  .personal-feed-section--event-detail :global([data-lab-media-treatment="document-contain"] .event-card__media) {
-    object-fit: contain !important;
-    object-position: center center !important;
-    background: #15110f !important;
+  /* EventCard/relatedCardLayout own the exact fit on both continuation
+     surfaces. The personal feed may style contain bands, never change fit. */
+  .personal-feed-section--event-detail :global([data-card-authoritative-fit="contain"]) {
+    background: #15110f;
   }
 
   .personal-feed-section__load-more,

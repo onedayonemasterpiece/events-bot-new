@@ -1,6 +1,41 @@
 /** Reviewed V7 desktop event keyboard router.
  * Source contract: d0027a53. DOM actions delegate to the existing controls.
  */
+const GALLERY_HANDOFF_STORAGE_KEY = 'ke_keyboard_gallery_handoff_v1';
+const GALLERY_HANDOFF_TTL_MS = 30_000;
+
+export function keyboardGalleryDestination(href, currentHref) {
+  try {
+    const current = new URL(currentHref);
+    const destination = new URL(href, current);
+    if (destination.origin !== current.origin || !/\/sobytiya\/[^/]+\/?$/u.test(destination.pathname)) return '';
+    return `${destination.pathname}${destination.search}`;
+  } catch {
+    return '';
+  }
+}
+
+function rectIntersection(rect, viewportWidth, viewportHeight) {
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) return { width:0, height:0 };
+  return {
+    width:Math.max(0, Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0)),
+    height:Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0)),
+  };
+}
+
+/** Pure ownership policy used by the router and focused regression tests. */
+export function footerViewportShortcutOwnership({ footerRect, targetRect = null, targetKind, viewportWidth, viewportHeight }) {
+  if (targetKind === 'footer') return true;
+  if (!['body', 'managed-card'].includes(targetKind)) return false;
+  const footerIntersection = rectIntersection(footerRect, viewportWidth, viewportHeight);
+  const footerVisibleEnough = footerIntersection.width >= Math.min(120, footerRect?.width || 0)
+    && footerIntersection.height >= Math.min(72, (footerRect?.height || 0) * 0.35);
+  if (!footerVisibleEnough) return false;
+  if (targetKind === 'body') return true;
+  const targetIntersection = rectIntersection(targetRect, viewportWidth, viewportHeight);
+  return targetIntersection.width === 0 || targetIntersection.height === 0;
+}
+
 export function initKeyboardEventNavigation(options = {}) {
   const doc = options.document || document;
   const win = options.window || window;
@@ -374,6 +409,40 @@ export function initKeyboardEventNavigation(options = {}) {
     let relatedRestoreFrame = 0;
     let continuationRestoreFrame = 0;
     let posterPngPromise = null;
+    const clearGalleryHandoff = () => {
+      try { win.sessionStorage.removeItem(GALLERY_HANDOFF_STORAGE_KEY); } catch {}
+    };
+    const armGalleryHandoff = (anchor) => {
+      if (!(anchor instanceof win.HTMLAnchorElement)) return false;
+      const destination = keyboardGalleryDestination(anchor.href, win.location.href);
+      if (!destination) return false;
+      try {
+        win.sessionStorage.setItem(GALLERY_HANDOFF_STORAGE_KEY, JSON.stringify({
+          version:1,
+          destination,
+          expires_at:Date.now() + GALLERY_HANDOFF_TTL_MS,
+        }));
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const readGalleryHandoff = () => {
+      try {
+        const value = JSON.parse(win.sessionStorage.getItem(GALLERY_HANDOFF_STORAGE_KEY) || 'null');
+        clearGalleryHandoff();
+        const current = keyboardGalleryDestination(win.location.href, win.location.href);
+        return value?.version === 1
+          && value.destination === current
+          && Number(value.expires_at || 0) >= Date.now()
+          ? Number(value.expires_at)
+          : 0;
+      } catch {
+        clearGalleryHandoff();
+        return 0;
+      }
+    };
+    let galleryDestinationHandoffExpiresAt = readGalleryHandoff();
     const setStatus = (message) => {
       if (!(status instanceof win.HTMLElement)) return;
       win.clearTimeout(statusTimer);
@@ -949,7 +1018,19 @@ export function initKeyboardEventNavigation(options = {}) {
 
     const footerOwnsShortcut = (target, code) => {
       if (!(footerShare instanceof win.HTMLElement) || !['KeyP', 'KeyS'].includes(code)) return false;
-      return footerShare.contains(target);
+      const managedCard = managedCardFor(target);
+      const targetKind = footerShare.contains(target)
+        ? 'footer'
+        : target === doc.body || target === doc.documentElement
+          ? 'body'
+          : managedCard instanceof win.HTMLElement ? 'managed-card' : 'other';
+      return footerViewportShortcutOwnership({
+        footerRect:footerShare.getBoundingClientRect(),
+        targetRect:managedCard?.getBoundingClientRect() || null,
+        targetKind,
+        viewportWidth:Math.max(0, Number(win.innerWidth || doc.documentElement.clientWidth || 0)),
+        viewportHeight:Math.max(0, Number(win.innerHeight || doc.documentElement.clientHeight || 0)),
+      });
     };
 
     const isEditing = (target) => target instanceof win.HTMLElement && (
@@ -1006,6 +1087,7 @@ export function initKeyboardEventNavigation(options = {}) {
           if (target === gallery) {
             event.preventDefault();
             recordShortcutUse('gallery_recommendation_enter');
+            armGalleryHandoff(recommendation);
             recommendation.click();
           }
         } else if (recommendation instanceof win.HTMLAnchorElement && event.code === 'Space' && !event.repeat) {
@@ -1041,6 +1123,20 @@ export function initKeyboardEventNavigation(options = {}) {
           return;
         }
         pressedArrows.add(event.code);
+      }
+
+      if (galleryDestinationHandoffExpiresAt >= Date.now()
+        && (event.code === 'ArrowLeft' || event.code === 'ArrowRight')
+        && (target === doc.body || target === doc.documentElement)) {
+        galleryDestinationHandoffExpiresAt = 0;
+        if (selectHero(event.code === 'ArrowRight' ? 1 : -1)) {
+          event.preventDefault();
+          surface.focus({ preventScroll:true });
+          captureLogicalOwner(surface);
+          bodyRecoveryArmed = true;
+          recordShortcutUse(event.code === 'ArrowRight' ? 'hero_next' : 'hero_previous');
+        }
+        return;
       }
 
       if (event.code === 'ArrowDown' && (target === doc.body || target === doc.documentElement)) {
@@ -1216,6 +1312,7 @@ export function initKeyboardEventNavigation(options = {}) {
       if (gallery !== arm.gallery || recommendation !== arm.recommendation || event.target !== arm.target || doc.activeElement !== arm.target) return;
       event.preventDefault();
       recordShortcutUse('gallery_recommendation_space');
+      armGalleryHandoff(recommendation);
       recommendation.click();
     });
 
@@ -1223,6 +1320,9 @@ export function initKeyboardEventNavigation(options = {}) {
       if (gallerySpaceArm && doc.activeElement !== gallerySpaceArm.target) gallerySpaceArm = null;
       if (downGesture && doc.activeElement !== surface) resetDownGesture();
       const active = doc.activeElement;
+      if (galleryDestinationHandoffExpiresAt && active !== doc.body && active !== doc.documentElement) {
+        galleryDestinationHandoffExpiresAt = 0;
+      }
       if (active === surface || surface.contains(active) || managedCardFor(active)) {
         captureLogicalOwner(active);
         bodyRecoveryArmed = true;
@@ -1232,6 +1332,7 @@ export function initKeyboardEventNavigation(options = {}) {
       }
     });
     listen(doc, 'pointerdown', (event) => {
+      galleryDestinationHandoffExpiresAt = 0;
       resetDownGesture();
       pressedArrows.clear();
       suppressPageDownUntilArrowDownRelease = false;
