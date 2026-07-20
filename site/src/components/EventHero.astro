@@ -37,6 +37,8 @@ type HeroGalleryImage = {
   width?: number;
   height?: number;
   low_resolution_portrait?: boolean;
+  protected_crop_fit?: 'contain' | 'cover';
+  protected_crop_reason?: string;
 };
 
 const { event, modeOverride, composition, headingTag = 'h1', galleryCta, metaTreatment = 'standard' } = Astro.props;
@@ -108,8 +110,13 @@ function isReliableHeroGalleryImageUrl(value: string | null | undefined): boolea
     return true;
   }
 }
-const focalObjectPosition = event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null;
-const heroObjectPosition = heroMode === 'photo-cover' ? normalizeObjectPosition(event.image_object_position || focalObjectPosition) : null;
+// This component spans fixed-ratio, viewport-height and immersive layouts. A
+// server-side ratio guess cannot prove one crop safe for all of them, so it
+// remains contained until a consumer with the actual target box solves it.
+const primaryHeroCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
+const heroObjectPosition = heroMode === 'photo-cover' && primaryHeroCrop.fit === 'cover'
+  ? normalizeObjectPosition(primaryHeroCrop.objectPosition)
+  : null;
 const ctaIsExternal = isExternalHttpUrl(ctaHref);
 const ctaIsTelephone = isTelephoneUrl(ctaHref);
 
@@ -131,6 +138,8 @@ const galleryImages = (() => {
       width: image?.width,
       height: image?.height,
       low_resolution_portrait: image?.low_resolution_portrait,
+      protected_crop_fit: image?.protected_crop_fit || 'contain',
+      protected_crop_reason: image?.protected_crop_reason || 'missing_crop_decision',
     });
   };
   if (primaryImageUrl) {
@@ -139,24 +148,29 @@ const galleryImages = (() => {
       alt: heroAlt,
       image_text_mode: primaryImageTextMode,
       recommended_object_position: heroObjectPosition || undefined,
-      recommended_hero_fit: heroMode === 'photo-cover' ? 'cover' : 'contain',
+      recommended_hero_fit: heroMode === 'photo-cover' ? primaryHeroCrop.fit : 'contain',
       media_role: primaryImageAsset?.media_role || event.image_media_role,
       width: primaryImageAsset?.width,
       height: primaryImageAsset?.height,
       low_resolution_portrait: primaryLowResolutionPortrait,
+      protected_crop_fit: primaryHeroCrop.fit,
+      protected_crop_reason: primaryHeroCrop.reason,
     });
   }
   for (const asset of admittedImageAssets) {
+    const galleryCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
     push({
       src: eventImageUrl(asset.src) || asset.src,
       alt: asset.alt || heroAlt,
       image_text_mode: asset.image_text_mode || 'unknown',
-      recommended_object_position: asset.recommended_object_position,
-      recommended_hero_fit: asset.recommended_hero_fit,
+      recommended_object_position: galleryCrop.fit === 'cover' ? galleryCrop.objectPosition : undefined,
+      recommended_hero_fit: galleryCrop.fit,
       media_role: asset.media_role,
       width: asset.width,
       height: asset.height,
       low_resolution_portrait: admittedImageAssets.length === 1 && isLowResolutionPortraitEventMedia(asset),
+      protected_crop_fit: galleryCrop.fit,
+      protected_crop_reason: galleryCrop.reason,
     });
   }
   return out;
@@ -184,7 +198,10 @@ const showTicketCta = Boolean(ctaHref);
           decoding="async"
           fetchpriority="high"
           data-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined}
+          data-protected-crop-fit={primaryHeroCrop.fit}
+          data-protected-crop-reason={primaryHeroCrop.reason}
           style={[
+            `object-fit:${primaryLowResolutionPortrait ? 'contain' : primaryHeroCrop.fit}`,
             heroObjectPosition ? `object-position:${heroObjectPosition}` : '',
             primaryLowResolutionPortrait && primaryImageAsset?.width ? `--hero-source-width:${primaryImageAsset.width}px` : '',
             primaryLowResolutionPortrait && primaryImageAsset?.height ? `--hero-source-height:${primaryImageAsset.height}px` : '',
@@ -281,9 +298,12 @@ const showTicketCta = Boolean(ctaHref);
               data-event-id={event.id}
               data-event-title={event.title}
               data-low-resolution-portrait={image.low_resolution_portrait ? 'true' : undefined}
+              data-protected-crop-fit={image.protected_crop_fit}
+              data-protected-crop-reason={image.protected_crop_reason}
               width={image.width}
               height={image.height}
               style={[
+                `object-fit:${image.low_resolution_portrait ? 'contain' : image.protected_crop_fit || 'contain'}`,
                 image.recommended_object_position ? `object-position:${image.recommended_object_position}` : '',
                 image.low_resolution_portrait && image.width ? `--gallery-source-width:${image.width}px` : '',
                 image.low_resolution_portrait && image.height ? `--gallery-source-height:${image.height}px` : '',

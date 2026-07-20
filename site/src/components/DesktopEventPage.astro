@@ -74,6 +74,8 @@ type GalleryImage = {
   recommended_hero_fit?: EventImageAsset['recommended_hero_fit'];
   safe_crop?: boolean;
   thumbnail_sources?: EventImageDerivative[];
+  protected_crop_fit?: 'contain' | 'cover';
+  protected_crop_reason?: string;
 };
 
 const {
@@ -150,13 +152,21 @@ const typedFallbackArt = preferredUrl ? null : resolveEventFallbackArt(event);
 const preferredWidth = heroWidth || preferredAsset?.width || 1600;
 const preferredHeight = heroHeight || preferredAsset?.height || 1000;
 const ratio = preferredWidth / preferredHeight;
-const preferredPosition = heroObjectPosition || preferredAsset?.recommended_object_position || event.image_object_position || '50% 50%';
+// Desktop heroes use viewport-height, split and continuous editorial frames;
+// their target aspect is not known at SSR time. Keep them contained rather
+// than presenting a 16:9 approximation as a proven-safe crop.
+const preferredCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
+const preferredPosition = preferredCrop.fit === 'cover' ? preferredCrop.objectPosition : '50% 50%';
 const selectedMediaMode = forcedOcrSourceIndexes.has(heroImageIndex)
   ? 'ocr_text'
   : preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
 const selectedHeroIsOcr = selectedMediaMode !== 'visual_only'
   || (preferredAsset?.media_semantic_status === 'classified'
     && preferredAsset.media_role !== 'event_photo');
+const selectedHeroMustContain = selectedHeroIsOcr || preferredCrop.fit !== 'cover';
+const effectiveSplitMediaFit = splitMediaFit === 'viewport-cover' && selectedHeroMustContain
+  ? 'viewport-contain'
+  : splitMediaFit;
 const fallbackMediaRole = (mode: EventImageAsset['image_text_mode']): EventImageMediaRole => mode === 'visual_only' ? 'event_photo' : 'unknown_document';
 const mediaRoleLabel = (role: EventImageMediaRole) => ({
   event_identity_poster: 'Афиша',
@@ -188,6 +198,7 @@ const galleryImages = (() => {
       ? 'ocr_text'
       : asset?.image_text_mode || fallbackMode || 'unknown';
     const dimensions = sourceIndex === undefined ? undefined : mediaDimensionOverrides[sourceIndex];
+    const crop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
     out.push({
       src,
       alt: asset?.alt || heroAlt,
@@ -205,9 +216,11 @@ const galleryImages = (() => {
       safe_crop:asset?.safe_crop,
       width: dimensions?.width || asset?.width,
       height: dimensions?.height || asset?.height,
-      position: asset?.recommended_object_position,
+      position: crop.fit === 'cover' ? crop.objectPosition : '50% 50%',
       sourceIndex,
       thumbnail_sources: asset?.thumbnail_sources,
+      protected_crop_fit: crop.fit,
+      protected_crop_reason: crop.reason,
     });
   };
   if (preferredAsset) add(preferredAsset, event.image_text_mode, heroImageIndex);
@@ -249,13 +262,11 @@ const viewerRecommendationMeta = viewerRecommendation
   ? [displayDateTime(viewerRecommendation), viewerRecommendation.venue_name || viewerRecommendation.city].filter(Boolean).join(' · ')
   : '';
 const desktopTransportEvent = desktopEventWithExplicitEnd(event);
-// Display crop follows the positive OCR boundary, not the asynchronous media-
-// role enrichment state. A `visual_only` asset is treated as an ordinary photo
-// while its role is pending; OCR and positively classified documents stay whole.
-const desktopGalleryFit = (image: GalleryImage) => image.image_text_mode !== 'visual_only'
-  || (image.media_semantic_status === 'classified' && image.media_role !== 'event_photo')
-    ? 'contain'
-    : 'cover';
+// Fullscreen cover is unlocked only by the same semantic + current-pixel
+// geometry contract as embedded surfaces. Pending, OCR, missing and stale
+// geometry stay whole.
+const desktopGalleryFit = (image: GalleryImage) => image.protected_crop_fit || 'contain';
+const effectiveAutoRotate = autoRotate && galleryImages.every((image) => desktopGalleryFit(image) === 'cover');
 const railAspectBucket = (image: GalleryImage) => {
   const imageRatio = image.width && image.height ? image.width / image.height : 1;
   if (imageRatio < .9) return 'portrait';
@@ -301,14 +312,14 @@ const descriptionHtml = (event.description_html || '')
   data-selected-media-policy={selectedMediaMode}
   data-selected-media-role={preferredAsset?.media_role}
   data-selected-media-semantic-status={preferredAsset?.media_semantic_status}
-  data-hero-render-fit={selectedHeroIsOcr ? 'contain' : 'cover'}
+  data-hero-render-fit={selectedHeroMustContain ? 'contain' : 'cover'}
   data-editorial-motion={candidate === 'editorial' ? editorialMotion : undefined}
   data-editorial-crop={candidate === 'editorial' ? editorialCropPolicy : undefined}
   data-ocr-companion-layout={ocrCompanion ? ocrCompanionLayout : undefined}
-  data-split-media-fit={candidate === 'split' ? splitMediaFit : undefined}
+  data-split-media-fit={candidate === 'split' ? effectiveSplitMediaFit : undefined}
   data-split-efficient-viewer={splitPortraitViewer ? 'true' : undefined}
   data-related-media-treatment={relatedMediaTreatment}
-  data-auto-rotate={autoRotate ? 'true' : 'false'}
+  data-auto-rotate={effectiveAutoRotate ? 'true' : 'false'}
   data-closed-hero-gallery={photoCount > 1 ? galleryId : undefined}
   data-active-hero-gallery-index={photoCount > 1 ? '0' : undefined}
   data-event-id={event.id}
@@ -327,7 +338,7 @@ const descriptionHtml = (event.description_html || '')
         aria-labelledby={`clean-event-title-${event.id}`}
       >
         {candidate === 'split' ? (
-          <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport data-split-media-fit={splitMediaFit}>
+          <figure class="desktop-prototype__media desktop-prototype__media--poster-scroll" data-media-frame data-slow-media-viewport data-split-media-fit={effectiveSplitMediaFit}>
             <div class="desktop-poster-track" data-slow-media-track data-slow-media-speed="0.36">
               {preferredUrl ? (
                 <button
@@ -341,7 +352,7 @@ const descriptionHtml = (event.description_html || '')
                   aria-keyshortcuts={photoCount > 1 ? 'ArrowLeft ArrowRight' : undefined}
                   aria-label={splitPortraitViewer ? `Открыть быстрый просмотр всех изображений события «${event.title}»` : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
                 >
-                  <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
+                  <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" data-protected-crop-fit={preferredCrop.fit} data-protected-crop-reason={preferredCrop.reason} />
                 </button>
               ) : typedFallbackArt ? (
                 <EventFallbackArt event={event} surface="desktop" />
@@ -385,10 +396,10 @@ const descriptionHtml = (event.description_html || '')
             </div>
           </figure>
         ) : (
-          <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroIsOcr ? undefined : ''} data-editorial-media>
+          <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroMustContain ? undefined : ''} data-editorial-media>
             {preferredUrl && (
               <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-describedby={photoCount > 1 ? closedHeroStatusId : undefined} aria-keyshortcuts={photoCount > 1 ? 'ArrowLeft ArrowRight' : undefined} aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
-                <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" />
+                <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" data-protected-crop-fit={preferredCrop.fit} data-protected-crop-reason={preferredCrop.reason} />
               </button>
             )}
             {!preferredUrl && (typedFallbackArt
@@ -416,8 +427,10 @@ const descriptionHtml = (event.description_html || '')
                     data-width={image.width}
                     data-height={image.height}
                     data-position={image.position || '50% 50%'}
+                    data-crop-fit={desktopGalleryFit(image)}
+                    data-crop-reason={image.protected_crop_reason}
                     data-mode={image.image_text_mode}
-                    data-rotation-eligible={image.image_text_mode === 'visual_only' && image.media_role === 'event_photo' ? 'true' : 'false'}
+                    data-rotation-eligible={desktopGalleryFit(image) === 'cover' && image.image_text_mode === 'visual_only' && image.media_role === 'event_photo' ? 'true' : 'false'}
                     data-image-text-mode={image.image_text_mode}
                     data-media-role={image.media_role}
                     data-source-index={image.sourceIndex}
@@ -632,7 +645,7 @@ const descriptionHtml = (event.description_html || '')
         <div class="hero-gallery__track" data-hero-gallery-track>
           {galleryImages.map((image, index) => (
             <figure class="hero-gallery__slide" data-hero-gallery-slide data-gallery-slide-kind="image" data-gallery-index={index} data-source-index={image.sourceIndex} aria-hidden={index === 0 ? 'false' : 'true'}>
-              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-media-semantic-status={image.media_semantic_status} data-desktop-gallery-fit={desktopGalleryFit(image)} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} data-object-position={image.position} style={image.position ? `object-position:${image.position}` : undefined} />
+              <img class="hero-gallery__image" data-gallery-src={image.src} alt={image.alt} width={image.width} height={image.height} loading="lazy" decoding="async" data-image-text-mode={image.image_text_mode} data-media-role={image.media_role} data-media-semantic-status={image.media_semantic_status} data-desktop-gallery-fit={desktopGalleryFit(image)} data-protected-crop-fit={desktopGalleryFit(image)} data-protected-crop-reason={image.protected_crop_reason} data-source-index={image.sourceIndex} data-event-id={event.id} data-event-title={event.title} data-object-position={image.position} style={`object-fit:${desktopGalleryFit(image)};object-position:${image.position || '50% 50%'}`} />
               <figcaption class="sr-only">Фото события: {event.title}</figcaption>
             </figure>
           ))}
@@ -1255,6 +1268,7 @@ const descriptionHtml = (event.description_html || '')
         const nextWidth = Number(button.dataset.width || probe.naturalWidth || heroImage.width);
         const nextHeight = Number(button.dataset.height || probe.naturalHeight || heroImage.height);
         const nextPosition = button.dataset.position || '50% 50%';
+        const nextFit = button.dataset.cropFit === 'cover' ? 'cover' : 'contain';
         if (source === 'auto' && !reducedMotion.matches && heroImage.parentElement) {
           const incoming = heroImage.cloneNode(false) as HTMLImageElement;
           incoming.removeAttribute('data-clean-hero-image');
@@ -1264,6 +1278,7 @@ const descriptionHtml = (event.description_html || '')
           incoming.width = nextWidth;
           incoming.height = nextHeight;
           incoming.style.objectPosition = nextPosition;
+          incoming.style.objectFit = nextFit;
           incoming.style.opacity = '0';
           incoming.style.pointerEvents = 'none';
           incoming.setAttribute('aria-hidden', 'true');
@@ -1283,6 +1298,7 @@ const descriptionHtml = (event.description_html || '')
           heroImage.width = nextWidth;
           heroImage.height = nextHeight;
           heroImage.style.objectPosition = nextPosition;
+          heroImage.style.objectFit = nextFit;
           incomingAnimation.cancel();
           incoming.remove();
         } else {
@@ -1291,7 +1307,9 @@ const descriptionHtml = (event.description_html || '')
           heroImage.width = nextWidth;
           heroImage.height = nextHeight;
           heroImage.style.objectPosition = nextPosition;
+          heroImage.style.objectFit = nextFit;
         }
+        cleanRoot.dataset.heroRenderFit = nextFit;
         cleanRoot.dataset.selectedMediaPolicy = button.dataset.mode || 'unknown';
         thumbButtons.forEach((item, itemIndex) => {
           const current = itemIndex === next;
@@ -1322,6 +1340,9 @@ const descriptionHtml = (event.description_html || '')
         heroImage.width = Number(image.getAttribute('width') || probe.naturalWidth || heroImage.width);
         heroImage.height = Number(image.getAttribute('height') || probe.naturalHeight || heroImage.height);
         heroImage.style.objectPosition = image.dataset.objectPosition || '50% 50%';
+        const nextFit = image.dataset.protectedCropFit === 'cover' ? 'cover' : 'contain';
+        heroImage.style.objectFit = nextFit;
+        cleanRoot.dataset.heroRenderFit = nextFit;
         cleanRoot.dataset.selectedMediaPolicy = image.dataset.imageTextMode || 'unknown';
         const matchingThumbIndex = thumbButtons.findIndex((button) => button.dataset.src === src);
         thumbButtons.forEach((button, buttonIndex) => {
@@ -1686,6 +1707,7 @@ const descriptionHtml = (event.description_html || '')
   .desktop-prototype__generic-fallback span { font-size:.78rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; opacity:.72; }
   .desktop-prototype__generic-fallback strong { max-width:16ch; font-size:clamp(2rem,4vw,4rem); line-height:.96; }
   .desktop-prototype--non-ocr .desktop-prototype__media-image { object-fit:cover; }
+  .desktop-clean-event[data-hero-render-fit="contain"] .desktop-prototype__media-image[data-clean-hero-image] { object-fit:contain !important; object-position:center !important; transform:none !important; margin:0 !important; background:#181411; }
   .desktop-prototype--ocr .desktop-prototype__media-image { object-fit:contain; }
   .desktop-clean-event--ocr.is-safe-cover .desktop-prototype__media-image { object-fit:cover; }
   .desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { height:calc(100% + 112px); margin-top:-56px; transform:translate3d(0,var(--desktop-parallax-y,0),0) scale(1.025); will-change:transform; }

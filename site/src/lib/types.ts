@@ -9,7 +9,8 @@ export interface ImageBox {
   w: number;
   /** Normalized 0..1 height. */
   h: number;
-  confidence: number;
+  /** Model confidence when the producer supplies one (valuable regions do). */
+  confidence?: number;
 }
 
 export interface ImageFocalPoint {
@@ -51,11 +52,25 @@ export interface EventImageAsset {
   asset_key?: string;
   ocr_boxes?: ImageBox[];
   face_boxes?: ImageBox[];
+  /** Smallest coherent viewer-value region, in the same normalized space as face_boxes. */
+  valuable_region?: ImageBox;
   saliency_boxes?: ImageBox[];
   focal_point?: ImageFocalPoint;
   recommended_object_position?: string;
   recommended_hero_fit?: 'contain' | 'cover';
   safe_crop?: boolean;
+  /** Geometry is usable only when these two hashes are present and exactly equal. */
+  current_pixel_sha256?: string;
+  geometry_id?: number;
+  geometry_pixel_sha256?: string;
+  geometry_model?: string;
+  geometry_prompt_version?: string;
+  geometry_status?: 'classified';
+  /** All x/y/w/h values are fractions of source pixels in [0, 1], origin top-left. */
+  geometry_coordinate_space?: 'normalized_0_1';
+  geometry_source_width?: number;
+  geometry_source_height?: number;
+  geometry_reason_code?: string;
   /** Build-time technical quality signal; it never replaces semantic LLM media classification. */
   quality_score?: number;
 }
@@ -118,6 +133,7 @@ export interface PreviewEvent {
   /** Future multi-image/face-aware export contract; first item should match image_url when present. */
   image_assets?: EventImageAsset[];
   face_boxes?: ImageBox[];
+  valuable_region?: ImageBox | null;
   ocr_boxes?: ImageBox[];
   focal_point?: ImageFocalPoint;
   image_object_position?: string | null;
