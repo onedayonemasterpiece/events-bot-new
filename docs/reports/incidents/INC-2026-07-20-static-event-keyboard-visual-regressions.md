@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: mitigated / corrective immutable secret candidate ready for owner acceptance
+Status: open / second crop correction passes local gate; new immutable candidate pending
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -36,6 +36,14 @@ geometry: it did not prove that the failure fallback behind a loaded
 `contain` image was hidden. The same acceptance also omitted cold-load and
 real inert-pointer ownership. Therefore the previous `mitigated`/`SHIP`
 conclusion is withdrawn. No production-root promotion was performed.
+
+The second corrective candidate `DJc9…` also failed owner acceptance. It hid
+the fallback layer correctly but preserved `visual-contain`, leaving ordinary
+photographs visibly letterboxed by 7–32% inside fixed recommendation frames.
+The earlier green receipt and Gemini verdict are therefore superseded for crop
+acceptance. The actual correction must restore the previously accepted compact
+`visual_only` cover policy through the shared `EventCard`, while keeping real
+OCR/text/unknown documents contained.
 
 ## User / Business Impact
 
@@ -133,20 +141,36 @@ secret preproduction candidate family.
   earlier review's mistaken `pointerup`, and returned
   `SHIP_SECRET_CANDIDATE`. Native Firefox/Safari, assistive technology,
   high-contrast and zoom/reflow remain root-rollout blockers.
+- 2026-07-20 21:12 UTC — owner review rejected `DJc9…`: ordinary photographs
+  still used `contain`, with empty bands of roughly 22% (`Собачье сердце` and
+  one `Ромео и Джульетта`), 7% (second `Ромео и Джульетта`) and 32%
+  (`Женитьба`). Hiding fallback content had corrected a symptom, not the crop.
+- 2026-07-20 22:08–22:13 UTC — the historical compact-card behavior was traced
+  to the shared row policy introduced at `621d6f8e`. A local 303-event build
+  restored `visual_only` cover for both static and runtime recommendation rows;
+  the retained `6408` decoded screenshot has no ordinary-photo bands and keeps
+  a real OCR document contained as the negative control.
+- 2026-07-20 22:13–22:15 UTC — agy `Gemini 3.1 Pro (High)` inspected the current
+  diff, historical implementation and screenshot pixels, returned
+  `READY_TO_COMPLETE_LOCAL_GATE`, and required captured production payload
+  fixtures plus an explicit computed-style browser guard. Both were added; a
+  production-family generated-tree run and immutable candidate review remain
+  mandatory before publication.
 
 ## Root Cause
 
 ### Recommendation image geometry
 
-1. `site/src/lib/relatedCardLayout.mjs` determines row eligibility and assigns
-   `visual-cover` from `image_text_mode` before the final semantic crop policy
-   is known.
-2. `site/src/components/EventCard.astro` subsequently applies the authoritative
-   media-role, exact-geometry and protected-region gates and can correctly fall
-   back to `contain`.
-3. The row therefore remains sized for `cover` while the image is rendered as
-   `contain`. On the reported page, 4 of 10 cards declared `visual-cover` but
-   computed to `contain`; 5 cards had at least 20% unused media area.
+1. The bbox rollout applied the strict large-surface semantic crop gate to
+   compact recommendation previews. It therefore let stale/missing role or
+   protected-region metadata demote an already classified `visual_only` photo
+   to `contain`.
+2. The later unification correctly made `site/src/lib/relatedCardLayout.mjs`
+   and `EventCard.astro` agree, but agreed on that wrong surface policy. The
+   row stayed compact while ordinary photos were letterboxed.
+3. The accepted pre-bbox recommendation mechanism used `visual_only` as the
+   compact-card crop boundary. The regression was not lack of unification; it
+   was importing a hero-grade fail-closed rule into the wrong surface.
 4. A parallel bbox change also maps `document-safe-cover` to `contain` in the
    desktop page while the same treatment maps to `cover` in the personal-feed
    surface, so one canonical card policy is rendered differently by surface.
@@ -248,8 +272,11 @@ secret preproduction candidate family.
   fallback layer has no visible box. Missing images must retain the fallback.
   Retain both a related-section capture and an FHD/125%-equivalent viewport
   capture.
-- Keep unsafe OCR/protected-region images fail-closed to `contain`; row packing
-  must consume that final decision rather than re-enable blind crop.
+- Keep OCR/text/unknown documents fail-closed to `contain`. In compact
+  event-detail recommendation rows, every `visual_only` preview must use
+  `visual-cover` and have an independently computed unused-frame ratio of zero;
+  exact/focal metadata positions the crop but missing bbox metadata must not
+  turn the photo into a letterboxed document.
 - Perform the real two-page journey without intercepting navigation:
   `6408` → gallery → final recommendation → Enter → destination → Right/Left;
   assert focus ownership, hero index/source changes and telemetry.
@@ -323,9 +350,13 @@ secret preproduction candidate family.
   normalized-title reciprocity plus fail-closed graph topology checks.
 - [x] Published and verified a fresh immutable secret candidate from
   `origin/main` without mutating the stable root or stable ICS namespace.
-- [x] Supersede rejected `RHOg…` with a new immutable noindex candidate whose
-  retained browser evidence proves loaded-layer visibility, cold/reload arrows
-  and real inert-click Russian-layout shortcuts.
+- [x] Superseded rejected `RHOg…` with `DJc9…`; keyboard and loaded-layer checks
+  passed, but owner review rejected its still-letterboxed crop.
+- [x] Restored the historical compact `visual_only` cover policy in the single
+  shared row/Card resolver, kept OCR/unknown documents contained, preserved
+  exported focal positions, and added exact `6408` payload canaries plus an
+  independent unused-frame browser budget.
+- [ ] Publish and verify a new immutable noindex candidate from this correction.
 - [ ] Complete native Firefox/Safari, screen-reader, high-contrast and
   zoom/reflow checks before any later root rollout.
 
@@ -347,7 +378,7 @@ secret preproduction candidate family.
   do not invalidate the exact successful receipt, but they remain operational
   debt and must not be hidden by aggregate success counts.
 
-## Corrective Secret-Candidate Evidence
+## Rejected Second Secret-Candidate Evidence
 
 - immutable URL:
   `https://kenigevents.ru/_review/DJc9V0Milp7igVHNO8xPopYxHo3pW0vmy-Eqhhubd54/`
@@ -387,7 +418,8 @@ secret preproduction candidate family.
   service text and canonical root URL; the toast confirmed success
 - consultant: agy `Gemini 3.1 Pro (High)`, provider alias
   `gemini-3.1-pro-preview`, clean exit `0`, verdict
-  `SHIP_SECRET_CANDIDATE`. This is not approval for root rollout.
+  `SHIP_SECRET_CANDIDATE`; owner crop review superseded this verdict. This is
+  neither valid crop acceptance nor approval for root rollout.
 - final read-only 48-hour diagnostics at `2026-07-20T21:05:34Z`: `59`
   requests, `44` claims, `17` successes, `26` failed attempts, `13` busy
   deferrals and `2` no-ops. Generated-evidence totals are `1,240` event-page

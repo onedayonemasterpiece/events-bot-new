@@ -15,6 +15,31 @@ function displayPayload(item) {
   return candidate?.display || item?.display || candidate;
 }
 
+function normalizedObjectPosition(value) {
+  const raw = String(value || '').trim();
+  return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : '';
+}
+
+function visualFallbackObjectPosition(item) {
+  const candidate = item?.candidate || item || {};
+  const display = displayPayload(item);
+  const asset = primaryImageAsset(item);
+  const explicit = normalizedObjectPosition(
+    display?.image_object_position
+      || candidate?.image_object_position
+      || item?.image_object_position
+      || asset?.recommended_object_position
+      || asset?.object_position,
+  );
+  if (explicit) return explicit;
+  const focal = display?.focal_point || candidate?.focal_point || item?.focal_point || asset?.focal_point || {};
+  const x = Number(focal?.x ?? display?.focal_x ?? candidate?.focal_x ?? item?.focal_x);
+  const y = Number(focal?.y ?? display?.focal_y ?? candidate?.focal_y ?? item?.focal_y);
+  const safeX = Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : .5;
+  const safeY = Number.isFinite(y) ? Math.min(1, Math.max(0, y)) : .5;
+  return `${Math.round(safeX * 100)}% ${Math.round(safeY * 100)}%`;
+}
+
 function primaryImageAsset(item) {
   const candidate = item?.candidate || item || {};
   const display = displayPayload(item);
@@ -56,9 +81,10 @@ export function relatedCardMediaGeometry(item) {
 }
 
 /**
- * One authoritative recommendation-card media decision. Both the row packer
- * and EventCard call this gate, so a protected crop can never be advertised as
- * cover by the row and later rendered as contain by the card (or vice versa).
+ * One authoritative compact recommendation-card media decision. Both the row
+ * packer and EventCard call this gate, so a visual photo cannot be advertised
+ * as cover by the row and later rendered as contain by the card (or vice
+ * versa); OCR/document media stays on the explicit contain branch.
  */
 export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = relatedCardMediaGeometry(item)) {
   const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? DEFAULT_DOCUMENT_RATIO : 1);
@@ -75,15 +101,25 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
     };
   }
   const crop = resolveEventImageCrop(geometry?.asset || primaryImageAsset(item), targetAspect);
-  const fit = crop.fit === 'cover' ? 'cover' : 'contain';
+  // Restore the accepted recommendation-card contract from before the bbox
+  // rollout: `visual_only` is the product-level permission to fill a compact
+  // preview. Exact protected geometry improves its object position when it is
+  // available, but missing/stale/over-constrained bbox metadata must not turn
+  // a photographic card into a letterboxed document. OCR and unknown media
+  // still take the document branch above and remain fully contained.
+  const objectPosition = crop.fit === 'cover'
+    ? (crop.objectPosition || visualFallbackObjectPosition(item))
+    : visualFallbackObjectPosition(item);
   return {
     mediaKind:'visual',
-    mediaTreatment:fit === 'cover' ? 'visual-cover' : 'visual-contain',
-    fit,
-    objectPosition:crop.objectPosition || '50% 50%',
-    cropReason:crop.reason || 'semantic_crop_gate_closed',
+    mediaTreatment:'visual-cover',
+    fit:'cover',
+    objectPosition,
+    cropReason:crop.fit === 'cover'
+      ? (crop.reason || 'protected_geometry_cover')
+      : `visual_only_focal_fallback:${crop.reason || 'semantic_crop_gate_closed'}`,
     potentialCoverCrop,
-    coverCrop:fit === 'cover' ? potentialCoverCrop : 0,
+    coverCrop:potentialCoverCrop,
   };
 }
 
@@ -127,54 +163,14 @@ function initialRowRatio(row, mediaTreatment) {
   return { targetRatio, rowMode };
 }
 
-function subsetMeans(ratios) {
-  const values = [];
-  const combinations = 1 << ratios.length;
-  for (let mask = 1; mask < combinations; mask += 1) {
-    const selected = ratios.filter((_ratio, index) => mask & (1 << index));
-    values.push(geometricMean(selected));
-  }
-  return values;
-}
-
-function compareScores(left, right) {
-  for (let index = 0; index < left.length; index += 1) {
-    if (Math.abs(left[index] - right[index]) > 1e-9) return left[index] - right[index];
-  }
-  return 0;
-}
-
-function authoritativeRowDecision(row, initialTarget) {
-  const candidates = [...new Set([
-    initialTarget,
-    ...row.map(({ ratio }) => ratio),
-    ...subsetMeans(row.map(({ ratio }) => ratio)),
-  ].map((ratio) => finiteRatio(ratio, initialTarget).toFixed(8)))].map(Number);
-  let best = null;
-  for (const targetRatio of candidates) {
-    const decisions = row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, targetRatio, entry));
-    const contained = decisions.filter(({ fit }) => fit === 'contain');
-    const containedLosses = contained.map(({ potentialCoverCrop }) => potentialCoverCrop);
-    const coverLosses = decisions.filter(({ fit }) => fit === 'cover').map(({ coverCrop }) => coverCrop);
-    const score = [
-      Math.max(0, ...containedLosses),
-      containedLosses.length ? containedLosses.reduce((sum, value) => sum + value, 0) / containedLosses.length : 0,
-      Math.max(0, ...coverLosses),
-      Math.abs(Math.log(targetRatio / initialTarget)),
-    ];
-    if (!best || compareScores(score, best.score) < 0) best = { targetRatio, decisions, score };
-  }
-  return best;
-}
-
 function rowLayout(row, rowIndex, mediaTreatment) {
   const initial = initialRowRatio(row, mediaTreatment);
-  const authoritative = authoritativeRowDecision(row, initial.targetRatio);
-  const targetRatio = authoritative?.targetRatio || initial.targetRatio;
-  const decisions = authoritative?.decisions || row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, targetRatio, entry));
-  const finalContain = decisions.some(({ fit }) => fit === 'contain');
-  const targetChanged = Math.abs(Math.log(targetRatio / initial.targetRatio)) > 1e-7;
-  const rowMode = `${initial.rowMode}${finalContain || targetChanged ? '-authoritative' : ''}`;
+  // Keep the reviewed compact row geometry. In particular a single portrait
+  // photograph must not expand one three-column row to its natural 2:3 ratio;
+  // it remains a square-ish preview and uses the same EventCard crop contract.
+  const targetRatio = initial.targetRatio;
+  const decisions = row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, targetRatio, entry));
+  const rowMode = initial.rowMode;
   const entries = row.map(({ item, ratio:mediaRatio }, index) => {
     const decision = decisions[index];
     return {
@@ -189,7 +185,9 @@ function rowLayout(row, rowIndex, mediaTreatment) {
       },
     };
   });
-  const rowWorstCrop = Math.max(0, ...entries.map(({ layout }) => layout.coverCrop));
+  const rowWorstCrop = Math.max(0, ...entries
+    .filter(({ layout }) => layout.mediaKind === 'document')
+    .map(({ layout }) => layout.coverCrop));
   for (const entry of entries) entry.layout.rowWorstCrop = rowWorstCrop;
   return entries;
 }

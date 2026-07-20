@@ -57,6 +57,14 @@ must prove the concrete card safe. A mixed row's `rowWorstCrop` is retained as
 diagnostic evidence but is not attributed to a `document-contain` neighbour,
 because that value describes the row's worst *potential* cover crop rather
 than an applied crop on every card.
+For compact event-detail continuation rows, product acceptance is stronger:
+`visual_only` photography must use canonical `visual-cover` and leave no unused
+media-frame area. `ocr_text`/`unknown` stay `document-contain`. Static
+`Смотрите дальше` and hydrated `Ещё события` consume this one decision through
+`relatedCardLayout` and the canonical `EventCard`; surface CSS may not
+reinterpret it. The gate uses captured `6408` production canaries, computed
+style, an independent unused-frame ratio and decoded row pixels so a declared
+treatment cannot certify itself.
 The keyboard compatibility migration rewrites continuation links only for
 legacy prefixed candidates. Root-form cards retain the canonical component's
 relative `href` in both `data-card-href` and media/title anchors, so keyboard
@@ -325,7 +333,7 @@ Historical v44 preview scale/evidence (Kaggle CPU build from the 2026-06-28 prod
 
 Preview `v39` keeps the consultant P0 hardening, explicit discovery feedback and feed-card comparison, and adds the current UI/data refinements: the mobile brand tag removes the rejected icon and keeps only a subtle periodic title sway; the fullscreen gallery uses a slower/farther `38%→64%` pan and advances before the pan fully stops; `Фото события` and the event title are forced onto separate caption lines; `Пушкинская карта` is rendered as a green check property, not a text value; admission/free states use compact property labels instead of bare `Бесплатно`; and the desktop event nav no longer exposes `Sitemap`. It also keeps date-listing/navigation refinements: `/segodnya/` is grouped into `Утро / День / Вечер / Ночь`, `/zavtra/` exists as a separate tomorrow page with the same sections, date-listing cards use a compact mobile plaque with a cropped left photo column and a straight separator to the text column, and list cards no longer expose mass external ticket/source links; users go through the internal event page first. The mobile discovery drawer handle no longer shows the icon; it uses only a subtle title sway in the site palette. Preview `v39` also hardens the event hero into a stronger mobile-first surface: the hero **image itself** is guarded by preview checks at bbox-style full-width contract (`x=0,width=viewport`) with no layout side gutters; the normal mobile header is replaced over the hero by a TASS-like terracotta drawer handle (`Полюбить Калининград / Анонсы`). Tapping it opens a no-JS `<details>` discovery drawer implemented as one monolithic sliding object: the full-width navigation rail and handle move together, overlap by a few pixels, have no transitional gap, no chevron/up-down icon, no rounded dropdown panel and no pill-buttons inside the rail. Visual-only hero variants use stable `svh` sizing plus constant-scale vertical parallax so mobile browser chrome changes should not cause a post-scroll scale jump. The current event page itself exposes first-party like/unlike with the honest aggregate like count, and share counters are present but stay empty when the total is zero. Feed cards use `split-actions` as the baseline, not an A/B on normal event pages: `Поделиться` is clustered near the right-thumb like action below the card, while `Не интересно` is demoted to a quieter utility action. The fullscreen hero viewer now uses a visible on-image photo CTA (`Фото N` when multiple images exist), lazy-hydrates gallery images from `data-gallery-src` only after opening/navigating, uses full-viewport-height `cover` + one-way right-to-left auto-pan for `visual_only` photos to avoid black side fields, auto-advances to the next photo after the pan, pauses forward auto-advance after a manual backward swipe, keeps OCR/text images in the base `contain` mode, keeps the service tag visible in the gallery, and places the event title in a readable bottom stripe. JSON-LD offer `validFrom` is emitted as ISO 8601 with timezone and JSON-LD `image[]` includes the event gallery assets so lazy images remain connected to the event for SEO/GEO. The historical comparison is in `docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md`; hero decisions are in `docs/features/static-site-pages/event-hero-lab-2026-06-27.md`. The inherited v32 interaction/SEO hardening remains: in fullscreen gallery the service tag is a real top-flush navigation link, not a floating label; visual-photo pan starts at `38%` and moves to `64%` over `17.9s`, which gives a slower/farther right-to-left image motion; manual backward motion uses `64% → 38%`; the event title in the fullscreen viewer uses inline/subline stripes via `box-decoration-break`, not a full-width bottom slab. Event cards now place the title before time/status meta because the feed scan task starts from “what is this?”, then date/conditions; service controls (`Не интересно`, share, like/undo plate) are marked `data-nosnippet` and remain buttons, not crawlable links. Phone-only desktop CTAs keep the branded primary button, use the shared copy icon instead of a redundant phone pictogram, reveal the number on click, copy it to the clipboard and announce success without adding a layout-shifting helper row.
 
-Other v39 contracts remain: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, native-share-first button, transparent terracotta wide-«о» tag favicon, prefetch for static links, and sticky CTA hiding while the hero is visible and again when the user reaches the feed. The after-hero drawer handle remains visible when closed so navigation is never lost while scrolling; the monolithic root transform keeps the panel off-screen and only the handle protrudes. Current media rule: only the explicit LLM-authored `event_photo` role may use a cover frame in discovery cards; OCR, missing/unknown roles and legacy `visual_only` render width-fit without horizontal crop. Compact date-listing thumbnails remain a separate navigation-preview exception. Desktop event detail uses the continuous Editorial composition for a strong
+Other v39 contracts remain: visible description, one vertical neutral `Смотрите дальше` feed, no user-facing “try another genre” block, large right-thumb like buttons with counts and unlike, “Не интересно” negative feedback, native-share-first button, transparent terracotta wide-«о» tag favicon, prefetch for static links, and sticky CTA hiding while the hero is visible and again when the user reaches the feed. The after-hero drawer handle remains visible when closed so navigation is never lost while scrolling; the monolithic root transform keeps the panel off-screen and only the handle protrudes. Current media rule is surface-specific: compact event-detail recommendation cards use `visual_only` cover with exported focal/object-position metadata when available, while OCR/unknown-text documents stay contained; large/responsive discovery surfaces retain their stricter `event_photo`/geometry rule. Compact date-listing thumbnails remain a separate navigation-preview exception. Desktop event detail uses the continuous Editorial composition for a strong
 `visual_only` landscape and a split/contained fallback for documents; a
 dedicated companion remains reserved for strict `event_identity_poster`.
 Within the detail hero/fullscreen gallery a positive `visual_only` result is
@@ -436,16 +444,15 @@ Smart Update / image preparation must enrich image assets in batch/offline, not 
 - `focal_point` / `recommended_object_position` in normalized 0..1 coordinates or CSS object-position form;
 - `safe_crop` / crop guards: do not crop OCR text, and do not cut detected faces, especially top face bounds.
 
-Runtime policy is surface-specific. Discovery cards remain role-first: only an
-explicit LLM-authored `event_photo` may use cover there. The event-detail hero
-and fullscreen gallery no longer treat legacy/derived `visual_only` alone as
-crop permission. `cover` requires classified `event_photo`, positive semantic
-crop permission and current exact-pixel geometry whose protected face/value
-union fits the surface's known target ratio. OCR/unknown, stale/missing geometry
-and responsive surfaces without a fixed target ratio remain `contain`. This
-exact-pixel fail-closed rule supersedes the earlier temporary pending-photo
-exception recorded in `INC-2026-07-16`; it prevents a stale focal/role verdict
-from authorizing a crop after the bytes behind an image change.
+Runtime policy is surface-specific. Event-detail recommendation rows have a
+fixed compact ratio: `visual_only` authorizes `cover`, with exact geometry or
+exported focal/object-position metadata improving its position and a centered
+fallback when enrichment is missing. OCR/text/unknown images remain contained.
+The event-detail hero, fullscreen gallery and other large/responsive surfaces
+retain the stricter contract: `cover` requires classified `event_photo`,
+positive semantic permission and current exact-pixel geometry whose protected
+face/value union fits the known target ratio; otherwise they use `contain`.
+Thus the compact-card correction does not weaken large-surface protection.
 
 ## Цель продукта
 

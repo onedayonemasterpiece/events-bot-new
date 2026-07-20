@@ -296,13 +296,17 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     const actualCrop = image?.naturalWidth > 0 && image?.naturalHeight > 0 && shellRect?.width > 0 && shellRect?.height > 0
       ? Math.max(0, 1 - Math.min((image.naturalWidth / image.naturalHeight) / (shellRect.width / shellRect.height), (shellRect.width / shellRect.height) / (image.naturalWidth / image.naturalHeight)))
       : 0;
+    const objectFit = image ? getComputedStyle(image).objectFit : '';
+    // Independent product-visible empty-frame budget: `cover` fills the shell;
+    // `contain` leaves the ratio loss the owner saw as 22%/32% bands.
+    const unusedFrameRatio = objectFit === 'contain' ? actualCrop : 0;
     return {
       id: card.getAttribute('data-event-id'), row: card.getAttribute('data-lab-row-index'), treatment, mediaKind,
-      coverCrop: Number(card.getAttribute('data-lab-cover-crop') || 0), rowWorstCrop: Number(card.getAttribute('data-lab-row-worst-crop') || 0), actualCrop,
+      coverCrop: Number(card.getAttribute('data-lab-cover-crop') || 0), rowWorstCrop: Number(card.getAttribute('data-lab-row-worst-crop') || 0), actualCrop, unusedFrameRatio,
       card: { top: cardRect.top, left: cardRect.left, right: cardRect.right, width: cardRect.width },
       shell: shellRect ? { top: shellRect.top, left: shellRect.left, right: shellRect.right, width: shellRect.width, height: shellRect.height } : null,
       image: imageRect ? { left: imageRect.left, right: imageRect.right, width: imageRect.width, height: imageRect.height } : null,
-      objectFit: image ? getComputedStyle(image).objectFit : '',
+      objectFit,
       imageOpacity: image ? Number(getComputedStyle(image).opacity || 1) : 0,
       imageVisibility: image ? getComputedStyle(image).visibility : '',
       imageLoaded: Boolean(image?.complete && image?.naturalWidth > 0 && shell?.classList.contains('is-image-loaded')),
@@ -336,11 +340,17 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     }
     if (item.imageMissing) invariant(item.fallbackVisible, `card ${item.id} lost its fallback after image failure`);
     // The serialized treatment is the source-of-truth contract produced by
-    // resolveRelatedCardMediaTreatment(). Both contain variants intentionally
-    // preserve the complete image; only visual-cover may crop it.
+    // resolveRelatedCardMediaTreatment(). Product acceptance additionally
+    // requires every visual-only/photo preview to fill its canonical card;
+    // `contain` is reserved for OCR/document media.
     const expectedFit = expectedObjectFitForTreatment(item.treatment);
     invariant(item.objectFit === expectedFit, `card ${item.id} crop mode ${item.objectFit} != ${expectedFit}`);
+    if (item.mediaKind === 'visual') {
+      invariant(item.treatment === 'visual-cover' && item.objectFit === 'cover', `visual card ${item.id} is letterboxed as ${item.treatment}/${item.objectFit}`);
+      invariant(item.unusedFrameRatio <= 0.001, `visual card ${item.id} leaves ${(item.unusedFrameRatio * 100).toFixed(1)}% of its media frame unused`);
+    }
     if (item.mediaKind === 'document') {
+      invariant(item.treatment === 'document-contain' && item.objectFit === 'contain', `document card ${item.id} is not fully preserved`);
       // rowWorstCrop describes the worst *potential* cover crop anywhere in a
       // mixed row. It may be high because of a neighbouring visual photo and
       // is not a crop applied to this fail-closed document card.
@@ -666,7 +676,7 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
       const routeRelated = await assertRecommendationGeometry(page, '[data-related-start] [data-event-card]', 3);
       const routeContinuation = await assertRecommendationGeometry(page, '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot] > [data-event-card]', 1);
       invariant(routeContinuation.length <= 6, `Ещё события is unbounded on ${route}: ${routeContinuation.length}`);
-      invariant([...routeRelated, ...routeContinuation].some((item) => item.objectFit === 'contain'), `crop canary ${route} has no fail-closed contain card`);
+      invariant([...routeRelated, ...routeContinuation].some((item) => item.mediaKind === 'document' && item.objectFit === 'contain'), `crop canary ${route} has no preserved document card`);
       related.push(...routeRelated);
       continuation.push(...routeContinuation);
       if (artifactDir) {
@@ -719,6 +729,7 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
         id:item.id,
         treatment:item.treatment,
         object_fit:item.objectFit,
+        unused_frame_ratio:item.unusedFrameRatio,
         image_loaded:item.imageLoaded,
         image_missing:item.imageMissing,
         fallback_visible:item.fallbackVisible,
