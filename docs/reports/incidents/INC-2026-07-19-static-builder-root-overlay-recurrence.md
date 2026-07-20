@@ -1,6 +1,6 @@
 # INC-2026-07-19 Static Builder Blocked by Fly Root Overlay Recurrence
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: Smart Update static candidate builder / Fly app `events-bot-new-wngqia`
 Opened: 2026-07-19
@@ -98,13 +98,13 @@ the production root was not changed.
 
 ## Corrective Actions
 
-- implemented on the integration branch, deployment pending: bound/delete
+- deployed from main on 2026-07-20: bound/delete
   terminal static runner outputs after durable receipt/history adoption, reject
   output symlink/traversal and defer capacity without consuming retry budget;
-- implemented on the integration branch, deployment pending: delete terminal
+- deployed from main on 2026-07-20: delete terminal
   published video frame trees, publish-only/log side trees and reconcile a
   failed cleanup on startup while preserving actionable recovery;
-- implemented on the integration branch, deployment pending: root-scratch
+- deployed from main on 2026-07-20: root-scratch
   capacity/tempfile checks in health and large-download preflight.
 
 ## Follow-up Actions
@@ -115,10 +115,16 @@ the production root was not changed.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- fixed SHA is reachable from `origin/main` through merge `11cbef1751d5c7af1705d1c42e9a3f615d31a263` (PR #99); manual Fly release `v1721` deployed that clean tree, and the concurrent bbox release `v1722` advanced to descendant `ae2336cb6e6b2518213c702db7a3ced92dc2434a` without losing the fixes;
+- the startup catch-up generated `production-secret-20260720T130141-937a3d18` from repo SHA `11cbef17`: 248 event pages, 853 pages and 930 files; all production and secret-candidate gates passed and 936 create-only objects were verified;
+- the internal review receipt advanced at `2026-07-20T11:22:41Z`; root and stable ICS hashes remained byte-identical, and the static claim/lease returned idle;
+- `/healthz` after deploy reports persistent `/data` and scratch `/tmp` separately, including a successful real tempfile probe; `PRAGMA quick_check=ok` and the runtime file mirror remained available;
+- both live Chromium V7 fixtures (Split `6408`, Editorial `6593`) passed the complete gallery, focus, Cyrillic/Latin shortcut, consent, canonical related/continuation card, rerender and teardown regression;
+- local task cleanup removed about 0.75 GiB of stale build/test output and raised devserver free space from about 1.9 GiB to 2.8 GiB. Object Storage currently has 22 immutable review prefixes; pruning the oldest 12 is deliberately deferred while the descendant `v1722` startup rebuild is active, so no running prefix can be mistaken for retention garbage.
+
+The incident stays in monitoring until the active descendant candidate becomes
+terminal and the explicit failed-video recovery decision in Follow-up Actions is
+made; neither item invalidates the completed secret candidate above.
 
 ## Prevention
 
