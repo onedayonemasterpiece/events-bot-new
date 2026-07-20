@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-20-static-listing-desktop-preview-regression.md`
+  - Scope: shared static listing CSS ownership and the desktop sticky stack for
+    Today, Tomorrow, Weekend and Popular.
+  - Must not regress: every built listing route contains the shared design
+    system; the real header remains at viewport top and discovery rails stick
+    below it; mobile Popular V26 remains unchanged.
+
 - `INC-2026-07-19-static-site-stale-builder-lease.md`
   - Scope: host-validated StaticSiteBuilder terminal reconciliation, exact-owner
     `static_site:builder` lease release and pre-push Smart Update self-healing.

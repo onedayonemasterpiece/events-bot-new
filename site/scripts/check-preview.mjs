@@ -60,6 +60,40 @@ for (const rel of required) {
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
 
+const listingRoutes = ['segodnya', 'zavtra', 'vyhodnye', 'populyarnoe'];
+for (const route of listingRoutes) {
+  const html = readFileSync(join(root, route, 'index.html'), 'utf8');
+  const stylesheetHrefs = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/gu)].map((match) => match[1]);
+  const bundledCss = stylesheetHrefs
+    .map((href) => href.replace(/^https?:\/\/[^/]+/u, '').replace(`/${buildId}/`, ''))
+    .filter((href) => href.startsWith('_astro/'))
+    .map((href) => readFileSync(join(root, href), 'utf8'))
+    .join('\n');
+  const normalizedCss = bundledCss.replace(/\s+/gu, '');
+  for (const contract of ['.ke-listing-shell', '.ke-listing-discovery-rail', '.ke-listing-card']) {
+    if (!bundledCss.includes(contract)) throw new Error(`Listing route ${route} misses design-system CSS contract ${contract}`);
+  }
+  for (const contract of [
+    '.site-header{position:sticky;top:0;',
+    '.ke-listing-discovery-rail{position:sticky;top:var(--ke-site-header-bar-height);',
+    '.ke-listing-card__media{position:relative;',
+  ]) {
+    if (!normalizedCss.includes(contract)) throw new Error(`Listing route ${route} misses compiled desktop geometry contract ${contract}`);
+  }
+  if (!html.includes('class="ke-listing-page')) throw new Error(`Listing route ${route} misses the shared listing-page root`);
+}
+const eventLayoutSource = readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8');
+for (const headerContract of [
+  "import '../styles/design-system.css';",
+  '.site-header {',
+  'position: sticky;',
+  'top: 0;',
+  'height: var(--ke-site-header-bar-height);',
+  'z-index: 60;',
+]) {
+  if (!eventLayoutSource.includes(headerContract)) throw new Error(`Shared static header contract misses ${headerContract}`);
+}
+
 const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
 for (const marker of [
   'data-listing-variant="POPULAR-V26"',

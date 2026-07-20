@@ -1,0 +1,40 @@
+mode: serial_integrator
+repo: events-bot-new
+base_ref: c4f3c4de
+base_branch: integration/listing-surfaces-v26-mobile-sticky-groups-20260719
+integration_branch: hotfix/static-listing-desktop-preview-regression-20260720
+global_constraints:
+  - preserve mobile Popular V26
+  - restore shared design-system ownership rather than page-local imitation
+verification_owner: root
+stop_conditions:
+  - compiled listing CSS missing on any target route
+  - sticky layers overlap
+  - mobile Popular geometry regresses
+lanes:
+  - id: R01-R04
+    role: worker
+    requirement_ids: [R01, R02, R03, R04]
+    target: shared listing layout, build guards, browser acceptance and public preview
+    depends_on: []
+    execution_mode: serial_after_dependency
+    branch: hotfix/static-listing-desktop-preview-regression-20260720
+    worktree: /home/dev/.codex/worktrees/events-bot-new/inc-listing-desktop-regression-20260720
+    writable_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/pages/populyarnoe/index.astro
+      - site/scripts/check-preview.mjs
+      - site/scripts/check-listing-desktop-geometry-playwright.sh
+      - site/package.json
+      - docs/features/static-site-pages/listing-surfaces-v27-desktop-recovery.md
+      - docs/features/static-site-pages/test-scenarios.md
+      - docs/operations/e2e-scenarios.md
+      - docs/reports/incidents/INC-2026-07-20-static-listing-desktop-preview-regression.md
+      - docs/reports/incidents/README.md
+      - CHANGELOG.md
+    forbidden_files:
+      - site/src/components/listings/PopularMobileGroupContext.astro
+      - site/src/components/listings/ListingMobileDensitySwitch.astro
+    expected_output: immutable V27 preview with four repaired desktop listing routes
+    verification_scope: full_local
+    status: planned

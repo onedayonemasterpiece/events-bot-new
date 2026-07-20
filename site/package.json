@@ -18,6 +18,7 @@
     "check:production": "node scripts/check-production.mjs",
     "check:production-desktop": "node scripts/check-production-desktop-contract.mjs",
     "check:desktop-cta-geometry": "bash scripts/check-desktop-cta-geometry-playwright.sh",
+    "check:listing-desktop-geometry": "bash scripts/check-listing-desktop-geometry-playwright.sh",
     "check:secret-candidate": "node scripts/check-secret-candidate.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
     "plan:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs plan",

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed the shared static listing shell after a divergent integration dropped
+  its design-system import and sticky header contract: Today, Tomorrow,
+  Weekend and Popular now ship the same styled desktop surface, keep the real
+  site header above discovery rails while scrolling, and fail preview checks
+  if any listing route loses its compiled listing CSS again.
 - Added mobile-only sticky context for Popular groups: the existing strong
   category heading compacts into a right-aligned, non-interactive label after
   it reaches the viewport, remains section-bounded, and refreshes across both
