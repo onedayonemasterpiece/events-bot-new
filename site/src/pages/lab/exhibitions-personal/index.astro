@@ -159,7 +159,11 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       </div>
       <div class="ex-gallery__stage">
         <button type="button" data-gallery-prev aria-label="Предыдущее фото"><span aria-hidden="true">←</span></button>
-        <img data-gallery-image src="" alt="" width="1280" height="900" />
+        <div class="ex-gallery__media" data-gallery-media data-image-state="idle" aria-busy="false">
+          <img data-gallery-image alt="" width="1280" height="900" hidden />
+          <span class="ex-gallery__skeleton" data-gallery-skeleton aria-hidden="true" hidden></span>
+          <p class="ex-gallery__error" data-gallery-error role="status" hidden>Не удалось загрузить фото.</p>
+        </div>
         <button type="button" data-gallery-next aria-label="Следующее фото"><span aria-hidden="true">→</span></button>
       </div>
       <p class="ex-gallery__count" data-gallery-count aria-live="polite"></p>
@@ -223,34 +227,41 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-legend .is-ending i { background:var(--ex-red); color:var(--ex-red); }
   .ex-legend .is-popular i { background:var(--ex-yellow); color:var(--ex-yellow); }
   .ex-list { position:relative; display:grid; gap:7px; padding-left:22px; }
-  .ex-list::before { content:""; position:absolute; top:0; bottom:0; left:7px; width:1px; background:linear-gradient(var(--ex-border),#454a4e,var(--ex-border)); }
+  .ex-list::before { content:""; position:absolute; top:1.45rem; bottom:1.45rem; left:7px; width:1px; background:linear-gradient(180deg,rgba(84,172,247,.06),#50575c 7%,#3d4348 93%,rgba(84,172,247,.06)); box-shadow:0 0 8px rgba(255,255,255,.035); }
   .ex-row {
     --ex-media-column:clamp(420px,42vw,680px);
+    --ex-row-gap:clamp(.75rem,1.5vw,1.25rem);
+    --ex-surface-start:calc(112px + var(--ex-row-gap) - .6rem);
+    --ex-rail-color:var(--ex-blue);
     position:relative;
     min-height:132px;
     display:grid;
     grid-template-columns:112px var(--ex-media-column) minmax(250px,1fr) auto;
-    gap:clamp(.75rem,1.5vw,1.25rem);
+    gap:var(--ex-row-gap);
     align-items:stretch;
     isolation:isolate;
     padding:.58rem .68rem .58rem 0;
-    border:1px solid transparent;
-    border-radius:8px;
-    background:
-      linear-gradient(92deg,rgba(20,23,25,.98),rgba(13,15,17,.98)) padding-box,
-      linear-gradient(118deg,rgba(255,255,255,.34),rgba(102,112,121,.12) 40%,rgba(84,172,247,.34) 100%) border-box;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 10px 32px rgba(0,0,0,.2),0 0 0 1px rgba(255,255,255,.018);
-    transition:box-shadow var(--ex-motion-base) var(--ex-ease-cinematic),border-color var(--ex-motion-base) var(--ex-ease-cinematic),background-color var(--ex-motion-base) var(--ex-ease-cinematic);
     view-transition-name:var(--row-transition-name);
   }
-  .ex-row:hover,.ex-row:focus-within {
-    z-index:2;
+  .ex-row::after {
+    content:"";
+    position:absolute;
+    z-index:-1;
+    inset:0 0 0 var(--ex-surface-start);
+    border:1px solid transparent;
+    border-radius:8px;
+    background:linear-gradient(92deg,rgba(20,23,25,.98),rgba(13,15,17,.98)) padding-box,linear-gradient(118deg,rgba(255,255,255,.34),rgba(102,112,121,.12) 40%,rgba(84,172,247,.34) 100%) border-box;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 10px 32px rgba(0,0,0,.2),0 0 0 1px rgba(255,255,255,.018);
+    transition:box-shadow var(--ex-motion-base) var(--ex-ease-cinematic),border-color var(--ex-motion-base) var(--ex-ease-cinematic),background-color var(--ex-motion-base) var(--ex-ease-cinematic);
+  }
+  .ex-row:hover,.ex-row:focus-within { z-index:2; }
+  .ex-row:hover::after,.ex-row:focus-within::after {
     box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 18px 52px rgba(0,0,0,.38),0 0 34px rgba(84,172,247,.1),0 0 0 1px rgba(84,172,247,.18);
   }
   .ex-row__halo {
     position:absolute;
     z-index:-1;
-    inset:-18px -14px;
+    inset:-18px -14px -18px calc(var(--ex-surface-start) - 14px);
     border-radius:18px;
     background:radial-gradient(ellipse at 22% 54%,rgba(84,172,247,.18),rgba(84,172,247,.05) 38%,transparent 72%);
     opacity:0;
@@ -260,7 +271,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-row__edge-light {
     position:absolute;
     z-index:5;
-    inset:-1px;
+    inset:-1px -1px -1px calc(var(--ex-surface-start) - 1px);
     border:1px solid transparent;
     border-radius:inherit;
     background:linear-gradient(115deg,rgba(255,255,255,.46),transparent 24%,rgba(84,172,247,.58) 72%,transparent 96%) border-box;
@@ -274,19 +285,21 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   }
   .ex-row:hover .ex-row__halo,.ex-row:focus-within .ex-row__halo { opacity:1; }
   .ex-row:hover .ex-row__edge-light,.ex-row:focus-within .ex-row__edge-light { opacity:.92; filter:drop-shadow(0 0 9px rgba(84,172,247,.28)); }
-  .ex-row::before { content:""; position:absolute; left:-20px; top:50%; width:11px; height:11px; transform:translateY(-50%); border:2px solid #0d0f10; border-radius:50%; background:var(--ex-blue); box-shadow:0 0 0 1px var(--ex-blue),0 0 12px color-mix(in srgb,var(--ex-blue),transparent 20%); }
-  .ex-row--recent::before { background:var(--ex-orange); box-shadow:0 0 0 1px var(--ex-orange),0 0 12px rgba(241,130,36,.8); }
-  .ex-row--ending::before { background:var(--ex-red); box-shadow:0 0 0 1px var(--ex-red),0 0 12px rgba(239,75,88,.75); }
-  .ex-row--upcoming::before,.ex-row--long::before { background:var(--ex-gray); box-shadow:0 0 0 1px var(--ex-gray); }
-  .ex-row--popular::before { background:var(--ex-yellow); box-shadow:0 0 0 1px var(--ex-yellow),0 0 12px rgba(239,193,43,.7); }
-  .ex-row__rail { display:grid; align-content:center; gap:.18rem; padding-left:.65rem; color:var(--ex-muted); font-size:.7rem; font-variant-numeric:tabular-nums; }
+  .ex-row--recent { --ex-rail-color:var(--ex-orange); }
+  .ex-row--ending { --ex-rail-color:var(--ex-red); }
+  .ex-row--upcoming,.ex-row--long { --ex-rail-color:var(--ex-gray); }
+  .ex-row--popular { --ex-rail-color:var(--ex-yellow); }
+  .ex-row__rail { position:relative; display:grid; align-content:start; gap:.18rem; padding:.75rem 0 0 .65rem; color:var(--ex-muted); font-size:.7rem; font-variant-numeric:tabular-nums; }
+  .ex-row__rail::after { content:""; position:absolute; z-index:-1; top:1.06rem; left:-14px; right:calc(var(--ex-row-gap) * -1 + .15rem); height:1px; background:linear-gradient(90deg,color-mix(in srgb,var(--ex-rail-color),transparent 34%),color-mix(in srgb,var(--ex-rail-color),transparent 74%) 55%,transparent); }
   .ex-row__rail strong { color:var(--ex-text); font-size:.78rem; }
-  .ex-row__dot { display:none; }
+  .ex-row__dot { position:absolute; z-index:4; top:1.06rem; left:-20px; width:11px; height:11px; display:block; transform:translate3d(0,-50%,0); border:2px solid #0d0f10; border-radius:50%; background:var(--ex-rail-color); box-shadow:0 0 0 1px var(--ex-rail-color),0 0 14px color-mix(in srgb,var(--ex-rail-color),transparent 18%); }
   .ex-deck {
     position:relative;
     inline-size:100%;
     min-inline-size:0;
-    block-size:114px;
+    min-block-size:114px;
+    block-size:auto;
+    align-self:stretch;
     overflow:hidden;
     contain:layout paint;
     isolation:isolate;
@@ -328,16 +341,27 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     pointer-events:none;
   }
   .ex-deck__frame[data-deck-state="stack"] {
-    border-color:rgba(230,238,244,.78);
-    box-shadow:inset -1px 0 0 rgba(255,255,255,.22),6px 0 16px -2px rgba(0,0,0,.94),0 8px 20px rgba(0,0,0,.42);
+    border-color:color-mix(in srgb,rgba(230,238,244,.8),transparent calc(var(--deck-depth,1) * 8%));
+    box-shadow:inset -1px 0 0 rgba(255,255,255,.22),calc(7px - var(--deck-depth,1) * .8px) 0 calc(18px - var(--deck-depth,1) * 1.6px) -2px rgba(0,0,0,.94),0 8px 20px rgba(0,0,0,.42);
   }
   .ex-deck__frame img {
+    position:relative;
+    z-index:0;
     width:100%;
     height:100%;
     display:block;
     object-fit:cover;
     object-position:var(--media-position,50% 50%);
   }
+  .ex-deck__frame[data-deck-state="stack"] img { filter:saturate(var(--deck-saturation,1)) brightness(var(--deck-brightness,1)) contrast(var(--deck-contrast,1)) blur(var(--deck-blur,0)); }
+  .ex-deck__frame[data-image-state="loading"] img { opacity:0; }
+  .ex-deck__frame[data-image-state="loaded"] img { opacity:1; transition:opacity var(--ex-motion-fast) var(--ex-ease-cinematic); }
+  .ex-deck__frame[data-image-state="error"] img { display:none; }
+  .ex-deck__skeleton,.ex-gallery__skeleton { position:absolute; z-index:1; inset:0; overflow:hidden; background:linear-gradient(105deg,#171a1d 18%,#252a2e 38%,#171a1d 58%); background-size:220% 100%; }
+  .ex-deck__frame:not([data-image-state="loading"]) .ex-deck__skeleton { display:none; }
+  .ex-deck__depth-plane { position:absolute; inset:0; display:block; background:linear-gradient(100deg,#343a3f,#202428 58%,#15181a); }
+  .ex-deck__frame[data-deck-visual="depth-tail"] { border-color:rgba(202,211,218,.36); background:#23272b; }
+  .ex-deck__frame[data-deck-visual="depth-tail"]::after { box-shadow:inset -1px 0 rgba(255,255,255,.13),inset 1px 0 rgba(255,255,255,.05); }
   .ex-deck__frame[data-media-treatment="document-natural"] img {
     object-position:50% 50%;
   }
@@ -369,10 +393,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     pointer-events:none;
   }
   .ex-row__body { min-width:0; display:grid; align-content:center; gap:.28rem; padding:.2rem 0; }
-  .ex-row__title-line { display:flex; align-items:start; gap:.7rem; }
-  .ex-row__title { min-width:0; color:var(--ex-text); font-size:clamp(1rem,1.35vw,1.18rem); font-weight:820; line-height:1.15; text-decoration:none; }
+  .ex-row__title-line { min-width:0; display:block; }
+  .ex-row__title { min-width:0; inline-size:100%; display:block; overflow-wrap:anywhere; color:var(--ex-text); font-size:clamp(1rem,1.35vw,1.18rem); font-weight:820; line-height:1.15; text-decoration:none; }
   .ex-row__title:hover { color:#fff; text-decoration:underline; text-decoration-color:var(--ex-blue); }
-  .ex-discussed { flex:0 0 auto; display:inline-flex; align-items:center; gap:.3rem; color:var(--ex-yellow); font-size:.68rem; font-weight:850; }
+  .ex-discussed { display:inline-flex; align-items:center; gap:.3rem; color:var(--ex-yellow); font-size:.68rem; font-weight:850; white-space:nowrap; }
   .ex-discussed svg { width:14px; height:14px; fill:currentColor; }
   .ex-row__venue { margin:0; color:var(--ex-muted); font-size:.78rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .ex-row__reasons,.ex-row__tags { display:flex; flex-wrap:wrap; gap:.28rem; }
@@ -384,6 +408,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-row__tags span { background:#211c2b; color:#c2a6fa; }
   .ex-row__social { display:flex; flex-wrap:wrap; gap:.6rem; margin:.3rem 0 0; color:var(--ex-muted); font-size:.68rem; }
   .ex-row__social strong { color:var(--ex-text); }
+  .ex-row__aside { width:98px; min-width:0; display:grid; align-content:center; justify-items:end; gap:.5rem; }
   .ex-row__actions { display:flex; align-items:center; gap:.35rem; }
   .ex-action { position:relative; min-width:46px; min-height:46px; display:grid; place-items:center; border:1px solid var(--ex-border); border-radius:5px; background:#121416; color:var(--ex-muted); cursor:pointer; transition:border-color var(--ex-motion-fast) var(--ex-ease-cinematic),background-color var(--ex-motion-fast) var(--ex-ease-cinematic),color var(--ex-motion-fast) var(--ex-ease-cinematic),box-shadow var(--ex-motion-fast) var(--ex-ease-cinematic); }
   .ex-action:hover,.ex-action:focus-visible { border-color:rgba(187,222,249,.72); color:var(--ex-text); box-shadow:0 0 14px rgba(84,172,247,.13); }
@@ -398,6 +423,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-row>*:not(.ex-row__hidden,.ex-row__halo,.ex-row__edge-light) { transition:opacity var(--ex-motion-fast) var(--ex-ease-cinematic),transform var(--ex-motion-base) var(--ex-ease-cinematic),visibility 0s linear 0s; }
   .ex-row.is-rejected>*:not(.ex-row__hidden,.ex-row__halo,.ex-row__edge-light) { visibility:hidden; opacity:0; transform:translate3d(-10px,0,0) scale(.985); transition:opacity var(--ex-motion-fast) var(--ex-ease-cinematic),transform var(--ex-motion-fast) var(--ex-ease-cinematic),visibility 0s linear var(--ex-motion-fast); }
   .ex-row.is-rejected { min-height:132px; background:#17191a; }
+  .ex-row.is-rejected::after { background:#17191a; }
   .ex-row__hidden { position:absolute; inset:0; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.25rem; color:var(--ex-muted); opacity:0; transform:translate3d(10px,0,0); transition:opacity var(--ex-motion-base) var(--ex-ease-cinematic),transform var(--ex-motion-base) var(--ex-ease-cinematic); }
   .ex-row.is-rejected .ex-row__hidden { opacity:1; transform:translate3d(0,0,0); }
   .ex-row__hidden button { min-height:44px; padding:.5rem .8rem; border:1px solid #565b5f; border-radius:4px; background:#232629; color:var(--ex-text); font:inherit; font-weight:800; cursor:pointer; }
@@ -417,7 +443,9 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-gallery__bar h2 { margin:.1rem 0 0; font-size:clamp(1rem,2vw,1.5rem); }
   .ex-gallery__bar button { min-height:44px; padding:.5rem .75rem; border:1px solid #52585d; border-radius:4px; background:#17191b; color:var(--ex-text); font:inherit; cursor:pointer; }
   .ex-gallery__stage { min-height:min(72dvh,760px); display:grid; grid-template-columns:60px 1fr 60px; align-items:stretch; background:#070809; }
-  .ex-gallery__stage img { width:100%; height:min(72dvh,760px); object-fit:contain; background:#070809; }
+  .ex-gallery__media { position:relative; min-width:0; height:min(72dvh,760px); display:grid; place-items:center; overflow:hidden; background:#070809; }
+  .ex-gallery__stage img { position:relative; z-index:0; width:100%; height:100%; object-fit:contain; background:#070809; }
+  .ex-gallery__error { position:relative; z-index:2; margin:0; color:var(--ex-muted); }
   .ex-gallery__stage button { border:0; background:#111416; color:var(--ex-text); font-size:2rem; cursor:pointer; }
   .ex-gallery__count { margin:0; padding:.7rem; color:var(--ex-muted); text-align:center; }
   .ex-live { position:fixed; left:50%; bottom:1rem; z-index:80; transform:translateX(-50%); min-width:min(420px,calc(100% - 2rem)); margin:0; padding:.7rem 1rem; border:1px solid #4d5358; border-radius:6px; background:#191c1e; color:var(--ex-text); text-align:center; box-shadow:0 12px 34px rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity 160ms ease; }
@@ -426,6 +454,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   @keyframes ex-gallery-out { from { opacity:1; transform:translate3d(0,0,0) scale(1); } to { opacity:0; transform:translate3d(0,8px,0) scale(.988); } }
   @keyframes ex-backdrop-in { from { background:rgba(0,0,0,0); backdrop-filter:blur(0); } to { background:rgba(0,0,0,.84); backdrop-filter:blur(5px); } }
   @keyframes ex-backdrop-out { from { background:rgba(0,0,0,.84); backdrop-filter:blur(5px); } to { background:rgba(0,0,0,0); backdrop-filter:blur(0); } }
+  @keyframes ex-skeleton-shimmer { to { background-position:-120% 0; } }
   ::view-transition-group(*) { animation-duration:var(--ex-motion-base); animation-timing-function:var(--ex-ease-cinematic); }
   @media (min-width:760px) and (max-width:1020px) {
     body:has(.ex-page)>.site-header .site-header__inner { gap:clamp(.45rem,2vw,2rem); }
@@ -436,6 +465,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-controls { grid-template-columns:auto 1fr; }
     .ex-controls__end { grid-column:1/-1; justify-content:space-between; }
     .ex-row { --ex-media-column:clamp(320px,39vw,410px); grid-template-columns:95px var(--ex-media-column) minmax(190px,1fr) auto; }
+    .ex-deck { min-block-size:114px; block-size:114px; }
     .ex-discussed span { position:absolute; width:1px; height:1px; overflow:hidden; }
   }
   @media (max-width:820px) {
@@ -458,21 +488,28 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-legend { justify-content:flex-start; }
     .ex-list { gap:.7rem; padding-left:12px; }
     .ex-list::before { left:3px; }
-    .ex-row { min-height:0; grid-template-columns:1fr auto; grid-template-areas:"rail rail" "deck deck" "body actions"; gap:.65rem; padding:.65rem; border-radius:8px; }
-    .ex-row::before { left:-14px; top:1.35rem; }
+    .ex-row { --ex-surface-start:0px; min-height:0; grid-template-columns:1fr auto; grid-template-areas:"rail rail" "deck deck" "body aside"; gap:.65rem; padding:.65rem; border-radius:8px; }
+    .ex-row__halo { inset:-18px -14px; }
+    .ex-row__edge-light { inset:-1px; }
     .ex-row__rail { grid-area:rail; grid-template-columns:auto 1fr; gap:.25rem .65rem; padding:0; }
+    .ex-row__rail::after { top:.52rem; left:-1.25rem; right:auto; width:1.25rem; }
+    .ex-row__dot { top:.52rem; left:-1.25rem; }
     .ex-row__rail span:last-child { text-align:right; }
     .ex-deck { grid-area:deck; inline-size:100%; max-inline-size:100%; block-size:clamp(160px,48vw,228px); }
     .ex-deck__count { right:14px; }
     .ex-row__body { grid-area:body; }
-    .ex-row__actions { grid-area:actions; align-items:start; }
+    .ex-row__aside { grid-area:aside; align-content:start; }
+    .ex-row__actions { align-items:start; }
     .ex-row__expanded { opacity:1; transform:none; }
     .ex-row__social { font-size:.72rem; }
     .ex-tail-callout { align-items:stretch; flex-direction:column; }
     .ex-tail-toggle { width:100%; }
     .ex-gallery { width:100%; height:100dvh; max-height:none; margin:0; border:0; border-radius:0; }
     .ex-gallery__stage { min-height:calc(100dvh - 150px); grid-template-columns:48px 1fr 48px; }
-    .ex-gallery__stage img { height:calc(100dvh - 150px); }
+    .ex-gallery__media { height:calc(100dvh - 150px); }
+  }
+  @media (prefers-reduced-motion:no-preference) {
+    .ex-deck__frame[data-image-state="loading"] .ex-deck__skeleton,.ex-gallery__media[data-image-state="loading"] .ex-gallery__skeleton { animation:ex-skeleton-shimmer 1.35s linear infinite; }
   }
   @media (prefers-reduced-motion:reduce) {
     .ex-page *,.ex-page *::before,.ex-page *::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; }
@@ -514,11 +551,17 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       frames.forEach((frame) => {
         frame.hidden = true;
         frame.dataset.deckState = 'hidden';
+        delete frame.dataset.deckDepth;
         frame.style.removeProperty('inset-inline-start');
         frame.style.removeProperty('inset-block-start');
         frame.style.removeProperty('inline-size');
         frame.style.removeProperty('block-size');
         frame.style.removeProperty('z-index');
+        frame.style.removeProperty('--deck-depth');
+        frame.style.removeProperty('--deck-saturation');
+        frame.style.removeProperty('--deck-brightness');
+        frame.style.removeProperty('--deck-contrast');
+        frame.style.removeProperty('--deck-blur');
       });
 
       if (total === 1) {
@@ -558,7 +601,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       let fullWidth = 0;
       while (fullCount < frames.length - 1) {
         const nextWidth = widths[fullCount] + (fullCount ? gap : 0);
-        const remainingStackCount = Math.min(3, frames.length - (fullCount + 1));
+        const remainingStackCount = Math.min(5, frames.length - (fullCount + 1));
         // The stack only needs room for its exposed right edges and count badge;
         // most of each lower card may sit beneath the last fully visible card.
         const stackReserve = 50 + Math.max(0, remainingStackCount - 1) * sliver;
@@ -580,16 +623,28 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         frame.style.zIndex = String(100 + index);
         left += width + gap;
       }
-      const stackFrames = frames.slice(fullCount, fullCount + 3);
+      const stackFrames = frames.slice(fullCount);
       stackFrames.forEach((frame, index) => {
         const sourceIndex = fullCount + index;
+        const depth = index + 1;
+        const depthScale = 1 / (1 + depth * .05);
+        const depthHeight = height * depthScale;
+        const depthWidth = depthHeight * (widths[sourceIndex] / height);
         const rightEdge = available - (stackFrames.length - 1 - index) * sliver;
         frame.hidden = false;
         frame.dataset.deckState = 'stack';
-        frame.style.insetInlineStart = `${rightEdge - widths[sourceIndex]}px`;
-        frame.style.inlineSize = `${widths[sourceIndex]}px`;
+        frame.dataset.deckDepth = String(depth);
+        frame.style.insetInlineStart = `${rightEdge - depthWidth}px`;
+        frame.style.insetBlockStart = `${(height - depthHeight) / 2}px`;
+        frame.style.inlineSize = `${depthWidth}px`;
+        frame.style.blockSize = `${depthHeight}px`;
+        frame.style.setProperty('--deck-depth', String(depth));
+        frame.style.setProperty('--deck-saturation', String(.82 + (depth - 1) * .09));
+        frame.style.setProperty('--deck-brightness', String(Math.max(.76, .96 - (depth - 1) * .05)));
+        frame.style.setProperty('--deck-contrast', String(1.02 + (depth - 1) * .01));
+        frame.style.setProperty('--deck-blur', `${Math.max(0, depth - 1) * .15}px`);
         // Earlier cards stay above later cards, exposing each later right edge.
-        frame.style.zIndex = String(50 - index);
+        frame.style.zIndex = String(120 - depth);
       });
       const overflowCount = Math.max(1, total - fullCount);
       deck.dataset.deckFullCount = String(fullCount);
@@ -607,6 +662,25 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       deckResizeFrame = window.requestAnimationFrame(layoutDecks);
     };
     window.addEventListener('resize', scheduleDeckLayout, { passive:true });
+    const deckResizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleDeckLayout) : null;
+    root.querySelectorAll('[data-gallery-open]').forEach((deck) => deckResizeObserver?.observe(deck));
+    document.fonts?.ready.then(scheduleDeckLayout);
+
+    root.querySelectorAll('[data-deck-image]').forEach((image) => {
+      if (!(image instanceof HTMLImageElement)) return;
+      const frame = image.closest('[data-deck-frame]');
+      if (!(frame instanceof HTMLElement)) return;
+      let settled = false;
+      const finish = (state) => {
+        if (settled) return;
+        settled = true;
+        frame.dataset.imageState = state;
+        frame.querySelector('[data-image-skeleton]')?.remove();
+      };
+      image.addEventListener('load', () => finish('loaded'), { once:true });
+      image.addEventListener('error', () => finish('error'), { once:true });
+      if (image.complete) finish(image.naturalWidth > 0 ? 'loaded' : 'error');
+    });
     const transitionDOM = (callback) => {
       if (reducedMotion.matches || typeof document.startViewTransition !== 'function') { callback(); return; }
       document.startViewTransition(callback);
@@ -827,15 +901,41 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
 
     const dialog = root.querySelector('[data-gallery]');
     const galleryImage = root.querySelector('[data-gallery-image]');
+    const galleryMedia = root.querySelector('[data-gallery-media]');
     const galleryTitle = root.querySelector('[data-gallery-title]');
     const galleryCount = root.querySelector('[data-gallery-count]');
-    let galleryImages = []; let galleryIndex = 0; let galleryOpener = null; let galleryCloseTimer = 0;
+    const gallerySkeleton = root.querySelector('[data-gallery-skeleton]');
+    const galleryError = root.querySelector('[data-gallery-error]');
+    let galleryImages = []; let galleryIndex = 0; let galleryOpener = null; let galleryCloseTimer = 0; let galleryRequestId = 0;
     const renderGallery = () => {
-      if (!(galleryImage instanceof HTMLImageElement)) return;
-      galleryImage.src = galleryImages[galleryIndex] || '';
+      if (!(galleryImage instanceof HTMLImageElement) || !(galleryMedia instanceof HTMLElement)) return;
+      const src = galleryImages[galleryIndex];
+      if (!src) return;
+      const requestId = ++galleryRequestId;
+      galleryMedia.dataset.imageState = 'loading';
+      galleryMedia.setAttribute('aria-busy','true');
+      galleryImage.hidden = true;
+      if (gallerySkeleton instanceof HTMLElement) gallerySkeleton.hidden = false;
+      if (galleryError instanceof HTMLElement) galleryError.hidden = true;
       galleryImage.alt = galleryTitle instanceof HTMLElement ? `${galleryTitle.textContent}, фото ${galleryIndex+1}` : `Фото ${galleryIndex+1}`;
       if (galleryCount instanceof HTMLElement) galleryCount.textContent = `${galleryIndex+1} из ${galleryImages.length}`;
-      if (!reducedMotion.matches) galleryImage.animate([{ opacity:.35, transform:'translate3d(10px,0,0) scale(.992)' },{ opacity:1, transform:'translate3d(0,0,0) scale(1)' }],{ duration:240, easing:'cubic-bezier(.16,1,.3,1)' });
+      const finish = (state) => {
+        if (requestId !== galleryRequestId) return;
+        galleryMedia.dataset.imageState = state;
+        galleryMedia.setAttribute('aria-busy','false');
+        if (gallerySkeleton instanceof HTMLElement) gallerySkeleton.hidden = true;
+        if (state === 'loaded') {
+          galleryImage.hidden = false;
+          if (!reducedMotion.matches) galleryImage.animate([{ opacity:.35, transform:'translate3d(10px,0,0) scale(.992)' },{ opacity:1, transform:'translate3d(0,0,0) scale(1)' }],{ duration:240, easing:'cubic-bezier(.16,1,.3,1)' });
+        } else {
+          galleryImage.hidden = true;
+          if (galleryError instanceof HTMLElement) galleryError.hidden = false;
+        }
+      };
+      galleryImage.onload = () => finish('loaded');
+      galleryImage.onerror = () => finish('error');
+      galleryImage.src = src;
+      if (galleryImage.complete) finish(galleryImage.naturalWidth > 0 ? 'loaded' : 'error');
     };
     const openGallery = (opener,row) => {
       if (!(dialog instanceof HTMLDialogElement) || !(opener instanceof HTMLElement)) return;

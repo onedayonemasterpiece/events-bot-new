@@ -50,7 +50,12 @@
   or action movement; normalize desktop media into one adaptive column so every
   title starts on the same vertical, strengthen real right-edge deck depth with
   directional shadows/rims, and select the nearest named crop token so `4:3`
-  photos remain exact `W` instead of being unnecessarily cut to `3:2`.
+  photos remain exact `W` instead of being unnecessarily cut to `3:2`; let the
+  fixed-width media deck grow with unusually tall desktop title rows, move the
+  discussion marker into the reserved right aside, separate the date rail from
+  the bordered card surface, add cache/error-safe image skeletons, and replace
+  flat overflow with progressively smaller depth planes plus a gray image-free
+  sixth layer while preserving zero hover geometry movement.
 
 ### Added
 - **Personal exhibitions product prototype**: add a separate dark timeline

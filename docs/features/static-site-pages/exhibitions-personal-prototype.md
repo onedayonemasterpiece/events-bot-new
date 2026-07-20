@@ -140,14 +140,27 @@ marker. Адаптированы:
   колонки без изменения их пропорций; если natural card шире mobile viewport,
   одновременно уменьшаются её width и height, а не обрезается содержимое;
 - колода появляется только при реальном переполнении текущей полосы. Полностью
-  поместившиеся карточки остаются видимы; до трёх следующих реальных images
-  укладываются вправо с последовательным offset `13px` desktop / `9px` mobile
-  и убывающим z-index, а их правые края привязаны к общей границе media-column.
-  Верхние fully-visible cards лежат над началом stack: это убирает зазор и
-  оставляет справа настоящие последовательные корешки. Направленные вправо
-  shadow и светлый rim отделяют листы даже на тёмных фотографиях.
-  Счётчик `+N` означает все media, которые не показаны полностью; декоративных
-  пустых `i`-карт больше нет;
+  поместившиеся карточки остаются видимы; следующие карточки укладываются
+  вправо с offset `13px` desktop / `9px` mobile и убывающим z-index, а их
+  правые края привязаны к общей границе media-column. Каждый следующий слой
+  физически ниже и уже предыдущего, темнее, чуть контрастнее и насыщеннее:
+  перспектива существует постоянно, а не возникает на hover. После пяти
+  реальных previews шестой слой — нейтральная серая плоскость без `<img>`.
+  Направленные тени и светлый rim отделяют соседние листы; `+N` честно означает
+  все media, которые не показаны полностью;
+- на desktop deck не имеет фиксированной высоты: он растягивается до высоты
+  content-row, но сохраняет общую ширину media-column. Поэтому длинный title
+  делает выше и фотографии, вмещает меньше previews, однако не двигает начало
+  текста в соседних строках. `ResizeObserver` и завершение загрузки webfont
+  повторяют расчёт колоды без ручного resize;
+- discussion-marker вынесен в фиксированную правую aside над действиями и не
+  отнимает строку у title. Timeline rail, date/status и светящаяся lifecycle-dot
+  визуально находятся слева от bordered surface; короткий цветной connector
+  доводит линию до карточки, как в исходном референсе;
+- deck и полноэкранная gallery имеют стабильные shimmer-skeleton states. Для
+  cached image отдельно проверяется `complete/naturalWidth`; success и error
+  всегда снимают skeleton, а ошибка оставляет устойчивую серую поверхность без
+  broken-image icon и без изменения геометрии;
 - безопасные photos выбирают ближайший именованный token по геометрическим
   midpoint-границам. В частности, исходные `4:3` больше не форсируются в `L
   3:2`: они получают точный `W 4:3` без прежней потери около `11%` кадра;
@@ -270,6 +283,19 @@ overflow stack и полностью световой hover.
 отклонены: они противоречат повторному требованию владельца о неподвижной
 геометрии; hover остаётся только light/halo state.
 
+Перед итерацией adaptive-height / perspective / loading выполнен новый
+критический разбор через `agy`, `Gemini 3.1 Pro (High)`, а также три независимых
+read-only lane-а по layout/title, reference/depth и loading/QA. Приняты:
+растяжение deck вслед за высоким desktop row при неизменной ширине колонки,
+`ResizeObserver`, закреплённая у даты timeline-dot, уменьшающиеся depth planes,
+нейтральный шестой слой и cache-safe skeleton lifecycle. Совет Gemini оставить
+`Обсуждают` inline после title отклонён: он противоречит наблюдаемой проблеме
+длинного заголовка; marker вынесен в уже зарезервированную правую aside.
+Финальный screenshot/code/QA gate той же Pro-линии дал `ACCEPT` по R1–R5 без
+P0/P1. Единственное P2-замечание о сохранении высоты rejected row не принято
+как дефект: это намеренный documented undo-stub contract, предотвращающий
+прыжок списка под рукой пользователя.
+
 Независимый checklist-review дополнительно поймал два P1, пропущенных первым
 source-string gate: blanket `transform:none!important` ломал позиционирование в
 reduced-motion, а single-image deck сохранял пустой reserve правого edge-stack.
@@ -286,13 +312,12 @@ python3 -m http.server 4321 --directory dist
 # затем открыть /lab/exhibitions-personal/
 ```
 
-Browser QA должен покрывать `375×812`, `768×1024` и `1440×1000`: zero
+Browser QA должен покрывать `375×812`, `768×1024`, `900×900` и `1440×1000`: zero
 horizontal overflow, 12 уникальных exhibition rows, 3 new rows, no console
-errors, одинаковую desktop media/body vertical alignment, честные right-edge
-stack/count, keyboard movement, like/reject/undo, input shortcut guard, gallery and
-badge clearing. Последний gate: Astro build `381` pages, prototype contract
-`31/31`, ArrowDown/gallery/Escape/reject/undo/like/mobile drawer — pass без
-console errors; reduced-motion сохраняет позиционирующие transforms при `0s`
-transition и `auto` scroll. Отдельный regression-smoke `/vystavki/` подтвердил
-`51/51` уникальную listing row, прежний H1, все пять desktop destinations,
-mobile drawer и отсутствие horizontal overflow; route/data/ranking не менялись.
+errors, одинаковую desktop media-column/body vertical alignment, высокий deck
+у event `4913`, честные right-edge stack/count, строго убывающую высоту depth
+planes, серый tail без image, неподвижный hover, keyboard movement и gallery.
+Loading gate задерживает первый image: skeleton виден до ответа, исчезает после
+load, а deck geometry имеет delta `0`. Последний source/build gate: Astro build
+`381` pages и prototype contract `38/38`; production route/data/ranking не
+менялись.

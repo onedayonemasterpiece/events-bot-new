@@ -160,6 +160,8 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
         <span
           class="ex-deck__frame"
           data-deck-frame
+          data-deck-visual={index >= 5 ? 'depth-tail' : 'media'}
+          data-image-state={index >= 5 ? 'depth' : 'loading'}
           data-media-treatment={asset.treatment}
           data-media-token={asset.token}
           data-media-role={asset.mediaRole}
@@ -171,16 +173,24 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
           data-presentation-ratio={asset.presentationRatio.toFixed(5)}
           style={`--deck-index:${index};--media-ratio:${asset.presentationRatio.toFixed(5)};--media-position:${asset.objectPosition}`}
         >
-          <img
-            src={asset.src}
-            srcset={asset.thumbnailSrcset || undefined}
-            sizes="(max-width: 740px) 48vw, 190px"
-            alt=""
-            width={asset.width}
-            height={asset.height}
-            loading={rowIndex > 2 ? 'lazy' : 'eager'}
-            decoding="async"
-          />
+          {index < 5 ? (
+            <>
+              <img
+                data-deck-image
+                src={asset.src}
+                srcset={asset.thumbnailSrcset || undefined}
+                sizes="(max-width: 740px) 48vw, 190px"
+                alt=""
+                width={asset.width}
+                height={asset.height}
+                loading={rowIndex > 2 ? 'lazy' : 'eager'}
+                decoding="async"
+              />
+              <span class="ex-deck__skeleton" data-image-skeleton aria-hidden="true"></span>
+            </>
+          ) : (
+            <span class="ex-deck__depth-plane" aria-hidden="true"></span>
+          )}
         </span>
       ))}
     </span>
@@ -198,12 +208,6 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
         aria-keyshortcuts="ArrowUp ArrowDown Enter L X G"
         aria-label={actionLabel}
       >{event.title}</a>
-      {item.discussions >= 20 && (
-        <span class="ex-discussed" aria-label={`Активно обсуждают: ${item.discussions} обсуждений`} title="Активно обсуждают">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.72 5.52 6.1.88-4.41 4.3 1.04 6.08L12 16.61l-5.45 2.87 1.04-6.08-4.41-4.3 6.1-.88L12 2.7Z" /></svg>
-          <span>Обсуждают</span>
-        </span>
-      )}
     </div>
     <p class="ex-row__venue">{event.venue_name || event.city}</p>
     <div class="ex-row__reasons" aria-label="Почему выставка здесь">
@@ -222,17 +226,25 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     </div>
   </div>
 
-  <div class="ex-row__actions" aria-label={`Действия с выставкой «${event.title}»`}>
-    <button type="button" class="ex-action ex-action--like" data-like aria-pressed="false" aria-label={`Нравится: ${event.title}`}>
-      <Icon name="heart" />
-      <span class="ex-action__label">Нравится</span>
-      <kbd aria-hidden="true">L</kbd>
-    </button>
-    <button type="button" class="ex-action ex-action--reject" data-reject aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
-      <Icon name="dislike" />
-      <span class="ex-action__label">Не интересно</span>
-      <kbd aria-hidden="true">X</kbd>
-    </button>
+  <div class="ex-row__aside">
+    {item.discussions >= 20 && (
+      <span class="ex-discussed" aria-label={`Активно обсуждают: ${item.discussions} обсуждений`} title="Активно обсуждают">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.72 5.52 6.1.88-4.41 4.3 1.04 6.08L12 16.61l-5.45 2.87 1.04-6.08-4.41-4.3 6.1-.88L12 2.7Z" /></svg>
+        <span>Обсуждают</span>
+      </span>
+    )}
+    <div class="ex-row__actions" aria-label={`Действия с выставкой «${event.title}»`}>
+      <button type="button" class="ex-action ex-action--like" data-like aria-pressed="false" aria-label={`Нравится: ${event.title}`}>
+        <Icon name="heart" />
+        <span class="ex-action__label">Нравится</span>
+        <kbd aria-hidden="true">L</kbd>
+      </button>
+      <button type="button" class="ex-action ex-action--reject" data-reject aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
+        <Icon name="dislike" />
+        <span class="ex-action__label">Не интересно</span>
+        <kbd aria-hidden="true">X</kbd>
+      </button>
+    </div>
   </div>
 
   <div class="ex-row__hidden" data-hidden-stub hidden>
