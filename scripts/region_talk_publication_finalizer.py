@@ -1161,7 +1161,7 @@ def _mark_ineligible(row: dict[str, Any], verdict: str, *, now_iso: str) -> None
 
 def _review_state_is_current(row: dict[str, Any]) -> bool:
     previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
-    return bool(
+    base_current = bool(
         previous
         and str(previous.get("publication_status") or "") == "needs_visual_review"
         and str(previous.get("publication_eligibility_verdict") or "") == "review"
@@ -1172,6 +1172,21 @@ def _review_state_is_current(row: dict[str, Any]) -> bool:
         and str(previous.get("authoritative_source_fingerprint") or "")
         == str(row.get("authoritative_source_fingerprint") or "")
     )
+    if not base_current:
+        return False
+    origin = str(row.get("content_origin_type") or "")
+    if origin not in rt.EXTERNAL_PUBLICATION_ORIGIN_TYPES:
+        return True
+    # v1 external publication rows predated durable origin/rights/image-review
+    # fields. Re-write that review row once instead of treating its older gate
+    # fingerprint as proof that the operator contract is complete.
+    required_external_projection = (
+        "content_origin_type", "external_publication_id", "external_research_quality_score",
+        "rights_policy", "media_use_policy", "media_reuse_allowed",
+        "image_quality_decision", "image_quality_reason",
+        "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
+    )
+    return all(previous.get(field) == row.get(field) for field in required_external_projection)
 
 
 def _mark_review_pending(row: dict[str, Any]) -> None:

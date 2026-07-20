@@ -245,6 +245,43 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
                 [],
             )
 
+    def test_external_visual_review_rewrites_missing_rights_projection_once(self) -> None:
+        mod = self.mod
+        row = candidate_row(
+            content_origin_type="editorial_publication",
+            external_publication_id="extpub-1",
+            external_research_quality_score=0.857,
+            rights_policy="link_only",
+            media_use_policy="score_only_no_reuse",
+            media_reuse_allowed=False,
+            image_quality_decision="needs_visual_review",
+            image_quality_reason="low_score_requires_review",
+            kaliningrad_oblast_only_scope=True,
+            kaliningrad_mention_role="main_subject",
+            publication_eligibility_verdict="review",
+            publication_eligibility_gate_version="gate-v1",
+            publication_eligibility_evidence_fingerprint="evidence-v1",
+            authoritative_source_fingerprint="source-v1",
+            _previous_publication={
+                "publication_status": "needs_visual_review",
+                "publication_eligibility_verdict": "review",
+                "publication_eligibility_gate_version": "gate-v1",
+                "publication_eligibility_evidence_fingerprint": "evidence-v1",
+                "authoritative_source_fingerprint": "source-v1",
+            },
+        )
+        self.assertFalse(mod._review_state_is_current(row))
+        row["_previous_publication"].update({
+            field: row.get(field)
+            for field in (
+                "content_origin_type", "external_publication_id", "external_research_quality_score",
+                "rights_policy", "media_use_policy", "media_reuse_allowed",
+                "image_quality_decision", "image_quality_reason",
+                "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
+            )
+        })
+        self.assertTrue(mod._review_state_is_current(row))
+
     def test_normalize_post_url_collapses_public_telegram_variants(self) -> None:
         variants = [
             "http://T.ME/TravelCase/10/",
