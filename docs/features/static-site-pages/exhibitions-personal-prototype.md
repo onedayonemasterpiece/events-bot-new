@@ -526,3 +526,9 @@ V10 browser gate проверяет stable и настоящий third-like rera
 viewport media budget, footer `P/S` positive/negative scope и отсутствие всего
 keyboard chrome на `375px`. Результат: source contract `59/59`, desktop/mobile
 Playwright — без console/page errors и horizontal overflow.
+
+Финальный gate того же `Gemini 3.1 Pro (High)` по публичному immutable preview:
+`ACCEPT`, P0/P1 блокеров нет. Консультант отдельно подтвердил cumulative batch
+`4`, сохранение focus на disclosure после `Enter/Space` и per-visible-deck
+media cap; P2 — измерять частоту последовательных раскрытий и только по данным
+решать, нужен ли адаптивный размер батча.
