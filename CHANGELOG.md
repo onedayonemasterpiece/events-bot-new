@@ -22,6 +22,9 @@
 - Fixed Smart Update static-site single-flight recovery so a fresh local claim
   whose Kaggle ledger is already terminal cannot block the next coalesced build
   for the two-hour claim TTL; the supersession is recorded as failed history.
+- Bounded the mandatory production Chromium gate by selecting gallery journeys
+  from generated HTML before opening a browser, while still executing the full
+  real-document crop, card, gallery and footer assertions in Chromium.
 - Fixed event-media deferred-pair convergence: an early/no-op media worker now
   re-arms exactly one durable job for the earliest future pair retry, without
   spending provider budget early or losing the quarantined review wake-up.

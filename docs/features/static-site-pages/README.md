@@ -32,6 +32,13 @@ portrait series, low-resolution and quality-fallback combinations. The same
 production artifacts and secret candidates. A build that falls back to the
 legacy `EventHero + event-grid` desktop DOM fails closed.
 
+The blocking Chromium release gate first derives a bounded specimen set from
+the generated immutable HTML (preferring the reported `6408` gallery journey
+while it remains in the catalog), then performs the same real-browser document
+navigation and geometry assertions. It never scans dozens of live pages merely
+to discover a specimen, so a large catalog cannot turn the mandatory gate into
+an unbounded Kaggle run.
+
 The reviewed desktop keyboard navigator V7 is documented in
 [keyboard-event-navigation-prototype.md](keyboard-event-navigation-prototype.md).
 Its exact command router is shared by the historical lab and the primary event
