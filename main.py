@@ -18700,10 +18700,15 @@ async def _run_due_jobs_once_locked(
                 # Compare-and-swap the durable owner.  Another Fly process may
                 # have selected the same due row before either process wrote;
                 # only one is allowed to cross into the effectful handler.
+                # Keep the scalar before rollback. SQLAlchemy expires ORM
+                # instances on transaction boundaries, and reading ``obj.id``
+                # after a lost CAS can otherwise attempt async IO outside a
+                # greenlet, taking the whole outbox/health loop down.
+                claim_job_id = int(obj.id)
                 claim_result = await session.execute(
                     update(JobOutbox)
                     .where(
-                        JobOutbox.id == obj.id,
+                        JobOutbox.id == claim_job_id,
                         JobOutbox.status.in_([JobStatus.pending, JobStatus.error]),
                         ~select(JobOutbox.id)
                         .where(
@@ -18718,7 +18723,7 @@ async def _run_due_jobs_once_locked(
                 )
                 if claim_result.rowcount != 1:
                     await session.rollback()
-                    logging.info("STATIC_SITE_CLAIM_LOST job_id=%s", obj.id)
+                    logging.info("STATIC_SITE_CLAIM_LOST job_id=%s", claim_job_id)
                     continue
                 await session.commit()
                 obj.status = JobStatus.running

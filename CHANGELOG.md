@@ -25,6 +25,9 @@
 - Bounded the mandatory production Chromium gate by selecting gallery journeys
   from generated HTML before opening a browser, while still executing the full
   real-document crop, card, gallery and footer assertions in Chromium.
+- Fixed the static-site outbox CAS-loss path so a deploy during an active
+  Kaggle build logs the cached job id instead of triggering SQLAlchemy
+  `MissingGreenlet` repeatedly and making `/healthz` unavailable.
 - Fixed event-media deferred-pair convergence: an early/no-op media worker now
   re-arms exactly one durable job for the earliest future pair retry, without
   spending provider budget early or losing the quarantined review wake-up.
