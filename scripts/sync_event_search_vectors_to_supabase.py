@@ -97,6 +97,49 @@ def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def vector_corpus_hash(
+    docs: Iterable["SearchDoc"],
+    *,
+    document_kind: str,
+    embedding_model: str,
+    embedding_dim: int,
+) -> str:
+    """Return a stable revision for one complete embedding corpus.
+
+    The revision is intentionally based on the ordered event/text-hash manifest
+    plus the embedding contract, not timestamps or provider-call ordering.  It
+    therefore changes whenever membership, semantic input, model, dimension or
+    document kind changes and remains identical for no-op reconciliations.
+    """
+
+    if document_kind not in {"search_v3", "related_v1"}:
+        raise ValueError(f"unsupported vector corpus document kind: {document_kind}")
+    hash_key = "text_hash" if document_kind == "search_v3" else "related_text_hash"
+    manifest = {
+        "schema_version": "event_vector_corpus_v1",
+        "embedding_model": str(embedding_model),
+        "embedding_dim": int(embedding_dim),
+        "embedding_doc_kind": document_kind,
+        "documents": sorted(
+            (
+                {
+                    "event_id": int(doc.event_id),
+                    "text_hash": str(doc.document[hash_key]),
+                }
+                for doc in docs
+            ),
+            key=lambda item: (item["event_id"], item["text_hash"]),
+        ),
+    }
+    canonical = json.dumps(
+        manifest,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha256_text(canonical)
+
+
 def event_weekday(event: dict[str, Any]) -> tuple[int | None, str | None]:
     raw = clean_text(event.get("start_date"))
     try:
@@ -713,6 +756,15 @@ def main() -> int:
     invalid_kinds = sorted(set(document_kinds) - {"search_v3", "related_v1"})
     if invalid_kinds:
         raise SystemExit(f"Unsupported document kinds: {', '.join(invalid_kinds)}")
+    corpus_hashes = {
+        kind: vector_corpus_hash(
+            docs,
+            document_kind=kind,
+            embedding_model=args.embedding_model,
+            embedding_dim=args.embedding_dim,
+        )
+        for kind in ("search_v3", "related_v1")
+    }
 
     report: dict[str, Any] = {
         "preview_events_json": str(args.preview_events_json),
@@ -723,6 +775,8 @@ def main() -> int:
         "apply": bool(args.apply),
         "site_origin": args.site_origin,
         "base_path": args.base_path,
+        "search_v3_hash": corpus_hashes["search_v3"],
+        "related_v1_hash": corpus_hashes["related_v1"],
     }
     if not args.apply:
         report["sample"] = [

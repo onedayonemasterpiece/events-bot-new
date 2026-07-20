@@ -336,6 +336,7 @@ def export_preview_data_if_configured(config: dict) -> None:
         '--catalog-mode', str(config.get('catalog_mode') or 'slice'),
         '--related-cache', str(cache_path),
         '--related-mode', str(config.get('related_mode') or 'sparse'),
+        '--related-corpus-revision', str(config.get('related_corpus_revision') or ''),
         '--pgvector-embedding-model', str(config.get('pgvector_embedding_model') or 'gemini-embedding-2'),
         '--pgvector-embedding-key-env', str(config.get('pgvector_embedding_key_env') or 'GOOGLE_API_KEY4'),
         '--pgvector-max-provider-calls', str(config.get('pgvector_max_provider_calls') or 1000),

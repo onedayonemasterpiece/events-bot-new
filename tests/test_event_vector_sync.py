@@ -15,7 +15,11 @@ from scripts import sync_event_search_vectors_to_supabase as sync
 async def test_full_catalog_sync_persists_structured_ops_metrics(monkeypatch, tmp_path):
     monkeypatch.setenv("ENABLE_EVENT_VECTOR_SYNC", "1")
     monkeypatch.setenv("EVENT_VECTOR_SYNC_CATALOG_LIMIT", "5000")
+    receipt_path = tmp_path / "event-vector-receipt.json"
+    monkeypatch.setenv("EVENT_VECTOR_SYNC_RECEIPT_PATH", str(receipt_path))
     calls: list[tuple[str, dict]] = []
+    search_hash = "a" * 64
+    related_hash = "b" * 64
 
     async def fake_start(*_args, **_kwargs):
         return 77
@@ -44,6 +48,9 @@ async def test_full_catalog_sync_persists_structured_ops_metrics(monkeypatch, tm
                         "complete": True,
                         "embedding_model": "gemini-embedding-2",
                         "embedding_dim": 768,
+                        "document_kinds": ["search_v3", "related_v1"],
+                        "search_v3_hash": search_hash,
+                        "related_v1_hash": related_hash,
                     }
                 ),
                 encoding="utf-8",
@@ -53,6 +60,12 @@ async def test_full_catalog_sync_persists_structured_ops_metrics(monkeypatch, tm
     monkeypatch.setattr(evs, "start_ops_run", fake_start)
     monkeypatch.setattr(evs, "finish_ops_run", fake_finish)
     monkeypatch.setattr(evs, "_run_process", fake_process)
+    monkeypatch.setattr(
+        evs,
+        "_create_sqlite_snapshot",
+        lambda _source, target: target.write_bytes(b"snapshot"),
+    )
+    monkeypatch.setattr(evs, "_snapshot_event_revisions", lambda _path: {"42": "revision-42"})
 
     result = await evs.run_event_vector_sync(
         SimpleNamespace(path=str(tmp_path / "db.sqlite")),
@@ -66,6 +79,103 @@ async def test_full_catalog_sync_persists_structured_ops_metrics(monkeypatch, tm
     assert calls[-1][0] == "success"
     assert calls[-1][1]["metrics"]["stale_events_deleted"] == 3
     assert calls[-1][1]["details"]["document_kinds"] == ["search_v3", "related_v1"]
+    assert calls[-1][1]["details"]["related_v1_hash"] == related_hash
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt == {
+        "complete": True,
+        "document_kinds": ["search_v3", "related_v1"],
+        "embedding_dim": 768,
+        "embedding_model": "gemini-embedding-2",
+        "event_revisions": {"42": "revision-42"},
+        "events": 334,
+        "projected_at": receipt["projected_at"],
+        "projection_run_id": 77,
+        "related_v1_hash": related_hash,
+        "run_id": 77,
+        "schema_version": "event_vector_sync_receipt_v1",
+        "search_v3_hash": search_hash,
+        "status": "complete",
+    }
+
+
+def test_vector_corpus_hash_is_order_independent_and_contract_bound() -> None:
+    def doc(event_id: int, search_hash: str, related_hash: str) -> sync.SearchDoc:
+        return sync.SearchDoc(
+            event_id=event_id,
+            document={"text_hash": search_hash, "related_text_hash": related_hash},
+            search_embedding_input="",
+            related_embedding_input="",
+        )
+
+    docs = [doc(2, "s2", "r2"), doc(1, "s1", "r1")]
+    reverse = list(reversed(docs))
+    related = sync.vector_corpus_hash(
+        docs,
+        document_kind="related_v1",
+        embedding_model="gemini-embedding-2",
+        embedding_dim=768,
+    )
+
+    assert related == sync.vector_corpus_hash(
+        reverse,
+        document_kind="related_v1",
+        embedding_model="gemini-embedding-2",
+        embedding_dim=768,
+    )
+    assert related != sync.vector_corpus_hash(
+        [doc(2, "s2", "changed"), doc(1, "s1", "r1")],
+        document_kind="related_v1",
+        embedding_model="gemini-embedding-2",
+        embedding_dim=768,
+    )
+    assert related != sync.vector_corpus_hash(
+        docs,
+        document_kind="related_v1",
+        embedding_model="gemini-embedding-3",
+        embedding_dim=768,
+    )
+
+
+def test_atomic_receipt_replaces_complete_json(tmp_path: Path) -> None:
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text('{"status":"old"}\n', encoding="utf-8")
+
+    evs._atomic_write_json(receipt_path, {"status": "complete", "revision": "a" * 64})
+
+    assert json.loads(receipt_path.read_text(encoding="utf-8")) == {
+        "revision": "a" * 64,
+        "status": "complete",
+    }
+    assert not list(tmp_path.glob(".receipt.json.*.tmp"))
+
+
+@pytest.mark.asyncio
+async def test_snapshot_revisions_match_static_request_revision(tmp_path: Path) -> None:
+    import main
+
+    database = main.Database(str(tmp_path / "source.sqlite"))
+    await database.init()
+    async with database.get_session() as session:
+        event = main.Event(
+            title="Revision snapshot",
+            description="Canonical description",
+            date="2026-08-01",
+            time="19:00",
+            location_name="Дом искусств",
+            city="Калининград",
+            source_text="source",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        expected = main.event_public_revision(event)
+        event_id = int(event.id)
+
+    snapshot = tmp_path / "snapshot.sqlite"
+    evs._create_sqlite_snapshot(database.path, snapshot)
+
+    assert evs._snapshot_event_revisions(snapshot)[str(event_id)] == expected
+    await database.close()
 
 
 def test_sync_require_complete_returns_nonzero_when_cap_leaves_gap(monkeypatch, tmp_path):

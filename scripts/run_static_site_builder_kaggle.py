@@ -241,6 +241,7 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             cmd.extend(['--related-cache', str(Path(args.related_cache).resolve())])
         cmd.extend([
             '--related-mode', args.related_mode,
+            '--related-corpus-revision', args.related_corpus_revision,
             '--pgvector-embedding-model', args.pgvector_embedding_model,
             '--pgvector-embedding-key-env', args.pgvector_embedding_key_env,
             '--pgvector-max-provider-calls', str(args.pgvector_max_provider_calls),
@@ -590,6 +591,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'sqlite_db_filename': 'events.sqlite' if args.db and args.export_in_kaggle else None,
         'related_cache_filename': 'event_related_chain_cache.json',
         'related_mode': args.related_mode,
+        'related_corpus_revision': args.related_corpus_revision or None,
         'sync_pgvector_vectors': bool(args.sync_pgvector_vectors),
         'pgvector_embedding_model': args.pgvector_embedding_model,
         'pgvector_embedding_key_env': args.pgvector_embedding_key_env,
@@ -731,6 +733,7 @@ def main() -> int:
     parser.add_argument('--export-in-kaggle', action='store_true', default=(os.getenv('STATIC_SITE_EXPORT_IN_KAGGLE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--related-cache', default=os.getenv('STATIC_SITE_RELATED_CACHE', str(ARTIFACT_ROOT / 'event_related_chain_cache.json')))
     parser.add_argument('--related-mode', choices=['sparse', 'pgvector'], default=os.getenv('STATIC_SITE_RELATED_MODE', 'sparse'))
+    parser.add_argument('--related-corpus-revision', default=os.getenv('STATIC_SITE_RELATED_CORPUS_REVISION', ''))
     parser.add_argument('--sync-pgvector-vectors', action='store_true', default=(os.getenv('STATIC_SITE_SYNC_PGVECTOR_VECTORS', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--pgvector-embedding-model', default=os.getenv('STATIC_SITE_PGVECTOR_EMBEDDING_MODEL', 'gemini-embedding-2'))
     parser.add_argument('--pgvector-embedding-key-env', default=os.getenv('STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV', 'GOOGLE_API_KEY4'))

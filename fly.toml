@@ -204,6 +204,7 @@ app = "events-bot-new-wngqia"
   EVENT_VECTOR_SYNC_CATALOG_LIMIT = "5000"
   EVENT_VECTOR_SYNC_MAX_PROVIDER_CALLS = "500"
   EVENT_VECTOR_SYNC_GOOGLE_KEY_ENV = "GOOGLE_API_KEY4"
+  EVENT_VECTOR_SYNC_RECEIPT_PATH = "/data/event_vector_sync_receipt.json"
   # One immutable full-catalog build is coalesced for 15 minutes after the
   # latest Smart Update. The Kaggle job refreshes pgvector related manifests
   # and downloads a checked artifact; production-root promotion remains a
@@ -216,10 +217,16 @@ app = "events-bot-new-wngqia"
   STATIC_SITE_OUTPUT_KEEP_LATEST_TERMINAL = "0"
   STATIC_SITE_BUILDER_LIMIT = "5000"
   STATIC_SITE_RELATED_MODE = "pgvector"
+  STATIC_SITE_REQUIRE_VECTOR_BARRIER = "1"
+  STATIC_SITE_VECTOR_RECEIPT_PATH = "/data/event_vector_sync_receipt.json"
   STATIC_SITE_SYNC_PGVECTOR_VECTORS = "1"
   STATIC_SITE_PGVECTOR_EMBEDDING_MODEL = "gemini-embedding-2"
   STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV = "GOOGLE_API_KEY4"
   STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS = "1000"
+  # The per-anchor strict verifier costs about two Gemma calls per anchor; keep
+  # it disabled until a bounded one-call-per-build design replaces it.
+  STATIC_SITE_GEMMA_RELATED_VERIFY = "0"
+  STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS = "0"
   STATIC_SITE_ASSET_BASE_URL = "https://static.kenigevents.ru"
   STATIC_SITE_ASTRO_ASSET_BASE_URL = "https://static.kenigevents.ru/{buildId}"
   STATIC_SITE_ICS_BASE_URL = "https://static.kenigevents.ru/ics"

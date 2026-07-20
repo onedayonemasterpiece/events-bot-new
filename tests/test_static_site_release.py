@@ -806,12 +806,13 @@ def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_p
     disabled = make_request_payload(reason="base", event_ids=[1], require_vector_barrier=False)
     assert validate_vector_barrier(disabled, None)["status"] == "disabled"
 
+    related_hash = "b" * 64
     required = make_request_payload(
         reason="related",
         event_ids=[1],
         event_revisions={1: "revision-1"},
         require_vector_barrier=True,
-        expected_related_v1_hash="related-hash",
+        expected_related_v1_hash=related_hash,
     )
     with pytest.raises(StaticSiteRetryableError, match="pending"):
         validate_vector_barrier(required, None)
@@ -819,8 +820,11 @@ def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_p
     receipt.write_text(
         json.dumps(
             {
+                "schema_version": "event_vector_sync_receipt_v1",
                 "status": "complete",
-                "related_v1_hash": "related-hash",
+                "complete": True,
+                "search_v3_hash": "a" * 64,
+                "related_v1_hash": related_hash,
                 "event_revisions": {"1": "revision-1"},
                 "run_id": "projection-1",
             }
@@ -828,6 +832,23 @@ def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_p
         encoding="utf-8",
     )
     assert validate_vector_barrier(required, receipt)["projection_run_id"] == "projection-1"
+
+    malformed = tmp_path / "malformed-receipt.json"
+    malformed.write_text(
+        json.dumps(
+            {
+                "schema_version": "event_vector_sync_receipt_v1",
+                "status": "complete",
+                "complete": True,
+                "search_v3_hash": "not-a-corpus-hash",
+                "related_v1_hash": related_hash,
+                "event_revisions": {"1": "revision-1"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(StaticSitePermanentError, match="hash_invalid:search_v3_hash"):
+        validate_vector_barrier(required, malformed)
 
 
 def test_add_build_13_and_add_obs_failure_and_freshness_contract() -> None:

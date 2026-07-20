@@ -1568,6 +1568,11 @@ def validate_vector_barrier(request_payload: Mapping[str, Any], receipt_path: st
         raise StaticSitePermanentError(f"vector_barrier_receipt_invalid:{exc}") from exc
     if receipt.get("status") not in {"complete", "success"} or receipt.get("complete") is False:
         raise StaticSiteRetryableError("vector_barrier_incomplete")
+    if receipt.get("schema_version") != "event_vector_sync_receipt_v1":
+        raise StaticSitePermanentError("vector_barrier_receipt_schema_mismatch")
+    for key in ("search_v3_hash", "related_v1_hash"):
+        if not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get(key) or "")):
+            raise StaticSitePermanentError(f"vector_barrier_hash_invalid:{key}")
     for key in ("expected_search_v3_hash", "expected_related_v1_hash"):
         expected = barrier.get(key)
         actual = receipt.get(key.removeprefix("expected_"))
