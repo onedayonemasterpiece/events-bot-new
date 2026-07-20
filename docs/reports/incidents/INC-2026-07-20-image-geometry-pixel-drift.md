@@ -50,6 +50,17 @@ prove that a crop referred to the current pixels.
 - 2026-07-20 00:37 UTC — the managed object involved in event `6954` was also
   overwritten during later materialization/rehydration.
 - 2026-07-20 — audit localized the exact-pixel drift and opened this incident.
+- 2026-07-20 — merge `82fb5ba1` reached `origin/main` and Fly release `v1719`
+  deployed the first exact-pixel repair.
+- 2026-07-20 10:06–10:09 UTC — bounded event `6956` canary exposed a second
+  convergence defect: source rehydrate repeatedly weak-URL-merged a different
+  exact rendition into the classified row and caused eight duplicate
+  `event_media_role` calls, alternating the intended KEY4/KEY5 pool.
+- 2026-07-20 10:09 UTC — only the `event_media_review:6956` follow-up was
+  deferred; no mass backfill was running.
+- 2026-07-20 10:04 UTC — StaticSiteBuilder built all Astro pages but its stale
+  desktop post-build check rejected 372 safe `contain` decisions as legacy
+  `expected cover`; only that retry was deferred while the contract was fixed.
 
 ## Root Cause
 
@@ -66,6 +77,13 @@ prove that a crop referred to the current pixels.
    the operational selector omitted geometry-only stale rows.
 6. The static exporter emitted empty face boxes and no viewer-value region
    instead of joining pixel-current `event_image_geometry` rows.
+7. The identity index exposed weak source URLs for rows that already owned an
+   exact-v2 object, and source/candidate hash lookup ran before exact served-byte
+   identity. Reconciliation could therefore overwrite and invalidate the same
+   classified row on every pass.
+8. The static production desktop check still inferred `cover` from
+   `visual_only`, contradicting the new protected-region rule that responsive
+   unknown-aspect surfaces must fail closed to `contain`.
 
 ## Contributing Factors
 
@@ -126,6 +144,8 @@ prove that a crop referred to the current pixels.
 - Mass backfill is paused until exact object/pixel identity is fixed.
 - Production inspection remains read-only except for an explicitly bounded,
   delayed canary after deploy.
+- The single `6956` media follow-up and the failed static-build retry are
+  deferred until the convergence hotfix is deployed; unrelated jobs continue.
 
 ## Corrective Actions
 
@@ -135,6 +155,10 @@ prove that a crop referred to the current pixels.
 - [x] Enqueue after pair reconciliation and include geometry-only stale rows.
 - [x] Export pixel-current face/value metadata with provenance.
 - [x] Consume it through deterministic safe-cover/contain decisions.
+- [x] Make exact identity outrank source identity and restrict weak-URL merge to
+  legacy rows so repeated source reconciliation converges.
+- [x] Align the production desktop build contract with protected-crop
+  `cover`/reason evidence and fail-closed responsive `contain`.
 
 ## Follow-up Actions
 
@@ -143,11 +167,15 @@ prove that a crop referred to the current pixels.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- first deployed SHA: `82fb5ba12dfc1181a358044cc060c19d441378dd`, Fly
+  release `v1719`; convergence hotfix deploy pending
+- deploy path: clean `origin/main` Fly deploy; convergence hotfix pending
 - source regression checks: 146 Python tests and 20 focused Node tests passed;
   Astro built 380 pages. The broad Node suite remained 43/44 because of a
   pre-existing literal class-token assertion in an unchanged layout file.
+- convergence regression: 55 focused Python tests passed; a full local
+  production-profile export/build from the retained failed snapshot passed the
+  corrected desktop post-build contract with zero provider calls.
 - post-deploy verification: pending
 
 ## Prevention
