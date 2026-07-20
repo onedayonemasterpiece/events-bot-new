@@ -1661,6 +1661,7 @@ def validate_production_candidate_result(
         "fixture_isolation",
         "canonical_and_indexing",
         "tree_hashes",
+        "browser_visual",
     ):
         if production_checks.get(check) != "ok":
             raise StaticSitePermanentError(f"static_site_result_production_check_incomplete:{check}")
@@ -1672,6 +1673,7 @@ def validate_production_candidate_result(
         "no_referrer",
         "prefix_containment",
         "root_isolation",
+        "browser_visual",
     ):
         if candidate_checks.get(check) != "ok":
             raise StaticSitePermanentError(f"static_site_result_candidate_check_incomplete:{check}")
@@ -1788,7 +1790,7 @@ def publish_secret_candidate_archive(
         or manifest.get("run_id") != build_result.get("run_id")
     ):
         raise StaticSitePermanentError("secret_candidate_manifest_identity_mismatch")
-    for check in ("candidate_contract", "catalog_parity", "noindex", "no_referrer", "prefix_containment", "root_isolation"):
+    for check in ("candidate_contract", "catalog_parity", "noindex", "no_referrer", "prefix_containment", "root_isolation", "browser_visual"):
         if (manifest.get("checks") or {}).get(check) != "ok":
             raise StaticSitePermanentError(f"secret_candidate_manifest_unchecked:{check}")
     files = manifest.get("files")

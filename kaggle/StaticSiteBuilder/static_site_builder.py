@@ -457,8 +457,11 @@ def main() -> int:
         status_event('alive', phase='install', status='alive', progress={'phase': 'install', 'progress_percent': 25, 'progress_label': 'установка npm зависимостей'})
         install_cmd = ['npm', 'ci', '--no-audit', '--no-fund'] if (SITE_DIR / 'package-lock.json').exists() else ['npm', 'install', '--no-audit', '--no-fund']
         run(install_cmd, cwd=SITE_DIR, env=env)
-        event_count = len(json.loads((SITE_DIR / 'src/data/preview-events.json').read_text(encoding='utf-8')).get('events', []))
         profile = str(config.get('profile') or 'preview')
+        if profile == 'production-candidate':
+            status_event('alive', phase='install', status='alive', progress={'phase': 'install', 'progress_percent': 31, 'progress_label': 'установка pinned Chromium для release gate'})
+            run(['npx', 'playwright', 'install', 'chromium'], cwd=SITE_DIR, env=env)
+        event_count = len(json.loads((SITE_DIR / 'src/data/preview-events.json').read_text(encoding='utf-8')).get('events', []))
         artifacts: list[dict] = []
         result_details: dict = {}
         if profile == 'production-candidate':
@@ -476,6 +479,12 @@ def main() -> int:
             status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 42, 'progress_label': 'production root-form build'})
             run(['npm', 'run', 'build:production'], cwd=SITE_DIR, env=env)
             root_dist = SITE_DIR / 'dist'
+            status_event('alive', phase='check', status='alive', progress={'phase': 'check', 'progress_percent': 57, 'progress_label': 'Chromium gate production root'})
+            run([
+                'npm', 'run', 'check:browser-release', '--',
+                '--root', str(root_dist),
+                '--manifest', str(root_dist / 'static-release-manifest.json'),
+            ], cwd=SITE_DIR, env=env)
             root_manifest = json.loads((root_dist / 'static-release-manifest.json').read_text(encoding='utf-8'))
             root_archive = WORKING / f'{build_id}-root.tar.gz'
             with tarfile.open(root_archive, 'w:gz') as tar:
@@ -485,6 +494,12 @@ def main() -> int:
             status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 68, 'progress_label': 'noindex secret candidate build'})
             run(['npm', 'run', 'build:secret-candidate'], cwd=SITE_DIR, env=env)
             candidate_dist = SITE_DIR / 'dist' / '_review' / token
+            status_event('alive', phase='check', status='alive', progress={'phase': 'check', 'progress_percent': 81, 'progress_label': 'Chromium gate secret candidate'})
+            run([
+                'npm', 'run', 'check:browser-release', '--',
+                '--root', str(candidate_dist),
+                '--manifest', str(candidate_dist / 'secret-candidate-manifest.json'),
+            ], cwd=SITE_DIR, env=env)
             candidate_manifest = json.loads((candidate_dist / 'secret-candidate-manifest.json').read_text(encoding='utf-8'))
             candidate_archive = WORKING / f'{build_id}-secret-candidate.tar.gz'
             with tarfile.open(candidate_archive, 'w:gz') as tar:

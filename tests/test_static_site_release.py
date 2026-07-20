@@ -756,6 +756,7 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
                 "fixture_isolation": "ok",
                 "canonical_and_indexing": "ok",
                 "tree_hashes": "ok",
+                "browser_visual": "ok",
             },
             "secret_candidate": {
                 "astro_build": "ok",
@@ -765,6 +766,7 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
                 "no_referrer": "ok",
                 "prefix_containment": "ok",
                 "root_isolation": "ok",
+                "browser_visual": "ok",
             },
         },
         "artifacts": artifacts,
@@ -788,6 +790,22 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
     result["checks"]["production"]["template_matrix"] = "pending"
     result_path.write_text(json.dumps(result), encoding="utf-8")
     with pytest.raises(StaticSitePermanentError, match="template_matrix"):
+        validate_production_candidate_result(
+            result_path,
+            output_dir=output,
+            build_id="production-checks",
+            run_id="static-site:checks",
+            repo_sha="a" * 40,
+            snapshot=metadata,
+            candidate_token=token,
+            input_fingerprint="f" * 64,
+            build_clock=clock,
+        )
+
+    result["checks"]["production"]["template_matrix"] = "ok"
+    result["checks"]["secret_candidate"]["browser_visual"] = "pending"
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    with pytest.raises(StaticSitePermanentError, match="browser_visual"):
         validate_production_candidate_result(
             result_path,
             output_dir=output,
@@ -880,7 +898,7 @@ def test_add_build_10_secret_candidate_publish_is_create_only_and_root_isolated(
         "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
         "checks": {
             "candidate_contract": "ok", "catalog_parity": "ok", "noindex": "ok",
-            "no_referrer": "ok", "prefix_containment": "ok", "root_isolation": "ok",
+            "no_referrer": "ok", "prefix_containment": "ok", "root_isolation": "ok", "browser_visual": "ok",
         },
         "files": [{
             "key": "index.html", "sha256": hashlib.sha256(index).hexdigest(),
