@@ -35,6 +35,10 @@ for _candidate in (SCRIPT_PATH.parents[1], SCRIPT_PATH.parents[2] if len(SCRIPT_
 
 BUILD_TIME_ZONE = ZoneInfo("Europe/Kaliningrad")
 CURRENT_DATE_DEFAULT = datetime.now(BUILD_TIME_ZONE).date().isoformat()
+EXPECTED_IMAGE_GEOMETRY_MODEL = (
+    os.getenv("EVENT_IMAGE_GEOMETRY_MODEL") or "gemma-4-31b-it"
+).strip()
+EXPECTED_IMAGE_GEOMETRY_PROMPT_VERSION = "event-image-geometry-v1"
 CONTROL_EVENT_IDS = [
     5878, 5370, 6093, 6322, 4913, 4512, 5690, 6437, 6438, 3730, 698,
     # pgvector semantic retrieval golden anchors: urban-planning intent must
@@ -949,6 +953,70 @@ def choose_primary_image_asset(assets: list[dict[str, Any]]) -> dict[str, Any] |
     return first
 
 
+def normalized_yxyx_box(value: Any) -> dict[str, float] | None:
+    """Convert stored normalized [ymin, xmin, ymax, xmax] into the public x/y/w/h contract."""
+    parsed = read_json(value, value)
+    if not isinstance(parsed, list) or len(parsed) != 4:
+        return None
+    try:
+        ymin, xmin, ymax, xmax = (float(item) for item in parsed)
+    except (TypeError, ValueError):
+        return None
+    if not all(math.isfinite(item) and 0 <= item <= 1 for item in (ymin, xmin, ymax, xmax)):
+        return None
+    if ymax <= ymin or xmax <= xmin:
+        return None
+    return {
+        "x": round(xmin, 6),
+        "y": round(ymin, 6),
+        "w": round(xmax - xmin, 6),
+        "h": round(ymax - ymin, 6),
+    }
+
+
+def current_geometry_metadata(row: sqlite3.Row) -> dict[str, Any] | None:
+    """Return geometry only when SQL joined a classified record for the current pixels."""
+    geometry_id = row_get(row, "geometry_id")
+    current_pixel = clean_text(row_get(row, "pixel_sha256"))
+    geometry_pixel = clean_text(row_get(row, "geometry_pixel_sha256"))
+    if not geometry_id or not current_pixel or geometry_pixel != current_pixel:
+        return None
+    if clean_text(row_get(row, "geometry_status")).lower() != "classified":
+        return None
+    if clean_text(row_get(row, "geometry_model")) != EXPECTED_IMAGE_GEOMETRY_MODEL:
+        return None
+    if clean_text(row_get(row, "geometry_prompt_version")) != EXPECTED_IMAGE_GEOMETRY_PROMPT_VERSION:
+        return None
+    face_values = read_json(row_get(row, "geometry_face_boxes_yxyx_json"), None)
+    if not isinstance(face_values, list):
+        return None
+    face_boxes = [box for item in face_values if (box := normalized_yxyx_box(item)) is not None]
+    valuable_region = normalized_yxyx_box(row_get(row, "geometry_valuable_region_yxyx_json"))
+    if valuable_region is None:
+        return None
+    confidence = row_get(row, "geometry_valuable_region_confidence")
+    try:
+        confidence_value = float(confidence)
+    except (TypeError, ValueError):
+        confidence_value = None
+    if confidence_value is not None and math.isfinite(confidence_value):
+        valuable_region["confidence"] = round(max(0.0, min(1.0, confidence_value)), 6)
+    return {
+        "geometry_id": int(geometry_id),
+        "current_pixel_sha256": current_pixel,
+        "geometry_pixel_sha256": geometry_pixel,
+        "geometry_model": clean_text(row_get(row, "geometry_model")),
+        "geometry_prompt_version": clean_text(row_get(row, "geometry_prompt_version")),
+        "geometry_status": "classified",
+        "geometry_coordinate_space": "normalized_0_1",
+        "geometry_source_width": int(row_get(row, "geometry_source_width") or 0) or None,
+        "geometry_source_height": int(row_get(row, "geometry_source_height") or 0) or None,
+        "face_boxes": face_boxes,
+        "valuable_region": valuable_region,
+        "geometry_reason_code": clean_text(row_get(row, "geometry_reason_code")) or None,
+    }
+
+
 def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, title: str) -> tuple[str | None, str, str | None, list[dict[str, Any]]]:
     canonical_ledger_present = False
     try:
@@ -976,15 +1044,57 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             "canonical_object_path",
         ]
         optional_select = ", ".join(
-            field if field in eventposter_columns else f"NULL AS {field}"
+            f"ep.{field}" if field in eventposter_columns else f"NULL AS {field}"
             for field in optional_fields
         )
+        geometry_table_present = bool(
+            con.execute(
+                "select 1 from sqlite_master where type='table' and name='event_image_geometry'"
+            ).fetchone()
+        )
+        geometry_available = (
+            geometry_table_present
+            and "image_geometry_id" in eventposter_columns
+            and "pixel_sha256" in eventposter_columns
+        )
+        geometry_select = """
+            g.id AS geometry_id,
+            g.pixel_sha256 AS geometry_pixel_sha256,
+            g.model AS geometry_model,
+            g.prompt_version AS geometry_prompt_version,
+            g.status AS geometry_status,
+            g.source_width AS geometry_source_width,
+            g.source_height AS geometry_source_height,
+            g.face_boxes_yxyx_json AS geometry_face_boxes_yxyx_json,
+            g.valuable_region_yxyx_json AS geometry_valuable_region_yxyx_json,
+            g.valuable_region_confidence AS geometry_valuable_region_confidence,
+            g.reason_code AS geometry_reason_code
+        """ if geometry_available else """
+            NULL AS geometry_id,
+            NULL AS geometry_pixel_sha256,
+            NULL AS geometry_model,
+            NULL AS geometry_prompt_version,
+            NULL AS geometry_status,
+            NULL AS geometry_source_width,
+            NULL AS geometry_source_height,
+            NULL AS geometry_face_boxes_yxyx_json,
+            NULL AS geometry_valuable_region_yxyx_json,
+            NULL AS geometry_valuable_region_confidence,
+            NULL AS geometry_reason_code
+        """
+        geometry_join = """
+            left join event_image_geometry g
+              on g.id=ep.image_geometry_id
+             and g.status='classified'
+             and g.pixel_sha256=ep.pixel_sha256
+        """ if geometry_available else ""
         rows = con.execute(
             f"""
-            select supabase_url, catbox_url, ocr_text, {optional_select}
-            from eventposter
-            where event_id=? and review_status='approved'
-            order by display_order asc, id asc
+            select ep.supabase_url, ep.catbox_url, ep.ocr_text, {optional_select}, {geometry_select}
+            from eventposter ep
+            {geometry_join}
+            where ep.event_id=? and ep.review_status='approved'
+            order by ep.display_order asc, ep.id asc
             """,
             (event_id,),
         ).fetchall()
@@ -1069,6 +1179,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             needs_rescue_scan = True
     for index, url in enumerate(urls[:12]):
         metadata = metadata_by_url.get(image_url_key(url), {})
+        geometry = current_geometry_metadata(metadata) if metadata else None
         ocr = str(metadata.get("ocr_text") or "")
         stored_mode = clean_text(metadata.get("image_text_mode")).lower()
         mode = (
@@ -1118,6 +1229,13 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             alt = f"Полезная информация для посетителей события «{title}»"
         else:
             alt = f"Фотография события «{title}»"
+        crop_eligible = bool(
+            geometry
+            and mode == "visual_only"
+            and semantic_status == "classified"
+            and role_for_ui == "event_photo"
+            and metadata.get("safe_crop")
+        )
         asset = {
             "src": url,
             "width": width,
@@ -1128,13 +1246,15 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             "media_role_confidence": round(float(metadata.get("media_role_confidence") or 0), 5),
             "media_semantic_status": semantic_status if semantic_status in {"pending", "classified", "error", "stale"} else "pending",
             "image_kind": "poster" if role_for_ui == "event_identity_poster" else ("photo" if role_for_ui == "event_photo" else "mixed"),
-            "recommended_hero_fit": "cover" if role_for_ui == "event_photo" else "contain",
-            "safe_crop": bool(metadata.get("safe_crop")) if metadata.get("safe_crop") is not None else False,
+            "recommended_hero_fit": "cover" if crop_eligible else "contain",
+            "safe_crop": crop_eligible,
             "source_order": index,
             "_event_reuse_count": max(1, int(metadata.get("event_reuse_count") or 1)),
         }
         if thumbnail_sources:
             asset["thumbnail_sources"] = thumbnail_sources
+        if geometry:
+            asset.update(geometry)
         if focal_point:
             asset["focal_point"] = focal_point
             asset["recommended_object_position"] = f"{round(focal_point['x'] * 100)}% {round(focal_point['y'] * 100)}%"
@@ -1793,10 +1913,11 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "image_text_mode": image_mode,
         "image_media_role": image_role,
         "image_assets": image_assets,
-        "face_boxes": [],
+        "face_boxes": list(primary_asset.get("face_boxes") or []) if primary_asset else [],
+        "valuable_region": primary_asset.get("valuable_region") if primary_asset else None,
         "ocr_boxes": [],
-        "focal_point": None,
-        "image_object_position": None,
+        "focal_point": primary_asset.get("focal_point") if primary_asset else None,
+        "image_object_position": primary_asset.get("recommended_object_position") if primary_asset else None,
         "safe_crop": bool(primary_asset and primary_asset.get("safe_crop")),
         "summary": summary,
         "meta_description": summary,
