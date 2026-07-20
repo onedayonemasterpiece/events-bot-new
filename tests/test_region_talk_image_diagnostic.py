@@ -199,6 +199,35 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
                     else:
                         os.environ[key] = value
 
+    def test_web_publication_fetches_direct_image_without_platform_api(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+
+            def fake_download(url, path):
+                self.assertEqual(url, "https://cdn.example/publication.jpg")
+                Path(path).write_bytes(b"image")
+                return str(path)
+
+            mod._download_http_image = fake_download
+            row = {
+                "image_queue_id": "web-publication",
+                "post_url": "https://publisher.example/article",
+                "image_url_or_local_path": "https://cdn.example/publication.jpg",
+                "media_count": 1,
+                "rights_policy": "link_only",
+                "media_use_policy": "score_only_no_reuse",
+            }
+
+            mod.fetch_web_direct(row)
+
+            self.assertEqual(row["media_fetch_status"], "downloaded_public_url")
+            self.assertEqual(row["image_acquisition_status"], "complete")
+            self.assertEqual(row["expected_image_count"], 1)
+            self.assertEqual(row["fetched_image_count"], 1)
+            self.assertTrue(Path(row["actual_media_path"]).exists())
+            self.assertEqual(row["rights_policy"], "link_only")
+            self.assertEqual(row["media_use_policy"], "score_only_no_reuse")
+
     def test_vk_read_prefers_service_token_for_remote_wall_fetch(self) -> None:
         keys = (
             "VK_SERVICE_TOKEN",

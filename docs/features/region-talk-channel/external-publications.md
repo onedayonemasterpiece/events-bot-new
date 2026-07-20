@@ -263,7 +263,11 @@ Implemented now:
   also preserves the same-run defer-to-fetch transition used by changed-only
   YDB persistence and cursor recovery. ImageDiagnostic consumes
   `selected_for_next_image_batch=true` ahead of older unselected backlog, so
-  the CandidateReport handoff is operational rather than display-only.
+  the CandidateReport handoff is operational rather than display-only. For a
+  web publication it downloads only the direct image URL supplied by the
+  research contract, scores the decoded bytes, and preserves
+  `link_only`/`score_only_no_reuse`; it does not invent a platform fallback or
+  grant reuse rights.
 
 Still required for each imported external-publication candidate to become confirmed:
 

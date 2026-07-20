@@ -338,6 +338,39 @@ def _download_direct_image_refs(row: dict, refs: list[str], *, name_prefix: str)
     return paths, errors
 
 
+def fetch_web_direct(row: dict) -> None:
+    """Acquire externally researched publication images from direct URLs.
+
+    Telegram and VK have platform-specific fallbacks. Editorial/academic web
+    rows intentionally do not: the research contract must provide a concrete
+    image URL, and rights remain score-only unless separately cleared.
+    """
+    started = time.monotonic()
+    refs = _row_direct_image_refs(row)
+    if not refs:
+        row["media_fetch_status"] = "needs_actual_image_fetch"
+        row["media_fetch_error"] = "external publication has no direct image URL"
+        row["media_download_seconds"] = round(time.monotonic() - started, 3)
+        return
+    paths, errors = _download_direct_image_refs(row, refs, name_prefix="web_public_url")
+    expected = _expected_image_count(row, len(refs))
+    complete = bool(paths) and len(paths) >= expected and not errors
+    if paths:
+        _apply_acquired_paths(
+            row,
+            paths,
+            media_ids=[f"web_direct:{index}" for index in range(1, len(paths) + 1)],
+            expected=expected,
+            status="complete" if complete else "partial",
+        )
+        row["media_fetch_status"] = "downloaded_public_url" if complete else "downloaded_partial_album"
+    else:
+        row["media_fetch_status"] = "needs_actual_image_fetch"
+    if errors:
+        row["media_fetch_error"] = "; ".join(errors)[:300]
+    row["media_download_seconds"] = round(time.monotonic() - started, 3)
+
+
 def image_work_key(row: dict) -> str:
     return str(row.get("image_queue_id") or row.get("post_url") or row.get("_ydb_pk") or "").strip()
 
@@ -2417,7 +2450,8 @@ def process_batch(batch_rows, batch_index: int):
     # Fetch media, no source/comment scanning.
     tg=[r for r in rows if "t.me/" in (r.get("post_url") or "")]
     vk=[r for r in rows if "vk.com/wall" in (r.get("post_url") or "")]
-    log_event("media_fetch_started", phase="media_fetch", telegram=len(tg), vk=len(vk), total=len(rows))
+    web=[r for r in rows if r not in tg and r not in vk]
+    log_event("media_fetch_started", phase="media_fetch", telegram=len(tg), vk=len(vk), web=len(web), total=len(rows))
     try:
         if tg:
             asyncio.run(fetch_telegram(tg))
@@ -2436,6 +2470,11 @@ def process_batch(batch_rows, batch_index: int):
         ydb_upsert_image_rows([r], stage="media_fetch_result")
         log_event("image_fetch_result", phase="vk_fetch", index=i, total=len(vk), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
         if i % 10 == 0: log_event("vk_fetch_progress", phase="media_fetch", done=i, total=len(vk), actual=sum(1 for x in vk if x.get("actual_media_path")))
+    for i, r in enumerate(web, 1):
+        log_event("image_fetch_current", phase="web_fetch", index=i, total=len(web), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), source_title=r.get("source_title"))
+        fetch_web_direct(r)
+        ydb_upsert_image_rows([r], stage="media_fetch_result")
+        log_event("image_fetch_result", phase="web_fetch", index=i, total=len(web), image_queue_id=r.get("image_queue_id"), post_url=r.get("post_url"), status=r.get("media_fetch_status"), actual=bool(r.get("actual_media_path")), seconds=r.get("media_download_seconds"), error=r.get("media_fetch_error"))
     log_event("media_fetch_done", phase="media_fetch", actual_downloaded=sum(1 for r in rows if r.get("actual_media_path")), total=len(rows))
 
     for i, r in enumerate(rows, 1):
