@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Region Talk's saved external-research prompt now opens the exact stable live-registry URL without a cache-busting query parameter; the registry already uses `no-cache`/`no-store`, and the exact URL is compatible with research sandboxes that only allow URLs already present in the prompt or previous results.
 - Region Talk repeated external research now uses a one-file saved-prompt workflow: every run fetches a stable public YDB-derived seen registry and result schema itself; candidates, exclusions and unresolved leads enter the durable ledger; and executed imports re-check live YDB and automatically refresh the registry, eliminating manual per-run prompt/sidecar updates.
 - Region Talk external-publication image review now discovers bounded article lightbox galleries, applies genre-aware architecture/interior/editorial prompts, and accepts manifest-bound operator visual approval without bypassing source, text, rights, safety, or final Gemini gates; Telegram delivery now verifies editorial publishers against their dedicated live source-attestation rows.
 

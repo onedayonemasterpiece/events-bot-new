@@ -138,7 +138,7 @@ gates remain the same.
 Canonical stable prompt: [`external-publication-research.prompt.txt`](external-publication-research.prompt.txt).
 It is the **only file the operator needs to save and launch**. Do not edit it
 and do not generate an attachment before a run. At execution time the agent
-must fetch, with a cache-busting query parameter, the live read-only registry:
+must fetch the exact stable URL of the live read-only registry:
 
 `https://static.kenigevents.ru/region-talk/external-publications/research-registry.json`
 
@@ -146,6 +146,11 @@ The registry contains non-secret policy plus the current projection of prior
 candidates, exclusions and unresolved leads. It also points to the current
 result JSON Schema. If the registry or result schema is unavailable, the agent
 must stop rather than search without duplicate protection.
+
+Do not append a cache-busting query parameter. The object is already served
+with `Cache-Control: no-cache, no-store, must-revalidate`; keeping the exact URL
+also satisfies research environments that only permit URLs already present in
+the prompt or a preceding page.
 
 The registry is rebuilt from YDB and published automatically after every
 successful `--execute` import by

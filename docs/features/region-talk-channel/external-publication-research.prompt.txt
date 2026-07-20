@@ -6,7 +6,7 @@ At the beginning of every run, before any search, fetch this stable public URL:
 
 https://static.kenigevents.ru/region-talk/external-publications/research-registry.json
 
-Append a cache-busting query parameter made from the current UTC timestamp, for example `?run=20260720T153012Z`. The response must be a strict JSON object with schema_version=region_talk_external_research_registry.v1. It contains the current search_policy, blocked_domains, duplicate_guard and the current result_contract.schema_url. Fetch the result schema from that URL too and verify its SHA-256 against result_contract.sha256 when your environment supports hashing.
+Open that exact URL without adding query parameters. The registry is published with `no-cache`/`no-store` response headers, so a cache-busting URL is neither required nor permitted by this contract. The response must be a strict JSON object with schema_version=region_talk_external_research_registry.v1. It contains the current search_policy, blocked_domains, duplicate_guard and the current result_contract.schema_url. Fetch the result schema from the exact URL declared there and verify its SHA-256 against result_contract.sha256 when your environment supports hashing.
 
 This saved prompt is deliberately self-contained. Do not ask the operator to generate, update or attach a runtime JSON file. Do not use a duplicate list copied into the prompt. If the live registry cannot be fetched or parsed, or its declared result schema cannot be fetched, stop without searching and report the exact access error; never continue with an empty or remembered exclusion list.
 

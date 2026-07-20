@@ -40,6 +40,15 @@ def test_registry_is_schema_valid_and_points_to_stable_contract() -> None:
     assert json.loads(json.dumps(payload, ensure_ascii=False)) == payload
 
 
+def test_saved_prompt_requires_exact_registry_url_without_cache_busting() -> None:
+    mod = load_module()
+    prompt = mod.PROMPT_PATH.read_text(encoding="utf-8")
+
+    assert mod._url(mod.REGISTRY_OBJECT_PATH) in prompt
+    assert "Open that exact URL without adding query parameters" in prompt
+    assert "Append a cache-busting query parameter" not in prompt
+
+
 def test_publish_uploads_registry_schema_result_schema_and_prompt(monkeypatch) -> None:
     mod = load_module()
     payload = mod.build_registry([], generated_at="2026-07-20T15:00:00+00:00")
