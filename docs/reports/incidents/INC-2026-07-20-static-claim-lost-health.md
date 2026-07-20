@@ -86,15 +86,24 @@ Cache the integer job id before the CAS and use that scalar after rollback.
 ## Follow-up Actions
 
 - [ ] add a full deploy-overlap integration scenario for the outbox CAS loser;
-- [ ] verify the active remote build reaches a terminal receipt and run the
-  compensating corrected candidate build if it failed.
+- [x] verified the active/retried static build reached the successful terminal
+  receipt for `production-secret-20260720T201154-77720953`; the coalesced
+  successor correctly completed as a fingerprint no-op.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: Fly remote build from clean `origin/main`
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `1e7594d22c545f535c131aef3e9f9e5bddddd9f3`, reachable from
+  `origin/main`; Fly release `v1734`
+- deploy path: Fly remote build from clean exact `origin/main`
+- regression checks: focused outbox/static-site tests and both required CI
+  checks passed before merge; the post-deploy static job completed and released
+  its claim, then the queued duplicate became a no-op
+- post-deploy verification: `/healthz` returns `ok=true`, `ready=true` with no
+  issues; current runtime mirror contains no `MissingGreenlet` and the exact
+  corrected candidate has a successful terminal receipt
+- closure caveat: a deliberately induced live deploy-overlap CAS-loser cycle
+  has not yet been run, so status remains `mitigated` until that follow-up is
+  completed
 
 ## Prevention
 
