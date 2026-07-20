@@ -3,7 +3,7 @@
 > **Статус:** отдельный интерактивный product/UI prototype; production `/vystavki/` не изменён.
 > **Маршрут:** `/lab/exhibitions-personal/` в обычной Astro-сборке.
 > **Источник визуального подхода:** `docs/reference/Выставки UI UX.png`.
-> **Последний immutable preview:** `preview-20260720-exhibitions-personal-v11-44d73fcc`.
+> **Последний immutable preview:** `preview-20260720-exhibitions-personal-v12-465c2bc5`.
 
 ## Зачем нужен отдельный прототип
 
@@ -584,3 +584,49 @@ overflow.
 Финальный повторный gate `Gemini 3.1 Pro (High)` после расширения bounded pool
 и демонстрации фактических focus assertions дал `ACCEPT`: P0/P1/P2 замечаний
 не осталось.
+
+### V12: институциональная печать, семантика дат и тихий photo pager
+
+Отдельный product review через `agy`, `Gemini 3.1 Pro (High)`, подтвердил, что
+выставочный список нуждается в связи с общей системой медальонов, но не в
+detail-page ряду из крупных `90–112px` токенов. Рассмотрены четыре варианта:
+отдельный ряд ломает вертикальный ритм, inline-аватар у площадки слишком
+утилитарен, а логотип как фотография фатально искажает `+N`, pager и gallery.
+Принят один compact pattern: `44px` desktop / `36px` mobile institutional seal
+в левом верхнем углу photo deck.
+
+Seal использует существующий fail-closed `resolveEventMedallions`: показывается
+не больше одного curated `venue_brand` или primary `organizer`. Он является
+стабильным sibling photo-frames, а не членом `deckMedia`, поэтому не уезжает с
+раздаваемыми фотографиями и не входит в photo count/gallery. Элемент
+неинтерактивен, `aria-hidden`, лежит выше фото и ниже `+N`, использует manifest
+ring/background и контрастную тень. Ошибка изображения скрывает seal; при
+отсутствии curated identity карточка остаётся без круга. Neutral initials не
+используются: неполное покрытие лучше честной чистой карточки, чем системной
+заглушки, похожей на broken image.
+
+Timeline теперь сообщает смысл границы, а не голую календарную дату:
+
+- недавно открывшиеся — `с 15 июля`;
+- upcoming — `с 8 августа`;
+- ending/popular/long с известным окончанием — `до 19 июля`;
+- граница в другом календарном году включает год: `до 28 марта 2027`, чтобы
+  март не воспринимался как уже прошедший;
+- derived long-running без end date — `с <дата начала>`; `Постоянная` допустима
+  только при отдельном source-grounded признаке постоянной экспозиции.
+
+Визуальный fixed toast после каждого `←/→` удалён: `+N` и движение колоды уже
+дают достаточную зрительную обратную связь, а вспышка внизу конкурировала с
+действием. Photo page озвучивается отдельным visually-hidden `aria-live` с
+debounce `250ms` и мгновенным reduced-motion режимом. Toast сохранён для
+глобальных действий и undo; его появление теперь использует slide/fade с
+кинематическим easing, а смена сообщения — crossfade без предварительного
+очищения текста.
+
+Локальный acceptance прошёл source-contract `65/65` на 22 уникальных
+выставках и Playwright-проверку desktop/mobile: одна curated-печать находится
+вне photo semantics, имеет `44/36px`, не перекрывает `+N`, корректно скрывается
+при ошибке загрузки и не создаёт horizontal overflow. Проверены также тихое
+листание с delayed screen-reader status, transition у action toast и
+межгодовая дата. Финальный gate `Gemini 3.1 Pro (High)` дал `ACCEPT` без
+P0/P1/P2 замечаний.

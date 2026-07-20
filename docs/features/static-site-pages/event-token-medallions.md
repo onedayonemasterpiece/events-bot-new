@@ -1,7 +1,7 @@
 # Event token medallions / quick-read badges
 
 > **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA. The 2026-07-15 Telegram projection also keeps deterministic same-stem PNG fallbacks for SVG items so the production Pillow renderer needs no SVG engine.
-> **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Listing/search cards are affected only by the separate date/type formatting requirement (weekday + event type without `#`).
+> **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Обычные production listing/search cards по-прежнему не являются medallion surface; отдельное исключение исследуется только в персональном prototype `/lab/exhibitions-personal/`.
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
 ## Goal
@@ -21,7 +21,32 @@ Current scope:
 
 - **P0:** medallions on the concrete event page only;
 - **P0:** listing/card date formatting: show short weekday and render event type without `#`;
-- **Not P0:** medallion rows inside listing/search/related cards. If added later, they must be re-approved as a separate compact-card design.
+- **Not P0:** medallion rows inside production listing/search/related cards. If added later, they must be re-approved as a separate compact-card design.
+- **Approved lab exception:** `/lab/exhibitions-personal/` may show one compact
+  curated institutional seal over its photo deck under the contract below;
+  this does not promote the pattern to production `/vystavki/`.
+
+### Compact institutional seal in the exhibitions lab
+
+The separately approved exhibitions-listing experiment reuses recognition, not
+the large detail-page token row:
+
+- render at most one resolved `venue_brand` or primary `organizer`;
+- keep the seal outside `deckMedia`, photo `+N`, keyboard pager and fullscreen
+  gallery semantics;
+- desktop size is `44×44px`, mobile `36×36px`; it sits `8px` / `7px` from the
+  top-left of the deck, above photographs and below the `+N` counter;
+- the seal is non-interactive and `aria-hidden`, because the same venue name is
+  already present as card text;
+- use the curated manifest background/ring, a bounded dark shadow for contrast,
+  lazy loading and fail closed on an image error;
+- do not manufacture initials or placeholder seals when curated identity
+  resolution returns no asset;
+- do not show festival/fact pills or multiple seals on this listing surface.
+
+This overlay is intentionally a stable child of the media deck rather than a
+photo frame. It therefore does not leave with the dealt photographs and never
+pretends that a logo is exhibition media.
 
 ## Visual contract
 

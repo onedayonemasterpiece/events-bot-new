@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Changed the personal-exhibitions prototype to reuse one fail-closed curated
+  venue/organizer medallion as a compact non-interactive seal over the photo
+  deck, without adding logos to photo counts, paging or galleries and without
+  manufacturing initials for uncovered venues. Ongoing and future opening
+  dates now explicitly use `с`, while closing boundaries retain `до`.
+- Removed the flickering visual toast from exhibition photo keyboard paging;
+  page changes now debounce into a visually hidden live region, while the
+  remaining action/undo toast uses a cinematic slide/fade and message
+  crossfade instead of clearing and flashing.
 - Fixed the personal-exhibitions long-running deck so fully dealt and near-stack
   cards always render their real exported media instead of becoming empty
   bordered planes after the third image; cumulative four-row disclosure,

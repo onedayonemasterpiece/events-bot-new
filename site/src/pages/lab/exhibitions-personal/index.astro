@@ -8,13 +8,13 @@ const title = `Прототип персональной страницы выс
 const description = 'Отдельный noindex-прототип: новые, персональные, популярные и завершающиеся выставки в компактном timeline-интерфейсе.';
 
 const featuredSpecs = [
-  { id: 6902, bucket: 'new', lifecycle: 'recent', dateLabel: '18 июля', status: 'Открылась вчера', category: 'Искусство', tags: ['живопись', 'современное искусство'], reasons: ['Недавно открылась', 'Рядом со Светлогорском'] },
-  { id: 6894, bucket: 'new', lifecycle: 'recent', dateLabel: '15 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['живопись', 'локальные авторы'], reasons: ['Открылась 4 дня назад', 'Новая в каталоге'] },
-  { id: 6871, bucket: 'new', lifecycle: 'upcoming', dateLabel: '8 августа', status: 'Откроется скоро', category: 'Фотография', tags: ['фотография', 'город', 'под открытым небом'], reasons: ['Недавно анонсирована', 'Только два дня'] },
-  { id: 5370, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 28 марта', status: 'Идёт сейчас', category: 'Искусство', tags: ['современное искусство', 'графика', 'Третьяковка'], reasons: ['Популярно в источниках', 'Высокий интерес'] },
+  { id: 6902, bucket: 'new', lifecycle: 'recent', dateLabel: 'с 18 июля', status: 'Открылась вчера', category: 'Искусство', tags: ['живопись', 'современное искусство'], reasons: ['Недавно открылась', 'Рядом со Светлогорском'] },
+  { id: 6894, bucket: 'new', lifecycle: 'recent', dateLabel: 'с 15 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['живопись', 'локальные авторы'], reasons: ['Открылась 4 дня назад', 'Новая в каталоге'] },
+  { id: 6871, bucket: 'new', lifecycle: 'upcoming', dateLabel: 'с 8 августа', status: 'Откроется скоро', category: 'Фотография', tags: ['фотография', 'город', 'под открытым небом'], reasons: ['Недавно анонсирована', 'Только два дня'] },
+  { id: 5370, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 28 марта 2027', status: 'Идёт сейчас', category: 'Искусство', tags: ['современное искусство', 'графика', 'Третьяковка'], reasons: ['Популярно в источниках', 'Высокий интерес'] },
   { id: 6222, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 19 июля', status: 'Последний день', category: 'История', tags: ['история', 'путешествия', 'музей'], reasons: ['Заканчивается сегодня', 'Успеть посмотреть'] },
   { id: 5459, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 30 августа', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'натюрморт', 'XX век'], reasons: ['Популярно в источниках'] },
-  { id: 6560, bucket: 'priority', lifecycle: 'recent', dateLabel: '5—31 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['локальные авторы', 'иллюстрация', 'истории'], reasons: ['Открылась две недели назад', 'Высокий интерес'] },
+  { id: 6560, bucket: 'priority', lifecycle: 'recent', dateLabel: 'с 5 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['локальные авторы', 'иллюстрация', 'истории'], reasons: ['Открылась две недели назад', 'Высокий интерес'] },
   { id: 4913, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 31 июля', status: 'Скоро закроется', category: 'История', tags: ['археология', 'история', 'Пруссия'], reasons: ['Осталось 12 дней'] },
   { id: 3216, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 27 сентября', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'классика', 'Третьяковка'], reasons: ['Популярно в источниках', 'Высокий интерес'] },
 ] as const;
@@ -40,6 +40,12 @@ const shownTitles = new Set([
   ...allEvents.filter((event) => curatedTailIds.has(event.id)).map((event) => normalizedExhibitionTitle(event.title)),
 ]);
 const currentDateMs = Date.parse(`${getCurrentDate()}T00:00:00Z`);
+const currentYear = getCurrentDate().slice(0,4);
+const lifecycleDateValue = (value: string) => {
+  const label = displayDateValue(value);
+  const year = value.slice(0,4);
+  return year && year !== currentYear ? `${label} ${year}` : label;
+};
 const longRunningCutoffMs = currentDateMs - 21 * 24 * 60 * 60 * 1000;
 const topicLabels = new Map([
   ['KRAEVEDENIE_KALININGRAD_OBLAST', 'краеведение'],
@@ -67,7 +73,7 @@ const derivedTailSpecs = allEvents
       id: event.id,
       bucket: 'tail',
       lifecycle: 'long',
-      dateLabel: event.end_date ? `до ${displayDateValue(event.end_date)}` : event.display_date,
+      dateLabel: event.end_date ? `до ${lifecycleDateValue(event.end_date)}` : `с ${lifecycleDateValue(event.start_date)}`,
       status: 'Идёт давно',
       category,
       tags: [...new Set(topicTags.length ? topicTags : [category.toLocaleLowerCase('ru')])].slice(0,3),
@@ -235,6 +241,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       <span data-live-message role="status" aria-live="polite" aria-atomic="true"></span>
       <button type="button" data-live-undo hidden>Отменить</button>
     </div>
+    <p class="ex-deck-live" data-deck-live role="status" aria-live="polite" aria-atomic="true"></p>
   </main>
 </EventLayout>
 
@@ -444,6 +451,22 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-deck__frame[data-media-treatment="document-natural"] img {
     object-position:50% 50%;
   }
+  .ex-deck__medallion {
+    position:absolute;
+    z-index:260;
+    top:8px;
+    left:8px;
+    width:44px;
+    height:44px;
+    overflow:hidden;
+    border:1px solid var(--medallion-ring,#697178);
+    border-radius:50%;
+    background:var(--medallion-bg,#17191b);
+    box-shadow:0 4px 12px rgba(0,0,0,.48),0 0 0 2px rgba(8,10,11,.6);
+    pointer-events:none;
+  }
+  .ex-deck__medallion picture,.ex-deck__medallion img { width:100%; height:100%; display:block; }
+  .ex-deck__medallion img { object-fit:cover; }
   .ex-row:hover .ex-deck__frame,.ex-row:focus-within .ex-deck__frame {
     border-color:rgba(235,244,250,.84);
     box-shadow:inset -1px 0 0 rgba(255,255,255,.2),5px 0 14px -3px rgba(0,0,0,.88),0 6px 18px rgba(0,0,0,.36);
@@ -536,9 +559,12 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-gallery__error { position:relative; z-index:2; margin:0; color:var(--ex-muted); }
   .ex-gallery__stage button { border:0; background:#111416; color:var(--ex-text); font-size:2rem; cursor:pointer; }
   .ex-gallery__count { margin:0; padding:.7rem; color:var(--ex-muted); text-align:center; }
-  .ex-live { position:fixed; left:50%; bottom:1rem; z-index:80; transform:translateX(-50%); min-width:min(420px,calc(100% - 2rem)); display:flex; align-items:center; justify-content:center; gap:.8rem; margin:0; padding:.7rem 1rem; border:1px solid #4d5358; border-radius:6px; background:#191c1e; color:var(--ex-text); text-align:center; box-shadow:0 12px 34px rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity 160ms ease; }
-  .ex-live.is-visible { opacity:1; }
+  .ex-live { position:fixed; left:50%; bottom:1rem; z-index:80; transform:translate3d(-50%,8px,0); min-width:min(420px,calc(100% - 2rem)); display:flex; align-items:center; justify-content:center; gap:.8rem; margin:0; padding:.7rem 1rem; border:1px solid #4d5358; border-radius:6px; background:#191c1e; color:var(--ex-text); text-align:center; box-shadow:0 12px 34px rgba(0,0,0,.45); opacity:0; visibility:hidden; pointer-events:none; transition:opacity 160ms ease-in,transform 190ms ease-in,visibility 0s linear 190ms; }
+  .ex-live.is-visible { transform:translate3d(-50%,0,0); opacity:1; visibility:visible; transition:opacity 240ms ease-out,transform 320ms var(--ex-ease-cinematic),visibility 0s; }
+  .ex-live [data-live-message] { opacity:1; transform:translate3d(0,0,0); transition:opacity 160ms ease-out,transform 240ms var(--ex-ease-cinematic); }
+  .ex-live.is-updating [data-live-message] { opacity:0; transform:translate3d(0,4px,0); }
   .ex-live [data-live-undo] { min-height:36px; padding:.35rem .65rem; border:1px solid #656c72; border-radius:4px; background:#272b2e; color:var(--ex-text); font:inherit; font-size:.78rem; font-weight:800; cursor:pointer; pointer-events:auto; }
+  .ex-deck-live { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }
   @keyframes ex-gallery-in { from { opacity:0; transform:translate3d(0,14px,0) scale(.982); } to { opacity:1; transform:translate3d(0,0,0) scale(1); } }
   @keyframes ex-gallery-out { from { opacity:1; transform:translate3d(0,0,0) scale(1); } to { opacity:0; transform:translate3d(0,8px,0) scale(.988); } }
   @keyframes ex-backdrop-in { from { background:rgba(0,0,0,0); backdrop-filter:blur(0); } to { background:rgba(0,0,0,.84); backdrop-filter:blur(5px); } }
@@ -587,6 +613,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-row__rail span:last-child { text-align:right; }
     .ex-row__media { grid-area:deck; }
     .ex-deck { inline-size:100%; max-inline-size:100%; block-size:clamp(160px,48vw,228px); cursor:pointer; }
+    .ex-deck__medallion { top:7px; left:7px; width:36px; height:36px; }
     .ex-deck__count { left:0; }
     .ex-row__body { grid-area:body; }
     .ex-row__aside { grid-area:aside; align-content:start; }
@@ -636,6 +663,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const live = root.querySelector('[data-live]');
     const liveMessage = root.querySelector('[data-live-message]');
     const liveUndo = root.querySelector('[data-live-undo]');
+    const deckLive = root.querySelector('[data-deck-live]');
     const badges = () => Array.from(document.querySelectorAll('[data-header-badge="exhibitions"]'));
     const personalNote = root.querySelector('[data-personal-note]');
     const visibleCount = root.querySelector('[data-visible-count]');
@@ -649,6 +677,14 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const PROFILE_MIN_LIKES = 3;
     const DECK_EASE = 'cubic-bezier(.16,1,.3,1)';
     let imageRequestId = 0;
+
+    root.querySelectorAll('[data-exhibition-medallion] img').forEach((image) => {
+      if (!(image instanceof HTMLImageElement)) return;
+      const seal = image.closest('[data-exhibition-medallion]');
+      const hideBrokenSeal = () => { if (seal instanceof HTMLElement) seal.hidden = true; };
+      image.addEventListener('error',hideBrokenSeal,{ once:true });
+      if (image.complete && image.naturalWidth === 0) hideBrokenSeal();
+    });
 
     const manifestFor = (deck) => {
       if (deckManifests.has(deck)) return deckManifests.get(deck);
@@ -924,10 +960,16 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const waitAnimations = async (animations) => {
       await Promise.allSettled(animations.filter(Boolean).map((animation) => animation.finished));
     };
+    let deckLiveTimer;
+    const announceDeckStatus = (message) => {
+      if (!(deckLive instanceof HTMLElement)) return;
+      window.clearTimeout(deckLiveTimer);
+      deckLiveTimer = window.setTimeout(() => { deckLive.textContent = message; },reducedMotion.matches ? 0 : 250);
+    };
     const announceDeckPage = (deck,page) => {
       const first = page.start + 1;
       const last = page.start + page.full.length;
-      announce(`Фото ${first}–${last} из ${page.total}${page.remaining ? `, ещё ${page.remaining}` : ', конец колоды'}.`);
+      announceDeckStatus(`Фото ${first}–${last} из ${page.total}${page.remaining ? `, ещё ${page.remaining}` : ', конец колоды'}.`);
     };
     const pageDeck = async (deck,direction) => {
       if (!(deck instanceof HTMLElement) || compactDeck.matches) return;
@@ -938,7 +980,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       const target = direction > 0 ? resolveForwardPage(deck,current) : (historyCursor === undefined ? null : measureDeckPage(deck,historyCursor));
       const targetCursor = target?.start;
       if (!target || targetCursor === undefined || targetCursor === null || targetCursor === state.cursor || (direction > 0 && current.remaining === 0)) {
-        announce(direction > 0 ? 'Это последние фотографии.' : 'Это начало колоды.');
+        announceDeckStatus(direction > 0 ? 'Это последние фотографии.' : 'Это начало колоды.');
         return;
       }
       const nextHistory = direction > 0 ? [...state.history,state.cursor] : state.history.slice(0,-1);
@@ -1054,7 +1096,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       transition.updateCallbackDone.catch(() => {});
       transition.finished.catch(() => {});
     };
-    let liveTimer; let liveShowTimer;
+    let liveTimer; let liveShowTimer; let liveClearTimer;
     let mode = 'personal';
     let category = 'Все темы';
     const tagsFor = (row) => String(row.dataset.tags || '').split(',').filter(Boolean);
@@ -1079,24 +1121,36 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     let liveUndoAction = null;
     const hideAnnouncement = () => {
       if (!(live instanceof HTMLElement) || !(liveMessage instanceof HTMLElement)) return;
-      live.classList.remove('is-visible');
-      liveMessage.textContent = '';
+      window.clearTimeout(liveShowTimer);
+      window.clearTimeout(liveClearTimer);
+      live.classList.remove('is-visible','is-updating');
       liveUndoAction = null;
-      if (liveUndo instanceof HTMLButtonElement) liveUndo.hidden = true;
+      const clear = () => {
+        if (live.classList.contains('is-visible')) return;
+        liveMessage.textContent = '';
+        if (liveUndo instanceof HTMLButtonElement) liveUndo.hidden = true;
+      };
+      if (reducedMotion.matches) clear();
+      else liveClearTimer = window.setTimeout(clear,190);
     };
     const announce = (message,options = {}) => {
       if (!(live instanceof HTMLElement) || !(liveMessage instanceof HTMLElement)) return;
       const hasUndo = typeof options.undo === 'function';
       window.clearTimeout(liveTimer);
       window.clearTimeout(liveShowTimer);
-      hideAnnouncement();
-      liveShowTimer = window.setTimeout(() => {
+      window.clearTimeout(liveClearTimer);
+      const commit = () => {
         liveMessage.textContent = message;
         liveUndoAction = hasUndo ? options.undo : null;
         if (liveUndo instanceof HTMLButtonElement) liveUndo.hidden = !liveUndoAction;
+        live.classList.remove('is-updating');
         live.classList.add('is-visible');
         if (options.focusUndo && liveUndoAction && liveUndo instanceof HTMLButtonElement) liveUndo.focus({ preventScroll:true });
-      },20);
+      };
+      if (live.classList.contains('is-visible') && liveMessage.textContent && !reducedMotion.matches) {
+        live.classList.add('is-updating');
+        liveShowTimer = window.setTimeout(commit,160);
+      } else commit();
       liveTimer = window.setTimeout(() => {
         if (live.contains(document.activeElement)) focusRowLink(root.querySelector('[data-list-section="new"] [data-row-focus]'));
         hideAnnouncement();

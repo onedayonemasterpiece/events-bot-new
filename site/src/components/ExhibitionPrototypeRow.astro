@@ -1,6 +1,8 @@
 ---
 import Icon from './Icon.astro';
+import organizerMedallions from '../data/organizerMedallions.json';
 import { withBase } from '../lib/events';
+import { resolveEventMedallions, type OrganizerMedallionDefinition } from '../lib/eventMedallions';
 import type { EventImageAsset } from '../lib/types';
 
 interface PrototypeSpec {
@@ -150,6 +152,15 @@ const deckMedia = [...media]
 // rebound into these shells as the deck is paged rather than rendering every
 // source image in every row of a long listing.
 const deckSlotCount = Math.min(9, Math.max(1, deckMedia.length));
+const medallionManifest = organizerMedallions as { items?: OrganizerMedallionDefinition[] };
+const medallionResolution = resolveEventMedallions(event, medallionManifest.items || []);
+// Listing cards get one trusted institutional seal, not the full detail-page
+// token row. Keep it outside deckMedia so photo count, pager and gallery remain
+// semantically exact.
+const listingMedallion = medallionResolution.identities.find(({ item:definition }) => {
+  const category = definition.category || 'organizer';
+  return category === 'venue_brand' || category === 'organizer';
+});
 const detailHref = withBase(`/sobytiya/${event.slug}/`);
 const likeCount = Number(event.likes_count || 0);
 const shareCount = Number(event.shares_count || 0);
@@ -218,6 +229,30 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
         </span>
       ))}
     </span>
+    {listingMedallion && (
+      <span
+        class="ex-deck__medallion"
+        data-exhibition-medallion
+        data-medallion-slug={listingMedallion.item.slug}
+        data-medallion-evidence={listingMedallion.evidence.field}
+        style={`--medallion-bg:${listingMedallion.item.background || '#17191b'};--medallion-ring:${listingMedallion.item.ring || '#697178'}`}
+        aria-hidden="true"
+      >
+        <picture>
+          {listingMedallion.item.avatarUrl.endsWith('.webp') && listingMedallion.item.fallbackPngUrl && (
+            <source srcset={withBase(listingMedallion.item.avatarUrl)} type="image/webp" />
+          )}
+          <img
+            src={withBase(listingMedallion.item.avatarUrl.endsWith('.webp') ? (listingMedallion.item.fallbackPngUrl || listingMedallion.item.avatarUrl) : listingMedallion.item.avatarUrl)}
+            alt=""
+            width="44"
+            height="44"
+            loading="lazy"
+            decoding="async"
+          />
+        </picture>
+      </span>
+    )}
     <span class="ex-deck__count" data-deck-count hidden></span>
   </a>
   </div>
