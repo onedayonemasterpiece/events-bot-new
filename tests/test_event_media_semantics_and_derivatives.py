@@ -14,7 +14,7 @@ from media_dedup import (
     build_event_thumbnail_object_path,
     prepare_image_for_supabase,
 )
-from models import Event, EventImageGeometry, EventPoster
+from models import Event, EventImageGeometry, EventMediaPairReview, EventPoster
 
 
 def _jpeg_bytes(width: int = 1600, height: int = 1000) -> bytes:
@@ -546,6 +546,98 @@ async def test_future_semantic_retry_remains_armed_after_geometry_is_current(
     if job_at.tzinfo is None:
         job_at = job_at.replace(tzinfo=event_media.timezone.utc)
     assert job_at == retry_at
+
+
+@pytest.mark.asyncio
+async def test_future_pair_retry_remains_armed_after_early_noop_job(tmp_path) -> None:
+    db = Database(str(tmp_path / "pair-retry-armed.sqlite"))
+    await db.init()
+    now = event_media.datetime.now(event_media.timezone.utc)
+    retry_at = now + event_media.timedelta(minutes=10)
+    async with db.get_session() as session:
+        event = Event(
+            title="Deferred pair remains armed",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        context_hash = event_media._context_hash(event)
+        geometry = EventImageGeometry(
+            pixel_sha256="a" * 64,
+            model=event_media.image_geometry_model(),
+            prompt_version=event_media.IMAGE_GEOMETRY_PROMPT_VERSION,
+            status="classified",
+        )
+        session.add(geometry)
+        await session.flush()
+        left = EventPoster(
+            event_id=int(event.id),
+            poster_hash="approved-current",
+            supabase_url="https://static.kenigevents.ru/approved.webp",
+            review_status="approved",
+            pixel_sha256="a" * 64,
+            image_geometry_id=int(geometry.id),
+            media_role="event_identity_poster",
+            media_semantic_status="classified",
+            media_semantic_prompt_version=event_media.MEDIA_ROLE_PROMPT_VERSION,
+            media_semantic_context_hash=context_hash,
+        )
+        right = EventPoster(
+            event_id=int(event.id),
+            poster_hash="candidate-deferred",
+            supabase_url="https://static.kenigevents.ru/candidate.webp",
+            review_status="pending_review",
+            pixel_sha256="b" * 64,
+        )
+        session.add(left)
+        session.add(right)
+        await session.flush()
+        session.add(
+            EventMediaPairReview(
+                event_id=int(event.id),
+                left_poster_id=int(left.id),
+                right_poster_id=int(right.id),
+                context_hash=context_hash,
+                pair_input_hash="future-pair-retry",
+                status="deferred",
+                decision="uncertain",
+                attempts=1,
+                next_run_at=retry_at,
+            )
+        )
+        await session.commit()
+        event_id = int(event.id)
+
+    assert await event_media.review_next_event_media_pair(event_id, db) is False
+    async with db.get_session() as session:
+        jobs = (
+            await session.execute(
+                event_media.select(event_media.JobOutbox).where(
+                    event_media.JobOutbox.event_id == event_id,
+                    event_media.JobOutbox.status == event_media.JobStatus.pending,
+                )
+            )
+        ).scalars().all()
+        review = (
+            await session.execute(
+                event_media.select(EventMediaPairReview).where(
+                    EventMediaPairReview.event_id == event_id
+                )
+            )
+        ).scalar_one()
+    await db.engine.dispose()
+
+    assert len(jobs) == 1
+    job_at = jobs[0].next_run_at
+    if job_at.tzinfo is None:
+        job_at = job_at.replace(tzinfo=event_media.timezone.utc)
+    assert job_at == retry_at
+    assert review.status == "deferred"
+    assert review.attempts == 1
 
 
 @pytest.mark.asyncio
