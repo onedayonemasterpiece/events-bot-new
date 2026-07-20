@@ -274,6 +274,67 @@ STATIC_SITE_CANARY_PERCENT=0..100
 только явным операторским решением и bounded backfill пропущенных eligible events.
 Ни один rollback не очищает legacy Telegraph fields.
 
+## Mobile date-feed analytics и date navigation gate (2026-07-20)
+
+Это release-требование, а не доказательство готовой production-реализации. Исследовательский
+v10-прототип не является источником production-данных: current like state должен оставаться
+в shared Supabase profile/controller, а de-identified bounded analytics history — асинхронно
+уходить в YDB. Новый page-specific `localStorage`-силос или прямой browser write в YDB
+запрещены.
+
+### Фактический горизонтальный сдвиг строки
+
+- [ ] Каноническое событие `listing_row_swipe_commit` создаётся только после завершённого
+  физического touch/pointer-жеста: горизонтальная ось доминирует, пройден утверждённый
+  threshold и позиция строки действительно изменилась. Hint-анимация, `scrollIntoView`,
+  restoration и иной programmatic scroll событие не создают.
+- [ ] Payload содержит `client_event_id`, `page_view_id`, consented actor/session key,
+  `event_id`, `page_type`, `surface=listing_row`, `placement=event_strip`, `component`,
+  `input_type`, `from_state`, `to_state`, `content_direction`, viewport/layout, schema/build
+  version и `occurred_at`; сырые координаты/траектория, referrer, token и PII не сохраняются.
+- [ ] Ingest применяет consent gate, schema allowlist, rate limit, exact-once по
+  `client_event_id` и semantic debounce одного жеста; session меняется после 30 минут
+  неактивности.
+- [ ] Посуточный отчёт считается в `Europe/Kaliningrad`: distinct пользователей,
+  совершивших хотя бы один commit, / distinct eligible viewers; рядом показываются gestures,
+  sessions и sample size. Нулевой denominator не превращается в `0%`.
+
+### Где пользователи ставят лайк
+
+- [ ] `like_event` и `unlike_event` пишутся только на реальном переходе canonical like-state,
+  не на render/reload/retry; UI обновляет shared state один раз, а analytics является
+  идемпотентным побочным эффектом.
+- [ ] Обязательные dimension: `page_type`, `surface`, `placement`, `component=event_like`,
+  `event_id`, `viewport_class`, `layout_mode`, `page_view_id`, `client_event_id`, schema/build
+  version и timestamp. `page_type` — allowlisted enum: `home`, `date_listing`,
+  `weekend_listing`, `category_listing`, `popular_listing`, `search`, `event_detail`,
+  `favorites`, `festival`, `personal_page`; `surface` различает как минимум `listing_row`,
+  `listing_card`, `event_detail_actions`, `event_detail_related_card`,
+  `personal_feed_card`, `search_result_card`, `favorites_row`.
+- [ ] Daily dashboard показывает likes, unlikes, unique actors, net/current state по
+  `page_type × surface × placement × viewport`; raw identity не экспортируется, малые
+  cohorts подавляются по принятому privacy threshold.
+- [ ] Release evidence включает schema/RLS/grant/rate/dedupe/retention tests, сверку
+  UI-state с aggregate и ежедневный sample query. До этого нельзя заявлять, что аналитика
+  свайпов или page-type лайков production-ready.
+
+### Нижняя полоса дат
+
+- [ ] Полоса дат — contextual accessory только над активным top-level пунктом `Даты`, а не
+  второй глобальный tab bar. Даты до «сегодня» недоступны; arbitrary date имеет canonical
+  route вида `/daty/YYYY-MM-DD/` и корректные back/forward/deep-link states.
+- [ ] На 320/360/390 px и с safe-area каждый target не меньше `48×48 CSS px`, selected date
+  явно читается, виден следующий partial item, native horizontal scroll не блокирует
+  вертикальный список; date rail и main nav не перекрывают контент, consent bars, keyboard
+  или detail CTA.
+- [ ] Перед canary проводится instrumented usability test: accidental activation rate
+  `<2%`; `>5%`, target `<48 px`, суммарный fixed stack `>25%` короткого viewport или
+  систематическое скрытие CTA/строки — hard reject. Между значениями требуется отдельное
+  product review; fallback — один компактный `Выбрать дату`, открывающий bottom sheet.
+- [ ] Это production NO-GO, пока arbitrary-date routing/data projection и реальный
+  consent-aware telemetry ingest отсутствуют; research-local events и placeholder для
+  незагруженной даты не считаются release evidence.
+
 ## Top-5 задач, которые можно запускать сейчас
 
 Задачи не включают проектирование UI листингов или event detail.
