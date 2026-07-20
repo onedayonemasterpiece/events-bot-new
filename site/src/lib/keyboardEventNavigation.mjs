@@ -371,6 +371,7 @@ export function initKeyboardEventNavigation(options = {}) {
     let overlayReturn = null;
     let overlaySequence = 0;
     let pendingContinuationEntry = false;
+    let relatedRestoreFrame = 0;
     let continuationRestoreFrame = 0;
     let posterPngPromise = null;
     const setStatus = (message) => {
@@ -682,6 +683,24 @@ export function initKeyboardEventNavigation(options = {}) {
           if (target instanceof win.HTMLElement) focusCard(target);
         });
       }).observe(continuationSection, { childList: true, subtree: true });
+    }
+
+    if (relatedSection instanceof win.HTMLElement) {
+      observe(() => {
+        const snapshot = logicalOwner;
+        if (snapshot.kind !== 'card' || snapshot.zone !== 'related') return;
+        win.cancelAnimationFrame(relatedRestoreFrame);
+        // The shared discovery controller may reorder canonical nodes with
+        // append(). Browsers then move focus to BODY even while the exact card
+        // remains connected, so restore its logical ownership after the batch.
+        relatedRestoreFrame = scheduleFrame(() => {
+          relatedRestoreFrame = 0;
+          const active = doc.activeElement;
+          if (active !== doc.body && active !== doc.documentElement) return;
+          const target = resolveLogicalOwner(snapshot);
+          if (target instanceof win.HTMLElement) focusCard(target);
+        });
+      }).observe(relatedSection, { childList: true, subtree: true });
     }
 
     const relatedBoundaryIsVisible = () => {

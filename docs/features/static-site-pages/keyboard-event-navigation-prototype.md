@@ -310,7 +310,9 @@ The desktop similar grid is itself a canonical `[data-discovery-feed]`, so the
 same candidate store, served-list attribution and feedback controller used by
 the mobile/continuation cards applies there. An in-flight desktop-only manifest
 request may be marked consumed only while its media query still matches; a
-mobile resize must leave it eligible for the next desktop retry.
+mobile resize must leave it eligible for the next desktop retry. If that shared
+controller reorders still-connected related cards, the router restores focus to
+the same logical event after the mutation batch rather than leaving it on BODY.
 
 ### Implemented extraction contract
 

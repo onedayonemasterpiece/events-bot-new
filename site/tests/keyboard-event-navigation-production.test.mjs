@@ -63,6 +63,9 @@ test('router has reversible lifecycle and disarms lost-focus provenance on page 
     'consent ownership must be transition-driven, not discarded by a fixed timeout');
   assert.match(router, /const attributeSnapshots = new Map\(\)/u);
   assert.match(router, /restoreManagedAttributes\(\)/u);
+  assert.match(router, /snapshot\.kind !== 'card' \|\| snapshot\.zone !== 'related'/u);
+  assert.match(router, /win\.cancelAnimationFrame\(relatedRestoreFrame\)[\s\S]*resolveLogicalOwner\(snapshot\)/u,
+    'shared discovery reorders must restore the related card that owned focus');
   assert.match(router, /return \{ destroy, get active\(\)/u);
 });
 
