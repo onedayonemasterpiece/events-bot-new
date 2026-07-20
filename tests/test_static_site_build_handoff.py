@@ -49,6 +49,63 @@ def test_snapshot_retention_context_fails_closed_for_malformed_active_handoff(tm
     )
 
 
+def test_output_retention_context_preserves_only_exact_active_handoff(tmp_path: Path) -> None:
+    import main
+
+    database = tmp_path / "retention.sqlite"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE static_site_build_state(release_channel TEXT PRIMARY KEY, active_job_id INTEGER)"
+        )
+        connection.execute(
+            "CREATE TABLE joboutbox(id INTEGER PRIMARY KEY, task TEXT, payload TEXT)"
+        )
+        connection.execute("INSERT INTO static_site_build_state VALUES('secret_preview', 7)")
+        connection.execute(
+            "INSERT INTO joboutbox VALUES(7, 'static_site_build', ?)",
+            (json.dumps({"remote_handoff": {"build_id": "production-exact-123"}}),),
+        )
+
+    assert main._static_site_output_retention_context(str(database)) == (
+        True,
+        ["production-exact-123"],
+    )
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE joboutbox SET payload=? WHERE id=7",
+            (json.dumps({"remote_handoff": {"build_id": "../../operator"}}),),
+        )
+    assert main._static_site_output_retention_context(str(database)) == (False, [])
+
+
+def test_shared_static_site_artifact_root_is_configurable(tmp_path: Path, monkeypatch) -> None:
+    from static_site_release import static_site_artifact_root, static_site_scratch_root
+
+    root = tmp_path / "persistent-static"
+    monkeypatch.setenv("STATIC_SITE_ARTIFACT_ROOT", str(root))
+    monkeypatch.delenv("STATIC_SITE_SCRATCH_DIR", raising=False)
+
+    assert static_site_artifact_root("/ignored/repo") == root.resolve()
+    assert static_site_scratch_root(static_site_artifact_root()) == root.resolve() / ".tmp"
+
+
+def test_static_site_preflight_rejects_critical_root_scratch(monkeypatch) -> None:
+    import main
+
+    monkeypatch.setattr(
+        main,
+        "runtime_scratch_health",
+        lambda: {
+            "status": "critical",
+            "tempfile_status": "error",
+            "tempfile_error": "OSError",
+        },
+    )
+
+    with pytest.raises(main.StaticSiteRetryableError, match="root_scratch_preflight"):
+        main._static_site_storage_preflight()
+
+
 @pytest.mark.asyncio
 async def test_static_site_preflight_reconciles_exact_current_candidate_before_push(
     monkeypatch: pytest.MonkeyPatch,
@@ -240,6 +297,54 @@ def test_runner_adopts_exact_complete_output_without_push(tmp_path: Path) -> Non
     finally:
         runner.ARTIFACT_ROOT = old_root
     assert Client.pushes == 0
+
+
+def test_runner_output_directory_rejects_traversal_and_symlinks(tmp_path: Path) -> None:
+    from scripts.run_static_site_builder_kaggle import prepare_output_directory
+
+    with pytest.raises(ValueError, match="build id"):
+        prepare_output_directory(tmp_path, "preview-../../operator")
+    outside = tmp_path / "operator"
+    outside.mkdir()
+    link = tmp_path / "output-preview-linked"
+    link.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(RuntimeError, match="symlink"):
+        prepare_output_directory(tmp_path, "preview-linked")
+    assert outside.is_dir()
+
+
+def test_runner_storage_preflight_checks_root_and_durable_scratch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import scripts.run_static_site_builder_kaggle as runner
+
+    scratch = tmp_path / "static-scratch"
+    probes: list[Path] = []
+    monkeypatch.setattr(runner, "SCRATCH_ROOT", scratch)
+    monkeypatch.setattr(
+        runner,
+        "runtime_scratch_health",
+        lambda: {"status": "ok", "tempfile_status": "ok"},
+    )
+    monkeypatch.setattr(
+        runner,
+        "writable_disk_health",
+        lambda path, **_kwargs: probes.append(Path(path))
+        or {"status": "ok", "tempfile_status": "ok"},
+    )
+
+    runner.require_static_site_storage_ready()
+
+    assert scratch.is_dir()
+    assert probes == [scratch]
+
+
+def test_static_site_storage_capacity_defers_without_consuming_attempt_budget() -> None:
+    import main
+
+    source = Path(main.__file__).read_text(encoding="utf-8")
+    assert 'StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}")' in source
 
 
 def test_runner_closes_status_database_after_config_creation() -> None:

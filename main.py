@@ -26,6 +26,7 @@ from enum import Enum
 from dataclasses import dataclass
 from types import MappingProxyType
 from runtime_logging import install_runtime_file_logging
+from runtime_disk import runtime_scratch_health, writable_disk_health
 
 
 class DeduplicateFilter(logging.Filter):
@@ -271,6 +272,7 @@ from static_site_release import (
     compute_static_site_input_fingerprint,
     create_immutable_snapshot,
     delete_immutable_snapshot,
+    delete_static_site_output,
     event_public_revision,
     freshness_state as static_site_freshness_state,
     iso_utc as static_site_iso_utc,
@@ -279,10 +281,14 @@ from static_site_release import (
     merge_request_payload as merge_static_site_request_payload,
     publish_secret_candidate_archive,
     prune_immutable_snapshots,
+    prune_static_site_outputs,
     resolve_current_secret_candidate,
     recoverable_static_site_build,
     finish_static_site_build_claim,
     resolve_build_clock as resolve_static_site_build_clock,
+    static_site_artifact_root,
+    static_site_result_counts,
+    static_site_scratch_root,
     validate_production_candidate_result,
     validate_snapshot,
     validate_vector_barrier,
@@ -22647,6 +22653,125 @@ def _static_site_snapshot_retention_context(database_path: str) -> tuple[bool, l
         return (len(paths) == 2), paths
 
 
+def _static_site_output_retention_context(database_path: str) -> tuple[bool, list[str]]:
+    """Return exact recoverable output identities, failing closed on drift."""
+
+    with sqlite3.connect(database_path) as connection:
+        state_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='static_site_build_state'"
+        ).fetchone()
+        if not state_exists:
+            return True, []
+        active_row = connection.execute(
+            "SELECT active_job_id FROM static_site_build_state WHERE release_channel=?",
+            ("secret_preview",),
+        ).fetchone()
+        if not active_row or not active_row[0]:
+            return True, []
+        payload_row = connection.execute(
+            "SELECT payload FROM joboutbox WHERE id=? AND task='static_site_build'",
+            (int(active_row[0]),),
+        ).fetchone()
+        if not payload_row or not payload_row[0]:
+            return False, []
+        try:
+            active_payload = json.loads(payload_row[0])
+        except (TypeError, ValueError):
+            return False, []
+        handoff = active_payload.get("remote_handoff")
+        if not isinstance(handoff, dict):
+            return False, []
+        build_id = str(handoff.get("build_id") or "").strip()
+        if not re.fullmatch(r"production-[A-Za-z0-9][A-Za-z0-9._-]{0,191}", build_id):
+            return False, []
+        return True, [build_id]
+
+
+def _static_site_storage_preflight() -> dict[str, Any]:
+    """Verify system temp and configured durable builder work before claiming."""
+
+    root_scratch = runtime_scratch_health()
+    if (
+        root_scratch.get("status") not in {"ok", "warning"}
+        or root_scratch.get("tempfile_status") != "ok"
+    ):
+        error = root_scratch.get("tempfile_error") or root_scratch.get("error") or "none"
+        raise StaticSiteRetryableError(
+            f"static_site_root_scratch_preflight_failed:{root_scratch.get('status')}:{error}"
+        )
+    artifact_root = static_site_artifact_root(Path(__file__).resolve().parent)
+    scratch_root = static_site_scratch_root(artifact_root)
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    storage = writable_disk_health(
+        scratch_root,
+        warn_free_mb=max(0, _env_int("STATIC_SITE_STORAGE_WARN_FREE_MB", 1536)),
+        critical_free_mb=max(0, _env_int("STATIC_SITE_STORAGE_CRITICAL_FREE_MB", 1024)),
+        tempfile_probe=True,
+    )
+    if storage.get("status") not in {"ok", "warning"} or storage.get("tempfile_status") != "ok":
+        error = storage.get("tempfile_error") or storage.get("error") or "none"
+        raise StaticSiteRetryableError(
+            f"static_site_storage_preflight_failed:{storage.get('status')}:{error}"
+        )
+    return {"root_scratch": root_scratch, "storage": storage}
+
+
+async def _prune_static_site_terminal_outputs(db: Database) -> dict[str, Any]:
+    prune_safe, preserve_build_ids = await asyncio.to_thread(
+        _static_site_output_retention_context, db.path
+    )
+    if not prune_safe:
+        logging.error(
+            "static_site_build: output retention skipped; active handoff is unreadable"
+        )
+        return {
+            "removed_build_ids": [],
+            "removed_bytes": 0,
+            "preserved_build_ids": [],
+            "retained_terminal_count": 0,
+            "skipped_symlink_build_ids": [],
+            "status": "skipped_unreadable_active_handoff",
+        }
+    report = await asyncio.to_thread(
+        prune_static_site_outputs,
+        static_site_artifact_root(Path(__file__).resolve().parent),
+        preserve_build_ids=preserve_build_ids,
+        keep_latest_terminal=max(
+            0, _env_int("STATIC_SITE_OUTPUT_KEEP_LATEST_TERMINAL", 0)
+        ),
+    )
+    if report["removed_build_ids"] or report["skipped_symlink_build_ids"]:
+        logging.info(
+            "static_site_build: output retention build_ids=%s bytes=%s skipped_symlinks=%s",
+            report["removed_build_ids"],
+            report["removed_bytes"],
+            report["skipped_symlink_build_ids"],
+        )
+    return report
+
+
+async def _delete_terminal_static_site_output(build_id: str) -> None:
+    try:
+        removed = await asyncio.to_thread(
+            delete_static_site_output,
+            static_site_artifact_root(Path(__file__).resolve().parent),
+            build_id,
+        )
+        logging.info(
+            "static_site_build: terminal output cleanup build_id=%s bytes=%s",
+            build_id,
+            removed,
+        )
+    except Exception:
+        # Durable success/failure state is authoritative.  Cleanup failure must
+        # surface without turning a completed immutable publication into a
+        # duplicate retry.
+        logging.exception(
+            "static_site_build: terminal output cleanup failed build_id=%s",
+            build_id,
+        )
+
+
 async def _static_site_running_request(db: Database, event_id: int) -> tuple[int, dict[str, Any]]:
     async with db.get_session() as session:
         row = (
@@ -22731,6 +22856,10 @@ async def _finish_static_site_candidate(
             public_base_url=(os.getenv("KENIGEVENTS_SITE_PUBLIC_BASE_URL") or "https://kenigevents.ru").strip(),
             **required_env,
         )
+    counts = static_site_result_counts(
+        result,
+        object_count=(publication_receipt.object_count if publication_receipt else None),
+    )
     await _patch_static_site_request_payload(
         db,
         job_id,
@@ -22740,13 +22869,13 @@ async def _finish_static_site_candidate(
                 "run_id": run_id,
                 "repo_sha": repo_sha,
                 "event_count": int(result.get("event_count") or 0),
-                "candidate_archive": str(candidate_archive),
+                "counts": counts,
                 "artifacts": result.get("artifacts"),
                 "checks": result.get("checks"),
                 "publication": (
                     {
                         "status": "published",
-                        "public_url": publication_receipt.public_url,
+                        "location": "/_review/<redacted>/",
                         "manifest_sha256": publication_receipt.manifest_sha256,
                         "token_sha256": publication_receipt.token_sha256,
                         "object_count": publication_receipt.object_count,
@@ -22773,6 +22902,7 @@ async def _finish_static_site_candidate(
         "input_fingerprint": input_fingerprint,
         "effective_date": clock.effective_date,
         "result_sha256": result_sha256,
+        "counts": counts,
         "published": bool(publication_receipt),
         "recovered_remote": recovered_remote,
     }
@@ -22805,6 +22935,15 @@ async def _finish_static_site_candidate(
         success=True,
         receipt=success_receipt,
     )
+    try:
+        # Redact the no-longer-recoverable bearer handoff only after the
+        # immutable success/current-candidate receipt commits atomically.
+        await _patch_static_site_request_payload(db, job_id, {"remote_handoff": None})
+    except Exception:
+        logging.exception(
+            "static_site_build: failed to redact completed handoff run_id=%s",
+            run_id,
+        )
     try:
         from kaggle_status import reconcile_kaggle_run_terminal_from_host
 
@@ -22941,12 +23080,13 @@ async def _recover_previous_static_site_attempt(
             claim.run_id,
             removed,
         )
+        await _delete_terminal_static_site_output(required["build_id"])
         return False, None
     if proc.returncode != 0:
         raise StaticSiteSingleFlightDeferred(
             f"static_site_remote_recovery_probe_failed:{claim.run_id}:code={proc.returncode}"
         )
-    output_dir = Path(__file__).resolve().parent / "artifacts" / "codex" / "static-site-builder" / f"output-{required['build_id']}"
+    output_dir = static_site_artifact_root(Path(__file__).resolve().parent) / f"output-{required['build_id']}"
     result = await _finish_static_site_candidate(
         db=db,
         job_id=job_id,
@@ -23016,6 +23156,17 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     job_id, request_payload = await _static_site_running_request(db, event_id)
     if request_payload.get("release_channel") not in {None, "secret_preview"}:
         raise StaticSitePermanentError("root_release_channel_is_disabled")
+    # Cleanup can recover capacity before the write probe, but it is permitted
+    # to remove only recognized terminal outputs not named by the exact active
+    # handoff in durable state.
+    await _prune_static_site_terminal_outputs(db)
+    try:
+        await asyncio.to_thread(_static_site_storage_preflight)
+    except StaticSiteRetryableError as exc:
+        # Capacity is an environmental gate, not a failed immutable input.
+        # Keep the coalesced request pending without spending its finite build
+        # attempt budget; the next healthy probe can run the same payload.
+        raise StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}") from exc
     force_rebuild = bool(request_payload.get("force_rebuild"))
     if force_rebuild and request_payload.get("trigger") != "operator_request":
         raise StaticSitePermanentError("force_rebuild_requires_operator_request")
@@ -23046,6 +23197,9 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 delete_immutable_snapshot, previous_path, previous_manifest
             )
             logging.info("static_site_build: recovered snapshot cleanup bytes=%s", removed)
+        handoff = request_payload.get("remote_handoff")
+        if isinstance(handoff, Mapping) and handoff.get("build_id"):
+            await _delete_terminal_static_site_output(str(handoff["build_id"]))
         return recovered_result if recovered_result is not None else True
     vector_evidence = await asyncio.to_thread(
         validate_vector_barrier,
@@ -23305,7 +23459,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             raise StaticSiteRetryableError(
                 f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
             )
-        output_dir = Path(__file__).resolve().parent / "artifacts" / "codex" / "static-site-builder" / f"output-{build_id}"
+        output_dir = static_site_artifact_root(Path(__file__).resolve().parent) / f"output-{build_id}"
         completed = await _finish_static_site_candidate(
             db=db,
             job_id=job_id,
@@ -23320,6 +23474,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             claim_token=claim.claim_token,
         )
         claim_finished = True
+        await _delete_terminal_static_site_output(build_id)
         return completed
     finally:
         if not claim_finished:
@@ -23358,6 +23513,17 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 "static_site_build: retaining snapshot for durable recovery run_id=%s", run_id
             )
         else:
+            if not claim_finished:
+                try:
+                    await _patch_static_site_request_payload(
+                        db, job_id, {"remote_handoff": None}
+                    )
+                except Exception:
+                    logging.exception(
+                        "static_site_build: failed to redact terminal handoff run_id=%s",
+                        run_id,
+                    )
+                await _delete_terminal_static_site_output(build_id)
             try:
                 removed = await asyncio.to_thread(
                     delete_immutable_snapshot, snapshot_path, manifest_path

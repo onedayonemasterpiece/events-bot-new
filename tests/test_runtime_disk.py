@@ -36,3 +36,37 @@ def test_runtime_disk_health_handles_bad_env_and_probe_failure(monkeypatch) -> N
     assert payload["warn_free_mb"] == 500
     assert payload["critical_free_mb"] == 500
     assert payload["error"] == "FileNotFoundError"
+
+
+def test_runtime_scratch_health_writes_fsyncs_and_removes_probe(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("RUNTIME_SCRATCH_WARN_FREE_MB", "1")
+    monkeypatch.setenv("RUNTIME_SCRATCH_CRITICAL_FREE_MB", "0")
+
+    payload = runtime_disk.runtime_scratch_health(tmp_path)
+
+    assert payload["status"] == "ok"
+    assert payload["tempfile_status"] == "ok"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_runtime_scratch_health_is_critical_when_tempfile_probe_fails(
+    tmp_path, monkeypatch
+) -> None:
+    class ProbeFailure:
+        def __enter__(self):
+            raise OSError("disk full")
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        runtime_disk.tempfile,
+        "NamedTemporaryFile",
+        lambda **_kwargs: ProbeFailure(),
+    )
+
+    payload = runtime_disk.runtime_scratch_health(tmp_path)
+
+    assert payload["status"] == "critical"
+    assert payload["tempfile_status"] == "error"
+    assert payload["tempfile_error"] == "OSError"

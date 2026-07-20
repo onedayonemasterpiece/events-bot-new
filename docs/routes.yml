@@ -306,6 +306,7 @@ features:
     related_personalization: docs/features/unsigned-personalization/README.md
     interface_references: docs/features/static-site-pages/interface-references.md
     event_page_product_design: docs/features/static-site-pages/event-page-product-design.md
+    keyboard_event_navigation_prototype: docs/features/static-site-pages/keyboard-event-navigation-prototype.md
     event_page_opus_ui_ux_2026_06_27: docs/features/static-site-pages/opus-event-page-ui-ux-2026-06-27.md
     event_page_ui_ux_comparison_brief: docs/features/static-site-pages/event-page-ui-ux-comparison-brief.md
     event_page_gemini_comparison_2026_06_27: docs/features/static-site-pages/gemini-event-page-comparison-2026-06-27.md

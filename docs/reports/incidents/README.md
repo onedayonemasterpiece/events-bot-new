@@ -25,6 +25,10 @@
     stale geometry is invalidated and re-enqueued; only pixel-current boxes
     reach renderers, and an unsafe protected-region crop falls back to `contain`.
 
+- `INC-2026-07-19-static-builder-root-overlay-recurrence.md`
+  - Scope: Fly root writable overlay, `/tmp` Kaggle video outputs, retained static-site artifacts and scratch readiness.
+  - Must not regress: terminal outputs remain bounded, active/recoverable handoffs are preserved, `/healthz`/preflight detects an unwritable root scratch filesystem before scheduled jobs dead-letter.
+
 - `INC-2026-07-19-static-site-stale-builder-lease.md`
   - Scope: host-validated StaticSiteBuilder terminal reconciliation, exact-owner
     `static_site:builder` lease release and pre-push Smart Update self-healing.

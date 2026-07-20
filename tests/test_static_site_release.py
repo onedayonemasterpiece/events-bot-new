@@ -24,14 +24,17 @@ from static_site_release import (
     compute_static_site_input_fingerprint,
     create_immutable_snapshot,
     delete_immutable_snapshot,
+    delete_static_site_output,
     finish_static_site_build_claim,
     freshness_state,
     make_request_payload,
     merge_request_payload,
     publish_secret_candidate_archive,
     prune_immutable_snapshots,
+    prune_static_site_outputs,
     resolve_build_clock,
     resolve_current_secret_candidate,
+    static_site_result_counts,
     validate_production_candidate_result,
     validate_snapshot,
     validate_vector_barrier,
@@ -627,6 +630,69 @@ def test_snapshot_retention_removes_only_stale_recognized_incomplete_files(tmp_p
     assert not old_tmp.exists() and not orphan_sqlite.exists()
     assert recent_tmp.exists(), "a possibly active backup temp must be preserved"
     assert unknown.exists(), "unknown operator evidence must never be pruned"
+
+
+def test_output_retention_preserves_exact_handoff_and_unknown_paths(tmp_path) -> None:
+    root = tmp_path / "builder"
+    root.mkdir()
+    builds = [f"production-retention-{index}" for index in range(4)]
+    for index, build_id in enumerate(builds):
+        output = root / f"output-{build_id}"
+        output.mkdir()
+        (output / "payload.bin").write_bytes(b"x" * (index + 1))
+        os.utime(output, (100 + index, 100 + index))
+    unknown_dir = root / "operator-evidence"
+    unknown_dir.mkdir()
+    (unknown_dir / "keep.txt").write_text("keep", encoding="utf-8")
+    preview = root / "output-preview-manual"
+    preview.mkdir()
+    symlink = root / "output-production-symlink"
+    symlink.symlink_to(unknown_dir, target_is_directory=True)
+
+    report = prune_static_site_outputs(
+        root,
+        preserve_build_ids=[builds[0]],
+        keep_latest_terminal=1,
+    )
+
+    assert (root / f"output-{builds[0]}").is_dir()
+    assert (root / f"output-{builds[3]}").is_dir()
+    assert not (root / f"output-{builds[1]}").exists()
+    assert not (root / f"output-{builds[2]}").exists()
+    assert unknown_dir.is_dir() and preview.is_dir() and symlink.is_symlink()
+    assert sorted(report["removed_build_ids"]) == sorted(builds[1:3])
+    assert report["removed_bytes"] == 5
+    assert report["skipped_symlink_build_ids"] == ["production-symlink"]
+
+    assert delete_static_site_output(root, builds[3]) == 4
+    with pytest.raises(StaticSitePermanentError, match="identity_invalid"):
+        delete_static_site_output(root, "preview-manual")
+
+
+def test_static_site_result_counts_retains_only_redacted_numeric_diagnostics() -> None:
+    counts = static_site_result_counts(
+        {
+            "event_count": 10,
+            "counts": {
+                "event_page_count": "10",
+                "page_count": 20,
+                "file_count": 30,
+                "bytes": 1000,
+                "candidate_token": "never-store",
+                "public_url": "https://example.test/_review/secret/",
+            },
+        },
+        object_count=42,
+    )
+
+    assert counts == {
+        "event_count": 10,
+        "event_page_count": 10,
+        "page_count": 20,
+        "file_count": 30,
+        "object_count": 42,
+        "bytes": 1000,
+    }
 
 
 def test_production_candidate_result_requires_exact_template_and_noindex_checks(tmp_path) -> None:

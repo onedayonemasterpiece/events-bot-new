@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import tempfile
 import tarfile
@@ -43,6 +44,17 @@ STATIC_SITE_FINGERPRINT_SCHEMA = "static_site_input_fingerprint_v1"
 STATIC_SITE_STATE_SCHEMA = "static_site_build_state_v1"
 STATIC_SITE_PROJECTION_VERSION = "static_event_public_projection_v2"
 CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA = "static_site_current_secret_candidate_v1"
+STATIC_SITE_OUTPUT_NAME_RE = re.compile(
+    r"output-(production-[A-Za-z0-9][A-Za-z0-9._-]{0,191})"
+)
+STATIC_SITE_COUNT_KEYS = (
+    "event_count",
+    "event_page_count",
+    "page_count",
+    "file_count",
+    "object_count",
+    "bytes",
+)
 
 
 @dataclass(frozen=True)
@@ -145,6 +157,60 @@ class StaticSiteSingleFlightDeferred(StaticSiteRetryableError):
 
 class StaticSitePermanentError(StaticSiteReleaseError):
     """An invalid immutable input/result that must not be retried unchanged."""
+
+
+def static_site_artifact_root(
+    repo_root: str | os.PathLike[str] | None = None,
+) -> Path:
+    """Resolve the shared Fly-side builder root.
+
+    Production config points this at the persistent volume.  The repository
+    fallback preserves local developer behavior and remains independent of the
+    caller's current working directory.
+    """
+
+    configured = (os.getenv("STATIC_SITE_ARTIFACT_ROOT") or "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    base = Path(repo_root).resolve() if repo_root is not None else Path(__file__).resolve().parent
+    return (base / "artifacts" / "codex" / "static-site-builder").resolve()
+
+
+def static_site_scratch_root(
+    artifact_root: str | os.PathLike[str] | None = None,
+) -> Path:
+    configured = (os.getenv("STATIC_SITE_SCRATCH_DIR") or "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    root = Path(artifact_root).resolve() if artifact_root is not None else static_site_artifact_root()
+    return root / ".tmp"
+
+
+def static_site_result_counts(
+    result: Mapping[str, Any],
+    *,
+    object_count: int | None = None,
+) -> dict[str, int]:
+    """Copy only bounded numeric build counts into durable diagnostics."""
+
+    raw_counts = result.get("counts")
+    raw_counts = raw_counts if isinstance(raw_counts, Mapping) else {}
+    counts: dict[str, int] = {}
+    for key in STATIC_SITE_COUNT_KEYS:
+        value = raw_counts.get(key)
+        if key == "event_count" and value is None:
+            value = result.get("event_count")
+        if key == "object_count" and object_count is not None:
+            value = object_count
+        if isinstance(value, bool) or value is None:
+            continue
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if 0 <= parsed <= 10**12:
+            counts[key] = parsed
+    return counts
 
 
 @dataclass(frozen=True)
@@ -1370,6 +1436,114 @@ def prune_immutable_snapshots(
         "removed_bytes": removed_bytes,
         "preserved_paths": sorted(str(path) for path in preserved),
         "retained_terminal_count": min(len(terminal), keep_latest),
+    }
+
+
+def _static_site_output_identity(path: Path) -> str | None:
+    match = STATIC_SITE_OUTPUT_NAME_RE.fullmatch(path.name)
+    return match.group(1) if match else None
+
+
+def _directory_size_bytes(path: Path) -> int:
+    total = 0
+    for parent, directories, files in os.walk(path, followlinks=False):
+        # Never follow an unexpected symlink hidden inside a recognized tree.
+        directories[:] = [
+            name for name in directories if not (Path(parent) / name).is_symlink()
+        ]
+        for name in files:
+            candidate = Path(parent) / name
+            if candidate.is_symlink():
+                continue
+            try:
+                total += candidate.stat().st_size
+            except FileNotFoundError:
+                continue
+    return total
+
+
+def delete_static_site_output(
+    artifact_root: str | os.PathLike[str],
+    build_id: str,
+) -> int:
+    """Delete exactly one asserted production output directory.
+
+    Lock files, staging trees, caches, symlinks and unrecognized operator paths
+    are outside this function's deletion language.
+    """
+
+    root = Path(artifact_root).resolve()
+    clean_build_id = str(build_id or "").strip()
+    candidate = root / f"output-{clean_build_id}"
+    if _static_site_output_identity(candidate) != clean_build_id:
+        raise StaticSitePermanentError("static_site_output_identity_invalid")
+    if candidate.is_symlink():
+        raise StaticSitePermanentError("static_site_output_symlink_rejected")
+    try:
+        candidate.resolve().relative_to(root)
+    except ValueError as exc:
+        raise StaticSitePermanentError("static_site_output_path_escape") from exc
+    if not candidate.exists():
+        return 0
+    if not candidate.is_dir():
+        raise StaticSitePermanentError("static_site_output_not_directory")
+    removed_bytes = _directory_size_bytes(candidate)
+    shutil.rmtree(candidate)
+    return removed_bytes
+
+
+def prune_static_site_outputs(
+    artifact_root: str | os.PathLike[str],
+    *,
+    preserve_build_ids: Iterable[str] = (),
+    keep_latest_terminal: int = 0,
+) -> dict[str, Any]:
+    """Bound terminal production outputs while preserving exact handoffs.
+
+    Only directories matching ``output-production-*`` are recognized.  A
+    malformed preserve identity fails closed because it may represent an
+    unreadable durable handoff; unknown filesystem entries are never removed.
+    """
+
+    root = Path(artifact_root).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    preserved: set[str] = set()
+    for raw in preserve_build_ids:
+        build_id = str(raw or "").strip()
+        if not build_id or _static_site_output_identity(root / f"output-{build_id}") != build_id:
+            raise StaticSitePermanentError("static_site_output_preserve_identity_invalid")
+        preserved.add(build_id)
+
+    recognized: list[tuple[float, str, Path]] = []
+    skipped_symlinks: list[str] = []
+    for path in root.iterdir():
+        build_id = _static_site_output_identity(path)
+        if build_id is None:
+            continue
+        if path.is_symlink():
+            skipped_symlinks.append(build_id)
+            continue
+        if not path.is_dir():
+            continue
+        recognized.append((path.stat().st_mtime, build_id, path))
+
+    keep_latest = max(0, int(keep_latest_terminal))
+    terminal = sorted(
+        (item for item in recognized if item[1] not in preserved),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    removed: list[str] = []
+    removed_bytes = 0
+    for _mtime, build_id, _path in terminal[keep_latest:]:
+        removed_bytes += delete_static_site_output(root, build_id)
+        removed.append(build_id)
+    return {
+        "removed_build_ids": removed,
+        "removed_bytes": removed_bytes,
+        "preserved_build_ids": sorted(preserved),
+        "retained_terminal_count": min(len(terminal), keep_latest),
+        "skipped_symlink_build_ids": sorted(skipped_symlinks),
     }
 
 

@@ -34,6 +34,7 @@
 | Kaliningrad today + build single-flight | `ADD-V12-04..06` | State-machine/unit + fresh candidate | build clock boundary, no-op fingerprint, live/terminal orphan adoption, `/segodnya/` public check | production-run evidence |
 | Typed no-image fallbacks | `ADD-V12-07` | Unit + public candidate | fallback is visible but absent from gallery/OG/JSON-LD/share | inventory refresh after each snapshot |
 | Footer/media/continuation rollout | `ADD-V12-09..12` | Component + public Playwright | global service footer, related-card skeleton, portrait/wide CTA families, bounded desktop continuation | native share and long-session analytics |
+| Desktop event keyboard navigation | `ADD-KEY-01..07` | Component + Chromium secret-candidate route | `node --test site/tests/keyboard-event-navigation-production.test.mjs`; `npm --prefix site run check:keyboard-event-navigation` | Firefox/Safari, screen reader, high contrast and root rollout |
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
@@ -102,6 +103,39 @@
   similarity to wider anti-bubble discovery; the latter may mix profile,
   non-rejected vector tail and diverse upcoming fallback rather than looping
   within one theatre/event type.
+
+### Desktop keyboard navigation V7
+
+- **ADD-KEY-01 — One reviewed router.** Lab fixtures and secret-candidate event
+  routes import the same V7 router originating at `d0027a53`; generated HTML and
+  a second production imitation are forbidden. Flag-off/root/listing/mobile
+  install no document listeners or key hints.
+- **ADD-KEY-02 — Intent and ownership.** Page load never steals focus. The
+  router activates after meaningful keyboard intent and handles contexts in the
+  fixed order editor/IME → top dialog/gallery → service share → CTA → managed
+  card → provenance-gated body `L` → native browser behavior.
+- **ADD-KEY-03 — Gallery Down latch.** A fresh `ArrowDown` closes a keyboard- or
+  pointer-opened gallery through its existing close control, restores the
+  logical owner and neither scrolls the covered page nor leaks held repeat into
+  page scrolling. Only a physical keyup permits a later Down scroll.
+- **ADD-KEY-04 — Lost-focus `L`.** Body recovery works only after CTA, related
+  or broad-card ownership. Header, footer, editor, unrelated control,
+  blur/hidden and top dialogs disarm it until a new managed owner exists.
+- **ADD-KEY-05 — Canonical two-zone cards.** `Смотрите дальше` and the finite
+  broader section use the same `EventCard` DOM/controller. Arrows bridge their
+  explicit zones; Enter/L/K/S and rerender focus restoration behave identically
+  without erasing feedback state or rotating unrelated cards.
+- **ADD-KEY-06 — Lifecycle/privacy.** `destroy()` aborts listeners, disconnects
+  observers, clears timers/RAF/latches and restores every pre-existing
+  title/ARIA/tabindex attribute. Slow async consent is transition-owned rather
+  than dropped after a timer. Daily local facts are boolean,
+  allowlisted, deduplicated and URL/event/title/key/count/time-free; no remote
+  collector is enabled.
+- **ADD-KEY-07 — Release boundary.** Every newly checked immutable secret
+  candidate enables the router across its full event catalog and remains exact
+  `noindex`/no-referrer. Root/current/stable ICS hashes do not change. A root
+  rollout remains blocked until Firefox/Safari, screen-reader, high-contrast and
+  zoom/reflow gates pass.
 
 ### Release evidence row contract
 
@@ -352,6 +386,23 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   останавливает build до Kaggle artifact publication.
   Production-profile check всегда читает root-form `dist/sobytiya`, даже если
   Kaggle runtime унаследовал исторический `PREVIEW_BUILD_ID`.
+- **ADD-BUILD-15 — Dual-disk и bounded artifacts.** Перед удалённым push
+  проверяются writable/free-space для persistent `/data` и root scratch `/tmp`
+  реальной create+fsync+remove пробой. Static snapshot/output хранится только в
+  configured `/data/static_site_builder`; после durable terminal receipt
+  удаляются лишь распознанные `output-production-*` сверх retention, точный
+  active/recoverable handoff сохраняется, symlink/unknown path остаётся
+  нетронутым. Любой runner `preview-*|production-*` build id валидируется до
+  построения пути; pre-existing symlink и traversal отклоняются. Broken `/tmp`
+  делает health/preflight красным, а запрос остаётся pending без расходования
+  конечного retry budget.
+- **ADD-BUILD-16 — Bounded video side outputs.** После отправки удаляются только
+  exact non-symlink `videoannounce-publish-only-source-<id>`,
+  `videoannounce-publish-only-<id>` и `videoannounce-logs-<id>` внутри
+  configured temp root. Основной `videoannounce-<id>` удаляется лишь по
+  persisted published terminal state без ожидающего main target; active,
+  ledger-live, failed и publish-blocked сохраняются. Startup reconciliation
+  повторяет только это assertion-safe удаление после прошлой ошибки cleanup.
 
 ### Related/vector barrier
 

@@ -144,6 +144,15 @@ revision and submits that immutable file as a unique Kaggle input. Retries,
 missed-build reconciliation and the feature-specific 5400-second runtime are
 bounded in `static_site_release.py`/`main.py`.
 
+The Smart Update build now also owns the accepted desktop keyboard navigator:
+the exact deployed `STATIC_SITE_REPO_SHA` is packed into the immutable source
+dataset, and every event route in the resulting secret candidate mounts the
+shared reviewed V7 router while
+`PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED != 0`. This is still secret-only
+preproduction publication. The checked production-form proof, public root,
+`current` and stable `/ics/` objects are never promoted or modified by this
+flow.
+
 The same durable request can be made manually without bypassing debounce or the
 outbox state machine:
 
@@ -215,6 +224,39 @@ hash/MIME plus a public `index.html` probe. It returns a receipt containing the
 bearer URL and tree hash. Never put the URL/token in public docs, sitemap,
 canonical, Telegram public channels or logs. Revocation in this phase means
 deleting that complete immutable prefix; root/current remain untouched.
+
+### Fly artifact and scratch capacity
+
+Persistent builder state is rooted at `STATIC_SITE_ARTIFACT_ROOT` (production:
+`/data/static_site_builder`) and its working scratch at
+`STATIC_SITE_SCRATCH_DIR` (production: `/data/static_site_builder/tmp`). The
+generic process scratch filesystem is independently checked through
+`RUNTIME_SCRATCH_PATH` (production: `/tmp`). Both persistent storage and root
+scratch need configured free-space headroom and a successful real temporary
+file create, write, `fsync` and remove probe before a remote push. A writable
+`/data` therefore cannot mask an exhausted root overlay that makes Python
+`tempfile` unusable.
+
+Runner build identities are bounded to `preview-*` or `production-*` before
+constructing any filesystem path. Output creation uses one assertion-safe
+helper that rejects traversal, a non-directory target and any pre-existing
+symlink before download/adoption; it never calls permissive `rmtree(...,
+ignore_errors=True)` on a derived path.
+
+After a durable terminal receipt, the runner prunes only recognized
+`output-production-*` trees below the configured artifact root. Default
+terminal retention is zero because counts/hashes needed for diagnostics are
+persisted in SQLite/the receipt. The exact active or recoverable handoff is
+always preserved; unknown directories, symlinks and paths outside the root are
+fail-closed and never removed. Failed/nonterminal outputs remain available for
+explicit incident disposition rather than being mistaken for regenerable
+success artifacts.
+
+Production health reports persistent and scratch disk separately. A critical
+or unwritable `/tmp` keeps `/healthz` not ready and blocks the static preflight
+even during startup grace. The coalesced request is deferred without incrementing
+its finite attempt counter until cleanup or deploy restores capacity; it must
+not be bypassed by sending another Kaggle attempt.
 
 ### Smart Update debounce and historical 2026-07-15 data evidence
 

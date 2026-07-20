@@ -1,0 +1,235 @@
+---
+interface Props { showQuickstart?: boolean; }
+const { showQuickstart = true } = Astro.props;
+---
+{showQuickstart && (
+<section class="keyboard-quickstart" data-keyboard-quickstart aria-labelledby="keyboard-quickstart-title">
+  <div class="page-shell keyboard-quickstart__inner">
+    <div>
+      <p class="eyebrow">Попробуй быструю навигацию</p>
+      <h2 id="keyboard-quickstart-title">Ищи следующее событие без мышки</h2>
+      <p>Одна стрелка вниз прокручивает страницу как обычно. Нажми её дважды быстро — и перейдёшь к похожим событиям.</p>
+    </div>
+    <button type="button" class="keyboard-quickstart__start" data-keyboard-prototype-start>
+      <span>Перейти к похожим</span><kbd>↓↓</kbd>
+    </button>
+    <div class="keyboard-quickstart__contexts" aria-label="Ситуативные клавиши быстрой навигации">
+      <p><strong>Событие</strong><span><kbd>↓</kbd> прокрутка · <kbd>↓↓</kbd> к карточкам · <kbd>↑</kbd> галерея · в галерее <kbd>↓</kbd> закрыть · <kbd>← →</kbd> фото</span><span><kbd>L</kbd> нравится · <kbd>K</kbd> в календарь · <kbd>S</kbd> ссылка · <kbd>C</kbd> описание · <kbd>P</kbd> афиша</span></p>
+      <p><strong>Выбранная карточка</strong><span><kbd>Стрелки</kbd> между «Похожими» и «Ещё событиями» · <kbd>Enter</kbd> открыть</span><span><kbd>L</kbd> нравится · <kbd>K</kbd> в календарь · <kbd>S</kbd> ссылка</span></p>
+      <p><strong>Поделиться сервисом</strong><span><kbd>P</kbd> скопировать карточку «Анонсов» · <kbd>S</kbd> скопировать текст и ссылку</span></p>
+    </div>
+  </div>
+</section>
+)}
+
+<p class="sr-only" id="keyboard-prototype-instructions">
+  Быстрая навигация по событиям. Одна стрелка вниз прокручивает страницу, две быстрые стрелки вниз переводят к похожим событиям.
+  На карточках используйте стрелки для перехода между событиями. Пробел также прокручивает страницу.
+  Enter открывает событие или основное действие. L ставит лайк, K добавляет в календарь,
+  S копирует название и ссылку, C копирует полное описание, P копирует афишу текущего события. Стрелки влево и вправо в верхнем блоке листают фотографии,
+  стрелка вверх открывает полноэкранную галерею, а стрелка вниз закрывает её и возвращает к событию.
+</p>
+<p class="sr-only" data-keyboard-prototype-status role="status" aria-live="polite" aria-atomic="true"></p>
+<div class="keyboard-action-toast" data-keyboard-action-toast aria-hidden="true" hidden>
+  <span data-keyboard-action-toast-icon>✓</span><strong data-keyboard-action-toast-text></strong>
+</div>
+
+<script>
+  import { initKeyboardEventNavigation } from '../lib/keyboardEventNavigation.mjs';
+  window.KenigEventsKeyboardNavigation?.destroy?.();
+  window.KenigEventsKeyboardNavigation = initKeyboardEventNavigation();
+</script>
+
+<style is:global is:inline>
+  .keyboard-quickstart { display:none; }
+
+  @media (min-width:1024px) {
+    [data-keyboard-event-surface]:focus-visible {
+      outline:2px solid rgba(244,185,66,.34);
+      outline-offset:3px;
+    }
+    [data-related-start] [data-event-card]:focus-visible,
+    [data-related-start] [data-event-card]:has(:focus-visible),
+    [data-personal-feed-section][data-listing-context="event-detail"] [data-event-card]:focus-visible,
+    [data-personal-feed-section][data-listing-context="event-detail"] [data-event-card]:has(:focus-visible) {
+      outline:3px solid #f4b942;
+      outline-offset:5px;
+      box-shadow:0 12px 36px rgba(46,31,22,.2);
+    }
+    [data-related-start] [data-event-card],
+    [data-personal-feed-section][data-listing-context="event-detail"] [data-event-card] { container-type:inline-size; }
+    [data-personal-feed-section][data-listing-context="event-detail"]:focus-visible {
+      outline:3px solid #f4b942;
+      outline-offset:-3px;
+    }
+    .related-calendar-shortcut {
+      display:none;
+      min-width:20px;
+      min-height:20px;
+      place-items:center;
+      margin-left:auto;
+      padding:1px 5px;
+      border:1px solid currentColor;
+      border-radius:6px;
+      font:800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      opacity:.58;
+      pointer-events:none;
+    }
+    .related-calendar-shortcut[hidden] { display:none !important; }
+    @container (min-width:310px) {
+      .related-calendar-shortcut:not([hidden]) { display:inline-grid; }
+    }
+    [data-keyboard-shortcut-target] { position:relative; }
+    .keyboard-shortcut-badge {
+      position:absolute;
+      right:5px;
+      bottom:4px;
+      z-index:2;
+      min-width:14px;
+      padding:1px 3px;
+      border:1px solid currentColor;
+      border-radius:4px;
+      color:inherit;
+      font:700 8px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing:0;
+      text-align:center;
+      opacity:.46;
+      pointer-events:none;
+    }
+    .service-share-inline-shortcut {
+      display:inline-grid;
+      min-width:20px;
+      min-height:20px;
+      place-items:center;
+      margin-left:.2rem;
+      padding:1px 5px;
+      border:1px solid rgba(121,48,20,.22);
+      border-radius:6px;
+      background:#fffaf2;
+      color:#793014;
+      box-shadow:0 1px 0 rgba(34,26,20,.12);
+      font:800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .desktop-clean-event [data-calendar-action].is-calendar-added,
+    .desktop-clean-event [data-calendar-action].is-calendar-added:hover {
+      border-color:#267848 !important;
+      background:#267848 !important;
+      color:#fff !important;
+      box-shadow:0 8px 20px rgba(38,120,72,.28) !important;
+    }
+    .desktop-clean-event [data-feedback-action="like"][aria-pressed="true"],
+    .desktop-clean-event [data-feedback-action="like"][aria-pressed="true"]:hover {
+      border-color:#c93434 !important;
+      background:#c93434 !important;
+      color:#fff !important;
+      box-shadow:0 8px 20px rgba(201,52,52,.3) !important;
+    }
+    .keyboard-action-toast {
+      position:fixed;
+      z-index:10080;
+      left:50%;
+      bottom:clamp(1.25rem,4vh,2.5rem);
+      display:flex;
+      align-items:center;
+      gap:.65rem;
+      max-width:min(92vw,580px);
+      padding:.8rem 1rem;
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:14px;
+      background:#24211e;
+      color:#fff;
+      box-shadow:0 18px 48px rgba(30,22,17,.28);
+      opacity:0;
+      transform:translate(-50%,12px);
+      pointer-events:none;
+    }
+    .keyboard-action-toast[hidden] { display:none; }
+    .keyboard-action-toast.is-visible { opacity:1; transform:translate(-50%,0); }
+    .keyboard-action-toast>span { display:grid; width:24px; height:24px; place-items:center; border-radius:50%; background:#267848; font-weight:900; }
+    .keyboard-action-toast[data-state="error"]>span { background:#a43b2f; }
+    .keyboard-action-toast strong { font-size:.9rem; line-height:1.3; }
+    @media (prefers-reduced-motion:no-preference) {
+      .keyboard-action-toast { transition:opacity .16s ease, transform .16s ease; }
+    }
+    .keyboard-description-actions {
+      display:flex;
+      flex-wrap:wrap;
+      gap:.65rem;
+      margin-top:2rem;
+      padding-top:1.2rem;
+      border-top:1px solid rgba(72,56,45,.12);
+    }
+    .keyboard-description-actions button {
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:.55rem;
+      min-height:40px;
+      padding:.58rem .78rem;
+      border:1px solid rgba(92,63,45,.22);
+      border-radius:10px;
+      background:#fffaf2;
+      color:#5f3b29;
+      font:760 .84rem/1.2 inherit;
+      cursor:pointer;
+    }
+    .keyboard-description-actions button:hover { border-color:#a44721; background:#fff4e8; color:#793014; }
+    .keyboard-description-actions button:focus-visible { outline:3px solid #f4b942; outline-offset:3px; }
+    .keyboard-description-actions button:disabled { cursor:wait; opacity:.62; }
+    .keyboard-description-actions button[data-copy-state="success"] { border-color:#267848; color:#267848; }
+    .keyboard-description-actions button[data-copy-state="error"] { border-color:#a43b2f; color:#a43b2f; }
+    .keyboard-description-actions kbd {
+      min-width:22px;
+      padding:.18rem .38rem;
+      border:1px solid currentColor;
+      border-radius:5px;
+      font:800 .68rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      opacity:.62;
+    }
+    .keyboard-quickstart {
+      display:block;
+      padding:clamp(3rem,6vw,5.5rem) 0;
+      border-top:1px solid rgba(255,255,255,.1);
+      background:#241f1b;
+      color:#fffaf2;
+    }
+    .keyboard-quickstart__inner {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:2rem 3rem;
+      align-items:center;
+    }
+    .keyboard-quickstart .eyebrow { margin:0 0 .75rem; color:#d77a4f; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+    .keyboard-quickstart h2 { max-width:18ch; margin:0; font-size:clamp(2rem,3.6vw,4rem); line-height:.96; letter-spacing:-.045em; }
+    .keyboard-quickstart h2 + p { max-width:60ch; margin:1rem 0 0; color:#cfc2b6; font-size:1rem; line-height:1.6; }
+    .keyboard-quickstart__start {
+      display:flex;
+      align-items:center;
+      gap:1rem;
+      min-height:72px;
+      padding:.8rem .9rem .8rem 1.25rem;
+      border:0;
+      border-radius:18px;
+      background:#b54d22;
+      color:white;
+      font:900 1rem/1.1 inherit;
+      cursor:pointer;
+    }
+    .keyboard-quickstart__start kbd { min-width:48px; padding:.65rem; border-radius:12px; background:#fffaf2; color:#2a211b; font-size:1.35rem; }
+    .keyboard-quickstart__contexts { grid-column:1 / -1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
+    .keyboard-quickstart__contexts p { display:grid; gap:.45rem; margin:0; padding:.8rem .9rem; border:1px solid rgba(255,255,255,.1); border-radius:12px; color:#bfb1a5; font-size:.8rem; }
+    .keyboard-quickstart__contexts strong { color:#fffaf2; font-size:.78rem; letter-spacing:.04em; }
+    .keyboard-quickstart__contexts kbd {
+      padding:.28rem .48rem;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:7px;
+      background:#332c27;
+      color:#fffaf2;
+      box-shadow:0 2px 0 #171310;
+      font:800 .72rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    @media (max-width:1120px) {
+      .keyboard-quickstart__contexts { grid-template-columns:1fr; }
+    }
+  }
+</style>

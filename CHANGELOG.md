@@ -16,6 +16,25 @@
   protected regions or fail closed to `contain`. TelegramMonitor uses the same
   exact encoded identity, provider results are discarded on mid-call pixel
   drift, and per-event raw-SHA ownership is conflict-safe during retry/merge.
+- Added the exact reviewed keyboard-navigation V7 router to every desktop event
+  route in immutable noindex secret candidates: frozen prototype pages and the
+  primary template share one lifecycle-managed implementation, while no lab
+  route ships in production artifacts. Teardown restores pre-existing ARIA/title
+  attributes, slow consent remains transition-owned, and there is no autofocus,
+  mobile/root activation or remote shortcut collector.
+- Fixed related/broad desktop discovery parity so both zones clone the same
+  canonical `EventCard` markup and run inside the same discovery controller,
+  keeping feedback attribution, share, rerank and keyboard focus semantics.
+  Desktop-only broad hydration now retries after an in-flight mobile resize.
+- Fixed recurring Fly root-overlay exhaustion around static builds: builder
+  artifacts and working scratch now live under bounded persistent storage,
+  recognized successful outputs are removed after durable receipts, and
+  readiness/preflight independently prove `/data` capacity and real `/tmp`
+  tempfile writability; capacity defers without consuming the finite build
+  attempt budget, and runner output paths reject traversal and symlinks. Fully
+  published video-render trees are removed only after assertion-validated
+  terminal persistence, with startup reconciliation; publish-only and log
+  download trees are also bounded and cleaned.
 - Fixed static event detail parity so a one-photo Editorial page keeps the same
   CTA side-motion/docking state machine as a multi-photo page; the optional
   thumbnail rail no longer controls the page-family behavior.
@@ -53,6 +72,40 @@
   heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
 
 ### Added
+- **Desktop keyboard event-surfing prototype:** add one noindex event-detail lab
+  for «Собака на сене» with a scoped current-event/related-card navigator,
+  spatial arrow movement, native `Space` scrolling, contextual `L`/`K`/`S`
+  actions, CTA-integrated shortcut badges, top-level photo arrows and an
+  in-flow pre-footer quick-start section; remove the obstructive fixed help
+  overlay and title-panel focus ring; add `ArrowDown` recovery after focus loss,
+  `Escape`/`Enter` consent handling, native shortcut hover titles, adaptive CTA
+  badges and inline `P`/`S` service-copy hints; in V4 add green saved-calendar
+  and red consent-replayed like states, deterministic desktop event-link copy
+  with an auto-dismissing toast, `ArrowUp` fullscreen gallery entry,
+  `Enter`/`Space` activation of its final related-event slide, and Russian-layout
+  physical footer copy shortcuts; in V5 extend the shared component to the
+  Split 6408 and one-image Editorial 6593 fixtures, preserve ordinary single-Down
+  scrolling with released double-Down acceleration, return first-row Up to the
+  true event top without held-repeat gallery chaining, add roomy related-card K
+  hints, compact description/poster copy controls, situational teaching, and a
+  35-day daily-deduped local shortcut-fact ledger with per-action mastery plus a
+  consent-gated minimal collector event; add an exact two-object builder and a
+  parameterized dual-fixture Playwright gate; in V6 restore the logical keyboard
+  owner after gallery/consent Escape/accept (including a lazy-created focused
+  consent dialog), latch each physical arrow until keyup and use one controlled
+  single-Down step to eliminate dropped/cascading motion, bridge the related grid into the hydrated
+  six-card `Ещё события` continuation with the same Enter/L/K/S/Escape and K
+  hints, add scoped event-poster `P`, canonicalize dynamic continuation links,
+  and rewrite the teaching block with explicit action names; in V7 close the
+  active gallery with an isolated `ArrowDown` gesture and recover `L` from lost
+  document focus only with managed surface/card provenance and logical ownership;
+  production event
+  routes, remote telemetry and mobile behavior remain unchanged.
+- **Keyboard interface navigation skill:** add the reusable project
+  `.codex/skills/keyboard-interface-navigation` workflow for scoped command
+  routing, physical key codes, modal focus restoration, dynamic card graphs,
+  repeat latches, accessible shortcut discovery, privacy-minimal daily facts
+  and cross-input/browser acceptance.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
   expose one fail-closed resolver to bot/operator link-producing paths, preserve

@@ -555,6 +555,331 @@ async def test_update_status_sets_published_at_for_published_test(tmp_path: Path
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "status",
+    [
+        VideoAnnounceSessionStatus.PUBLISHED_TEST,
+        VideoAnnounceSessionStatus.PUBLISHED_MAIN,
+    ],
+)
+async def test_cleanup_removes_only_fully_persisted_published_output(
+    tmp_path: Path,
+    status: VideoAnnounceSessionStatus,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=status,
+            profile_key="popular_review",
+            finished_at=now,
+            published_at=now,
+            video_url="cherryflash_full_final.mp4",
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    output_dir = tmp_path / f"videoannounce-{session_id}"
+    nested = output_dir / "bulk" / "nested"
+    nested.mkdir(parents=True)
+    (nested / "render.mp4").write_bytes(b"bulk-output")
+
+    cleaned = await poller_module._cleanup_terminal_local_output(
+        db,
+        session_id,
+        output_dir,
+        temp_root=tmp_path,
+    )
+
+    assert cleaned is True
+    assert not output_dir.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "status",
+    [
+        VideoAnnounceSessionStatus.RENDERING,
+        VideoAnnounceSessionStatus.DONE,
+        VideoAnnounceSessionStatus.FAILED,
+        VideoAnnounceSessionStatus.PUBLISH_BLOCKED,
+    ],
+)
+async def test_cleanup_preserves_live_or_recoverable_output(
+    tmp_path: Path,
+    status: VideoAnnounceSessionStatus,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=status,
+            profile_key="popular_review",
+            finished_at=now,
+            published_at=now,
+            video_url="cherryflash_full_final.mp4",
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    output_dir = tmp_path / f"videoannounce-{session_id}"
+    output_dir.mkdir()
+    sentinel = output_dir / "recoverable.mp4"
+    sentinel.write_bytes(b"preserve-me")
+
+    cleaned = await poller_module._cleanup_terminal_local_output(
+        db,
+        session_id,
+        output_dir,
+        temp_root=tmp_path,
+    )
+
+    assert cleaned is False
+    assert sentinel.read_bytes() == b"preserve-me"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_preserves_published_test_output_when_main_is_still_pending(
+    tmp_path: Path,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            profile_key="popular_review",
+            finished_at=now,
+            published_at=now,
+            video_url="cherryflash_full_final.mp4",
+            main_chat_id=-100123,
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    output_dir = tmp_path / f"videoannounce-{session_id}"
+    output_dir.mkdir()
+    sentinel = output_dir / "main-publish-retry.mp4"
+    sentinel.write_bytes(b"preserve-for-main")
+
+    cleaned = await poller_module._cleanup_terminal_local_output(
+        db,
+        session_id,
+        output_dir,
+        temp_root=tmp_path,
+    )
+
+    assert cleaned is False
+    assert sentinel.read_bytes() == b"preserve-for-main"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_preserves_published_output_without_complete_durable_evidence(
+    tmp_path: Path,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            profile_key="popular_review",
+            video_url="cherryflash_full_final.mp4",
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    output_dir = tmp_path / f"videoannounce-{session_id}"
+    output_dir.mkdir()
+    sentinel = output_dir / "incomplete-state.mp4"
+    sentinel.write_bytes(b"preserve-without-proof")
+
+    cleaned = await poller_module._cleanup_terminal_local_output(
+        db,
+        session_id,
+        output_dir,
+        temp_root=tmp_path,
+    )
+
+    assert cleaned is False
+    assert sentinel.read_bytes() == b"preserve-without-proof"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_refuses_unknown_or_symlinked_output_paths(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_TEST,
+            profile_key="popular_review",
+            finished_at=now,
+            published_at=now,
+            video_url="cherryflash_full_final.mp4",
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    unknown_dir = tmp_path / "videoannounce-999999"
+    unknown_dir.mkdir()
+    unknown_sentinel = unknown_dir / "unknown.mp4"
+    unknown_sentinel.write_bytes(b"unknown")
+    assert await poller_module._cleanup_terminal_local_output(
+        db,
+        session_id,
+        unknown_dir,
+        temp_root=tmp_path,
+    ) is False
+    assert unknown_sentinel.exists()
+
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    outside_sentinel = outside_dir / "outside.mp4"
+    outside_sentinel.write_bytes(b"outside")
+    symlinked_output = tmp_path / f"videoannounce-{session_id}"
+    symlinked_output.symlink_to(outside_dir, target_is_directory=True)
+    assert await poller_module._cleanup_terminal_local_output(
+        db,
+        session_id,
+        symlinked_output,
+        temp_root=tmp_path,
+    ) is False
+    assert outside_sentinel.exists()
+
+
+def test_cleanup_covers_publish_only_and_log_output_families(tmp_path: Path):
+    session_id = 77
+    for family, name in (
+        ("publish-only-source", f"videoannounce-publish-only-source-{session_id}"),
+        ("publish-only", f"videoannounce-publish-only-{session_id}"),
+        ("logs", f"videoannounce-logs-{session_id}"),
+    ):
+        output = tmp_path / name
+        output.mkdir()
+        (output / "payload.bin").write_bytes(b"x")
+        assert poller_module._cleanup_ephemeral_local_output(
+            session_id, output, tmp_path, family
+        ) is True
+        assert not output.exists()
+
+
+@pytest.mark.asyncio
+async def test_startup_reconciles_only_terminal_published_render_trees(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        published = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.PUBLISHED_MAIN,
+            profile_key="popular_review",
+            finished_at=now,
+            published_at=now,
+            video_url="cherryflash_full_final.mp4",
+        )
+        failed = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.FAILED,
+            profile_key="popular_review",
+            finished_at=now,
+            video_url="cherryflash_full_final.mp4",
+        )
+        session.add_all([published, failed])
+        await session.commit()
+        await session.refresh(published)
+        await session.refresh(failed)
+    published_dir = tmp_path / f"videoannounce-{published.id}"
+    failed_dir = tmp_path / f"videoannounce-{failed.id}"
+    published_dir.mkdir()
+    failed_dir.mkdir()
+    (published_dir / "published.mp4").write_bytes(b"done")
+    (failed_dir / "recover.mp4").write_bytes(b"keep")
+
+    assert await poller_module.reconcile_terminal_local_outputs(
+        db, temp_root=tmp_path, live_session_ids=set()
+    ) == 1
+    assert not published_dir.exists()
+    assert failed_dir.exists()
+
+
+@pytest.mark.asyncio
+async def test_completed_published_kernel_cleans_recognized_output_tree(
+    monkeypatch,
+    tmp_path: Path,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            test_chat_id=123,
+            selection_params={"target_date": "2026-07-19", "mode": "popular_review"},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    async def fake_caption(*args, **kwargs):  # noqa: ANN002,ANN003
+        return "Видеоанонс #1 · 19 июля"
+
+    async def noop_send(*args, **kwargs):  # noqa: ANN002,ANN003
+        return None
+
+    monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(poller_module, "_build_video_caption", fake_caption)
+    monkeypatch.setattr(poller_module, "_send_video_with_preview", noop_send)
+    monkeypatch.setattr(poller_module, "_send_logs", noop_send)
+
+    await poller_module.run_kernel_poller(
+        db,
+        _CompleteKernelClient(),
+        VideoAnnounceSession(
+            id=session_id,
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/cherryflash",
+        ),
+        bot=_DummyBot(),
+        notify_chat_id=777,
+        test_chat_id=123,
+        main_chat_id=None,
+        poll_interval=0,
+        timeout_minutes=1,
+        download_dir=tmp_path,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISHED_TEST
+        assert refreshed.finished_at is not None
+        assert refreshed.published_at is not None
+        assert refreshed.video_url == "cherryflash_full_final.mp4"
+    assert not (tmp_path / f"videoannounce-{session_id}").exists()
+
+
+@pytest.mark.asyncio
 async def test_completed_kernel_bot_delivery_failure_becomes_publish_blocked(
     monkeypatch, tmp_path: Path
 ):
@@ -618,6 +943,7 @@ async def test_completed_kernel_bot_delivery_failure_becomes_publish_blocked(
             "⚠️ Сессия #1: видео готово, но бот не смог доставить mp4 в тест/notify чат. Полный Kaggle rerender не требуется.",
         )
     ]
+    assert (tmp_path / f"videoannounce-{session_id}" / "cherryflash_full_final.mp4").exists()
 
 
 @pytest.mark.asyncio
