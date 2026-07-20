@@ -1851,13 +1851,14 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--reading .desktop-clean-travel { grid-column:2; grid-row:5; width:auto; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(5rem,9vw,9rem); grid-template-columns:1fr; }
     .desktop-clean-event--reading .desktop-prototype__media-rail { right:1rem; bottom:1rem; }
 
-    /* Shared desktop related rows: one ratio per row, cover-only media and <=20% OCR crop. */
+    /* Shared desktop related rows: one ratio per row; visual fit comes from the
+       exact-geometry solver, while document treatments retain their reviewed rules. */
     .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto minmax(0,1fr) minmax(58px,auto) minmax(56px,auto); }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-link) { display:block; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; isolation:isolate; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; background:#d2c5b7; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; z-index:2; inset:0; width:100% !important; height:100% !important; }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
-    .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; object-fit:cover !important; }
+    .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; }
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-cover"] .event-card__media),
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) { object-fit:cover !important; object-position:center center !important; }
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-contain"] .event-card__media) { object-fit:contain !important; object-position:center center !important; background:#15110f !important; }

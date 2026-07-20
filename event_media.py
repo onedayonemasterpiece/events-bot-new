@@ -629,6 +629,15 @@ async def materialize_event_media_candidate_to_cdn(
         canonical = canonicalize_yandex_public_url(url)
         parsed = parse_yandex_storage_url(url)
         if canonical and parsed and is_event_media_cdn_url(canonical):
+            previous_display_url = str(
+                getattr(candidate, "supabase_url", None)
+                or getattr(candidate, "catbox_url", None)
+                or ""
+            ).strip()
+            if previous_display_url and previous_display_url != canonical:
+                invalidate_event_poster_visual_evidence(
+                    candidate, reason="display_identity_changed"
+                )
             candidate.supabase_url = canonical
             candidate.supabase_path = parsed[1]
             if not hasattr(candidate, "thumbnail_256_url") or (
@@ -700,6 +709,15 @@ async def materialize_event_media_candidate_to_cdn(
     if not hosted or not is_event_media_cdn_url(hosted):
         logger.warning("event_media.cdn_upload_failed path=%s", object_path)
         return False
+    previous_display_url = str(
+        getattr(candidate, "supabase_url", None)
+        or getattr(candidate, "catbox_url", None)
+        or ""
+    ).strip()
+    if previous_display_url and previous_display_url != hosted:
+        invalidate_event_poster_visual_evidence(
+            candidate, reason="display_identity_changed"
+        )
     candidate.supabase_url = hosted
     candidate.supabase_path = object_path
     if hasattr(candidate, "pixel_sha256"):

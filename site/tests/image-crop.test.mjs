@@ -66,6 +66,10 @@ test('responsive surfaces fail closed and only an exact resolved card ratio invo
 
   assert.match(card, /desktopRelatedCrop\s*\? resolveEventImageCrop\(primaryImageAsset, cardTargetAspect\)/u);
   assert.match(card, /reason:'responsive_target_unknown'/u);
+  assert.doesNotMatch(
+    desktop,
+    /\[data-lab-media-kind="visual"\] \.event-card__media\) \{[^}]*object-fit:cover !important;/u,
+  );
   for (const source of [hero, listing, desktop]) {
     assert.match(source, /reason:'responsive_target_unknown'/u);
     assert.doesNotMatch(source, /resolveEventImageCrop\([^)]*,\s*16\s*\//u);

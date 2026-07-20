@@ -99,6 +99,40 @@ async def test_current_yandex_bucket_url_is_canonicalized_to_cdn(monkeypatch) ->
 
 
 @pytest.mark.asyncio
+async def test_cdn_display_url_change_invalidates_visual_evidence(monkeypatch) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    candidate = SimpleNamespace(
+        supabase_url=(
+            "https://storage.yandexcloud.net/kenigevents.ru/"
+            "p/dh16/aa/abcdef.webp"
+        ),
+        catbox_url=None,
+        image_geometry_id=42,
+        pixel_sha256="1" * 64,
+        media_semantic_status="classified",
+        media_semantic_reason_code=None,
+        media_role="event_photo",
+        focal_x=0.4,
+        focal_y=0.5,
+        safe_crop=True,
+    )
+
+    assert await event_media.materialize_event_media_candidate_to_cdn(candidate)
+
+    assert candidate.supabase_url == (
+        "https://static.kenigevents.ru/p/dh16/aa/abcdef.webp"
+    )
+    assert candidate.image_geometry_id is None
+    assert candidate.pixel_sha256 is None
+    assert candidate.media_semantic_status == "pending"
+    assert candidate.media_semantic_reason_code == "display_identity_changed"
+    assert candidate.media_role is None
+    assert candidate.focal_x is None and candidate.focal_y is None
+    assert candidate.safe_crop is False
+
+
+@pytest.mark.asyncio
 async def test_cdn_retry_preserves_unique_raw_sha_survivor(
     tmp_path, monkeypatch
 ) -> None:
