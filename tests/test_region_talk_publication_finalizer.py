@@ -117,6 +117,30 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
             "local_region_source",
         )
 
+    def test_newer_external_image_scope_overrides_stale_candidate_memory(self) -> None:
+        memory = {
+            "content_origin_type": "editorial_publication",
+            "updated_at": "2026-07-19T23:10:00+00:00",
+            "kaliningrad_oblast_only_scope": False,
+            "kaliningrad_mention_role": "unclear",
+            "vector_gate_status": "vector_accept_candidate",
+        }
+        image = {
+            "content_origin_type": "editorial_publication",
+            "updated_at": "2026-07-19T23:53:00+00:00",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "vector_gate_status": "vector_accept_candidate",
+        }
+
+        merged = self.mod.merge_image_and_memory_for_finalizer(image, memory)
+        self.assertTrue(merged["kaliningrad_oblast_only_scope"])
+        self.assertEqual(merged["kaliningrad_mention_role"], "main_subject")
+
+        memory["updated_at"] = "2026-07-20T00:00:00+00:00"
+        newer_memory = self.mod.merge_image_and_memory_for_finalizer(image, memory)
+        self.assertFalse(newer_memory["kaliningrad_oblast_only_scope"])
+
     def test_ineligible_tombstone_is_current_only_with_current_source_fingerprint(self) -> None:
         row = {
             "publication_eligibility_verdict": "review",

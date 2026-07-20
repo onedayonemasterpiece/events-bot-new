@@ -596,6 +596,53 @@ def _memory_rows_by_source(memory_rows: dict[str, dict[str, Any]]) -> dict[str, 
     return out
 
 
+FINALIZER_MEMORY_AUTHORITY_FIELDS = (
+    "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
+    "source_queue_status", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
+    "matched_place_names", "external_geo_mentions", "mentioned_external_regions",
+    "mentioned_external_countries", "is_ad_or_promo", "is_multi_region_roundup",
+    "is_multi_topic_digest", "is_digest_or_roundup", "current_stage",
+    "current_lifecycle_status", "vector_gate_status", "vector_content_type",
+    "text_vector_fusion_status", "external_bge_m3_status", "processing_policy_version",
+)
+
+EXTERNAL_PUBLICATION_IMAGE_SCOPE_FIELDS = {
+    "kaliningrad_oblast_only_scope", "kaliningrad_mention_role", "matched_place_names",
+    "external_geo_mentions", "mentioned_external_regions", "mentioned_external_countries",
+    "is_ad_or_promo", "is_multi_region_roundup", "is_multi_topic_digest", "is_digest_or_roundup",
+}
+
+
+def merge_image_and_memory_for_finalizer(image: dict[str, Any], memory: dict[str, Any]) -> dict[str, Any]:
+    """Merge durable image evidence with the latest authoritative text state.
+
+    Candidate memory normally owns text/scope. External-publication canary
+    runs may deliberately stop after the early image handoff, however, so the
+    refreshed image row can be newer than the older memory row. In that narrow
+    case its external scope attestation wins until a still-newer memory refresh
+    supersedes it.
+    """
+    row = {**memory, **image}
+    origin = str(image.get("content_origin_type") or memory.get("content_origin_type") or "")
+    image_updated = str(image.get("updated_at") or image.get("queue_item_updated_at") or image.get("_ydb_updated_at") or "")
+    memory_updated = str(memory.get("updated_at") or memory.get("_ydb_updated_at") or "")
+    newer_external_image_scope = bool(
+        origin in rt.EXTERNAL_PUBLICATION_ORIGIN_TYPES
+        and image_updated
+        and image_updated >= memory_updated
+    )
+    for field in FINALIZER_MEMORY_AUTHORITY_FIELDS:
+        if (
+            newer_external_image_scope
+            and field in EXTERNAL_PUBLICATION_IMAGE_SCOPE_FIELDS
+            and image.get(field) not in (None, "")
+        ):
+            continue
+        if field in memory and memory.get(field) not in (None, ""):
+            row[field] = memory.get(field)
+    return row
+
+
 def read_live_rows(
     limit_images: int,
     limit_memory: int,
@@ -672,23 +719,12 @@ def read_live_rows(
             continue
         memory = memory_by_url.get(post_url, {})
         publication = publication_by_url.get(post_url, {})
-        row = {**memory, **image}
+        row = merge_image_and_memory_for_finalizer(image, memory)
         # ImageDiagnostic stores a snapshot of the text/source gate at queue
         # admission time.  Candidate memory is the authoritative, refreshable
         # text decision.  A later policy refresh (for example an ambiguous
         # place-name false positive) must therefore override the stale image
         # snapshot before publication eligibility is evaluated.
-        for field in (
-            "source_scope", "source_geo_class", "source_topic_class", "source_quick_class",
-            "source_queue_status", "kaliningrad_oblast_only_scope", "kaliningrad_mention_role",
-            "matched_place_names", "external_geo_mentions", "mentioned_external_regions",
-            "mentioned_external_countries", "is_ad_or_promo", "is_multi_region_roundup",
-            "is_multi_topic_digest", "is_digest_or_roundup", "current_stage",
-            "current_lifecycle_status", "vector_gate_status", "vector_content_type",
-            "text_vector_fusion_status", "external_bge_m3_status", "processing_policy_version",
-        ):
-            if field in memory and memory.get(field) not in (None, ""):
-                row[field] = memory.get(field)
         row["_image_ydb_pk"] = str(image.get("_ydb_pk") or "")
         row["_memory_ydb_pk"] = str(memory.get("_ydb_pk") or "")
         row["_image_payload"] = dict(image)

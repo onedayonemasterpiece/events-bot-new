@@ -269,6 +269,13 @@ Implemented now:
   `link_only`/`score_only_no_reuse`; it does not invent a platform fallback or
   grant reuse rights.
 
+The finalizer normally treats candidate memory as the refreshable text source.
+For an external-publication canary that intentionally stopped after the early
+image handoff, a newer image row's explicit Region Talk scope attestation wins
+over older candidate-memory scope fields; a later memory refresh supersedes it
+again. This prevents the canary shortcut from reviving a stale pre-fix
+`kaliningrad_oblast_only_scope=false` value.
+
 Still required for each imported external-publication candidate to become confirmed:
 
 - a real E5 pass followed by the isolated BGE-M3 pass for the same current text hash;
