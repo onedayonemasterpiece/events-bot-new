@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-20-image-geometry-pixel-drift.md`
+  - Scope: Smart Update media materialization, exact pixel/geometry identity,
+    transient enrichment recovery, static bbox export and safe crop consumption.
+  - Must not regress: pixel-distinct posters never overwrite one managed object;
+    stale geometry is invalidated and re-enqueued; only pixel-current boxes
+    reach renderers, and an unsafe protected-region crop falls back to `contain`.
+
 - `INC-2026-07-19-static-site-stale-builder-lease.md`
   - Scope: host-validated StaticSiteBuilder terminal reconciliation, exact-owner
     `static_site:builder` lease release and pre-push Smart Update self-healing.

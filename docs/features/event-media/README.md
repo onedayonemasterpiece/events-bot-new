@@ -99,6 +99,13 @@ download/hash/VLM; связанные deferred pair rows закрываются 
 существующем survivor: второй ledger row не нарушает partial unique index
 `(event_id, raw_sha256)`, а exact-equality остаётся в pair-review evidence.
 
+Новые managed WebP пишутся в immutable path, адресованный точным SHA-256 уже
+закодированных байтов: `p/image/v2/<first2>/<encoded_sha256>.webp`. Старые
+`p/dh16/...` URL остаются читаемым legacy, но больше не являются целью новых
+записей. Перцептивный dHash — только evidence сходства: использовать его как
+object identity нельзя, поскольку разные пиксели могут иметь одинаковый dHash и
+перезапись такого URL нарушает годовой immutable CDN cache contract.
+
 ### Автоматический VLM review
 
 Каждое новое второе и последующее изображение остается `pending_review`. Worker
@@ -148,8 +155,12 @@ VLM явно подтверждает, что это афиша **конкрет
 спонсорский бренд. Требуется confidence не ниже
 `EVENT_MEDIA_ROLE_POSTER_CONFIDENCE` (по умолчанию `0.88`) и все schema
 guard booleans. OCR/keyword/соотношение сторон сами по себе никогда не повышают
-изображение до афиши. Ошибка, quota или неполная schema fail-close оставляют
-роль неизвестной; renderer не угадывает её повторно.
+изображение до афиши. Неполная/низкоуверенная schema fail-close оставляет роль
+в terminal `error`. Временные `429`/RPM/RPD/timeout используют normal pool
+`GOOGLE_API_KEY4,GOOGLE_API_KEY5`, оставляют роль неизвестной в `pending` и
+ставят один durable delayed retry: RPD переносится на следующий UTC-day, а
+краткие provider/transport ограничения получают bounded delay. Inline retry
+burst, emergency overflow и model fallback запрещены; renderer роль не угадывает.
 
 Static event-detail использует эту роль только для крупного poster companion.
 `attendee_information` (например карточка услуг кемпинга),
@@ -176,8 +187,11 @@ export: только `lifecycle_status=active`, `silent=0` и события, к
 закончились на `--from-date`. Отменённые, postponed, merged и silent rows не
 получают derivative/LLM jobs и не могут быть случайно возвращены в public fanout.
 
-Повторное выполнение не переотправляет rows с актуальной версией/input hash;
-`--retry-errors` разрешён только для контролируемого повторного прогона.
+Повторное выполнение не переотправляет rows с актуальной версией/input hash.
+Operational selector включает также отсутствующую, устаревшую по model/prompt и
+несовпадающую по exact pixel hash geometry; `--event-id` поэтому может поставить
+точечный geometry-only repair. `--retry-errors` остаётся ручным контролем только
+для terminal semantic errors.
 
 ### Face boxes and viewer-value region
 
@@ -213,6 +227,13 @@ durable worker/backfill отдельным paced запуском, без retry 
 ссылается на него. Поэтому один и тот же ориентированный набор RGB-пикселей в
 разных событиях оплачивается один раз, а re-encode/crop с другими пикселями не
 получает потенциально неверные координаты из perceptual-hash cache.
+Ссылка считается текущей только при точном равенстве
+`EventPoster.pixel_sha256 == EventImageGeometry.pixel_sha256` и совпадении
+model/prompt. Смена display URL/path или нормализованных пикселей атомарно
+сбрасывает geometry и все image-dependent semantic/focal/safe-crop evidence,
+после чего обычный durable worker анализирует новые байты. Финальный poster,
+получивший `approved` после pair reconciliation, всегда получает enrichment
+follow-up, даже если других pair-review rows уже нет.
 
 Consumer `smart_update_image_geometry` использует normal pool
 `GOOGLE_API_KEY4,GOOGLE_API_KEY5` с ротацией с первого reserve. Это не emergency

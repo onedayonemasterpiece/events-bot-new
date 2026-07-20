@@ -347,11 +347,14 @@ Smart Update / image preparation must enrich image assets in batch/offline, not 
 
 Runtime policy is surface-specific. Discovery cards remain role-first: only an
 explicit LLM-authored `event_photo` may use cover there. The event-detail hero
-and fullscreen gallery also have direct OCR evidence, so `visual_only` is a
-positive permission for bounded photo cover even if `media_role` is still
-pending; `ocr_text`/`unknown` and a positively classified non-photo document remain contain. Reviewed focal metadata controls
-`object-position` when present. If OCR or face/crop evidence makes cover unsafe,
-the renderer falls back to contain/natural rather than cutting text or faces.
+and fullscreen gallery no longer treat legacy/derived `visual_only` alone as
+crop permission. `cover` requires classified `event_photo`, positive semantic
+crop permission and current exact-pixel geometry whose protected face/value
+union fits the surface's known target ratio. OCR/unknown, stale/missing geometry
+and responsive surfaces without a fixed target ratio remain `contain`. This
+exact-pixel fail-closed rule supersedes the earlier temporary pending-photo
+exception recorded in `INC-2026-07-16`; it prevents a stale focal/role verdict
+from authorizing a crop after the bytes behind an image change.
 
 ## Цель продукта
 
