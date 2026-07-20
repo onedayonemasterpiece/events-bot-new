@@ -4,12 +4,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
+  BROWSER_GATE_ACTION_TIMEOUT_MS,
+  BROWSER_GATE_NAVIGATION_TIMEOUT_MS,
   expectedObjectFitForTreatment,
   recordBrowserVisualSuccess,
   releaseRootMetadata,
   staticSpecimenCandidates,
   startReleaseServer,
 } from './check-browser-release-gate.mjs';
+
+test('R03 mandatory browser gate has bounded action/navigation waits and no network-idle dependency', () => {
+  assert.equal(BROWSER_GATE_ACTION_TIMEOUT_MS, 8_000);
+  assert.equal(BROWSER_GATE_NAVIGATION_TIMEOUT_MS, 12_000);
+  const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /waitForLoadState\(['"]networkidle['"]\)/u);
+  assert.match(source, /closeAllConnections/u);
+});
 
 test('R01 crop assertion preserves both document and visual contain decisions', () => {
   assert.equal(expectedObjectFitForTreatment('document-contain'), 'contain');

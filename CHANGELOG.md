@@ -25,6 +25,11 @@
 - Bounded the mandatory production Chromium gate by selecting gallery journeys
   from generated HTML before opening a browser, while still executing the full
   real-document crop, card, gallery and footer assertions in Chromium.
+- Bounded every mandatory Chromium action/navigation and both Kaggle gate
+  subprocesses, replaced the discouraged unbounded `networkidle` wait with
+  concrete DOM readiness, and force-close residual fixture sockets; a visual
+  regression now fails closed within five minutes instead of holding the
+  static-site single-flight build indefinitely.
 - Fixed the static-site outbox CAS-loss path so a deploy during an active
   Kaggle build logs the cached job id instead of triggering SQLAlchemy
   `MissingGreenlet` repeatedly and making `/healthz` unavailable.

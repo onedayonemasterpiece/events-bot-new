@@ -200,9 +200,21 @@ def cleanup_transient_workspace() -> None:
             print(f'[static-site-builder] transient cleanup failed for {path}: {exc}', flush=True)
 
 
-def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
+def run(
+    cmd: list[str],
+    cwd: Path,
+    env: dict[str, str] | None = None,
+    *,
+    timeout_seconds: int | None = None,
+) -> None:
     print(f"[static-site-builder] $ {' '.join(cmd)} cwd={cwd}", flush=True)
-    subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
+    subprocess.run(
+        cmd,
+        cwd=str(cwd),
+        env=env,
+        check=True,
+        timeout=timeout_seconds,
+    )
 
 
 def find_input_file(name: str) -> Path | None:
@@ -484,7 +496,7 @@ def main() -> int:
                 'npm', 'run', 'check:browser-release', '--',
                 '--root', str(root_dist),
                 '--manifest', str(root_dist / 'static-release-manifest.json'),
-            ], cwd=SITE_DIR, env=env)
+            ], cwd=SITE_DIR, env=env, timeout_seconds=300)
             root_manifest = json.loads((root_dist / 'static-release-manifest.json').read_text(encoding='utf-8'))
             root_archive = WORKING / f'{build_id}-root.tar.gz'
             with tarfile.open(root_archive, 'w:gz') as tar:
@@ -499,7 +511,7 @@ def main() -> int:
                 'npm', 'run', 'check:browser-release', '--',
                 '--root', str(candidate_dist),
                 '--manifest', str(candidate_dist / 'secret-candidate-manifest.json'),
-            ], cwd=SITE_DIR, env=env)
+            ], cwd=SITE_DIR, env=env, timeout_seconds=300)
             candidate_manifest = json.loads((candidate_dist / 'secret-candidate-manifest.json').read_text(encoding='utf-8'))
             candidate_archive = WORKING / f'{build_id}-secret-candidate.tar.gz'
             with tarfile.open(candidate_archive, 'w:gz') as tar:

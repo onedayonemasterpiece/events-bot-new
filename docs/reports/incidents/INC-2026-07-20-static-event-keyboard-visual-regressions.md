@@ -204,6 +204,10 @@ secret preproduction candidate family.
   canonical `EventCard` navigation, real cross-document gallery Enter and
   footer clipboard/toast behavior. Build manifests receive `browser_visual=ok`
   only after every browser assertion passes.
+- [x] Removed the unbounded/discouraged Playwright `networkidle` wait, bounded
+  browser actions/navigation and the Kaggle browser-gate subprocess, and
+  force-close residual local HTTP sockets so the visual gate cannot hold the
+  production single-flight claim indefinitely.
 - [x] Bound related caches to the atomic vector-corpus receipt and added exact-
   normalized-title reciprocity plus fail-closed graph topology checks.
 - [ ] Publish and verify a fresh immutable secret candidate from `origin/main`.

@@ -37,7 +37,13 @@ the generated immutable HTML (preferring the reported `6408` gallery journey
 while it remains in the catalog), then performs the same real-browser document
 navigation and geometry assertions. It never scans dozens of live pages merely
 to discover a specimen, so a large catalog cannot turn the mandatory gate into
-an unbounded Kaggle run.
+an unbounded Kaggle run. Every Playwright action/navigation has an explicit
+deadline (`8s`/`12s`), the gate waits for the concrete continuation/card
+readiness contract rather than Playwright's discouraged `networkidle` state,
+and each root/candidate subprocess is killed after five minutes. The local
+HTTP fixture also force-closes residual image sockets after Chromium exits, so
+the required visual gate fails closed instead of occupying the Kaggle
+single-flight lease indefinitely.
 
 The reviewed desktop keyboard navigator V7 is documented in
 [keyboard-event-navigation-prototype.md](keyboard-event-navigation-prototype.md).
