@@ -2303,7 +2303,17 @@ def normalized_related_title(value: Any) -> str:
     text = clean_text(value or "").lower().replace("ё", "е")
     text = re.sub(r"[«»„“”\"'`]+", " ", text)
     text = re.sub(r"[^a-zа-я0-9]+", " ", text, flags=re.I | re.U)
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    # Importers may prepend a generic content-type wrapper to the same source
+    # title (for example ``🖼️ Выставка «…»``).  Removing only one known leading
+    # wrapper improves recall without turning arbitrary title words into a
+    # dedup key.
+    text = re.sub(
+        r"^(?:выставка|спектакль|концерт|лекция|экскурсия|кинопоказ|мюзикл|опера|балет)\s+",
+        "",
+        text,
+    )
+    return text
 
 
 def _reverse_related_item(

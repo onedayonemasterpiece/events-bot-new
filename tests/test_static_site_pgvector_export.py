@@ -95,8 +95,8 @@ def _related_event(event_id: int, title: str, *, day: int) -> dict:
 def test_pgvector_graph_reciprocity_links_equal_titles_without_merging() -> None:
     exporter = _load_exporter_module()
     events = [
-        _related_event(4327, "Отдыха не знали, из руин подняли", day=2),
-        _related_event(5382, "«Отдыха не знали, из руин подняли»", day=4),
+        _related_event(4327, "Отдыха не знали, Из руин подняли", day=2),
+        _related_event(5382, "🖼️ Выставка «Отдыха не знали, Из руин подняли»", day=4),
         _related_event(7000, "Другая выставка", day=8),
     ]
     chains = {
