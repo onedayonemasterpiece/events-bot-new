@@ -704,6 +704,17 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(json.loads(result[0]["publication_eligibility_evidence"])["source_policy"], "eligible")
 
         result[0]["text"] = "x" * 2000
+        result[0].update({
+            "content_origin_type": "editorial_publication",
+            "external_publication_id": "extpub-1",
+            "external_research_quality_score": 0.857,
+            "rights_policy": "link_only",
+            "media_use_policy": "score_only_no_reuse",
+            "media_reuse_allowed": False,
+            "image_quality_decision": "needs_visual_review",
+            "image_quality_reason": "low_score_requires_review",
+            "kaliningrad_oblast_only_scope": True,
+        })
         captured = {}
 
         class Pool:
@@ -727,6 +738,12 @@ class RegionTalkPublicationFinalizerTests(unittest.TestCase):
         self.assertEqual(payload["finalizer_state_version"], mod.PUBLICATION_FINALIZER_STATE_VERSION)
         self.assertEqual(payload["llm_prompt_version"], mod.rt.REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION)
         self.assertTrue(payload["llm_request_fingerprint"])
+        self.assertEqual(payload["content_origin_type"], "editorial_publication")
+        self.assertEqual(payload["external_publication_id"], "extpub-1")
+        self.assertEqual(payload["rights_policy"], "link_only")
+        self.assertEqual(payload["media_use_policy"], "score_only_no_reuse")
+        self.assertEqual(payload["image_quality_decision"], "needs_visual_review")
+        self.assertTrue(payload["kaliningrad_oblast_only_scope"])
         self.assertNotIn("text", payload)
 
     def test_retryable_publication_keeps_only_bounded_text_for_next_attempt(self) -> None:

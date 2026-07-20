@@ -558,6 +558,13 @@ visibility.
   `external_publication_import_error_item:<stable-error-id>` — row-level
   contract errors. One bad result remains auditable without discarding the
   valid part of the external research batch;
+
+When an external intake reaches `publication_candidate_item`, its compact row
+retains `content_origin_type`, external publication/research identifiers and
+score, image-quality decision/reason, Region Talk scope, and
+`rights_policy`/`media_use_policy`/`media_reuse_allowed`. Operator and queue
+consumers therefore do not need to reconstruct rights or visual-review state
+from the transient image workbook.
 - kind `queue_cursor`, pk `queue_cursor:source|image` — cursor position/key and
   quick counts for source and image queues;
 - kind `queue_metrics`, pk `queue_metrics:latest` — latest compact queue counters.
