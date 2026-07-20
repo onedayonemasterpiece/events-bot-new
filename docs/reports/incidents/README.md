@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-20-static-event-keyboard-visual-regressions.md`
+  - Scope: generated recommendation-row media treatment, real cross-document
+    keyboard ownership, and footer copy shortcuts after touchpad scrolling.
+  - Must not regress: row packing uses the final safe crop/contain decision;
+    Enter navigation into another event preserves a safe keyboard entry path
+    for closed-hero arrows; visible-footer `P`/`S` cannot silently no-op or act
+    on an off-screen card; production acceptance covers actual generated pixels
+    and multi-page mixed-input journeys rather than prototype-only behavior.
+
 - `INC-2026-07-20-image-geometry-pixel-drift.md`
   - Scope: Smart Update media materialization, exact pixel/geometry identity,
     transient enrichment recovery, static bbox export and safe crop consumption.
