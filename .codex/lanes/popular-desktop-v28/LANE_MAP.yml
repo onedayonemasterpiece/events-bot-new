@@ -45,4 +45,4 @@ lanes:
       - any CSS inside max-width mobile media queries
     expected_output: committed desktop-only implementation, tests, documentation, immutable preview
     verification_scope: full_local
-    status: planned
+    status: committed
