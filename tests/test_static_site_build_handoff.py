@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import json
+import importlib.util
 import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
@@ -153,6 +154,7 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
         current_date="2026-06-29",
         script_path="/repo/scripts/run_static_site_builder_kaggle.py",
         status_callback_url="https://events-bot.example/internal/kaggle/run-event",
+        related_corpus_revision="b" * 64,
     )
 
     assert cmd[0] == sys.executable
@@ -160,6 +162,7 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     assert _arg_after(cmd, "--status-db") == "/data/db.sqlite"
     assert _arg_after(cmd, "--status-callback-url") == "https://events-bot.example/internal/kaggle/run-event"
     assert _arg_after(cmd, "--related-mode") == "pgvector"
+    assert _arg_after(cmd, "--related-corpus-revision") == "b" * 64
     assert "--sync-pgvector-vectors" in cmd
     assert _arg_after(cmd, "--pgvector-embedding-model") == "gemini-embedding-2"
     assert _arg_after(cmd, "--pgvector-embedding-key-env") == "GOOGLE_API_KEY4"
@@ -176,6 +179,140 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     assert "--download-output" in cmd
 
 
+def test_kaggle_runner_and_builder_forward_related_corpus_revision(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    revision = "c" * 64
+    kernel_src = tmp_path / "kernel"
+    kernel_src.mkdir()
+    staging = tmp_path / "staging"
+    dataset = tmp_path / "dataset"
+    dataset.mkdir()
+    staged_site = tmp_path / "staged-site"
+    staged_site.mkdir()
+    monkeypatch.setattr(runner, "KERNEL_SRC", kernel_src)
+    monkeypatch.setattr(runner, "copy_tree", lambda *_args: None)
+    monkeypatch.setattr(runner, "prepare_site_source", lambda *_args: staged_site)
+    monkeypatch.setattr(
+        runner,
+        "tar_site_source",
+        lambda _source, target: Path(target).write_bytes(b"site"),
+    )
+    monkeypatch.setattr(runner, "create_input_dataset", lambda *_args: None)
+    monkeypatch.setattr(runner, "wait_dataset_ready", lambda *_args, **_kwargs: None)
+    args = SimpleNamespace(
+        build_id="preview-revision",
+        run_id="run-revision",
+        profile="preview",
+        catalog_mode="slice",
+        repo_sha="",
+        candidate_token="",
+        snapshot_contract=None,
+        current_date="2026-07-20",
+        current_datetime="",
+        build_clock=None,
+        input_fingerprint="",
+        focus_date_from="",
+        focus_date_to="",
+        limit=50,
+        public_site_origin="https://kenigevents.ru",
+        asset_base_url="",
+        astro_asset_base_url="",
+        ics_base_url="",
+        public_personalization_supabase_url="",
+        public_personalization_supabase_publishable_key="",
+        public_yandex_auth_provider="custom:yandex",
+        export_in_kaggle=False,
+        db="",
+        snapshot_manifest="",
+        related_cache="",
+        related_mode="pgvector",
+        related_corpus_revision=revision,
+        sync_pgvector_vectors=False,
+        pgvector_embedding_model="gemini-embedding-2",
+        pgvector_embedding_key_env="GOOGLE_API_KEY4",
+        pgvector_max_provider_calls=1000,
+        gemma_related_verify=False,
+        gemma_related_model="models/gemma-4-26b-a4b-it",
+        gemma_related_key_env="GOOGLE_API_KEY4",
+        gemma_related_max_anchors=0,
+    )
+
+    runner.stage_kernel_and_dataset(args, staging, dataset, object(), "owner")
+
+    config = json.loads((dataset / "build_config.json").read_text(encoding="utf-8"))
+    assert config["related_corpus_revision"] == revision
+
+    builder_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location("static_site_builder_revision_test", builder_path)
+    assert spec and spec.loader
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    working = tmp_path / "working"
+    site_dir = tmp_path / "site"
+    (site_dir / "scripts").mkdir(parents=True)
+    (site_dir / "scripts" / "export-production-preview-data.py").write_text("", encoding="utf-8")
+    input_db = tmp_path / "events.sqlite"
+    input_db.write_bytes(b"sqlite")
+    working.mkdir()
+    monkeypatch.setattr(builder, "WORKING", working)
+    monkeypatch.setattr(builder, "SITE_DIR", site_dir)
+    monkeypatch.setattr(
+        builder,
+        "find_input_file",
+        lambda name: input_db if name == "events.sqlite" else None,
+    )
+    monkeypatch.setattr(builder, "validate_snapshot_input", lambda *_args: {})
+    monkeypatch.setattr(
+        builder,
+        "validate_build_clock",
+        lambda _config: {
+            "effective_date": "2026-07-20",
+            "current_datetime": "2026-07-20T12:00:00+02:00",
+        },
+    )
+    monkeypatch.setattr(builder, "ensure_python_deps_for_gemma", lambda *_args: None)
+    monkeypatch.setattr(builder, "load_encrypted_secrets_to_env", lambda: None)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        builder,
+        "run",
+        lambda command, **_kwargs: commands.append(command),
+    )
+    builder.export_preview_data_if_configured(
+        {
+            "export_in_kaggle": True,
+            "sqlite_db_filename": "events.sqlite",
+            "related_mode": "pgvector",
+            "related_corpus_revision": revision,
+            "current_date": "2026-07-20",
+            "catalog_mode": "slice",
+            "limit": 50,
+        }
+    )
+    assert _arg_after(commands[-1], "--related-corpus-revision") == revision
+
+
+def test_fly_requires_vector_receipt_and_keeps_strict_gemma_verifier_off() -> None:
+    import tomllib
+
+    config = tomllib.loads((Path(__file__).resolve().parents[1] / "fly.toml").read_text())
+    env = config["env"]
+    assert env["STATIC_SITE_REQUIRE_VECTOR_BARRIER"] == "1"
+    assert env["EVENT_VECTOR_SYNC_RECEIPT_PATH"] == "/data/event_vector_sync_receipt.json"
+    assert env["STATIC_SITE_VECTOR_RECEIPT_PATH"] == "/data/event_vector_sync_receipt.json"
+    assert env["STATIC_SITE_GEMMA_RELATED_VERIFY"] == "0"
+    assert env["STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS"] == "0"
+
+
 def test_static_site_build_kaggle_command_rejects_unknown_related_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     import main
 
@@ -189,6 +326,18 @@ def test_static_site_build_kaggle_command_rejects_unknown_related_mode(monkeypat
             current_date="2026-06-29",
             script_path="/repo/scripts/run_static_site_builder_kaggle.py",
             status_callback_url="https://events-bot.example/internal/kaggle/run-event",
+        )
+
+    monkeypatch.setenv("STATIC_SITE_RELATED_MODE", "pgvector")
+    with pytest.raises(ValueError, match="related corpus revision"):
+        main._static_site_build_kaggle_command(
+            db_path="/data/db.sqlite",
+            build_id="preview-test",
+            limit=1,
+            current_date="2026-06-29",
+            script_path="/repo/scripts/run_static_site_builder_kaggle.py",
+            status_callback_url="https://events-bot.example/internal/kaggle/run-event",
+            related_corpus_revision="not-a-hash",
         )
 
 

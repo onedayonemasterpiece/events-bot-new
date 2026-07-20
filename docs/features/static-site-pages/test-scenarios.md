@@ -19,7 +19,7 @@
   визуальный review; mocks не заменяют evidence.
 - **Planned** — product/implementation ещё отсутствует в `origin/main`.
 
-## Карта текущего покрытия на 2026-07-18
+## Карта текущего покрытия на 2026-07-20
 
 | Surface | Сценарии | Уровень сейчас | Канонический test/command | Что не доказано |
 |---|---|---|---|---|
@@ -35,6 +35,7 @@
 | Typed no-image fallbacks | `ADD-V12-07` | Unit + public candidate | fallback is visible but absent from gallery/OG/JSON-LD/share | inventory refresh after each snapshot |
 | Footer/media/continuation rollout | `ADD-V12-09..12` | Component + public Playwright | global service footer, related-card skeleton, portrait/wide CTA families, bounded desktop continuation | native share and long-session analytics |
 | Desktop event keyboard navigation | `ADD-KEY-01..07` | Component + Chromium secret-candidate route | `node --test site/tests/keyboard-event-navigation-production.test.mjs`; `npm --prefix site run check:keyboard-event-navigation` | Firefox/Safari, screen reader, high contrast and root rollout |
+| Generated event release journeys | `ADD-KEY-08..10`, `ADD-DISC-08..10` | Blocking Chromium production/candidate gate | `npm --prefix site run check:browser-release -- --root <generated-root>`; Smart Update/Kaggle invokes it before each archive | native Safari remains a root-rollout gate |
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
@@ -136,6 +137,36 @@
   `noindex`/no-referrer. Root/current/stable ICS hashes do not change. A root
   rollout remains blocked until Firefox/Safari, screen-reader, high-contrast and
   zoom/reflow gates pass.
+- **ADD-KEY-08 — Real cross-document handoff.** Open the current event gallery,
+  reach its recommendation, activate it with Enter without intercepting the
+  navigation, then press Left/Right while destination focus is still `BODY`.
+  A short-lived same-origin provenance handoff restores the destination event
+  surface and changes the hero; an ordinary direct page load does not make
+  arrows global.
+- **ADD-KEY-09 — Footer after pointer scroll.** Scroll to a visible footer with
+  touchpad/wheel while focus is `BODY`, then repeat with focus retained on an
+  off-screen managed card or current-event action surface. `P` and `S` must copy the service image/text target
+  and show feedback, never silently do nothing or share the stale card.
+- **ADD-KEY-10 — Footer ambiguity guard.** A visible/focused header, editor,
+  dialog, on-screen event action or card retains ownership; footer visibility
+  alone must not steal shortcuts from a meaningful visible target.
+
+### Related graph and visual release regressions
+
+- **ADD-DISC-08 — Final crop owns row packing.** Every generated related and
+  broader card uses one `EventCard` layout decision after semantic role,
+  protected-region and exact-geometry crop resolution. Declared treatment,
+  computed `object-fit`, reserved row ratio and visible letterbox/crop budget
+  must agree at `1536×864`; surface CSS may not reinterpret the decision.
+- **ADD-DISC-09 — Exact-title recall without unsafe merge.** Every eligible
+  exact-normalized-title pair is mutual in the related graph even when Smart
+  Update has not merged it. This is a discovery invariant, not evidence that
+  differing venues/dates/sources may be merged deterministically.
+- **ADD-DISC-10 — Vector revision and topology barrier.** A changed
+  `related_v1_hash` invalidates the related cache. Full production export fails
+  before archive when the vector receipt is incomplete/stale, zero-incoming is
+  at least 5%, an eligible exact-title pair is disconnected, or a chain has
+  fewer than four candidates.
 
 ### Release evidence row contract
 

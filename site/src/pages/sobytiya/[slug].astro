@@ -17,7 +17,7 @@ import { eventImageUrl } from '../../lib/assets';
 import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-overrides.json';
 import type { EventImageDerivative, PreviewEvent } from '../../lib/types';
 import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
-import { IS_SECRET_CANDIDATE, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { IS_PRODUCTION_FAMILY, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -88,7 +88,8 @@ const desktopEvent: PreviewEvent = Object.keys(desktopThumbnailOverrides).length
     }
   : event;
 const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
-const keyboardEventNavigationEnabled = IS_SECRET_CANDIDATE
+const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
+  || String(import.meta.env.PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE || '') === '1')
   && String(import.meta.env.PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED || '1') !== '0';
 ---
 <EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive">

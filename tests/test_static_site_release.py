@@ -756,6 +756,7 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
                 "fixture_isolation": "ok",
                 "canonical_and_indexing": "ok",
                 "tree_hashes": "ok",
+                "browser_visual": "ok",
             },
             "secret_candidate": {
                 "astro_build": "ok",
@@ -765,6 +766,7 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
                 "no_referrer": "ok",
                 "prefix_containment": "ok",
                 "root_isolation": "ok",
+                "browser_visual": "ok",
             },
         },
         "artifacts": artifacts,
@@ -800,18 +802,35 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
             build_clock=clock,
         )
 
+    result["checks"]["production"]["template_matrix"] = "ok"
+    result["checks"]["secret_candidate"]["browser_visual"] = "pending"
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    with pytest.raises(StaticSitePermanentError, match="browser_visual"):
+        validate_production_candidate_result(
+            result_path,
+            output_dir=output,
+            build_id="production-checks",
+            run_id="static-site:checks",
+            repo_sha="a" * 40,
+            snapshot=metadata,
+            candidate_token=token,
+            input_fingerprint="f" * 64,
+            build_clock=clock,
+        )
+
 
 def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_path) -> None:
     """Acceptance metadata: ADD-RELATED-01, -02, -03 and -04."""
     disabled = make_request_payload(reason="base", event_ids=[1], require_vector_barrier=False)
     assert validate_vector_barrier(disabled, None)["status"] == "disabled"
 
+    related_hash = "b" * 64
     required = make_request_payload(
         reason="related",
         event_ids=[1],
         event_revisions={1: "revision-1"},
         require_vector_barrier=True,
-        expected_related_v1_hash="related-hash",
+        expected_related_v1_hash=related_hash,
     )
     with pytest.raises(StaticSiteRetryableError, match="pending"):
         validate_vector_barrier(required, None)
@@ -819,8 +838,11 @@ def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_p
     receipt.write_text(
         json.dumps(
             {
+                "schema_version": "event_vector_sync_receipt_v1",
                 "status": "complete",
-                "related_v1_hash": "related-hash",
+                "complete": True,
+                "search_v3_hash": "a" * 64,
+                "related_v1_hash": related_hash,
                 "event_revisions": {"1": "revision-1"},
                 "run_id": "projection-1",
             }
@@ -828,6 +850,23 @@ def test_add_related_01_02_03_04_vector_barrier_and_optional_base_contract(tmp_p
         encoding="utf-8",
     )
     assert validate_vector_barrier(required, receipt)["projection_run_id"] == "projection-1"
+
+    malformed = tmp_path / "malformed-receipt.json"
+    malformed.write_text(
+        json.dumps(
+            {
+                "schema_version": "event_vector_sync_receipt_v1",
+                "status": "complete",
+                "complete": True,
+                "search_v3_hash": "not-a-corpus-hash",
+                "related_v1_hash": related_hash,
+                "event_revisions": {"1": "revision-1"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(StaticSitePermanentError, match="hash_invalid:search_v3_hash"):
+        validate_vector_barrier(required, malformed)
 
 
 def test_add_build_13_and_add_obs_failure_and_freshness_contract() -> None:
@@ -859,7 +898,7 @@ def test_add_build_10_secret_candidate_publish_is_create_only_and_root_isolated(
         "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
         "checks": {
             "candidate_contract": "ok", "catalog_parity": "ok", "noindex": "ok",
-            "no_referrer": "ok", "prefix_containment": "ok", "root_isolation": "ok",
+            "no_referrer": "ok", "prefix_containment": "ok", "root_isolation": "ok", "browser_visual": "ok",
         },
         "files": [{
             "key": "index.html", "sha256": hashlib.sha256(index).hexdigest(),

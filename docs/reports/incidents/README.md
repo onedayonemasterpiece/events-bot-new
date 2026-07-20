@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-20-static-event-keyboard-visual-regressions.md`
+  - Scope: recommendation-card crop/row agreement, real cross-document gallery
+    navigation, footer shortcut ownership and production-candidate browser gates.
+  - Must not regress: canonical card layout and computed `object-fit` agree on
+    both discovery surfaces; a gallery recommendation Enter survives document
+    navigation; visible-footer `P`/`S` works from body or stale off-screen focus;
+    the generated candidate cannot publish without the real Playwright journeys.
+
 - `INC-2026-07-20-image-geometry-pixel-drift.md`
   - Scope: Smart Update media materialization, exact pixel/geometry identity,
     transient enrichment recovery, static bbox export and safe crop consumption.

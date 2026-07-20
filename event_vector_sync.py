@@ -10,6 +10,8 @@ import asyncio
 import json
 import logging
 import os
+import re
+import sqlite3
 import sys
 import tempfile
 from datetime import datetime
@@ -17,12 +19,18 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from sqlmodel import Session, create_engine, select
+
+from models import Event
 from ops_run import finish_ops_run, start_ops_run
+from static_site_release import event_public_revision
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent
 LOCAL_TZ = ZoneInfo("Europe/Kaliningrad")
 _SYNC_LOCK = asyncio.Lock()
+DEFAULT_RECEIPT_PATH = Path("/data/event_vector_sync_receipt.json")
+RECEIPT_SCHEMA_VERSION = "event_vector_sync_receipt_v1"
 
 
 def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
@@ -39,6 +47,53 @@ def enabled() -> bool:
         "yes",
         "on",
     }
+
+
+def _create_sqlite_snapshot(source_path: str, target_path: Path) -> None:
+    """Take a transactionally consistent SQLite backup for export + revisions."""
+
+    source = Path(source_path).resolve()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(f"file:{source}?mode=ro", uri=True, timeout=60.0) as source_db:
+        with sqlite3.connect(target_path, timeout=60.0) as target_db:
+            source_db.backup(target_db)
+
+
+def _snapshot_event_revisions(snapshot_path: Path) -> dict[str, str]:
+    engine = create_engine(f"sqlite:///{snapshot_path}")
+    try:
+        with Session(engine) as session:
+            events = session.exec(select(Event)).all()
+            return {
+                str(int(event.id)): event_public_revision(event)
+                for event in events
+                if event.id is not None and int(event.id) > 0
+            }
+    finally:
+        engine.dispose()
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Replace a durable receipt without exposing partial JSON to readers."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 async def _run_process(cmd: list[str], *, stage: str, run_id: int | None) -> list[str]:
@@ -111,12 +166,17 @@ async def run_event_vector_sync(
             with tempfile.TemporaryDirectory(prefix="event-vector-sync-") as tmp:
                 tmp_path = Path(tmp)
                 report_path = tmp_path / "sync-report.json"
+                snapshot_path = tmp_path / "events.sqlite"
+                await asyncio.to_thread(_create_sqlite_snapshot, db_path, snapshot_path)
+                event_revisions = await asyncio.to_thread(
+                    _snapshot_event_revisions, snapshot_path
+                )
                 await _run_process(
                     [
                         sys.executable,
                         str(ROOT / "site" / "scripts" / "export-production-preview-data.py"),
                         "--db",
-                        db_path,
+                        str(snapshot_path),
                         "--output-dir",
                         str(tmp_path),
                         "--limit",
@@ -161,6 +221,30 @@ async def run_event_vector_sync(
                     run_id=ops_run_id,
                 )
                 report = json.loads(report_path.read_text(encoding="utf-8"))
+                for hash_key in ("search_v3_hash", "related_v1_hash"):
+                    if not re.fullmatch(r"[0-9a-f]{64}", str(report.get(hash_key) or "")):
+                        raise RuntimeError(f"event vector report missing valid {hash_key}")
+
+            receipt_path = Path(
+                (os.getenv("EVENT_VECTOR_SYNC_RECEIPT_PATH") or "").strip()
+                or DEFAULT_RECEIPT_PATH
+            )
+            receipt = {
+                "schema_version": RECEIPT_SCHEMA_VERSION,
+                "status": "complete",
+                "complete": True,
+                "run_id": ops_run_id,
+                "projection_run_id": ops_run_id,
+                "projected_at": datetime.now(LOCAL_TZ).isoformat(),
+                "embedding_model": report.get("embedding_model"),
+                "embedding_dim": report.get("embedding_dim"),
+                "document_kinds": report.get("document_kinds") or ["search_v3", "related_v1"],
+                "events": int(report.get("events") or 0),
+                "search_v3_hash": report.get("search_v3_hash"),
+                "related_v1_hash": report.get("related_v1_hash"),
+                "event_revisions": event_revisions,
+            }
+            await asyncio.to_thread(_atomic_write_json, receipt_path, receipt)
 
         metrics = {
             "events": int(report.get("events") or 0),
@@ -179,6 +263,10 @@ async def run_event_vector_sync(
                 "embedding_dim": report.get("embedding_dim"),
                 "embeddings_skipped_by_kind": report.get("embeddings_skipped_by_kind") or {},
                 "stale_event_ids": report.get("stale_event_ids") or [],
+                "search_v3_hash": report.get("search_v3_hash"),
+                "related_v1_hash": report.get("related_v1_hash"),
+                "receipt_path": str(receipt_path),
+                "event_revisions_count": len(event_revisions),
             }
         )
         await finish_ops_run(

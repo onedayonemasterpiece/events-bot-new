@@ -3,7 +3,7 @@ import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
 import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
-import { resolveEventImageCrop } from '../lib/imageCrop.mjs';
+import { resolveRelatedCardMediaTreatment } from '../lib/relatedCardLayout.mjs';
 type CardVariant = 'overlay-controls' | 'split-actions';
 interface DesktopRelatedLayout {
   mediaRatio: number;
@@ -11,7 +11,10 @@ interface DesktopRelatedLayout {
   rowIndex: number;
   rowMode: string;
   mediaKind: 'document' | 'visual';
-  mediaTreatment: 'document-safe-cover' | 'document-contain' | 'visual-cover';
+  mediaTreatment: 'document-contain' | 'visual-cover' | 'visual-contain';
+  fit: 'contain' | 'cover';
+  objectPosition: string;
+  cropReason: string;
   coverCrop: number;
   potentialCoverCrop: number;
   rowWorstCrop: number;
@@ -47,37 +50,43 @@ function normalizeObjectPosition(value: string | null | undefined) {
   return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
 }
 // Shared/default cards unlock cropping only through the LLM-authored
-// event_photo role. The accepted desktop continuation has its own reviewed
-// OCR-first framing contract and opts in explicitly below.
+// event_photo role. Related cards additionally require exact geometry below.
 const imageMediaRole = event.image_media_role || 'unknown_document';
-// Desktop continuation still selects its document shell from the verified text
-// mode, but actual cover is independently gated below by current semantic
-// geometry. A visual with missing/stale geometry therefore remains contained.
-const documentMedia = desktopRelatedCrop
-  ? event.image_text_mode !== 'visual_only'
-  : imageMediaRole !== 'event_photo';
 const primaryImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
 const intrinsicMediaRatio = desktopRelatedLayout?.mediaRatio
   || (primaryImageAsset?.width && primaryImageAsset?.height ? primaryImageAsset.width / primaryImageAsset.height : 4 / 5);
+const cardTargetAspect = desktopRelatedCrop
+  ? (desktopRelatedLayout?.rowRatio || intrinsicMediaRatio)
+  : 4 / 5;
+// EventCard owns the final related-card treatment. The row packer calls the
+// same gate while choosing its shared ratio, and client-rendered continuation
+// cards consume the resulting serialized decision.
+const relatedMediaDecision = desktopRelatedCrop
+  ? resolveRelatedCardMediaTreatment(event, cardTargetAspect)
+  : null;
+const documentMedia = desktopRelatedCrop
+  ? relatedMediaDecision?.mediaKind === 'document'
+  : imageMediaRole !== 'event_photo';
 const mediaShellClass = [
   'event-card__media-shell',
   documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover',
   desktopRelatedCrop && 'event-card__media-shell--dynamic',
   desktopRelatedCrop && 'is-image-loading',
 ].filter(Boolean).join(' ');
-const cardTargetAspect = desktopRelatedCrop
-  ? (desktopRelatedLayout?.rowRatio || intrinsicMediaRatio)
-  : 4 / 5;
-// Only desktop related rows expose their exact resolved aspect to this
-// component. Other card instances can be overridden by responsive discovery
-// CSS (4:5 vs 1:1.04), so they stay contained instead of using an estimate.
-const cardCrop = desktopRelatedCrop
-  ? resolveEventImageCrop(primaryImageAsset, cardTargetAspect)
-  : { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
-const cardObjectPosition = !documentMedia && cardCrop.fit === 'cover'
+// Responsive cards without an exact row ratio fail closed. No surface CSS may
+// later promote this decision back to cover.
+const cardCrop = relatedMediaDecision || {
+  fit:'contain' as const,
+  objectPosition:'50% 50%',
+  cropReason:'responsive_target_unknown',
+  mediaTreatment:'visual-contain' as const,
+  potentialCoverCrop:0,
+  coverCrop:0,
+};
+const cardObjectPosition = cardCrop.fit === 'cover'
   ? normalizeObjectPosition(cardCrop.objectPosition)
   : null;
-const cardImageStyle = !documentMedia
+const cardImageStyle = desktopRelatedCrop || !documentMedia
   ? [`object-fit:${cardCrop.fit}`, `object-position:${cardObjectPosition || '50% 50%'}`].join(';')
   : undefined;
 const focalY = event.focal_point ? Math.max(0, Math.min(1, event.focal_point.y)) : 0.5;
@@ -117,9 +126,9 @@ const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.r
   data-lab-media-ratio={desktopRelatedLayout?.mediaRatio.toFixed(5)}
   data-lab-row-media={desktopRelatedLayout?.rowMode}
   data-lab-row-index={desktopRelatedLayout ? String(desktopRelatedLayout.rowIndex) : undefined}
-  data-lab-media-treatment={desktopRelatedLayout?.mediaTreatment}
-  data-lab-cover-crop={desktopRelatedLayout?.coverCrop.toFixed(4)}
-  data-lab-potential-cover-crop={desktopRelatedLayout?.potentialCoverCrop.toFixed(4)}
+  data-lab-media-treatment={desktopRelatedLayout ? cardCrop.mediaTreatment : undefined}
+  data-lab-cover-crop={desktopRelatedLayout ? cardCrop.coverCrop.toFixed(4) : undefined}
+  data-lab-potential-cover-crop={desktopRelatedLayout ? cardCrop.potentialCoverCrop.toFixed(4) : undefined}
   data-lab-row-worst-crop={desktopRelatedLayout?.rowWorstCrop.toFixed(4)}
   style={desktopRelatedLayout ? `--lab-row-media-ratio:${desktopRelatedLayout.rowRatio.toFixed(5)}` : undefined}
   tabindex="0"
@@ -142,8 +151,9 @@ const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.r
           decoding="async"
           width={primaryImageAsset?.width}
           height={primaryImageAsset?.height}
-          data-protected-crop-fit={!documentMedia ? cardCrop.fit : 'contain'}
-          data-protected-crop-reason={!documentMedia ? cardCrop.reason : 'document_media'}
+          data-card-authoritative-fit={cardCrop.fit}
+          data-protected-crop-fit={cardCrop.fit}
+          data-protected-crop-reason={cardCrop.cropReason}
           style={cardImageStyle}
           onload={imageLoadHandler}
           onerror={imageErrorHandler}

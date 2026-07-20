@@ -22517,10 +22517,20 @@ def _static_site_build_kaggle_command(
     profile: str = "preview",
     adopt_existing: bool = False,
     expected_dataset_ref: str | None = None,
+    related_corpus_revision: str | None = None,
 ) -> list[str]:
     related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
     if related_mode not in {"sparse", "pgvector"}:
         raise ValueError(f"unsupported STATIC_SITE_RELATED_MODE={related_mode!r}")
+    resolved_related_corpus_revision = (
+        related_corpus_revision
+        or os.getenv("STATIC_SITE_RELATED_CORPUS_REVISION")
+        or ""
+    ).strip()
+    if resolved_related_corpus_revision and not re.fullmatch(
+        r"[0-9a-f]{64}", resolved_related_corpus_revision
+    ):
+        raise ValueError("related corpus revision must be a lowercase SHA-256 hex digest")
     cmd = [
         sys.executable,
         script_path,
@@ -22563,6 +22573,8 @@ def _static_site_build_kaggle_command(
         (os.getenv("STATIC_SITE_RELATED_CACHE") or "/data/static_site_event_related_chain_cache.json").strip(),
         "--related-mode",
         related_mode,
+        "--related-corpus-revision",
+        resolved_related_corpus_revision,
         "--pgvector-embedding-model",
         (os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2").strip(),
         "--pgvector-embedding-key-env",
@@ -23010,6 +23022,9 @@ async def _recover_previous_static_site_attempt(
         "input_fingerprint": str(handoff.get("input_fingerprint") or "").strip(),
         "current_datetime": str(handoff.get("current_datetime") or "").strip(),
     }
+    related_corpus_revision = str(
+        handoff.get("related_corpus_revision") or ""
+    ).strip()
     if (
         not all(required.values())
         or required["run_id"] != claim.run_id
@@ -23042,6 +23057,7 @@ async def _recover_previous_static_site_attempt(
         profile="production-candidate",
         adopt_existing=True,
         expected_dataset_ref=claim.dataset_ref,
+        related_corpus_revision=related_corpus_revision or None,
     )
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -23206,6 +23222,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         request_payload,
         (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None,
     )
+    related_corpus_revision = str(vector_evidence.get("related_v1_hash") or "").strip()
     # ADD-BUILD-08: the runner only ever receives an immutable online-backup
     # snapshot. The live DB remains a separate status-ledger connection.
     snapshot_root = Path(
@@ -23261,6 +23278,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         ),
         "ics_base_url": _first_env("STATIC_SITE_ICS_BASE_URL", "PUBLIC_ICS_BASE_URL"),
         "related_mode": (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse",
+        "related_corpus_revision": related_corpus_revision or None,
         "sync_pgvector_vectors": _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"),
         "pgvector_embedding_model": (
             os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2"
@@ -23347,6 +23365,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 "build_receipt": {
                     "status": outcome,
                     "input_fingerprint": input_fingerprint,
+                    "related_corpus_revision": related_corpus_revision or None,
                     "effective_date": clock.effective_date,
                     "time_zone": clock.time_zone,
                     "previous_run_id": claim.previous_run_id,
@@ -23373,6 +23392,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 "build_receipt": {
                     "status": "single_flight_deferred",
                     "input_fingerprint": input_fingerprint,
+                    "related_corpus_revision": related_corpus_revision or None,
                     "effective_date": clock.effective_date,
                     "blocking_run_id": claim.blocking_run_id,
                     "blocking_fingerprint": claim.blocking_fingerprint,
@@ -23403,6 +23423,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                     "snapshot_path": str(snapshot_path),
                     "manifest_path": str(manifest_path),
                     "input_fingerprint": input_fingerprint,
+                    "related_corpus_revision": related_corpus_revision or None,
                     "effective_date": clock.effective_date,
                     "current_datetime": clock.current_datetime,
                     "prepared_at": static_site_iso_utc(),
@@ -23425,6 +23446,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             run_id=run_id,
             candidate_token=candidate_token,
             profile="production-candidate",
+            related_corpus_revision=related_corpus_revision,
         )
         logging.info(
             "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",

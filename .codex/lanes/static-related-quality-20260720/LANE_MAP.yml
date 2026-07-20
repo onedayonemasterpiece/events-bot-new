@@ -1,0 +1,78 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: integration/static-related-quality-20260720
+global_constraints:
+  - secret review publication only
+  - preserve parallel bbox and Smart Update changes from origin/main
+  - deploy only after mandatory Playwright and consultant review
+verification_owner: /root
+stop_conditions:
+  - dirty or unreproducible production base
+  - visual or recommendation acceptance gate failure
+lanes:
+  - id: mapping-related
+    role: planner
+    requirement_ids: [R01, R02]
+    target: recommendation graph and LLM policy
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: evidence-backed implementation map
+    verification_scope: inspection_only
+    status: completed
+  - id: mapping-playwright
+    role: planner
+    requirement_ids: [R03]
+    target: mandatory visual release gate
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: scenario and release-gate map
+    verification_scope: inspection_only
+    status: completed
+  - id: mapping-release
+    role: planner
+    requirement_ids: [R04]
+    target: Smart Update secret build path
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: safe release map
+    verification_scope: inspection_only
+    status: completed
+  - id: integration
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04]
+    target: implementation, regression validation, main merge and secret publish
+    depends_on: [mapping-related, mapping-playwright, mapping-release]
+    execution_mode: serial_after_dependency
+    branch: integration/static-related-quality-20260720
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-related-quality-20260720
+    writable_files:
+      - site/scripts/**
+      - scripts/**
+      - kaggle/StaticSiteBuilder/**
+      - tests/**
+      - docs/features/static-site-pages/**
+      - docs/features/unsigned-personalization/**
+      - docs/operations/**
+      - docs/reports/incidents/**
+      - CHANGELOG.md
+      - fly.toml
+      - main.py
+    forbidden_files:
+      - unrelated application surfaces
+    expected_output: merged production code and verified secret candidate
+    verification_scope: full_local
+    status: in_progress

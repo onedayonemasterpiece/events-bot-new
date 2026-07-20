@@ -4,10 +4,10 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('production route mounts reviewed keyboard navigation only on secret candidates behind its flag', async () => {
+test('production route mounts reviewed keyboard navigation for immutable artifacts behind its flag', async () => {
   const route = await read('src/pages/sobytiya/[slug].astro');
   assert.match(route, /import KeyboardEventNavigation from '..\/..\/components\/KeyboardEventNavigation\.astro'/u);
-  assert.match(route, /IS_SECRET_CANDIDATE\s*&&\s*String\(import\.meta\.env\.PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED \|\| '1'\) !== '0'/u);
+  assert.match(route, /IS_PRODUCTION_FAMILY[\s\S]*PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE[\s\S]*PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED/u);
   assert.match(route, /\{keyboardEventNavigationEnabled && <KeyboardEventNavigation \/>\}/u);
   assert.doesNotMatch(route, /KeyboardEventNavigationPrototype/u);
 });

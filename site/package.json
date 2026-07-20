@@ -19,16 +19,21 @@
     "check:production-desktop": "node scripts/check-production-desktop-contract.mjs",
     "check:desktop-cta-geometry": "bash scripts/check-desktop-cta-geometry-playwright.sh",
     "check:keyboard-event-navigation": "bash scripts/check-keyboard-event-navigation-playwright.sh",
+    "check:browser-release": "node scripts/check-browser-release-gate.mjs",
     "check:secret-candidate": "node scripts/check-secret-candidate.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
     "plan:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs plan",
     "publish:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs publish",
     "test:static-release": "node --test scripts/static-release.behavior.test.mjs",
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
+    "test:browser-release-gate": "node --test scripts/browser-release-gate.behavior.test.mjs",
     "astro": "astro"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",
     "astro": "^6.0.5"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
   }
 }

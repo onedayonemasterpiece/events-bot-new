@@ -1568,6 +1568,11 @@ def validate_vector_barrier(request_payload: Mapping[str, Any], receipt_path: st
         raise StaticSitePermanentError(f"vector_barrier_receipt_invalid:{exc}") from exc
     if receipt.get("status") not in {"complete", "success"} or receipt.get("complete") is False:
         raise StaticSiteRetryableError("vector_barrier_incomplete")
+    if receipt.get("schema_version") != "event_vector_sync_receipt_v1":
+        raise StaticSitePermanentError("vector_barrier_receipt_schema_mismatch")
+    for key in ("search_v3_hash", "related_v1_hash"):
+        if not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get(key) or "")):
+            raise StaticSitePermanentError(f"vector_barrier_hash_invalid:{key}")
     for key in ("expected_search_v3_hash", "expected_related_v1_hash"):
         expected = barrier.get(key)
         actual = receipt.get(key.removeprefix("expected_"))
@@ -1656,6 +1661,7 @@ def validate_production_candidate_result(
         "fixture_isolation",
         "canonical_and_indexing",
         "tree_hashes",
+        "browser_visual",
     ):
         if production_checks.get(check) != "ok":
             raise StaticSitePermanentError(f"static_site_result_production_check_incomplete:{check}")
@@ -1667,6 +1673,7 @@ def validate_production_candidate_result(
         "no_referrer",
         "prefix_containment",
         "root_isolation",
+        "browser_visual",
     ):
         if candidate_checks.get(check) != "ok":
             raise StaticSitePermanentError(f"static_site_result_candidate_check_incomplete:{check}")
@@ -1783,7 +1790,7 @@ def publish_secret_candidate_archive(
         or manifest.get("run_id") != build_result.get("run_id")
     ):
         raise StaticSitePermanentError("secret_candidate_manifest_identity_mismatch")
-    for check in ("candidate_contract", "catalog_parity", "noindex", "no_referrer", "prefix_containment", "root_isolation"):
+    for check in ("candidate_contract", "catalog_parity", "noindex", "no_referrer", "prefix_containment", "root_isolation", "browser_visual"):
         if (manifest.get("checks") or {}).get(check) != "ok":
             raise StaticSitePermanentError(f"secret_candidate_manifest_unchecked:{check}")
     files = manifest.get("files")

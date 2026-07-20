@@ -3869,7 +3869,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const sourceCard = template?.content?.querySelector('[data-event-card]');
           if (!sourceCard) return null;
           const card = sourceCard.cloneNode(true);
-          const documentMedia = relatedLayout ? data.image_text_mode !== 'visual_only' : data.image_media_role !== 'event_photo';
+          const documentMedia = relatedLayout ? relatedLayout.mediaKind === 'document' : data.image_media_role !== 'event_photo';
           const likes = Number(data.likes_count || 0);
           const shares = Number(data.shares_count || 0);
           const status = data.price_label || data.status_label || '';
@@ -3930,6 +3930,12 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           setRuntimeCardText(card, '[data-card-fallback-city]', data.city || '', { hideWhenEmpty: true });
           if (image) {
             image.hidden = !imageUrl;
+            const authoritativeFit = relatedLayout?.fit === 'cover' ? 'cover' : 'contain';
+            image.style.objectFit = authoritativeFit;
+            image.style.objectPosition = relatedLayout?.objectPosition || '50% 50%';
+            setRuntimeCardDataset(image, 'cardAuthoritativeFit', authoritativeFit);
+            setRuntimeCardDataset(image, 'protectedCropFit', authoritativeFit);
+            setRuntimeCardDataset(image, 'protectedCropReason', relatedLayout?.cropReason || 'responsive_target_unknown');
             if (imageUrl) {
               image.setAttribute('src', imageUrl);
               image.setAttribute('alt', data.image_alt);

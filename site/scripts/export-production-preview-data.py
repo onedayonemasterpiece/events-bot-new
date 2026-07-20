@@ -51,7 +51,7 @@ SPARSE_RELATED_RETRIEVAL_METHOD = "local_tfidf_sparse_v1"
 PGVECTOR_RELATED_ALGORITHM = "event_pgvector_related_chain_v2_two_doc"
 PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v2"
 PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
-PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20260630a"
+PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20260720_graph_reciprocity"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
@@ -2292,6 +2292,239 @@ def stable_jitter(left_id: int, right_id: int, salt: str) -> float:
     return (value - 0.5) * 0.012
 
 
+def normalized_related_title(value: Any) -> str:
+    """Normalize a title only for graph-recall checks, never for dedup merge.
+
+    Equal normalized titles are strong evidence that two still-separate public
+    rows must at least be mutually discoverable.  They are *not* sufficient to
+    merge records: venue/date/source adjudication remains owned by Smart Update.
+    """
+
+    text = clean_text(value or "").lower().replace("ё", "е")
+    text = re.sub(r"[«»„“”\"'`]+", " ", text)
+    text = re.sub(r"[^a-zа-я0-9]+", " ", text, flags=re.I | re.U)
+    text = re.sub(r"\s+", " ", text).strip()
+    # Importers may prepend a generic content-type wrapper to the same source
+    # title (for example ``🖼️ Выставка «…»``).  Removing only one known leading
+    # wrapper improves recall without turning arbitrary title words into a
+    # dedup key.
+    text = re.sub(
+        r"^(?:выставка|спектакль|концерт|лекция|экскурсия|кинопоказ|мюзикл|опера|балет)\s+",
+        "",
+        text,
+    )
+    return text
+
+
+def _reverse_related_item(
+    item: dict[str, Any],
+    *,
+    event_id: int,
+    reason: str,
+    force_similar: bool,
+) -> dict[str, Any]:
+    related_score = float(item.get("related_score") or 0.0)
+    if reason == "exact_normalized_title":
+        related_score = max(0.97, related_score)
+    elif reason == "high_confidence_reciprocal":
+        related_score = max(0.84, related_score * 0.985)
+    else:
+        related_score = max(0.60, related_score * 0.965)
+    slot_type = "pure_related" if force_similar else str(item.get("slot_type") or "adjacent_discovery")
+    return {
+        **item,
+        "event_id": int(event_id),
+        "related_score": round(min(1.0, related_score), 4),
+        "slot_type": slot_type,
+        "similarity_class": "same_domain" if force_similar else str(item.get("similarity_class") or "adjacent_discovery"),
+        "reason_codes": list(dict.fromkeys([*(item.get("reason_codes") or []), f"mutual_link:{reason}"])),
+        "retrieval_sources": list(dict.fromkeys([*(item.get("retrieval_sources") or []), "graph_reciprocity"])),
+        "display_eligible": True,
+    }
+
+
+def _insert_forced_related(
+    chain: list[dict[str, Any]],
+    item: dict[str, Any],
+    *,
+    limit: int = 40,
+) -> None:
+    event_id = int(item["event_id"])
+    existing = next((entry for entry in chain if int(entry.get("event_id") or 0) == event_id), None)
+    if existing is not None:
+        existing["reason_codes"] = list(dict.fromkeys([*(existing.get("reason_codes") or []), *(item.get("reason_codes") or [])]))
+        existing["retrieval_sources"] = list(dict.fromkeys([*(existing.get("retrieval_sources") or []), *(item.get("retrieval_sources") or [])]))
+        if item.get("slot_type") == "pure_related":
+            existing["slot_type"] = "pure_related"
+            existing["similarity_class"] = "same_domain"
+        existing["related_score"] = round(max(float(existing.get("related_score") or 0), float(item.get("related_score") or 0)), 4)
+        return
+    chain.append(item)
+    chain.sort(key=lambda entry: (-float(entry.get("related_score") or 0), -float(entry.get("vector_similarity") or entry.get("lexical_similarity") or 0), int(entry["event_id"])))
+    if len(chain) > limit:
+        # A forced graph-repair edge is an invariant, not a best-effort append.
+        # Prefer removing the weakest ordinary edge over silently dropping it.
+        removable = next(
+            (index for index in range(len(chain) - 1, -1, -1) if "graph_reciprocity" not in (chain[index].get("retrieval_sources") or [])),
+            len(chain) - 1,
+        )
+        del chain[removable]
+
+
+def apply_pgvector_graph_reciprocity(
+    events: list[dict[str, Any]],
+    chains: dict[str, list[dict[str, Any]]],
+    *,
+    high_confidence_threshold: float = 0.88,
+) -> dict[str, Any]:
+    """Repair only high-signal graph asymmetry without creating an echo chamber."""
+
+    by_id = {int(event["id"]): event for event in events}
+    exact_title_groups: dict[str, list[int]] = defaultdict(list)
+    for event in events:
+        normalized = normalized_related_title(event.get("title"))
+        if normalized:
+            exact_title_groups[normalized].append(int(event["id"]))
+
+    exact_links = 0
+    high_confidence_links = 0
+    rescue_links = 0
+
+    def forward_item(left_id: int, right_id: int) -> dict[str, Any] | None:
+        return next(
+            (item for item in chains.get(str(left_id), []) if int(item.get("event_id") or 0) == right_id),
+            None,
+        )
+
+    # Exact-title groups are often duplicate/occurrence suspects.  Connect each
+    # row to the closest dates (all rows for small groups) so a missed upstream
+    # dedup can never make the two records mutually invisible.
+    for ids in exact_title_groups.values():
+        if len(ids) < 2:
+            continue
+        ordered = sorted(ids, key=lambda event_id: (str(by_id[event_id].get("start_date") or "9999-12-31"), event_id))
+        for index, left_id in enumerate(ordered):
+            candidates = [right_id for right_id in ordered if right_id != left_id]
+            if len(candidates) > 3:
+                candidates = sorted(candidates, key=lambda right_id: (abs(ordered.index(right_id) - index), right_id))[:3]
+            for right_id in candidates:
+                left = by_id[left_id]
+                right = by_id[right_id]
+                if not eligible_related_pair(left, right):
+                    continue
+                source = forward_item(right_id, left_id) or forward_item(left_id, right_id) or {
+                    "related_score": 0.97,
+                    "vector_similarity": 0.0,
+                    "deterministic_score": score_pair(left, right),
+                    "confidence": 0.97,
+                    "reason_codes": [],
+                    "retrieval_sources": ["exact_title_recall"],
+                }
+                before = forward_item(left_id, right_id)
+                _insert_forced_related(
+                    chains.setdefault(str(left_id), []),
+                    _reverse_related_item(source, event_id=right_id, reason="exact_normalized_title", force_similar=True),
+                )
+                if before is None:
+                    exact_links += 1
+
+    # Cosine is symmetric, but top-K truncation is not.  Restore only strong
+    # reverse edges; weaker asymmetric edges remain asymmetric by design.
+    for left_id_text, chain in list(chains.items()):
+        left_id = int(left_id_text)
+        for item in list(chain):
+            right_id = int(item.get("event_id") or 0)
+            if right_id not in by_id or float(item.get("vector_similarity") or 0) < high_confidence_threshold:
+                continue
+            if not eligible_related_pair(by_id[right_id], by_id[left_id]):
+                continue
+            before = forward_item(right_id, left_id)
+            _insert_forced_related(
+                chains.setdefault(str(right_id), []),
+                _reverse_related_item(item, event_id=left_id, reason="high_confidence_reciprocal", force_similar=True),
+            )
+            if before is None:
+                high_confidence_links += 1
+
+    def incoming_counts() -> Counter[int]:
+        result: Counter[int] = Counter()
+        for chain in chains.values():
+            result.update(int(item.get("event_id") or 0) for item in chain if int(item.get("event_id") or 0) in by_id)
+        return result
+
+    # Rescue dark nodes into the broader/adjacent graph through their own best
+    # neighbour.  This does not label a weak pair as semantically similar.
+    incoming = incoming_counts()
+    for event_id in sorted(by_id):
+        if incoming.get(event_id, 0) > 0:
+            continue
+        outgoing = next(
+            (item for item in chains.get(str(event_id), []) if int(item.get("event_id") or 0) in by_id),
+            None,
+        )
+        if not outgoing:
+            continue
+        neighbor_id = int(outgoing["event_id"])
+        if not eligible_related_pair(by_id[neighbor_id], by_id[event_id]):
+            continue
+        before = forward_item(neighbor_id, event_id)
+        _insert_forced_related(
+            chains.setdefault(str(neighbor_id), []),
+            _reverse_related_item(outgoing, event_id=event_id, reason="zero_incoming_rescue", force_similar=False),
+        )
+        if before is None:
+            rescue_links += 1
+            incoming[event_id] += 1
+
+    final_incoming = incoming_counts()
+    exact_missing: list[list[int]] = []
+    for ids in exact_title_groups.values():
+        if len(ids) != 2:
+            continue
+        left_id, right_id = ids
+        if not eligible_related_pair(by_id[left_id], by_id[right_id]) or not eligible_related_pair(by_id[right_id], by_id[left_id]):
+            continue
+        if not forward_item(left_id, right_id) or not forward_item(right_id, left_id):
+            exact_missing.append(sorted([left_id, right_id]))
+    zero_incoming_event_ids = sorted(event_id for event_id in by_id if final_incoming.get(event_id, 0) == 0)
+    required_chain_size = min(4, max(0, len(events) - 1))
+    underfilled_event_ids = sorted(
+        event_id
+        for event_id in by_id
+        if len(chains.get(str(event_id), [])) < required_chain_size
+    )
+    return {
+        "policy": "pgvector_selective_reciprocity_v1",
+        "event_count": len(by_id),
+        "high_confidence_threshold": high_confidence_threshold,
+        "exact_title_links_added": exact_links,
+        "high_confidence_links_added": high_confidence_links,
+        "zero_incoming_rescue_links_added": rescue_links,
+        "zero_incoming_event_ids": zero_incoming_event_ids,
+        "zero_incoming_rate": round(len(zero_incoming_event_ids) / max(1, len(by_id)), 6),
+        "required_chain_size": required_chain_size,
+        "underfilled_event_ids": underfilled_event_ids,
+        "exact_title_pairs_missing": exact_missing,
+    }
+
+
+def validate_pgvector_graph_release(graph_meta: dict[str, Any]) -> None:
+    """Fail a production candidate before publication on unhealthy topology."""
+
+    failures: list[str] = []
+    zero_rate = float(graph_meta.get("zero_incoming_rate") or 0.0)
+    if zero_rate >= 0.05:
+        failures.append(f"zero_incoming_rate={zero_rate:.4f} must be <0.05")
+    exact_missing = graph_meta.get("exact_title_pairs_missing") or []
+    if exact_missing:
+        failures.append(f"exact_title_pairs_missing={exact_missing[:10]}")
+    underfilled = graph_meta.get("underfilled_event_ids") or []
+    if underfilled:
+        failures.append(f"underfilled_event_ids={underfilled[:20]}")
+    if failures:
+        raise RuntimeError("pgvector related graph release gate failed: " + "; ".join(failures))
+
+
 FACET_PATTERNS: dict[str, list[str]] = {
     "urbanism": [
         r"архитект", r"урбан", r"городск\w*\s+сред", r"общественн\w*\s+пространств",
@@ -2444,6 +2677,7 @@ def build_pgvector_related_chain(
     embedding_model: str = "gemini-embedding-2",
     match_count: int = 60,
     embedding_doc_kind: str = "related_v1",
+    graph_meta_out: dict[str, Any] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     by_id = {int(event["id"]): event for event in events}
     allowed_ids = set(by_id)
@@ -2531,6 +2765,10 @@ def build_pgvector_related_chain(
             })
         scored.sort(key=lambda item: (-float(item["related_score"]), -float(item.get("vector_similarity") or 0), int(item["event_id"])))
         chains[str(event_id)] = scored[:40]
+    graph_meta = apply_pgvector_graph_reciprocity(events, chains)
+    if graph_meta_out is not None:
+        graph_meta_out.clear()
+        graph_meta_out.update(graph_meta)
     chain_lengths = [len(value or []) for value in chains.values()]
     log_stage(
         "pgvector_rebuild_complete",
@@ -2540,6 +2778,7 @@ def build_pgvector_related_chain(
         avg_chain=round(sum(chain_lengths) / max(1, len(chain_lengths)), 2),
         embedding_model=embedding_model,
         embedding_doc_kind=embedding_doc_kind,
+        graph_reciprocity=graph_meta,
     )
     return chains
 
@@ -3222,6 +3461,7 @@ def build_related(
     gemma_key_env: str = "GOOGLE_API_KEY4",
     gemma_max_anchors: int = 0,
     embedding_model: str = "gemini-embedding-2",
+    related_corpus_revision: str = "",
 ) -> dict[str, Any]:
     related_mode = "pgvector" if str(related_mode or "").strip().lower() == "pgvector" else "sparse"
     algorithm = PGVECTOR_RELATED_ALGORITHM if related_mode == "pgvector" else SPARSE_RELATED_ALGORITHM
@@ -3229,10 +3469,14 @@ def build_related(
     retrieval_method = PGVECTOR_RELATED_RETRIEVAL_METHOD if related_mode == "pgvector" else SPARSE_RELATED_RETRIEVAL_METHOD
     cache_schema_version = PGVECTOR_RELATED_CACHE_SCHEMA_VERSION if related_mode == "pgvector" else RELATED_CACHE_SCHEMA_VERSION
     embedding_doc_version = os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") if related_mode == "pgvector" else "event_embedding_doc_v1"
+    related_corpus_revision = str(related_corpus_revision or "").strip()
     generated_at = datetime.now(timezone.utc).isoformat()
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
     event_ids = [int(event["id"]) for event in events]
     cache = load_related_cache(cache_path) or {}
+    graph_meta: dict[str, Any] = {
+        "policy": "not_applicable" if related_mode != "pgvector" else "pgvector_selective_reciprocity_v1",
+    }
     previous_fingerprints = cache.get("event_fingerprints") if isinstance(cache.get("event_fingerprints"), dict) else {}
     previous_ids = [int(value) for value in (cache.get("event_ids") or []) if str(value).isdigit()]
     previous_id_set = set(previous_ids)
@@ -3248,6 +3492,7 @@ def build_related(
         and cache.get("algorithm") == algorithm
         and (related_mode != "pgvector" or cache.get("embedding_model") == embedding_model)
         and (related_mode != "pgvector" or cache.get("embedding_document_version") == embedding_doc_version)
+        and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
         and cache.get("event_fingerprints") == fingerprints
         and cache.get("event_ids") == event_ids
         and isinstance(cache.get("chains"), dict)
@@ -3295,12 +3540,14 @@ def build_related(
             "verified_event_ids": sorted(current_id_set) if gemma_verify else [],
             "errors": [],
         }
+        graph_meta = copy.deepcopy(cache.get("graph_reciprocity") or graph_meta)
     elif cache_valid and cached_raw_chains:
         # Previous runs may contain partially Gemma-filtered display chains.
         # Always apply the verifier to the unfiltered pgvector chains so a
         # smoke/partial run cannot permanently hide candidate events.
         chains = copy.deepcopy(cached_raw_chains)
         raw_chains_for_cache = copy.deepcopy(cached_raw_chains)
+        graph_meta = copy.deepcopy(cache.get("graph_reciprocity") or graph_meta)
         cache_state = "hit"
         log_stage("gemma_initial_audit_required", event_count=len(events), model=gemma_model)
         chains, gemma_meta = maybe_apply_gemma_audit(
@@ -3317,11 +3564,13 @@ def build_related(
         salt = hashlib.sha1(json.dumps({"ids": event_ids, "fp": fingerprints}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:12]
         log_stage(f"{related_mode}_rebuild_start", event_count=len(events), cache_salt=salt, changed_event_count=len(changed_event_ids), embedding_model=embedding_model)
         if related_mode == "pgvector":
+            graph_meta = {}
             chains = build_pgvector_related_chain(
                 events,
                 current_date=current_date,
                 embedding_model=embedding_model,
                 embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
+                graph_meta_out=graph_meta,
             )
         else:
             chains = build_sparse_related_chain(events, cache_salt=salt)
@@ -3352,11 +3601,13 @@ def build_related(
         "retrieval_method": retrieval_method,
         "embedding_document_version": embedding_doc_version,
         "embedding_model": embedding_model if related_mode == "pgvector" else None,
+        "related_corpus_revision": related_corpus_revision if related_mode == "pgvector" else None,
         "semantic_embeddings": related_mode == "pgvector",
         "event_ids": event_ids,
         "event_fingerprints": fingerprints,
         "chains": chains,
         "raw_chains": raw_chains_for_cache or copy.deepcopy(chains),
+        "graph_reciprocity": graph_meta,
         "gemma_audit_cache": cache.get("gemma_audit_cache", {}),
         "gemma_verification": gemma_meta,
         "gemma_verified_model": (
@@ -3422,6 +3673,8 @@ def build_related(
         "semantic_embeddings": related_mode == "pgvector",
         "embedding_model": embedding_model if related_mode == "pgvector" else None,
         "embedding_document_version": embedding_doc_version,
+        "related_corpus_revision": related_corpus_revision if related_mode == "pgvector" else None,
+        "graph_reciprocity": graph_meta,
         "gemma_verification": gemma_meta,
         "strict_verified_related": bool(gemma_verify),
         "cache": {
@@ -3475,6 +3728,7 @@ def main() -> int:
     parser.add_argument("--sync-pgvector-vectors", action="store_true", default=(os.getenv("STATIC_SITE_SYNC_PGVECTOR_VECTORS", "").strip().lower() in {"1", "true", "yes", "on"}), help="Upsert event search docs/embeddings before pgvector related build")
     parser.add_argument("--pgvector-embedding-model", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL", "gemini-embedding-2"))
     parser.add_argument("--pgvector-embedding-key-env", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV", "GOOGLE_API_KEY4"))
+    parser.add_argument("--related-corpus-revision", default=os.getenv("STATIC_SITE_RELATED_CORPUS_REVISION", ""), help="SHA-256 revision from the completed related_v1 vector-sync receipt")
     parser.add_argument("--pgvector-max-provider-calls", type=int, default=int(os.getenv("STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS", "1000") or "1000"))
     parser.add_argument("--site-origin", default=os.getenv("PUBLIC_SITE_ORIGIN", "https://kenigevents.ru"))
     parser.add_argument("--base-path", default=os.getenv("PUBLIC_PREVIEW_BUILD_ID", ""))
@@ -3527,6 +3781,8 @@ def main() -> int:
             raise SystemExit("full catalog export requires a full 40-character repo SHA")
         if not re.fullmatch(r"[0-9a-f]{64}", args.snapshot_sha256):
             raise SystemExit("full catalog export requires a 64-character snapshot SHA-256")
+        if args.related_mode == "pgvector" and not re.fullmatch(r"[0-9a-f]{64}", str(args.related_corpus_revision or "")):
+            raise SystemExit("full pgvector export requires --related-corpus-revision from the completed vector receipt")
     rows = fetch_rows(
         con,
         None if args.catalog_mode == "full" else args.limit,
@@ -3621,7 +3877,10 @@ def main() -> int:
         gemma_key_env=args.gemma_related_key_env,
         gemma_max_anchors=max(0, int(args.gemma_related_max_anchors or 0)),
         embedding_model=args.pgvector_embedding_model,
+        related_corpus_revision=args.related_corpus_revision,
     )
+    if args.catalog_mode == "full" and args.related_mode == "pgvector":
+        validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})
     (out_dir / "preview-related.json").write_text(json.dumps(related_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Exported {len(events)} events to {out_dir}")
     print("IDs:", ",".join(str(event["id"]) for event in events))

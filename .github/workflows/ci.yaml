@@ -4,6 +4,35 @@ on:
     branches: [ main ]
 
 jobs:
+  static-browser-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install pinned site dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install pinned Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Run browser gate receipt contracts
+        run: npm run test:browser-release-gate
+      - name: Build real static event pages
+        env:
+          PREVIEW_BUILD_ID: preview-ci-browser-gate
+          # Build the preview through the same keyboard path as the immutable
+          # production/candidate artifacts; ordinary local previews stay inert.
+          PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE: '1'
+        run: npm run build:preview
+      - name: Block on static browser release gate
+        run: npm run check:browser-release -- --root dist/preview-ci-browser-gate
+
   python-ci:
     runs-on: ubuntu-latest
     timeout-minutes: 20
