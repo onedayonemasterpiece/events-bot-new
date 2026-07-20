@@ -8,6 +8,14 @@
   longer retain `telegram_session:s22` until TTL and block the later critical
   Telegram Monitoring slot (`INC-2026-07-20-tg-monitor-stale-s22-lease`).
 
+- Restored the accepted compact crop contract for static event-detail
+  recommendations after `DJc9…` still letterboxed ordinary photos: one shared
+  `relatedCardLayout`/`EventCard` policy now renders every `visual_only` card as
+  focal-aware `cover`, keeps OCR/unknown documents contained, and prevents a
+  portrait singleton from expanding the row. Added captured `6408` production
+  fixtures plus an independent browser unused-frame budget, decoded screenshots
+  and a document negative control so `contain` cannot self-certify the same
+  owner-visible 22%/32% photo-band regression again.
 - Reopened `INC-2026-07-20-static-event-keyboard-visual-regressions` after the
   `RHOg…` candidate disproved its earlier green receipt: loaded `contain`
   recommendation images now hide the semantic date/type/city failure layer,

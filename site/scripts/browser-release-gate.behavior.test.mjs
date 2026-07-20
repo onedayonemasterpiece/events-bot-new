@@ -37,10 +37,14 @@ test('R03 prepublication gate maps only immutable CDN Astro runtime back to the 
   assert.equal(localReleaseAssetPath('not-a-url'), null);
 });
 
-test('R01 crop assertion preserves both document and visual contain decisions', () => {
+test('R01 crop assertion maps treatments and product-gates visual cards to cover', () => {
   assert.equal(expectedObjectFitForTreatment('document-contain'), 'contain');
   assert.equal(expectedObjectFitForTreatment('visual-contain'), 'contain');
   assert.equal(expectedObjectFitForTreatment('visual-cover'), 'cover');
+  const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
+  assert.match(source, /item\.mediaKind === 'visual'[\s\S]*item\.treatment === 'visual-cover' && item\.objectFit === 'cover'/u);
+  assert.match(source, /unusedFrameRatio[\s\S]*visual card .* leaves .* media frame unused/u);
+  assert.match(source, /item\.mediaKind === 'document'[\s\S]*item\.treatment === 'document-contain' && item\.objectFit === 'contain'/u);
 });
 
 test('R01 document acceptance is card-local and does not mistake a mixed row potential for applied crop', () => {

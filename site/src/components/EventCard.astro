@@ -50,7 +50,9 @@ function normalizeObjectPosition(value: string | null | undefined) {
   return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
 }
 // Shared/default cards unlock cropping only through the LLM-authored
-// event_photo role. Related cards additionally require exact geometry below.
+// event_photo role. Compact event-detail recommendation cards instead use the
+// shared relatedCardLayout surface contract below (`visual_only` cover,
+// OCR/unknown contain).
 const imageMediaRole = event.image_media_role || 'unknown_document';
 const primaryImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
 const intrinsicMediaRatio = desktopRelatedLayout?.mediaRatio
@@ -73,8 +75,8 @@ const mediaShellClass = [
   desktopRelatedCrop && 'event-card__media-shell--dynamic',
   desktopRelatedCrop && 'is-image-loading',
 ].filter(Boolean).join(' ');
-// Responsive cards without an exact row ratio fail closed. No surface CSS may
-// later promote this decision back to cover.
+// Responsive cards without an exact recommendation-row ratio fail closed. No
+// surface CSS may later reinterpret the decision made here.
 const cardCrop = relatedMediaDecision || {
   fit:'contain' as const,
   objectPosition:'50% 50%',

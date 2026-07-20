@@ -1,12 +1,17 @@
 # Event image framing and focal metadata
 
-> Status: **pixel-current producer/export and fail-closed consumer implemented**.
+> Status: **pixel-current producer/export plus surface-specific consumers implemented**.
 
 ## Contract
 
 - OCR/text/unknown images use full-poster/natural/contain presentation and are not meaningfully cropped.
-- Visual-only images may use cover only when focal/face metadata or a safe deterministic fallback supports it.
-- When safe crop cannot be proven, use contain/natural presentation rather than cut heads, text or the main subject.
+- Compact event-detail recommendation cards (`Смотрите дальше` and desktop
+  `Ещё события`) treat the OCR result `visual_only` as permission to fill the
+  shared card frame with `cover`. They prefer exact crop geometry, then exported
+  object-position/focal metadata, then a deterministic center fallback.
+- Hero, fullscreen and other large/responsive surfaces keep their stricter
+  role/geometry policy. When their safe crop cannot be proven, they use
+  contain/natural presentation rather than cut heads, text or the main subject.
 - Framing metadata is versioned with the media/content hash and may be manually overridden.
 
 ## Pixel-current bbox contract
@@ -22,18 +27,20 @@ final crop. A surface with a **known** target aspect may run the deterministic
 protected-region solver: it adds a bounded margin around faces plus the valuable
 region, chooses a `cover` window only when the complete union fits, and returns
 the matching CSS object position without whole-percent rounding that could move
-the browser crop past a tight protected boundary. If the union does not fit, geometry is stale,
-the image is OCR/text, semantic role is not an explicitly classified
-`event_photo`, or the responsive target ratio is unknown, the renderer uses
-`contain`. Responsive hero/listing layouts therefore do not claim a safe bbox
-crop using an approximate ratio.
+the browser crop past a tight protected boundary. If the union does not fit,
+geometry is stale, the image is OCR/text, semantic role is not an explicitly
+classified `event_photo`, or the responsive target ratio is unknown, the strict
+hero/large-surface renderer uses `contain`. Compact event-detail recommendation
+cards are the deliberate exception: their known row ratio and `visual_only`
+classification restore the accepted photo preview crop, while `ocr_text` and
+`unknown` remain document `contain`.
 
-Production desktop post-build contract проверяет ту же fail-closed семантику:
-`cover` допустим только с `protected_regions_fit` и совпадающим
-`data-protected-crop-fit`; `contain` является корректным результатом для
-responsive target с неизвестным aspect ratio и обязан иметь явный reason.
-Contract не должен требовать legacy `cover` только из-за `visual_only`, иначе
-полностью успешная Astro-сборка ошибочно отклонит безопасное bbox-поведение.
+Production desktop post-build contract checks the actual surface contract. A
+hero `cover` still requires protected-region proof. In recommendation rows,
+every `visual_only` card must compute to `visual-cover`/`cover` with zero unused
+frame budget; document cards must compute to `document-contain`/`contain`.
+The gate decodes the real image, checks the loaded/fallback layers, records the
+unused-frame ratio and retains the rendered row screenshot.
 
 ## Required producer
 

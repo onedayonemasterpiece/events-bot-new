@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -12,6 +13,7 @@ import {
 } from '../src/lib/keyboardEventNavigation.mjs';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const cropCanaries = JSON.parse(readFileSync(new URL('./fixtures/related-card-crop-canaries.json', import.meta.url), 'utf8'));
 
 const imageEvent = (id, width, height, asset = {}) => ({
   id,
@@ -39,7 +41,7 @@ const classifiedPhoto = (overrides = {}) => ({
   ...overrides,
 });
 
-test('row packing serializes the same final protected treatment that EventCard resolves', () => {
+test('row packing serializes the same unified treatment that EventCard resolves', () => {
   const items = [
     imageEvent(1, 1600, 1000, classifiedPhoto()),
     imageEvent(2, 800, 1000, classifiedPhoto({ geometry_pixel_sha256:'older-pixel' })),
@@ -49,7 +51,7 @@ test('row packing serializes the same final protected treatment that EventCard r
 
   assert.deepEqual(packed.map(({ layout }) => layout.mediaTreatment), [
     'visual-cover',
-    'visual-contain',
+    'visual-cover',
     'document-contain',
   ]);
   for (const { item, layout } of packed) {
@@ -61,7 +63,7 @@ test('row packing serializes the same final protected treatment that EventCard r
   }
 });
 
-test('fail-closed visuals participate in row geometry instead of being packed as cover', () => {
+test('visual-only photos retain the accepted compact cover contract when bbox metadata is stale', () => {
   const stale = classifiedPhoto({ geometry_pixel_sha256:'older-pixel' });
   const packed = packRelatedCardRows([
     imageEvent(1, 500, 1000, stale),
@@ -69,13 +71,41 @@ test('fail-closed visuals participate in row geometry instead of being packed as
     imageEvent(3, 1600, 1000, stale),
   ], { rowSize:3, mediaTreatment:'hybrid' });
 
-  assert.ok(packed.every(({ layout }) => layout.fit === 'contain'));
-  assert.ok(packed.every(({ layout }) => layout.mediaTreatment === 'visual-contain'));
-  assert.match(packed[0].layout.rowMode, /-authoritative$/u);
-  assert.ok(packed[0].layout.rowRatio < 1, 'final contain geometry must replace the old squareish cover assumption');
-  const oldSquareWorstBand = Math.max(...packed.map(({ layout }) => Math.max(0, 1 - Math.min(layout.mediaRatio, 1 / layout.mediaRatio))));
-  const finalWorstBand = Math.max(...packed.map(({ layout }) => layout.potentialCoverCrop));
-  assert.ok(finalWorstBand < oldSquareWorstBand);
+  assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
+  assert.ok(packed.every(({ layout }) => layout.mediaTreatment === 'visual-cover'));
+  assert.ok(packed.every(({ layout }) => layout.cropReason.startsWith('visual_only_focal_fallback:')));
+  assert.ok(packed[0].layout.rowRatio >= 1 && packed[0].layout.rowRatio <= 4 / 3);
+});
+
+test('the Dog-page photo canaries cannot regress to contain bands or a tall singleton row', () => {
+  const packed = packRelatedCardRows([
+    imageEvent(5757, 1200, 800, { media_role:'unknown_document', media_semantic_status:'classified', safe_crop:false }),
+    imageEvent(6586, 1000, 410, classifiedPhoto({
+      valuable_region:{ x:.01, y:.1, w:.98, h:.8 },
+    })),
+    imageEvent(6318, 1200, 675, classifiedPhoto({ geometry_pixel_sha256:'older-pixel' })),
+    imageEvent(6652, 1170, 1755, { media_role:'event_photo', media_semantic_status:'classified', safe_crop:true }),
+  ], { rowSize:3, mediaTreatment:'hybrid' });
+
+  assert.deepEqual(packed.map(({ layout }) => layout.mediaTreatment), [
+    'visual-cover', 'visual-cover', 'visual-cover', 'visual-cover',
+  ]);
+  assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
+  assert.equal(packed[3].layout.rowRatio, 1, 'a lone portrait photo keeps the accepted square preview row');
+});
+
+test('captured Dog-page production payloads reject the exact 22%/32% photo-band regression', () => {
+  const packed = packRelatedCardRows(cropCanaries.visuals, { rowSize:3, mediaTreatment:'hybrid' });
+  assert.deepEqual(packed.map(({ item }) => item.id), [5757, 6586, 6318, 5756]);
+  assert.ok(packed.every(({ layout }) => layout.mediaKind === 'visual'));
+  assert.ok(packed.every(({ layout }) => layout.mediaTreatment === 'visual-cover' && layout.fit === 'cover'));
+  assert.equal(packed[0].layout.objectPosition, '50% 25%', 'asset focal metadata must survive the restored cover path');
+  assert.equal(packed[3].layout.rowRatio, 1, 'the portrait singleton stays in the compact canonical row');
+
+  const document = resolveRelatedCardMediaTreatment(cropCanaries.document, 1);
+  assert.equal(document.mediaKind, 'document');
+  assert.equal(document.mediaTreatment, 'document-contain');
+  assert.equal(document.fit, 'contain');
 });
 
 test('related and personal continuation surfaces cannot override EventCard fit', async () => {

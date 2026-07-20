@@ -1,0 +1,90 @@
+{
+  "visuals": [
+    {
+      "id": 5757,
+      "title": "Собачье сердце и экскурсия «Закулисье театра»",
+      "image_url": "https://static.kenigevents.ru/p/dh16/80/808081048080cab001f446a40601d42091000008000000000000000000000000.webp",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [{
+        "src": "https://static.kenigevents.ru/p/dh16/80/808081048080cab001f446a40601d42091000008000000000000000000000000.webp",
+        "width": 757,
+        "height": 800,
+        "image_text_mode": "visual_only",
+        "media_role": "unknown_document",
+        "media_semantic_status": "classified",
+        "safe_crop": false,
+        "focal_point": { "x": 0.5, "y": 0.25 },
+        "recommended_object_position": "50% 25%"
+      }]
+    },
+    {
+      "id": 6586,
+      "title": "Спектакль «Ромео и Джульетта»",
+      "image_url": "https://static.kenigevents.ru/p/dh16/24/24342454a844404d14c464c664c44cc548c540c1c4c6cccc0ac41a908888808e.webp",
+      "image_text_mode": "visual_only",
+      "image_media_role": "event_photo",
+      "image_assets": [{
+        "src": "https://static.kenigevents.ru/p/dh16/24/24342454a844404d14c464c664c44cc548c540c1c4c6cccc0ac41a908888808e.webp",
+        "width": 1000,
+        "height": 410,
+        "image_text_mode": "visual_only",
+        "media_role": "event_photo",
+        "media_semantic_status": "classified",
+        "safe_crop": true,
+        "focal_point": { "x": 0.5, "y": 0.5 },
+        "recommended_object_position": "50% 50%"
+      }]
+    },
+    {
+      "id": 6318,
+      "title": "Спектакль «Ромео и Джульетта»",
+      "image_url": "https://static.kenigevents.ru/p/dh16/60/603060106032213220f0246228250064246640e644e6c464c44248460a480a4a.webp",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [{
+        "src": "https://static.kenigevents.ru/p/dh16/60/603060106032213220f0246228250064246640e644e6c464c44248460a480a4a.webp",
+        "width": 1200,
+        "height": 675,
+        "image_text_mode": "visual_only",
+        "media_role": "unknown_document",
+        "media_semantic_status": "error",
+        "safe_crop": false
+      }]
+    },
+    {
+      "id": 5756,
+      "title": "Женитьба и экскурсия «Закулисье театра»",
+      "image_url": "https://static.kenigevents.ru/p/dh16/80/808081048080cab001f446a40601d42091000008000000000000000000000000.webp",
+      "image_text_mode": "visual_only",
+      "image_media_role": "unknown_document",
+      "image_assets": [{
+        "src": "https://static.kenigevents.ru/p/dh16/80/808081048080cab001f446a40601d42091000008000000000000000000000000.webp",
+        "width": 757,
+        "height": 800,
+        "image_text_mode": "visual_only",
+        "media_role": "unknown_document",
+        "media_semantic_status": "classified",
+        "safe_crop": false,
+        "focal_point": { "x": 0.5, "y": 0.25 },
+        "recommended_object_position": "50% 25%"
+      }]
+    }
+  ],
+  "document": {
+    "id": 6921,
+    "title": "Гимн любви",
+    "image_url": "https://static.kenigevents.ru/p/dh16/a4/a448a450cb348b148e04cb10c710c748dc649e6496e494669c4e8024c2a8b622.webp",
+    "image_text_mode": "ocr_text",
+    "image_media_role": "unknown_document",
+    "image_assets": [{
+      "src": "https://static.kenigevents.ru/p/dh16/a4/a448a450cb348b148e04cb10c710c748dc649e6496e494669c4e8024c2a8b622.webp",
+      "width": 1080,
+      "height": 1080,
+      "image_text_mode": "ocr_text",
+      "media_role": "unknown_document",
+      "media_semantic_status": "pending",
+      "safe_crop": false
+    }]
+  }
+}
