@@ -116,6 +116,9 @@ secret preproduction candidate family.
   Fly volume had less than the configured `1024 MiB` free-space floor. Two
   unreferenced stale local build/snapshot trees were removed after checking
   that no pending/running job referenced them, recovering `563,472,029` bytes.
+  After both static jobs became terminal, the last orphaned runner scratch tree
+  was also verified unreferenced and removed; total Fly-volume recovery was
+  `855,078,330` bytes.
 - 2026-07-20 20:37–20:57 UTC — job `39144` built, browser-gated and published
   candidate `DJc9…` from exact SHA `1810a12b`; the older coalesced job `39115`
   then completed as a fingerprint `noop`, proving the single-flight/fingerprint
