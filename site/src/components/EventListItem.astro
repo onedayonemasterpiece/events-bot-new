@@ -12,6 +12,9 @@ const canAddToCalendar = isCalendarEligible(event);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const dateTimeLabel = displayDateTime(event);
 const imageUrl = eventImageUrl(event.image_url);
+// Listing height depends on content and viewport, so its exact target aspect is
+// unknown during SSR. Do not label an approximate 4:5 crop safe.
+const listingCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
 const linkedEventIds = getLinkedSessionIds(event).join(',');
 const otherTimeLabels = getOtherDates(event)
   .filter((item) => item.start_date === event.start_date && item.display_time && item.display_time !== event.display_time)
@@ -21,7 +24,16 @@ const otherTimeLabels = getOtherDates(event)
 <article class="listing-item" data-listing-item data-card-href={href} data-event-id={event.id} data-event-title={event.title} data-linked-event-ids={linkedEventIds} data-city={event.city || undefined} data-venue={event.venue_name || undefined} role="link" tabindex="0" aria-label={`Открыть событие: ${event.title}`}>
   <a class="listing-item__media listing-item__media--cover" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
-      <img class="listing-item__image" src={imageUrl} alt={event.image_alt || `Афиша события «${event.title}»`} loading="lazy" decoding="async" />
+      <img
+        class="listing-item__image"
+        src={imageUrl}
+        alt={event.image_alt || `Афиша события «${event.title}»`}
+        loading="lazy"
+        decoding="async"
+        data-protected-crop-fit={listingCrop.fit}
+        data-protected-crop-reason={listingCrop.reason}
+        style={`object-fit:${listingCrop.fit};object-position:${listingCrop.objectPosition}`}
+      />
     ) : (
       <span class="listing-item__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
     )}

@@ -2,7 +2,7 @@
 """Audit Supabase media deduplication (posters + videos) for the last N hours.
 
 This script inspects the local SQLite DB to verify:
-  - poster paths are canonical (WebP-only, dHash16-based, stable across PROD/TEST)
+  - poster paths use exact encoded-SHA v2 identity; legacy dHash16 is reported separately
   - video assets are content-addressed when possible (sha256-based), and no obvious duplicates appear
 
 Optionally it can HEAD-check referenced objects in Supabase Storage to ensure they exist and have
@@ -26,7 +26,11 @@ from pathlib import Path
 from typing import Any
 
 
-_POSTER_PATH_RE = re.compile(
+_POSTER_V2_PATH_RE = re.compile(
+    r"^(?P<prefix>[^/]+)/image/v2/(?P<first2>[0-9a-f]{2})/(?P<hash>[0-9a-f]{64})\.webp$",
+    re.IGNORECASE,
+)
+_POSTER_DH16_PATH_RE = re.compile(
     r"^(?P<prefix>[^/]+)/dh16/(?P<first2>[0-9a-f]{2})/(?P<hash>[0-9a-f]{64})\.webp$",
     re.IGNORECASE,
 )
@@ -92,6 +96,7 @@ class PosterRow:
     event_id: int | None
     poster_hash: str | None
     phash: str | None
+    raw_sha256: str | None
     supabase_path: str | None
     supabase_url: str | None
     updated_at: datetime | None
@@ -132,6 +137,7 @@ def _fetch_posters(con: sqlite3.Connection) -> list[PosterRow]:
           event_id,
           poster_hash,
           phash,
+          raw_sha256,
           supabase_path,
           supabase_url,
           updated_at
@@ -147,6 +153,7 @@ def _fetch_posters(con: sqlite3.Connection) -> list[PosterRow]:
                 event_id=int(r["event_id"]) if r["event_id"] is not None else None,
                 poster_hash=str(r["poster_hash"] or "").strip() or None,
                 phash=str(r["phash"] or "").strip() or None,
+                raw_sha256=str(r["raw_sha256"] or "").strip() or None,
                 supabase_path=str(r["supabase_path"] or "").strip() or None,
                 supabase_url=str(r["supabase_url"] or "").strip() or None,
                 updated_at=_parse_dt(r["updated_at"]),
@@ -207,51 +214,70 @@ def _scan_poster_rows(rows: list[PosterRow], *, near_threshold: int, near_max_pa
     non_webp = sorted({p for p in paths if not p.lower().endswith(".webp")})
     stats["non_webp_paths"] = non_webp
 
-    canonical: list[tuple[PosterRow, re.Match[str]]] = []
+    canonical: list[tuple[PosterRow, re.Match[str], str]] = []
     noncanonical: list[PosterRow] = []
     for r in rows:
         p = (r.supabase_path or "").strip().lstrip("/")
         if not p:
             continue
-        m = _POSTER_PATH_RE.match(p)
-        if m:
-            canonical.append((r, m))
+        m_v2 = _POSTER_V2_PATH_RE.match(p)
+        m_legacy = _POSTER_DH16_PATH_RE.match(p)
+        if m_v2:
+            canonical.append((r, m_v2, "exact_v2"))
+        elif m_legacy:
+            canonical.append((r, m_legacy, "legacy_dh16"))
         else:
             noncanonical.append(r)
     stats["canonical_paths"] = len(canonical)
+    stats["exact_v2_paths"] = sum(1 for _r, _m, kind in canonical if kind == "exact_v2")
+    stats["legacy_dh16_paths"] = sum(1 for _r, _m, kind in canonical if kind == "legacy_dh16")
     stats["noncanonical_paths"] = len(noncanonical)
     stats["noncanonical_path_samples"] = [
         (r.supabase_path or "")[:200] for r in noncanonical[:20]
     ]
 
-    prefix_counts = Counter(m.group("prefix").strip().lower() for _r, m in canonical)
+    prefix_counts = Counter(m.group("prefix").strip().lower() for _r, m, _kind in canonical)
     stats["prefix_counts"] = dict(prefix_counts)
 
     first2_mismatch: list[str] = []
     phash_mismatch: list[str] = []
     phash_missing: list[str] = []
+    encoded_sha_mismatch: list[str] = []
+    encoded_sha_missing: list[str] = []
     by_phash_paths: dict[str, set[str]] = defaultdict(set)
     by_poster_hash_paths: dict[str, set[str]] = defaultdict(set)
     by_poster_hash_phash: dict[str, set[str]] = defaultdict(set)
-    for r, m in canonical:
+    for r, m, kind in canonical:
         first2 = m.group("first2").lower()
         h = m.group("hash").lower()
         p = (r.supabase_path or "").strip().lstrip("/")
         if h[:2] != first2:
             first2_mismatch.append(p)
-        if r.phash:
+        if kind == "exact_v2":
+            if r.raw_sha256:
+                if str(r.raw_sha256).strip().lower() != h:
+                    encoded_sha_mismatch.append(
+                        f"id={r.id} raw_sha256={r.raw_sha256} path_hash={h} path={p}"
+                    )
+            else:
+                encoded_sha_missing.append(f"id={r.id} path={p}")
+        elif r.phash:
             if str(r.phash).strip().lower() != h:
                 phash_mismatch.append(f"id={r.id} phash={r.phash} path_hash={h} path={p}")
         else:
             phash_missing.append(f"id={r.id} path={p}")
-        by_phash_paths[h].add(p)
+        if r.phash:
+            by_phash_paths[str(r.phash).strip().lower()].add(p)
         if r.poster_hash:
             by_poster_hash_paths[r.poster_hash].add(p)
-            by_poster_hash_phash[r.poster_hash].add(h)
+            if r.phash:
+                by_poster_hash_phash[r.poster_hash].add(str(r.phash).strip().lower())
 
     stats["first2_mismatch"] = first2_mismatch[:20]
     stats["phash_mismatch"] = phash_mismatch[:20]
     stats["phash_missing"] = phash_missing[:20]
+    stats["encoded_sha_mismatch"] = encoded_sha_mismatch[:20]
+    stats["encoded_sha_missing"] = encoded_sha_missing[:20]
 
     multi_path_same_phash = {
         ph: sorted(list(paths))
@@ -376,6 +402,27 @@ def _scan_video_rows(rows: list[VideoRow]) -> dict[str, Any]:
     stats["tg_paths_missing_sha256"] = tg_missing_sha[:30]
 
     return stats
+
+
+def _local_anomaly_count(
+    poster_stats: dict[str, Any], video_stats: dict[str, Any]
+) -> int:
+    poster_keys = (
+        "non_webp_paths",
+        "noncanonical_paths",
+        "first2_mismatch",
+        "phash_mismatch",
+        "encoded_sha_mismatch",
+        "encoded_sha_missing",
+        "legacy_dh16_paths",
+        "multi_path_same_phash",
+        "poster_hash_multi_paths",
+        "poster_hash_multi_phash",
+    )
+    video_keys = ("sha_mismatches", "sha256_multi_paths")
+    return sum(1 for key in poster_keys if poster_stats.get(key)) + sum(
+        1 for key in video_keys if video_stats.get(key)
+    )
 
 
 def _head_storage_object(
@@ -582,6 +629,8 @@ def main() -> int:
     print("")
     print(f"- rows_in_window: {poster_stats['rows']}")
     print(f"- canonical_paths: {poster_stats['canonical_paths']} / {poster_stats['rows']}")
+    print(f"- exact_v2_paths: {poster_stats['exact_v2_paths']}")
+    print(f"- legacy_dh16_paths: {poster_stats['legacy_dh16_paths']}")
     print(f"- noncanonical_paths: {poster_stats['noncanonical_paths']}")
     print(f"- distinct_paths: {poster_stats['distinct_supabase_paths']}")
     print(f"- distinct_phash: {poster_stats['distinct_phash']}")
@@ -602,6 +651,14 @@ def main() -> int:
     if poster_stats["phash_mismatch"]:
         print(f"- PHASH_MISMATCH rows: {len(poster_stats['phash_mismatch'])}")
         for s in poster_stats["phash_mismatch"][:10]:
+            print(f"  - `{s}`")
+    if poster_stats["encoded_sha_mismatch"]:
+        print(f"- ENCODED_SHA_MISMATCH rows: {len(poster_stats['encoded_sha_mismatch'])}")
+        for s in poster_stats["encoded_sha_mismatch"][:10]:
+            print(f"  - `{s}`")
+    if poster_stats["encoded_sha_missing"]:
+        print(f"- ENCODED_SHA_MISSING rows: {len(poster_stats['encoded_sha_missing'])}")
+        for s in poster_stats["encoded_sha_missing"][:10]:
             print(f"  - `{s}`")
     if poster_stats["multi_path_same_phash"]:
         print(f"- MULTI_PATH_SAME_PHASH: {len(poster_stats['multi_path_same_phash'])}")
@@ -683,15 +740,7 @@ def main() -> int:
                     print(f"  - `{p}`")
         print("")
 
-    anomalies = 0
-    anomalies += 1 if poster_stats["non_webp_paths"] else 0
-    anomalies += 1 if poster_stats["first2_mismatch"] else 0
-    anomalies += 1 if poster_stats["phash_mismatch"] else 0
-    anomalies += 1 if poster_stats["multi_path_same_phash"] else 0
-    anomalies += 1 if poster_stats["poster_hash_multi_paths"] else 0
-    anomalies += 1 if poster_stats["poster_hash_multi_phash"] else 0
-    anomalies += 1 if video_stats["sha_mismatches"] else 0
-    anomalies += 1 if video_stats["sha256_multi_paths"] else 0
+    anomalies = _local_anomaly_count(poster_stats, video_stats)
 
     if args.check_storage:
         storage = _storage_check(

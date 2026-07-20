@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed Smart Update image geometry so managed posters use immutable exact-byte
+  object paths, pixel changes invalidate stale face/value and crop evidence,
+  final pair approval schedules enrichment, and transient semantic-role calls
+  rotate through the normal key pool with bounded retries. Static export now
+  exposes only exact-current geometry, and exact-ratio card crops preserve its
+  protected regions or fail closed to `contain`. TelegramMonitor uses the same
+  exact encoded identity, provider results are discarded on mid-call pixel
+  drift, and per-event raw-SHA ownership is conflict-safe during retry/merge.
 - Fixed static event detail parity so a one-photo Editorial page keeps the same
   CTA side-motion/docking state machine as a multi-photo page; the optional
   thumbnail rail no longer controls the page-family behavior.

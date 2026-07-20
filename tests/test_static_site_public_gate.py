@@ -286,3 +286,120 @@ def test_collect_images_does_not_fallback_when_only_quarantined_rows_exist() -> 
         con, 8, '["https://legacy.example/leak.jpg"]', "Событие"
     )
     assert assets == []
+
+
+def _geometry_export_connection(*, poster_pixel: str = "pixel-current") -> sqlite3.Connection:
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        """
+        create table eventposter(
+            id integer primary key,
+            event_id integer,
+            supabase_url text,
+            catbox_url text,
+            ocr_text text,
+            review_status text,
+            display_order integer,
+            width integer,
+            height integer,
+            image_text_mode text,
+            media_role text,
+            media_role_confidence real,
+            media_semantic_status text,
+            safe_crop integer,
+            raw_sha256 text,
+            pixel_sha256 text,
+            image_geometry_id integer
+        )
+        """
+    )
+    con.execute(
+        """
+        create table event_image_geometry(
+            id integer primary key,
+            pixel_sha256 text,
+            model text,
+            prompt_version text,
+            status text,
+            source_width integer,
+            source_height integer,
+            face_boxes_yxyx_json text,
+            valuable_region_yxyx_json text,
+            valuable_region_confidence real,
+            reason_code text
+        )
+        """
+    )
+    con.execute(
+        """
+        insert into eventposter(
+            id,event_id,supabase_url,review_status,display_order,width,height,
+            image_text_mode,media_role,media_role_confidence,media_semantic_status,
+            safe_crop,raw_sha256,pixel_sha256,image_geometry_id
+        ) values(1,42,'https://static.kenigevents.ru/p/current.webp','approved',0,
+                 1600,1000,'visual_only','event_photo',.97,'classified',1,
+                 'raw-current',?,7)
+        """,
+        (poster_pixel,),
+    )
+    con.execute(
+        """
+        insert into event_image_geometry values(
+            7,'pixel-current','gemma-4-31b-it','event-image-geometry-v1','classified',1600,1000,
+            '[[0.2,0.4,0.4,0.6],[2,0,3,1]]','[0.1,0.25,0.8,0.75]',.92,
+            'viewer_value_region'
+        )
+        """
+    )
+    return con
+
+
+def test_collect_images_exports_only_current_classified_normalized_geometry() -> None:
+    exporter = _load_exporter_module()
+    exporter.SKIP_IMAGE_PROBES = True
+    con = _geometry_export_connection()
+
+    _primary, _mode, _role, assets = exporter.collect_images(con, 42, "[]", "Событие")
+
+    assert assets[0]["geometry_coordinate_space"] == "normalized_0_1"
+    assert assets[0]["current_pixel_sha256"] == assets[0]["geometry_pixel_sha256"] == "pixel-current"
+    assert assets[0]["face_boxes"] == [{"x": 0.4, "y": 0.2, "w": 0.2, "h": 0.2}]
+    assert assets[0]["valuable_region"] == {
+        "x": 0.25,
+        "y": 0.1,
+        "w": 0.5,
+        "h": 0.7,
+        "confidence": 0.92,
+    }
+    assert assets[0]["safe_crop"] is True
+    assert assets[0]["recommended_hero_fit"] == "cover"
+
+
+def test_collect_images_drops_stale_geometry_and_closes_crop_gate() -> None:
+    exporter = _load_exporter_module()
+    exporter.SKIP_IMAGE_PROBES = True
+    con = _geometry_export_connection(poster_pixel="pixel-replaced")
+
+    _primary, _mode, _role, assets = exporter.collect_images(con, 42, "[]", "Событие")
+
+    assert "geometry_id" not in assets[0]
+    assert "face_boxes" not in assets[0]
+    assert "valuable_region" not in assets[0]
+    assert assets[0]["safe_crop"] is False
+    assert assets[0]["recommended_hero_fit"] == "contain"
+
+
+def test_collect_images_drops_same_pixel_geometry_from_obsolete_contract() -> None:
+    exporter = _load_exporter_module()
+    exporter.SKIP_IMAGE_PROBES = True
+    con = _geometry_export_connection()
+    con.execute(
+        "update event_image_geometry set model='gemma-3-27b-it', prompt_version='event-image-geometry-v0' where id=7"
+    )
+
+    _primary, _mode, _role, assets = exporter.collect_images(con, 42, "[]", "Событие")
+
+    assert "geometry_id" not in assets[0]
+    assert assets[0]["safe_crop"] is False
+    assert assets[0]["recommended_hero_fit"] == "contain"

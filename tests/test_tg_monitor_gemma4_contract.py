@@ -1139,3 +1139,35 @@ def test_tg_monitor_service_stages_script_built_notebook_and_google_ai_bundle() 
     assert "await_dataset_ready" in source
     assert "\"kaggle_run.json\"" in source
     assert "\"kaggle_status_client.py\"" in source
+
+
+def test_tg_monitor_poster_objects_use_exact_encoded_identity() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(
+        encoding="utf-8"
+    )
+    upload = source[
+        source.index("def upload_to_supabase_storage") : source.index(
+            "def _bucket_item_size_bytes"
+        )
+    ]
+
+    assert "encoded_sha256 = hashlib.sha256(stored_bytes).hexdigest()" in upload
+    assert 'f"{SUPABASE_POSTERS_PREFIX}/image/v2/"' in upload
+    assert "/dh16/" not in upload
+    assert "max-age=31536000, immutable" in upload
+    assert "return public_url, object_path, encoded_sha256" in upload
+    assert "'raw_sha256': raw_sha256" in source
+
+    handler = Path("source_parsing/telegram/handlers.py").read_text(encoding="utf-8")
+    assert 'raw_sha256=(item or {}).get("raw_sha256")' in handler
+    assert 'raw_sha256=item.get("raw_sha256")' in handler
+
+    notebook = json.loads(
+        Path("kaggle/TelegramMonitor/telegram_monitor.ipynb").read_text(
+            encoding="utf-8"
+        )
+    )
+    built_entrypoint = "".join(notebook["cells"][1]["source"])
+    assert "encoded_sha256 = hashlib.sha256(stored_bytes).hexdigest()" in built_entrypoint
+    assert 'f"{SUPABASE_POSTERS_PREFIX}/image/v2/"' in built_entrypoint
+    assert "return public_url, object_path, encoded_sha256" in built_entrypoint

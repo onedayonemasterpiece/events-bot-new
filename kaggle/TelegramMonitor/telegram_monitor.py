@@ -849,34 +849,33 @@ def _upload_yandex_public_bytes(data: bytes, *, bucket: str, object_path: str, c
             Key=object_path,
             Body=data,
             ContentType=content_type,
-            CacheControl='public, max-age=31536000',
+            CacheControl='public, max-age=31536000, immutable',
         )
     except Exception as exc:
         logger.warning('yandex poster upload failed: %s', exc)
         return None
     return _yandex_public_url(bucket, object_path)
 
-def upload_to_supabase_storage(image_bytes: bytes, sha256_hex: str | None) -> tuple[str | None, str | None]:
+def upload_to_supabase_storage(image_bytes: bytes, sha256_hex: str | None) -> tuple[str | None, str | None, str | None]:
     if not POSTER_STORAGE_ENABLED:
-        return None, None
+        return None, None, None
     if not image_bytes:
-        return None, None
+        return None, None, None
 
     webp_quality = _env_int('TG_MONITORING_POSTERS_WEBP_QUALITY', 82)
     stored_bytes = _to_webp_bytes(image_bytes, quality=webp_quality)
     if not stored_bytes:
-        return None, None
+        return None, None, None
 
-    # Prefer perceptual hash for cross-resolution dedup.
-    phash = _compute_phash(image_bytes)
-    sha = (sha256_hex or '').strip()
-    if phash:
-        object_path = f"{SUPABASE_POSTERS_PREFIX}/dh16/{phash[:2]}/{phash}.webp"
-    elif sha:
-        object_path = f"{SUPABASE_POSTERS_PREFIX}/sha256/{sha[:2]}/{sha}.webp"
-    else:
-        rnd = uuid.uuid4().hex
-        object_path = f"{SUPABASE_POSTERS_PREFIX}/rnd/{rnd[:2]}/{rnd}.webp"
+    # Public immutable identity is the exact encoded WebP digest. Perceptual
+    # hashes remain duplicate evidence only: using dHash as an object key can
+    # alias distinct renditions and make geometry refer to other bytes.
+    del sha256_hex
+    encoded_sha256 = hashlib.sha256(stored_bytes).hexdigest()
+    object_path = (
+        f"{SUPABASE_POSTERS_PREFIX}/image/v2/"
+        f"{encoded_sha256[:2]}/{encoded_sha256}.webp"
+    )
 
     ext, content_type = _detect_image_meta(stored_bytes)
 
@@ -884,7 +883,7 @@ def upload_to_supabase_storage(image_bytes: bytes, sha256_hex: str | None) -> tu
         public_url = _yandex_public_url(YC_STORAGE_BUCKET, object_path)
         exists = _yandex_storage_object_exists(bucket=YC_STORAGE_BUCKET, object_path=object_path)
         if exists is True:
-            return public_url, object_path
+            return public_url, object_path, encoded_sha256
         hosted = _upload_yandex_public_bytes(
             stored_bytes,
             bucket=YC_STORAGE_BUCKET,
@@ -893,20 +892,20 @@ def upload_to_supabase_storage(image_bytes: bytes, sha256_hex: str | None) -> tu
         )
         if hosted:
             _VIDEO_OBJECT_EXISTS_CACHE[(YC_STORAGE_BUCKET, object_path)] = True
-            return hosted, object_path
-        return None, None
+            return hosted, object_path, encoded_sha256
+        return None, None, None
 
     if not SUPABASE_STORAGE_ENABLED:
-        return None, None
+        return None, None, None
 
     allowed, _deny_reason = _poster_bucket_guard_allows(bucket=SUPABASE_MEDIA_BUCKET, extra_bytes=len(stored_bytes))
     if not allowed:
-        return None, None
+        return None, None, None
 
     exists = _supabase_storage_object_exists(bucket=SUPABASE_MEDIA_BUCKET, object_path=object_path)
     public_url = SUPABASE_URL.rstrip('/') + f"/storage/v1/object/public/{SUPABASE_MEDIA_BUCKET}/{object_path}"
     if exists is True:
-        return public_url, object_path
+        return public_url, object_path, encoded_sha256
 
     upload_url = SUPABASE_URL.rstrip('/') + f"/storage/v1/object/{SUPABASE_MEDIA_BUCKET}/{object_path}"
     headers = {
@@ -914,14 +913,14 @@ def upload_to_supabase_storage(image_bytes: bytes, sha256_hex: str | None) -> tu
         'Authorization': f'Bearer {SUPABASE_KEY}',
         'Content-Type': content_type,
         'x-upsert': 'false',
-        'cache-control': 'public, max-age=31536000',
+        'cache-control': 'public, max-age=31536000, immutable',
     }
     resp = requests.post(upload_url, headers=headers, data=stored_bytes, timeout=45)
     if resp.status_code not in (200, 201, 409):
         logger.warning('supabase poster upload failed: %s %s', resp.status_code, resp.text[:200])
-        return None, None
+        return None, None, None
     _VIDEO_OBJECT_EXISTS_CACHE[(SUPABASE_MEDIA_BUCKET, object_path)] = True
-    return public_url, object_path
+    return public_url, object_path, encoded_sha256
 
 
 def _bucket_item_size_bytes(item: dict) -> int:
@@ -4247,15 +4246,16 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                     except Exception as exc:
                         logger.warning('catbox upload failed for %s/%s: %s', username, msg.id, exc)
                         catbox_url = None
-                supabase_url, supabase_path = None, None
+                supabase_url, supabase_path, raw_sha256 = None, None, None
                 if SUPABASE_POSTERS_MODE == 'always' or (SUPABASE_POSTERS_MODE == 'fallback' and not catbox_url):
-                    supabase_url, supabase_path = upload_to_supabase_storage(image_bytes, sha)
+                    supabase_url, supabase_path, raw_sha256 = upload_to_supabase_storage(image_bytes, sha)
                 ocr_text, ocr_title = await ocr_image(image_bytes, message_date=msg_date)
                 posters.append({
                     'catbox_url': catbox_url,
                     'supabase_url': supabase_url,
                     'supabase_path': supabase_path,
                     'sha256': sha,
+                    'raw_sha256': raw_sha256,
                     'phash': phash,
                     'ocr_text': ocr_text,
                     'ocr_title': ocr_title,

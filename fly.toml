@@ -188,6 +188,11 @@ app = "events-bot-new-wngqia"
   EVENT_IMAGE_GEOMETRY_FOLLOWUP_SECONDS = "7"
   EVENT_IMAGE_GEOMETRY_PROVIDER_TIMEOUT_SEC = "90"
   EVENT_IMAGE_GEOMETRY_MAX_OUTPUT_TOKENS = "768"
+  # Semantic crop-role classification uses KEY4+KEY5 as its normal pool from
+  # the first request. It has no overflow-key or model fallback path.
+  EVENT_MEDIA_ROLE_GOOGLE_KEY_ENVS = "GOOGLE_API_KEY4,GOOGLE_API_KEY5"
+  EVENT_MEDIA_ROLE_RATE_RETRY_SECONDS = "600"
+  EVENT_MEDIA_ROLE_TRANSIENT_RETRY_SECONDS = "900"
   EVENT_MEDIA_REQUIRE_CDN = "1"
   EVENT_MEDIA_CDN_BASE_URL = "https://static.kenigevents.ru"
   ENABLE_EVENT_VECTOR_SYNC = "1"

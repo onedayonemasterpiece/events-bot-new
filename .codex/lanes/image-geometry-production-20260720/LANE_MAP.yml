@@ -1,0 +1,30 @@
+feature: image-geometry-production-20260720
+base: origin/main
+requirements:
+  R01: invalidate and refresh image geometry whenever poster pixels change
+  R02: prove Smart Update enqueues and accumulates geometry for new approved images
+  R03: bounded automatic recovery for transient semantic provider limits with normal key rotation
+  R04: export only pixel-current face/value geometry with provenance
+  R05: apply deterministic bbox-aware safe crop decisions in static renderers
+  R06: tests, incident regression record, docs, changelog, paced production canary and visual QA
+lanes:
+  mapper:
+    mode: read-only
+    owns: [R01, R02]
+  backend:
+    branch: agent/image-geometry-production/backend
+    worktree: /home/dev/.codex/worktrees/events-bot-new/image-geometry-backend-20260720
+    owns: [R01, R02, R03]
+  static:
+    branch: agent/image-geometry-production/static
+    worktree: /home/dev/.codex/worktrees/events-bot-new/image-geometry-static-20260720
+    owns: [R04, R05]
+  integration:
+    branch: integration/image-geometry-production-20260720
+    worktree: /home/dev/.codex/worktrees/events-bot-new/image-geometry-production-20260720
+    owns: [R06]
+dependencies:
+  - R01 -> R04
+  - R04 -> R05
+  - [R01, R02, R03, R04, R05] -> R06
+integration_order: [backend, static, integration]

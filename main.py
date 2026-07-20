@@ -5695,9 +5695,13 @@ async def upload_images(
         if not detect_image_type(data):
             return None
 
-        # Re-encode as WebP and compute a perceptual hash key for cross-env dedup.
+        # Re-encode as WebP. The object key is the exact encoded hash; perceptual
+        # hashes remain similarity evidence and must never alias mutable bytes.
         try:
-            from media_dedup import build_supabase_poster_object_path, prepare_image_for_supabase
+            from media_dedup import (
+                build_content_addressed_poster_object_path,
+                prepare_image_for_supabase,
+            )
         except Exception:
             return None
 
@@ -5721,10 +5725,9 @@ async def upload_images(
             or os.getenv("TG_MONITORING_POSTERS_PREFIX")
             or "p"
         ).strip()
-        object_path = build_supabase_poster_object_path(
-            prepared.dhash_hex,
+        object_path = build_content_addressed_poster_object_path(
+            prepared.encoded_sha256,
             prefix=posters_prefix,
-            dhash_size=16,
         )
 
         # Prefer Yandex Object Storage when credentials are configured.

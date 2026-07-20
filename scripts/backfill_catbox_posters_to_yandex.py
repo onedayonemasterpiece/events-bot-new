@@ -26,6 +26,7 @@ from db import Database
 from event_media import (
     PENDING_REVIEW,
     ensure_event_media_reviews,
+    invalidate_event_poster_visual_evidence,
     sync_event_gallery_projection,
 )
 from media_dedup import prepare_image_for_supabase
@@ -65,6 +66,7 @@ class ExistingPosterState:
 class FetchedPoster:
     data: bytes
     raw_sha256: str
+    hosted_raw_sha256: str | None
     dhash_hex: str | None
     hosted_url: str | None
     hosted_path: str | None
@@ -352,6 +354,7 @@ async def _build_fetched_poster(
     return FetchedPoster(
         data=data,
         raw_sha256=hashlib.sha256(data).hexdigest(),
+        hosted_raw_sha256=(prepared.encoded_sha256 if prepared else None),
         dhash_hex=(prepared.dhash_hex if prepared else None),
         hosted_url=None,
         hosted_path=None,
@@ -684,9 +687,13 @@ async def _process_event(
                 continue
             row = catbox_db_rows[row_idx]
             fetched = fetched_rows[fetch_idx]
+            if fetched.hosted_url and fetched.hosted_url != row.supabase_url:
+                invalidate_event_poster_visual_evidence(row)
             row.supabase_url = fetched.hosted_url
             if fetched.hosted_path:
                 row.supabase_path = fetched.hosted_path
+            if fetched.hosted_raw_sha256:
+                row.raw_sha256 = fetched.hosted_raw_sha256
             if fetched.dhash_hex and not getattr(row, "phash", None):
                 row.phash = fetched.dhash_hex
             row.updated_at = now
@@ -713,7 +720,7 @@ async def _process_event(
                     supabase_url=fetched.hosted_url,
                     supabase_path=fetched.hosted_path,
                     poster_hash=fetched.raw_sha256,
-                    raw_sha256=fetched.raw_sha256,
+                    raw_sha256=fetched.hosted_raw_sha256,
                     phash=fetched.dhash_hex,
                     review_status=PENDING_REVIEW,
                     review_reason="storage_backfill_awaiting_automated_review",
