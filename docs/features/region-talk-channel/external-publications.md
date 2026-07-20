@@ -18,9 +18,10 @@ The attached 2025–2026 research is treated as a **map of discovery contours**,
 ## Lightweight architecture
 
 ```text
-one broad external web-research request
+saved broad external web-research prompt
+  → fetch current public read-only registry generated from YDB
   → strict region_talk_external_research.v1 JSON
-  → local validation + DOI/canonical-URL dedupe
+  → local validation + live-YDB DOI/canonical-URL dedupe
   → YDB external_publication_intake_item + external_publication_source_item
   → same Region Talk E5 + BGE-M3 text evaluation
   → same RegionTalkImageDiagnostic for direct article images
@@ -68,14 +69,13 @@ Dry-run validation:
 
 ```bash
 python3 scripts/region_talk_external_publication_import.py research-result.json \
-  --request-input region-talk-external-research-input-<request_id>.json
+  --report artifacts/codex/region-talk-external-publication-import.json
 ```
 
 Explicit YDB staging write:
 
 ```bash
 python3 scripts/region_talk_external_publication_import.py research-result.json \
-  --request-input region-talk-external-research-input-<request_id>.json \
   --execute
 ```
 
@@ -87,12 +87,13 @@ The importer:
 - rejects non-HTTP schemes, private/local/reserved hosts, and non-web ports;
 - prefers normalized DOI identity, then canonical URL;
 - upserts stable IDs, so replay is idempotent;
-- requires the generated request sidecar for every executing import, verifies
-  that request/window/languages match the result, and rejects any candidate
-  already present in that sidecar's immutable seen snapshot;
+- reads the current durable YDB ledger itself for every executing import and
+  rejects already-known URL/DOI identities even if the external agent used an
+  older registry snapshot;
 - persists candidates, exclusions and unresolved leads into
-  `external_publication_seen_item`, so future sidecars suppress both accepted
-  work and previously checked noise;
+  `external_publication_seen_item`, then automatically republishes the stable
+  public registry so future launches suppress both accepted work and
+  previously checked noise;
 - reports invalid rows independently instead of aborting the valid batch;
 - requires every non-empty editorial-copy surface to have evidence-backed `copy_support`, and every referenced evidence ID to resolve;
 - forbids a clean candidate with regional/unknown source scope, out-of-window or snippet-only date, news/sales classification, hard exclusion, language mismatch, unverified product-policy match, non-full-text access, or unverified source externality;
@@ -134,29 +135,29 @@ gates remain the same.
 
 ## Ready-to-run external prompt
 
-Canonical stable prompt: [`external-publication-research.prompt.txt`](external-publication-research.prompt.txt). Do not edit it between research runs. Before every run generate a fresh `region-talk-external-research-input-<request_id>.json` sidecar from YDB with `scripts/region_talk_external_research_request.py`; attach the prompt, sidecar and result schema to the web-capable research agent. The sidecar contains the complete durable seen-publication ledger, so adding/importing a result updates later runs without editing the prompt.
+Canonical stable prompt: [`external-publication-research.prompt.txt`](external-publication-research.prompt.txt).
+It is the **only file the operator needs to save and launch**. Do not edit it
+and do not generate an attachment before a run. At execution time the agent
+must fetch, with a cache-busting query parameter, the live read-only registry:
 
-Example (the generator is read-only):
+`https://static.kenigevents.ru/region-talk/external-publications/research-registry.json`
 
-```bash
-python3 scripts/region_talk_external_research_request.py \
-  --request-id region-talk-external-2026-07-20-02 \
-  --as-of-date 2026-07-20 \
-  --window-start 2025-01-01 \
-  --window-end 2026-07-20
-```
+The registry contains non-secret policy plus the current projection of prior
+candidates, exclusions and unresolved leads. It also points to the current
+result JSON Schema. If the registry or result schema is unavailable, the agent
+must stop rather than search without duplicate protection.
 
-Attach exactly four files to the external agent:
+The registry is rebuilt from YDB and published automatically after every
+successful `--execute` import by
+`scripts/region_talk_external_research_registry.py`. The old generated request
+sidecar and `--request-input` remain accepted only for compatibility with a
+research run that was already started; they are not part of the normal launch
+workflow.
 
-1. stable prompt `external-publication-research.prompt.txt`;
-2. freshly generated runtime input JSON;
-3. runtime-input schema `external-publication-research-request.schema.json`;
-4. result schema `external-publication-research.schema.json`.
-
-The search engine may still display a known URL, but the agent must skip it
-before detailed page verification. The importer is the second enforcement
-layer: if the agent nevertheless returns a URL/DOI from the snapshot, the row
-is rejected before YDB intake/pipeline promotion.
+The search engine may still display a known URL, but the agent skips it before
+detailed page verification. The importer is the independent second layer: it
+re-reads live YDB at import time and rejects a URL/DOI that appeared after the
+agent fetched its registry snapshot.
 
 
 ## Operator chat and ranking
@@ -201,6 +202,8 @@ The chat snapshot includes policy version, stable snapshot ID, rank score, quali
 Implemented now:
 
 - versioned external-search contract and ready-to-run prompt;
+- stable public live registry and one-file saved-prompt launch, with automatic
+  registry refresh after imports and an authoritative live-YDB import guard;
 - fail-closed, idempotent YDB staging importer with row-level error ledger;
 - review-card numeric evaluation fields and editorial wording;
 - read-only on-demand queue renderer with compatible-vector MMR and anti-adjacency;

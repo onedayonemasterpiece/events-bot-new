@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import importlib
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -299,6 +301,87 @@ def test_generated_duplicate_guard_rejects_seen_candidate_before_staging() -> No
     assert result["batch"]["duplicate_seen_rejected"] == 1
     assert "already seen" in " ".join(result["rejected"][0]["errors"])
     assert all(kind != "external_publication_intake_item" for _, kind, _ in result["ydb_rows"])
+
+
+def test_live_seen_guard_needs_no_run_specific_request_sidecar() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    live = mod.duplicate_guard_from_seen_publications([{
+        "canonical_url": "https://example.org/articles/kaliningrad",
+        "doi": None,
+        "title": "Исследование побережья Калининградской области",
+        "source_name": "Внешний журнал",
+        "disposition": "candidate",
+    }])
+
+    result = mod.prepare_import(payload, duplicate_guard=live)
+
+    assert not result["valid"]
+    assert result["batch"]["duplicate_seen_rejected"] == 1
+    assert live["request"] == {}
+
+
+def test_live_and_legacy_guards_merge_without_losing_identities() -> None:
+    mod = load_module()
+    payload = valid_payload()
+    legacy = {
+        "snapshot_id": "rtseen_legacy",
+        "request": dict(payload["run"]),
+        "urls": {"https://legacy.example.org/item"},
+        "dois": set(),
+    }
+    live = {
+        "snapshot_id": "rtseen_live",
+        "request": {},
+        "urls": {"https://live.example.org/item"},
+        "dois": {"10.1234/live"},
+    }
+
+    merged = mod.merge_duplicate_guards(legacy, live)
+
+    assert merged is not None
+    assert merged["request"] == payload["run"]
+    assert merged["urls"] == {"https://legacy.example.org/item", "https://live.example.org/item"}
+    assert merged["dois"] == {"10.1234/live"}
+
+
+def test_execute_without_sidecar_uses_live_ydb_guard_and_refreshes_registry(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    mod = load_module()
+    payload = valid_payload()
+    payload["candidates"] = []
+    input_path = tmp_path / "result.json"
+    report_path = tmp_path / "report.json"
+    input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    request_mod = importlib.import_module("scripts.region_talk_external_research_request")
+    registry_mod = importlib.import_module("scripts.region_talk_external_research_registry")
+    monkeypatch.setattr(request_mod, "read_seen_from_ydb", lambda _limit: [])
+    monkeypatch.setattr(mod, "write_ydb", lambda rows: len(rows))
+    monkeypatch.setattr(
+        registry_mod,
+        "publish_current_registry",
+        lambda *, seen_limit: {"seen_publication_count": 0, "seen_limit": seen_limit},
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(MODULE_PATH),
+            str(input_path),
+            "--report",
+            str(report_path),
+            "--execute",
+        ],
+    )
+
+    assert mod.main() == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["live_duplicate_guard_applied"] is True
+    assert report["registry_publication"]["seen_limit"] == 20000
+    assert report["registry_publication_error"] is None
 
 
 def test_duplicate_guard_request_must_match_research_result() -> None:

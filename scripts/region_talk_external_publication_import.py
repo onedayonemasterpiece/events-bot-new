@@ -185,6 +185,48 @@ def load_duplicate_guard(path: Path) -> dict[str, Any]:
     }
 
 
+def duplicate_guard_from_seen_publications(seen_publications: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build an import-time guard from the current durable YDB projection."""
+    canonical_seen = sorted(
+        seen_publications,
+        key=lambda item: (str(item.get("doi") or ""), str(item.get("canonical_url") or "")),
+    )
+    raw = json.dumps(canonical_seen, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    urls: set[str] = set()
+    dois: set[str] = set()
+    for item in canonical_seen:
+        if item.get("canonical_url"):
+            urls.add(canonicalize_http_url(item.get("canonical_url")))
+        if item.get("doi"):
+            dois.add(normalize_doi(item.get("doi")))
+    return {
+        "snapshot_id": "rtseen_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24],
+        "request": {},
+        "urls": urls,
+        "dois": dois,
+    }
+
+
+def merge_duplicate_guards(*guards: dict[str, Any] | None) -> dict[str, Any] | None:
+    present = [guard for guard in guards if guard]
+    if not present:
+        return None
+    explicit_request = next(
+        (
+            guard.get("request")
+            for guard in present
+            if isinstance(guard.get("request"), dict) and guard.get("request")
+        ),
+        {},
+    )
+    return {
+        "snapshot_id": "+".join(str(guard.get("snapshot_id") or "unknown") for guard in present),
+        "request": explicit_request,
+        "urls": set().union(*(guard.get("urls", set()) for guard in present)),
+        "dois": set().union(*(guard.get("dois", set()) for guard in present)),
+    }
+
+
 def _require_mapping(value: Any, field: str, errors: list[str]) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -452,7 +494,7 @@ def prepare_import(
         raise ContractError("run window must use YYYY-MM-DD") from exc
     if str(run.get("window_start")) > str(run.get("window_end")):
         raise ContractError("run.window_start must not be after window_end")
-    if duplicate_guard:
+    if duplicate_guard and duplicate_guard.get("request"):
         request = duplicate_guard.get("request") if isinstance(duplicate_guard.get("request"), dict) else {}
         expected = {
             "request_id": request.get("request_id"),
@@ -715,7 +757,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("input", type=Path, help="JSON result conforming to region_talk_external_research.v1")
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--report", type=Path, default=ROOT / "artifacts" / "codex" / "region-talk-external-publication-import.json")
-    parser.add_argument("--request-input", type=Path, help="Generated region_talk_external_research_request.v1 sidecar used by the research agent")
+    parser.add_argument("--request-input", type=Path, help="Legacy optional request sidecar; live YDB duplicate checking is always applied on --execute")
     parser.add_argument("--execute", action="store_true", help="Write idempotent staging rows to YDB; default is validation/dry-run")
     return parser.parse_args()
 
@@ -723,12 +765,30 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     load_env(args.env_file)
-    if args.execute and args.request_input is None:
-        raise ContractError("--execute requires --request-input so cross-run duplicate protection cannot be bypassed")
     duplicate_guard = load_duplicate_guard(args.request_input) if args.request_input else None
+    if args.execute:
+        # Import-time YDB state is authoritative.  This closes the race between
+        # an older research snapshot and a later import, and removes any need
+        # for the operator to prepare a sidecar before launching saved prompts.
+        from scripts.region_talk_external_research_request import read_seen_from_ydb
+
+        live_seen = read_seen_from_ydb(20000)
+        duplicate_guard = merge_duplicate_guards(
+            duplicate_guard,
+            duplicate_guard_from_seen_publications(live_seen),
+        )
     payload = json.loads(args.input.read_text(encoding="utf-8"))
     result = prepare_import(payload, duplicate_guard=duplicate_guard)
     written = write_ydb(result["ydb_rows"]) if args.execute else 0
+    registry_publication: dict[str, Any] | None = None
+    registry_error = ""
+    if args.execute:
+        try:
+            from scripts.region_talk_external_research_registry import publish_current_registry
+
+            registry_publication = publish_current_registry(seen_limit=20000)
+        except Exception as exc:  # YDB rows are already durable; expose repair evidence.
+            registry_error = f"{type(exc).__name__}: {exc}"
     report = {
         "batch": result["batch"],
         "valid_ids": [row["external_publication_id"] for row in result["valid"]],
@@ -736,10 +796,15 @@ def main() -> int:
         "planned_ydb_rows": len(result["ydb_rows"]),
         "written_ydb_rows": written,
         "executed": bool(args.execute),
+        "live_duplicate_guard_applied": bool(args.execute),
+        "registry_publication": registry_publication,
+        "registry_publication_error": registry_error or None,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    if registry_error:
+        return 3
     return 0 if not result["rejected"] else 2
 
 
