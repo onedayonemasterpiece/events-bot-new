@@ -65,7 +65,13 @@
   plain desktop activation and native detail navigation on mobile; delete the
   invented numeric discussion/mention fixtures, show only exported share counts
   and a qualitative source-grounded `Обсуждают` reason, and compensate mobile
-  row padding so lifecycle bullets sit exactly on the vertical spine.
+  row padding so lifecycle bullets sit exactly on the vertical spine. Make
+  `L/X/G/F/A` physical-key commands work across Latin and Russian keyboard
+  layouts; replace the discontinuous deck reserve with contact-connected,
+  full-photo-readable right stacks; and add an experimental bounded desktop
+  `←/→` group pager with seven reusable media shells, reversible history,
+  compositor-only cinematic deal motion, resize cancellation and an instant
+  reduced-motion path while retaining direct event navigation on mobile.
 
 ### Added
 - **Personal exhibitions product prototype**: add a separate dark timeline

@@ -168,3 +168,46 @@ v7_lanes:
     verification_scope: full_local
     effort: high
     status: completed
+v8_lanes:
+  - id: v8-keyboard-layout-audit
+    role: planner
+    requirement_ids: [V8-R1]
+    target: physical-key shortcut mapping for Latin and Russian layouts with safe event guards
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v8-deck-contact-audit
+    role: planner
+    requirement_ids: [V8-R2]
+    target: derive a no-gap full-photo/stack contact rule across responsive widths
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v8-paging-motion-audit
+    role: planner
+    requirement_ids: [V8-R3]
+    target: bounded group paging, virtualization, FLIP/WAAPI motion and reduced-motion contract
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: high
+    status: completed
+  - id: v8-integration
+    role: worker
+    requirement_ids: [V8-R1, V8-R2, V8-R3]
+    target: integrate code-first shortcuts, contact geometry and the experimental desktop deck pager
+    depends_on: [v8-keyboard-layout-audit, v8-deck-contact-audit, v8-paging-motion-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/index.astro
+      - site/src/components/ExhibitionPrototypeRow.astro
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    verification_scope: full_local
+    effort: high
+    status: completed

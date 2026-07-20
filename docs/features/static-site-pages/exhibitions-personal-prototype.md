@@ -347,6 +347,53 @@ delta `0`, connector rounding не больше `0.01px`, zero overflow; desktop
 открывает gallery без отдельной иконки, mobile media — detail. Финальный
 повторный gate той же Pro-линии дал `ACCEPT` по R1–R3 без P0/P1/P2.
 
+### V8: физические клавиши и разбор колоды
+
+Команды оценки теперь определяются прежде всего по физическому
+`KeyboardEvent.code`: `KeyL`, `KeyX`, `KeyG`, `KeyF`, `KeyA`. Поэтому `L/X`
+работают и при русской раскладке (`д/ч` в `event.key`), а латинский
+`event.key` оставлен только как fallback. Команды не выполняются при
+модификаторах, автоповторе, IME composition и внутри editable controls;
+`↑/↓` остаются layout-independent навигацией списка.
+
+Правый overflow больше не рассчитывается через консервативный резерв всех
+sliver-ов. Полные фото набираются до компактного badge-reserve, после чего
+первая карта стопки обязана соприкасаться с последней полной карточкой с
+нахлёстом не менее `8px` desktop / `6px` mobile. Полные фотографии лежат выше
+стопки по z-axis, поэтому дополнительная полная карточка остаётся читаемой, а
+из-под неё справа выходят последовательно уменьшающиеся края колоды. `+N`
+привязан к фактическому последнему краю и всегда равен числу фотографий после
+текущей полностью раскрытой группы. Ширина media-column и hover geometry не
+меняются.
+
+На desktop `←/→` с roving-title выбранной выставки или с фокусом на её
+media-link экспериментально листают фотографии группами. Текущая полная группа
+за `190ms` ускоряется за левый/правый край, затем следующие карточки за
+`470ms` с stagger `36ms` раскладываются из стопки через FLIP/WAAPI и
+`cubic-bezier(.16,1,.3,1)`. Анимируются только `transform` и `opacity`; deck,
+row и текстовая колонка остаются неподвижны. Состояние хранится отдельно для
+каждой колоды (`cursor/history/phase/queued`), конец не зацикливается, быстрые
+нажатия сводятся к одной ожидающей команде, resize сначала отменяет активные
+WAAPI animations. При `prefers-reduced-motion: reduce` страница переключается
+мгновенно без motion objects. На `≤820px` стрелки фото не перехватываются, а
+media-link по-прежнему ведёт прямо на страницу события.
+
+Чтобы длинный список не создавал DOM по числу всех фотографий, каждая строка
+имеет не больше семи переиспользуемых frame-shells. Полный сортированный
+manifest хранит реальные размеры, srcset, crop evidence и source index;
+логические фотографии rebound-ятся в shells текущей группы и ближайшей
+стопки. Пятый depth-level остаётся нейтрально-серым, но получает настоящее
+изображение и skeleton, когда доходит до раскрытой группы.
+
+Предварительный Gemini 3.1 Pro (High) review дал `REVISE`: потребовал
+ограничить DOM вместо рендера всех media, добавить stagger, локализовать
+перехват стрелок и отменять WAAPI перед resize. Все четыре замечания включены
+в реализацию; глобального перехвата `←/→`, 3D rotate, spring и анимации layout
+properties нет. Финальный review той же Pro-линии дал `ACCEPT` по R1–R3 без
+P0/P1. Единственный P2 о fractional zoom дополнительно закрыт Playwright
+проверкой `100/125/150%` на `1020/1440px`: межгрупповой зазор не появился,
+frames остались внутри deck, `+N` не изменился.
+
 ## Проверка
 
 ```bash
@@ -364,11 +411,16 @@ errors, одинаковую desktop media-column/body vertical alignment, вы�
 planes, серый tail без image, неподвижный hover, keyboard movement и gallery.
 Loading gate задерживает первый image: skeleton виден до ответа, исчезает после
 load, а deck geometry имеет delta `0`. Последний source/build gate: Astro build
-`381` pages и prototype contract `45/45`; production route/data/ranking не
+`381` pages и prototype contract `50/50`; production route/data/ranking не
 менялись. V6 Playwright дополнительно проверяет: short timeline connector,
 единственный roving target, Up/Down с body/media/actions, нативный Enter,
 центровку rejected stub по surface, отсутствие keyboard/gallery affordances на
 mobile и прямую media navigation. V7 gate дополнительно проверяет отсутствие
 painted gallery icon, real share values, отсутствие numeric mentions/comments,
 qualitative `Обсуждают`, desktop gallery/media-link fallback и совпадение осей
-dot/spine/connector на трёх mobile widths.
+dot/spine/connector на трёх mobile widths. V8 gate дополнительно проверяет
+русские `key=д/code=KeyL` и `key=ч/code=KeyX`, игнорирование
+modifier/repeat/composition, отсутствие межгруппового зазора на `375, 768, 820,
+821, 900, 1020, 1021, 1045, 1100, 1440px`, точную формулу `+N`, forward/back
+history до дна колоды, bounded rapid input, неизменность deck/row rect,
+мгновенный reduced-motion switch и нулевой mobile cursor после `←/→`.

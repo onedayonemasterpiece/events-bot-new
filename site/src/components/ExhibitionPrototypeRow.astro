@@ -124,9 +124,31 @@ if (!media.length && event.image_url) {
 const galleryImages = [...media].sort((a, b) => a.sourceIndex - b.sourceIndex).map((asset) => asset.src);
 // Discovery starts with verified, crop-safe event photos; the identity poster
 // remains intact and reachable in the source-order gallery.
-const visibleMedia = [...media]
+const deckMedia = [...media]
   .sort((a, b) => a.sortPriority - b.sortPriority || a.sourceIndex - b.sourceIndex)
-  .slice(0, 6);
+  .map((asset, mediaIndex) => ({
+    mediaIndex,
+    sourceIndex: asset.sourceIndex,
+    src: asset.src,
+    srcset: asset.thumbnailSrcset,
+    width: asset.width,
+    height: asset.height,
+    sourceRatio: asset.sourceRatio,
+    presentationRatio: asset.presentationRatio,
+    treatment: asset.treatment,
+    token: asset.token,
+    mediaRole: asset.mediaRole,
+    textMode: asset.textMode,
+    safeCrop: asset.safeCrop,
+    cropReason: asset.cropReason,
+    cropLoss: asset.cropLoss,
+    objectPosition: asset.objectPosition,
+  }));
+// Seven reusable shells are enough for the widest page (up to four full
+// photographs plus three depth cards). Logical media are rebound into these
+// shells as the deck is paged, rather than rendering every source image in
+// every row of a long listing.
+const deckSlotCount = Math.min(7, Math.max(1, deckMedia.length));
 const detailHref = withBase(`/sobytiya/${event.slug}/`);
 const likeCount = Number(event.likes_count || 0);
 const shareCount = Number(event.shares_count || 0);
@@ -164,45 +186,34 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     data-gallery-open
     data-gallery-title={event.title}
     data-gallery-images={JSON.stringify(galleryImages)}
-    data-media-total={String(galleryImages.length || 1)}
+    data-deck-manifest={JSON.stringify(deckMedia)}
+    data-media-total={String(deckMedia.length || 1)}
+    data-deck-cursor="0"
+    data-deck-phase="idle"
+    aria-keyshortcuts="ArrowLeft ArrowRight Enter"
     aria-label={`Подробнее о выставке «${event.title}», ${galleryImages.length || 1} фото`}
   >
     <span class="ex-deck__images" data-deck-images aria-hidden="true">
-      {visibleMedia.map((asset, index: number) => (
+      {Array.from({ length: deckSlotCount }, (_, slotIndex) => (
         <span
           class="ex-deck__frame"
           data-deck-frame
-          data-deck-visual={index >= 5 ? 'depth-tail' : 'media'}
-          data-image-state={index >= 5 ? 'depth' : 'loading'}
-          data-media-treatment={asset.treatment}
-          data-media-token={asset.token}
-          data-media-role={asset.mediaRole}
-          data-image-text-mode={asset.textMode}
-          data-safe-crop={asset.safeCrop ? 'true' : 'false'}
-          data-crop-reason={asset.cropReason}
-          data-crop-loss={asset.cropLoss.toFixed(5)}
-          data-source-ratio={asset.sourceRatio.toFixed(5)}
-          data-presentation-ratio={asset.presentationRatio.toFixed(5)}
-          style={`--deck-index:${index};--media-ratio:${asset.presentationRatio.toFixed(5)};--media-position:${asset.objectPosition}`}
+          data-deck-slot={String(slotIndex)}
+          data-deck-visual="media"
+          data-image-state="idle"
+          hidden
         >
-          {index < 5 ? (
-            <>
-              <img
-                data-deck-image
-                src={asset.src}
-                srcset={asset.thumbnailSrcset || undefined}
-                sizes="(max-width: 740px) 48vw, 190px"
-                alt=""
-                width={asset.width}
-                height={asset.height}
-                loading={rowIndex > 2 ? 'lazy' : 'eager'}
-                decoding="async"
-              />
-              <span class="ex-deck__skeleton" data-image-skeleton aria-hidden="true"></span>
-            </>
-          ) : (
-            <span class="ex-deck__depth-plane" aria-hidden="true"></span>
-          )}
+          <img
+            data-deck-image
+            sizes="(max-width: 740px) 48vw, 190px"
+            alt=""
+            width="1"
+            height="1"
+            loading={rowIndex > 2 ? 'lazy' : 'eager'}
+            decoding="async"
+          />
+          <span class="ex-deck__skeleton" data-image-skeleton aria-hidden="true"></span>
+          <span class="ex-deck__depth-plane" aria-hidden="true"></span>
         </span>
       ))}
     </span>
@@ -218,7 +229,7 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
         href={detailHref}
         data-row-focus
         tabindex={rowIndex === 0 ? '0' : '-1'}
-        aria-keyshortcuts="ArrowUp ArrowDown Enter L X G"
+        aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Enter L X G"
         aria-label={actionLabel}
       >{event.title}</a>
     </div>

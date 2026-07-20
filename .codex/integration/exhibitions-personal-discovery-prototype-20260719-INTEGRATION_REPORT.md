@@ -62,3 +62,28 @@ V6 local verification: Astro build `381` pages; prototype contract `43/43`; Play
 | V7-R3 | Align mobile bullet to the vertical line | Done | At `375`, `390`, `768px`, every visible row measures `dotX-spineX=0`; connector start/end rounding is under `0.01px`; overflow is zero. |
 
 V7 local verification: Astro build `381` pages; prototype contract `45/45`; Playwright desktop/mobile interaction and screenshot gate reported zero console/page errors and hover geometry delta `0`. Predesign and final `agy` gates with `Gemini 3.1 Pro (High)`: `ACCEPT`; final R1–R3 had no P0/P1/P2.
+
+## v8 physical shortcuts / contact stack / experimental paging closure
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| V8-R1 | `L/X` keep working with a Russian keyboard layout | Done | Code-first `KeyL/KeyX` mapping with Latin key fallback; Playwright dispatches `key=д/code=KeyL` and `key=ч/code=KeyX`; modifier/repeat guards preserve state. `G/F/A` use the same contract. |
+| V8-R2 | Remove the conditional blank between full photographs and the right deck | Done | First stack plane contacts/overlaps the last full card; full cards stay above the pile and remain readable. Playwright reports no gap, overflow or count-equation violation at `375, 768, 820, 821, 900, 1020, 1021, 1045, 1100, 1440px`. |
+| V8-R3 | Experimental `←/→` group deal with cinematic motion | Done | Per-deck cursor/history, bounded queue, seven rebound shells, `190ms` exit + `470ms` staggered FLIP arrival, no loop, exact reverse, resize cancellation, instant reduced-motion and mobile no-op/direct-detail. |
+
+The pre-design `agy` run with `Gemini 3.1 Pro (High)` returned `REVISE` and
+identified four concrete risks: rendering every media source, simultaneous
+conveyor-like motion, broad arrow interception and resize/WAAPI races. The
+integrated solution bounds each deck to seven physical shells, staggers the
+deal, intercepts `←/→` only from the selected row title or its own media link,
+and cancels active animations before responsive relayout. The final Pro gate
+returned `ACCEPT`, R1–R3 `PASS`, no P0/P1. Its sole P2 asked for fractional
+zoom coverage; Playwright at `100/125/150%` on `1020/1440px` kept every frame
+inside the deck with no positive gap and an unchanged `+N` equation.
+
+V8 local verification: Astro build `381` pages; prototype contract `50/50`;
+built-dist Playwright confirms Russian-layout actions, exact forward/reverse
+cursor and counter state, stable row/deck/hover rectangles, responsive no-gap
+geometry, bounded rapid input, instant reduced motion, delayed-image skeleton
+without geometry shift, mobile direct-detail behavior, zero horizontal overflow
+and zero prototype console/page errors.
