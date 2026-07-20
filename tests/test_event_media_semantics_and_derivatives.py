@@ -10,6 +10,7 @@ from PIL import Image
 import event_media
 from db import Database
 from media_dedup import (
+    ImageFingerprints,
     build_event_thumbnail_object_path,
     prepare_image_for_supabase,
 )
@@ -254,6 +255,176 @@ async def test_geometry_cache_reuses_pixel_identity_across_events(
 
 
 @pytest.mark.asyncio
+async def test_geometry_pixel_mismatch_is_not_current_and_is_selected(tmp_path) -> None:
+    db = Database(str(tmp_path / "geometry-stale-pixel.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Changed pixels",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        geometry = EventImageGeometry(
+            pixel_sha256="a" * 64,
+            model=event_media.image_geometry_model(),
+            prompt_version=event_media.IMAGE_GEOMETRY_PROMPT_VERSION,
+            status="classified",
+        )
+        session.add(geometry)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="stale-link",
+            supabase_url="https://static.kenigevents.ru/changed.webp",
+            review_status="approved",
+            pixel_sha256="b" * 64,
+            image_geometry_id=int(geometry.id),
+        )
+        session.add(poster)
+        await session.commit()
+        await session.refresh(poster)
+
+        assert await event_media._current_geometry_for_poster(session, poster) is None
+        assert await event_media._next_geometry_candidate_id(
+            session, int(event.id)
+        ) == int(poster.id)
+    await db.engine.dispose()
+
+
+def test_pixel_fingerprint_change_invalidates_geometry_and_semantic_crop() -> None:
+    poster = EventPoster(
+        event_id=1,
+        poster_hash="fingerprint-change",
+        pixel_sha256="a" * 64,
+        image_geometry_id=9,
+        media_semantic_status="classified",
+        media_role="event_photo",
+        focal_x=0.4,
+        focal_y=0.6,
+        safe_crop=True,
+    )
+    fp = ImageFingerprints(
+        raw_sha256="c" * 64,
+        pixel_sha256="b" * 64,
+        dhash_hex="d" * 64,
+        phash_hex="e" * 64,
+        width=100,
+        height=200,
+        mime_type="image/webp",
+    )
+
+    event_media._apply_fingerprints(poster, fp)
+
+    assert poster.raw_sha256 == "c" * 64
+    assert poster.pixel_sha256 == "b" * 64
+    assert poster.image_geometry_id is None
+    assert poster.media_semantic_status == "pending"
+    assert poster.media_semantic_reason_code == "pixel_identity_changed"
+    assert poster.media_role is None
+    assert poster.focal_x is None and poster.focal_y is None
+    assert poster.safe_crop is False
+
+
+@pytest.mark.asyncio
+async def test_coalesced_pending_media_job_is_moved_earlier_for_ready_work(
+    tmp_path,
+) -> None:
+    db = Database(str(tmp_path / "media-job-coalesce.sqlite"))
+    await db.init()
+    now = event_media.datetime.now(event_media.timezone.utc)
+    async with db.get_session() as session:
+        assert await event_media.enqueue_event_media_review_job(
+            session,
+            123,
+            next_run_at=now + event_media.timedelta(hours=20),
+            force_followup=True,
+        )
+        assert not await event_media.enqueue_event_media_review_job(
+            session,
+            123,
+            next_run_at=now + event_media.timedelta(seconds=7),
+            force_followup=True,
+        )
+        await session.commit()
+        job = (
+            await session.execute(
+                event_media.select(event_media.JobOutbox).where(
+                    event_media.JobOutbox.event_id == 123
+                )
+            )
+        ).scalar_one()
+    await db.engine.dispose()
+    next_run_at = job.next_run_at
+    if next_run_at.tzinfo is None:
+        next_run_at = next_run_at.replace(tzinfo=event_media.timezone.utc)
+    assert next_run_at == now + event_media.timedelta(seconds=7)
+
+
+@pytest.mark.asyncio
+async def test_future_semantic_retry_remains_armed_after_geometry_is_current(
+    tmp_path,
+) -> None:
+    db = Database(str(tmp_path / "semantic-retry-armed.sqlite"))
+    await db.init()
+    now = event_media.datetime.now(event_media.timezone.utc)
+    retry_at = now + event_media.timedelta(minutes=10)
+    async with db.get_session() as session:
+        event = Event(
+            title="Retry remains armed",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        geometry = EventImageGeometry(
+            pixel_sha256="a" * 64,
+            model=event_media.image_geometry_model(),
+            prompt_version=event_media.IMAGE_GEOMETRY_PROMPT_VERSION,
+            status="classified",
+        )
+        session.add(geometry)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="future-semantic-retry",
+            supabase_url="https://static.kenigevents.ru/retry.webp",
+            review_status="approved",
+            pixel_sha256="a" * 64,
+            image_geometry_id=int(geometry.id),
+            media_semantic_status="pending",
+            media_semantic_prompt_version=event_media.MEDIA_ROLE_PROMPT_VERSION,
+            media_semantic_context_hash=event_media._context_hash(event),
+            media_semantic_classified_at=retry_at,
+        )
+        session.add(poster)
+        await session.commit()
+        event_id = int(event.id)
+
+    assert await event_media.review_next_event_media_pair(event_id, db) is False
+    async with db.get_session() as session:
+        job = (
+            await session.execute(
+                event_media.select(event_media.JobOutbox).where(
+                    event_media.JobOutbox.event_id == event_id
+                )
+            )
+        ).scalar_one()
+    await db.engine.dispose()
+    job_at = job.next_run_at
+    if job_at.tzinfo is None:
+        job_at = job_at.replace(tzinfo=event_media.timezone.utc)
+    assert job_at == retry_at
+
+
+@pytest.mark.asyncio
 async def test_geometry_download_failure_is_item_level(tmp_path, monkeypatch) -> None:
     db = Database(str(tmp_path / "geometry-download.sqlite"))
     await db.init()
@@ -396,3 +567,172 @@ async def test_pending_semantic_role_does_not_starve_geometry(
     await db.engine.dispose()
     assert changed is True
     assert calls == [("semantic", ids[1]), ("geometry", ids[1])]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("provider_error", "minimum_delay_seconds"),
+    [
+        ("429 RESOURCE_EXHAUSTED rpm", 590),
+        ("RateLimitError:rpd", 3600),
+        ("TimeoutError:timed out", 890),
+    ],
+)
+async def test_transient_media_role_failure_is_delayed_and_uses_normal_key_pool(
+    tmp_path, monkeypatch, provider_error, minimum_delay_seconds
+) -> None:
+    db = Database(str(tmp_path / f"semantic-retry-{minimum_delay_seconds}.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Semantic retry",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="semantic-retry",
+            supabase_url="https://static.kenigevents.ru/retry.webp",
+            review_status="approved",
+            media_semantic_status="pending",
+        )
+        session.add(poster)
+        await session.commit()
+        ids = int(event.id), int(poster.id)
+
+    async def fake_download(_poster):
+        return event_media.DownloadedPoster(
+            data=_jpeg_bytes(64, 48),
+            mime_type="image/jpeg",
+            source_url="https://static.kenigevents.ru/retry.webp",
+        )
+
+    async def fake_budget(*_args):
+        return True
+
+    captured_init: dict[str, object] = {}
+
+    class FakeGoogleAIClient:
+        def __init__(self, **kwargs):
+            captured_init.update(kwargs)
+
+        async def generate_content_async(self, **_kwargs):
+            raise RuntimeError(provider_error)
+
+    import google_ai
+    import main
+
+    monkeypatch.setattr(event_media, "_download_poster", fake_download)
+    monkeypatch.setattr(event_media, "_claim_feature_budget", fake_budget)
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+    monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
+    monkeypatch.setattr(main, "get_supabase_client", lambda: object())
+    monkeypatch.setenv(
+        "EVENT_MEDIA_ROLE_GOOGLE_KEY_ENVS", "GOOGLE_API_KEY4,GOOGLE_API_KEY5"
+    )
+
+    before = event_media.datetime.now(event_media.timezone.utc)
+    assert await event_media._classify_event_poster_role(*ids, db) is False
+
+    async with db.get_session() as session:
+        poster = await session.get(EventPoster, ids[1])
+        job = (
+            await session.execute(
+                event_media.select(event_media.JobOutbox).where(
+                    event_media.JobOutbox.event_id == ids[0],
+                    event_media.JobOutbox.status == event_media.JobStatus.pending,
+                )
+            )
+        ).scalar_one()
+    await db.engine.dispose()
+    retry_at = poster.media_semantic_classified_at
+    job_at = job.next_run_at
+    if retry_at.tzinfo is None:
+        retry_at = retry_at.replace(tzinfo=event_media.timezone.utc)
+    if job_at.tzinfo is None:
+        job_at = job_at.replace(tzinfo=event_media.timezone.utc)
+    assert poster.media_semantic_status == "pending"
+    assert poster.media_semantic_reason_code.startswith("transient_provider_error:")
+    assert retry_at >= before + event_media.timedelta(seconds=minimum_delay_seconds)
+    assert job_at == retry_at
+    assert captured_init["default_env_var_name"] == "GOOGLE_API_KEY4"
+    assert captured_init["reserve_key_envs"] == [
+        "GOOGLE_API_KEY4",
+        "GOOGLE_API_KEY5",
+    ]
+    assert captured_init["reserve_overflow_key_envs"] == []
+
+
+@pytest.mark.asyncio
+async def test_invalid_media_role_response_remains_permanent_error(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "semantic-permanent.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Semantic invalid",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="semantic-invalid",
+            supabase_url="https://static.kenigevents.ru/invalid.webp",
+            review_status="approved",
+            media_semantic_status="pending",
+        )
+        session.add(poster)
+        await session.commit()
+        ids = int(event.id), int(poster.id)
+
+    async def fake_download(_poster):
+        return event_media.DownloadedPoster(
+            data=_jpeg_bytes(64, 48),
+            mime_type="image/jpeg",
+            source_url="https://static.kenigevents.ru/invalid.webp",
+        )
+
+    async def fake_budget(*_args):
+        return True
+
+    class FakeGoogleAIClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def generate_content_async(self, **_kwargs):
+            return "{}", None
+
+    import google_ai
+    import main
+
+    monkeypatch.setattr(event_media, "_download_poster", fake_download)
+    monkeypatch.setattr(event_media, "_claim_feature_budget", fake_budget)
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+    monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
+    monkeypatch.setattr(main, "get_supabase_client", lambda: object())
+
+    assert await event_media._classify_event_poster_role(*ids, db) is False
+    async with db.get_session() as session:
+        poster = await session.get(EventPoster, ids[1])
+        jobs = (
+            await session.execute(
+                event_media.select(event_media.JobOutbox).where(
+                    event_media.JobOutbox.event_id == ids[0]
+                )
+            )
+        ).scalars().all()
+    await db.engine.dispose()
+    assert poster.media_semantic_status == "error"
+    assert poster.media_semantic_reason_code == "invalid_or_low_confidence_media_role"
+    assert jobs == []

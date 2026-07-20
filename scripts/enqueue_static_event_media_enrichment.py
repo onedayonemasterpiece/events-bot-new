@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import sys
 
@@ -20,8 +20,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from db import Database
-from event_media import MEDIA_ROLE_PROMPT_VERSION, enqueue_event_media_review_job
-from models import Event, EventPoster
+from event_media import (
+    IMAGE_GEOMETRY_PROMPT_VERSION,
+    MEDIA_ROLE_PROMPT_VERSION,
+    enqueue_event_media_review_job,
+    image_geometry_model,
+)
+from models import Event, EventImageGeometry, EventPoster
 
 
 def static_event_eligibility(from_date: str):
@@ -38,6 +43,74 @@ def static_event_eligibility(from_date: str):
     )
 
 
+def static_media_enrichment_statement(
+    *,
+    from_date: str,
+    limit: int,
+    event_id: int | None = None,
+    retry_errors: bool = False,
+    now: datetime | None = None,
+):
+    role_statuses = [None, "pending", "stale"]
+    if retry_errors:
+        role_statuses.append("error")
+    needs_semantics = or_(
+        EventPoster.media_semantic_status.in_(
+            [value for value in role_statuses if value is not None]
+        ),
+        EventPoster.media_semantic_status.is_(None),
+        EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
+        EventPoster.media_semantic_prompt_version.is_(None),
+    )
+    needs_derivative = or_(
+        EventPoster.thumbnail_256_url.is_(None),
+        EventPoster.thumbnail_512_url.is_(None),
+        EventPoster.width.is_(None),
+        EventPoster.height.is_(None),
+    )
+    retry_before = (now or datetime.now(timezone.utc)) - timedelta(hours=20)
+    geometry_model = image_geometry_model()
+    needs_geometry = or_(
+        EventPoster.image_geometry_id.is_(None),
+        EventImageGeometry.id.is_(None),
+        EventPoster.pixel_sha256.is_(None),
+        EventImageGeometry.pixel_sha256.is_(None),
+        EventPoster.pixel_sha256 != EventImageGeometry.pixel_sha256,
+        EventImageGeometry.model.is_(None),
+        EventImageGeometry.model != geometry_model,
+        EventImageGeometry.prompt_version.is_(None),
+        EventImageGeometry.prompt_version != IMAGE_GEOMETRY_PROMPT_VERSION,
+        EventImageGeometry.status.is_(None),
+        and_(
+            EventImageGeometry.status != "classified",
+            EventImageGeometry.status != "error",
+        ),
+        and_(
+            EventImageGeometry.status == "error",
+            EventImageGeometry.updated_at <= retry_before,
+        ),
+    )
+    stmt = (
+        select(Event.id, func.count(EventPoster.id).label("media_count"))
+        .join(EventPoster, EventPoster.event_id == Event.id)
+        .outerjoin(
+            EventImageGeometry,
+            EventPoster.image_geometry_id == EventImageGeometry.id,
+        )
+        .where(
+            EventPoster.review_status == "approved",
+            or_(needs_derivative, needs_semantics, needs_geometry),
+            static_event_eligibility(str(from_date)),
+        )
+        .group_by(Event.id)
+        .order_by(Event.date.asc(), Event.id.asc())
+        .limit(max(1, int(limit)))
+    )
+    if event_id:
+        stmt = stmt.where(Event.id == int(event_id))
+    return stmt
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", default="db.sqlite")
@@ -51,35 +124,12 @@ async def main() -> int:
     db = Database(str(args.db))
     await db.init()
     async with db.get_session() as session:
-        role_statuses = [None, "pending", "stale"]
-        if args.retry_errors:
-            role_statuses.append("error")
-        needs_semantics = or_(
-            EventPoster.media_semantic_status.in_([value for value in role_statuses if value is not None]),
-            EventPoster.media_semantic_status.is_(None),
-            EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
-            EventPoster.media_semantic_prompt_version.is_(None),
+        stmt = static_media_enrichment_statement(
+            from_date=str(args.from_date),
+            limit=int(args.limit),
+            event_id=args.event_id,
+            retry_errors=bool(args.retry_errors),
         )
-        needs_derivative = or_(
-            EventPoster.thumbnail_256_url.is_(None),
-            EventPoster.thumbnail_512_url.is_(None),
-            EventPoster.width.is_(None),
-            EventPoster.height.is_(None),
-        )
-        stmt = (
-            select(Event.id, func.count(EventPoster.id).label("media_count"))
-            .join(EventPoster, EventPoster.event_id == Event.id)
-            .where(
-                EventPoster.review_status == "approved",
-                or_(needs_derivative, needs_semantics),
-                static_event_eligibility(str(args.from_date)),
-            )
-            .group_by(Event.id)
-            .order_by(Event.date.asc(), Event.id.asc())
-            .limit(max(1, int(args.limit)))
-        )
-        if args.event_id:
-            stmt = stmt.where(Event.id == int(args.event_id))
         rows = (await session.execute(stmt)).all()
         print(f"candidates={len(rows)} apply={int(args.apply)} from_date={args.from_date}")
         if not args.apply:

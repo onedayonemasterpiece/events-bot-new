@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import types
 
@@ -91,12 +92,8 @@ async def test_upload_images_prefers_yandex_storage(monkeypatch):
         lambda *_args, **_kwargs: types.SimpleNamespace(
             dhash_hex="abc123",
             webp_bytes=b"webp-bytes",
+            encoded_sha256=hashlib.sha256(b"webp-bytes").hexdigest(),
         ),
-    )
-    monkeypatch.setattr(
-        media_dedup,
-        "build_supabase_poster_object_path",
-        lambda dhash_hex, *, prefix, dhash_size: f"{prefix}/dh16/ab/{dhash_hex}.webp",
     )
     monkeypatch.setattr(
         supabase_storage,
@@ -113,7 +110,8 @@ async def test_upload_images_prefers_yandex_storage(monkeypatch):
 
     urls, msg = await main.upload_images([(b"raw-image", "a.png")])
 
+    digest = hashlib.sha256(b"webp-bytes").hexdigest()
     assert urls == [
-        "https://storage.yandexcloud.net/kenigevents/p/dh16/ab/abc123.webp"
+        f"https://storage.yandexcloud.net/kenigevents/p/image/v2/{digest[:2]}/{digest}.webp"
     ]
     assert msg == "storage_primary"

@@ -526,6 +526,9 @@ class PosterCandidate:
     supabase_url: str | None = None
     supabase_path: str | None = None
     sha256: str | None = None
+    # Exact bytes served by supabase_url after canonical materialization.
+    # ``sha256`` remains the source/candidate identity.
+    raw_sha256: str | None = None
     phash: str | None = None
     ocr_text: str | None = None
     ocr_title: str | None = None
@@ -18617,6 +18620,7 @@ async def _apply_posters(
         ensure_event_media_reviews,
         _enqueue_geometry_followup_if_needed,
         event_media_require_cdn,
+        invalidate_event_poster_visual_evidence,
         materialize_event_media_candidate_to_cdn,
         resolve_poster_display_url,
         sync_event_gallery_projection,
@@ -18675,6 +18679,9 @@ async def _apply_posters(
         poster_catbox_url = getattr(poster, "catbox_url", None)
         poster_supabase_path = getattr(poster, "supabase_path", None)
         poster_phash = getattr(poster, "phash", None)
+        poster_raw_sha256 = (
+            str(getattr(poster, "raw_sha256", None) or "").strip().lower()
+        )
         poster_ocr_text = getattr(poster, "ocr_text", None)
         poster_ocr_title = getattr(poster, "ocr_title", None)
         display_url = str(poster_supabase_url or poster_catbox_url or "").strip()
@@ -18696,6 +18703,29 @@ async def _apply_posters(
                 existing_identity_index,
             )
         if row is not None:
+            previous_display_url = resolve_poster_display_url(row)
+            previous_path = str(row.supabase_path or "").strip()
+            next_supabase_url = str(
+                poster_supabase_url or row.supabase_url or ""
+            ).strip()
+            next_catbox_url = str(poster_catbox_url or row.catbox_url or "").strip()
+            next_display_url = next_supabase_url or next_catbox_url
+            next_path = str(poster_supabase_path or row.supabase_path or "").strip()
+            same_managed_object = bool(
+                previous_path and next_path and previous_path == next_path
+            )
+            display_identity_changed = bool(
+                previous_display_url
+                and next_display_url
+                and _normalize_poster_identity_url(previous_display_url)
+                != _normalize_poster_identity_url(next_display_url)
+                and not same_managed_object
+            )
+            if display_identity_changed:
+                # Visual evidence belongs to exact display bytes. A replaced
+                # object must be re-fingerprinted, reclassified and rebound to
+                # geometry before bbox/crop metadata can be trusted again.
+                invalidate_event_poster_visual_evidence(row)
             if poster_catbox_url and row.catbox_url != poster_catbox_url:
                 row.catbox_url = poster_catbox_url
             if poster_supabase_url and row.supabase_url != poster_supabase_url:
@@ -18704,8 +18734,11 @@ async def _apply_posters(
                 row.supabase_path = poster_supabase_path
             if poster_phash:
                 row.phash = poster_phash
-            if digest_is_content and not row.raw_sha256:
-                row.raw_sha256 = digest
+            resolved_raw_sha256 = poster_raw_sha256 or (
+                digest if digest_is_content else None
+            )
+            if resolved_raw_sha256 and not row.raw_sha256:
+                row.raw_sha256 = resolved_raw_sha256
             if poster_ocr_text is not None:
                 row.ocr_text = poster_ocr_text
             if poster_ocr_title is not None:
@@ -18739,7 +18772,8 @@ async def _apply_posters(
                 supabase_url=poster_supabase_url,
                 supabase_path=poster_supabase_path,
                 poster_hash=digest,
-                raw_sha256=digest if digest_is_content else None,
+                raw_sha256=poster_raw_sha256
+                or (digest if digest_is_content else None),
                 phash=poster_phash,
                 review_status=PENDING_REVIEW,
                 review_reason=(

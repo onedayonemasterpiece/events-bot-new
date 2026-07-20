@@ -393,7 +393,7 @@ async def enqueue_event_media_review_job(
     statuses = [JobStatus.pending] if force_followup else [JobStatus.pending, JobStatus.running]
     existing = (
         await session.execute(
-            select(JobOutbox.id)
+            select(JobOutbox)
             .where(
                 JobOutbox.event_id == int(event_id),
                 JobOutbox.task == JobTask.event_media_review,
@@ -403,6 +403,16 @@ async def enqueue_event_media_review_job(
         )
     ).scalar_one_or_none()
     if existing is not None:
+        requested = next_run_at or datetime.now(timezone.utc)
+        if getattr(requested, "tzinfo", None) is None:
+            requested = requested.replace(tzinfo=timezone.utc)
+        current = existing.next_run_at
+        if getattr(current, "tzinfo", None) is None:
+            current = current.replace(tzinfo=timezone.utc)
+        if existing.status == JobStatus.pending and requested < current:
+            existing.next_run_at = requested
+            existing.updated_at = datetime.now(timezone.utc)
+            session.add(existing)
         return False
     session.add(
         JobOutbox(
@@ -600,8 +610,8 @@ async def materialize_event_media_candidate_to_cdn(
     """
 
     from media_dedup import (
+        build_content_addressed_poster_object_path,
         build_event_thumbnail_object_path,
-        build_supabase_poster_object_path,
         prepare_image_for_supabase,
     )
     from yandex_storage import (
@@ -668,10 +678,17 @@ async def materialize_event_media_candidate_to_cdn(
     if prepared is None:
         logger.warning("event_media.cdn_prepare_failed url=%s", downloaded.source_url)
         return False
-    object_path = build_supabase_poster_object_path(
-        prepared.dhash_hex,
-        prefix=(os.getenv("SUPABASE_POSTERS_PREFIX") or "p").strip() or "p",
-        dhash_size=16,
+    # dHash is deliberately fuzzy and therefore cannot be an immutable object
+    # identity: two different renditions can share it and overwrite the same
+    # public URL.  Address canonical WebP objects by their exact encoded bytes.
+    prefix = (os.getenv("SUPABASE_POSTERS_PREFIX") or "p").strip().strip("/") or "p"
+    encoded_sha256 = str(prepared.encoded_sha256 or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", encoded_sha256):
+        logger.warning("event_media.cdn_invalid_encoded_sha url=%s", downloaded.source_url)
+        return False
+    object_path = build_content_addressed_poster_object_path(
+        encoded_sha256,
+        prefix=prefix,
     )
     hosted = await asyncio.to_thread(
         upload_yandex_public_bytes,
@@ -685,7 +702,15 @@ async def materialize_event_media_candidate_to_cdn(
         return False
     candidate.supabase_url = hosted
     candidate.supabase_path = object_path
-    if hasattr(candidate, "width"):
+    if hasattr(candidate, "pixel_sha256"):
+        canonical_fp = await asyncio.to_thread(
+            compute_image_fingerprints, prepared.webp_bytes
+        )
+        if canonical_fp is None:
+            logger.warning("event_media.cdn_fingerprint_failed path=%s", object_path)
+            return False
+        _apply_pixel_fingerprints(candidate, canonical_fp)
+    elif hasattr(candidate, "width"):
         candidate.width = int(prepared.width or 0) or getattr(candidate, "width", None)
         candidate.height = int(prepared.height or 0) or getattr(candidate, "height", None)
         candidate.mime_type = "image/webp"
@@ -719,7 +744,9 @@ async def materialize_event_media_candidate_to_cdn(
                 setattr(candidate, attr, value)
     if not str(getattr(candidate, "catbox_url", None) or "").strip():
         candidate.catbox_url = downloaded.source_url
-    digest = hashlib.sha256(downloaded.data).hexdigest()
+    # raw_sha256 describes the bytes served by supabase_url. poster_hash keeps
+    # the original source/candidate identity independently.
+    digest = encoded_sha256
     if hasattr(candidate, "raw_sha256"):
         conflicting_poster_id: int | None = None
         event_id = getattr(candidate, "event_id", None)
@@ -749,7 +776,8 @@ async def materialize_event_media_candidate_to_cdn(
                 conflicting_poster_id,
             )
     else:
-        candidate.sha256 = digest
+        if not str(getattr(candidate, "sha256", None) or "").strip():
+            candidate.sha256 = digest
     candidate.phash = prepared.dhash_hex
     return True
 
@@ -822,8 +850,73 @@ async def _download_poster(poster: EventPoster) -> DownloadedPoster:
     raise RuntimeError(f"event_media_download_failed:{last_error}")
 
 
+def invalidate_event_poster_visual_evidence(
+    poster: Any,
+    *,
+    reason: str = "display_identity_changed",
+) -> None:
+    """Fail closed when the bytes behind an EventPoster may have changed."""
+
+    for name in (
+        "raw_sha256",
+        "pixel_sha256",
+        "phash",
+        "perceptual_hash",
+        "width",
+        "height",
+        "mime_type",
+        "image_geometry_id",
+        "thumbnail_256_url",
+        "thumbnail_256_path",
+        "thumbnail_256_width",
+        "thumbnail_256_height",
+        "thumbnail_512_url",
+        "thumbnail_512_path",
+        "thumbnail_512_width",
+        "thumbnail_512_height",
+        "ocr_text",
+        "ocr_title",
+        "image_text_mode",
+        "media_role",
+        "media_role_confidence",
+        "media_semantic_evidence_json",
+        "media_semantic_model",
+        "media_semantic_prompt_version",
+        "media_semantic_context_hash",
+        "media_semantic_classified_at",
+        "focal_x",
+        "focal_y",
+    ):
+        if hasattr(poster, name):
+            setattr(poster, name, None)
+    if hasattr(poster, "media_semantic_status"):
+        poster.media_semantic_status = "pending"
+    if hasattr(poster, "media_semantic_reason_code"):
+        poster.media_semantic_reason_code = reason
+    if hasattr(poster, "safe_crop"):
+        poster.safe_crop = False
+    if hasattr(poster, "updated_at"):
+        poster.updated_at = datetime.now(timezone.utc)
+
+
 def _apply_fingerprints(poster: EventPoster, fp: ImageFingerprints) -> None:
+    _apply_pixel_fingerprints(poster, fp)
     poster.raw_sha256 = fp.raw_sha256
+
+
+def _apply_pixel_fingerprints(poster: Any, fp: ImageFingerprints) -> None:
+    previous_pixel = str(getattr(poster, "pixel_sha256", None) or "").strip()
+    if previous_pixel and previous_pixel != str(fp.pixel_sha256):
+        invalidate_event_poster_visual_evidence(
+            poster, reason="pixel_identity_changed"
+        )
+    elif (
+        getattr(poster, "image_geometry_id", None) is not None
+        and previous_pixel != str(fp.pixel_sha256)
+    ):
+        invalidate_event_poster_visual_evidence(
+            poster, reason="pixel_identity_changed"
+        )
     poster.pixel_sha256 = fp.pixel_sha256
     poster.phash = fp.dhash_hex
     poster.perceptual_hash = fp.phash_hex
@@ -1198,6 +1291,8 @@ async def _current_geometry_for_poster(session: Any, poster: EventPoster):
         and geometry.status == "classified"
         and geometry.model == image_geometry_model()
         and geometry.prompt_version == IMAGE_GEOMETRY_PROMPT_VERSION
+        and bool(str(poster.pixel_sha256 or "").strip())
+        and poster.pixel_sha256 == geometry.pixel_sha256
     ):
         return geometry
     return None
@@ -1246,13 +1341,7 @@ async def analyze_event_poster_geometry(
         poster = await session.get(EventPoster, int(poster_id))
         if poster is None or int(poster.event_id) != int(event_id):
             return ImageGeometryOutcome("missing", int(poster_id), error="poster_drifted")
-        poster.pixel_sha256 = pixel_sha256
-        poster.phash = fingerprints.dhash_hex
-        poster.perceptual_hash = fingerprints.phash_hex
-        poster.width = fingerprints.width
-        poster.height = fingerprints.height
-        poster.mime_type = fingerprints.mime_type
-        poster.updated_at = datetime.now(timezone.utc)
+        _apply_pixel_fingerprints(poster, fingerprints)
         session.add(poster)
         cached = (
             await session.execute(
@@ -1372,6 +1461,9 @@ async def _next_geometry_candidate_id(session: Any, event_id: int) -> int | None
             or_(
                 EventPoster.image_geometry_id.is_(None),
                 EventImageGeometry.id.is_(None),
+                EventPoster.pixel_sha256.is_(None),
+                EventImageGeometry.pixel_sha256.is_(None),
+                EventPoster.pixel_sha256 != EventImageGeometry.pixel_sha256,
                 EventImageGeometry.model != model,
                 EventImageGeometry.prompt_version != IMAGE_GEOMETRY_PROMPT_VERSION,
                 and_(
@@ -1430,6 +1522,92 @@ def _media_role_prompt(event: Event, poster: EventPoster) -> str:
     )
 
 
+def _media_role_candidate_condition(context_hash: str, *, now: datetime | None = None):
+    eligible_at = now or datetime.now(timezone.utc)
+    return or_(
+        EventPoster.media_semantic_status.is_(None),
+        EventPoster.media_semantic_status == "stale",
+        and_(
+            EventPoster.media_semantic_status == "pending",
+            or_(
+                EventPoster.media_semantic_classified_at.is_(None),
+                EventPoster.media_semantic_classified_at <= eligible_at,
+            ),
+        ),
+        EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
+        EventPoster.media_semantic_prompt_version.is_(None),
+        EventPoster.media_semantic_context_hash != context_hash,
+        EventPoster.media_semantic_context_hash.is_(None),
+    )
+
+
+def _media_role_transient_retry_at(error: str | None) -> datetime | None:
+    value = str(error or "").strip().lower()
+    if not value:
+        return None
+    day_markers = (
+        "rpd",
+        "per day",
+        "daily",
+        "free_tier_requests",
+        "requests per day",
+    )
+    if any(marker in value for marker in day_markers):
+        return _next_utc_day()
+    minute_markers = (
+        "429",
+        "resource_exhausted",
+        "rate limit",
+        "ratelimit",
+        "rpm",
+        "tpm",
+        "quota",
+    )
+    if any(marker in value for marker in minute_markers):
+        return datetime.now(timezone.utc) + timedelta(
+            seconds=_env_int("EVENT_MEDIA_ROLE_RATE_RETRY_SECONDS", 600, lo=60, hi=3600)
+        )
+    temporary_markers = (
+        "timeout",
+        "timed out",
+        "temporarily unavailable",
+        "service unavailable",
+        "connectionerror",
+        "connection reset",
+        "servererror",
+        "http 500",
+        "http 502",
+        "http 503",
+        "http 504",
+    )
+    if any(marker in value for marker in temporary_markers):
+        return datetime.now(timezone.utc) + timedelta(
+            seconds=_env_int("EVENT_MEDIA_ROLE_TRANSIENT_RETRY_SECONDS", 900, lo=60, hi=7200)
+        )
+    return None
+
+
+async def _next_media_role_retry_at(
+    session: Any,
+    event_id: int,
+    context_hash: str,
+    *,
+    now: datetime,
+) -> datetime | None:
+    return (
+        await session.execute(
+            select(func.min(EventPoster.media_semantic_classified_at)).where(
+                EventPoster.event_id == int(event_id),
+                EventPoster.review_status == APPROVED,
+                EventPoster.media_semantic_status == "pending",
+                EventPoster.media_semantic_prompt_version == MEDIA_ROLE_PROMPT_VERSION,
+                EventPoster.media_semantic_context_hash == context_hash,
+                EventPoster.media_semantic_classified_at > now,
+            )
+        )
+    ).scalar_one_or_none()
+
+
 async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) -> bool:
     async with db.get_session() as session:
         event = await session.get(Event, int(event_id))
@@ -1450,13 +1628,15 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
             "semantic_role",
             _env_int("EVENT_MEDIA_ROLE_DAILY_CALLS", 150, lo=0, hi=5000),
         ):
+            retry_at = _next_utc_day()
             poster.media_semantic_status = "pending"
             poster.media_semantic_reason_code = "daily_budget_exhausted"
+            poster.media_semantic_classified_at = retry_at
             session.add(poster)
             await enqueue_event_media_review_job(
                 session,
                 int(event_id),
-                next_run_at=_next_utc_day(),
+                next_run_at=retry_at,
                 force_followup=True,
             )
             await session.commit()
@@ -1469,12 +1649,20 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
         from google_ai import GoogleAIClient, SecretsProvider
         from main import get_supabase_client
 
+        pool_csv = (
+            os.getenv("EVENT_MEDIA_ROLE_GOOGLE_KEY_ENVS")
+            or os.getenv("EVENT_MEDIA_ROLE_GOOGLE_KEY_ENV")
+            or "GOOGLE_API_KEY4,GOOGLE_API_KEY5"
+        ).strip()
+        pool = [item.strip() for item in pool_csv.split(",") if item.strip()]
+        default_env = pool[0] if pool else "GOOGLE_API_KEY4"
         client = GoogleAIClient(
             supabase_client=get_supabase_client(),
             secrets_provider=SecretsProvider(),
             consumer="event_media_role",
             account_name="event-media-role",
-            default_env_var_name=(os.getenv("EVENT_MEDIA_ROLE_GOOGLE_KEY_ENV") or "GOOGLE_API_KEY4").strip(),
+            default_env_var_name=default_env,
+            reserve_key_envs=pool,
             reserve_overflow_key_envs=[],
         )
         client.allow_reserve_fallback = False
@@ -1512,12 +1700,18 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
         poster.media_semantic_model = model
         poster.media_semantic_prompt_version = MEDIA_ROLE_PROMPT_VERSION
         poster.media_semantic_context_hash = _context_hash(event)
-        poster.media_semantic_classified_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        retry_at = _media_role_transient_retry_at(error) if decision is None else None
+        poster.media_semantic_classified_at = retry_at or now
         if decision is None:
             poster.media_role = None
             poster.media_role_confidence = None
-            poster.media_semantic_status = "error"
-            poster.media_semantic_reason_code = error or "invalid_response"
+            poster.media_semantic_status = "pending" if retry_at is not None else "error"
+            poster.media_semantic_reason_code = (
+                f"transient_provider_error:{error}"[:500]
+                if retry_at is not None
+                else error or "invalid_response"
+            )
             poster.media_semantic_evidence_json = None
             poster.focal_x = None
             poster.focal_y = None
@@ -1535,29 +1729,29 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
             poster.safe_crop = bool(decision.get("safe_crop", False))
         poster.updated_at = datetime.now(timezone.utc)
         session.add(poster)
+        context_hash = _context_hash(event)
         remaining = (
             await session.execute(
                 select(EventPoster.id)
                 .where(
                     EventPoster.event_id == int(event_id),
                     EventPoster.review_status == APPROVED,
-                    or_(
-                        EventPoster.media_semantic_status.is_(None),
-                        EventPoster.media_semantic_status.in_(("pending", "stale")),
-                        EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
-                        EventPoster.media_semantic_prompt_version.is_(None),
-                        EventPoster.media_semantic_context_hash != _context_hash(event),
-                        EventPoster.media_semantic_context_hash.is_(None),
-                    ),
+                    _media_role_candidate_condition(context_hash, now=now),
                 )
                 .limit(1)
             )
         ).scalar_one_or_none()
-        if remaining is not None:
+        future_retry = await _next_media_role_retry_at(
+            session, int(event_id), context_hash, now=now
+        )
+        next_run_at = now + timedelta(seconds=2) if remaining is not None else future_retry
+        if next_run_at is not None:
+            if getattr(next_run_at, "tzinfo", None) is None:
+                next_run_at = next_run_at.replace(tzinfo=timezone.utc)
             await enqueue_event_media_review_job(
                 session,
                 int(event_id),
-                next_run_at=datetime.now(timezone.utc) + timedelta(seconds=2),
+                next_run_at=next_run_at,
                 force_followup=True,
             )
         await session.commit()
@@ -1696,19 +1890,15 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                     .where(
                         EventPoster.event_id == int(event_id),
                         EventPoster.review_status == APPROVED,
-                        or_(
-                            EventPoster.media_semantic_status.is_(None),
-                            EventPoster.media_semantic_status.in_(("pending", "stale")),
-                            EventPoster.media_semantic_prompt_version != MEDIA_ROLE_PROMPT_VERSION,
-                            EventPoster.media_semantic_prompt_version.is_(None),
-                            EventPoster.media_semantic_context_hash != context_hash,
-                            EventPoster.media_semantic_context_hash.is_(None),
-                        ),
+                        _media_role_candidate_condition(context_hash, now=now),
                     )
                     .order_by(EventPoster.display_order.asc(), EventPoster.id.asc())
                     .limit(1)
                 )
             ).scalar_one_or_none()
+            role_retry_at = await _next_media_role_retry_at(
+                session, int(event_id), context_hash, now=now
+            )
             geometry_candidate_id = await _next_geometry_candidate_id(
                 session, int(event_id)
             )
@@ -1745,26 +1935,52 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                     remaining_id = await _next_geometry_candidate_id(
                         followup_session, int(event_id)
                     )
-                    if remaining_id is not None or outcome.status in {"pending", "error"}:
+                    if (
+                        remaining_id is not None
+                        or outcome.status in {"pending", "error"}
+                        or role_retry_at is not None
+                    ):
+                        geometry_followup_needed = (
+                            remaining_id is not None
+                            or outcome.status in {"pending", "error"}
+                        )
+                        requested_next_run = (
+                            next_run_at
+                            or datetime.now(timezone.utc)
+                            + timedelta(
+                                seconds=_env_int(
+                                    "EVENT_IMAGE_GEOMETRY_FOLLOWUP_SECONDS",
+                                    7,
+                                    lo=5,
+                                    hi=3600,
+                                )
+                            )
+                            if geometry_followup_needed
+                            else role_retry_at
+                        )
+                        if role_retry_at is not None:
+                            if getattr(role_retry_at, "tzinfo", None) is None:
+                                role_retry_at = role_retry_at.replace(tzinfo=timezone.utc)
+                            requested_next_run = min(requested_next_run, role_retry_at)
                         await enqueue_event_media_review_job(
                             followup_session,
                             int(event_id),
-                            next_run_at=(
-                                next_run_at
-                                or datetime.now(timezone.utc)
-                                + timedelta(
-                                    seconds=_env_int(
-                                        "EVENT_IMAGE_GEOMETRY_FOLLOWUP_SECONDS",
-                                        7,
-                                        lo=5,
-                                        hi=3600,
-                                    )
-                                )
-                            ),
+                            next_run_at=requested_next_run,
                             force_followup=True,
                         )
                     await followup_session.commit()
                 return bool(projection_changed or outcome.status == "classified")
+            if role_retry_at is not None:
+                if getattr(role_retry_at, "tzinfo", None) is None:
+                    role_retry_at = role_retry_at.replace(tzinfo=timezone.utc)
+                async with db.get_session() as followup_session:
+                    await enqueue_event_media_review_job(
+                        followup_session,
+                        int(event_id),
+                        next_run_at=role_retry_at,
+                        force_followup=True,
+                    )
+                    await followup_session.commit()
             return projection_changed
         left = await session.get(EventPoster, int(review.left_poster_id))
         right = await session.get(EventPoster, int(review.right_poster_id))
@@ -1950,6 +2166,10 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
         await _reconcile_pending_posters(session, int(event_id))
         await ensure_event_media_reviews(session, int(event_id))
         projection_changed = await sync_event_gallery_projection(session, int(event_id))
+        # Resolving the final pending pair can promote a new approved poster
+        # after the last pair-review job has already been consumed. Arm the
+        # independent semantic/geometry enrichment pass for that new poster.
+        await _enqueue_geometry_followup_if_needed(session, int(event_id))
 
         remaining = (
             await session.execute(
