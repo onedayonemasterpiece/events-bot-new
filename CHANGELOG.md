@@ -39,6 +39,15 @@
   heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
 
 ### Changed
+- **Personal exhibitions keyboard/tail V10**: keep the selected title focused
+  across stable likes and real personalized reranks, skip no-op row re-appends
+  and document-wide like transitions so an immediate physical-layout `→`
+  reliably pages that row's deck; replace automatic full-tail expansion with
+  an explicit native disclosure boundary and cumulative four-row batches, with
+  viewport media unbinding and at most three real image planes per active tail
+  deck; move desktop-only, footer-scoped physical `P/S` copy shortcuts and
+  visible keycaps into the shared `ServiceShareAction` owner while leaving
+  mobile free of keyboard affordances.
 - **Personal exhibitions visual prototype**: replace its handwritten header
   with the shared base-aware static-site header and responsive new-exhibitions
   badge, including fluid tablet navigation and an `aria-current` shared mobile

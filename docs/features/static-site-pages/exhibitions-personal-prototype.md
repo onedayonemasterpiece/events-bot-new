@@ -3,7 +3,7 @@
 > **Статус:** отдельный интерактивный product/UI prototype; production `/vystavki/` не изменён.
 > **Маршрут:** `/lab/exhibitions-personal/` в обычной Astro-сборке.
 > **Источник визуального подхода:** `docs/reference/Выставки UI UX.png`.
-> **Последний immutable preview:** `preview-20260720-exhibitions-personal-v9-a6b4d662`.
+> **Последний immutable preview:** `preview-20260720-exhibitions-personal-v10-61c118ee`.
 
 ## Зачем нужен отдельный прототип
 
@@ -473,3 +473,56 @@ V9 gate дополнительно проверяет: один лайк не с
 уникальный long-running хвост, shared footer виден без overlap/overflow, а
 `ArrowDown` внутри footer не уводит фокус обратно в список. Актуальный source
 contract: `56/56`.
+
+### V10: непрерывная связка `лайк → фото`, явный хвост и общие footer-hotkeys
+
+Пользовательская последовательность `↓ → L → →` выявила не ошибку раскладки,
+а потерю DOM-focus: `syncPersonalOrder()` переустанавливал каждый row через
+`append()` даже при неизменном порядке. Фокус уходил в `body`, поэтому
+глобальный `↑` мог восстановить выбранную строку, а локальный `→` до этого не
+доходил до deck. Теперь порядок сравнивается до мутации; при настоящем rerank
+сохраняется тот же title-node и roving owner. Like-sync не запускает
+document-wide View Transition и не планирует геометрический deck-relayout,
+поэтому немедленный `→` начинает собственную кинематическую раздачу без гонки
+двух animation timelines. Это действует и для `key=д/code=KeyL`.
+
+История footer подтвердила: отдельной версии `SiteFooter.astro` с хоткеями не
+существовало. Рабочие `P/S` раньше добавлял event-page keyboard navigator
+(`d0027a53`, затем production extraction `11cbef17`). V10 переносит эту узкую
+ответственность в общий `ServiceShareAction`: только при desktop `>=1024px` и
+только когда фокус уже внутри footer share-root физический `KeyP` нажимает
+реальную кнопку копирования карточки, а `KeyS` — текста/ссылки. На mobile нет
+ни keycaps, ни `aria-keyshortcuts`. Shared handler проверяет
+`event.defaultPrevented`, а сам предотвращает обработку, поэтому при будущем
+слиянии с новым event navigator не возникает двойного click. Остаточный
+техдолг после rebase на `origin/main`: удалить старую footer-инъекцию из
+event-only navigator, оставив единственного владельца в `ServiceShareAction`.
+
+Длинный хвост больше не раскрывается неявно одним `ArrowDown`. Последняя
+featured-строка передаёт фокус native disclosure-кнопке; `Enter/Space`
+раскрывает первые четыре позиции, фокус остаётся на кнопке, следующий `↓`
+входит в первую карточку, а `↑` возвращается симметрично. Дальнейшие позиции
+добавляются явными батчами по четыре; scroll сам ничего не загружает. Выбран
+накопительный вариант, а не замена окна: он сохраняет `Ctrl+F`, скролл-контекст
+и уже просмотренные карточки. При этом hidden rows не получают image `src`, а
+`IntersectionObserver` снимает media вне viewport; в каждом видимом tail-deck
+не больше трёх реальных image planes, остальные depth-слои остаются
+нейтральными. Так полный набор из 13 уникальных tail-позиций достижим, но
+первое раскрытие остаётся малым и визуально заполненные карточки не превращаются
+в пустые рамки ради слишком жёсткого глобального лимита.
+
+Предпроектный `Gemini 3.1 Pro (High)` review ранжировал потерю фокуса как P0,
+bulk-раскрытие хвоста как P1 и раздельное владение footer-hotkeys как P2.
+Приняты отказ от no-op DOM reorder, общий root-scoped footer controller,
+explicit disclosure и cumulative batch size `4`. Совет ставить animation
+semaphore/queue поверх потерянного фокуса не использован: исправлена причина,
+а существующий deck queue сохранён. Предложенный жёсткий лимит 12 картинок
+скорректирован после screenshot QA: он оставлял видимые строки пустыми;
+вместо этого ограничены реальные planes каждого viewport-active deck.
+
+V10 browser gate проверяет stable и настоящий third-like rerank, немедленный
+`→` после Latin/Russian physical L, ноль child-list мутаций при стабильном
+порядке, disclosure `↓ → Space → ↓ → ↑`, все 13 tail id ровно по одному,
+viewport media budget, footer `P/S` positive/negative scope и отсутствие всего
+keyboard chrome на `375px`. Результат: source contract `59/59`, desktop/mobile
+Playwright — без console/page errors и horizontal overflow.

@@ -261,3 +261,55 @@ v9_lanes:
     verification_scope: full_local
     effort: high
     status: completed
+v10_lanes:
+  - id: v10-focus-audit
+    role: planner
+    requirement_ids: [V10-R1]
+    target: reproduce and localize focus loss after a keyboard like before photo paging
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: high
+    status: completed
+  - id: v10-footer-history-audit
+    role: planner
+    requirement_ids: [V10-R2]
+    target: locate the canonical reusable footer version with working hotkeys
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v10-tail-product-audit
+    role: planner
+    requirement_ids: [V10-R3]
+    target: compare direct auto-expansion with disclosure-button keyboard navigation
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v10-tail-performance-audit
+    role: planner
+    requirement_ids: [V10-R3]
+    target: bound the cost of eventual access to the complete long-running tail
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: high
+    status: completed
+  - id: v10-integration
+    role: worker
+    requirement_ids: [V10-R1, V10-R2, V10-R3]
+    target: preserve focus, reuse footer hotkeys and implement bounded explicit tail disclosure
+    depends_on: [v10-focus-audit, v10-footer-history-audit, v10-tail-product-audit, v10-tail-performance-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/index.astro
+      - site/src/components/ServiceShareAction.astro
+      - site/src/lib/service-share/controller.js
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    verification_scope: full_local
+    effort: high
+    status: completed

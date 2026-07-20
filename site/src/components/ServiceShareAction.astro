@@ -75,6 +75,7 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
         <path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.2 4.2L19 7"></path>
       </svg>
       <span>Скопировать карточку</span>
+      {surface === 'footer' && <kbd class="service-share-action__shortcut" data-service-shortcut-badge aria-hidden="true">P</kbd>}
     </button>
 
     <button
@@ -96,6 +97,7 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
         <path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.2 4.2L19 7"></path>
       </svg>
       <span>Скопировать текст и ссылку</span>
+      {surface === 'footer' && <kbd class="service-share-action__shortcut" data-service-shortcut-badge aria-hidden="true">S</kbd>}
     </button>
 
     <span
@@ -214,6 +216,7 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
     color: #8b4537;
   }
   .service-share-action__button--desktop { display: none; }
+  .service-share-action__shortcut { display:none; min-width:1.45rem; min-height:1.35rem; align-items:center; justify-content:center; padding:.08rem .28rem; border:1px solid rgba(121,48,20,.5); border-bottom-color:rgba(121,48,20,.76); border-radius:4px; background:rgba(121,48,20,.06); color:var(--primary-strong); box-shadow:0 1px 0 rgba(0,0,0,.16); font:800 .68rem/1 ui-monospace,SFMono-Regular,Consolas,monospace; text-transform:uppercase; }
   .service-share-action__status {
     position: absolute !important;
     width: 1px !important;
@@ -234,6 +237,9 @@ const statusId = `service-share-status-${surface}-${desktopMode}`;
   @media (min-width: 768px) {
     .service-share-action__button--mobile { display: none; }
     .service-share-action__button--desktop { display: inline-flex; }
+  }
+  @media (min-width: 1024px) {
+    .service-share-action--footer .service-share-action__shortcut { display:inline-flex; }
   }
   @media (max-width: 767px) {
     .service-share-action { align-items: stretch; }

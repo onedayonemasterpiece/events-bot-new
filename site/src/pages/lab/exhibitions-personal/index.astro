@@ -191,10 +191,14 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
               <h2 id="tail-heading">Давно идут</h2>
               <p>Эти выставки всё ещё актуальны, но не поднимаются выше только из-за долгой даты.</p>
             </div>
-            <button type="button" class="ex-tail-toggle" data-tail-toggle aria-expanded="false" aria-controls="old-exhibitions">Показать ещё {tailItems.length}</button>
+            <button type="button" class="ex-tail-toggle" data-tail-toggle aria-expanded="false" aria-controls="old-exhibitions">Показать 4 из {tailItems.length}</button>
           </div>
           <div id="old-exhibitions" class="ex-list" data-list-section="tail" hidden>
             {tailItems.map((item, index) => <ExhibitionPrototypeRow item={item as any} rowIndex={newItems.length + priorityItems.length + index} />)}
+          </div>
+          <div class="ex-tail-controls" data-tail-controls hidden>
+            <p data-tail-status role="status" aria-live="polite">Показаны 0 из {tailItems.length}</p>
+            <button type="button" class="ex-tail-more" data-tail-more>Показать ещё 4</button>
           </div>
         </section>
 
@@ -273,7 +277,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-group__heading { display:flex; align-items:end; justify-content:space-between; gap:2rem; margin-bottom:1rem; }
   .ex-group__heading h2,.ex-tail-callout h2 { margin:0; font-size:clamp(1.75rem,3vw,2.7rem); line-height:1; }
   .ex-group__heading p:not(.ex-group__eyebrow),.ex-tail-callout p:not(.ex-group__eyebrow) { max-width:68ch; margin:.55rem 0 0; color:var(--ex-muted); font-size:.9rem; }
-  .ex-mark-seen,.ex-tail-toggle,.ex-empty button { min-height:44px; padding:.55rem .85rem; border:1px solid #52585d; border-radius:5px; background:var(--ex-raised); color:var(--ex-text); font:inherit; font-weight:800; cursor:pointer; }
+  .ex-mark-seen,.ex-tail-toggle,.ex-tail-more,.ex-empty button { min-height:44px; padding:.55rem .85rem; border:1px solid #52585d; border-radius:5px; background:var(--ex-raised); color:var(--ex-text); font:inherit; font-weight:800; cursor:pointer; }
   .ex-legend { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.55rem 1rem; color:var(--ex-muted); font-size:.72rem; }
   .ex-legend span { display:inline-flex; align-items:center; gap:.38rem; }
   .ex-legend i { width:9px; height:9px; border-radius:50%; background:var(--ex-blue); box-shadow:0 0 10px currentColor; }
@@ -501,6 +505,9 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
   .ex-row.is-filtered { display:none; }
   .ex-tail-callout { display:flex; align-items:center; justify-content:space-between; gap:2rem; padding:1.1rem 1.2rem; border:1px solid #292d30; border-radius:6px; background:#101214; }
   .ex-group--tail .ex-list { margin-top:.75rem; }
+  .ex-tail-controls { display:flex; align-items:center; justify-content:flex-end; gap:1rem; margin:.9rem 0 0; }
+  .ex-tail-controls[hidden] { display:none; }
+  .ex-tail-controls p { margin:0; color:var(--ex-muted); font-size:.78rem; font-variant-numeric:tabular-nums; }
   .ex-empty { margin:2rem 0; padding:2rem; border:1px dashed #4c5257; border-radius:6px; text-align:center; }
   .ex-empty h2 { margin:0; }
   .ex-empty p { color:var(--ex-muted); }
@@ -576,7 +583,8 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-row__expanded { opacity:1; transform:none; }
     .ex-row__social { font-size:.72rem; }
     .ex-tail-callout { align-items:stretch; flex-direction:column; }
-    .ex-tail-toggle { width:100%; }
+    .ex-tail-toggle,.ex-tail-more { width:100%; }
+    .ex-tail-controls { align-items:stretch; flex-direction:column; }
     .ex-gallery { width:100%; height:100dvh; max-height:none; margin:0; border:0; border-radius:0; }
     .ex-gallery__stage { min-height:calc(100dvh - 150px); grid-template-columns:48px 1fr 48px; }
     .ex-gallery__media { height:calc(100dvh - 150px); }
@@ -624,6 +632,8 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const deckStates = new WeakMap();
     const deckManifests = new WeakMap();
     const MAX_STACK_DEPTH = 5;
+    const TAIL_BATCH_SIZE = 4;
+    const MAX_TAIL_MEDIA_PER_DECK = 3;
     const PROFILE_MIN_LIKES = 3;
     const DECK_EASE = 'cubic-bezier(.16,1,.3,1)';
     let imageRequestId = 0;
@@ -699,6 +709,23 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       else image.removeAttribute('srcset');
       image.src = asset.src;
       if (image.complete) settleDeckImage(frame,image,requestId,image.naturalWidth > 0 ? 'loaded' : 'error');
+    };
+    const unbindDeckMedia = (deck) => {
+      if (!(deck instanceof HTMLElement)) return;
+      const state = ensureDeckState(deck);
+      if (state.phase !== 'idle') cancelDeckMotion(deck,state);
+      deck.querySelectorAll('[data-deck-frame]').forEach((frame) => {
+        if (!(frame instanceof HTMLElement)) return;
+        const image = frame.querySelector('[data-deck-image]');
+        delete frame.dataset.imageRequest;
+        frame.dataset.imageState = frame.dataset.deckVisual === 'depth-tail' ? 'depth' : 'idle';
+        if (!(image instanceof HTMLImageElement)) return;
+        image.onload = null;
+        image.onerror = null;
+        delete image.dataset.boundSrc;
+        image.removeAttribute('srcset');
+        image.removeAttribute('src');
+      });
     };
     const measureDeckPage = (deck,cursor,options = {}) => {
       const manifest = manifestFor(deck);
@@ -828,7 +855,8 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         const frame = slotByIndex.get(placement.index);
         const asset = manifest[placement.index];
         if (!(frame instanceof HTMLElement) || !asset) return;
-        const showImage = placement.state === 'full' || placement.depth < MAX_STACK_DEPTH;
+        const mediaCandidate = placement.state === 'full' || placement.depth < MAX_STACK_DEPTH;
+        const showImage = mediaCandidate && (!deck.closest('[data-list-section="tail"]') || placementIndex < MAX_TAIL_MEDIA_PER_DECK);
         bindFrame(frame,asset,showImage);
         frame.hidden = false;
         frame.dataset.deckState = placement.state;
@@ -963,19 +991,49 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const layoutDecks = () => root.querySelectorAll('[data-deck]').forEach((deck) => {
       if (!(deck instanceof HTMLElement)) return;
       const state = ensureDeckState(deck);
-      if (state.phase !== 'idle') cancelDeckMotion(deck,state);
+      if (state.phase !== 'idle') return;
+      if (deck.closest('[data-list-section="tail"]') && deck.dataset.tailDeckActive !== 'true') return;
       layoutDeck(deck);
     });
     let deckResizeFrame = 0;
-    const scheduleDeckLayout = () => {
+    const scheduleDeckLayout = (cancelActive = false) => {
       window.cancelAnimationFrame(deckResizeFrame);
+      if (cancelActive) root.querySelectorAll('[data-deck][data-deck-phase]:not([data-deck-phase="idle"])').forEach((deck) => {
+        if (deck instanceof HTMLElement) cancelDeckMotion(deck,ensureDeckState(deck));
+      });
       deckResizeFrame = window.requestAnimationFrame(layoutDecks);
     };
-    window.addEventListener('resize', scheduleDeckLayout, { passive:true });
-    compactDeck.addEventListener?.('change',scheduleDeckLayout);
-    const deckResizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleDeckLayout) : null;
+    window.addEventListener('resize', () => scheduleDeckLayout(true), { passive:true });
+    compactDeck.addEventListener?.('change',() => scheduleDeckLayout(true));
+    const deckResizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => scheduleDeckLayout()) : null;
     root.querySelectorAll('[data-deck]').forEach((deck) => deckResizeObserver?.observe(deck));
     document.fonts?.ready.then(scheduleDeckLayout);
+    const deactivateTailDeck = (deck) => {
+      if (!(deck instanceof HTMLElement)) return;
+      delete deck.dataset.tailDeckActive;
+      unbindDeckMedia(deck);
+    };
+    const activateTailDeck = (deck) => {
+      if (!(deck instanceof HTMLElement) || deck.offsetParent === null) return;
+      deck.dataset.tailDeckActive = 'true';
+      layoutDeck(deck);
+    };
+    const tailDeckObserver = typeof IntersectionObserver === 'function'
+      ? new IntersectionObserver((entries) => entries.forEach((entry) => {
+        const deck = entry.target;
+        if (!(deck instanceof HTMLElement)) return;
+        if (entry.isIntersecting && deck.offsetParent !== null) activateTailDeck(deck);
+        else deactivateTailDeck(deck);
+      }), { rootMargin:'80px 0px' })
+      : null;
+    const tailDecks = () => Array.from(root.querySelectorAll('[data-list-section="tail"] [data-deck]')).filter((deck) => deck instanceof HTMLElement);
+    tailDecks().forEach((deck) => tailDeckObserver?.observe(deck));
+    const refreshTailDecks = () => {
+      tailDecks().forEach((deck) => {
+        if (deck.offsetParent === null) deactivateTailDeck(deck);
+        else if (!tailDeckObserver) activateTailDeck(deck);
+      });
+    };
     const transitionDOM = (callback) => {
       if (reducedMotion.matches || typeof document.startViewTransition !== 'function') { callback(); return; }
       const transition = document.startViewTransition(callback);
@@ -1018,19 +1076,24 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const matchesProfile = (row) => tagsFor(row).some((tag) => state.likedTags.includes(tag)) || state.likes.includes(row.dataset.eventId);
     const profileScore = (row) => tagsFor(row).filter((tag) => state.likedTags.includes(tag)).length;
     const syncPersonalOrder = () => {
+      let changed = false;
       root.querySelectorAll('[data-list-section="priority"],[data-list-section="tail"]').forEach((list) => {
-        const ordered = Array.from(list.querySelectorAll(':scope > [data-exhibition-row]')).sort((left,right) => {
+        const current = Array.from(list.querySelectorAll(':scope > [data-exhibition-row]'));
+        const ordered = [...current].sort((left,right) => {
           if (mode === 'personal' && hasProfile()) {
             const scoreDelta = profileScore(right) - profileScore(left);
             if (scoreDelta) return scoreDelta;
           }
           return Number(originalRowOrder.get(left) || 0) - Number(originalRowOrder.get(right) || 0);
         });
-        ordered.forEach((row) => {
-          row.dataset.profileMatch = String(hasProfile() && matchesProfile(row));
-          list.append(row);
-        });
+        ordered.forEach((row) => { row.dataset.profileMatch = String(hasProfile() && matchesProfile(row)); });
+        if (!ordered.some((row,index) => row !== current[index])) return;
+        const fragment = document.createDocumentFragment();
+        ordered.forEach((row) => fragment.append(row));
+        list.append(fragment);
+        changed = true;
       });
+      return changed;
     };
     const unseenRelevantNewRows = () => rows().filter((row) => row.dataset.new === 'true' && !state.seenNew.includes(row.dataset.eventId) && !state.negative.includes(row.dataset.eventId));
 
@@ -1098,31 +1161,89 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       link.scrollIntoView({ block:'center', behavior:reducedMotion.matches ? 'auto' : 'smooth' });
       return link;
     };
+    let tailExpanded = false;
+    let tailRevealCount = 0;
+    const tailPanel = () => root.querySelector('[data-list-section="tail"]');
+    const tailToggle = () => root.querySelector('[data-tail-toggle]');
+    const tailMore = () => root.querySelector('[data-tail-more]');
+    const tailRows = () => {
+      const panel = tailPanel();
+      return panel instanceof HTMLElement ? Array.from(panel.querySelectorAll(':scope > [data-exhibition-row]')).filter((row) => row instanceof HTMLElement) : [];
+    };
+    const eligibleTailRows = () => tailRows().filter((row) => !row.classList.contains('is-filtered'));
+    const syncTailWindow = () => {
+      const panel = tailPanel();
+      const toggle = tailToggle();
+      const controls = root.querySelector('[data-tail-controls]');
+      const more = tailMore();
+      const status = root.querySelector('[data-tail-status]');
+      if (!(panel instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement)) return;
+      const eligible = eligibleTailRows();
+      const total = eligible.length;
+      if (tailExpanded) tailRevealCount = Math.min(Math.max(TAIL_BATCH_SIZE,tailRevealCount),total);
+      else tailRevealCount = 0;
+      const visible = new Set(eligible.slice(0,tailRevealCount));
+      tailRows().forEach((row) => { row.hidden = !tailExpanded || !visible.has(row); });
+      panel.hidden = !tailExpanded;
+      toggle.setAttribute('aria-expanded',String(tailExpanded));
+      toggle.disabled = total === 0;
+      toggle.textContent = tailExpanded ? 'Свернуть долгие выставки' : total ? `Показать ${Math.min(TAIL_BATCH_SIZE,total)} из ${total}` : 'Нет совпадений';
+      if (controls instanceof HTMLElement) controls.hidden = !tailExpanded;
+      const remaining = Math.max(0,total - tailRevealCount);
+      if (status instanceof HTMLElement) status.textContent = `Показаны ${tailRevealCount} из ${total}`;
+      if (more instanceof HTMLButtonElement) {
+        more.hidden = !tailExpanded || remaining === 0;
+        more.textContent = `Показать ещё ${Math.min(TAIL_BATCH_SIZE,remaining)}`;
+        more.setAttribute('aria-label',`Показать ещё ${Math.min(TAIL_BATCH_SIZE,remaining)} выставки. Сейчас показаны ${tailRevealCount} из ${total}.`);
+      }
+      refreshTailDecks();
+      window.requestAnimationFrame(refreshTailDecks);
+    };
+    const focusBoundary = (control,preferred = null) => {
+      if (!(control instanceof HTMLElement)) return null;
+      setRovingTitle(preferred);
+      setKeyboardActive(null);
+      control.focus({ preventScroll:true });
+      control.scrollIntoView({ block:'center', behavior:reducedMotion.matches ? 'auto' : 'smooth' });
+      return control;
+    };
     const focusAdjacentRow = (direction) => {
+      const toggle = tailToggle();
+      const more = tailMore();
+      const active = document.activeElement;
       let links = focusLinks();
       if (!links.length) return null;
       const activeRow = document.activeElement instanceof Element ? document.activeElement.closest('[data-exhibition-row]') : null;
       const selectedRow = root.querySelector('.ex-row.is-keyboard-active');
       const current = activeRow?.querySelector('[data-row-focus]') || selectedRow?.querySelector('[data-row-focus]');
       const currentIndex = links.indexOf(current);
-      const tail = root.querySelector('[data-list-section="tail"]');
       const visiblePriority = links.filter((link) => link.closest('[data-list-section="priority"]'));
-      if (direction > 0 && tail instanceof HTMLElement && tail.hidden && current === visiblePriority.at(-1)) {
-        setTailExpanded(true,current);
-        links = focusLinks();
-        const firstTail = links.find((link) => tail.contains(link));
-        if (firstTail) return focusRowLink(firstTail);
-        setRovingTitle(current);
-        setKeyboardActive(current);
-        announce('В давно идущих выставках нет совпадений с текущими фильтрами.');
+      const visibleTail = links.filter((link) => link.closest('[data-list-section="tail"]'));
+      const lastPriority = visiblePriority.at(-1);
+      if (active === toggle) {
+        if (direction < 0 && lastPriority) return focusRowLink(lastPriority);
+        if (direction > 0 && tailExpanded && visibleTail[0]) return focusRowLink(visibleTail[0]);
+        if (direction > 0 && !tailExpanded) announce('Нажмите Enter или пробел, чтобы показать давно идущие выставки.');
+        return toggle;
+      }
+      if (active === more) {
+        if (direction < 0 && visibleTail.at(-1)) return focusRowLink(visibleTail.at(-1));
+        return more;
+      }
+      if (direction > 0 && current === lastPriority && toggle instanceof HTMLElement) return focusBoundary(toggle,current);
+      if (direction < 0 && current === visibleTail[0] && toggle instanceof HTMLElement) return focusBoundary(toggle,lastPriority);
+      if (direction > 0 && current === visibleTail.at(-1) && more instanceof HTMLElement && !more.hidden) return focusBoundary(more,current);
+      if (direction > 0 && current === visibleTail.at(-1) && tailExpanded) {
+        announce('Это последняя показанная выставка.');
         return current;
       }
       const nextIndex = currentIndex < 0 ? (direction > 0 ? 0 : links.length - 1) : Math.max(0,Math.min(links.length - 1,currentIndex + direction));
       const next = links[nextIndex];
       return focusRowLink(next);
     };
-    const syncFilters = (preferred = null) => {
-      syncPersonalOrder();
+    const syncFilters = (preferred = null,options = {}) => {
+      const exactFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const orderChanged = syncPersonalOrder();
       let count = 0;
       rows().forEach((row) => {
         const rejected = state.negative.includes(row.dataset.eventId);
@@ -1131,6 +1252,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         row.classList.toggle('is-filtered', !visible);
         if (visible) count += 1;
       });
+      syncTailWindow();
       if (visibleCount instanceof HTMLElement) visibleCount.textContent = String(count);
       if (empty instanceof HTMLElement) empty.hidden = count > 0;
       if (personalNote instanceof HTMLElement) {
@@ -1142,17 +1264,21 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
             : '<strong>Начните с 2–3 оценок.</strong> Пока профиль пуст, «Для меня» показывает новое и общее главное.';
       }
       const chosen = setRovingTitle(preferred);
+      const exactRowLink = exactFocus?.closest?.('[data-row-focus]');
+      const exactBoundary = exactFocus === tailToggle() || exactFocus === tailMore();
+      if (orderChanged && ((exactRowLink && focusLinks().includes(exactRowLink)) || (exactBoundary && exactFocus.offsetParent !== null))) {
+        exactFocus.focus({ preventScroll:true });
+      }
       if (document.activeElement?.closest?.('[data-exhibition-row]')) setKeyboardActive(chosen);
+      else if (document.activeElement === tailToggle() || document.activeElement === tailMore()) setKeyboardActive(null);
       updateBadge();
-      scheduleDeckLayout();
+      if (options.relayout !== false) scheduleDeckLayout();
     };
     const setTailExpanded = (expanded,preferred = null) => {
-      const panel = root.querySelector('[data-list-section="tail"]');
-      const toggle = root.querySelector('[data-tail-toggle]');
-      if (!(panel instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return null;
-      panel.hidden = !expanded;
-      toggle.setAttribute('aria-expanded',String(expanded));
-      toggle.textContent = expanded ? 'Свернуть долгие выставки' : `Показать ещё ${panel.querySelectorAll('[data-exhibition-row]').length}`;
+      const panel = tailPanel();
+      if (!(panel instanceof HTMLElement)) return null;
+      tailExpanded = Boolean(expanded);
+      tailRevealCount = tailExpanded ? Math.max(TAIL_BATCH_SIZE,tailRevealCount) : 0;
       syncFilters(preferred);
       return panel;
     };
@@ -1192,8 +1318,17 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       }
       const tailToggle = target.closest('[data-tail-toggle]');
       if (tailToggle instanceof HTMLElement) {
-        const panel = root.querySelector('[data-list-section="tail"]');
-        if (panel instanceof HTMLElement) setTailExpanded(panel.hidden);
+        const preferred = root.querySelector('[data-row-focus][tabindex="0"]');
+        setTailExpanded(!tailExpanded,preferred);
+        announce(tailExpanded ? `Показаны первые ${tailRevealCount} давно идущих выставок.` : 'Давно идущие выставки свёрнуты.');
+        return;
+      }
+      const tailMoreButton = target.closest('[data-tail-more]');
+      if (tailMoreButton instanceof HTMLElement) {
+        const before = tailRevealCount;
+        tailRevealCount += TAIL_BATCH_SIZE;
+        syncFilters(root.querySelector('[data-row-focus][tabindex="0"]'));
+        announce(`Добавлены выставки ${before + 1}–${tailRevealCount}.`);
         return;
       }
       if (target.closest('[data-empty-all]')) { switchMode('all'); return; }
@@ -1225,13 +1360,17 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
 
     const toggleLike = (row) => {
       const id = row.dataset.eventId;
+      const focusedTitle = row.querySelector('[data-row-focus]');
       const liked = state.likes.includes(id);
       state.likes = liked ? state.likes.filter((value) => value !== id) : [...state.likes, id];
       if (!liked) {
         state.negative = state.negative.filter((value) => value !== id);
       }
       rebuildLikedTags();
-      markSeen(row); writeState(); syncActionState(); transitionDOM(syncFilters);
+      // A like must not open a document-wide View Transition: an immediate
+      // ArrowRight belongs to this row's deck and should start without waiting
+      // for a second animation timeline.
+      markSeen(row); writeState(); syncActionState(); syncFilters(focusedTitle,{ relayout:false });
       announce(liked ? 'Лайк убран. Персональный порядок обновлён.' : 'Нравится. Темы сохранены в интересах; выставки не скрываются.');
     };
     const rejectRow = (row) => {
