@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: reopened / corrective immutable secret candidate pending
+Status: mitigated / corrective immutable secret candidate ready for owner acceptance
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -103,6 +103,33 @@ secret preproduction candidate family.
   ownership. The review explicitly required fail-closed `contain`, neutral
   bands after load and mixed-input regression coverage rather than a blind
   switch back to `cover`.
+- 2026-07-20 20:22 UTC — exact `origin/main` SHA
+  `1810a12bb6eacce10361c0c05900cecd3708f4d3` was deployed as Fly release
+  `v1735`; release `v1736` then changed only the immutable
+  `STATIC_SITE_REPO_SHA` pin to that same SHA. The stable web root remained
+  untouched.
+- 2026-07-20 20:23–20:31 UTC — the already-running old-SHA Kaggle handoff was
+  allowed to finish. After the Fly restart, the existing built-in outbox
+  reconciliation path rearmed that orphaned runner owner; no second remote
+  builder was started for it.
+- 2026-07-20 20:34 UTC — static build preflight correctly deferred while the
+  Fly volume had less than the configured `1024 MiB` free-space floor. Two
+  unreferenced stale local build/snapshot trees were removed after checking
+  that no pending/running job referenced them, recovering `563,472,029` bytes.
+- 2026-07-20 20:37–20:57 UTC — job `39144` built, browser-gated and published
+  candidate `DJc9…` from exact SHA `1810a12b`; the older coalesced job `39115`
+  then completed as a fingerprint `noop`, proving the single-flight/fingerprint
+  path did not publish a stale duplicate.
+- 2026-07-20 20:58 UTC — an independent live Chromium pass on the exact public
+  secret URL repeated loaded-layer geometry, fresh/reload arrows, inert-click
+  Russian physical codes, the `6408` → gallery → `6407` document transition,
+  single-image `6593` negative control and footer clipboard/toast flows.
+- 2026-07-20 21:00–21:01 UTC — agy `Gemini 3.1 Pro (High)` independently
+  inspected the exact candidate, source, computed report and PNG pixels. It
+  explicitly confirmed that the production listener is `pointerdown`, not the
+  earlier review's mistaken `pointerup`, and returned
+  `SHIP_SECRET_CANDIDATE`. Native Firefox/Safari, assistive technology,
+  high-contrast and zoom/reflow remain root-rollout blockers.
 
 ## Root Cause
 
@@ -293,7 +320,7 @@ secret preproduction candidate family.
   normalized-title reciprocity plus fail-closed graph topology checks.
 - [x] Published and verified a fresh immutable secret candidate from
   `origin/main` without mutating the stable root or stable ICS namespace.
-- [ ] Supersede rejected `RHOg…` with a new immutable noindex candidate whose
+- [x] Supersede rejected `RHOg…` with a new immutable noindex candidate whose
   retained browser evidence proves loaded-layer visibility, cold/reload arrows
   and real inert-click Russian-layout shortcuts.
 - [ ] Complete native Firefox/Safari, screen-reader, high-contrast and
@@ -309,13 +336,61 @@ secret preproduction candidate family.
   the off-screen-focus ambiguity case and mandatory feedback.
 - [x] Add the missing live visual and multi-page/mixed-input scenarios to the
   canonical Playwright matrix.
-- [ ] Repeat generated-tree plus live immutable-candidate Chromium acceptance
+- [x] Repeat generated-tree plus live immutable-candidate Chromium acceptance
   with the expanded evidence contract and obtain a fresh Gemini 3.1 Pro
   verdict. The previous `SHIP` is explicitly invalidated by owner reproduction.
 - [ ] Repair the 28 static-build observability consistency issues reported in
   the final 48-hour diagnostic window. These historical reconciliation issues
   do not invalidate the exact successful receipt, but they remain operational
   debt and must not be hidden by aggregate success counts.
+
+## Corrective Secret-Candidate Evidence
+
+- immutable URL:
+  `https://kenigevents.ru/_review/DJc9V0Milp7igVHNO8xPopYxHo3pW0vmy-Eqhhubd54/`
+- source identity: `origin/main@1810a12bb6eacce10361c0c05900cecd3708f4d3`;
+  Fly releases `v1735` (image) and `v1736` (exact static-builder SHA pin)
+- build identity: `production-secret-20260720T223718-960d2ff8`; run
+  `static-site:production-secret-20260720T223718-960d2ff8:ae3ac226b597`;
+  snapshot `snapshot-20260720T203718-846ed94662`
+- receipt identity: result SHA-256
+  `cb5508fe97839ea0919dabf43e4a09320f2e391fd4f517f160cdb691c069d4e8`;
+  manifest SHA-256
+  `a6438021161fdf7cbaddc589a0b37cd487ef76d96517b09c1e370d775c6edccc`;
+  token SHA-256
+  `99b76b075d8c807f63df5a26941ea0f0002a5708922485619142e421ea9a009c`
+- generated output: `248` event pages, `853` pages, `931` files and three
+  exact artifacts: `production_root`, `secret_candidate` and fail-closed
+  `browser_evidence`; only the secret candidate was published
+- indexing/isolation: `noindex,nofollow,noarchive,nosnippet`, `no-referrer`,
+  prefix containment, `root_mutation=false`, `stable_ics_mutation=false`
+- mandatory generated-tree Chromium checks:
+  `related_geometry_crop`, `related_loaded_media`, `canonical_event_cards`,
+  `cold_and_pointer_keyboard`, `gallery_cross_document` and
+  `footer_shortcuts` all passed
+- loaded related media: all `10` tested cards decoded successfully, their
+  dynamic shells reached `is-image-loaded`, and every fallback had
+  `display:none` / `fallback_visible=false`; the set included `cover`,
+  `visual-contain` and `document-contain`
+- keyboard evidence: event `6408` had `7` images and changed on the first cold
+  `ArrowRight`; event `6593` had one image and stayed unchanged; both passed a
+  real inert-description mouse click followed by physical `KeyL/KeyK/KeyS`
+  with Cyrillic logical keys plus `Enter`; header, editor and modal dialog were
+  negative controls
+- journey evidence: the real final-gallery recommendation navigated from
+  `6408` to `Старший сын` (`6407`) and destination Right/Left changed/restored
+  its hero without a Down/Up primer
+- footer evidence: visible-footer `P` copied `image/png`; `S` copied the
+  service text and canonical root URL; the toast confirmed success
+- consultant: agy `Gemini 3.1 Pro (High)`, provider alias
+  `gemini-3.1-pro-preview`, clean exit `0`, verdict
+  `SHIP_SECRET_CANDIDATE`. This is not approval for root rollout.
+- final read-only 48-hour diagnostics at `2026-07-20T21:05:34Z`: `59`
+  requests, `44` claims, `17` successes, `26` failed attempts, `13` busy
+  deferrals and `2` no-ops. Generated-evidence totals are `1,240` event-page
+  renders, `4,265` page renders and `620,931,528` bytes. The diagnostic still
+  reports `28` historical ledger/history consistency issues; they are recorded
+  debt rather than hidden by the successful current receipt.
 
 ## Superseded Release Evidence
 
