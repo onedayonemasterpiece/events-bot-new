@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: open / second crop correction passes local gate; new immutable candidate pending
+Status: mitigated / crop-corrected immutable candidate published; owner acceptance pending
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -156,6 +156,32 @@ secret preproduction candidate family.
   fixtures plus an explicit computed-style browser guard. Both were added; a
   production-family generated-tree run and immutable candidate review remain
   mandatory before publication.
+- 2026-07-20 22:30–22:33 UTC — Fly release `v1738` deployed exact
+  `origin/main` crop SHA `2d3d5f3bc5ea4a7f23313ed5687dda697f30ad13`;
+  release `v1739` corrected the separately stored `STATIC_SITE_REPO_SHA` secret
+  to that same SHA. Public `/healthz` returned ready and the runtime file mirror
+  remained enabled under `/data/runtime_logs`.
+- 2026-07-20 22:47–22:57 UTC — build
+  `production-secret-20260721T004740-5e5fb9bf` ran the complete production and
+  secret-candidate generated-tree browser gates from the crop SHA. An unrelated
+  guide-monitoring release restarted Fly while the remote kernel was live, but
+  the durable handoff retained the exact snapshot/run identity; the kernel
+  completed and released its exact `static_site:builder` lease.
+- 2026-07-20 23:03–23:14 UTC — host recovery adopted the terminal kernel,
+  hash-validated its result and all `937` create-only candidate objects, and
+  completed the current-review receipt without overwriting the stable root or
+  stable ICS namespace. Stale runner scratch and one unreferenced terminal
+  snapshot were removed only after exact-run/reference checks; `/data` finished
+  with about `1848 MiB` free and `PRAGMA quick_check=ok`.
+- 2026-07-20 23:21 UTC — independent live Chromium acceptance on the actual
+  immutable URL verified the four owner-reported ordinary-photo canaries as
+  computed `cover` with zero unused frame, retained three real document
+  `contain` controls, found no loaded fallback bleed, and passed the cold,
+  Cyrillic mixed-input, cross-document gallery and footer shortcut journeys.
+- 2026-07-20 23:26–23:27 UTC — agy `Gemini 3.1 Pro (High)` independently
+  inspected the immutable URL, source, retained PNG pixels and live report and
+  returned `SHIP_SECRET_CANDIDATE`. This is not production-root approval;
+  incident closure still requires owner visual acceptance.
 
 ## Root Cause
 
@@ -356,7 +382,8 @@ secret preproduction candidate family.
   shared row/Card resolver, kept OCR/unknown documents contained, preserved
   exported focal positions, and added exact `6408` payload canaries plus an
   independent unused-frame browser budget.
-- [ ] Publish and verify a new immutable noindex candidate from this correction.
+- [x] Published and verified a new immutable noindex candidate from this
+  correction, including independent live Chromium and Gemini 3.1 Pro review.
 - [ ] Complete native Firefox/Safari, screen-reader, high-contrast and
   zoom/reflow checks before any later root rollout.
 
@@ -377,6 +404,55 @@ secret preproduction candidate family.
   the final 48-hour diagnostic window. These historical reconciliation issues
   do not invalidate the exact successful receipt, but they remain operational
   debt and must not be hidden by aggregate success counts.
+
+## Corrected Secret-Candidate Evidence
+
+- immutable URL:
+  `https://kenigevents.ru/_review/2BxKLmLKkRXG7uuiNjbvUC1g_dy7Kw1gtaVdnfG5Lj4/`
+- source identity:
+  `origin/main@2d3d5f3bc5ea4a7f23313ed5687dda697f30ad13`; Fly releases
+  `v1738` (image) and `v1739` (exact static-builder SHA secret pin). The SHA
+  remains reachable from current `origin/main`.
+- build identity: `production-secret-20260721T004740-5e5fb9bf`; run
+  `static-site:production-secret-20260721T004740-5e5fb9bf:79c9ed254238`;
+  snapshot `snapshot-20260720T224740-cfb8cf9f55`; input fingerprint
+  `9f3149691ebd63a49321da1fa780316e0974c05c714846d04518d8f87295a6c1`
+- receipt identity: result SHA-256
+  `ce294733fd89629ae66c31137149537241b6440c90b4dac644dfc5500ab8fc69`;
+  manifest SHA-256
+  `aaf69f91a13610afd0009bb081c3f3ab5e3b84414064b7a25cd9be4fbbb96705`;
+  token SHA-256
+  `12fa09b37d15f42208dc3b3d880cb35f4ede1ab009460fea686a72cfdf6f316b`;
+  `937` verified objects
+- isolation: `noindex,nofollow,noarchive,nosnippet`, `no-referrer`,
+  `root_mutation=false`, `stable_ics_mutation=false`; the stable root body
+  remained SHA-256
+  `e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`
+- live crop evidence: all ordinary-photo cards returned computed
+  `visual-cover` / `object-fit:cover` / `unusedFrameRatio=0`, including event
+  `5757` (`Собачье сердце`), `6586` and `6318` (the two
+  `Ромео и Джульетта` cards) and `5756` (`Женитьба`). Document controls
+  `6477`, `3934` and `6610` remained `document-contain`; every decoded image
+  had `fallbackVisible=false`.
+- live keyboard evidence: cold `6408` Right/Left changed/restored a seven-image
+  hero; single-image `6593` remained unchanged; an inert real click followed
+  by physical Cyrillic `KeyL`, `KeyK`, `KeyS` and `Enter` reached the intended
+  current-event actions; the gallery CTA navigated `6408` → `6407` and the
+  destination hero arrows worked; visible-footer `P`/`S` copied `image/png`
+  and service text with confirmation toast.
+- operational convergence: jobs `39145` and `39146` are terminal, active build
+  state is empty, the exact run's `static_site:builder` lease is `released`,
+  `PRAGMA quick_check=ok`, runtime file logging is enabled, `/healthz` is ready
+  and `/data` has about `1848 MiB` free.
+- consultant: agy `Gemini 3.1 Pro (High)`, provider alias
+  `gemini-3.1-pro-preview`, clean process exit `0`, verdict
+  `SHIP_SECRET_CANDIDATE`. Native Firefox/Safari, assistive-technology,
+  high-contrast and zoom/reflow validation remain explicit root-rollout
+  blockers.
+- retained local evidence (ignored):
+  `artifacts/codex/INC-2026-07-20-static-event-keyboard-visual-regressions-v3/live-candidate/`
+  contains the live report, exact test script, loaded-row PNGs, HTTP/root hashes,
+  production state and Gemini brief/review/provenance.
 
 ## Rejected Second Secret-Candidate Evidence
 
