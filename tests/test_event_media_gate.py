@@ -87,15 +87,46 @@ async def test_current_yandex_bucket_url_is_canonicalized_to_cdn(monkeypatch) ->
     candidate = PosterCandidate(
         supabase_url=(
             "https://storage.yandexcloud.net/kenigevents.ru/"
-            "p/dh16/aa/abcdef.webp"
+            f"p/image/v2/aa/{'a' * 64}.webp"
         )
     )
 
     assert await event_media.materialize_event_media_candidate_to_cdn(candidate)
     assert candidate.supabase_url == (
-        "https://static.kenigevents.ru/p/dh16/aa/abcdef.webp"
+        f"https://static.kenigevents.ru/p/image/v2/aa/{'a' * 64}.webp"
     )
-    assert candidate.supabase_path == "p/dh16/aa/abcdef.webp"
+    assert candidate.supabase_path == f"p/image/v2/aa/{'a' * 64}.webp"
+    assert candidate.raw_sha256 == "a" * 64
+
+
+@pytest.mark.asyncio
+async def test_legacy_managed_poster_is_rematerialized_to_exact_v2(monkeypatch) -> None:
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    source_bytes = _pattern_png_bytes()
+
+    def download(url: str, *, max_bytes: int, timeout: float):
+        del max_bytes, timeout
+        return DownloadedPoster(source_bytes, "image/webp", url)
+
+    monkeypatch.setattr(event_media, "_download_url", download)
+    monkeypatch.setattr(
+        "yandex_storage.upload_yandex_public_bytes",
+        lambda _data, *, object_path, content_type, **_kwargs: (
+            f"https://static.kenigevents.ru/{object_path}"
+        ),
+    )
+    candidate = PosterCandidate(
+        supabase_url=(
+            "https://static.kenigevents.ru/"
+            f"p/dh16/aa/{'a' * 64}.webp"
+        ),
+        supabase_path=f"p/dh16/aa/{'a' * 64}.webp",
+    )
+
+    assert await event_media.materialize_event_media_candidate_to_cdn(candidate)
+    assert candidate.supabase_path.startswith("p/image/v2/")
+    assert candidate.supabase_url.endswith(candidate.supabase_path)
+    assert candidate.raw_sha256 == candidate.supabase_path.split("/")[-1][:-5]
 
 
 @pytest.mark.asyncio
@@ -105,7 +136,7 @@ async def test_cdn_display_url_change_invalidates_visual_evidence(monkeypatch) -
     candidate = SimpleNamespace(
         supabase_url=(
             "https://storage.yandexcloud.net/kenigevents.ru/"
-            "p/dh16/aa/abcdef.webp"
+            f"p/image/v2/aa/{'a' * 64}.webp"
         ),
         catbox_url=None,
         image_geometry_id=42,
@@ -121,7 +152,7 @@ async def test_cdn_display_url_change_invalidates_visual_evidence(monkeypatch) -
     assert await event_media.materialize_event_media_candidate_to_cdn(candidate)
 
     assert candidate.supabase_url == (
-        "https://static.kenigevents.ru/p/dh16/aa/abcdef.webp"
+        f"https://static.kenigevents.ru/p/image/v2/aa/{'a' * 64}.webp"
     )
     assert candidate.image_geometry_id is None
     assert candidate.pixel_sha256 is None
@@ -130,6 +161,36 @@ async def test_cdn_display_url_change_invalidates_visual_evidence(monkeypatch) -
     assert candidate.media_role is None
     assert candidate.focal_x is None and candidate.focal_y is None
     assert candidate.safe_crop is False
+
+
+@pytest.mark.asyncio
+async def test_geometry_download_never_falls_back_from_display_to_source(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    calls: list[str] = []
+
+    def download(url: str, *, max_bytes: int, timeout: float):
+        del max_bytes, timeout
+        calls.append(url)
+        if url == "https://static.kenigevents.ru/current.webp":
+            raise OSError("managed object unavailable")
+        return DownloadedPoster(b"different source", "image/jpeg", url)
+
+    monkeypatch.setattr(event_media, "_download_url", download)
+    poster = EventPoster(
+        event_id=1,
+        poster_hash="display-only-download",
+        supabase_url="https://static.kenigevents.ru/current.webp",
+        catbox_url="https://source.example/different.jpg",
+        review_status=APPROVED,
+    )
+
+    with pytest.raises(RuntimeError, match="managed object unavailable"):
+        await event_media._download_poster(poster)
+
+    assert calls == ["https://static.kenigevents.ru/current.webp"]
 
 
 @pytest.mark.asyncio
@@ -197,6 +258,113 @@ async def test_cdn_retry_preserves_unique_raw_sha_survivor(
     assert failed == 0
     assert retry.supabase_url.startswith("https://static.kenigevents.ru/p/image/v2/")
     assert retry.raw_sha256 is None
+
+
+@pytest.mark.asyncio
+async def test_exact_v2_early_return_preserves_unique_raw_sha_survivor(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "1")
+    monkeypatch.setenv("PUBLIC_ASSET_BASE_URL", "https://static.kenigevents.ru")
+    digest = "a" * 64
+    exact_path = f"p/image/v2/aa/{digest}.webp"
+    exact_url = f"https://static.kenigevents.ru/{exact_path}"
+
+    db = Database(str(tmp_path / "exact-early-return.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        survivor = EventPoster(
+            event_id=int(event.id),
+            poster_hash="survivor",
+            supabase_url=exact_url,
+            supabase_path=exact_path,
+            raw_sha256=digest,
+            thumbnail_256_url="https://static.kenigevents.ru/t/256/a.webp",
+            thumbnail_512_url="https://static.kenigevents.ru/t/512/a.webp",
+            review_status=APPROVED,
+            display_order=0,
+        )
+        duplicate = EventPoster(
+            event_id=int(event.id),
+            poster_hash="duplicate",
+            supabase_url=exact_url,
+            supabase_path=exact_path,
+            thumbnail_256_url="https://static.kenigevents.ru/t/256/b.webp",
+            thumbnail_512_url="https://static.kenigevents.ru/t/512/b.webp",
+            review_status=APPROVED,
+            display_order=1,
+        )
+        session.add(survivor)
+        session.add(duplicate)
+        await session.commit()
+
+        updated, failed = await event_media.materialize_event_posters_to_cdn(
+            session, int(event.id)
+        )
+        await session.commit()
+        await session.refresh(duplicate)
+
+    await db.engine.dispose()
+    assert updated == 0
+    assert failed == 0
+    assert duplicate.raw_sha256 is None
+
+
+@pytest.mark.asyncio
+async def test_smart_update_merge_does_not_claim_another_rows_raw_sha(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "0")
+    digest = "b" * 64
+    exact_path = f"p/image/v2/bb/{digest}.webp"
+    exact_url = f"https://static.kenigevents.ru/{exact_path}"
+    db = Database(str(tmp_path / "smart-merge-raw-conflict.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.flush()
+        matched_by_source = EventPoster(
+            event_id=int(event.id),
+            poster_hash="source-candidate",
+            review_status=APPROVED,
+            display_order=0,
+        )
+        raw_owner = EventPoster(
+            event_id=int(event.id),
+            poster_hash="other-source",
+            supabase_url=exact_url,
+            supabase_path=exact_path,
+            raw_sha256=digest,
+            review_status=APPROVED,
+            display_order=1,
+        )
+        session.add(matched_by_source)
+        session.add(raw_owner)
+        await session.commit()
+
+        await _apply_posters(
+            session,
+            int(event.id),
+            [
+                PosterCandidate(
+                    sha256="source-candidate",
+                    raw_sha256=digest,
+                    supabase_url=exact_url,
+                    supabase_path=exact_path,
+                )
+            ],
+        )
+        await session.commit()
+        await session.refresh(matched_by_source)
+        await session.refresh(raw_owner)
+
+    await db.engine.dispose()
+    assert matched_by_source.raw_sha256 is None
+    assert raw_owner.raw_sha256 == digest
 
 
 @pytest.mark.asyncio
@@ -607,7 +775,10 @@ async def test_exact_content_reimport_merges_without_new_review(tmp_path) -> Non
 
     assert len(rows) == 1
     assert rows[0].review_status == APPROVED
-    assert rows[0].raw_sha256 == digest
+    # Candidate/source identity stays in poster_hash. raw_sha256 is reserved
+    # for exact bytes actually served by the managed display URL.
+    assert rows[0].poster_hash == digest
+    assert rows[0].raw_sha256 is None
     assert rows[0].supabase_url == "https://static.example/managed.webp"
     assert reviews == []
 

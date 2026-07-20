@@ -157,6 +157,9 @@ const ratio = preferredWidth / preferredHeight;
 // than presenting a 16:9 approximation as a proven-safe crop.
 const preferredCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
 const preferredPosition = preferredCrop.fit === 'cover' ? preferredCrop.objectPosition : '50% 50%';
+const heroContainStyle = preferredCrop.fit === 'contain'
+  ? 'object-fit:contain !important;object-position:center !important;transform:none !important;margin:0 !important;'
+  : undefined;
 const selectedMediaMode = forcedOcrSourceIndexes.has(heroImageIndex)
   ? 'ocr_text'
   : preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
@@ -352,7 +355,7 @@ const descriptionHtml = (event.description_html || '')
                   aria-keyshortcuts={photoCount > 1 ? 'ArrowLeft ArrowRight' : undefined}
                   aria-label={splitPortraitViewer ? `Открыть быстрый просмотр всех изображений события «${event.title}»` : `${mediaRoleAction(galleryImages[0]?.media_role || 'unknown_document')} события «${event.title}» на весь экран`}
                 >
-                  <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" data-protected-crop-fit={preferredCrop.fit} data-protected-crop-reason={preferredCrop.reason} />
+                  <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" data-protected-crop-fit={preferredCrop.fit} data-protected-crop-reason={preferredCrop.reason} style={heroContainStyle} />
                 </button>
               ) : typedFallbackArt ? (
                 <EventFallbackArt event={event} surface="desktop" />
@@ -399,7 +402,7 @@ const descriptionHtml = (event.description_html || '')
           <figure class="desktop-prototype__media" data-media-frame data-ocr-safe-cover={ocrSafeCover ? 'true' : 'false'} data-desktop-parallax={selectedHeroMustContain ? undefined : ''} data-editorial-media>
             {preferredUrl && (
               <button type="button" class="desktop-prototype__media-opener" data-hero-gallery-open={galleryId} data-hero-gallery-index="0" aria-describedby={photoCount > 1 ? closedHeroStatusId : undefined} aria-keyshortcuts={photoCount > 1 ? 'ArrowLeft ArrowRight' : undefined} aria-label={`Открыть фотографии события «${event.title}» на весь экран`}>
-                <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" data-protected-crop-fit={preferredCrop.fit} data-protected-crop-reason={preferredCrop.reason} />
+                <img class="desktop-prototype__media-image" data-clean-hero-image src={preferredUrl} alt={heroAlt} width={preferredWidth} height={preferredHeight} fetchpriority="high" decoding="async" data-protected-crop-fit={preferredCrop.fit} data-protected-crop-reason={preferredCrop.reason} style={heroContainStyle} />
               </button>
             )}
             {!preferredUrl && (typedFallbackArt
@@ -1860,7 +1863,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; }
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-cover"] .event-card__media),
-    .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) { object-fit:cover !important; object-position:center center !important; }
+    .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media),
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-contain"] .event-card__media) { object-fit:contain !important; object-position:center center !important; background:#15110f !important; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
@@ -2243,8 +2246,9 @@ const descriptionHtml = (event.description_html || '')
 
     .desktop-prototype__media-rail--poster { justify-content:safe center; }
     .desktop-clean-related__grid :global([data-lab-media-treatment="document-safe-cover"] .event-card__media) {
-      object-fit:cover !important;
+      object-fit:contain !important;
       object-position:50% 50% !important;
+      background:#15110f !important;
     }
 
     .desktop-portrait-viewer {
@@ -2531,4 +2535,5 @@ const descriptionHtml = (event.description_html || '')
     [data-slow-media-track] { transform:none !important; }
     .desktop-portrait-viewer__viewport { scroll-behavior:auto !important; }
   }
+
 </style>

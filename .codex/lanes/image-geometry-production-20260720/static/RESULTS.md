@@ -62,4 +62,3 @@
   **and** a client-size/range-aware solver is introduced. This is intentional:
   a server-side approximate aspect ratio cannot guarantee face/value retention.
 - No backend, docs or CHANGELOG files were edited in this lane.
-

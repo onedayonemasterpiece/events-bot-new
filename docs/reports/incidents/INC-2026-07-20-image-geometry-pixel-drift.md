@@ -85,6 +85,7 @@ prove that a crop referred to the current pixels.
 ### Affected surfaces
 
 - `event_media.py`, Smart Update poster merge and legacy CDN backfill paths;
+- Kaggle `TelegramMonitor` poster writer and Telegram payload ingestion;
 - `scripts/enqueue_static_event_media_enrichment.py`;
 - production `eventposter`, `event_image_geometry`, `event_media_review_usage`
   and `joboutbox` rows;
@@ -144,7 +145,7 @@ prove that a crop referred to the current pixels.
 
 - deployed SHA: pending
 - deploy path: pending
-- source regression checks: 97 Python tests and 19 focused Node tests passed;
+- source regression checks: 146 Python tests and 20 focused Node tests passed;
   Astro built 380 pages. The broad Node suite remained 43/44 because of a
   pre-existing literal class-token assertion in an unchanged layout file.
 - post-deploy verification: pending

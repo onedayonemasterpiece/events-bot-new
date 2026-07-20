@@ -28,7 +28,12 @@ The audit must apply, not duplicate, these incidents:
 - [INC-2026-05-05 event-source media aggregation gap](../reports/incidents/INC-2026-05-05-event-source-media-aggregation-gap.md): source aggregation must add missing unique media without re-adding duplicate repost media;
 - [INC-2026-06-07 TG event publishing media/calendar dedup](../reports/incidents/INC-2026-06-07-tg-event-publishing-media-calendar-dedup.md): persisted and published mirror dedup.
 
-`EventPoster.poster_hash` is an exact persisted digest. `EventPoster.phash` and the canonical `p/dh16/.../<hash>.webp` path use the repository’s 256-bit dHash implementation in `media_dedup.py`. Neither field alone proves the final gallery is clean: legacy `Event.photo_urls`, absent hashes, cross-host mirrors, crops and render-only selection must also be checked.
+`EventPoster.poster_hash` is an exact source digest. New canonical public objects
+use `p/image/v2/.../<encoded_sha256>.webp`; `EventPoster.phash` and legacy
+`p/dh16/...` use the repository’s 256-bit dHash implementation in
+`media_dedup.py`. Neither field alone proves the final gallery is clean: legacy
+`Event.photo_urls`, absent hashes, cross-host mirrors, crops and render-only
+selection must also be checked.
 
 ## Copy-paste prompt for the current production DB audit
 
@@ -73,7 +78,7 @@ D. одинаковый EventPoster.poster_hash внутри события;
 E. одинаковый phash/dh16 внутри события;
 F. отсутствующий phash, phash/path mismatch, noncanonical path;
 G. photo_count != фактическому числу gallery refs;
-H. managed p/dh16 WebP + raw VK/TG/qTickets/другой CDN mirror одного изображения;
+H. managed `p/image/v2` or legacy `p/dh16` WebP + raw VK/TG/qTickets/другой CDN mirror одного изображения;
 I. Event.photo_urls содержит дубль, которого уже нет среди deduped EventPoster, или наоборот.
 Запусти существующий scripts/inspect/audit_media_dedup.py на полном релевантном окне как один источник evidence, но прямо перечисли его blind spots: он не заменяет per-event union ledger и визуальный аудит.
 

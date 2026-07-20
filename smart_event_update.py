@@ -18619,6 +18619,7 @@ async def _apply_posters(
         UNAVAILABLE,
         ensure_event_media_reviews,
         _enqueue_geometry_followup_if_needed,
+        assign_event_poster_raw_sha256,
         event_media_require_cdn,
         invalidate_event_poster_visual_evidence,
         materialize_event_media_candidate_to_cdn,
@@ -18682,14 +18683,22 @@ async def _apply_posters(
         poster_raw_sha256 = (
             str(getattr(poster, "raw_sha256", None) or "").strip().lower()
         )
+        if poster_raw_sha256:
+            await assign_event_poster_raw_sha256(
+                poster,
+                poster_raw_sha256,
+                session=session,
+                event_id=int(event_id),
+            )
+            poster_raw_sha256 = (
+                str(getattr(poster, "raw_sha256", None) or "").strip().lower()
+            )
         poster_ocr_text = getattr(poster, "ocr_text", None)
         poster_ocr_title = getattr(poster, "ocr_title", None)
         display_url = str(poster_supabase_url or poster_catbox_url or "").strip()
         digest = str(getattr(poster, "sha256", None) or "").strip().lower()
-        # Only a real SHA-256 may enter the byte-fingerprint column and its
-        # uniqueness guard.  Legacy callers sometimes supplied opaque ids here;
-        # those remain usable as poster identity but are not byte evidence.
-        digest_is_content = bool(re.fullmatch(r"[0-9a-f]{64}", digest))
+        # This is source/candidate identity only. Exact managed display bytes
+        # enter raw_sha256 separately after materialization and conflict checks.
         if not digest and display_url:
             digest = hashlib.sha256(f"url:{_normalize_poster_identity_url(display_url)}".encode()).hexdigest()
         if not digest:
@@ -18734,9 +18743,7 @@ async def _apply_posters(
                 row.supabase_path = poster_supabase_path
             if poster_phash:
                 row.phash = poster_phash
-            resolved_raw_sha256 = poster_raw_sha256 or (
-                digest if digest_is_content else None
-            )
+            resolved_raw_sha256 = poster_raw_sha256
             if resolved_raw_sha256 and not row.raw_sha256:
                 row.raw_sha256 = resolved_raw_sha256
             if poster_ocr_text is not None:
@@ -18772,8 +18779,7 @@ async def _apply_posters(
                 supabase_url=poster_supabase_url,
                 supabase_path=poster_supabase_path,
                 poster_hash=digest,
-                raw_sha256=poster_raw_sha256
-                or (digest if digest_is_content else None),
+                raw_sha256=poster_raw_sha256 or None,
                 phash=poster_phash,
                 review_status=PENDING_REVIEW,
                 review_reason=(

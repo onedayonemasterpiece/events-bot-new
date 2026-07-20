@@ -21,7 +21,8 @@ Stored coordinates remain reusable metadata; the exporter does not invent a
 final crop. A surface with a **known** target aspect may run the deterministic
 protected-region solver: it adds a bounded margin around faces plus the valuable
 region, chooses a `cover` window only when the complete union fits, and returns
-the matching CSS object position. If the union does not fit, geometry is stale,
+the matching CSS object position without whole-percent rounding that could move
+the browser crop past a tight protected boundary. If the union does not fit, geometry is stale,
 the image is OCR/text, semantic role is not an explicitly classified
 `event_photo`, or the responsive target ratio is unknown, the renderer uses
 `contain`. Responsive hero/listing layouts therefore do not claim a safe bbox

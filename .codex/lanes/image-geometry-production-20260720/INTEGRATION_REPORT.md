@@ -16,8 +16,10 @@ Base: `origin/main@c587a0cf86e144a88c0457035866c8325ea59dc5`
 ## Validation
 
 - Python compile and `git diff --check`: passed.
-- Focused/integrated Python: `97 passed`.
-- Focused Node crop/media/desktop suite: `19 passed`.
+- Focused/integrated Python: `146 passed` (including exact-v2 early-return and
+  Smart Update raw-identity collision regressions).
+- Focused Node crop/media/desktop suite: `20 passed` (including reconstruction
+  of the serialized CSS crop at a tight protected boundary).
 - Astro production build: `380 page(s) built`.
 - Broad Node suite: `43/44`; the sole failure is the pre-existing
   `event-detail-runtime-regressions` literal class-token assertion against an
@@ -26,6 +28,10 @@ Base: `origin/main@c587a0cf86e144a88c0457035866c8325ea59dc5`
 - Production preflight: SQLite `quick_check=ok`; 2026-07-20 usage before canary
   was 9/100 geometry calls and 10/150 semantic-role calls. Event `6956` still
   demonstrated the old-pixel linked geometry defect before deployment.
+
+The independent checklist review found and drove fixes for provider-call
+TOCTOU drift, legacy TelegramMonitor writes, CSS specificity/precision,
+display/source fallback, audit blind spots and per-event raw-SHA collisions.
 
 ## Release guard
 

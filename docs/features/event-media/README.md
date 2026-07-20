@@ -12,7 +12,8 @@ Smart Update, а не отдельным ручным процессом и не
 `catbox_url`, а публичные consumers получают CDN URL из `supabase_url`.
 Raw URL `storage.yandexcloud.net/kenigevents.ru/...` безопасно меняет host на
 CDN без копирования объекта; source/Supabase/legacy-bucket URL скачиваются,
-нормализуются в WebP и загружаются в deterministic `p/dh16/...`.
+нормализуются в WebP и загружаются по exact encoded-SHA в immutable
+`p/image/v2/...`; `p/dh16/...` остаётся только legacy read path.
 Одновременно materialization готовит независимые content-addressed WebP
 миниатюры по длинной стороне `256` и `512` px в `p/thumb/v1/...`. Статический
 сайт использует их через `srcset`/`sizes`; полноразмерный объект остаётся только
@@ -95,9 +96,12 @@ Festival media — отдельная модель `Festival` и не входи
 OCR или SSIM само по себе никогда не удаляет и не скрывает approved media.
 Повтор одного и того же resolved display URL схлопывается ещё раньше, до
 download/hash/VLM; связанные deferred pair rows закрываются детерминированно.
-При retry CDN-materialization одинаковый raw SHA сохраняется только на уже
-существующем survivor: второй ledger row не нарушает partial unique index
-`(event_id, raw_sha256)`, а exact-equality остаётся в pair-review evidence.
+При любом CDN-materialization или Smart Update merge одинаковый raw SHA
+сохраняется только на уже существующем survivor: второй ledger row не нарушает
+partial unique index `(event_id, raw_sha256)`, а exact-equality остаётся в
+pair-review evidence. `poster_hash` описывает identity исходного кандидата;
+`raw_sha256` заполняется только доказанным SHA байтов managed display object и
+не выводится из source hash.
 
 Новые managed WebP пишутся в immutable path, адресованный точным SHA-256 уже
 закодированных байтов: `p/image/v2/<first2>/<encoded_sha256>.webp`. Старые

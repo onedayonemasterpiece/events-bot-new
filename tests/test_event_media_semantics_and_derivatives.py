@@ -296,6 +296,130 @@ async def test_geometry_pixel_mismatch_is_not_current_and_is_selected(tmp_path) 
     await db.engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_pending_geometry_status_is_selected_for_convergence(tmp_path) -> None:
+    db = Database(str(tmp_path / "geometry-pending-status.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Pending geometry",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        geometry = EventImageGeometry(
+            pixel_sha256="a" * 64,
+            model=event_media.image_geometry_model(),
+            prompt_version=event_media.IMAGE_GEOMETRY_PROMPT_VERSION,
+            status="pending",
+        )
+        session.add(geometry)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="pending-geometry",
+            supabase_url="https://static.kenigevents.ru/pending.webp",
+            review_status="approved",
+            pixel_sha256="a" * 64,
+            image_geometry_id=int(geometry.id),
+        )
+        session.add(poster)
+        await session.commit()
+
+        assert await event_media._next_geometry_candidate_id(
+            session, int(event.id)
+        ) == int(poster.id)
+    await db.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_geometry_provider_result_is_discarded_after_visual_identity_drift(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "geometry-provider-drift.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Concurrent geometry",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="geometry-provider-drift",
+            supabase_url="https://static.kenigevents.ru/old.webp",
+            review_status="approved",
+        )
+        session.add(poster)
+        await session.commit()
+        ids = int(event.id), int(poster.id)
+
+    async def fake_download(_poster):
+        return event_media.DownloadedPoster(
+            data=_jpeg_bytes(64, 48),
+            mime_type="image/jpeg",
+            source_url="https://static.kenigevents.ru/old.webp",
+        )
+
+    async def fake_budget(*_args):
+        return True
+
+    async def drifting_provider(_media):
+        async with db.get_session() as session:
+            current = await session.get(EventPoster, ids[1])
+            event_media.invalidate_event_poster_visual_evidence(current)
+            current.supabase_url = "https://static.kenigevents.ru/new.webp"
+            session.add(current)
+            await session.commit()
+        return (
+            {
+                "face_boxes_yxyx": [],
+                "valuable_region_yxyx": [0.1, 0.1, 0.9, 0.9],
+                "valuable_region_confidence": 0.95,
+                "reason_code": "main_subject",
+            },
+            SimpleNamespace(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+
+    monkeypatch.setattr(event_media, "_download_poster", fake_download)
+    monkeypatch.setattr(event_media, "_claim_feature_budget", fake_budget)
+    monkeypatch.setattr(event_media, "_call_image_geometry_provider", drifting_provider)
+
+    outcome = await event_media.analyze_event_poster_geometry(*ids, db)
+
+    async with db.get_session() as session:
+        poster = await session.get(EventPoster, ids[1])
+        geometries = (
+            await session.execute(event_media.select(EventImageGeometry))
+        ).scalars().all()
+        jobs = (
+            await session.execute(
+                event_media.select(event_media.JobOutbox).where(
+                    event_media.JobOutbox.event_id == ids[0],
+                    event_media.JobOutbox.status == event_media.JobStatus.pending,
+                )
+            )
+        ).scalars().all()
+    await db.engine.dispose()
+    assert outcome.status == "pending"
+    assert outcome.provider_called is True
+    assert outcome.error == "poster_drifted_during_geometry"
+    assert poster.supabase_url.endswith("/new.webp")
+    assert poster.pixel_sha256 is None
+    assert poster.image_geometry_id is None
+    assert geometries == []
+    assert len(jobs) == 1
+
+
 def test_pixel_fingerprint_change_invalidates_geometry_and_semantic_crop() -> None:
     poster = EventPoster(
         event_id=1,
@@ -736,3 +860,87 @@ async def test_invalid_media_role_response_remains_permanent_error(
     assert poster.media_semantic_status == "error"
     assert poster.media_semantic_reason_code == "invalid_or_low_confidence_media_role"
     assert jobs == []
+
+
+@pytest.mark.asyncio
+async def test_semantic_provider_result_is_discarded_after_visual_identity_drift(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "semantic-provider-drift.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Concurrent semantic role",
+            description="Описание",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Площадка",
+            source_text="Источник",
+        )
+        session.add(event)
+        await session.flush()
+        poster = EventPoster(
+            event_id=int(event.id),
+            poster_hash="semantic-provider-drift",
+            supabase_url="https://static.kenigevents.ru/old-role.webp",
+            review_status="approved",
+            pixel_sha256="a" * 64,
+            media_semantic_status="pending",
+        )
+        session.add(poster)
+        await session.commit()
+        ids = int(event.id), int(poster.id)
+
+    async def fake_download(_poster):
+        return event_media.DownloadedPoster(
+            data=_jpeg_bytes(64, 48),
+            mime_type="image/jpeg",
+            source_url="https://static.kenigevents.ru/old-role.webp",
+        )
+
+    async def fake_budget(*_args):
+        return True
+
+    class FakeGoogleAIClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def generate_content_async(self, **_kwargs):
+            async with db.get_session() as session:
+                current = await session.get(EventPoster, ids[1])
+                event_media.invalidate_event_poster_visual_evidence(current)
+                current.supabase_url = "https://static.kenigevents.ru/new-role.webp"
+                session.add(current)
+                await session.commit()
+            return json.dumps(
+                _role_decision(role="event_identity_poster"), ensure_ascii=False
+            ), None
+
+    import google_ai
+    import main
+
+    monkeypatch.setattr(event_media, "_download_poster", fake_download)
+    monkeypatch.setattr(event_media, "_claim_feature_budget", fake_budget)
+    monkeypatch.setattr(google_ai, "GoogleAIClient", FakeGoogleAIClient)
+    monkeypatch.setattr(google_ai, "SecretsProvider", lambda: object())
+    monkeypatch.setattr(main, "get_supabase_client", lambda: object())
+
+    assert await event_media._classify_event_poster_role(*ids, db) is False
+
+    async with db.get_session() as session:
+        poster = await session.get(EventPoster, ids[1])
+        jobs = (
+            await session.execute(
+                event_media.select(event_media.JobOutbox).where(
+                    event_media.JobOutbox.event_id == ids[0],
+                    event_media.JobOutbox.status == event_media.JobStatus.pending,
+                )
+            )
+        ).scalars().all()
+    await db.engine.dispose()
+    assert poster.supabase_url.endswith("/new-role.webp")
+    assert poster.pixel_sha256 is None
+    assert poster.media_semantic_status == "pending"
+    assert poster.media_role is None
+    assert poster.safe_crop is False
+    assert len(jobs) == 1

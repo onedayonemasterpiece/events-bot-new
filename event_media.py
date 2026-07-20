@@ -243,7 +243,80 @@ def _is_managed_url(url: str | None) -> bool:
         return bool(is_managed_storage_url(raw))
     except Exception:
         low = raw.casefold()
-        return "/p/dh16/" in low or "/storage/v1/object/" in low
+        return (
+            "/p/image/v2/" in low
+            or "/p/dh16/" in low
+            or "/storage/v1/object/" in low
+        )
+
+
+def _exact_content_digest_from_poster_path(path: str | None) -> str | None:
+    match = re.fullmatch(
+        r"[^/]+/image/v2/(?P<prefix>[0-9a-f]{2})/(?P<digest>[0-9a-f]{64})\.webp",
+        str(path or "").strip().lstrip("/"),
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    digest = match.group("digest").lower()
+    return digest if digest.startswith(match.group("prefix").lower()) else None
+
+
+def _is_exact_content_poster_path(path: str | None) -> bool:
+    return _exact_content_digest_from_poster_path(path) is not None
+
+
+async def assign_event_poster_raw_sha256(
+    candidate: Any,
+    digest: str | None,
+    *,
+    session: Any | None = None,
+    event_id: int | None = None,
+) -> bool:
+    """Assign served-byte identity without violating the per-event unique key.
+
+    ``PosterCandidate`` objects do not carry an event id and exact-v2 URLs can
+    return before downloading.  Keep the conflict check in one place so both
+    those early returns and persisted ``EventPoster`` rows obey the same
+    production invariant.  A losing duplicate deliberately keeps ``NULL``;
+    pair review can then adjudicate it without aborting the transaction.
+    """
+
+    if not hasattr(candidate, "raw_sha256"):
+        return False
+    normalized = str(digest or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", normalized):
+        candidate.raw_sha256 = None
+        return False
+
+    resolved_event_id = event_id
+    if resolved_event_id is None:
+        resolved_event_id = getattr(candidate, "event_id", None)
+    poster_id = getattr(candidate, "id", None)
+    conflicting_poster_id: int | None = None
+    if session is not None and resolved_event_id is not None:
+        conflict_stmt = select(EventPoster.id).where(
+            EventPoster.event_id == int(resolved_event_id),
+            EventPoster.raw_sha256 == normalized,
+        )
+        if poster_id is not None:
+            conflict_stmt = conflict_stmt.where(EventPoster.id != int(poster_id))
+        conflicting_poster_id = (
+            await session.execute(conflict_stmt.limit(1))
+        ).scalar_one_or_none()
+
+    if conflicting_poster_id is None:
+        candidate.raw_sha256 = normalized
+        return True
+
+    candidate.raw_sha256 = None
+    logger.info(
+        "event_media.cdn_raw_sha_conflict event_id=%s poster_id=%s survivor_id=%s",
+        resolved_event_id,
+        poster_id,
+        conflicting_poster_id,
+    )
+    return False
 
 
 def resolve_poster_display_url(poster: EventPoster) -> str | None:
@@ -265,6 +338,18 @@ def resolve_poster_display_url(poster: EventPoster) -> str | None:
         if raw and (not event_media_require_cdn() or is_event_media_cdn_url(raw)):
             return raw
     return None
+
+
+def _poster_visual_identity_snapshot(poster: Any) -> tuple[str, str, str, str, str]:
+    """Capture the row identity that must stay stable across provider calls."""
+
+    return (
+        str(resolve_poster_display_url(poster) or "").strip(),
+        str(getattr(poster, "supabase_url", None) or "").strip(),
+        str(getattr(poster, "supabase_path", None) or "").strip(),
+        str(getattr(poster, "catbox_url", None) or "").strip(),
+        str(getattr(poster, "pixel_sha256", None) or "").strip(),
+    )
 
 
 async def get_event_gallery_rows(session: Any, event_id: int) -> list[EventPoster]:
@@ -640,18 +725,35 @@ async def materialize_event_media_candidate_to_cdn(
                 )
             candidate.supabase_url = canonical
             candidate.supabase_path = parsed[1]
-            if not hasattr(candidate, "thumbnail_256_url") or (
-                str(getattr(candidate, "thumbnail_256_url", None) or "").strip()
-                and str(getattr(candidate, "thumbnail_512_url", None) or "").strip()
+            exact_digest = _exact_content_digest_from_poster_path(parsed[1])
+            if exact_digest:
+                await assign_event_poster_raw_sha256(
+                    candidate, exact_digest, session=session
+                )
+            if _is_exact_content_poster_path(parsed[1]) and (
+                not hasattr(candidate, "thumbnail_256_url")
+                or (
+                    str(getattr(candidate, "thumbnail_256_url", None) or "").strip()
+                    and str(getattr(candidate, "thumbnail_512_url", None) or "").strip()
+                )
             ):
                 return True
         if is_event_media_cdn_url(url):
             candidate.supabase_url = url
             if parsed:
                 candidate.supabase_path = parsed[1]
-            if not hasattr(candidate, "thumbnail_256_url") or (
-                str(getattr(candidate, "thumbnail_256_url", None) or "").strip()
-                and str(getattr(candidate, "thumbnail_512_url", None) or "").strip()
+            candidate_path = str(getattr(candidate, "supabase_path", None) or "")
+            exact_digest = _exact_content_digest_from_poster_path(candidate_path)
+            if exact_digest:
+                await assign_event_poster_raw_sha256(
+                    candidate, exact_digest, session=session
+                )
+            if _is_exact_content_poster_path(candidate_path) and (
+                not hasattr(candidate, "thumbnail_256_url")
+                or (
+                    str(getattr(candidate, "thumbnail_256_url", None) or "").strip()
+                    and str(getattr(candidate, "thumbnail_512_url", None) or "").strip()
+                )
             ):
                 return True
 
@@ -766,33 +868,7 @@ async def materialize_event_media_candidate_to_cdn(
     # the original source/candidate identity independently.
     digest = encoded_sha256
     if hasattr(candidate, "raw_sha256"):
-        conflicting_poster_id: int | None = None
-        event_id = getattr(candidate, "event_id", None)
-        poster_id = getattr(candidate, "id", None)
-        if session is not None and event_id is not None:
-            conflict_stmt = select(EventPoster.id).where(
-                EventPoster.event_id == int(event_id),
-                EventPoster.raw_sha256 == digest,
-            )
-            if poster_id is not None:
-                conflict_stmt = conflict_stmt.where(EventPoster.id != int(poster_id))
-            conflicting_poster_id = (
-                await session.execute(conflict_stmt.limit(1))
-            ).scalar_one_or_none()
-        if conflicting_poster_id is None:
-            candidate.raw_sha256 = digest
-        else:
-            # Production has a partial unique index on
-            # (event_id, raw_sha256).  Keep byte identity on the existing
-            # survivor and let the pair-review row preserve/adjudicate the
-            # equality instead of aborting the whole CDN retry transaction.
-            candidate.raw_sha256 = None
-            logger.info(
-                "event_media.cdn_raw_sha_conflict event_id=%s poster_id=%s survivor_id=%s",
-                event_id,
-                poster_id,
-                conflicting_poster_id,
-            )
+        await assign_event_poster_raw_sha256(candidate, digest, session=session)
     else:
         if not str(getattr(candidate, "sha256", None) or "").strip():
             candidate.sha256 = digest
@@ -851,21 +927,20 @@ async def materialize_event_posters_to_cdn(session: Any, event_id: int) -> tuple
 
 
 async def _download_poster(poster: EventPoster) -> DownloadedPoster:
-    urls: list[str] = []
     preferred = resolve_poster_display_url(poster)
-    for value in (preferred, poster.supabase_url, poster.catbox_url):
-        url = str(value or "").strip()
-        if url and url not in urls:
-            urls.append(url)
+    url = str(preferred or "").strip()
+    if not url:
+        raise RuntimeError("event_media_download_failed:no_current_display_url")
     max_bytes = _env_int("EVENT_MEDIA_REVIEW_MAX_IMAGE_BYTES", 8_000_000, lo=100_000, hi=36_700_160)
     timeout = float(_env_int("EVENT_MEDIA_REVIEW_DOWNLOAD_TIMEOUT_SEC", 25, lo=3, hi=120))
-    last_error: Exception | None = None
-    for url in urls:
-        try:
-            return await asyncio.to_thread(_download_url, url, max_bytes=max_bytes, timeout=timeout)
-        except Exception as exc:
-            last_error = exc
-    raise RuntimeError(f"event_media_download_failed:{last_error}")
+    try:
+        return await asyncio.to_thread(
+            _download_url, url, max_bytes=max_bytes, timeout=timeout
+        )
+    except Exception as exc:
+        # Geometry and semantic evidence must describe the public display URL,
+        # never an alternate provenance URL with potentially different pixels.
+        raise RuntimeError(f"event_media_download_failed:{exc}") from exc
 
 
 def invalidate_event_poster_visual_evidence(
@@ -1337,6 +1412,7 @@ async def analyze_event_poster_geometry(
                 cache_hit=True,
             )
         try:
+            downloaded_identity = _poster_visual_identity_snapshot(poster)
             media = await _download_poster(poster)
         except Exception as exc:
             # A stale/404 public object is an item-level failure, not a reason
@@ -1359,7 +1435,21 @@ async def analyze_event_poster_geometry(
         poster = await session.get(EventPoster, int(poster_id))
         if poster is None or int(poster.event_id) != int(event_id):
             return ImageGeometryOutcome("missing", int(poster_id), error="poster_drifted")
+        if _poster_visual_identity_snapshot(poster) != downloaded_identity:
+            await enqueue_event_media_review_job(
+                session,
+                int(event_id),
+                next_run_at=datetime.now(timezone.utc) + timedelta(seconds=2),
+                force_followup=True,
+            )
+            await session.commit()
+            return ImageGeometryOutcome(
+                "pending",
+                int(poster_id),
+                error="poster_drifted_during_download",
+            )
         _apply_pixel_fingerprints(poster, fingerprints)
+        provider_identity = _poster_visual_identity_snapshot(poster)
         session.add(poster)
         cached = (
             await session.execute(
@@ -1411,6 +1501,27 @@ async def analyze_event_poster_geometry(
 
     now = datetime.now(timezone.utc)
     async with db.get_session() as session:
+        poster = await session.get(EventPoster, int(poster_id))
+        if (
+            poster is None
+            or int(poster.event_id) != int(event_id)
+            or _poster_visual_identity_snapshot(poster) != provider_identity
+        ):
+            if poster is not None and int(poster.event_id) == int(event_id):
+                await enqueue_event_media_review_job(
+                    session,
+                    int(event_id),
+                    next_run_at=now + timedelta(seconds=2),
+                    force_followup=True,
+                )
+                await session.commit()
+            return ImageGeometryOutcome(
+                "pending",
+                int(poster_id),
+                pixel_sha256=pixel_sha256,
+                provider_called=True,
+                error="poster_drifted_during_geometry",
+            )
         geometry = (
             await session.execute(
                 select(EventImageGeometry).where(
@@ -1482,8 +1593,15 @@ async def _next_geometry_candidate_id(session: Any, event_id: int) -> int | None
                 EventPoster.pixel_sha256.is_(None),
                 EventImageGeometry.pixel_sha256.is_(None),
                 EventPoster.pixel_sha256 != EventImageGeometry.pixel_sha256,
+                EventImageGeometry.model.is_(None),
                 EventImageGeometry.model != model,
+                EventImageGeometry.prompt_version.is_(None),
                 EventImageGeometry.prompt_version != IMAGE_GEOMETRY_PROMPT_VERSION,
+                EventImageGeometry.status.is_(None),
+                and_(
+                    EventImageGeometry.status != "classified",
+                    EventImageGeometry.status != "error",
+                ),
                 and_(
                     EventImageGeometry.status == "error",
                     EventImageGeometry.updated_at <= retry_before,
@@ -1639,6 +1757,7 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
             and poster.media_semantic_context_hash == context_hash
         ):
             return False
+        role_visual_identity = _poster_visual_identity_snapshot(poster)
         media = await _download_poster(poster)
         model = (os.getenv("EVENT_MEDIA_ROLE_MODEL") or "gemini-3.1-flash-lite").strip()
         if not await _claim_feature_budget(
@@ -1714,6 +1833,24 @@ async def _classify_event_poster_role(event_id: int, poster_id: int, db: Any) ->
         event = await session.get(Event, int(event_id))
         poster = await session.get(EventPoster, int(poster_id))
         if event is None or poster is None:
+            return False
+        if (
+            _poster_visual_identity_snapshot(poster) != role_visual_identity
+            or _context_hash(event) != context_hash
+        ):
+            now = datetime.now(timezone.utc)
+            await enqueue_event_media_review_job(
+                session,
+                int(event_id),
+                next_run_at=now + timedelta(seconds=2),
+                force_followup=True,
+            )
+            await session.commit()
+            logger.info(
+                "event_media.provider_result_discarded event_id=%s poster_id=%s stage=semantic_role reason=identity_drift",
+                event_id,
+                poster_id,
+            )
             return False
         poster.media_semantic_model = model
         poster.media_semantic_prompt_version = MEDIA_ROLE_PROMPT_VERSION

@@ -28,7 +28,23 @@ test('protected crop returns a cover window containing face and value regions', 
   assert.ok(result.cropWindow);
   assert.ok(result.cropWindow.x <= .32 - .02 + 1e-6);
   assert.ok(result.cropWindow.x + result.cropWindow.w >= .68 + .02 - 1e-6);
-  assert.match(result.objectPosition, /^\d+% \d+%$/u);
+  assert.match(result.objectPosition, /^\d+(?:\.\d+)?% \d+(?:\.\d+)?%$/u);
+});
+
+test('serialized CSS position preserves a tight protected crop boundary', () => {
+  const result = solveProtectedCrop({
+    sourceWidth:2000,
+    sourceHeight:1000,
+    targetAspect:1,
+    boxes:[{ x:.301, y:.2, w:.5, h:.3 }],
+    margin:0,
+  });
+
+  assert.equal(result.fit, 'cover');
+  const [positionX] = result.objectPosition.split(' ').map((value) => Number.parseFloat(value) / 100);
+  const reconstructedX = positionX * (1 - result.cropWindow.w);
+  assert.ok(reconstructedX <= .301 + 1e-9);
+  assert.ok(reconstructedX + result.cropWindow.w >= .801 - 1e-9);
 });
 
 test('protected crop fails closed when the protected union cannot fit', () => {
@@ -69,6 +85,12 @@ test('responsive surfaces fail closed and only an exact resolved card ratio invo
   assert.doesNotMatch(
     desktop,
     /\[data-lab-media-kind="visual"\] \.event-card__media\) \{[^}]*object-fit:cover !important;/u,
+  );
+  assert.match(desktop, /const heroContainStyle = preferredCrop\.fit === 'contain'/u);
+  assert.equal((desktop.match(/style=\{heroContainStyle\}/gu) || []).length, 2);
+  assert.doesNotMatch(
+    desktop,
+    /data-lab-media-treatment="document-safe-cover"[^}]*object-fit:cover !important/gu,
   );
   for (const source of [hero, listing, desktop]) {
     assert.match(source, /reason:'responsive_target_unknown'/u);

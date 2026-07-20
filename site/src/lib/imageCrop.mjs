@@ -72,7 +72,10 @@ export function solveProtectedCrop({ sourceWidth, sourceHeight, targetAspect, bo
   const positionY = cropHeight >= 1 - 1e-9 ? 0.5 : y / (1 - cropHeight);
   return {
     fit:'cover',
-    objectPosition:`${Math.round(clamp(positionX, 0, 1) * 100)}% ${Math.round(clamp(positionY, 0, 1) * 100)}%`,
+    // Whole-percent rounding can move the browser's reconstructed crop window
+    // outside a tight protected union. Preserve enough precision for the CSS
+    // position to describe the window that was actually proven safe above.
+    objectPosition:`${round(clamp(positionX, 0, 1) * 100)}% ${round(clamp(positionY, 0, 1) * 100)}%`,
     cropWindow:{ x:round(x), y:round(y), w:round(cropWidth), h:round(cropHeight) },
     reason:'protected_regions_fit',
   };
@@ -97,4 +100,3 @@ export function resolveEventImageCrop(asset, targetAspect, options = {}) {
     margin:options.margin,
   });
 }
-
