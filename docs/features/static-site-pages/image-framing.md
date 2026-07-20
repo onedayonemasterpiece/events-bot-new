@@ -28,6 +28,13 @@ the image is OCR/text, semantic role is not an explicitly classified
 `contain`. Responsive hero/listing layouts therefore do not claim a safe bbox
 crop using an approximate ratio.
 
+Production desktop post-build contract проверяет ту же fail-closed семантику:
+`cover` допустим только с `protected_regions_fit` и совпадающим
+`data-protected-crop-fit`; `contain` является корректным результатом для
+responsive target с неизвестным aspect ratio и обязан иметь явный reason.
+Contract не должен требовать legacy `cover` только из-за `visual_only`, иначе
+полностью успешная Astro-сборка ошибочно отклонит безопасное bbox-поведение.
+
 ## Required producer
 
 Offline Smart Update/media preparation or Kaggle enrichment emits:

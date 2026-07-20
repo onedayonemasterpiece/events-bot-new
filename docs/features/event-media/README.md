@@ -103,6 +103,15 @@ pair-review evidence. `poster_hash` описывает identity исходног
 `raw_sha256` заполняется только доказанным SHA байтов managed display object и
 не выводится из source hash.
 
+При повторной source rehydrate exact identity разрешается **раньше** source
+candidate hash, а URL считается weak identity только для legacy-row без
+`raw_sha256`/`p/image/v2/...`. Один mutable VK/TG/source URL может со временем
+вернуть другую rendition; она создаёт/находит отдельную exact row и проходит
+обычный pair gate, но не перезаписывает уже классифицированный exact-v2 объект.
+Identity index перестраивается после каждого merge внутри batch, поэтому
+повторный reconcile с теми же кандидатами идемпотентен и не сбрасывает semantic
+role/geometry, не создаёт tight-loop и не повторяет платный VLM-вызов.
+
 Новые managed WebP пишутся в immutable path, адресованный точным SHA-256 уже
 закодированных байтов: `p/image/v2/<first2>/<encoded_sha256>.webp`. Старые
 `p/dh16/...` URL остаются читаемым legacy, но больше не являются целью новых
