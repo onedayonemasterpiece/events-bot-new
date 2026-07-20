@@ -1,6 +1,6 @@
 # Image postcardness scoring
 
-Status: **album-safe guardrails implemented; calibrated album scorer remains under evaluation**. Goal: make MVP visibly useful by showing selected photos + model image report + why they are “открыточные”, without silently discarding a good album because its first frame or one unavailable model scored poorly.
+Status: **album/editorial-gallery-safe guardrails implemented; calibrated scorer remains under evaluation**. Goal: make MVP visibly useful by showing selected photos + model image report + why they work as a Region Talk illustration, without silently discarding a good album because its first frame, its OG preview or one unavailable model scored poorly.
 
 > The 2026-07-14 live audit found at least four operator-confirmed false
 > rejects among 18 exact image-only rejects. The old runtime scored one anchor
@@ -13,8 +13,45 @@ Status: **album-safe guardrails implemented; calibrated album scorer remains und
 ## Deployed album-safe transition contract
 
 The current production-safe transition contract is
-`region_talk_image_album_guard_v2`; its publication attestation is
+`region_talk_image_editorial_gallery_guard_v3`; its publication attestation is
 `region_talk_publication_eligibility_v5`.
+
+### Editorial gallery and visual-genre correction (v3)
+
+The Archi.ru article “Вся мудрость океана” exposed two distinct false-negative
+causes rather than weak media: the first pass scored only the supplied OG image,
+while the CLIP positive bank was dominated by scenic travel/postcard concepts.
+Professional museum interiors and architectural frames can therefore be
+technically and aesthetically strong while receiving a low scenic score.
+
+The v3 transition fixes the methodology without adding a domain-specific
+Archi.ru exception:
+
+- an external editorial/academic page may expose a bounded intentional image
+  gallery through `data-fancybox`/`data-lightbox` anchors; the worker scores up
+  to the ordinary 20-frame cap and ignores unrelated navigation/recommendation
+  thumbnails;
+- the research-provided OG/direct URL remains a fallback and may fill a free
+  gallery slot, but it is no longer assumed to represent the whole article;
+- structured content metadata selects a diagnostic visual track:
+  `scenic_travel`, `editorial_publication` or
+  `architecture_interior_editorial`;
+- the architecture/interior prompt bank measures professional composition,
+  light, space, materials, detail and editorial usefulness. A compatibility
+  `clip_postcardness_score` is still written for existing consumers, but v3
+  explicitly tags it as genre visual fit rather than a calibrated probability;
+- the selective VLM prompt judges a strong standalone **editorial teaser
+  illustration**, not only an outdoor tourist postcard, and sees the complete
+  bounded gallery;
+- low raw CV/CLIP/LAION/NIMA output still cannot become a terminal reject or a
+  new uncalibrated auto-accept. It routes to the selective VLM/human review.
+
+An operator may persist `approve_visual` only against a complete, decoded,
+safe gallery manifest. The attestation is bound to
+`input_media_manifest_hash`; any changed gallery invalidates it. This resolves
+visual suitability only: source, geography, text/vector, rights and final
+Gemini gates remain mandatory. Media rights stay `score_only_no_reuse` unless
+separately cleared.
 
 - Telegram media with the same exact `grouped_id` and all VK photo
   attachments are acquired as one bounded post/album manifest. The default

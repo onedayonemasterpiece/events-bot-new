@@ -89,6 +89,41 @@ def apply_decision(kind: str, row: dict[str, Any], *, decision: str, reason: str
                 "finalization_trigger": "operator_feedback",
                 "publication_tombstone": "true",
             })
+    elif decision == "approve_visual":
+        # This is a narrow visual attestation, not a semantic/source override.
+        # The finalizer still requires current text/vector/source evidence and
+        # the ordinary final Gemini verification.
+        out["operator_visual_decision"] = "accept"
+        out["operator_visual_decision_reason"] = reason
+        out["operator_visual_decision_at"] = at
+        out["operator_visual_decision_version"] = "region_talk_operator_visual_review_v1"
+        out["operator_visual_strong_publishable_image"] = "true"
+        if kind == "image_queue_item":
+            actual = str(out.get("image_model_input_type") or "") == "actual_image"
+            complete = (
+                str(out.get("image_acquisition_status") or "") == "complete"
+                and int(out.get("expected_image_count") or 0) > 0
+                and int(out.get("expected_image_count") or 0) == int(out.get("fetched_image_count") or 0)
+                and int(out.get("images_scored_actual_count") or out.get("actual_image_count") or 0) > 0
+                and bool(str(out.get("input_media_manifest_hash") or "").strip())
+            )
+            try:
+                safety = float(out.get("publication_safety_score") or out.get("cv_publication_safety_score") or 0)
+            except (TypeError, ValueError):
+                safety = 0.0
+            if actual and complete and safety >= 0.95:
+                out.update({
+                    "operator_visual_media_manifest_hash": out.get("input_media_manifest_hash"),
+                    "image_quality_decision": "operator_visual_accept",
+                    "image_quality_reason": "complete_album_accepted_by_operator_visual_review",
+                    "image_quality_terminality": "operator_decision",
+                    "image_queue_status": "actual_scored",
+                    "next_action": "publication_verification",
+                })
+            else:
+                out["next_action"] = "complete_safe_actual_gallery_before_operator_visual_accept"
+        else:
+            out["next_action"] = "retain_operator_visual_evidence_and_run_normal_finalizer_gates"
     else:
         # Human calibration evidence is not an automatic semantic override.
         # It makes the row visible for review while retaining freshness/source
@@ -109,7 +144,7 @@ def apply_decision(kind: str, row: dict[str, Any], *, decision: str, reason: str
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-file", type=Path, default=Path("/home/dev/projects/events-bot-new/.env"))
-    parser.add_argument("--decision", choices=["reject", "review"], required=True)
+    parser.add_argument("--decision", choices=["reject", "review", "approve_visual"], required=True)
     parser.add_argument("--reason", required=True)
     parser.add_argument("--reviewer", default="product_owner")
     parser.add_argument("--execute", action="store_true")

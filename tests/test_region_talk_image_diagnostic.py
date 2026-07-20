@@ -228,6 +228,132 @@ class RegionTalkImageDiagnosticTests(unittest.TestCase):
             self.assertEqual(row["rights_policy"], "link_only")
             self.assertEqual(row["media_use_policy"], "score_only_no_reuse")
 
+    def test_editorial_gallery_extractor_ignores_site_chrome_and_deduplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            page = """
+                <a href="/related/thumb.jpg"><img src="/related/thumb.jpg"></a>
+                <a data-fancybox="slider" href="//cdn.example/full-1.jpg">one</a>
+                <a data-fancybox="slider" href="/media/full-2.webp?quality=95">two</a>
+                <a data-fancybox="slider" href="//cdn.example/full-1.jpg">duplicate</a>
+                <a data-lightbox="article" href="https://cdn.example/full-3.png">three</a>
+            """
+            self.assertEqual(
+                mod.extract_editorial_gallery_image_urls(
+                    page, base_url="https://publisher.example/story"
+                ),
+                [
+                    "https://cdn.example/full-1.jpg",
+                    "https://publisher.example/media/full-2.webp?quality=95",
+                    "https://cdn.example/full-3.png",
+                ],
+            )
+
+    def test_external_publication_fetches_intentional_article_gallery(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+
+            class Headers:
+                def get(self, key, default=None):
+                    return "text/html; charset=utf-8" if key == "Content-Type" else default
+
+                def get_content_charset(self):
+                    return "utf-8"
+
+            class Response:
+                headers = Headers()
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    return None
+
+                def read(self, _limit):
+                    return (
+                        '<a href="/chrome.jpg">chrome</a>'
+                        '<a data-fancybox="slider" href="/gallery/1.jpg">one</a>'
+                        '<a data-fancybox="slider" href="/gallery/2.jpg">two</a>'
+                    ).encode("utf-8")
+
+            downloaded: list[str] = []
+
+            def fake_download(url, path):
+                downloaded.append(url)
+                Path(path).write_bytes(url.encode("utf-8"))
+                return str(path)
+
+            mod._download_http_image = fake_download
+            row = {
+                "image_queue_id": "editorial-gallery",
+                "post_url": "https://publisher.example/article",
+                "content_origin_type": "editorial_publication",
+                "publication_content_type": "architecture_criticism",
+                "image_url_or_local_path": "https://cdn.example/og.jpg",
+                "media_count": 1,
+                "rights_policy": "link_only",
+                "media_use_policy": "score_only_no_reuse",
+            }
+            with mock.patch.object(mod, "urlopen", return_value=Response()):
+                mod.fetch_web_direct(row)
+
+            self.assertEqual(
+                downloaded,
+                [
+                    "https://publisher.example/gallery/1.jpg",
+                    "https://publisher.example/gallery/2.jpg",
+                    "https://cdn.example/og.jpg",
+                ],
+            )
+            self.assertEqual(row["web_gallery_discovered_count"], 2)
+            self.assertEqual(row["web_gallery_used_count"], 3)
+            self.assertEqual(row["expected_image_count"], 3)
+            self.assertEqual(row["fetched_image_count"], 3)
+            self.assertEqual(row["image_acquisition_status"], "complete")
+            self.assertEqual(row["rights_policy"], "link_only")
+            self.assertEqual(row["media_use_policy"], "score_only_no_reuse")
+
+    def test_architecture_track_uses_editorial_prompts_not_scenic_only(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "content_origin_type": "editorial_publication",
+                "publication_content_type": "architecture_criticism",
+            }
+            track = mod.visual_content_track(row)
+            positive, negative = mod.clip_prompt_bank(track)
+            prompt = mod._visual_adjudication_prompt(row, 5)
+
+            self.assertEqual(track, "architecture_interior_editorial")
+            self.assertIn("professional architectural photography", positive)
+            self.assertIn("screenshot", negative)
+            self.assertIn("не требуй", prompt)
+            self.assertIn("профессиональная архитектурная", prompt)
+            self.assertIn("editorial_suitability_score", prompt)
+
+    def test_complete_external_gallery_enters_selective_vlm_review(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            mod = self._load_in_temp_output(td)
+            row = {
+                "content_origin_type": "editorial_publication",
+                "publication_content_type": "architecture_criticism",
+                "image_quality_decision": "needs_visual_review",
+                "image_quality_reason": "uncalibrated_legacy_low_score_requires_visual_review",
+                "publication_eligibility_decision": "accept",
+                "publication_eligibility_gate_version": "publication-gate-test-v1",
+                "vector_gate_status": "vector_accept_candidate",
+                "text_vector_fusion_status": "fused_e5_bge_m3",
+                "image_model_input_type": "actual_image",
+                "image_acquisition_status": "complete",
+                "expected_image_count": 8,
+                "fetched_image_count": 8,
+                "image_component_bundle_complete": "true",
+                "input_media_manifest_hash": "gallery-hash",
+                "overall_media_score": 0.52,
+                "shadow_best_frame_score": 0.55,
+            }
+            self.assertTrue(mod.image_row_needs_vlm_review(row))
+
     def test_vk_read_prefers_service_token_for_remote_wall_fetch(self) -> None:
         keys = (
             "VK_SERVICE_TOKEN",

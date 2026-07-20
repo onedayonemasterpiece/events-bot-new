@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio, base64, hashlib, html, io, json, os, random, re, subprocess, sys, time, urllib.parse
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from statistics import mean, median, pstdev
 from urllib.request import Request, urlopen, urlretrieve
@@ -29,16 +30,17 @@ PUBLICATION_ELIGIBILITY_SOFT_DECISIONS = {
     "deferred",
 }
 PUBLICATION_ELIGIBILITY_GATE_VERSION = "region_talk_publication_eligibility_v5"
-IMAGE_DECISION_CONTRACT_VERSION = "region_talk_image_album_guard_v2"
-IMAGE_ACQUISITION_VERSION = "region_talk_plural_media_v2"
+IMAGE_DECISION_CONTRACT_VERSION = "region_talk_image_editorial_gallery_guard_v3"
+IMAGE_ACQUISITION_VERSION = "region_talk_plural_media_v3"
 IMAGE_AUTH_RETRY_RESET_VERSION = "vk_service_read_token_v1"
 IMAGE_LEGACY_SCORER_VERSION = "region_talk_cv_clip_laion_nima_legacy_v1"
 IMAGE_QUALITY_NEEDS_REVIEW = "needs_visual_review"
 IMAGE_QUALITY_LEGACY_ACCEPT = "legacy_auto_accept"
 IMAGE_QUALITY_VLM_ACCEPT = "vlm_visual_accept"
+IMAGE_QUALITY_OPERATOR_ACCEPT = "operator_visual_accept"
 IMAGE_QUALITY_SCORING_RETRY = "scoring_retry"
-IMAGE_VLM_PROMPT_VERSION = "region_talk_visual_adjudicator_v1"
-IMAGE_VLM_DECISION_VERSION = "region_talk_visual_decision_v1"
+IMAGE_VLM_PROMPT_VERSION = "region_talk_visual_adjudicator_v2"
+IMAGE_VLM_DECISION_VERSION = "region_talk_visual_decision_v2"
 LEGACY_PUBLICATION_ELIGIBILITY_GATE_VERSIONS = {
     "region_talk_publication_eligibility_v2",
     "region_talk_publication_eligibility_v3",
@@ -126,6 +128,36 @@ def _row_float(row: dict, *keys: str) -> float:
     return 0.0
 
 
+def is_external_publication_row(row: dict) -> bool:
+    return str(row.get("content_origin_type") or "").strip() in {
+        "editorial_publication", "academic_publication"
+    }
+
+
+def visual_content_track(row: dict) -> str:
+    """Select a visual vocabulary from structured editorial metadata.
+
+    The track is not an acceptance shortcut. It only prevents professional
+    architecture/interior/editorial work from being compared exclusively with
+    scenic travel-postcard prompts before the selective VLM review.
+    """
+    explicit = str(row.get("visual_content_track") or "").strip().lower()
+    if explicit:
+        return explicit
+    structured = " ".join(str(row.get(key) or "") for key in (
+        "publication_content_type", "source_topic_class", "vector_content_type",
+        "content_type", "diversity_topics",
+    )).lower()
+    if any(token in structured for token in (
+        "architect", "interior", "urban", "museum", "exhibition", "design",
+        "архитект", "интерьер", "музе", "выстав", "дизайн", "урбан",
+    )):
+        return "architecture_interior_editorial"
+    if is_external_publication_row(row):
+        return "editorial_publication"
+    return "scenic_travel"
+
+
 def image_vlm_request_fingerprint(row: dict, *, model: str | None = None) -> str:
     payload = {
         "stage": "region_talk_complete_album_visual_adjudication",
@@ -189,7 +221,12 @@ def image_row_needs_vlm_review(row: dict) -> bool:
     # This lane recovers scorer false negatives, not every weak image.  It is
     # deliberately wider than the legacy 0.66 boundary while still requiring
     # a near-threshold anchor, strong postcard semantics, or one strong frame.
-    return overall >= 0.58 or postcard >= 0.85 or best >= 0.66
+    editorial_gallery = (
+        is_external_publication_row(row)
+        and fetched >= 2
+        and best >= 0.50
+    )
+    return overall >= 0.58 or postcard >= 0.85 or best >= 0.66 or editorial_gallery
 
 
 def image_vlm_priority(row: dict) -> tuple[float, float, float, int]:
@@ -303,6 +340,77 @@ def _row_direct_image_refs(row: dict) -> list[str]:
     return refs[:max_images_per_post()]
 
 
+class _EditorialGalleryParser(HTMLParser):
+    """Extract only author-declared article lightbox/gallery targets.
+
+    Navigation thumbnails, recommendations and site chrome are deliberately
+    ignored. ``data-fancybox``/``data-lightbox`` anchors are a generic signal
+    that the publisher considers an image part of the article gallery.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.refs: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "a":
+            return
+        values = {str(key).lower(): str(value or "") for key, value in attrs}
+        gallery_marker = values.get("data-fancybox") or values.get("data-lightbox")
+        href = values.get("href", "").strip()
+        if gallery_marker and href:
+            self.refs.append(href)
+
+
+def extract_editorial_gallery_image_urls(page_html: str, *, base_url: str) -> list[str]:
+    parser = _EditorialGalleryParser()
+    parser.feed(str(page_html or ""))
+    out: list[str] = []
+    for raw in parser.refs:
+        absolute = urllib.parse.urljoin(base_url, html.unescape(raw))
+        ref = direct_image_url(absolute)
+        if ref and ref not in out:
+            out.append(ref)
+    return out[:max_images_per_post()]
+
+
+def discover_external_publication_image_refs(row: dict) -> list[str]:
+    """Discover a bounded article gallery, retaining direct research refs as fallback."""
+    direct = _row_direct_image_refs(row)
+    post_url = str(row.get("post_url") or "").strip()
+    if not is_external_publication_row(row) or not post_url.startswith(("http://", "https://")):
+        return direct
+    timeout = max(5, min(60, int(os.getenv("REGION_TALK_EXTERNAL_PAGE_FETCH_TIMEOUT_SECONDS") or "25")))
+    try:
+        request = Request(post_url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; RegionTalkEditorialImageReview/1.0)",
+            "Accept": "text/html,application/xhtml+xml",
+        })
+        with urlopen(request, timeout=timeout) as response:  # nosec B310 - public URL admitted by research contract
+            content_type = str(response.headers.get("Content-Type") or "").lower()
+            if "html" not in content_type:
+                raise ValueError(f"article response is not HTML: {content_type[:80]}")
+            payload = response.read(4 * 1024 * 1024 + 1)
+            if len(payload) > 4 * 1024 * 1024:
+                raise ValueError("article HTML exceeds 4 MiB discovery limit")
+            charset = response.headers.get_content_charset() or "utf-8"
+        gallery = extract_editorial_gallery_image_urls(payload.decode(charset, errors="replace"), base_url=post_url)
+        row["web_gallery_discovery_status"] = "gallery_found" if gallery else "no_gallery_fallback_direct"
+        row["web_gallery_discovered_count"] = len(gallery)
+        row["web_gallery_discovery_version"] = IMAGE_ACQUISITION_VERSION
+        merged = gallery + [ref for ref in direct if ref not in gallery]
+        used = merged[:max_images_per_post()]
+        row["web_gallery_used_count"] = len(used)
+        return used
+    except Exception as exc:
+        row["web_gallery_discovery_status"] = "page_fetch_failed_fallback_direct"
+        row["web_gallery_discovery_error"] = f"{type(exc).__name__}: {str(exc)[:220]}"
+        row["web_gallery_discovery_version"] = IMAGE_ACQUISITION_VERSION
+        row["web_gallery_discovered_count"] = 0
+        row["web_gallery_used_count"] = len(direct)
+        return direct
+
+
 def _apply_acquired_paths(
     row: dict,
     paths: list[str],
@@ -342,18 +450,20 @@ def fetch_web_direct(row: dict) -> None:
     """Acquire externally researched publication images from direct URLs.
 
     Telegram and VK have platform-specific fallbacks. Editorial/academic web
-    rows intentionally do not: the research contract must provide a concrete
-    image URL, and rights remain score-only unless separately cleared.
+    rows discover an intentional article lightbox/gallery first and retain the
+    research-provided direct image as fallback. Rights remain score-only unless
+    separately cleared.
     """
     started = time.monotonic()
-    refs = _row_direct_image_refs(row)
+    refs = discover_external_publication_image_refs(row)
     if not refs:
         row["media_fetch_status"] = "needs_actual_image_fetch"
         row["media_fetch_error"] = "external publication has no direct image URL"
         row["media_download_seconds"] = round(time.monotonic() - started, 3)
         return
     paths, errors = _download_direct_image_refs(row, refs, name_prefix="web_public_url")
-    expected = _expected_image_count(row, len(refs))
+    gallery_discovered = int(row.get("web_gallery_discovered_count") or 0) > 0
+    expected = len(refs) if gallery_discovered else _expected_image_count(row, len(refs))
     complete = bool(paths) and len(paths) >= expected and not errors
     if paths:
         _apply_acquired_paths(
@@ -1041,12 +1151,20 @@ def _vlm_image_parts(media_paths: list[str]) -> list:
 
 
 def _visual_adjudication_prompt(row: dict, image_count: int) -> str:
-    return f"""Ты — строгий визуальный редактор Region Talk. Перед тобой полный набор из {image_count} изображений одного поста.
-Оцени только визуальную пригодность для редакционной публикации о путешествии по Калининградской области. Текст поста проверяется отдельно и не должен влиять на визуальный вердикт.
+    track = visual_content_track(row)
+    return f"""Ты — строгий визуальный редактор Region Talk. Перед тобой полный набор из {image_count} изображений одной публикации.
+Оцени только визуальную пригодность набора для короткого редакционного тизера о Калининградской области. Текст и географическая релевантность проверяются отдельно и не должны влиять на визуальный вердикт.
 
-ACCEPT: в полном наборе есть хотя бы один действительно сильный, технически читаемый и привлекательный кадр, который передаёт место/атмосферу и годится как самостоятельное открыточное изображение.
+ACCEPT: в полном наборе есть хотя бы один действительно сильный, технически читаемый и привлекательный кадр, который годится как самостоятельная иллюстрация редакционного тизера.
 REJECT: все кадры явно слабые, нечитаемые, бытовые без выразительного места, скриншоты/афиши/новостная графика, доминирующая реклама или водяные знаки мешают публикации.
 REVIEW: изображений недостаточно для уверенного решения или сигналы противоречивы.
+
+Критически важно:
+- не требуй от каждого хорошего кадра быть туристической открыткой, пейзажем или видом снаружи;
+- профессиональная архитектурная, интерьерная, музейная, выставочная, научная и документальная фотография может быть сильной редакционной иллюстрацией;
+- для архитектуры и интерьеров оцени композицию, свет, пространство, материалы, детализацию и способность заинтересовать читателя;
+- несколько сильных кадров в целостной фотосерии усиливают вердикт, даже если первый/OG-кадр не лучший;
+- безопасность, навязчивая реклама и техническая непригодность остаются обязательными ограничениями.
 
 Верни ТОЛЬКО JSON:
 {{
@@ -1054,7 +1172,10 @@ REVIEW: изображений недостаточно для уверенно�
   "strong_publishable_image": true,
   "best_image_ordinal": 1,
   "postcardness_score": 0.0,
+  "editorial_suitability_score": 0.0,
+  "aesthetic_score": 0.0,
   "technical_quality_score": 0.0,
+  "publication_safety_score": 0.0,
   "commercial_overlay": false,
   "screenshot_or_graphic": false,
   "reason": "краткое проверяемое объяснение"
@@ -1064,7 +1185,7 @@ REVIEW: изображений недостаточно для уверенно�
 - accept требует strong_publishable_image=true и best_image_ordinal от 1 до {image_count};
 - оцени весь альбом, но выбери лучший кадр;
 - не выдумывай содержание за пределами видимого;
-- source={str(row.get('source_title') or '')[:120]}; post={str(row.get('post_url') or '')[:200]}; prompt_version={IMAGE_VLM_PROMPT_VERSION}.
+- visual_track={track}; structured_content_type={str(row.get('publication_content_type') or row.get('content_type') or '')[:120]}; source={str(row.get('source_title') or '')[:120]}; post={str(row.get('post_url') or '')[:200]}; prompt_version={IMAGE_VLM_PROMPT_VERSION}.
 """
 
 
@@ -1098,7 +1219,11 @@ def apply_image_vlm_result(row: dict, result: dict, *, fingerprint: str) -> dict
         "image_vlm_best_image_ordinal": best_ordinal,
         "image_vlm_strong_publishable_image": str(_vlm_bool(result.get("strong_publishable_image"))).lower(),
         "image_vlm_postcardness_score": result.get("postcardness_score", ""),
+        "image_vlm_editorial_suitability_score": result.get("editorial_suitability_score", ""),
+        "image_vlm_aesthetic_score": result.get("aesthetic_score", ""),
         "image_vlm_technical_quality_score": result.get("technical_quality_score", ""),
+        "image_vlm_publication_safety_score": result.get("publication_safety_score", ""),
+        "visual_content_track": visual_content_track(row),
         "image_vlm_commercial_overlay": str(_vlm_bool(result.get("commercial_overlay"))).lower(),
         "image_vlm_screenshot_or_graphic": str(_vlm_bool(result.get("screenshot_or_graphic"))).lower(),
         "image_vlm_reason": str(result.get("reason") or result.get("llm_reason") or "")[:500],
@@ -1177,7 +1302,10 @@ def maybe_adjudicate_image_with_vlm(row: dict, media_paths: list[str]) -> dict:
             "strong_publishable_image": data.get("strong_publishable_image"),
             "best_image_ordinal": data.get("best_image_ordinal"),
             "postcardness_score": data.get("postcardness_score"),
+            "editorial_suitability_score": data.get("editorial_suitability_score"),
+            "aesthetic_score": data.get("aesthetic_score"),
             "technical_quality_score": data.get("technical_quality_score"),
+            "publication_safety_score": data.get("publication_safety_score"),
             "commercial_overlay": data.get("commercial_overlay"),
             "screenshot_or_graphic": data.get("screenshot_or_graphic"),
             "reason": str(data.get("reason") or "")[:500],
@@ -1329,6 +1457,15 @@ def image_row_needs_contract_rescore(row: dict) -> bool:
         return False
     if str(row.get("image_model_input_type") or "") != "actual_image":
         return False
+    if (
+        is_external_publication_row(row)
+        and str(row.get("publication_eligibility_decision") or "").strip().lower()
+        == PUBLICATION_ELIGIBILITY_ACCEPT
+    ):
+        # v3 adds bounded article-gallery discovery and genre-aware review.
+        # Re-open external-publication rows even when their old single OG frame
+        # had already been scored under the v2 album contract.
+        return True
     current_decision = str(row.get("publication_eligibility_decision") or "").strip().lower()
     current_gate = str(row.get("publication_eligibility_gate_version") or "").strip()
     audit_decision = str(row.get("image_eligibility_decision") or "").strip().lower()
@@ -1589,7 +1726,7 @@ def ydb_rows_for_diagnostic(limit_n: int):
                 r["media_fetch_retry_exhausted"] = "false"
                 r["media_fetch_retry_reset_version"] = IMAGE_AUTH_RETRY_RESET_VERSION
                 r["media_fetch_retry_reset_reason"] = "ip_bound_vk_token_replaced_by_service_read_token"
-        elif status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal" and not needs_vlm_review:
+        elif status == "needs_visual_review" and str(r.get("image_quality_terminality") or "") == "nonterminal" and not needs_vlm_review and not needs_contract_rescore:
             continue
         if status == "needs_actual_image_fetch" and int(r.get("media_fetch_attempt_count") or 0) >= max_media_fetch_attempts():
             r["image_queue_status"] = "needs_visual_review"
@@ -2116,16 +2253,48 @@ def maybe_clip():
         log_event("model_unavailable", phase="model_load", model="clip_iqa_postcardness_prompt_scorer", error=CLIP["error"])
         return False
 
+def clip_prompt_bank(track: str) -> tuple[list[str], list[str]]:
+    negative = [
+        "screenshot", "meme", "advertising banner", "news incident photo",
+        "low quality blurry photo", "document scan", "crowded political event", "accident scene",
+    ]
+    if track == "architecture_interior_editorial":
+        positive = [
+            "professional architectural photography",
+            "high quality editorial interior photography",
+            "well composed museum interior",
+            "beautiful exhibition design photography",
+            "architectural photograph with expressive light materials and spatial depth",
+            "professional cultural venue photography",
+        ]
+    elif track == "editorial_publication":
+        positive = [
+            "high quality editorial feature photography",
+            "professional documentary photography of a place",
+            "visually compelling cultural magazine photograph",
+            "strong standalone image for an editorial article",
+            "well composed travel and heritage photography",
+        ]
+    else:
+        positive = [
+            "beautiful postcard travel photo", "scenic Baltic sea travel photo",
+            "beautiful old European city architecture", "Kaliningrad travel postcard photo",
+            "atmospheric seaside resort town",
+        ]
+    return positive, negative
+
+
 def score_clip(im, r):
     if not maybe_clip(): return
-    pos=["beautiful postcard travel photo","scenic Baltic sea travel photo","beautiful old European city architecture","Kaliningrad travel postcard photo","atmospheric seaside resort town"]
-    neg=["screenshot","meme","advertising banner","news incident photo","low quality blurry photo","document scan","crowded political event","accident scene"]
+    track = visual_content_track(r)
+    pos, neg = clip_prompt_bank(track)
     prompts=pos+neg; t=time.monotonic()
     try:
         torch=CLIP["torch"]; inputs=CLIP["processor"](text=prompts,images=im,return_tensors="pt",padding=True).to(CLIP["device"])
         with torch.no_grad(): probs=CLIP["model"](**inputs).logits_per_image.softmax(dim=1)[0].detach().cpu().tolist()
         ps=sum(probs[:len(pos)]); ns=sum(probs[len(pos):])
-        r.update({"clip_postcardness_score":round(ps/(ps+ns+1e-9),3),"clip_positive_mass":round(ps,4),"clip_negative_mass":round(ns,4),"clip_top_prompt":prompts[max(range(len(prompts)), key=lambda i: probs[i])],"clip_inference_seconds":round(time.monotonic()-t,3)})
+        fit = round(ps/(ps+ns+1e-9),3)
+        r.update({"visual_content_track":track,"clip_visual_fit_score":fit,"clip_postcardness_score":fit,"clip_score_semantics":"genre_visual_fit_compatibility_alias","clip_positive_mass":round(ps,4),"clip_negative_mass":round(ns,4),"clip_top_prompt":prompts[max(range(len(prompts)), key=lambda i: probs[i])],"clip_inference_seconds":round(time.monotonic()-t,3)})
     except Exception as exc:
         r["clip_error"] = type(exc).__name__ + ": " + str(exc)[:300]
 
@@ -2245,7 +2414,7 @@ def finalize(r):
 
 FRAME_SCORE_FIELDS = (
     "cv_technical_quality_score", "cv_aesthetic_score", "cv_postcardness_score", "cv_overall_media_score",
-    "clip_postcardness_score", "clip_positive_mass", "clip_negative_mass", "clip_top_prompt",
+    "clip_postcardness_score", "clip_visual_fit_score", "clip_score_semantics", "visual_content_track", "clip_positive_mass", "clip_negative_mass", "clip_top_prompt",
     "laion_aesthetic_raw_score", "laion_aesthetic_score", "nima_quality_raw_score", "nima_quality_score",
     "final_visual_score", "model_disagreement_score", "image_width", "image_height", "image_file_bytes",
     "cv_inference_seconds", "clip_inference_seconds", "laion_inference_seconds", "nima_inference_seconds",
@@ -2303,6 +2472,7 @@ def apply_album_quality_decision(row: dict, frame_scores: list[dict]) -> dict:
     scored = [frame for frame in frame_scores if frame.get("final_visual_status") == "scored_actual_image"]
     row["image_decision_contract_version"] = IMAGE_DECISION_CONTRACT_VERSION
     row["image_scorer_version"] = IMAGE_LEGACY_SCORER_VERSION
+    row["visual_content_track"] = visual_content_track(row)
     row["images_scored_actual_count"] = len(scored)
     row["actual_image_count"] = len(scored)
     row["frame_scores_available_count"] = len(scored)
@@ -2320,6 +2490,7 @@ def apply_album_quality_decision(row: dict, frame_scores: list[dict]) -> dict:
             row[key] = anchor.get(key)
     row["overall_media_score"] = anchor.get("final_visual_score")
     row["postcardness_score"] = anchor.get("clip_postcardness_score") or anchor.get("cv_postcardness_score")
+    row["visual_fit_score"] = anchor.get("clip_visual_fit_score") or anchor.get("clip_postcardness_score") or anchor.get("cv_postcardness_score")
     row["aesthetic_score"] = anchor.get("laion_aesthetic_score") or anchor.get("cv_aesthetic_score")
     row["technical_quality_score"] = anchor.get("cv_technical_quality_score")
     row["shadow_best_frame_index"] = int(best.get("frame_index") or 1)
@@ -2377,7 +2548,7 @@ def apply_image_queue_status(r):
             if str(r.get("image_acquisition_status") or "") == "complete"
             else "partial_album_requires_retry_or_review"
         )
-        if quality_decision in {IMAGE_QUALITY_LEGACY_ACCEPT, IMAGE_QUALITY_VLM_ACCEPT}:
+        if quality_decision in {IMAGE_QUALITY_LEGACY_ACCEPT, IMAGE_QUALITY_VLM_ACCEPT, IMAGE_QUALITY_OPERATOR_ACCEPT}:
             r["next_action"] = "publication_verification"
         elif quality_decision == IMAGE_QUALITY_SCORING_RETRY:
             r["next_action"] = "retry_required_image_components"
@@ -2492,6 +2663,7 @@ def process_batch(batch_rows, batch_index: int):
                 "actual_media_path": media_path,
                 "frame_index": frame_index,
                 "media_id": str((manifest_items[frame_index - 1] if frame_index <= len(manifest_items) else {}).get("media_id") or f"frame:{frame_index}"),
+                "visual_content_track": visual_content_track(r),
             }
             im = validate_image(frame)
             if im is None:

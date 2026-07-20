@@ -233,6 +233,10 @@ Operator feedback is durable and idempotent through
 `scripts/region_talk_operator_feedback.py`. A reject tombstones exact-link,
 candidate, media and publication projections; a review request records human
 calibration evidence but does not bypass freshness/source/Gemini safeguards.
+`approve_visual` is narrower still: it is accepted only for a complete decoded
+gallery with safety score `>=0.95`, is bound to the current media-manifest hash,
+and bypasses only the uncalibrated legacy visual-score threshold. Source,
+text/vector, rights and final Gemini verification remain unchanged.
 
 Keyword source metrics likewise distinguish
 `keyword_sources_with_preliminary_candidates_total` from

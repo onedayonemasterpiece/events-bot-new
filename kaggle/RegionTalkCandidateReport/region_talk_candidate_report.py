@@ -9981,11 +9981,21 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
     if image_quality_decision == "scoring_retry":
         return False, "image_quality_scoring_retry"
     if image_quality_decision == "vlm_visual_accept":
+        vlm_contract = str(row.get("image_decision_contract_version") or "")
+        vlm_prompt = str(row.get("image_vlm_prompt_version") or "")
+        vlm_decision_version = str(row.get("image_vlm_decision_version") or "")
+        vlm_version_ok = (
+            (vlm_contract == "region_talk_image_editorial_gallery_guard_v3"
+             and vlm_prompt == "region_talk_visual_adjudicator_v2"
+             and vlm_decision_version == "region_talk_visual_decision_v2")
+            or (vlm_contract == "region_talk_image_album_guard_v2"
+                and vlm_prompt == "region_talk_visual_adjudicator_v1"
+                and vlm_decision_version == "region_talk_visual_decision_v1")
+        )
         vlm_attestation_ok = bool(
             str(row.get("image_vlm_status") or "") == "completed"
             and str(row.get("image_vlm_decision") or "") == "accept"
-            and str(row.get("image_vlm_prompt_version") or "") == "region_talk_visual_adjudicator_v1"
-            and str(row.get("image_vlm_decision_version") or "") == "region_talk_visual_decision_v1"
+            and vlm_version_ok
             and str(row.get("image_vlm_request_fingerprint") or "").strip()
             and str(row.get("image_vlm_media_manifest_hash") or "").strip()
             == str(row.get("input_media_manifest_hash") or "").strip()
@@ -9997,8 +10007,36 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
         # reapply the uncalibrated legacy scalar threshold that caused this
         # bounded false-negative recovery lane in the first place.
         return True, ""
+    if image_quality_decision == "operator_visual_accept":
+        try:
+            safety = _rt_float(
+                row.get("publication_safety_score") or row.get("cv_publication_safety_score")
+            )
+        except (TypeError, ValueError):
+            safety = 0.0
+        operator_attestation_ok = bool(
+            str(row.get("operator_visual_decision") or "") == "accept"
+            and str(row.get("operator_visual_decision_version") or "")
+            == "region_talk_operator_visual_review_v1"
+            and str(row.get("operator_visual_decision_at") or "").strip()
+            and str(row.get("operator_visual_strong_publishable_image") or "").lower() == "true"
+            and str(row.get("operator_visual_media_manifest_hash") or "").strip()
+            == str(row.get("input_media_manifest_hash") or "").strip()
+            and str(row.get("image_acquisition_status") or "") == "complete"
+            and int(row.get("expected_image_count") or 0) > 0
+            and int(row.get("expected_image_count") or 0) == int(row.get("fetched_image_count") or 0)
+            and safety >= 0.95
+        )
+        if not operator_attestation_ok:
+            return False, "image_operator_accept_attestation_invalid"
+        # Human review resolves visual suitability only. Source, text, vector,
+        # rights and final Gemini gates remain above/downstream.
+        return True, ""
     if (
-        str(row.get("image_decision_contract_version") or "") == "region_talk_image_album_guard_v2"
+        str(row.get("image_decision_contract_version") or "") in {
+            "region_talk_image_album_guard_v2",
+            "region_talk_image_editorial_gallery_guard_v3",
+        }
         and image_quality_decision not in {"legacy_auto_accept"}
     ):
         return False, "image_quality_contract_decision_missing"

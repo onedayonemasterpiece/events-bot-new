@@ -9116,6 +9116,43 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertFalse(stale["eligible"])
         self.assertEqual(stale["primary_reason"], "image_vlm_accept_attestation_invalid")
 
+    def test_publication_eligibility_accepts_manifest_bound_operator_visual_review(self) -> None:
+        mod = load_module()
+        row = {
+            "post_url": "https://publisher.example/architecture",
+            "source_geo_class": "nonlocal_russia",
+            "source_scope": "external",
+            "source_topic_class": "architecture",
+            "kaliningrad_oblast_only_scope": True,
+            "kaliningrad_mention_role": "main_subject",
+            "is_ad_or_promo": False,
+            "vector_gate_status": "vector_accept_candidate",
+            "text_vector_fusion_status": "fused_e5_bge_m3",
+            "image_model_input_type": "actual_image",
+            "image_queue_status": "actual_scored",
+            "image_decision_contract_version": "region_talk_image_editorial_gallery_guard_v3",
+            "image_quality_decision": "operator_visual_accept",
+            "image_acquisition_status": "complete",
+            "expected_image_count": 12,
+            "fetched_image_count": 12,
+            "images_scored_actual_count": 12,
+            "input_media_manifest_hash": "gallery-hash",
+            "operator_visual_decision": "accept",
+            "operator_visual_decision_version": "region_talk_operator_visual_review_v1",
+            "operator_visual_decision_at": "2026-07-20T12:00:00+00:00",
+            "operator_visual_media_manifest_hash": "gallery-hash",
+            "operator_visual_strong_publishable_image": "true",
+            "cv_publication_safety_score": 0.98,
+            "overall_media_score": 0.42,
+            "postcardness_score": 0.10,
+        }
+        accepted = mod.publication_eligibility(row)
+        stale = mod.publication_eligibility({**row, "operator_visual_media_manifest_hash": "old-gallery"})
+
+        self.assertTrue(accepted["eligible"])
+        self.assertFalse(stale["eligible"])
+        self.assertEqual(stale["primary_reason"], "image_operator_accept_attestation_invalid")
+
     def test_final_verifier_prompt_does_not_treat_short_author_footer_as_ad(self) -> None:
         mod = load_module()
         prompt = mod.llm_text_gate_prompt({

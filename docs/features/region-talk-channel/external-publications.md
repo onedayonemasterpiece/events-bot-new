@@ -231,6 +231,28 @@ FINAL SELF-CHECK
 
 Candidate messages now show the original link, source link, overall score, image score, postcardness, verifier reason, and `О публикации` for editorial/academic origin. Automatic confirmed-candidate delivery remains idempotent.
 
+### Article galleries and editorial image suitability
+
+External publications are not limited to a single OG preview. After the text
+and source gates accept a candidate, ImageDiagnostic downloads a bounded set of
+images explicitly declared by the page as its lightbox/gallery
+(`data-fancybox`/`data-lightbox`, maximum 20). It does not scrape arbitrary
+image URLs from page chrome, recommendations or navigation. The imported
+direct image URL remains a fallback.
+
+Visual evaluation is genre-aware. Architecture, interiors, museums,
+exhibitions, science and documentary editorial photography do not have to look
+like an outdoor travel postcard. Their composition, light, space, material,
+detail, technical quality and teaser value are considered by the selective
+visual adjudicator. This is a review/routing correction, not an uncalibrated
+automatic-score threshold reduction.
+
+Human `approve_visual` feedback is supported as a durable, manifest-bound
+visual attestation. It never bypasses regional scope, nonlocal-source,
+anti-ad/news/negative-image rules, dual-vector evidence, rights policy or the
+final Gemini publication verifier. External images remain link-only and
+score-only/no-reuse by default.
+
 An explicit one-shot request renders a **read-only** queue without marking candidates `sent_to_chat`:
 
 ```bash
