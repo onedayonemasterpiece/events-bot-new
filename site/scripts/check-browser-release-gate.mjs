@@ -16,6 +16,10 @@ function invariant(condition, message) {
   if (!condition) throw new Error(`Browser release gate failed: ${message}`);
 }
 
+export function expectedObjectFitForTreatment(treatment) {
+  return String(treatment || '').endsWith('-contain') ? 'contain' : 'cover';
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -133,7 +137,10 @@ async function chooseSpecimen(browser, origin, routes) {
       await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
       if (await page.locator('[data-desktop-clean-event]').count() !== 1) continue;
       const relatedCount = await page.locator('[data-related-start] [data-event-card]').count();
-      const gallery = page.locator('[data-hero-gallery]').first();
+      const opener = page.locator('[data-desktop-clean-event] [data-hero-gallery-open]').first();
+      const galleryId = await opener.getAttribute('data-hero-gallery-open').catch(() => null);
+      if (!galleryId) continue;
+      const gallery = page.locator(`[id="${galleryId}"]`);
       const slideCount = await gallery.locator('[data-hero-gallery-slide][data-gallery-slide-kind="image"]').count();
       const target = await gallery.locator('[data-hero-gallery-slide][data-gallery-slide-kind="cta"] a[href]').getAttribute('href').catch(() => null);
       if (relatedCount < 3 || slideCount < 2 || !target) continue;
@@ -189,7 +196,10 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     invariant(item.variant === 'split-actions' && item.tabIndex === '0', `card ${item.id} bypasses canonical split EventCard behavior`);
     invariant(item.href && item.href === item.titleHref && item.href === item.mediaHref, `card ${item.id} has divergent canonical links`);
     invariant(item.actions.like === 1 && item.actions.dislike === 1 && item.actions.share === 1, `card ${item.id} has a non-canonical action set`);
-    const expectedFit = item.treatment === 'document-contain' ? 'contain' : 'cover';
+    // The serialized treatment is the source-of-truth contract produced by
+    // resolveRelatedCardMediaTreatment(). Both contain variants intentionally
+    // preserve the complete image; only visual-cover may crop it.
+    const expectedFit = expectedObjectFitForTreatment(item.treatment);
     invariant(item.objectFit === expectedFit, `card ${item.id} crop mode ${item.objectFit} != ${expectedFit}`);
     if (item.mediaKind === 'document') {
       invariant(item.coverCrop <= 0.2001 && item.rowWorstCrop <= 0.2001, `card ${item.id} exceeds the 20% document crop contract`);
@@ -227,8 +237,14 @@ async function assertRealCardEnter(page, origin, route, zoneSelector) {
 
 async function assertGalleryCrossDocument(page, origin, route) {
   await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
-  const gallery = page.locator('[data-hero-gallery]').first();
-  await page.locator('[data-hero-gallery-open]').first().click();
+  // Event pages intentionally render separate mobile and desktop galleries.
+  // Exercise the visible desktop owner rather than relying on DOM order: the
+  // first gallery in markup may be the hidden mobile dialog.
+  const opener = page.locator('[data-desktop-clean-event] [data-hero-gallery-open]:visible').first();
+  const galleryId = await opener.getAttribute('data-hero-gallery-open');
+  invariant(galleryId, 'visible desktop gallery opener has no target');
+  const gallery = page.locator(`[id="${galleryId}"]`);
+  await opener.click();
   await gallery.waitFor({ state: 'visible' });
   const slides = gallery.locator('[data-hero-gallery-slide]');
   const slideCount = await slides.count();
@@ -260,8 +276,17 @@ async function assertGalleryCrossDocument(page, origin, route) {
 async function assertFooterShortcuts(page, origin, route) {
   await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
   const footer = page.locator('[data-service-share-root][data-service-share-surface="footer"]');
-  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+  // Let the continuation insert its cards before targeting the footer. A raw
+  // scrollHeight jump races that insertion and can leave the footer above the
+  // viewport, which does not reproduce a person actually looking at it.
+  await waitForContinuation(page);
+  await footer.evaluate((element) => element.scrollIntoView({ block:'center', behavior:'instant' }));
   await footer.waitFor({ state: 'visible' });
+  await page.waitForFunction(() => {
+    const element = document.querySelector('[data-service-share-surface="footer"]');
+    const rect = element?.getBoundingClientRect();
+    return Boolean(rect && rect.bottom > 72 && rect.top < window.innerHeight - 72);
+  }, null, { timeout: 8_000 });
   await page.waitForFunction(() => document.querySelector('[data-service-share-surface="footer"]')?.getAttribute('data-service-share-ready') === 'file', null, { timeout: 12_000 });
   await page.evaluate(() => document.activeElement?.blur());
   invariant(['BODY', 'HTML'].includes(await page.evaluate(() => document.activeElement?.tagName)), 'footer BODY specimen unexpectedly owns focused control');
@@ -275,7 +300,7 @@ async function assertFooterShortcuts(page, origin, route) {
   // Keep a real event owner focused but offscreen. The footer viewport owns the
   // service shortcuts; the test never focuses either footer button.
   await page.locator('[data-keyboard-event-surface]').focus();
-  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+  await footer.evaluate((element) => element.scrollIntoView({ block:'center', behavior:'instant' }));
   invariant(await page.evaluate(() => {
     const rect = document.activeElement?.getBoundingClientRect();
     return Boolean(rect && rect.bottom < 0);

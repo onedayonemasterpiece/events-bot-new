@@ -105,7 +105,7 @@ test('gallery handoff accepts only an exact same-origin event destination', () =
   assert.equal(keyboardGalleryDestination('/afisha/', current), '');
 });
 
-test('visible footer owns P/S only from body or a stale offscreen managed card', () => {
+test('visible footer owns P/S from body or an offscreen managed event owner', () => {
   const viewport = { viewportWidth:1200, viewportHeight:800 };
   const footerRect = { left:0, right:1200, top:610, bottom:850, width:1200, height:240 };
   const visibleCard = { left:20, right:360, top:100, bottom:500, width:340, height:400 };
@@ -113,6 +113,8 @@ test('visible footer owns P/S only from body or a stale offscreen managed card',
 
   assert.equal(footerViewportShortcutOwnership({ footerRect, targetKind:'body', ...viewport }), true);
   assert.equal(footerViewportShortcutOwnership({ footerRect, targetKind:'managed-card', targetRect:offscreenCard, ...viewport }), true);
+  assert.equal(footerViewportShortcutOwnership({ footerRect, targetKind:'event-surface', targetRect:offscreenCard, ...viewport }), true);
+  assert.equal(footerViewportShortcutOwnership({ footerRect, targetKind:'event-surface', targetRect:visibleCard, ...viewport }), false);
   assert.equal(footerViewportShortcutOwnership({ footerRect, targetKind:'managed-card', targetRect:visibleCard, ...viewport }), false);
   assert.equal(footerViewportShortcutOwnership({ footerRect, targetKind:'other', ...viewport }), false);
   assert.equal(footerViewportShortcutOwnership({
@@ -129,5 +131,6 @@ test('router persists one bounded gallery handoff and consumes it for body arrow
   assert.match(router, /value\.destination === current/u);
   assert.match(router, /galleryDestinationHandoffExpiresAt >= Date\.now\(\)[\s\S]*event\.code === 'ArrowLeft'[\s\S]*target === doc\.body[\s\S]*selectHero/u);
   assert.match(router, /const targetKind = footerShare\.contains\(target\)[\s\S]*managed-card/u);
+  assert.match(router, /targetKind === 'event-surface' \? surface\.getBoundingClientRect\(\) : null/u);
   assert.match(router, /footerViewportShortcutOwnership/u);
 });

@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+- Fixed immutable static-event recommendation and keyboard release regressions:
+  both `Смотрите дальше` and finite `Ещё события` now consume the same final
+  protected-crop decision from the canonical `EventCard`; gallery Enter stores
+  a bounded same-origin handoff so destination hero arrows work from natural
+  `BODY` focus; and a visible footer owns service `P`/`S` from `BODY` or an
+  off-screen managed event owner while preserving visible-control ambiguity.
+  Added a mandatory pinned-Chromium gate over real generated pages and made
+  immutable root-proof/secret-candidate builds fail closed unless computed
+  crop geometry, canonical card navigation, the cross-document gallery journey
+  and footer clipboard/toast journeys all pass.
+- Bound static related generation to an atomic event-vector corpus receipt:
+  Smart Update and Kaggle now carry deterministic `search_v3_hash` and
+  `related_v1_hash`, invalidate mismatched related caches, repair reciprocal
+  high-confidence/exact-normalized-title recall, and reject unhealthy catalog
+  topology. The former per-anchor Gemma verifier stays outside the synchronous
+  publication path because it costs hundreds of calls per full catalog;
+  targeted offline LLM audits remain the quality-review path.
 - Fixed event-media deferred-pair convergence: an early/no-op media worker now
   re-arms exactly one durable job for the earliest future pair retry, without
   spending provider budget early or losing the quarantined review wake-up.

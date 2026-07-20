@@ -4,10 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
+  expectedObjectFitForTreatment,
   recordBrowserVisualSuccess,
   releaseRootMetadata,
   startReleaseServer,
 } from './check-browser-release-gate.mjs';
+
+test('R01 crop assertion preserves both document and visual contain decisions', () => {
+  assert.equal(expectedObjectFitForTreatment('document-contain'), 'contain');
+  assert.equal(expectedObjectFitForTreatment('visual-contain'), 'contain');
+  assert.equal(expectedObjectFitForTreatment('visual-cover'), 'cover');
+});
 
 const successfulReport = {
   ok: true,

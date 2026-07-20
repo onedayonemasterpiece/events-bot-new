@@ -26,7 +26,7 @@ function rectIntersection(rect, viewportWidth, viewportHeight) {
 /** Pure ownership policy used by the router and focused regression tests. */
 export function footerViewportShortcutOwnership({ footerRect, targetRect = null, targetKind, viewportWidth, viewportHeight }) {
   if (targetKind === 'footer') return true;
-  if (!['body', 'managed-card'].includes(targetKind)) return false;
+  if (!['body', 'managed-card', 'event-surface'].includes(targetKind)) return false;
   const footerIntersection = rectIntersection(footerRect, viewportWidth, viewportHeight);
   const footerVisibleEnough = footerIntersection.width >= Math.min(120, footerRect?.width || 0)
     && footerIntersection.height >= Math.min(72, (footerRect?.height || 0) * 0.35);
@@ -1023,10 +1023,15 @@ export function initKeyboardEventNavigation(options = {}) {
         ? 'footer'
         : target === doc.body || target === doc.documentElement
           ? 'body'
-          : managedCard instanceof win.HTMLElement ? 'managed-card' : 'other';
+          : managedCard instanceof win.HTMLElement
+            ? 'managed-card'
+            : target === surface || surface.contains(target)
+              ? 'event-surface'
+              : 'other';
       return footerViewportShortcutOwnership({
         footerRect:footerShare.getBoundingClientRect(),
-        targetRect:managedCard?.getBoundingClientRect() || null,
+        targetRect:managedCard?.getBoundingClientRect()
+          || (targetKind === 'event-surface' ? surface.getBoundingClientRect() : null),
         targetKind,
         viewportWidth:Math.max(0, Number(win.innerWidth || doc.documentElement.clientWidth || 0)),
         viewportHeight:Math.max(0, Number(win.innerHeight || doc.documentElement.clientHeight || 0)),

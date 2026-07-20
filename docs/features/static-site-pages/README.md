@@ -121,6 +121,40 @@ failures. Gemini 3.1 Pro's direct browser attempt was correctly recorded as
 the follow-up screenshot-based review inspected exact public Playwright
 captures and evidence JSON and returned `ACCEPT`.
 
+The current production policy keeps the synchronous Smart Update build on
+pgvector rather than enabling the old per-anchor Gemma verifier. That verifier
+is not one extra request per build: with two candidate passes it is normally
+two provider calls per anchor (about `496` successful calls for a 248-page
+catalog, plus retries), and a partial run can starve the public `Похожие` list.
+Gemini 3.1 Pro review therefore selected **routine pgvector + targeted offline
+LLM audit**, not LLM in the publication critical path. The UI keeps two honest
+surfaces: semantically close events under `Смотрите дальше`, then a visibly
+separate finite `Ещё события`/personalized anti-bubble block with category and
+venue diversity limits.
+
+Pgvector publication is revision-bound and topology-gated. Vector sync writes
+one atomic durable receipt with deterministic `search_v3_hash` and
+`related_v1_hash`; Smart Update passes the validated `related_v1_hash` into the
+Kaggle export and the related cache must match it exactly. Selective graph
+repair guarantees reciprocal eligible exact-normalized-title pairs, restores
+only high-confidence cosine reverse links (`>=0.88`), and attaches a zero-
+incoming event to a neighbour only as broader discovery when the edge is not
+semantically strong. Full-catalog generation fails before publication when
+the zero-incoming rate is `>=5%`, an eligible exact-title pair is disconnected,
+or an anchor has fewer than four candidates. Equal titles create a duplicate/
+occurrence **suspect and mutual discovery edge**, never an automatic merge;
+canonical identity remains an LLM-first Smart Update decision with source,
+date and venue evidence.
+
+Every automatic root-form proof and immutable secret candidate also executes
+the blocking browser release gate against its generated files before the
+archive is trusted. The gate checks final recommendation `object-fit` against
+the shared card layout on both discovery surfaces, performs a real two-page
+gallery-recommendation navigation before testing destination hero arrows, and
+tests visible-footer `P`/`S` from `BODY` and retained off-screen event focus. It does
+not intercept navigation or pre-focus the share buttons, which were the two
+false-positive patterns in the rejected test.
+
 This is a prefix-only review release. It does not promote or delete the
 production root and does not modify stable `/p/` media or `/ics/` calendars.
 Automatic root promotion remains the release-protocol gate.

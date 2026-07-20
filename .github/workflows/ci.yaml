@@ -26,6 +26,9 @@ jobs:
       - name: Build real static event pages
         env:
           PREVIEW_BUILD_ID: preview-ci-browser-gate
+          # Build the preview through the same keyboard path as the immutable
+          # production/candidate artifacts; ordinary local previews stay inert.
+          PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE: '1'
         run: npm run build:preview
       - name: Block on static browser release gate
         run: npm run check:browser-release -- --root dist/preview-ci-browser-gate
