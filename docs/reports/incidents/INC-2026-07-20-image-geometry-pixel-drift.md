@@ -69,6 +69,12 @@ prove that a crop referred to the current pixels.
   KEY4 Gemma call. Its automatic source follow-up then exposed a final edge:
   the source-level poster hash stayed stable while exact encoded bytes changed,
   causing the per-event poster-hash unique constraint to reject a new row.
+- 2026-07-20 11:25 UTC — Fly `v1722` on main SHA `ae2336cb` converged that
+  stable-source/new-exact follow-up without a uniqueness error and preserved
+  approved poster `14758` plus geometry `566`.
+- 2026-07-20 11:46 UTC — a deliberately early no-op media pass exposed that a
+  future `deferred` pair remained in the ledger but its durable next-day job
+  was not re-armed. No provider call was made; the pair stayed quarantined.
 
 ## Root Cause
 
@@ -96,6 +102,10 @@ prove that a crop referred to the current pixels.
    inserted under its unchanged source-level `poster_hash`. The schema correctly
    rejected the duplicate `(event_id, poster_hash)`, so the follow-up could not
    converge even though the approved poster and its new geometry stayed intact.
+10. In the no-due-pair branch, future semantic-role retries were re-armed but
+    future pair-review retries were not. An unrelated or operator-triggered
+    early media job could therefore consume the only durable wake-up while the
+    pair remained correctly `deferred` in quarantine.
 
 ## Contributing Factors
 
@@ -173,6 +183,8 @@ prove that a crop referred to the current pixels.
   `cover`/reason evidence and fail-closed responsive `contain`.
 - [x] Namespace an unchanged mutable source hash by exact encoded digest when it
   yields a new rendition, preserving old visual evidence and DB uniqueness.
+- [x] Re-arm the earliest future deferred pair after any early/no-op media pass,
+  without an early provider call or duplicate job.
 
 ## Follow-up Actions
 
@@ -183,8 +195,10 @@ prove that a crop referred to the current pixels.
 
 - first deployed SHA: `82fb5ba12dfc1181a358044cc060c19d441378dd`, Fly
   release `v1719`; convergence SHA `66b4f129719c02c90420e6c56801f7fa65509bf5`,
-  Fly release `v1720`; stable-source/exact uniqueness follow-up pending
-- deploy path: clean `origin/main` Fly deploy; final uniqueness follow-up pending
+  Fly release `v1720`; stable-source/exact uniqueness SHA
+  `ae2336cb6e6b2518213c702db7a3ced92dc2434a`, Fly release `v1722`; deferred
+  pair re-arm follow-up pending
+- deploy path: clean `origin/main` Fly deploy; deferred-pair re-arm follow-up pending
 - source regression checks: 146 Python tests and 20 focused Node tests passed;
   Astro built 380 pages. The broad Node suite remained 43/44 because of a
   pre-existing literal class-token assertion in an unchanged layout file.
@@ -193,8 +207,9 @@ prove that a crop referred to the current pixels.
   corrected desktop post-build contract with zero provider calls.
 - post-deploy static verification: build
   `production-secret-20260720T123645-19876d03`, 248 events, 935 published
-  objects, production and secret-candidate checks all `ok`; final canary
-  convergence and exact-SHA receipt refresh pending
+  objects, production and secret-candidate checks all `ok`; final exact-SHA
+  build `production-secret-20260720T132607-9e4818dd` published 936 verified
+  objects with repo SHA `ae2336cb6e6b2518213c702db7a3ced92dc2434a`
 
 ## Prevention
 

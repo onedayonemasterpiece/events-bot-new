@@ -139,6 +139,10 @@ Defaults:
   непубличным, ручной очереди нет;
 - exhausted primary budget не тратит escalation budget; retry переносится на
   следующий UTC day;
+- если другой/ручной `event_media_review` пришёл раньше `next_run_at`
+  отложенной пары, no-op проход повторно ставит ровно один durable job на
+  минимальный future retry. Ранний проход не расходует VLM budget и не может
+  потерять отложенную пару или превратить её в tight loop;
 - cache/idempotency: `event_media_pair_review.pair_input_hash` включает event,
   fingerprints, event context и policy/prompt versions.
 - `running` pair, прерванный deploy/restart, автоматически возвращается в

@@ -2054,6 +2054,17 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
             role_retry_at = await _next_media_role_retry_at(
                 session, int(event_id), context_hash, now=now
             )
+            pair_retry_at = (
+                await session.execute(
+                    select(func.min(EventMediaPairReview.next_run_at)).where(
+                        EventMediaPairReview.event_id == int(event_id),
+                        EventMediaPairReview.status.in_(("pending", "deferred")),
+                        EventMediaPairReview.next_run_at > now,
+                    )
+                )
+            ).scalar_one_or_none()
+            if pair_retry_at is not None and getattr(pair_retry_at, "tzinfo", None) is None:
+                pair_retry_at = pair_retry_at.replace(tzinfo=timezone.utc)
             geometry_candidate_id = await _next_geometry_candidate_id(
                 session, int(event_id)
             )
@@ -2067,6 +2078,13 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                         await _enqueue_geometry_followup_if_needed(
                             followup_session, int(event_id)
                         )
+                        if pair_retry_at is not None:
+                            await enqueue_event_media_review_job(
+                                followup_session,
+                                int(event_id),
+                                next_run_at=pair_retry_at,
+                                force_followup=True,
+                            )
                         await followup_session.commit()
                     return bool(projection_changed or classified)
                 # Semantic role and geometry have independent daily budgets.
@@ -2094,15 +2112,16 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                         remaining_id is not None
                         or outcome.status in {"pending", "error"}
                         or role_retry_at is not None
+                        or pair_retry_at is not None
                     ):
                         geometry_followup_needed = (
                             remaining_id is not None
                             or outcome.status in {"pending", "error"}
                         )
-                        requested_next_run = (
-                            next_run_at
-                            or datetime.now(timezone.utc)
-                            + timedelta(
+                        if geometry_followup_needed:
+                            requested_next_run = next_run_at or datetime.now(
+                                timezone.utc
+                            ) + timedelta(
                                 seconds=_env_int(
                                     "EVENT_IMAGE_GEOMETRY_FOLLOWUP_SECONDS",
                                     7,
@@ -2110,13 +2129,19 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                                     hi=3600,
                                 )
                             )
-                            if geometry_followup_needed
-                            else role_retry_at
-                        )
-                        if role_retry_at is not None:
-                            if getattr(role_retry_at, "tzinfo", None) is None:
-                                role_retry_at = role_retry_at.replace(tzinfo=timezone.utc)
-                            requested_next_run = min(requested_next_run, role_retry_at)
+                        else:
+                            requested_next_run = role_retry_at or pair_retry_at
+                        for retry_at in (role_retry_at, pair_retry_at):
+                            if retry_at is None:
+                                continue
+                            if getattr(retry_at, "tzinfo", None) is None:
+                                retry_at = retry_at.replace(tzinfo=timezone.utc)
+                            requested_next_run = (
+                                retry_at
+                                if requested_next_run is None
+                                else min(requested_next_run, retry_at)
+                            )
+                        assert requested_next_run is not None
                         await enqueue_event_media_review_job(
                             followup_session,
                             int(event_id),
@@ -2125,14 +2150,23 @@ async def review_next_event_media_pair(event_id: int, db: Any, bot: Any = None) 
                         )
                     await followup_session.commit()
                 return bool(projection_changed or outcome.status == "classified")
-            if role_retry_at is not None:
-                if getattr(role_retry_at, "tzinfo", None) is None:
-                    role_retry_at = role_retry_at.replace(tzinfo=timezone.utc)
+            future_retry_at = None
+            for retry_at in (role_retry_at, pair_retry_at):
+                if retry_at is None:
+                    continue
+                if getattr(retry_at, "tzinfo", None) is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                future_retry_at = (
+                    retry_at
+                    if future_retry_at is None
+                    else min(future_retry_at, retry_at)
+                )
+            if future_retry_at is not None:
                 async with db.get_session() as followup_session:
                     await enqueue_event_media_review_job(
                         followup_session,
                         int(event_id),
-                        next_run_at=role_retry_at,
+                        next_run_at=future_retry_at,
                         force_followup=True,
                     )
                     await followup_session.commit()

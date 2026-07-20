@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Fixed event-media deferred-pair convergence: an early/no-op media worker now
+  re-arms exactly one durable job for the earliest future pair retry, without
+  spending provider budget early or losing the quarantined review wake-up.
 - Fixed the remaining mutable-source convergence edge: when one stable source
   poster hash yields a different immutable exact-v2 rendition, Smart Update now
   assigns a deterministic source+exact row identity instead of overwriting
