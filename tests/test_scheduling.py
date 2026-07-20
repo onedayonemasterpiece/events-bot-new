@@ -1799,6 +1799,80 @@ async def test_critical_scheduler_watchdog_defers_guide_after_remote_busy_skip(
 
 
 @pytest.mark.asyncio
+async def test_critical_scheduler_watchdog_defers_guide_remote_busy_after_local_midnight(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_guide_critical_env(monkeypatch)
+    monkeypatch.setenv("GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS", "300")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+
+    calls: list[dict[str, str]] = []
+
+    async def fake_run(_db, _bot, *, mode: str) -> None:
+        calls.append({"mode": mode})
+        run_id = await start_ops_run(
+            db,
+            kind="guide_monitoring",
+            trigger="scheduled",
+            operator_id=0,
+            started_at=_FixedCriticalAfterMidnightDatetime.fixed_now,
+            details={
+                "mode": "full",
+                "errors": ["remote_telegram_session_busy: tg_monitoring"],
+                "remote_telegram_session_conflicts": [
+                    {
+                        "job_type": "tg_monitoring",
+                        "kernel_ref": "zigomaro/telegram-monitor-bot",
+                    }
+                ],
+            },
+        )
+        await finish_ops_run(
+            db,
+            run_id=run_id,
+            status="skipped",
+            finished_at=_FixedCriticalAfterMidnightDatetime.fixed_now,
+            details={
+                "mode": "full",
+                "errors": ["remote_telegram_session_busy: tg_monitoring"],
+                "remote_telegram_session_conflicts": [
+                    {
+                        "job_type": "tg_monitoring",
+                        "kernel_ref": "zigomaro/telegram-monitor-bot",
+                    }
+                ],
+            },
+        )
+
+    @asynccontextmanager
+    async def fake_heavy_operation(**kwargs):
+        calls.append({"kind": kwargs["kind"], "guard": kwargs["mode"]})
+        yield
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_guide_excursions", fake_run)
+    monkeypatch.setattr(scheduling, "heavy_operation", fake_heavy_operation)
+
+    first_dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+    second_dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert first_dispatched == 1
+    assert second_dispatched == 0
+    assert calls == [
+        {"kind": "guide_monitoring", "guard": "wait"},
+        {"mode": "full"},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_critical_scheduler_watchdog_defers_after_crashed_guide_full_run(
     tmp_path, monkeypatch
 ):

@@ -52,6 +52,12 @@ Telegram slot.
   holder and exits during bootstrap.
 - `2026-07-20 21:41:48 UTC` — Telegram `ops_run 4245` finishes `error` with
   zero sources scanned.
+- `2026-07-20 22:26 UTC` — compensating Telegram run
+  `inc-20260720-tg-stale-s22-catchup-r3` acquires S22 and starts normally.
+- `2026-07-20 22:33–22:46 UTC` — the guide critical watchdog emits repeated
+  remote-session-busy skips and admin notifications because its persisted
+  retry query ended at local midnight and could not see catch-up attempts
+  recorded after that boundary.
 
 ## Root Cause
 
@@ -70,6 +76,10 @@ Telegram slot.
 - The resource guard correctly failed closed, preventing concurrent use of the
   role-scoped S22 Telegram session; the missing behavior was terminal cleanup,
   not lease bypass.
+- The guide watchdog's retry evidence window ended at midnight of the missed
+  slot's local day. After-midnight remote-busy skips therefore fell outside the
+  query on every tick, bypassing the existing five-minute/one-hour cooldown and
+  flooding the admin chat.
 
 ## Automation Contract
 
@@ -125,6 +135,9 @@ Telegram slot.
 - Invoke it from Guide Excursions and Telegram Monitoring terminal failure
   paths before propagating the run error; recovery metadata/output probing
   remains independent.
+- Extend the guide watchdog evidence window through the current invocation so
+  that after-midnight catch-up outcomes participate in the persisted retry
+  cooldown.
 
 ## Follow-up Actions
 

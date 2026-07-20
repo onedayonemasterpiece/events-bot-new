@@ -2126,10 +2126,15 @@ async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
         return 0
 
     day_start_utc, day_end_utc = _slot_day_window_utc(scheduled_local)
+    # A missed evening slot can still be retried after local midnight.  Keep
+    # those catch-up attempts in the persisted evidence window; otherwise the
+    # watchdog cannot see its own remote-session-busy skip and dispatches on
+    # every watchdog tick until the competing S22 run finishes.
+    evidence_end_utc = max(day_end_utc, now_utc + timedelta(seconds=1))
     if await _guide_full_dispatch_exists_today(
         db,
         day_start_utc=day_start_utc,
-        day_end_utc=day_end_utc,
+        day_end_utc=evidence_end_utc,
     ):
         return 0
 
@@ -2147,7 +2152,7 @@ async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
     latest_remote_busy_started = await _latest_guide_full_remote_busy_skip_started_at(
         db,
         day_start_utc=day_start_utc,
-        day_end_utc=day_end_utc,
+        day_end_utc=evidence_end_utc,
     )
     if latest_remote_busy_started is not None:
         db_deferred_until = latest_remote_busy_started + timedelta(seconds=retry_seconds)
@@ -2157,7 +2162,7 @@ async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
     latest_retry_hold_started = await _latest_guide_full_retry_hold_started_at(
         db,
         day_start_utc=day_start_utc,
-        day_end_utc=day_end_utc,
+        day_end_utc=evidence_end_utc,
     )
     if latest_retry_hold_started is not None:
         db_deferred_until = latest_retry_hold_started + timedelta(seconds=retry_seconds)
@@ -2190,7 +2195,7 @@ async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
         if await _guide_full_dispatch_exists_today(
             db,
             day_start_utc=day_start_utc,
-            day_end_utc=day_end_utc,
+            day_end_utc=evidence_end_utc,
         ):
             _critical_catchup_completed.add(catchup_key)
             _critical_catchup_deferred_until.pop(catchup_key, None)
@@ -2198,13 +2203,13 @@ async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
             latest_remote_busy_started = await _latest_guide_full_remote_busy_skip_started_at(
                 db,
                 day_start_utc=day_start_utc,
-                day_end_utc=day_end_utc,
+                day_end_utc=evidence_end_utc,
             )
             if latest_remote_busy_started is None:
                 latest_retry_hold_started = await _latest_guide_full_retry_hold_started_at(
                     db,
                     day_start_utc=day_start_utc,
-                    day_end_utc=day_end_utc,
+                    day_end_utc=evidence_end_utc,
                 )
                 if latest_retry_hold_started is None:
                     return 1

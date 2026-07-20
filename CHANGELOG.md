@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Guide critical-watchdog теперь видит after-midnight remote-session-busy
+  catch-up attempts и соблюдает cooldown вместо повторных запусков и спама в
+  админский чат, пока Telegram Monitoring владеет S22.
+
 - Fixed failed Kaggle monitor cleanup so a host-observed terminal
   Guide/Telegram kernel records `host_failure_observed`, closes its ledger and
   releases only its exact-owned resource leases; a failed guide run can no
