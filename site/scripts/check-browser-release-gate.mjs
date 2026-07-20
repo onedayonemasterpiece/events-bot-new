@@ -125,15 +125,57 @@ function eventRoutes(root, basePath) {
   return routes.sort();
 }
 
+function routeFile(root, basePath, route) {
+  let pathname = new URL(route, 'https://release.invalid').pathname;
+  if (basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`))) {
+    pathname = pathname.slice(basePath.length) || '/';
+  }
+  const parts = pathname.split('/').filter(Boolean);
+  invariant(!parts.some((part) => part === '.' || part === '..' || part.includes('\\')), `unsafe generated route: ${route}`);
+  return join(root, ...parts, 'index.html');
+}
+
+function galleryTargetFromHtml(html) {
+  const match = /data-gallery-slide-kind="cta"[\s\S]{0,6000}?<a[^>]+href="([^"]+)"/u.exec(html);
+  return match?.[1]?.replaceAll('&amp;', '&') || null;
+}
+
+export function staticSpecimenCandidates(root, basePath, routes) {
+  const routeSet = new Set(routes);
+  const candidates = [];
+  for (const route of routes) {
+    const path = routeFile(root, basePath, route);
+    if (!existsSync(path)) continue;
+    const html = readFileSync(path, 'utf8');
+    if (!html.includes('data-desktop-clean-event') || !html.includes('data-related-start')) continue;
+    if ((html.match(/data-event-card(?:=|\s|>)/gu) || []).length < 3) continue;
+    if ((html.match(/data-gallery-slide-kind="image"/gu) || []).length < 2) continue;
+    const target = galleryTargetFromHtml(html);
+    if (!target) continue;
+    const targetPath = new URL(target, `https://release.invalid${route}`).pathname;
+    if (!routeSet.has(targetPath)) continue;
+    const targetFile = routeFile(root, basePath, targetPath);
+    if (!existsSync(targetFile)) continue;
+    const targetHtml = readFileSync(targetFile, 'utf8');
+    if (!targetHtml.includes('data-clean-hero-image')) continue;
+    if ((targetHtml.match(/data-gallery-slide-kind="image"/gu) || []).length < 2) continue;
+    candidates.push({ route, targetPath });
+  }
+  // Keep the user-reported production journey as the first canary while it is
+  // present, but remain data-driven when that event leaves the active catalog.
+  return candidates.sort((left, right) => Number(!/-6408\/$/u.test(left.route)) - Number(!/-6408\/$/u.test(right.route)));
+}
+
 async function waitForContinuation(page) {
   await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
   await page.waitForFunction(() => document.querySelectorAll('[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot] > [data-event-card]').length > 0, null, { timeout: 15_000 });
 }
 
-async function chooseSpecimen(browser, origin, routes) {
+async function chooseSpecimen(browser, origin, candidates) {
   const page = await browser.newPage({ viewport: { width: 1536, height: 864 } });
   try {
-    for (const route of routes.slice(0, 80)) {
+    for (const candidate of candidates.slice(0, 12)) {
+      const { route, targetPath } = candidate;
       await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
       if (await page.locator('[data-desktop-clean-event]').count() !== 1) continue;
       const relatedCount = await page.locator('[data-related-start] [data-event-card]').count();
@@ -146,6 +188,7 @@ async function chooseSpecimen(browser, origin, routes) {
       if (relatedCount < 3 || slideCount < 2 || !target) continue;
       const targetUrl = new URL(target, `${origin}${route}`);
       if (targetUrl.origin !== origin) continue;
+      if (targetUrl.pathname !== targetPath) continue;
       const probe = await browser.newPage({ viewport: { width: 1536, height: 864 } });
       try {
         await probe.goto(targetUrl.href, { waitUntil: 'domcontentloaded' });
@@ -314,7 +357,9 @@ async function assertFooterShortcuts(page, origin, route) {
 
 async function runBrowserGate({ root, basePath, origin, browser }) {
   const routes = eventRoutes(root, basePath);
-  const specimen = await chooseSpecimen(browser, origin, routes);
+  const candidates = staticSpecimenCandidates(root, basePath, routes);
+  invariant(candidates.length > 0, 'generated release has no static multi-image recommendation journey');
+  const specimen = await chooseSpecimen(browser, origin, candidates);
   const context = await browser.newContext({ viewport: { width: 1536, height: 864 } });
   await context.addInitScript(() => {
     window.__releaseGateClipboard = { text: [], images: [] };

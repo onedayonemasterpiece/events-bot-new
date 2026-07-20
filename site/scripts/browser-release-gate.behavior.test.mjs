@@ -7,6 +7,7 @@ import {
   expectedObjectFitForTreatment,
   recordBrowserVisualSuccess,
   releaseRootMetadata,
+  staticSpecimenCandidates,
   startReleaseServer,
 } from './check-browser-release-gate.mjs';
 
@@ -63,4 +64,27 @@ test('R03 static server maps prefixed clean URLs to generated files', async () =
   } finally {
     await server.close();
   }
+});
+
+test('R03 production specimen discovery is static, bounded and prefers the reported 6408 journey', () => {
+  const root = mkdtempSync(join(tmpdir(), 'static-browser-specimens-'));
+  const basePath = '/_review/token';
+  const makePage = (slug, target, { related = true } = {}) => {
+    const dir = join(root, 'sobytiya', slug);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'index.html'), `<!doctype html>
+      <main data-desktop-clean-event><img data-clean-hero-image>
+      ${related ? '<section data-related-start><article data-event-card></article><article data-event-card></article><article data-event-card></article></section>' : ''}
+      <div data-gallery-slide-kind="image"></div><div data-gallery-slide-kind="image"></div>
+      ${target ? `<div data-gallery-slide-kind="cta"><a href="${basePath}/sobytiya/${target}/">next</a></div>` : ''}
+      </main>`);
+  };
+  makePage('alpha-100', 'target-200');
+  makePage('dog-6408', 'target-200');
+  makePage('target-200', null, { related: false });
+  const routes = ['alpha-100', 'dog-6408', 'target-200'].map((slug) => `${basePath}/sobytiya/${slug}/`);
+  assert.deepEqual(staticSpecimenCandidates(root, basePath, routes), [
+    { route: `${basePath}/sobytiya/dog-6408/`, targetPath: `${basePath}/sobytiya/target-200/` },
+    { route: `${basePath}/sobytiya/alpha-100/`, targetPath: `${basePath}/sobytiya/target-200/` },
+  ]);
 });
