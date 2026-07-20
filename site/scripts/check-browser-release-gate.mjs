@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,9 @@ const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SITE_DIR = dirname(dirname(SCRIPT_PATH));
 const REQUIRED_CHECKS = Object.freeze([
   'related_geometry_crop',
+  'related_loaded_media',
   'canonical_event_cards',
+  'cold_and_pointer_keyboard',
   'gallery_cross_document',
   'footer_shortcuts',
 ]);
@@ -166,6 +168,13 @@ function galleryTargetFromHtml(html) {
   return match?.[1]?.replaceAll('&amp;', '&') || null;
 }
 
+function hasClosedHeroCarousel(html) {
+  // Event pages contain separate mobile/desktop gallery DOM, so counting raw
+  // gallery slides mistakes one duplicated image for a multi-image hero. The
+  // canonical desktop renderer only emits this owner id when photoCount > 1.
+  return /<main\b[^>]*data-desktop-clean-event[^>]*data-closed-hero-gallery="[^"]+"/u.test(html);
+}
+
 export function staticSpecimenCandidates(root, basePath, routes) {
   const routeSet = new Set(routes);
   const candidates = [];
@@ -175,7 +184,7 @@ export function staticSpecimenCandidates(root, basePath, routes) {
     const html = readFileSync(path, 'utf8');
     if (!html.includes('data-desktop-clean-event') || !html.includes('data-related-start')) continue;
     if ((html.match(/data-event-card(?:=|\s|>)/gu) || []).length < 3) continue;
-    if ((html.match(/data-gallery-slide-kind="image"/gu) || []).length < 2) continue;
+    if (!hasClosedHeroCarousel(html)) continue;
     const target = galleryTargetFromHtml(html);
     if (!target) continue;
     const targetPath = new URL(target, `https://release.invalid${route}`).pathname;
@@ -184,12 +193,21 @@ export function staticSpecimenCandidates(root, basePath, routes) {
     if (!existsSync(targetFile)) continue;
     const targetHtml = readFileSync(targetFile, 'utf8');
     if (!targetHtml.includes('data-clean-hero-image')) continue;
-    if ((targetHtml.match(/data-gallery-slide-kind="image"/gu) || []).length < 2) continue;
+    if (!hasClosedHeroCarousel(targetHtml)) continue;
     candidates.push({ route, targetPath });
   }
   // Keep the user-reported production journey as the first canary while it is
   // present, but remain data-driven when that event leaves the active catalog.
   return candidates.sort((left, right) => Number(!/-6408\/$/u.test(left.route)) - Number(!/-6408\/$/u.test(right.route)));
+}
+
+function singleImageSpecimen(root, basePath, routes) {
+  return routes.find((route) => {
+    const html = readFileSync(routeFile(root, basePath, route), 'utf8');
+    return html.includes('data-desktop-clean-event')
+      && html.includes('data-clean-hero-image')
+      && !hasClosedHeroCarousel(html);
+  }) || null;
 }
 
 async function waitForContinuation(page) {
@@ -248,9 +266,28 @@ async function chooseSpecimen(browser, origin, candidates) {
 }
 
 async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
+  await page.waitForFunction((cardSelector) => Array.from(document.querySelectorAll(cardSelector))
+    .filter((card) => !card.hidden)
+    .every((card) => {
+      const shell = card.querySelector('[data-card-media-shell]');
+      const image = card.querySelector('[data-card-image]');
+      if (!(image instanceof HTMLImageElement) || !image.getAttribute('src')) return true;
+      return (image.complete && image.naturalWidth > 0 && shell?.classList.contains('is-image-loaded'))
+        || shell?.classList.contains('is-image-missing');
+    }), selector, { timeout: 12_000 });
+  // `complete`/`naturalWidth` prove fetch success but not that Chromium has
+  // decoded the lazy image into a paintable frame. Evidence screenshots must
+  // capture the settled pixels, not a transient neutral shell.
+  await page.locator(selector).evaluateAll(async (cards) => {
+    const images = cards.flatMap((card) => Array.from(card.querySelectorAll('[data-card-image]')));
+    await Promise.all(images.map((image) => image instanceof HTMLImageElement && image.currentSrc
+      ? image.decode().catch(() => undefined)
+      : Promise.resolve()));
+  });
   const metrics = await page.locator(selector).evaluateAll((cards) => cards.filter((card) => !card.hidden).map((card) => {
     const shell = card.querySelector('[data-card-media-shell]');
     const image = card.querySelector('[data-card-image]');
+    const fallback = card.querySelector('[data-card-image-fallback]');
     const cardRect = card.getBoundingClientRect();
     const shellRect = shell?.getBoundingClientRect();
     const imageRect = image?.getBoundingClientRect();
@@ -266,6 +303,16 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
       shell: shellRect ? { top: shellRect.top, left: shellRect.left, right: shellRect.right, width: shellRect.width, height: shellRect.height } : null,
       image: imageRect ? { left: imageRect.left, right: imageRect.right, width: imageRect.width, height: imageRect.height } : null,
       objectFit: image ? getComputedStyle(image).objectFit : '',
+      imageOpacity: image ? Number(getComputedStyle(image).opacity || 1) : 0,
+      imageVisibility: image ? getComputedStyle(image).visibility : '',
+      imageLoaded: Boolean(image?.complete && image?.naturalWidth > 0 && shell?.classList.contains('is-image-loaded')),
+      imageMissing: Boolean(shell?.classList.contains('is-image-missing')),
+      fallbackVisible: fallback ? (() => {
+        const style = getComputedStyle(fallback);
+        const rect = fallback.getBoundingClientRect();
+        return !fallback.hidden && style.display !== 'none' && style.visibility !== 'hidden'
+          && Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
+      })() : false,
       href: card.getAttribute('data-card-href'), titleHref: card.querySelector('[data-card-title]')?.getAttribute('href'),
       mediaHref: card.querySelector('[data-card-media-link]')?.getAttribute('href'), variant: card.getAttribute('data-feed-card-variant'),
       tabIndex: card.getAttribute('tabindex'), actions: {
@@ -282,6 +329,12 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     invariant(item.variant === 'split-actions' && item.tabIndex === '0', `card ${item.id} bypasses canonical split EventCard behavior`);
     invariant(item.href && item.href === item.titleHref && item.href === item.mediaHref, `card ${item.id} has divergent canonical links`);
     invariant(item.actions.like === 1 && item.actions.dislike === 1 && item.actions.share === 1, `card ${item.id} has a non-canonical action set`);
+    invariant(item.imageLoaded || item.imageMissing, `card ${item.id} media never reached loaded or missing state`);
+    if (item.imageLoaded) {
+      invariant(!item.fallbackVisible, `card ${item.id} exposes fallback text behind a loaded ${item.objectFit} image`);
+      invariant(item.imageOpacity > 0.99 && item.imageVisibility === 'visible', `card ${item.id} loaded image is not paint-visible`);
+    }
+    if (item.imageMissing) invariant(item.fallbackVisible, `card ${item.id} lost its fallback after image failure`);
     // The serialized treatment is the source-of-truth contract produced by
     // resolveRelatedCardMediaTreatment(). Both contain variants intentionally
     // preserve the complete image; only visual-cover may crop it.
@@ -322,6 +375,165 @@ async function assertRealCardEnter(page, origin, route, zoneSelector) {
     page.keyboard.press('Enter'),
   ]);
   invariant(page.url() === expected && await page.locator('[data-desktop-clean-event]').count() === 1, `real Enter navigation failed in ${zoneSelector}`);
+}
+
+async function dispatchPhysicalKey(page, code, key) {
+  return page.evaluate(({ physicalCode, logicalKey }) => {
+    const target = document.activeElement === document.body || document.activeElement === document.documentElement
+      ? document.body
+      : document.activeElement;
+    const down = new KeyboardEvent('keydown', {
+      code:physicalCode, key:logicalKey, bubbles:true, cancelable:true,
+    });
+    const accepted = target.dispatchEvent(down);
+    target.dispatchEvent(new KeyboardEvent('keyup', {
+      code:physicalCode, key:logicalKey, bubbles:true, cancelable:true,
+    }));
+    return { accepted, target:target?.tagName || '' };
+  }, { physicalCode:code, logicalKey:key });
+}
+
+async function clickInertCurrentEventPoint(page) {
+  const scope = page.locator('[data-desktop-clean-event] .desktop-clean-description').first();
+  invariant(await scope.count() === 1, 'current event has no inert description scope for mixed-input acceptance');
+  await scope.scrollIntoViewIfNeeded();
+  const point = await scope.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const blocked = 'a,button,input,textarea,select,[contenteditable="true"],[role="dialog"],[data-service-share-root]';
+    const left = Math.max(1, Math.ceil(rect.left + 4));
+    const right = Math.min(innerWidth - 2, Math.floor(rect.right - 4));
+    const top = Math.max(1, Math.ceil(rect.top + 4));
+    const bottom = Math.min(innerHeight - 2, Math.floor(rect.bottom - 4));
+    for (let y = top; y <= bottom; y += 16) {
+      for (let x = left; x <= right; x += 16) {
+        const target = document.elementFromPoint(x, y);
+        if (target && element.contains(target) && !target.closest(blocked)) return { x, y, tag:target.tagName };
+      }
+    }
+    return null;
+  });
+  invariant(point, 'could not find a real inert pointer point inside the current event');
+  await page.mouse.click(point.x, point.y);
+  invariant(['BODY', 'HTML'].includes(await page.evaluate(() => document.activeElement?.tagName)), `inert current-event click unexpectedly focused ${await page.evaluate(() => document.activeElement?.tagName)}`);
+  return point;
+}
+
+async function clickInertWithin(page, selector, label) {
+  const scope = page.locator(selector).first();
+  invariant(await scope.count() === 1, `${label} scope is missing`);
+  await scope.evaluate((element) => element.scrollIntoView({ block:'nearest', inline:'nearest' }));
+  const point = await scope.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const blocked = 'a,button,input,textarea,select,[contenteditable="true"]';
+    for (let y = Math.max(1, Math.ceil(rect.top + 3)); y <= Math.min(innerHeight - 2, Math.floor(rect.bottom - 3)); y += 8) {
+      for (let x = Math.max(1, Math.ceil(rect.left + 3)); x <= Math.min(innerWidth - 2, Math.floor(rect.right - 3)); x += 8) {
+        const target = document.elementFromPoint(x, y);
+        if (target && element.contains(target) && !target.closest(blocked)) return { x, y, tag:target.tagName };
+      }
+    }
+    return null;
+  });
+  invariant(point, `could not find a real inert pointer point inside ${label}`);
+  await page.mouse.click(point.x, point.y);
+  return point;
+}
+
+async function assertColdAndPointerKeyboard(page, origin, route, { expectMultipleImages = null } = {}) {
+  await page.goto(`${origin}${route}`, { waitUntil:'domcontentloaded' });
+  await page.locator('[data-keyboard-event-surface]').waitFor({ state:'attached' });
+  invariant(['BODY', 'HTML'].includes(await page.evaluate(() => document.activeElement?.tagName)), 'cold event page must retain BODY/HTML focus');
+  const hero = page.locator('[data-clean-hero-image]');
+  const actualImageCount = await page.locator('[data-desktop-clean-event]').evaluate((root) => {
+    const galleryId = root.getAttribute('data-closed-hero-gallery');
+    return galleryId
+      ? document.querySelectorAll(`#${CSS.escape(galleryId)} [data-hero-gallery-slide][data-gallery-slide-kind="image"]`).length
+      : 1;
+  });
+  const hasMultipleImages = expectMultipleImages === null ? actualImageCount > 1 : expectMultipleImages;
+  const before = await hero.getAttribute('src');
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(100);
+  const after = await hero.getAttribute('src');
+  if (hasMultipleImages) {
+    invariant(after && after !== before, `cold BODY ArrowRight did not advance ${route}`);
+    invariant(await page.locator('[data-keyboard-event-surface]:focus').count() === 1, 'cold hero arrow did not establish current-event focus');
+    await page.keyboard.press('ArrowLeft');
+    invariant(await hero.getAttribute('src') === before, 'cold ArrowLeft did not restore the original hero');
+  } else {
+    invariant(after === before, `single-image cold ArrowRight changed ${route}`);
+  }
+
+  await page.reload({ waitUntil:'domcontentloaded' });
+  await page.locator('[data-keyboard-event-surface]').waitFor({ state:'attached' });
+  await page.evaluate(() => {
+    window.__releaseGateEventActions = { like:0, calendar:0, primary:0 };
+    const surface = document.querySelector('[data-keyboard-event-surface]');
+    const observe = (selector, key) => surface?.querySelector(selector)?.addEventListener('click', (event) => {
+      window.__releaseGateEventActions[key] += 1;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, { capture:true });
+    observe('[data-feedback-action="like"]', 'like');
+    observe('[data-calendar-action]', 'calendar');
+    observe('.desktop-prototype__primary-action:not(.is-disabled)', 'primary');
+  });
+  const pointer = await clickInertCurrentEventPoint(page);
+  // Explicit Cyrillic `key` values with stable physical `code` prove that the
+  // router is layout-independent rather than accidentally matching Latin text.
+  await dispatchPhysicalKey(page, 'KeyL', 'д');
+  invariant(await page.evaluate(() => window.__releaseGateEventActions.like) === 1, 'inert click + Russian-layout KeyL did not reach current-event Like');
+  await dispatchPhysicalKey(page, 'KeyK', 'л');
+  invariant(await page.evaluate(() => window.__releaseGateEventActions.calendar) === 1, 'inert click + Russian-layout KeyK did not reach current-event calendar');
+  const textWrites = await page.evaluate(() => window.__releaseGateClipboard.text.length);
+  await dispatchPhysicalKey(page, 'KeyS', 'ы');
+  await page.waitForFunction((count) => window.__releaseGateClipboard.text.length === count + 1, textWrites, { timeout:8_000 });
+  invariant((await page.evaluate(() => window.__releaseGateClipboard.text.at(-1)))?.includes('/sobytiya/'), 'current-event KeyS copied the wrong payload');
+  await dispatchPhysicalKey(page, 'Enter', 'Enter');
+  invariant(await page.evaluate(() => window.__releaseGateEventActions.primary) === 1, 'inert click + Enter did not reach current-event CTA');
+
+  // Unrelated pointer provenance must revoke BODY recovery.
+  await page.reload({ waitUntil:'domcontentloaded' });
+  await page.locator('[data-keyboard-event-surface]').waitFor({ state:'attached' });
+  await page.evaluate(() => {
+    window.__releaseGateNegativeLikes = 0;
+    document.querySelector('[data-keyboard-event-surface] [data-feedback-action="like"]')?.addEventListener('click', (event) => {
+      window.__releaseGateNegativeLikes += 1;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, { capture:true });
+  });
+  const headerPointer = await clickInertWithin(page, '.site-header', 'site header');
+  await page.evaluate(() => document.activeElement?.blur());
+  await dispatchPhysicalKey(page, 'KeyL', 'д');
+  invariant(await page.evaluate(() => window.__releaseGateNegativeLikes) === 0, 'header provenance leaked current-event KeyL ownership');
+  await page.evaluate(() => {
+    const input = document.createElement('input');
+    input.dataset.releaseGateEditor = '';
+    document.querySelector('[data-desktop-clean-event]')?.append(input);
+    input.focus({ preventScroll:true });
+  });
+  await page.keyboard.type('д');
+  invariant(await page.locator('[data-release-gate-editor]').inputValue() === 'д', 'editor did not retain native Cyrillic input');
+  invariant(await page.evaluate(() => window.__releaseGateNegativeLikes) === 0, 'editable input leaked current-event shortcut ownership');
+  await page.evaluate(() => {
+    document.querySelector('[data-release-gate-editor]')?.remove();
+    const dialog = document.createElement('dialog');
+    dialog.dataset.releaseGateDialog = '';
+    dialog.innerHTML = '<p>Проверка модального контекста</p>';
+    document.body.append(dialog);
+    dialog.showModal();
+  });
+  const dialogPointer = await clickInertWithin(page, '[data-release-gate-dialog]', 'modal dialog');
+  await dispatchPhysicalKey(page, 'KeyL', 'д');
+  invariant(await page.evaluate(() => window.__releaseGateNegativeLikes) === 0, 'modal dialog leaked current-event KeyL ownership');
+  await page.evaluate(() => document.querySelector('[data-release-gate-dialog]')?.remove());
+  return {
+    coldHeroChanged:after !== before,
+    imageCount:actualImageCount,
+    inertPointer:pointer,
+    headerPointer,
+    dialogPointer,
+  };
 }
 
 async function assertGalleryCrossDocument(page, origin, route) {
@@ -401,7 +613,7 @@ async function assertFooterShortcuts(page, origin, route) {
   invariant(await footer.locator('[data-service-share-intent="image"]:focus, [data-service-share-intent="text"]:focus').count() === 0, 'browser gate must not focus footer controls');
 }
 
-async function runBrowserGate({ root, basePath, origin, browser }) {
+async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '' }) {
   const routes = eventRoutes(root, basePath);
   const candidates = staticSpecimenCandidates(root, basePath, routes);
   invariant(candidates.length > 0, 'generated release has no static multi-image recommendation journey');
@@ -454,16 +666,45 @@ async function runBrowserGate({ root, basePath, origin, browser }) {
       const routeRelated = await assertRecommendationGeometry(page, '[data-related-start] [data-event-card]', 3);
       const routeContinuation = await assertRecommendationGeometry(page, '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot] > [data-event-card]', 1);
       invariant(routeContinuation.length <= 6, `Ещё события is unbounded on ${route}: ${routeContinuation.length}`);
+      invariant([...routeRelated, ...routeContinuation].some((item) => item.objectFit === 'contain'), `crop canary ${route} has no fail-closed contain card`);
       related.push(...routeRelated);
       continuation.push(...routeContinuation);
+      if (artifactDir) {
+        const slug = route.split('/').filter(Boolean).at(-1)?.replace(/[^a-z0-9_-]+/giu, '-') || 'event';
+        const relatedSection = page.locator('[data-related-start]');
+        await relatedSection.screenshot({
+          path:join(artifactDir, `${slug}-related-loaded.png`),
+          animations:'disabled',
+        });
+        await relatedSection.evaluate((element) => element.scrollIntoView({ block:'start', inline:'nearest' }));
+        await page.screenshot({
+          path:join(artifactDir, `${slug}-related-viewport.png`),
+          animations:'disabled',
+          fullPage:false,
+        });
+      }
     }
     checks.related_geometry_crop = 'ok';
     console.log('[browser-release-gate] related_geometry_crop=ok');
+    checks.related_loaded_media = 'ok';
+    console.log('[browser-release-gate] related_loaded_media=ok');
     invariant(await page.evaluate(() => typeof window.KenigEventsCreateEventCard === 'function'), 'canonical EventCard runtime renderer is missing');
     await assertRealCardEnter(page, origin, specimen.route, '[data-related-start]');
     await assertRealCardEnter(page, origin, specimen.route, '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot]');
     checks.canonical_event_cards = 'ok';
     console.log('[browser-release-gate] canonical_event_cards=ok');
+    const keyboardRoutes = [...new Set([
+      routes.find((route) => /-6408\/$/u.test(route)),
+      routes.find((route) => /-6593\/$/u.test(route)),
+      specimen.route,
+    ].filter(Boolean))];
+    const keyboardReports = [];
+    for (const route of keyboardRoutes) keyboardReports.push({ route, ...await assertColdAndPointerKeyboard(page, origin, route) });
+    const singleRoute = singleImageSpecimen(root, basePath, routes);
+    invariant(singleRoute, 'generated release has no single-image negative keyboard specimen');
+    keyboardReports.push({ route:singleRoute, ...await assertColdAndPointerKeyboard(page, origin, singleRoute, { expectMultipleImages:false }) });
+    checks.cold_and_pointer_keyboard = 'ok';
+    console.log('[browser-release-gate] cold_and_pointer_keyboard=ok');
     await assertGalleryCrossDocument(page, origin, specimen.route);
     checks.gallery_cross_document = 'ok';
     console.log('[browser-release-gate] gallery_cross_document=ok');
@@ -473,6 +714,15 @@ async function runBrowserGate({ root, basePath, origin, browser }) {
     return {
       ok: true, checks,
       specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes },
+      keyboard:keyboardReports,
+      media: [...related, ...continuation].map((item) => ({
+        id:item.id,
+        treatment:item.treatment,
+        object_fit:item.objectFit,
+        image_loaded:item.imageLoaded,
+        image_missing:item.imageMissing,
+        fallback_visible:item.fallbackVisible,
+      })),
       related_cards: related.length, continuation_cards: continuation.length,
     };
   } finally {
@@ -483,13 +733,19 @@ async function runBrowserGate({ root, basePath, origin, browser }) {
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const metadata = releaseRootMetadata(args.root || join(SITE_DIR, 'dist'), args.manifest || '');
-  const { chromium } = await import('playwright');
+  const browserName = args.browser || 'chromium';
+  invariant(['chromium', 'firefox', 'webkit'].includes(browserName), `unsupported browser engine: ${browserName}`);
+  const playwright = await import('playwright');
+  const browserType = playwright[browserName];
   let server = null;
   let browser = null;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await browserType.launch({ headless: true });
     server = await startReleaseServer(metadata.root, metadata.basePath);
-    const report = await runBrowserGate({ root: metadata.root, basePath: metadata.basePath, origin: server.origin, browser });
+    const artifactDir = args.artifact_dir ? resolve(args.artifact_dir) : '';
+    if (artifactDir) mkdirSync(artifactDir, { recursive:true });
+    const report = await runBrowserGate({ root: metadata.root, basePath: metadata.basePath, origin: server.origin, browser, artifactDir });
+    report.browser = browserName;
     if (metadata.manifestPath) recordBrowserVisualSuccess(metadata.manifestPath, report);
     if (args.report) writeFileSync(resolve(args.report), `${JSON.stringify(report, null, 2)}\n`);
     console.log(`Browser release gate passed: ${JSON.stringify(report)}`);

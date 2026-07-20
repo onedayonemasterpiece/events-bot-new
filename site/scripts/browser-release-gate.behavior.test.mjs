@@ -53,7 +53,9 @@ const successfulReport = {
   ok: true,
   checks: {
     related_geometry_crop: 'ok',
+    related_loaded_media: 'ok',
     canonical_event_cards: 'ok',
+    cold_and_pointer_keyboard: 'ok',
     gallery_cross_document: 'ok',
     footer_shortcuts: 'ok',
   },
@@ -73,6 +75,18 @@ test('R03/R04 browser_visual is written only after every browser assertion passe
   const manifest = recordBrowserVisualSuccess(manifestPath, successfulReport);
   assert.equal(manifest.checks.browser_visual, 'ok');
   assert.equal(JSON.parse(readFileSync(manifestPath)).checks.browser_visual, 'ok');
+});
+
+test('R01/R02 release gate blocks fallback bleed and tests cold/mixed keyboard ownership', () => {
+  const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
+  assert.match(source, /fallbackVisible/gu);
+  assert.match(source, /exposes fallback text behind a loaded/gu);
+  assert.match(source, /cold BODY ArrowRight did not advance/gu);
+  assert.match(source, /inert click \+ Russian-layout KeyL/gu);
+  assert.match(source, /header provenance leaked/gu);
+  assert.match(source, /page\.mouse\.click\(point\.x, point\.y\)/gu);
+  assert.match(source, /modal dialog leaked current-event KeyL ownership/gu);
+  assert.match(source, /single-image cold ArrowRight changed/gu);
 });
 
 test('R04 release metadata preserves the immutable candidate prefix', () => {
@@ -105,7 +119,7 @@ test('R03 production specimen discovery is static, bounded and prefers the repor
     const dir = join(root, 'sobytiya', slug);
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'index.html'), `<!doctype html>
-      <main data-desktop-clean-event><img data-clean-hero-image>
+      <main data-desktop-clean-event data-closed-hero-gallery="gallery-${slug}"><img data-clean-hero-image>
       ${related ? '<section data-related-start><article data-event-card></article><article data-event-card></article><article data-event-card></article></section>' : ''}
       <div data-gallery-slide-kind="image"></div><div data-gallery-slide-kind="image"></div>
       ${target ? `<div data-gallery-slide-kind="cta"><a href="${basePath}/sobytiya/${target}/">next</a></div>` : ''}

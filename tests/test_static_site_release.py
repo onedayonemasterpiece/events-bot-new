@@ -767,6 +767,7 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
     for kind, filename in (
         ("production_root", "production-root.tar.gz"),
         ("secret_candidate", "secret-candidate.tar.gz"),
+        ("browser_evidence", "browser-evidence.tar.gz"),
     ):
         path = output / filename
         with tarfile.open(path, "w:gz") as bundle:
@@ -862,6 +863,24 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
     result["checks"]["secret_candidate"]["browser_visual"] = "pending"
     result_path.write_text(json.dumps(result), encoding="utf-8")
     with pytest.raises(StaticSitePermanentError, match="browser_visual"):
+        validate_production_candidate_result(
+            result_path,
+            output_dir=output,
+            build_id="production-checks",
+            run_id="static-site:checks",
+            repo_sha="a" * 40,
+            snapshot=metadata,
+            candidate_token=token,
+            input_fingerprint="f" * 64,
+            build_clock=clock,
+        )
+
+    result["checks"]["secret_candidate"]["browser_visual"] = "ok"
+    result["artifacts"] = [
+        artifact for artifact in artifacts if artifact["kind"] != "browser_evidence"
+    ]
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    with pytest.raises(StaticSitePermanentError, match="artifact_set_mismatch"):
         validate_production_candidate_result(
             result_path,
             output_dir=output,

@@ -270,8 +270,10 @@ merged follow-up. Fly creates an online-backup SQLite snapshot, runs
 `quick_check`, records SHA/size/watermark, and only that immutable file reaches
 Kaggle. The same outbox is used by `scripts/request_static_site_build.py`.
 
-Kaggle returns exactly two hash-checked artifacts plus bounded result JSON: an
-indexable root-form proof and a prefix-contained noindex candidate. Publication
+Kaggle returns exactly three hash-checked artifacts plus bounded result JSON:
+an indexable root-form proof, a prefix-contained noindex candidate, and a
+browser-evidence archive containing the generated-tree JSON receipts and
+settled-pixel recommendation screenshots for both trees. Publication
 is a trusted Fly/operator-side create-only step guarded by
 `ENABLE_STATIC_SITE_SECRET_PUBLISH`; Kaggle receives no bucket credentials.
 Both generation flags default off until the controlled canary is accepted.

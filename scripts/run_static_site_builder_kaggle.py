@@ -159,8 +159,13 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
         if result.get('build_clock') != args.build_clock:
             raise RuntimeError('Kaggle result build clock mismatch')
         artifacts = result.get('artifacts')
-        if not isinstance(artifacts, list) or len(artifacts) != 2:
-            raise RuntimeError('production-candidate result must contain exactly root and secret artifacts')
+        expected_artifact_kinds = {'production_root', 'secret_candidate', 'browser_evidence'}
+        actual_artifact_kinds = {
+            str(artifact.get('kind') or '')
+            for artifact in artifacts
+        } if isinstance(artifacts, list) else set()
+        if not isinstance(artifacts, list) or len(artifacts) != 3 or actual_artifact_kinds != expected_artifact_kinds:
+            raise RuntimeError('production-candidate result must contain root, secret and browser-evidence artifacts')
         for artifact in artifacts:
             name = str(artifact.get('filename') or '')
             path = out_dir / name

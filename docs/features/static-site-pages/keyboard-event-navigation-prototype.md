@@ -36,6 +36,7 @@ production wrapper does not reimplement a second “similar” navigator.
 | Current-event CTA | second released `ArrowDown` within `430 ms` | Focus first related card |
 | Related section already at the viewport boundary | one `ArrowDown` | Focus first related card |
 | No focused control (`body`) | `ArrowDown` | Re-enter at first related card |
+| Fresh/reloaded multi-image event with `body` focus | first `ArrowLeft` / `ArrowRight` | Enter the current-event surface without load-time autofocus and move the hero |
 | Current-event CTA | `ArrowLeft` / `ArrowRight` | Previous / next hero image; safe no-op for one-image Editorial |
 | Current-event CTA | fresh `ArrowUp` | Open existing fullscreen gallery |
 | Keyboard-opened gallery | `Escape` | Close and restore the logical CTA owner; arrows work again immediately |
@@ -43,7 +44,7 @@ production wrapper does not reimplement a second “similar” navigator.
 | First related row | `ArrowUp` | Focus CTA and scroll to page top; held repeat cannot open gallery |
 | Current-event CTA | `Enter` | Visible primary CTA |
 | Current-event CTA | `L` / `K` / `S` | Like / calendar / copy title plus canonical URL |
-| Lost DOM focus (`body`) after a managed surface/card | `L` | Re-enter the recorded logical owner and execute once |
+| Lost DOM focus (`body`) after a managed surface/card or inert current-event click | `L` / `K` / `S` / `Enter` | Re-enter the recorded logical owner and execute like / calendar / event copy / primary CTA once |
 | Current-event CTA or description copy group | `C` | Copy title, rendered lead/body and canonical URL |
 | Current-event CTA or description copy group | physical `P` | Copy the canonical event poster as PNG |
 | Related or `Ещё события` card | arrows | One spatial step per released press; bridge between both card zones |
@@ -66,13 +67,16 @@ fullscreen overlay finishes closing. The visible `Перейти к похожи
 remains the timing-independent alternative.
 
 Lost-focus recovery is deliberately narrower than ordinary global hotkeys. It
-accepts only `L` from `body`/the document element, after modal, IME, modifier
-and editor exclusions, and only while provenance is armed by the last meaningful
-focus/pointer owner being the CTA surface or a managed card. A pointer/focus in
-the header, footer, editor or unrelated control disarms it. The logical owner is
-resolved and focused without scrolling before the action runs. `K`, `S`, `C`
-and `P` retain their stricter ownership because their result or payload can be
-ambiguous without an explicit context.
+accepts physical `KeyL`, `KeyK`, `KeyS` and `Enter` from `body`/the document
+element, after modal, IME, modifier and editor exclusions, and only while
+provenance is armed by the last meaningful focus/pointer owner being the CTA
+surface, a managed card or inert content inside the current-event root. A
+pointer/focus in the header, footer, editor or unrelated control disarms it.
+The logical owner is resolved and focused without scrolling before the action
+runs. `C` and `P` retain stricter explicit ownership because their payload can
+be ambiguous. A fresh page has a separate one-use hero-arrow entry: it never
+autofocuses, but the first physical Left/Right can enter a multi-image hero;
+any unrelated pointer/focus, window blur or hidden document revokes it.
 
 The continuation is a separate semantic zone outside
 `[data-desktop-clean-event]`. Its section is observed idempotently because the
@@ -287,7 +291,8 @@ Keep one ordered command router with this priority:
 3. explicitly focused service-share control;
 4. current-event CTA surface;
 5. managed related/continuation card;
-6. provenance-gated `body` re-entry for `L` only;
+6. one-use cold `body` hero Left/Right or provenance-gated `body` re-entry for
+   `L/K/S/Enter`;
 7. otherwise leave the event untouched and preserve browser behavior.
 
 Persist logical owner as `{kind, eventId, zone, index}` plus a connected node
@@ -356,8 +361,13 @@ production change.
   screen-reader commands, high contrast, zoom/reflow or reduced motion;
 - feature-flag rollback, cleanup on navigation and telemetry privacy review.
 
-The Chromium fixture and secret-candidate route gate is required for every
-candidate containing the router. Firefox/Safari, screen-reader, high-contrast
+The Chromium generated-tree gate is required for every candidate containing
+the router. It covers fresh load and reload, real inert pointer click, explicit
+Cyrillic `key` values with physical `code`, header/editor and single-image
+negative controls, gallery handoff and footer ownership. The same executable
+accepts `--browser firefox` and `--browser webkit` on hosts with Playwright
+system libraries; Playwright WebKit is only an approximation. Native
+Firefox/Safari, screen-reader, high-contrast
 and zoom/reflow evidence are still required before any production-root rollout;
 secret-candidate integration is not that approval. A collector is optional and
 must be separately reviewed rather than blocking the current local-only facts.

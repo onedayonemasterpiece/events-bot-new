@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Reopened `INC-2026-07-20-static-event-keyboard-visual-regressions` after the
+  `RHOg…` candidate disproved its earlier green receipt: loaded `contain`
+  recommendation images now hide the semantic date/type/city failure layer,
+  fresh/reloaded BODY Left/Right can enter a multi-image hero without
+  autofocus, and a real inert current-event click arms physical
+  Russian-layout `L/K/S/Enter` while headers/editors/dialogs still revoke
+  ownership. The mandatory generated-tree Playwright gate now waits for image
+  decode, checks paint/fallback visibility, cold and mixed-input positive and
+  negative routes, retains section plus FHD/125%-equivalent viewport evidence,
+  supports explicit Chromium/Firefox/WebKit engines, and makes Kaggle return a
+  third hash-checked `browser_evidence` artifact with the root and secret trees.
 - Fixed immutable static-event recommendation and keyboard release regressions:
   both `Смотрите дальше` and finite `Ещё события` now consume the same final
   protected-crop decision from the canonical `EventCard`; gallery Enter stores

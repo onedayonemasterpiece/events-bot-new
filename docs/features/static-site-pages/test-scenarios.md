@@ -114,14 +114,19 @@
 - **ADD-KEY-02 — Intent and ownership.** Page load never steals focus. The
   router activates after meaningful keyboard intent and handles contexts in the
   fixed order editor/IME → top dialog/gallery → service share → CTA → managed
-  card → provenance-gated body `L` → native browser behavior.
+  card → provenance-gated body recovery → native browser behavior. A fresh
+  multi-image event permits only the first physical Left/Right intent to enter
+  its hero; unrelated pointer/focus/blur/hidden provenance revokes that entry.
 - **ADD-KEY-03 — Gallery Down latch.** A fresh `ArrowDown` closes a keyboard- or
   pointer-opened gallery through its existing close control, restores the
   logical owner and neither scrolls the covered page nor leaks held repeat into
   page scrolling. Only a physical keyup permits a later Down scroll.
-- **ADD-KEY-04 — Lost-focus `L`.** Body recovery works only after CTA, related
-  or broad-card ownership. Header, footer, editor, unrelated control,
-  blur/hidden and top dialogs disarm it until a new managed owner exists.
+- **ADD-KEY-04 — Lost-focus actions.** Body recovery for physical
+  `KeyL/KeyK/KeyS/Enter` works only after CTA, related/broad-card ownership or a
+  real click on inert current-event content. Header, footer, editor, unrelated
+  control, blur/hidden and top dialogs disarm it until a new managed owner
+  exists. Acceptance dispatches Cyrillic logical keys (`д/л/ы`) with stable
+  physical codes to prove layout independence.
 - **ADD-KEY-05 — Canonical two-zone cards.** `Смотрите дальше` and the finite
   broader section use the same `EventCard` DOM/controller. Arrows bridge their
   explicit zones; Enter/L/K/S and rerender focus restoration behave identically
@@ -141,8 +146,10 @@
   reach its recommendation, activate it with Enter without intercepting the
   navigation, then press Left/Right while destination focus is still `BODY`.
   A short-lived same-origin provenance handoff restores the destination event
-  surface and changes the hero; an ordinary direct page load does not make
-  arrows global.
+  surface and changes the hero. Independently, a direct fresh load/reload keeps
+  `BODY` focus but lets the first Left/Right intent enter a multi-image hero;
+  single-image pages and pages whose header/editor/dialog owns context remain
+  native/no-op.
 - **ADD-KEY-09 — Footer after pointer scroll.** Scroll to a visible footer with
   touchpad/wheel while focus is `BODY`, then repeat with focus retained on an
   off-screen managed card or current-event action surface. `P` and `S` must copy the service image/text target
@@ -158,6 +165,21 @@
   protected-region and exact-geometry crop resolution. Declared treatment,
   computed `object-fit`, reserved row ratio and visible letterbox/crop budget
   must agree at `1536×864`; surface CSS may not reinterpret the decision.
+- **ADD-DISC-11 — Loaded media owns the letterbox.** For every canonical
+  recommendation card, Playwright waits for the lazy image to settle and
+  `decode()`. A successfully loaded `contain` image must hide the semantic
+  date/type/city failure fallback and reveal only the neutral media shell in
+  its bands; a failed image must keep that fallback. The release artifact
+  retains a full related-section screenshot and a `1536×864` viewport capture
+  after pixels settle. Correct `object-fit` alone is not acceptance.
+- **ADD-DISC-12 — Cold and mixed-input matrix.** On both reported routes
+  `6408` and `6593`, the blocking generated-tree gate covers fresh load,
+  reload, real inert-content mouse click, Russian-layout `L/K/S`, Enter,
+  header/editor negatives, a single-image negative, cross-document gallery
+  handoff, footer touchpad ownership and canonical related/broad-card Enter.
+  Run the same command with `--browser firefox` and `--browser webkit` where
+  the host provides Playwright system dependencies; Playwright WebKit is an
+  approximation, not a substitute for the native Safari rollout check.
 - **ADD-DISC-09 — Exact-title recall without unsafe merge.** Every eligible
   exact-normalized-title pair is mutual in the related graph even when Smart
   Update has not merged it. This is a discovery invariant, not evidence that
