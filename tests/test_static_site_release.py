@@ -504,6 +504,62 @@ def test_terminal_orphan_remains_recoverable_by_exact_job_and_dataset(tmp_path) 
     assert recoverable_static_site_build(database, job_id=42) is None
 
 
+def test_terminal_remote_claim_does_not_block_new_coalesced_job_for_claim_ttl(tmp_path) -> None:
+    database = tmp_path / "terminal-supersede.sqlite"
+    _fingerprint_db(database)
+    now = datetime(2026, 7, 20, 12, tzinfo=timezone.utc)
+    first = claim_static_site_build(
+        database,
+        job_id=41,
+        run_id="remote-terminal-error",
+        input_fingerprint="c" * 64,
+        effective_date="2026-07-20",
+        request_watermark="old-watermark",
+        now=now,
+    )
+    assert first.action == "claimed"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE kaggle_run_ledger(
+                run_id TEXT PRIMARY KEY, status TEXT, updated_at TEXT,
+                last_heartbeat_at TEXT, terminal_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO kaggle_run_ledger VALUES(?, 'failed', ?, ?, ?)",
+            (
+                "remote-terminal-error",
+                now.isoformat(),
+                now.isoformat(),
+                (now + timedelta(seconds=10)).isoformat(),
+            ),
+        )
+
+    replacement = claim_static_site_build(
+        database,
+        job_id=42,
+        run_id="replacement-run",
+        input_fingerprint="d" * 64,
+        effective_date="2026-07-20",
+        request_watermark="new-watermark",
+        stale_seconds=7200,
+        now=now + timedelta(seconds=20),
+    )
+    assert replacement.action == "claimed"
+    with sqlite3.connect(database) as connection:
+        active = connection.execute(
+            "SELECT active_job_id, active_run_id FROM static_site_build_state"
+        ).fetchone()
+        superseded = connection.execute(
+            "SELECT evidence_json FROM static_site_build_history "
+            "WHERE run_id='remote-terminal-error' AND outcome='failed' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert active == (42, "replacement-run")
+    assert json.loads(superseded[0])["reason"] == "terminal_remote_claim_superseded"
+
+
 class _MemoryS3:
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], dict[str, object]] = {}
