@@ -71,7 +71,13 @@
   full-photo-readable right stacks; and add an experimental bounded desktop
   `←/→` group pager with seven reusable media shells, reversible history,
   compositor-only cinematic deal motion, resize cancellation and an instant
-  reduced-motion path while retaining direct event navigation on mobile.
+  reduced-motion path while retaining direct event navigation on mobile. Stop
+  treating the first positive like as an exclusion filter: after three likes
+  matching themes now only reorder their current bucket, while unrelated and
+  unseen exhibitions stay visible; rebuild liked tags after unlike/reject.
+  Backfill the terminal photo page with retained cards from the preceding batch,
+  auto-expand the unique long-running tail on `ArrowDown`, and restore the
+  production shared footer with footer-local keyboard behavior.
 
 ### Added
 - **Personal exhibitions product prototype**: add a separate dark timeline

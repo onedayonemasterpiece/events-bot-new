@@ -96,3 +96,25 @@ HTTP `200`. Public Playwright repeated the `0 → 2` cursor / `+10 → +8`
 transition, Russian-layout like, `-7.98px` deck contact, zero overflow and zero
 console/page errors; mobile kept cursor `0`, hid all keyboard chrome, preserved
 dot delta `0` and did not open the gallery.
+
+## v9 soft personalization / terminal batch / full tail / footer closure
+
+| ID | Requirement | Status | Evidence |
+|---|---|---|---|
+| V9-R1 | Liking `Диалоги` must not hide `Окна времени` | Done | Likes never hard-filter. One-like Playwright state keeps all 22 rows unfiltered and `Окна времени` visible; three current likes only stable-rerank the priority/tail buckets. Unseen badge drops from 3 to 2 only because the liked new row was meaningfully seen. `likedTags` rebuild after unlike and reject. |
+| V9-R2 | Final photo batch must retain prior cards rather than leave a left blank | Done | The resolver selects the earliest fitting terminal suffix strictly after the prior cursor, start-aligns it, retains shared shells through FLIP and stores exact history. At `900/1020px`, `[8,9] → [9,10,11]`, retained id `9`, first left `0`, and reverse snapshots are exact. |
+| V9-R3 | Down from the bottom must open the complete old-exhibition list with no repeats | Done | Current build derives every 21+ day exhibition not already featured, then removes normalized title repeats: 13 unique tail rows / 22 total. `↓` from `3216` expands and focuses `698`; `↑` returns to `3216` without collapsing. |
+| V9-R4 | Reuse the common footer | Done | The prototype-local `display:none` was removed; the existing production `EventLayout → SiteFooter service-v1` path remains the only implementation. Desktop/mobile have zero overflow; footer focus retains `ArrowDown` instead of jumping to the exhibition list. |
+
+V9 local verification: Astro build `381` pages; prototype contract `56/56` with
+`22` unique event ids; Chromium Playwright covered one/three-like behavior,
+physical keyboard navigation, terminal batching at `900/1020/1440px`, exact
+reverse history, derived-tail disclosure, shared footer, mobile pager no-op,
+zero horizontal overflow and zero console/page errors. The final external gate
+through `agy`, model `Gemini 3.1 Pro (High)`, returned `ACCEPT`: R1–R4 `PASS`,
+no P0/P1/P2.
+
+Shared-footer tech debt is recorded but not duplicated into this fix:
+production-wide `check-production.mjs` does not yet mirror the secret-candidate
+`service-v1` assertions, and the accepted component retains legacy
+`site-footer-prototype__*` CSS names.

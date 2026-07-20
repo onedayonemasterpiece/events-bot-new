@@ -193,6 +193,56 @@ v8_lanes:
     writable_files: []
     effort: high
     status: completed
+v9_lanes:
+  - id: v9-personalization-audit
+    role: planner
+    requirement_ids: [V9-R1]
+    target: explain and remove the abrupt one-like strict-filter transition
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v9-final-batch-audit
+    role: planner
+    requirement_ids: [V9-R2]
+    target: overlapping final photo window that keeps the deck surface filled
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: high
+    status: completed
+  - id: v9-keyboard-tail-audit
+    role: planner
+    requirement_ids: [V9-R3]
+    target: ArrowDown expansion into the complete non-duplicated long-running tail
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v9-footer-audit
+    role: planner
+    requirement_ids: [V9-R4]
+    target: locate and reuse the production shared footer component
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v9-integration
+    role: worker
+    requirement_ids: [V9-R1, V9-R2, V9-R3, V9-R4]
+    target: integrate soft-profile gating, final-window backfill, tail keyboard reveal and shared footer
+    depends_on: [v9-personalization-audit, v9-final-batch-audit, v9-keyboard-tail-audit, v9-footer-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/index.astro
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    verification_scope: full_local
+    effort: high
+    status: completed
   - id: v8-integration
     role: worker
     requirement_ids: [V8-R1, V8-R2, V8-R3]

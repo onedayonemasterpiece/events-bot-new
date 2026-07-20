@@ -1,13 +1,13 @@
 ---
 import EventLayout from '../../../layouts/EventLayout.astro';
 import ExhibitionPrototypeRow from '../../../components/ExhibitionPrototypeRow.astro';
-import { absoluteUrl, getEvents, SITE_NAME } from '../../../lib/events';
+import { absoluteUrl, displayDateValue, getCurrentDate, getEvents, SITE_NAME } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/exhibitions-personal/');
 const title = `Прототип персональной страницы выставок | ${SITE_NAME}`;
 const description = 'Отдельный noindex-прототип: новые, персональные, популярные и завершающиеся выставки в компактном timeline-интерфейсе.';
 
-const specs = [
+const featuredSpecs = [
   { id: 6902, bucket: 'new', lifecycle: 'recent', dateLabel: '18 июля', status: 'Открылась вчера', category: 'Искусство', tags: ['живопись', 'современное искусство'], reasons: ['Недавно открылась', 'Рядом со Светлогорском'] },
   { id: 6894, bucket: 'new', lifecycle: 'recent', dateLabel: '15 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['живопись', 'локальные авторы'], reasons: ['Открылась 4 дня назад', 'Новая в каталоге'] },
   { id: 6871, bucket: 'new', lifecycle: 'upcoming', dateLabel: '8 августа', status: 'Откроется скоро', category: 'Фотография', tags: ['фотография', 'город', 'под открытым небом'], reasons: ['Недавно анонсирована', 'Только два дня'] },
@@ -17,14 +17,67 @@ const specs = [
   { id: 6560, bucket: 'priority', lifecycle: 'recent', dateLabel: '5—31 июля', status: 'Открылась недавно', category: 'Искусство', tags: ['локальные авторы', 'иллюстрация', 'истории'], reasons: ['Открылась две недели назад', 'Высокий интерес'] },
   { id: 4913, bucket: 'priority', lifecycle: 'ending', dateLabel: 'до 31 июля', status: 'Скоро закроется', category: 'История', tags: ['археология', 'история', 'Пруссия'], reasons: ['Осталось 12 дней'] },
   { id: 3216, bucket: 'priority', lifecycle: 'popular', dateLabel: 'до 27 сентября', status: 'Идёт сейчас', category: 'Искусство', tags: ['живопись', 'классика', 'Третьяковка'], reasons: ['Популярно в источниках', 'Высокий интерес'] },
+] as const;
+
+const curatedTailSpecs = [
   { id: 698, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 30 сентября', status: 'Идёт давно', category: 'История', tags: ['археология', 'краеведение', 'музей'], reasons: ['Долгий формат'] },
   { id: 2601, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 31 декабря', status: 'Идёт давно', category: 'История', tags: ['история', 'военная история'], reasons: ['Долгий формат'] },
   { id: 2182, bucket: 'tail', lifecycle: 'long', dateLabel: 'до 31 декабря', status: 'Идёт давно', category: 'Искусство', tags: ['живопись', 'природа', 'краеведение'], reasons: ['Долгий формат'] },
 ] as const;
 
+const allEvents = getEvents();
+const normalizedExhibitionTitle = (value: string) => value
+  .toLocaleLowerCase('ru')
+  .replace(/^выставка\s+/u, '')
+  .replace(/[«»„“”"']/gu, '')
+  .replace(/\s+/gu, ' ')
+  .trim();
+const featuredIds = new Set(featuredSpecs.map((spec) => spec.id));
+const featuredTitles = new Set(allEvents.filter((event) => featuredIds.has(event.id)).map((event) => normalizedExhibitionTitle(event.title)));
+const curatedTailIds = new Set(curatedTailSpecs.map((spec) => spec.id));
+const shownTitles = new Set([
+  ...featuredTitles,
+  ...allEvents.filter((event) => curatedTailIds.has(event.id)).map((event) => normalizedExhibitionTitle(event.title)),
+]);
+const currentDateMs = Date.parse(`${getCurrentDate()}T00:00:00Z`);
+const longRunningCutoffMs = currentDateMs - 21 * 24 * 60 * 60 * 1000;
+const topicLabels = new Map([
+  ['KRAEVEDENIE_KALININGRAD_OBLAST', 'краеведение'],
+  ['PERSONALITIES', 'персоналии'],
+  ['FAMILY', 'семейное'],
+  ['FASHION', 'костюм'],
+  ['KIDS_SCHOOL', 'для детей'],
+  ['PHOTOGRAPHY', 'фотография'],
+  ['HISTORY', 'история'],
+]);
+const derivedTailSpecs = allEvents
+  .filter((event) => String(event.event_type || '').toLocaleLowerCase('ru') === 'выставка')
+  .filter((event) => !featuredIds.has(event.id) && !curatedTailIds.has(event.id))
+  .filter((event) => Date.parse(`${event.start_date}T00:00:00Z`) <= longRunningCutoffMs)
+  .filter((event) => {
+    const titleKey = normalizedExhibitionTitle(event.title);
+    if (shownTitles.has(titleKey)) return false;
+    shownTitles.add(titleKey);
+    return true;
+  })
+  .map((event) => {
+    const topicTags = (event.topics || []).map((topic) => topicLabels.get(topic)).filter((tag): tag is string => Boolean(tag));
+    const category = topicTags.includes('фотография') ? 'Фотография' : topicTags.some((tag) => tag === 'история' || tag === 'краеведение') ? 'История' : 'Искусство';
+    return {
+      id: event.id,
+      bucket: 'tail',
+      lifecycle: 'long',
+      dateLabel: event.end_date ? `до ${displayDateValue(event.end_date)}` : event.display_date,
+      status: 'Идёт давно',
+      category,
+      tags: [...new Set(topicTags.length ? topicTags : [category.toLocaleLowerCase('ru')])].slice(0,3),
+      reasons: ['Полный список', 'Идёт больше трёх недель'],
+    };
+  });
+const specs = [...featuredSpecs, ...curatedTailSpecs, ...derivedTailSpecs];
 const ids = specs.map((spec) => spec.id);
 if (new Set(ids).size !== ids.length) throw new Error('Exhibitions prototype contains duplicate event ids');
-const eventsById = new Map(getEvents().map((event) => [event.id, event]));
+const eventsById = new Map(allEvents.map((event) => [event.id, event]));
 const items = specs.map((spec) => {
   const event = eventsById.get(spec.id);
   if (!event) throw new Error(`Exhibitions prototype fixture is missing event ${spec.id}`);
@@ -184,7 +237,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     --ex-motion-base:420ms;
   }
   body:has(.ex-page) { background:var(--ex-bg); color:var(--ex-text); }
-  body:has(.ex-page)::before, body:has(.ex-page)>.site-footer { display:none; }
+  body:has(.ex-page)::before { display:none; }
   body:has(.ex-page)>.site-header { z-index:60; }
   body:has(.ex-page) a:focus-visible, body:has(.ex-page) button:focus-visible { outline:3px solid var(--ex-blue); outline-offset:3px; }
   .ex-page { min-height:100dvh; padding:0; overflow-x:clip; background:radial-gradient(circle at 52% -14%,rgba(84,172,247,.14),transparent 35rem),radial-gradient(circle at 8% 34%,rgba(241,130,36,.07),transparent 28rem),var(--ex-bg); color:var(--ex-text); font-size:16px; line-height:1.45; }
@@ -547,7 +600,20 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     if (!(root instanceof HTMLElement)) return;
     const STATE_KEY = 'ke_exhibitions_prototype_v1';
     const rows = () => Array.from(root.querySelectorAll('[data-exhibition-row]'));
-    const focusLinks = () => rows().filter((row) => !row.classList.contains('is-filtered') && !row.classList.contains('is-rejected') && !row.closest('[hidden]')).map((row) => row.querySelector('[data-row-focus]')).filter((node) => node instanceof HTMLElement);
+    const originalRowOrder = new WeakMap(rows().map((row,index) => [row,index]));
+    const focusLinks = () => {
+      const seen = new Set();
+      return rows()
+        .filter((row) => !row.classList.contains('is-filtered') && !row.classList.contains('is-rejected') && !row.closest('[hidden]'))
+        .filter((row) => {
+          const id = row.dataset.eventId;
+          if (!id || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        })
+        .map((row) => row.querySelector('[data-row-focus]'))
+        .filter((node) => node instanceof HTMLElement);
+    };
     const live = root.querySelector('[data-live]');
     const badges = () => Array.from(document.querySelectorAll('[data-header-badge="exhibitions"]'));
     const personalNote = root.querySelector('[data-personal-note]');
@@ -558,6 +624,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const deckStates = new WeakMap();
     const deckManifests = new WeakMap();
     const MAX_STACK_DEPTH = 5;
+    const PROFILE_MIN_LIKES = 3;
     const DECK_EASE = 'cubic-bezier(.16,1,.3,1)';
     let imageRequestId = 0;
 
@@ -633,7 +700,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       image.src = asset.src;
       if (image.complete) settleDeckImage(frame,image,requestId,image.naturalWidth > 0 ? 'loaded' : 'error');
     };
-    const measureDeckPage = (deck,cursor) => {
+    const measureDeckPage = (deck,cursor,options = {}) => {
       const manifest = manifestFor(deck);
       const frames = Array.from(deck.querySelectorAll('[data-deck-frame]')).filter((node) => node instanceof HTMLElement);
       const height = deck.clientHeight;
@@ -646,6 +713,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       const badgeReserve = compactDeck.matches ? 40 : 46;
       const widthFor = (asset) => Math.max(52,height * Math.max(.25,Number(asset?.presentationRatio || 1)));
       const remaining = manifest.slice(start);
+      const startAlignedTerminal = options.alignFinal === 'start' && start > 0;
       const naturalWidth = remaining.reduce((sum,asset) => sum + widthFor(asset),0) + gap * Math.max(0,remaining.length - 1);
       const full = [];
       let fullRight = 0;
@@ -653,10 +721,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         const natural = widthFor(remaining[0]);
         const width = Math.min(natural,available);
         const scale = natural ? width / natural : 1;
-        full.push({ index:start, left:Math.max(0,(available - width) / 2), top:Math.max(0,(height - height * scale) / 2), width, height:height * scale, depth:0, state:'full' });
+        full.push({ index:start, left:startAlignedTerminal ? 0 : Math.max(0,(available - width) / 2), top:Math.max(0,(height - height * scale) / 2), width, height:height * scale, depth:0, state:'full' });
         fullRight = full[0].left + width;
       } else if (remaining.length <= frames.length && naturalWidth <= available) {
-        let left = Math.max(0,(available - naturalWidth) / 2);
+        let left = startAlignedTerminal ? 0 : Math.max(0,(available - naturalWidth) / 2);
         remaining.forEach((asset,index) => {
           const width = widthFor(asset);
           full.push({ index:start + index, left, top:0, width, height, depth:0, state:'full' });
@@ -706,6 +774,18 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
         if (overflow) stack.forEach((item) => { item.left -= overflow; });
       }
       return { start, full, stack, placements:[...full,...stack], next, remaining:Math.max(0,total - next), total, available, height, gap, overlap };
+    };
+    const resolveForwardPage = (deck,current) => {
+      const rawNext = current.next;
+      const raw = measureDeckPage(deck,rawNext,{ alignFinal:'start' });
+      if (raw.next !== raw.total || raw.remaining > 0) return raw;
+      for (let start = current.start + 1; start < rawNext; start += 1) {
+        const candidate = measureDeckPage(deck,start,{ alignFinal:'start' });
+        const terminal = candidate.next === candidate.total && candidate.remaining === 0;
+        const promotesNewMedia = candidate.full.some((item) => item.index >= rawNext);
+        if (terminal && promotesNewMedia) return candidate;
+      }
+      return raw;
     };
     const updateDeckA11y = (deck,page) => {
       const title = deck.dataset.galleryTitle || 'выставки';
@@ -815,8 +895,10 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       const state = ensureDeckState(deck);
       const current = state.page || measureDeckPage(deck,state.cursor);
       if (state.phase !== 'idle') { state.queued = direction; return; }
-      const targetCursor = direction > 0 ? current.next : state.history.at(-1);
-      if (targetCursor === undefined || targetCursor === null || targetCursor === state.cursor || (direction > 0 && current.remaining === 0)) {
+      const historyCursor = state.history.at(-1);
+      const target = direction > 0 ? resolveForwardPage(deck,current) : (historyCursor === undefined ? null : measureDeckPage(deck,historyCursor));
+      const targetCursor = target?.start;
+      if (!target || targetCursor === undefined || targetCursor === null || targetCursor === state.cursor || (direction > 0 && current.remaining === 0)) {
         announce(direction > 0 ? 'Это последние фотографии.' : 'Это начало колоды.');
         return;
       }
@@ -824,7 +906,6 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       if (reducedMotion.matches || typeof Element.prototype.animate !== 'function') {
         state.cursor = targetCursor;
         state.history = nextHistory;
-        const target = measureDeckPage(deck,state.cursor);
         applyDeckPage(deck,target,state);
         announceDeckPage(deck,target);
         return;
@@ -838,7 +919,8 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       deck.querySelectorAll('[data-deck-frame]:not([hidden])').forEach((frame) => {
         if (frame instanceof HTMLElement) oldRects.set(Number(frame.dataset.mediaIndex),frame.getBoundingClientRect());
       });
-      const exitAnimations = current.full.map((placement) => {
+      const targetIndexes = new Set(target.placements.map((placement) => placement.index));
+      const exitAnimations = current.full.filter((placement) => !targetIndexes.has(placement.index)).map((placement) => {
         const frame = deck.querySelector(`[data-deck-frame][data-media-index="${placement.index}"]`);
         if (!(frame instanceof HTMLElement)) return null;
         const rect = frame.getBoundingClientRect();
@@ -852,7 +934,6 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       if (generation !== state.generation) return;
       state.cursor = targetCursor;
       state.history = nextHistory;
-      const target = measureDeckPage(deck,state.cursor);
       applyDeckPage(deck,target,state);
       const arrivalAnimations = target.placements.map((placement,placementIndex) => {
         const frame = deck.querySelector(`[data-deck-frame][data-media-index="${placement.index}"]`);
@@ -900,11 +981,14 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       const transition = document.startViewTransition(callback);
       // Navigation, filters and repeated keyboard input may legitimately skip
       // a pending view transition. Treat that as cancellation, not a page error.
+      transition.ready.catch(() => {});
+      transition.updateCallbackDone.catch(() => {});
       transition.finished.catch(() => {});
     };
     let liveTimer;
     let mode = 'personal';
     let category = 'Все темы';
+    const tagsFor = (row) => String(row.dataset.tags || '').split(',').filter(Boolean);
 
     const emptyState = () => ({ likes: [], negative: [], likedTags: [], seenNew: [], siteVisits: 0, hasVisitedExhibitions: false });
     const readState = () => {
@@ -914,6 +998,12 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       } catch { return emptyState(); }
     };
     let state = readState();
+    const currentLikes = () => [...new Set(Array.isArray(state.likes) ? state.likes.map(String) : [])];
+    const rebuildLikedTags = () => {
+      state.likes = currentLikes();
+      state.likedTags = [...new Set(rows().filter((row) => state.likes.includes(row.dataset.eventId)).flatMap(tagsFor))];
+    };
+    rebuildLikedTags();
     const writeState = () => { try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch {} };
     writeState();
 
@@ -924,10 +1014,25 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       window.setTimeout(() => { live.textContent = message; }, 20);
       liveTimer = window.setTimeout(() => { live.textContent = ''; }, 3200);
     };
-    const tagsFor = (row) => String(row.dataset.tags || '').split(',').filter(Boolean);
-    const hasProfile = () => Array.isArray(state.likedTags) && state.likedTags.length > 0;
+    const hasProfile = () => currentLikes().length >= PROFILE_MIN_LIKES && Array.isArray(state.likedTags) && state.likedTags.length > 0;
     const matchesProfile = (row) => tagsFor(row).some((tag) => state.likedTags.includes(tag)) || state.likes.includes(row.dataset.eventId);
-    const unseenRelevantNewRows = () => rows().filter((row) => row.dataset.new === 'true' && !state.seenNew.includes(row.dataset.eventId) && !state.negative.includes(row.dataset.eventId) && (!hasProfile() || matchesProfile(row)));
+    const profileScore = (row) => tagsFor(row).filter((tag) => state.likedTags.includes(tag)).length;
+    const syncPersonalOrder = () => {
+      root.querySelectorAll('[data-list-section="priority"],[data-list-section="tail"]').forEach((list) => {
+        const ordered = Array.from(list.querySelectorAll(':scope > [data-exhibition-row]')).sort((left,right) => {
+          if (mode === 'personal' && hasProfile()) {
+            const scoreDelta = profileScore(right) - profileScore(left);
+            if (scoreDelta) return scoreDelta;
+          }
+          return Number(originalRowOrder.get(left) || 0) - Number(originalRowOrder.get(right) || 0);
+        });
+        ordered.forEach((row) => {
+          row.dataset.profileMatch = String(hasProfile() && matchesProfile(row));
+          list.append(row);
+        });
+      });
+    };
+    const unseenRelevantNewRows = () => rows().filter((row) => row.dataset.new === 'true' && !state.seenNew.includes(row.dataset.eventId) && !state.negative.includes(row.dataset.eventId));
 
     const updateBadge = () => {
       const count = unseenRelevantNewRows().length;
@@ -985,42 +1090,71 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     const setKeyboardActive = (link) => {
       rows().forEach((row) => row.classList.toggle('is-keyboard-active', link instanceof Element && row.contains(link)));
     };
+    const focusRowLink = (link) => {
+      if (!(link instanceof HTMLElement)) return null;
+      setRovingTitle(link);
+      setKeyboardActive(link);
+      link.focus({ preventScroll:true });
+      link.scrollIntoView({ block:'center', behavior:reducedMotion.matches ? 'auto' : 'smooth' });
+      return link;
+    };
     const focusAdjacentRow = (direction) => {
-      const links = focusLinks();
+      let links = focusLinks();
       if (!links.length) return null;
       const activeRow = document.activeElement instanceof Element ? document.activeElement.closest('[data-exhibition-row]') : null;
       const selectedRow = root.querySelector('.ex-row.is-keyboard-active');
       const current = activeRow?.querySelector('[data-row-focus]') || selectedRow?.querySelector('[data-row-focus]');
       const currentIndex = links.indexOf(current);
+      const tail = root.querySelector('[data-list-section="tail"]');
+      const visiblePriority = links.filter((link) => link.closest('[data-list-section="priority"]'));
+      if (direction > 0 && tail instanceof HTMLElement && tail.hidden && current === visiblePriority.at(-1)) {
+        setTailExpanded(true,current);
+        links = focusLinks();
+        const firstTail = links.find((link) => tail.contains(link));
+        if (firstTail) return focusRowLink(firstTail);
+        setRovingTitle(current);
+        setKeyboardActive(current);
+        announce('В давно идущих выставках нет совпадений с текущими фильтрами.');
+        return current;
+      }
       const nextIndex = currentIndex < 0 ? (direction > 0 ? 0 : links.length - 1) : Math.max(0,Math.min(links.length - 1,currentIndex + direction));
       const next = links[nextIndex];
-      setRovingTitle(next);
-      setKeyboardActive(next);
-      next?.focus({ preventScroll:true });
-      next?.scrollIntoView({ block:'center', behavior:reducedMotion.matches ? 'auto' : 'smooth' });
-      return next;
+      return focusRowLink(next);
     };
     const syncFilters = (preferred = null) => {
+      syncPersonalOrder();
       let count = 0;
       rows().forEach((row) => {
         const rejected = state.negative.includes(row.dataset.eventId);
         const categoryMatches = category === 'Все темы' || row.dataset.category === category;
-        const personalMatches = mode === 'all' || !hasProfile() || matchesProfile(row);
-        const visible = categoryMatches && personalMatches && !(mode === 'personal' && rejected);
+        const visible = categoryMatches && !(mode === 'personal' && rejected);
         row.classList.toggle('is-filtered', !visible);
         if (visible) count += 1;
       });
       if (visibleCount instanceof HTMLElement) visibleCount.textContent = String(count);
       if (empty instanceof HTMLElement) empty.hidden = count > 0;
       if (personalNote instanceof HTMLElement) {
+        const likeCount = currentLikes().length;
         personalNote.innerHTML = hasProfile()
-          ? `<strong>Подборка уточнена.</strong> Учитываем темы ваших ${state.likes.length} отметок; отклонённые выставки не показываем.`
-          : '<strong>Начните с 2–3 оценок.</strong> Пока профиль пуст, «Для меня» показывает новое и общее главное.';
+          ? `<strong>Персональный порядок включён.</strong> Совпадающие темы подняты выше по ${likeCount} отметкам; лайки ничего не скрывают.`
+          : likeCount > 0
+            ? `<strong>Интересы сохранены.</strong> Ещё ${PROFILE_MIN_LIKES - likeCount} ${PROFILE_MIN_LIKES - likeCount === 1 ? 'отметка' : 'отметки'} — и совпадающие темы поднимутся выше; пока показываем общее главное.`
+            : '<strong>Начните с 2–3 оценок.</strong> Пока профиль пуст, «Для меня» показывает новое и общее главное.';
       }
       const chosen = setRovingTitle(preferred);
       if (document.activeElement?.closest?.('[data-exhibition-row]')) setKeyboardActive(chosen);
       updateBadge();
       scheduleDeckLayout();
+    };
+    const setTailExpanded = (expanded,preferred = null) => {
+      const panel = root.querySelector('[data-list-section="tail"]');
+      const toggle = root.querySelector('[data-tail-toggle]');
+      if (!(panel instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return null;
+      panel.hidden = !expanded;
+      toggle.setAttribute('aria-expanded',String(expanded));
+      toggle.textContent = expanded ? 'Свернуть долгие выставки' : `Показать ещё ${panel.querySelectorAll('[data-exhibition-row]').length}`;
+      syncFilters(preferred);
+      return panel;
     };
     const switchMode = (nextMode, focus = false) => {
       mode = nextMode === 'all' ? 'all' : 'personal';
@@ -1059,12 +1193,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       const tailToggle = target.closest('[data-tail-toggle]');
       if (tailToggle instanceof HTMLElement) {
         const panel = root.querySelector('[data-list-section="tail"]');
-        if (panel instanceof HTMLElement) {
-          panel.hidden = !panel.hidden;
-          tailToggle.setAttribute('aria-expanded', String(!panel.hidden));
-          tailToggle.textContent = panel.hidden ? `Показать ещё ${panel.querySelectorAll('[data-exhibition-row]').length}` : 'Свернуть долгие выставки';
-          if (!panel.hidden) syncFilters();
-        }
+        if (panel instanceof HTMLElement) setTailExpanded(panel.hidden);
         return;
       }
       if (target.closest('[data-empty-all]')) { switchMode('all'); return; }
@@ -1100,18 +1229,18 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       state.likes = liked ? state.likes.filter((value) => value !== id) : [...state.likes, id];
       if (!liked) {
         state.negative = state.negative.filter((value) => value !== id);
-        state.likedTags = [...new Set([...state.likedTags, ...tagsFor(row)])];
-      } else {
-        state.likedTags = [...new Set(rows().filter((candidate) => state.likes.includes(candidate.dataset.eventId)).flatMap(tagsFor))];
       }
+      rebuildLikedTags();
       markSeen(row); writeState(); syncActionState(); transitionDOM(syncFilters);
-      announce(liked ? 'Лайк убран. Подборка обновлена.' : 'Нравится. Темы выставки добавлены в ваши интересы.');
+      announce(liked ? 'Лайк убран. Персональный порядок обновлён.' : 'Нравится. Темы сохранены в интересах; выставки не скрываются.');
     };
     const rejectRow = (row) => {
       const id = row.dataset.eventId;
       if (!state.negative.includes(id)) state.negative.push(id);
       state.likes = state.likes.filter((value) => value !== id);
+      rebuildLikedTags();
       markSeen(row); writeState(); syncActionState();
+      syncPersonalOrder(); scheduleDeckLayout(); updateBadge();
       const rejectedLink = row.querySelector('[data-row-focus]');
       if (rejectedLink instanceof HTMLElement) rejectedLink.tabIndex = -1;
       setRovingTitle();
@@ -1185,6 +1314,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
       if (event.defaultPrevented) return;
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest('input,textarea,select,[contenteditable="true"]')) return;
+      if (target?.closest('.site-footer')) return;
       if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !root.querySelector('[data-gallery][open]')) {
         event.preventDefault();
         focusAdjacentRow(event.key === 'ArrowDown' ? 1 : -1);

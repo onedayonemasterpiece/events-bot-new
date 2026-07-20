@@ -15,8 +15,9 @@ const eventIds = [...html.matchAll(/<article[^>]+data-exhibition-row[^>]+data-ev
 const uniqueIds = new Set(eventIds);
 
 const checks = [
-  ['12 curated exhibition rows', eventIds.length === 12],
+  ['featured rows plus the complete derived long-running tail', eventIds.length > 12 && (html.match(/data-bucket="tail"/gu) || []).length > 3 && pageSource.includes('longRunningCutoffMs')],
   ['no duplicate event rows', uniqueIds.size === eventIds.length],
+  ['tail excludes normalized repeats of featured and earlier tail titles', pageSource.includes('const normalizedExhibitionTitle =') && pageSource.includes('const shownTitles = new Set') && pageSource.includes('if (shownTitles.has(titleKey)) return false')],
   ['3 new inbox rows', (html.match(/data-new="true"/gu) || []).length === 3],
   ['personal mode precedes all mode', html.indexOf('data-mode="personal"') < html.indexOf('data-mode="all"')],
   ['new inbox precedes priority and tail', html.indexOf('data-list-section="new"') < html.indexOf('data-list-section="priority"') && html.indexOf('data-list-section="priority"') < html.indexOf('data-list-section="tail"')],
@@ -27,6 +28,7 @@ const checks = [
   ['rejection keeps an undo stub', rowSource.includes('data-hidden-stub') && rowSource.includes('data-undo')],
   ['gallery uses native modal dialog', /<dialog[^>]+data-gallery/u.test(html) && pageSource.includes('showModal()')],
   ['shared header is selected for exhibitions', pageSource.includes('headerCurrent="exhibitions"') && !pageSource.includes('<header class="ex-header"')],
+  ['shared production footer remains visible and owns its service markup', layoutSource.includes('<SiteFooter socialLinks={FOOTER_SOCIAL_LINKS} />') && html.includes('data-site-footer="service-v1"') && !pageSource.includes('body:has(.ex-page)>.site-footer { display:none; }')],
   ['shared header owns the responsive badge', pageSource.includes("headerBadge={{ key: 'exhibitions'") && layoutSource.includes('data-header-badge={item.key}') && html.includes('data-header-badge="exhibitions"') && html.includes('3 новых')],
   ['responsive and reduced-motion contracts exist', pageSource.includes('@media (max-width:820px)') && pageSource.includes('@media (prefers-reduced-motion:reduce)')],
   ['mobile uses the shared immersive discovery drawer', layoutSource.includes('data-mobile-discovery-menu') && pageSource.includes('heroChrome="immersive"') && !pageSource.includes('>.site-header .site-nav { display:none; }')],
@@ -62,7 +64,11 @@ const checks = [
   ['roving tabindex follows global and inner arrow focus', pageSource.includes('const setRovingTitle = (preferred = null)') && pageSource.includes('const focusAdjacentRow = (direction)') && pageSource.includes("event.key === 'ArrowDown' || event.key === 'ArrowUp'") && pageSource.includes("row.classList.add('is-keyboard-active')")],
   ['shortcuts follow physical keys across keyboard layouts', pageSource.includes("const rowCommandByCode = { KeyL:'like', KeyX:'reject', KeyG:'gallery' }") && pageSource.includes("const modeCommandByCode = { KeyF:'personal', KeyA:'all' }") && pageSource.includes('event.repeat || event.isComposing')],
   ['desktop row selection pages its own deck with left and right arrows', pageSource.includes("target.matches('[data-row-focus]') || target.matches('[data-deck]')") && pageSource.includes("pageDeck(deck,event.key === 'ArrowRight' ? 1 : -1)") && pageSource.includes("if (!(deck instanceof HTMLElement) || compactDeck.matches) return")],
-  ['group pager is bounded, reversible and resize-cancellable', pageSource.includes("{ cursor:0, history:[], page:null, phase:'idle', queued:0") && pageSource.includes('const targetCursor = direction > 0 ? current.next : state.history.at(-1)') && pageSource.includes('cancelDeckMotion(deck,state)')],
+  ['group pager is bounded, reversible and resize-cancellable', pageSource.includes("{ cursor:0, history:[], page:null, phase:'idle', queued:0") && pageSource.includes('const target = direction > 0 ? resolveForwardPage(deck,current)') && pageSource.includes('cancelDeckMotion(deck,state)')],
+  ['terminal deck page backfills prior photos and starts at the left edge', pageSource.includes('const resolveForwardPage = (deck,current)') && pageSource.includes("measureDeckPage(deck,start,{ alignFinal:'start' })") && pageSource.includes('candidate.full.some((item) => item.index >= rawNext)') && pageSource.includes("startAlignedTerminal ? 0")],
+  ['likes rerank only after a mature profile and never hard-filter rows', pageSource.includes('const PROFILE_MIN_LIKES = 3') && pageSource.includes('const syncPersonalOrder = () =>') && pageSource.includes('profileScore(right) - profileScore(left)') && !pageSource.includes('const personalMatches =') && pageSource.includes('лайки ничего не скрывают')],
+  ['liked tags are rebuilt after both unlike and reject', (pageSource.match(/rebuildLikedTags\(\);/gu) || []).length >= 3 && pageSource.includes('state.likes = state.likes.filter((value) => value !== id);\n      rebuildLikedTags();')],
+  ['ArrowDown expands the unique long-running tail and footer arrows stay local', pageSource.includes('current === visiblePriority.at(-1)') && pageSource.includes('setTailExpanded(true,current)') && pageSource.includes("announce('В давно идущих выставках нет совпадений") && pageSource.includes("target?.closest('.site-footer')")],
   ['deck motion is compositor-only with cinematic deal stagger', pageSource.includes("duration:190, easing:'cubic-bezier(.55,.085,.68,.53)'") && pageSource.includes('duration:470, delay, easing:DECK_EASE') && pageSource.includes('placementIndex * 36') && pageSource.includes('will-change:transform,opacity')],
   ['full photographs stay above a contact-connected right stack', pageSource.includes('firstLeft = Math.max(0,Math.min(naturalFirstLeft,fullRight - overlap))') && pageSource.includes('frame.style.zIndex = String(200 + placementIndex)') && pageSource.includes('count.style.insetInlineStart')],
 ];
