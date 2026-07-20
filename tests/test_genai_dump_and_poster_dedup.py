@@ -117,15 +117,22 @@ def test_posters_without_phash_are_kept():
 
 
 @pytest.mark.asyncio
-async def test_media_rehydrate_does_not_refetch_ordinary_single_source_event(
+async def test_media_rehydrate_recovers_single_source_event_without_usable_media(
     tmp_path,
     monkeypatch,
 ):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
+    monkeypatch.setenv("EVENT_MEDIA_REQUIRE_CDN", "0")
+
     async def fake_fetch(*_args, **_kwargs):
-        raise AssertionError("single-source events must not be re-fetched")
+        return [
+            PosterCandidate(
+                catbox_url="https://source.example/recovered.jpg",
+                sha256="recovered-source-poster",
+            )
+        ]
 
     monkeypatch.setattr(main, "_fetch_event_source_poster_candidates", fake_fetch)
 
@@ -165,10 +172,11 @@ async def test_media_rehydrate_does_not_refetch_ordinary_single_source_event(
             )
         ).scalars().all()
 
-    assert added == 0
-    assert event.photo_urls == []
-    assert event.photo_count == 0
-    assert rows == []
+    assert added == 1
+    assert event.photo_urls == ["https://source.example/recovered.jpg"]
+    assert event.photo_count == 1
+    assert len(rows) == 1
+    assert rows[0].poster_hash == "recovered-source-poster"
 
 
 @pytest.mark.asyncio

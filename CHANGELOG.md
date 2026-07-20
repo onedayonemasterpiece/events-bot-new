@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed repeated Smart Update source reconciliation so exact-v2/raw identity
+  outranks mutable source hashes and weak URLs are used only for legacy rows;
+  classified geometry no longer resets into a paid semantic-role loop. The
+  static production desktop gate now accepts reasoned fail-closed `contain`
+  when a responsive crop aspect is unknown and requires protected-region proof
+  for every `cover`.
 - Fixed Smart Update image geometry so managed posters use immutable exact-byte
   object paths, pixel changes invalidate stale face/value and crop evidence,
   final pair approval schedules enrichment, and transient semantic-role calls

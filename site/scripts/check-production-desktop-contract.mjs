@@ -77,19 +77,32 @@ for (const { slug, file } of eventFiles) {
   for (const imageTag of desktopHtml.match(/<img class="hero-gallery__image"[^>]+>/gu) || []) {
     const textMode = imageTag.match(/data-image-text-mode="([^"]+)"/u)?.[1];
     const fit = imageTag.match(/data-desktop-gallery-fit="([^"]+)"/u)?.[1];
+    const protectedFit = imageTag.match(/data-protected-crop-fit="([^"]+)"/u)?.[1];
+    const protectedReason = imageTag.match(/data-protected-crop-reason="([^"]+)"/u)?.[1];
     const semanticStatus = imageTag.match(/data-media-semantic-status="([^"]+)"/u)?.[1];
     const mediaRole = imageTag.match(/data-media-role="([^"]+)"/u)?.[1];
-    const expectedFit = textMode !== 'visual_only' || (semanticStatus === 'classified' && mediaRole !== 'event_photo') ? 'contain' : 'cover';
-    if (fit !== expectedFit) failures.push(`${slug}: desktop gallery ${textMode || 'missing'} image uses ${fit || 'missing'}, expected ${expectedFit}`);
+    if (!['contain', 'cover'].includes(fit)) failures.push(`${slug}: desktop gallery has unsupported fit ${fit || 'missing'}`);
+    if (fit !== protectedFit) failures.push(`${slug}: desktop gallery fit ${fit || 'missing'} disagrees with protected fit ${protectedFit || 'missing'}`);
+    if (textMode !== 'visual_only' && fit !== 'contain') failures.push(`${slug}: desktop gallery document/unknown image must contain`);
+    if (semanticStatus === 'classified' && mediaRole !== 'event_photo' && fit !== 'contain') failures.push(`${slug}: desktop gallery classified non-photo must contain`);
+    if (fit === 'cover' && protectedReason !== 'protected_regions_fit') failures.push(`${slug}: desktop gallery cover lacks a proven protected crop`);
+    if (fit === 'contain' && !protectedReason) failures.push(`${slug}: desktop gallery contain lacks a fail-closed reason`);
   }
   const selectedMode = desktopHtml.match(/data-selected-media-policy="([^"]+)"/u)?.[1];
   const selectedRole = desktopHtml.match(/data-selected-media-role="([^"]+)"/u)?.[1];
   const selectedSemanticStatus = desktopHtml.match(/data-selected-media-semantic-status="([^"]+)"/u)?.[1];
   const heroFit = desktopHtml.match(/data-hero-render-fit="([^"]+)"/u)?.[1];
-  const expectedHeroFit = selectedMode === 'visual_only' && !(selectedSemanticStatus === 'classified' && selectedRole !== 'event_photo') ? 'cover' : 'contain';
-  if (heroFit !== expectedHeroFit) failures.push(`${slug}: selected ${selectedMode || 'missing'} hero uses ${heroFit || 'missing'}, expected ${expectedHeroFit}`);
-  if (eventId === 5658 && (!desktopHtml.includes('data-editorial-crop="bounded-cover"') || heroFit !== 'cover')) {
-    failures.push(`${slug}: wide no-OCR photograph must use the bounded cover hero contract`);
+  const heroTag = desktopHtml.match(/<img class="desktop-prototype__media-image"[^>]*data-clean-hero-image[^>]+>/u)?.[0] || '';
+  const heroProtectedFit = heroTag.match(/data-protected-crop-fit="([^"]+)"/u)?.[1];
+  const heroProtectedReason = heroTag.match(/data-protected-crop-reason="([^"]+)"/u)?.[1];
+  if (!['contain', 'cover'].includes(heroFit)) failures.push(`${slug}: selected hero has unsupported fit ${heroFit || 'missing'}`);
+  if (heroTag && heroFit !== heroProtectedFit) failures.push(`${slug}: selected hero fit ${heroFit || 'missing'} disagrees with protected fit ${heroProtectedFit || 'missing'}`);
+  if (selectedMode !== 'visual_only' && heroFit !== 'contain') failures.push(`${slug}: selected document/unknown hero must contain`);
+  if (selectedSemanticStatus === 'classified' && selectedRole !== 'event_photo' && heroFit !== 'contain') failures.push(`${slug}: selected classified non-photo hero must contain`);
+  if (heroFit === 'cover' && heroProtectedReason !== 'protected_regions_fit') failures.push(`${slug}: selected hero cover lacks a proven protected crop`);
+  if (heroTag && heroFit === 'contain' && !heroProtectedReason) failures.push(`${slug}: selected hero contain lacks a fail-closed reason`);
+  if (eventId === 5658 && (!desktopHtml.includes('data-editorial-crop="bounded-cover"') || heroFit !== 'contain' || heroProtectedReason !== 'responsive_target_unknown')) {
+    failures.push(`${slug}: wide no-OCR photograph must keep editorial routing but fail closed while the responsive target is unknown`);
   }
   if (eventId === 5756) {
     if (!desktopHtml.includes('data-selected-media-policy="visual_only"')) failures.push(`${slug}: classified horizontal photo was not selected as the desktop hero`);

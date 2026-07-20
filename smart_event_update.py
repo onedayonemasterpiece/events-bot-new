@@ -18512,6 +18512,12 @@ def _poster_identity_keys(
     fallback for legacy rows that lack stronger metadata.
     """
     keys: list[tuple[str, str]] = []
+    raw_sha256 = str(getattr(poster, "raw_sha256", "") or "").strip().lower()
+    if re.fullmatch(r"[0-9a-f]{64}", raw_sha256):
+        keys.append(("raw_sha256", raw_sha256))
+    supabase_path = str(getattr(poster, "supabase_path", "") or "").strip()
+    if supabase_path:
+        keys.append(("supabase_path", supabase_path))
     poster_hash = (
         getattr(poster, "poster_hash", None)
         or getattr(poster, "sha256", None)
@@ -18520,9 +18526,6 @@ def _poster_identity_keys(
     poster_hash_s = str(poster_hash or "").strip().lower()
     if poster_hash_s:
         keys.append(("poster_hash", poster_hash_s))
-    supabase_path = str(getattr(poster, "supabase_path", "") or "").strip()
-    if supabase_path:
-        keys.append(("supabase_path", supabase_path))
     if include_weak_url:
         seen_urls: set[str] = set()
         for raw_url in (getattr(poster, "supabase_url", None), getattr(poster, "catbox_url", None)):
@@ -18533,12 +18536,34 @@ def _poster_identity_keys(
     return tuple(keys)
 
 
+def _poster_has_exact_content_identity(poster: PosterCandidate | EventPoster) -> bool:
+    raw_sha256 = str(getattr(poster, "raw_sha256", "") or "").strip().lower()
+    if re.fullmatch(r"[0-9a-f]{64}", raw_sha256):
+        return True
+    path = str(getattr(poster, "supabase_path", "") or "").strip().lstrip("/")
+    return bool(
+        re.fullmatch(
+            r"[^/]+/image/v2/[0-9a-f]{2}/[0-9a-f]{64}\.webp",
+            path,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def _build_eventposter_identity_index(
     rows: Sequence[EventPoster],
 ) -> dict[tuple[str, str], EventPoster]:
     index: dict[tuple[str, str], EventPoster] = {}
     for row in rows or []:
-        for key in _poster_identity_keys(row):
+        # A source URL is provenance, not immutable image identity.  It remains
+        # a migration fallback only for legacy rows which do not yet have an
+        # exact-v2 object/raw digest.  Otherwise a later source rendition could
+        # overwrite a classified exact object and invalidate its geometry on
+        # every reconciliation pass.
+        for key in _poster_identity_keys(
+            row,
+            include_weak_url=not _poster_has_exact_content_identity(row),
+        ):
             index.setdefault(key, row)
     return index
 
@@ -18568,7 +18593,13 @@ def _dedup_poster_candidates_by_identity(
     kept: list[PosterCandidate] = []
     index: dict[tuple[str, str], int] = {}
     for poster in posters:
-        keys = _poster_identity_keys(poster)
+        # Once materialized, exact bytes/path win.  Do not collapse two
+        # different exact renditions merely because they came from the same
+        # mutable source URL.
+        keys = _poster_identity_keys(
+            poster,
+            include_weak_url=not _poster_has_exact_content_identity(poster),
+        )
         duplicate_idx: int | None = None
         duplicate_key: tuple[str, str] | None = None
         for key in keys:
@@ -18704,13 +18735,14 @@ async def _apply_posters(
         if not digest:
             continue
 
-        row = existing_map.get(digest)
-        duplicate_reason = "poster_hash" if row else None
-        if row is None:
-            row, duplicate_reason = _find_duplicate_eventposter_by_identity(
-                poster,
-                existing_identity_index,
-            )
+        # Exact served-byte/object identity must be resolved before the
+        # source/candidate hash.  The same source candidate can already have a
+        # different persisted row while its exact object belongs to an
+        # existing survivor.
+        row, duplicate_reason = _find_duplicate_eventposter_by_identity(
+            poster,
+            existing_identity_index,
+        )
         if row is not None:
             previous_display_url = resolve_poster_display_url(row)
             previous_path = str(row.supabase_path or "").strip()
@@ -18766,6 +18798,7 @@ async def _apply_posters(
                 row.reviewed_at = None
             row.updated_at = now
             session.add(row)
+            existing_identity_index = _build_eventposter_identity_index(existing_rows)
             if duplicate_reason and duplicate_reason != "poster_hash":
                 logger.info(
                     "smart_update: merged exact poster identity reason=%s event_id=%s",
@@ -18801,8 +18834,7 @@ async def _apply_posters(
             await session.flush()
             existing_rows.append(row)
             existing_map[digest] = row
-            for key in _poster_identity_keys(row):
-                existing_identity_index.setdefault(key, row)
+            existing_identity_index = _build_eventposter_identity_index(existing_rows)
             added += 1
         url = resolve_poster_display_url(row)
         if url and url not in added_urls:

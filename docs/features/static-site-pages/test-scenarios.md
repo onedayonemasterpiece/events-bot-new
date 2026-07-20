@@ -301,6 +301,12 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   показывает принятый `departure_board_v1`, не старую компактную таблицу.
   Forced QA проверяет каждый arm, один рейс не выводит «Ещё 0 рейсов», а
   официальный трансфер допускает «автобус или микроавтобус». Контроль: `4671`.
+- **ADD-RECENT-11 — Pixel-current bbox и fail-closed crop.** Exact-v2 row не
+  сливается с другой rendition по mutable source URL и повторный source
+  reconcile не сбрасывает её semantic/geometry evidence. Static export отдаёт
+  bbox только при совпадении pixel/model/prompt. Production desktop contract
+  допускает `cover` только с `protected_regions_fit`; неизвестный responsive
+  aspect честно остаётся `contain` с reason, а не блокирует всю сборку.
 
 ### Статическая публикация, CDN и устойчивость
 
