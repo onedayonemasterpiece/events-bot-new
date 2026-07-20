@@ -329,8 +329,14 @@ export function initKeyboardEventNavigation(options = {}) {
     const normalizeManagedCardLinks = (card) => {
       if (!(card instanceof win.HTMLElement) || zoneForCard(card) !== 'continuation') return;
       const legacyBase = String(doc.body.dataset.siteBasePath || '').replace(/\/$/u, '');
+      // Root builds already contain canonical relative links. Reassigning the
+      // DOM `href` property would serialize them as absolute URLs while
+      // `data-card-href` stayed relative, creating needless divergence between
+      // otherwise identical canonical cards. Only legacy prefixed candidates
+      // need the migration below.
+      if (!legacyBase) return;
       const normalize = (value) => {
-        if (!legacyBase || !value) return value;
+        if (!value) return value;
         try {
           const url = new URL(value, win.location.href);
           const legacyEvents = `${legacyBase}/sobytiya/`;

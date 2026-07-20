@@ -30,6 +30,22 @@
   concrete DOM readiness, and force-close residual fixture sockets; a visual
   regression now fails closed within five minutes instead of holding the
   static-site single-flight build indefinitely.
+- Fixed the mandatory browser gate's continuation trigger: it now crosses the
+  same end-of-related `IntersectionObserver` boundary as wheel/touchpad users
+  before asserting canonical `Ещё события` cards, instead of jumping past the
+  observer directly to `scrollHeight`.
+- Fixed prepublication browser acceptance to execute the generated immutable
+  Astro runtime locally while its create-only CDN prefix does not exist yet;
+  event media still uses the real CDN, but candidate JS/CSS can no longer be
+  silent 404s during the gate.
+- Fixed document-card crop acceptance to use each card's applied treatment and
+  crop, not a mixed row's worst potential crop from a neighbouring visual;
+  fail-closed `document-contain` cards remain uncropped and no longer fail on
+  unrelated row diagnostics.
+- Fixed the keyboard compatibility migration so it does not rewrite canonical
+  root continuation anchors from relative to absolute URLs; static similar and
+  hydrated broad cards now retain one identical `data-card-href`/anchor URL
+  representation as well as one shared component behaviour.
 - Fixed the static-site outbox CAS-loss path so a deploy during an active
   Kaggle build logs the cached job id instead of triggering SQLAlchemy
   `MissingGreenlet` repeatedly and making `/healthz` unavailable.
