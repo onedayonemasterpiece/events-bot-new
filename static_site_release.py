@@ -1735,9 +1735,10 @@ def validate_production_candidate_result(
         if candidate_checks.get(check) != "ok":
             raise StaticSitePermanentError(f"static_site_result_candidate_check_incomplete:{check}")
     artifacts = result.get("artifacts")
-    if not isinstance(artifacts, list) or len(artifacts) != 2 or {item.get("kind") for item in artifacts if isinstance(item, Mapping)} != {
+    if not isinstance(artifacts, list) or len(artifacts) != 3 or {item.get("kind") for item in artifacts if isinstance(item, Mapping)} != {
         "production_root",
         "secret_candidate",
+        "browser_evidence",
     }:
         raise StaticSitePermanentError("static_site_result_artifact_set_mismatch")
     base = Path(output_dir).resolve()

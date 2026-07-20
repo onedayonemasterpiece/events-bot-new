@@ -596,6 +596,27 @@ def test_static_site_kernel_installs_chromium_with_linux_dependencies() -> None:
     )
 
 
+def test_static_site_kernel_retains_loaded_media_and_keyboard_browser_evidence() -> None:
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    source = kernel_path.read_text(encoding="utf-8")
+
+    assert "--artifact-dir" in source
+    assert "browser-release-report.json" in source
+    assert "browser_evidence" in source
+    assert "browser-evidence.tar.gz" in source
+    runner_source = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "run_static_site_builder_kaggle.py"
+    ).read_text(encoding="utf-8")
+    assert "{'production_root', 'secret_candidate', 'browser_evidence'}" in runner_source
+
+
 def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
     from scripts.run_static_site_builder_kaggle import resolve_build_template
 

@@ -40,7 +40,9 @@ test('prototype and production share the exact extracted V7 router', async () =>
   assert.match(router, /export function initKeyboardEventNavigation\(options = \{\}\)/u);
   assert.match(router, /gallery_close_down/u);
   assert.match(router, /downGesture\?\.released && event\.timeStamp - downGesture\.at <= 430/u);
-  assert.match(router, /event\.code === 'KeyL' && !event\.repeat && bodyRecoveryArmed/u);
+  assert.match(router, /\['KeyL', 'KeyK', 'KeyS', 'Enter'\]\.includes\(event\.code\)[\s\S]*bodyRecoveryArmed && bodyTarget/u);
+  assert.match(router, /let coldBodyHeroEntryArmed = true/u);
+  assert.match(router, /inertCurrentEventPointer[\s\S]*bodyRecoveryArmed = true/u);
   assert.match(router, /\['KeyL', 'KeyK', 'KeyS'\]\.includes\(event\.code\)/u);
   assert.match(router, /event\.isComposing/u);
   assert.doesNotMatch(router, /surface\.focus\(\{ preventScroll: true \}\);\s*\n\s*\}/u, 'module must not end with prototype autofocus');

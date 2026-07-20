@@ -120,8 +120,12 @@ Rules:
 - Fly handoff: `JobTask.static_site_build` and `main.py` `job_static_site_build_kaggle`.
 - Feature docs: `docs/features/static-site-pages/astro-preview.md`.
 
-The current path produces a checked tarball artifact and can publish it only as
-an immutable secret candidate. CDN host `static.kenigevents.ru` is configured for
+The current production-candidate path produces three hash-checked tarballs:
+the root-form proof, the immutable noindex secret candidate and a
+`browser_evidence` archive. The latter contains separate root/candidate JSON
+reports plus settled related-section and `1536×864` viewport screenshots; the
+trusted runner rejects an absent, extra or mismatched artifact kind. Only the
+secret-candidate tree can be published. CDN host `static.kenigevents.ru` is configured for
 the static-site bucket and also serves mirrored event media `/p/...` plus stable
 calendar files `/ics/<event_id>.ics`. Production root/current promotion is not
 implemented: the existing website origin cannot resolve an object pointer
@@ -215,7 +219,18 @@ npm --prefix site run build:production
 npm --prefix site run check:production
 npm --prefix site run build:secret-candidate
 npm --prefix site run check:secret-candidate
+npm --prefix site run check:browser-release -- \
+  --browser chromium --root <generated-root> \
+  --report <browser-report.json> --artifact-dir <browser-evidence-dir>
 ```
+
+The blocking Chromium gate waits for lazy recommendation images to decode,
+asserts that a loaded `contain` image hides the semantic failure fallback,
+checks cold/reload and real mouse→Russian-layout keyboard paths, and only then
+writes `browser_visual=ok`. For compatibility investigation the same executable
+accepts `--browser firefox` and `--browser webkit`; the host must have the
+official Playwright system dependencies, and WebKit automation does not replace
+the native Safari root-rollout gate.
 
 The Python Fly-side publisher validates/extracts the tar safely, checks the
 production-candidate result and manifest identity, rejects a bucket that still

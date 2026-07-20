@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: mitigated / immutable secret candidate verified
+Status: reopened / corrective immutable secret candidate pending
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -29,11 +29,13 @@ Gemini 3.1 Pro `SHIP` verdict applied only to two frozen noindex V7 prototype
 objects and explicitly marked production integration `NOT READY`; it was not a
 visual acceptance of this generated candidate.
 
-The corrective implementation is merged into `origin/main`, deployed to the
-Smart Update producer and verified in a new immutable production-data secret
-candidate. No production-root promotion was performed. Native cross-browser
-and accessibility checks remain rollout blockers, so the incident stays
-mitigated rather than closed.
+The first corrective implementation was merged and generated candidate
+`RHOg…`, but that candidate failed owner acceptance. Its green
+`related_geometry_crop` receipt proved only the selected `object-fit` and box
+geometry: it did not prove that the failure fallback behind a loaded
+`contain` image was hidden. The same acceptance also omitted cold-load and
+real inert-pointer ownership. Therefore the previous `mitigated`/`SHIP`
+conclusion is withdrawn. No production-root promotion was performed.
 
 ## User / Business Impact
 
@@ -90,6 +92,17 @@ secret preproduction candidate family.
 - 2026-07-20 18:40 UTC — agy Gemini 3.1 Pro reviewed the actual immutable URL
   and retained screenshots and returned `SHIP` with all five acceptance groups
   marked `PASS`.
+- 2026-07-20 19:10 UTC — owner review of `RHOg…` disproved that acceptance:
+  fallback date/type/city remained visible through `contain` letterboxing;
+  fresh-load hero arrows did nothing until a Down/Up ownership cycle; and a
+  real click on inert current-event content followed by physical Russian-layout
+  `L/K/S/Enter` did nothing.
+- 2026-07-20 19:32–19:33 UTC — a new agy `Gemini 3.1 Pro (High)` review over
+  the exact reproduction JSON, screenshots and production code returned
+  `REJECT`: P0 fallback bleed, P1 cold-load ownership and P2 inert-pointer
+  ownership. The review explicitly required fail-closed `contain`, neutral
+  bands after load and mixed-input regression coverage rather than a blind
+  switch back to `cover`.
 
 ## Root Cause
 
@@ -107,6 +120,11 @@ secret preproduction candidate family.
 4. A parallel bbox change also maps `document-safe-cover` to `contain` in the
    desktop page while the same treatment maps to `cover` in the personal-feed
    surface, so one canonical card policy is rendered differently by surface.
+5. In `RHOg…` the final `contain` decision itself is valid, but
+   `.event-card__image-fallback` remains painted underneath the successfully
+   loaded image. The unused letterbox area therefore reveals fallback
+   date/type/city/gradient content. The gate checked fit and bounds, not this
+   composited loaded state.
 
 ### Cross-document hero navigation
 
@@ -118,6 +136,20 @@ secret preproduction candidate family.
 3. The destination page contains seven valid image slides and responds as soon
    as its event surface is focused manually; the gallery and image-selection
    data are not the failure.
+4. The handoff-only correction did not cover a fresh direct load/reload. The
+   first body-targeted Left/Right remained unowned until another keyboard path
+   focused the event action surface.
+
+### Inert pointer plus keyboard navigation
+
+1. Pointer ownership recognized only the CTA surface or a managed event card.
+2. Clicking inert current-event copy correctly leaves DOM focus on `BODY`, but
+   also revoked logical ownership, so physical `KeyL`, `KeyK`, `KeyS` and
+   `Enter` could not recover the current event.
+3. The old Playwright path used programmatic focus or synthetic control
+   provenance and therefore did not reproduce the owner's mouse-then-keyboard
+   sequence or explicit Cyrillic `KeyboardEvent.key` values with stable
+   physical `KeyboardEvent.code`.
 
 ### Footer shortcuts
 
@@ -137,6 +169,10 @@ secret preproduction candidate family.
   model touchpad scroll followed by an unfocused shortcut.
 - The Playwright gate checks card count, focus/actions and horizontal overflow,
   but not computed `object-fit`, row/image geometry or crop/letterbox budgets.
+- The later `related_geometry_crop` gate still treated a loaded image plus
+  correct `object-fit` as sufficient. It neither asserted that the failure
+  fallback became non-visible nor retained a settled-pixel viewport screenshot
+  for critical review.
 - Its single final screenshot is captured after the journey near the
   continuation/footer, is not compared, and does not gate the broken related
   rows.
@@ -144,9 +180,11 @@ secret preproduction candidate family.
   fit of generated recommendation cards.
 - The earlier external review covered the frozen V7 prototypes, not the later
   production integration, real candidate data or bbox merge.
-- The fresh production-data Gemini review rejects the candidate. Its clarified
-  verdict relies on observed ownership/feedback behavior, not on attempting to
-  infer PNG clipboard success from `navigator.clipboard.readText()`.
+- The first candidate Gemini prompt trusted incomplete green checks and
+  insufficient visual evidence; it did not force an independent loaded-layer
+  inspection. The new review rejects the candidate and requires exact
+  screenshots plus DOM/computed-style evidence rather than trusting a `PASS`
+  label.
 
 ## Automation Contract
 
@@ -175,6 +213,11 @@ secret preproduction candidate family.
   at `1536×864` and the reported FHD/125% geometry. Assert that declared
   treatment, computed `object-fit`, final row ratio and crop/letterbox budgets
   agree; retain screenshots of the rows, not only the footer.
+- For every loaded recommendation image, wait for `decode()`, assert that the
+  media shell is `is-image-loaded`, the real image is paint-visible and the
+  fallback layer has no visible box. Missing images must retain the fallback.
+  Retain both a related-section capture and an FHD/125%-equivalent viewport
+  capture.
 - Keep unsafe OCR/protected-region images fail-closed to `contain`; row packing
   must consume that final decision rather than re-enable blind crop.
 - Perform the real two-page journey without intercepting navigation:
@@ -182,6 +225,12 @@ secret preproduction candidate family.
   assert focus ownership, hero index/source changes and telemetry.
 - Cover single-image destinations and non-event/body contexts as negative
   controls.
+- On a direct load and reload with natural `BODY` focus, Left/Right must enter
+  and move a multi-image hero on first physical intent; a single-image page
+  must remain unchanged. After a real mouse click on inert current-event copy,
+  physical Russian-layout `KeyL/KeyK/KeyS/Enter` must route to like, calendar,
+  event share and primary CTA. A real header click, editor, dialog, browser
+  blur and hidden document must disarm that recovery.
 - Reproduce touchpad/wheel scroll to a visible footer with both `BODY` focus and
   retained off-screen card focus; verify deterministic `P`/`S` ownership,
   correct clipboard payload and visible success/failure feedback.
@@ -244,6 +293,9 @@ secret preproduction candidate family.
   normalized-title reciprocity plus fail-closed graph topology checks.
 - [x] Published and verified a fresh immutable secret candidate from
   `origin/main` without mutating the stable root or stable ICS namespace.
+- [ ] Supersede rejected `RHOg…` with a new immutable noindex candidate whose
+  retained browser evidence proves loaded-layer visibility, cold/reload arrows
+  and real inert-click Russian-layout shortcuts.
 - [ ] Complete native Firefox/Safari, screen-reader, high-contrast and
   zoom/reflow checks before any later root rollout.
 
@@ -257,14 +309,15 @@ secret preproduction candidate family.
   the off-screen-focus ambiguity case and mandatory feedback.
 - [x] Add the missing live visual and multi-page/mixed-input scenarios to the
   canonical Playwright matrix.
-- [x] Ran generated-tree plus live immutable-candidate Chromium acceptance and
-  obtained a Gemini 3.1 Pro `SHIP` review for the actual URL/screenshots.
+- [ ] Repeat generated-tree plus live immutable-candidate Chromium acceptance
+  with the expanded evidence contract and obtain a fresh Gemini 3.1 Pro
+  verdict. The previous `SHIP` is explicitly invalidated by owner reproduction.
 - [ ] Repair the 28 static-build observability consistency issues reported in
   the final 48-hour diagnostic window. These historical reconciliation issues
   do not invalidate the exact successful receipt, but they remain operational
   debt and must not be hidden by aggregate success counts.
 
-## Release And Closure Evidence
+## Superseded Release Evidence
 
 - deployed SHA: `1e7594d22c545f535c131aef3e9f9e5bddddd9f3`, reachable from
   `origin/main`; Fly release `v1734`
@@ -282,8 +335,9 @@ secret preproduction candidate family.
 - live post-publish checks: `16` related/continuation cards inspected, bounded
   continuation count `6`, gallery target `starshiy-syn-kaliningrad-6407`, hero
   Right/Left source change/restore, and footer clipboard/toasts all passed
-- consultant acceptance: agy `Gemini 3.1 Pro`, verdict `SHIP`, acceptance groups
-  `5/5 PASS`
+- consultant acceptance: the earlier agy `Gemini 3.1 Pro` `SHIP` is superseded
+  and must not be cited as closure evidence; the corrective review verdict is
+  `REJECT`
 - production health after completion: `/healthz` reports `ok=true`,
   `ready=true`, no issues; current 48-hour diagnostic reports `60` requests,
   `19` successes, `25` failed attempts, `13` busy deferrals and `2` no-ops,

@@ -501,6 +501,11 @@ def main() -> int:
                 'PRODUCTION_BUILD_ID': str(build_id),
                 'SECRET_CANDIDATE_TOKEN': token,
             })
+            browser_evidence_dir = WORKING / f'{build_id}-browser-evidence'
+            root_browser_evidence = browser_evidence_dir / 'production-root'
+            candidate_browser_evidence = browser_evidence_dir / 'secret-candidate'
+            root_browser_evidence.mkdir(parents=True, exist_ok=True)
+            candidate_browser_evidence.mkdir(parents=True, exist_ok=True)
             status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 42, 'progress_label': 'production root-form build'})
             run(['npm', 'run', 'build:production'], cwd=SITE_DIR, env=env)
             root_dist = SITE_DIR / 'dist'
@@ -509,6 +514,8 @@ def main() -> int:
                 'npm', 'run', 'check:browser-release', '--',
                 '--root', str(root_dist),
                 '--manifest', str(root_dist / 'static-release-manifest.json'),
+                '--report', str(root_browser_evidence / 'browser-release-report.json'),
+                '--artifact-dir', str(root_browser_evidence),
             ], cwd=SITE_DIR, env=env, timeout_seconds=300)
             root_manifest = json.loads((root_dist / 'static-release-manifest.json').read_text(encoding='utf-8'))
             root_archive = WORKING / f'{build_id}-root.tar.gz'
@@ -524,12 +531,18 @@ def main() -> int:
                 'npm', 'run', 'check:browser-release', '--',
                 '--root', str(candidate_dist),
                 '--manifest', str(candidate_dist / 'secret-candidate-manifest.json'),
+                '--report', str(candidate_browser_evidence / 'browser-release-report.json'),
+                '--artifact-dir', str(candidate_browser_evidence),
             ], cwd=SITE_DIR, env=env, timeout_seconds=300)
             candidate_manifest = json.loads((candidate_dist / 'secret-candidate-manifest.json').read_text(encoding='utf-8'))
             candidate_archive = WORKING / f'{build_id}-secret-candidate.tar.gz'
             with tarfile.open(candidate_archive, 'w:gz') as tar:
                 tar.add(candidate_dist, arcname=f'_review/{token}')
             artifacts.append({'kind': 'secret_candidate', 'filename': candidate_archive.name, 'sha256': sha256_file(candidate_archive), 'size': candidate_archive.stat().st_size})
+            browser_evidence_archive = WORKING / f'{build_id}-browser-evidence.tar.gz'
+            with tarfile.open(browser_evidence_archive, 'w:gz') as tar:
+                tar.add(browser_evidence_dir, arcname='browser-evidence')
+            artifacts.append({'kind': 'browser_evidence', 'filename': browser_evidence_archive.name, 'sha256': sha256_file(browser_evidence_archive), 'size': browser_evidence_archive.stat().st_size})
             result_details = {
                 'repo_sha': repo_sha,
                 'run_id': run_id,

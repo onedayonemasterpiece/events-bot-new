@@ -1250,6 +1250,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
       .event-card__media-shell--dynamic.is-image-loaded::after,
       .event-card__media-shell--dynamic.is-image-missing::after { display: none; }
+      /* The semantic crop gate may correctly choose `contain`.  Once the real
+         image has loaded, its transparent letterbox must reveal only the
+         neutral shell—not the date/type/city fallback intended for failures. */
+      .event-card__media-shell--dynamic.is-image-loaded .event-card__image-fallback { display: none; }
       @keyframes event-card-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
       @media (prefers-reduced-motion: reduce) {
         .event-card__media-shell--dynamic::after { animation: none; background-position: 50% 0; }

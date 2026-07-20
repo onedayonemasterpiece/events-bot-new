@@ -409,6 +409,11 @@ export function initKeyboardEventNavigation(options = {}) {
     const pressedArrows = new Set();
     let logicalOwner = { kind: 'surface', node: surface, eventId: '', zone: '', index: 0 };
     let bodyRecoveryArmed = false;
+    // A freshly loaded event page deliberately keeps BODY focus.  The first
+    // physical hero arrow is still a meaningful keyboard intent, but this
+    // implicit entry is revoked as soon as another page surface (header,
+    // footer, editor, dialog, browser blur) claims the interaction context.
+    let coldBodyHeroEntryArmed = true;
     let overlayReturn = null;
     let overlaySequence = 0;
     let pendingContinuationEntry = false;
@@ -1136,9 +1141,12 @@ export function initKeyboardEventNavigation(options = {}) {
         pressedArrows.add(event.code);
       }
 
-      if (galleryDestinationHandoffExpiresAt >= Date.now()
-        && (event.code === 'ArrowLeft' || event.code === 'ArrowRight')
-        && (target === doc.body || target === doc.documentElement)) {
+      const bodyTarget = target === doc.body || target === doc.documentElement;
+      const galleryHandoffArmed = galleryDestinationHandoffExpiresAt >= Date.now();
+      if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight')
+        && bodyTarget
+        && (coldBodyHeroEntryArmed || bodyRecoveryArmed || galleryHandoffArmed)) {
+        coldBodyHeroEntryArmed = false;
         galleryDestinationHandoffExpiresAt = 0;
         if (selectHero(event.code === 'ArrowRight' ? 1 : -1)) {
           event.preventDefault();
@@ -1146,6 +1154,13 @@ export function initKeyboardEventNavigation(options = {}) {
           captureLogicalOwner(surface);
           bodyRecoveryArmed = true;
           recordShortcutUse(event.code === 'ArrowRight' ? 'hero_next' : 'hero_previous');
+        } else if (galleryHandoffArmed || bodyRecoveryArmed) {
+          // A single-image destination has no slide to advance, but a proven
+          // event owner may still re-enter its action surface without scroll.
+          event.preventDefault();
+          surface.focus({ preventScroll:true });
+          captureLogicalOwner(surface);
+          bodyRecoveryArmed = true;
         }
         return;
       }
@@ -1157,13 +1172,28 @@ export function initKeyboardEventNavigation(options = {}) {
         return;
       }
 
-      if (event.code === 'KeyL' && !event.repeat && bodyRecoveryArmed
-        && (target === doc.body || target === doc.documentElement)) {
+      if (['KeyL', 'KeyK', 'KeyS', 'Enter'].includes(event.code)
+        && !event.repeat && bodyRecoveryArmed && bodyTarget) {
         const scope = resolveLogicalOwner();
         if (scope instanceof win.HTMLElement && isVisible(scope)) {
           scope.focus({ preventScroll: true });
           captureLogicalOwner(scope);
-          runAction(scope, event);
+          if (event.code === 'Enter') {
+            event.preventDefault();
+            const card = managedCardFor(scope);
+            const link = card?.querySelector('[data-card-title][href], [data-card-media-link][href]');
+            if (link instanceof win.HTMLAnchorElement) {
+              recordShortcutUse('card_open');
+              link.click();
+            } else if (scope === surface && primary instanceof win.HTMLElement) {
+              recordShortcutUse('primary_cta');
+              primary.click();
+            } else {
+              setStatus('Основное действие недоступно для выбранного события.');
+            }
+          } else {
+            runAction(scope, event);
+          }
         }
         return;
       }
@@ -1335,9 +1365,11 @@ export function initKeyboardEventNavigation(options = {}) {
         galleryDestinationHandoffExpiresAt = 0;
       }
       if (active === surface || surface.contains(active) || managedCardFor(active)) {
+        coldBodyHeroEntryArmed = false;
         captureLogicalOwner(active);
         bodyRecoveryArmed = true;
       } else if (active !== doc.body && active !== doc.documentElement) {
+        coldBodyHeroEntryArmed = false;
         if (!doc.querySelector('[data-personalization-consent].is-visible')) pendingConsentOwner = null;
         bodyRecoveryArmed = false;
       }
@@ -1347,8 +1379,25 @@ export function initKeyboardEventNavigation(options = {}) {
       resetDownGesture();
       pressedArrows.clear();
       suppressPageDownUntilArrowDownRelease = false;
-      const pointerOwner = event.target === surface || (event.target instanceof win.Node && surface.contains(event.target))
-        ? surface : managedCardFor(event.target);
+      coldBodyHeroEntryArmed = false;
+      const pointerTarget = event.target;
+      const managedPointerCard = managedCardFor(pointerTarget);
+      const directSurfacePointer = pointerTarget === surface
+        || (pointerTarget instanceof win.Node && surface.contains(pointerTarget));
+      const rootRect = root.getBoundingClientRect();
+      const bodyPointInsideEvent = (pointerTarget === doc.body || pointerTarget === doc.documentElement)
+        && event.clientX >= rootRect.left && event.clientX <= rootRect.right
+        && event.clientY >= rootRect.top && event.clientY <= rootRect.bottom;
+      const inertCurrentEventPointer = pointerTarget instanceof win.Element
+        && (root.contains(pointerTarget) || bodyPointInsideEvent)
+        && !pointerTarget.closest('a,button,input,textarea,select,[contenteditable="true"],[role="dialog"],[data-personalization-consent],[data-service-share-root]');
+      const pointerOwner = directSurfacePointer
+        ? surface
+        : managedPointerCard instanceof win.HTMLElement
+          ? managedPointerCard
+          : inertCurrentEventPointer
+            ? surface
+            : null;
       if (pointerOwner instanceof win.HTMLElement) {
         captureLogicalOwner(pointerOwner);
         bodyRecoveryArmed = true;
@@ -1361,6 +1410,7 @@ export function initKeyboardEventNavigation(options = {}) {
       resetDownGesture();
       pressedArrows.clear();
       suppressPageDownUntilArrowDownRelease = false;
+      coldBodyHeroEntryArmed = false;
       bodyRecoveryArmed = false;
       pendingConsentOwner = null;
     });
@@ -1369,6 +1419,7 @@ export function initKeyboardEventNavigation(options = {}) {
       resetDownGesture();
       pressedArrows.clear();
       suppressPageDownUntilArrowDownRelease = false;
+      coldBodyHeroEntryArmed = false;
       bodyRecoveryArmed = false;
       pendingConsentOwner = null;
     });
