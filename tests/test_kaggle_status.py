@@ -18,6 +18,7 @@ from kaggle_status import (
     create_kaggle_status_dataset,
     format_kaggle_status_label,
     make_kaggle_run_event_handler,
+    reconcile_kaggle_run_failure_from_host,
     reconcile_kaggle_run_terminal_from_host,
     record_kaggle_run_event,
     validate_run_token,
@@ -344,6 +345,109 @@ async def test_host_reconciliation_retries_transient_sqlite_writer_lock(monkeypa
     assert result["status"] == "reconciled"
     assert calls == 3
     assert sleeps == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_host_failure_reconciliation_marks_failed_and_releases_owned_lease(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("KAGGLE_STATUS_CALLBACK_URL", "https://example.test/internal/kaggle/run-event")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    config = await create_kaggle_run_config(
+        db,
+        run_id="guide_monitor:failed-holder",
+        session_id=None,
+        kind="guide_excursions_monitor",
+        notebook="GuideExcursionsMonitor",
+    )
+    assert config
+    now = datetime.now(timezone.utc)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            ) VALUES (?, ?, 'kaggle', 'active', ?, ?, ?)
+            """,
+            (
+                "telegram_session:s22",
+                config["run_id"],
+                now.isoformat(),
+                (now + timedelta(hours=3)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status, acquired_at, expires_at, updated_at
+            ) VALUES (?, ?, 'kaggle', 'active', ?, ?, ?)
+            """,
+            (
+                "successor:resource",
+                "successor-run",
+                now.isoformat(),
+                (now + timedelta(hours=3)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    first = await reconcile_kaggle_run_failure_from_host(
+        db,
+        run_id=config["run_id"],
+        message="Guide Kaggle kernel failed (failed)",
+    )
+    second = await reconcile_kaggle_run_failure_from_host(
+        db,
+        run_id=config["run_id"],
+        message="Guide Kaggle kernel failed (failed)",
+    )
+
+    assert first["status"] == "failed_reconciled"
+    assert first["released_resource_count"] == 1
+    assert second["status"] == "already_terminal"
+    assert second["released_resource_count"] == 0
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, phase, terminal_at, error, progress_json "
+            "FROM kaggle_run_ledger WHERE run_id=?",
+            (config["run_id"],),
+        )
+        ledger = await cur.fetchone()
+        await cur.close()
+        cur = await conn.execute(
+            "SELECT event_name, phase, status, event_uid, message "
+            "FROM kaggle_run_event WHERE run_id=?",
+            (config["run_id"],),
+        )
+        events = await cur.fetchall()
+        await cur.close()
+        cur = await conn.execute(
+            "SELECT resource_key, run_id, status, released_at FROM kaggle_resource_lease "
+            "ORDER BY resource_key"
+        )
+        leases = await cur.fetchall()
+        await cur.close()
+    assert ledger[0:2] == ("failed", "terminal")
+    assert ledger[2]
+    assert ledger[3] == "Guide Kaggle kernel failed (failed)"
+    assert json.loads(ledger[4])["host_reconciled"] is True
+    assert events == [
+        (
+            "host_failure_observed",
+            "terminal",
+            "failed",
+            "host_failure_observed",
+            "Guide Kaggle kernel failed (failed)",
+        )
+    ]
+    assert leases[0][0:3] == ("successor:resource", "successor-run", "active")
+    assert leases[0][3] is None
+    assert leases[1][0:3] == ("telegram_session:s22", config["run_id"], "released")
+    assert leases[1][3]
+    await db.close()
 
 
 def test_create_kaggle_status_dataset_keeps_long_run_ids_unique():

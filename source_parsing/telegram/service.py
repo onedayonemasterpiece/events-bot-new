@@ -28,6 +28,7 @@ from kaggle_status import (
     create_kaggle_run_config,
     enrich_kaggle_status_from_ledger,
     format_kaggle_status_label,
+    reconcile_kaggle_run_failure_from_host,
     write_kaggle_status_files,
 )
 from models import TelegramSource, TelegramSourceForceMessage
@@ -3347,6 +3348,20 @@ async def _run_telegram_monitor_locked(
         )
         if status != "complete":
             failure = _extract_kaggle_failure_message(status_data)
+            failure_message = f"Kaggle kernel failed ({status}) {failure}".strip()
+            if status in RECOVERY_TERMINAL_STATES:
+                try:
+                    await reconcile_kaggle_run_failure_from_host(
+                        db,
+                        run_id=f"tg_monitor:{run_id}",
+                        message=failure_message,
+                    )
+                except Exception:
+                    logger.exception(
+                        "tg_monitor.failure_reconcile_failed run_id=%s kernel_ref=%s",
+                        run_id,
+                        kernel_ref,
+                    )
             if registered_recovery and kernel_ref and status in RECOVERY_TERMINAL_STATES:
                 timestamp = datetime.now(timezone.utc).isoformat()
                 try:
@@ -3390,7 +3405,7 @@ async def _run_telegram_monitor_locked(
                 await _notify(
                     f"❌ Kaggle kernel завершился с ошибкой ({status}). {failure}".strip()
                 )
-            raise RuntimeError(f"Kaggle kernel failed ({status}) {failure}".strip())
+            raise RuntimeError(failure_message)
 
         results_path = await _download_results(client, kernel_ref, run_id)
         await _notify("⬇️ Результаты Kaggle скачаны, запускаю импорт…")

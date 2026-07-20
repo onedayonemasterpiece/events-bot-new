@@ -973,6 +973,140 @@ async def reconcile_kaggle_run_terminal_from_host(
             await asyncio.sleep(delay)
 
 
+async def _reconcile_kaggle_run_failure_from_host_once(
+    db: Database,
+    *,
+    run_id: str,
+    message: str,
+) -> dict[str, Any]:
+    """Persist a host-observed terminal failure and release its exact leases."""
+
+    clean_run_id = _clean_text(run_id, limit=300)
+    if not clean_run_id:
+        raise ValueError("run_id is required")
+    clean_message = _clean_text(message, limit=2000) or "host observed terminal Kaggle failure"
+    now = utc_now_iso()
+    async with db.raw_conn() as conn:
+        await _begin_immediate_with_retry(
+            conn,
+            run_id=clean_run_id,
+            operation="reconcile_failure",
+        )
+        try:
+            cur = await conn.execute(
+                "SELECT status, terminal_at FROM kaggle_run_ledger WHERE run_id=?",
+                (clean_run_id,),
+            )
+            ledger = await cur.fetchone()
+            await cur.close()
+            if not ledger:
+                await conn.rollback()
+                return {"status": "missing", "run_id": clean_run_id}
+            cur = await conn.execute(
+                "SELECT COUNT(*), COALESCE(MAX(seq), 0) FROM kaggle_run_event WHERE run_id=?",
+                (clean_run_id,),
+            )
+            callback_event_count, max_seq = await cur.fetchone()
+            await cur.close()
+            release_cur = await conn.execute(
+                """
+                UPDATE kaggle_resource_lease
+                SET status='released', released_at=?, updated_at=?
+                WHERE run_id=? AND status='active'
+                """,
+                (now, now, clean_run_id),
+            )
+            released_resource_count = int(getattr(release_cur, "rowcount", 0) or 0)
+            if ledger[1] and str(ledger[0] or "").lower() in TERMINAL_STATUSES:
+                await conn.commit()
+                return {
+                    "status": "already_terminal",
+                    "run_id": clean_run_id,
+                    "callback_event_count": int(callback_event_count or 0),
+                    "released_resource_count": released_resource_count,
+                }
+            progress = {
+                "phase": "terminal",
+                "progress_percent": 100,
+                "progress_label": "ошибка подтверждена принимающим хостом",
+                "host_reconciled": True,
+                "callback_event_count": int(callback_event_count or 0),
+            }
+            event_uid = "host_failure_observed"
+            await conn.execute(
+                """
+                INSERT OR IGNORE INTO kaggle_run_event(
+                    run_id, seq, event_name, phase, status, event_uid,
+                    progress_json, message, created_at
+                ) VALUES (?, ?, 'host_failure_observed', 'terminal', 'failed', ?, ?, ?, ?)
+                """,
+                (
+                    clean_run_id,
+                    int(max_seq or 0) + 1,
+                    event_uid,
+                    _json_dumps(progress),
+                    clean_message,
+                    now,
+                ),
+            )
+            await conn.execute(
+                """
+                UPDATE kaggle_run_ledger
+                SET phase='terminal', status='failed', progress_json=?, updated_at=?,
+                    terminal_at=COALESCE(terminal_at, ?), error=?
+                WHERE run_id=?
+                """,
+                (_json_dumps(progress), now, now, clean_message, clean_run_id),
+            )
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+    logger.info(
+        "kaggle_status: host reconciled failure run_id=%s callback_event_count=%s released_resources=%s",
+        clean_run_id,
+        int(callback_event_count or 0),
+        released_resource_count,
+    )
+    return {
+        "status": "failed_reconciled",
+        "run_id": clean_run_id,
+        "callback_event_count": int(callback_event_count or 0),
+        "released_resource_count": released_resource_count,
+    }
+
+
+async def reconcile_kaggle_run_failure_from_host(
+    db: Database,
+    *,
+    run_id: str,
+    message: str = "host observed terminal Kaggle failure",
+) -> dict[str, Any]:
+    """Close a failed Kaggle ledger and release only resources owned by it."""
+
+    max_attempts = 5
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await _reconcile_kaggle_run_failure_from_host_once(
+                db,
+                run_id=run_id,
+                message=message,
+            )
+        except sqlite3.OperationalError as exc:
+            if not _is_sqlite_lock_error(exc) or attempt >= max_attempts:
+                raise
+            delay = min(2 ** (attempt - 1), 8)
+            logger.warning(
+                "kaggle_status: host failure reconciliation SQLite lock run_id=%s "
+                "attempt=%s/%s retry_in=%ss",
+                _clean_text(run_id, limit=300),
+                attempt,
+                max_attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+
 def make_kaggle_run_event_handler(db: Database):
     from aiohttp import web
 

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed failed Kaggle monitor cleanup so a host-observed terminal
+  Guide/Telegram kernel records `host_failure_observed`, closes its ledger and
+  releases only its exact-owned resource leases; a failed guide run can no
+  longer retain `telegram_session:s22` until TTL and block the later critical
+  Telegram Monitoring slot (`INC-2026-07-20-tg-monitor-stale-s22-lease`).
+
 - Reopened `INC-2026-07-20-static-event-keyboard-visual-regressions` after the
   `RHOg…` candidate disproved its earlier green receipt: loaded `contain`
   recommendation images now hide the semantic date/type/city failure layer,

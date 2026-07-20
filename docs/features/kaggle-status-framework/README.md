@@ -126,6 +126,12 @@ example `telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY` or
 `telegram_session:env:TELEGRAM_AUTH_BUNDLE_S22_VIDEO1`; monitoring jobs that use
 the shared S22 session still use `telegram_session:s22`. A live lease blocks
 another run from using the same auth bundle until it expires or is released.
+If the server poller observes a terminal failed/error kernel before a terminal
+callback arrives, it must atomically mark that exact ledger failed, append a
+`host_failure_observed` event, and release only leases owned by that exact
+`run_id`. A failed guide/monitor kernel must not retain `telegram_session:s22`
+until TTL and block a later critical monitor; the guard itself remains
+fail-closed and must never be bypassed with another Telegram auth bundle.
 
 For long CPU renders, `alive` callbacks renew active leases for the same
 `run_id` (`KAGGLE_RESOURCE_LEASE_RENEW_TTL_SECONDS`, default `10800`) so a valid

@@ -6,6 +6,7 @@ import pytest
 import requests
 
 from guide_excursions import service as guide_service
+from guide_excursions import kaggle_service
 from guide_excursions.kaggle_service import _is_transient_kaggle_status_error
 
 
@@ -22,6 +23,77 @@ def test_kaggle_status_http_500_is_transient() -> None:
 
 def test_kaggle_status_http_400_is_not_transient() -> None:
     assert not _is_transient_kaggle_status_error(_http_error(400))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kernel_status", "expects_reconciliation"),
+    [("failed", True), ("timeout", False)],
+)
+async def test_only_terminal_failed_kernel_reconciles_status_lease_before_raise(
+    monkeypatch, kernel_status: str, expects_reconciliation: bool
+) -> None:
+    reconciled: list[dict] = []
+
+    class DummyKaggleClient:
+        pass
+
+    async def fake_build_config(*_args, **_kwargs):
+        return {"sources": [{"username": "source"}]}
+
+    async def fake_prepare(**_kwargs):
+        return "cipher", "key"
+
+    async def fake_push(*_args, **_kwargs):
+        return "zigomaro/guide-excursions-monitor", {"dataset_sources": ["cipher", "key"]}
+
+    async def fake_shape(*_args, **_kwargs):
+        return {"dataset_sources": ["cipher", "key"]}
+
+    async def fake_register(*_args, **_kwargs):
+        return None
+
+    async def fake_poll(*_args, **_kwargs):
+        return kernel_status, {"status": kernel_status.upper()}, 12.0
+
+    async def fake_reconcile(_db, **kwargs):
+        reconciled.append(kwargs)
+        return {"status": "failed_reconciled", "released_resource_count": 1}
+
+    async def fake_cleanup(_slugs):
+        return None
+
+    monkeypatch.setattr(kaggle_service, "KaggleClient", DummyKaggleClient)
+    monkeypatch.setattr(kaggle_service, "_build_config_payload", fake_build_config)
+    monkeypatch.setattr(kaggle_service, "_build_secrets_payload", lambda: "{}")
+    monkeypatch.setattr(kaggle_service, "_prepare_kaggle_datasets", fake_prepare)
+    monkeypatch.setattr(kaggle_service, "_push_kernel", fake_push)
+    monkeypatch.setattr(kaggle_service, "_wait_for_remote_kernel_shape", fake_shape)
+    monkeypatch.setattr(kaggle_service, "register_job", fake_register)
+    monkeypatch.setattr(kaggle_service, "_poll_kaggle_kernel", fake_poll)
+    monkeypatch.setattr(kaggle_service, "reconcile_kaggle_run_failure_from_host", fake_reconcile)
+    monkeypatch.setattr(kaggle_service, "_cleanup_datasets", fake_cleanup)
+    monkeypatch.setattr(kaggle_service, "DATASET_PROPAGATION_WAIT_SECONDS", 0)
+    monkeypatch.setattr(kaggle_service, "KAGGLE_STARTUP_WAIT_SECONDS", 0)
+
+    with pytest.raises(RuntimeError, match=f"Guide Kaggle kernel failed \\({kernel_status}\\)"):
+        await kaggle_service.run_guide_monitor_kaggle(
+            object(),
+            run_id="failed-holder",
+            mode="full",
+            limit=60,
+            days_back=5,
+        )
+
+    expected = []
+    if expects_reconciliation:
+        expected = [
+            {
+                "run_id": "guide_monitor:failed-holder",
+                "message": "Guide Kaggle kernel failed (failed)",
+            }
+        ]
+    assert reconciled == expected
 
 
 @pytest.mark.asyncio

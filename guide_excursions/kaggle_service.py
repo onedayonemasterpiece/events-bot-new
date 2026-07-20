@@ -22,7 +22,12 @@ import aiosqlite
 
 from db import Database
 from kaggle_registry import register_job, update_job_meta
-from kaggle_status import create_kaggle_run_config, format_kaggle_status_label, write_kaggle_status_files
+from kaggle_status import (
+    create_kaggle_run_config,
+    format_kaggle_status_label,
+    reconcile_kaggle_run_failure_from_host,
+    write_kaggle_status_files,
+)
 from source_parsing.telegram.split_secrets import encrypt_secret
 from video_announce.kaggle_client import KaggleClient
 
@@ -1234,7 +1239,21 @@ async def run_guide_monitor_kaggle(
         )
         if status != "complete":
             failure = _extract_failure_message(status_data)
-            raise RuntimeError(f"Guide Kaggle kernel failed ({status}) {failure}".strip())
+            failure_message = f"Guide Kaggle kernel failed ({status}) {failure}".strip()
+            if status == "failed":
+                try:
+                    await reconcile_kaggle_run_failure_from_host(
+                        db,
+                        run_id=f"guide_monitor:{run_id}",
+                        message=failure_message,
+                    )
+                except Exception:
+                    logger.exception(
+                        "guide_monitor.failure_reconcile_failed run_id=%s kernel_ref=%s",
+                        run_id,
+                        kernel_ref,
+                    )
+            raise RuntimeError(failure_message)
         result_path = await download_guide_results(
             client,
             kernel_ref,

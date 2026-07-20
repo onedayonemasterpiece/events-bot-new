@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-20-tg-monitor-stale-s22-lease.md`
+  - Scope: Guide/Telegram monitor terminal Kaggle failure reconciliation,
+    exact-owner `telegram_session:s22` release and same-day Telegram catch-up.
+  - Must not regress: a host-observed failed guide/Telegram kernel becomes a
+    terminal ledger row and releases only its own lease; it cannot block the
+    later critical Telegram slot until TTL, and a missed daily scan requires a
+    verified compensating run including forum-topic sources such as
+    `@klassster/8809`.
+
 - `INC-2026-07-20-static-claim-lost-health.md`
   - Scope: deploy/restart while a static-site Kaggle job owns the coalesced
     outbox row, CAS-loss logging and `/healthz` availability.
