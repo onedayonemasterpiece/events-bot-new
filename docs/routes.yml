@@ -11,6 +11,9 @@ sections:
   architecture:
     overview: docs/architecture/overview.md
     personalization_data_ownership: docs/architecture/personalization-data-ownership.md
+  product:
+    mobile_discovery_shell: docs/features/static-site-pages/mobile-shell.md
+    audience_admission_discovery: docs/features/unsigned-personalization/audience-admission-discovery.md
   operations:
     incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md
