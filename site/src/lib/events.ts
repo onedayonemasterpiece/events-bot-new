@@ -1,6 +1,13 @@
 import previewData from '../data/preview-events.json';
 import relatedData from '../data/preview-related.json';
 import { eventImageUrl } from './assets';
+import {
+  collapseOccurrenceCards,
+  formatOccurrencePresentation,
+  resolveOccurrenceFamily,
+  type OccurrenceFamily,
+  type OccurrencePresentation,
+} from './eventOccurrences';
 import type {
   DiscoveryDisplayPayload,
   EventDetailRelatedManifest,
@@ -214,59 +221,26 @@ function isFutureStartingEvent(event: Pick<PreviewEvent, 'start_date'>): boolean
   return event.start_date >= getCurrentDate();
 }
 
-function normalizeSessionKeyPart(value: string | null | undefined): string {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ')
-    .replace(/\s+/gu, ' ')
-    .trim();
-}
-
-function linkedSessionKey(event: Pick<PreviewEvent, 'title' | 'event_type' | 'venue_name' | 'city'>): string {
-  return [event.title, event.event_type || '', event.venue_name || event.city || ''].map(normalizeSessionKeyPart).join('|');
-}
-
-function eventTimeSortValue(event: Pick<PreviewEvent, 'start_time' | 'display_time' | 'id'>): string {
-  const raw = event.start_time || event.display_time || '';
-  const match = /(\d{1,2}):(\d{2})/u.exec(raw);
-  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : `99:${String(event.id || 0).padStart(8, '0')}`;
-}
-
 export function getLinkedSessionIds(event: PreviewEvent): number[] {
-  const explicit = event.other_date_ids.map(Number).filter((id) => Number.isFinite(id));
-  const key = linkedSessionKey(event);
-  if (!key.split('|')[0]) return explicit;
-  const inferred = getEvents()
-    .filter((candidate) => candidate.id !== event.id)
-    .filter((candidate) => linkedSessionKey(candidate) === key)
-    .map((candidate) => candidate.id);
-  return Array.from(new Set([...explicit, ...inferred]));
+  return Array.from(new Set((event.other_date_ids || [])
+    .map(Number)
+    .filter((id) => Number.isFinite(id) && id !== event.id)));
 }
 
 export function collapseLinkedSessionEvents(events: PreviewEvent[]): PreviewEvent[] {
-  const grouped = new Map<string, PreviewEvent[]>();
-  for (const event of events) {
-    const key = `${linkedSessionKey(event)}|${event.start_date}`;
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key)?.push(event);
-  }
-  const collapsed: PreviewEvent[] = [];
-  for (const group of grouped.values()) {
-    group.sort((left, right) => eventTimeSortValue(left).localeCompare(eventTimeSortValue(right)) || left.id - right.id);
-    collapsed.push(group[0]);
-  }
-  return collapsed.sort((left, right) => {
-    const av = left.starts_at || left.start_date;
-    const bv = right.starts_at || right.start_date;
-    return av.localeCompare(bv) || eventTimeSortValue(left).localeCompare(eventTimeSortValue(right)) || left.id - right.id;
-  });
+  return collapseOccurrenceCards(events, 'per-date');
+}
+
+export function getOccurrenceFamily(event: PreviewEvent): OccurrenceFamily {
+  return resolveOccurrenceFamily(event, getEvents(), { currentDate: getCurrentDate() });
+}
+
+export function getOccurrencePresentation(event: PreviewEvent): OccurrencePresentation {
+  return formatOccurrencePresentation(getOccurrenceFamily(event), getCurrentDate());
 }
 
 export function getOtherDates(event: PreviewEvent): PreviewEvent[] {
-  return getLinkedSessionIds(event)
-    .map((id) => getEventById(id))
-    .filter((candidate): candidate is PreviewEvent => Boolean(candidate) && isFutureStartingEvent(candidate) && (!candidate.lifecycle_status || candidate.lifecycle_status === 'active'))
-    .sort((left, right) => (left.start_date.localeCompare(right.start_date) || eventTimeSortValue(left).localeCompare(eventTimeSortValue(right)) || left.id - right.id));
+  return getOccurrenceFamily(event).alternatives;
 }
 
 export function getRelatedEvents(event: PreviewEvent, kind: 'similar' | 'explore'): PreviewEvent[] {
@@ -438,6 +412,7 @@ function eligibleRelatedCandidate(current: PreviewEvent, candidate: PreviewEvent
 
 function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload {
   const likesCount = event.likes_count || 0;
+  const occurrence = getOccurrencePresentation(event);
   return {
     href: eventHref(event),
     absolute_url: eventAbsoluteUrl(event),
@@ -449,7 +424,9 @@ function toDiscoveryDisplayPayload(event: PreviewEvent): DiscoveryDisplayPayload
     focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,
-    display_date_time: displayDateTime(event),
+    display_date_time: occurrence.compactLabel,
+    occurrence_aria_label: occurrence.ariaLabel,
+    occurrence_member_ids: occurrence.family.memberIds,
     city: event.city,
     venue_name: event.venue_name,
     place: [event.city, event.venue_name].filter(Boolean).join(' · '),
@@ -607,6 +584,8 @@ export interface DiscoveryEventPayloadItem {
   display_date: string;
   display_time: string | null;
   display_date_time: string;
+  occurrence_aria_label: string;
+  occurrence_member_ids: number[];
   city: string | null;
   venue_name: string | null;
   place: string;
@@ -625,6 +604,7 @@ export interface DiscoveryEventPayloadItem {
 export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayloadItem {
   const likesCount = event.likes_count || 0;
   const primaryAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
+  const occurrence = getOccurrencePresentation(event);
   return {
     id: event.id,
     title: event.title,
@@ -640,7 +620,9 @@ export function toDiscoveryEventPayload(event: PreviewEvent): DiscoveryEventPayl
     focal_y: event.focal_point?.y ?? null,
     display_date: displayDate(event),
     display_time: event.display_time,
-    display_date_time: displayDateTime(event),
+    display_date_time: occurrence.compactLabel,
+    occurrence_aria_label: occurrence.ariaLabel,
+    occurrence_member_ids: occurrence.family.memberIds,
     city: event.city,
     venue_name: event.venue_name,
     place: [event.city, event.venue_name].filter(Boolean).join(' · '),
@@ -690,13 +672,13 @@ export function eventPopularityScore(event: PreviewEvent): number {
 }
 
 export function getPopularEvents(limit = 20): PreviewEvent[] {
-  return getEvents()
+  const ranked = getEvents()
     .filter((event) => eventIntersectsDateRange(event, getCurrentDate(), '9999-12-31'))
     .map((event) => ({ event, score: eventPopularityScore(event) }))
     .filter((item) => item.score > 0 || (item.event.likes_count || 0) > 0 || (item.event.source_views_count || 0) > 0)
     .sort((left, right) => right.score - left.score || (left.event.starts_at || left.event.start_date).localeCompare(right.event.starts_at || right.event.start_date) || left.event.id - right.event.id)
-    .slice(0, Math.max(0, limit))
     .map((item) => item.event);
+  return collapseOccurrenceCards(ranked, 'per-family').slice(0, Math.max(0, limit));
 }
 
 

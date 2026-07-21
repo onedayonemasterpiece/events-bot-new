@@ -49,10 +49,29 @@ Fly SQLite Event (канонические факты и lifecycle)
 - Любая ветка должна потреблять единый результат связи, а не заново решать
   regex/эвристиками, что является другой датой или похожим событием.
 
-Current-main exception (не целевое поведение): frontend
-`getLinkedSessionIds()` сейчас объединяет explicit `other_date_ids` с inference
-по normalized title/type/venue/city. Это отмечено как migration gap, а не как
-второй допустимый source of truth.
+Исключение в `origin/main@3d0af26c` (не целевое поведение): frontend
+`getLinkedSessionIds()` объединяет explicit `other_date_ids` с inference по
+normalized title/type/venue/city. В consolidation branch это удалено: совпадение
+текста больше не создаёт family и остаётся только migration gap исходной базы.
+
+## Каноническая frontend-проекция
+
+Ветка `feature/related-events-compact-unified-20260721` собирает решение в три
+слоя:
+
+1. `site/src/lib/eventOccurrences.ts` — pure resolver взаимных explicit links,
+   lifecycle/graph issues, slot grouping, compact/rail formatting и card
+   collapse (`none` / `per-date` / `per-family`).
+2. `EventOccurrenceLabel.astro` — одна подпись для больших и rail cards;
+   `EventOccurrenceNav.astro` — один selector для event detail.
+3. `EventCard`, `EventListItem`, detail/CTA и hydrated discovery получают готовую
+   projection, но не определяют identity и не собирают даты локально.
+
+Канонические примеры: `2, 9 ноября 19:00` и
+`4 ноября 17:00, 19:00`. Rail показывает ту же projection в две строки и один
+полный `aria-label`. Конкретная date-list сворачивает family только внутри даты;
+entity/ranked surface оставляет одного representative на family. Полная матрица
+и fail-closed правила — `REL-045`–`REL-048`.
 
 ## Поверхности
 
@@ -73,6 +92,8 @@ Current-main exception (не целевое поведение): frontend
    откуда взяты решения и какие ветки нельзя принимать за production.
 3. [Визуальные паттерны и скриншоты](visual-patterns.md) — принятые механики,
    экспериментальные варианты и их provenance.
+4. [Передача решения в рабочие ветки](handoff.md) — donor branch, короткий
+   prompt, integration order и обязательные проверки.
 
 Подробные subordinate contracts остаются на своих местах:
 

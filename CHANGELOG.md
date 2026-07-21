@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Unified linked-occurrence projection for static event selectors, large/list cards, rail-ready labels and hydrated discovery payloads: reciprocal explicit links now feed one resolver/formatter, compact schedules use canonical date/time grouping, date lists collapse per date, ranked/entity lists can collapse per family, and frontend title/type/venue identity inference plus legacy full-card `Другие даты` output were removed. Added synthetic occurrence lab/tests and consolidated visual/handoff documentation for accepted patterns 03/04/05/10.
+
 ### Added
 
 - Consolidated the cross-surface related-events contract into one canonical

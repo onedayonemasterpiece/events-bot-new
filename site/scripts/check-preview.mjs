@@ -41,6 +41,7 @@ const required = [
   'lab/hero/review/5878-poster-billboard/index.html',
   'lab/hero/review/5878-poster-attached-card/index.html',
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
+  'lab/occurrences/index.html',
   ...templateContract.lab_scenarios.map((scenario) => `lab/event-desktop/examples/${scenario}/index.html`),
   'lab/event-mobile/index.html',
   ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6', 'accepted-v7', 'accepted-v8'].flatMap((variant) =>
@@ -59,6 +60,15 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+const occurrenceLabHtml = readFileSync(join(root, 'lab/occurrences/index.html'), 'utf8');
+for (const compactLabel of ['2, 9 ноября 19:00', '4 ноября 17:00, 19:00']) {
+  if (!occurrenceLabHtml.includes(compactLabel)) throw new Error(`Occurrence lab misses compact label: ${compactLabel}`);
+}
+for (const variant of ['inline', 'rail-time-first', 'rail-date-first']) {
+  if (!occurrenceLabHtml.includes(`data-occurrence-label-variant="${variant}"`)) throw new Error(`Occurrence lab misses shared label variant: ${variant}`);
+}
+if (!occurrenceLabHtml.includes('data-occurrence-variant="mobile"')) throw new Error('Occurrence lab misses the accepted always-visible mobile selector');
+if (occurrenceLabHtml.includes('Также:')) throw new Error('Occurrence lab must not render the rejected legacy other-times copy');
 for (const scenario of templateContract.lab_scenarios) {
   const scenarioHtml = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
   if (!scenarioHtml.includes(`data-event-template-contract="${templateContract.contract_id}"`)) {
@@ -690,6 +700,7 @@ if (!/hero-gallery__event-title\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*el
 if (!tretyakovHtml.includes('data-efficient-portrait-viewer="true"') || !tretyakovHtml.includes('const pageSpan = Math.max') || !tretyakovHtml.includes("moveEfficientGallery(activeGallery, 'backward')") || !tretyakovHtml.includes("moveEfficientGallery(activeGallery, 'forward')")) throw new Error('Efficient portrait gallery must page symmetrically in both directions while keeping its multi-image viewport');
 if (!controlHtml.includes('loadGalleryMedia') || !controlHtml.includes('preloadAdjacentGalleryMedia') || !controlHtml.includes('.decode().catch') || !controlHtml.includes('nextImageIndex') || !controlHtml.includes('animationend') || !controlHtml.includes('galleryPanTimer') || !controlHtml.includes('8880') || !/gallery-pan-forward 17\.9s/iu.test(css) || !controlHtml.includes('swipeSurface') || !controlHtml.includes('touchstart') || !controlHtml.includes('touchmove') || !controlHtml.includes('pointermove') || !/gallery-pan-forward/iu.test(css)) throw new Error('Hero gallery must lazy-load but pre-decode adjacent slides, keep ~40% slower pan, and auto-advance after the shorter non-dead viewing interval plus pointer/touch swipe');
 if (!controlHtml.includes('data-not-interested-plate') || !/event-card__not-interest-plate/iu.test(css)) throw new Error('Not-interested feedback must keep an explicit undo plate instead of turning the card into an accidental navigation target');
+if (!controlHtml.includes('collapseRankedOccurrenceFamilies') || !controlHtml.includes('occurrence_member_ids')) throw new Error('Hydrated ranked feeds must collapse the same explicit occurrence projection as static lists');
 if (/100vh/u.test(css)) throw new Error('Hero CSS must not use fragile 100vh units');
 if (!/event-card--split-actions \.event-card__feedback\{[^}]*justify-content:\s*flex-end/iu.test(css)) throw new Error('Split-actions under-card row must cluster share text near the right-thumb like action');
 if (!/event-card--split-actions \.event-card__feedback \.feedback-button\{[^}]*background:\s*transparent[^}]*border-color:\s*transparent/iu.test(css)) throw new Error('Split-actions under-card share/like must be icon-style, not pill buttons');

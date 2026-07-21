@@ -1,0 +1,73 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import EventOccurrenceLabel from '../../../components/EventOccurrenceLabel.astro';
+import EventOccurrenceNav from '../../../components/EventOccurrenceNav.astro';
+import { getCurrentDate, getEvents } from '../../../lib/events';
+import { formatOccurrencePresentation, resolveOccurrenceFamily } from '../../../lib/eventOccurrences';
+import type { PreviewEvent } from '../../../lib/types';
+
+const source = getEvents()[0];
+const makeEvent = (id: number, date: string, time: string, links: number[]): PreviewEvent => ({
+  ...source,
+  id,
+  slug:`occurrence-lab-${id}`,
+  title:'Тестовая программа связанных сеансов',
+  start_date:date,
+  end_date:date,
+  start_time:time,
+  display_time:time,
+  starts_at:`${date}T${time}:00+02:00`,
+  lifecycle_status:'active',
+  other_date_ids:links,
+});
+const sameTimeEvents = [
+  makeEvent(990001, '2026-11-02', '19:00', [990002]),
+  makeEvent(990002, '2026-11-09', '19:00', [990001]),
+];
+const sameDateEvents = [
+  makeEvent(990003, '2026-11-04', '17:00', [990004]),
+  makeEvent(990004, '2026-11-04', '19:00', [990003]),
+];
+const project = (events: PreviewEvent[]) => formatOccurrencePresentation(
+  resolveOccurrenceFamily(events[0], events, { currentDate:getCurrentDate() }),
+  getCurrentDate(),
+);
+const sameTime = project(sameTimeEvents);
+const sameDate = project(sameDateEvents);
+---
+
+<EventLayout title="Occurrence presentation lab" description="Synthetic explicit linked-event fixture" noindex>
+  <main class="occurrence-lab page-shell">
+    <header><p>synthetic explicit reciprocal links</p><h1>Связанные даты: единая проекция</h1></header>
+    {[sameTime, sameDate].map((presentation, index) => (
+      <section class="occurrence-lab__case" data-occurrence-lab-case={index + 1}>
+        <h2>{index === 0 ? 'Одинаковое время, разные даты' : 'Одна дата, разное время'}</h2>
+        <article class="occurrence-lab__large-card">
+          <span>Большая карточка</span>
+          <EventOccurrenceLabel presentation={presentation} />
+        </article>
+        <div class="occurrence-lab__rails">
+          <article><span>Rail · time first</span><EventOccurrenceLabel presentation={presentation} variant="rail-time-first" /></article>
+          <article><span>Rail · date first</span><EventOccurrenceLabel presentation={presentation} variant="rail-date-first" /></article>
+        </div>
+        <div class="occurrence-lab__selector">
+          <EventOccurrenceNav event={presentation.family.slots[0].event} presentation={presentation} variant="mobile" />
+        </div>
+      </section>
+    ))}
+  </main>
+</EventLayout>
+
+<style>
+  .occurrence-lab { display:grid; gap:1.4rem; max-width:62rem; padding-block:2rem 4rem; }
+  .occurrence-lab header p,
+  .occurrence-lab__large-card > span,
+  .occurrence-lab__rails article > span { color:#75665b; font-size:.72rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+  .occurrence-lab__case { display:grid; gap:1rem; padding:1.2rem; border:1px solid #e5d8ca; border-radius:22px; background:#fffaf2; }
+  .occurrence-lab__case h2 { margin:0; }
+  .occurrence-lab__large-card { display:grid; gap:.45rem; padding:1rem; border-radius:16px; background:#211d1a; color:#fffaf2; font-size:1.25rem; font-weight:950; }
+  .occurrence-lab__rails { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; }
+  .occurrence-lab__rails article { display:grid; gap:.55rem; min-height:8rem; align-content:center; padding:1rem; border-radius:16px; background:#f1e4d1; color:#733016; font-size:1.25rem; }
+  .occurrence-lab__selector { padding:1rem; border:1px dashed #caa78e; border-radius:16px; }
+  @media (max-width:640px) { .occurrence-lab__rails { grid-template-columns:1fr; } }
+</style>

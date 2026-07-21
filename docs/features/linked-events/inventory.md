@@ -102,6 +102,27 @@ source graph. Поэтому `REL-006/007/017/018` — не архитектур
 | `origin/agent/static-site-release-analytics-20260720@e686a990ce` | `91/2` | mobile rail analytics/bounded storage gates | переносить telemetry requirements, не mixed branch |
 | `origin/docs/static-site-release-plan-20260717@4758542437` | `271/4` | mobile-feed analytics/release requirements | docs evidence only |
 
+## Consolidated implementation после review
+
+`feature/related-events-compact-unified-20260721` — целевой donor поверх
+`origin/main@3d0af26c`, а не wholesale merge лабораторий. В нём:
+
+- `eventOccurrences.ts` единолично решает наличие family из взаимных explicit
+  `other_date_ids`, строит slots/issues, форматирует compact/rail DTO и задаёт
+  `none` / `per-date` / `per-family` collapse;
+- `EventOccurrenceLabel.astro` обслуживает большие и rail cards,
+  `EventOccurrenceNav.astro` переносит принятую механику 03/04/05;
+- title/type/venue/city inference удалён из frontend identity path;
+- №10 реализуется общей collapse policy, но artifact renderer `build-v19.py` не
+  импортируется; branch V28 также остаётся donor/research, потому что его
+  heuristic family fold и отдельный mobile path противоречат explicit-only
+  contract;
+- synthetic lab `/lab/occurrences/` проверяет две точные November подписи и не
+  использует incident-подозрительный event `5756` как data truth.
+
+До merge эта ветка не является `origin/main` или production. Порядок переноса и
+короткий prompt находятся в [handoff.md](handoff.md).
+
 ## Лабораторные цепочки
 
 ### Desktop event page

@@ -130,7 +130,8 @@
 - **REL-031 — Event detail order.** Дата/CTA → компактный occurrence selector →
   описание/практическая информация → конечные `Похожие события` → при наличии
   отдельный finite broad/personal tail.
-- **REL-032 — Mobile.** `Другие даты` раскрывается рядом с выбранной датой;
+- **REL-032 — Mobile.** `Другие даты` всегда видны рядом с выбранной датой без
+  обязательного disclosure/dropdown;
   cards `Похожие события` идут вертикально, target десять initial + следующие
   порции по десять через явное `Показать ещё`, без горизонтального hidden rail
   и бесконечного scroll. Повторный broad block не создаётся, если он дублирует
@@ -151,7 +152,8 @@
   share/canonical navigation target и доступность; старые данные anchor не
   остаются рядом с новой датой.
 - **REL-041 — Hierarchy.** Same-day times показываются как `Другое время`;
-  другие days — как раскрываемые `Другие даты N`. Текущий вариант отмечен
+  другие days — как компактный всегда доступный список `Другие даты N`.
+  Приняты визуальные образцы **03, 04, 05**. Текущий вариант отмечен
   `выбрано`, прошлые/неактивные siblings скрыты или явно disabled по policy.
 - **REL-042 — Direct pages.** Каждая occurrence сохраняет собственный canonical
   URL/row. Selector навигирует или атомарно переключает полный projection; он
@@ -165,13 +167,44 @@
   canonical service/export. Frontend exact-title inference и implicit feeding
   special cases либо мигрируются в relation model, либо явно остаются
   отдельными правилами с tests.
+- **REL-045 — Компактная запись.** Formatter группирует только факты из
+  принятой occurrence family. Одинаковое время в один месяц:
+  `2, 9 ноября 19:00`; несколько времён в один день:
+  `4 ноября 17:00, 19:00`. В rail допустимы две строки
+  `19:00` / `2, 9 ноября` или `2, 9 ноя` / `19:00`.
+- **REL-046 — Честный fallback.** Разные месяцы сохраняют название каждого
+  месяца. Смешанная матрица дат/времени не угадывается и не теряет slots:
+  `2 ноября 19:00; 3 ноября 17:00, 20:00`. Неизвестное время подписывается как
+  `время уточняется`; сложный rail может показать `разное время` и обязан иметь
+  полный `aria-label`.
+- **REL-047 — Collapse policy.** Date-bounded lists (`Сегодня`, конкретная
+  дата) сворачивают только несколько времён одной family **внутри этой даты**
+  (`per-date`), сохраняя отдельные строки для разных дат. Entity/ranked lists
+  (`Популярное`, поиск, рекомендации, personal feed) показывают одного
+  representative на family (`per-family`) и его компактное расписание.
+  Event detail не заменяет selector карточками (`none`). Representative —
+  первый элемент уже отсортированной surface выдачи; formatter не меняет rank.
+- **REL-048 — Explicit-only identity.** Renderer/formatter не создаёт family по
+  совпадению title/type/venue/city. В UI допускаются только взаимные explicit
+  `other_date_ids` или будущий canonical `occurrence_group_id`; dangling,
+  one-way, inactive, past, range и exact same-slot links fail closed и попадают
+  в diagnostic issues.
+- **REL-049 — Coverage rollout gate.** Отключение frontend inference не означает
+  тихо потерять все старые family. Перед stable rollout измеряется доля future
+  active rows/families с валидными взаимными explicit links, разбираются
+  one-way/dangling/same-slot defects и выполняется backend backfill/review.
+  Нулевая explicit coverage в preview — blocker данных, а не повод вернуть
+  title/type/venue guessing в browser.
 
 ## 7. Card, media, accessibility и SEO/GEO
 
-- **REL-050 — Один renderer/API.** Related, broad, search и personal cards
-  используют canonical EventCard API/interaction controller. Surface-specific
-  read-only/compact variant допустим, но второй handwritten dynamic renderer и
-  расхождение identity/href/actions semantics запрещены.
+- **REL-050 — Один projection и renderer API.** Pure domain resolver определяет
+  family/slots/issues/collapse; единый formatter строит compact/rail/a11y DTO;
+  dumb Astro components только отображают DTO. Related, broad, search и
+  personal cards используют canonical EventCard API/interaction controller и
+  общий `EventOccurrenceLabel`; event detail — общий `EventOccurrenceNav`.
+  Surface-specific read-only/compact variant допустим, но второй handwritten
+  formatter/identity inference и расхождение href/actions semantics запрещены.
 - **REL-051 — Scan order.** После media: title → date/time/status → venue/city →
   admission → utility actions.
 - **REL-052 — Actions.** `Не интересно`, like/unlike, share и undo — `<button>`
@@ -190,6 +223,10 @@
   service copy исключена из snippets, но event facts и внутренние ссылки
   индексируемы. Personal continuation не получает отдельный canonical URL и
   не попадает в sitemap.
+- **REL-057 — Rail accessibility.** Визуальные переносы строк rail скрыты от
+  screen reader; один полный `aria-label` проговаривает все даты и времена без
+  сокращённых месяцев. Overflow не обрезает единственный смысловой slot:
+  сложное расписание использует честный fallback или ссылку на selector.
 
 ## 8. Personalization и feedback
 
@@ -226,12 +263,16 @@
 | Gate | Проверка |
 | --- | --- |
 | Identity | симметрия/no-self `linked_event_ids`; canonical ids; relation kinds не смешаны |
+| Coverage | measured future-active explicit coverage; backfill/review receipt; frontend inference не используется как fallback |
 | Lifecycle | current/past/ended/cancelled/duplicate/merged/siblings отсутствуют там, где запрещены |
 | Freshness | changed/new event, смена статуса и ход времени инвалидируют/перестраивают graph |
 | Quality | golden top-k + hard negatives + graph topology + cache/corpus hashes |
 | Event mobile | selector меняет все CTA/calendar данные; 10 initial + порции 10; нет дубля tail |
+| Event occurrence | образцы 03/04/05; always-visible selector; нет full-card grid/dropdown; все occurrence URL canonical |
 | Event desktop | 3–4 card grid; finite tail ≤6; sticky boundary; shared card geometry |
-| Listings/feed | static SEO fallback; honest `Для меня`; cross-section/group dedupe; cache failure safe |
+| Large cards | shared formatter; exact compact examples; одинаковый SSR/hydrated text; legacy `Также:` отсутствует |
+| Rail cards | обе двухстрочные проекции; полный aria; safe overflow/complex fallback |
+| Listings/feed | date lists=`per-date`; entity/ranked lists=`per-family`; static SEO fallback; honest `Для меня`; cache failure safe |
 | Feedback | like/unlike semantics; not-interest + undo; viewport/focus не прыгает |
 | A11y/SEO | buttons/links/aria/data-nosnippet; keyboard/touch; JSON-LD/canonical/sitemap не искажены |
 | Observability | manifest metadata; surface/relation/rank/algorithm/build exposure; bounded telemetry |

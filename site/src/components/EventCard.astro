@@ -1,7 +1,8 @@
 ---
 import Icon from './Icon.astro';
+import EventOccurrenceLabel from './EventOccurrenceLabel.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, displayDateTime, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOtherDates, isCalendarEligible } from '../lib/events';
+import { displayDate, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOccurrencePresentation, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { resolveRelatedCardMediaTreatment } from '../lib/relatedCardLayout.mjs';
 type CardVariant = 'overlay-controls' | 'split-actions';
@@ -32,8 +33,8 @@ const place = [event.city, event.venue_name].filter(Boolean).join(' · ');
 const href = eventHref(event);
 const absolute = eventAbsoluteUrl(event);
 const dateLabel = displayDate(event);
-const dateTimeLabel = displayDateTime(event);
-const metaLabel = [label, dateTimeLabel].filter(Boolean).join(' · ');
+const occurrencePresentation = getOccurrencePresentation(event);
+const dateTimeLabel = occurrencePresentation.compactLabel;
 const statusLabel = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count ?? 0;
@@ -102,10 +103,6 @@ const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const cardClass = ['event-card', `event-card--${variant}`].join(' ');
 const feedbackClass = ['event-card__feedback', variant === 'split-actions' ? 'event-card__feedback--under' : 'event-card__feedback--overlay'].join(' ');
 const eventTypeTag = eventTypeLabel(event.event_type);
-const otherTimeLabels = getOtherDates(event)
-  .filter((item) => item.start_date === event.start_date && item.display_time && item.display_time !== event.display_time)
-  .map((item) => item.display_time)
-  .filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
 const mediaShellStyle = [
   documentMedia ? `--card-focal-y:${focalY};--card-focal-offset:${focalOffset}%` : null,
   desktopRelatedCrop ? `--dynamic-media-ratio:${desktopRelatedLayout?.rowRatio || intrinsicMediaRatio}` : null,
@@ -173,10 +170,12 @@ const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.r
     <a class="event-card__title" href={href} data-card-title data-prefetch>{event.title}</a>
     <div class="event-card__meta-row">
       {eventTypeTag && <span class="event-card__tag" data-card-type>{eventTypeTag}</span>}
-      <span class="event-card__meta" data-card-meta>{metaLabel}</span>
+      <span class="event-card__meta" data-card-meta>
+        {label && <><span>{label}</span><span aria-hidden="true"> · </span></>}
+        <EventOccurrenceLabel presentation={occurrencePresentation} />
+      </span>
       <span class="event-card__status" data-card-status>{statusLabel}</span>
     </div>
-    {otherTimeLabels.length > 0 && <div class="event-card__other-times" data-card-other-times aria-label="Другие сеансы">Также: {otherTimeLabels.join(' · ')}</div>}
     {place && <span class="event-card__footer" data-card-place>{place}</span>}
   </div>
 

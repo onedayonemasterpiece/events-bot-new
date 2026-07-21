@@ -1,7 +1,8 @@
 ---
 import Icon from './Icon.astro';
+import EventOccurrenceLabel from './EventOccurrenceLabel.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAdmissionLabel, eventCalendarHref, eventHref, getLinkedSessionIds, getOtherDates, isCalendarEligible } from '../lib/events';
+import { eventAdmissionLabel, eventCalendarHref, eventHref, getLinkedSessionIds, getOccurrencePresentation, isCalendarEligible } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 interface Props { event: PreviewEvent }
@@ -10,16 +11,12 @@ const href = eventHref(event);
 const calendarHref = eventCalendarHref(event);
 const canAddToCalendar = isCalendarEligible(event);
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
-const dateTimeLabel = displayDateTime(event);
+const occurrencePresentation = getOccurrencePresentation(event);
 const imageUrl = eventImageUrl(event.image_url);
 // Listing height depends on content and viewport, so its exact target aspect is
 // unknown during SSR. Do not label an approximate 4:5 crop safe.
 const listingCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
 const linkedEventIds = getLinkedSessionIds(event).join(',');
-const otherTimeLabels = getOtherDates(event)
-  .filter((item) => item.start_date === event.start_date && item.display_time && item.display_time !== event.display_time)
-  .map((item) => item.display_time)
-  .filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
 ---
 <article class="listing-item" data-listing-item data-card-href={href} data-event-id={event.id} data-event-title={event.title} data-linked-event-ids={linkedEventIds} data-city={event.city || undefined} data-venue={event.venue_name || undefined} role="link" tabindex="0" aria-label={`Открыть событие: ${event.title}`}>
   <a class="listing-item__media listing-item__media--cover" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
@@ -41,10 +38,9 @@ const otherTimeLabels = getOtherDates(event)
   <div class="listing-item__body">
     <a class="listing-item__title" href={href} data-prefetch>{event.title}</a>
     <div class="listing-item__meta">
-      <span>{dateTimeLabel}</span>
+      <EventOccurrenceLabel presentation={occurrencePresentation} />
       <span>{eventAdmissionLabel(event)}</span>
     </div>
-    {otherTimeLabels.length > 0 && <p class="listing-item__other-times">Также: {otherTimeLabels.join(' · ')}</p>}
     {place && <p>{place}</p>}
     <div class="listing-item__actions">
       {canAddToCalendar && <a class="secondary-button" href={calendarHref} type="text/calendar"><Icon name="calendar" /> <span>В календарь</span></a>}

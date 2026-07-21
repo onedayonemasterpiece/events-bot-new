@@ -11,6 +11,29 @@
 обещание воспроизводимости. Проверочные hashes и размеры committed copies — в
 [`screenshots/README.md`](screenshots/README.md).
 
+## Решение по нумерованному Telegram review
+
+Нумерация соответствует треду **«Связанные события — паттерны 01–13»**.
+
+| № | Файл | Решение | Что фиксируем |
+| ---: | --- | --- | --- |
+| 01 | `event-detail-related-candidate.png` | **нет** | не baseline для occurrence UI; большая card family может жить отдельно только после общей temporal projection |
+| 02 | `event-detail-related-mobile.png` | **нет** | full/continuation card не заменяет компактный occurrence selector |
+| 03 | `occurrence-desktop-open.png` | **да** | компактная desktop hierarchy рядом с основной датой |
+| 04 | `occurrence-desktop-schedule.png` | **да** | factual schedule в `Когда` |
+| 05 | `occurrence-mobile-open.png` | **да** | always-visible mobile selector, не disclosure |
+| 06–09 | feed/feedback/personal/Popular labs | **не решались этим review** | остаются research evidence, не occurrence baseline |
+| 10 | `listing-inline-other-dates-lab.png` | **да** | одна representative card + компактная temporal projection |
+| 11 | `personalization-labeling-rules.png` | **нет** | не визуальный baseline связанных дат |
+| 12 | `legacy-occurrence-switcher.png` | **нет** | тяжёлый дублирующий standalone module |
+| 13 | `rejected-occurrence-dropdown.png` | **нет** | disclosure/dropdown для базового расписания |
+
+Скриншоты 03–05 сняты на fixture `5756`, связанном с открытым
+`INC-2026-07-18-dramteatr-same-day-event-glue`. Они принимаются **только как
+композиция**, не как доказательство корректной family. В новой lab используются
+синтетические взаимные November fixtures; production facts `5754–5757` не
+копируются в тесты.
+
 ## Известные source refs и доступные rerender routes
 
 | Лаборатория | Ref / route |
@@ -54,7 +77,7 @@ branch нет.
   похожих event cards. Sticky action panel остаётся отдельным.
 - Gate: плавающий selector не перекрывает title/media и доступен keyboard/touch.
 
-## 3. Accepted immutable-candidate related grid
+## 3. Большие related cards — не occurrence baseline (№01: нет)
 
 ![Accepted related grid](screenshots/event-detail-related-candidate.png)
 
@@ -64,12 +87,15 @@ branch нет.
   continuation zone, три canonical cards в ряд, общий media/body contract,
   service actions вне crawlable title link. Stable root rollout этим
   скриншотом не доказан.
-- Сохранить: desktop-native плотность, единая геометрия, title-first scan,
+- Card shell может сохранять desktop-native плотность, единую геометрию,
+  title-first scan,
   `Не интересно`/calendar/share/like semantics.
-- Изменить по целевому словарю: strict zone должна называться `Похожие события`,
-  broad tail — отдельно `Ещё события`.
+- Для связанных дат этот pattern не используется. Если card показывает event из
+  family как recommendation/listing item, её date meta обязана приходить из
+  общего compact formatter. Strict zone называется `Похожие события`, broad
+  tail — отдельно `Ещё события`.
 
-### Mobile card continuation
+### Mobile card continuation (№02: нет для occurrence)
 
 ![Mobile related continuation](screenshots/event-detail-related-mobile.png)
 
@@ -78,8 +104,10 @@ branch нет.
 - Историческая mobile lab family:
   `origin/feature/static-mobile-ui-variants-20260715@fd8766b1`; canonical card
   behavior позднее вошёл в main другими commits.
-- Сохранить: один вертикальный поток, крупные touch targets, тот же порядок
+- Допустимо сохранить как общий related-card shell: один вертикальный поток,
+  крупные touch targets, тот же порядок
   title/meta/place и те же feedback semantics, что на desktop.
+- Для `Другие даты` full cards запрещены: принят selector №05.
 
 ## 4. Mobile feed laboratory
 
@@ -119,13 +147,14 @@ branch нет.
 - Не переносить literal copy/трёхколоночное обещание на mobile. Label `Для вас`
   допустим только после реального compatible-profile rerank.
 
-## 7. Honest personalization labels
+## 7. Honest personalization labels (№11: нет как visual baseline)
 
 ![Personalization labeling rules](screenshots/personalization-labeling-rules.png)
 
 - Источник:
   `artifacts/codex/listing-wireframes-thread-2026-07-17/images-media/14-personalization.png`.
-- Статус: local-only concept diagram. Новый visitor получает честное baseline-описание;
+- Статус: local-only concept diagram, отклонён как visual baseline связанных
+  событий. Текстовый semantic contract сохраняется независимо: новый visitor получает честное baseline-описание;
   mature profile — `Для вас`; reason badge появляется только при confidence;
   reason не повторяется на каждой второй card.
 
@@ -141,21 +170,23 @@ branch нет.
   reuse listing card family. Это не semantic-related surface и не должно
   называться `Похожие события`.
 
-## 9. Inline `Ещё даты` в listing — исследование
+## 9. Inline `Ещё даты` в listing (№10: принято)
 
 ![Inline other dates listing lab](screenshots/listing-inline-other-dates-lab.png)
 
 - Источник:
   `artifacts/codex/mobile-calendar-city-popular-v15-research-20260720/v19-popular-orpheus-other-date.png`.
-- Статус: artifact-only laboratory, не remote implementation branch.
+- Статус: визуальная механика принята; исходник остаётся artifact-only
+  laboratory без remote implementation branch.
 - Source renderer локальный/ignored и не воспроизводится из этой ветки.
-- Полезная идея: occurrence family можно свернуть в одну representative card с
-  коротким temporal summary.
+- Зафиксировано: entity/ranked surface сворачивает occurrence family в одну
+  representative card с короткой temporal projection; date-bounded surface
+  сворачивает только несколько времён в пределах даты.
 - Ограничение: это не замена event-detail selector; listing projection должен
   использовать тот же family id/eligibility и не суммировать engagement разных
   occurrences.
 
-## 10. Anti-pattern: disclosure/dropdown перед контентом
+## 10. Anti-pattern: disclosure/dropdown перед контентом (№13: нет)
 
 ![Rejected occurrence dropdown](screenshots/rejected-occurrence-dropdown.png)
 
@@ -165,7 +196,7 @@ branch нет.
   owner даты, конкурирует с primary hierarchy и заставляет пользователя
   раскрывать базовое расписание.
 
-## 11. Legacy standalone switcher
+## 11. Legacy standalone switcher (№12: нет)
 
 ![Legacy occurrence switcher](screenshots/legacy-occurrence-switcher.png)
 

@@ -186,6 +186,8 @@ export interface DiscoveryDisplayPayload {
   display_date: string;
   display_time: string | null;
   display_date_time: string;
+  occurrence_aria_label: string;
+  occurrence_member_ids: number[];
   city: string | null;
   venue_name: string | null;
   place: string;

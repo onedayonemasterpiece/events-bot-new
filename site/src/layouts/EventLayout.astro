@@ -3344,6 +3344,19 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           return Math.min(1, Math.log1p(likes + shares * 1.5) / Math.log(80));
         }
 
+        function collapseRankedOccurrenceFamilies(items) {
+          const seen = new Set();
+          return toArray(items).filter((item) => {
+            const display = displayOf(item?.candidate);
+            const memberIds = unique(toArray(display?.occurrence_member_ids).map(asId).filter(Boolean)).sort((left, right) => left - right);
+            const eventId = asId(item?.event_id) || asId(candidateId(item?.candidate));
+            const familyKey = memberIds.length > 1 ? `family:${memberIds.join(',')}` : `event:${eventId || ''}`;
+            if (seen.has(familyKey)) return false;
+            seen.add(familyKey);
+            return true;
+          }).map((item, index) => ({ ...item, rank:index }));
+        }
+
         function rankPersonalFeedCandidates(manifest, profile) {
           if (!personalFeedProfileIsReady(profile)) return [];
           const scored = [];
@@ -3576,7 +3589,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const genericRanked = rankPopularFallbackCandidates(manifest, profile);
           const adjacentRanked = isEventDetail ? rankAdjacentContinuationCandidates(manifest, profile) : [];
           const recentServed = isEventDetail ? readRecentContinuationIds() : new Set();
-          const ranked = isEventDetail
+          const rankedBeforeOccurrenceCollapse = isEventDetail
             ? window.KenigEventsSelectEventContinuation({
                 currentEventId: personalFeedCurrentEventId(section),
                 profileCandidates: profileRanked,
@@ -3589,8 +3602,9 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
                 maxSameVenue: 2,
               })
             : (isPersonal ? profileRanked : genericRanked)
-                .filter((item) => !excluded.has(asId(item.event_id)))
-                .slice(0, isEventDetail ? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT);
+                .filter((item) => !excluded.has(asId(item.event_id)));
+          const ranked = collapseRankedOccurrenceFamilies(rankedBeforeOccurrenceCollapse)
+            .slice(0, isEventDetail ? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT);
           if (!ranked.length) {
             if (isEventDetail) {
               section.hidden = false;
@@ -3822,6 +3836,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             display_date: display.display_date || formatDateForUi(candidate?.date || ''),
             display_time: display.display_time || null,
             display_date_time: display.display_date_time || [display.display_date || formatDateForUi(candidate?.date || ''), display.display_time].filter(Boolean).join(' · '),
+            occurrence_aria_label: display.occurrence_aria_label || display.display_date_time || [display.display_date || formatDateForUi(candidate?.date || ''), display.display_time].filter(Boolean).join(' · '),
+            occurrence_member_ids: toArray(display.occurrence_member_ids).map(Number).filter(Number.isFinite),
             city: display.city || candidate?.city || null,
             venue_name: display.venue_name || candidate?.location_name || null,
             place: display.place || [display.city || candidate?.city, display.venue_name || candidate?.location_name].filter(Boolean).join(' · '),
@@ -3882,7 +3898,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const absoluteUrl = safeRuntimeCardUrl(data.absolute_url, location.href);
           const imageUrl = safeRuntimeCardUrl(data.image_url || '', '');
           const calendarHref = safeRuntimeCardUrl(data.calendar_href || '', '');
-          const shareText = [data.title, [data.display_date, data.display_time, data.venue_name || data.city].filter(Boolean).join(' · '), status].filter(Boolean).join('\n');
+          const shareText = [data.title, [data.display_date_time, data.venue_name || data.city].filter(Boolean).join(' · '), status].filter(Boolean).join('\n');
           const shareImageType = imageUrl.toLowerCase().includes('.webp')
             ? 'image/webp'
             : /\.png(?:[?#]|$)/u.test(imageUrl.toLowerCase()) ? 'image/png' : 'image/jpeg';
@@ -3893,6 +3909,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           setRuntimeCardDataset(card, 'eventId', data.id);
           setRuntimeCardDataset(card, 'eventTitle', data.title);
           setRuntimeCardDataset(card, 'cardHref', href);
+          setRuntimeCardDataset(card, 'occurrenceMemberIds', data.occurrence_member_ids.join(','));
           setRuntimeCardDataset(card, 'rank', data.rank);
           setRuntimeCardDataset(card, 'score', data.personal_score);
           card.setAttribute('aria-label', `${data.title}: ${data.display_date}`);
@@ -3962,6 +3979,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           }
           setRuntimeCardText(card, '[data-card-type]', typeTag, { hideWhenEmpty: true });
           setRuntimeCardText(card, '[data-card-meta]', data.display_date_time);
+          const cardMeta = card.querySelector('[data-card-meta]');
+          if (cardMeta && data.occurrence_aria_label) cardMeta.setAttribute('aria-label', data.occurrence_aria_label);
           setRuntimeCardText(card, '[data-card-status]', status, { hideWhenEmpty: true });
           setRuntimeCardText(card, '[data-card-place]', data.place, { hideWhenEmpty: true });
 

@@ -630,14 +630,19 @@ features:
     unified_requirements: docs/features/linked-events/requirements.md
     implementation_inventory: docs/features/linked-events/inventory.md
     visual_patterns: docs/features/linked-events/visual-patterns.md
+    branch_handoff: docs/features/linked-events/handoff.md
     entrypoints:
       - linked_events.py
       - smart_event_update.py
       - source_parsing/handlers.py
       - main.py
       - main_part2.py
+      - site/src/lib/eventOccurrences.ts
       - site/src/lib/events.ts
+      - site/src/components/EventOccurrenceLabel.astro
+      - site/src/components/EventOccurrenceNav.astro
       - site/src/pages/sobytiya/[slug].astro
+      - site/src/pages/lab/occurrences/index.astro
       - site/src/components/DesktopEventPage.astro
       - site/src/components/PersonalFeedSlot.astro
       - site/scripts/export-production-preview-data.py

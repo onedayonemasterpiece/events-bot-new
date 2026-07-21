@@ -10,6 +10,21 @@ strict related, broad continuation and personal feed are canonical in
 [`docs/features/linked-events/README.md`](../linked-events/README.md). This
 document owns page implementation details, not a parallel relation taxonomy.
 
+### Unified occurrence projection (integration donor)
+
+В `feature/related-events-compact-unified-20260721` event detail, большие/list
+cards и hydrated discovery используют один pure
+`site/src/lib/eventOccurrences.ts` и dumb components
+`EventOccurrenceLabel.astro` / `EventOccurrenceNav.astro`. Identity берётся
+только из взаимных explicit `other_date_ids`; совпадение title/type/venue не
+создаёт family. Exact compact labels: `2, 9 ноября 19:00` и
+`4 ноября 17:00, 19:00`; rail переносит тот же DTO в две строки с полным
+`aria-label`. Date lists применяют `per-date`, ranked/entity lists —
+`per-family`, event detail — always-visible selector. Полный contract и handoff:
+[`REL-045`–`REL-050`](../linked-events/requirements.md) и
+[`handoff.md`](../linked-events/handoff.md). До merge/release этот donor не
+меняет production status страницы.
+
 ## Implementation status
 
 The accepted event-detail templates are the primary preproduction surface. A
@@ -753,7 +768,8 @@ Google Event structured data требует добавлять required properti
 
 - при build/export для каждого future active event подготовить `related_static` candidates;
 - HTML должен показывать fallback related block без JS/Supabase;
-- “Другие даты” рендерятся отдельным блоком и не смешиваются с “Похожие события”;
+- “Другие даты” рендерятся компактным selector рядом с primary date/CTA, не
+  full-card grid, и не смешиваются с “Похожие события”;
 - client island может после consent переупорядочить уже полезный block, но не должен ломать CTA/SEO;
 - mobile рендерит related как вертикальную continuation/feed-секцию `Смотрите дальше`, не горизонтальный rail; desktop остаётся desktop-native grid/module, а не растянутой мобильной лентой;
 - после явно похожих карточек desktop отдельно и честно обозначает переход к

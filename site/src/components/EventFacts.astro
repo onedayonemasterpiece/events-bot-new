@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDateTime, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isTelephoneUrl, isTicketSoldOut } from '../lib/events';
+import { eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isExternalHttpUrl, isTelephoneUrl, isTicketSoldOut } from '../lib/events';
 interface Props { event: PreviewEvent }
 type FactIcon = 'pin' | 'ticket' | 'spark' | 'info';
 type FactVariant = 'default' | 'admission';
@@ -24,8 +24,9 @@ const admissionHref = !isTicketSoldOut(event) && !event.ticket.is_free && event.
   : null;
 const admissionExternal = isExternalHttpUrl(admissionHref);
 const admissionRel = admissionExternal ? 'noopener noreferrer nofollow' : undefined;
+const occurrencePresentation = getOccurrencePresentation(event);
 const rows: Array<{ icon: FactIcon; label: string; value: string | null | undefined; variant?: FactVariant }> = [
-  { icon: 'info', label: 'Когда', value: displayDateTime(event) },
+  { icon: 'info', label: 'Когда', value: occurrencePresentation.compactLabel },
   { icon: 'pin', label: 'Где', value: placeLine },
   { icon: 'ticket', label: 'Вход', value: admission.main, variant: 'admission' },
   { icon: 'info', label: 'Фестиваль', value: event.festival },

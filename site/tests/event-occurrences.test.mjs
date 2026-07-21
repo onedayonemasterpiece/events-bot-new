@@ -1,0 +1,111 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  collapseOccurrenceCards,
+  formatOccurrencePresentation,
+  resolveOccurrenceFamily,
+} from '../src/lib/eventOccurrences.ts';
+
+function event(id, date, time, linked = [], extra = {}) {
+  return {
+    id,
+    title: extra.title || 'Одна программа',
+    slug: `event-${id}`,
+    event_type: 'спектакль',
+    venue_name: 'Один театр',
+    city: 'Калининград',
+    start_date: date,
+    end_date: date,
+    start_time: time,
+    display_time: time,
+    lifecycle_status: 'active',
+    other_date_ids: linked,
+    ...extra,
+  };
+}
+
+function presentation(current, catalog, currentDate = '2026-07-21') {
+  const family = resolveOccurrenceFamily(current, catalog, { currentDate });
+  return formatOccurrencePresentation(family, currentDate);
+}
+
+test('same time across dates uses one compact month label and accessible conjunction', () => {
+  const first = event(1, '2026-11-02', '19:00', [2]);
+  const second = event(2, '2026-11-09', '19:00', [1]);
+  const result = presentation(first, [first, second]);
+  assert.equal(result.compactLabel, '2, 9 ноября 19:00');
+  assert.equal(result.railDateLine, '2, 9 ноя');
+  assert.equal(result.railTimeLine, '19:00');
+  assert.equal(result.ariaLabel, '2 и 9 ноября в 19:00');
+  assert.equal(result.isComplexSchedule, false);
+});
+
+test('same date with several times uses one date and comma-separated times', () => {
+  const early = event(3, '2026-11-04', '17:00', [4]);
+  const late = event(4, '2026-11-04', '19:00', [3]);
+  const result = presentation(early, [early, late]);
+  assert.equal(result.compactLabel, '4 ноября 17:00, 19:00');
+  assert.equal(result.railDateLine, '4 ноя');
+  assert.equal(result.railTimeLine, '17:00, 19:00');
+  assert.equal(result.ariaLabel, '4 ноября в 17:00 и 19:00');
+});
+
+test('same time across months remains compact without hiding month boundaries', () => {
+  const november = event(5, '2026-11-30', '19:00', [6]);
+  const december = event(6, '2026-12-02', '19:00', [5]);
+  const result = presentation(november, [november, december]);
+  assert.equal(result.compactLabel, '30 ноября, 2 декабря 19:00');
+  assert.equal(result.railDateLine, '30 ноя, 2 дек');
+});
+
+test('mixed date/time matrix falls back to explicit semicolon groups', () => {
+  const first = event(7, '2026-11-02', '19:00', [8, 9]);
+  const second = event(8, '2026-11-03', '17:00', [7, 9]);
+  const third = event(9, '2026-11-03', '20:00', [7, 8]);
+  const result = presentation(first, [first, second, third]);
+  assert.equal(result.compactLabel, '2 ноября 19:00; 3 ноября 17:00, 20:00');
+  assert.equal(result.railDateLine, '2, 3 ноя');
+  assert.equal(result.railTimeLine, 'разное время');
+  assert.equal(result.isComplexSchedule, true);
+});
+
+test('matching copy without explicit reciprocal links never creates a family', () => {
+  const first = event(10, '2026-11-02', '19:00');
+  const lookalike = event(11, '2026-11-09', '19:00');
+  const result = presentation(first, [first, lookalike]);
+  assert.deepEqual(result.family.memberIds, [10]);
+  assert.equal(result.family.hasAlternatives, false);
+  assert.equal(result.compactLabel, '2 ноября 19:00');
+});
+
+test('resolver rejects asymmetric, dangling, inactive, past and range members', () => {
+  const current = event(20, '2026-11-02', '19:00', [21, 22, 23, 24, 25]);
+  const asymmetric = event(21, '2026-11-03', '19:00', []);
+  const inactive = event(23, '2026-11-04', '19:00', [20], { lifecycle_status: 'cancelled' });
+  const past = event(24, '2026-07-20', '19:00', [20]);
+  const range = event(25, '2026-11-05', '19:00', [20], { end_date: '2026-11-06' });
+  const family = resolveOccurrenceFamily(current, [current, asymmetric, inactive, past, range], { currentDate: '2026-07-21' });
+  assert.deepEqual(family.memberIds, [20]);
+  assert.deepEqual(new Set(family.issues.map((issue) => issue.code)), new Set([
+    'asymmetric_link', 'dangling_link', 'inactive_member', 'past_member', 'range_member',
+  ]));
+});
+
+test('duplicate exact slots stay safe in UI and remain visible as an issue', () => {
+  const current = event(30, '2026-11-04', '17:00', [31]);
+  const duplicate = event(31, '2026-11-04', '17:00', [30]);
+  const family = resolveOccurrenceFamily(current, [current, duplicate], { currentDate: '2026-07-21' });
+  assert.deepEqual(family.memberIds, [30]);
+  assert.equal(family.issues.some((issue) => issue.code === 'duplicate_slot'), true);
+});
+
+test('card collapse policy is per-date for temporal lists and per-family for entity lists', () => {
+  const first = event(40, '2026-11-02', '17:00', [41, 42]);
+  const secondTime = event(41, '2026-11-02', '19:00', [40, 42]);
+  const nextDate = event(42, '2026-11-09', '19:00', [40, 41]);
+  const input = [first, secondTime, nextDate];
+  assert.deepEqual(collapseOccurrenceCards(input, 'none').map((item) => item.id), [40, 41, 42]);
+  assert.deepEqual(collapseOccurrenceCards(input, 'per-date').map((item) => item.id), [40, 42]);
+  assert.deepEqual(collapseOccurrenceCards(input, 'per-family').map((item) => item.id), [40]);
+});
