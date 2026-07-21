@@ -1,0 +1,147 @@
+mode: full_fanout
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/integration/mobile-v23-search-sticky-20260721
+base_branch: integration/mobile-v23-search-sticky-20260721
+integration_branch: integration/mobile-v24-search-runtime-20260721
+global_constraints:
+  - Reuse the exact crop contract behind preview focus-6408; do not recreate by eye.
+  - Mobile-only visual acceptance at 390x844 and high-DPR emulation.
+  - Gemini Pro-class consultation and final gate are mandatory.
+  - Shared shell/auth/routing changes integrate serially.
+  - Sync canonical docs and CHANGELOG.
+verification_owner: root-integrator
+stop_conditions:
+  - Gemini Pro and Opus are both unavailable for consultant gate.
+  - Donor crop contract cannot be identified from git or deployed source.
+lanes:
+  - id: D01
+    role: planner
+    requirement_ids: [R01]
+    target: Identify crop donor commit/source contract and search-card propagation path.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: donor SHA/diff, exact files, regression tests
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: D02
+    role: planner
+    requirement_ids: [R02, R03]
+    target: Map search progress state machine and every toast/notification surface.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: root cause and shared component boundary
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: D03
+    role: planner
+    requirement_ids: [R04]
+    target: Audit free/children semantics, page taxonomy, fields, facets, and medallions.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: evidence-backed product options and existing assets
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: D04
+    role: planner
+    requirement_ids: [R05]
+    target: Inventory mobile headers and bottom-nav relationships across current surfaces.
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: unified shell proposal grounded in existing components
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: C01
+    role: planner
+    requirement_ids: [R06]
+    target: Gemini Pro critical product and interaction review after discovery.
+    depends_on: [D01, D02, D03, D04]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: decisions, rejected alternatives, acceptance criteria
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: W01
+    role: worker
+    requirement_ids: [R01, R02]
+    target: Integrate crop donor and monotonic search progress.
+    depends_on: [D01, D02, C01]
+    execution_mode: serial_after_dependency
+    branch: agent/mobile-v24/search-runtime
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-v24-search-runtime-worker
+    writable_files:
+      - site/src/components/AuthorizedEventSearch.astro
+      - site/src/components/EventCard.astro
+      - site/src/lib/relatedCardLayout.ts
+      - site/tests/search-learning.test.mjs
+      - site/tests/event-card*.test.mjs
+      - .codex/lanes/mobile-v24-search-runtime-20260721/W01-RESULTS.md
+    forbidden_files:
+      - site/src/layouts/EventLayout.astro
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed implementation and targeted tests
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: W02
+    role: worker
+    requirement_ids: [R03, R05]
+    target: Shared mobile header and toast behavior without breaking bottom nav.
+    depends_on: [D02, D04, C01]
+    execution_mode: serial_after_dependency
+    branch: agent/mobile-v24/mobile-shell
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-v24-mobile-shell-worker
+    writable_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/components/Mobile*.astro
+      - site/src/components/*Toast*.astro
+      - site/src/pages/poisk/index.astro
+      - site/tests/mobile-shell*.test.mjs
+      - site/tests/search-learning.test.mjs
+      - .codex/lanes/mobile-v24-search-runtime-20260721/W02-RESULTS.md
+    forbidden_files:
+      - site/src/components/EventCard.astro
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed shared shell/toast implementation and tests
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: I01
+    role: merge_reviewer
+    requirement_ids: [R04, R07]
+    target: Integrate product UX, docs, changelog, build, Playwright, preview and final Gemini acceptance.
+    depends_on: [W01, W02]
+    execution_mode: serial_after_dependency
+    branch: integration/mobile-v24-search-runtime-20260721
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-v24-search-runtime
+    writable_files: ['*']
+    forbidden_files: []
+    expected_output: public mobile preview and complete closure matrix
+    verification_scope: full_local
+    effort: high
+    status: planned
