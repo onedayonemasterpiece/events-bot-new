@@ -14,7 +14,7 @@ Base: `origin/integration/mobile-v23-search-sticky-20260721`
 | R04 | Done | Canonical product contract makes explicit free intent a hard constraint. Child/family admission requires evidence-backed LLM output; topic and age labels are insufficient, so a decorative child medallion is not shipped. A noindex combined collection remains a research materialization, not claimed production truth. |
 | R05 | Done | `EventLayout` owns the shared mobile header/drawer and bottom safe areas. Search and collection select exactly one `Поиск` item; event detail uses CTA bottom mode and has no global bottom nav. |
 | R06 | Done | Three design consultations were completed with Gemini 3.1 Pro (High), with model evidence saved. The first final pass returned `CONDITIONAL GO` only for toast/brand overlap. After the overhang fix was deployed, Gemini 3.1 Pro (High) returned final `GO` in `gemini-pro-final-recheck.md`; Flash probes remain invalid/supplementary and are not used as the gate. |
-| R07 | Done with noted legacy-gate limitation | Public noindex preview, build/static gates, focused browser tests, high-DPR Playwright and authorized Search smoke passed. The older full `check-browser-release-gate.mjs` stalled after specimen selection and was terminated; focused generated/browser gates covering the touched surfaces passed. |
+| R07 | Done with noted legacy-gate limitation | Public noindex preview, build/static gates, focused browser tests, high-DPR Playwright at canonical 320px and review 390px widths, and authorized Search smoke passed. The older cross-site `check-browser-release-gate.mjs` stalled after specimen selection and was terminated; focused generated/browser gates covering every touched surface passed. |
 
 ## Public preview
 
@@ -39,8 +39,16 @@ Deployment was prefix-only. The stable production root and `/ics/*` were not rep
   - toast countdown pauses and resumes;
   - collection: 12 cards, one current Search nav item, zero overflow;
   - event 6408: CTA mode, zero bottom nav, one toast region, zero overflow.
+- Public Search at 320x720 and 390x720, DPR 3: authorized-search shell is
+  present, one bottom nav/current item, zero horizontal overflow, and a 7px
+  gap between the brand handle and toast at both widths.
 - The collection QA field `broken: 6` is not six broken assets: those were below-fold lazy images inspected before decode; visible media rendered. This counter is not used as a release gate.
-- Full legacy browser script: partial. It stalled for more than six minutes after `static candidates=55`, specimen 6408 and target 6407, produced no report, and was terminated. The focused generated-output and public mobile checks above cover the changed surfaces.
+- Full legacy cross-site browser script: partial/non-blocking for this noindex
+  prototype. It stalled for more than six minutes after `static candidates=55`,
+  specimen 6408 and target 6407, produced no report, and was terminated. Its
+  touched-surface responsibilities are covered by the focused generated Search
+  smoke plus public 320/390 DPR3 shell, toast and crop checks above; unrelated
+  legacy journeys were not declared green.
 
 ## Search sidecar synchronization
 
