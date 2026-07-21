@@ -30,7 +30,7 @@ lanes:
     forbidden_files: [unrelated dirty root-worktree changes]
     expected_output: one integrated, tested commit
     verification_scope: full_local
-    status: spawned
+    status: merged
   - id: closure_audit
     role: reviewer
     requirement_ids: [R10]
@@ -43,7 +43,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: ACCEPT or concrete blockers
     verification_scope: inspection_only
-    status: spawned
+    status: merged
 ```
 
 ## Requirement matrix
@@ -59,7 +59,7 @@ lanes:
 | R07 | Always-visible detail selector and exact compact/two-line accessible labels | integration | Done | occurrence formatter/component tests |
 | R08 | Search snapshot, Edge response and browser hydration collapse per family | integration | Done | vector-sync/Edge wiring and client tests |
 | R09 | Canonical docs, changelog, incident and generated-output gates | integration | Done | docs diff; Node/Python/Astro/Chromium evidence |
-| R10 | Independent final review, including agy Gemini 3.1 Pro High | closure_audit | Partial | Codex closure audit pending; agy is a post-publication hard gate |
+| R10 | Independent final review, including agy Gemini 3.1 Pro High | closure_audit | Done | Codex closure audit accepted; live candidate passed and agy returned `SHIP_SECRET_CANDIDATE` |
 
 ## Local integration evidence
 
@@ -75,6 +75,28 @@ lanes:
 - Retained local evidence (ignored):
   `artifacts/codex/static-crop-occurrences-20260721/local-browser-gate-v2/`.
 
-The release portion stays pending until the implementation is reachable from
-`origin/main`, a fresh immutable candidate is published, and agy Gemini 3.1 Pro
-High returns an acceptance verdict on that exact candidate.
+## Release and final acceptance evidence
+
+- PR `#117` merged to exact `origin/main` SHA
+  `58440062e7bab708676c378de345c65f19ce91b1`; both required GitHub checks
+  passed.
+- Fly release `v1741` deployed and pinned that exact SHA; `/healthz` remained
+  ready.
+- Fresh immutable candidate `D1qL0…` was built as
+  `production-secret-20260721T120452-b290f999` from snapshot
+  `snapshot-20260721T100452-9c8cd823ac`; result SHA-256 is
+  `16c57759c57f1d31cd1a84cf5e4e30556a730abc1f71721d871e5bcb6b7b3f16`
+  and manifest SHA-256 is
+  `73cb6e4c3ea1ce22e22e29e6974323a17abea2219b34543f6d9e4a247ed5c884`.
+- Live Chromium passed nine acceptance groups on the exact candidate: hero and
+  gallery crop, static and hydrated compact-card geometry, always-rendered and
+  real-family occurrence selectors, cold/mixed-input keyboard, cross-document
+  gallery and footer shortcuts.
+- Stable root and sitemap hashes remained unchanged. No root promotion occurred.
+- Independent `/home/dev/.local/bin/agy` model `gemini-3.1-pro-high`, high
+  effort, returned `SHIP_SECRET_CANDIDATE` after inspecting the URL, PNG pixels,
+  source and test evidence.
+
+Full bearer URL and detailed evidence stay in the ignored directory
+`artifacts/codex/static-crop-occurrences-20260721/`; the secret token is not
+committed to Git.
