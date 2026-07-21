@@ -47,6 +47,32 @@ Mobile acceptance: touch targets не меньше `44px`, input font не ме�
 нет overflow на `320/390px`, auth error/status объявляется через `aria-live`, а
 browser evidence охватывает anonymous, auth-required и signed-in/result states.
 
+### v23 donor correction and query-learning pages
+
+Самостоятельный Search UI из calendar `v22` superseded: arrow внутри input,
+fake Yandex/email states и маленькие bespoke result rows не переносятся дальше.
+Канонический mobile donor — визуальный v58 (`abbcf7a13d…`) и актуальная Search
+revision `2ef8dd834d…`. Текущий Astro `AuthorizedEventSearch` сохраняет отдельный
+full-width submit под input; `::before` отображает `--search-progress`, а
+результаты строятся только общим runtime `EventCard`. Yandex/Supabase PKCE,
+session restore, NDJSON/vector-first и stalled-stream JSON rescue не
+переписываются. Email не является частью этого donor и не показывается.
+
+Ниже поиска располагается тихая секция `Готовые подборки` с полными живыми
+фразами, которые одновременно учат формулировать запрос. Централизованно
+нормализованный и одобренный запрос с materialized result set — обычная
+crawlable ссылка на регулярно обновляемую static page; просмотр такой страницы
+не расходует online embedding/LLM quota. Если static page ещё не создана,
+пример может только подставить текст в input без auto-submit, network request
+или вымышленного URL. Личные сохранённые поиски — отдельная auth-only секция и
+не называются публичными подборками.
+
+Mobile gates: input и progress-submit остаются раздельными; submit получает
+`aria-busy` и видимый percent/progress; live/mocked results используют крупный
+canonical `EventCard`; materialized links реально открывают static pages;
+fill-only example не навигирует и не отправляет форму; на `320/390px` отсутствует
+horizontal overflow.
+
 ## Search feedback and public tag candidates
 
 The dedicated `/poisk/` page now exposes seed query chips and, after enough

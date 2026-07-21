@@ -375,6 +375,12 @@
   because its separate daily budget is exhausted.
 
 ### Changed
+- **Mobile calendar/Search v23 research:** restored the proven v58 Astro Search
+  with a separate progress submit and canonical large `EventCard` results,
+  replaced the fake v22 Search with honest static query-learning links, added a
+  factual `Уже началось` treatment and future-timed autoscroll for Today,
+  restored Orpheus's end-of-rail future-date recap, and replaced the broken
+  sticky date/count/city wrapping with one scoped two-row hierarchy.
 - **Mobile calendar/search v22 research contract:** make the slower
   resize-stable, directionally monotonic right-corner parallax the primary
   mobile calendar variant; restore a verified `visual_only` horizontal `5:4`
