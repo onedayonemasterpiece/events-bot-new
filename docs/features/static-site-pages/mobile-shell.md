@@ -169,49 +169,73 @@ Gemini 3.1 Pro (High) подтвердил три top-mode, единый `aria-c
 скролле отклонены как противоречащие самой цели унификации и постоянной
 доступности top-level навигации.
 
-## A/B/C research lab, 2026-07-21
+## A/B/C research lab v2, 2026-07-21
 
-Отдельный noindex-lab проверяет не новую карточку события, а только shell. Его
-builder — `scripts/build_mobile_shell_unification_lab.py`. Calendar и Popular
-берутся из принятого generated v23 donor: DOM event rail, crop, gestures,
-медальоны и нижняя календарная полоса не пересобираются «по мотивам». Search и
-Personal в lab — явно обозначенные функциональные specimens, а не готовые
-production-страницы.
+Отдельный noindex-lab проверяет shell, а не новую карточку события. Builder —
+`scripts/build_mobile_shell_unification_lab.py`. Calendar и Popular копируют
+принятый generated v23 donor: event rail DOM, crop, gestures, medallions,
+date accessory и bottom dock не пересобираются «по мотивам». Search и Personal
+в lab — функциональные specimens для оценки оболочки, а не заявление об их
+production-готовности.
 
-Во всех трёх вариантах зафиксированы инварианты:
+### Motion invariant
 
-- закрытая бренд-бирка имеет bbox `x=12, y=0, 120×84 CSS px` на Search,
-  Today, Popular и Personal;
-- при открытии menu bbox бирки не меняется: движется только панель из-за неё;
-- один и тот же dock высотой `64px`, ровно один `aria-current`, date accessory
-  только у календаря;
-- визуальный Search progress находится **внутри submit CTA**. Рядом остаётся
-  только скрытый семантический `role=progressbar`; неизвестная начальная фаза не
-  изображает фиктивный процент, determinate width монотонен;
-- системные ссылки не дублируют четыре пункта dock; high-DPR обеспечивается SVG
-  и 1x/2x/3x donor assets, а геометрия задаётся в CSS px;
-- `prefers-reduced-motion` убирает transform/interpolation, сохраняя явные
-  состояния и подписи.
+Первая версия lab отклонена: она ошибочно фиксировала бирку и двигала отдельную
+панель. Канонический behavioral donor — mobile Search v24 из commit `3f21baa9`:
 
-Сравниваются три информационные архитектуры раскрытия:
+```text
+<details.mobile-discovery-menu>  ← единственный moving parent
+  <summary>brand tag</summary>
+  <div>cream plane</div>
+</details>
+```
 
-| Вариант | Верхний блок | Footer policy | Основной trade-off |
-|---|---|---|---|
-| A «Бирка-лента» | неглубокие строки quick contexts/идей поиска и global actions; четыре раздела dock не повторяются | utility находится в menu; у ленты нет второго «дна» | самый близкий к v23 и быстрый, но quick links всё равно требуют редакционной дисциплины |
-| B «Бирка-панель» | более высокая группированная панель «Когда / Что / Мой контекст», без копии dock | одинаковый компактный `DiscoveryEndcap` на четырёх страницах | самый объяснимый, но тяжелее и ближе всего к дублированию локальных фильтров |
-| C «Бирка-минимум» | только город, вход и utility; разделы остаются в dock | terminal только у конечных Popular/Personal | самый чистый, но бирка слабее считывается как полное menu |
+`transform` применяется только к общему `details`. В closed state parent
+сдвинут на `-var(--plane-h)`, поэтому видна пришитая к его нижнему краю бирка
+`x=12, y=0, 120×84`. В open state весь объект возвращается в `translateY(0)`:
+бирка оказывается на `y=plane-h` и плоскость полностью видна над ней. Нельзя
+анимировать summary и panel отдельно, менять motion на height/max-height,
+толкать `main`, вводить backdrop/body scroll lock или убирать бирку раньше plane.
 
-Ни один из вариантов не меняет production автоматически. Выбор A/B/C определяет
-следующий этап: реальный общий header component/token contract, перенос Search
-runtime без потери auth/result-card логики и один route resolver также для
-footer. Большой `SiteFooter` не должен оставаться только на Search; допустимы
-либо compact discovery endcap, либо перенос utility в раскрываемый блок, тогда
-как полный service footer сохраняется на desktop/detail/institutional surfaces.
+Открытие/закрытие наследует donor: `320ms cubic-bezier(.22,.86,.32,1)`, повторный
+tap, Escape, outside click, переход по ссылке и vertical scroll более `24px`.
+При закрытии `open` снимается через `340ms`, чтобы panel не исчезла до окончания
+общего transform. Reduced motion оставляет те же состояния без интерполяции.
+
+### Общие инварианты
+
+- один закрытый tag bbox на Search/Today/Popular/Personal;
+- один 64px four-item dock и ровно один `aria-current`; date accessory остаётся
+  только календарным дополнительным уровнем;
+- plane — продолжение v23 cream canvas с flat typography/hairlines, без белой
+  card, glass, floating islands, massive pills и нового шрифта;
+- Search form остаётся в canvas; progress визуально живёт **внутри submit CTA**.
+  Рядом допустим только скрытый semantic `role=progressbar`;
+- unknown phase не изображает процент; determinate fill монотонен, 100% держится
+  `700–800ms`; append имеет собственный control;
+- high-DPR обеспечивается donor SVG и 1x/2x/3x media assets, CSS geometry остаётся
+  в CSS pixels.
+
+### Сравниваемые варианты
+
+| Вариант | Plane IA | `--plane-h` | Footer policy | Trade-off |
+|---|---|---:|---|---|
+| A «Строгие строки» | сервисная строка; Сегодня/Завтра/Выходные; Выставки/Клубы/Бесплатно | `152px` | micro-footer на finite Popular/Search/Personal, без footer у Calendar | ближе всего к принятому v23 и проще для первого сравнения; требует дисциплины вторичных ссылок |
+| B «Индекс» | слева город/profile/service, справа три действия текущего surface при неизменной геометрии | `160px` | одинаковый компактный `Куда дальше?` на четырёх surface | лидер продуктовой приёмки: лучше объясняет контекст, но labels надо централизовать, чтобы surfaces не расходились |
+| C «Тональные зоны» | спокойная service zone и 2×2 typographic index без cards | `184px` | mobile footer отсутствует, service/legal принадлежит plane | лидер визуальной приёмки: чище завершает ленту, но plane выше и legal path менее заметен |
+
+Full desktop `SiteFooter` остаётся на desktop/detail/institutional surfaces. Он не
+должен случайно появляться только на Search mobile. Production-выбор A/B/C
+определит общий tracked header component/token contract и единый route resolver
+для dock, plane и любого terminal/footer.
 
 ### Lab acceptance
 
-Playwright проверяет все 12 route/variant combinations в `390×844` и лидера в
-`320×700`: одинаковый bbox бирки, нулевой open delta, отсутствие horizontal
-overflow и ровно один current dock item. Отдельно проверяются body scroll lock,
-Escape/focus return, progress внутри CTA без видимой внешней полосы и Search
-state sequence `unknown → 12 → 38 → 64 → 86 → 100` без обратного движения.
+Playwright проверяет все `3 × 4 × 2` combinations при `320×700` и `390×844`:
+closed tag `12,0,120×84`, open `tag.y == plane-h`, horizontal overflow `0`, один
+current dock item и отсутствие page errors. Дополнительно проверяются five close
+paths, отсутствие backdrop/body lock, неизменность accepted v23 rail selectors и
+Search sequence `unknown → 12 → 38 → 64 → 86 → 100` без видимой внешней полосы.
+Visual gate сравнивает screenshots с v23 donor и отклоняет card-in-card, detached
+tag, pills, Search form внутри plane, внешний progress rail и новый font/palette
+даже при формально правильном bbox.

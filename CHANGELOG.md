@@ -4,10 +4,12 @@
 
 ### Added
 
-- Added a noindex mobile shell A/B/C research lab built on the accepted Calendar/
-  Popular v23 output instead of redrawing its event rails: three separately
-  linked tag-menu and footer policies share an invariant 120×84 brand tag,
-  64px four-item dock and Search CTA with its progress fill inside the button.
+- Rebuilt the noindex mobile shell A/B/C lab around the canonical whole-object
+  drawer motion: the cream top plane and 120×84 brand tag now slide together,
+  while accepted Calendar/Popular v23 rails and the 64px dock remain untouched.
+  Three flat typographic plane/footer policies share a Search CTA whose visible,
+  monotonic progress fill is contained inside the button. The rejected fixed-tag
+  plus detached-sheet v1 is not a production donor.
 
 - Added `послушать хор` to the editorial fill-only Search query examples.
 - Defined one mobile discovery shell for Search and materialized collections:

@@ -19,23 +19,23 @@ DONOR_DEFAULT = Path(
     "/home/dev/.codex/worktrees/events-bot-new/calendar-occurrences-v21-mobile/"
     "artifacts/codex/mobile-calendar-v23-research-20260721/public"
 )
-BUILD_ID_DEFAULT = "preview-20260721-mobile-shell-unification-lab-v1"
+BUILD_ID_DEFAULT = "preview-20260721-mobile-shell-unification-lab-v2"
 
 VARIANTS = {
     "a": {
-        "name": "Бирка-лента",
-        "subtitle": "быстрое верхнее меню в две строки",
-        "body_class": "variant-ribbon",
+        "name": "Строгие строки",
+        "subtitle": "время и рубрики — плоскими типографическими рядами",
+        "body_class": "variant-rows",
     },
     "b": {
-        "name": "Бирка-панель",
-        "subtitle": "единый центр города, аккаунта и навигации",
-        "body_class": "variant-panel",
+        "name": "Индекс",
+        "subtitle": "город и профиль слева, действия текущего раздела справа",
+        "body_class": "variant-index",
     },
     "c": {
-        "name": "Бирка-минимум",
-        "subtitle": "наверху только глобальные действия",
-        "body_class": "variant-minimal",
+        "name": "Тональные зоны",
+        "subtitle": "сервисная строка и спокойный рубрикатор без отдельного футера",
+        "body_class": "variant-tonal",
     },
 }
 
@@ -70,51 +70,43 @@ def bottom_nav(base: str, current: str) -> str:
     return '<nav class="bottom-nav shell-bottom-nav" aria-label="Основная навигация">' + "".join(items) + "</nav>"
 
 
-def sheet_content(variant: str, base: str) -> str:
+def plane_content(variant: str, base: str, current: str) -> str:
     if variant == "a":
         return f"""
-          <div class="sheet-title"><b>Быстро выбрать</b><span>не повторяет разделы снизу</span></div>
-          <nav class="sheet-primary" aria-label="Быстрый выбор">
-            <a href="{base}/segodnya/">Завтра</a><a href="{base}/populyarnoe/">Выходные</a>
-            <a href="{base}/populyarnoe/">Выставки</a><a href="{base}/">Бесплатно</a>
-          </nav>
-          <nav class="sheet-quick" aria-label="Идеи поиска">
-            <a href="{base}/">Послушать хор</a><a href="{base}/">С детьми</a><a href="{base}/">Под открытым небом</a>
-          </nav>
-          <div class="sheet-utility"><button type="button">Калининград и область</button><button type="button">Войти</button><a href="#utility">О проекте</a></div>
+          <div class="plane-row plane-row--service"><button type="button"><span>Город</span><b>Калининград и область</b></button><button type="button"><span>Аккаунт</span><b>Войти</b></button></div>
+          <nav class="plane-row plane-row--primary" aria-label="Быстрый выбор времени"><a href="{base}/segodnya/">Сегодня</a><a href="{base}/segodnya/">Завтра</a><a href="{base}/populyarnoe/">Выходные</a></nav>
+          <nav class="plane-row plane-row--secondary" aria-label="Рубрики"><a href="{base}/populyarnoe/">Выставки</a><a href="{base}/">Клубы</a><a href="{base}/">Бесплатно</a></nav>
         """
     if variant == "b":
+        contextual = {
+            "calendar": ("Сегодня", "Завтра", "Выходные"),
+            "popular": ("Быстро растут", "По темам", "На выходных"),
+            "search": ("Недавние", "Сохранённые", "Бесплатно"),
+            "personal": ("Интересы", "Лайки", "Подписки"),
+        }[current]
         return f"""
-          <div class="sheet-title"><b>Меню афиши</b><span>всё важное в одном месте</span></div>
-          <div class="sheet-groups">
-            <section><h2>Когда</h2><div><a href="{base}/segodnya/">Сегодня</a><a href="{base}/segodnya/">Завтра</a><a href="{base}/populyarnoe/">Выходные</a></div></section>
-            <section><h2>Что</h2><div><a href="{base}/populyarnoe/">Выставки</a><a href="{base}/">Бесплатно</a><a href="{base}/">С детьми</a></div></section>
-            <section><h2>Мой контекст</h2><div><button type="button">2 города выбрано</button><button type="button">Войти или подписаться</button></div></section>
-          </div>
-          <div class="sheet-utility"><a href="#utility">О проекте</a><a href="#utility">Контакты</a><a href="#utility">Документы</a></div>
+          <section class="index-column index-column--global"><span>Мой контекст</span><button type="button"><b>Калининград</b><small>+ область</small></button><button type="button"><b>Войти</b><small>синхронизировать</small></button><a href="#utility">О проекте</a></section>
+          <nav class="index-column index-column--context" aria-label="Действия текущего раздела"><span>{ROUTES[current][1]}</span><a href="#canvas-action">{contextual[0]}</a><a href="#canvas-action">{contextual[1]}</a><a href="#canvas-action">{contextual[2]}</a></nav>
         """
     return f"""
-      <div class="sheet-title"><b>Настройки афиши</b><span>разделы всегда доступны снизу</span></div>
-      <div class="minimal-actions"><button type="button"><b>Калининград и область</b><span>Сменить города</span></button><button type="button"><b>Войти</b><span>Лайки и подписка</span></button></div>
-      <div class="sheet-utility"><a href="#utility">О проекте</a><a href="#utility">Контакты</a><a href="#utility">Документы</a></div>
+      <div class="tone-service"><button type="button"><span>Город</span><b>Калининград и область</b></button><button type="button"><span>Аккаунт</span><b>Войти</b></button><a href="#utility">О проекте</a></div>
+      <nav class="tone-grid" aria-label="Быстрые разделы"><a href="{base}/segodnya/"><span>Когда</span><b>Завтра</b></a><a href="{base}/populyarnoe/"><span>Когда</span><b>Выходные</b></a><a href="{base}/populyarnoe/"><span>Что</span><b>Выставки</b></a><a href="{base}/"><span>Цена</span><b>Бесплатно</b></a></nav>
     """
 
 
 def shell_header(variant: str, base: str, asset_root: str, current: str, context_title: str, context_meta: str) -> str:
-    content = sheet_content(variant, base)
+    content = plane_content(variant, base, current)
     wordmark = f"{asset_root}/assets/v2/brand/announcements-wordmark-ui.svg"
     return f"""
-      <div class="shell-scrim" data-shell-close hidden></div>
-      <section class="top-sheet" id="top-sheet-{variant}" aria-label="Меню" aria-hidden="true">
-        <button class="sheet-close" type="button" data-shell-close aria-label="Закрыть меню">×</button>
-        {content}
-      </section>
       <header class="site-header shell-header">
-        <button class="brand-tag shell-trigger" type="button" data-shell-trigger aria-controls="top-sheet-{variant}" aria-expanded="false">
-          <span class="brand-tag__endorsement">Полюбить<br>Калининград</span>
-          <img class="brand-tag__wordmark" src="{wordmark}" width="96" alt="Анонсы">
-          <span class="brand-tag__chevron" aria-hidden="true"></span>
-        </button>
+        <details class="mobile-discovery-menu" data-mobile-discovery-menu>
+          <summary class="brand-tag mobile-discovery-menu__summary" aria-label="Открыть меню афиши">
+            <span class="brand-tag__endorsement">Полюбить<br>Калининград</span>
+            <img class="brand-tag__wordmark" src="{wordmark}" width="96" alt="Анонсы">
+            <span class="brand-tag__chevron" aria-hidden="true"></span>
+          </summary>
+          <div class="mobile-discovery-menu__panel" aria-label="Меню и действия афиши">{content}</div>
+        </details>
         <div class="sticky-date shell-context"><div class="sticky-date__layout"><div class="sticky-date__row1"><strong>{html.escape(context_title)}</strong></div><span class="shell-context__meta">{html.escape(context_meta)}</span></div></div>
       </header>
     """
@@ -122,12 +114,12 @@ def shell_header(variant: str, base: str, asset_root: str, current: str, context
 
 def endcap(variant: str, base: str, current: str) -> str:
     if variant == "a":
-        return '<div class="no-footer-marker" id="utility"><span>Служебные ссылки находятся в меню бирки</span></div>'
+        if current == "calendar":
+            return '<div class="no-footer-marker" id="utility"><span>Календарная лента продолжается</span></div>'
+        return '<footer class="mobile-micro-footer" id="utility"><a href="#utility">О проекте</a><a href="#utility">Контакты</a><a href="#utility">Документы</a></footer>'
     if variant == "b":
-        return f'''<section class="discovery-endcap" id="utility"><b>Куда дальше?</b><p>Компактное завершение одинаково на всех четырёх страницах.</p><div><a href="{base}/segodnya/">Сегодня</a><a href="{base}/">Поиск</a><button type="button">О проекте и документы</button></div></section>'''
-    if current in {"popular", "personal"}:
-        return f'''<section class="discovery-endcap contextual-endcap" id="utility"><b>{"Ещё идеи" if current == "popular" else "Подборка закончилась"}</b><p>{"Продолжить с календарём или поиском." if current == "popular" else "Уточнить интересы или посмотреть всю афишу."}</p><div><a href="{base}/segodnya/">К датам</a><a href="{base}/">К поиску</a></div></section>'''
-    return '<div class="no-footer-marker" id="utility"><span>Без терминального блока на этой ленте</span></div>'
+        return f'''<section class="discovery-endcap" id="utility"><b>Куда дальше?</b><p>Один компактный terminal на всех разделах.</p><div><a href="{base}/segodnya/">К датам</a><a href="{base}/">К поиску</a><a href="#utility">О проекте</a></div></section>'''
+    return '<div class="no-footer-marker" id="utility"><span>Служебные действия находятся в плоскости бирки</span></div>'
 
 
 def normalize_donor_html(source: str, base: str) -> str:
@@ -193,56 +185,80 @@ def custom_page(donor: Path, variant: str, base: str, asset_root: str, page: str
 
 
 LAB_CSS = r'''
-/* Shell-only research overrides. Accepted v23 rail selectors above remain untouched. */
-:root{--shell-ease:cubic-bezier(.2,.8,.2,1);--shell-tag-w:120px;--shell-tag-h:84px;--shell-header-h:64px}
-html.shell-open,html.shell-open body{overflow:hidden;overscroll-behavior:none}
-body.shell-lab{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.shell-lab .brand-tag{left:12px;width:120px;height:84px}
-.shell-header{height:var(--shell-header-h);background:transparent;z-index:70;pointer-events:none}
-.shell-trigger{pointer-events:auto;border:0;text-align:left;cursor:pointer;padding:0;overflow:visible}
-.shell-trigger .brand-tag__chevron{position:absolute;right:8px;bottom:8px;width:7px;height:7px;border-right:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(45deg);transition:transform .22s var(--shell-ease)}
-.shell-trigger[aria-expanded="true"] .brand-tag__chevron{transform:rotate(225deg) translate(-2px,-2px)}
-.shell-context{display:flex;align-items:center;min-width:0}.shell-context__meta{display:block;margin-top:3px;font-size:10.5px;line-height:12px;color:#776b61;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.shell-scrim{position:fixed;inset:0;background:rgba(34,26,20,.26);z-index:55;opacity:0;transition:opacity .22s var(--shell-ease)}
-.shell-scrim.is-visible{opacity:1}.top-sheet{position:fixed;left:0;right:0;top:0;z-index:60;box-sizing:border-box;background:#fffdf8;color:#221a14;padding:18px 16px 18px 148px;border-bottom:1px solid rgba(121,48,20,.18);transform:translateY(-105%);visibility:hidden;transition:transform .24s var(--shell-ease),visibility 0s .24s;box-shadow:0 10px 30px rgba(65,43,27,.12)}
-.top-sheet.is-open{transform:translateY(0);visibility:visible;transition-delay:0s}.sheet-close{position:absolute;right:12px;top:10px;border:0;background:transparent;font:400 28px/1 system-ui;color:#776b61;width:40px;height:40px}.sheet-title{min-height:48px;padding-right:38px;display:flex;flex-direction:column;justify-content:center}.sheet-title b{font-size:17px;line-height:20px}.sheet-title span{font-size:11px;line-height:14px;color:#776b61}.sheet-primary,.sheet-quick,.sheet-utility{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}.sheet-primary a,.sheet-quick a,.sheet-utility a,.sheet-utility button,.sheet-groups a,.sheet-groups button{font:650 12px/1.2 inherit;color:#34271f;text-decoration:none;background:#f4ede3;border:0;padding:10px 12px;white-space:nowrap}.sheet-primary{margin:8px 0}.sheet-primary a{background:#a54821;color:#fff}.sheet-quick a{border-bottom:1px solid rgba(121,48,20,.25);background:transparent;padding-left:2px;padding-right:14px}.sheet-utility{margin-top:12px;padding-top:10px;border-top:1px solid rgba(121,48,20,.12)}.sheet-utility a,.sheet-utility button{padding:7px 8px;background:transparent;color:#776b61}
-.variant-panel .top-sheet{padding-left:16px;padding-top:88px;border-radius:0 0 16px 16px;box-shadow:0 14px 28px rgba(72,45,25,.13);transition-duration:.3s}.variant-panel .sheet-title{position:absolute;left:148px;top:16px}.sheet-groups{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sheet-groups section{background:#f7f0e7;padding:10px;min-width:0}.sheet-groups section:last-child{grid-column:1/-1}.sheet-groups h2{margin:0 0 8px;font-size:10px;line-height:12px;text-transform:uppercase;letter-spacing:.08em;color:#8b7768}.sheet-groups section>div{display:flex;gap:5px;overflow-x:auto}.sheet-groups a,.sheet-groups button{padding:8px;background:#fffdf8}
-.variant-minimal .top-sheet{padding-top:16px;padding-bottom:14px;background:#fbf7ef;box-shadow:none}.minimal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}.minimal-actions button{border:1px solid rgba(121,48,20,.14);background:#fffdf8;text-align:left;padding:10px}.minimal-actions b,.minimal-actions span{display:block}.minimal-actions b{font-size:12px}.minimal-actions span{font-size:10px;color:#776b61;margin-top:3px}
-.variant-minimal .sheet-utility{flex-wrap:wrap;overflow:visible;row-gap:2px}.variant-minimal .sheet-utility a{flex:0 0 auto}
-.shell-bottom-nav{z-index:80}.variant-panel .shell-bottom-nav{border-radius:14px 14px 0 0;box-shadow:0 -8px 22px rgba(72,45,25,.08)}.variant-minimal .shell-bottom-nav{border-top-color:transparent;background:linear-gradient(to bottom,rgba(251,247,239,.88),#fbf7ef 25%)}
-.shell-lab main{padding-bottom:calc(86px + env(safe-area-inset-bottom))}.shell-lab .date-accessory{z-index:78}.variant-kicker{display:block;margin-bottom:8px;font-size:10px;line-height:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#a54821}
-.search-specimen,.personal-specimen{max-width:390px;margin:0 auto;padding-top:96px}.search-specimen .page-head,.personal-specimen .page-head{padding-bottom:18px}.search-form-lab{margin:0 14px 18px;padding:14px;background:#fffdf8;border-top:1px solid rgba(121,48,20,.16);border-bottom:1px solid rgba(121,48,20,.16)}.search-form-lab label{display:block;font-size:12px;font-weight:750;margin-bottom:7px}.search-form-lab textarea{box-sizing:border-box;width:100%;resize:none;border:1px solid #cfc1b5;border-radius:8px;background:#fff;padding:12px;font:600 16px/1.35 inherit;color:#221a14}.search-progress-cta{--cta-progress:0%;position:relative;isolation:isolate;box-sizing:border-box;width:100%;height:50px;margin-top:9px;overflow:hidden;border:0;border-radius:8px;background:#a54821;color:#fff;font:800 14px/1 inherit;cursor:pointer}.search-progress-cta::before{content:"";position:absolute;z-index:-1;inset:0 auto 0 0;width:var(--cta-progress);background:#793014;transition:width .24s var(--shell-ease)}.search-progress-cta[data-state="requesting"]::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.15) 48%,transparent 66%);animation:cta-shimmer 1.1s infinite}.search-progress-cta[data-state="done"]::before{background:#793014}.search-progress-cta span{position:relative;z-index:2}.search-status{min-height:28px;margin:8px 2px 0;font-size:11px;line-height:14px;color:#776b61}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}@keyframes cta-shimmer{from{transform:translateX(-90%)}to{transform:translateX(90%)}}
-.saved-searches{margin:0 14px 20px}.saved-searches>b{font-size:12px}.saved-searches>div{display:flex;gap:6px;overflow-x:auto;margin-top:8px}.saved-searches button{border:1px solid rgba(121,48,20,.2);border-radius:999px;background:transparent;padding:8px 11px;white-space:nowrap;color:#4c3b30}.search-results .event-list,.personal-specimen>.event-list{padding-top:0}.search-results .event-row,.personal-specimen>.event-list .event-row{margin-top:8px}
-.personal-onboarding{margin:0 14px 18px;padding:14px;display:flex;gap:12px;align-items:flex-end;background:#fffdf8;border:1px solid rgba(121,48,20,.14)}.personal-onboarding div{min-width:0}.personal-onboarding b{font-size:14px}.personal-onboarding p{margin:5px 0 0;font-size:11px;line-height:15px;color:#776b61}.personal-onboarding button{flex:0 0 104px;border:0;background:#a54821;color:#fff;padding:10px 8px;font:750 11px/1.2 inherit}
-.personal-specimen>.feed-head{box-sizing:border-box;max-width:100%;overflow:hidden}.personal-specimen>.feed-head .feed-head__copy{min-width:0;max-width:100%}.personal-specimen>.feed-head .feed-head__copy>*{max-width:100%;overflow:hidden;text-overflow:ellipsis}
-.discovery-endcap{margin:28px 14px 12px;padding:16px;border-top:1px solid rgba(121,48,20,.2);background:#fffdf8}.discovery-endcap>b{font-size:18px}.discovery-endcap p{margin:5px 0 12px;font-size:12px;color:#776b61}.discovery-endcap div{display:flex;gap:8px;flex-wrap:wrap}.discovery-endcap a,.discovery-endcap button{border:0;background:#eee2d5;color:#34271f;padding:9px 11px;text-decoration:none;font:700 11px/1 inherit}.contextual-endcap{border-left:3px solid #a54821}.no-footer-marker{height:30px;margin:22px 14px 8px;text-align:center;color:#9b8d82;font-size:9px;line-height:30px}
-@media(max-width:350px){.top-sheet{padding-left:140px}.sheet-title b{font-size:15px}.sheet-primary a,.sheet-quick a{font-size:11px;padding-right:9px}.shell-context{left:145px!important}.personal-onboarding{display:block}.personal-onboarding button{margin-top:10px}.variant-panel .top-sheet{padding-left:12px}.variant-panel .sheet-title{left:145px}}
-@media(prefers-reduced-motion:reduce){.top-sheet,.shell-scrim,.brand-tag__chevron,.search-progress-cta::before{transition:none!important}.search-progress-cta::after{animation:none!important;display:none}}
+/* v2 shell-only research overrides. Accepted v23 rails remain untouched. */
+:root{--drawer-ease:cubic-bezier(.22,.86,.32,1);--shell-tag-w:120px;--shell-tag-h:84px;--shell-header-h:64px;--plane-bg:#fbf7ef;--plane-alt:#fffdf8;--hairline:#e7d8c8;--text-main:#221a14;--text-sec:#776b61;--accent:#98401f}
+body.shell-lab{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--plane-bg);color:var(--text-main)}
+.shell-header{height:var(--shell-header-h);background:transparent;z-index:26;pointer-events:none}
+.shell-context{z-index:1;display:flex;align-items:center;min-width:0;transition:opacity 120ms ease}.shell-context__meta{display:block;margin-top:3px;font-size:10.5px;line-height:12px;color:var(--text-sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.shell-menu-open .shell-context{opacity:0;visibility:hidden}
+.mobile-discovery-menu{--plane-h:152px;position:fixed;inset:0 0 auto 0;z-index:28;display:block;width:100%;height:calc(var(--plane-h) + var(--shell-tag-h));color:var(--text-main);pointer-events:none;transform:translate3d(0,calc(-1 * var(--plane-h) - env(safe-area-inset-top)),0);transition:transform 320ms var(--drawer-ease);will-change:transform}
+.variant-index .mobile-discovery-menu{--plane-h:160px}.variant-tonal .mobile-discovery-menu{--plane-h:184px}
+.mobile-discovery-menu[open]{transform:translate3d(0,0,0)}.mobile-discovery-menu.is-closing{transform:translate3d(0,calc(-1 * var(--plane-h) - env(safe-area-inset-top)),0)}
+.mobile-discovery-menu__summary{position:absolute!important;left:max(12px,env(safe-area-inset-left))!important;top:calc(var(--plane-h) + env(safe-area-inset-top))!important;z-index:2!important;box-sizing:border-box!important;width:var(--shell-tag-w)!important;height:calc(var(--shell-tag-h) + env(safe-area-inset-top))!important;min-height:0!important;display:grid!important;grid-template-rows:1fr auto;align-content:end;overflow:hidden;isolation:isolate;padding:max(18px,calc(env(safe-area-inset-top) + 13px)) 8px 9px!important;border:0!important;border-radius:0 0 11px 11px!important;background:var(--accent)!important;color:var(--plane-alt)!important;box-shadow:0 9px 20px rgba(72,45,25,.16)!important;list-style:none;cursor:pointer;pointer-events:auto;touch-action:manipulation}
+.mobile-discovery-menu__summary::-webkit-details-marker{display:none}.mobile-discovery-menu__summary::marker{content:""}.mobile-discovery-menu__summary .brand-tag__endorsement{align-self:end;font-size:7.5px;line-height:8px;letter-spacing:.075em;font-weight:750;text-transform:uppercase}.mobile-discovery-menu__summary .brand-tag__wordmark{display:block;width:96px;height:auto;align-self:end}.brand-tag__chevron{position:absolute;right:8px;bottom:8px;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);transition:transform 180ms ease}.mobile-discovery-menu[open] .brand-tag__chevron{transform:rotate(225deg) translate(-1px,-1px)}
+.mobile-discovery-menu__panel{position:absolute;inset:0 0 auto 0;z-index:1;box-sizing:border-box;width:100%;height:calc(var(--plane-h) + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);overflow:hidden;background:var(--plane-bg);border-bottom:1px solid var(--hairline);color:var(--text-main);visibility:hidden;pointer-events:none;transition:visibility 0s linear 320ms}
+.mobile-discovery-menu[open] .mobile-discovery-menu__panel{visibility:visible;pointer-events:auto;transition-delay:0s}.mobile-discovery-menu.is-closing .mobile-discovery-menu__panel{visibility:visible;pointer-events:none}
+/* A · strict rows */
+.plane-row{box-sizing:border-box;display:grid;align-items:stretch;margin:0;border-bottom:1px solid var(--hairline)}.plane-row>*{min-width:0;display:flex;align-items:center;border:0;background:transparent;color:inherit;text-decoration:none;text-align:left;font-family:inherit}.plane-row--service{height:48px;grid-template-columns:minmax(0,1fr) 112px;padding:0 14px}.plane-row--service>*{display:flex;flex-direction:column;align-items:flex-start;justify-content:center}.plane-row--service>*:last-child{border-left:1px solid var(--hairline);padding-left:14px}.plane-row--service span{font-size:9px;line-height:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-sec)}.plane-row--service b{display:block;max-width:100%;font-size:12px;line-height:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.plane-row--primary{height:52px;grid-template-columns:repeat(3,minmax(0,1fr));padding:0 14px}.plane-row--primary a{font-size:17px;line-height:19px;font-weight:780}.plane-row--primary a+a{border-left:1px solid var(--hairline);padding-left:12px}.plane-row--secondary{height:52px;grid-template-columns:repeat(3,minmax(0,1fr));padding:0 14px;border-bottom:0}.plane-row--secondary a{font-size:12px;line-height:15px;font-weight:680;color:#5f5147}.plane-row--secondary a+a{border-left:1px solid var(--hairline);padding-left:12px}
+/* B · index */
+.variant-index .mobile-discovery-menu__panel{display:grid;grid-template-columns:45% 55%;padding-inline:14px}.index-column{box-sizing:border-box;min-width:0;height:160px;padding:16px 12px 10px 2px;display:flex;flex-direction:column;align-items:flex-start;gap:0}.index-column+ .index-column{border-left:1px solid var(--hairline);padding-left:16px}.index-column>span{margin-bottom:9px;font-size:9px;line-height:11px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--accent)}.index-column a,.index-column button{box-sizing:border-box;width:100%;min-height:33px;display:flex;align-items:baseline;gap:4px;padding:0;border:0;border-bottom:1px solid var(--hairline);background:transparent;color:var(--text-main);text-decoration:none;text-align:left;font:680 13px/15px inherit}.index-column small{font-size:9px;color:var(--text-sec)}.index-column--global>a{font-size:10px;color:var(--text-sec);border-bottom:0}.index-column--context a{font-size:14px;line-height:16px}
+/* C · tonal zones */
+.variant-tonal .mobile-discovery-menu__panel{background:var(--plane-bg)}.tone-service{box-sizing:border-box;height:56px;padding:0 14px;display:grid;grid-template-columns:minmax(0,1fr) 78px 58px;align-items:stretch;background:var(--plane-alt);border-bottom:1px solid var(--hairline)}.tone-service>*{min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;border:0;background:transparent;color:inherit;text-decoration:none;font-family:inherit}.tone-service>*+*{border-left:1px solid var(--hairline);padding-left:10px}.tone-service span{font-size:8.5px;line-height:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-sec)}.tone-service b{max-width:100%;font-size:11px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tone-service>a{font-size:9px;line-height:12px;color:var(--text-sec)}.tone-grid{height:128px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}.tone-grid a{box-sizing:border-box;min-width:0;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;color:inherit;text-decoration:none}.tone-grid a:nth-child(even){border-left:1px solid var(--hairline)}.tone-grid a:nth-child(n+3){border-top:1px solid var(--hairline)}.tone-grid span{font-size:8.5px;line-height:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-sec)}.tone-grid b{font-size:15px;line-height:18px;margin-top:2px}
+.shell-bottom-nav{z-index:40!important}.shell-lab .date-accessory{z-index:39!important}.variant-kicker{display:block;margin-bottom:7px;font-size:9px;line-height:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+.search-specimen,.personal-specimen{max-width:390px;margin:0 auto;padding-top:96px;padding-bottom:96px}.search-specimen .page-head,.personal-specimen .page-head{padding-bottom:16px}.search-form-lab{margin:0 14px 20px;padding:14px 0 18px;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}.search-form-lab label{display:block;font-size:10px;line-height:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:8px}.search-form-lab textarea{box-sizing:border-box;width:100%;min-height:82px;resize:none;border:0;border-bottom:2px solid var(--text-main);border-radius:0;background:transparent;padding:4px 0 10px;font:650 21px/1.25 inherit;color:var(--text-main);outline-offset:4px}.search-progress-cta{--cta-progress:0%;position:relative;isolation:isolate;box-sizing:border-box;width:100%;height:50px;margin-top:12px;overflow:hidden;border:0;border-radius:8px;background:#221a14;color:#fffdf8;font:800 14px/1 inherit;letter-spacing:.01em;cursor:pointer}.search-progress-cta::before{content:"";position:absolute;z-index:-1;inset:0 auto 0 0;width:var(--cta-progress);background:var(--accent);transition:width 240ms var(--drawer-ease)}.search-progress-cta[data-state="requesting"]{background:#30241d}.search-progress-cta[data-state="done"]::before{background:var(--accent)}.search-progress-cta span{position:relative;z-index:2}.search-status{min-height:28px;margin:8px 0 0;font-size:10.5px;line-height:14px;color:var(--text-sec)}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.saved-searches{margin:0 14px 22px;border-top:1px solid var(--hairline)}.saved-searches>b{display:block;padding:11px 0 7px;font-size:10px;line-height:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-sec)}.saved-searches>div{display:block;margin:0}.saved-searches button{box-sizing:border-box;width:100%;display:flex;align-items:center;min-height:38px;border:0;border-bottom:1px solid var(--hairline);border-radius:0;background:transparent;padding:0;color:var(--text-main);text-align:left;font:700 13px/16px inherit}.saved-searches button::after{content:"→";margin-left:auto;color:var(--accent);font-size:18px}.search-results .event-list,.personal-specimen>.event-list{padding-top:0}.search-results .event-row,.personal-specimen>.event-list .event-row{margin-top:8px}
+.personal-onboarding{margin:0 14px 18px;padding:13px 0;display:flex;gap:12px;align-items:flex-end;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);background:transparent}.personal-onboarding div{min-width:0}.personal-onboarding b{font-size:14px}.personal-onboarding p{margin:5px 0 0;font-size:11px;line-height:15px;color:var(--text-sec)}.personal-onboarding button{flex:0 0 104px;border:0;border-bottom:2px solid var(--accent);background:transparent;color:var(--accent);padding:8px 0;font:780 11px/1.2 inherit}.personal-specimen>.feed-head{box-sizing:border-box;max-width:100%;overflow:hidden}.personal-specimen>.feed-head .feed-head__copy{min-width:0;max-width:100%}.personal-specimen>.feed-head .feed-head__copy>*{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.mobile-micro-footer{margin:28px 14px 14px;padding:12px 0;border-top:1px solid var(--hairline);display:flex;gap:16px;flex-wrap:wrap}.mobile-micro-footer a{font-size:10px;line-height:13px;color:var(--text-sec);text-decoration:none}.discovery-endcap{margin:28px 14px 14px;padding:14px 0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);background:transparent}.discovery-endcap>b{font-size:17px;line-height:20px}.discovery-endcap p{margin:4px 0 10px;font-size:11px;line-height:15px;color:var(--text-sec)}.discovery-endcap div{display:flex;gap:15px;flex-wrap:wrap}.discovery-endcap a{color:var(--accent);text-decoration:underline;text-underline-offset:3px;font:720 11px/1.3 inherit}.no-footer-marker{height:24px;margin:20px 14px 8px;text-align:center;color:#aa9e94;font-size:8.5px;line-height:24px}
+@media(max-width:350px){.shell-context{left:145px!important}.plane-row--service{grid-template-columns:minmax(0,1fr) 94px;padding-inline:12px}.plane-row--primary,.plane-row--secondary{padding-inline:12px}.plane-row--primary a{font-size:15px}.plane-row--primary a+a,.plane-row--secondary a+a{padding-left:8px}.variant-index .mobile-discovery-menu__panel{grid-template-columns:44% 56%;padding-inline:12px}.index-column{padding-right:8px}.index-column+ .index-column{padding-left:12px}.index-column--context a{font-size:12px}.tone-service{grid-template-columns:minmax(0,1fr) 70px 52px;padding-inline:12px}.tone-grid a{padding-inline:12px}.personal-onboarding{display:block}.personal-onboarding button{margin-top:9px}}
+@media(prefers-reduced-motion:reduce){.mobile-discovery-menu,.brand-tag__chevron,.shell-context,.search-progress-cta::before{transition:none!important}}
 '''
-
 
 LAB_JS = r'''
 (() => {
-  const root = document.documentElement;
-  const trigger = document.querySelector('[data-shell-trigger]');
-  const sheet = document.querySelector('.top-sheet');
-  const scrim = document.querySelector('.shell-scrim');
-  let returnFocus = null;
-  function setOpen(open) {
-    if (!trigger || !sheet || !scrim) return;
-    if (open) returnFocus = document.activeElement;
-    root.classList.toggle('shell-open', open);
-    trigger.setAttribute('aria-expanded', String(open));
-    sheet.setAttribute('aria-hidden', String(!open));
-    sheet.classList.toggle('is-open', open);
-    scrim.hidden = !open;
-    requestAnimationFrame(() => scrim.classList.toggle('is-visible', open));
-    if (open) sheet.querySelector('a,button:not([data-shell-close])')?.focus({preventScroll:true});
-    else if (returnFocus && document.contains(returnFocus)) returnFocus.focus({preventScroll:true});
-  }
-  trigger?.addEventListener('click', () => setOpen(trigger.getAttribute('aria-expanded') !== 'true'));
-  document.querySelectorAll('[data-shell-close]').forEach((node) => node.addEventListener('click', () => setOpen(false)));
-  addEventListener('keydown', (event) => { if (event.key === 'Escape' && root.classList.contains('shell-open')) setOpen(false); });
+  const menu = document.querySelector('[data-mobile-discovery-menu]');
+  const summary = menu?.querySelector('summary');
+  let drawerTimer = 0;
+  let openedAtY = 0;
+  const syncState = (open) => {
+    document.body.classList.toggle('shell-menu-open', open);
+    summary?.setAttribute('aria-expanded', String(open));
+  };
+  const closeMenu = ({ returnFocus = false } = {}) => {
+    if (!menu?.hasAttribute('open')) return;
+    clearTimeout(drawerTimer);
+    menu.classList.remove('is-opening');
+    menu.classList.add('is-closing');
+    syncState(false);
+    drawerTimer = setTimeout(() => {
+      menu.removeAttribute('open');
+      menu.classList.remove('is-closing');
+      if (returnFocus) summary?.focus({ preventScroll: true });
+    }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 340);
+  };
+  const openMenu = () => {
+    if (!menu) return;
+    clearTimeout(drawerTimer);
+    openedAtY = scrollY || 0;
+    menu.setAttribute('open', '');
+    menu.classList.remove('is-closing');
+    syncState(true);
+    requestAnimationFrame(() => menu.classList.add('is-opening'));
+  };
+  summary?.setAttribute('aria-expanded', 'false');
+  summary?.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (menu.hasAttribute('open') && !menu.classList.contains('is-closing')) closeMenu();
+    else openMenu();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu({ returnFocus: true });
+  });
+  document.addEventListener('click', (event) => {
+    if (menu?.hasAttribute('open') && !menu.contains(event.target)) closeMenu();
+  });
+  document.addEventListener('scroll', () => {
+    if (menu?.hasAttribute('open') && Math.abs((scrollY || 0) - openedAtY) > 24) closeMenu();
+  }, { passive: true });
+  menu?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => closeMenu()));
 
   const form = document.querySelector('[data-search-form]');
   const cta = document.querySelector('[data-search-cta]');
@@ -255,21 +271,41 @@ LAB_JS = r'''
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const mine = ++epoch;
-    cta.disabled = true; cta.dataset.state = 'requesting'; cta.style.setProperty('--cta-progress', '0%');
-    cta.setAttribute('aria-busy', 'true'); label.textContent = 'Подключаю поиск…'; status.textContent = 'Готовлю смысловой поиск';
-    semantic.removeAttribute('aria-valuenow'); semantic.removeAttribute('aria-valuetext');
-    await wait(520); if (mine !== epoch) return;
-    const frames = [[12,'Ищу · 12%','Понимаю запрос'],[38,'Ищу · 38%','Сопоставляю интересы'],[64,'Ищу · 64%','Проверяю события'],[86,'Ищу · 86%','Сортирую выдачу'],[100,'Готово · 3 события','Результаты готовы']];
+    cta.disabled = true;
+    cta.dataset.state = 'requesting';
+    cta.style.setProperty('--cta-progress', '0%');
+    cta.setAttribute('aria-busy', 'true');
+    label.textContent = 'Подключаю поиск…';
+    status.textContent = 'Готовлю смысловой поиск';
+    semantic.removeAttribute('aria-valuenow');
+    semantic.removeAttribute('aria-valuetext');
+    await wait(520);
+    if (mine !== epoch) return;
+    const frames = [
+      [12, 'Ищу · 12%', 'Понимаю запрос'],
+      [38, 'Ищу · 38%', 'Сопоставляю интересы'],
+      [64, 'Ищу · 64%', 'Проверяю события'],
+      [86, 'Ищу · 86%', 'Сортирую выдачу'],
+      [100, 'Готово · 3 события', 'Результаты готовы'],
+    ];
     cta.dataset.state = 'determinate';
     for (const [value, text, message] of frames) {
       if (mine !== epoch) return;
-      cta.style.setProperty('--cta-progress', value + '%'); label.textContent = text; status.textContent = message;
-      semantic.setAttribute('aria-valuenow', String(value)); semantic.setAttribute('aria-valuetext', message);
+      cta.style.setProperty('--cta-progress', `${value}%`);
+      label.textContent = text;
+      status.textContent = message;
+      semantic.setAttribute('aria-valuenow', String(value));
+      semantic.setAttribute('aria-valuetext', message);
       await wait(value === 100 ? 780 : 430);
     }
     if (mine !== epoch) return;
-    results.hidden = false; cta.dataset.state = 'done'; cta.disabled = false; cta.removeAttribute('aria-busy');
-    results.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'});
+    results.hidden = false;
+    cta.dataset.state = 'idle';
+    cta.style.setProperty('--cta-progress', '0%');
+    label.textContent = 'Искать снова';
+    cta.disabled = false;
+    cta.removeAttribute('aria-busy');
+    results.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   });
 })();
 '''

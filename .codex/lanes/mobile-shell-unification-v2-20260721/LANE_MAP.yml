@@ -1,0 +1,92 @@
+mode: serial_integrator_with_parallel_read_only_discovery
+repo: events-bot-new
+base_ref: 52342765bd9b9b677111005ad709fa1f2c2cfd8f
+base_branch: integration/mobile-shell-unification-lab-20260721
+integration_branch: integration/mobile-shell-unification-v2-20260721
+global_constraints:
+  - Calendar and Popular v23 are the visual donor; do not redraw their event rails
+  - existing moving brand tag plus top plane is the behavioral donor and an invariant
+  - tag and plane move as one physical object; never pin the tag while only the sheet moves
+  - design only the useful content, hierarchy and footer policy around that mechanism
+  - exact same shell geometry across Search, Today, Popular and Personal
+  - progress is a stylish visual fill inside the Search CTA, never a visible detached rail
+  - mobile-only research URLs; do not replace accepted production/research builds
+verification_owner: root
+stop_conditions:
+  - actual moving-tag donor cannot be reproduced selector-for-selector
+  - prototypes visibly diverge from accepted Calendar/Popular visual grammar
+lanes:
+  - id: D01
+    role: planner
+    requirement_ids: [R03, R04, R07]
+    target: map exact moving-tag/top-plane behavior and accepted visual donor
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: selector, motion, geometry and reuse map
+    verification_scope: inspection_only
+    status: completed
+    effort: medium
+  - id: C01
+    role: planner
+    requirement_ids: [R01, R02, R04, R05, R07]
+    target: independent Gemini Pro product architecture under fixed donor invariants
+    depends_on: []
+    execution_mode: parallel
+    branch: external-consultant
+    worktree: none
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: product variants and job map
+    verification_scope: inspection_only
+    status: completed
+    effort: high
+  - id: C02
+    role: planner
+    requirement_ids: [R01, R02, R03, R04, R05, R07]
+    target: independent Gemini Pro visual and motion design under fixed donor invariants
+    depends_on: []
+    execution_mode: parallel
+    branch: external-consultant
+    worktree: none
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: renderable visual directions with exact geometry
+    verification_scope: inspection_only
+    status: completed
+    effort: high
+  - id: I01
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07]
+    target: implement separate unified-shell prototype families
+    depends_on: [D01, C01, C02]
+    execution_mode: serial_after_dependency
+    branch: integration/mobile-shell-unification-v2-20260721
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-v24-search-runtime
+    writable_files:
+      - scripts/build_mobile_shell_unification_lab.py
+      - docs/features/static-site-pages/mobile-shell.md
+      - CHANGELOG.md
+    forbidden_files:
+      - site/src
+    expected_output: separate public A/B/C links
+    verification_scope: full_local
+    status: completed
+    effort: high
+  - id: R01
+    role: reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07]
+    target: visual Playwright plus Gemini Pro acceptance against donor screenshots
+    depends_on: [I01]
+    execution_mode: serial_after_dependency
+    branch: integration/mobile-shell-unification-v2-20260721
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-v24-search-runtime
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: visual acceptance report, not geometry-only gate
+    verification_scope: full_local
+    status: completed
+    effort: high
