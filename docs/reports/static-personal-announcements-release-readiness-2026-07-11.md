@@ -282,6 +282,39 @@ Smart Update является владельцем семантического 
 - [ ] Remove root `noindex` only after all launch blockers are signed off.
 - [ ] Post-launch 72-hour hypercare, then 14-day review before declaring stable.
 
+### Stage 13 — Feature discovery «Пасхалки о Калининграде»
+
+Stage number сохранён из planning thread. Это отдельный post-release track, не
+first-presentation GO blocker и не разрешение на production implementation.
+Каноника: [static-site easter eggs](../features/static-site-easter-eggs/README.md),
+[critical product analysis](../features/static-site-easter-eggs/product-analysis.md),
+[external deep-research prompt](../features/static-site-easter-eggs/external-research-brief.md).
+
+- [ ] Owner принимает публичное название, first curated set, duration и exact
+  `communal|cohort` placement mode.
+- [ ] Утверждены source/provenance/IP/freshness/safety и accessible alternatives
+  для каждого объекта.
+- [ ] Clickable mobile/desktop/keyboard/screen-reader/reduced-motion prototype
+  доказывает, что hunt не блокирует event discovery/CTA и не увеличивает badge
+  сохранённых событий в `Моё`.
+- [ ] Архитектура добавляет first-class egg/collection/placement/progress subjects;
+  fake `event_id` в текущем `promo_exposure` запрещён.
+- [ ] `site_easter_egg` activity использует campaign status/window/priority/caps,
+  disclosure/reporting и deterministic dramaturgy с fatigue/hints/catch-up/kill.
+- [ ] Страница коллекции имеет обычный feedback/problem flow и CTA
+  `Предложить пасхалку` с видимым `info@kenigevents.ru`; proposal проходит
+  triage → fact/IP/safety review и не создаёт кампанию автоматически.
+- [ ] Admin inventory показывает прошлые/текущие/будущие объекты, verified
+  placement links, campaign state, metrics, proposals, reports/audit и pause/kill.
+- [ ] Baseline/A-A, holdout, MDE/traffic feasibility, primary incremental
+  downstream event outcome, full-cycle duration и non-inferiority stop rules
+  утверждены до canary.
+- [ ] MVP остаётся non-prize: без streak/loot box/fake scarcity, обязательного
+  login/email/share и влияния share на шанс. Материальная награда — только
+  отдельный legal/privacy/eligibility/audit/fraud release.
+- [ ] Immutable candidate проходит performance/public-HTML/SEO/a11y/security
+  evidence, независимый consultant rerun и owner acceptance exact branch/SHA.
+
 ## 8. Reliability objectives to approve
 
 Это **предложения**, а не уже принятые SLO:

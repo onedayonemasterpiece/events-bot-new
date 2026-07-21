@@ -34,6 +34,7 @@
 - Static event-page production plan, 10-day Telegraph cutover and tests: `docs/features/static-site-pages/release-plan.md`, `docs/features/static-site-pages/test-scenarios.md`
 
 - Static-site service share: `docs/features/static-site-pages/service-sharing.md`
+- Static-site Easter eggs product discovery, analytics and external-research brief: `docs/features/static-site-easter-eggs/README.md`
 - Service-share preview runbook: `docs/operations/service-sharing-preview.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the post-release static-site Easter-eggs product-discovery package: a
+  critical promo-aligned product analysis, deterministic dramaturgy/analytics
+  and guardrails, collection feedback plus partner email/intake and admin
+  requirements, a Stage 13 release gate, and a GitHub/prototype-linked external
+  deep-research prompt. No production behavior or scheduler was changed.
+
 ### Fixed
 
 - Unified linked-event occurrence projection across static detail, date lists,
