@@ -1,0 +1,99 @@
+mode: serial_integrator_with_parallel_read_only_discovery
+repo: events-bot-new
+base_ref: 3f21baa9612d8a2f2200e82d844976f89521bc1d
+base_branch: integration/mobile-v24-search-runtime-20260721
+integration_branch: integration/mobile-shell-unification-lab-20260721
+global_constraints:
+  - preserve accepted calendar/popular v23 as visual donor
+  - research-only separate A/B/C URLs; do not replace v24
+  - one shared shell per variant across calendar/popular/search/personal
+  - keep top brand tag with attached dropdown/sheet concept
+  - mobile-only 320/390 CSS px and high-DPR acceptance
+verification_owner: root
+stop_conditions:
+  - Gemini Pro unavailable without valid Opus fallback
+  - donor v23 cannot be reused without visual regression
+lanes:
+  - id: D01
+    role: explorer
+    requirement_ids: [R02, R04]
+    target: map exact accepted calendar/popular and current Search/Personal donors
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: donor map
+    verification_scope: inspection_only
+    status: completed
+  - id: D02
+    role: explorer
+    requirement_ids: [R01, R03]
+    target: map Search CTA progress and footer/navigation contracts
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: product/technical acceptance map
+    verification_scope: inspection_only
+    status: completed
+  - id: C01
+    role: planner
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: independent Gemini Pro product architecture
+    depends_on: []
+    execution_mode: parallel
+    branch: external-consultant
+    worktree: none
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: consultant artifact
+    verification_scope: inspection_only
+    status: completed
+  - id: C02
+    role: planner
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: independent Gemini Pro visual/motion design
+    depends_on: []
+    execution_mode: parallel
+    branch: external-consultant
+    worktree: none
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: consultant artifact
+    verification_scope: inspection_only
+    status: completed
+  - id: I01
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: implement three standalone unified-shell prototype families
+    depends_on: [D01, D02, C01, C02]
+    execution_mode: serial_after_dependency
+    branch: integration/mobile-shell-unification-lab-20260721
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-v24-search-runtime
+    writable_files:
+      - scripts/build_mobile_shell_unification_lab.py
+      - docs/features/static-site-pages/mobile-shell.md
+      - CHANGELOG.md
+    forbidden_files:
+      - site/src/components
+      - site/src/layouts
+    expected_output: committed research builder, docs, separate public links
+    verification_scope: full_local
+    status: completed
+  - id: R01
+    role: reviewer
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: Gemini Pro plus Playwright mobile acceptance
+    depends_on: [I01]
+    execution_mode: serial_after_dependency
+    branch: integration/mobile-shell-unification-lab-20260721
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-v24-search-runtime
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: acceptance report
+    verification_scope: full_local
+    status: completed

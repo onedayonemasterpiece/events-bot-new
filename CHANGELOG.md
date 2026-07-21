@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added a noindex mobile shell A/B/C research lab built on the accepted Calendar/
+  Popular v23 output instead of redrawing its event rails: three separately
+  linked tag-menu and footer policies share an invariant 120×84 brand tag,
+  64px four-item dock and Search CTA with its progress fill inside the button.
+
 - Added `послушать хор` to the editorial fill-only Search query examples.
 - Defined one mobile discovery shell for Search and materialized collections:
   shared header/drawer ownership, route-driven bottom navigation, safe-area

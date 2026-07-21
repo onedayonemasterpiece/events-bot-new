@@ -4,6 +4,12 @@
 расхождение между календарным прототипом, Search и обычными Astro-страницами, не
 переписывая содержимое самих страниц.
 
+> **Implementation status, 2026-07-21.** Контракт ниже пока не означает, что в
+> Astro уже существует общий `MobileHeader`: календарь v23 генерирует header
+> отдельно, а Search использует drawer из `EventLayout`. Это и есть найденная
+> причина визуального расхождения. До production-конвергенции нельзя называть
+> совпадающие по смыслу, но разные DOM/CSS реализации «единым компонентом».
+
 ## Структура
 
 Один shell владеет тремя независимыми зонами:
@@ -162,3 +168,50 @@ Gemini 3.1 Pro (High) подтвердил три top-mode, единый `aria-c
 оставить Search hardcoded-исключением, убрать dock с listings и скрывать nav при
 скролле отклонены как противоречащие самой цели унификации и постоянной
 доступности top-level навигации.
+
+## A/B/C research lab, 2026-07-21
+
+Отдельный noindex-lab проверяет не новую карточку события, а только shell. Его
+builder — `scripts/build_mobile_shell_unification_lab.py`. Calendar и Popular
+берутся из принятого generated v23 donor: DOM event rail, crop, gestures,
+медальоны и нижняя календарная полоса не пересобираются «по мотивам». Search и
+Personal в lab — явно обозначенные функциональные specimens, а не готовые
+production-страницы.
+
+Во всех трёх вариантах зафиксированы инварианты:
+
+- закрытая бренд-бирка имеет bbox `x=12, y=0, 120×84 CSS px` на Search,
+  Today, Popular и Personal;
+- при открытии menu bbox бирки не меняется: движется только панель из-за неё;
+- один и тот же dock высотой `64px`, ровно один `aria-current`, date accessory
+  только у календаря;
+- визуальный Search progress находится **внутри submit CTA**. Рядом остаётся
+  только скрытый семантический `role=progressbar`; неизвестная начальная фаза не
+  изображает фиктивный процент, determinate width монотонен;
+- системные ссылки не дублируют четыре пункта dock; high-DPR обеспечивается SVG
+  и 1x/2x/3x donor assets, а геометрия задаётся в CSS px;
+- `prefers-reduced-motion` убирает transform/interpolation, сохраняя явные
+  состояния и подписи.
+
+Сравниваются три информационные архитектуры раскрытия:
+
+| Вариант | Верхний блок | Footer policy | Основной trade-off |
+|---|---|---|---|
+| A «Бирка-лента» | неглубокие строки quick contexts/идей поиска и global actions; четыре раздела dock не повторяются | utility находится в menu; у ленты нет второго «дна» | самый близкий к v23 и быстрый, но quick links всё равно требуют редакционной дисциплины |
+| B «Бирка-панель» | более высокая группированная панель «Когда / Что / Мой контекст», без копии dock | одинаковый компактный `DiscoveryEndcap` на четырёх страницах | самый объяснимый, но тяжелее и ближе всего к дублированию локальных фильтров |
+| C «Бирка-минимум» | только город, вход и utility; разделы остаются в dock | terminal только у конечных Popular/Personal | самый чистый, но бирка слабее считывается как полное menu |
+
+Ни один из вариантов не меняет production автоматически. Выбор A/B/C определяет
+следующий этап: реальный общий header component/token contract, перенос Search
+runtime без потери auth/result-card логики и один route resolver также для
+footer. Большой `SiteFooter` не должен оставаться только на Search; допустимы
+либо compact discovery endcap, либо перенос utility в раскрываемый блок, тогда
+как полный service footer сохраняется на desktop/detail/institutional surfaces.
+
+### Lab acceptance
+
+Playwright проверяет все 12 route/variant combinations в `390×844` и лидера в
+`320×700`: одинаковый bbox бирки, нулевой open delta, отсутствие horizontal
+overflow и ровно один current dock item. Отдельно проверяются body scroll lock,
+Escape/focus return, progress внутри CTA без видимой внешней полосы и Search
+state sequence `unknown → 12 → 38 → 64 → 86 → 100` без обратного движения.
