@@ -9,6 +9,7 @@ const collections = read('src/data/searchCollections.ts');
 const collectionPage = read('src/pages/podborki/[slug]/index.astro');
 const donor = read('src/components/AuthorizedEventSearch.astro');
 const bottomNav = read('src/components/MobileSearchBottomNav.astro');
+const eventLayout = read('src/layouts/EventLayout.astro');
 
 test('materialized collections are real static links and examples are fill-only controls', () => {
   assert.match(learning, /href=\{withBase\(`\/podborki\/\$\{item\.slug\}\/`\)\}/u);
@@ -42,13 +43,43 @@ test('collection claims are explicit and derived from actual event fields', () =
   assert.doesNotMatch(collections, /similar|embedding|inference/iu);
 });
 
-test('v58 donor retains separate submit progress and canonical EventCard rendering', () => {
+test('search progress is a backend-owned adjacent progressbar, not a decorated submit button', () => {
   assert.match(donor, /data-search-form/u);
   assert.match(donor, /data-search-submit/u);
-  assert.match(donor, /--search-progress/u);
+  assert.match(donor, /data-search-progress role="progressbar"[^>]*aria-valuemin="0"[^>]*aria-valuemax="100"[^>]*hidden/u);
+  assert.match(donor, /data-search-progress-label role="status" aria-live="polite" aria-atomic="true"/u);
+  assert.match(donor, /progress\.removeAttribute\('aria-valuenow'\)/u, 'request opening and idle are indeterminate/not measurable');
+  assert.match(donor, /progress\.setAttribute\('aria-valuenow', String\(progressValue\)\)/u);
   assert.match(donor, /submit\.classList\.toggle\('is-loading', isLoading\)/u);
+  assert.doesNotMatch(donor, /setSearchProgress\((?:28|55|74|92),/u);
+  assert.doesNotMatch(donor, /--search-progress/u);
+  assert.doesNotMatch(eventLayout, /authorized-search__submit::before/u);
+  assert.match(eventLayout, /\.authorized-search__progress[^}]*background:\s*#fff7ea/u);
+  assert.match(eventLayout, /\.authorized-search__progress-bar[^}]*background:\s*#a54821/u);
+  assert.doesNotMatch(eventLayout, /\.authorized-search__progress-bar[^}]*linear-gradient|\.authorized-search__progress-bar[^}]*15,118,110/su);
+});
+
+test('search progress is monotonic, epoch guarded and reset only by its owning request', () => {
+  assert.match(donor, /const searchStageOrder =/u);
+  assert.match(donor, /progressValue = Math\.max\(progressValue,/u);
+  assert.match(donor, /if \(nextStageRank < progressStageRank\) return/u);
+  assert.match(donor, /searchEpoch/u);
+  assert.match(donor, /new AbortController\(\)/u);
+  assert.match(donor, /activeSearchController\?\.abort\(\)/u);
+  assert.match(donor, /completionResetTimer/u);
+  assert.match(donor, /resetSearchProgress\(epoch\)/u);
+  assert.match(donor, /setSearchProgress\(event\.progress,[^\n]+stage: event\.stage/u, 'only streamed progress events set intermediate values');
+});
+
+test('ranked search cards reuse one-column donor media decisions without related-grid placement', () => {
   assert.match(donor, /window\.KenigEventsRenderEventCard/u);
-  assert.match(donor, /renderer\([^\n]+, 'split-actions'\)/u);
+  assert.match(donor, /packRelatedCardRows\(items,[\s\S]*?rowSize:\s*1,[\s\S]*?presentation:\s*'flow'/u);
+  assert.match(donor, /renderer\([^\n]+, 'split-actions', layout\)/u);
+  assert.match(eventLayout, /function createEventCardElement\(item, variant = 'split-actions', relatedLayout = null\)/u, 'legacy two-argument callers remain valid');
+  assert.match(eventLayout, /relatedLayout\.presentation !== 'flow'/u);
+  assert.match(eventLayout, /else if \(relatedLayout\)[\s\S]*?cardMediaPresentation[\s\S]*?'flow'/u);
+  assert.match(eventLayout, /card\.style\.removeProperty\('grid-row'\)[\s\S]*?if \(relatedGridLayout\)[\s\S]*?style\.setProperty\('grid-row'/u);
+  assert.match(donor, /if \(!append\) \{[\s\S]*?results\.innerHTML = ''/u, 'append pages do not wipe previously rendered cards');
   assert.doesNotMatch(searchPage, /email|magic link|otp/iu);
 });
 

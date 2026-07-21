@@ -1865,16 +1865,16 @@ const descriptionHtml = (event.description_html || '')
 
     /* Shared desktop related rows: EventCard owns exact fit/position; this
        surface supplies geometry only and never overrides the crop decision. */
-    .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto 184px 58px 56px; }
+    .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto minmax(0,1fr) minmax(58px,auto) minmax(56px,auto); }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-link) { display:block; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; isolation:isolate; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; background:#d2c5b7; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; z-index:2; inset:0; width:100% !important; height:100% !important; }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; }
     .desktop-clean-related__grid :global([data-card-authoritative-fit="contain"]) { background:#15110f; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; height:184px; align-content:start; overflow:hidden; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; max-height:58px; overflow:hidden; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; max-height:56px; overflow:hidden; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; align-content:start; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }
   }
   @media (min-width:1024px) and (max-height:720px) {
     .desktop-prototype__stage { --stage-height:calc(100svh - 72px); min-height:520px; }

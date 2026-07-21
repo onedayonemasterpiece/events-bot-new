@@ -93,6 +93,81 @@ test('the Dog-page photo canaries cannot regress to contain bands and may reorde
   assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
   assert.ok(packed.every(({ layout }) => layout.rowRatio >= 5 / 4 && layout.rowRatio <= 8 / 5));
   assert.notDeepEqual(packed.map(({ item }) => item.id), [5757, 6586, 6318, 6652], 'packing may reorder cards across rows');
+  assert.deepEqual([...new Set(packed.map(({ layout }) => layout.rowIndex))].map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length), [3, 1]);
+});
+
+test('row packing permits an incomplete row only as the final row for every supported count', () => {
+  for (let count = 1; count <= 10; count += 1) {
+    const packed = packRelatedCardRows(
+      Array.from({ length:count }, (_, index) => imageEvent(index + 1, 1200 + index * 10, 900, classifiedPhoto())),
+      { rowSize:3, mediaTreatment:'hybrid' },
+    );
+    const sizes = [...new Set(packed.map(({ layout }) => layout.rowIndex))]
+      .map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length);
+    assert.ok(sizes.slice(0, -1).every((size) => size === 3), `${count} cards emitted an early incomplete row: ${sizes}`);
+    assert.equal(sizes.at(-1), count % 3 || 3, `${count} cards emitted the wrong final remainder: ${sizes}`);
+  }
+});
+
+test('one-column flow packing preserves search rank and carries no grid presentation intent', () => {
+  const ranked = [
+    imageEvent(31, 1600, 1000, classifiedPhoto()),
+    imageEvent(32, 800, 1200, { image_text_mode:'ocr_text' }),
+    imageEvent(33, 1200, 900, classifiedPhoto()),
+  ];
+  const packed = packRelatedCardRows(ranked, {
+    rowSize:1,
+    mediaTreatment:'hybrid',
+    presentation:'flow',
+  });
+
+  assert.deepEqual(packed.map(({ item }) => item.id), [31, 32, 33]);
+  assert.ok(packed.every(({ layout }) => layout.presentation === 'flow'));
+  assert.deepEqual(packed.map(({ layout }) => layout.rowColumn), [0, 0, 0]);
+});
+
+test('unknown OCR dimensions fail closed instead of claiming a measured 20% crop', () => {
+  const unknownDocument = imageEvent(41, 0, 0, { image_text_mode:'ocr_text' });
+  const decision = resolveRelatedCardMediaTreatment(unknownDocument, 4 / 5);
+  const [packed] = packRelatedCardRows([unknownDocument], { rowSize:1, presentation:'flow' });
+
+  assert.equal(decision.fit, 'contain');
+  assert.equal(decision.mediaTreatment, 'document-contain');
+  assert.equal(decision.cropReason, 'document_dimensions_unknown');
+  assert.equal(decision.coverCrop, null);
+  assert.equal(decision.potentialCoverCrop, null);
+  assert.equal(packed.layout.rowWorstCrop, null);
+});
+
+test('optimizer may place the first OCR item in the final remainder to keep full rows feasible and compact', () => {
+  const document = (id, width, height) => imageEvent(id, width, height, { image_text_mode:'ocr_text' });
+  const packed = packRelatedCardRows([
+    document(10, 500, 1000),
+    document(11, 1000, 1000),
+    imageEvent(12, 1600, 1000, classifiedPhoto()),
+    imageEvent(13, 1500, 1000, classifiedPhoto()),
+  ], { rowSize:3, mediaTreatment:'hybrid' });
+  const rowSizes = [...new Set(packed.map(({ layout }) => layout.rowIndex))]
+    .map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length);
+  assert.deepEqual(rowSizes, [3, 1]);
+  assert.equal(packed.find(({ item }) => item.id === 10)?.layout.rowIndex, 1, 'source anchor may move to the final remainder');
+});
+
+test('incompatible ranked OCR prefix uses a bounded alternate instead of opening a middle hole', () => {
+  const document = (id, width, height) => imageEvent(id, width, height, { image_text_mode:'ocr_text' });
+  const packed = packRelatedCardRows([
+    document(20, 500, 1000),
+    document(21, 1000, 1000),
+    document(22, 1400, 1000),
+    imageEvent(23, 1600, 1000, classifiedPhoto()),
+    imageEvent(24, 1500, 1000, classifiedPhoto()),
+    imageEvent(25, 1400, 1000, classifiedPhoto()),
+    imageEvent(26, 1300, 1000, classifiedPhoto()),
+  ], { limit:6, rowSize:3, mediaTreatment:'hybrid' });
+  assert.equal(packed.length, 6, 'one bounded alternate preserves the finite six-card surface');
+  assert.deepEqual([...new Set(packed.map(({ layout }) => layout.rowIndex))]
+    .map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length), [3, 3]);
+  assert.ok([20, 21, 22].some((id) => !packed.some(({ item }) => item.id === id)), 'one incompatible OCR candidate is replaced, not put in a singleton middle row');
 });
 
 test('captured Dog-page production payloads reject the exact 22%/32% photo-band regression', () => {
@@ -131,10 +206,12 @@ test('global row optimizer separates incompatible OCR ratios and keeps every doc
   assert.ok(new Set(packed.map(({ layout }) => layout.rowCost)).size >= 1, 'optimizer serializes its page-height objective');
 
   const combinations = (values, size) => {
-    const output = [[]];
+    const output = [];
     const visit = (start, chosen) => {
-      if (chosen.length) output.push(chosen);
-      if (chosen.length === size) return;
+      if (chosen.length === size) {
+        output.push(chosen);
+        return;
+      }
       for (let index = start; index < values.length; index += 1) visit(index + 1, [...chosen, values[index]]);
     };
     visit(0, []);
@@ -146,8 +223,13 @@ test('global row optimizer separates incompatible OCR ratios and keeps every doc
     let best = Number.POSITIVE_INFINITY;
     for (const tail of combinations(rest, 2)) {
       const group = [anchor, ...tail];
-      const plan = packRelatedCardRows(group, { rowSize:3, mediaTreatment:'hybrid' });
-      if (new Set(plan.map(({ layout }) => layout.rowIndex)).size !== 1) continue;
+      let plan;
+      try {
+        plan = packRelatedCardRows(group, { rowSize:3, mediaTreatment:'hybrid' });
+      } catch {
+        continue;
+      }
+      if (plan.length !== 3 || new Set(plan.map(({ layout }) => layout.rowIndex)).size !== 1) continue;
       const tailIds = new Set(tail.map((item) => item.id));
       best = Math.min(best, plan[0].layout.rowCost + exhaustiveMinimum(rest.filter((item) => !tailIds.has(item.id))));
     }

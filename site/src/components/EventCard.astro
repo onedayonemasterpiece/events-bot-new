@@ -13,13 +13,13 @@ interface DesktopRelatedLayout {
   rowColumn: number;
   rowMode: string;
   mediaKind: 'document' | 'visual';
-  mediaTreatment: 'document-safe-cover' | 'visual-cover';
+  mediaTreatment: 'document-safe-cover' | 'document-contain' | 'visual-cover';
   fit: 'contain' | 'cover';
   objectPosition: string;
   cropReason: string;
-  coverCrop: number;
-  potentialCoverCrop: number;
-  rowWorstCrop: number;
+  coverCrop: number | null;
+  potentialCoverCrop: number | null;
+  rowWorstCrop: number | null;
   rowCost: number;
 }
 interface Props {
@@ -113,6 +113,7 @@ const imageLoadHandler = desktopRelatedCrop
   ? "this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-loaded'); this.closest('.event-card__media-shell')?.removeAttribute('aria-busy');"
   : undefined;
 const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.closest('.event-card__media-shell')?.removeAttribute('aria-busy'); this.hidden = true; this.removeAttribute('src');";
+const fixedLayoutMetric = (value: number | null | undefined, digits: number) => Number.isFinite(value) ? Number(value).toFixed(digits) : undefined;
 ---
 <article
   class={cardClass}
@@ -129,9 +130,9 @@ const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.r
   data-lab-row-index={desktopRelatedLayout ? String(desktopRelatedLayout.rowIndex) : undefined}
   data-lab-row-column={desktopRelatedLayout ? String(desktopRelatedLayout.rowColumn) : undefined}
   data-lab-media-treatment={desktopRelatedLayout ? cardCrop.mediaTreatment : undefined}
-  data-lab-cover-crop={desktopRelatedLayout ? cardCrop.coverCrop.toFixed(4) : undefined}
-  data-lab-potential-cover-crop={desktopRelatedLayout ? cardCrop.potentialCoverCrop.toFixed(4) : undefined}
-  data-lab-row-worst-crop={desktopRelatedLayout?.rowWorstCrop.toFixed(4)}
+  data-lab-cover-crop={desktopRelatedLayout ? fixedLayoutMetric(cardCrop.coverCrop, 4) : undefined}
+  data-lab-potential-cover-crop={desktopRelatedLayout ? fixedLayoutMetric(cardCrop.potentialCoverCrop, 4) : undefined}
+  data-lab-row-worst-crop={fixedLayoutMetric(desktopRelatedLayout?.rowWorstCrop, 4)}
   data-lab-row-cost={desktopRelatedLayout?.rowCost.toFixed(5)}
   style={desktopRelatedLayout ? `--lab-row-media-ratio:${desktopRelatedLayout.rowRatio.toFixed(5)};grid-row:${desktopRelatedLayout.rowIndex + 1};grid-column:${desktopRelatedLayout.rowColumn + 1}` : undefined}
   tabindex="0"

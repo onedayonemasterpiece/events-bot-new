@@ -545,6 +545,28 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
     occurrence_member_ids = [int(value) for value in (event.get("occurrence_member_ids") or [event["id"]])]
     place = join_parts([event.get("city"), event.get("venue_name")])
     status_label = clean_text(ticket.get("price_label")) or clean_text(ticket.get("label")) or clean_text(event.get("status_label"))
+    image_url = clean_text(event.get("image_url"))
+    image_assets = [asset for asset in (event.get("image_assets") or []) if isinstance(asset, dict)]
+    primary_image = next(
+        (asset for asset in image_assets if clean_text(asset.get("src")) == image_url),
+        image_assets[0] if image_assets else {},
+    )
+
+    def positive_image_dimension(value: Any) -> int | None:
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            return None
+        return numeric if numeric > 0 else None
+
+    focal_point = primary_image.get("focal_point") if isinstance(primary_image.get("focal_point"), dict) else {}
+    focal_value = focal_point.get("y", primary_image.get("focal_y"))
+    try:
+        focal_y = float(focal_value)
+    except (TypeError, ValueError):
+        focal_y = None
+    if focal_y is not None and not 0 <= focal_y <= 1:
+        focal_y = None
     display = {
         "id": int(event["id"]),
         "event_id": int(event["id"]),
@@ -552,9 +574,13 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
         "href": href,
         "absolute_url": abs_url,
         "event_type": clean_text(event.get("event_type")) or None,
-        "image_url": clean_text(event.get("image_url")) or None,
+        "image_url": image_url or None,
         "image_alt": clean_text(event.get("image_alt")) or f"Афиша события «{clean_text(event.get('title'))}»",
-        "image_text_mode": event.get("image_text_mode") or "unknown",
+        "image_text_mode": primary_image.get("image_text_mode") or event.get("image_text_mode") or "unknown",
+        "image_media_role": clean_text(primary_image.get("media_role")) or clean_text(event.get("image_media_role")) or "unknown_document",
+        "image_width": positive_image_dimension(primary_image.get("width")),
+        "image_height": positive_image_dimension(primary_image.get("height")),
+        "focal_y": focal_y,
         "display_date": clean_text(event.get("display_date")),
         "display_time": clean_text(event.get("display_time")) or None,
         "display_date_time": display_date_time,
@@ -626,7 +652,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
         "event_id": int(event["id"]),
         "search_doc_version": "event-search-doc-v3-search-facets",
         "related_doc_version": "event-related-doc-v1",
-        "card_snapshot_version": "event-card-v2-occurrences",
+        "card_snapshot_version": "event-card-v3-media-layout",
         "text_hash": search_text_hash,
         "related_text_hash": related_text_hash,
         "slug": clean_text(event.get("slug")) or None,

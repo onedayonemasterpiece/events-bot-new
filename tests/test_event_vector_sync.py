@@ -328,6 +328,73 @@ def test_search_card_snapshot_carries_family_identity_and_exact_compact_label():
     assert card["display"]["occurrence_aria_label"] == "2 и 9 ноября в 19:00"
 
 
+def test_search_card_snapshot_uses_matching_primary_asset_media_geometry():
+    event = {
+        "id": 7,
+        "title": "Фото события",
+        "slug": "photo-event",
+        "start_date": "2026-11-02",
+        "display_date": "2 ноября",
+        "image_url": "/primary.jpg",
+        "image_media_role": "unknown_document",
+        "image_assets": [
+            {
+                "src": "/alternate.jpg",
+                "width": 400,
+                "height": 800,
+                "media_role": "event_identity_poster",
+                "focal_point": {"y": 0.9},
+            },
+            {
+                "src": "/primary.jpg",
+                "width": 1600,
+                "height": 1000,
+                "media_role": "event_photo",
+                "image_text_mode": "visual_only",
+                "focal_point": {"x": 0.45, "y": 0.32},
+            },
+        ],
+        "ticket": {},
+    }
+
+    card = sync.build_card_snapshot(
+        event,
+        site_origin="https://kenigevents.ru",
+        base_path="",
+        ics_base_url="https://static.kenigevents.ru/ics",
+    )
+
+    assert card["display"]["image_media_role"] == "event_photo"
+    assert card["display"]["image_width"] == 1600
+    assert card["display"]["image_height"] == 1000
+    assert card["display"]["focal_y"] == 0.32
+    assert card["display"]["image_text_mode"] == "visual_only"
+
+
+def test_search_card_snapshot_unknown_asset_geometry_stays_unknown():
+    event = {
+        "id": 8,
+        "title": "Афиша без геометрии",
+        "slug": "poster-without-geometry",
+        "start_date": "2026-11-03",
+        "display_date": "3 ноября",
+        "image_url": "/poster.jpg",
+        "image_assets": [{"src": "/poster.jpg", "media_role": "event_identity_poster"}],
+        "ticket": {},
+    }
+
+    card = sync.build_card_snapshot(
+        event,
+        site_origin="https://kenigevents.ru",
+        base_path="",
+        ics_base_url="https://static.kenigevents.ru/ics",
+    )
+
+    assert card["display"]["image_width"] is None
+    assert card["display"]["image_height"] is None
+    assert card["display"]["focal_y"] is None
+
+
 def test_search_snapshot_formats_same_day_sessions_and_ignores_dangling_links():
     first = {
         "id": 4,
