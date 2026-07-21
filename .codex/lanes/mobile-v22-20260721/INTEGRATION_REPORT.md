@@ -12,7 +12,7 @@ Public noindex preview: <https://kenigevents.ru/preview-20260721-mobile-calendar
 | R02 | Done | Main calendar routes use parallax factor `.28`; random schedule is one-shot and height-resize safe; forward/reverse opacity gates are monotonic; reload randomizes the field; reduced motion removes transform. Static comparison remains `/date-2026-07-24-static/`. |
 | R03 | Done | Date-list row `5511` renders `19:00 / 24 июля / 25 июля 17:00`, carries explicit family `5511,5512`, full aria, current-detail click semantics and no redundant `Ещё даты`. No title/venue inference was added. |
 | R04 | Done | `/poisk/` uses anonymous query-first, inline auth after submit, preserved `q`, active Search nav, no date accessory, ten visibly simulated public-query chips, honest Yandex-active/email-unapplied copy and separate personal-saved-search semantics. |
-| R05 | Done | Telegram forum topic `122` received one annotated four-link message; receipt `telegram-receipt-v22-annotated.json`, message `474`, exact text verified in topic. |
+| R05 | Done | Telegram forum topic `122` received one annotated four-link message; final edit receipt `telegram-receipt-v22-annotated-edit.json`, message `474`, exact text verified in topic. The annotation explicitly says this noindex build demonstrates auth states rather than launching auth. |
 | R06 | Done | Gemini 3.1 Pro (High) reviewed the public prototype and returned PASS on all four product areas. Its initial false attribution of reload randomization to Search was challenged and formally retracted; corrected Search evidence is the Demo badge/copy, simulated data attribute and fill-only chip behavior. |
 
 ## Validation
