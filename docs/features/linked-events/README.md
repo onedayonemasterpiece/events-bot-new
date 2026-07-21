@@ -1,51 +1,117 @@
-# Linked Events (Связанные события)
+# Связанные события: единый контракт
 
-Одна и та же активность (мастер‑класс, лекция, спектакль) часто публикуется как несколько отдельных событий по разным датам. Цель этой фичи: чтобы на странице одного события было понятно, что у него есть **другие доступные даты**.
+> **Статус:** каноника для переноса во все ветки, где показываются связи между
+> событиями. Production source of truth — `origin/main`; лабораторные ветки
+> ниже дают требования и визуальные образцы, но не становятся production
+> автоматически.
 
-## Данные
+Цель фичи — одна модель данных и одно предсказуемое поведение на странице
+события, в mobile feed, на списочных страницах, в Telegram/Telegraph и в
+будущих персональных поверхностях.
 
-- `Event.linked_event_ids: list[int]` — список `event_id` других “вхождений” того же события.
-- Инвариант: связь **симметрична**. Если `A` ссылается на `B`, то `B` ссылается на `A`. `linked_event_ids` никогда не содержит `self`.
+## Главное решение: четыре публичных связи + duplicate review
 
-## Алгоритм связывания (deterministic)
+| Канонический тип | Что означает | Публичная подпись | Нельзя смешивать с |
+| --- | --- | --- | --- |
+| `same_occurrence_group` | та же программа/активность в другое время или дату | **Другие даты** / **Другое время** | похожими событиями и дедупликацией |
+| `semantic_related` | действительно похожее, но самостоятельное событие | **Похожие события** | другими датами и широкой афишей |
+| `broad_discovery` | ограниченное продолжение выбора и anti-bubble | **Ещё события** | утверждением «похожие» |
+| `personalized_feed` | выдача изменена совместимым профилем пользователя | **Для вас** / **По вашим интересам** | анонимным статическим fallback |
 
-Каноническая функция: `linked_events.recompute_linked_event_ids(db, event_id)`.
+`duplicate_same_slot` — отдельный непубличный outcome: два rows с одной
+программой и одним slot должны идти в merge/review, а не показываться как
+«другая дата». Он не входит в четыре публичных relation surfaces.
 
-Правила (намеренно строгие, чтобы избежать ложных “Другие даты”):
+`festival`, площадка, организатор, источник, рубрика и поисковая выдача — это
+**membership/filter context**, а не relation edge. Они могут быть признаками
+ранжирования, но не дают права называть два события «похожими» или «другими
+датами».
 
-- связываем только **однодневные** события: не `date` в формате диапазона `YYYY-MM-DD..YYYY-MM-DD` и без `end_date`;
-- `location_name` должен совпадать **строго**;
-- `title` должен совпадать по строгому matcher’у (нормализация + шумовые токены + `SequenceMatcher >= 0.90`);
-- кандидаты берутся в окне вокруг даты события:
-  - `LINKED_EVENTS_PAST_DAYS` (default `120`)
-  - `LINKED_EVENTS_FUTURE_DAYS` (default `365`)
-  - `LINKED_EVENTS_MAX_CANDIDATES` (default `800`)
-  - `LINKED_EVENTS_MAX_GROUP_SIZE` (default `120`)
+## Единая цепочка данных
 
-Результат применяется симметрично: всем событиям группы выставляется одинаковый список ссылок (минус self), а устаревшие ссылки удаляются.
+```text
+Fly SQLite Event (канонические факты и lifecycle)
+  ├─ linked_event_ids -> same_occurrence_group
+  ├─ static export -> активный публичный каталог
+  ├─ offline retrieval + quality gates -> semantic_related
+  ├─ bounded diverse tail -> broad_discovery
+  └─ consented compatible profile -> personalized_feed rerank/filter
+       -> static HTML/JSON/card projection
+       -> один card renderer и один interaction controller на всех surfaces
+```
 
-## Где пересчитывается (потоки)
+- Fly SQLite остаётся источником истины для идентичности, дат, статусов и
+  `linked_event_ids`.
+- Supabase/pgvector может хранить поисковые документы, embeddings, компактную
+  выдачу и telemetry, но не становится источником истины о lifecycle события.
+- LLM/vector/provider не вызываются в page-view hot path. Страница всегда
+  полезна как статический fallback.
+- Любая ветка должна потреблять единый результат связи, а не заново решать
+  regex/эвристиками, что является другой датой или похожим событием.
 
-- Smart Update: после `create/merge`, а также при изменении `title/location_name/date/time`.
-- Source parsing (`/parse` и парсеры сайтов): через `source_parsing.handlers.update_linked_events(...)`.
-- Ручное редактирование через UI бота: при правках `title/location_name/date/time`.
+Current-main exception (не целевое поведение): frontend
+`getLinkedSessionIds()` сейчас объединяет explicit `other_date_ids` с inference
+по normalized title/type/venue/city. Это отмечено как migration gap, а не как
+второй допустимый source of truth.
 
-Если пересчёт изменил `linked_event_ids` у других событий группы, они получают задачу `telegraph_build`, чтобы публичный инфоблок обновился.
+## Поверхности
 
-## Публикация Telegram/VK
+| Surface | Обязательное поведение |
+| --- | --- |
+| Статическая страница события | `Другие даты` рядом с датой/CTA; ниже контента конечный блок `Похожие события`; отдельный `Ещё события` допустим только как честно отделённый broad tail. |
+| Mobile event detail | те же relation types и порядок; cards идут вертикально, без бесконечного скролла и без дублирующего второго блока. |
+| Mobile feed / «Для меня» | использует тот же card/feedback/profile contract; скрывает siblings одной occurrence group после явного negative action, но не называет всю ленту «похожей». |
+| `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/populyarnoe/`, категории | основной SEO-список не меняется; персональная часть — progressive enhancement, конечная и дедуплицированная с уже показанными событиями. |
+| Telegraph/бот | компактная строка `Другие даты`; тот же `linked_event_ids`, сортировка и lifecycle-фильтры. |
+| Галерея события | финальный CTA может вести на первый `semantic_related`, но не маскируется под фотографию и подписан `Смотреть похожее`. |
 
-Если несколько связанных вхождений попадают на одну дату и отличаются только временем, наружные event-посты в Telegram и VK публикуются одним якорным постом. Якорь выбирается детерминированно: самое раннее время в этот день, затем меньший `event.id`. В строке времени якорного поста показываются все времена дня, например `14:00 и 16:00`.
+## Что является каноникой
 
-Job, пришедший по любому sibling-событию same-day группы, публикует/переиспользует якорный пост и затем сохраняет ссылку на него в остальных sibling rows. Это не требует нового поля или ручного объединения событий; источник истины остаётся `linked_event_ids`.
+1. [Единые требования и acceptance checklist](requirements.md) — документ,
+   который нужно передавать во все implementation branches.
+2. [Инвентаризация production, старых реализаций и лабораторий](inventory.md) —
+   откуда взяты решения и какие ветки нельзя принимать за production.
+3. [Визуальные паттерны и скриншоты](visual-patterns.md) — принятые механики,
+   экспериментальные варианты и их provenance.
 
-## UI: “Другие даты” на Telegraph‑странице
+Подробные subordinate contracts остаются на своих местах:
 
-При сборке Telegraph‑страницы события (`update_telegraph_event_page`) в `SourcePageEventSummary.other_dates` добавляются ближайшие связанные вхождения, а `_build_source_summary_block` рендерит строку:
+- event-detail ranking/personalization:
+  `docs/features/unsigned-personalization/event-detail-related.md`;
+- retrieval/cache/quality:
+  `docs/features/unsigned-personalization/semantic-vector-retrieval.md`;
+- listing continuation:
+  `docs/features/static-site-pages/listing-personal-feed.md`;
+- page/card/media behavior:
+  `docs/features/static-site-pages/README.md`.
 
-`🗓 Другие даты: 12 марта 10:30 · 26 марта 10:30 · …`
+При расхождении терминов или поведения эти документы должны быть приведены к
+этому umbrella contract; нельзя создавать ещё один параллельный «related»
+словарь.
 
-Особенности:
+## Уже работающая legacy-механика `linked_event_ids`
 
-- показывается до 6 дат (окно вокруг текущего события), остаток: `и ещё N`;
-- отмена/перенос помечаются `❌` / `⏸`;
-- для `event_type=выставка` и для событий‑диапазонов блок скрывается (там “много дат” уже выражено периодом).
+Legacy-каноническая функция
+`linked_events.recompute_linked_event_ids(db, event_id)`
+связывает только однодневные события, требует точного `location_name` и строгого
+совпадения title. Intended recompute invariant: связь симметрична, self-link
+запрещён, все члены пересчитанной группы получают один состав siblings.
+Это не гарантия качества всех legacy rows: production-derived snapshot содержит
+one-way/dangling/same-slot defects, а некоторые early-return paths не очищают
+старые edges.
+
+Пересчёт вызывается после Smart Update create/merge и правок
+`title/location_name/date/time`, в source parsing и в ручном UI. Изменённые
+siblings получают `telegraph_build`. Same-day Telegram/VK публикация выбирает
+детерминированный anchor (раннее время, затем меньший `event.id`) и показывает
+все времена дня.
+
+Это production foundation, но не целевая модель: стабильный target —
+`occurrence_group_id` + relation kind/provenance/version/confidence/review/manual
+lock, а `linked_event_ids` становится совместимым derived projection. До этой
+миграции нельзя изобретать группу на frontend по title/type/venue.
+
+Текущий foundation также не полный продуктовый контракт: статическая
+страница должна ещё применять lifecycle-фильтры, переключать выбранную дату со
+всеми зависимыми CTA/calendar/source данными и не отправлять siblings в блок
+`semantic_related`.

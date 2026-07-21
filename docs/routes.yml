@@ -625,14 +625,22 @@ features:
       - scripts/apply_event_media_audit_cleanup.py
       - scripts/stage_event_media_review_backfill.py
   linked_events:
-    status: implemented
+    status: mixed_implemented_preprod_and_lab
     docs: docs/features/linked-events/README.md
+    unified_requirements: docs/features/linked-events/requirements.md
+    implementation_inventory: docs/features/linked-events/inventory.md
+    visual_patterns: docs/features/linked-events/visual-patterns.md
     entrypoints:
       - linked_events.py
       - smart_event_update.py
       - source_parsing/handlers.py
       - main.py
       - main_part2.py
+      - site/src/lib/events.ts
+      - site/src/pages/sobytiya/[slug].astro
+      - site/src/components/DesktopEventPage.astro
+      - site/src/components/PersonalFeedSlot.astro
+      - site/scripts/export-production-preview-data.py
   vk_auto_queue:
     status: implemented
     docs: docs/features/vk-auto-queue/README.md
