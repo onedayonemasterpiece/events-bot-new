@@ -72,6 +72,11 @@ Contract/donor `feature/related-events-compact-unified-20260721` выбороч�
    `card_snapshot`; Edge Function до LLM/final response сворачивает выдачу
    по этому family key. Так live authorized search остаётся
    `per-family`, а не только статический fallback.
+   Материализованный DTO содержит точные `occurrence_member_ids`, compact label
+   и полный `aria-label`; Edge Function сначала сворачивает полный ranked window,
+   затем применяет logical pagination, повторяет collapse после LLM rerank и
+   переносит тот же family seen-set в fallback. Первый/highest-ranked member
+   остаётся representative; malformed one-way/dangling metadata fail closed.
 
 Канонические примеры: `2, 9 ноября 19:00` и
 `4 ноября 17:00, 19:00`. Rail показывает ту же projection в две строки и один

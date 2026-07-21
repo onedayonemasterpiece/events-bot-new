@@ -1,6 +1,11 @@
 // KenigEvents authorized vector search Edge Function.
 // Runtime: Supabase Edge Functions / Deno.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.108.2";
+import {
+  collapseOccurrenceFamilies,
+  occurrenceFamilyKey,
+  paginateOccurrenceFamilies,
+} from "./occurrence-families.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -729,34 +734,6 @@ function candidateId(candidate: Candidate): number | null {
     (candidate?.display as Candidate | undefined)?.id;
   const value = Number(raw);
   return Number.isFinite(value) ? value : null;
-}
-
-function occurrenceMemberIds(candidate: Candidate): number[] {
-  const display = candidate?.display && typeof candidate.display === "object"
-    ? candidate.display as Candidate
-    : {};
-  const raw = Array.isArray(display.occurrence_member_ids)
-    ? display.occurrence_member_ids
-    : Array.isArray(candidate.occurrence_member_ids)
-      ? candidate.occurrence_member_ids
-      : [];
-  return Array.from(new Set(raw.map(Number).filter((value) => Number.isFinite(value) && value > 0)))
-    .sort((left, right) => left - right);
-}
-
-function occurrenceFamilyKey(candidate: Candidate): string {
-  const memberIds = occurrenceMemberIds(candidate);
-  const eventId = candidateId(candidate);
-  return memberIds.length > 1 ? `family:${memberIds.join(",")}` : `event:${eventId ?? ""}`;
-}
-
-function collapseOccurrenceFamilies(candidates: Candidate[], seen = new Set<string>()): Candidate[] {
-  return candidates.filter((candidate) => {
-    const key = occurrenceFamilyKey(candidate);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function truncateText(value: unknown, maxChars: number): string {
@@ -1759,8 +1736,11 @@ async function runEventSearch(
       "search_events_by_embedding_v1",
       {
         p_query_embedding: embedding,
-        p_match_count: verificationWindow,
-        p_offset_count: offset,
+        // Pagination is applied after reciprocal-family collapse below. Fetch
+        // the complete ranked server window so a lower-ranked sibling cannot
+        // reappear merely because it crossed a raw SQL offset boundary.
+        p_match_count: 60,
+        p_offset_count: 0,
         p_date_from: dateFrom,
         p_date_to: null,
         p_city_filter: null,
@@ -1775,10 +1755,18 @@ async function runEventSearch(
     );
     timings.search_rpc_ms = nowMs() - Math.round(searchStartedAt);
     if (searchError) throw new Error(`db_search:${searchError.message}`);
-    let items = collapseOccurrenceFamilies((Array.isArray(rows) ? rows : []).map(normalizeCandidate));
-    const retrievedCount = Array.isArray(rows) ? rows.length : 0;
-    const nextOffset = offset + retrievedCount;
-    const hasMore = retrievedCount >= verificationWindow && nextOffset < 60;
+    const rankedCandidates = (Array.isArray(rows) ? rows : []).map(
+      normalizeCandidate,
+    );
+    const familyPage = paginateOccurrenceFamilies(
+      rankedCandidates,
+      offset,
+      verificationWindow,
+    );
+    let items = familyPage.items;
+    const retrievedCount = familyPage.retrievedCount;
+    const nextOffset = familyPage.nextOffset;
+    const hasMore = familyPage.hasMore;
 
     await progress?.({
       stage: "vector_results",
@@ -1848,12 +1836,15 @@ async function runEventSearch(
       timings.digest_ms = 0;
       timings.llm_ms = 0;
     }
-    items = collapseOccurrenceFamilies(llmResult.used
-      ? llmResult.exact
-      : llmResult.possible).slice(0, limit);
+    items = collapseOccurrenceFamilies(
+      llmResult.used ? llmResult.exact : llmResult.possible,
+    ).slice(0, limit);
 
     let fallbackItems: Candidate[] = llmResult.used && includeFallback
-      ? collapseOccurrenceFamilies(llmResult.possible, new Set(items.map(occurrenceFamilyKey)))
+      ? collapseOccurrenceFamilies(
+          llmResult.possible,
+          new Set(items.map(occurrenceFamilyKey)),
+        )
       : [];
     if (
       includeFallback &&
@@ -1870,18 +1861,23 @@ async function runEventSearch(
       const { data: fallbackRows } = await supabase.rpc(
         "event_search_fallback_cards_v1",
         {
-          p_match_count: limit,
+          // Same bounded complete-pool rule as vector pagination: family
+          // collapse happens before the result limit is applied.
+          p_match_count: 60,
           p_offset_count: 0,
           p_date_from: dateFrom,
         },
       );
       const seenIds = new Set(items.map(candidateId));
       const seenFamilies = new Set(items.map(occurrenceFamilyKey));
-      fallbackItems = collapseOccurrenceFamilies((Array.isArray(fallbackRows) ? fallbackRows : [])
-        .map((row: Record<string, unknown>, index: number) =>
-          normalizeCandidate({ ...row, similarity: 0, distance: 1 }, index),
-        )
-        .filter((candidate) => !seenIds.has(candidateId(candidate))), seenFamilies)
+      fallbackItems = collapseOccurrenceFamilies(
+        (Array.isArray(fallbackRows) ? fallbackRows : [])
+          .map((row: Record<string, unknown>, index: number) =>
+            normalizeCandidate({ ...row, similarity: 0, distance: 1 }, index)
+          )
+          .filter((candidate) => !seenIds.has(candidateId(candidate))),
+        seenFamilies,
+      )
         .slice(0, limit);
       timings.fallback_rpc_ms = nowMs() - Math.round(fallbackStartedAt);
     }

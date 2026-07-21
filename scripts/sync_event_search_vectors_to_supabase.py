@@ -102,7 +102,10 @@ def sha256_text(value: str) -> str:
 
 
 def _occurrence_time(event: dict[str, Any]) -> str | None:
-    match = re.search(r"(\d{1,2}):(\d{2})", clean_text(event.get("start_time") or event.get("display_time")))
+    match = re.search(
+        r"(\d{1,2}):(\d{2})",
+        clean_text(event.get("start_time") or event.get("display_time")),
+    )
     if not match:
         return None
     hour, minute = int(match.group(1)), int(match.group(2))
@@ -141,7 +144,9 @@ def _format_occurrence_dates(values: list[str], current_year: int, *, aria: bool
     return _human_join(formatted) if aria else ", ".join(formatted)
 
 
-def build_occurrence_projections(events: list[dict[str, Any]], *, current_year: int | None = None) -> dict[int, dict[str, Any]]:
+def build_occurrence_projections(
+    events: list[dict[str, Any]], *, current_year: int | None = None
+) -> dict[int, dict[str, Any]]:
     """Project reciprocal explicit occurrence families into search snapshots.
 
     This is publication projection only: it never infers identity from title,
@@ -154,7 +159,11 @@ def build_occurrence_projections(events: list[dict[str, Any]], *, current_year: 
         for event in events
         if int(event.get("id") or 0) > 0
         and clean_text(event.get("lifecycle_status")).lower() in {"", "active"}
-        and (not clean_text(event.get("end_date")) or clean_text(event.get("end_date")) == clean_text(event.get("start_date")))
+        and (
+            not clean_text(event.get("end_date"))
+            or clean_text(event.get("end_date"))
+            == clean_text(event.get("start_date"))
+        )
     }
     parent = {event_id: event_id for event_id in public}
 
@@ -184,7 +193,13 @@ def build_occurrence_projections(events: list[dict[str, Any]], *, current_year: 
 
     output: dict[int, dict[str, Any]] = {}
     for members in components.values():
-        members.sort(key=lambda item: (clean_text(item.get("start_date")), _occurrence_time(item) or "99:99", int(item["id"])))
+        members.sort(
+            key=lambda item: (
+                clean_text(item.get("start_date")),
+                _occurrence_time(item) or "99:99",
+                int(item["id"]),
+            )
+        )
         member_ids = [int(item["id"]) for item in members]
         dates = list(dict.fromkeys(clean_text(item.get("start_date")) for item in members))
         times = [_occurrence_time(item) for item in members]
@@ -524,7 +539,9 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
     ticket = event.get("ticket") or {}
     href = event_href(event, base_path=base_path)
     abs_url = absolute_url(f"/sobytiya/{event.get('slug')}/", site_origin=site_origin, base_path=base_path)
-    display_date_time = clean_text(event.get("occurrence_compact_label")) or join_parts([event.get("display_date"), event.get("display_time")])
+    display_date_time = clean_text(event.get("occurrence_compact_label")) or join_parts(
+        [event.get("display_date"), event.get("display_time")]
+    )
     occurrence_member_ids = [int(value) for value in (event.get("occurrence_member_ids") or [event["id"]])]
     place = join_parts([event.get("city"), event.get("venue_name")])
     status_label = clean_text(ticket.get("price_label")) or clean_text(ticket.get("label")) or clean_text(event.get("status_label"))

@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Hardened authorized event search occurrence collapse: reciprocal family DTOs
+  are paginated only after collapse, deduplicated again after LLM reranking and
+  share the same seen-set with fallback results; malformed one-way metadata
+  remains separate and the highest-ranked member stays representative.
+
 - Unified linked-event occurrence projection across static detail, date lists,
   Popular, search, recommendations and personal continuation: only reciprocal
   explicit `other_date_ids` create a family; date lists remain per-date while

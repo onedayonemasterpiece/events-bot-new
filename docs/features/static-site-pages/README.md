@@ -21,7 +21,10 @@ cards и hydrated discovery используют один pure
 создаёт family. Exact compact labels: `2, 9 ноября 19:00` и
 `4 ноября 17:00, 19:00`; rail переносит тот же DTO в две строки с полным
 `aria-label`. Date lists применяют `per-date`, ranked/entity lists —
-`per-family`, event detail — always-visible selector. Полный contract и handoff:
+`per-family`, event detail — always-visible selector. Search snapshot хранит
+member ids, compact label и полный accessibility label; сервер сворачивает family
+до logical pagination, после LLM rerank и в fallback, поэтому sibling не
+всплывает на следующей странице. Полный contract и handoff:
 [`REL-045`–`REL-050`](../linked-events/requirements.md) и
 [`handoff.md`](../linked-events/handoff.md). Это не wholesale merge старых labs
 и не меняет production-root status страницы.

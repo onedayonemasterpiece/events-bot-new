@@ -328,6 +328,37 @@ def test_search_card_snapshot_carries_family_identity_and_exact_compact_label():
     assert card["display"]["occurrence_aria_label"] == "2 и 9 ноября в 19:00"
 
 
+def test_search_snapshot_formats_same_day_sessions_and_ignores_dangling_links():
+    first = {
+        "id": 4,
+        "title": "Один спектакль",
+        "start_date": "2026-11-04",
+        "start_time": "17:00",
+        "end_date": "2026-11-04",
+        "lifecycle_status": "active",
+        "other_date_ids": [5, 999],
+    }
+    second = {
+        **first,
+        "id": 5,
+        "start_time": "19:00",
+        "other_date_ids": [4],
+    }
+
+    projection = sync.build_occurrence_projections(
+        [first, second],
+        current_year=2026,
+    )
+
+    assert projection[4] == {
+        "occurrence_member_ids": [4, 5],
+        "occurrence_compact_label": "4 ноября 17:00, 19:00",
+        "occurrence_aria_label": "4 ноября в 17:00 и 19:00",
+    }
+    assert projection[5] == projection[4]
+    assert 999 not in projection[4]["occurrence_member_ids"]
+
+
 @pytest.mark.asyncio
 async def test_smart_update_fanout_enqueues_coalesced_vector_projection(monkeypatch, tmp_path):
     import main
