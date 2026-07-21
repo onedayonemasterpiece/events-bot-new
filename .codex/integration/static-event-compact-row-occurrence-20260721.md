@@ -29,6 +29,15 @@ Base: `origin/main@71a9cb1e5b78c1e85098cfb70862daa1f07bd28f`
 | focused review audit | read-only | R04 | Use unique legacy `preview-*` prefix; never run production request/publisher. |
 | integration | serial write | R01–R06 | This worktree only; implementation, tests, docs, preview publication. |
 
+## Status at focused handoff
+
+- R01, R02, R03, R04 and R05: done for the isolated `6408` preview; generated
+  rows are `3,3,3,1`, Romeo is one explicit-family card, all gates are green,
+  and stable root/current-review/stable ICS were not changed.
+- R06: partial by design. Canonical docs/changelog/incident are synchronized,
+  but canonical DB repair and all-page generation remain blocked on explicit
+  owner visual approval of the focused URL.
+
 ## Integration order
 
 1. Enforce full rows plus at most one final remainder in the shared packer.

@@ -228,6 +228,17 @@ secret preproduction candidate family.
   cannot collapse them. The prior acceptance is superseded. Only a fresh
   isolated `preview-*` page for `6408` may be shown next; no all-page candidate
   or stable-root rollout is allowed before owner visual approval.
+- 2026-07-21 11:39–11:50 UTC — branch `9dced876` built a focused noindex
+  `preview-*` namespace using the production-family renderer and an isolated
+  reciprocal review fixture for `6318 ↔ 6586`; canonical production data was
+  not mutated. Generated-output checks, `77` Node tests, `10` occurrence tests,
+  the `15`-test Dramteatr identity regression and the complete Chromium release
+  gate passed. Live `6408` rows are `3,3,3,1`; body height fell from the
+  rejected fixed `184px` to about `132.6px`, saving about `206px` over four
+  rows, and the single Romeo card exposes `2, 3 ноября 19:00` with aria
+  `2 и 3 ноября в 19:00`. Stable root and sitemap SHA-256 remained unchanged.
+  The full preview id/link stays in the operator handoff, not Git; owner visual
+  approval is still required before canonical repair or all-page generation.
 
 ## Root Cause
 
@@ -469,6 +480,12 @@ secret preproduction candidate family.
   debt and must not be hidden by aggregate success counts.
 
 ## Current Replacement Secret-Candidate Evidence
+
+The `D1qL0…` evidence below is superseded by owner rejection. The active
+acceptance object is a focused `preview-*` namespace only, produced from branch
+SHA `9dced876` plus an isolated explicit Romeo fixture. It did not advance the
+`/_review` pointer and did not mutate stable root or stable ICS. It is not a
+production-data or all-pages rollout approval.
 
 - immutable prefix: `https://kenigevents.ru/_review/D1qL0…/` (full bearer URL is
   intentionally retained only in ignored acceptance artifacts and the operator
