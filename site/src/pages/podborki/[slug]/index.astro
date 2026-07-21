@@ -48,7 +48,7 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
           <h2 id="collection-results-title">{events.length ? `${events.length} событий` : 'Подходящих событий пока нет'}</h2>
           {events.length ? (
             <div class="cards-grid" data-search-collection-results>
-              {events.map((event) => <EventCard event={event} />)}
+              {events.map((event) => <EventCard event={event} mobileFlowMedia />)}
             </div>
           ) : (
             <p class="muted-note">Критерии оставлены без расширения: мы не добавляем похожие события только ради заполнения страницы.</p>

@@ -16,6 +16,17 @@
 
 ### Fixed
 
+- Fixed mobile Search media framing after real result-card regressions:
+  `visual_only` images such as «Царевна Лягушка» now fill the shared horizontal
+  5:4 frame, while OCR/document images keep their decoded intrinsic ratio so
+  missing snapshot dimensions cannot create artificial black top/bottom fields.
+  Search and static query collections share this resolver; the desktop
+  recommendation-row optimizer and focus-6408 contract remain unchanged.
+- Restored the accepted mobile calendar v23 journey from Search v24. The bottom
+  dock and mobile drawer now share one route resolver, so `Афиша`, `Даты` and
+  `Для меня` no longer open legacy same-prefix Astro pages while `Поиск` returns
+  to the current v24 build.
+
 - Fixed mobile authorized-search cards to consume the accepted static compact
   crop contract, including intrinsic media dimensions, semantic role and focal
   position, while keeping linear result order free of related-grid placement.

@@ -170,6 +170,51 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
   };
 }
 
+/**
+ * Mobile large cards are not miniature desktop recommendation rows.
+ * Visual-only media uses one stable horizontal 5:4 frame; OCR/document media
+ * keeps its intrinsic aspect and is never cropped. When document dimensions
+ * are absent from the snapshot, the browser replaces the provisional ratio
+ * with decoded naturalWidth/naturalHeight on load.
+ */
+export function resolveMobileEventCardMedia(item, options = {}) {
+  const targetAspect = finiteRatio(options.targetAspect, PREFERRED_VISUAL_RATIO);
+  const geometry = relatedCardMediaGeometry(item);
+  if (geometry.documentMedia) {
+    return {
+      mediaRatio:geometry.ratio,
+      rowRatio:geometry.ratio,
+      rowIndex:0,
+      rowColumn:0,
+      rowMode:'mobile-document-natural',
+      presentation:'flow',
+      mediaKind:'document',
+      mediaTreatment:'document-contain',
+      fit:'contain',
+      objectPosition:'50% 50%',
+      cropReason:geometry.dimensionsKnown ? 'mobile_document_natural' : 'mobile_document_decode_natural',
+      potentialCoverCrop:null,
+      coverCrop:null,
+      rowWorstCrop:null,
+      rowCost:0,
+      useNaturalAspect:true,
+    };
+  }
+  const decision = resolveRelatedCardMediaTreatment(item, targetAspect, geometry);
+  return {
+    mediaRatio:geometry.ratio,
+    rowRatio:targetAspect,
+    rowIndex:0,
+    rowColumn:0,
+    rowMode:'mobile-visual-fixed-5x4',
+    presentation:'flow',
+    ...decision,
+    rowWorstCrop:0,
+    rowCost:0,
+    useNaturalAspect:false,
+  };
+}
+
 function geometricMean(ratios, fallback = PREFERRED_VISUAL_RATIO) {
   return ratios.length
     ? Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length)
@@ -439,3 +484,4 @@ export function packRelatedCardRows(items, options = {}) {
 
 export const RELATED_CARD_MAX_DOCUMENT_CROP = MAX_DOCUMENT_CROP;
 export const RELATED_CARD_PREFERRED_VISUAL_RATIO = PREFERRED_VISUAL_RATIO;
+export const MOBILE_EVENT_CARD_VISUAL_RATIO = PREFERRED_VISUAL_RATIO;

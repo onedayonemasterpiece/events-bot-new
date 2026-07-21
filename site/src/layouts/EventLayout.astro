@@ -6,6 +6,7 @@ import MobileBottomNav, { type MobileSection } from '../components/MobileBottomN
 import MobileToastRegion from '../components/MobileToastRegion.astro';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
+import { mobileDiscoveryHref } from '../lib/mobileDiscoveryRoutes';
 import type { PreviewEvent } from '../lib/types';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular' | 'clubs';
@@ -51,6 +52,10 @@ const bodyClass = resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const personalFeedRpcName = import.meta.env.PUBLIC_PERSONAL_FEED_RPC_NAME || 'get_listing_personal_feed_v1';
+const mobileDiscoveryBases = {
+  calendarBase: import.meta.env.PUBLIC_MOBILE_CALENDAR_BASE_URL,
+  searchBase: import.meta.env.PUBLIC_MOBILE_SEARCH_BASE_URL,
+};
 // Inert source data for the canonical runtime-card templates below. Dynamic
 // manifests only populate clones of EventCard's DOM; they never build a second
 // handwritten card tree in the browser.
@@ -2300,7 +2305,7 @@ const visibleDrawerNavigation = DRAWER_NAVIGATION.filter((item) => item.key !== 
             <nav class="mobile-discovery-menu__nav" aria-label="Быстрая навигация по афише">
               <div class="mobile-discovery-menu__links">
                 {visibleDrawerNavigation.map((item) => (
-                  <a href={withBase(item.href)} aria-current={item.key === drawerCurrent ? 'page' : undefined}>{item.label}</a>
+                  <a href={mobileDiscoveryHref(item.href, mobileDiscoveryBases, BASE_PATH)} aria-current={item.key === drawerCurrent ? 'page' : undefined}>{item.label}</a>
                 ))}
               </div>
             </nav>
@@ -2326,11 +2331,12 @@ const visibleDrawerNavigation = DRAWER_NAVIGATION.filter((item) => item.key !== 
     {resolvedMobileBottomMode === 'nav' && <MobileBottomNav current={mobileSection} />}
 
     <script>
-      import { packRelatedCardRows, relatedCardMediaGeometry } from '../lib/relatedCardLayout.mjs';
+      import { packRelatedCardRows, relatedCardMediaGeometry, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
       import { selectEventContinuation } from '../lib/eventContinuation.mjs';
       Object.assign(window, {
         KenigEventsPackRelatedCardRows: packRelatedCardRows,
         KenigEventsRelatedCardMediaGeometry: relatedCardMediaGeometry,
+        KenigEventsResolveMobileEventCardMedia: resolveMobileEventCardMedia,
         KenigEventsSelectEventContinuation: selectEventContinuation,
       });
     </script>
@@ -3980,6 +3986,13 @@ const visibleDrawerNavigation = DRAWER_NAVIGATION.filter((item) => item.key !== 
             setRuntimeCardDataset(image, 'cardAuthoritativeFit', authoritativeFit);
             setRuntimeCardDataset(image, 'protectedCropFit', authoritativeFit);
             setRuntimeCardDataset(image, 'protectedCropReason', relatedLayout?.cropReason || 'responsive_target_unknown');
+            const reconcileNaturalAspect = relatedLayout?.useNaturalAspect
+              ? "if(shell&&this.naturalWidth>0&&this.naturalHeight>0){shell.style.setProperty('--dynamic-media-ratio',this.naturalWidth+' / '+this.naturalHeight);shell.dataset.naturalAspectReconciled='true';}"
+              : '';
+            // Search currently serializes the canonical cloned card to HTML.
+            // Keep load reconciliation in the serialized markup rather than a
+            // property listener that outerHTML would discard.
+            image.setAttribute('onload', `const shell=this.closest('[data-card-media-shell]');${reconcileNaturalAspect}shell?.classList.remove('is-image-loading');shell?.classList.add('is-image-loaded');shell?.removeAttribute('aria-busy');`);
             if (imageUrl) {
               image.setAttribute('src', imageUrl);
               image.setAttribute('alt', data.image_alt);

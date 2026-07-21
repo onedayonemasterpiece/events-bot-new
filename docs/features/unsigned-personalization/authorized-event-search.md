@@ -92,22 +92,27 @@ Research materialization может получить явную дату сре�
 
 ### v24 runtime crop and progress contract
 
-Search-result cards no longer have a surface-local image policy. Runtime
-results use the exact accepted compact-card decision from donor
-`9dced876ab4e8d2c69c79937d3b0186196c924db` through
-`packRelatedCardRows(..., { rowSize: 1, presentation: 'flow' })`. `flow` keeps
-the donor media ratio, focal position and `cover`/`contain` decision, but never
-emits related-grid row/column placement into the linear Search DOM. Result rank
-therefore remains authoritative and headings/feedback cannot collide with card
-grid coordinates.
+Search-result cards use one shared **mobile large-card** media resolver; they
+are not one-column desktop recommendation rows. `visual_only` media receives a
+stable horizontal `5:4` frame (`width / height = 1.25`) with focal-aware
+`cover`. This is the product's earlier “4:5 horizontal” convention expressed
+unambiguously in CSS aspect-ratio order. OCR/document media is never cropped:
+known dimensions reserve the intrinsic ratio, while a missing snapshot first
+reserves a poster-like `4:5` skeleton and is reconciled from decoded
+`naturalWidth / naturalHeight`. This removes
+artificial top/bottom fields without cutting poster text. Search maps ranked
+items directly through `resolveMobileEventCardMedia`, so result order stays
+authoritative and no related-grid coordinates enter the linear DOM. Static
+materialized Search collections opt into the same resolver.
 
 The Supabase search snapshot contract is `event-card-v3-media-layout` and
 includes `image_media_role`, `image_width`, `image_height` and `focal_y`.
-Known visual photos are focal-aware `cover`; classified documents follow the
-accepted bounded crop rule. Unknown role or unknown intrinsic dimensions fail
-closed to `contain` rather than claiming a safe crop. The exporter and browser
-renderer must be upgraded together; a newer renderer may not invent missing
-snapshot geometry.
+Known `visual_only` media is focal-aware `cover`. OCR and unknown text mode
+remain fail-closed `contain`; missing dimensions are not invented as crop
+evidence, but decoded browser geometry may replace the provisional skeleton
+ratio. The exporter and browser renderer must be upgraded together; a newer
+renderer may not invent semantic crop permission. The desktop related-card
+optimizer and its `6408` crop gates remain unchanged and surface-specific.
 
 The backend vector-sync verification must inspect the whole requested corpus
 even when `--max-provider-calls 0`. That value forbids new Gemini calls; it does

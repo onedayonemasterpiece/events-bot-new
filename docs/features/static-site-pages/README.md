@@ -13,9 +13,11 @@ document owns page implementation details, not a parallel relation taxonomy.
 Mobile Search, query collections and other Astro discovery routes use the
 shared [`mobile shell`](mobile-shell.md): one header/drawer contract, one
 route-owned bottom-nav selection and one header-attached toast region. Runtime
-Search cards consume the same protected crop decision as static compact cards;
-the linear Search surface receives media geometry only, never the related-grid
-placement coordinates. Search progress is backend-streamed and monotonic rather
+Search and materialized-query cards consume the same mobile large-card media
+resolver: visual-only images fill a horizontal `5:4` frame; OCR/documents keep
+their intrinsic ratio, including browser decode reconciliation when the Search
+snapshot lacks dimensions. The desktop compact related-row optimizer remains a
+separate contract and never supplies Search placement geometry. Search progress is backend-streamed and monotonic rather
 than simulated by client timers. The exact runtime/search contract lives in
 [`authorized-event-search.md`](../unsigned-personalization/authorized-event-search.md).
 
@@ -964,4 +966,6 @@ Search и materialized-query pages возвращают тот же четырё
 активным `Поиск`. На Search скрыт только старый горизонтальный desktop nav,
 который визуально попадал под fixed brand top-sheet; сам top-sheet и Search
 donor не перестраиваются. Preview base URLs задаются публичными build-time env,
-поэтому в source нет зашитого versioned prefix.
+поэтому в source нет зашитого versioned prefix. Dock и mobile drawer используют
+один resolver; v24 acceptance проверяет, что calendar/personal links ведут в
+принятый v23 prefix, а Search — обратно в текущий v24 prefix.

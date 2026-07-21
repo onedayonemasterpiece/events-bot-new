@@ -1,19 +1,20 @@
 ---
-import { withBase } from '../lib/events';
+import { mobileDiscoveryHref } from '../lib/mobileDiscoveryRoutes';
+import { BASE_PATH } from '../lib/events';
 
 export type MobileSection = 'afisha' | 'dates' | 'search' | 'personal' | null;
 
 interface Props { current: MobileSection; }
 const { current } = Astro.props;
-const calendarPreview = String(import.meta.env.PUBLIC_MOBILE_CALENDAR_BASE_URL || '').replace(/\/+$/u, '');
-const searchPreview = String(import.meta.env.PUBLIC_MOBILE_SEARCH_BASE_URL || '').replace(/\/+$/u, '');
-const calendarHref = (path: string) => calendarPreview ? `${calendarPreview}${path}` : withBase(path);
-const searchHref = (path: string) => searchPreview ? `${searchPreview}${path}` : withBase(path);
+const discoveryBases = {
+  calendarBase: import.meta.env.PUBLIC_MOBILE_CALENDAR_BASE_URL,
+  searchBase: import.meta.env.PUBLIC_MOBILE_SEARCH_BASE_URL,
+};
 const items = [
-  { key: 'afisha', label: 'Афиша', href: calendarHref('/populyarnoe/'), icon: 'ticket' },
-  { key: 'dates', label: 'Даты', href: calendarHref('/segodnya/'), icon: 'calendar' },
-  { key: 'search', label: 'Поиск', href: searchHref('/poisk/'), icon: 'search' },
-  { key: 'personal', label: 'Для меня', href: calendarHref('/dlya-menya/'), icon: 'personal' },
+  { key: 'afisha', label: 'Афиша', href: mobileDiscoveryHref('/populyarnoe/', discoveryBases, BASE_PATH), icon: 'ticket' },
+  { key: 'dates', label: 'Даты', href: mobileDiscoveryHref('/segodnya/', discoveryBases, BASE_PATH), icon: 'calendar' },
+  { key: 'search', label: 'Поиск', href: mobileDiscoveryHref('/poisk/', discoveryBases, BASE_PATH), icon: 'search' },
+  { key: 'personal', label: 'Для меня', href: mobileDiscoveryHref('/dlya-menya/', discoveryBases, BASE_PATH), icon: 'personal' },
 ] as const;
 ---
 

@@ -53,6 +53,24 @@ top-level переходов и создаёт лишнюю анимацию. Ca
 `bottomAccessory` над nav, а shell сам вычисляет `--mobile-bottom-stack-h` и
 content padding.
 
+### Cross-preview composition
+
+Research calendar v23 and Astro Search v24 are separate noindex builds but one
+mobile journey. Both dock and drawer resolve routes through the same
+`mobileDiscoveryHref` table. With build-time bases configured, `Афиша`, `Даты`,
+`Завтра`, `Выходные` and `Для меня` go to the accepted calendar v23 prefix;
+`Поиск` goes to the current Search v24 prefix. Unrelated Astro routes such as
+`Инфопартнёры` remain local. A Search preview must not silently fall back to its
+legacy local `/segodnya/`, `/populyarnoe/` or missing `/dlya-menya/` pages; the
+release build and generated-output gate must assert the four exact dock URLs.
+
+Current accepted research composition:
+
+```text
+PUBLIC_MOBILE_CALENDAR_BASE_URL=https://kenigevents.ru/preview-20260721-mobile-calendar-v23
+PUBLIC_MOBILE_SEARCH_BASE_URL=https://kenigevents.ru/preview-20260721-mobile-search-runtime-v24
+```
+
 ## City and auth
 
 - город — контекст выборки, а не глобальный top-level раздел. В календаре он
@@ -117,6 +135,8 @@ feedback сохранения, calendar state, consent, gallery counters, like a
 
 - один header/drawer DOM contract на Astro mobile surfaces;
 - ровно один текущий bottom-nav item; drawer отражает тот же section;
+- dock и drawer используют один route resolver; Search v24 возвращается на
+  принятые calendar/Popular v23 pages, а не на старые same-prefix templates;
 - nav/CTA/none взаимоисключаемы;
 - Search/collection=`search`, Today/date=`dates`, Popular/listings=`afisha`,
   Personal=`personal`;

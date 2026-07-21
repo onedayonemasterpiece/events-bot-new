@@ -29,7 +29,7 @@ test('technical seed-tag copy is removed from the Search page', () => {
 
 test('materialized collection routes use canonical large EventCard without bespoke result rows', () => {
   assert.match(collectionPage, /import EventCard from/u);
-  assert.match(collectionPage, /events\.map\(\(event\) => <EventCard event=\{event\} \/>\)/u);
+  assert.match(collectionPage, /events\.map\(\(event\) => <EventCard event=\{event\} mobileFlowMedia \/>\)/u);
   assert.match(collectionPage, /data-search-collection-results/u);
   assert.match(collectionPage, /noindex/u);
   assert.doesNotMatch(collectionPage, /EventListItem|authorized-search__vector-card|search-result-row/u);
@@ -72,9 +72,11 @@ test('search progress is monotonic, epoch guarded and reset only by its owning r
   assert.match(donor, /setSearchProgress\(event\.progress,[^\n]+stage: event\.stage/u, 'only streamed progress events set intermediate values');
 });
 
-test('ranked search cards reuse one-column donor media decisions without related-grid placement', () => {
+test('ranked search cards use the shared mobile media contract without desktop row packing', () => {
   assert.match(donor, /window\.KenigEventsRenderEventCard/u);
-  assert.match(donor, /packRelatedCardRows\(items,[\s\S]*?rowSize:\s*1,[\s\S]*?presentation:\s*'flow'/u);
+  assert.match(donor, /resolveMobileEventCardMedia/u);
+  assert.match(donor, /items\.map\(\(item\) => \(\{ item, layout: resolveMobileEventCardMedia\(item\) \}\)\)/u);
+  assert.doesNotMatch(donor, /packRelatedCardRows\(items/u);
   assert.match(donor, /renderer\([^\n]+, 'split-actions', layout\)/u);
   assert.match(eventLayout, /function createEventCardElement\(item, variant = 'split-actions', relatedLayout = null\)/u, 'legacy two-argument callers remain valid');
   assert.match(eventLayout, /relatedLayout\.presentation !== 'flow'/u);
@@ -92,6 +94,8 @@ test('mobile Search fixes donor shell without rewriting its core', () => {
   assert.doesNotMatch(bottomNav, /body:has\(/u);
   assert.match(bottomNav, /PUBLIC_MOBILE_CALENDAR_BASE_URL/u);
   assert.match(bottomNav, /PUBLIC_MOBILE_SEARCH_BASE_URL/u);
+  assert.match(bottomNav, /mobileDiscoveryHref/u);
+  assert.match(eventLayout, /mobileDiscoveryHref\(item\.href, mobileDiscoveryBases, BASE_PATH\)/u);
   assert.doesNotMatch(bottomNav, /preview-20260721/u);
   assert.match(collections, /PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE/u);
   assert.match(collections, /getMaterializedSearchCollectionReferenceDate\(\)/u);

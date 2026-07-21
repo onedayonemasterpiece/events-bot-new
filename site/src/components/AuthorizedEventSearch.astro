@@ -69,7 +69,7 @@ const HeadingTag = headingLevel;
 
 <script>
   import { createClient } from '@supabase/supabase-js';
-  import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
+  import { resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
 
   const roots = Array.from(document.querySelectorAll('[data-authorized-search]'));
   for (const root of roots) {
@@ -515,15 +515,9 @@ const HeadingTag = headingLevel;
 
     function renderCards(items, rankBase = offset) {
       const renderer = window.KenigEventsRenderEventCard;
-      // The search surface is a ranked one-column feed. Reuse the exact donor
-      // media decision for each card without opting into recommendation-grid
-      // placement or allowing the packer to reorder ranks across rows.
-      const packed = packRelatedCardRows(items, {
-        rowSize: 1,
-        limit: items.length,
-        mediaTreatment: 'hybrid',
-        presentation: 'flow',
-      });
+      // Search is a ranked mobile feed, not a one-column desktop recommendation
+      // row. Preserve rank while applying the shared mobile media contract.
+      const packed = items.map((item) => ({ item, layout: resolveMobileEventCardMedia(item) }));
       const rendered = typeof renderer === 'function'
         ? packed.map(({ item: candidate, layout }, index) => renderer({ candidate: { ...candidate, base_similarity: candidate.semantic_score || candidate.base_similarity || 0 }, rank: rankBase + index, personal_score: candidate.semantic_score || candidate.base_similarity || 0 }, 'split-actions', layout)).filter(Boolean).join('')
         : '';
