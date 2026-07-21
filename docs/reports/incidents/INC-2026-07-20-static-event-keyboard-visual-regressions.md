@@ -239,6 +239,13 @@ secret preproduction candidate family.
   `2 и 3 ноября в 19:00`. Stable root and sitemap SHA-256 remained unchanged.
   The full preview id/link stays in the operator handoff, not Git; owner visual
   approval is still required before canonical repair or all-page generation.
+- 2026-07-21 11:55 UTC — mandatory independent agy model
+  `gemini-3.1-pro-high` at high effort opened the exact live focused URL,
+  inspected the retained full-section screenshot and computed DOM geometry,
+  and returned `ACCEPT_FOCUSED_6408`: all five row/compactness/crop/occurrence/
+  noindex groups passed with no owner-visible defect. The verdict explicitly
+  does not authorize full-site rollout and remains subordinate to owner visual
+  acceptance.
 
 ## Root Cause
 
