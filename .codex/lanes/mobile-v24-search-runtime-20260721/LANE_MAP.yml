@@ -126,6 +126,12 @@ lanes:
       - site/src/components/Mobile*.astro
       - site/src/components/*Toast*.astro
       - site/src/pages/poisk/index.astro
+      - site/src/pages/podborki/[slug]/index.astro
+      - site/src/components/KeyboardEventNavigationPrototype.astro
+      - site/src/lib/keyboardEventNavigation.mjs
+      - site/src/components/DesktopEventActionPanel.astro
+      - site/scripts/check-browser-release-gate.mjs
+      - site/tests/keyboard-event-navigation-production.test.mjs
       - site/tests/mobile-shell*.test.mjs
       - site/tests/mobile-shell-toast.test.mjs
       - .codex/lanes/mobile-v24-search-runtime-20260721/W02-RESULTS.md
