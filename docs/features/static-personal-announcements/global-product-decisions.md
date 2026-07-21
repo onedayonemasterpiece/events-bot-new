@@ -70,6 +70,13 @@
    VK postponed smoke. Existing Telegram/VK publishers не проектируются заново:
    к ним добавляется только выбор branded derivative. Activation зафиксирован как
    `2026-07-30 18:00 Europe/Kaliningrad` (`2026-07-30T16:00:00Z`).
+40. **«Пасхалки о Калининграде» заведены как отдельная feature-discovery стадия.**
+   Они являются познавательными коллекционными объектами, а их появление должно
+   использовать существующий promo-campaign control plane через новый activity
+   type. Прогресс виден в `Моё`; keyboard/touch/mobile/desktop discovery обязаны
+   быть доступны. Награда или влияние social share на шансы не включаются без
+   отдельного legal/privacy/anti-fraud решения. До принятия product spec эта
+   feature не блокирует первую публичную презентацию и не имеет production code.
 
 ## Consequences
 

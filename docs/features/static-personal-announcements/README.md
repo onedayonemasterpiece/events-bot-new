@@ -123,6 +123,12 @@ Current decisions and questions that affect several feature families live in [gl
   только проверяемые candidates для gallery/carousel, не принятое по умолчанию
   решение. Оба направления проходят production-SHA, provenance/privacy,
   mobile/desktop, accessibility и owner-approval gates.
+- [Пасхалки о Калининграде](../static-site-easter-eggs/README.md): отдельная
+  feature-discovery ветка для познавательных коллекционных находок, управляемых
+  как `promo_activity`, с прогрессом в `Моё`, cadence/hints, mobile/desktop и
+  keyboard discovery, тематическими наборами и только после отдельного
+  legal/anti-abuse решения — возможной заявкой на розыгрыш. Сейчас это planning
+  scope без implementation и без влияния на first-presentation GO.
 
 ## Documentation completion rule
 

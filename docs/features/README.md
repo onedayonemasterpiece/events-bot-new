@@ -54,6 +54,7 @@
 - `docs/features/event-comment-feedback/README.md` — aggregated discussion signals from public source comments
 - `docs/features/event-issue-reporting/README.md` — admin event-problem report and ArtKodex repair/history workflow
 - `docs/features/info-partners/README.md` — страница информационных партнёров на static-first сайте: логотипы организаций, nofollow-ссылки и связь со статусом/промо-кампаниями
+- `docs/features/static-site-easter-eggs/README.md` — discovery-механика коллекционных пасхалок о Калининграде: promo-размещение, прогресс в «Моё» и gated reward/legal design без production implementation
 
 ## Как добавлять новую фичу
 

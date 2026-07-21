@@ -4,9 +4,9 @@
 > найдена в `origin/agent/static-release/checklist-cdn-social@fbb5b6a2` после
 > аварийного обрыва предыдущей задачи и возвращена в main-based release branch.
 > Базовый восстановленный реестр содержит **228 отдельных checkbox-требований**
-> в Stage 0–11; пять D0–D10, семь video-guide, пять calendar/personal-hub и одна
-> social brand-tag строка добавлены при сверке, поэтому текущая версия
-> Stage 0–12 содержит **246 checkbox-требований**;
+> в Stage 0–11; пять D0–D10, семь video-guide, пять calendar/personal-hub, одна
+> social brand-tag и одна easter-eggs discovery строка добавлены при сверке,
+> поэтому текущая версия Stage 0–13 содержит **247 checkbox-требований**;
 > scope **F1–F18, H1, M1–M6** и не сводится к пяти задачам production-платформы.
 > Источники и расхождения с текущим `origin/main` зафиксированы в
 > [отчёте восстановления](static-site-release-context-recovery-2026-07-17.md).
@@ -579,6 +579,14 @@ navigation/search/event-action flows. Каноника:
 - [ ] Пройти subtitles/transcript, privacy и accessibility QA: не раскрывать email, токены, private URLs, персональные интересы, admin state или чужие уведомления.
 - [ ] Для каждого target (site/Telegram/VK/MAX) получить owner approval, опубликовать принятую версию и сохранить public URL, source/export hashes и production evidence.
 - [ ] Проверить воспроизводимость новым пользователем и завести version/review/withdrawal process: изменение UI или критическая неточность снимает старый ролик до проверенной замены.
+
+### Stage 13 — Feature discovery «Пасхалки о Калининграде»
+
+Эта стадия пока не является first-presentation GO blocker и не разрешает
+production implementation. Каноника:
+[static-site easter eggs](../features/static-site-easter-eggs/README.md).
+
+- [ ] На ветке `feature/static-site-easter-eggs-design-20260721` подготовить и получить owner acceptance полного product spec: название и первый curated региональный набор; cadence/hints/expiry; `promo_activity` placement contract; feed/mobile/desktop/keyboard discovery; прогресс и anonymous→authorized merge в `Моё`; source/provenance/IP/accessibility; data/abuse/privacy; а для любой награды/розыгрыша — отдельные legal, eligibility, audit и voluntary-social-share правила. До этого не добавлять скрытые production objects и не менять promo scheduler.
 
 ## 8. Reliability objectives to approve
 

@@ -46,9 +46,9 @@ festivals, operations dashboard и interest clubs.
 
 The 2026-07-17 reconciliation adds five executable D0–D10 Telegraph rows to
 Stage 8 without deleting the baseline; the 2026-07-18 post-release video-guide
-stage adds seven, the calendar-counter/personal-hub reconciliation adds five and
-the release-time social brand-tag plan adds one more. The current canonical
-checklist therefore has **246 checkbox requirements**.
+stage adds seven, the calendar-counter/personal-hub reconciliation adds five,
+the release-time social brand-tag plan adds one and the easter-eggs feature
+discovery adds one. The current canonical checklist therefore has **247 checkbox requirements**.
 
 The [event-page release plan](../features/static-site-pages/release-plan.md) is only
 one Stage 2/8 workstream and cannot replace this registry.
@@ -124,7 +124,7 @@ P0 documentation and automation task, not a cosmetic cleanup.
 
 ## What is still not done
 
-The full unresolved backlog is the unchecked part of the current 246-item checklist, not a
+The full unresolved backlog is the unchecked part of the current 247-item checklist, not a
 five-row table. The largest blocking families are:
 
 1. repeat M2 full-catalog/static-surface audit plus 14-day zero-critical Smart Update/event-quality window and closure-grade incident replay;
@@ -141,6 +141,7 @@ five-row table. The largest blocking families are:
 12. separate F14, festivals, operations dashboard and interest-club stable releases;
 13. post-release production video guides for quickly finding an event, with subtitles, privacy, publication evidence and stale-version withdrawal;
 14. one idempotent unique calendar-saver counter plus the privacy-safe `Мои события` hub, with ICS-attempt separation, identity/event-merge reconciliation and lifecycle-aware calendar/favorite filters.
+15. product discovery for Kaliningrad easter eggs: promo-activity cadence/placement, accessible cross-surface discovery, collection progress, curated regional provenance and gated reward/legal/anti-abuse decisions.
 
 ## Release truth rule
 

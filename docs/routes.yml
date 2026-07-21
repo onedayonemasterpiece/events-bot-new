@@ -181,6 +181,7 @@ features:
   static_personal_announcements:
     status: release_planning
     docs: docs/features/static-personal-announcements/README.md
+    easter_eggs: docs/features/static-site-easter-eggs/README.md
     global_product_decisions: docs/features/static-personal-announcements/global-product-decisions.md
     release_readiness: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md
     context_recovery: docs/reports/static-site-release-context-recovery-2026-07-17.md
