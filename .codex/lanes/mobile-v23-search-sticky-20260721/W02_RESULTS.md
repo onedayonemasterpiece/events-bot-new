@@ -1,7 +1,9 @@
 # W02 — Search donor + query-learning/static collections
 
-Status: **complete**  
-Date: 2026-07-21  
+Status: **complete**
+
+Date: 2026-07-21
+
 Branch: `agent/mobile-v23/search`
 
 ## Implemented

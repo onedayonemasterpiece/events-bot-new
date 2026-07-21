@@ -1,6 +1,7 @@
 # Mobile calendar/Search v23 — integration report
 
-Date: 2026-07-21  
+Date: 2026-07-21
+
 Branch: `integration/mobile-v23-search-sticky-20260721`
 
 ## Public handoff

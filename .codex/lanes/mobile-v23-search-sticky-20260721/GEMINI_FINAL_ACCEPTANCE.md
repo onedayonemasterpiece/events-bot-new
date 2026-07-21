@@ -29,7 +29,7 @@ The core interaction mechanics, sticky header redesign, Orpheus recap layout, de
 - The review date is **21 July 2026** (Tuesday). The nearest upcoming weekend is **25–26 July 2026**.
 - The published page [`podborki/dzhaz-na-vyhodnyh/`](https://kenigevents.ru/preview-20260721-mobile-search-donor-v23/podborki/dzhaz-na-vyhodnyh/) is titled *"Джаз на ближайших выходных"* ("Jazz on nearest weekend").
 - However, the page displays a single event: *Опера и джаз* on **18 июля** (last weekend's Saturday).
-- Although the page includes a disclaimer (*"Данные афиши обновлены 2026-07-17"*) and carries `noindex` headers, **presenting past events (18 July) under the heading "nearest weekend" on 21 July violates semantic honesty**. A user entering "nearest weekend" expects the upcoming 25–26 July program. 
+- Although the page includes a disclaimer (*"Данные афиши обновлены 2026-07-17"*) and carries `noindex` headers, **presenting past events (18 July) under the heading "nearest weekend" on 21 July violates semantic honesty**. A user entering "nearest weekend" expects the upcoming 25–26 July program.
 
 **Decision:** Relying on fixture convenience here undermines product integrity. The Astro static generator must re-materialize the query against the current dataset (21 July 2026) so that the page reflects 25–26 July events before user handoff.
 
