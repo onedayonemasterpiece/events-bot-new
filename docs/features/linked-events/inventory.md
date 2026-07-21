@@ -1,7 +1,8 @@
 # Инвентаризация реализаций и веток
 
 Срез выполнен 2026-07-21 после `git fetch origin --prune`.
-Production code base: `origin/main@3d0af26cbe`.
+Repository base: `origin/main@da95738c`; runtime code base remains
+`3d0af26cbe` (новый commit содержит только incident documentation).
 
 ## Release reality
 
@@ -85,7 +86,7 @@ source graph. Поэтому `REL-006/007/017/018` — не архитектур
 
 | Ветка / tip | behind/ahead | Что в ней есть | Решение |
 | --- | ---: | --- | --- |
-| `origin/main@3d0af26cbe` | `0/0` | текущий production-bound code contract | единственный code source of truth; rollout проверяется отдельно |
+| `origin/main@da95738c` (runtime `3d0af26c`) | `0/0` | текущий production-bound code contract | единственный code source of truth; rollout проверяется отдельно |
 | `origin/integration/static-related-quality-20260720@6dbaa3d0fd` | `28/0` | atomic vector corpus, graph repair/health, media/keyboard ownership | уже contained/merged; сохранять как regression evidence |
 | `origin/integration/static-event-preprod-continuation-20260718@ce27d59361` | `142/0` | preproduction continuation regression contract | contained in main; historical gate baseline, не текущий candidate source |
 | `origin/integration/keyboard-navigation-production-20260719@fe83088e4f` | `47/0` | focus stability через rerank/hydration | contained/merged |
@@ -105,7 +106,8 @@ source graph. Поэтому `REL-006/007/017/018` — не архитектур
 ## Consolidated implementation после review
 
 `feature/related-events-compact-unified-20260721` — целевой donor поверх
-`origin/main@3d0af26c`, а не wholesale merge лабораторий. В нём:
+`origin/main@da95738c` (implementation commit `a6a5d7ac`), а не wholesale merge
+лабораторий. В нём:
 
 - `eventOccurrences.ts` единолично решает наличие family из взаимных explicit
   `other_date_ids`, строит slots/issues, форматирует compact/rail DTO и задаёт

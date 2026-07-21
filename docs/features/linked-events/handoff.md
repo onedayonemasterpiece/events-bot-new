@@ -3,7 +3,9 @@
 ## Donor
 
 - Branch: `feature/related-events-compact-unified-20260721`
-- Base: `origin/main@3d0af26cbe`
+- Current base: `origin/main@da95738c` (runtime code lineage remains
+  `3d0af26c`; the newer main commit is incident documentation only).
+- Tested implementation commit: `a6a5d7ac`.
 - Scope: explicit occurrence resolver, compact/rail formatter, shared label and
   selector components, surface wiring, synthetic lab, tests и канонические docs.
 - Это integration donor, не свидетельство production deploy.

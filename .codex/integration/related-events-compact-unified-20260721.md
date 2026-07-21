@@ -4,6 +4,8 @@
 
 - Base branch: `docs/related-events-consolidation-20260721`
 - Base SHA: `d37e224f5a010d5f88b817298678eec8002d81cc`
+- Rebased repository base: `origin/main@da95738c`
+- Tested implementation commit: `a6a5d7ac`
 - Integration branch: `feature/related-events-compact-unified-20260721`
 - Verification owner: root integrator
 - Global constraints: explicit canonical occurrence links only; no frontend identity inference; preserve accepted patterns 03/04/05/10; do not import rejected 01/02/11/12/13; no production deploy.

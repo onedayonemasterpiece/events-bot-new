@@ -49,7 +49,8 @@ Fly SQLite Event (канонические факты и lifecycle)
 - Любая ветка должна потреблять единый результат связи, а не заново решать
   regex/эвристиками, что является другой датой или похожим событием.
 
-Исключение в `origin/main@3d0af26c` (не целевое поведение): frontend
+Исключение в runtime lineage `origin/main@3d0af26c` (она всё ещё содержится в
+актуальном `origin/main@da95738c`, не целевое поведение): frontend
 `getLinkedSessionIds()` объединяет explicit `other_date_ids` с inference по
 normalized title/type/venue/city. В consolidation branch это удалено: совпадение
 текста больше не создаёт family и остаётся только migration gap исходной базы.
