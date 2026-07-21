@@ -1,7 +1,7 @@
 # Mobile calendar / Search v22 — integration report
 
-Date: 2026-07-21  
-Integration branch: `integration/mobile-v22-20260721`  
+Date: 2026-07-21
+Integration branch: `integration/mobile-v22-20260721`
 Public noindex preview: <https://kenigevents.ru/preview-20260721-mobile-calendar-city-search-v22/>
 
 ## Requirement closure

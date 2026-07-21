@@ -4,17 +4,17 @@
 
 ### 1) Проблема узких афиш (событие 6764, 180x320)
 **Проблема:** Сейчас скрипт `build-v21.py` жестко требует `safe_crop=1` (наличие geometry), чтобы включить `cover`. Если `image_text_mode = visual_only`, но геометрии нет, он проваливается в fail-closed `natural` (object-fit: contain), получая ширину 63px.
-**Решение:** 
-- **Для подтвержденного `visual_only`:** Отсутствие текста означает, что агрессивный crop *безопасен для смысла*. Нужно разрешить focal-aware 5:4. Если `focal_x/y` нет, форсируем `fx=0.5, fy=0.5`. 
+**Решение:**
+- **Для подтвержденного `visual_only`:** Отсутствие текста означает, что агрессивный crop *безопасен для смысла*. Нужно разрешить focal-aware 5:4. Если `focal_x/y` нет, форсируем `fx=0.5, fy=0.5`.
 - **Для `unknown` (fail-closed):** Нельзя кропать, так как можно обрезать важный текст (время, место). Но чтобы UI не выглядел сломанным, оборачиваем узкий `natural` `<img>` в контейнер `.event-media--natural` с CSS-блюром самой картинки на фоне (или мягким градиентом), чтобы заполнить пространство 5:4.
 
 ### 2) Математически монотонный Parallax
 **Проблема:** Конкуренция JS (scroll) и CSS (entry `@keyframes`) вызывает скачки.
-**Решение:** Разнести зоны ответственности через CSS Variables. 
+**Решение:** Разнести зоны ответственности через CSS Variables.
 Анимация входа (`hero-tile-in`) управляет *только* opacity внутреннего `.corner-hero__tile`. JS управляет *только* CSS переменными на обертке `.corner-hero`.
 **Математическая гарантия (JS):**
 ```javascript
-const maxScroll = 160; 
+const maxScroll = 160;
 const progress = Math.max(0, Math.min(1, window.scrollY / maxScroll));
 // Строго монотонно убывает/растет от 0 до 1 без реверсов.
 heroWrapper.style.setProperty('--scroll-fade', 1 - progress);
@@ -46,7 +46,7 @@ heroWrapper.style.setProperty('--scroll-offset', `${progress * 40}px`);
 **CSS:** `.event-time-column { display: flex; flex-direction: column; gap: 4px; line-height: 1; }` и уменьшенный кегль для `--next`.
 
 ### 4) Спроектированный мобильный Search UI
-**Авторизация (Auth Gating):** Поле поиска всегда видимо. При `focus` неавторизованным пользователем под полем плавно выезжает блок: `Email magic-link` + `Войти через Яндекс`. 
+**Авторизация (Auth Gating):** Поле поиска всегда видимо. При `focus` неавторизованным пользователем под полем плавно выезжает блок: `Email magic-link` + `Войти через Яндекс`.
 **Чистый URL (PKCE):** В коллбэке `exchangeCodeForSession` немедленно применять:
 ```javascript
 window.history.replaceState({}, '', window.location.pathname);
