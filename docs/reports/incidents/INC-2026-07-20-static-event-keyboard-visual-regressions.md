@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: open / focused crop accepted provisionally; keyboard replacement review pending
+Status: open / focused crop and keyboard automated acceptance passed; owner review pending
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -258,6 +258,16 @@ secret preproduction candidate family.
   keycap. Its explicit negative controls are zero badges at rest, hover-only
   zero, one focused badge, focused-card `KeyK`, ragged-row navigation and
   related/continuation bridges.
+- 2026-07-21 13:11–13:17 UTC — pushed commit `ff4a4950`, then published a new
+  create-only focused `preview-*` namespace for event `6408`; stable root and
+  sitemap SHA-256 remained byte-identical and the live page retained strict
+  `noindex`/`no-referrer`. Live Chromium confirmed visual rows `3,3,3,1`,
+  row wrap, nearest-centre ragged-row movement, both section bridges, zero `K`
+  badges at rest/hover, exactly one on the focused card, focused-card `KeyK`,
+  and one visible Romeo card labelled `2, 3 ноября 19:00`. Required final agy
+  `gemini-3.1-pro-high` acceptance returned `PASS` for all five contract groups.
+  This remains a focused owner-review artifact only and does not authorize a
+  canonical data repair, all-page generation or stable-root rollout.
 
 ## Root Cause
 
