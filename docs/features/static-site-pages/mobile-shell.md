@@ -239,3 +239,41 @@ Search sequence `unknown → 12 → 38 → 64 → 86 → 100` без видим�
 Visual gate сравнивает screenshots с v23 donor и отклоняет card-in-card, detached
 tag, pills, Search form внутри plane, внешний progress rail и новый font/palette
 даже при формально правильном bbox.
+
+## Global-navigation lab v3, 2026-07-21
+
+Вариант B из v2 был намеренно contextual experiment: правая часть plane менялась
+между Search/Today/Popular/Personal. Он не является принятой архитектурой. После
+product feedback добавлен отдельный D/E/F lab, где проверяется ожидаемая роль
+верхнего объекта как глобального меню. Builder —
+`scripts/build_mobile_shell_global_nav_lab.py`, build id —
+`preview-20260721-mobile-shell-global-nav-lab-v3`.
+
+Разделение ответственности в новой серии:
+
+- bottom dock — четыре primary discovery destination: Popular, Dates, Search,
+  Personal;
+- top plane — устойчивый город/account и вторичные глобальные destinations;
+- transient filters, дата календаря и действия карточки остаются в canvas;
+- D/E не меняют ни одного label при переходе между четырьмя страницами;
+- F меняет только одну явно подписанную строку `На этой странице`; глобальные
+  `138px` из `186px` остаются неизменными.
+
+| Вариант | Plane IA | Высота | Context change | Footer policy |
+|---|---|---:|---|---|
+| D «Глобальное меню» | город/account; Рубрики/Площадки/Подборки; О проекте/Поддержка/Документы | `164px` | отсутствует | mobile footer отсутствует на всех четырёх surface; service/legal принадлежат plane |
+| E «Карта афиши» | город/account; две колонки Каталог и Редакция с устойчивыми сущностями сайта | `180px` | отсутствует | одинаковый compact legal footer на всех surface |
+| F «Глобальное + контекст» | глобальные `138px` как неизменная база; отдельная secondary row | `186px` | ровно два коротких действия под label `На этой странице` | одинаковый compact legal footer на всех surface |
+
+Gemini Pro был привлечён отдельно как product analyst и mobile UI designer.
+Первичные предложения не переносились автоматически: отклонены дубли dock в
+top plane, возврат к quick-filter menu и horizontal scroll contextual row.
+Итоговые D/E/F — синтез проектировщика с этими критическими ограничениями, а не
+выбор одного необработанного consultant output.
+
+Playwright gate покрывает `3 × 4 × 2` состояния при `320×700` и `390×844`:
+closed tag `12,0,120×84`, open `tag.y == plane-h`, отсутствие horizontal
+overflow/page errors, один current dock item и отсутствие внутреннего scroll у
+plane. Дополнительно D/E обязаны иметь один и тот же normalized panel text на
+всех четырёх страницах, а F — один invariant global subtree и ровно одну
+contextual row фиксированной высоты `48px`.

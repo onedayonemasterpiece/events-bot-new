@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added a separate D/E/F mobile global-navigation research lab. It keeps the
+  accepted whole-object brand-tag motion and v23 Calendar/Popular rails, while
+  comparing two fully invariant global planes with one explicitly bounded
+  hybrid. Search progress remains inside its submit CTA; footer policy is part
+  of each separately linked prototype rather than an accidental per-page drift.
+
 - Rebuilt the noindex mobile shell A/B/C lab around the canonical whole-object
   drawer motion: the cream top plane and 120×84 brand tag now slide together,
   while accepted Calendar/Popular v23 rails and the 64px dock remain untouched.
