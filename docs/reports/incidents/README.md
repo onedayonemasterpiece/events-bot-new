@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-21-faberge-tg-public-writer-gap.md`
+  - Scope: grounded Telegram event public writer, exact organizer-source quote
+    contract, bounded fallback/retry behavior and Faberge event `6991` repair.
+  - Must not regress: Lite and strict fallback failures remain fail-closed but
+    cannot silently strand valid current events; terminal failures are visible
+    and recoverable, and closure includes replay of the affected future cohort.
+
 - `INC-2026-07-20-tg-monitor-stale-s22-lease.md`
   - Scope: Guide/Telegram monitor terminal Kaggle failure reconciliation,
     exact-owner `telegram_session:s22` release and same-day Telegram catch-up.
