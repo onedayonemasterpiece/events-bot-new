@@ -90,6 +90,42 @@ Research materialization может получить явную дату сре�
 июля. Research routes остаются `noindex`; production crawlable materialization
 разрешается только после подключения регулярно обновляемого canonical job.
 
+### v24 runtime crop and progress contract
+
+Search-result cards no longer have a surface-local image policy. Runtime
+results use the exact accepted compact-card decision from donor
+`9dced876ab4e8d2c69c79937d3b0186196c924db` through
+`packRelatedCardRows(..., { rowSize: 1, presentation: 'flow' })`. `flow` keeps
+the donor media ratio, focal position and `cover`/`contain` decision, but never
+emits related-grid row/column placement into the linear Search DOM. Result rank
+therefore remains authoritative and headings/feedback cannot collide with card
+grid coordinates.
+
+The Supabase search snapshot contract is `event-card-v3-media-layout` and
+includes `image_media_role`, `image_width`, `image_height` and `focal_y`.
+Known visual photos are focal-aware `cover`; classified documents follow the
+accepted bounded crop rule. Unknown role or unknown intrinsic dimensions fail
+closed to `contain` rather than claiming a safe crop. The exporter and browser
+renderer must be upgraded together; a newer renderer may not invent missing
+snapshot geometry.
+
+Search progress has a single owner: backend NDJSON stages. The old client-side
+28/55/74/92% timers are removed. Until the first frame the adjacent semantic
+progressbar is indeterminate; after that its value and stage rank are monotonic,
+and `result` completes at 100%. Every request owns an epoch, `AbortController`
+and completion-reset timer: stale chunks or a previous run's delayed reset
+cannot mutate the current button. The submit remains a button with
+`aria-busy`; progress semantics live on a separate referenced
+`role="progressbar"`. Reduced-motion disables cosmetic interpolation without
+removing state feedback. Search/auth/quota explanations remain inline because
+they are contextual form state, not transient global toasts.
+
+Mobile chrome and transient-message ownership are defined once in
+[`mobile-shell.md`](../static-site-pages/mobile-shell.md); admission/audience
+queries and the explicit decision not to ship an unverified child medallion are
+canonical in
+[`audience-admission-discovery.md`](audience-admission-discovery.md).
+
 ## Search feedback and public tag candidates
 
 The dedicated `/poisk/` page now exposes seed query chips and, after enough

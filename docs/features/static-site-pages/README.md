@@ -10,6 +10,15 @@ strict related, broad continuation and personal feed are canonical in
 [`docs/features/linked-events/README.md`](../linked-events/README.md). This
 document owns page implementation details, not a parallel relation taxonomy.
 
+Mobile Search, query collections and other Astro discovery routes use the
+shared [`mobile shell`](mobile-shell.md): one header/drawer contract, one
+route-owned bottom-nav selection and one header-attached toast region. Runtime
+Search cards consume the same protected crop decision as static compact cards;
+the linear Search surface receives media geometry only, never the related-grid
+placement coordinates. Search progress is backend-streamed and monotonic rather
+than simulated by client timers. The exact runtime/search contract lives in
+[`authorized-event-search.md`](../unsigned-personalization/authorized-event-search.md).
+
 ### Unified occurrence projection
 
 Интеграция из contract/donor `feature/related-events-compact-unified-20260721`

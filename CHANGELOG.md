@@ -2,7 +2,27 @@
 
 ## [Unreleased]
 
+### Added
+
+- Defined one mobile discovery shell for Search and materialized collections:
+  shared header/drawer ownership, route-driven bottom navigation, safe-area
+  tokens and a single header-attached transient toast region with a five-second
+  reverse countdown, pause/dedupe and persistent action/error states.
+- Added the cross-surface admission/audience discovery contract. Explicit free
+  intent is a hard eligibility rule; child/family suitability requires
+  evidence-backed LLM output, so no decorative child medallion is shipped from
+  noisy topic or age-rating inference.
+
 ### Fixed
+
+- Fixed mobile authorized-search cards to consume the accepted static compact
+  crop contract, including intrinsic media dimensions, semantic role and focal
+  position, while keeping linear result order free of related-grid placement.
+  Unknown document geometry remains fail-closed instead of being cropped.
+- Removed the competing synthetic Search progress timers: the submit now uses
+  one request-epoch-owned, monotonic backend NDJSON state machine with a
+  separate accessible progressbar, stale-response protection and reduced-motion
+  behavior.
 
 - Hardened authorized event search occurrence collapse: reciprocal family DTOs
   are paginated only after collapse, deduplicated again after LLM reranking and
