@@ -38,7 +38,7 @@ SITE_TODAY=2026-07-21 python3 /home/dev/.codex/worktrees/events-bot-new/calendar
 cd /home/dev/.codex/worktrees/events-bot-new/calendar-occurrences-v21-mobile/artifacts/codex/mobile-calendar-city-popular-v21-research-20260721
 python3 -m http.server 8158 --directory "$PWD/public"
 node validate-v21.cjs
-# 105 checks, PASS
+# 106 checks, PASS
 ```
 
 Validated Playwright mobile contexts:
@@ -79,4 +79,5 @@ Ignored research artifact additions/updates:
 - Parallax is intentionally an experiment and is not recommended as the default.
 - The UI/UX skill CLI was unavailable because the installed `scripts` entry is an unresolved plain-text pointer; the available skill checklist, accepted v20 system and supplied Gemini 3.1 Pro High constraints were applied instead.
 - Gemini 3.1 Pro final acceptance found the count-inflection defect; it is fixed and covered by two added gates while all original 103 checks remain green.
-- Public-host validation remains for the integrator after upload; `validate-v21.cjs` accepts `BASE=<public URL>`.
+- A prefixed public-host smoke then exposed the hero custom-property URL resolving against the external stylesheet. The final builder keeps tile CSS URLs stylesheet-relative (`assets/...`) and preload URLs document-relative (`../assets/...`); the added prefix gate brings the total to **106/106**. The published host passed all 106 checks after an explicit `HTMLImageElement.decode()` wait for lazy media.
+- Public-host validation completed at `https://kenigevents.ru/preview-20260721-mobile-calendar-city-popular-v21/`: **106/106 PASS**; `validate-v21.cjs` remains reusable with `BASE=<public URL>`.
