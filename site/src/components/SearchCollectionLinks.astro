@@ -1,0 +1,113 @@
+---
+import { searchLearningItems } from '../data/searchCollections';
+import { withBase } from '../lib/events';
+---
+<section class="search-collections" aria-labelledby="search-collections-title" data-search-collections data-nosnippet>
+  <p class="eyebrow">Можно начать отсюда</p>
+  <h2 id="search-collections-title">Готовые подборки</h2>
+  <p class="search-collections__intro">Фразы показывают, как можно описывать желание целиком — не только выбирать один жанр.</p>
+  <ul class="search-collections__list">
+    {searchLearningItems.map((item) => (
+      <li>
+        {item.kind === 'materialized' ? (
+          <a
+            class="search-collections__item"
+            href={withBase(`/podborki/${item.slug}/`)}
+            data-search-collection-link
+          >
+            <span>{item.phrase}</span>
+            <span class="search-collections__arrow" aria-hidden="true">→</span>
+          </a>
+        ) : (
+          <button
+            class="search-collections__item search-collections__item--example"
+            type="button"
+            data-search-query-fill={item.phrase}
+            aria-describedby="search-query-examples-note"
+          >
+            <span>{item.phrase}</span>
+            <span class="search-collections__example-label">пример</span>
+          </button>
+        )}
+      </li>
+    ))}
+  </ul>
+  <p id="search-query-examples-note" class="search-collections__note">Строки с пометкой «пример» только подставляют фразу в поиск. Запрос не отправится, пока вы сами не нажмёте «Искать».</p>
+  <p class="search-collections__note">Это общие редакционные подборки. Личные сохранённые запросы появятся отдельно и только после входа.</p>
+  <p class="search-collections__note" data-search-local-feedback-note>Оценка выдачи после входа сохраняется в Supabase; при сбое сети браузер временно держит её в локальной очереди.</p>
+</section>
+
+<script>
+  for (const root of document.querySelectorAll('[data-search-collections]')) {
+    if (root.dataset.searchCollectionsBound === 'true') continue;
+    root.dataset.searchCollectionsBound = 'true';
+    for (const control of root.querySelectorAll('[data-search-query-fill]')) {
+      control.addEventListener('click', () => {
+        const query = control.getAttribute('data-search-query-fill') || '';
+        const input = document.querySelector('[data-authorized-search] [data-search-input]');
+        if (!(input instanceof HTMLInputElement) || !query) return;
+        input.value = query;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const searchRoot = input.closest('[data-authorized-search]');
+        const form = input.closest('[data-search-form]');
+        if (form && !form.hidden) input.focus({ preventScroll: false });
+        else {
+          const status = searchRoot?.querySelector('[data-search-status]');
+          if (status) status.textContent = `Фраза «${query}» выбрана. Войдите через Яндекс, чтобы запустить поиск.`;
+          searchRoot?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
+  }
+</script>
+
+<style>
+  .search-collections {
+    margin-top: 1.1rem;
+    padding: clamp(1rem, 3.5vw, 1.5rem) clamp(.15rem, 2vw, .75rem) 0;
+    border-top: 1px solid rgba(121, 48, 20, 0.13);
+  }
+  .search-collections h2 { margin-bottom: .35rem; }
+  .search-collections__intro,
+  .search-collections__note { margin: 0; color: var(--muted); }
+  .search-collections__intro { max-width: 58ch; }
+  .search-collections__list {
+    display: grid;
+    gap: 0;
+    margin: .75rem 0;
+    padding: 0;
+    list-style: none;
+  }
+  .search-collections__item {
+    width: 100%;
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .8rem;
+    padding: .72rem 0;
+    border: 0;
+    border-bottom: 1px solid rgba(121, 48, 20, 0.11);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-weight: 720;
+    line-height: 1.3;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .search-collections__item:hover { color: var(--primary-strong); }
+  .search-collections__arrow { color: var(--primary); font-size: 1.35rem; line-height: 1; }
+  .search-collections__example-label {
+    color: var(--muted);
+    font-size: .72rem;
+    font-weight: 650;
+    text-transform: lowercase;
+  }
+  .search-collections__note { margin-top: .45rem; font-size: .82rem; line-height: 1.45; }
+  @media (min-width: 760px) {
+    .search-collections__list { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.5rem; }
+  }
+</style>
