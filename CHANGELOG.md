@@ -28,6 +28,9 @@
   renderer instead of falling back to “cards temporarily unavailable”. The
   authorized UI smoke now checks a real visual-image `cover` treatment and the
   intentionally separate fallback-result section.
+- Fixed zero-provider-call vector-sync verification so it audits every event
+  and document kind instead of stopping after the first item when the call cap
+  is already reached.
 
 - Hardened authorized event search occurrence collapse: reciprocal family DTOs
   are paginated only after collapse, deduplicated again after LLM reranking and

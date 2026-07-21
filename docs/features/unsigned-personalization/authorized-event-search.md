@@ -109,6 +109,12 @@ closed to `contain` rather than claiming a safe crop. The exporter and browser
 renderer must be upgraded together; a newer renderer may not invent missing
 snapshot geometry.
 
+The backend vector-sync verification must inspect the whole requested corpus
+even when `--max-provider-calls 0`. That value forbids new Gemini calls; it does
+not permit an early exit after the first document. A zero-call
+`--require-complete` audit is green only when every requested document kind has
+an existing embedding with the current text hash.
+
 Search progress has a single owner: backend NDJSON stages. The old client-side
 28/55/74/92% timers are removed. Until the first frame the adjacent semantic
 progressbar is indeterminate; after that its value and stage rank are monotonic,

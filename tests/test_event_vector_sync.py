@@ -223,6 +223,61 @@ def test_sync_require_complete_returns_nonzero_when_cap_leaves_gap(monkeypatch, 
     assert report["complete"] is False
 
 
+def test_zero_call_verification_scans_all_matching_embeddings(monkeypatch, tmp_path):
+    fixture = tmp_path / "preview-events.json"
+    fixture.write_text(
+        json.dumps(
+            {
+                "events": [
+                    {
+                        "id": event_id,
+                        "title": f"Событие {event_id}",
+                        "slug": f"event-{event_id}",
+                        "start_date": "2026-07-20",
+                        "lifecycle_status": "active",
+                        "ticket": {},
+                    }
+                    for event_id in (41, 42, 43)
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    report_path = tmp_path / "report.json"
+    expected_hashes: dict[int, str] = {}
+
+    def remember_documents(docs):
+        expected_hashes.update({doc.event_id: doc.document["text_hash"] for doc in docs})
+        return len(docs)
+
+    monkeypatch.setattr(sync, "upsert_documents", remember_documents)
+    monkeypatch.setattr(sync, "fetch_existing_embeddings", lambda *args, **kwargs: dict(expected_hashes))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "sync_event_search_vectors_to_supabase.py",
+            "--preview-events-json",
+            str(fixture),
+            "--document-kinds",
+            "search_v3",
+            "--apply",
+            "--max-provider-calls",
+            "0",
+            "--require-complete",
+            "--report-json",
+            str(report_path),
+        ],
+    )
+
+    assert sync.main() == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["embeddings_skipped_unchanged"] == 3
+    assert report["provider_calls"] == 0
+    assert report["not_embedded_due_call_cap"] == 0
+    assert report["complete"] is True
+
+
 def test_delete_stale_events_removes_embeddings_before_documents(monkeypatch):
     calls: list[tuple[str, str]] = []
     monkeypatch.setattr(

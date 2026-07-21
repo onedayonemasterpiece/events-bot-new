@@ -996,7 +996,10 @@ def main() -> int:
                 skipped_by_kind[doc_kind] += 1
                 continue
             if provider_calls >= max(0, int(args.max_provider_calls)):
-                break
+                # The call cap limits provider work, not verification. Keep
+                # scanning the remaining documents so a zero-call audit can
+                # prove that every stored embedding is current.
+                continue
             vector = gemini_embed(embedding_input, model=args.embedding_model, dim=args.embedding_dim, key_env=args.google_key_env)
             provider_calls += 1
             rows.append({
@@ -1029,8 +1032,6 @@ def main() -> int:
                 )
             if args.sleep_seconds > 0:
                 time.sleep(float(args.sleep_seconds))
-        if provider_calls >= max(0, int(args.max_provider_calls)):
-            break
     if rows:
         upserted_embeddings += upsert_embeddings(rows)
     skipped_total = sum(skipped_by_kind.values())
