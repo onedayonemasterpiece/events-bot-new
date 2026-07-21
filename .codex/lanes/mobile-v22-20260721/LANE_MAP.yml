@@ -31,7 +31,7 @@ lanes:
     expected_output: "root cause, patch guidance, measurable crop gate"
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: D02
     role: planner
     requirement_ids: [R02]
@@ -44,7 +44,7 @@ lanes:
     expected_output: "monotonic motion model and Playwright gate"
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: D03
     role: planner
     requirement_ids: [R04]
@@ -57,7 +57,7 @@ lanes:
     expected_output: "existing Search/Auth donor and product-state contract"
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: D04
     role: planner
     requirement_ids: [R03]
@@ -70,11 +70,11 @@ lanes:
     expected_output: "occurrence time-block DOM/data/a11y contract"
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: W01
     role: worker
     requirement_ids: [R01, R02, R03, R04]
-    target: /root/mobile_v22_impl
+    target: /root/mobile_v22_finish
     depends_on: [D01, D02, D03, D04]
     execution_mode: serial_after_dependency
     branch: agent/mobile-v22/prototype
@@ -89,7 +89,7 @@ lanes:
     expected_output: "built/published noindex v22 prototype plus tracked evidence"
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed
   - id: I01
     role: merge_reviewer
     requirement_ids: [R05, R06]
@@ -104,4 +104,4 @@ lanes:
     expected_output: "Gemini acceptance, public Playwright gate, Telegram receipts, integration report"
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed

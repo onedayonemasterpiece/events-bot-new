@@ -16,6 +16,37 @@ When vector results are exhausted, the UI starts a separate section **«Возм
 
 Anonymous users have quota `0`: the UI shows “Войти через Яндекс”. Search is not available until Supabase Auth has a valid session.
 
+### Mobile point-of-intent entry and query cloud (v22 research)
+
+На mobile `/poisk/` — самостоятельный пункт нижней навигации; он активен на
+странице поиска, а календарная date-strip там не дублируется. Поле запроса видно
+анонимному пользователю сразу, поэтому можно сформулировать намерение до входа.
+Auth раскрывается inline после submit, запрос сохраняется в поле, но результаты
+до действующей session не подменяются демо-данными. Это point-of-value gate:
+постоянный большой login CTA в каждой шапке не нужен. Те же auth entry points
+могут появляться в `Для меня` и при явном durable save/sync; после входа общим
+сквозным контролом становится компактный avatar/account menu.
+
+Порядок inline auth: поле email и `Получить код`, разделитель `или`, затем
+`Войти через Яндекс`. Yandex PKCE возвращает на очищенный текущий URL и сохраняет
+введённый запрос. **Production status на 2026-07-21:** реально подключён только
+`custom:yandex`; email OTP/code UI в `v22` — исследовательская демонстрация
+состояний из ещё не применённого identity-controller и не должен называться
+рабочей production-авторизацией до отдельного rollout/acceptance.
+
+Облако над поиском обозначается как `Подборки по запросам` и разделяется с
+персональными сохранениями. Его целевой источник — централизованно
+нормализованные LLM и одобренные редакцией общеполезные запросы, которые после
+накопления становятся регулярно обновляемыми статическими tag pages. Пока таких
+страниц нет, prototype обязан показывать `Демо` и
+`data-prototype-simulated=true`: chips только подставляют текст в query/`?q`, не
+ведут на вымышленные `/tag/` и не утверждают, что пользователь их сохранял.
+Личные сохранённые поиски — отдельный auth-only объект.
+
+Mobile acceptance: touch targets не меньше `44px`, input font не меньше `16px`,
+нет overflow на `320/390px`, auth error/status объявляется через `aria-live`, а
+browser evidence охватывает anonymous, auth-required и signed-in/result states.
+
 ## Search feedback and public tag candidates
 
 The dedicated `/poisk/` page now exposes seed query chips and, after enough

@@ -375,6 +375,14 @@
   because its separate daily budget is exhausted.
 
 ### Changed
+- **Mobile calendar/search v22 research contract:** make the slower
+  resize-stable, directionally monotonic right-corner parallax the primary
+  mobile calendar variant; restore a verified `visual_only` horizontal `5:4`
+  crop for event `6764` without weakening unknown/OCR fail-closed behavior;
+  allow the date-list time block to show the next explicit occurrence; and
+  define `/poisk/` point-of-intent auth plus a visibly simulated, centrally
+  curated query cloud. Yandex remains the only active production auth provider;
+  the email flow in this prototype is explicitly research-only.
 - **Static-site documentation and E2E index**: linked the event-page release/test contracts from canonical feature/docs routing, distinguished preview component checks, mocked Playwright demo tests and draft Gherkin from missing production E2E, and replaced the open-ended one-month Telegraph wording with a D0-to-D10 cutover contract that preserves legacy URLs and keeps aggregate Telegraph surfaces separate.
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without
