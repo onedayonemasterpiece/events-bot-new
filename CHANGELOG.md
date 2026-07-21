@@ -31,6 +31,8 @@
 - Fixed zero-provider-call vector-sync verification so it audits every event
   and document kind instead of stopping after the first item when the call cap
   is already reached.
+- Kept the mobile toast below the header's protruding brand handle by including
+  its overhang in the shared top-chrome geometry instead of covering the logo.
 
 - Hardened authorized event search occurrence collapse: reciprocal family DTOs
   are paginated only after collapse, deduplicated again after LLM reranking and

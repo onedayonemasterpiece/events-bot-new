@@ -59,7 +59,7 @@ test('toast pauses actual time and countdown and honors safe/reduced-motion geom
   for (const reason of ['pointer', 'focus', 'touch', 'window', 'visibility', 'drawer']) {
     assert.match(toast, new RegExp(`(?:pause|resume)\\('${reason}'\\)`));
   }
-  assert.match(toast, /top:calc\(var\(--mobile-top-chrome-bottom\) \+ 8px\)/u);
+  assert.match(toast, /top:calc\(var\(--mobile-top-chrome-bottom\) \+ var\(--mobile-header-handle-overhang, 24px\) \+ 8px\)/u);
   assert.match(toast, /max-height:72px/u);
   assert.match(toast, /min-width:44px; min-height:44px/u);
   assert.match(toast, /transform-origin:left/u);

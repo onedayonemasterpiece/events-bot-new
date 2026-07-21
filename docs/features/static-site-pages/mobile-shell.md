@@ -70,6 +70,7 @@ Shell публикует переменные:
 ```css
 --mobile-header-h: 64px;
 --mobile-top-chrome-bottom: calc(env(safe-area-inset-top) + var(--mobile-header-h));
+--mobile-header-handle-overhang: 24px;
 --mobile-nav-h: 64px;
 --mobile-bottom-stack-h: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom));
 ```
@@ -77,15 +78,16 @@ Shell публикует переменные:
 Toast — overlay без layout shift:
 
 ```text
-top = --mobile-top-chrome-bottom + 8px
+top = --mobile-top-chrome-bottom + --mobile-header-handle-overhang + 8px
 left/right = max(12px, safe-area inset)
 max height = 72px (две строки и controls)
 ```
 
 На `390×844` без notch стабильный chrome занимает `64 + 64 = 128px`, оставляя
 `716px` viewport до overlay. Safe areas добавляются физическим устройством, но
-не должны дважды входить в header/nav height. Toast временно перекрывает верхние
-`56–72px` content area и не сдвигает карточки. Drawer open скрывает или
+не должны дважды входить в header/nav height. Toast начинается на 8px ниже
+фактического края выступающей бренд-бирки, временно перекрывает верхние `56–72px`
+content area и не сдвигает карточки. Drawer open скрывает или
 приостанавливает toast, чтобы два слоя не конкурировали.
 
 ### Toast runtime policy

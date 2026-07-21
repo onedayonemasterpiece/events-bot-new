@@ -168,7 +168,7 @@
 <style is:global>
   .mobile-toast-region {
     position:fixed; z-index:60;
-    top:calc(var(--mobile-top-chrome-bottom) + 8px);
+    top:calc(var(--mobile-top-chrome-bottom) + var(--mobile-header-handle-overhang, 24px) + 8px);
     left:max(12px,env(safe-area-inset-left)); right:max(12px,env(safe-area-inset-right));
     max-width:560px; margin-inline:auto; pointer-events:none;
   }
