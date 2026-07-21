@@ -72,6 +72,7 @@ The earlier Garage generated-output blocker belonged to the older base; after re
 - Gemini 3.1 Pro High reviewed the final branch and public pages read-only after W03. All seven visual/occurrence/search criteria received **PASS**; full response: [`GEMINI_FINAL_ACCEPTANCE.md`](GEMINI_FINAL_ACCEPTANCE.md).
 - The consultant agrees that parallax should remain an isolated experiment, not the default, and identifies the bounded 60-row Edge mapping cost as a non-blocking operational trade-off.
 - Machine evidence remains authoritative for exact Playwright check counts: local/public **106/106**.
+- Independent final checklist re-review marked Search `per-family`, integration hygiene and evidence **Done**; no code or acceptance blocker remains in this branch.
 
 ## Known limits
 
