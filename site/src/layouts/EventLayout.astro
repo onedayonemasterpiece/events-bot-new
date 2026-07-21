@@ -2,11 +2,15 @@
 import EventCard from '../components/EventCard.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
+import MobileBottomNav, { type MobileSection } from '../components/MobileBottomNav.astro';
+import MobileToastRegion from '../components/MobileToastRegion.astro';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 import type { PreviewEvent } from '../lib/types';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular' | 'clubs';
+export type MobileTopMode = 'standard' | 'contextual' | 'immersive';
+export type MobileBottomMode = 'nav' | 'cta' | 'none';
 
 interface Props {
   title: string;
@@ -19,15 +23,31 @@ interface Props {
   structuredData?: unknown[];
   heroChrome?: 'standard' | 'immersive';
   headerCurrent?: HeaderCurrent;
+  mobileTopMode?: MobileTopMode;
+  mobileSection?: MobileSection;
+  mobileBottomMode?: MobileBottomMode;
   noindex?: boolean;
 }
 
-const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent, noindex = false } = Astro.props;
+const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent, mobileTopMode, mobileSection: explicitMobileSection, mobileBottomMode, noindex = false } = Astro.props;
 const robots = noindex
   ? 'noindex,nofollow,noarchive'
   : (IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive'));
 const safeDescription = description || 'Анонс события в Калининградской области.';
-const bodyClass = heroChrome === 'immersive' ? 'hero-chrome-immersive' : undefined;
+const routePath = Astro.url.pathname.replace(/\/+$/u, '') || '/';
+const derivedMobileSection: MobileSection = heroChrome === 'immersive'
+  ? null
+  : /\/(?:poisk|podborki)(?:\/|$)/u.test(`${routePath}/`)
+    ? 'search'
+    : /\/(?:segodnya|zavtra)(?:\/|$)/u.test(`${routePath}/`) || headerCurrent === 'today' || headerCurrent === 'tomorrow'
+      ? 'dates'
+      : /\/dlya-menya(?:\/|$)/u.test(`${routePath}/`)
+        ? 'personal'
+        : 'afisha';
+const mobileSection = explicitMobileSection === undefined ? derivedMobileSection : explicitMobileSection;
+const resolvedMobileTopMode: MobileTopMode = mobileTopMode || (heroChrome === 'immersive' ? 'immersive' : mobileSection === 'dates' ? 'contextual' : 'standard');
+const resolvedMobileBottomMode: MobileBottomMode = mobileBottomMode || (resolvedMobileTopMode === 'immersive' ? 'cta' : mobileSection === null ? 'none' : 'nav');
+const bodyClass = resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive' : undefined;
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const personalFeedRpcName = import.meta.env.PUBLIC_PERSONAL_FEED_RPC_NAME || 'get_listing_personal_feed_v1';
@@ -101,6 +121,15 @@ const HEADER_NAVIGATION = [
   { key: 'clubs', label: 'Клубы', href: '/kluby-po-interesam/' },
 ] as const;
 const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED);
+const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : mobileSection === 'personal' ? 'personal' : mobileSection === 'afisha' ? 'all' : null);
+const DRAWER_NAVIGATION = [
+  ...HEADER_NAVIGATION,
+  { key: 'search', label: 'Поиск', href: '/poisk/' },
+  { key: 'personal', label: 'Для меня', href: '/dlya-menya/' },
+  { key: 'partners', label: 'Инфопартнёры', href: '/partners/' },
+  { key: 'all', label: 'Все анонсы', href: '/' },
+] as const;
+const visibleDrawerNavigation = DRAWER_NAVIGATION.filter((item) => item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED);
 ---
 <!doctype html>
 <html lang="ru">
@@ -148,6 +177,10 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         --radius-xl: 28px;
         --radius-lg: 20px;
         --radius-md: 14px;
+        --mobile-header-h: 64px;
+        --mobile-top-chrome-bottom: calc(env(safe-area-inset-top) + var(--mobile-header-h));
+        --mobile-nav-h: 64px;
+        --mobile-bottom-stack-h: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom));
         color-scheme: light;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
@@ -1689,6 +1722,11 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         .side-col { display: none; }
       }
       @media (max-width: 759px) {
+        body[data-mobile-bottom-mode="nav"] { padding-bottom: var(--mobile-bottom-stack-h); }
+        body[data-mobile-bottom-mode="nav"] footer { padding-bottom: 2rem; }
+        body:not(.hero-chrome-immersive) .site-header { padding-top: env(safe-area-inset-top); }
+        body:not(.hero-chrome-immersive) .site-header__inner { height: var(--mobile-header-h); min-height: var(--mobile-header-h); }
+        .site-header .site-nav { display: none; }
         body.hero-chrome-immersive::before { opacity: 0; }
         .site-header__brand-tag { display: none; }
         .mobile-discovery-menu {
@@ -2246,7 +2284,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
     </style>
   </head>
-  <body class={bodyClass} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">
@@ -2260,15 +2298,9 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           <div class="mobile-discovery-menu__panel" aria-label="Дополнительная навигация афиши">
             <nav class="mobile-discovery-menu__nav" aria-label="Быстрая навигация по афише">
               <div class="mobile-discovery-menu__links">
-                <a href={withBase('/segodnya/')}>Сегодня</a>
-                <a href={withBase('/zavtra/')}>Завтра</a>
-                <a href={withBase('/vyhodnye/')}>Выходные</a>
-                <a href={withBase('/vystavki/')}>Выставки</a>
-                <a href={withBase('/populyarnoe/')}>Популярное</a>
-                {INTEREST_CLUBS_PUBLIC_ENABLED && <a href={withBase('/kluby-po-interesam/')}>Клубы</a>}
-                <a href={withBase('/poisk/')}>Поиск</a>
-                <a href={withBase('/partners/')}>Инфопартнёры</a>
-                <a href={siteHomeHref()}>Все анонсы</a>
+                {visibleDrawerNavigation.map((item) => (
+                  <a href={withBase(item.href)} aria-current={item.key === drawerCurrent ? 'page' : undefined}>{item.label}</a>
+                ))}
               </div>
             </nav>
           </div>
@@ -2280,6 +2312,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         </nav>
       </div>
     </header>
+    <MobileToastRegion />
     <slot />
     <!-- EventCard is the single DOM/interaction source for every client-added card. -->
     <template data-event-card-template="split-actions">
@@ -2289,6 +2322,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       <EventCard event={runtimeTemplateEvent} variant="overlay-controls" desktopRelatedCrop runtimeTemplate />
     </template>
     <SiteFooter socialLinks={FOOTER_SOCIAL_LINKS} />
+    {resolvedMobileBottomMode === 'nav' && <MobileBottomNav current={mobileSection} />}
 
     <script>
       import { packRelatedCardRows, relatedCardMediaGeometry } from '../lib/relatedCardLayout.mjs';
@@ -4441,7 +4475,19 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           await applyFeedbackState({ anchorEventId: eventId });
         }
 
+        const shareStatusTimers = new Map();
+        const shareStatusEpochs = new WeakMap();
+        function showMobileActionToast(message, type = 'success', dedupeKey = 'mobile-action', announce = true) {
+          if (!window.matchMedia('(max-width: 759px)').matches || !message) return;
+          (window as any).KenigEventsToast?.show?.({ message, type, dedupeKey, announce });
+        }
+
         function setNativeShareStatus(button, message = '', isBusy = false) {
+          const previousTimer = shareStatusTimers.get(button);
+          if (previousTimer) window.clearTimeout(previousTimer);
+          shareStatusTimers.delete(button);
+          const epoch = Number(shareStatusEpochs.get(button) || 0) + 1;
+          shareStatusEpochs.set(button, epoch);
           const label = button.querySelector('[data-share-label]') || button.querySelector('span') || button;
           const original = button.dataset.shareOriginalLabel || label.textContent || 'Поделиться';
           button.dataset.shareOriginalLabel = original;
@@ -4452,9 +4498,13 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           }
           button.disabled = Boolean(isBusy);
           if (!isBusy && message) {
-            window.setTimeout(() => {
+            if (/не удалось|ошиб/iu.test(message)) showMobileActionToast(message, 'error', `share-${button.dataset.shareEventId || 'event'}`);
+            else if (/поделились|скопирована/iu.test(message)) showMobileActionToast(message, 'success', `share-${button.dataset.shareEventId || 'event'}`);
+            const resetTimer = window.setTimeout(() => {
+              if (shareStatusEpochs.get(button) !== epoch) return;
               label.textContent = button.dataset.shareOriginalLabel || 'Поделиться';
             }, 2200);
+            shareStatusTimers.set(button, resetTimer);
           }
         }
 
@@ -4627,8 +4677,6 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             } catch (_) {
               setNativeShareStatus(button, 'Не удалось');
             }
-          } finally {
-            window.setTimeout(() => setNativeShareStatus(button, ''), 2600);
           }
         });
 
@@ -4642,11 +4690,22 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             const label = button.querySelector('span') || button;
             const original = label.textContent;
             label.textContent = 'Ссылка скопирована';
-            setTimeout(() => { label.textContent = original || 'Скопировать ссылку'; }, 1800);
+            showMobileActionToast('Ссылка скопирована', 'success', 'copy-url');
+            const epoch = Number(button.dataset.copyUrlEpoch || 0) + 1;
+            button.dataset.copyUrlEpoch = String(epoch);
+            setTimeout(() => {
+              if (Number(button.dataset.copyUrlEpoch || 0) === epoch) label.textContent = original || 'Скопировать ссылку';
+            }, 1800);
           } catch (_) {
+            showMobileActionToast('Не удалось скопировать ссылку', 'error', 'copy-url');
             location.href = url;
           }
         });
+
+        window.addEventListener('pagehide', () => {
+          shareStatusTimers.forEach((timer) => window.clearTimeout(timer));
+          shareStatusTimers.clear();
+        }, { once: true });
 
         function isCardInteractiveTarget(target) {
           return Boolean(target.closest('a, button, input, textarea, select, summary, [role="button"], [data-native-share], [data-feedback-action], [data-not-interested-plate]'));

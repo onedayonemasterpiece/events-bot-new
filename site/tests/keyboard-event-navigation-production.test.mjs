@@ -48,6 +48,18 @@ test('prototype and production share the exact extracted V7 router', async () =>
   assert.doesNotMatch(router, /surface\.focus\(\{ preventScroll: true \}\);\s*\n\s*\}/u, 'module must not end with prototype autofocus');
 });
 
+test('keyboard visual feedback delegates to the one layout toast while SR status remains local', async () => {
+  const prototype = await read('src/components/KeyboardEventNavigationPrototype.astro');
+  const router = await read('src/lib/keyboardEventNavigation.mjs');
+  const layout = await read('src/layouts/EventLayout.astro');
+  assert.match(prototype, /data-keyboard-prototype-status role="status" aria-live="polite"/u);
+  assert.doesNotMatch(prototype, /data-keyboard-action-toast|keyboard-action-toast/u);
+  assert.match(router, /KenigEventsToast\?\.show/u);
+  assert.match(router, /kenigevents:toast/u);
+  assert.match(router, /announce: false/u);
+  assert.equal((layout.match(/<MobileToastRegion\s*\/>/gu) || []).length, 1);
+});
+
 test('router has reversible lifecycle and disarms lost-focus provenance on page lifecycle loss', async () => {
   const router = await read('src/lib/keyboardEventNavigation.mjs');
   assert.match(router, /new win\.AbortController\(\)/u);

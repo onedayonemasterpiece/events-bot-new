@@ -1,7 +1,6 @@
 ---
 import EventCard from '../../../components/EventCard.astro';
 import EventLayout from '../../../layouts/EventLayout.astro';
-import MobileSearchBottomNav from '../../../components/MobileSearchBottomNav.astro';
 import {
   getMaterializedSearchCollection,
   getMaterializedSearchCollectionEvents,
@@ -23,7 +22,7 @@ const title = `${collection.title} | ${SITE_NAME}`;
 const updatedDate = getPreviewBuild().current_date;
 const referenceDate = getMaterializedSearchCollectionReferenceDate();
 ---
-<EventLayout title={title} description={collection.description} canonicalUrl={canonicalUrl} structuredData={[]} noindex>
+<EventLayout title={title} description={collection.description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="search" noindex>
   <main id="main">
     <div class="page-shell page-shell--search-collection">
       <nav class="crumbs" aria-label="Хлебные крошки">
@@ -58,7 +57,6 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
       </section>
     </div>
   </main>
-  <MobileSearchBottomNav />
 </EventLayout>
 
 <style>
