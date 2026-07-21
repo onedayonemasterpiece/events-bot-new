@@ -10,6 +10,7 @@ import {
   localReleaseAssetPath,
   recordBrowserVisualSuccess,
   releaseRootMetadata,
+  staticHeroCropCandidates,
   staticSpecimenCandidates,
   startReleaseServer,
 } from './check-browser-release-gate.mjs';
@@ -39,12 +40,15 @@ test('R03 prepublication gate maps only immutable CDN Astro runtime back to the 
 
 test('R01 crop assertion maps treatments and product-gates visual cards to cover', () => {
   assert.equal(expectedObjectFitForTreatment('document-contain'), 'contain');
+  assert.equal(expectedObjectFitForTreatment('document-safe-cover'), 'cover');
   assert.equal(expectedObjectFitForTreatment('visual-contain'), 'contain');
   assert.equal(expectedObjectFitForTreatment('visual-cover'), 'cover');
   const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
   assert.match(source, /item\.mediaKind === 'visual'[\s\S]*item\.treatment === 'visual-cover' && item\.objectFit === 'cover'/u);
   assert.match(source, /unusedFrameRatio[\s\S]*visual card .* leaves .* media frame unused/u);
-  assert.match(source, /item\.mediaKind === 'document'[\s\S]*item\.treatment === 'document-contain' && item\.objectFit === 'contain'/u);
+  assert.match(source, /item\.mediaKind === 'document'[\s\S]*item\.treatment === 'document-safe-cover' && item\.objectFit === 'cover'/u);
+  assert.match(source, /recommendation row cards do not share one total height/u);
+  assert.match(source, /fixed chrome height used by the global optimizer/u);
 });
 
 test('R01 document acceptance is card-local and does not mistake a mixed row potential for applied crop', () => {
@@ -56,6 +60,7 @@ test('R01 document acceptance is card-local and does not mistake a mixed row pot
 const successfulReport = {
   ok: true,
   checks: {
+    hero_gallery_crop: 'ok',
     related_geometry_crop: 'ok',
     related_loaded_media: 'ok',
     canonical_event_cards: 'ok',
@@ -85,6 +90,9 @@ test('R01/R02 release gate blocks fallback bleed and tests cold/mixed keyboard o
   const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
   assert.match(source, /fallbackVisible/gu);
   assert.match(source, /exposes fallback text behind a loaded/gu);
+  assert.match(source, /non-OCR hero is letterboxed/gu);
+  assert.match(source, /non-OCR gallery slide is letterboxed/gu);
+  assert.match(source, /staticHeroCropCandidates\(root, basePath, routes\)/gu);
   assert.match(source, /cold BODY ArrowRight did not advance/gu);
   assert.match(source, /inert click \+ Russian-layout KeyL/gu);
   assert.match(source, /header provenance leaked/gu);
@@ -137,4 +145,20 @@ test('R03 production specimen discovery is static, bounded and prefers the repor
     { route: `${basePath}/sobytiya/dog-6408/`, targetPath: `${basePath}/sobytiya/target-200/` },
     { route: `${basePath}/sobytiya/alpha-100/`, targetPath: `${basePath}/sobytiya/target-200/` },
   ]);
+});
+
+test('R01 hero crop canaries cover every generated visual-only desktop family/fit combination', () => {
+  const root = mkdtempSync(join(tmpdir(), 'static-browser-hero-crop-'));
+  const basePath = '/_review/token';
+  const page = (slug, family, fit, mode = 'visual_only') => {
+    const dir = join(root, 'sobytiya', slug);
+    mkdirSync(dir, { recursive:true });
+    writeFileSync(join(dir, 'index.html'), `<main data-desktop-clean-event data-desktop-family="${family}" data-selected-media-policy="${mode}" data-split-media-fit="${fit}"><img data-clean-hero-image></main>`);
+    return `${basePath}/sobytiya/${slug}/`;
+  };
+  const dog = page('dog-6408', 'editorial', 'none');
+  const duplicateEditorial = page('other-1', 'editorial', 'none');
+  const split = page('portrait-2', 'split', 'viewport-cover');
+  const ocr = page('poster-3', 'split', 'viewport-contain', 'ocr_text');
+  assert.deepEqual(staticHeroCropCandidates(root, basePath, [duplicateEditorial, split, ocr, dog]), [dog, split]);
 });

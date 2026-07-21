@@ -1,12 +1,15 @@
 # Event Detail Related Recommendations
 
-> **Status:** MVP-0 product/technical contract + hardened browser reference prototype
+> **Status:** detailed historical/current implementation contract; the umbrella
+> relation taxonomy, public naming and cross-surface acceptance live in
+> [`../linked-events/README.md`](../linked-events/README.md) and
+> [`../linked-events/requirements.md`](../linked-events/requirements.md).
 > **Surface:** `event_detail_related`
 > **Primary goal:** validate personalization as a small enhancement to a useful static event page before designing a personalized home feed.
 
 ## Why MVP starts here
 
-The first personalization surface is the related-events block on a concrete event page, not a personalized homepage or infinite feed.
+The first personalization surface is the related-events block on a concrete event page, not a personalized homepage or infinite feed. Current `main` contains the hardened static/manifest implementation, while stable-root promotion is still a separate release gate.
 
 Reason: an event detail page already gives strong context. If the visitor opens a jazz concert, the block should mostly remain “similar to this event” and only gently use the local anonymous profile. A homepage must guess what the visitor wants in general; this is a harder product problem and should wait until MVP-0 proves the catalog, taxonomy, ranking and UX on real data.
 

@@ -1,10 +1,12 @@
 ---
 import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
+import EventOccurrenceNav from './EventOccurrenceNav.astro';
 import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import EventFallbackArt from './EventFallbackArt.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
-import { displayDate, displayDateTime, displayDateWithWeekday, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
+import type { OccurrencePresentation } from '../lib/eventOccurrences';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { isLowResolutionPortraitEventMedia, selectEventMediaByQuality } from '../lib/eventMediaQuality';
 import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
@@ -25,6 +27,7 @@ interface Props {
   headingTag?: 'h1' | 'h2' | 'h3';
   galleryCta?: HeroGalleryCta;
   metaTreatment?: 'standard' | 'weekday-panel' | 'responsive-weekday-panel';
+  occurrencePresentation?: OccurrencePresentation;
 }
 
 type HeroGalleryImage = {
@@ -41,14 +44,17 @@ type HeroGalleryImage = {
   protected_crop_reason?: string;
 };
 
-const { event, modeOverride, composition, headingTag = 'h1', galleryCta, metaTreatment = 'standard' } = Astro.props;
+const { event, modeOverride, composition, headingTag = 'h1', galleryCta, metaTreatment = 'standard', occurrencePresentation } = Astro.props;
+const resolvedOccurrencePresentation = occurrencePresentation || getOccurrencePresentation(event);
 const HeadingTag = headingTag;
 const rawImageAssets = event.image_assets || [];
 const mediaQualitySelection = selectEventMediaByQuality(rawImageAssets);
 const admittedImageAssets = mediaQualitySelection.admittedSourceIndexes.map((index) => rawImageAssets[index]).filter(Boolean);
 const requestedPrimaryImageUrl = eventImageUrl(event.image_url);
 const primaryImageAsset = admittedImageAssets.find((asset) => eventImageUrl(asset.src) === requestedPrimaryImageUrl) || admittedImageAssets[0];
-const primaryLowResolutionPortrait = admittedImageAssets.length === 1 && isLowResolutionPortraitEventMedia(primaryImageAsset);
+const primaryLowResolutionPortrait = admittedImageAssets.length === 1
+  && (primaryImageAsset?.image_text_mode || event.image_text_mode) !== 'visual_only'
+  && isLowResolutionPortraitEventMedia(primaryImageAsset);
 const primaryImageUrl = eventImageUrl(primaryImageAsset?.src || event.image_url);
 const typedFallbackArt = primaryImageUrl ? null : resolveEventFallbackArt(event);
 const primaryImageTextMode = primaryImageAsset?.image_text_mode || event.image_text_mode;
@@ -61,12 +67,7 @@ const derivedComposition: HeroComposition = heroMode === 'fallback-art'
     ? 'photo-cinematic-sheet'
     : 'poster-billboard';
 const heroComposition = composition || derivedComposition;
-const dateTimeLabel = displayDateTime(event);
-const dateLabel = displayDate(event);
-const dateWithWeekdayLabel = displayDateWithWeekday(event);
-const weekdayLabel = dateWithWeekdayLabel.endsWith(dateLabel)
-  ? dateWithWeekdayLabel.slice(0, -dateLabel.length).replace(/,\s*$/u, '')
-  : '';
+const dateTimeLabel = resolvedOccurrencePresentation.compactLabel || displayDateTime(event);
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'место уточняется';
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
@@ -110,10 +111,11 @@ function isReliableHeroGalleryImageUrl(value: string | null | undefined): boolea
     return true;
   }
 }
-// This component spans fixed-ratio, viewport-height and immersive layouts. A
-// server-side ratio guess cannot prove one crop safe for all of them, so it
-// remains contained until a consumer with the actual target box solves it.
-const primaryHeroCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
+// Product contract: a non-OCR gallery image fills the visible frame. Semantic
+// bbox metadata refines position, but its absence must not create bands.
+const primaryHeroCrop = primaryImageTextMode === 'visual_only'
+  ? { fit:'cover' as const, objectPosition:normalizeObjectPosition(primaryImageAsset?.recommended_object_position) || '50% 50%', reason:'visual_only_gallery_fill' }
+  : { fit:'contain' as const, objectPosition:'50% 50%', reason:'document_media' };
 const heroObjectPosition = heroMode === 'photo-cover' && primaryHeroCrop.fit === 'cover'
   ? normalizeObjectPosition(primaryHeroCrop.objectPosition)
   : null;
@@ -158,7 +160,9 @@ const galleryImages = (() => {
     });
   }
   for (const asset of admittedImageAssets) {
-    const galleryCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
+    const galleryCrop = (asset.image_text_mode || 'unknown') === 'visual_only'
+      ? { fit:'cover' as const, objectPosition:normalizeObjectPosition(asset.recommended_object_position) || '50% 50%', reason:'visual_only_gallery_fill' }
+      : { fit:'contain' as const, objectPosition:'50% 50%', reason:'document_media' };
     push({
       src: eventImageUrl(asset.src) || asset.src,
       alt: asset.alt || heroAlt,
@@ -168,7 +172,8 @@ const galleryImages = (() => {
       media_role: asset.media_role,
       width: asset.width,
       height: asset.height,
-      low_resolution_portrait: admittedImageAssets.length === 1 && isLowResolutionPortraitEventMedia(asset),
+      low_resolution_portrait: (asset.image_text_mode || 'unknown') !== 'visual_only'
+        && admittedImageAssets.length === 1 && isLowResolutionPortraitEventMedia(asset),
       protected_crop_fit: galleryCrop.fit,
       protected_crop_reason: galleryCrop.reason,
     });
@@ -247,14 +252,10 @@ const showTicketCta = Boolean(ctaHref);
       </button>
     </div>
     {metaTreatment !== 'standard' && (
-      <p class="event-hero__meta-line event-hero__meta-line--weekday-panel">
-        <span class="event-hero__when">
-          {weekdayLabel && <span class="event-hero__weekday">{weekdayLabel}</span>}
-          <span class="event-hero__date">{dateLabel}</span>
-          {event.display_time && <span class="event-hero__time">{event.display_time}</span>}
-        </span>
+      <div class="event-hero__meta-line event-hero__meta-line--weekday-panel">
+        <EventOccurrenceNav event={event} presentation={resolvedOccurrencePresentation} variant="mobile" />
         <span class="event-hero__where">{placeLabel}</span>
-      </p>
+      </div>
     )}
     {metaTreatment !== 'weekday-panel' && (
       <p class="event-hero__meta-line event-hero__meta-line--standard">

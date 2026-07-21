@@ -4,15 +4,40 @@
 
 ## Contract
 
-- OCR/text/unknown images use full-poster/natural/contain presentation and are not meaningfully cropped.
-- Compact event-detail recommendation cards (`Смотрите дальше` and desktop
-  `Ещё события`) treat the OCR result `visual_only` as permission to fill the
-  shared card frame with `cover`. They prefer exact crop geometry, then exported
-  object-position/focal metadata, then a deterministic center fallback.
-- Hero, fullscreen and other large/responsive surfaces keep their stricter
-  role/geometry policy. When their safe crop cannot be proven, they use
-  contain/natural presentation rather than cut heads, text or the main subject.
-- Framing metadata is versioned with the media/content hash and may be manually overridden.
+- Hero/gallery photography classified as `visual_only` always fills its frame
+  with `cover`; semantic-role uncertainty must not turn a non-OCR photograph
+  into a letterboxed document. OCR/text/unknown hero media keeps the stricter
+  full-poster `contain` policy.
+- Compact cards never have unused bands around an image: every packed card uses
+  `cover`, in both static related rows and hydrated continuation rows.
+- A normal OCR/document card defines an exact feasible row ratio and is not
+  cropped. Only a very tall document (source width/height below `4/5`) may widen
+  that interval, and no more than `20%` of its source area may be cropped.
+- Cards in a row have one media height and one total card height. Cards may be
+  reordered between rows; input order is not an acceptance requirement.
+- Without a constraining OCR/document neighbour the compact target is
+  width/height `5/4` (a horizontal frame). A wider target is allowed when it
+  reduces the whole-page height or aligns with a horizontal neighbour.
+- Framing metadata is versioned with the media/content hash and may be manually
+  overridden.
+
+## Global compact-row optimizer
+
+`site/src/lib/relatedCardLayout.mjs` enumerates feasible card groupings (up to
+the surface row-size cap) and uses dynamic programming over the complete set of
+cards. It minimizes the sum of normalized full-row heights, including the
+desktop card's fixed `184px + 58px + 56px` content/action tracks, rather than
+greedily optimizing the current row. The generated browser gate proves that
+this chrome height is actually invariant across the packed cards. Ties prefer
+fewer rows, less visual crop and less displacement from source order.
+
+For each candidate row the solver intersects document-safe target intervals.
+An ordinary document contributes only its natural ratio; a very tall document
+contributes `[naturalRatio, naturalRatio / 0.8]`. Infeasible combinations are
+rejected. The selected target is then shared by every card in the row, so media
+and outer-card heights are equal and no image uses `contain` inside a fixed
+frame. `rowWorstCrop`, `coverCrop` and `rowCost` are emitted as diagnostics and
+checked against the rendered result.
 
 ## Pixel-current bbox contract
 
@@ -28,19 +53,20 @@ protected-region solver: it adds a bounded margin around faces plus the valuable
 region, chooses a `cover` window only when the complete union fits, and returns
 the matching CSS object position without whole-percent rounding that could move
 the browser crop past a tight protected boundary. If the union does not fit,
-geometry is stale, the image is OCR/text, semantic role is not an explicitly
-classified `event_photo`, or the responsive target ratio is unknown, the strict
-hero/large-surface renderer uses `contain`. Compact event-detail recommendation
-cards are the deliberate exception: their known row ratio and `visual_only`
-classification restore the accepted photo preview crop, while `ocr_text` and
-`unknown` remain document `contain`.
+geometry is stale, the image is OCR/text, or the responsive target ratio is
+unknown, the strict OCR/large-surface renderer uses `contain`. A `visual_only`
+hero/gallery is the deliberate product exception and fills with `cover`.
+Compact cards use the separate bounded-row contract above: documents constrain
+the row instead of creating bands, and very tall documents alone may lose at
+most `20%` of their area.
 
 Production desktop post-build contract checks the actual surface contract. A
-hero `cover` still requires protected-region proof. In recommendation rows,
-every `visual_only` card must compute to `visual-cover`/`cover` with zero unused
-frame budget; document cards must compute to `document-contain`/`contain`.
-The gate decodes the real image, checks the loaded/fallback layers, records the
-unused-frame ratio and retains the rendered row screenshot.
+non-OCR hero/gallery media must compute to `cover`. In recommendation rows,
+every image must compute to `cover` with zero unused frame budget; document
+cards must additionally compute to `document-safe-cover` with applied crop no
+greater than `20%`. The gate decodes the real image, checks loaded/fallback
+layers, equal media and card heights per row, records the independent
+unused-frame/crop ratios and retains the rendered row screenshot.
 
 ## Required producer
 
@@ -57,7 +83,9 @@ The browser/static renderer consumes metadata but does not run vision models.
 ## Acceptance
 
 - golden corpus across posters, portraits, groups, architecture, text-heavy images and sparse photos;
-- no cut faces/heads or significant OCR text;
+- no cut faces/heads; no OCR crop except the documented very-tall `<=20%` case;
+- zero image-frame bands and equal media/card heights within each compact row;
+- the globally selected grouping has the minimum normalized total page height;
 - repeatable output for the same versioned media;
 - visual regression for hero/card/list/gallery/share formats;
 - safe fallback when metadata is missing/low confidence;

@@ -71,7 +71,7 @@ test('stale pixel provenance, OCR and missing geometry never unlock cover', () =
   assert.equal(resolveEventImageCrop(currentPhoto({ safe_crop:false }), 16 / 9).reason, 'semantic_crop_gate_closed');
 });
 
-test('responsive surfaces fail closed and only an exact resolved card ratio invokes the solver', async () => {
+test('non-OCR hero/gallery and compact cards fill while unknown listing geometry remains fail-closed', async () => {
   const read = (name) => readFile(new URL(`../src/components/${name}`, import.meta.url), 'utf8');
   const [card, hero, listing, desktop] = await Promise.all([
     read('EventCard.astro'),
@@ -82,19 +82,17 @@ test('responsive surfaces fail closed and only an exact resolved card ratio invo
 
   assert.match(card, /desktopRelatedCrop\s*\? resolveRelatedCardMediaTreatment\(event, cardTargetAspect\)/u);
   assert.match(card, /data-card-authoritative-fit=\{cardCrop\.fit\}/u);
-  assert.match(card, /cropReason:'responsive_target_unknown'/u);
+  assert.match(card, /resolveRelatedCardMediaTreatment\(event, cardTargetAspect\)/u);
   assert.doesNotMatch(
     desktop,
     /\[data-lab-media-kind="visual"\] \.event-card__media\) \{[^}]*object-fit:cover !important;/u,
   );
   assert.match(desktop, /const heroContainStyle = preferredCrop\.fit === 'contain'/u);
+  assert.match(desktop, /preferredImageTextMode === 'visual_only'[\s\S]*fit:'cover'/u);
+  assert.match(desktop, /desktopGalleryFit = \(image: GalleryImage\) => image\.image_text_mode === 'visual_only' \? 'cover' : 'contain'/u);
+  assert.match(desktop, /effectiveSplitMediaFit: SplitMediaFit = selectedMediaMode === 'visual_only'[\s\S]*\? 'viewport-cover'/u);
+  assert.match(hero, /primaryImageTextMode === 'visual_only'[\s\S]*fit:'cover'/u);
   assert.equal((desktop.match(/style=\{heroContainStyle\}/gu) || []).length, 2);
-  assert.doesNotMatch(
-    desktop,
-    /data-lab-media-treatment="document-safe-cover"[^}]*object-fit:cover !important/gu,
-  );
-  for (const source of [hero, listing, desktop]) {
-    assert.match(source, /reason:'responsive_target_unknown'/u);
-    assert.doesNotMatch(source, /resolveEventImageCrop\([^)]*,\s*16\s*\//u);
-  }
+  assert.match(listing, /reason:'responsive_target_unknown'/u);
+  for (const source of [hero, listing, desktop]) assert.doesNotMatch(source, /resolveEventImageCrop\([^)]*,\s*16\s*\//u);
 });

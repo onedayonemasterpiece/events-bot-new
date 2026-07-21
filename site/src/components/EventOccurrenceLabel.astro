@@ -1,0 +1,43 @@
+---
+import type { OccurrencePresentation } from '../lib/eventOccurrences';
+
+interface Props {
+  presentation: OccurrencePresentation;
+  variant?: 'inline' | 'rail-time-first' | 'rail-date-first';
+  className?: string;
+}
+
+const { presentation, variant = 'inline', className } = Astro.props;
+const classes = ['event-occurrence-label', `event-occurrence-label--${variant}`, className].filter(Boolean).join(' ');
+---
+
+<span
+  class={classes}
+  aria-label={presentation.ariaLabel}
+  data-occurrence-label
+  data-occurrence-label-variant={variant}
+  data-occurrence-member-ids={presentation.family.memberIds.join(',')}
+  data-occurrence-complex={presentation.isComplexSchedule ? 'true' : 'false'}
+>
+  {variant === 'inline' ? (
+    <span aria-hidden="true">{presentation.compactLabel}</span>
+  ) : variant === 'rail-time-first' ? (
+    <>
+      {presentation.railTimeLine && <strong aria-hidden="true">{presentation.railTimeLine}</strong>}
+      <span aria-hidden="true">{presentation.railDateLine}</span>
+    </>
+  ) : (
+    <>
+      <strong aria-hidden="true">{presentation.railDateLine}</strong>
+      {presentation.railTimeLine && <span aria-hidden="true">{presentation.railTimeLine}</span>}
+    </>
+  )}
+</span>
+
+<style>
+  .event-occurrence-label { min-width:0; font-variant-numeric:tabular-nums; }
+  .event-occurrence-label--rail-time-first,
+  .event-occurrence-label--rail-date-first { display:flex; flex-direction:column; align-items:flex-start; line-height:1.05; }
+  .event-occurrence-label--rail-time-first > strong,
+  .event-occurrence-label--rail-date-first > strong { font-weight:950; }
+</style>

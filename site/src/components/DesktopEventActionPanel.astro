@@ -3,11 +3,11 @@ import Icon from './Icon.astro';
 import CalendarLink from './CalendarLink.astro';
 import type { PreviewEvent } from '../lib/types';
 import {
-  displayDateTime,
   eventAbsoluteUrl,
   eventActionHref,
   eventAdmissionLabel,
   eventTicketActionLabel,
+  getOccurrencePresentation,
   isCalendarEligible,
   isExternalHttpUrl,
   isTelephoneUrl,
@@ -22,7 +22,7 @@ interface Props {
 }
 
 const { event, shareImage = event.image_url || '', className = '', family = 'editorial' } = Astro.props;
-const dateTimeLabel = displayDateTime(event);
+const dateTimeLabel = getOccurrencePresentation(event).compactLabel;
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'Место уточняется';
 const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
 const ctaHref = eventActionHref(event);

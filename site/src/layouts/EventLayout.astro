@@ -1236,7 +1236,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
         inset: 0;
         width: 100%;
         height: 100%;
-        object-fit: contain;
+        object-fit: cover;
       }
       .event-card__media-shell--dynamic::after {
         content: "";
@@ -1250,9 +1250,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
       }
       .event-card__media-shell--dynamic.is-image-loaded::after,
       .event-card__media-shell--dynamic.is-image-missing::after { display: none; }
-      /* The semantic crop gate may correctly choose `contain`.  Once the real
-         image has loaded, its transparent letterbox must reveal only the
-         neutral shell—not the date/type/city fallback intended for failures. */
+      /* Once the real image has loaded, the failure fallback is never allowed
+         to paint through the media layer. */
       .event-card__media-shell--dynamic.is-image-loaded .event-card__image-fallback { display: none; }
       @keyframes event-card-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
       @media (prefers-reduced-motion: reduce) {
@@ -3344,6 +3343,19 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           return Math.min(1, Math.log1p(likes + shares * 1.5) / Math.log(80));
         }
 
+        function collapseRankedOccurrenceFamilies(items) {
+          const seen = new Set();
+          return toArray(items).filter((item) => {
+            const display = displayOf(item?.candidate);
+            const memberIds = unique(toArray(display?.occurrence_member_ids).map(asId).filter(Boolean)).sort((left, right) => left - right);
+            const eventId = asId(item?.event_id) || asId(candidateId(item?.candidate));
+            const familyKey = memberIds.length > 1 ? `family:${memberIds.join(',')}` : `event:${eventId || ''}`;
+            if (seen.has(familyKey)) return false;
+            seen.add(familyKey);
+            return true;
+          }).map((item, index) => ({ ...item, rank:index }));
+        }
+
         function rankPersonalFeedCandidates(manifest, profile) {
           if (!personalFeedProfileIsReady(profile)) return [];
           const scored = [];
@@ -3576,7 +3588,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const genericRanked = rankPopularFallbackCandidates(manifest, profile);
           const adjacentRanked = isEventDetail ? rankAdjacentContinuationCandidates(manifest, profile) : [];
           const recentServed = isEventDetail ? readRecentContinuationIds() : new Set();
-          const ranked = isEventDetail
+          const rankedBeforeOccurrenceCollapse = isEventDetail
             ? window.KenigEventsSelectEventContinuation({
                 currentEventId: personalFeedCurrentEventId(section),
                 profileCandidates: profileRanked,
@@ -3589,8 +3601,9 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
                 maxSameVenue: 2,
               })
             : (isPersonal ? profileRanked : genericRanked)
-                .filter((item) => !excluded.has(asId(item.event_id)))
-                .slice(0, isEventDetail ? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT);
+                .filter((item) => !excluded.has(asId(item.event_id)));
+          const ranked = collapseRankedOccurrenceFamilies(rankedBeforeOccurrenceCollapse)
+            .slice(0, isEventDetail ? EVENT_DETAIL_CONTINUATION_LIMIT : PERSONAL_FEED_RENDER_LIMIT);
           if (!ranked.length) {
             if (isEventDetail) {
               section.hidden = false;
@@ -3822,6 +3835,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             display_date: display.display_date || formatDateForUi(candidate?.date || ''),
             display_time: display.display_time || null,
             display_date_time: display.display_date_time || [display.display_date || formatDateForUi(candidate?.date || ''), display.display_time].filter(Boolean).join(' · '),
+            occurrence_aria_label: display.occurrence_aria_label || display.display_date_time || [display.display_date || formatDateForUi(candidate?.date || ''), display.display_time].filter(Boolean).join(' · '),
+            occurrence_member_ids: toArray(display.occurrence_member_ids).map(Number).filter(Number.isFinite),
             city: display.city || candidate?.city || null,
             venue_name: display.venue_name || candidate?.location_name || null,
             place: display.place || [display.city || candidate?.city, display.venue_name || candidate?.location_name].filter(Boolean).join(' · '),
@@ -3882,7 +3897,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           const absoluteUrl = safeRuntimeCardUrl(data.absolute_url, location.href);
           const imageUrl = safeRuntimeCardUrl(data.image_url || '', '');
           const calendarHref = safeRuntimeCardUrl(data.calendar_href || '', '');
-          const shareText = [data.title, [data.display_date, data.display_time, data.venue_name || data.city].filter(Boolean).join(' · '), status].filter(Boolean).join('\n');
+          const shareText = [data.title, [data.display_date_time, data.venue_name || data.city].filter(Boolean).join(' · '), status].filter(Boolean).join('\n');
           const shareImageType = imageUrl.toLowerCase().includes('.webp')
             ? 'image/webp'
             : /\.png(?:[?#]|$)/u.test(imageUrl.toLowerCase()) ? 'image/png' : 'image/jpeg';
@@ -3893,6 +3908,7 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           setRuntimeCardDataset(card, 'eventId', data.id);
           setRuntimeCardDataset(card, 'eventTitle', data.title);
           setRuntimeCardDataset(card, 'cardHref', href);
+          setRuntimeCardDataset(card, 'occurrenceMemberIds', data.occurrence_member_ids.join(','));
           setRuntimeCardDataset(card, 'rank', data.rank);
           setRuntimeCardDataset(card, 'score', data.personal_score);
           card.setAttribute('aria-label', `${data.title}: ${data.display_date}`);
@@ -3962,6 +3978,8 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           }
           setRuntimeCardText(card, '[data-card-type]', typeTag, { hideWhenEmpty: true });
           setRuntimeCardText(card, '[data-card-meta]', data.display_date_time);
+          const cardMeta = card.querySelector('[data-card-meta]');
+          if (cardMeta && data.occurrence_aria_label) cardMeta.setAttribute('aria-label', data.occurrence_aria_label);
           setRuntimeCardText(card, '[data-card-status]', status, { hideWhenEmpty: true });
           setRuntimeCardText(card, '[data-card-place]', data.place, { hideWhenEmpty: true });
 
@@ -4007,20 +4025,26 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
           card.querySelectorAll('.event-card__feedback').forEach((group) => group.setAttribute('aria-label', `Оценить событие: ${data.title}`));
           card.querySelectorAll('.event-card__utility-row').forEach((group) => group.setAttribute('aria-label', `Дополнительные действия: ${data.title}`));
 
-          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowIndex', 'labMediaTreatment', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop'];
+          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowIndex', 'labRowColumn', 'labMediaTreatment', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop', 'labRowCost'];
           for (const key of relatedKeys) delete card.dataset[key];
           card.style.removeProperty('--lab-row-media-ratio');
+          card.style.removeProperty('grid-row');
+          card.style.removeProperty('grid-column');
           if (relatedLayout) {
             setRuntimeCardDataset(card, 'labRelatedCard', 'true');
             setRuntimeCardDataset(card, 'labMediaKind', relatedLayout.mediaKind);
             setRuntimeCardDataset(card, 'labMediaRatio', Number(relatedLayout.mediaRatio).toFixed(5));
             setRuntimeCardDataset(card, 'labRowMedia', relatedLayout.rowMode);
             setRuntimeCardDataset(card, 'labRowIndex', relatedLayout.rowIndex);
+            setRuntimeCardDataset(card, 'labRowColumn', relatedLayout.rowColumn);
             setRuntimeCardDataset(card, 'labMediaTreatment', relatedLayout.mediaTreatment);
             setRuntimeCardDataset(card, 'labCoverCrop', Number(relatedLayout.coverCrop).toFixed(4));
             setRuntimeCardDataset(card, 'labPotentialCoverCrop', Number(relatedLayout.potentialCoverCrop).toFixed(4));
             setRuntimeCardDataset(card, 'labRowWorstCrop', Number(relatedLayout.rowWorstCrop).toFixed(4));
+            setRuntimeCardDataset(card, 'labRowCost', Number(relatedLayout.rowCost).toFixed(5));
             card.style.setProperty('--lab-row-media-ratio', Number(relatedLayout.rowRatio).toFixed(5));
+            card.style.setProperty('grid-row', String(Number(relatedLayout.rowIndex) + 1));
+            card.style.setProperty('grid-column', String(Number(relatedLayout.rowColumn) + 1));
           }
           return card;
         }

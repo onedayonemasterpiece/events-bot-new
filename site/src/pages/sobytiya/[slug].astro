@@ -17,7 +17,7 @@ import { eventImageUrl } from '../../lib/assets';
 import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-overrides.json';
 import type { EventImageDerivative, PreviewEvent } from '../../lib/types';
 import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
-import { IS_PRODUCTION_FAMILY, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOtherDates, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { IS_PRODUCTION_FAMILY, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -40,7 +40,7 @@ if (!event) {
 const discoveryFeed = getPreloadedDiscoveryEvents(event, 10);
 const desktopDiscoveryFeed = getPreloadedDiscoveryEvents(event, 30);
 const discoveryAlgorithmId = eventDetailRelatedAlgorithmId();
-const otherDates = getOtherDates(event);
+const occurrencePresentation = getOccurrencePresentation(event);
 const canonicalUrl = eventAbsoluteUrl(event);
 const title = eventTitle(event);
 const structuredData = [buildEventJsonLd(event), buildBreadcrumbJsonLd(event)];
@@ -49,7 +49,7 @@ const ogImageAsset = event.image_assets?.find((asset) => asset.src === event.ima
 const ogImageType = ogImage?.toLowerCase().includes('.webp') ? 'image/webp' : ogImage?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : ogImage ? 'image/jpeg' : null;
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
-const stickyDateLabel = displayDateTime(event);
+const stickyDateLabel = occurrencePresentation.compactLabel;
 const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
 const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
@@ -72,7 +72,7 @@ const galleryCta = galleryCtaEvent ? {
   href: eventHref(galleryCtaEvent),
   label: 'Смотреть похожее',
   image_url: eventImageUrl(galleryCtaEvent.image_url),
-  meta: [displayDateTime(galleryCtaEvent), galleryCtaEvent.venue_name || galleryCtaEvent.city].filter(Boolean).join(' · '),
+  meta: [getOccurrencePresentation(galleryCtaEvent).compactLabel || displayDateTime(galleryCtaEvent), galleryCtaEvent.venue_name || galleryCtaEvent.city].filter(Boolean).join(' · '),
 } : undefined;
 // A handful of the accepted desktop specimens were enriched before their
 // derivative rows reached the current production snapshot. Reuse only those
@@ -120,6 +120,7 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
     surface="production"
     presentationReason={desktopPresentation.reason}
     showTransport
+    occurrencePresentation={occurrencePresentation}
   />
   <main
     class="mobile-event-production"
@@ -134,7 +135,7 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
     <div class="page-shell page-shell--event-impact mobile-event-production__shell">
       <article class="main-col section-card section-card--hero section-card--impact-hero">
         <div class="section-card__inner section-card__inner--hero">
-          <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} metaTreatment="weekday-panel" />
+          <EventHero event={event} composition={heroComposition} galleryCta={galleryCta} metaTreatment="weekday-panel" occurrencePresentation={occurrencePresentation} />
         </div>
       </article>
 
@@ -163,16 +164,6 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
           <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
         </section>
 
-        {otherDates.length > 0 && (
-          <section class="section-card mobile-event-production__other-dates" style="margin-top: 1rem;">
-            <div class="section-card__inner">
-              <h2>Другие даты</h2>
-              <div class="cards-grid cards-grid--immersive">
-                {otherDates.map((candidate) => <EventCard event={candidate} label="Другая дата" />)}
-              </div>
-            </div>
-          </section>
-        )}
       </div>
 
       <section id="discovery-feed" class="section-card mobile-event-production__discovery" style="margin-top: 1rem;" data-hide-sticky-after>

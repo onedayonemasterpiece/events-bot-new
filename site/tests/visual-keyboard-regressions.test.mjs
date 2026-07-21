@@ -52,7 +52,7 @@ test('row packing serializes the same unified treatment that EventCard resolves'
   assert.deepEqual(packed.map(({ layout }) => layout.mediaTreatment), [
     'visual-cover',
     'visual-cover',
-    'document-contain',
+    'document-safe-cover',
   ]);
   for (const { item, layout } of packed) {
     const cardDecision = resolveRelatedCardMediaTreatment(item, layout.rowRatio);
@@ -77,7 +77,7 @@ test('visual-only photos retain the accepted compact cover contract when bbox me
   assert.ok(packed[0].layout.rowRatio >= 1 && packed[0].layout.rowRatio <= 4 / 3);
 });
 
-test('the Dog-page photo canaries cannot regress to contain bands or a tall singleton row', () => {
+test('the Dog-page photo canaries cannot regress to contain bands and may reorder for the global minimum', () => {
   const packed = packRelatedCardRows([
     imageEvent(5757, 1200, 800, { media_role:'unknown_document', media_semantic_status:'classified', safe_crop:false }),
     imageEvent(6586, 1000, 410, classifiedPhoto({
@@ -91,21 +91,71 @@ test('the Dog-page photo canaries cannot regress to contain bands or a tall sing
     'visual-cover', 'visual-cover', 'visual-cover', 'visual-cover',
   ]);
   assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
-  assert.equal(packed[3].layout.rowRatio, 1, 'a lone portrait photo keeps the accepted square preview row');
+  assert.ok(packed.every(({ layout }) => layout.rowRatio >= 5 / 4 && layout.rowRatio <= 8 / 5));
+  assert.notDeepEqual(packed.map(({ item }) => item.id), [5757, 6586, 6318, 6652], 'packing may reorder cards across rows');
 });
 
 test('captured Dog-page production payloads reject the exact 22%/32% photo-band regression', () => {
   const packed = packRelatedCardRows(cropCanaries.visuals, { rowSize:3, mediaTreatment:'hybrid' });
-  assert.deepEqual(packed.map(({ item }) => item.id), [5757, 6586, 6318, 5756]);
+  assert.deepEqual(new Set(packed.map(({ item }) => item.id)), new Set([5757, 6586, 6318, 5756]));
   assert.ok(packed.every(({ layout }) => layout.mediaKind === 'visual'));
   assert.ok(packed.every(({ layout }) => layout.mediaTreatment === 'visual-cover' && layout.fit === 'cover'));
   assert.equal(packed[0].layout.objectPosition, '50% 25%', 'asset focal metadata must survive the restored cover path');
-  assert.equal(packed[3].layout.rowRatio, 1, 'the portrait singleton stays in the compact canonical row');
+  assert.ok(packed.every(({ layout }) => layout.rowRatio >= 5 / 4 && layout.rowRatio <= 8 / 5));
 
   const document = resolveRelatedCardMediaTreatment(cropCanaries.document, 1);
   assert.equal(document.mediaKind, 'document');
-  assert.equal(document.mediaTreatment, 'document-contain');
-  assert.equal(document.fit, 'contain');
+  assert.equal(document.mediaTreatment, 'document-safe-cover');
+  assert.equal(document.fit, 'cover');
+  assert.equal(document.coverCrop, 0);
+});
+
+test('global row optimizer separates incompatible OCR ratios and keeps every document within 20%', () => {
+  const document = (id, width, height) => imageEvent(id, width, height, { image_text_mode:'ocr_text' });
+  const items = [
+    document(10, 600, 1200),
+    document(11, 1000, 1000),
+    imageEvent(12, 1600, 900, classifiedPhoto()),
+    imageEvent(13, 700, 1000, classifiedPhoto()),
+    imageEvent(14, 1500, 1000, classifiedPhoto()),
+    imageEvent(15, 900, 1000, classifiedPhoto()),
+  ];
+  const packed = packRelatedCardRows(items, { rowSize:3, mediaTreatment:'hybrid' });
+  const tallRow = packed.find(({ item }) => item.id === 10)?.layout.rowIndex;
+  const squareRow = packed.find(({ item }) => item.id === 11)?.layout.rowIndex;
+  assert.notEqual(tallRow, squareRow, 'incompatible OCR posters must be placed in different rows');
+  assert.equal(new Set(packed.map(({ layout }) => layout.rowIndex)).size, 2, 'enumeration finds the two-row global minimum instead of greedy overflow');
+  assert.ok([...new Set(packed.map(({ layout }) => layout.rowIndex))].every((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length === 3));
+  assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
+  assert.ok(packed.filter(({ layout }) => layout.mediaKind === 'document').every(({ layout }) => layout.coverCrop <= 0.2 + 1e-9));
+  assert.ok(new Set(packed.map(({ layout }) => layout.rowCost)).size >= 1, 'optimizer serializes its page-height objective');
+
+  const combinations = (values, size) => {
+    const output = [[]];
+    const visit = (start, chosen) => {
+      if (chosen.length) output.push(chosen);
+      if (chosen.length === size) return;
+      for (let index = start; index < values.length; index += 1) visit(index + 1, [...chosen, values[index]]);
+    };
+    visit(0, []);
+    return output;
+  };
+  const exhaustiveMinimum = (remaining) => {
+    if (!remaining.length) return 0;
+    const [anchor, ...rest] = remaining;
+    let best = Number.POSITIVE_INFINITY;
+    for (const tail of combinations(rest, 2)) {
+      const group = [anchor, ...tail];
+      const plan = packRelatedCardRows(group, { rowSize:3, mediaTreatment:'hybrid' });
+      if (new Set(plan.map(({ layout }) => layout.rowIndex)).size !== 1) continue;
+      const tailIds = new Set(tail.map((item) => item.id));
+      best = Math.min(best, plan[0].layout.rowCost + exhaustiveMinimum(rest.filter((item) => !tailIds.has(item.id))));
+    }
+    return best;
+  };
+  const selectedCost = [...new Map(packed.map(({ layout }) => [layout.rowIndex, layout.rowCost])).values()]
+    .reduce((sum, value) => sum + value, 0);
+  assert.ok(Math.abs(selectedCost - exhaustiveMinimum(items)) < 1e-9, 'DP must equal an independent exhaustive page-height search');
 });
 
 test('related and personal continuation surfaces cannot override EventCard fit', async () => {
