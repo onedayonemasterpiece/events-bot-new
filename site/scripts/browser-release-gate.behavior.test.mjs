@@ -66,6 +66,7 @@ const successfulReport = {
     related_geometry_crop: 'ok',
     related_loaded_media: 'ok',
     canonical_event_cards: 'ok',
+    spatial_card_keyboard: 'ok',
     cold_and_pointer_keyboard: 'ok',
     gallery_cross_document: 'ok',
     footer_shortcuts: 'ok',
@@ -101,6 +102,10 @@ test('R01/R02 release gate blocks fallback bleed and tests cold/mixed keyboard o
   assert.match(source, /page\.mouse\.click\(point\.x, point\.y\)/gu);
   assert.match(source, /modal dialog leaked current-event KeyL ownership/gu);
   assert.match(source, /single-image cold ArrowRight changed/gu);
+  assert.match(source, /ArrowRight did not follow the visual row/gu);
+  assert.match(source, /ArrowDown did not choose the nearest card in the ragged final row/gu);
+  assert.match(source, /hovered card exposes a K hint without focus/gu);
+  assert.match(source, /KeyK acted on a card other than the visually focused owner/gu);
 });
 
 test('R04 release metadata preserves the immutable candidate prefix', () => {

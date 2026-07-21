@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: open / owner rejected D1qL0 row packing and compactness; focused replacement review pending
+Status: open / focused crop accepted provisionally; keyboard replacement review pending
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -246,6 +246,18 @@ secret preproduction candidate family.
   noindex groups passed with no owner-visible defect. The verdict explicitly
   does not authorize full-site rollout and remains subordinate to owner visual
   acceptance.
+- 2026-07-21 — owner found the crop and card dimensions sufficiently correct,
+  but rejected keyboard behavior after CSS row reordering: horizontal arrows
+  followed DOM adjacency instead of the visible grid. The same review rejected
+  ten simultaneous `K` badges as ambiguous because only one focused card owns
+  the shortcut. Full-site generation remains paused; the next artifact is
+  again a focused `6408` preview only.
+- 2026-07-21 12:45 UTC — required agy `gemini-3.1-pro-high` product review
+  reproduced the split ordering model (geometric Up/Down versus DOM-indexed
+  Left/Right) and accepted a visual 2D matrix plus a single `:focus-within`
+  keycap. Its explicit negative controls are zero badges at rest, hover-only
+  zero, one focused badge, focused-card `KeyK`, ragged-row navigation and
+  related/continuation bridges.
 
 ## Root Cause
 
@@ -304,6 +316,20 @@ secret preproduction candidate family.
 3. No viewport-aware ownership handoff or ambiguity guard exists for this
    mixed pointer/keyboard journey.
 
+### Reordered card navigation and shortcut hint
+
+1. The row optimizer intentionally assigns CSS grid coordinates that can differ
+   from source/DOM order.
+2. Up/Down already grouped rendered rectangles, while Left/Right, Home/End,
+   first-card entry and rerender fallback still indexed DOM arrays. One focus
+   graph therefore used two contradictory orders and appeared unpredictable.
+3. Every eligible card calendar rendered its decorative `K` keycap at once.
+   The action is scoped to one focused card, so the repeated affordance did not
+   identify its actual owner and added avoidable visual noise.
+4. The correction uses the rendered visual matrix for every card-order
+   transition and keeps all `aria-keyshortcuts` semantics while revealing only
+   the focused card's decorative `K` via `:focus-within`.
+
 ## Contributing Factors
 
 - The keyboard acceptance script blocks real gallery CTA navigation with
@@ -312,7 +338,8 @@ secret preproduction candidate family.
   the footer image and text buttons before testing `P` and `S`; it does not
   model touchpad scroll followed by an unfocused shortcut.
 - The Playwright gate checks card count, focus/actions and horizontal overflow,
-  but not computed `object-fit`, row/image geometry or crop/letterbox budgets.
+  but historically did not compare focused IDs to rendered row/column geometry
+  or count visible shortcut hints.
 - The later `related_geometry_crop` gate still treated a loaded image plus
   correct `object-fit` as sufficient. It neither asserted that the failure
   fallback became non-visible nor retained a settled-pixel viewport screenshot
@@ -382,6 +409,12 @@ secret preproduction candidate family.
   physical Russian-layout `KeyL/KeyK/KeyS/Enter` must route to like, calendar,
   event share and primary CTA. A real header click, editor, dialog, browser
   blur and hidden document must disarm that recovery.
+- On CSS-reordered related and continuation cards, build visual rows from
+  rendered rectangles and assert Left/Right row progression and wrap, Up/Down
+  nearest-center movement, ragged-final-row behavior and both section bridges.
+  Assert zero visible card `K` badges at rest and after hover, exactly one on
+  the focused card, and that `KeyK` invokes that same card. Keep the keycap's
+  reserved layout width and permanent accessible `aria-keyshortcuts` metadata.
 - Reproduce touchpad/wheel scroll to a visible footer with both `BODY` focus and
   retained off-screen card focus; verify deterministic `P`/`S` ownership,
   correct clipboard payload and visible success/failure feedback.
@@ -462,6 +495,10 @@ secret preproduction candidate family.
   retained screenshots and computed geometry.
 - [ ] Replace `D1qL0…` with an owner-reviewed focused `6408` preview whose
   non-final rows are full and whose card chrome is intrinsic per row.
+- [x] Replace DOM-indexed horizontal card movement with one rendered visual
+  matrix for entry, Home/End, Left/Right, Up/Down, rerender recovery and both
+  card-zone bridges; reveal the decorative `K` only on the focused card without
+  changing its accessible shortcut or shifting action layout.
 - [ ] After owner approval, repair `6318 ↔ 6586` as a durable reciprocal
   explicit occurrence family with provenance/lock, then regenerate all pages;
   do not infer the family from matching copy or venue.

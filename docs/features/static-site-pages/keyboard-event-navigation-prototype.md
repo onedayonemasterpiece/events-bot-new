@@ -23,6 +23,14 @@ continuation form one scoped desktop navigator.
 Letter shortcuts use physical `KeyboardEvent.code`, so Latin/Russian layout
 changes do not break `L/K/S/C/P` positions.
 
+Recommendation optimization may change CSS `grid-row`/`grid-column` without
+changing DOM order. Arrow navigation therefore derives a visual matrix from
+the rendered card rectangles: rows are ordered top-to-bottom, cards inside a
+row left-to-right, horizontal arrows wrap at the visible row boundary, and
+vertical arrows choose the nearest card center in the adjacent row. This also
+defines deterministic transitions through a short final row and between
+`Смотрите дальше` and `Ещё события`; DOM adjacency is never the spatial order.
+
 The historical lab deliberately focuses the CTA surface on load. The shared
 secret-candidate production mount does not: it enters the mode only after
 meaningful keyboard intent. The same command router drives both surfaces; the
@@ -47,7 +55,8 @@ production wrapper does not reimplement a second “similar” navigator.
 | Lost DOM focus (`body`) after a managed surface/card or inert current-event click | `L` / `K` / `S` / `Enter` | Re-enter the recorded logical owner and execute like / calendar / event copy / primary CTA once |
 | Current-event CTA or description copy group | `C` | Copy title, rendered lead/body and canonical URL |
 | Current-event CTA or description copy group | physical `P` | Copy the canonical event poster as PNG |
-| Related or `Ещё события` card | arrows | One spatial step per released press; bridge between both card zones |
+| Related or `Ещё события` card | Left/Right | Previous/next card in visual row order, wrapping to the adjacent visible row and then between card zones |
+| Related or `Ещё события` card | Up/Down | Nearest horizontal center in the visible row above/below; deterministic bridge between both card zones |
 | Any managed card | `Enter` / `L` / `K` / `S` | Open / like / calendar / copy selected event |
 | Managed-card inner action | `Escape` | Return focus to card root |
 | Gallery final recommendation | `Enter` / `Space` | Follow the real related-event link |
@@ -100,9 +109,14 @@ rendered desktop description:
   silently copies a URL or opens Web Share.
 
 The CTA keeps subtle `Enter/K/S/L` keycaps and hover/focus titles. Related and
-continuation calendar controls receive one non-focusable `K` keycap only when
-their card container is at least `310px`; the badge survives the green
-`Добавлено` state.
+continuation calendar controls receive non-focusable `K` keycap markup when
+their card container is at least `310px`, but all card keycaps are visually
+hidden by default. Exactly the card that owns focus (`:focus-within`) reveals
+its `K`; hover alone reveals nothing. The hidden badge keeps its layout width,
+so changing focus does not move neighbouring actions, and it survives the
+green `Добавлено` state. `aria-keyshortcuts="K"` remains on every eligible
+calendar control even while the decorative badge is hidden. Three mastered
+days still suppress the badge entirely.
 Likes remain red after consent replay. Successful copy operations use the
 existing short visual toast plus one polite hidden status without replacing
 icons/counts or moving focus.
@@ -194,7 +208,9 @@ owner restoration, repeatable lost-focus `L` recovery from `body`, red like,
 green calendar,
 related→continuation hydration and reverse bridge, unified continuation
 Enter/L/K/S/Escape/Home/End, slot replacement and feedback-rerank owner
-restoration, dynamic K badges, canonical links, daily dedupe,
+restoration, CSS-reordered visual Left/Right/Up/Down including a ragged final
+row, zero K badges before focus/hover and exactly one on the focused card,
+focused-card KeyK ownership, canonical links, daily dedupe,
 adaptive mastery/lapse, no Web Share, noindex and horizontal overflow.
 
 ## External review and project skill

@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- Fixed keyboard traversal after compact recommendation reordering: card entry,
+  Home/End and all four arrows now follow the rendered visual row/column matrix,
+  including wrapped rows, a ragged final row and related/continuation bridges,
+  instead of mixing geometry with DOM adjacency. Eligible calendars retain
+  `aria-keyshortcuts="K"`, but the decorative keycap is hidden at rest/hover and
+  appears only inside the focused card without shifting action layout. The
+  generated Chromium gate now proves visual focus order, the zero/one hint
+  invariant and focused-card `KeyK` ownership on event `6408`.
+
 - Reopened the static event-detail review after owner inspection found middle
   row holes, globally reserved empty card bodies and uncollapsed Romeo dates on
   event `6408`. The row DP now permits only exact full rows plus one optional

@@ -10,6 +10,7 @@ const REQUIRED_CHECKS = Object.freeze([
   'related_geometry_crop',
   'related_loaded_media',
   'canonical_event_cards',
+  'spatial_card_keyboard',
   'cold_and_pointer_keyboard',
   'gallery_cross_document',
   'footer_shortcuts',
@@ -503,6 +504,92 @@ async function clickInertWithin(page, selector, label) {
   return point;
 }
 
+async function visualCardGrid(page, selector) {
+  return page.locator(selector).evaluateAll((cards) => {
+    const measured = cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      return { id:card.getAttribute('data-event-id'), top:rect.top, left:rect.left, centerX:rect.left + rect.width / 2 };
+    }).sort((left, right) => left.top - right.top || left.left - right.left);
+    const rows = [];
+    for (const entry of measured) {
+      const row = rows.at(-1);
+      if (!row || Math.abs(row.top - entry.top) > 16) rows.push({ top:entry.top, cards:[entry] });
+      else row.cards.push(entry);
+    }
+    rows.forEach((row) => row.cards.sort((left, right) => left.left - right.left));
+    return rows.map((row) => row.cards);
+  });
+}
+
+async function assertSpatialCardKeyboard(page, origin, route) {
+  const relatedSelector = '[data-related-start] [data-event-card]';
+  const continuationSelector = '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot] > [data-event-card]';
+  await page.goto(`${origin}${route}`, { waitUntil:'domcontentloaded' });
+  await waitForContinuation(page);
+  const relatedRows = await visualCardGrid(page, relatedSelector);
+  const continuationRows = await visualCardGrid(page, continuationSelector);
+  invariant(relatedRows.length >= 2 && relatedRows[0].length >= 2, 'spatial keyboard specimen has no multi-row related grid');
+  invariant(continuationRows.length > 0, 'spatial keyboard specimen has no continuation grid');
+  const card = (id) => page.locator(`${relatedSelector}[data-event-id="${id}"]`).first();
+  const continuationCard = (id) => page.locator(`${continuationSelector}[data-event-id="${id}"]`).first();
+  const activeId = () => page.evaluate(() => document.activeElement?.closest?.('[data-event-card]')?.getAttribute('data-event-id') || '');
+  const visibleHints = () => page.locator('[data-related-calendar-shortcut]:visible').count();
+
+  invariant(await visibleHints() === 0, 'unfocused cards expose K hints');
+  await card(relatedRows[0][0].id).hover();
+  invariant(await visibleHints() === 0, 'hovered card exposes a K hint without focus');
+  await card(relatedRows[0][0].id).focus();
+  invariant(await visibleHints() === 1, 'focused card must expose exactly one K hint');
+  invariant(await card(relatedRows[0][0].id).locator('[data-related-calendar-shortcut]:visible').count() === 1, 'visible K hint belongs to a different card');
+
+  await page.keyboard.press('ArrowRight');
+  invariant(await activeId() === relatedRows[0][1].id, 'ArrowRight did not follow the visual row');
+  await card(relatedRows[0].at(-1).id).focus();
+  await page.keyboard.press('ArrowRight');
+  invariant(await activeId() === relatedRows[1][0].id, 'ArrowRight did not wrap to the first card of the next visual row');
+
+  const finalRow = relatedRows.at(-1);
+  const previousRow = relatedRows.at(-2);
+  if (finalRow.length < previousRow.length) {
+    const source = previousRow.at(-1);
+    const nearestFinal = finalRow.reduce((best, entry) => Math.abs(entry.centerX - source.centerX) < Math.abs(best.centerX - source.centerX) ? entry : best);
+    await card(source.id).focus();
+    await page.keyboard.press('ArrowDown');
+    invariant(await activeId() === nearestFinal.id, 'ArrowDown did not choose the nearest card in the ragged final row');
+    const nearestPrevious = previousRow.reduce((best, entry) => Math.abs(entry.centerX - nearestFinal.centerX) < Math.abs(best.centerX - nearestFinal.centerX) ? entry : best);
+    await page.keyboard.press('ArrowUp');
+    invariant(await activeId() === nearestPrevious.id, 'ArrowUp did not return from the ragged row by visual center');
+  }
+
+  const lastRelated = finalRow.at(-1);
+  const firstContinuationRow = continuationRows[0];
+  const nearestContinuation = firstContinuationRow.reduce((best, entry) => Math.abs(entry.centerX - lastRelated.centerX) < Math.abs(best.centerX - lastRelated.centerX) ? entry : best);
+  await card(lastRelated.id).focus();
+  await page.keyboard.press('ArrowDown');
+  invariant(await activeId() === nearestContinuation.id, 'ArrowDown did not bridge to the visually nearest continuation card');
+  invariant(await visibleHints() === 1 && await continuationCard(nearestContinuation.id).locator('[data-related-calendar-shortcut]:visible').count() === 1,
+    'continuation focus does not own the single visible K hint');
+  await page.keyboard.press('ArrowUp');
+  invariant(await activeId() === lastRelated.id, 'ArrowUp did not bridge back to the final related row');
+
+  const eligible = await page.locator(`${relatedSelector}:has([data-calendar-action])`).first().getAttribute('data-event-id');
+  invariant(eligible, 'spatial keyboard specimen has no calendar-eligible related card');
+  await page.evaluate(() => {
+    window.__releaseGateCardCalendar = [];
+    document.querySelectorAll('[data-event-card] [data-calendar-action]').forEach((action) => action.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.__releaseGateCardCalendar.push(action.closest('[data-event-card]')?.getAttribute('data-event-id'));
+    }, { capture:true }));
+  });
+  await card(eligible).focus();
+  await page.keyboard.press('KeyK');
+  invariant(await page.evaluate(() => window.__releaseGateCardCalendar.at(-1)) === eligible, 'KeyK acted on a card other than the visually focused owner');
+  invariant(await visibleHints() === 1 && await card(eligible).locator('[data-related-calendar-shortcut]:visible').count() === 1,
+    'KeyK result lost the focused card hint invariant');
+  return { relatedRows:relatedRows.map((row) => row.map(({ id }) => id)), continuationEntry:nearestContinuation.id, calendarOwner:eligible };
+}
+
 async function assertColdAndPointerKeyboard(page, origin, route, { expectMultipleImages = null } = {}) {
   await page.goto(`${origin}${route}`, { waitUntil:'domcontentloaded' });
   await page.locator('[data-keyboard-event-surface]').waitFor({ state:'attached' });
@@ -778,6 +865,10 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
     await assertRealCardEnter(page, origin, specimen.route, '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot]');
     checks.canonical_event_cards = 'ok';
     console.log('[browser-release-gate] canonical_event_cards=ok');
+    invariant(dogRoute, 'generated release has no 6408 spatial keyboard specimen');
+    const spatialKeyboard = await assertSpatialCardKeyboard(page, origin, dogRoute);
+    checks.spatial_card_keyboard = 'ok';
+    console.log('[browser-release-gate] spatial_card_keyboard=ok');
     const keyboardRoutes = [...new Set([
       routes.find((route) => /-6408\/$/u.test(route)),
       routes.find((route) => /-6593\/$/u.test(route)),
@@ -801,6 +892,7 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
       specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes, hero_routes:heroRoutes },
       hero_gallery:heroGallery,
       keyboard:keyboardReports,
+      spatial_keyboard:spatialKeyboard,
       media: [...related, ...continuation].map((item) => ({
         id:item.id,
         row:item.row,

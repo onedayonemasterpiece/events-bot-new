@@ -10,6 +10,7 @@ import {
 import {
   footerViewportShortcutOwnership,
   keyboardGalleryDestination,
+  visualCardRows,
 } from '../src/lib/keyboardEventNavigation.mjs';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -235,6 +236,33 @@ test('gallery handoff accepts only an exact same-origin event destination', () =
   );
   assert.equal(keyboardGalleryDestination('https://other.test/sobytiya/destination-2/', current), '');
   assert.equal(keyboardGalleryDestination('/afisha/', current), '');
+});
+
+test('visual keyboard rows follow CSS geometry instead of reordered DOM adjacency', () => {
+  const cards = ['dom-a', 'dom-b', 'dom-c', 'dom-d', 'dom-e', 'dom-f', 'dom-g'];
+  const rectangles = new Map([
+    ['dom-a', { top:200, left:400, width:300 }],
+    ['dom-b', { top:100, left:700, width:300 }],
+    ['dom-c', { top:100, left:100, width:300 }],
+    ['dom-d', { top:300, left:100, width:300 }],
+    ['dom-e', { top:200, left:100, width:300 }],
+    ['dom-f', { top:100, left:400, width:300 }],
+    ['dom-g', { top:200, left:700, width:300 }],
+  ]);
+  const rows = visualCardRows(cards, { rectFor:(card) => rectangles.get(card) });
+  assert.deepEqual(rows.map((row) => row.cards.map(({ card }) => card)), [
+    ['dom-c', 'dom-f', 'dom-b'],
+    ['dom-e', 'dom-a', 'dom-g'],
+    ['dom-d'],
+  ]);
+});
+
+test('card K hint is reserved in layout but visible only inside the focused card', async () => {
+  const component = await read('src/components/KeyboardEventNavigationPrototype.astro');
+  assert.match(component, /\.related-calendar-shortcut[\s\S]*visibility:hidden;[\s\S]*opacity:0;/u);
+  assert.match(component, /\.related-calendar-shortcut:not\(\[hidden\]\) \{ display:inline-grid; \}/u,
+    'the hidden keycap keeps its horizontal space so focus does not shift card actions');
+  assert.match(component, /\[data-event-card\]:focus-within \.related-calendar-shortcut:not\(\[hidden\]\)[\s\S]*visibility:visible;[\s\S]*opacity:\.58;/u);
 });
 
 test('visible footer owns P/S from body or an offscreen managed event owner', () => {

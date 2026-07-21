@@ -36,6 +36,31 @@ export function footerViewportShortcutOwnership({ footerRect, targetRect = null,
   return targetIntersection.width === 0 || targetIntersection.height === 0;
 }
 
+/**
+ * Builds the keyboard order from the rendered card geometry rather than DOM
+ * order. The recommendation optimizer deliberately moves cards with CSS grid
+ * coordinates, so DOM adjacency is not a reliable description of what a
+ * person sees.
+ */
+export function visualCardRows(cards, { rowTolerance = 16, rectFor = (card) => card.getBoundingClientRect() } = {}) {
+  const measured = Array.from(cards || [], (card) => {
+    const rect = rectFor(card);
+    return { card, rect, centerX:rect.left + rect.width / 2 };
+  }).filter(({ rect }) => Number.isFinite(rect?.top) && Number.isFinite(rect?.left));
+  measured.sort((left, right) => left.rect.top - right.rect.top || left.rect.left - right.rect.left);
+  const rows = [];
+  for (const entry of measured) {
+    const row = rows.at(-1);
+    if (!row || Math.abs(row.top - entry.rect.top) > rowTolerance) {
+      rows.push({ top:entry.rect.top, cards:[entry] });
+    } else {
+      row.cards.push(entry);
+    }
+  }
+  rows.forEach((row) => row.cards.sort((left, right) => left.rect.left - right.rect.left));
+  return rows;
+}
+
 export function initKeyboardEventNavigation(options = {}) {
   const doc = options.document || document;
   const win = options.window || window;
@@ -310,6 +335,9 @@ export function initKeyboardEventNavigation(options = {}) {
       return scope instanceof win.HTMLElement ? Array.from(scope.querySelectorAll('[data-event-card]')).filter(isVisible) : [];
     };
     const cards = () => [...zoneCards('related'), ...zoneCards('continuation')];
+    const rowsFor = (allCards) => visualCardRows(allCards);
+    const visualZoneCards = (zone) => rowsFor(zoneCards(zone)).flatMap((row) => row.cards.map(({ card }) => card));
+    const visualCards = () => [...visualZoneCards('related'), ...visualZoneCards('continuation')];
     const zoneForCard = (card) => relatedSection?.contains(card) ? 'related' : continuationSlot()?.contains(card) ? 'continuation' : '';
     const managedCardFor = (target) => {
       const card = target instanceof win.Element ? target.closest('[data-event-card]') : null;
@@ -653,7 +681,7 @@ export function initKeyboardEventNavigation(options = {}) {
         const zone = zoneForCard(card);
         return {
           kind: 'card', node: card, eventId: card.dataset.eventId || '', zone,
-          index: Math.max(0, zoneCards(zone).indexOf(card)),
+          index: Math.max(0, visualZoneCards(zone).indexOf(card)),
         };
       }
       return logicalOwner;
@@ -671,7 +699,7 @@ export function initKeyboardEventNavigation(options = {}) {
         if (sameEvent) return sameEvent;
       }
       if (snapshot?.kind === 'card' && snapshot.zone) {
-        const candidates = zoneCards(snapshot.zone);
+        const candidates = visualZoneCards(snapshot.zone);
         if (candidates.length) return candidates[Math.min(snapshot.index || 0, candidates.length - 1)];
       }
       return surface;
@@ -719,12 +747,12 @@ export function initKeyboardEventNavigation(options = {}) {
     };
 
     const focusFirstCard = () => {
-      const first = zoneCards('related')[0];
+      const first = visualZoneCards('related')[0];
       if (first) focusCard(first);
     };
 
     const enterContinuation = () => {
-      const first = zoneCards('continuation')[0];
+      const first = visualZoneCards('continuation')[0];
       if (first) {
         pendingContinuationEntry = false;
         focusCard(first);
@@ -741,9 +769,9 @@ export function initKeyboardEventNavigation(options = {}) {
     if (continuationSection instanceof win.HTMLElement) {
       observe(() => {
         enhanceManagedCards();
-        if (pendingContinuationEntry && zoneCards('continuation')[0]) {
+        if (pendingContinuationEntry && visualZoneCards('continuation')[0]) {
           pendingContinuationEntry = false;
-          focusCard(zoneCards('continuation')[0]);
+          focusCard(visualZoneCards('continuation')[0]);
           recordShortcutUse('card_row_down');
           return;
         }
@@ -818,22 +846,6 @@ export function initKeyboardEventNavigation(options = {}) {
       // while a fullscreen gallery is finishing its close transition.
       event.preventDefault();
       win.scrollBy({ top: Math.max(40, Math.min(72, win.innerHeight * 0.075)), left: 0, behavior: 'instant' });
-    };
-
-    const rowsFor = (allCards) => {
-      const rows = [];
-      for (const card of allCards) {
-        const rect = card.getBoundingClientRect();
-        let row = rows.find((candidate) => Math.abs(candidate.top - rect.top) < 32);
-        if (!row) {
-          row = { top: rect.top, cards: [] };
-          rows.push(row);
-        }
-        row.cards.push({ card, centerX: rect.left + rect.width / 2 });
-      }
-      rows.sort((a, b) => a.top - b.top);
-      rows.forEach((row) => row.cards.sort((a, b) => a.centerX - b.centerX));
-      return rows;
     };
 
     const nearestCardInRow = (current, row) => {
@@ -1271,7 +1283,7 @@ export function initKeyboardEventNavigation(options = {}) {
           event.preventDefault();
           enterContinuation();
         } else if (event.code === 'ArrowUp') {
-          const lastRelated = zoneCards('related').at(-1);
+          const lastRelated = visualZoneCards('related').at(-1);
           if (lastRelated) {
             event.preventDefault();
             pendingContinuationEntry = false;
@@ -1283,7 +1295,7 @@ export function initKeyboardEventNavigation(options = {}) {
 
       const current = managedCardFor(target);
       if (!(current instanceof win.HTMLElement)) return;
-      const allCards = cards();
+      const allCards = visualCards();
       const index = allCards.indexOf(current);
 
       if (event.code === 'Escape' && target !== current) {

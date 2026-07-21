@@ -95,7 +95,12 @@ async page => {
   assert(await page.locator(".keyboard-prototype-dock").count() === 0, "No floating service dock is allowed");
   assert(await page.locator(cardSelector).count() === 10, "Both fixtures must expose ten related cards");
   assert(await page.locator("[data-related-start] [data-calendar-action] [data-related-calendar-shortcut]").count() === 10, "Every eligible related calendar must receive one K hint");
-  assert(await page.locator("[data-related-start] [data-calendar-action] [data-related-calendar-shortcut]:visible").count() >= 1, "Roomy cards must visibly show the K hint");
+  assert(await page.locator("[data-related-start] [data-calendar-action] [data-related-calendar-shortcut]:visible").count() === 0, "Unfocused cards must not show K hints");
+  await page.locator(cardSelector).nth(4).hover();
+  assert(await page.locator("[data-related-start] [data-related-calendar-shortcut]:visible").count() === 0, "Hover alone must not show a K hint");
+  await page.locator(cardSelector).first().focus();
+  assert(await page.locator("[data-related-start] [data-related-calendar-shortcut]:visible").count() === 1, "Exactly one focused card must show a K hint");
+  assert(await page.locator(`${cardSelector}:focus-within [data-related-calendar-shortcut]:visible`).count() === 1, "The visible K hint must belong to the focused card");
   assert(await page.locator("[data-event-content-copy-actions]").count() === 1, "Expected one description action group in the desktop description");
   assert(await page.locator(".desktop-clean-description__text + [data-event-content-copy-actions]").count() === 1, "Copy controls must follow the full description text");
   assert(await page.locator("[data-copy-event-poster][aria-keyshortcuts=P] kbd", { hasText: "P" }).count() === 1, "Poster control must visibly and accessibly expose P");
@@ -421,7 +426,8 @@ async page => {
   }));
   assert(report.continuation.count === 6 && report.continuation.inZone && report.continuation.href.includes('/sobytiya/') && !report.continuation.href.includes('/preview-'), "Down must bridge into six canonical continuation cards");
   const visibleContinuationCalendars = await page.locator('[data-personal-feed-slot] [data-calendar-action]:visible').count();
-  assert(visibleContinuationCalendars > 0 && await page.locator('[data-personal-feed-slot] [data-calendar-action]:visible [data-related-calendar-shortcut]').count() === visibleContinuationCalendars, "Every visible continuation calendar must receive the same K hint");
+  assert(visibleContinuationCalendars > 0 && await page.locator('[data-personal-feed-slot] [data-calendar-action]:visible [data-related-calendar-shortcut]').count() === visibleContinuationCalendars, "Every visible continuation calendar must receive K hint markup");
+  assert(await page.locator('[data-personal-feed-slot] [data-related-calendar-shortcut]:visible').count() === 1, "Only the focused continuation card may show its K hint");
   await page.keyboard.press("ArrowUp");
   assert((await activeState()).cardId === await lastRelated.getAttribute("data-event-id"), "Up from the first continuation row must bridge to the last related row");
 

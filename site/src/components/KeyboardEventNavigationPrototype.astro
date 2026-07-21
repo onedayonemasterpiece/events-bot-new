@@ -72,12 +72,17 @@ const { showQuickstart = true } = Astro.props;
       border:1px solid currentColor;
       border-radius:6px;
       font:800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-      opacity:.58;
+      visibility:hidden;
+      opacity:0;
       pointer-events:none;
     }
     .related-calendar-shortcut[hidden] { display:none !important; }
     @container (min-width:310px) {
       .related-calendar-shortcut:not([hidden]) { display:inline-grid; }
+      [data-event-card]:focus-within .related-calendar-shortcut:not([hidden]) {
+        visibility:visible;
+        opacity:.58;
+      }
     }
     [data-keyboard-shortcut-target] { position:relative; }
     .keyboard-shortcut-badge {
