@@ -5,6 +5,11 @@
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
+Cross-surface naming, identity, lifecycle and acceptance for `Другие даты`,
+strict related, broad continuation and personal feed are canonical in
+[`docs/features/linked-events/README.md`](../linked-events/README.md). This
+document owns page implementation details, not a parallel relation taxonomy.
+
 ## Implementation status
 
 The accepted event-detail templates are the primary preproduction surface. A

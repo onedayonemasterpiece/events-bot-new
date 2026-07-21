@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- Consolidated the cross-surface related-events contract into one canonical
+  feature package: explicit occurrence/similar/broad/personal relation kinds,
+  shared lifecycle/ranking/card/feedback requirements, a production-to-lab
+  branch inventory, release-status caveats, and a curated screenshot set for
+  mobile feed, listings, static event pages, occurrence selectors and rejected
+  legacy patterns.
+
 ### Fixed
 
 - Guide critical-watchdog теперь видит after-midnight remote-session-busy

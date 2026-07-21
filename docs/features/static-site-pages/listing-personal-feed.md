@@ -2,9 +2,18 @@
 
 > **Status:** client contract and same-origin static-catalog MVP implemented; backend/RPC remains an optional fallback, not the default read path.
 
+Canonical cross-surface relation kinds, family dedupe and naming are defined in
+[`../linked-events/README.md`](../linked-events/README.md). This file owns the
+listing runtime/cache projection only.
+
 ## Product rule
 
-Static listing pages (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) end with a dynamic “Личная лента” section. The section is **not pre-rendered with personal cards** in static HTML. It stays hidden until the browser can use a cached personal list or fetch one from a backend.
+Current main appends the dynamic slot to `/segodnya/`, `/zavtra/`,
+`/vyhodnye/`, `/populyarnoe/` and `/vystavki/`; the unified target may disable
+the generic slot on a surface that owns a more specific finite continuation.
+The section is **not pre-rendered with personal cards** in static HTML. It stays
+hidden until the browser can use a cached personal list or fetch one from the
+same-origin catalog/backend.
 
 This keeps SEO-safe deterministic listing content first, then adds a personal continuation only for real users.
 
