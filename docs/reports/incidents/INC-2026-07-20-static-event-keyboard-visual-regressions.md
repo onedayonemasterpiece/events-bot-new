@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: open / previous crop candidate rejected; replacement implementation under acceptance
+Status: mitigated / replacement candidate passed generated, live Chromium and agy Gemini acceptance; owner acceptance pending
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -197,6 +197,28 @@ secret preproduction candidate family.
   not satisfy the required no-fields/equal-row/global-minimum contract. A new
   implementation and a fresh immutable noindex candidate are required; the
   production root remains untouched.
+- 2026-07-21 09:21 UTC — PR `#117` merged the replacement implementation into
+  `origin/main@58440062e7bab708676c378de345c65f19ce91b1`; both `python-ci` and
+  `static-browser-release-gate` completed successfully.
+- 2026-07-21 10:04 UTC — Fly release `v1741` deployed that exact main SHA and
+  pinned the static builder to the same repository identity. Three subsequent
+  `/healthz` probes were ready with no issues.
+- 2026-07-21 10:04–10:26 UTC — production-secret build
+  `production-secret-20260721T120452-b290f999` completed its production and
+  secret generated-output/browser gates and published the create-only `D1qL0…`
+  noindex prefix. The receipt reports `root_mutation=false` and
+  `stable_ics_mutation=false`.
+- 2026-07-21 10:31–10:35 UTC — live Chromium on the exact immutable candidate
+  verified the `6408` hero without top/bottom fields, ten related plus six
+  hydrated cards with zero unused frame and equal row/card geometry, the real
+  reciprocal occurrence family `6686`/`6687`, cold/mixed-input keyboard,
+  cross-document gallery and footer shortcuts. Stable-root and sitemap body
+  hashes remained byte-identical.
+- 2026-07-21 10:38–10:40 UTC — after following the official AGY headless
+  permission contract, independent `agy` model `gemini-3.1-pro-high` at high
+  effort inspected the exact URL, retained PNG pixels, source and reports and
+  returned `SHIP_SECRET_CANDIDATE`. This is acceptance of the secret candidate,
+  not permission to promote the stable root; owner acceptance remains pending.
 
 ## Root Cause
 
@@ -407,9 +429,10 @@ secret preproduction candidate family.
   cover: no bands, exact natural ratio for ordinary documents, at most 20% crop
   for very tall documents, and equal media/card heights per row. Non-OCR hero
   and gallery slides now cover independently of uncertain semantic role.
-- [ ] Publish and inspect a fresh immutable noindex replacement; repeat the
-  generated-output/browser gates and obtain a new agy Gemini 3.1 Pro verdict
-  over the exact URL, retained screenshots and computed geometry.
+- [x] Published and inspected fresh immutable noindex replacement `D1qL0…`;
+  repeated generated-output and live-browser gates, then obtained independent
+  agy `gemini-3.1-pro-high` verdict `SHIP_SECRET_CANDIDATE` over the exact URL,
+  retained screenshots and computed geometry.
 - [ ] Complete native Firefox/Safari, screen-reader, high-contrast and
   zoom/reflow checks before any later root rollout.
 
@@ -430,6 +453,46 @@ secret preproduction candidate family.
   the final 48-hour diagnostic window. These historical reconciliation issues
   do not invalidate the exact successful receipt, but they remain operational
   debt and must not be hidden by aggregate success counts.
+
+## Current Replacement Secret-Candidate Evidence
+
+- immutable prefix: `https://kenigevents.ru/_review/D1qL0…/` (full bearer URL is
+  intentionally retained only in ignored acceptance artifacts and the operator
+  handoff, not in Git)
+- source identity: `origin/main@58440062e7bab708676c378de345c65f19ce91b1`;
+  Fly release `v1741`, deployment image
+  `deployment-01KY221C04PKKH7WZ9SMR204B1`
+- build identity: `production-secret-20260721T120452-b290f999`; run
+  `static-site:production-secret-20260721T120452-b290f999:82bfa8e8e4de`;
+  snapshot `snapshot-20260721T100452-9c8cd823ac`
+- receipt identity: result SHA-256
+  `16c57759c57f1d31cd1a84cf5e4e30556a730abc1f71721d871e5bcb6b7b3f16`;
+  manifest SHA-256
+  `73cb6e4c3ea1ce22e22e29e6974323a17abea2219b34543f6d9e4a247ed5c884`;
+  token SHA-256
+  `630e6e32605b47e67d14035d396d2210c16ef8dbabbf3b5d2aae37e899d69f1f`
+- isolation: candidate responses are `private, no-store`; HTML is `noindex` and
+  `no-referrer`; stable root and sitemap remained SHA-256
+  `e2ddecb6c2856a94d4579a3091604b7c0804f3545220f43e94eac73e0aab450d`
+  and `643f22960e703b91c173d4d52425ca28b6513da9612904047d9930508e329fa7`
+- live crop/geometry: `10` related and `6` hydrated cards, every image
+  `object-fit:cover`, unused-frame ratio `0`, shared chrome range
+  `299.00000–299.01563 px`; generated tall-document canary declares exact
+  `20%` crop and measures `20.00235%` only because of Chromium subpixels
+- occurrences: detail selectors are rendered for desktop, practical and mobile
+  without occurrence cards; real reciprocal family `6686`/`6687` exposes one
+  alternative. Exact formatter/rail strings remain enforced before the
+  production tree intentionally strips `/lab` routes.
+- consultant: `/home/dev/.local/bin/agy`, model id `gemini-3.1-pro-high`, high
+  effort, clean provider exit `0`, verdict `SHIP_SECRET_CANDIDATE`
+- retained evidence (ignored):
+  `artifacts/codex/static-crop-occurrences-20260721/` contains the local and
+  live browser reports, PNGs, HTTP headers, root hashes, deploy log and agy
+  brief/review/provenance.
+
+The incident stays mitigated rather than closed until the owner accepts the
+secret link. Firefox/Safari, assistive-technology, high-contrast and zoom/reflow
+checks remain mandatory before any future stable-root rollout.
 
 ## Corrected Secret-Candidate Evidence
 
