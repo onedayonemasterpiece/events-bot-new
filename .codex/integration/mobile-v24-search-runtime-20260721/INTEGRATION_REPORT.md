@@ -13,7 +13,7 @@ Base: `origin/integration/mobile-v23-search-sticky-20260721`
 | R03 | Done | One `MobileToastRegion` is mounted after the shared header. Global keyboard, share/copy and phone-copy producers use its bounded queue/dedupe/pause contract; info/success lasts 5s, error/action persists, and the terracotta underline retreats from right to left. Contextual Search/auth/quota and local transactional feedback stay inline. |
 | R04 | Done | Canonical product contract makes explicit free intent a hard constraint. Child/family admission requires evidence-backed LLM output; topic and age labels are insufficient, so a decorative child medallion is not shipped. A noindex combined collection remains a research materialization, not claimed production truth. |
 | R05 | Done | `EventLayout` owns the shared mobile header/drawer and bottom safe areas. Search and collection select exactly one `Поиск` item; event detail uses CTA bottom mode and has no global bottom nav. |
-| R06 | Done | Three design consultations were completed with Gemini 3.1 Pro (High), with model evidence saved. The first final pass returned `CONDITIONAL GO` only for toast/brand overlap. After the overhang fix was deployed, Gemini 3.1 Pro (High) returned final `GO` in `gemini-pro-final-recheck.md`; Flash probes remain invalid/supplementary and are not used as the gate. |
+| R06 | Done | Three design consultations were completed with Gemini 3.1 Pro (High), with model evidence saved. The first final pass returned `CONDITIONAL GO` only for toast/brand overlap. After the overhang fix was deployed, Gemini 3.1 Pro (High) returned `GO` in `gemini-pro-final-recheck.md`, then reconfirmed comprehensive live `GO` after the corrected public Search build in `gemini-pro-final-live.md`; Flash probes remain invalid/supplementary and are not used as the gate. |
 | R07 | Done with noted legacy-gate limitation | Public noindex preview, build/static gates, focused browser tests, high-DPR Playwright at canonical 320px and review 390px widths, and authorized Search smoke passed. The older cross-site `check-browser-release-gate.mjs` stalled after specimen selection and was terminated; focused generated/browser gates covering every touched surface passed. |
 
 ## Public preview
@@ -65,6 +65,7 @@ Valid Gemini Pro-class consultation:
 - `gemini-pro-header-review.md`
 - `gemini-pro-final-acceptance.md` (`CONDITIONAL GO`, blocker identified)
 - `gemini-pro-final-recheck.md` (final `GO`)
+- `gemini-pro-final-live.md` (comprehensive public-build `GO`)
 - matching `*-model-evidence.txt` / final model logs
 
 The files `gemini-consultation*.md`, `gemini-progress-toast-review.md` and `gemini-final-flash-invalid.md` are supplementary/invalid lower-class probes and do not satisfy R06.
