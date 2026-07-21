@@ -5,6 +5,10 @@
 ## Event Posts
 
 - После Smart Update событие получает редакционный пост в Telegram-канале `https://t.me/kldevents`.
+- Release plan требует с отдельно подтверждённого полного timestamp наносить
+  фирменную mobile-site бирку на social derivative каждого достоверно
+  `visual_only` изображения; OCR/unknown публикуются без overlay. Канонический
+  quality/activation/rollback contract: [social publish brand tag](../event-media/social-publish-brand-tag.md).
 - Telegram-публикация не заменяет VK, но не зависит от VK-публикации: для publish-eligible события VK (`vk_sync`) и Telegram (`tg_event_publish`) являются независимыми public surfaces. VK media/API/captcha failures must not block Telegram event announcements.
 - Публикация запускается через `JobTask.tg_event_publish` и зависит только от Telegram-required prerequisites: `telegraph_build` и `tg_ics_post` при наличии валидного календарного времени. `vk_sync` не входит в `depends_on` для `tg_event_publish`.
 - Если dependency ещё retry'ится с bounded `next_run_at`, ожидающий `tg_event_publish`/`tg_ics_post` не должен стареть до `expired`: он переносится к ближайшему retry dependency. Terminal Telegraph/ICS dependency failure остаётся blocker и требует requeue/repair; terminal VK failure не должен блокировать Telegram.

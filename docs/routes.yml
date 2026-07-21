@@ -632,6 +632,7 @@ features:
   event_media:
     status: implemented
     docs: docs/features/event-media/README.md
+    social_publish_brand_tag: docs/features/event-media/social-publish-brand-tag.md
     audit_runbook: docs/operations/event-image-duplicate-audit.md
     entrypoints:
       - event_media.py

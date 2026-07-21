@@ -9,7 +9,7 @@
 ## Важное восстановление scope
 
 Этот файл — **не весь релизный план** и не сокращает его до пяти задач. После
-повторного аудита истории найден базовый checklist из 228 требований; после добавления D0–D10, post-release video-guide и calendar/personal-hub rows текущий реестр содержит 245 требований:
+повторного аудита истории найден базовый checklist из 228 требований; после добавления D0–D10, post-release video-guide, calendar/personal-hub и social brand-tag rows текущий реестр содержит 246 требований:
 
 - [полный Stage 0–12 readiness checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
 - [отчёт восстановления источников и статусов](../../reports/static-site-release-context-recovery-2026-07-17.md);

@@ -46,8 +46,9 @@ festivals, operations dashboard и interest clubs.
 
 The 2026-07-17 reconciliation adds five executable D0–D10 Telegraph rows to
 Stage 8 without deleting the baseline; the 2026-07-18 post-release video-guide
-stage adds seven and the calendar-counter/personal-hub reconciliation adds five
-more. The current canonical checklist therefore has **245 checkbox requirements**.
+stage adds seven, the calendar-counter/personal-hub reconciliation adds five and
+the release-time social brand-tag plan adds one more. The current canonical
+checklist therefore has **246 checkbox requirements**.
 
 The [event-page release plan](../features/static-site-pages/release-plan.md) is only
 one Stage 2/8 workstream and cannot replace this registry.
@@ -123,7 +124,7 @@ P0 documentation and automation task, not a cosmetic cleanup.
 
 ## What is still not done
 
-The full unresolved backlog is the unchecked part of the current 245-item checklist, not a
+The full unresolved backlog is the unchecked part of the current 246-item checklist, not a
 five-row table. The largest blocking families are:
 
 1. repeat M2 full-catalog/static-surface audit plus 14-day zero-critical Smart Update/event-quality window and closure-grade incident replay;

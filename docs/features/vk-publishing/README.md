@@ -4,6 +4,12 @@
 
 ## Event Posts
 
+- Release plan требует с отдельно подтверждённого полного timestamp использовать
+  для managed event posts фирменный social derivative каждого достоверно
+  `visual_only` изображения; OCR/unknown публикуются без overlay. До включения
+  обязателен создаваемый и затем удаляемый postponed smoke. Каноника:
+  [social publish brand tag](../event-media/social-publish-brand-tag.md).
+
 - После Smart Update событие получает отдельный VK-пост в событийном сообществе `VK_EVENTS_GROUP_ID`; если переменная не задана, используется исторический `VK_AFISHA_GROUP_ID`. Это относится и к событиям, пришедшим из VK wall: исходный VK-пост не считается заменой редакционного анонса в `klgdevents`.
 - Telegram-анонс того же события живёт в отдельной фиче [Telegram Event Publishing](../tg-publishing/README.md): он не наследует VK plain-text/caps формат и публикуется через отдельный `tg_event_publish` job.
 - Планировщик задач (`schedule_event_update_tasks`) запускает `vk_sync` для актуального события, у которого `source_vk_post_url` пуст или указывает на внешнее сообщество. Только когда `source_vk_post_url` уже указывает на пост в `VK_EVENTS_GROUP_ID`, `vk_sync` пропускается — управляемый klgdevents-пост уже существует. Это значит, что актуальное событие, импортированное из VK wall (с внешним `source_vk_post_url`), всё равно получает свой пост в `klgdevents`.

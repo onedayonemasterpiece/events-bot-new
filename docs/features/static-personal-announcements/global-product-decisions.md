@@ -62,6 +62,14 @@
    calendar app, поэтом метрика означает принятое KenigEvents
    save action. Единый personal hub называется `Мои события`:
    mobile label `Моё`, внутри filters `В календаре` и `Избранное`.
+39. **С release timestamp text-free event images получают фирменную social-бирку.**
+   Telegram `@kldevents` и managed VK используют один versioned derivative с
+   mobile-site lockup только при уверенном `image_text_mode=visual_only`;
+   `ocr_text|unknown`, unsafe placement и render failure fail closed к оригиналу.
+   До включения обязателен высококачественный full-size visual gate и удаляемый
+   VK postponed smoke. Existing Telegram/VK publishers не проектируются заново:
+   к ним добавляется только выбор branded derivative. Activation зафиксирован как
+   `2026-07-30 18:00 Europe/Kaliningrad` (`2026-07-30T16:00:00Z`).
 
 ## Consequences
 

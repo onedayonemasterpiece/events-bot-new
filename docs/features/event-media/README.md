@@ -3,6 +3,11 @@
 `event_media.py` — канонический слой изображений событий. Он является частью
 Smart Update, а не отдельным ручным процессом и не renderer-side фильтром.
 
+Планируемый release-only social derivative с фирменной mobile-site биркой для
+достоверно `visual_only` изображений Telegram/VK описан отдельно в
+[social publish brand tag](social-publish-brand-tag.md). Он пока не реализован и
+не меняет текущий approved media projection или publishers.
+
 ## CDN invariant
 
 В production (`EVENT_MEDIA_REQUIRE_CDN=1`) изображение не может попасть в
