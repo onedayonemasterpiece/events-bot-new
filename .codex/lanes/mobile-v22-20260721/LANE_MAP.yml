@@ -1,0 +1,107 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/integration/calendar-occurrences-v21-final-20260721
+base_branch: integration/calendar-occurrences-v21-final-20260721
+integration_branch: integration/mobile-v22-20260721
+requirements:
+  R01: "Restore confirmed non-OCR horizontal 5:4 smart crop; fix event 6764."
+  R02: "Make accepted primary parallax slower and strictly monotonic per scroll direction."
+  R03: "Show 24/25 July Orpheus occurrences in the left time block without family duplication."
+  R04: "Add mobile Search with intent-time auth, email/Yandex entry and simulated normalized query cloud."
+  R05: "Telegram links include a concise explanation of what changed and where to inspect."
+  R06: "Gemini 3.1 Pro High critical product review and final acceptance."
+global_constraints:
+  - "Research prototype remains noindex and does not pretend simulated searches are persisted user data."
+  - "Do not expose auth secrets or implement a fake production session."
+  - "Preserve current accepted v21 styles, crop rules, medallions, rails, city behavior and analytics."
+  - "Parallax must respect reduced motion."
+verification_owner: /root
+stop_conditions:
+  - "Any production auth/schema/deploy change beyond the existing documented contract."
+lanes:
+  - id: D01
+    role: planner
+    requirement_ids: [R01]
+    target: /root/v22_crop_audit
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["all"]
+    expected_output: "root cause, patch guidance, measurable crop gate"
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: D02
+    role: planner
+    requirement_ids: [R02]
+    target: /root/v22_parallax_audit
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["all"]
+    expected_output: "monotonic motion model and Playwright gate"
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: D03
+    role: planner
+    requirement_ids: [R04]
+    target: /root/v22_search_auth_map
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["all"]
+    expected_output: "existing Search/Auth donor and product-state contract"
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: D04
+    role: planner
+    requirement_ids: [R03]
+    target: /root/v22_occurrence_ui_audit
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["all"]
+    expected_output: "occurrence time-block DOM/data/a11y contract"
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: W01
+    role: worker
+    requirement_ids: [R01, R02, R03, R04]
+    target: /root/mobile_v22_impl
+    depends_on: [D01, D02, D03, D04]
+    execution_mode: serial_after_dependency
+    branch: agent/mobile-v22/prototype
+    worktree: /home/dev/.codex/worktrees/events-bot-new/calendar-occurrences-v21-mobile
+    writable_files:
+      - artifacts/codex/mobile-calendar-city-popular-v22-research-20260721/
+      - .codex/lanes/mobile-v22-20260721/W01_RESULTS.md
+    forbidden_files:
+      - site/src/
+      - supabase/
+      - production databases
+    expected_output: "built/published noindex v22 prototype plus tracked evidence"
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: I01
+    role: merge_reviewer
+    requirement_ids: [R05, R06]
+    target: /root
+    depends_on: [W01]
+    execution_mode: serial_after_dependency
+    branch: integration/mobile-v22-20260721
+    worktree: /home/dev/.codex/worktrees/events-bot-new/calendar-occurrences-v21-final
+    writable_files:
+      - .codex/lanes/mobile-v22-20260721/
+    forbidden_files: []
+    expected_output: "Gemini acceptance, public Playwright gate, Telegram receipts, integration report"
+    verification_scope: full_local
+    effort: high
+    status: planned
