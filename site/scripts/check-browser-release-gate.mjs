@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SITE_DIR = dirname(dirname(SCRIPT_PATH));
 const REQUIRED_CHECKS = Object.freeze([
+  'hero_gallery_crop',
   'related_geometry_crop',
   'related_loaded_media',
   'canonical_event_cards',
@@ -210,6 +211,20 @@ function singleImageSpecimen(root, basePath, routes) {
   }) || null;
 }
 
+export function staticHeroCropCandidates(root, basePath, routes) {
+  const byPresentation = new Map();
+  for (const route of routes) {
+    const html = readFileSync(routeFile(root, basePath, route), 'utf8');
+    const main = /<main\b[^>]*data-desktop-clean-event[^>]*>/u.exec(html)?.[0] || '';
+    if (!main.includes('data-selected-media-policy="visual_only"')) continue;
+    const family = /data-desktop-family="([^"]+)"/u.exec(main)?.[1] || 'unknown';
+    const splitFit = /data-split-media-fit="([^"]+)"/u.exec(main)?.[1] || 'none';
+    const key = `${family}:${splitFit}`;
+    if (!byPresentation.has(key) || /-6408\/$/u.test(route)) byPresentation.set(key, route);
+  }
+  return [...byPresentation.values()].sort((left, right) => Number(!/-6408\/$/u.test(left)) - Number(!/-6408\/$/u.test(right)));
+}
+
 async function waitForContinuation(page) {
   // Hydration intentionally starts when the end-of-related marker approaches
   // the viewport. Jumping straight to scrollHeight can skip that marker in one
@@ -303,7 +318,7 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     return {
       id: card.getAttribute('data-event-id'), row: card.getAttribute('data-lab-row-index'), treatment, mediaKind,
       coverCrop: Number(card.getAttribute('data-lab-cover-crop') || 0), rowWorstCrop: Number(card.getAttribute('data-lab-row-worst-crop') || 0), actualCrop, unusedFrameRatio,
-      card: { top: cardRect.top, left: cardRect.left, right: cardRect.right, width: cardRect.width },
+      card: { top: cardRect.top, left: cardRect.left, right: cardRect.right, bottom:cardRect.bottom, width: cardRect.width, height:cardRect.height },
       shell: shellRect ? { top: shellRect.top, left: shellRect.left, right: shellRect.right, width: shellRect.width, height: shellRect.height } : null,
       image: imageRect ? { left: imageRect.left, right: imageRect.right, width: imageRect.width, height: imageRect.height } : null,
       objectFit,
@@ -341,8 +356,8 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     if (item.imageMissing) invariant(item.fallbackVisible, `card ${item.id} lost its fallback after image failure`);
     // The serialized treatment is the source-of-truth contract produced by
     // resolveRelatedCardMediaTreatment(). Product acceptance additionally
-    // requires every visual-only/photo preview to fill its canonical card;
-    // `contain` is reserved for OCR/document media.
+    // requires every preview to fill its canonical card. OCR/documents may
+    // crop only inside their explicit 20% budget.
     const expectedFit = expectedObjectFitForTreatment(item.treatment);
     invariant(item.objectFit === expectedFit, `card ${item.id} crop mode ${item.objectFit} != ${expectedFit}`);
     if (item.mediaKind === 'visual') {
@@ -350,12 +365,10 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
       invariant(item.unusedFrameRatio <= 0.001, `visual card ${item.id} leaves ${(item.unusedFrameRatio * 100).toFixed(1)}% of its media frame unused`);
     }
     if (item.mediaKind === 'document') {
-      invariant(item.treatment === 'document-contain' && item.objectFit === 'contain', `document card ${item.id} is not fully preserved`);
-      // rowWorstCrop describes the worst *potential* cover crop anywhere in a
-      // mixed row. It may be high because of a neighbouring visual photo and
-      // is not a crop applied to this fail-closed document card.
+      invariant(item.treatment === 'document-safe-cover' && item.objectFit === 'cover', `document card ${item.id} leaves fields as ${item.treatment}/${item.objectFit}`);
+      invariant(item.unusedFrameRatio <= 0.001, `document card ${item.id} leaves ${(item.unusedFrameRatio * 100).toFixed(1)}% of its media frame unused`);
       invariant(item.coverCrop <= 0.2001, `card ${item.id} exceeds the 20% document crop contract: cover=${item.coverCrop}`);
-      if (item.objectFit === 'cover') invariant(item.actualCrop <= 0.205, `card ${item.id} visually crops ${item.actualCrop}`);
+      invariant(item.actualCrop <= 0.205, `card ${item.id} visually crops ${item.actualCrop}`);
     }
   }
   const rows = new Map();
@@ -365,11 +378,44 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
   }
   for (const cards of rows.values()) {
     const shellHeights = cards.map((item) => item.shell.height);
+    const cardHeights = cards.map((item) => item.card.height);
     invariant(Math.max(...shellHeights) - Math.min(...shellHeights) <= 2, 'recommendation row media shells do not share one geometry');
+    invariant(Math.max(...cardHeights) - Math.min(...cardHeights) <= 2, 'recommendation row cards do not share one total height');
     const sorted = [...cards].sort((left, right) => left.card.left - right.card.left);
     for (let index = 1; index < sorted.length; index += 1) invariant(sorted[index - 1].card.right <= sorted[index].card.left + 1, 'recommendation cards overlap');
   }
+  const chromeHeights = metrics.map((item) => item.card.height - item.shell.height);
+  invariant(Math.max(...chromeHeights) - Math.min(...chromeHeights) <= 2, 'recommendation cards do not share the fixed chrome height used by the global optimizer');
   return metrics;
+}
+
+async function assertHeroGalleryCrop(page) {
+  const hero = page.locator('[data-clean-hero-image]').first();
+  await hero.waitFor({ state:'visible' });
+  await hero.evaluate(async (image) => {
+    if (image instanceof HTMLImageElement && image.currentSrc) await image.decode().catch(() => undefined);
+  });
+  const result = await page.evaluate(() => {
+    const root = document.querySelector('[data-desktop-family]');
+    const image = document.querySelector('[data-clean-hero-image]');
+    if (!(image instanceof HTMLImageElement)) return null;
+    const mode = root?.getAttribute('data-selected-media-policy') || '';
+    const fit = getComputedStyle(image).objectFit;
+    const gallery = Array.from(document.querySelectorAll('[data-hero-gallery-slide][data-gallery-slide-kind="image"] img')).map((entry) => ({
+      mode:entry.getAttribute('data-image-text-mode') || '',
+      fit:getComputedStyle(entry).objectFit,
+    }));
+    return { mode, fit, declared:image.getAttribute('data-protected-crop-fit') || '', gallery };
+  });
+  invariant(result, 'desktop hero image is missing');
+  if (result.mode === 'visual_only') {
+    invariant(result.fit === 'cover' && result.declared === 'cover', `non-OCR hero is letterboxed as ${result.declared}/${result.fit}`);
+  }
+  for (const item of result.gallery) {
+    if (item.mode === 'visual_only') invariant(item.fit === 'cover', `non-OCR gallery slide is letterboxed as ${item.fit}`);
+    else invariant(item.fit === 'contain', `OCR/document gallery slide is unexpectedly ${item.fit}`);
+  }
+  return result;
 }
 
 async function assertRealCardEnter(page, origin, route, zoneSelector) {
@@ -618,6 +664,11 @@ async function assertFooterShortcuts(page, origin, route) {
   }), 'offscreen-focus footer specimen was not established');
   await page.keyboard.press('KeyP');
   await page.waitForFunction(() => window.__releaseGateClipboard.images.length === 2, null, { timeout: 8_000 });
+  // Clipboard write resolves before the async service-share handler finishes
+  // its success state. Wait on that concrete UI signal before sending S;
+  // otherwise the still-busy P transaction can legitimately reject the next
+  // shortcut on slower/prefixed candidate assets.
+  await page.waitForFunction(() => /Карточка скопирована/iu.test(document.querySelector('[data-keyboard-action-toast]')?.textContent || ''), null, { timeout: 8_000 });
   await page.keyboard.press('KeyS');
   await page.waitForFunction(() => window.__releaseGateClipboard.text.length >= 2 && window.__releaseGateClipboard.text.at(-1)?.endsWith('\nhttps://kenigevents.ru/'), null, { timeout: 8_000 });
   invariant(await footer.locator('[data-service-share-intent="image"]:focus, [data-service-share-intent="text"]:focus').count() === 0, 'browser gate must not focus footer controls');
@@ -668,15 +719,28 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
   try {
     const dogRoute = routes.find((route) => /-6408\/$/u.test(route));
     const cropRoutes = [...new Set([specimen.route, dogRoute].filter(Boolean))];
+    const heroRoutes = [...new Set([...cropRoutes, ...staticHeroCropCandidates(root, basePath, routes)])];
     let related = [];
     let continuation = [];
+    const heroGallery = [];
+    for (const route of heroRoutes) {
+      await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
+      heroGallery.push({ route, ...await assertHeroGalleryCrop(page) });
+      if (artifactDir) {
+        const slug = route.split('/').filter(Boolean).at(-1)?.replace(/[^a-z0-9_-]+/giu, '-') || 'event';
+        await page.locator('[data-desktop-family] [data-scroll-stage]').first().screenshot({
+          path:join(artifactDir, `${slug}-hero-loaded.png`),
+          animations:'disabled',
+        });
+      }
+    }
     for (const route of cropRoutes) {
       await page.goto(`${origin}${route}`, { waitUntil: 'domcontentloaded' });
       await waitForContinuation(page);
       const routeRelated = await assertRecommendationGeometry(page, '[data-related-start] [data-event-card]', 3);
       const routeContinuation = await assertRecommendationGeometry(page, '[data-personal-feed-section][data-listing-context="event-detail"] [data-personal-feed-slot] > [data-event-card]', 1);
       invariant(routeContinuation.length <= 6, `Ещё события is unbounded on ${route}: ${routeContinuation.length}`);
-      invariant([...routeRelated, ...routeContinuation].some((item) => item.mediaKind === 'document' && item.objectFit === 'contain'), `crop canary ${route} has no preserved document card`);
+      invariant([...routeRelated, ...routeContinuation].some((item) => item.mediaKind === 'document' && item.objectFit === 'cover' && item.actualCrop <= 0.205), `crop canary ${route} has no bounded-cover document card`);
       related.push(...routeRelated);
       continuation.push(...routeContinuation);
       if (artifactDir) {
@@ -694,6 +758,8 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
         });
       }
     }
+    checks.hero_gallery_crop = 'ok';
+    console.log('[browser-release-gate] hero_gallery_crop=ok');
     checks.related_geometry_crop = 'ok';
     console.log('[browser-release-gate] related_geometry_crop=ok');
     checks.related_loaded_media = 'ok';
@@ -723,13 +789,19 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
     console.log('[browser-release-gate] footer_shortcuts=ok');
     return {
       ok: true, checks,
-      specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes },
+      specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes, hero_routes:heroRoutes },
+      hero_gallery:heroGallery,
       keyboard:keyboardReports,
       media: [...related, ...continuation].map((item) => ({
         id:item.id,
+        row:item.row,
         treatment:item.treatment,
         object_fit:item.objectFit,
+        cover_crop:item.coverCrop,
+        actual_crop:item.actualCrop,
         unused_frame_ratio:item.unusedFrameRatio,
+        card_height:item.card.height,
+        media_height:item.shell.height,
         image_loaded:item.imageLoaded,
         image_missing:item.imageMissing,
         fallback_visible:item.fallbackVisible,

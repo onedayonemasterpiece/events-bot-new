@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: mitigated / crop-corrected immutable candidate published; owner acceptance pending
+Status: open / previous crop candidate rejected; replacement implementation under acceptance
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -44,6 +44,16 @@ The earlier green receipt and Gemini verdict are therefore superseded for crop
 acceptance. The actual correction must restore the previously accepted compact
 `visual_only` cover policy through the shared `EventCard`, while keeping real
 OCR/text/unknown documents contained.
+
+On 2026-07-21 the owner also rejected the later `2BxK…` candidate: a
+`visual_only` main gallery image on event `6408` was still letterboxed above and
+below because semantic-role uncertainty overrode the OCR classification. The
+owner additionally superseded the compact-card document rule: fixed card frames
+may not use `contain` at all. Ordinary documents must define the row's natural
+ratio without crop; only very tall documents may crop, capped at `20%`, and a
+global grouping search must minimize total page height while keeping both media
+and card heights equal per row. Therefore the 2026-07-20 `SHIP_SECRET_CANDIDATE`
+verdict remains historical evidence, not current acceptance.
 
 ## User / Business Impact
 
@@ -182,6 +192,11 @@ secret preproduction candidate family.
   inspected the immutable URL, source, retained PNG pixels and live report and
   returned `SHIP_SECRET_CANDIDATE`. This is not production-root approval;
   incident closure still requires owner visual acceptance.
+- 2026-07-21 — owner acceptance rejected `2BxK…`: event `6408` still had
+  non-OCR hero/gallery bands and the compact-card document-`contain` policy did
+  not satisfy the required no-fields/equal-row/global-minimum contract. A new
+  implementation and a fresh immutable noindex candidate are required; the
+  production root remains untouched.
 
 ## Root Cause
 
@@ -298,11 +313,15 @@ secret preproduction candidate family.
   fallback layer has no visible box. Missing images must retain the fallback.
   Retain both a related-section capture and an FHD/125%-equivalent viewport
   capture.
-- Keep OCR/text/unknown documents fail-closed to `contain`. In compact
-  event-detail recommendation rows, every `visual_only` preview must use
-  `visual-cover` and have an independently computed unused-frame ratio of zero;
-  exact/focal metadata positions the crop but missing bbox metadata must not
-  turn the photo into a letterboxed document.
+- Keep OCR/text/unknown **hero** media fail-closed to `contain`, but require
+  every `visual_only` hero/gallery slide to use `cover` even when semantic-role
+  metadata is uncertain. In compact event-detail rows every card must use
+  `cover` and have an independently computed unused-frame ratio of zero.
+  Ordinary documents must remain uncropped by adapting the row ratio; only very
+  tall documents may crop, and their decoded area loss must be `<=20%`.
+- Enumerate feasible compact-card groupings globally, allow row reorder, and
+  prove that the selected grouping minimizes total normalized page height.
+  Assert equal media heights and equal total card heights inside every row.
 - Perform the real two-page journey without intercepting navigation:
   `6408` → gallery → final recommendation → Enter → destination → Right/Left;
   assert focus ownership, hero index/source changes and telemetry.
@@ -379,11 +398,18 @@ secret preproduction candidate family.
 - [x] Superseded rejected `RHOg…` with `DJc9…`; keyboard and loaded-layer checks
   passed, but owner review rejected its still-letterboxed crop.
 - [x] Restored the historical compact `visual_only` cover policy in the single
-  shared row/Card resolver, kept OCR/unknown documents contained, preserved
-  exported focal positions, and added exact `6408` payload canaries plus an
-  independent unused-frame browser budget.
-- [x] Published and verified a new immutable noindex candidate from this
-  correction, including independent live Chromium and Gemini 3.1 Pro review.
+  shared row/Card resolver, preserved exported focal positions, and added exact
+  `6408` payload canaries plus an independent unused-frame browser budget.
+- [x] Published and verified a new immutable noindex candidate from that
+  correction, including independent live Chromium and Gemini 3.1 Pro review;
+  owner review later superseded its crop acceptance.
+- [x] Replaced compact document `contain` locally with globally optimized bounded
+  cover: no bands, exact natural ratio for ordinary documents, at most 20% crop
+  for very tall documents, and equal media/card heights per row. Non-OCR hero
+  and gallery slides now cover independently of uncertain semantic role.
+- [ ] Publish and inspect a fresh immutable noindex replacement; repeat the
+  generated-output/browser gates and obtain a new agy Gemini 3.1 Pro verdict
+  over the exact URL, retained screenshots and computed geometry.
 - [ ] Complete native Firefox/Safari, screen-reader, high-contrast and
   zoom/reflow checks before any later root rollout.
 

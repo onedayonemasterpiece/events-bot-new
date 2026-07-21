@@ -415,7 +415,25 @@ const HeadingTag = headingLevel;
         place: display.place || display.venue_name || candidate?.venue_name || candidate?.city || '',
         type: display.event_type || candidate?.event_type || candidate?.category || 'вариант',
         score: candidate?.semantic_score || candidate?.base_similarity || candidate?.similarity || 0,
+        occurrenceMemberIds: Array.isArray(display.occurrence_member_ids) ? display.occurrence_member_ids.map(Number).filter(Number.isFinite) : [],
       };
+    }
+
+    function searchOccurrenceFamilyKey(candidate) {
+      const display = candidate?.display || candidate || {};
+      const ids = Array.from(new Set((Array.isArray(display.occurrence_member_ids) ? display.occurrence_member_ids : [])
+        .map(Number).filter((value) => Number.isFinite(value) && value > 0))).sort((left, right) => left - right);
+      const eventId = candidateEventId(candidate);
+      return ids.length > 1 ? `family:${ids.join(',')}` : `event:${eventId || ''}`;
+    }
+
+    function collapseSearchOccurrenceFamilies(items, seen = new Set()) {
+      return items.filter((candidate) => {
+        const key = searchOccurrenceFamilyKey(candidate);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
 
     function renderVectorPreviewCards(items, rankBase = offset, pageOffset = offset) {
@@ -423,7 +441,7 @@ const HeadingTag = headingLevel;
         const item = vectorPreviewDisplay(candidate);
         const rank = rankBase + index + 1;
         const score = Math.max(0, Math.min(99, Math.round(Number(item.score || 0) * 100)));
-        return `<article class="authorized-search__vector-card" data-search-vector-card data-search-phase="vector" data-search-page-offset="${escapeHtml(pageOffset)}" data-event-id="${escapeHtml(item.id)}" data-event-title="${escapeHtml(item.title)}" data-card-href="${escapeHtml(item.href)}" data-rank="${escapeHtml(rank)}" data-score="${escapeHtml(score)}" aria-busy="true" aria-label="${escapeHtml(`Кандидат ${rank}: ${item.title}. ИИ проверяет релевантность.`)}">
+        return `<article class="authorized-search__vector-card" data-search-vector-card data-search-phase="vector" data-search-page-offset="${escapeHtml(pageOffset)}" data-event-id="${escapeHtml(item.id)}" data-event-title="${escapeHtml(item.title)}" data-occurrence-member-ids="${escapeHtml(item.occurrenceMemberIds.join(','))}" data-card-href="${escapeHtml(item.href)}" data-rank="${escapeHtml(rank)}" data-score="${escapeHtml(score)}" aria-busy="true" aria-label="${escapeHtml(`Кандидат ${rank}: ${item.title}. ИИ проверяет релевантность.`)}">
           <div class="authorized-search__vector-card-glow" aria-hidden="true"></div>
           <div class="authorized-search__vector-card-top">
             <span class="authorized-search__vector-pill">${escapeHtml(item.type)}</span>
@@ -624,8 +642,15 @@ const HeadingTag = headingLevel;
     function renderSearchPayload(data, options = {}) {
       const { append = false, phase = 'final', pageOffset = offset } = options;
       const isVector = phase === 'vector';
-      const items = Array.isArray(data?.items) ? data.items : [];
-      const fallbackItems = isVector ? [] : (Array.isArray(data?.fallback_items) ? data.fallback_items : []);
+      const rawItems = Array.isArray(data?.items) ? data.items : [];
+      const rawFallbackItems = isVector ? [] : (Array.isArray(data?.fallback_items) ? data.fallback_items : []);
+      const seenFamilies = new Set((append ? Array.from(results?.querySelectorAll('[data-occurrence-member-ids]') || []) : [])
+        .map((node) => {
+          const ids = String(node.getAttribute('data-occurrence-member-ids') || '').split(',').map(Number).filter(Number.isFinite).sort((left, right) => left - right);
+          return ids.length > 1 ? `family:${ids.join(',')}` : `event:${node.getAttribute('data-event-id') || ''}`;
+        }));
+      const items = collapseSearchOccurrenceFamilies(rawItems, seenFamilies);
+      const fallbackItems = collapseSearchOccurrenceFamilies(rawFallbackItems, seenFamilies);
       if (!results) return { itemCount: items.length, fallbackCount: fallbackItems.length };
 
       if (!append || !isVector) removeVectorPreview(pageOffset);

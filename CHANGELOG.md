@@ -4,6 +4,23 @@
 
 ### Fixed
 
+- Unified linked-event occurrence projection across static detail, date lists,
+  Popular, search, recommendations and personal continuation: only reciprocal
+  explicit `other_date_ids` create a family; date lists remain per-date while
+  ranked/entity surfaces collapse per-family. Event detail now uses the
+  always-visible selector, cards share the exact compact/rail formatter and
+  accessible labels, and the rejected full-card/dropdown occurrence variants
+  are absent. The pgvector card-snapshot producer and authorized-search Edge
+  Function now carry/collapse the same reciprocal family projection.
+- Replaced compact recommendation letterboxing with a global row optimizer:
+  it enumerates feasible card groupings, may reorder cards, minimizes total
+  normalized page height, keeps media and card heights equal within each row,
+  and uses `cover` with zero bands. Ordinary OCR documents remain uncropped by
+  defining the row ratio; only very tall documents may crop up to 20%. Non-OCR
+  event hero/gallery media now also fills its frame even when semantic-role
+  metadata is uncertain. Generated-browser checks enforce actual crop, no
+  unused frame, equal row geometry and the `6408` regression.
+
 - Guide critical-watchdog теперь видит after-midnight remote-session-busy
   catch-up attempts и соблюдает cooldown вместо повторных запусков и спама в
   админский чат, пока Telegram Monitoring владеет S22.
@@ -14,10 +31,10 @@
   longer retain `telegram_session:s22` until TTL and block the later critical
   Telegram Monitoring slot (`INC-2026-07-20-tg-monitor-stale-s22-lease`).
 
-- Restored the accepted compact crop contract for static event-detail
+- Restored the then-accepted compact crop contract for static event-detail
   recommendations after `DJc9…` still letterboxed ordinary photos: one shared
   `relatedCardLayout`/`EventCard` policy now renders every `visual_only` card as
-  focal-aware `cover`, keeps OCR/unknown documents contained, and prevents a
+  focal-aware `cover`, kept OCR/unknown documents contained at that stage, and prevented a
   portrait singleton from expanding the row. Added captured `6408` production
   fixtures plus an independent browser unused-frame budget, decoded screenshots
   and a document negative control so `contain` cannot self-certify the same

@@ -1,8 +1,9 @@
 ---
 import CalendarLink from './CalendarLink.astro';
+import EventOccurrenceLabel from './EventOccurrenceLabel.astro';
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, isCalendarEligible, isExternalHttpUrl, isTelephoneUrl, isTicketSoldOut } from '../lib/events';
+import { eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isCalendarEligible, isExternalHttpUrl, isTelephoneUrl, isTicketSoldOut } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
@@ -10,10 +11,11 @@ const href = eventActionHref(event);
 const external = isExternalHttpUrl(href);
 const telephone = isTelephoneUrl(href);
 const absolute = eventAbsoluteUrl(event);
-const dateLabel = displayDate(event);
+const occurrencePresentation = getOccurrencePresentation(event);
+const dateLabel = occurrencePresentation.compactLabel;
 const admissionLabel = eventAdmissionLabel(event);
 const imageUrl = eventImageUrl(event.image_url);
-const shareText = [event.title, [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · '), admissionLabel].filter(Boolean).join('\n');
+const shareText = [event.title, [dateLabel, event.venue_name || event.city].filter(Boolean).join(' · '), admissionLabel].filter(Boolean).join('\n');
 const shareImageType = imageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : imageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
 const shareFileName = `kenigevents-${event.slug}`;
 const ctaRel = external ? 'noopener noreferrer nofollow' : undefined;
@@ -30,8 +32,8 @@ const sharesCount = event.shares_count || 0;
   <div class="cta-panel__top">
     <div>
       <p class="eyebrow">Когда</p>
-      <div class="cta-panel__date">{dateLabel}</div>
-      {event.display_time && <div class="muted-note">{event.display_time} · {event.timezone}</div>}
+      <div class="cta-panel__date"><EventOccurrenceLabel presentation={occurrencePresentation} /></div>
+      {event.timezone && <div class="muted-note">{event.timezone}</div>}
     </div>
     <div>
       <p class="eyebrow">Где</p>
@@ -61,7 +63,7 @@ const sharesCount = event.shares_count || 0;
     </div>
     <div class="action-grid event-cta-panel__action-row" data-feedback-scope data-event-cta-action-row="calendar-share-like">
       <CalendarLink event={event} />
-      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute} data-share-image={imageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={[dateLabel, event.display_time].filter(Boolean).join(' · ')} data-share-place={event.venue_name || event.city || ''} data-share-admission={admissionLabel} aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}><Icon name="share" /> <strong data-share-count>{sharesCount}</strong></button>
+      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute} data-share-image={imageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateLabel} data-share-place={event.venue_name || event.city || ''} data-share-admission={admissionLabel} aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}><Icon name="share" /> <strong data-share-count>{sharesCount}</strong></button>
       <button type="button" class="secondary-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Нравится: ${event.title}. Сейчас ${likesCount}`}><Icon name="heart" /> <strong data-feedback-count>{likesCount}</strong></button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}

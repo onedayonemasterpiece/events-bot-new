@@ -2,6 +2,7 @@
 import Icon from './Icon.astro';
 import EventCard from './EventCard.astro';
 import EventTokenMedallions from './EventTokenMedallions.astro';
+import EventOccurrenceNav from './EventOccurrenceNav.astro';
 import EventFallbackArt from './EventFallbackArt.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
 import EventTransportSchedule from './EventTransportSchedule.astro';
@@ -9,12 +10,13 @@ import EventBusTransportSchedule from './EventBusTransportSchedule.astro';
 import KaupTransportSchedule from './KaupTransportSchedule.astro';
 import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import type { EventImageAsset, EventImageDerivative, EventImageMediaRole, PreviewEvent } from '../lib/types';
+import type { OccurrencePresentation } from '../lib/eventOccurrences';
 import templateContract from '../data/eventTemplateContract.json';
 import {
-  displayDate,
   displayDateTime,
   eventDetailRelatedAlgorithmId,
   eventHref,
+  getOccurrencePresentation,
   siteHomeHref,
   withBase,
 } from '../lib/events';
@@ -61,6 +63,7 @@ interface Props {
   surface?: 'lab' | 'production';
   presentationReason?: string;
   showTransport?: boolean;
+  occurrencePresentation?: OccurrencePresentation;
 }
 
 type GalleryImage = {
@@ -109,7 +112,9 @@ const {
   surface = 'lab',
   presentationReason = 'lab-fixture',
   showTransport = false,
+  occurrencePresentation,
 } = Astro.props;
+const resolvedOccurrencePresentation = occurrencePresentation || getOccurrencePresentation(event);
 const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
 const hiddenDuplicateSourceIndexes = new Set(duplicateSourceIndexes);
 // Historical review fixtures predate the LLM media-role export. Keep this fallback
@@ -121,15 +126,17 @@ type DesktopRelatedLayout = {
   mediaRatio:number;
   rowRatio:number;
   rowIndex:number;
+  rowColumn:number;
   rowMode:string;
   mediaKind:'document' | 'visual';
-  mediaTreatment:'document-contain' | 'visual-cover' | 'visual-contain';
+  mediaTreatment:'document-safe-cover' | 'visual-cover';
   fit:'contain' | 'cover';
   objectPosition:string;
   cropReason:string;
   coverCrop:number;
   potentialCoverCrop:number;
   rowWorstCrop:number;
+  rowCost:number;
 };
 const relatedForRender = packRelatedCardRows(relatedWithRoles, {
   limit:10,
@@ -148,24 +155,25 @@ const typedFallbackArt = preferredUrl ? null : resolveEventFallbackArt(event);
 const preferredWidth = heroWidth || preferredAsset?.width || 1600;
 const preferredHeight = heroHeight || preferredAsset?.height || 1000;
 const ratio = preferredWidth / preferredHeight;
-// Desktop heroes use viewport-height, split and continuous editorial frames;
-// their target aspect is not known at SSR time. Keep them contained rather
-// than presenting a 16:9 approximation as a proven-safe crop.
-const preferredCrop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
+const preferredImageTextMode = forcedOcrSourceIndexes.has(heroImageIndex)
+  ? 'ocr_text'
+  : preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
+// The desktop stage/gallery is a carousel surface: every non-OCR image fills
+// it. OCR/document media stays whole; missing bbox metadata may never demote a
+// classified non-OCR photo to letterboxed contain.
+const preferredCrop = preferredImageTextMode === 'visual_only'
+  ? { fit:'cover' as const, objectPosition:heroObjectPosition || preferredAsset?.recommended_object_position || '50% 50%', reason:'visual_only_gallery_fill' }
+  : { fit:'contain' as const, objectPosition:'50% 50%', reason:'document_media' };
 const preferredPosition = preferredCrop.fit === 'cover' ? preferredCrop.objectPosition : '50% 50%';
 const heroContainStyle = preferredCrop.fit === 'contain'
   ? 'object-fit:contain !important;object-position:center !important;transform:none !important;margin:0 !important;'
   : undefined;
-const selectedMediaMode = forcedOcrSourceIndexes.has(heroImageIndex)
-  ? 'ocr_text'
-  : preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
-const selectedHeroIsOcr = selectedMediaMode !== 'visual_only'
-  || (preferredAsset?.media_semantic_status === 'classified'
-    && preferredAsset.media_role !== 'event_photo');
+const selectedMediaMode = preferredImageTextMode;
+const selectedHeroIsOcr = selectedMediaMode !== 'visual_only';
 const selectedHeroMustContain = selectedHeroIsOcr || preferredCrop.fit !== 'cover';
-const effectiveSplitMediaFit = splitMediaFit === 'viewport-cover' && selectedHeroMustContain
-  ? 'viewport-contain'
-  : splitMediaFit;
+const effectiveSplitMediaFit: SplitMediaFit = selectedMediaMode === 'visual_only'
+  ? 'viewport-cover'
+  : (splitMediaFit === 'viewport-cover' ? 'viewport-contain' : splitMediaFit);
 const fallbackMediaRole = (mode: EventImageAsset['image_text_mode']): EventImageMediaRole => mode === 'visual_only' ? 'event_photo' : 'unknown_document';
 const mediaRoleLabel = (role: EventImageMediaRole) => ({
   event_identity_poster: 'Афиша',
@@ -197,7 +205,9 @@ const galleryImages = (() => {
       ? 'ocr_text'
       : asset?.image_text_mode || fallbackMode || 'unknown';
     const dimensions = sourceIndex === undefined ? undefined : mediaDimensionOverrides[sourceIndex];
-    const crop = { fit:'contain' as const, objectPosition:'50% 50%', reason:'responsive_target_unknown' };
+    const crop = imageTextMode === 'visual_only'
+      ? { fit:'cover' as const, objectPosition:asset?.recommended_object_position || '50% 50%', reason:'visual_only_gallery_fill' }
+      : { fit:'contain' as const, objectPosition:'50% 50%', reason:'document_media' };
     out.push({
       src,
       alt: asset?.alt || heroAlt,
@@ -261,11 +271,11 @@ const viewerRecommendationMeta = viewerRecommendation
   ? [displayDateTime(viewerRecommendation), viewerRecommendation.venue_name || viewerRecommendation.city].filter(Boolean).join(' · ')
   : '';
 const desktopTransportEvent = desktopEventWithExplicitEnd(event);
-// Fullscreen cover is unlocked only by the same semantic + current-pixel
-// geometry contract as embedded surfaces. Pending, OCR, missing and stale
-// geometry stay whole.
-const desktopGalleryFit = (image: GalleryImage) => image.protected_crop_fit || 'contain';
-const effectiveAutoRotate = autoRotate && galleryImages.every((image) => desktopGalleryFit(image) === 'cover');
+const desktopGalleryFit = (image: GalleryImage) => image.image_text_mode === 'visual_only' ? 'cover' : 'contain';
+// Rotation advances only through `data-rotation-eligible` non-OCR slides. An
+// OCR companion in the same gallery must not disable the photo carousel or be
+// cropped merely to make rotation possible.
+const effectiveAutoRotate = autoRotate && galleryImages.filter((image) => image.image_text_mode === 'visual_only').length > 1;
 const railAspectBucket = (image: GalleryImage) => {
   const imageRatio = image.width && image.height ? image.width / image.height : 1;
   if (imageRatio < .9) return 'portrait';
@@ -282,13 +292,6 @@ const splitRailSlotWidth = (image: GalleryImage) => Math.round(Math.max(88, Math
 const transparentRailPixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const usesLongFlow = true;
 
-const dateLabel = displayDate(event);
-const weekdayLabel = (() => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(event.start_date || '');
-  if (!match) return null;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  return ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'][date.getUTCDay()] || null;
-})();
 const dateTimeLabel = displayDateTime(event);
 const addressLabel = event.address || event.city || 'Адрес уточняется';
 const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
@@ -429,7 +432,7 @@ const descriptionHtml = (event.description_html || '')
                     data-crop-fit={desktopGalleryFit(image)}
                     data-crop-reason={image.protected_crop_reason}
                     data-mode={image.image_text_mode}
-                    data-rotation-eligible={desktopGalleryFit(image) === 'cover' && image.image_text_mode === 'visual_only' && image.media_role === 'event_photo' ? 'true' : 'false'}
+                    data-rotation-eligible={desktopGalleryFit(image) === 'cover' && image.image_text_mode === 'visual_only' ? 'true' : 'false'}
                     data-image-text-mode={image.image_text_mode}
                     data-media-role={image.media_role}
                     data-source-index={image.sourceIndex}
@@ -504,10 +507,10 @@ const descriptionHtml = (event.description_html || '')
 
         <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long']} data-scroll-content={usesLongFlow ? '' : undefined} data-editorial-content-flow={candidate === 'editorial' ? '' : undefined}>
           <div class="desktop-prototype__info" data-title-panel>
-            <p class="desktop-prototype__kicker">
+            <div class="desktop-prototype__kicker">
               <span>{event.event_type || 'событие'}</span>
-              <time datetime={event.starts_at || event.start_date}><strong>{dateLabel}</strong>{weekdayLabel && <b>{weekdayLabel}</b>}{event.display_time && <strong>{event.display_time}</strong>}</time>
-            </p>
+              <EventOccurrenceNav event={event} presentation={resolvedOccurrencePresentation} variant="desktop" />
+            </div>
             <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
             {candidate === 'editorial' && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
             <p class="desktop-prototype__place"><Icon name="pin" /><span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span></p>
@@ -526,7 +529,7 @@ const descriptionHtml = (event.description_html || '')
               <section class="desktop-clean-practical" aria-labelledby={`practical-${event.id}`}>
                 <p class="eyebrow">Перед посещением</p><h2 id={`practical-${event.id}`}>Всё главное в одном месте</h2>
                 <div class="desktop-clean-practical__grid">
-                  <article><Icon name="calendar" /><span>Когда</span><strong>{dateTimeLabel}</strong></article>
+                  <article><Icon name="calendar" /><span>Когда</span><EventOccurrenceNav event={event} presentation={resolvedOccurrencePresentation} variant="practical" /></article>
                   <article><Icon name="pin" /><span>Где</span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></article>
                   <article><Icon name="ticket" /><span>Вход</span><strong>{admissionLabel}</strong></article>
                 </div>
@@ -559,7 +562,7 @@ const descriptionHtml = (event.description_html || '')
     <p class="eyebrow">Перед посещением</p>
     <h2 id={`practical-${event.id}`}>Всё главное в одном месте</h2>
     <div class="desktop-clean-practical__grid">
-      <article><Icon name="calendar" /><span>Когда</span><strong>{dateTimeLabel}</strong></article>
+      <article><Icon name="calendar" /><span>Когда</span><EventOccurrenceNav event={event} presentation={resolvedOccurrencePresentation} variant="practical" /></article>
       <article><Icon name="pin" /><span>Где</span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></article>
       <article><Icon name="ticket" /><span>Вход</span><strong>{admissionLabel}</strong></article>
     </div>
@@ -1862,16 +1865,16 @@ const descriptionHtml = (event.description_html || '')
 
     /* Shared desktop related rows: EventCard owns exact fit/position; this
        surface supplies geometry only and never overrides the crop decision. */
-    .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto minmax(0,1fr) minmax(58px,auto) minmax(56px,auto); }
+    .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto 184px 58px 56px; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-link) { display:block; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; isolation:isolate; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; background:#d2c5b7; }
     .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; z-index:2; inset:0; width:100% !important; height:100% !important; }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
     .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; }
     .desktop-clean-related__grid :global([data-card-authoritative-fit="contain"]) { background:#15110f; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; height:184px; align-content:start; overflow:hidden; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; max-height:58px; overflow:hidden; }
+    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; max-height:56px; overflow:hidden; }
   }
   @media (min-width:1024px) and (max-height:720px) {
     .desktop-prototype__stage { --stage-height:calc(100svh - 72px); min-height:520px; }

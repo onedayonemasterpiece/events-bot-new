@@ -182,10 +182,14 @@ export interface DiscoveryDisplayPayload {
   image_alt: string;
   image_text_mode: PreviewEvent['image_text_mode'];
   image_media_role?: EventImageMediaRole;
+  image_width?: number | null;
+  image_height?: number | null;
   focal_y?: number | null;
   display_date: string;
   display_time: string | null;
   display_date_time: string;
+  occurrence_aria_label: string;
+  occurrence_member_ids: number[];
   city: string | null;
   venue_name: string | null;
   place: string;

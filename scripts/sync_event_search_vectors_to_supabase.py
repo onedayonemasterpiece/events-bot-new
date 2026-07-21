@@ -70,6 +70,10 @@ TIME_OF_DAY_RU = {
     "evening": "вечер",
     "night": "ночь",
 }
+MONTHS_GENITIVE_RU = (
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+)
 
 
 def load_env(path: Path) -> None:
@@ -95,6 +99,125 @@ def clean_text(value: Any) -> str:
 
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _occurrence_time(event: dict[str, Any]) -> str | None:
+    match = re.search(r"(\d{1,2}):(\d{2})", clean_text(event.get("start_time") or event.get("display_time")))
+    if not match:
+        return None
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}"
+
+
+def _human_join(values: list[str]) -> str:
+    if len(values) < 2:
+        return values[0] if values else ""
+    return f"{', '.join(values[:-1])} и {values[-1]}"
+
+
+def _format_occurrence_date(value: str, current_year: int) -> str:
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return value
+    suffix = f" {parsed.year}" if parsed.year != current_year else ""
+    return f"{parsed.day} {MONTHS_GENITIVE_RU[parsed.month - 1]}{suffix}"
+
+
+def _format_occurrence_dates(values: list[str], current_year: int, *, aria: bool = False) -> str:
+    dates = list(dict.fromkeys(values))
+    try:
+        parsed = [date.fromisoformat(value) for value in dates]
+    except ValueError:
+        return _human_join(dates) if aria else ", ".join(dates)
+    if parsed and all(item.month == parsed[0].month and item.year == parsed[0].year for item in parsed):
+        days = [str(item.day) for item in parsed]
+        joined = _human_join(days) if aria else ", ".join(days)
+        suffix = f" {parsed[0].year}" if parsed[0].year != current_year else ""
+        return f"{joined} {MONTHS_GENITIVE_RU[parsed[0].month - 1]}{suffix}"
+    formatted = [_format_occurrence_date(value, current_year) for value in dates]
+    return _human_join(formatted) if aria else ", ".join(formatted)
+
+
+def build_occurrence_projections(events: list[dict[str, Any]], *, current_year: int | None = None) -> dict[int, dict[str, Any]]:
+    """Project reciprocal explicit occurrence families into search snapshots.
+
+    This is publication projection only: it never infers identity from title,
+    type or venue. Connected components contain reciprocal `other_date_ids`
+    edges exclusively, matching the static per-family collapse contract.
+    """
+    year = int(current_year or date.today().year)
+    public = {
+        int(event["id"]): event
+        for event in events
+        if int(event.get("id") or 0) > 0
+        and clean_text(event.get("lifecycle_status")).lower() in {"", "active"}
+        and (not clean_text(event.get("end_date")) or clean_text(event.get("end_date")) == clean_text(event.get("start_date")))
+    }
+    parent = {event_id: event_id for event_id in public}
+
+    def find(event_id: int) -> int:
+        while parent[event_id] != event_id:
+            parent[event_id] = parent[parent[event_id]]
+            event_id = parent[event_id]
+        return event_id
+
+    def union(left: int, right: int) -> None:
+        left_root, right_root = find(left), find(right)
+        if left_root != right_root:
+            parent[max(left_root, right_root)] = min(left_root, right_root)
+
+    links = {
+        event_id: {int(value) for value in (event.get("other_date_ids") or []) if str(value).isdigit()}
+        for event_id, event in public.items()
+    }
+    for event_id, linked_ids in links.items():
+        for linked_id in linked_ids:
+            if linked_id in public and event_id in links.get(linked_id, set()):
+                union(event_id, linked_id)
+
+    components: dict[int, list[dict[str, Any]]] = {}
+    for event_id, event in public.items():
+        components.setdefault(find(event_id), []).append(event)
+
+    output: dict[int, dict[str, Any]] = {}
+    for members in components.values():
+        members.sort(key=lambda item: (clean_text(item.get("start_date")), _occurrence_time(item) or "99:99", int(item["id"])))
+        member_ids = [int(item["id"]) for item in members]
+        dates = list(dict.fromkeys(clean_text(item.get("start_date")) for item in members))
+        times = [_occurrence_time(item) for item in members]
+        known_times = [value for value in times if value]
+        rows: dict[str, list[str | None]] = {}
+        for member, time_value in zip(members, times, strict=True):
+            rows.setdefault(clean_text(member.get("start_date")), []).append(time_value)
+        if len(rows) == 1 and len(known_times) == len(members):
+            date_label = _format_occurrence_date(dates[0], year)
+            compact = f"{date_label} {', '.join(known_times)}"
+            aria = f"{date_label} в {_human_join(known_times)}"
+        elif known_times and len(known_times) == len(members) and len(set(known_times)) == 1:
+            compact = f"{_format_occurrence_dates(dates, year)} {known_times[0]}"
+            aria = f"{_format_occurrence_dates(dates, year, aria=True)} в {known_times[0]}"
+        else:
+            chunks: list[str] = []
+            for date_value, row_times in rows.items():
+                date_label = _format_occurrence_date(date_value, year)
+                if all(row_times):
+                    chunks.append(f"{date_label} {', '.join(value for value in row_times if value)}")
+                elif any(row_times):
+                    chunks.append(f"{date_label}, время уточняется")
+                else:
+                    chunks.append(date_label)
+            compact = "; ".join(chunks)
+            aria = compact
+        for event_id in member_ids:
+            output[event_id] = {
+                "occurrence_member_ids": member_ids,
+                "occurrence_compact_label": compact,
+                "occurrence_aria_label": aria,
+            }
+    return output
 
 
 def vector_corpus_hash(
@@ -401,7 +524,8 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
     ticket = event.get("ticket") or {}
     href = event_href(event, base_path=base_path)
     abs_url = absolute_url(f"/sobytiya/{event.get('slug')}/", site_origin=site_origin, base_path=base_path)
-    display_date_time = join_parts([event.get("display_date"), event.get("display_time")])
+    display_date_time = clean_text(event.get("occurrence_compact_label")) or join_parts([event.get("display_date"), event.get("display_time")])
+    occurrence_member_ids = [int(value) for value in (event.get("occurrence_member_ids") or [event["id"]])]
     place = join_parts([event.get("city"), event.get("venue_name")])
     status_label = clean_text(ticket.get("price_label")) or clean_text(ticket.get("label")) or clean_text(event.get("status_label"))
     display = {
@@ -417,6 +541,8 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
         "display_date": clean_text(event.get("display_date")),
         "display_time": clean_text(event.get("display_time")) or None,
         "display_date_time": display_date_time,
+        "occurrence_aria_label": clean_text(event.get("occurrence_aria_label")) or display_date_time,
+        "occurrence_member_ids": occurrence_member_ids,
         "city": clean_text(event.get("city")) or None,
         "venue_name": clean_text(event.get("venue_name")) or None,
         "place": place,
@@ -451,6 +577,7 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
         "reason_codes": ["pgvector_search_candidate"],
         "exploration_candidate": False,
         "display": display,
+        "occurrence_member_ids": occurrence_member_ids,
     }
 
 
@@ -482,7 +609,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
         "event_id": int(event["id"]),
         "search_doc_version": "event-search-doc-v3-search-facets",
         "related_doc_version": "event-related-doc-v1",
-        "card_snapshot_version": "event-card-v1",
+        "card_snapshot_version": "event-card-v2-occurrences",
         "text_hash": search_text_hash,
         "related_text_hash": related_text_hash,
         "slug": clean_text(event.get("slug")) or None,
@@ -741,7 +868,10 @@ def main() -> int:
 
     load_env(ROOT / args.env_file)
     fixture = json.loads(Path(args.preview_events_json).read_text(encoding="utf-8"))
-    events = list(fixture.get("events") or [])
+    events = [dict(event) for event in (fixture.get("events") or [])]
+    occurrence_projections = build_occurrence_projections(events)
+    for event in events:
+        event.update(occurrence_projections.get(int(event.get("id") or 0), {}))
     if args.event_ids.strip():
         wanted = {int(part) for part in args.event_ids.split(",") if part.strip()}
         events = [event for event in events if int(event.get("id") or 0) in wanted]

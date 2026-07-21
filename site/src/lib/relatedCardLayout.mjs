@@ -1,9 +1,18 @@
 import { resolveEventImageCrop } from './imageCrop.mjs';
 
-const DEFAULT_DOCUMENT_RATIO = 4 / 5;
-const MIN_VISUAL_RATIO = 1;
-const MAX_VISUAL_RATIO = 4 / 3;
+// CSS aspect ratios are width / height. The compact default is therefore the
+// horizontal 5:4 counterpart of the product's "4:5 by height" rule.
+const PREFERRED_VISUAL_RATIO = 5 / 4;
+const MAX_VISUAL_RATIO = 8 / 5;
+const VERY_TALL_DOCUMENT_RATIO = 4 / 5;
 const MAX_DOCUMENT_CROP = 0.2;
+// Desktop compact cards use fixed 184px body + 58px utility + 56px feedback
+// tracks. At the 1536x864 acceptance viewport this is 0.777 normalized card
+// widths, so this objective is the actual rendered row height rather than a
+// media-only proxy. The browser gate separately proves the fixed chrome
+// invariant on generated output.
+const ROW_CHROME_COST = 0.777;
+const EPSILON = 1e-9;
 
 function finiteRatio(value, fallback) {
   const ratio = Number(value);
@@ -18,26 +27,6 @@ function displayPayload(item) {
 function normalizedObjectPosition(value) {
   const raw = String(value || '').trim();
   return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : '';
-}
-
-function visualFallbackObjectPosition(item) {
-  const candidate = item?.candidate || item || {};
-  const display = displayPayload(item);
-  const asset = primaryImageAsset(item);
-  const explicit = normalizedObjectPosition(
-    display?.image_object_position
-      || candidate?.image_object_position
-      || item?.image_object_position
-      || asset?.recommended_object_position
-      || asset?.object_position,
-  );
-  if (explicit) return explicit;
-  const focal = display?.focal_point || candidate?.focal_point || item?.focal_point || asset?.focal_point || {};
-  const x = Number(focal?.x ?? display?.focal_x ?? candidate?.focal_x ?? item?.focal_x);
-  const y = Number(focal?.y ?? display?.focal_y ?? candidate?.focal_y ?? item?.focal_y);
-  const safeX = Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : .5;
-  const safeY = Number.isFinite(y) ? Math.min(1, Math.max(0, y)) : .5;
-  return `${Math.round(safeX * 100)}% ${Math.round(safeY * 100)}%`;
 }
 
 function primaryImageAsset(item) {
@@ -66,6 +55,26 @@ function primaryImageAsset(item) {
   };
 }
 
+function visualFallbackObjectPosition(item) {
+  const candidate = item?.candidate || item || {};
+  const display = displayPayload(item);
+  const asset = primaryImageAsset(item);
+  const explicit = normalizedObjectPosition(
+    display?.image_object_position
+      || candidate?.image_object_position
+      || item?.image_object_position
+      || asset?.recommended_object_position
+      || asset?.object_position,
+  );
+  if (explicit) return explicit;
+  const focal = display?.focal_point || candidate?.focal_point || item?.focal_point || asset?.focal_point || {};
+  const x = Number(focal?.x ?? display?.focal_x ?? candidate?.focal_x ?? item?.focal_x);
+  const y = Number(focal?.y ?? display?.focal_y ?? candidate?.focal_y ?? item?.focal_y);
+  const safeX = Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : .5;
+  const safeY = Number.isFinite(y) ? Math.min(1, Math.max(0, y)) : .5;
+  return `${Math.round(safeX * 100)}% ${Math.round(safeY * 100)}%`;
+}
+
 export function relatedCardMediaGeometry(item) {
   const asset = primaryImageAsset(item);
   const display = displayPayload(item);
@@ -76,37 +85,34 @@ export function relatedCardMediaGeometry(item) {
   return {
     asset,
     documentMedia,
-    ratio: finiteRatio(width > 0 && height > 0 ? width / height : 0, documentMedia ? DEFAULT_DOCUMENT_RATIO : 1),
+    ratio: finiteRatio(width > 0 && height > 0 ? width / height : 0, documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO),
   };
 }
 
+function cropFraction(sourceRatio, targetRatio) {
+  return Math.max(0, 1 - Math.min(sourceRatio / targetRatio, targetRatio / sourceRatio));
+}
+
 /**
- * One authoritative compact recommendation-card media decision. Both the row
- * packer and EventCard call this gate, so a visual photo cannot be advertised
- * as cover by the row and later rendered as contain by the card (or vice
- * versa); OCR/document media stays on the explicit contain branch.
+ * Final compact-card treatment. A card image always fills its shell: fields
+ * are forbidden. OCR/document assets may use cover only inside the 20% crop
+ * budget; packRelatedCardRows guarantees that target-ratio precondition.
  */
 export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = relatedCardMediaGeometry(item)) {
-  const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? DEFAULT_DOCUMENT_RATIO : 1);
-  const potentialCoverCrop = Math.max(0, 1 - Math.min(mediaRatio / targetAspect, targetAspect / mediaRatio));
+  const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO);
+  const potentialCoverCrop = cropFraction(mediaRatio, targetAspect);
   if (geometry?.documentMedia) {
     return {
       mediaKind:'document',
-      mediaTreatment:'document-contain',
-      fit:'contain',
+      mediaTreatment:'document-safe-cover',
+      fit:'cover',
       objectPosition:'50% 50%',
-      cropReason:'document_media',
+      cropReason:potentialCoverCrop <= EPSILON ? 'document_uncropped' : 'document_bounded_cover',
       potentialCoverCrop,
-      coverCrop:0,
+      coverCrop:potentialCoverCrop,
     };
   }
   const crop = resolveEventImageCrop(geometry?.asset || primaryImageAsset(item), targetAspect);
-  // Restore the accepted recommendation-card contract from before the bbox
-  // rollout: `visual_only` is the product-level permission to fill a compact
-  // preview. Exact protected geometry improves its object position when it is
-  // available, but missing/stale/over-constrained bbox metadata must not turn
-  // a photographic card into a letterboxed document. OCR and unknown media
-  // still take the document branch above and remain fully contained.
   const objectPosition = crop.fit === 'cover'
     ? (crop.objectPosition || visualFallbackObjectPosition(item))
     : visualFallbackObjectPosition(item);
@@ -123,68 +129,141 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
   };
 }
 
-function geometricMean(ratios, fallback = 1) {
+function geometricMean(ratios, fallback = PREFERRED_VISUAL_RATIO) {
   return ratios.length
     ? Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length)
     : fallback;
 }
 
-function initialRowRatio(row, mediaTreatment) {
-  const documents = row.filter(({ documentMedia }) => documentMedia);
-  const visuals = row.filter(({ documentMedia }) => !documentMedia);
-  const documentRatios = documents.map(({ ratio }) => ratio);
-  const visualRatios = visuals.map(({ ratio }) => ratio);
-  let targetRatio = 1;
-  let rowMode = 'visual-square';
-
-  if (documents.length === 0) {
-    targetRatio = Math.min(MAX_VISUAL_RATIO, Math.max(MIN_VISUAL_RATIO, geometricMean(visualRatios)));
-    rowMode = 'visual-squareish';
-  } else if (visuals.length > 0) {
-    if (mediaTreatment === 'cover') {
-      targetRatio = 1.12;
-      rowMode = 'mixed-compact-cover';
-    } else if (mediaTreatment === 'ambient') {
-      targetRatio = 1;
-      rowMode = 'mixed-square-ambient';
-    } else {
-      const documentCenter = geometricMean(documentRatios, DEFAULT_DOCUMENT_RATIO);
-      targetRatio = [DEFAULT_DOCUMENT_RATIO, 1, MAX_VISUAL_RATIO]
-        .sort((left, right) => Math.abs(Math.log(left / documentCenter)) - Math.abs(Math.log(right / documentCenter)))[0];
-      rowMode = 'mixed-adaptive-ambient';
-    }
-  } else if (documentRatios.length === 1) {
-    targetRatio = Math.min(0.9, documentRatios[0] * 1.1);
-    rowMode = 'document-bounded-vertical-crop';
-  } else {
-    targetRatio = Math.sqrt(Math.min(...documentRatios) * Math.max(...documentRatios));
-    rowMode = 'document-minimax';
-  }
-  return { targetRatio, rowMode };
+function documentTargetInterval(entry) {
+  // Ordinary OCR posters stay uncropped. Only an unusually tall document may
+  // spend up to the explicit 20% area budget to keep its whole row compact.
+  if (entry.ratio >= VERY_TALL_DOCUMENT_RATIO - EPSILON) return [entry.ratio, entry.ratio];
+  return [entry.ratio, entry.ratio / (1 - MAX_DOCUMENT_CROP)];
 }
 
-function rowLayout(row, rowIndex, mediaTreatment) {
-  const initial = initialRowRatio(row, mediaTreatment);
-  // Keep the reviewed compact row geometry. In particular a single portrait
-  // photograph must not expand one three-column row to its natural 2:3 ratio;
-  // it remains a square-ish preview and uses the same EventCard crop contract.
-  const targetRatio = initial.targetRatio;
-  const decisions = row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, targetRatio, entry));
-  const rowMode = initial.rowMode;
-  const entries = row.map(({ item, ratio:mediaRatio }, index) => {
-    const decision = decisions[index];
+function rowTarget(row) {
+  const documents = row.filter(({ documentMedia }) => documentMedia);
+  if (documents.length) {
+    const intervals = documents.map(documentTargetInterval);
+    const lower = Math.max(...intervals.map(([value]) => value));
+    const upper = Math.min(...intervals.map(([, value]) => value));
+    if (lower > upper + EPSILON) return null;
     return {
-      item,
-      layout: {
-        mediaRatio,
-        rowRatio:targetRatio,
-        rowIndex,
-        rowMode,
-        ...decision,
-        rowWorstCrop:0,
-      },
+      targetRatio:upper,
+      rowMode:documents.some(({ ratio }) => ratio < VERY_TALL_DOCUMENT_RATIO - EPSILON)
+        ? 'document-led-bounded-cover'
+        : 'document-led-uncropped',
     };
-  });
+  }
+  const visualRatios = row.map(({ ratio }) => ratio);
+  const evidenceRatio = geometricMean(visualRatios);
+  return {
+    targetRatio:Math.min(MAX_VISUAL_RATIO, Math.max(PREFERRED_VISUAL_RATIO, evidenceRatio)),
+    rowMode:evidenceRatio > PREFERRED_VISUAL_RATIO + EPSILON ? 'visual-horizontal-adaptive' : 'visual-compact-5x4',
+  };
+}
+
+function rowPlan(row, mediaTreatment) {
+  const target = rowTarget(row, mediaTreatment);
+  if (!target) return null;
+  const decisions = row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, target.targetRatio, entry));
+  if (decisions.some((decision) => decision.mediaKind === 'document' && decision.coverCrop > MAX_DOCUMENT_CROP + EPSILON)) return null;
+  const visualCrop = decisions
+    .filter(({ mediaKind }) => mediaKind === 'visual')
+    .reduce((sum, decision) => sum + decision.coverCrop, 0);
+  return {
+    ...target,
+    decisions,
+    // Normalized full-card row height: shared media height plus the invariant
+    // title/meta/action chrome. This is the objective minimized page-wide.
+    cost:ROW_CHROME_COST + (1 / target.targetRatio),
+    visualCrop,
+  };
+}
+
+function comparePlans(left, right) {
+  if (!right) return -1;
+  const scoreLeft = [left.cost, left.rows, left.visualCrop, left.displacement];
+  const scoreRight = [right.cost, right.rows, right.visualCrop, right.displacement];
+  for (let index = 0; index < scoreLeft.length; index += 1) {
+    if (Math.abs(scoreLeft[index] - scoreRight[index]) > EPSILON) return scoreLeft[index] - scoreRight[index];
+  }
+  return left.signature.localeCompare(right.signature);
+}
+
+function combinationsIncludingAnchor(mask, anchor, rowSize) {
+  const rest = [];
+  for (let index = anchor + 1; index < 31; index += 1) if (mask & (1 << index)) rest.push(index);
+  const result = [[anchor]];
+  const choose = (start, selected) => {
+    if (selected.length >= rowSize - 1) return;
+    for (let index = start; index < rest.length; index += 1) {
+      const next = [...selected, rest[index]];
+      result.push([anchor, ...next]);
+      choose(index + 1, next);
+    }
+  };
+  choose(0, []);
+  return result;
+}
+
+function optimizeRows(selected, rowSize, mediaTreatment) {
+  if (!selected.length) return [];
+  // Current recommendation surfaces cap at 10. Keep a deterministic fallback
+  // rather than allowing a bitmask overflow if a future caller forgets limit.
+  if (selected.length > 20) {
+    const rows = [];
+    for (let offset = 0; offset < selected.length; offset += rowSize) rows.push(selected.slice(offset, offset + rowSize));
+    return rows;
+  }
+  const fullMask = (1 << selected.length) - 1;
+  const memo = new Map();
+  const solve = (mask) => {
+    if (!mask) return { cost:0, rows:0, visualCrop:0, displacement:0, signature:'', groups:[] };
+    if (memo.has(mask)) return memo.get(mask);
+    let anchor = 0;
+    while (!(mask & (1 << anchor))) anchor += 1;
+    let best = null;
+    for (const indexes of combinationsIncludingAnchor(mask, anchor, rowSize)) {
+      const group = indexes.map((index) => selected[index]);
+      const plan = rowPlan(group, mediaTreatment);
+      if (!plan) continue;
+      const groupMask = indexes.reduce((value, index) => value | (1 << index), 0);
+      const tail = solve(mask & ~groupMask);
+      const displacement = indexes.reduce((sum, value, index) => sum + Math.abs(value - (anchor + index)), 0);
+      const signature = `${indexes.join('.')};${tail.signature}`;
+      const candidate = {
+        cost:plan.cost + tail.cost,
+        rows:1 + tail.rows,
+        visualCrop:plan.visualCrop + tail.visualCrop,
+        displacement:displacement + tail.displacement,
+        signature,
+        groups:[{ entries:group, plan }, ...tail.groups],
+      };
+      if (comparePlans(candidate, best) < 0) best = candidate;
+    }
+    memo.set(mask, best);
+    return best;
+  };
+  return solve(fullMask)?.groups || selected.map((entry) => ({ entries:[entry], plan:rowPlan([entry], mediaTreatment) }));
+}
+
+function materializeRow(row, rowIndex) {
+  const { entries:sourceEntries, plan } = row;
+  const entries = sourceEntries.map(({ item, ratio:mediaRatio }, index) => ({
+    item,
+    layout: {
+      mediaRatio,
+      rowRatio:plan.targetRatio,
+      rowIndex,
+      rowColumn:index,
+      rowMode:plan.rowMode,
+      ...plan.decisions[index],
+      rowWorstCrop:0,
+      rowCost:plan.cost,
+    },
+  }));
   const rowWorstCrop = Math.max(0, ...entries
     .filter(({ layout }) => layout.mediaKind === 'document')
     .map(({ layout }) => layout.coverCrop));
@@ -192,17 +271,21 @@ function rowLayout(row, rowIndex, mediaTreatment) {
   return entries;
 }
 
+/**
+ * Enumerate every feasible row grouping (up to rowSize), then use bitmask
+ * dynamic programming to minimize the sum of normalized full-card row heights.
+ * Reordering is therefore intentional, deterministic and globally optimal for
+ * the declared cost model rather than a greedy per-row guess.
+ */
 export function packRelatedCardRows(items, options = {}) {
   const limit = Math.max(0, Number(options.limit ?? items.length));
-  const rowSize = Math.max(1, Number(options.rowSize ?? 3));
+  const rowSize = Math.max(1, Math.min(6, Number(options.rowSize ?? 3)));
   const mediaTreatment = options.mediaTreatment || 'hybrid';
   const geometry = options.geometry || relatedCardMediaGeometry;
-  const selected = items.slice(0, limit).map((item) => ({ item, ...geometry(item) }));
-  const packed = [];
-  for (let offset = 0, rowIndex = 0; offset < selected.length; offset += rowSize, rowIndex += 1) {
-    packed.push(...rowLayout(selected.slice(offset, offset + rowSize), rowIndex, mediaTreatment));
-  }
-  return packed;
+  const selected = items.slice(0, limit).map((item, originalIndex) => ({ item, originalIndex, ...geometry(item) }));
+  const rows = optimizeRows(selected, rowSize, mediaTreatment);
+  return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex));
 }
 
 export const RELATED_CARD_MAX_DOCUMENT_CROP = MAX_DOCUMENT_CROP;
+export const RELATED_CARD_PREFERRED_VISUAL_RATIO = PREFERRED_VISUAL_RATIO;

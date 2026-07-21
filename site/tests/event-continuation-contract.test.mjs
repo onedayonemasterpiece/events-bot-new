@@ -9,7 +9,7 @@ import { packRelatedCardRows, RELATED_CARD_MAX_DOCUMENT_CROP } from '../src/lib/
 
 const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-test('event 3934 and its continuation use stable three-card OCR-safe row geometry', async () => {
+test('event 3934 and its continuation use globally packed OCR-safe row geometry', async () => {
   const payload = JSON.parse(await readFile(path.join(siteRoot, 'src/data/preview-events.json'), 'utf8'));
   const byId = new Map(payload.events.map((event) => [event.id, event]));
   const ids = [3934, 6593, 6821, 6907, 4784, 6610];
@@ -27,13 +27,15 @@ test('event 3934 and its continuation use stable three-card OCR-safe row geometr
 
   const packed = packRelatedCardRows(cards, { limit: 6, rowSize: 3, mediaTreatment: 'hybrid' });
   assert.equal(packed.length, 6);
-  assert.deepEqual(packed.map(({ item }) => item.event_id), ids, 'packing is stable and never drops an incompatible poster');
+  assert.deepEqual(new Set(packed.map(({ item }) => item.event_id)), new Set(ids), 'global packing may reorder but never drops an incompatible poster');
   assert.equal(packed.find(({ item }) => item.event_id === 3934)?.layout.mediaKind, 'document');
 
-  for (const rowIndex of [0, 1]) {
+  const rowIndexes = [...new Set(packed.map(({ layout }) => layout.rowIndex))];
+  for (const rowIndex of rowIndexes) {
     const row = packed.filter(({ layout }) => layout.rowIndex === rowIndex);
-    assert.equal(row.length, 3);
+    assert.ok(row.length >= 1 && row.length <= 3);
     assert.equal(new Set(row.map(({ layout }) => layout.rowRatio.toFixed(5))).size, 1);
+    assert.ok(row.every(({ layout }) => layout.fit === 'cover'), 'no card may expose fields');
     assert.ok(row.every(({ layout }) => layout.rowWorstCrop <= RELATED_CARD_MAX_DOCUMENT_CROP + 1e-9));
     assert.ok(row.filter(({ layout }) => layout.mediaKind === 'document').every(({ layout }) => layout.coverCrop <= RELATED_CARD_MAX_DOCUMENT_CROP + 1e-9));
   }
@@ -123,4 +125,12 @@ test('broad continuation escapes a same-type bubble while remaining finite and d
   assert.ok(!ids.includes(2), 'events already offered by the similar section stay excluded');
   assert.ok(selected.filter(({ candidate }) => candidate.category === 'theatre').length <= 3, 'at least half of the finite section escapes the theatre/type bubble');
   assert.ok(new Set(selected.map(({ candidate }) => candidate.category)).size >= 4, 'the continuation deliberately broadens across event types');
+});
+
+test('runtime continuation keeps the same fixed chrome tracks as static related cards', async () => {
+  const source = await readFile(path.join(siteRoot, 'src/components/PersonalFeedSlot.astro'), 'utf8');
+  assert.match(source, /grid-template-rows:\s*auto 184px 58px 56px/u);
+  assert.match(source, /\[data-lab-related-card\] \.event-card__body[\s\S]*?height:\s*184px/u);
+  assert.match(source, /\[data-lab-related-card\] \.event-card__utility-row[\s\S]*?min-height:\s*58px[\s\S]*?max-height:\s*58px/u);
+  assert.match(source, /\[data-lab-related-card\] \.event-card__feedback--under[\s\S]*?min-height:\s*56px[\s\S]*?max-height:\s*56px/u);
 });

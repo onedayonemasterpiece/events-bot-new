@@ -46,7 +46,7 @@ test('accepted media/CTA design-system examples remain frozen after the live eve
   for (const eventId of [4783, 5374, 6551, 6815]) assert.ok(examples.events.some((event) => event.id === eventId), `missing frozen event ${eventId}`);
 });
 
-test('a lone low-resolution portrait stays available in viewport-contain efficient viewer', () => {
+test('a lone low-resolution portrait stays available for the efficient viewer while the non-OCR page fills its stage', () => {
   const event = eventById(6815);
   assert.ok(event);
   const presentation = buildDesktopEventPresentation(event);

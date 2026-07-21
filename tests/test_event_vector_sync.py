@@ -261,6 +261,73 @@ def test_explicit_registration_is_tagged_as_ticketed():
     assert "ticketed" in sync.event_tags(event, "event")
 
 
+def test_search_snapshot_projects_only_reciprocal_explicit_occurrence_families():
+    first = {
+        "id": 1,
+        "title": "Одна программа",
+        "start_date": "2026-11-02",
+        "start_time": "19:00",
+        "display_time": "19:00",
+        "end_date": "2026-11-02",
+        "lifecycle_status": "active",
+        "other_date_ids": [2, 3],
+    }
+    second = {
+        **first,
+        "id": 2,
+        "start_date": "2026-11-09",
+        "end_date": "2026-11-09",
+        "other_date_ids": [1],
+    }
+    lookalike_without_reverse_link = {
+        **first,
+        "id": 3,
+        "start_date": "2026-11-16",
+        "end_date": "2026-11-16",
+        "other_date_ids": [],
+    }
+
+    projection = sync.build_occurrence_projections(
+        [first, second, lookalike_without_reverse_link],
+        current_year=2026,
+    )
+
+    assert projection[1] == {
+        "occurrence_member_ids": [1, 2],
+        "occurrence_compact_label": "2, 9 ноября 19:00",
+        "occurrence_aria_label": "2 и 9 ноября в 19:00",
+    }
+    assert projection[2] == projection[1]
+    assert projection[3]["occurrence_member_ids"] == [3]
+
+
+def test_search_card_snapshot_carries_family_identity_and_exact_compact_label():
+    event = {
+        "id": 1,
+        "title": "Одна прграмма",
+        "slug": "one-program",
+        "start_date": "2026-11-02",
+        "display_date": "2 ноября",
+        "display_time": "19:00",
+        "occurrence_member_ids": [1, 2],
+        "occurrence_compact_label": "2, 9 ноября 19:00",
+        "occurrence_aria_label": "2 и 9 ноября в 19:00",
+        "ticket": {},
+    }
+
+    card = sync.build_card_snapshot(
+        event,
+        site_origin="https://kenigevents.ru",
+        base_path="",
+        ics_base_url="https://static.kenigevents.ru/ics",
+    )
+
+    assert card["occurrence_member_ids"] == [1, 2]
+    assert card["display"]["occurrence_member_ids"] == [1, 2]
+    assert card["display"]["display_date_time"] == "2, 9 ноября 19:00"
+    assert card["display"]["occurrence_aria_label"] == "2 и 9 ноября в 19:00"
+
+
 @pytest.mark.asyncio
 async def test_smart_update_fanout_enqueues_coalesced_vector_projection(monkeypatch, tmp_path):
     import main

@@ -19,7 +19,7 @@
   визуальный review; mocks не заменяют evidence.
 - **Planned** — product/implementation ещё отсутствует в `origin/main`.
 
-## Карта текущего покрытия на 2026-07-20
+## Карта текущего покрытия на 2026-07-21
 
 | Surface | Сценарии | Уровень сейчас | Канонический test/command | Что не доказано |
 |---|---|---|---|---|
@@ -35,7 +35,7 @@
 | Typed no-image fallbacks | `ADD-V12-07` | Unit + public candidate | fallback is visible but absent from gallery/OG/JSON-LD/share | inventory refresh after each snapshot |
 | Footer/media/continuation rollout | `ADD-V12-09..12` | Component + public Playwright | global service footer, related-card skeleton, portrait/wide CTA families, bounded desktop continuation | native share and long-session analytics |
 | Desktop event keyboard navigation | `ADD-KEY-01..07` | Component + Chromium secret-candidate route | `node --test site/tests/keyboard-event-navigation-production.test.mjs`; `npm --prefix site run check:keyboard-event-navigation` | Firefox/Safari, screen reader, high contrast and root rollout |
-| Generated event release journeys | `ADD-KEY-08..10`, `ADD-DISC-08..10` | Blocking Chromium production/candidate gate | `npm --prefix site run check:browser-release -- --root <generated-root>`; Smart Update/Kaggle invokes it before each archive | native Safari remains a root-rollout gate |
+| Generated event release journeys | `ADD-KEY-08..10`, `ADD-DISC-08..13` | Blocking Chromium production/candidate gate | `npm --prefix site run check:browser-release -- --root <generated-root>`; Smart Update/Kaggle invokes it before each archive | native Safari remains a root-rollout gate |
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
@@ -160,18 +160,22 @@
 
 ### Related graph and visual release regressions
 
-- **ADD-DISC-08 — Final crop owns row packing.** Every generated related and
-  broader card uses one `EventCard` layout decision after semantic role,
-  protected-region and exact-geometry crop resolution. Declared treatment,
-  computed `object-fit`, reserved row ratio and visible letterbox/crop budget
-  must agree at `1536×864`; surface CSS may not reinterpret the decision.
-- **ADD-DISC-11 — Loaded media owns the letterbox.** For every canonical
+- **ADD-DISC-08 — Global row optimizer owns compact crop.** Every generated
+  related and broader card uses one `EventCard` layout decision from the
+  globally minimum-height feasible grouping. Cards may reorder; each row has
+  one visible media height and one total card height. Every image uses `cover`
+  with zero unused frame; an ordinary OCR/document source fixes the natural row
+  ratio, while only a very tall document may crop and actual area loss is at
+  most `20%`. Declared treatment, computed `object-fit`, row/column, reserved
+  ratio and decoded-pixel crop budget must agree at `1536×864`; surface CSS
+  may not reinterpret the decision.
+- **ADD-DISC-11 — Loaded media owns the frame.** For every canonical
   recommendation card, Playwright waits for the lazy image to settle and
-  `decode()`. A successfully loaded `contain` image must hide the semantic
-  date/type/city failure fallback and reveal only the neutral media shell in
-  its bands; a failed image must keep that fallback. The release artifact
-  retains a full related-section screenshot and a `1536×864` viewport capture
-  after pixels settle. Correct `object-fit` alone is not acceptance.
+  `decode()`. A successfully loaded image must hide the semantic date/type/city
+  failure fallback and leave no band; a failed image must keep that fallback.
+  The release artifact retains a full related-section screenshot and a
+  `1536×864` viewport capture after pixels settle. Correct `object-fit` alone
+  is not acceptance.
 - **ADD-DISC-12 — Cold and mixed-input matrix.** On both reported routes
   `6408` and `6593`, the blocking generated-tree gate covers fresh load,
   reload, real inert-content mouse click, Russian-layout `L/K/S`, Enter,
@@ -180,6 +184,11 @@
   Run the same command with `--browser firefox` and `--browser webkit` where
   the host provides Playwright system dependencies; Playwright WebKit is an
   approximation, not a substitute for the native Safari rollout check.
+- **ADD-DISC-13 — Non-OCR hero/gallery fills the stage.** On event `6408` and
+  the generated crop-canary route, each `visual_only` hero and gallery slide
+  computes to `cover` even when semantic-role metadata is uncertain; OCR/text/
+  unknown documents remain `contain`. The browser report and retained hero
+  screenshot must show no top/bottom fields on the non-OCR slide.
 - **ADD-DISC-09 — Exact-title recall without unsafe merge.** Every eligible
   exact-normalized-title pair is mutual in the related graph even when Smart
   Update has not merged it. This is a discovery invariant, not evidence that
