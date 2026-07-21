@@ -109,7 +109,7 @@ lanes:
     expected_output: "v23 standalone calendar artifact with past-state, occurrence recap, sticky layout and Search donor link"
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed
   - id: W02
     role: worker
     requirement_ids: [R03, R04, R05]
@@ -135,7 +135,7 @@ lanes:
     expected_output: "real donor-backed Astro Search plus honest static query-learning pages using canonical EventCard"
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed
   - id: I01
     role: merge_reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
@@ -152,4 +152,4 @@ lanes:
     expected_output: "merged previews, public gates, Gemini acceptance, Telegram annotated handoff"
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed

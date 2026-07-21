@@ -948,3 +948,11 @@ terracotta остаётся только у стрелки. Селекторы �
 `.sticky-date span` запрещён, потому что он превращал `20 событий` в две строки
 и визуально смешивал count с city. Gates проверяют nowrap на `320/390px`, safe
 lane справа от brand tag и совместное появление backdrop/content.
+
+Calendar v23 и Astro Search публикуются разными noindex prefixes, но образуют
+один mobile journey: calendar bottom-nav ведёт в проверенный Astro `/poisk/`, а
+Search и materialized-query pages возвращают тот же четырёхпунктовый dock с
+активным `Поиск`. На Search скрыт только старый горизонтальный desktop nav,
+который визуально попадал под fixed brand top-sheet; сам top-sheet и Search
+donor не перестраиваются. Preview base URLs задаются публичными build-time env,
+поэтому в source нет зашитого versioned prefix.

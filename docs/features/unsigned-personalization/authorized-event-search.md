@@ -73,6 +73,23 @@ canonical `EventCard`; materialized links реально открывают stat
 fill-only example не навигирует и не отправляет форму; на `320/390px` отсутствует
 horizontal overflow.
 
+В noindex mobile research preview страницы `/poisk/` и `/podborki/*` монтируют
+один `MobileSearchBottomNav`: `Афиша / Даты / Поиск / Для меня`, где `Поиск`
+активен. Он не переписывает `AuthorizedEventSearch`; на mobile скрывается только
+конфликтующий горизонтальный `.site-nav`, а существующая brand/top-sheet
+механика остаётся. Между раздельными calendar/Search preview используются
+`PUBLIC_MOBILE_CALENDAR_BASE_URL` и `PUBLIC_MOBILE_SEARCH_BASE_URL`; без них
+компонент возвращается к обычным `withBase(...)` links.
+
+Research materialization может получить явную дату среза через
+`PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE`. Страница обязана одновременно
+показывать дату обновления source catalog и дату, на которую рассчитана
+подборка: это не разрешение маскировать старые данные. Перед пользовательской
+передачей относительный запрос вроде `ближайшие выходные` не может содержать
+прошедший weekend. В v23 public preview срез `2026-07-21` даёт карточки 25–26
+июля. Research routes остаются `noindex`; production crawlable materialization
+разрешается только после подключения регулярно обновляемого canonical job.
+
 ## Search feedback and public tag candidates
 
 The dedicated `/poisk/` page now exposes seed query chips and, after enough

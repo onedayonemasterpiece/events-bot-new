@@ -1,9 +1,11 @@
 ---
 import EventCard from '../../../components/EventCard.astro';
 import EventLayout from '../../../layouts/EventLayout.astro';
+import MobileSearchBottomNav from '../../../components/MobileSearchBottomNav.astro';
 import {
   getMaterializedSearchCollection,
   getMaterializedSearchCollectionEvents,
+  getMaterializedSearchCollectionReferenceDate,
   materializedSearchCollections,
 } from '../../../data/searchCollections';
 import { absoluteUrl, getPreviewBuild, siteHomeHref, SITE_NAME, withBase } from '../../../lib/events';
@@ -19,6 +21,7 @@ const events = getMaterializedSearchCollectionEvents(collection.slug);
 const canonicalUrl = absoluteUrl(`/podborki/${collection.slug}/`);
 const title = `${collection.title} | ${SITE_NAME}`;
 const updatedDate = getPreviewBuild().current_date;
+const referenceDate = getMaterializedSearchCollectionReferenceDate();
 ---
 <EventLayout title={title} description={collection.description} canonicalUrl={canonicalUrl} structuredData={[]} noindex>
   <main id="main">
@@ -37,7 +40,7 @@ const updatedDate = getPreviewBuild().current_date;
           <h1>{collection.title}</h1>
           <p class="lead">{collection.description}</p>
           <p class="collection-criteria"><strong>Как собрана:</strong> {collection.criteria}</p>
-          <p class="muted-note">Данные афиши обновлены {updatedDate}. Подборка не является личным сохранённым поиском.</p>
+          <p class="muted-note">Данные афиши обновлены {updatedDate}; подборка рассчитана на {referenceDate}. Это не личный сохранённый поиск.</p>
         </div>
       </section>
 
@@ -55,6 +58,7 @@ const updatedDate = getPreviewBuild().current_date;
       </section>
     </div>
   </main>
+  <MobileSearchBottomNav />
 </EventLayout>
 
 <style>

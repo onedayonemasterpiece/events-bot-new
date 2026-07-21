@@ -58,6 +58,11 @@ export const searchLearningItems: SearchLearningItem[] = [
   ...searchQueryExamples,
 ];
 
+export function getMaterializedSearchCollectionReferenceDate(): string {
+  const configured = String(import.meta.env.PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/u.test(configured) ? configured : getCurrentDate();
+}
+
 function datePlusDays(date: string, days: number): string {
   const value = new Date(`${date}T00:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);
@@ -81,7 +86,7 @@ export function getMaterializedSearchCollection(slug: string): MaterializedSearc
 }
 
 export function getMaterializedSearchCollectionEvents(slug: string): PreviewEvent[] {
-  const currentDate = getCurrentDate();
+  const currentDate = getMaterializedSearchCollectionReferenceDate();
   const events = getEvents().filter((event) => isPublicFutureEvent(event, currentDate));
   let matches: PreviewEvent[] = [];
 

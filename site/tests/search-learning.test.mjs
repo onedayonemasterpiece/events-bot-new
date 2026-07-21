@@ -8,6 +8,7 @@ const learning = read('src/components/SearchCollectionLinks.astro');
 const collections = read('src/data/searchCollections.ts');
 const collectionPage = read('src/pages/podborki/[slug]/index.astro');
 const donor = read('src/components/AuthorizedEventSearch.astro');
+const bottomNav = read('src/components/MobileSearchBottomNav.astro');
 
 test('materialized collections are real static links and examples are fill-only controls', () => {
   assert.match(learning, /href=\{withBase\(`\/podborki\/\$\{item\.slug\}\/`\)\}/u);
@@ -49,4 +50,16 @@ test('v58 donor retains separate submit progress and canonical EventCard renderi
   assert.match(donor, /window\.KenigEventsRenderEventCard/u);
   assert.match(donor, /renderer\([^\n]+, 'split-actions'\)/u);
   assert.doesNotMatch(searchPage, /email|magic link|otp/iu);
+});
+
+test('mobile Search fixes donor shell without rewriting its core', () => {
+  assert.match(searchPage, /<MobileSearchBottomNav\s*\/>/u);
+  assert.match(collectionPage, /<MobileSearchBottomNav\s*\/>/u);
+  assert.match(bottomNav, /aria-current="page"[\s\S]*Поиск/u);
+  assert.match(bottomNav, /body:has\(\.mobile-search-bottom-nav\) \.site-header \.site-nav \{ display: none; \}/u);
+  assert.match(bottomNav, /PUBLIC_MOBILE_CALENDAR_BASE_URL/u);
+  assert.match(bottomNav, /PUBLIC_MOBILE_SEARCH_BASE_URL/u);
+  assert.doesNotMatch(bottomNav, /preview-20260721/u);
+  assert.match(collections, /PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE/u);
+  assert.match(collections, /getMaterializedSearchCollectionReferenceDate\(\)/u);
 });

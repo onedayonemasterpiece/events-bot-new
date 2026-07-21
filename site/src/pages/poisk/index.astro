@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
+import MobileSearchBottomNav from '../../components/MobileSearchBottomNav.astro';
 import SearchCollectionLinks from '../../components/SearchCollectionLinks.astro';
 import { siteHomeHref, absoluteUrl, SITE_NAME } from '../../lib/events';
 
@@ -20,4 +21,5 @@ const description = 'Векторный поиск по событиям Кал�
       <SearchCollectionLinks />
     </div>
   </main>
+  <MobileSearchBottomNav />
 </EventLayout>
