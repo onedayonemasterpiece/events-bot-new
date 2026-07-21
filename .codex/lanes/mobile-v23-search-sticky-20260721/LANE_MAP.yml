@@ -35,7 +35,7 @@ lanes:
     expected_output: "exact old Search donor, progress button, large cards, auth and tests/public evidence"
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
   - id: D02
     role: planner
     requirement_ids: [R01, R02]
@@ -49,7 +49,7 @@ lanes:
     expected_output: "root causes and exact safe patches/tests for past-state and other-date block"
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: D03
     role: planner
     requirement_ids: [R06, R07]
@@ -63,7 +63,7 @@ lanes:
     expected_output: "measured current hierarchy failure and 2-3 safe layouts preserving brand safe space"
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: D04
     role: planner
     requirement_ids: [R04]
@@ -78,7 +78,7 @@ lanes:
     expected_output: "Pinterest query funnel, self-reviewed board and shortlist"
     verification_scope: inspection_only
     effort: high
-    status: in_progress
+    status: completed
   - id: C01
     role: reviewer
     requirement_ids: [R08]
@@ -91,5 +91,65 @@ lanes:
     forbidden_files: ["repository source"]
     expected_output: "critical product/design decision and implementation gate"
     verification_scope: inspection_only
+    effort: high
+    status: completed
+
+  - id: W01
+    role: worker
+    requirement_ids: [R01, R02, R06, R07]
+    target: /root/v23_calendar_impl
+    depends_on: [D02, D03, C01]
+    execution_mode: parallel
+    branch: agent/mobile-v23/calendar
+    worktree: /home/dev/.codex/worktrees/events-bot-new/calendar-occurrences-v21-mobile
+    writable_files:
+      - artifacts/codex/mobile-calendar-v23-research-20260721/
+      - .codex/lanes/mobile-v23-search-sticky-20260721/W01_RESULTS.md
+    forbidden_files: ["site/src", "production databases"]
+    expected_output: "v23 standalone calendar artifact with past-state, occurrence recap, sticky layout and Search donor link"
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: W02
+    role: worker
+    requirement_ids: [R03, R04, R05]
+    target: /root/v23_search_impl
+    depends_on: [D01, D04, C01]
+    execution_mode: parallel
+    branch: agent/mobile-v23/search
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mobile-v23-search
+    writable_files:
+      - site/src/pages/poisk/index.astro
+      - site/src/pages/podborki/
+      - site/src/components/SearchCollectionLinks.astro
+      - site/src/data/searchCollections.ts
+      - site/tests/search-learning.test.mjs
+      - site/package.json
+      - .codex/lanes/mobile-v23-search-sticky-20260721/W02_RESULTS.md
+    forbidden_files:
+      - site/src/components/AuthorizedEventSearch.astro
+      - site/src/components/EventCard.astro
+      - site/src/layouts/EventLayout.astro
+      - supabase/
+      - production databases
+    expected_output: "real donor-backed Astro Search plus honest static query-learning pages using canonical EventCard"
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: I01
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
+    target: /root
+    depends_on: [W01, W02]
+    execution_mode: serial_after_dependency
+    branch: integration/mobile-v23-search-sticky-20260721
+    worktree: /home/dev/.codex/worktrees/events-bot-new/calendar-occurrences-v21-final
+    writable_files:
+      - docs/
+      - CHANGELOG.md
+      - .codex/lanes/mobile-v23-search-sticky-20260721/
+    forbidden_files: []
+    expected_output: "merged previews, public gates, Gemini acceptance, Telegram annotated handoff"
+    verification_scope: full_local
     effort: high
     status: planned
