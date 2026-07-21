@@ -48,7 +48,9 @@ test('R01 crop assertion maps treatments and product-gates visual cards to cover
   assert.match(source, /unusedFrameRatio[\s\S]*visual card .* leaves .* media frame unused/u);
   assert.match(source, /item\.mediaKind === 'document'[\s\S]*item\.treatment === 'document-safe-cover' && item\.objectFit === 'cover'/u);
   assert.match(source, /recommendation row cards do not share one total height/u);
-  assert.match(source, /fixed chrome height used by the global optimizer/u);
+  assert.match(source, /incomplete before the final row/u);
+  assert.match(source, /do not share row-local chrome height/u);
+  assert.match(source, /reserves excessive body whitespace/u);
 });
 
 test('R01 document acceptance is card-local and does not mistake a mixed row potential for applied crop', () => {

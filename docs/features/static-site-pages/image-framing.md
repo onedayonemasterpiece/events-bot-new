@@ -15,6 +15,9 @@
   that interval, and no more than `20%` of its source area may be cropped.
 - Cards in a row have one media height and one total card height. Cards may be
   reordered between rows; input order is not an acceptance requirement.
+- A non-final row is always full. The optimizer may emit one incomplete row
+  only as the final row of the section; it may choose which cards belong to
+  that remainder so OCR-safe grouping does not create holes above it.
 - Without a constraining OCR/document neighbour the compact target is
   width/height `5/4` (a horizontal frame). A wider target is allowed when it
   reduces the whole-page height or aligns with a horizontal neighbour.
@@ -26,10 +29,21 @@
 `site/src/lib/relatedCardLayout.mjs` enumerates feasible card groupings (up to
 the surface row-size cap) and uses dynamic programming over the complete set of
 cards. It minimizes the sum of normalized full-row heights, including the
-desktop card's fixed `184px + 58px + 56px` content/action tracks, rather than
-greedily optimizing the current row. The generated browser gate proves that
-this chrome height is actually invariant across the packed cards. Ties prefer
-fewer rows, less visual crop and less displacement from source order.
+row-local intrinsic title/place/action height, rather than greedily optimizing
+the current row. The body is bounded by the card's two-line copy contract and
+is estimated from those same text tracks in the search cost; CSS then stretches
+only to the tallest real content inside that row. It must not reserve the
+rejected global `184px + 58px + 56px` chrome. Ties prefer fewer rows, less
+visual crop and less displacement from source order.
+
+The solver first enumerates the optional final remainder of size
+`cardCount % rowSize`, then partitions everything else into exact full rows.
+Fullness is therefore a hard constraint, not a score that a shorter row can
+outvote. The browser gate checks row cardinality, row-local equal media/card
+heights and that at least one content-owning card per row has no large synthetic
+body gap. If the ranked prefix is mathematically OCR-incompatible, the packer
+may inspect at most three following candidates and keeps the largest feasible
+card count; it never repairs incompatibility by opening an earlier partial row.
 
 For each candidate row the solver intersects document-safe target intervals.
 An ordinary document contributes only its natural ratio; a very tall document
@@ -85,6 +99,8 @@ The browser/static renderer consumes metadata but does not run vision models.
 - golden corpus across posters, portraits, groups, architecture, text-heavy images and sparse photos;
 - no cut faces/heads; no OCR crop except the documented very-tall `<=20%` case;
 - zero image-frame bands and equal media/card heights within each compact row;
+- every non-final compact row is full and only the final row may be incomplete;
+- no global fixed body/action reservation; row chrome follows real row content;
 - the globally selected grouping has the minimum normalized total page height;
 - repeatable output for the same versioned media;
 - visual regression for hero/card/list/gallery/share formats;

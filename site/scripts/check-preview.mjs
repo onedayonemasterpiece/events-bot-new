@@ -713,6 +713,25 @@ if (!/aspect-ratio:4\/5/u.test(css.replace(/\s+/g, ''))) throw new Error('Visual
 if (/aspect-ratio:3\/4/u.test(css.replace(/\s+/g, ''))) throw new Error('Old 3:4 visual-only ratio leaked into CSS');
 
 const eventsById = new Map(eventsData.events.map((event) => [event.id, event]));
+const romeoSecond = eventsById.get(6318);
+const romeoThird = eventsById.get(6586);
+const romeoReviewFamily = romeoSecond?.other_date_ids?.includes(6586)
+  && romeoThird?.other_date_ids?.includes(6318);
+if (romeoReviewFamily) {
+  const dog = eventsById.get(6408);
+  if (!dog) throw new Error('Focused occurrence review requires event 6408');
+  const dogDiscovery = JSON.parse(readFileSync(join(root, 'data/discovery/6408.json'), 'utf8'));
+  const romeoCandidates = dogDiscovery.related_static.filter((item) => item.event_id === 6318 || item.event_id === 6586);
+  if (romeoCandidates.length !== 1) throw new Error(`6408 must project one Romeo occurrence card, got ${romeoCandidates.length}`);
+  if (romeoCandidates[0]?.display?.display_date_time !== '2, 3 ноября 19:00') {
+    throw new Error(`6408 Romeo card has wrong compact label: ${romeoCandidates[0]?.display?.display_date_time || '(missing)'}`);
+  }
+  const dogHtml = readFileSync(join(root, `sobytiya/${dog.slug}/index.html`), 'utf8');
+  const romeoCardCount = [...dogHtml.matchAll(/data-event-id="(?:6318|6586)"/gu)].length;
+  if (romeoCardCount !== 1 || !dogHtml.includes('data-occurrence-member-ids="6318,6586"') || !dogHtml.includes('2, 3 ноября 19:00')) {
+    throw new Error('6408 generated HTML must render one reciprocal Romeo card with the complete compact label');
+  }
+}
 const currentDate = eventsData.build?.current_date;
 const exactTodayEvents = eventsData.events.filter((event) => event.start_date === currentDate);
 const exactTodayTypes = new Set(exactTodayEvents.map((event) => event.event_type || 'unknown'));

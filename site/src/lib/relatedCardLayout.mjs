@@ -6,12 +6,13 @@ const PREFERRED_VISUAL_RATIO = 5 / 4;
 const MAX_VISUAL_RATIO = 8 / 5;
 const VERY_TALL_DOCUMENT_RATIO = 4 / 5;
 const MAX_DOCUMENT_CROP = 0.2;
-// Desktop compact cards use fixed 184px body + 58px utility + 56px feedback
-// tracks. At the 1536x864 acceptance viewport this is 0.777 normalized card
-// widths, so this objective is the actual rendered row height rather than a
-// media-only proxy. The browser gate separately proves the fixed chrome
-// invariant on generated output.
-const ROW_CHROME_COST = 0.777;
+// The desktop recommendation column is about 360px wide at the acceptance
+// viewport. Chrome is intrinsic per row, so the optimizer models the bounded
+// title/meta/place line budget instead of reserving one global fixed height.
+const REFERENCE_CARD_WIDTH = 360;
+const BASE_BODY_HEIGHT = 109;
+const EXTRA_TEXT_LINE_HEIGHT = 23;
+const UTILITY_AND_FEEDBACK_HEIGHT = 114;
 const EPSILON = 1e-9;
 
 function finiteRatio(value, fallback) {
@@ -22,6 +23,29 @@ function finiteRatio(value, fallback) {
 function displayPayload(item) {
   const candidate = item?.candidate || item || {};
   return candidate?.display || item?.display || candidate;
+}
+
+function compactLineCount(value, charactersPerLine, maxLines = 2) {
+  const length = Array.from(String(value || '').trim()).length;
+  if (!length) return 1;
+  return Math.max(1, Math.min(maxLines, Math.ceil(length / charactersPerLine)));
+}
+
+function estimatedChromeCost(row) {
+  const bodyHeight = Math.max(...row.map(({ item }) => {
+    const display = displayPayload(item);
+    const candidate = item?.candidate || item || {};
+    const title = display?.title || candidate?.title || '';
+    const place = [display?.city || candidate?.city, display?.venue_name || candidate?.venue_name]
+      .filter(Boolean)
+      .join(' · ');
+    const titleLines = compactLineCount(title, 29);
+    const placeLines = compactLineCount(place, 43);
+    return BASE_BODY_HEIGHT
+      + (titleLines - 1) * EXTRA_TEXT_LINE_HEIGHT
+      + (placeLines - 1) * EXTRA_TEXT_LINE_HEIGHT;
+  }));
+  return (bodyHeight + UTILITY_AND_FEEDBACK_HEIGHT) / REFERENCE_CARD_WIDTH;
 }
 
 function normalizedObjectPosition(value) {
@@ -175,9 +199,9 @@ function rowPlan(row, mediaTreatment) {
   return {
     ...target,
     decisions,
-    // Normalized full-card row height: shared media height plus the invariant
-    // title/meta/action chrome. This is the objective minimized page-wide.
-    cost:ROW_CHROME_COST + (1 / target.targetRatio),
+    // Normalized full-card row height: shared media height plus row-local
+    // intrinsic chrome estimated from the same bounded copy tracks as CSS.
+    cost:estimatedChromeCost(row) + (1 / target.targetRatio),
     visualCrop,
   };
 }
@@ -192,16 +216,35 @@ function comparePlans(left, right) {
   return left.signature.localeCompare(right.signature);
 }
 
-function combinationsIncludingAnchor(mask, anchor, rowSize) {
+function combinationsIncludingAnchor(mask, anchor, exactSize) {
   const rest = [];
   for (let index = anchor + 1; index < 31; index += 1) if (mask & (1 << index)) rest.push(index);
-  const result = [[anchor]];
+  if (exactSize === 1) return [[anchor]];
+  const result = [];
   const choose = (start, selected) => {
-    if (selected.length >= rowSize - 1) return;
+    if (selected.length === exactSize - 1) {
+      result.push([anchor, ...selected]);
+      return;
+    }
     for (let index = start; index < rest.length; index += 1) {
-      const next = [...selected, rest[index]];
-      result.push([anchor, ...next]);
-      choose(index + 1, next);
+      choose(index + 1, [...selected, rest[index]]);
+    }
+  };
+  choose(0, []);
+  return result;
+}
+
+function combinations(mask, exactSize) {
+  const indexes = [];
+  for (let index = 0; index < 31; index += 1) if (mask & (1 << index)) indexes.push(index);
+  const result = [];
+  const choose = (start, selected) => {
+    if (selected.length === exactSize) {
+      result.push(selected);
+      return;
+    }
+    for (let index = start; index < indexes.length; index += 1) {
+      choose(index + 1, [...selected, indexes[index]]);
     }
   };
   choose(0, []);
@@ -214,12 +257,17 @@ function optimizeRows(selected, rowSize, mediaTreatment) {
   // rather than allowing a bitmask overflow if a future caller forgets limit.
   if (selected.length > 20) {
     const rows = [];
-    for (let offset = 0; offset < selected.length; offset += rowSize) rows.push(selected.slice(offset, offset + rowSize));
+    for (let offset = 0; offset < selected.length; offset += rowSize) {
+      const entries = selected.slice(offset, offset + rowSize);
+      const plan = rowPlan(entries, mediaTreatment);
+      if (!plan) return null;
+      rows.push({ entries, plan });
+    }
     return rows;
   }
   const fullMask = (1 << selected.length) - 1;
   const memo = new Map();
-  const solve = (mask) => {
+  const solveFullRows = (mask) => {
     if (!mask) return { cost:0, rows:0, visualCrop:0, displacement:0, signature:'', groups:[] };
     if (memo.has(mask)) return memo.get(mask);
     let anchor = 0;
@@ -230,7 +278,8 @@ function optimizeRows(selected, rowSize, mediaTreatment) {
       const plan = rowPlan(group, mediaTreatment);
       if (!plan) continue;
       const groupMask = indexes.reduce((value, index) => value | (1 << index), 0);
-      const tail = solve(mask & ~groupMask);
+      const tail = solveFullRows(mask & ~groupMask);
+      if (!tail) continue;
       const displacement = indexes.reduce((sum, value, index) => sum + Math.abs(value - (anchor + index)), 0);
       const signature = `${indexes.join('.')};${tail.signature}`;
       const candidate = {
@@ -246,7 +295,51 @@ function optimizeRows(selected, rowSize, mediaTreatment) {
     memo.set(mask, best);
     return best;
   };
-  return solve(fullMask)?.groups || selected.map((entry) => ({ entries:[entry], plan:rowPlan([entry], mediaTreatment) }));
+
+  const remainderSize = selected.length % rowSize;
+  if (!remainderSize) {
+    const full = solveFullRows(fullMask);
+    return full?.groups || null;
+  }
+
+  // The incomplete group is a product constraint, not a scoring preference:
+  // enumerate which entries belong to it, optimize only full rows around it,
+  // then append that remainder last. This also allows the first source item to
+  // move into the final row when it is the only OCR-safe feasible partition.
+  let best = null;
+  for (const remainderIndexes of combinations(fullMask, remainderSize)) {
+    const remainderEntries = remainderIndexes.map((index) => selected[index]);
+    const remainderPlan = rowPlan(remainderEntries, mediaTreatment);
+    if (!remainderPlan) continue;
+    const remainderMask = remainderIndexes.reduce((value, index) => value | (1 << index), 0);
+    const full = solveFullRows(fullMask & ~remainderMask);
+    if (!full) continue;
+    const candidate = {
+      cost:full.cost + remainderPlan.cost,
+      rows:full.rows + 1,
+      visualCrop:full.visualCrop + remainderPlan.visualCrop,
+      displacement:full.displacement + remainderIndexes.reduce((sum, value, index) => sum + Math.abs(value - (selected.length - remainderSize + index)), 0),
+      signature:`${full.signature}|${remainderIndexes.join('.')}`,
+      groups:[...full.groups, { entries:remainderEntries, plan:remainderPlan }],
+    };
+    if (comparePlans(candidate, best) < 0) best = candidate;
+  }
+  return best?.groups || null;
+}
+
+function selectionCombinations(length, exactSize) {
+  const result = [];
+  const choose = (start, selected) => {
+    if (selected.length === exactSize) {
+      result.push(selected);
+      return;
+    }
+    for (let index = start; index < length; index += 1) {
+      choose(index + 1, [...selected, index]);
+    }
+  };
+  choose(0, []);
+  return result;
 }
 
 function materializeRow(row, rowIndex) {
@@ -272,18 +365,51 @@ function materializeRow(row, rowIndex) {
 }
 
 /**
- * Enumerate every feasible row grouping (up to rowSize), then use bitmask
- * dynamic programming to minimize the sum of normalized full-card row heights.
+ * Enumerate every feasible full-row grouping plus one optional final
+ * remainder, then use bitmask dynamic programming to minimize the sum of
+ * normalized full-card row heights.
  * Reordering is therefore intentional, deterministic and globally optimal for
  * the declared cost model rather than a greedy per-row guess.
  */
 export function packRelatedCardRows(items, options = {}) {
-  const limit = Math.max(0, Number(options.limit ?? items.length));
+  const limit = Math.max(0, Math.floor(Number(options.limit ?? items.length)));
   const rowSize = Math.max(1, Math.min(6, Number(options.rowSize ?? 3)));
   const mediaTreatment = options.mediaTreatment || 'hybrid';
   const geometry = options.geometry || relatedCardMediaGeometry;
-  const selected = items.slice(0, limit).map((item, originalIndex) => ({ item, originalIndex, ...geometry(item) }));
-  const rows = optimizeRows(selected, rowSize, mediaTreatment);
+  const targetCount = Math.min(limit, items.length);
+  if (!targetCount) return [];
+  // Usually the ranked prefix is feasible and takes the fast path. If its OCR
+  // ratios cannot share the required number of full rows, inspect only three
+  // lower-ranked alternates, preserve the largest possible card count, and
+  // choose the lowest rank-displacement set before comparing page height.
+  // This prevents the old workaround of emitting middle singleton/pair rows.
+  const pool = items.slice(0, Math.min(items.length, targetCount + 3))
+    .map((item, originalIndex) => ({ item, originalIndex, ...geometry(item) }));
+  let selected = pool.slice(0, targetCount);
+  let rows = optimizeRows(selected, rowSize, mediaTreatment);
+  if (!rows) {
+    let winner = null;
+    for (let count = targetCount; count >= 1 && !winner; count -= 1) {
+      for (const indexes of selectionCombinations(pool.length, count)) {
+        const candidateSelection = indexes.map((index) => pool[index]);
+        const candidateRows = optimizeRows(candidateSelection, rowSize, mediaTreatment);
+        if (!candidateRows) continue;
+        const rankDisplacement = indexes.reduce((sum, index, rank) => sum + Math.max(0, index - rank), 0);
+        const cost = candidateRows.reduce((sum, row) => sum + row.plan.cost, 0);
+        const signature = indexes.join('.');
+        const candidate = { selected:candidateSelection, rows:candidateRows, rankDisplacement, cost, signature };
+        if (!winner
+          || rankDisplacement < winner.rankDisplacement
+          || (rankDisplacement === winner.rankDisplacement && cost < winner.cost - EPSILON)
+          || (rankDisplacement === winner.rankDisplacement && Math.abs(cost - winner.cost) <= EPSILON && signature < winner.signature)) {
+          winner = candidate;
+        }
+      }
+    }
+    if (!winner) return [];
+    selected = winner.selected;
+    rows = winner.rows;
+  }
   return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex));
 }
 

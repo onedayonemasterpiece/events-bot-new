@@ -90,7 +90,7 @@ const headingId = `personal-feed-${context}-title`;
 
   .personal-feed-section--event-detail :global([data-lab-related-card]) {
     height: 100%;
-    grid-template-rows: auto 184px 58px 56px;
+    grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
   }
 
   .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__media-link) {
@@ -115,26 +115,19 @@ const headingId = `personal-feed-${context}-title`;
     height: 100% !important;
   }
 
-  /* Keep the non-media chrome identical to the server-rendered related rail.
-     The global row optimizer can minimize actual full-card page height only
-     when title/meta and action tracks do not grow with copy length. */
+  /* Keep row-local intrinsic chrome identical to the server-rendered rail.
+     The card stretches only to the tallest real content in its own row. */
   .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__body) {
     min-height: 0;
-    height: 184px;
     align-content: start;
-    overflow: hidden;
   }
 
   .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__utility-row) {
     min-height: 58px;
-    max-height: 58px;
-    overflow: hidden;
   }
 
   .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__feedback--under) {
     min-height: 56px;
-    max-height: 56px;
-    overflow: hidden;
   }
 
   /* EventCard/relatedCardLayout own the exact fit on both continuation

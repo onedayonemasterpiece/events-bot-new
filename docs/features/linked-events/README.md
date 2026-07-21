@@ -55,6 +55,18 @@ normalized title/type/venue/city. В текущей интеграции это 
 текста больше не создаёт family; family требует взаимных explicit links, а
 неполная coverage остаётся честным migration gap исходной базы.
 
+Практический canary этой границы — `6318` (2 ноября) и `6586` (3 ноября).
+Компоненты и formatter уже поддерживают требуемую одну карточку
+`2, 3 ноября 19:00`, включая разные площадки, но production/export snapshot на
+2026-07-21 содержит для обеих строк пустые `linked_event_ids`. Поэтому текущая
+раздельная выдача — data coverage gap, а не повод вернуть frontend inference.
+Для focused review допустим только явно зафиксированный взаимный fixture edge;
+перед общим rollout требуется source-grounded взаимная canonical repair.
+Legacy `recompute_linked_event_ids()` требует одинаковую площадку и может снять
+такую межплощадочную ручную связь, поэтому durable repair должен получить
+manual provenance/lock либо целевой `occurrence_group_id`, а не голый
+незащищённый edge.
+
 ## Каноническая frontend-проекция
 
 Contract/donor `feature/related-events-compact-unified-20260721` выборочно

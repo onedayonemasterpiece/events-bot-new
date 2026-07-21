@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- Reopened the static event-detail review after owner inspection found middle
+  row holes, globally reserved empty card bodies and uncollapsed Romeo dates on
+  event `6408`. The row DP now permits only exact full rows plus one optional
+  final remainder, scores row-local bounded copy height, and both static and
+  hydrated cards use intrinsic chrome instead of fixed `184px + 58px + 56px`
+  tracks. Added `1..10` fullness, compact-body browser and explicit reciprocal
+  `6318 ↔ 6586` generated-review gates; title/type/venue inference remains
+  forbidden and the canonical data repair is held for owner-approved rollout.
+  OCR-incompatible ranked prefixes use a bounded three-candidate alternate
+  window instead of reintroducing middle singleton/pair rows.
+
 - Unified linked-event occurrence projection across static detail, date lists,
   Popular, search, recommendations and personal continuation: only reciprocal
   explicit `other_date_ids` create a family; date lists remain per-date while

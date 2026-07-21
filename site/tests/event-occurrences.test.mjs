@@ -80,6 +80,22 @@ test('matching copy without explicit reciprocal links never creates a family', (
   assert.equal(result.compactLabel, '2 ноября 19:00');
 });
 
+test('explicit cross-venue Romeo family collapses to the required 6408 card label', () => {
+  const second = event(6318, '2026-11-02', '19:00', [6586], {
+    title:'Спектакль «Ромео и Джульетта»',
+    venue_name:'Драматический театр',
+  });
+  const third = event(6586, '2026-11-03', '19:00', [6318], {
+    title:'Спектакль «Ромео и Джульетта»',
+    venue_name:'Музыкальный театр',
+  });
+  const result = presentation(third, [second, third]);
+  assert.deepEqual(collapseOccurrenceCards([third, second], 'per-family').map((item) => item.id), [6586]);
+  assert.deepEqual(result.family.memberIds, [6318, 6586]);
+  assert.equal(result.compactLabel, '2, 3 ноября 19:00');
+  assert.equal(result.ariaLabel, '2 и 3 ноября в 19:00');
+});
+
 test('resolver rejects asymmetric, dangling, inactive, past and range members', () => {
   const current = event(20, '2026-11-02', '19:00', [21, 22, 23, 24, 25]);
   const asymmetric = event(21, '2026-11-03', '19:00', []);

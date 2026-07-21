@@ -303,9 +303,14 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     const shell = card.querySelector('[data-card-media-shell]');
     const image = card.querySelector('[data-card-image]');
     const fallback = card.querySelector('[data-card-image-fallback]');
+    const body = card.querySelector('.event-card__body');
     const cardRect = card.getBoundingClientRect();
     const shellRect = shell?.getBoundingClientRect();
     const imageRect = image?.getBoundingClientRect();
+    const bodyRect = body?.getBoundingClientRect();
+    const bodyContentBottom = body
+      ? Math.max(bodyRect?.top || 0, ...Array.from(body.children).map((child) => child.getBoundingClientRect().bottom))
+      : 0;
     const treatment = card.getAttribute('data-lab-media-treatment') || '';
     const mediaKind = card.getAttribute('data-lab-media-kind') || '';
     const actualCrop = image?.naturalWidth > 0 && image?.naturalHeight > 0 && shellRect?.width > 0 && shellRect?.height > 0
@@ -320,6 +325,7 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
       coverCrop: Number(card.getAttribute('data-lab-cover-crop') || 0), rowWorstCrop: Number(card.getAttribute('data-lab-row-worst-crop') || 0), actualCrop, unusedFrameRatio,
       card: { top: cardRect.top, left: cardRect.left, right: cardRect.right, bottom:cardRect.bottom, width: cardRect.width, height:cardRect.height },
       shell: shellRect ? { top: shellRect.top, left: shellRect.left, right: shellRect.right, width: shellRect.width, height: shellRect.height } : null,
+      body: bodyRect ? { height:bodyRect.height, unused:Math.max(0, bodyRect.bottom - bodyContentBottom) } : null,
       image: imageRect ? { left: imageRect.left, right: imageRect.right, width: imageRect.width, height: imageRect.height } : null,
       objectFit,
       imageOpacity: image ? Number(getComputedStyle(image).opacity || 1) : 0,
@@ -376,16 +382,19 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     const row = item.row ?? Math.round(item.shell.top);
     rows.set(row, [...(rows.get(row) || []), item]);
   }
-  for (const cards of rows.values()) {
+  const orderedRows = [...rows.entries()].sort(([left], [right]) => Number(left) - Number(right));
+  for (const [rowOffset, [, cards]] of orderedRows.entries()) {
+    invariant(cards.length === 3 || rowOffset === orderedRows.length - 1, `recommendation row ${rowOffset} is incomplete before the final row (${cards.length}/3)`);
     const shellHeights = cards.map((item) => item.shell.height);
     const cardHeights = cards.map((item) => item.card.height);
     invariant(Math.max(...shellHeights) - Math.min(...shellHeights) <= 2, 'recommendation row media shells do not share one geometry');
     invariant(Math.max(...cardHeights) - Math.min(...cardHeights) <= 2, 'recommendation row cards do not share one total height');
+    const chromeHeights = cards.map((item) => item.card.height - item.shell.height);
+    invariant(Math.max(...chromeHeights) - Math.min(...chromeHeights) <= 2, 'recommendation cards do not share row-local chrome height');
+    invariant(Math.min(...cards.map((item) => item.body?.unused ?? Number.POSITIVE_INFINITY)) <= 32, `recommendation row ${rowOffset} reserves excessive body whitespace`);
     const sorted = [...cards].sort((left, right) => left.card.left - right.card.left);
     for (let index = 1; index < sorted.length; index += 1) invariant(sorted[index - 1].card.right <= sorted[index].card.left + 1, 'recommendation cards overlap');
   }
-  const chromeHeights = metrics.map((item) => item.card.height - item.shell.height);
-  invariant(Math.max(...chromeHeights) - Math.min(...chromeHeights) <= 2, 'recommendation cards do not share the fixed chrome height used by the global optimizer');
   return metrics;
 }
 

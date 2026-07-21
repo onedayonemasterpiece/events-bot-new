@@ -169,6 +169,20 @@
   most `20%`. Declared treatment, computed `object-fit`, row/column, reserved
   ratio and decoded-pixel crop budget must agree at `1536×864`; surface CSS
   may not reinterpret the decision.
+- **ADD-DISC-14 — Full rows and intrinsic compact chrome.** For every desktop
+  related/personal section, all rows except the final row contain exactly three
+  cards. The final row contains `1..3`; explicit grid coordinates never leave a
+  middle hole. Media and total card heights are equal within each row, but body
+  and action tracks are intrinsic per row rather than globally fixed to
+  `184px + 58px + 56px`. The generated browser report records row cardinality
+  and rejects a row whose content-owning card retains a large synthetic body
+  gap. Counts `1..10` and the real event `6408` are mandatory canaries.
+- **ADD-DISC-15 — Generated occurrence-family card.** When review/canonical
+  input explicitly carries reciprocal `6318 ↔ 6586`, generated event `6408`
+  must contain exactly one Romeo card, `data-occurrence-member-ids="6318,6586"`,
+  visible text `2, 3 ноября 19:00` and full aria label
+  `2 и 3 ноября в 19:00`. The same titles without reciprocal explicit links
+  remain separate; venue/title inference is forbidden.
 - **ADD-DISC-11 — Loaded media owns the frame.** For every canonical
   recommendation card, Playwright waits for the lazy image to settle and
   `decode()`. A successfully loaded image must hide the semantic date/type/city

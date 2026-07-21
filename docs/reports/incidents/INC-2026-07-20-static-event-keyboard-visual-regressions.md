@@ -1,6 +1,6 @@
 # INC-2026-07-20 Static event recommendation crop and keyboard ownership regressions
 
-Status: mitigated / replacement candidate passed generated, live Chromium and agy Gemini acceptance; owner acceptance pending
+Status: open / owner rejected D1qL0 row packing and compactness; focused replacement review pending
 Severity: sev2
 Service: immutable secret static-event candidate / desktop event detail
 Opened: 2026-07-20
@@ -219,6 +219,15 @@ secret preproduction candidate family.
   effort inspected the exact URL, retained PNG pixels, source and reports and
   returned `SHIP_SECRET_CANDIDATE`. This is acceptance of the secret candidate,
   not permission to promote the stable root; owner acceptance remains pending.
+- 2026-07-21 — owner review rejected `D1qL0…` despite the previous automated
+  and Gemini verdict: the optimizer emitted middle partial rows (`2,3,2,3` for
+  the ten `6408` cards), and fixed `184px` bodies left roughly `63–86px` blank
+  per card. The same page also exposed the data coverage gap for Romeo events
+  `6318`/`6586`: the occurrence components are present, but both production
+  rows export empty explicit links, so the reciprocal-only resolver correctly
+  cannot collapse them. The prior acceptance is superseded. Only a fresh
+  isolated `preview-*` page for `6408` may be shown next; no all-page candidate
+  or stable-root rollout is allowed before owner visual approval.
 
 ## Root Cause
 
@@ -433,6 +442,11 @@ secret preproduction candidate family.
   repeated generated-output and live-browser gates, then obtained independent
   agy `gemini-3.1-pro-high` verdict `SHIP_SECRET_CANDIDATE` over the exact URL,
   retained screenshots and computed geometry.
+- [ ] Replace `D1qL0…` with an owner-reviewed focused `6408` preview whose
+  non-final rows are full and whose card chrome is intrinsic per row.
+- [ ] After owner approval, repair `6318 ↔ 6586` as a durable reciprocal
+  explicit occurrence family with provenance/lock, then regenerate all pages;
+  do not infer the family from matching copy or venue.
 - [ ] Complete native Firefox/Safari, screen-reader, high-contrast and
   zoom/reflow checks before any later root rollout.
 
