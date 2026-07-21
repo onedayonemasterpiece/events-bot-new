@@ -10,6 +10,16 @@
   requirements, a Stage 13 release gate, and a GitHub/prototype-linked external
   deep-research prompt. No production behavior or scheduler was changed.
 
+### Changed
+
+- Refined the static-site Easter-eggs discovery plan with a sticky per-user
+  semantic placement-bundle invariant, persistent post-find marker, separate
+  dislike/report/hide semantics, restrained state-driven motion, ecological
+  placement/type analytics, ITT difficulty measurement and provisional target
+  bands that keep standard/hard eggs uncommon without using invisible or
+  inaccessible targets. Added a focused Gemini 3.1 Pro adversarial review and
+  explicit owner disposition rather than accepting its recommendations wholesale.
+
 ### Fixed
 
 - Unified linked-event occurrence projection across static detail, date lists,

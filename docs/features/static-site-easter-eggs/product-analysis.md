@@ -257,6 +257,11 @@ moderation minutes, а не просто отправки.
 
 ## Аналитическая модель
 
+Канонические grains, stable placement dimensions, compact rollups, TTL, KPI
+difficulty bands и post-find/dislike/motion states вынесены в
+[measurement-and-state-contract.md](measurement-and-state-contract.md). Ни один
+raw event list ниже не означает per-event permanent storage.
+
 ### Primary outcome
 
 **Incremental meaningful campaign action rate (7d):** разница treatment и holdout

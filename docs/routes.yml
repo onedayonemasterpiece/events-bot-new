@@ -267,6 +267,9 @@ features:
     product_analysis: docs/features/static-site-easter-eggs/product-analysis.md
     external_research_brief: docs/features/static-site-easter-eggs/external-research-brief.md
     gemini_consultation: docs/features/static-site-easter-eggs/gemini-consultation-2026-07-21.md
+    measurement_and_state_contract: docs/features/static-site-easter-eggs/measurement-and-state-contract.md
+    gemini_kpi_state_followup_brief: docs/features/static-site-easter-eggs/gemini-kpi-state-followup-brief-2026-07-21.md
+    gemini_kpi_state_consultation: docs/features/static-site-easter-eggs/gemini-kpi-state-consultation-2026-07-21.md
     related_promo_campaigns: docs/features/promo-campaigns/README.md
     related_my_events: docs/features/event-favorites-calendar/README.md
     implementation: absent

@@ -104,6 +104,22 @@ holdout при non-inferior time-to-value и основных CTA.
 - если runtime/profile/analytics недоступны, основной static site остаётся
   полностью полезным, а слой пасхалок fail-closed исчезает.
 
+### Стабильное назначение и найденное состояние
+
+Пасхалка не «убегает»: после первого назначения её логический
+`placement_bundle_id + placement_version` и заранее заданные anchors для
+mobile/desktop/accessibility закреплены за пользователем/устройством до find или
+expiry. Reload, новый визит, hint, dislike, card reorder и смена viewport не дают
+reroll. Только подтверждённый safety/legal/technical blocker разрешает audited
+relocation в заранее проверенный equivalent slot.
+
+После find объект остаётся в том же месте как спокойный static marker
+**«Найдено — открыть историю»** до expiry. Он больше не pulse/shimmer и не
+собирается повторно; пользователь может явно скрыть found markers, не удаляя
+коллекцию. `dislike` записывает оценку и Undo, но не меняет progress, место или
+eligibility. Полный data/KPI/state/motion contract:
+[measurement-and-state-contract.md](measurement-and-state-contract.md).
+
 ### Одинаковое место или персональное
 
 В треде сообщения `518–519` добавили два требования: операторская страница всех
@@ -291,6 +307,9 @@ Stage 13 остаётся post-release и не блокирует первую �
 ## Связанные документы
 
 - [Критическая продуктовая аналитика](product-analysis.md)
+- [Экологичная аналитика, KPI и state/motion contract](measurement-and-state-contract.md)
+- [Focused Gemini KPI/state prompt](gemini-kpi-state-followup-brief-2026-07-21.md)
+- [Gemini Pro KPI/state consultation и disposition](gemini-kpi-state-consultation-2026-07-21.md)
 - [Промпт для внешнего deep research](external-research-brief.md)
 - [Gemini Pro consultation и disposition](gemini-consultation-2026-07-21.md)
 - [Promo campaigns](../promo-campaigns/README.md)
