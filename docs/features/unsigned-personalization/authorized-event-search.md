@@ -126,6 +126,10 @@ cannot mutate the current button. The submit remains a button with
 removing state feedback. Search/auth/quota explanations remain inline because
 they are contextual form state, not transient global toasts.
 
+The editorial fill-only examples include the compact intent `послушать хор`.
+Like the other rows marked `пример`, it only fills the input and never submits
+the query without an explicit press on `Искать`.
+
 Mobile chrome and transient-message ownership are defined once in
 [`mobile-shell.md`](../static-site-pages/mobile-shell.md); admission/audience
 queries and the explicit decision not to ship an unverified child medallion are

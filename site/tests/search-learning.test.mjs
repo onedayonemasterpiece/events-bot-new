@@ -24,6 +24,7 @@ test('materialized collections are real static links and examples are fill-only 
 test('technical seed-tag copy is removed from the Search page', () => {
   assert.match(searchPage, /<SearchCollectionLinks\s*\/>/u);
   assert.doesNotMatch(searchPage, /Поисковые теги|seed-теги|могут стать страницами/u);
+  assert.match(collections, /phrase: 'послушать хор'/u);
 });
 
 test('materialized collection routes use canonical large EventCard without bespoke result rows', () => {

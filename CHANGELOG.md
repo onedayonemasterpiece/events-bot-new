@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `послушать хор` to the editorial fill-only Search query examples.
 - Defined one mobile discovery shell for Search and materialized collections:
   shared header/drawer ownership, route-driven bottom navigation, safe-area
   tokens and a single header-attached transient toast region with a five-second

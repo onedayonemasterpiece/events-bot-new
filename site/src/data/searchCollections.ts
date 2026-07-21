@@ -47,6 +47,7 @@ export const materializedSearchCollections: MaterializedSearchCollection[] = [
 ];
 
 export const searchQueryExamples: SearchQueryExample[] = [
+  { kind: 'example', phrase: 'послушать хор', description: 'Пример короткого запроса по типу исполнения.' },
   { kind: 'example', phrase: 'концерт классической музыки вечером', description: 'Пример запроса с жанром и временем.' },
   { kind: 'example', phrase: 'куда сходить после работы', description: 'Пример запроса по жизненной ситуации.' },
   { kind: 'example', phrase: 'необычная экскурсия по городу', description: 'Пример запроса по формату и настроению.' },
