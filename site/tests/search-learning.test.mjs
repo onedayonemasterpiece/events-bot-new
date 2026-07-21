@@ -8,7 +8,7 @@ const learning = read('src/components/SearchCollectionLinks.astro');
 const collections = read('src/data/searchCollections.ts');
 const collectionPage = read('src/pages/podborki/[slug]/index.astro');
 const donor = read('src/components/AuthorizedEventSearch.astro');
-const bottomNav = read('src/components/MobileSearchBottomNav.astro');
+const bottomNav = read('src/components/MobileBottomNav.astro');
 const eventLayout = read('src/layouts/EventLayout.astro');
 
 test('materialized collections are real static links and examples are fill-only controls', () => {
@@ -84,10 +84,11 @@ test('ranked search cards reuse one-column donor media decisions without related
 });
 
 test('mobile Search fixes donor shell without rewriting its core', () => {
-  assert.match(searchPage, /<MobileSearchBottomNav\s*\/>/u);
-  assert.match(collectionPage, /<MobileSearchBottomNav\s*\/>/u);
-  assert.match(bottomNav, /aria-current="page"[\s\S]*Поиск/u);
-  assert.match(bottomNav, /body:has\(\.mobile-search-bottom-nav\) \.site-header \.site-nav \{ display: none; \}/u);
+  assert.match(searchPage, /<EventLayout[^>]*mobileSection="search"/u);
+  assert.match(collectionPage, /<EventLayout[^>]*mobileSection="search"/u);
+  assert.match(bottomNav, /aria-current=\{item\.key === current \? 'page' : undefined\}/u);
+  assert.match(eventLayout, /<MobileBottomNav current=\{mobileSection\} \/>/u);
+  assert.doesNotMatch(bottomNav, /body:has\(/u);
   assert.match(bottomNav, /PUBLIC_MOBILE_CALENDAR_BASE_URL/u);
   assert.match(bottomNav, /PUBLIC_MOBILE_SEARCH_BASE_URL/u);
   assert.doesNotMatch(bottomNav, /preview-20260721/u);

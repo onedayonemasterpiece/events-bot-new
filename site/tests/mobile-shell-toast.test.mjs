@@ -81,5 +81,6 @@ test('shared producers avoid duplicate keyboard and phone announcements', async 
   assert.match(layout, /showMobileActionToast\('Ссылка скопирована'/u);
   assert.match(layout, /showMobileActionToast\('Не удалось скопировать ссылку'/u);
   assert.match(layout, /shareStatusEpochs\.get\(button\) !== epoch/u);
+  assert.doesNotMatch(layout, /window as any/u, 'inline EventLayout runtime must stay browser-valid JavaScript');
   assert.doesNotMatch(layout, /authorized-search[^\n]+KenigEventsToast|KenigEventsToast[^\n]+authorized-search/u);
 });

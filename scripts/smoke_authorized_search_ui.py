@@ -122,6 +122,13 @@ def fake_search_response() -> dict[str, Any]:
             "href": "/sobytiya/arhitekturno-urbanisticheskaya-studiya-zanyatie-3-formiruem-kontseptsii-i-kaliningrad-6310/",
             "absolute_url": "https://kenigevents.ru/sobytiya/arhitekturno-urbanisticheskaya-studiya-zanyatie-3-formiruem-kontseptsii-i-kaliningrad-6310/",
             "event_type": "лекция",
+            "image_url": "https://static.kenigevents.ru/p/dh16/21/2111009450924c4948058765c7664636c636ccb3489bce9b46331e634e630c77.webp",
+            "image_alt": "Фотография события",
+            "image_text_mode": "visual_only",
+            "image_media_role": "unknown_document",
+            "image_width": 800,
+            "image_height": 534,
+            "focal_y": 0.5,
             "display_date": "2 июля",
             "display_time": "18:30",
             "display_date_time": "2 июля · 18:30",
@@ -445,11 +452,20 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(first_card).to_have_attribute("data-event-id", "6310")
             await expect(first_card).to_have_attribute("data-feed-card-variant", "split-actions")
             await expect(first_card).to_have_attribute("data-rank", "0")
+            await expect(first_card).to_have_attribute("data-card-media-presentation", "flow")
+            await expect(first_card).to_have_attribute("data-card-media-treatment", "visual-cover")
+            first_image = first_card.locator("[data-card-image]")
+            await expect(first_image).to_have_attribute("data-card-authoritative-fit", "cover")
+            if await first_image.evaluate("image => getComputedStyle(image).objectFit") != "cover":
+                raise AssertionError("runtime Search photo must use the donor cover treatment")
+            if await first_card.evaluate("card => Boolean(card.style.gridRow || card.style.gridColumn)"):
+                raise AssertionError("runtime Search flow card must not inherit related-grid placement")
             await expect(first_card.locator("[data-feedback-action='like']")).to_be_visible()
             await expect(first_card.locator("[data-native-share]")).to_be_visible()
             await expect(first_card.locator("[data-feedback-action='not_interested']")).to_be_visible()
             await expect(first_card.locator(".feedback-button--calendar")).to_be_visible()
-            await expect(page.get_by_text("Возможно, вам будет интересно")).to_be_hidden()
+            await expect(page.get_by_text("Возможно, вам будет интересно")).to_be_visible()
+            await expect(page.locator("[data-search-results] [data-event-card][data-event-id='5878']")).to_be_visible()
             await expect(page.locator("[data-search-more]").first).to_be_visible()
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
             await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")

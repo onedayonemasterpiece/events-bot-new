@@ -88,6 +88,29 @@ max height = 72px (две строки и controls)
 `56–72px` content area и не сдвигает карточки. Drawer open скрывает или
 приостанавливает toast, чтобы два слоя не конкурировали.
 
+### Toast runtime policy
+
+`EventLayout` монтирует ровно один `MobileToastRegion` сразу после header. Он
+принимает `window.KenigEventsToast.show(...)` и `kenigevents:toast`, показывает
+один toast, держит ограниченную FIFO-очередь и заменяет совпадающий
+`dedupeKey`, перезапуская его срок. Обычный `info/success` живёт **5 секунд**;
+ошибка или сообщение с действием остаётся до явного закрытия/действия. Таймер
+и подчёркивание приостанавливаются при удержании, focus, потере видимости и
+открытом drawer. Старый timer не может закрыть replacement.
+
+Нижняя линия начинается полной и правым краем отступает к левому
+(`transform-origin:left`, `scaleX(1→0)`), то есть визуально показывает остаток,
+а не «загрузку». При `prefers-reduced-motion` движение отключено, но линия и
+текст состояния остаются. Toast не получает autofocus; controls имеют минимум
+`44×44px`, polite/error announcements разделены и не дублируют уже озвученный
+inline status.
+
+В общий region перенесены существующие глобальные всплывающие сообщения
+keyboard actions, mobile share/copy и phone-copy. Search/auth/quota/progress,
+feedback сохранения, calendar state, consent, gallery counters, like animation
+и `Не интересно / Отменить` остаются inline/local: их исчезновение без
+контекста ухудшило бы управление или создало двойное screen-reader сообщение.
+
 ## Acceptance
 
 - один header/drawer DOM contract на Astro mobile surfaces;

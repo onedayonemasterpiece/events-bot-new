@@ -4479,7 +4479,7 @@ const visibleDrawerNavigation = DRAWER_NAVIGATION.filter((item) => item.key !== 
         const shareStatusEpochs = new WeakMap();
         function showMobileActionToast(message, type = 'success', dedupeKey = 'mobile-action', announce = true) {
           if (!window.matchMedia('(max-width: 759px)').matches || !message) return;
-          (window as any).KenigEventsToast?.show?.({ message, type, dedupeKey, announce });
+          window.KenigEventsToast?.show?.({ message, type, dedupeKey, announce });
         }
 
         function setNativeShareStatus(button, message = '', isBusy = false) {

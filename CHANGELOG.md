@@ -23,6 +23,11 @@
   one request-epoch-owned, monotonic backend NDJSON state machine with a
   separate accessible progressbar, stale-response protection and reduced-motion
   behavior.
+- Kept the shared mobile-toast producer valid inside EventLayout's inline
+  browser runtime; the generated Search page now initializes the canonical card
+  renderer instead of falling back to “cards temporarily unavailable”. The
+  authorized UI smoke now checks a real visual-image `cover` treatment and the
+  intentionally separate fallback-result section.
 
 - Hardened authorized event search occurrence collapse: reciprocal family DTOs
   are paginated only after collapse, deduplicated again after LLM reranking and
