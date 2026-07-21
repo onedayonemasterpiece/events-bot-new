@@ -9,11 +9,11 @@ Base: `origin/integration/mobile-v23-search-sticky-20260721`
 | ID | Status | Evidence |
 |---|---|---|
 | R01 | Done | Search runtime uses donor `9dced876ab4e8d2c69c79937d3b0186196c924db` through `packRelatedCardRows(..., { rowSize: 1, presentation: 'flow' })`; the snapshot carries semantic role, intrinsic geometry and focal Y; mocked authorized browser smoke checks a real photo is `cover` and no related-grid placement leaks into results. |
-| R02 | Done | Synthetic progress timers were removed. The request epoch owns one AbortController/reset; backend NDJSON stage/value can only advance; the separate ARIA progressbar is indeterminate before the first backend frame and determinate afterward. |
+| R02 | Done | Synthetic progress timers were removed. The request epoch owns one AbortController/reset; backend NDJSON stage/value can only advance; the separate ARIA progressbar is indeterminate before the first backend frame and determinate afterward. The generated-browser smoke injects out-of-order frames and covers success, a delayed second request across the prior reset window, terminal failure and successful retry. |
 | R03 | Done | One `MobileToastRegion` is mounted after the shared header. Global keyboard, share/copy and phone-copy producers use its bounded queue/dedupe/pause contract; info/success lasts 5s, error/action persists, and the terracotta underline retreats from right to left. Contextual Search/auth/quota and local transactional feedback stay inline. |
 | R04 | Done | Canonical product contract makes explicit free intent a hard constraint. Child/family admission requires evidence-backed LLM output; topic and age labels are insufficient, so a decorative child medallion is not shipped. A noindex combined collection remains a research materialization, not claimed production truth. |
 | R05 | Done | `EventLayout` owns the shared mobile header/drawer and bottom safe areas. Search and collection select exactly one `Поиск` item; event detail uses CTA bottom mode and has no global bottom nav. |
-| R06 | Done | Three design consultations were completed with Gemini 3.1 Pro (High), with model evidence saved. Final Pro acceptance is recorded in `gemini-pro-final-acceptance.md`; any Flash probes are explicitly invalid/supplementary and are not used as the gate. |
+| R06 | Done | Three design consultations were completed with Gemini 3.1 Pro (High), with model evidence saved. The first final pass returned `CONDITIONAL GO` only for toast/brand overlap. After the overhang fix was deployed, Gemini 3.1 Pro (High) returned final `GO` in `gemini-pro-final-recheck.md`; Flash probes remain invalid/supplementary and are not used as the gate. |
 | R07 | Done with noted legacy-gate limitation | Public noindex preview, build/static gates, focused browser tests, high-DPR Playwright and authorized Search smoke passed. The older full `check-browser-release-gate.mjs` stalled after specimen selection and was terminated; focused generated/browser gates covering the touched surfaces passed. |
 
 ## Public preview
@@ -33,7 +33,7 @@ Deployment was prefix-only. The stable production root and `/ics/*` were not rep
 - Browser release behavior unit tests: 10/10 passed.
 - Astro preview build: 386 pages generated.
 - Static preview check: 303 events, `strict_related=false`.
-- Mocked authorized Search browser smoke: 2 cards; first event 6310; one request; fallback section preserved; visual photo computed `object-fit: cover`; no grid placement.
+- Mocked authorized Search browser smoke: 2 cards; first event 6310; fallback section preserved; visual photo computed `object-fit: cover`; no grid placement. Four browser runs cover success/reset-race/error/retry; recorded progress was `[2,55,72,96,100]`, `[2,55,72,96,100]`, `[2,28]`, `[2,55,72,96,100]` with no rollback.
 - Public Playwright at 390x844, DPR 3:
   - Search: one shell/nav/current item/toast region, zero horizontal overflow;
   - toast countdown pauses and resumes;
@@ -55,7 +55,14 @@ Valid Gemini Pro-class consultation:
 - `gemini-pro-progress-toast-review.md`
 - `gemini-pro-free-header-review.md`
 - `gemini-pro-header-review.md`
-- `gemini-pro-final-acceptance.md`
-- matching `*-model-evidence.txt` / final model log
+- `gemini-pro-final-acceptance.md` (`CONDITIONAL GO`, blocker identified)
+- `gemini-pro-final-recheck.md` (final `GO`)
+- matching `*-model-evidence.txt` / final model logs
 
 The files `gemini-consultation*.md`, `gemini-progress-toast-review.md` and `gemini-final-flash-invalid.md` are supplementary/invalid lower-class probes and do not satisfy R06.
+
+## Handoff
+
+The annotated preview links were delivered to Telegram Saved Messages and
+verified as message `32524`; the redacted receipt is
+`artifacts/codex/mobile-v24-search-runtime-20260721/telegram-receipt.json`.

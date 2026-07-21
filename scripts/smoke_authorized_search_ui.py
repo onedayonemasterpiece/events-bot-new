@@ -313,6 +313,28 @@ async def run_smoke(args: argparse.Namespace) -> int:
             if dist.name.startswith("preview-"):
                 await page.route(f"https://static.kenigevents.ru/{dist.name}/**", route_static_cdn_assets)
 
+            await page.add_init_script(
+                """
+                (() => {
+                  window.__searchProgressAudit = [];
+                  const nativeSetAttribute = Element.prototype.setAttribute;
+                  const nativeRemoveAttribute = Element.prototype.removeAttribute;
+                  Element.prototype.setAttribute = function(name, value) {
+                    if (name === 'aria-valuenow' && this.matches?.('[data-search-progress]')) {
+                      window.__searchProgressAudit.push(Number(value));
+                    }
+                    return nativeSetAttribute.call(this, name, value);
+                  };
+                  Element.prototype.removeAttribute = function(name) {
+                    if (name === 'aria-valuenow' && this.matches?.('[data-search-progress]')) {
+                      window.__searchProgressAudit.push(null);
+                    }
+                    return nativeRemoveAttribute.call(this, name);
+                  };
+                })();
+                """
+            )
+
             async def route_supabase(route):
                 request = route.request
                 url = request.url
@@ -360,12 +382,29 @@ async def run_smoke(args: argparse.Namespace) -> int:
                             body=json.dumps(fake_search_response(), ensure_ascii=False),
                         )
                         return
-                    progress = [
-                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "accepted", "progress": 2, "label": "Запрос принят"},
-                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "embedding", "progress": 28, "label": "Понимаю смысл запроса"},
-                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "llm_verify", "progress": 72, "label": "Проверяю релевантность"},
-                        {"type": "result", "request_id": "00000000-0000-4000-8000-000000000001", "progress": 100, "label": "Готово", "data": fake_search_response()},
-                    ]
+                    call_number = len(calls)
+                    if call_number == 2:
+                        # Keep the second request alive beyond the first
+                        # request's 650ms completion-reset window.
+                        await asyncio.sleep(1.0)
+                    if call_number == 3:
+                        progress = [
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000003", "stage": "accepted", "progress": 2, "label": "Запрос принят"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000003", "stage": "embedding", "progress": 28, "label": "Понимаю смысл запроса"},
+                            {"type": "error", "request_id": "00000000-0000-4000-8000-000000000003", "status": 503, "error": "provider_unavailable", "message": "Поиск временно недоступен"},
+                        ]
+                    else:
+                        progress = [
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "accepted", "progress": 2, "label": "Запрос принят"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "vector_search", "progress": 55, "label": "Ищу события"},
+                            # Deliberately late/lower frames exercise both the
+                            # stage-rank and numeric monotonic guards.
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "validate", "progress": 10, "label": "Проверяю запрос"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "llm_verify", "progress": 72, "label": "Проверяю релевантность"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "vector_results", "progress": 62, "label": "Варианты найдены"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "finalize", "progress": 96, "label": "Собираю результат"},
+                            {"type": "result", "request_id": "00000000-0000-4000-8000-000000000001", "progress": 100, "label": "Готово", "data": fake_search_response()},
+                        ]
                     await route.fulfill(
                         status=200,
                         content_type="application/x-ndjson; charset=utf-8",
@@ -488,11 +527,54 @@ async def run_smoke(args: argparse.Namespace) -> int:
             if body.get("use_llm_verifier") is not True:
                 raise AssertionError(f"user-facing search must request bounded LLM verifier: {body}")
 
+            # Start another request before the first run's owned 650ms reset
+            # can fire. It must remain busy until its delayed response arrives.
+            await page.locator("[data-search-input]").first.fill("джаз на выходных")
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
+            await page.wait_for_timeout(750)
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
+            await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Ищу")
+            await expect(page.locator("[data-search-results]").first).to_be_visible(timeout=5000)
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
+
+            # A terminal stream error must return the control to an explicit
+            # retryable state; the next submit must recover normally.
+            await page.locator("[data-search-input]").first.fill("событие с временной ошибкой")
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-status][role='alert']").first).to_be_visible(timeout=5000)
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
+            await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")
+
+            await page.locator("[data-search-input]").first.fill("повторный поиск после ошибки")
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-results]").first).to_be_visible(timeout=5000)
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
+
+            progress_audit = await page.evaluate("() => window.__searchProgressAudit || []")
+            runs: list[list[int]] = []
+            current_run: list[int] = []
+            for value in progress_audit:
+                if value is None:
+                    if current_run:
+                        runs.append(current_run)
+                        current_run = []
+                else:
+                    current_run.append(int(value))
+            if current_run:
+                runs.append(current_run)
+            if len(runs) < 4:
+                raise AssertionError(f"expected progress evidence for success/race/error/retry runs: {runs}")
+            for run in runs:
+                if any(right < left for left, right in zip(run, run[1:])):
+                    raise AssertionError(f"search progress moved backward: {runs}")
+
             await browser.close()
     print(
         "authorized_search_ui_smoke=ok "
         f"dist={dist.name} cards={card_count} first_event=6310 "
-        f"scrolled_event={scrolled_event_id} scroll_y={scroll_y} request_calls={len(calls)}"
+        f"scrolled_event={scrolled_event_id} scroll_y={scroll_y} request_calls={len(calls)} "
+        f"progress_runs={runs}"
     )
     return 0
 
