@@ -1,0 +1,95 @@
+mode: read_only_parallel_then_serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/integration/mobile-v22-20260721
+base_branch: integration/mobile-v22-20260721
+integration_branch: integration/mobile-v23-search-sticky-20260721
+requirements:
+  R01: "Today: past events must visibly read as past through the established saturation/lightening treatment."
+  R02: "Orpheus: retain current/next dates in time block and restore the other-date block before the medallion."
+  R03: "Search: reuse the previously tested separate progress-button implementation."
+  R04: "Typical accepted searches link to static result pages and teach query formulation; research Pinterest references."
+  R05: "Search results reuse the established large cards; locate and prove the old tested Search donor before any implementation."
+  R06: "Redesign sticky date/event-count/city hierarchy highlighted in Telegram screenshot."
+  R07: "Treat Telegram image annotations as acceptance input."
+  R08: "Gemini 3.1 Pro High acts as critical consultant, product analyst, designer and final reviewer."
+global_constraints:
+  - "Mobile only."
+  - "No implementation before R05 donor is located and evidenced."
+  - "Do not rebuild accepted components from visual memory; reuse exact donor code/styles."
+  - "Research preview remains noindex until explicit production rollout."
+verification_owner: /root
+stop_conditions:
+  - "No proven old Search donor with its tests/public evidence."
+  - "Gemini Pro unavailable without approved Opus fallback."
+lanes:
+  - id: D01
+    role: planner
+    requirement_ids: [R03, R04, R05]
+    target: /root/v23_search_donor
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["all"]
+    expected_output: "exact old Search donor, progress button, large cards, auth and tests/public evidence"
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: D02
+    role: planner
+    requirement_ids: [R01, R02]
+    target: /root/v23_calendar_regressions
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["all"]
+    expected_output: "root causes and exact safe patches/tests for past-state and other-date block"
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: D03
+    role: planner
+    requirement_ids: [R06, R07]
+    target: /root/v23_sticky_header
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["all"]
+    expected_output: "measured current hierarchy failure and 2-3 safe layouts preserving brand safe space"
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: D04
+    role: planner
+    requirement_ids: [R04]
+    target: /root
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files:
+      - /home/dev/projects/pinterest-idea-library/
+    forbidden_files: ["repository source"]
+    expected_output: "Pinterest query funnel, self-reviewed board and shortlist"
+    verification_scope: inspection_only
+    effort: high
+    status: in_progress
+  - id: C01
+    role: reviewer
+    requirement_ids: [R08]
+    target: agy/gemini-3.1-pro-high
+    depends_on: [D01, D02, D03, D04]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["repository source"]
+    expected_output: "critical product/design decision and implementation gate"
+    verification_scope: inspection_only
+    effort: high
+    status: planned
