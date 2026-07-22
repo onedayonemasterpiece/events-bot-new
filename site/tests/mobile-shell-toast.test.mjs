@@ -6,10 +6,13 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('EventLayout is the single mobile shell owner with canonical route mapping', async () => {
   const layout = await read('src/layouts/EventLayout.astro');
+  const drawer = await read('src/components/Reference4MobileMenu.astro');
   const search = await read('src/pages/poisk/index.astro');
   const collection = await read('src/pages/podborki/[slug]/index.astro');
   assert.match(layout, /import MobileBottomNav/u);
   assert.match(layout, /import MobileToastRegion/u);
+  assert.match(layout, /import Reference4MobileMenu/u);
+  assert.match(layout, /<Reference4MobileMenu current=\{drawerCurrent\} discoveryBases=\{mobileDiscoveryBases\} \/>/u);
   assert.match(layout, /<\/header>\s*<MobileToastRegion\s*\/>/u, 'toast region must immediately follow the header');
   assert.match(layout, /resolvedMobileBottomMode === 'nav' && <MobileBottomNav current=\{mobileSection\} \/>/u);
   assert.match(layout, /\/(?:\\\/)?\(\?:poisk\|podborki\)/u);
@@ -19,6 +22,15 @@ test('EventLayout is the single mobile shell owner with canonical route mapping'
   assert.match(collection, /mobileSection="search"/u);
   assert.doesNotMatch(search, /MobileSearchBottomNav|MobileBottomNav/u);
   assert.doesNotMatch(collection, /MobileSearchBottomNav|MobileBottomNav/u);
+  assert.match(drawer, /data-reference4-fullscreen/u);
+  assert.match(drawer, /--shell-tag-w:120px; --shell-tag-h:84px/u);
+  assert.match(drawer, /transform:translate3d\(0,-100%,0\)/u);
+  assert.match(drawer, /height:100%!important/u);
+  assert.match(drawer, /backdrop-filter:blur\(22px\) saturate\(\.96\) brightness\(\.84\)/u);
+  assert.match(drawer, /html\.shell-menu-open \.mobile-bottom-nav/u);
+  assert.match(drawer, /data-service-share-root/u);
+  assert.match(drawer, /hydrateServiceShareActions/u);
+  assert.match(drawer, /Бесплатно[\s\S]*Детям[\s\S]*Выставки[\s\S]*Фестивали[\s\S]*Популярное[\s\S]*О сервисе[\s\S]*Поиск[\s\S]*Для меня/u);
 });
 
 test('shared bottom nav has one prop-owned current item and no scroll or :has ownership', async () => {

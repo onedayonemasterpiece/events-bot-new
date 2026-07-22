@@ -846,3 +846,59 @@ The post-fix scan covers 37 active geometric intersections and resolves the
 overlap point to the summary in every case. Gemini 3.1 Pro passed sticky
 overlap, pointer target, z-order, open/close motion, service Share and all
 routes, returning `SHIP research preview`.
+
+## Astro integration and unified Search/Calendar preview, v14, 2026-07-22
+
+The first large-card Search preview regressed visually even though its Search
+runtime was correct: `AuthorizedEventSearch` was mounted inside the legacy
+mobile portion of `EventLayout`, while the accepted reference-4 v13 shell
+existed only in a Python-generated lab. Navigating from Search therefore also
+opened legacy same-prefix Calendar/Popular pages. This was an integration
+failure, not a reason to redesign Search or the menu.
+
+`site/src/components/Reference4MobileMenu.astro` is now the reusable Astro
+owner of the accepted v13 shell. `EventLayout` mounts it once and keeps the
+existing desktop header unchanged. The port preserves the accepted contracts:
+
+- closed leather tag `x=12, y=0, 120×84` with live endorsement and canonical
+  wide-o SVG wordmark;
+- one full-viewport glass plane, with the tag moving as part of the same
+  parent and the leather close control at the upper-right;
+- complete factual menu/date/account/favorite/service-share IA and the same
+  Phosphor Thin asset set;
+- panel `0..visual viewport`, no horizontal overflow, internal scroll only
+  below the fitted height, settled clipping and body overscroll lock;
+- bottom dock hidden/inert while the plane is open;
+- stack order `sticky shelves < closed shell < dock < open shell`;
+- existing service-share controller and versioned service card, not a local
+  page/event-image share fork;
+- legacy desktop-style `SiteFooter` hidden only on mobile nav surfaces; desktop,
+  detail CTA surfaces and institutional layouts keep their existing footer.
+
+The noindex phone-review build is composed by
+`scripts/assemble_mobile_search_calendar_preview.py`. It is explicitly an
+assembly step, not another renderer: Astro continues to own the functional
+Search page and canonical `EventCard`; accepted v23 donor HTML continues to own
+calendar rails, crop, gestures, medallions and date navigation. The assembler
+transplants the exact v13 shell into donor date pages under the same build
+prefix so dock/menu transitions never fall back to old templates. It retains
+Astro generated labs and event pages so `check:preview` remains a valid gate.
+
+Acceptance for build
+`preview-20260722-mobile-search-unified-shell-v26`:
+
+- focused mobile-shell/Search tests: `16/16`;
+- Astro preview build and generated-output `check:preview`: pass (`303` events);
+- mocked authorized browser smoke: `2` canonical large cards, initial skeleton,
+  exact/feedback/discovery order and monotonic progress runs
+  `[2,55,72,96,100]`, `[2,55,72,96,100]`, `[2,28]`,
+  `[2,55,72,96,100]`;
+- local Playwright geometry at `320×700` and `390×844`: exact tag/panel bounds,
+  Share visible, dock hidden, horizontal overflow `0`;
+- Search, Today, Tomorrow, Weekend, Popular, Personal and dated continuation
+  routes return HTTP `200` within one prefix.
+
+Gemini 3.1 Pro (High) reviewed the root-cause fix rather than proposing a new
+IA and returned **GO**, provided the exact v13 geometry, full IA, Search runtime,
+mobile/desktop isolation and footer policy remain invariant. Review artifact:
+`artifacts/codex/mobile-search-unified-shell-v26-20260722/gemini-shell-review.md`.

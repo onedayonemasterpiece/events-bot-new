@@ -78,6 +78,14 @@
 
 ### Fixed
 
+- Fixed the mobile Search shell regression: the accepted reference-4 v13
+  leather/glass navigation is now a reusable Astro component owned by
+  `EventLayout`, rather than a disconnected Python-only lab. The real Search
+  runtime keeps its large canonical cards, skeleton and in-button progress;
+  the legacy desktop footer is suppressed on mobile navigation surfaces, and
+  the unified review assembly reuses the accepted v23 Calendar/Popular donor
+  instead of routing phone navigation back to old Astro listings.
+
 - Restored canonical large `split-actions` cards in mobile Search and an
   immediate matching card skeleton while data is fetched. Provisional vector
   candidates no longer replace the skeleton or reshuffle the page, generic

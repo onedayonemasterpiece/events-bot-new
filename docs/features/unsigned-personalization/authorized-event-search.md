@@ -173,6 +173,17 @@ and may continue into honest discovery. Generic `fallback_items` are never
 called personalized: `По вашим интересам` is reserved for a separately sourced
 personal-feed response whose mode actually confirms personalization.
 
+### v26 unified mobile-shell integration
+
+The v25 Search sequence and card renderer remain unchanged. The correction is
+outside Search: `EventLayout` now mounts the accepted reference-4 v13 mobile
+menu as `Reference4MobileMenu.astro`, suppresses the legacy desktop footer on
+mobile navigation surfaces, and composes the review prefix with the accepted
+v23 Calendar/Popular donor. This prevents a functional Search page from
+visually reverting as soon as the user opens the header or follows the bottom
+dock. Canonical geometry, routes and assembly/gate evidence are documented in
+[`mobile-shell.md`](../static-site-pages/mobile-shell.md#astro-integration-and-unified-searchcalendar-preview-v14-2026-07-22).
+
 ## Search feedback and public tag candidates
 
 The dedicated `/poisk/` page now exposes seed query chips and, after enough

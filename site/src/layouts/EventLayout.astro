@@ -4,9 +4,9 @@ import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import MobileBottomNav, { type MobileSection } from '../components/MobileBottomNav.astro';
 import MobileToastRegion from '../components/MobileToastRegion.astro';
+import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
-import { mobileDiscoveryHref } from '../lib/mobileDiscoveryRoutes';
 import type { PreviewEvent } from '../lib/types';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular' | 'clubs';
@@ -48,7 +48,7 @@ const derivedMobileSection: MobileSection = heroChrome === 'immersive'
 const mobileSection = explicitMobileSection === undefined ? derivedMobileSection : explicitMobileSection;
 const resolvedMobileTopMode: MobileTopMode = mobileTopMode || (heroChrome === 'immersive' ? 'immersive' : mobileSection === 'dates' ? 'contextual' : 'standard');
 const resolvedMobileBottomMode: MobileBottomMode = mobileBottomMode || (resolvedMobileTopMode === 'immersive' ? 'cta' : mobileSection === null ? 'none' : 'nav');
-const bodyClass = resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive' : undefined;
+const bodyClass = ['mobile-shell-reference4', resolvedMobileTopMode === 'immersive' ? 'hero-chrome-immersive' : null].filter(Boolean).join(' ');
 const personalizationSupabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const personalizationSupabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const personalFeedRpcName = import.meta.env.PUBLIC_PERSONAL_FEED_RPC_NAME || 'get_listing_personal_feed_v1';
@@ -127,14 +127,6 @@ const HEADER_NAVIGATION = [
 ] as const;
 const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED);
 const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : mobileSection === 'personal' ? 'personal' : mobileSection === 'afisha' ? 'all' : null);
-const DRAWER_NAVIGATION = [
-  ...HEADER_NAVIGATION,
-  { key: 'search', label: 'Поиск', href: '/poisk/' },
-  { key: 'personal', label: 'Для меня', href: '/dlya-menya/' },
-  { key: 'partners', label: 'Инфопартнёры', href: '/partners/' },
-  { key: 'all', label: 'Все анонсы', href: '/' },
-] as const;
-const visibleDrawerNavigation = DRAWER_NAVIGATION.filter((item) => item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED);
 ---
 <!doctype html>
 <html lang="ru">
@@ -2329,20 +2321,7 @@ const visibleDrawerNavigation = DRAWER_NAVIGATION.filter((item) => item.key !== 
         <a class="site-header__brand-tag" href={siteHomeHref()} aria-label="Полюбить Калининград Анонсы — на главную">
           <AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" />
         </a>
-        <details class="mobile-discovery-menu" data-mobile-discovery-menu>
-          <summary class="mobile-discovery-menu__summary" aria-label="Открыть навигацию афиши">
-            <AnnouncementsLockup variant="mobile" class="mobile-discovery-menu__lockup" />
-          </summary>
-          <div class="mobile-discovery-menu__panel" aria-label="Дополнительная навигация афиши">
-            <nav class="mobile-discovery-menu__nav" aria-label="Быстрая навигация по афише">
-              <div class="mobile-discovery-menu__links">
-                {visibleDrawerNavigation.map((item) => (
-                  <a href={mobileDiscoveryHref(item.href, mobileDiscoveryBases, BASE_PATH)} aria-current={item.key === drawerCurrent ? 'page' : undefined}>{item.label}</a>
-                ))}
-              </div>
-            </nav>
-          </div>
-        </details>
+        <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} />
         <nav class="site-nav" aria-label="Основная навигация">
           {visibleHeaderNavigation.map((item) => (
             <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined}>{item.label}</a>
@@ -4947,6 +4926,7 @@ const visibleDrawerNavigation = DRAWER_NAVIGATION.filter((item) => item.key !== 
             if (!menu.contains(event.target)) closeMenu();
           });
           document.addEventListener('scroll', () => {
+            if (menu.hasAttribute('data-reference4-fullscreen')) return;
             if (!menu.hasAttribute('open')) return;
             if (Math.abs((window.scrollY || 0) - openedAtY) > 24) closeMenu();
           }, { passive: true });

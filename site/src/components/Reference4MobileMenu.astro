@@ -1,0 +1,333 @@
+---
+import AnnouncementsWordmark from './brand/AnnouncementsWordmark.astro';
+import { BASE_PATH, siteHomeHref, withBase } from '../lib/events';
+import { mobileDiscoveryHref, type MobileDiscoveryBases } from '../lib/mobileDiscoveryRoutes';
+
+interface Props {
+  current?: string | null;
+  discoveryBases?: MobileDiscoveryBases;
+}
+
+const { current = null, discoveryBases = {} } = Astro.props;
+const route = (path: string) => mobileDiscoveryHref(path, discoveryBases, BASE_PATH);
+const iconRoot = withBase('/assets/icons/reference4-v8');
+const icon = (name: string) => `${iconRoot}/${name}`;
+const searchHref = (query: string) => `${route('/poisk/')}?q=${encodeURIComponent(query)}`;
+const isCurrent = (...keys: string[]) => keys.includes(String(current || ''));
+const serviceShareManifest = withBase('/service-share/current/manifest.json');
+---
+
+<details class="mobile-discovery-menu mobile-discovery-menu--reference4" data-mobile-discovery-menu data-reference4-fullscreen>
+  <summary class="brand-tag mobile-discovery-menu__summary" style={`--reference4-tag:url('${withBase('/assets/ui/mobile-head-skinny-leather-3x.webp')}')`} aria-label="Открыть навигацию афиши" aria-expanded="false">
+    <span class="brand-tag__endorsement">Полюбить<br />Калининград</span>
+    <AnnouncementsWordmark class="brand-tag__wordmark" />
+  </summary>
+  <div class="mobile-discovery-menu__panel" aria-label="Меню и действия афиши">
+    <div class="reference4-menu" aria-label="Глобальная навигация">
+      <button class="reference4-menu__close" type="button" aria-label="Закрыть навигацию" data-reference4-close>
+        <img src={withBase('/assets/ui/reference4-leather-close-v8.webp')} width="333" height="332" alt="" />
+      </button>
+
+      <a class="reference4-menu__brand" href={siteHomeHref()} aria-label="Главная — Полюбить Калининград, Анонсы" aria-current={isCurrent('all', 'home') ? 'page' : undefined}>
+        <span class="reference4-menu__endorsement">Полюбить<br />Калининград</span>
+        <AnnouncementsWordmark class="reference4-menu__wordmark" />
+      </a>
+
+      <nav class="reference4-menu__dates" aria-label="Быстрый выбор даты">
+        <a href={route('/segodnya/')} aria-current={isCurrent('today') ? 'page' : undefined}>Сегодня</a>
+        <a href={route('/zavtra/')} aria-current={isCurrent('tomorrow') ? 'page' : undefined}>Завтра</a>
+        <a href={route('/vyhodnye/')} aria-current={isCurrent('weekend') ? 'page' : undefined}>Выходные</a>
+      </nav>
+
+      <div class="reference4-menu__list" data-reference4-list>
+        <nav class="reference4-menu__list-plane is-active" aria-label="Разделы афиши" data-reference4-main>
+          <a class="reference4-menu__row" href={searchHref('бесплатные события')}>
+            <span class="reference4-icon reference4-icon--free" aria-hidden="true">0&#x200A;₽</span><span>Бесплатно</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href={searchHref('события для детей')}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('baby-thin.svg')}')`}></span></span><span>Детям</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href={route('/vystavki/')} aria-current={isCurrent('exhibitions') ? 'page' : undefined}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('palette-thin.svg')}')`}></span></span><span>Выставки</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href={searchHref('фестивали')}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('buildings-thin.svg')}')`}></span></span><span>Фестивали</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href={route('/populyarnoe/')} aria-current={isCurrent('popular', 'afisha') ? 'page' : undefined}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('popular-trend-up-thin.svg')}')`}></span></span><span>Популярное</span><i aria-hidden="true"></i>
+          </a>
+          <button class="reference4-menu__row reference4-menu__row--service" type="button" data-reference4-service-open aria-expanded="false">
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('handshake-thin.svg')}')`}></span></span><span>О сервисе</span><i aria-hidden="true"></i>
+          </button>
+          <a class="reference4-menu__row" href={route('/poisk/')} aria-current={isCurrent('search') ? 'page' : undefined}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('search-thin.svg')}')`}></span></span><span>Поиск</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href={route('/dlya-menya/')} aria-current={isCurrent('personal') ? 'page' : undefined}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('user-focus-thin.svg')}')`}></span></span><span>Для меня</span><i aria-hidden="true"></i>
+          </a>
+        </nav>
+
+        <nav class="reference4-menu__list-plane" aria-label="О сервисе" data-reference4-service aria-hidden="true">
+          <button class="reference4-menu__row reference4-menu__row--back" type="button" data-reference4-service-back>
+            <span class="reference4-menu__back-icon" aria-hidden="true"></span><span>Назад к афише</span>
+          </button>
+          <a class="reference4-menu__row" href={route('/partners/')} aria-current={isCurrent('partners') ? 'page' : undefined}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('handshake-thin.svg')}')`}></span></span><span>Инфопартнёры</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href={route('/partnerstvo/')}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('handshake-thin.svg')}')`}></span></span><span>Информационное партнёрство</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href="mailto:info@kenigevents.ru?subject=Правообладателям">
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('handshake-thin.svg')}')`}></span></span><span>Правообладателям</span><i aria-hidden="true"></i>
+          </a>
+        </nav>
+      </div>
+
+      <section
+        class="reference4-menu__utility"
+        aria-label="Аккаунт и сервис"
+        data-service-share-root
+        data-service-share-surface="menu"
+        data-service-share-desktop-mode="d0"
+        data-service-share-manifest-url={serviceShareManifest}
+        data-service-share-canonical-url="https://kenigevents.ru/"
+        data-nosnippet
+      >
+        <div class="reference4-menu__account-row">
+          <a href={`${route('/poisk/')}#poisk`}>Войти</a>
+          <a href={`${route('/dlya-menya/')}#izbrannoe`} aria-current={isCurrent('favorites') ? 'page' : undefined}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('heart-thin.svg')}')`}></span></span><span>Избранное</span>
+          </a>
+        </div>
+        <button
+          class="reference4-menu__share"
+          type="button"
+          data-service-share-button
+          data-service-share-intent="mobile"
+          aria-label="Поделиться анонсами KenigEvents"
+          aria-describedby="reference4-service-share-status"
+          aria-busy="false"
+        ><span>Поделиться</span><span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('share-network-thin.svg')}')`}></span></span></button>
+        <span id="reference4-service-share-status" class="sr-only" data-service-share-status role="status" aria-live="polite" aria-atomic="true"></span>
+        <a class="sr-only" data-service-share-fallback href="https://kenigevents.ru/" hidden>https://kenigevents.ru/</a>
+      </section>
+    </div>
+  </div>
+</details>
+
+<style is:global>
+  @media (max-width:759px) {
+    body.mobile-shell-reference4 .site-header {
+      position:fixed; inset:0 0 auto; z-index:39; height:0; padding:0!important;
+      border:0; background:transparent; box-shadow:none; pointer-events:none;
+    }
+    body.mobile-shell-reference4 .site-header__inner {
+      width:100%!important; height:0!important; min-height:0!important; margin:0!important;
+      display:block!important; pointer-events:none;
+    }
+    body.mobile-shell-reference4[data-mobile-bottom-mode="nav"] > main { padding-top:84px; }
+    body.mobile-shell-reference4[data-mobile-bottom-mode="nav"] .site-footer { display:none!important; }
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4 {
+      --drawer-ease:cubic-bezier(.22,.86,.32,1); --shell-tag-w:120px; --shell-tag-h:84px;
+      position:fixed!important; inset:0!important; z-index:41!important; display:block!important;
+      width:100%!important; height:auto!important; overflow:visible; color:#241b16;
+      pointer-events:none; transform:translate3d(0,-100%,0)!important;
+      transition:transform 320ms var(--drawer-ease)!important; will-change:transform;
+      overscroll-behavior:none;
+    }
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4[open] {
+      z-index:60!important; overflow:visible; pointer-events:auto;
+      transform:translate3d(0,0,0)!important;
+    }
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4[open].is-open-settled { overflow:clip; }
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4.is-closing {
+      transform:translate3d(0,-100%,0)!important;
+    }
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4 > .mobile-discovery-menu__summary {
+      position:absolute!important; left:max(12px,env(safe-area-inset-left))!important; top:100%!important;
+      z-index:3!important; box-sizing:border-box!important; width:var(--shell-tag-w)!important;
+      height:var(--shell-tag-h)!important; min-height:0!important; display:flex!important;
+      flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:4px; overflow:hidden;
+      padding:0 0 12px 14px!important; border:0!important; border-radius:0!important;
+      background:transparent var(--reference4-tag) center/100% 100% no-repeat!important;
+      color:#fffaf4; box-shadow:none!important;
+      filter:drop-shadow(0 8px 8px rgba(52,25,16,.22)) drop-shadow(0 15px 20px rgba(52,25,16,.14));
+      list-style:none; cursor:pointer; pointer-events:auto; touch-action:manipulation;
+    }
+    body.mobile-shell-reference4 .mobile-discovery-menu__summary::-webkit-details-marker { display:none; }
+    body.mobile-shell-reference4 .mobile-discovery-menu__summary::marker { content:""; }
+    body.mobile-shell-reference4 .brand-tag__endorsement {
+      align-self:flex-start; margin-left:-1px; color:#fffaf4; font-size:7.5px; line-height:8px;
+      font-weight:750; letter-spacing:.075em; text-transform:uppercase;
+      text-shadow:0 1px 1.5px rgba(60,20,10,.38),0 0 1px rgba(60,20,10,.22);
+    }
+    body.mobile-shell-reference4 .brand-tag__wordmark {
+      display:block; align-self:flex-start; width:96px; height:auto; color:#fff;
+      filter:drop-shadow(0 1px 1px rgba(60,20,10,.34));
+    }
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4 > .mobile-discovery-menu__panel {
+      position:absolute!important; inset:0!important; z-index:1!important; box-sizing:border-box;
+      display:block!important; width:100%!important; height:100%!important; min-height:0!important;
+      padding:env(safe-area-inset-top) 0 0!important; overflow-x:hidden; overflow-y:auto;
+      overscroll-behavior:none; -webkit-overflow-scrolling:touch; touch-action:none;
+      border:0!important; border-radius:0!important; color:#241b16;
+      background:radial-gradient(62% 30% at 18% 7%,rgba(160,78,45,.18),transparent 70%),linear-gradient(180deg,rgba(70,36,25,.15) 0,rgba(227,216,207,.14) 32%,rgba(241,235,228,.18) 100%)!important;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.56),0 20px 46px rgba(46,25,16,.24)!important;
+      backdrop-filter:blur(22px) saturate(.96) brightness(.84); -webkit-backdrop-filter:blur(22px) saturate(.96) brightness(.84);
+      visibility:hidden; pointer-events:none; transition:visibility 0s linear 320ms!important;
+    }
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4[open] > .mobile-discovery-menu__panel {
+      visibility:visible; pointer-events:auto; transition-delay:0s!important;
+    }
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4.is-closing > .mobile-discovery-menu__panel {
+      visibility:visible; pointer-events:none;
+    }
+    body.mobile-shell-reference4 .mobile-discovery-menu__panel.is-scrollable { touch-action:pan-y; }
+    .reference4-menu { box-sizing:border-box; position:relative; z-index:1; width:100%; min-height:100%; padding:0 14px 16px; font-family:inherit; color:#241b16; }
+    .reference4-menu__brand { box-sizing:border-box; width:150px; height:112px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:5px; padding:32px 0 12px; color:#2b211c; text-decoration:none; filter:drop-shadow(0 1px 1px rgba(255,255,255,.28)); }
+    .reference4-menu__endorsement { font-size:9px; line-height:10px; font-weight:780; letter-spacing:.05em; text-transform:uppercase; white-space:normal; opacity:.92; }
+    .reference4-menu__wordmark { display:block; width:104px; height:auto; color:currentColor; }
+    .reference4-menu__brand:focus-visible { outline:3px solid #98401f; outline-offset:3px; border-radius:8px; }
+    .reference4-menu__close { position:absolute; z-index:5; top:0; right:14px; box-sizing:border-box; width:112px; height:112px; padding:0; display:block; overflow:hidden; border:0; border-radius:0 0 18px 18px; background:transparent; filter:drop-shadow(0 8px 9px rgba(42,22,15,.24)) drop-shadow(0 18px 28px rgba(42,22,15,.18)); cursor:pointer; touch-action:manipulation; }
+    .reference4-menu__close img { display:block; width:112px; height:112px; object-fit:fill; }
+    .reference4-menu__close:focus-visible { outline:3px solid #fffaf2; outline-offset:3px; }
+    .reference4-menu__dates { box-sizing:border-box; height:58px; display:grid; grid-template-columns:1fr 1fr 1.34fr; align-items:center; gap:8px; margin:6px 0 10px; }
+    .reference4-menu__dates a { box-sizing:border-box; min-width:0; height:46px; padding:0 11px; display:flex; align-items:center; justify-content:center; border:1.25px solid rgba(255,255,255,.58); border-radius:24px; background:rgba(255,255,255,.11); box-shadow:inset 0 1px 0 rgba(255,255,255,.42); color:#251c17; text-decoration:none; font-size:14px; line-height:18px; font-weight:720; white-space:nowrap; }
+    .reference4-menu__dates a[aria-current="page"] { border-color:rgba(255,226,213,.84); background:rgba(255,218,203,.64); color:#8d351c; box-shadow:0 0 18px rgba(255,187,158,.36),inset 0 1px 0 rgba(255,255,255,.78); }
+    .reference4-menu__dates a:focus-visible { outline:3px solid #98401f; outline-offset:2px; }
+    .reference4-menu__list { box-sizing:border-box; position:relative; height:416px; overflow:hidden; border:1px solid rgba(255,255,255,.56); border-radius:22px; background:linear-gradient(180deg,rgba(255,252,247,.48),rgba(255,252,247,.32)); box-shadow:0 13px 34px rgba(46,28,20,.14),inset 0 1px 0 rgba(255,255,255,.68); }
+    .reference4-menu__list-plane { position:absolute; inset:0; display:block; opacity:0; visibility:hidden; transform:translate3d(24px,0,0); transition:opacity 180ms ease,transform 240ms cubic-bezier(.22,.82,.22,1),visibility 0s linear 240ms; }
+    .reference4-menu__list-plane.is-active { opacity:1; visibility:visible; transform:translate3d(0,0,0); transition-delay:0s; }
+    .reference4-menu__list.is-service .reference4-menu__list-plane[data-reference4-main] { transform:translate3d(-24px,0,0); }
+    .reference4-menu__row { box-sizing:border-box; position:relative; width:100%; height:52px; display:grid; grid-template-columns:38px 1fr 18px; align-items:center; gap:9px; padding:0 16px; border:0; background:transparent; color:#261d18; text-decoration:none; text-align:left; font-family:inherit; font-size:19px; line-height:23px; font-weight:560; letter-spacing:-.015em; cursor:pointer; }
+    .reference4-menu__row + .reference4-menu__row::before { content:""; position:absolute; left:63px; right:16px; top:0; height:1px; background:rgba(114,93,80,.18); }
+    .reference4-menu__row[aria-current="page"] { background:rgba(255,236,225,.42); color:#8f351c; }
+    .reference4-menu__row > i { width:9px; height:9px; border-top:1.25px solid currentColor; border-right:1.25px solid currentColor; transform:rotate(45deg); justify-self:end; }
+    .reference4-menu__row:focus-visible { outline:3px solid #98401f; outline-offset:-3px; }
+    .reference4-menu__row--back { grid-template-columns:38px 1fr; padding-right:34px; font-weight:720; color:#793014; }
+    .reference4-menu__back-icon { justify-self:center; width:14px; height:14px; border-left:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); }
+    .reference4-icon { position:relative; width:29px; height:29px; display:block; flex:0 0 29px; color:currentColor; }
+    .reference4-icon > span { position:absolute; inset:0; display:block; background:currentColor; -webkit-mask:var(--reference4-icon) center/contain no-repeat; mask:var(--reference4-icon) center/contain no-repeat; }
+    .reference4-icon--free { box-sizing:border-box; width:30px; height:30px; border:1px solid currentColor; border-radius:50%; display:flex; align-items:center; justify-content:center; padding-top:.5px; font-size:14px; line-height:1; font-weight:400; letter-spacing:-.02em; white-space:nowrap; opacity:.78; }
+    .reference4-menu__utility { box-sizing:border-box; overflow:hidden; margin-top:12px; border:1px solid rgba(255,255,255,.56); border-radius:22px; background:rgba(255,252,247,.18); box-shadow:0 12px 30px rgba(46,28,20,.13),inset 0 1px 0 rgba(255,255,255,.62); }
+    .reference4-menu__account-row { box-sizing:border-box; height:56px; display:grid; grid-template-columns:.8fr 1.2fr; align-items:center; padding:6px 9px; border-bottom:1px solid rgba(114,93,80,.18); gap:8px; background:rgba(48,31,23,.075); }
+    .reference4-menu__account-row > * { box-sizing:border-box; height:44px; min-width:0; display:flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(255,255,255,.48); border-radius:23px; background:rgba(255,253,249,.58); box-shadow:0 5px 15px rgba(64,40,28,.08),inset 0 1px rgba(255,255,255,.64); color:#2a211c; text-decoration:none; font-family:inherit; font-size:14px; line-height:17px; font-weight:720; }
+    .reference4-menu__account-row > [aria-current="page"] { background:#3b2720; color:#fffaf2; }
+    .reference4-menu__account-row .reference4-icon { width:20px; height:20px; flex-basis:20px; }
+    .reference4-menu__share { box-sizing:border-box; width:100%; height:50px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; border:0; background:rgba(255,252,247,.58); color:#2a211c; font-family:inherit; font-size:16px; line-height:20px; font-weight:650; text-align:left; cursor:pointer; }
+    .reference4-menu__share .reference4-icon { width:25px; height:25px; flex-basis:25px; }
+    .reference4-menu__share:disabled { cursor:wait; opacity:.72; }
+    .reference4-menu__account-row > *:focus-visible,.reference4-menu__share:focus-visible { outline:3px solid #98401f; outline-offset:-3px; }
+    html.shell-menu-open, body.shell-menu-open { overflow:hidden; overscroll-behavior:none; }
+    html.shell-menu-open body.mobile-shell-reference4 .site-header { z-index:60!important; }
+    html.shell-menu-open .mobile-bottom-nav { opacity:0; visibility:hidden; pointer-events:none; transform:translate3d(0,100%,0); transition:opacity 140ms ease,transform 220ms cubic-bezier(.22,.82,.22,1),visibility 0s linear 220ms; }
+    @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+      body.mobile-shell-reference4 .mobile-discovery-menu--reference4 > .mobile-discovery-menu__panel { background:rgba(203,191,181,.94)!important; }
+      .reference4-menu__list { background:rgba(255,252,247,.90); }
+    }
+  }
+  @media (max-width:350px) {
+    .reference4-menu { padding-inline:10px; padding-bottom:12px; }
+    .reference4-menu__close { right:10px; width:104px; height:104px; }
+    .reference4-menu__close img { width:104px; height:104px; }
+    .reference4-menu__brand { width:140px; height:104px; padding:30px 0 11px; }
+    .reference4-menu__endorsement { font-size:8px; line-height:9px; }
+    .reference4-menu__wordmark { width:96px; }
+    .reference4-menu__dates { height:44px; margin:6px 0 8px; gap:6px; }
+    .reference4-menu__dates a { height:44px; padding-inline:8px; font-size:12.5px; }
+    .reference4-menu__list { height:384px; }
+    .reference4-menu__row { height:48px; grid-template-columns:34px 1fr 17px; gap:8px; padding-inline:14px; font-size:18px; }
+    .reference4-menu__row + .reference4-menu__row::before { left:56px; right:14px; }
+    .reference4-menu__row--back { grid-template-columns:34px 1fr; }
+    .reference4-icon--free { font-size:13px; }
+    .reference4-menu__utility { margin-top:10px; }
+    .reference4-menu__account-row { height:52px; }
+    .reference4-menu__share { height:44px; }
+  }
+  @media (max-height:679px) and (max-width:759px) {
+    body.mobile-shell-reference4 .mobile-discovery-menu__panel { overflow-y:auto; }
+    .reference4-menu { padding-bottom:max(12px,env(safe-area-inset-bottom)); }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    body.mobile-shell-reference4 .mobile-discovery-menu--reference4,
+    .reference4-menu__list-plane,
+    html.shell-menu-open .mobile-bottom-nav { transition:none!important; }
+  }
+</style>
+
+<script>
+  import { hydrateServiceShareActions } from '../lib/service-share/controller.js';
+
+  const menu = document.querySelector('[data-mobile-discovery-menu][data-reference4-fullscreen]');
+  if (menu && menu.dataset.reference4Bound !== 'true') {
+    menu.dataset.reference4Bound = 'true';
+    const summary = menu.querySelector(':scope > summary');
+    const close = menu.querySelector('[data-reference4-close]');
+    const list = menu.querySelector('[data-reference4-list]');
+    const mainPlane = menu.querySelector('[data-reference4-main]');
+    const servicePlane = menu.querySelector('[data-reference4-service]');
+    const serviceOpen = menu.querySelector('[data-reference4-service-open]');
+    const serviceBack = menu.querySelector('[data-reference4-service-back]');
+    const panel = menu.querySelector('.mobile-discovery-menu__panel');
+    let settleTimer = 0;
+
+    const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const clearSettled = () => {
+      window.clearTimeout(settleTimer);
+      menu.classList.remove('is-open-settled');
+    };
+    const scheduleSettled = () => {
+      clearSettled();
+      const settle = () => {
+        if (menu.open && !menu.classList.contains('is-closing')) menu.classList.add('is-open-settled');
+      };
+      if (reducedMotion()) requestAnimationFrame(settle);
+      else settleTimer = window.setTimeout(settle, 360);
+    };
+    const syncScrollSurface = () => {
+      if (!panel) return;
+      panel.classList.toggle('is-scrollable', panel.scrollHeight > panel.clientHeight + 1);
+    };
+    const showService = (show) => {
+      list?.classList.toggle('is-service', show);
+      mainPlane?.classList.toggle('is-active', !show);
+      servicePlane?.classList.toggle('is-active', show);
+      mainPlane?.setAttribute('aria-hidden', show ? 'true' : 'false');
+      servicePlane?.setAttribute('aria-hidden', show ? 'false' : 'true');
+      serviceOpen?.setAttribute('aria-expanded', show ? 'true' : 'false');
+      requestAnimationFrame(() => (show ? serviceBack : serviceOpen)?.focus({ preventScroll: true }));
+    };
+    serviceOpen?.addEventListener('click', () => showService(true));
+    serviceBack?.addEventListener('click', () => showService(false));
+    close?.addEventListener('click', () => {
+      clearSettled();
+      showService(false);
+      summary?.click();
+      window.setTimeout(() => summary?.focus({ preventScroll: true }), reducedMotion() ? 0 : 360);
+    });
+    menu.addEventListener('toggle', () => {
+      const open = menu.open;
+      summary?.setAttribute('aria-label', open ? 'Закрыть навигацию афиши' : 'Открыть навигацию афиши');
+      summary?.setAttribute('aria-expanded', String(open));
+      document.documentElement.classList.toggle('shell-menu-open', open);
+      document.body.classList.toggle('shell-menu-open', open);
+      if (open) {
+        panel.scrollTop = 0;
+        scheduleSettled();
+        requestAnimationFrame(() => {
+          syncScrollSurface();
+          close?.focus({ preventScroll: true });
+        });
+      } else {
+        clearSettled();
+        showService(false);
+      }
+    });
+    new MutationObserver(() => {
+      if (menu.classList.contains('is-closing') && menu.classList.contains('is-open-settled')) clearSettled();
+    }).observe(menu, { attributes:true, attributeFilter:['class'] });
+    window.addEventListener('resize', syncScrollSurface, { passive:true });
+    window.visualViewport?.addEventListener('resize', syncScrollSurface, { passive:true });
+  }
+  hydrateServiceShareActions();
+</script>

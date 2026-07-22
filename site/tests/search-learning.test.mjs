@@ -10,6 +10,7 @@ const collectionPage = read('src/pages/podborki/[slug]/index.astro');
 const donor = read('src/components/AuthorizedEventSearch.astro');
 const bottomNav = read('src/components/MobileBottomNav.astro');
 const eventLayout = read('src/layouts/EventLayout.astro');
+const mobileMenu = read('src/components/Reference4MobileMenu.astro');
 
 test('materialized collections are real static links and examples are fill-only controls', () => {
   assert.match(learning, /href=\{withBase\(`\/podborki\/\$\{item\.slug\}\/`\)\}/u);
@@ -109,7 +110,9 @@ test('mobile Search fixes donor shell without rewriting its core', () => {
   assert.match(bottomNav, /PUBLIC_MOBILE_CALENDAR_BASE_URL/u);
   assert.match(bottomNav, /PUBLIC_MOBILE_SEARCH_BASE_URL/u);
   assert.match(bottomNav, /mobileDiscoveryHref/u);
-  assert.match(eventLayout, /mobileDiscoveryHref\(item\.href, mobileDiscoveryBases, BASE_PATH\)/u);
+  assert.match(eventLayout, /<Reference4MobileMenu current=\{drawerCurrent\} discoveryBases=\{mobileDiscoveryBases\} \/>/u);
+  assert.match(mobileMenu, /mobileDiscoveryHref\(path, discoveryBases, BASE_PATH\)/u);
+  assert.match(mobileMenu, /data-reference4-fullscreen/u);
   assert.doesNotMatch(bottomNav, /preview-20260721/u);
   assert.match(collections, /PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE/u);
   assert.match(collections, /getMaterializedSearchCollectionReferenceDate\(\)/u);
