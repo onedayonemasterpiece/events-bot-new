@@ -187,7 +187,7 @@ def fake_search_response() -> dict[str, Any]:
         },
         "items": [item],
         "fallback_items": [fallback],
-        "has_more": True,
+        "has_more": False,
         "next_offset": 12,
         "retrieved_count": 12,
         "llm_verifier": {"requested": True, "used": True, "status": "ok"},
@@ -359,7 +359,7 @@ async def run_smoke(args: argparse.Namespace) -> int:
                         body=json.dumps(fake_user(), ensure_ascii=False),
                     )
                     return
-                if url.endswith("/rest/v1/rpc/get_event_search_quota_v1"):
+                if url.endswith("/rest/v1/rpc/get_event_search_quota_v1") or url.endswith("/rest/v1/rpc/get_event_search_quota_v2"):
                     await route.fulfill(
                         status=200,
                         content_type="application/json; charset=utf-8",
@@ -477,6 +477,15 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await page.locator("[data-search-input]").first.fill("урбанистика в четверг вечером по регистрации")
             await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
+            await expect(page.locator("[data-search-skeletons]").first).to_be_visible()
+            await expect(page.locator("[data-search-skeletons] .authorized-search__skeleton-media").first).to_be_visible()
+            if await page.locator("[data-search-results] [data-event-card]").count() != 0:
+                raise AssertionError("provisional vector phase must keep the large-card skeleton, not render unstable cards")
+            button_progress = await page.locator("[data-search-submit]").first.evaluate(
+                "button => getComputedStyle(button).getPropertyValue('--search-progress').trim()"
+            )
+            if button_progress in {"", "0%"}:
+                raise AssertionError(f"search progress must paint inside the submit button: {button_progress!r}")
 
             results = page.locator("[data-search-results]").first
             await expect(results).to_be_visible()
@@ -503,9 +512,14 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(first_card.locator("[data-native-share]")).to_be_visible()
             await expect(first_card.locator("[data-feedback-action='not_interested']")).to_be_visible()
             await expect(first_card.locator(".feedback-button--calendar")).to_be_visible()
-            await expect(page.get_by_text("Возможно, вам будет интересно")).to_be_visible()
+            await expect(page.get_by_text("Результаты поиска", exact=True)).to_be_visible()
+            await expect(page.get_by_text("Нашли то, что искали?", exact=True)).to_be_visible()
+            await expect(page.get_by_role("button", name="Да, нашёл")).to_be_visible()
+            await expect(page.get_by_role("button", name="Нет, не нашёл")).to_be_visible()
+            await expect(page.get_by_text("Ещё можно посмотреть", exact=True)).to_be_visible()
             await expect(page.locator("[data-search-results] [data-event-card][data-event-id='5878']")).to_be_visible()
-            await expect(page.locator("[data-search-more]").first).to_be_visible()
+            await expect(page.locator("[data-search-more]").first).to_be_hidden()
+            await expect(page.locator("[data-search-skeletons]").first).to_be_hidden()
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
             await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")
 

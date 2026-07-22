@@ -44,7 +44,7 @@ test('collection claims are explicit and derived from actual event fields', () =
   assert.doesNotMatch(collections, /similar|embedding|inference/iu);
 });
 
-test('search progress is a backend-owned adjacent progressbar, not a decorated submit button', () => {
+test('search progress stays backend-owned while its visible surface is the submit button', () => {
   assert.match(donor, /data-search-form/u);
   assert.match(donor, /data-search-submit/u);
   assert.match(donor, /data-search-progress role="progressbar"[^>]*aria-valuemin="0"[^>]*aria-valuemax="100"[^>]*hidden/u);
@@ -53,11 +53,25 @@ test('search progress is a backend-owned adjacent progressbar, not a decorated s
   assert.match(donor, /progress\.setAttribute\('aria-valuenow', String\(progressValue\)\)/u);
   assert.match(donor, /submit\.classList\.toggle\('is-loading', isLoading\)/u);
   assert.doesNotMatch(donor, /setSearchProgress\((?:28|55|74|92),/u);
-  assert.doesNotMatch(donor, /--search-progress/u);
-  assert.doesNotMatch(eventLayout, /authorized-search__submit::before/u);
-  assert.match(eventLayout, /\.authorized-search__progress[^}]*background:\s*#fff7ea/u);
+  assert.match(donor, /submit\.style\.setProperty\('--search-progress', `\$\{progressValue\}%`\)/u);
+  assert.match(eventLayout, /\.authorized-search__submit::before/u);
+  assert.match(eventLayout, /\.authorized-search__progress[^}]*clip-path:\s*inset\(50%\)/u, 'semantic progress remains available to assistive technology without a second visual bar');
   assert.match(eventLayout, /\.authorized-search__progress-bar[^}]*background:\s*#a54821/u);
   assert.doesNotMatch(eventLayout, /\.authorized-search__progress-bar[^}]*linear-gradient|\.authorized-search__progress-bar[^}]*15,118,110/su);
+});
+
+test('search keeps a canonical-card skeleton until final results and separates the endcap', () => {
+  assert.match(donor, /authorized-search__skeleton-media/u);
+  assert.match(eventLayout, /\.authorized-search__skeleton-media[^}]*aspect-ratio:\s*5\s*\/\s*4/u);
+  assert.match(donor, /setSearchLoading\(true, \{ showSkeleton: !append \}\)/u);
+  assert.match(donor, /if \(isVector\) \{[\s\S]*?results\.hidden = true;[\s\S]*?return \{ itemCount:/u);
+  assert.doesNotMatch(donor, /if \(isVector\) \{[\s\S]*?insertVectorPreviewHtml\(/u);
+  assert.match(donor, /appendSectionHeading\('Результаты поиска', 'exact'\)/u);
+  assert.match(donor, /if \(!data\?\.has_more\) \{[\s\S]*?appendFeedbackPrompt[\s\S]*?appendSectionHeading\('Ещё можно посмотреть', 'discovery'\)/u);
+  assert.match(donor, /Нашли то, что искали\?/u);
+  assert.match(donor, /data-search-feedback="matched">Да, нашёл/u);
+  assert.match(donor, /data-search-feedback="missed">Нет, не нашёл/u);
+  assert.match(donor, /По вашему запросу ничего не найдено/u);
 });
 
 test('search progress is monotonic, epoch guarded and reset only by its owning request', () => {

@@ -1,0 +1,27 @@
+task: mobile-search-unified-v14-20260722
+requirements:
+  R01: Search results use the canonical large mobile EventCard split-actions design.
+  R02: A card-shaped skeleton is visible for the whole data-fetch phase.
+  R03: Exact search results are named honestly and separated from discovery.
+  R04: Recommendations start only after exact results are exhausted and never claim personalization without a personal-feed source.
+  R05: The accepted found/not-found feedback controls persist matched/missed feedback at the exact-results endcap.
+  R06: Deliver a noindex public preview in the updated mobile shell and visually validate at phone widths.
+lanes:
+  - id: donor_cards
+    owner: /root/related_cards_donor
+    mode: read_only
+    owns: [R01, R02]
+  - id: search_history
+    owner: /root/search_history
+    mode: read_only
+    owns: [R03, R04, R05]
+  - id: implementation
+    owner: /root
+    mode: serial_write
+    owns: [R01, R02, R03, R04, R05, R06]
+    branch: integration/mobile-search-unified-v14-20260722
+integration_order: [donor_cards, search_history, implementation, gemini_product_review, browser_acceptance]
+rationale: >-
+  Discovery was independent and read-only. Runtime, shared card DOM, styles, tests,
+  documentation and preview shell are coupled, so all writes stay serial on the
+  integration branch to avoid competing edits to AuthorizedEventSearch and EventLayout.

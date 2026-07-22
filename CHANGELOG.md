@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added the mobile Search completion boundary: after all exact pages, users can
+  answer `Да, нашёл` / `Нет, не нашёл`, then continue into the separately named
+  `Ещё можно посмотреть` discovery block; an empty exact set is stated plainly.
+
 - Added a compact transparent 3x WebP leather backing for the mobile brand
   tag, cropped from the supplied `mobile-head-skinny.png` without anisotropic
   distortion. `Полюбить Калининград` remains live text and the wide-o
@@ -73,6 +77,12 @@
   noisy topic or age-rating inference.
 
 ### Fixed
+
+- Restored canonical large `split-actions` cards in mobile Search and an
+  immediate matching card skeleton while data is fetched. Provisional vector
+  candidates no longer replace the skeleton or reshuffle the page, generic
+  fallback no longer appears before exact pagination is exhausted, and the
+  monotonic visible progress is again contained inside the Search button.
 
 - Mobile menu reference-4 v13 raises the closed shell stacking context above
   sticky shelf/city headers (while keeping it below the bottom navigation), so

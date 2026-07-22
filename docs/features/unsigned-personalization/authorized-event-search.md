@@ -141,6 +141,38 @@ queries and the explicit decision not to ship an unverified child medallion are
 canonical in
 [`audience-admission-discovery.md`](audience-admission-discovery.md).
 
+### v25 large-card loading and result-endcap contract
+
+Mobile Search renders the same canonical large `EventCard` / `split-actions`
+component as `Смотрите дальше`; compact calendar rails and copied
+`.event-row` markup are not valid Search results. The shared mobile resolver
+remains authoritative: `visual_only` media reserves a horizontal `5:4` cover
+with focal protection, while OCR/document media keeps its intrinsic ratio and
+`contain` treatment.
+
+An initial request immediately shows a structural large-card skeleton: two
+full cards and a short preview of the third, each with a `5:4` media slot,
+text lines and split-action placeholders. Provisional vector candidates update
+only the backend-owned monotonic progress/status; they do not replace the
+skeleton or reshuffle temporary cards. The visible progress fill lives inside
+the submit button. A visually hidden adjacent `role=progressbar` retains the
+same monotonic values and labels for assistive technology, so there is still
+one progress owner and one visible progress surface.
+
+Result order is fixed:
+
+1. `Результаты поиска` and the exact `items` pages;
+2. while `has_more=true`, only `Показать ещё` is added — fallback is buffered;
+3. after exact exhaustion, `Нашли то, что искали?` with `Да, нашёл` →
+   `matched` and `Нет, не нашёл` → `missed`;
+4. only then `Ещё можно посмотреть` and deduplicated `fallback_items`.
+
+If exact `items` are empty, the endcap begins with
+`По вашему запросу ничего не найдено`, still records the explicit user verdict,
+and may continue into honest discovery. Generic `fallback_items` are never
+called personalized: `По вашим интересам` is reserved for a separately sourced
+personal-feed response whose mode actually confirms personalization.
+
 ## Search feedback and public tag candidates
 
 The dedicated `/poisk/` page now exposes seed query chips and, after enough
