@@ -1,0 +1,315 @@
+---
+import Icon from './Icon.astro';
+import organizerMedallions from '../data/organizerMedallions.json';
+import { withBase } from '../lib/events';
+import { resolveEventMedallions, type OrganizerMedallionDefinition } from '../lib/eventMedallions';
+import type { EventImageAsset } from '../lib/types';
+
+interface PrototypeSpec {
+  id: number;
+  bucket: 'new' | 'priority' | 'tail';
+  lifecycle: 'recent' | 'ending' | 'popular' | 'upcoming' | 'long';
+  status: string;
+  dateLabel: string;
+  category: string;
+  tags: string[];
+  reasons: string[];
+}
+
+interface Props {
+  item: PrototypeSpec & { event: any };
+  rowIndex: number;
+}
+
+const { item, rowIndex } = Astro.props;
+const { event } = item;
+const ratioTokens = { P: 4 / 5, S: 1, W: 4 / 3, L: 3 / 2 } as const;
+type RatioToken = keyof typeof ratioTokens;
+
+function safeObjectPosition(value: string | null | undefined) {
+  const raw = String(value || '').trim();
+  return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : null;
+}
+
+function russianShareNoun(value: number) {
+  const mod100 = value % 100;
+  const mod10 = value % 10;
+  if (mod100 >= 11 && mod100 <= 14) return 'репостов';
+  if (mod10 === 1) return 'репост';
+  if (mod10 >= 2 && mod10 <= 4) return 'репоста';
+  return 'репостов';
+}
+
+function objectPosition(asset: EventImageAsset) {
+  return safeObjectPosition(asset.recommended_object_position)
+    || (asset.focal_point ? `${Math.round(asset.focal_point.x * 100)}% ${Math.round(asset.focal_point.y * 100)}%` : null)
+    || safeObjectPosition(event.image_object_position)
+    || (event.focal_point ? `${Math.round(event.focal_point.x * 100)}% ${Math.round(event.focal_point.y * 100)}%` : null)
+    || '50% 50%';
+}
+
+function photoToken(sourceRatio: number): RatioToken {
+  // Use the nearest named listing token. The previous 1.20 L threshold sent
+  // ordinary 4:3 photographs into a 3:2 frame and removed roughly 11% of the
+  // source even though W was an exact match.
+  if (sourceRatio < Math.sqrt(ratioTokens.P * ratioTokens.S)) return 'P';
+  if (sourceRatio < Math.sqrt(ratioTokens.S * ratioTokens.W)) return 'S';
+  if (sourceRatio < Math.sqrt(ratioTokens.W * ratioTokens.L)) return 'W';
+  return 'L';
+}
+
+const seenSources = new Set<string>();
+const media = (event.image_assets || [])
+  .filter((asset: EventImageAsset) => {
+    if (!asset?.src || seenSources.has(asset.src)) return false;
+    seenSources.add(asset.src);
+    return true;
+  })
+  .map((asset: EventImageAsset, sourceIndex: number) => {
+    const width = Number(asset.width || 0) || 1200;
+    const height = Number(asset.height || 0) || 900;
+    const sourceRatio = width / height;
+    const textMode = asset.image_text_mode || event.image_text_mode || 'unknown';
+    const cropSafePhoto = asset.media_semantic_status === 'classified'
+      && asset.media_role === 'event_photo'
+      && textMode === 'visual_only'
+      && asset.safe_crop === true
+      && Boolean(asset.recommended_object_position || asset.focal_point)
+      && width >= 640
+      && height >= 438;
+    const token = cropSafePhoto ? photoToken(sourceRatio) : null;
+    const presentationRatio = token ? ratioTokens[token] : sourceRatio;
+    const cropLoss = token ? 1 - Math.min(sourceRatio / presentationRatio, presentationRatio / sourceRatio) : 0;
+    const thumbnailSources = (asset.thumbnail_sources || [])
+      .filter((candidate) => candidate?.src && candidate.width && candidate.height)
+      .map((candidate) => `${candidate.src} ${candidate.width}w`);
+    if (!thumbnailSources.some((candidate) => candidate.startsWith(`${asset.src} `))) thumbnailSources.push(`${asset.src} ${width}w`);
+    return {
+      src: asset.src,
+      width,
+      height,
+      sourceIndex,
+      sourceRatio,
+      presentationRatio,
+      token: token || 'NATURAL',
+      treatment: cropSafePhoto ? 'photo-cover' : 'document-natural',
+      cropLoss,
+      cropReason: cropSafePhoto ? 'surface-wide-safe-photo' : 'protected-natural-ratio',
+      objectPosition: objectPosition(asset),
+      textMode,
+      mediaRole: asset.media_role || 'unknown_document',
+      safeCrop: asset.safe_crop === true,
+      thumbnailSrcset: thumbnailSources.join(', '),
+      sortPriority: cropSafePhoto ? (presentationRatio >= ratioTokens.W ? 0 : 1) : 2,
+    };
+  });
+if (!media.length && event.image_url) {
+  media.push({
+    src: event.image_url,
+    width: 1200,
+    height: 900,
+    sourceIndex: 0,
+    sourceRatio: 4 / 3,
+    presentationRatio: 4 / 3,
+    token: 'NATURAL',
+    treatment: 'document-natural',
+    cropLoss: 0,
+    cropReason: 'protected-natural-ratio',
+    objectPosition: '50% 50%',
+    textMode: event.image_text_mode || 'unknown',
+    mediaRole: event.image_media_role || 'unknown_document',
+    safeCrop: false,
+    thumbnailSrcset: '',
+    sortPriority: 2,
+  });
+}
+const galleryImages = [...media].sort((a, b) => a.sourceIndex - b.sourceIndex).map((asset) => asset.src);
+// Discovery starts with verified, crop-safe event photos; the identity poster
+// remains intact and reachable in the source-order gallery.
+const deckMedia = [...media]
+  .sort((a, b) => a.sortPriority - b.sortPriority || a.sourceIndex - b.sourceIndex)
+  .map((asset, mediaIndex) => ({
+    mediaIndex,
+    sourceIndex: asset.sourceIndex,
+    src: asset.src,
+    srcset: asset.thumbnailSrcset,
+    width: asset.width,
+    height: asset.height,
+    sourceRatio: asset.sourceRatio,
+    presentationRatio: asset.presentationRatio,
+    treatment: asset.treatment,
+    token: asset.token,
+    mediaRole: asset.mediaRole,
+    textMode: asset.textMode,
+    safeCrop: asset.safeCrop,
+    cropReason: asset.cropReason,
+    cropLoss: asset.cropLoss,
+    objectPosition: asset.objectPosition,
+  }));
+// Four wide photographs can fit before the pile on large desktops. Keep five
+// additional shells so the last one remains an unmistakably neutral depth
+// plane instead of silently truncating the perspective. Logical media are
+// rebound into these shells as the deck is paged rather than rendering every
+// source image in every row of a long listing.
+const deckSlotCount = Math.min(9, Math.max(1, deckMedia.length));
+const medallionManifest = organizerMedallions as { items?: OrganizerMedallionDefinition[] };
+const medallionResolution = resolveEventMedallions(event, medallionManifest.items || []);
+// Listing cards get one trusted institutional seal, not the full detail-page
+// token row. Keep it outside deckMedia so photo count, pager and gallery remain
+// semantically exact.
+const listingMedallion = medallionResolution.identities.find(({ item:definition }) => {
+  const category = definition.category || 'organizer';
+  return category === 'venue_brand' || category === 'organizer';
+});
+const detailHref = withBase(`/sobytiya/${event.slug}/`);
+const likeCount = Number(event.likes_count || 0);
+const shareCount = Number(event.shares_count || 0);
+const shareNoun = russianShareNoun(shareCount);
+const discussed = Array.isArray(event.popularity_reason_codes) && event.popularity_reason_codes.includes('discussed');
+const titleId = `exhibition-title-${event.id}`;
+const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`;
+---
+
+<article
+  class={`ex-row ex-row--${item.lifecycle}`}
+  data-exhibition-row
+  data-event-id={String(event.id)}
+  data-bucket={item.bucket}
+  data-tags={item.tags.join(',')}
+  data-category={item.category}
+  data-new={item.bucket === 'new' ? 'true' : 'false'}
+  style={`--row-transition-name:exhibition-${event.id}`}
+  aria-labelledby={titleId}
+>
+  <span class="ex-row__halo" aria-hidden="true"></span>
+  <span class="ex-row__edge-light" aria-hidden="true"></span>
+
+  <div class="ex-row__rail" aria-label={item.status}>
+    <span class="ex-row__dot" aria-hidden="true"></span>
+    <strong>{item.dateLabel}</strong>
+    <span>{item.status}</span>
+  </div>
+
+  <div class="ex-row__media">
+  <a
+    class="ex-deck"
+    href={detailHref}
+    data-deck
+    data-gallery-open
+    data-gallery-title={event.title}
+    data-gallery-images={JSON.stringify(galleryImages)}
+    data-deck-manifest={JSON.stringify(deckMedia)}
+    data-media-total={String(deckMedia.length || 1)}
+    data-deck-cursor="0"
+    data-deck-phase="idle"
+    aria-keyshortcuts="ArrowLeft ArrowRight Enter"
+    aria-label={`Подробнее о выставке «${event.title}», ${galleryImages.length || 1} фото`}
+  >
+    <span class="ex-deck__images" data-deck-images aria-hidden="true">
+      {Array.from({ length: deckSlotCount }, (_, slotIndex) => (
+        <span
+          class="ex-deck__frame"
+          data-deck-frame
+          data-deck-slot={String(slotIndex)}
+          data-deck-visual="media"
+          data-image-state="idle"
+          hidden
+        >
+          <img
+            data-deck-image
+            sizes="(max-width: 740px) 48vw, 190px"
+            alt=""
+            width="1"
+            height="1"
+            loading={rowIndex > 2 ? 'lazy' : 'eager'}
+            decoding="async"
+          />
+          <span class="ex-deck__skeleton" data-image-skeleton aria-hidden="true"></span>
+          <span class="ex-deck__depth-plane" aria-hidden="true"></span>
+        </span>
+      ))}
+    </span>
+    {listingMedallion && (
+      <span
+        class="ex-deck__medallion"
+        data-exhibition-medallion
+        data-medallion-slug={listingMedallion.item.slug}
+        data-medallion-evidence={listingMedallion.evidence.field}
+        style={`--medallion-bg:${listingMedallion.item.background || '#17191b'};--medallion-ring:${listingMedallion.item.ring || '#697178'}`}
+        aria-hidden="true"
+      >
+        <picture>
+          {listingMedallion.item.avatarUrl.endsWith('.webp') && listingMedallion.item.fallbackPngUrl && (
+            <source srcset={withBase(listingMedallion.item.avatarUrl)} type="image/webp" />
+          )}
+          <img
+            src={withBase(listingMedallion.item.avatarUrl.endsWith('.webp') ? (listingMedallion.item.fallbackPngUrl || listingMedallion.item.avatarUrl) : listingMedallion.item.avatarUrl)}
+            alt=""
+            width="44"
+            height="44"
+            loading="lazy"
+            decoding="async"
+          />
+        </picture>
+      </span>
+    )}
+    <span class="ex-deck__count" data-deck-count hidden></span>
+  </a>
+  </div>
+
+  <div class="ex-row__body">
+    <div class="ex-row__title-line">
+      <a
+        id={titleId}
+        class="ex-row__title"
+        href={detailHref}
+        data-row-focus
+        tabindex={rowIndex === 0 ? '0' : '-1'}
+        aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Enter L X G"
+        aria-label={actionLabel}
+      >{event.title}</a>
+    </div>
+    <p class="ex-row__venue">{event.venue_name || event.city}</p>
+    <div class="ex-row__reasons" aria-label="Почему выставка здесь">
+      {item.bucket === 'new' && <span class="ex-reason ex-reason--new" data-new-status>Новое</span>}
+      {item.reasons.map((reason) => <span class="ex-reason">{reason}</span>)}
+    </div>
+    <div class="ex-row__expanded">
+      <div class="ex-row__tags" aria-label="Темы выставки">
+        {item.tags.slice(0, 3).map((tag) => <span>{tag}</span>)}
+      </div>
+      {shareCount > 0 && (
+        <p class="ex-row__social" aria-label="Поделились исходными публикациями">
+          <span class="ex-signal" aria-label={`Репостов и пересылок исходных публикаций: ${shareCount}`} title="Пересылки и репосты исходных публикаций"><Icon name="share" /><strong>{shareCount}</strong><span>{shareNoun}</span></span>
+        </p>
+      )}
+    </div>
+  </div>
+
+  <div class="ex-row__aside">
+    {discussed && (
+      <span class="ex-discussed" aria-label="Выставку обсуждают в источниках" title="Обсуждают в источниках">
+        <Icon name="comment" />
+        <span>Обсуждают</span>
+      </span>
+    )}
+    <div class="ex-row__actions" aria-label={`Действия с выставкой «${event.title}»`}>
+      <button type="button" class="ex-action ex-action--like" data-like data-aggregate-count={String(likeCount)} aria-pressed="false" aria-label={`Нравится: ${event.title}. Общих отметок: ${likeCount}`}>
+        <Icon name="heart" />
+        <strong data-like-count>{likeCount}</strong>
+        <span class="ex-action__label">Нравится</span>
+        <kbd aria-hidden="true">L</kbd>
+      </button>
+      <button type="button" class="ex-action ex-action--reject" data-reject aria-pressed="false" aria-label={`Не интересно: ${event.title}`}>
+        <Icon name="dislike" />
+        <span class="ex-action__label">Не интересно</span>
+        <kbd aria-hidden="true">X</kbd>
+      </button>
+    </div>
+  </div>
+
+  <div class="ex-row__hidden" data-hidden-stub hidden>
+    <span>Скрыто из «Для меня»</span>
+    <button type="button" data-undo>Отменить</button>
+  </div>
+</article>

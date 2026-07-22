@@ -436,6 +436,50 @@ async function invoke(root, button) {
   }
 }
 
+export function hydrateFooterServiceShareKeyboard(root) {
+  if (!(root instanceof HTMLElement) || root.dataset.serviceShareSurface !== 'footer') return false;
+  if (root.dataset.serviceShareKeyboardHydrated === 'true') return true;
+  root.dataset.serviceShareKeyboardHydrated = 'true';
+  const desktopKeyboard = matchMedia('(min-width: 1024px)');
+  const actions = new Map([
+    ['KeyP', {
+      button: root.querySelector('[data-service-share-button][data-service-share-intent="image"]'),
+      key: 'P',
+      title: 'Скопировать карточку сервиса — клавиша P',
+    }],
+    ['KeyS', {
+      button: root.querySelector('[data-service-share-button][data-service-share-intent="text"]'),
+      key: 'S',
+      title: 'Скопировать текст и ссылку сервиса — клавиша S',
+    }],
+  ]);
+  const syncHints = () => actions.forEach(({ button,key,title }) => {
+    if (!(button instanceof HTMLElement)) return;
+    if (desktopKeyboard.matches) {
+      button.setAttribute('aria-keyshortcuts',key);
+      button.setAttribute('title',title);
+      button.dataset.serviceShareKeyboardManaged = 'true';
+    } else if (button.dataset.serviceShareKeyboardManaged === 'true') {
+      button.removeAttribute('aria-keyshortcuts');
+      button.removeAttribute('title');
+      delete button.dataset.serviceShareKeyboardManaged;
+    }
+  });
+  syncHints();
+  desktopKeyboard.addEventListener?.('change',syncHints);
+  root.addEventListener('keydown',(event) => {
+    if (!desktopKeyboard.matches || event.defaultPrevented || event.repeat || event.isComposing
+      || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || target.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(target.tagName)) return;
+    const action = actions.get(event.code);
+    if (!(action?.button instanceof HTMLButtonElement) || action.button.disabled) return;
+    event.preventDefault();
+    action.button.click();
+  });
+  return true;
+}
+
 export function hydrateServiceShareActions(scope = document) {
   const roots = [...scope.querySelectorAll('[data-service-share-root]')];
   roots.forEach((root) => {
@@ -460,6 +504,7 @@ export function hydrateServiceShareActions(scope = document) {
       button.addEventListener('pointerenter', markOpened, { once: true });
       button.addEventListener('click', () => void invoke(root, button));
     });
+    hydrateFooterServiceShareKeyboard(root);
   });
   return roots.length;
 }

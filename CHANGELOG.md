@@ -364,6 +364,23 @@
   the compact mode uses an ordered intrinsic-width one/two-card wrap, and a
   full-viewport-width bottom dock switches only the active accessible tree;
   the prior equal two-column specimen remains a separate comparison URL.
+- Changed the personal-exhibitions prototype to reuse one fail-closed curated
+  venue/organizer medallion as a compact non-interactive seal over the photo
+  deck, without adding logos to photo counts, paging or galleries and without
+  manufacturing initials for uncovered venues. Ongoing and future opening
+  dates now explicitly use `с`, while closing boundaries retain `до`.
+- Removed the flickering visual toast from exhibition photo keyboard paging;
+  page changes now debounce into a visually hidden live region, while the
+  remaining action/undo toast uses a cinematic slide/fade and message
+  crossfade instead of clearing and flashing.
+- Fixed the personal-exhibitions long-running deck so fully dealt and near-stack
+  cards always render their real exported media instead of becoming empty
+  bordered planes after the third image; cumulative four-row disclosure,
+  bounded reusable shells and viewport media unbinding still cap browser work.
+- Changed the bulk new-exhibition reset from the misleading
+  `Отметить просмотренными` to the secondary `Снять «новое» у всех`: it now
+  clears only new indicators and the header badge, keeps cards and interests in
+  place, gives explicit feedback and offers exact-state undo.
 - Fixed static event detail parity so a one-photo Editorial page keeps the same
   CTA side-motion/docking state machine as a multi-photo page; the optional
   thumbnail rail no longer controls the page-family behavior.
@@ -400,6 +417,56 @@
   private datasets, reconciled host-validated terminal results without faking a
   heartbeat, and restored the compact footer prompt's explicit `Поделитесь`.
 
+### Changed
+- **Personal exhibitions keyboard/tail V10**: keep the selected title focused
+  across stable likes and real personalized reranks, skip no-op row re-appends
+  and document-wide like transitions so an immediate physical-layout `→`
+  reliably pages that row's deck; replace automatic full-tail expansion with
+  an explicit native disclosure boundary and cumulative four-row batches, with
+  viewport media unbinding and at most three real image planes per active tail
+  deck; move desktop-only, footer-scoped physical `P/S` copy shortcuts and
+  visible keycaps into the shared `ServiceShareAction` owner while leaving
+  mobile free of keyboard affordances.
+- **Personal exhibitions visual prototype**: replace its handwritten header
+  with the shared base-aware static-site header and responsive new-exhibitions
+  badge, including fluid tablet navigation and an `aria-current` shared mobile
+  drawer; apply evidence-gated smart crop with wider named `W/L` previews for
+  verified safe photos and edge-to-edge natural cards for protected documents;
+  replace the fake reserved stack with real right-overlapping image cards whose
+  `+N` means actual overflow, remove media letterboxing/padding, and make hover
+  and keyboard focus purely halo/edge-light states without row, image, metadata
+  or action movement; normalize desktop media into one adaptive column so every
+  title starts on the same vertical, strengthen real right-edge deck depth with
+  directional shadows/rims, and select the nearest named crop token so `4:3`
+  photos remain exact `W` instead of being unnecessarily cut to `3:2`; let the
+  fixed-width media deck grow with unusually tall desktop title rows, move the
+  discussion marker into the reserved right aside, separate the date rail from
+  the bordered card surface, add cache/error-safe image skeletons, and replace
+  flat overflow with progressively smaller depth planes plus a gray image-free
+  sixth layer while preserving zero hover geometry movement.
+  Shorten and realign timeline connectors so they cannot cross date labels;
+  make Up/Down establish a visible row selection from page, media or actions
+  with native Enter detail navigation; confine rejected undo content to the
+  bordered exhibition surface; remove keyboard chrome and photo-preview detours
+  on mobile; and unify engagement into one canonical heart+aggregate action.
+  Remove the parasitic desktop gallery-icon overlay while retaining gallery-on-media for
+  plain desktop activation and native detail navigation on mobile; delete the
+  invented numeric discussion/mention fixtures, show only exported share counts
+  and a qualitative source-grounded `Обсуждают` reason, and compensate mobile
+  row padding so lifecycle bullets sit exactly on the vertical spine. Make
+  `L/X/G/F/A` physical-key commands work across Latin and Russian keyboard
+  layouts; replace the discontinuous deck reserve with contact-connected,
+  full-photo-readable right stacks; and add an experimental bounded desktop
+  `←/→` group pager with seven reusable media shells, reversible history,
+  compositor-only cinematic deal motion, resize cancellation and an instant
+  reduced-motion path while retaining direct event navigation on mobile. Stop
+  treating the first positive like as an exclusion filter: after three likes
+  matching themes now only reorder their current bucket, while unrelated and
+  unseen exhibitions stay visible; rebuild liked tags after unlike/reject.
+  Backfill the terminal photo page with retained cards from the preceding batch,
+  auto-expand the unique long-running tail on `ArrowDown`, and restore the
+  production shared footer with footer-local keyboard behavior.
+
 ### Added
 - **Desktop keyboard event-surfing prototype:** add one noindex event-detail lab
   for «Собака на сене» with a scoped current-event/related-card navigator,
@@ -435,6 +502,12 @@
   routing, physical key codes, modal focus restoration, dynamic card graphs,
   repeat latches, accessible shortcut discovery, privacy-minimal daily facts
   and cross-input/browser acceptance.
+- **Personal exhibitions product prototype**: add a separate dark timeline
+  `/lab/exhibitions-personal/` route with a hard-pinned new-exhibition inbox,
+  `Для меня` before `Все`, local like/not-interested/undo interest shaping,
+  source-interest/discussion and ending-soon reasons, a collapsed old long-run
+  tail, accessible photo dialog, notification-state demo, responsive layouts
+  and keyboard-first list navigation; production `/vystavki/` remains unchanged.
 - **Canonical static preproduction review routing**: persist the latest fully
   checked immutable noindex candidate as a hash-bound internal SQLite receipt,
   expose one fail-closed resolver to bot/operator link-producing paths, preserve

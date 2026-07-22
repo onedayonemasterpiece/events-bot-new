@@ -6,9 +6,10 @@ import { mobileDiscoveryHref, type MobileDiscoveryBases } from '../lib/mobileDis
 interface Props {
   current?: string | null;
   discoveryBases?: MobileDiscoveryBases;
+  badge?: { key: string; text: string };
 }
 
-const { current = null, discoveryBases = {} } = Astro.props;
+const { current = null, discoveryBases = {}, badge } = Astro.props;
 const route = (path: string) => mobileDiscoveryHref(path, discoveryBases, BASE_PATH);
 const iconRoot = withBase('/assets/icons/reference4-v8');
 const icon = (name: string) => `${iconRoot}/${name}`;
@@ -21,6 +22,7 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
   <summary class="brand-tag mobile-discovery-menu__summary" style={`--reference4-tag:url('${withBase('/assets/ui/mobile-head-skinny-leather-3x.webp')}')`} aria-label="Открыть навигацию афиши" aria-expanded="false">
     <span class="brand-tag__endorsement">Полюбить<br />Калининград</span>
     <AnnouncementsWordmark class="brand-tag__wordmark" />
+    {badge && <span class="site-header__badge" data-header-badge={badge.key} aria-hidden="true"><span data-header-badge-count>{badge.text}</span></span>}
   </summary>
   <div class="mobile-discovery-menu__panel" aria-label="Меню и действия афиши">
     <div class="reference4-menu" aria-label="Глобальная навигация">

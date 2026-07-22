@@ -1,0 +1,315 @@
+mode: serial_integrator
+repo: events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: integration/exhibitions-personal-discovery-prototype-20260719
+global_constraints:
+  - keep the production /vystavki/ surface unchanged
+  - create a separate prototype route
+  - reuse the supplied exhibition UX reference without copying it blindly
+  - local-only prototype personalization; no production telemetry claims
+verification_owner: root integrator
+stop_conditions:
+  - conflicting writes in the integration worktree
+  - unresolvable build or accessibility regression
+lanes:
+  - id: map
+    role: planner
+    requirement_ids: [R01, R03, R04, R05, R06, R07]
+    target: static-site architecture and personalization mapping
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: repository path and reuse report
+    verification_scope: inspection_only
+    status: completed
+  - id: ux-audit
+    role: reviewer
+    requirement_ids: [R02, R08, R09]
+    target: visual reference, responsive and accessibility audit
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: actionable design specification
+    verification_scope: inspection_only
+    status: completed
+  - id: integration
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09]
+    target: separate interactive exhibitions prototype, tests and canonical docs
+    depends_on: [map, ux-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/**
+      - site/src/components/ExhibitionPrototypeRow.astro
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - docs/features/static-site-pages/README.md
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    forbidden_files:
+      - site/src/pages/vystavki/**
+      - database and production runtime files
+    expected_output: committed prototype with visual and interaction evidence
+    verification_scope: full_local
+    status: completed
+v5_lanes:
+  - id: v5-layout-title
+    role: planner
+    requirement_ids: [R10, R11]
+    target: fixed-column adaptive height and non-competing discussed marker
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v5-reference-depth
+    role: planner
+    requirement_ids: [R12, R14]
+    target: reference timeline and perspective deck specification
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v5-loading-qa
+    role: planner
+    requirement_ids: [R13]
+    target: skeleton/cache/error lifecycle and QA contract
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v5-integration
+    role: worker
+    requirement_ids: [R10, R11, R12, R13, R14]
+    target: coherent Astro/CSS/JS implementation, verification and preview deploy
+    depends_on: [v5-layout-title, v5-reference-depth, v5-loading-qa]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    verification_scope: full_local
+    status: completed
+v6_lanes:
+  - id: v6-keyboard-reject-audit
+    role: planner
+    requirement_ids: [R16, R17]
+    target: global roving focus, native Enter navigation, and surface-confined rejection stub
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v6-timeline-mobile-audit
+    role: planner
+    requirement_ids: [R15, R18, R20]
+    target: non-crossing timeline geometry, mobile glow, and direct media navigation
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v6-social-product-audit
+    role: planner
+    requirement_ids: [R19]
+    target: canonical engagement icons and single honest aggregate-like control
+    execution_mode: read_only_parallel
+    writable_files: []
+    status: completed
+  - id: v6-integration
+    role: worker
+    requirement_ids: [R15, R16, R17, R18, R19, R20]
+    target: coherent timeline, keyboard, rejection, mobile, and engagement implementation
+    depends_on: [v6-keyboard-reject-audit, v6-timeline-mobile-audit, v6-social-product-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    verification_scope: full_local
+    status: completed
+v7_lanes:
+  - id: v7-media-audit
+    role: planner
+    requirement_ids: [V7-R1]
+    target: remove the visible gallery overlay without regressing desktop gallery or mobile detail navigation
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v7-counter-truth-audit
+    role: planner
+    requirement_ids: [V7-R2]
+    target: trace prototype counters to exported source data and define honest like/share/discussed semantics
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v7-mobile-geometry-audit
+    role: planner
+    requirement_ids: [V7-R3]
+    target: measure spine, dot and connector x-axes at mobile widths and derive exact correction
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v7-integration
+    role: worker
+    requirement_ids: [V7-R1, V7-R2, V7-R3]
+    target: integrate media, counter-truth and mobile timeline corrections with Playwright verification
+    depends_on: [v7-media-audit, v7-counter-truth-audit, v7-mobile-geometry-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/index.astro
+      - site/src/components/ExhibitionPrototypeRow.astro
+      - site/src/components/Icon.astro
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    verification_scope: full_local
+    effort: high
+    status: completed
+v8_lanes:
+  - id: v8-keyboard-layout-audit
+    role: planner
+    requirement_ids: [V8-R1]
+    target: physical-key shortcut mapping for Latin and Russian layouts with safe event guards
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v8-deck-contact-audit
+    role: planner
+    requirement_ids: [V8-R2]
+    target: derive a no-gap full-photo/stack contact rule across responsive widths
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v8-paging-motion-audit
+    role: planner
+    requirement_ids: [V8-R3]
+    target: bounded group paging, virtualization, FLIP/WAAPI motion and reduced-motion contract
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: high
+    status: completed
+v9_lanes:
+  - id: v9-personalization-audit
+    role: planner
+    requirement_ids: [V9-R1]
+    target: explain and remove the abrupt one-like strict-filter transition
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v9-final-batch-audit
+    role: planner
+    requirement_ids: [V9-R2]
+    target: overlapping final photo window that keeps the deck surface filled
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: high
+    status: completed
+  - id: v9-keyboard-tail-audit
+    role: planner
+    requirement_ids: [V9-R3]
+    target: ArrowDown expansion into the complete non-duplicated long-running tail
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v9-footer-audit
+    role: planner
+    requirement_ids: [V9-R4]
+    target: locate and reuse the production shared footer component
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v9-integration
+    role: worker
+    requirement_ids: [V9-R1, V9-R2, V9-R3, V9-R4]
+    target: integrate soft-profile gating, final-window backfill, tail keyboard reveal and shared footer
+    depends_on: [v9-personalization-audit, v9-final-batch-audit, v9-keyboard-tail-audit, v9-footer-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/index.astro
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    verification_scope: full_local
+    effort: high
+    status: completed
+  - id: v8-integration
+    role: worker
+    requirement_ids: [V8-R1, V8-R2, V8-R3]
+    target: integrate code-first shortcuts, contact geometry and the experimental desktop deck pager
+    depends_on: [v8-keyboard-layout-audit, v8-deck-contact-audit, v8-paging-motion-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/index.astro
+      - site/src/components/ExhibitionPrototypeRow.astro
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    verification_scope: full_local
+    effort: high
+    status: completed
+v10_lanes:
+  - id: v10-focus-audit
+    role: planner
+    requirement_ids: [V10-R1]
+    target: reproduce and localize focus loss after a keyboard like before photo paging
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: high
+    status: completed
+  - id: v10-footer-history-audit
+    role: planner
+    requirement_ids: [V10-R2]
+    target: locate the canonical reusable footer version with working hotkeys
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v10-tail-product-audit
+    role: planner
+    requirement_ids: [V10-R3]
+    target: compare direct auto-expansion with disclosure-button keyboard navigation
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: medium
+    status: completed
+  - id: v10-tail-performance-audit
+    role: planner
+    requirement_ids: [V10-R3]
+    target: bound the cost of eventual access to the complete long-running tail
+    execution_mode: read_only_parallel
+    writable_files: []
+    effort: high
+    status: completed
+  - id: v10-integration
+    role: worker
+    requirement_ids: [V10-R1, V10-R2, V10-R3]
+    target: preserve focus, reuse footer hotkeys and implement bounded explicit tail disclosure
+    depends_on: [v10-focus-audit, v10-footer-history-audit, v10-tail-product-audit, v10-tail-performance-audit]
+    execution_mode: serial_after_dependency
+    branch: integration/exhibitions-personal-discovery-prototype-20260719
+    worktree: /home/dev/.codex/worktrees/events-bot-new/exhibitions-personal-discovery-prototype-20260719
+    writable_files:
+      - site/src/pages/lab/exhibitions-personal/index.astro
+      - site/src/components/ServiceShareAction.astro
+      - site/src/lib/service-share/controller.js
+      - site/scripts/check-exhibitions-personal-prototype.mjs
+      - docs/features/static-site-pages/exhibitions-personal-prototype.md
+      - CHANGELOG.md
+      - .codex/integration/exhibitions-personal-discovery-prototype-20260719*
+    verification_scope: full_local
+    effort: high
+    status: completed

@@ -1,7 +1,7 @@
 # Event token medallions / quick-read badges
 
-> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. `DATE-LISTING TH-P1 · V15` also has an approved compact recognition rail: at most three quiet identity/fact medallions may sit beside media; a single overlay remains restricted to reviewed no-OCR photo media. SVG is the static-site primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA.
-> **Surface:** **страница конкретного события** (`/sobytiya/<slug>/`) and the explicitly bounded V15 date-listing compact rail/overlay. Search/related cards remain unaffected without separate approval.
+> **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. `DATE-LISTING TH-P1 · V15` has the approved compact rail/overlay exception; `/lab/exhibitions-personal/` has a separate lab-only seal exception. SVG is primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA, and Telegram retains deterministic same-stem PNG fallbacks for SVG items.
+> **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Generic search/related cards are not medallion surfaces without separate approval.
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
 ## Goal
@@ -23,7 +23,8 @@ Current scope:
 - **Approved compact exception:** on V15 Today/Tomorrow/Weekend/Popular, a vertical external rail may show up to three structured medallions. It is allowed for OCR/unknown media because it does not cover the image. Identity tokens precede the `Бесплатно` fact;
 - **Overlay exception:** one named venue/festival medallion may be placed at the bottom-right edge only when the selected asset passes the reviewed no-OCR gate below;
 - **P0:** listing/card date formatting: show short weekday and render event type without `#`;
-- **Not P0:** medallions on generic search/related cards. If added later, they need separate compact-card acceptance.
+- **Not P0:** medallion rows inside production listing/search/related cards. If added later, they need separate compact-card acceptance;
+- **Approved lab exception:** `/lab/exhibitions-personal/` may show one compact curated institutional seal over its photo deck; this does not promote the pattern to production `/vystavki/`.
 
 ### `DATE-LISTING TH-P1 · V15` compact rail and venue overlay
 
@@ -48,6 +49,28 @@ No listing flag treats `safe_crop`, filename or venue name as proof that an
 image has no OCR: `visual_only` plus reviewed event-photo/focal evidence remains
 mandatory for overlay/crop. The external rail does not need crop evidence
 because it never covers the image.
+
+### Compact institutional seal in the exhibitions lab
+
+The separately approved exhibitions-listing experiment reuses recognition, not
+the large detail-page token row:
+
+- render at most one resolved `venue_brand` or primary `organizer`;
+- keep the seal outside `deckMedia`, photo `+N`, keyboard pager and fullscreen
+  gallery semantics;
+- desktop size is `44×44px`, mobile `36×36px`; it sits `8px` / `7px` from the
+  top-left of the deck, above photographs and below the `+N` counter;
+- the seal is non-interactive and `aria-hidden`, because the same venue name is
+  already present as card text;
+- use the curated manifest background/ring, a bounded dark shadow for contrast,
+  lazy loading and fail closed on an image error;
+- do not manufacture initials or placeholder seals when curated identity
+  resolution returns no asset;
+- do not show festival/fact pills or multiple seals on this listing surface.
+
+This overlay is intentionally a stable child of the media deck rather than a
+photo frame. It therefore does not leave with the dealt photographs and never
+pretends that a logo is exhibition media.
 
 ## Visual contract
 
