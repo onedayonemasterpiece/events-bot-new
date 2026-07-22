@@ -343,3 +343,53 @@ Evidence: `artifacts/codex/mobile-shell-factual-nav-v4-20260721/gemini-product.t
 Поэтому v4 нельзя маркировать как завершивший external consultant review:
 фактическая IA подтверждена кодом и release-plan branch, а внешняя критическая
 приёмка остаётся pending.
+
+## Contrast-navigation lab v5, 2026-07-22
+
+Telegram review v4 выявил три самостоятельных дефекта: open plane имел тот же
+цвет, что и canvas; все сравнения оставались вариациями одной прямоугольной
+сетки; визуальная масса шапки была слишком лёгкой. Новый builder —
+`scripts/build_mobile_shell_contrast_nav_lab.py`, build id —
+`preview-20260722-mobile-shell-contrast-nav-lab-v5`.
+
+Чтобы сравнивать именно композицию и вес chrome, во всех трёх вариантах
+зафиксирована одна factual release IA: account/share, Главная, Моё избранное,
+Сегодня/Завтра/Выходные, Выставки/Популярное/Клубы, Поиск/Для меня/
+Инфопартнёры и неактивный `Фестивали · позже`. Нижний dock также неизменен:
+`Афиша / Даты / Поиск / Для меня`.
+
+| Вариант | Композиция | Plane | Visual weight |
+|---|---|---|---|
+| J «Типографическая плоскость» | свободные строки без внутренних границ; иерархия только кеглем, весом и интервалами | тёплый sand `#f2e3d1`, accent edge и shadow | средний, лидер безопасной эволюции |
+| K «Асимметричный индекс» | один терракотовый вертикальный якорь и свободный редакционный flow справа | split `#b55a38 / #fffaf2`, без матрицы ячеек | средне-тяжёлый |
+| L «Терракотовый монолит» | цельная брендовая плоскость без карточек и клеток | `#ad4926`, более тёмный самостоятельный tag `#70250f` | намеренно тяжёлый, проверка верхнего предела |
+
+Plane во всех вариантах отличается от canvas не только цветом, но и жёсткой
+нижней границей с shadow. K/L используют отличающийся оттенок tag, border и
+shadow, поэтому tag остаётся самостоятельной перекрывающей деталью, а не
+растворяется в терракотовом plane.
+
+Bottom dock и micro-footer намеренно остаются светлыми. Тяжёлый низ вместе с
+тяжёлой шапкой создаёт «сэндвич», конкурирует с brand tag и визуально зажимает
+ленту. Полный desktop/SEO footer не переносится в мобильный canvas; остаётся
+только компактная institutional строка.
+
+Предложение Gemini добавить scrim и body lock отклонено: оно конфликтует с
+принятым свободным скроллом и не требуется после явного surface contrast,
+accent edge и shadow. Механика plane+tag как одного moving object, v23 rails,
+media/crop/gestures и route-local links не меняются.
+
+### Acceptance
+
+Playwright покрывает `3 × 4 × 2` open/route состояния при 320/390 CSS px и DPR
+3 плюс 36 внутренних route URL: horizontal overflow `0`, clipping `0`, все
+interactive/disabled targets не ниже 44px, page errors `0`, состав plane
+неизменен между pages, festival item disabled и не имеет `href`.
+
+Gemini 3.1 Pro (High) был доступен 2026-07-22: выполнены отдельные product и
+visual reviews. Первичная acceptance обнаружила слияние tag/plane в K/L; после
+разведения оттенков, border и shadow повторная visual acceptance подтвердила:
+`visual blockers ... не осталось`, итог **SHIP** для исследовательского lab.
+Artifacts: `artifacts/codex/mobile-shell-factual-nav-v4-20260722/gemini-product-review.md`,
+`gemini-designer-review.md`, `gemini-v5-acceptance.md`,
+`gemini-v5-reacceptance.md`.

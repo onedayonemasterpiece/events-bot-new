@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added a J/K/L mobile header-contrast lab in response to Telegram review.
+  It replaces the repeated bordered-cell menu with typographic, asymmetric and
+  heavy terracotta compositions, keeps one factual IA and the accepted moving
+  brand-tag behavior, and holds the lower dock/footer light so header weight can
+  be evaluated independently.
+
 - Added a factual G/H/I mobile navigation lab based on the real static-site
   routes and the release-plan branch. It preserves the accepted moving brand-tag
   plane and v23 Calendar/Popular rails, keeps `Главная` explicit, compares the
