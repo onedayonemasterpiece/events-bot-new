@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added a full-viewport reference-4 mobile-menu successor: the canonical
+  `Полюбить Калининград / Анонсы` lockup, a tighter source-faithful leather
+  close crop, genuinely translucent single-layer glass, a coherent Phosphor
+  Thin icon set, unambiguous `0 ₽` Free sign and growth-led Popular icon. The
+  entire menu, including Share, fits `320×700` without scrolling and hides the
+  competing lower dock while open; the standard closed tag remains unchanged.
+
 - Added an exact expanded-state adaptation of the supplied mobile-menu
   reference: a live warm glass sheet, canonical wide-o `Анонсы` home mark,
   SVGRepo icon-led navigation, date chips and account/favorite/share utility.

@@ -546,3 +546,69 @@ Gemini 3.1 Pro (High) получил точный, непереинтерпре�
 chevrons и sticky-close дала **SHIP (research preview)** без blockers. Evidence:
 `artifacts/codex/mobile-menu-reference4-v7-20260722/gemini-design-review.md` и
 `gemini-final-acceptance.md`.
+
+## Full-viewport reference 4 menu, v8, 2026-07-22
+
+Owner review superseded v7 as a visual candidate: its open state omitted the
+canonical endorsement, left Share below the initial viewport at `320×700`,
+showed the lower dock, used a visually heavy Dazzle set and compounded panel +
+card alpha to roughly `88%`. The v8 research builder is
+`scripts/build_mobile_menu_reference4_fullglass_lab.py`; build id is
+`preview-20260722-mobile-menu-reference4-fullglass-lab-v8`, variant `P`.
+
+### State and geometry
+
+- Closed state still comes unchanged from the shared shell: `x=12, y=0`,
+  `120×84`, solid `#98401f`, the canonical endorsement/wordmark/chevron and no
+  leather background. v8 overrides only the expanded plane.
+- Open state is a navigation mode occupying the whole visual viewport. The
+  underlying page is scroll-locked and the 64px dock becomes hidden and inert;
+  it is not a second competing navigation layer behind the glass.
+- At `320×700`, the brand block is `100px`, date targets are `44px`, eight
+  list rows are `48px`, the account targets are `44px` and Share is `44px`.
+  Share is initially visible at `y=609…653`; `scrollHeight == clientHeight ==
+  700`. At `390×844`, Share is `y=663…713` and the same no-scroll invariant
+  holds. Screens below `680px` keep the panel's accessibility scroll fallback
+  rather than clipping enlarged text.
+- The open lockup adds the exact compact text `Полюбить Калининград` above the
+  canonical wide-o SVG `Анонсы`.
+- The leather close is a new direct lossless crop `333×332`: `44px`/`11.7%`
+  was removed from the top of the previous `333×376` source crop. It renders
+  `104×104` at 320 CSS px and `112×112` at 390 CSS px; CSS adds only layout
+  shadows.
+
+### Glass and icons
+
+The panel now has one compositor-owned `blur(30px) saturate(1.12)
+brightness(1.08)` layer. Warm backgrounds stay mostly in the `.18–.30` alpha
+range, while the list/utility panes use `.30–.46`; nested backdrop filters were
+removed. A top halo, active-date glow and strong bottom bloom keep the supplied
+reference's luminous glass hierarchy without washing out the dark labels.
+
+The implemented set is coherent **Phosphor Thin**. Exact sources, licenses and
+the visually reviewed Lucide/Solar/alternate Popular candidates are in
+`site/public/assets/icons/reference4-v8/ATTRIBUTION.md`. Product decisions:
+
+- `Бесплатно` uses typographic `0 ₽` inside a thin circle. Both local critical
+  review and Gemini 3.1 Pro rejected crossed ₽ because it can mean “rubles/cash
+  prohibited”, while `0 ₽` unambiguously means zero ticket price.
+- `Популярное` uses Trend Up Thin, not the v7 star. Gemini initially suggested a
+  flame as a generic “hot” convention, but the owner's explicit request was an
+  allegory of **growth**. In the labelled event-navigation row, the rising line
+  is literal and does not inherit a financial-dashboard meaning.
+- Festival uses the thin architectural/gate allegory, closer to the supplied
+  reference than a party horn; Share uses the reference-like three-node Share
+  Network; Personal uses User Focus rather than the generic chat composite.
+
+### Acceptance
+
+Local Playwright covers Home and Search at 320/390 CSS px plus all 12 generated
+routes. The machine gate confirms: `4` open/closed cases, `12` HTTP-200 routes,
+`0` failures; full-height panels, no initial scroll, Share fully in viewport,
+all targets `>=44px`, zero horizontal overflow/page errors, hidden/inert dock,
+exact labels, canonical wordmark, `0 ₽`, Trend Up, Share Network and direct
+`333×332` leather asset. Escape and the leather button both close through the
+shared path; the visible close action restores focus to the standard summary.
+
+Evidence lives in
+`artifacts/codex/mobile-menu-reference4-v8-20260722/{report.json,failures.json,open-320.png,open-390.png,gemini-design-review.md,gemini-final-acceptance.md}`.
