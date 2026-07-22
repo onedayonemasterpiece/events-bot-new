@@ -45,6 +45,15 @@ All F1–F17 are mandatory for the first public release/presentation. Canaries m
 
 Current decisions and questions that affect several feature families live in [global-product-decisions.md](global-product-decisions.md). Implementation-level questions remain in their feature homes.
 
+## Separate post-release product tracks
+
+- [Пасхалки о Калининграде](../static-site-easter-eggs/README.md) — Stage 13
+  product discovery для конечных культурных коллекций как нового
+  `promo_activity`. Механика имеет отдельный feedback/partner intake, admin
+  inventory, автоматическую режиссуру и holdout-аналитику. Она не блокирует
+  первую презентацию и не разрешает production implementation до owner,
+  accessibility, data, privacy/IP/safety и non-prize experiment gates.
+
 ## Documentation completion rule
 
 A release capability is considered properly documented only when it has:

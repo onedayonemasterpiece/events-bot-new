@@ -82,6 +82,21 @@
   intent is a hard eligibility rule; child/family suitability requires
   evidence-backed LLM output, so no decorative child medallion is shipped from
   noisy topic or age-rating inference.
+- Added the post-release static-site Easter-eggs product-discovery package: a
+  critical promo-aligned product analysis, deterministic dramaturgy/analytics
+  and guardrails, collection feedback plus partner email/intake and admin
+  requirements, a Stage 13 release gate, and a GitHub/prototype-linked external
+  deep-research prompt. No production behavior or scheduler was changed.
+
+### Changed
+
+- Refined the static-site Easter-eggs discovery plan with a sticky per-user
+  semantic placement-bundle invariant, persistent post-find marker, separate
+  dislike/report/hide semantics, restrained state-driven motion, ecological
+  placement/type analytics, ITT difficulty measurement and provisional target
+  bands that keep standard/hard eggs uncommon without using invisible or
+  inaccessible targets. Added a focused Gemini 3.1 Pro adversarial review and
+  explicit owner disposition rather than accepting its recommendations wholesale.
 
 ### Fixed
 

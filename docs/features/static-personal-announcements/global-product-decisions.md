@@ -17,6 +17,8 @@
 11. **Email providers have non-overlapping roles.** SpaceWeb owns and retains the human/inbound mailbox. Because its mailbox destination modes are mutually exclusive, a read-only Yandex IMAP collector handles the production automation copy without changing `Seen`; Yandex Mail Trigger remains a direct technical canary. Postbox sends transactional mail only, and NotiSend sends personal recommendations/announcements only. Supabase remains the consent/suppression/outbox authority; YDB remains analytics-only.
 12. **Recommendation email has a hard launch ceiling of 200 actively consented users.** Capacity must be enforced in Supabase and fail closed; provider limits do not authorize an extra recipient or a fallback to Postbox.
 
+13. **Пасхалки — отдельный post-release campaign format, а не engagement North Star.** Они используют общий promo control plane, но требуют first-class egg subject/progress ledger вместо fake event ids. Первый пилот — конечная non-prize коллекция с добровольными подсказками/share, отдельным блоком в `Моё`, feedback/partner intake, admin kill switch и holdout по downstream event value; до product/legal/privacy/a11y/IP/anti-abuse acceptance production implementation запрещена.
+
 ## Consequences
 
 - Email-only users are authenticated identities, not a parallel anonymous-subscription account model.

@@ -307,3 +307,14 @@ STATIC_SITE_CANARY_PERCENT=0..100
 Полный F1–F17 readiness и release evidence pack остаются в
 [аудите 2026-07-11](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
 этот документ не ослабляет его gates.
+
+## Separate post-release Stage 13 — «Пасхалки о Калининграде»
+
+После стабильного D10 эта механика прорабатывается в отдельном RC и не входит в
+current static-page GO. Она не меняет текущий Top-5. План: product research →
+owner decisions → clickable accessible prototype → first-class egg/progress and
+`site_easter_egg` promo-activity architecture → scheduler shadow/admin report →
+одна non-prize collection canary с holdout и automatic stop rules → ship/narrow/stop
+review. Материальный приз и social-share multiplier не наследуют этот релиз и
+требуют отдельного legal/anti-abuse решения. Полный contract:
+[static-site easter eggs](../static-site-easter-eggs/README.md).

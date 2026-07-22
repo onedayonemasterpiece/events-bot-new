@@ -54,6 +54,7 @@
 - `docs/features/event-comment-feedback/README.md` — aggregated discussion signals from public source comments
 - `docs/features/event-issue-reporting/README.md` — admin event-problem report and ArtKodex repair/history workflow
 - `docs/features/info-partners/README.md` — страница информационных партнёров на static-first сайте: логотипы организаций, nofollow-ссылки и связь со статусом/промо-кампаниями
+- `docs/features/static-site-easter-eggs/README.md` — post-release discovery механики региональных коллекционных пасхалок: promo activity, автоматическая режиссура, обратная связь/partner intake, аналитика и release gates без production implementation
 
 ## Как добавлять новую фичу
 

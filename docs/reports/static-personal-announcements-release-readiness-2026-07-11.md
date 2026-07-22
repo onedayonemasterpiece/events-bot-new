@@ -282,6 +282,58 @@ Smart Update является владельцем семантического 
 - [ ] Remove root `noindex` only after all launch blockers are signed off.
 - [ ] Post-launch 72-hour hypercare, then 14-day review before declaring stable.
 
+### Stage 13 — Feature discovery «Пасхалки о Калининграде»
+
+Stage number сохранён из planning thread. Это отдельный post-release track, не
+first-presentation GO blocker и не разрешение на production implementation.
+Каноника: [static-site easter eggs](../features/static-site-easter-eggs/README.md),
+[critical product analysis](../features/static-site-easter-eggs/product-analysis.md),
+[measurement/state contract](../features/static-site-easter-eggs/measurement-and-state-contract.md),
+[focused Gemini disposition](../features/static-site-easter-eggs/gemini-kpi-state-consultation-2026-07-21.md),
+[external deep-research prompt](../features/static-site-easter-eggs/external-research-brief.md).
+
+- [ ] Owner принимает публичное название, first curated set, duration и exact
+  `communal|cohort` placement mode.
+- [ ] Утверждены source/provenance/IP/freshness/safety и accessible alternatives
+  для каждого объекта.
+- [ ] Clickable mobile/desktop/keyboard/screen-reader/reduced-motion prototype
+  доказывает, что hunt не блокирует event discovery/CTA и не увеличивает badge
+  сохранённых событий в `Моё`.
+- [ ] Архитектура добавляет first-class egg/collection/placement/progress subjects;
+  fake `event_id` в текущем `promo_exposure` запрещён.
+- [ ] `site_easter_egg` activity использует campaign status/window/priority/caps,
+  disclosure/reporting и deterministic dramaturgy с fatigue/hints/catch-up/kill.
+- [ ] Assignment фиксирует semantic `placement_bundle/id/version` и заранее
+  заданные layout/accessibility anchors до find/expiry;
+  reload/hint/dislike не rebucket, safety relocation audit-ится, а found object
+  превращается в static reopenable marker вместо исчезновения или repeat claim.
+- [ ] Экологичная analytics lane хранит compact opportunity summaries/TTL rollups
+  по placement/type, показывает ITT assigned и delivered-path diagnostic, small-cell
+  suppression/bot exclusions и не создаёт Supabase/raw-event firehose.
+- [ ] Difficulty KPI bands отдельно калибруют onboarding/standard/hard; standard и
+  hard не проходят как «слишком лёгкие», но delivery, frustration, accessibility
+  parity и core-event CTA остаются blocking guardrails.
+- [ ] Motion contract проходит static/hinted/found/disliked/reduced-motion states:
+  no continuous pulse/shimmer, halo только finite hint, found echo static.
+- [ ] Страница коллекции имеет обычный feedback/problem flow и CTA
+  `Предложить пасхалку` с видимым `info@kenigevents.ru`; proposal проходит
+  triage → fact/IP/safety review и не создаёт кампанию автоматически.
+- [ ] Admin inventory показывает прошлые/текущие/будущие объекты, verified
+  placement links, campaign state, metrics, proposals, reports/audit и pause/kill.
+- [ ] Baseline/A-A, holdout, MDE/traffic feasibility, primary incremental
+  downstream event outcome, full-cycle duration и non-inferiority stop rules
+  утверждены до canary.
+- [ ] Проверочный analytics lifecycle test доказывает consent/no-consent paths,
+  TTL purge временных YDB summaries и account-lifecycle retention/delete для
+  durable Supabase assignment/progress.
+- [ ] Rehearsal подтверждает propagation `SUSPENDED`/kill ко всем клиентам в
+  заранее утверждённый SLA; expiry clock, найденные коллекции и audit сохраняются.
+- [ ] MVP остаётся non-prize: без streak/loot box/fake scarcity, обязательного
+  login/email/share и влияния share на шанс. Материальная награда — только
+  отдельный legal/privacy/eligibility/audit/fraud release.
+- [ ] Immutable candidate проходит performance/public-HTML/SEO/a11y/security
+  evidence, независимый consultant rerun и owner acceptance exact branch/SHA.
+
 ## 8. Reliability objectives to approve
 
 Это **предложения**, а не уже принятые SLO:
