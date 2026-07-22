@@ -13,7 +13,7 @@ Base: `integration/mobile-menu-reference4-v13-20260722`
 | R03 | Done | Exact section is `Результаты поиска`; zero exact state is `По вашему запросу ничего не найдено`. |
 | R04 | Done | `fallback_items` are buffered while `has_more=true`; after exact exhaustion they appear under honest `Ещё можно посмотреть`, without a false personalization claim. |
 | R05 | Done | Exact endcap is `Нашли то, что искали?`; `Да, нашёл`/`Нет, не нашёл` preserve RPC values `matched`/`missed` and the local fallback queue. |
-| R06 | In progress | Noindex preview built; public prefix deployment, mobile screenshots and final consultant recheck follow after the source commit. |
+| R06 | Done | Noindex preview is public, returns HTTP 200, exposes the real Search runtime and canonical card template, and contains no `Подходящие события` label. Mobile loading/result screenshots were captured from the generated build. |
 
 ## Verification before deployment
 
@@ -26,6 +26,16 @@ Base: `integration/mobile-menu-reference4-v13-20260722`
 ## Consultant
 
 Gemini 3.1 Pro (High) returned `GO` for the ordered exact → feedback → discovery design, recommended keeping provisional vector results behind the skeleton, and approved an isolated noindex Search preview before global shell unification. Prompt and response are saved under ignored `artifacts/codex/mobile-search-unified-v14-20260722/`.
+
+## Public preview
+
+- Search: <https://kenigevents.ru/preview-20260722-mobile-search-large-cards-v25/poisk/>
+- Prefix-only deploy; stable production root was not replaced.
+- Public fetch: HTTP 200, 220,516-byte document; Search enabled, noindex,
+  canonical `split-actions` runtime template present, structural skeleton present,
+  and the rejected `Подходящие события` copy absent.
+- Telegram UI-review topic `122`: verified message `585` with the URL and a
+  concise list of what to inspect on the phone.
 
 ## Incident regression contract
 

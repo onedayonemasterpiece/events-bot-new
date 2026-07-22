@@ -479,6 +479,10 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
             await expect(page.locator("[data-search-skeletons]").first).to_be_visible()
             await expect(page.locator("[data-search-skeletons] .authorized-search__skeleton-media").first).to_be_visible()
+            if args.screenshot_dir:
+                screenshot_dir = Path(args.screenshot_dir)
+                screenshot_dir.mkdir(parents=True, exist_ok=True)
+                await page.screenshot(path=str(screenshot_dir / "search-loading-390x844.png"), full_page=False)
             if await page.locator("[data-search-results] [data-event-card]").count() != 0:
                 raise AssertionError("provisional vector phase must keep the large-card skeleton, not render unstable cards")
             button_progress = await page.locator("[data-search-submit]").first.evaluate(
@@ -522,6 +526,8 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(page.locator("[data-search-skeletons]").first).to_be_hidden()
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
             await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")
+            if args.screenshot_dir:
+                await page.screenshot(path=str(Path(args.screenshot_dir) / "search-results-390x844.png"), full_page=True)
 
             cards = page.locator("[data-search-results] [data-event-card]")
             card_count = await cards.count()
@@ -736,6 +742,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", help="Path to site/dist/<preview-id>. Defaults to latest preview-* build.")
     parser.add_argument("--supabase-url", default="https://example.supabase.co")
+    parser.add_argument("--screenshot-dir", default="", help="Optional directory for mocked loading/result screenshots.")
     parser.add_argument(
         "--real-edge",
         action="store_true",
