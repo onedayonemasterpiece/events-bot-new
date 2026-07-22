@@ -110,7 +110,7 @@ test('mobile Search fixes donor shell without rewriting its core', () => {
   assert.match(bottomNav, /PUBLIC_MOBILE_CALENDAR_BASE_URL/u);
   assert.match(bottomNav, /PUBLIC_MOBILE_SEARCH_BASE_URL/u);
   assert.match(bottomNav, /mobileDiscoveryHref/u);
-  assert.match(eventLayout, /<Reference4MobileMenu current=\{drawerCurrent\} discoveryBases=\{mobileDiscoveryBases\} \/>/u);
+  assert.match(eventLayout, /<Reference4MobileMenu current=\{drawerCurrent\} discoveryBases=\{mobileDiscoveryBases\} badge=\{headerBadge\} \/>/u);
   assert.match(mobileMenu, /mobileDiscoveryHref\(path, discoveryBases, BASE_PATH\)/u);
   assert.match(mobileMenu, /data-reference4-fullscreen/u);
   assert.doesNotMatch(bottomNav, /preview-20260721/u);

@@ -25,6 +25,22 @@ no-op or artifact-only run preserves the previous immutable target; an
 incomplete receipt resolves to unavailable. Production `/`, `current.json` and
 stable `/ics/*` stay untouched.
 
+For a cross-surface product review, build the real-data tree and run both
+generated gates against the same immutable id:
+
+```bash
+PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run build:preview
+PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:preview
+PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:unified-prototype
+```
+
+The reviewer enters through `/<id>/__preview/`; that hub owns the page-type
+inventory and links only targets inside the same prefix. It must state that the
+integrated Search visual is not acceptance of the live auth/backend journey.
+The preview-only `/dlya-menya/` page is an honest finite cold-start specimen,
+not a new production SEO route. A successful local build or prefix upload never
+authorizes root promotion or a stable calendar rewrite.
+
 ## 2026-07-18 v12 fidelity and production-rail contract
 
 V12 applies the accepted component system to automatic generation rather than

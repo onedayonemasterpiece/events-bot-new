@@ -84,13 +84,16 @@ const specs = [...featuredSpecs, ...curatedTailSpecs, ...derivedTailSpecs];
 const ids = specs.map((spec) => spec.id);
 if (new Set(ids).size !== ids.length) throw new Error('Exhibitions prototype contains duplicate event ids');
 const eventsById = new Map(allEvents.map((event) => [event.id, event]));
-const items = specs.map((spec) => {
+const items = specs.flatMap((spec) => {
   const event = eventsById.get(spec.id);
-  if (!event) throw new Error(`Exhibitions prototype fixture is missing event ${spec.id}`);
+  // This review route consumes the same fresh real-data projection as the
+  // public listings. Expired/withdrawn historical donor specimens must not be
+  // resurrected merely to keep a lab card populated.
+  if (!event) return [];
   if (String(event.event_type || '').toLocaleLowerCase('ru') !== 'выставка') {
-    throw new Error(`Exhibitions prototype fixture ${spec.id} is not an exhibition`);
+    return [];
   }
-  return { ...spec, event };
+  return [{ ...spec, event }];
 });
 const newItems = items.filter((item) => item.bucket === 'new');
 const priorityItems = items.filter((item) => item.bucket === 'priority');

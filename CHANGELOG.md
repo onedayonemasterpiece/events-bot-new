@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added one immutable, noindex unified static-site review prototype on fresh
+  production-snapshot data: a responsive page-type hub links Calendar,
+  desktop/mobile Popular, Exhibitions, Search/materialized collections,
+  Personal cold start, clubs, Partners, partnership, event detail and bounded
+  QA labs. A generated-output gate verifies prefix-contained links, mutual
+  shell navigation, explicit occurrence selectors, compact no-band crop
+  invariants and real bus/rail specimens without promoting the production root.
+
 - Added two isolated mobile rail prototypes for the `Янтарный космонавт`
   easter egg: a physical-tail placement after the final like and an
   after-medallion challenger. Both keep the accepted `112px` rail geometry,
@@ -89,6 +97,13 @@
   deep-research prompt. No production behavior or scheduler was changed.
 
 ### Changed
+
+- Unified the current desktop and mobile discovery donors without flattening
+  their accepted responsive compositions. Public navigation now uses the short
+  label `Партнёры`; the preview-only `Для меня` route states its cold-start
+  fallback honestly, and the review hub explicitly marks real authorized
+  Search functionality as unaccepted rather than implying that its visual
+  integration proves the backend journey.
 
 - Refined the static-site Easter-eggs discovery plan with a sticky per-user
   semantic placement-bundle invariant, persistent post-find marker, separate

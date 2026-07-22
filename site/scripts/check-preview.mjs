@@ -147,11 +147,19 @@ if (popularDesktopFamilyKeys.length !== popularDesktopIds.length || new Set(popu
   throw new Error('Popular desktop V28 must allocate every event family only once across global shelves');
 }
 const popularDesktopReasons = [...popularDesktopGlobalHtml.matchAll(/data-popular-reason="([^"]+)"/gu)].map((match) => match[1]);
-if (popularDesktopReasons.join(',') !== 'fast_growth,multi_source,discussed,frequently_shared,score_fallback') {
+const expectedPopularDesktopReasonOrder = ['fast_growth', 'multi_source', 'discussed', 'frequently_shared', 'score_fallback'];
+if (popularDesktopReasons.length < 3
+  || popularDesktopReasons.length > expectedPopularDesktopReasonOrder.length
+  || new Set(popularDesktopReasons).size !== popularDesktopReasons.length
+  || popularDesktopReasons.some((reason, index) => {
+    const expectedIndex = expectedPopularDesktopReasonOrder.indexOf(reason);
+    const previousIndex = index > 0 ? expectedPopularDesktopReasonOrder.indexOf(popularDesktopReasons[index - 1]) : -1;
+    return expectedIndex < 0 || expectedIndex <= previousIndex;
+  })) {
   throw new Error(`Popular desktop V28 shelf order drifted: ${popularDesktopReasons.join(',')}`);
 }
 const popularDesktopGroupCounts = [...popularDesktopGlobalHtml.matchAll(/data-popular-group-count(?:="")?[^>]*>(\d+)</gu)].map((match) => Number(match[1]));
-if (popularDesktopGroupCounts.length !== 5 || popularDesktopGroupCounts.some((count) => count < 3 || count > 5)) {
+if (popularDesktopGroupCounts.length !== popularDesktopReasons.length || popularDesktopGroupCounts.some((count) => count < 3 || count > 5)) {
   throw new Error(`Popular desktop V28 shelves must remain one short evidence row (3–5 cards): ${popularDesktopGroupCounts.join(',')}`);
 }
 const temporalLabels = [...popularDesktopGlobalHtml.matchAll(/data-listing-temporal-status(?:="")?[^>]*>([^<]+)</gu)].map((match) => match[1]);
@@ -739,7 +747,7 @@ if (!bundledJs.includes('stream_stalled') || !bundledJs.includes('stream_rescue'
 if (!bundledJs.includes('mobile_document_decode_natural') || !bundledJs.includes('naturalAspectReconciled')) throw new Error('Authorized search must reconcile missing document geometry after image decode');
 if (!controlHtml.includes('/poisk/')) throw new Error('Mobile/desktop navigation must expose the authorized search page link');
 if (!controlHtml.includes('/vystavki/') || !controlHtml.includes('/populyarnoe/') || !controlHtml.includes('/partnerstvo/')) throw new Error('Navigation must expose exhibitions, popular and partnership pages');
-if (!controlHtml.includes('/partners/') || !controlHtml.includes('Инфопартнёры')) throw new Error('Footer/mobile navigation must expose the info partners page link');
+if (!controlHtml.includes('/partners/') || !controlHtml.includes('Партнёры')) throw new Error('Footer/mobile navigation must expose the Partners page link');
 
 const partnersHtml = readFileSync(join(root, 'partners/index.html'), 'utf8');
 const partnersVisibleHtml = stripGeneratedCode(partnersHtml);

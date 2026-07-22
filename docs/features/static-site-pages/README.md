@@ -268,6 +268,34 @@ canonical остаётся preview-safe, а корневые production URL
 
 Текущий preview реализует production-oriented форму по паттерну соседнего `kgd80/site`: production SQLite export/static manifest → `getStaticPaths()` → `/segodnya/`, `/zavtra/`, `/vyhodnye/`, `/vystavki/`, `/populyarnoe/`, `/poisk/`, `/sobytiya/<stable-slug>/index.html` → `event.ics` → `data/discovery/<event_id>.json` → sitemap/robots/JSON-LD → preview `noindex` → publish to Yandex Object Storage bucket `kenigevents.ru`. Служебные QA/product страницы `/lab/medallions/` и `/partnerstvo/` живут в том же preview-префиксе. Следующий release step — включить и доказать автоматический Smart Update → Kaggle → checked artifact → atomic production promotion/rollback path.
 
+### Единый review-прототип типов страниц
+
+`/__preview/` — каноническое оглавление ручной приёмки внутри конкретного
+immutable `preview-*` prefix. Одна ссылка адаптируется под desktop/mobile и
+связывает реальные страницы: Today/Tomorrow/Weekend, Exhibitions, раздельные
+desktop V28 и mobile Popular representations, Search, materialized Search
+collections, preview-only cold-start `/dlya-menya/`, clubs, `Партнёры`,
+partnership и event detail. Отдельные `/lab/*` ссылки вынесены в QA appendix и
+не подменяют продуктовую навигацию.
+
+Сборка берёт только актуальную public projection из read-only production
+SQLite snapshot. Пустой clubs dataset показывается честным empty state, а не
+синтетическими карточками. `/dlya-menya/` существует в этом integration
+prototype только для целостного mobile journey: без достаточных локальных
+сигналов он явно называет выдачу cold-start fallback и использует `per-family`;
+это не новый SEO landing и не заявление о готовой production personalization.
+В hub и handoff обязательно фиксируется, что Search принят визуально, но его
+реальный auth/backend journey ещё не принят.
+
+Generated-output gate `npm --prefix site run check:unified-prototype` проверяет
+наличие и взаимную перелинковку типов страниц, preview canonical/noindex,
+prefix-local targets, общий mobile dock, отдельные Popular representations,
+short label `Партнёры`, реальный reciprocal occurrence selector, bus/rail
+specimens и compact-related `cover`/OCR ≤20% crop. Он дополняет, но не заменяет
+`check:preview`, occurrence tests, incident regressions и responsive browser
+gate. Публикация допускается только в новый prefix; production root, public
+pointer и stable `/ics/*` не изменяются.
+
 Отдельный interactive product prototype страницы выставок доступен на
 `/lab/exhibitions-personal/`. Он сохраняет production `/vystavki/` без изменений
 и проверяет dark timeline/photo-deck подход, new-inbox, `Для меня / Все`,
@@ -308,9 +336,9 @@ and historical ПК/favicon variants are rejected. Canonical geometry and usage:
 [`design-system/brand-lockups.md`](design-system/brand-lockups.md) and
 [`design-system/favicon.md`](design-system/favicon.md).
 
-### Информационные партнёры
+### Партнёры
 
-Сервисная institutional-страница `/partners/` добавлена как статическая preview-страница для статуса «информационный партнёр». Она не меняет event-detail модель: стартовый список партнёров хранится отдельно в `site/src/data/info-partners.ts`, рендерится в `site/src/pages/partners/index.astro`, попадает в `sitemap.xml` и доступен из footer-навигации как `Инфопартнёры`. Страница должна оставаться компактной плоской logo-first bento-доской с заголовком `Полюбить Калининград Анонсы выступает информационным партнёром организаций`: на mobile — 4 плотные колонки с full-occupancy bento placement, где `80 историй` занимает 2×2 hero-ячейку, на tablet/desktop — 8-колоночные aspect-aware spans для широких и вертикальных логотипов; высота grid-рядов и logo/caption frames фиксированы, а подпись не управляет размером ячейки; подпись рендерится только когда нужна для контекста, поэтому `Знание` и `Акт Опус` идут без подписи. Текущий contract запрещает публичные категории вроде `Пригородные маршруты`/`Лекции и музыка`, неверный label `КППК / РЖД`, тяжёлые card borders/backgrounds/shadows и декоративные highlight-плашки. Внешний переход — вся плитка партнёра с `rel="nofollow noopener noreferrer"`; отдельный CTA `Сайт партнёра` не рендерится. Каноника фичи: `docs/features/info-partners/README.md`.
+Сервисная institutional-страница `/partners/` добавлена как статическая preview-страница для партнёров. Пользовательское имя раздела во всех navigation/footer surfaces — строго `Партнёры`; внутренний тип сотрудничества по-прежнему может называться информационным партнёрством. Она не меняет event-detail модель: стартовый список партнёров хранится отдельно в `site/src/data/info-partners.ts`, рендерится в `site/src/pages/partners/index.astro` и попадает в `sitemap.xml`. Страница должна оставаться компактной плоской logo-first bento-доской: на mobile — 4 плотные колонки с full-occupancy bento placement, где `80 историй` занимает 2×2 hero-ячейку, на tablet/desktop — 8-колоночные aspect-aware spans для широких и вертикальных логотипов; высота grid-рядов и logo/caption frames фиксированы, а подпись не управляет размером ячейки. Текущий contract запрещает публичные категории вроде `Пригородные маршруты`/`Лекции и музыка`, неверный label `КППК / РЖД`, тяжёлые card borders/backgrounds/shadows и декоративные highlight-плашки. Внешний переход — вся плитка партнёра с `rel="nofollow noopener noreferrer"`; отдельный CTA `Сайт партнёра` не рендерится. Каноника фичи: `docs/features/info-partners/README.md`.
 
 
 ### Kaggle CPU build handoff

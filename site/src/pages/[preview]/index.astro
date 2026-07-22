@@ -1,135 +1,180 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
 import EventCard from '../../components/EventCard.astro';
-import { absoluteUrl, getEvents, getPreviewBuild, PREVIEW_BUILD_ID, SITE_NAME, withBase } from '../../lib/events';
+import { materializedSearchCollections } from '../../data/searchCollections';
+import { collapseOccurrenceCards } from '../../lib/eventOccurrences';
+import {
+  absoluteUrl,
+  getEvents,
+  getPreviewBuild,
+  PREVIEW_BUILD_ID,
+  SITE_NAME,
+  withBase,
+} from '../../lib/events';
+import type { PreviewEvent } from '../../lib/types';
 
 export function getStaticPaths() {
   return [{ params: { preview: '__preview' } }];
 }
 
 const events = getEvents();
-const heroPoster = events.find((event) => event.id === 5878);
-const heroAttached = events.find((event) => event.id === 4913);
-const heroPhoto = events.find((event) => event.id === 6322);
-const heroParallax = events.find((event) => event.id === 5370) || events.find((event) => event.id === 4512);
 const build = getPreviewBuild();
 const canonicalUrl = absoluteUrl('/__preview/');
-const title = `Preview статических страниц событий | ${SITE_NAME}`;
-const description = 'Открываемый preview Astro SSG страниц событий для kenigevents.ru.';
+const title = `Единый прототип статических страниц | ${SITE_NAME}`;
+const description = 'Закрытая от индексации адаптивная сборка всех основных типов статических страниц KenigEvents на свежих реальных данных.';
+
+const pageGroups = [
+  {
+    title: 'Афиша и календарь',
+    note: 'Дата-списки показывают каждую дату отдельно; Popular объединяет только взаимно связанные даты.',
+    links: [
+      ['/segodnya/', 'Сегодня', 'События текущей даты'],
+      ['/zavtra/', 'Завтра', 'Следующий день'],
+      ['/vyhodnye/', 'Выходные', 'Ближайшие выходные'],
+      ['/populyarnoe/', 'Популярное', 'Desktop V28 и отдельная mobile-композиция'],
+      ['/vystavki/', 'Выставки', 'Каталог выставок'],
+    ],
+  },
+  {
+    title: 'Поиск и подборки',
+    note: 'Визуальный Search интегрирован. Реальный авторизованный поиск пока не принят и не заявляется как работающий.',
+    links: [
+      ['/poisk/', 'Поиск', 'Экран авторизованного поиска'],
+      ...materializedSearchCollections.map((collection) => [
+        `/podborki/${collection.slug}/`,
+        collection.title,
+        collection.description,
+      ]),
+    ],
+  },
+  {
+    title: 'Сервисные разделы',
+    note: 'Все разделы доступны из общей адаптивной навигации и возвращают пользователя к афише.',
+    links: [
+      ['/dlya-menya/', 'Для меня', 'Cold-start и персональная навигация без ложного обещания'],
+      ['/kluby-po-interesam/', 'Клубы по интересам', 'Честное пустое состояние в текущем срезе данных'],
+      ['/partners/', 'Партнёры', 'Компактная страница партнёров'],
+      ['/partnerstvo/', 'Информационное партнёрство', 'Условия сотрудничества'],
+    ],
+  },
+  {
+    title: 'Отдельные прототипы и QA',
+    note: 'Не входят в основную продуктовую навигацию; нужны для приёмки отдельных механик.',
+    links: [
+      ['/lab/exhibitions-personal/', 'Выставки · персональный discovery', 'Концепт выставок и персональной выдачи'],
+      ['/lab/design-system/', 'Дизайн-система', 'Компоненты и состояния'],
+      ['/lab/occurrences/', 'Связанные даты', 'Resolver, formatter и selector'],
+      ['/lab/medallions/', 'Медальоны', 'Карточки сущностей'],
+    ],
+  },
+] as const;
+
+const preferredSpecimenIds = [5658, 6710, 5370, 6686, 4913, 7001];
+const specimens: PreviewEvent[] = [];
+const seen = new Set<number>();
+for (const event of collapseOccurrenceCards(events, 'per-family')) {
+  if (!preferredSpecimenIds.includes(event.id)) continue;
+  specimens.push(event);
+  seen.add(event.id);
+}
+for (const event of collapseOccurrenceCards(events, 'per-family')) {
+  if (specimens.length >= 6) break;
+  if (seen.has(event.id)) continue;
+  specimens.push(event);
+  seen.add(event.id);
+}
+specimens.sort((a, b) => {
+  const ai = preferredSpecimenIds.indexOf(a.id);
+  const bi = preferredSpecimenIds.indexOf(b.id);
+  return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+});
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
-  <main id="main">
+  <main id="main" class="prototype-hub" data-unified-prototype-hub>
     <div class="page-shell">
-      <section class="section-card">
-        <div class="section-card__inner">
-          <p class="eyebrow">Astro SSG preview</p>
-          <h1 style="max-width: 13ch;">Страницы событий</h1>
-          <p class="lead">Публично открываемая preview-сборка под prefix <code>{PREVIEW_BUILD_ID}</code>. Все страницы закрыты от индексации и используют preview canonical.</p>
-          <div class="facts-quick" id="today">
-            <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Источник</strong><span>{build.source}</span></div></div>
-            <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Сгенерировано</strong><span>{build.generated_at}</span></div></div>
-            <div class="quick-fact"><span class="quick-fact__mark" aria-hidden="true"></span><div><strong>Текущая дата данных</strong><span>{build.current_date}</span></div></div>
-          </div>
-          <div class="source-links">
-            <a href={withBase('/segodnya/')}>Сегодня</a>
-            <a href={withBase('/zavtra/')}>Завтра</a>
-            <a href={withBase('/vyhodnye/')}>Выходные</a>
-            <a href={withBase('/vystavki/')}>Выставки</a>
-            <a href={withBase('/poisk/')}>Поиск</a>
-            <a href={withBase('/sitemap.xml')}>sitemap.xml</a>
-            <a href={withBase('/robots.txt')}>robots.txt</a>
-            <a href={withBase('/lab/hero/')}>Hero lab</a>
-            <a href={withBase('/lab/hero/review/')}>Hero viewport review</a>
-            <a href={withBase('/lab/design-system/')}>Дизайн-система</a>
-          </div>
-
-          <div class="preview-ab" aria-label="A/B/C/D сравнение hero события">
-            <h2>UI-варианты hero события</h2>
-            <div class="preview-ab__grid">
-              {heroPoster && (
-                <a class="preview-ab__item" href={withBase(`/sobytiya/${heroPoster.slug}/`)}>
-                  <strong>A · Poster Billboard</strong>
-                  <span>Полная OCR-афиша без crop, 100vw hero slab и H1/CTA sheet снизу.</span>
-                </a>
-              )}
-              {heroAttached && (
-                <a class="preview-ab__item" href={withBase(`/sobytiya/${heroAttached.slug}/`)}>
-                  <strong>B · Poster Attached Card</strong>
-                  <span>Более смелый attach/overlap с сохранением no-crop политики для афиш.</span>
-                </a>
-              )}
-              {heroPhoto && (
-                <a class="preview-ab__item" href={withBase(`/sobytiya/${heroPhoto.slug}/`)}>
-                  <strong>C · Photo Cinematic Sheet</strong>
-                  <span>visual_only: крупное cover-изображение и decision sheet, без H1 поверх картинки.</span>
-                </a>
-              )}
-              {heroParallax && (
-                <a class="preview-ab__item" href={withBase(`/sobytiya/${heroParallax.slug}/`)}>
-                  <strong>D · Photo Parallax Sheet</strong>
-                  <span>Эксперимент с мягким parallax для visual_only и reduced-motion guard.</span>
-                </a>
-              )}
-            </div>
-            <p class="muted-note">Сравнение привязано к разным event pages: можно открыть каждое событие и почувствовать первый экран, а не смотреть технический image-mode.</p>
-          </div>
-
-          <div class="preview-ab" aria-label="Решение по карточкам ленты">
-            <h2>Карточки ленты</h2>
-            <div class="preview-ab__grid">
-              <a class="preview-ab__item" href={withBase('/sobytiya/pesni-sssr-svetlogorsk-5878/')}>
-                <strong>Baseline · действия под карточкой</strong>
-                <span>Для обычных страниц принят split-actions: внутри карточки остаются вторичные календарь/«не интересно», а под карточкой — текстовое «Поделиться» и лайк справа.</span>
-              </a>
-            </div>
-            <p class="muted-note">Исторический overlay-вариант больше не используется на обычных event pages: он перегружал нижнюю часть карточки и начинал ленту со служебных действий.</p>
-          </div>
-        </div>
+      <section class="prototype-hero">
+        <p class="eyebrow">Единый preprod · noindex</p>
+        <h1>Все типы страниц в одной адаптивной сборке</h1>
+        <p class="lead">Одна и та же ссылка работает на компьютере и телефоне. Внутри — реальные актуальные данные, общая навигация и взаимные ссылки между типами страниц.</p>
+        <dl class="prototype-facts">
+          <div><dt>Сборка</dt><dd><code>{PREVIEW_BUILD_ID}</code></dd></div>
+          <div><dt>Данные на</dt><dd>{build.current_date}</dd></div>
+          <div><dt>Событий</dt><dd>{events.length}</dd></div>
+          <div><dt>Источник</dt><dd>{build.source}</dd></div>
+        </dl>
+        <aside class="prototype-warning" aria-label="Статус поиска">
+          <strong>Важно про Search</strong>
+          <span>В этой сборке принят только визуальный экран. Работоспособность реального авторизованного поиска ещё не подтверждена.</span>
+        </aside>
       </section>
 
-      <AuthorizedEventSearch />
+      <nav class="prototype-directory" aria-label="Типы страниц прототипа">
+        {pageGroups.map((group) => (
+          <section class="prototype-group">
+            <header><h2>{group.title}</h2><p>{group.note}</p></header>
+            <ul>
+              {group.links.map(([href, label, note]) => (
+                <li>
+                  <a href={withBase(href)}>
+                    <span><strong>{label}</strong><small>{note}</small></span>
+                    <span aria-hidden="true">→</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </nav>
 
-      <section class="section-card" style="margin-top: 1rem;" id="weekend">
-        <div class="section-card__inner">
-          <h2>Тестовые страницы</h2>
-          <div class="cards-grid">
-            {events.map((event) => <EventCard event={event} />)}
-          </div>
-        </div>
-      </section>
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <h2>Покрытые состояния</h2>
-          <ul class="prose">
-            <li>платное событие с ticket-link: event 5878 «Песни СССР»;</li>
-            <li>бесплатное / регистрационное событие;</li>
-            <li>phone-only CTA;</li>
-            <li>source-only CTA без прямого ticket-link;</li>
-            <li>длинный H1;</li>
-            <li>нет локального изображения — hero fallback;</li>
-            <li>слабый адрес — карта скрывается, вместо неё выводится “уточняйте у организатора”;</li>
-            <li>«Другие даты» для пары 6437/6438;</li>
-            <li>единая статическая лента «Смотрите дальше» без API и без отдельного пользовательского блока для диверсификации.</li>
-            <li>явные реакции: лайк с локальным увеличением счётчика, отмена лайка, “не интересно” и компактный локальный журнал явных действий для будущего Supabase ingest.</li>
-            <li>Карточки ленты используют baseline split-actions: «Поделиться» и лайк вынесены под карточку, календарь доступен для calendar-eligible событий.</li>
-            <li>минимальные листинги /segodnya/, /zavtra/ и /vyhodnye/.</li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner feedback-report" data-feedback-report>
-          <h2>Локальный отчёт по реакциям</h2>
-          <p class="muted-note">Preview хранит компактный журнал явных действий только в этом браузере. В production такие события должны уходить в personalization Supabase через same-origin ingest/RPC и агрегироваться в отчёт по anonymous profile id.</p>
-          <div class="feedback-report__summary">
-            <span>Anonymous profile: <code data-feedback-profile>—</code></span>
-            <span data-feedback-summary>Загрузка локального журнала…</span>
-          </div>
-          <ul class="feedback-report__list" data-feedback-log></ul>
+      <section class="prototype-specimens" aria-labelledby="prototype-specimens-title">
+        <header>
+          <p class="eyebrow">Реальные данные</p>
+          <h2 id="prototype-specimens-title">События для сквозной проверки</h2>
+          <p>Карточка ведёт на полноценную страницу события; с неё можно вернуться в листинги общей навигацией.</p>
+        </header>
+        <div class="cards-grid" data-prototype-specimen-grid>
+          {specimens.map((event) => <EventCard event={event} mobileFlowMedia />)}
         </div>
       </section>
     </div>
   </main>
 </EventLayout>
+
+<style>
+  .prototype-hub { padding: clamp(1rem, 2.5vw, 2.5rem) 0 4rem; }
+  .prototype-hero,
+  .prototype-group,
+  .prototype-specimens { border: 1px solid color-mix(in srgb, var(--ink, #201712) 14%, transparent); border-radius: 1.5rem; background: var(--paper, #fffaf3); }
+  .prototype-hero { padding: clamp(1.25rem, 4vw, 3.5rem); }
+  .prototype-hero h1 { max-width: 15ch; margin: .2rem 0 .8rem; font-size: clamp(2.15rem, 6vw, 5.5rem); line-height: .94; letter-spacing: -.055em; }
+  .prototype-hero .lead { max-width: 65ch; font-size: clamp(1rem, 1.7vw, 1.3rem); }
+  .prototype-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin: 1.5rem 0 0; }
+  .prototype-facts div { min-width: 0; padding: .85rem; border-radius: 1rem; background: color-mix(in srgb, var(--brand, #a33f1d) 8%, white); }
+  .prototype-facts dt { color: var(--muted, #74685f); font-size: .76rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+  .prototype-facts dd { margin: .25rem 0 0; overflow-wrap: anywhere; font-weight: 800; }
+  .prototype-warning { display: grid; grid-template-columns: auto 1fr; gap: .45rem 1rem; margin-top: 1rem; padding: 1rem; border-radius: 1rem; background: #fff1c9; color: #4f3600; }
+  .prototype-directory { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+  .prototype-group { padding: clamp(1rem, 2vw, 1.5rem); }
+  .prototype-group header { min-height: 5.75rem; }
+  .prototype-group h2,
+  .prototype-specimens h2 { margin: 0 0 .4rem; font-size: clamp(1.4rem, 2.5vw, 2.2rem); }
+  .prototype-group p,
+  .prototype-specimens p { margin: 0; color: var(--muted, #74685f); }
+  .prototype-group ul { display: grid; gap: .5rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+  .prototype-group a { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 4.25rem; padding: .75rem .9rem; border-radius: 1rem; background: color-mix(in srgb, var(--ink, #201712) 5%, transparent); color: inherit; text-decoration: none; }
+  .prototype-group a:hover,
+  .prototype-group a:focus-visible { outline: 2px solid var(--brand, #a33f1d); outline-offset: 2px; background: color-mix(in srgb, var(--brand, #a33f1d) 10%, white); }
+  .prototype-group a span:first-child { display: grid; gap: .18rem; }
+  .prototype-group small { color: var(--muted, #74685f); line-height: 1.25; }
+  .prototype-specimens { margin-top: 1rem; padding: clamp(1rem, 2.5vw, 2rem); }
+  .prototype-specimens > header { max-width: 60ch; margin-bottom: 1rem; }
+  .prototype-specimens .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 760px) {
+    .prototype-hub { padding-top: .5rem; }
+    .prototype-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .prototype-warning { grid-template-columns: 1fr; }
+    .prototype-directory { grid-template-columns: 1fr; }
+    .prototype-group header { min-height: 0; }
+    .prototype-specimens .cards-grid { grid-template-columns: 1fr; }
+  }
+</style>

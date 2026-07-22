@@ -2,7 +2,7 @@
 import EventLayout from '../../../layouts/EventLayout.astro';
 import EventOccurrenceLabel from '../../../components/EventOccurrenceLabel.astro';
 import EventOccurrenceNav from '../../../components/EventOccurrenceNav.astro';
-import { getCurrentDate, getEvents } from '../../../lib/events';
+import { absoluteUrl, getCurrentDate, getEvents } from '../../../lib/events';
 import { formatOccurrencePresentation, resolveOccurrenceFamily } from '../../../lib/eventOccurrences';
 import type { PreviewEvent } from '../../../lib/types';
 
@@ -36,7 +36,7 @@ const sameTime = project(sameTimeEvents);
 const sameDate = project(sameDateEvents);
 ---
 
-<EventLayout title="Occurrence presentation lab" description="Synthetic explicit linked-event fixture" noindex>
+<EventLayout title="Occurrence presentation lab" description="Synthetic explicit linked-event fixture" canonicalUrl={absoluteUrl('/lab/occurrences/')} noindex>
   <main class="occurrence-lab page-shell">
     <header><p>synthetic explicit reciprocal links</p><h1>Связанные даты: единая проекция</h1></header>
     {[sameTime, sameDate].map((presentation, index) => (

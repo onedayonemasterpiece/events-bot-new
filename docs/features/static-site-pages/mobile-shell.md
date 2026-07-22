@@ -66,7 +66,7 @@ mobile journey. Both dock and drawer resolve routes through the same
 `mobileDiscoveryHref` table. With build-time bases configured, `Афиша`, `Даты`,
 `Завтра`, `Выходные` and `Для меня` go to the accepted calendar v23 prefix;
 `Поиск` goes to the current Search v24 prefix. Unrelated Astro routes such as
-`Инфопартнёры` remain local. A Search preview must not silently fall back to its
+`Партнёры` remain local. A Search preview must not silently fall back to its
 legacy local `/segodnya/`, `/populyarnoe/` or missing `/dlya-menya/` pages; the
 release build and generated-output gate must assert the four exact dock URLs.
 
@@ -299,12 +299,12 @@ CTA.
 
 - current: `Главная`, `Сегодня`, `Завтра`, `Выходные`, `Выставки`,
   `Популярное`, `Клубы` (feature flag), `Поиск`, `Для меня`,
-  `Инфопартнёры`;
+  `Партнёры`;
 - bottom dock: `Афиша`, `Даты`, `Поиск`, `Для меня`;
 - first release target: глобальные account actions и `Моё избранное`;
 - post-release only: `Фестивали`. Пока `/festivali/` отсутствует, этот пункт
   допустим только как неактивный `Фестивали · позже`, без `href`;
-- institutional footer: `Инфопартнёры`, `Информационное партнёрство`,
+- institutional footer: `Партнёры`, `Информационное партнёрство`,
   `Правообладателям`.
 
 В current drawer название `Все анонсы` заменено на явно запрошенное владельцем
@@ -355,7 +355,7 @@ Telegram review v4 выявил три самостоятельных дефек
 Чтобы сравнивать именно композицию и вес chrome, во всех трёх вариантах
 зафиксирована одна factual release IA: account/share, Главная, Моё избранное,
 Сегодня/Завтра/Выходные, Выставки/Популярное/Клубы, Поиск/Для меня/
-Инфопартнёры и неактивный `Фестивали · позже`. Нижний dock также неизменен:
+Партнёры и неактивный `Фестивали · позже`. Нижний dock также неизменен:
 `Афиша / Даты / Поиск / Для меня`.
 
 | Вариант | Композиция | Plane | Visual weight |
@@ -648,7 +648,7 @@ its 30px circle.
 The former direct `Партнёры` row becomes `О сервисе`. It does not expand the
 eight-row card. A horizontal drill-down swaps the list plane in place and keeps
 Share fixed, exposing only factual destinations already present in the site:
-`Инфопартнёры` (`/partners/`), `Информационное партнёрство`
+`Партнёры` (`/partners/`), `Информационное партнёрство`
 (`/partnerstvo/`) and the canonical `Правообладателям` mail action. No invented
 `О проекте` route is emitted.
 

@@ -4,7 +4,7 @@ import { INFO_PARTNERS } from '../../data/info-partners';
 import type { InfoPartner } from '../../data/info-partners';
 import { siteHomeHref, absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 
-const title = `Информационные партнёры | ${SITE_NAME}`;
+const title = `Партнёры | ${SITE_NAME}`;
 const description = 'Полюбить Калининград Анонсы выступает информационным партнёром организаций: компактная сетка партнёрских логотипов.';
 const canonicalUrl = absoluteUrl('/partners/');
 const webpSource = (partner: InfoPartner) => Boolean(partner.logoUrl?.endsWith('.webp') && partner.logoFallbackUrl);
@@ -16,11 +16,11 @@ const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.web
       <nav class="crumbs" aria-label="Хлебные крошки">
         <a href={siteHomeHref()}>Афиша</a>
         <span aria-hidden="true">/</span>
-        <span>Информационные партнёры</span>
+        <span>Партнёры</span>
       </nav>
 
       <header class="partners-heading">
-        <p class="eyebrow">Информационные партнёры</p>
+        <p class="eyebrow">Партнёры</p>
         <h1>Полюбить Калининград Анонсы выступает информационным партнёром организаций</h1>
         <p>Логотипы ведут на сайты партнёров.</p>
       </header>
