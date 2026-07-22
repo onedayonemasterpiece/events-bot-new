@@ -476,6 +476,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
       }
       .authorized-search__form textarea { resize: vertical; }
+      .authorized-search--standalone .authorized-search__form { grid-template-columns: minmax(0, 1fr); }
+      .authorized-search--standalone .authorized-search__form textarea { min-height: 132px; border-radius: 20px; }
+      .authorized-search--standalone .authorized-search__submit { width: 100%; }
       .authorized-search__submit {
         --search-progress: 0%;
         position: relative;
@@ -500,6 +503,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
       .authorized-search__submit-label { position: relative; z-index: 1; }
       .authorized-search__status { margin: 0.72rem 0 0; color: var(--muted); font-size: 0.92rem; }
+      .authorized-search__prototype-label { margin: 1.1rem 0 0; color: var(--text); font-size: 0.92rem; font-weight: 780; }
       .authorized-search__progress { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
       .authorized-search__progress[hidden] { display: none; }
       .authorized-search__progress-bar { display: block; width: var(--progress); height: 0.6rem; border-radius: inherit; background: #a54821; transition: width 320ms ease; }
@@ -516,6 +520,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
       .authorized-search__results { margin-top: 1rem; display: grid; gap: 1rem; }
       .authorized-search__skeletons { margin-top: 1rem; display: grid; gap: 0.85rem; }
+      .authorized-search[data-search-enabled="false"] .authorized-search__skeletons { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
       .authorized-search__skeletons[hidden] { display: none; }
       .authorized-search__skeleton-card { overflow: hidden; border-radius: 24px; border: 1px solid rgba(121,48,20,0.12); background: #fffaf2; box-shadow: 0 16px 34px rgba(72,45,25,0.14); }
       .authorized-search__skeleton-media { aspect-ratio: 5 / 4; background: linear-gradient(110deg, #17191c 8%, #30343a 18%, #17191c 33%); background-size: 200% 100%; animation: search-skeleton-shimmer 1.35s ease-in-out infinite; }
@@ -2375,6 +2380,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           /* Accepted mobile donor: the button itself is the progress surface. */
           background: #98401f;
         }
+        .authorized-search[data-search-enabled="false"] .authorized-search__skeletons { grid-template-columns: minmax(0, 1fr); }
+        .authorized-search[data-search-enabled="false"] .authorized-search__skeleton-card:not(:first-child) { display: none; }
         .cta-button, .secondary-button { width: 100%; }
         .feedback-button--negative span { display: none; }
         .event-card__feedback { grid-template-columns: 48px minmax(118px, 1fr) 82px; gap: 0.28rem; left: 0.56rem; right: 0.56rem; }

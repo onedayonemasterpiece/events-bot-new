@@ -76,6 +76,8 @@ test('search progress stays backend-owned while its visible surface is the submi
 test('search keeps a canonical-card skeleton until final results and separates the endcap', () => {
   assert.match(donor, /authorized-search__skeleton-media/u);
   assert.match(eventLayout, /\.authorized-search__skeleton-media[^}]*aspect-ratio:\s*5\s*\/\s*4/u);
+  assert.match(eventLayout, /data-search-enabled="false"[^}]*authorized-search__skeletons[^}]*repeat\(3, minmax\(0, 1fr\)\)/u);
+  assert.match(eventLayout, /data-search-enabled="false"[^}]*authorized-search__skeleton-card:not\(:first-child\)[^}]*display:\s*none/u);
   assert.match(donor, /setSearchLoading\(true, \{ showSkeleton: !append \}\)/u);
   assert.match(donor, /if \(isVector\) \{[\s\S]*?results\.hidden = true;[\s\S]*?return \{ itemCount:/u);
   assert.doesNotMatch(donor, /if \(isVector\) \{[\s\S]*?insertVectorPreviewHtml\(/u);
