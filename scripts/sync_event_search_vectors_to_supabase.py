@@ -102,7 +102,10 @@ def sha256_text(value: str) -> str:
 
 
 def _occurrence_time(event: dict[str, Any]) -> str | None:
-    match = re.search(r"(\d{1,2}):(\d{2})", clean_text(event.get("start_time") or event.get("display_time")))
+    match = re.search(
+        r"(\d{1,2}):(\d{2})",
+        clean_text(event.get("start_time") or event.get("display_time")),
+    )
     if not match:
         return None
     hour, minute = int(match.group(1)), int(match.group(2))
@@ -141,7 +144,9 @@ def _format_occurrence_dates(values: list[str], current_year: int, *, aria: bool
     return _human_join(formatted) if aria else ", ".join(formatted)
 
 
-def build_occurrence_projections(events: list[dict[str, Any]], *, current_year: int | None = None) -> dict[int, dict[str, Any]]:
+def build_occurrence_projections(
+    events: list[dict[str, Any]], *, current_year: int | None = None
+) -> dict[int, dict[str, Any]]:
     """Project reciprocal explicit occurrence families into search snapshots.
 
     This is publication projection only: it never infers identity from title,
@@ -154,7 +159,11 @@ def build_occurrence_projections(events: list[dict[str, Any]], *, current_year: 
         for event in events
         if int(event.get("id") or 0) > 0
         and clean_text(event.get("lifecycle_status")).lower() in {"", "active"}
-        and (not clean_text(event.get("end_date")) or clean_text(event.get("end_date")) == clean_text(event.get("start_date")))
+        and (
+            not clean_text(event.get("end_date"))
+            or clean_text(event.get("end_date"))
+            == clean_text(event.get("start_date"))
+        )
     }
     parent = {event_id: event_id for event_id in public}
 
@@ -184,7 +193,13 @@ def build_occurrence_projections(events: list[dict[str, Any]], *, current_year: 
 
     output: dict[int, dict[str, Any]] = {}
     for members in components.values():
-        members.sort(key=lambda item: (clean_text(item.get("start_date")), _occurrence_time(item) or "99:99", int(item["id"])))
+        members.sort(
+            key=lambda item: (
+                clean_text(item.get("start_date")),
+                _occurrence_time(item) or "99:99",
+                int(item["id"]),
+            )
+        )
         member_ids = [int(item["id"]) for item in members]
         dates = list(dict.fromkeys(clean_text(item.get("start_date")) for item in members))
         times = [_occurrence_time(item) for item in members]
@@ -524,10 +539,34 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
     ticket = event.get("ticket") or {}
     href = event_href(event, base_path=base_path)
     abs_url = absolute_url(f"/sobytiya/{event.get('slug')}/", site_origin=site_origin, base_path=base_path)
-    display_date_time = clean_text(event.get("occurrence_compact_label")) or join_parts([event.get("display_date"), event.get("display_time")])
+    display_date_time = clean_text(event.get("occurrence_compact_label")) or join_parts(
+        [event.get("display_date"), event.get("display_time")]
+    )
     occurrence_member_ids = [int(value) for value in (event.get("occurrence_member_ids") or [event["id"]])]
     place = join_parts([event.get("city"), event.get("venue_name")])
     status_label = clean_text(ticket.get("price_label")) or clean_text(ticket.get("label")) or clean_text(event.get("status_label"))
+    image_url = clean_text(event.get("image_url"))
+    image_assets = [asset for asset in (event.get("image_assets") or []) if isinstance(asset, dict)]
+    primary_image = next(
+        (asset for asset in image_assets if clean_text(asset.get("src")) == image_url),
+        image_assets[0] if image_assets else {},
+    )
+
+    def positive_image_dimension(value: Any) -> int | None:
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            return None
+        return numeric if numeric > 0 else None
+
+    focal_point = primary_image.get("focal_point") if isinstance(primary_image.get("focal_point"), dict) else {}
+    focal_value = focal_point.get("y", primary_image.get("focal_y"))
+    try:
+        focal_y = float(focal_value)
+    except (TypeError, ValueError):
+        focal_y = None
+    if focal_y is not None and not 0 <= focal_y <= 1:
+        focal_y = None
     display = {
         "id": int(event["id"]),
         "event_id": int(event["id"]),
@@ -535,9 +574,13 @@ def build_card_snapshot(event: dict[str, Any], *, site_origin: str, base_path: s
         "href": href,
         "absolute_url": abs_url,
         "event_type": clean_text(event.get("event_type")) or None,
-        "image_url": clean_text(event.get("image_url")) or None,
+        "image_url": image_url or None,
         "image_alt": clean_text(event.get("image_alt")) or f"Афиша события «{clean_text(event.get('title'))}»",
-        "image_text_mode": event.get("image_text_mode") or "unknown",
+        "image_text_mode": primary_image.get("image_text_mode") or event.get("image_text_mode") or "unknown",
+        "image_media_role": clean_text(primary_image.get("media_role")) or clean_text(event.get("image_media_role")) or "unknown_document",
+        "image_width": positive_image_dimension(primary_image.get("width")),
+        "image_height": positive_image_dimension(primary_image.get("height")),
+        "focal_y": focal_y,
         "display_date": clean_text(event.get("display_date")),
         "display_time": clean_text(event.get("display_time")) or None,
         "display_date_time": display_date_time,
@@ -609,7 +652,7 @@ def build_search_doc(event: dict[str, Any], *, site_origin: str, base_path: str,
         "event_id": int(event["id"]),
         "search_doc_version": "event-search-doc-v3-search-facets",
         "related_doc_version": "event-related-doc-v1",
-        "card_snapshot_version": "event-card-v2-occurrences",
+        "card_snapshot_version": "event-card-v3-media-layout",
         "text_hash": search_text_hash,
         "related_text_hash": related_text_hash,
         "slug": clean_text(event.get("slug")) or None,
@@ -953,7 +996,10 @@ def main() -> int:
                 skipped_by_kind[doc_kind] += 1
                 continue
             if provider_calls >= max(0, int(args.max_provider_calls)):
-                break
+                # The call cap limits provider work, not verification. Keep
+                # scanning the remaining documents so a zero-call audit can
+                # prove that every stored embedding is current.
+                continue
             vector = gemini_embed(embedding_input, model=args.embedding_model, dim=args.embedding_dim, key_env=args.google_key_env)
             provider_calls += 1
             rows.append({
@@ -986,8 +1032,6 @@ def main() -> int:
                 )
             if args.sleep_seconds > 0:
                 time.sleep(float(args.sleep_seconds))
-        if provider_calls >= max(0, int(args.max_provider_calls)):
-            break
     if rows:
         upserted_embeddings += upsert_embeddings(rows)
     skipped_total = sum(skipped_by_kind.values())

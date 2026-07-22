@@ -106,10 +106,12 @@ export function relatedCardMediaGeometry(item) {
   const documentMedia = imageTextMode !== 'visual_only';
   const width = Number(asset?.width || display?.image_width || 0);
   const height = Number(asset?.height || display?.image_height || 0);
+  const dimensionsKnown = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
   return {
     asset,
     documentMedia,
-    ratio: finiteRatio(width > 0 && height > 0 ? width / height : 0, documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO),
+    dimensionsKnown,
+    ratio: finiteRatio(dimensionsKnown ? width / height : 0, documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO),
   };
 }
 
@@ -126,6 +128,21 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
   const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO);
   const potentialCoverCrop = cropFraction(mediaRatio, targetAspect);
   if (geometry?.documentMedia) {
+    // A fallback aspect ratio is useful for reserving layout space but is not
+    // evidence that an OCR/document image fits the 20% crop budget. Unknown
+    // intrinsic geometry therefore stays contained and exposes no numeric crop
+    // claim for analytics or browser gates to mistake for a measured value.
+    if (geometry?.dimensionsKnown === false) {
+      return {
+        mediaKind:'document',
+        mediaTreatment:'document-contain',
+        fit:'contain',
+        objectPosition:'50% 50%',
+        cropReason:'document_dimensions_unknown',
+        potentialCoverCrop:null,
+        coverCrop:null,
+      };
+    }
     return {
       mediaKind:'document',
       mediaTreatment:'document-safe-cover',
@@ -150,6 +167,51 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
       : `visual_only_focal_fallback:${crop.reason || 'semantic_crop_gate_closed'}`,
     potentialCoverCrop,
     coverCrop:potentialCoverCrop,
+  };
+}
+
+/**
+ * Mobile large cards are not miniature desktop recommendation rows.
+ * Visual-only media uses one stable horizontal 5:4 frame; OCR/document media
+ * keeps its intrinsic aspect and is never cropped. When document dimensions
+ * are absent from the snapshot, the browser replaces the provisional ratio
+ * with decoded naturalWidth/naturalHeight on load.
+ */
+export function resolveMobileEventCardMedia(item, options = {}) {
+  const targetAspect = finiteRatio(options.targetAspect, PREFERRED_VISUAL_RATIO);
+  const geometry = relatedCardMediaGeometry(item);
+  if (geometry.documentMedia) {
+    return {
+      mediaRatio:geometry.ratio,
+      rowRatio:geometry.ratio,
+      rowIndex:0,
+      rowColumn:0,
+      rowMode:'mobile-document-natural',
+      presentation:'flow',
+      mediaKind:'document',
+      mediaTreatment:'document-contain',
+      fit:'contain',
+      objectPosition:'50% 50%',
+      cropReason:geometry.dimensionsKnown ? 'mobile_document_natural' : 'mobile_document_decode_natural',
+      potentialCoverCrop:null,
+      coverCrop:null,
+      rowWorstCrop:null,
+      rowCost:0,
+      useNaturalAspect:true,
+    };
+  }
+  const decision = resolveRelatedCardMediaTreatment(item, targetAspect, geometry);
+  return {
+    mediaRatio:geometry.ratio,
+    rowRatio:targetAspect,
+    rowIndex:0,
+    rowColumn:0,
+    rowMode:'mobile-visual-fixed-5x4',
+    presentation:'flow',
+    ...decision,
+    rowWorstCrop:0,
+    rowCost:0,
+    useNaturalAspect:false,
   };
 }
 
@@ -192,7 +254,9 @@ function rowPlan(row, mediaTreatment) {
   const target = rowTarget(row, mediaTreatment);
   if (!target) return null;
   const decisions = row.map((entry) => resolveRelatedCardMediaTreatment(entry.item, target.targetRatio, entry));
-  if (decisions.some((decision) => decision.mediaKind === 'document' && decision.coverCrop > MAX_DOCUMENT_CROP + EPSILON)) return null;
+  if (decisions.some((decision) => decision.mediaKind === 'document'
+    && Number.isFinite(decision.coverCrop)
+    && decision.coverCrop > MAX_DOCUMENT_CROP + EPSILON)) return null;
   const visualCrop = decisions
     .filter(({ mediaKind }) => mediaKind === 'visual')
     .reduce((sum, decision) => sum + decision.coverCrop, 0);
@@ -342,7 +406,7 @@ function selectionCombinations(length, exactSize) {
   return result;
 }
 
-function materializeRow(row, rowIndex) {
+function materializeRow(row, rowIndex, presentation) {
   const { entries:sourceEntries, plan } = row;
   const entries = sourceEntries.map(({ item, ratio:mediaRatio }, index) => ({
     item,
@@ -352,14 +416,18 @@ function materializeRow(row, rowIndex) {
       rowIndex,
       rowColumn:index,
       rowMode:plan.rowMode,
+      presentation,
       ...plan.decisions[index],
       rowWorstCrop:0,
       rowCost:plan.cost,
     },
   }));
-  const rowWorstCrop = Math.max(0, ...entries
+  const documentCrops = entries
     .filter(({ layout }) => layout.mediaKind === 'document')
-    .map(({ layout }) => layout.coverCrop));
+    .map(({ layout }) => layout.coverCrop);
+  const rowWorstCrop = documentCrops.some((value) => !Number.isFinite(value))
+    ? null
+    : Math.max(0, ...documentCrops);
   for (const entry of entries) entry.layout.rowWorstCrop = rowWorstCrop;
   return entries;
 }
@@ -375,6 +443,7 @@ export function packRelatedCardRows(items, options = {}) {
   const limit = Math.max(0, Math.floor(Number(options.limit ?? items.length)));
   const rowSize = Math.max(1, Math.min(6, Number(options.rowSize ?? 3)));
   const mediaTreatment = options.mediaTreatment || 'hybrid';
+  const presentation = options.presentation === 'flow' ? 'flow' : 'related-grid';
   const geometry = options.geometry || relatedCardMediaGeometry;
   const targetCount = Math.min(limit, items.length);
   if (!targetCount) return [];
@@ -410,8 +479,9 @@ export function packRelatedCardRows(items, options = {}) {
     selected = winner.selected;
     rows = winner.rows;
   }
-  return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex));
+  return rows.flatMap((row, rowIndex) => materializeRow(row, rowIndex, presentation));
 }
 
 export const RELATED_CARD_MAX_DOCUMENT_CROP = MAX_DOCUMENT_CROP;
 export const RELATED_CARD_PREFERRED_VISUAL_RATIO = PREFERRED_VISUAL_RATIO;
+export const MOBILE_EVENT_CARD_VISUAL_RATIO = PREFERRED_VISUAL_RATIO;

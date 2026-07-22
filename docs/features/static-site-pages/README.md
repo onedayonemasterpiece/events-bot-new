@@ -10,6 +10,20 @@ strict related, broad continuation and personal feed are canonical in
 [`docs/features/linked-events/README.md`](../linked-events/README.md). This
 document owns page implementation details, not a parallel relation taxonomy.
 
+Mobile Search, query collections and other Astro discovery routes use the
+shared [`mobile shell`](mobile-shell.md): one header/drawer contract, one
+route-owned bottom-nav selection and one header-attached toast region. Runtime
+Search and materialized-query cards consume the same mobile large-card media
+resolver: visual-only images fill a horizontal `5:4` frame; OCR/documents keep
+their intrinsic ratio, including browser decode reconciliation when the Search
+snapshot lacks dimensions. The desktop compact related-row optimizer remains a
+separate contract and never supplies Search placement geometry. Search progress is backend-streamed and monotonic rather
+than simulated by client timers. The exact runtime/search contract lives in
+[`authorized-event-search.md`](../unsigned-personalization/authorized-event-search.md).
+The isolated [amber-artifact placement research](amber-artifact-easter-egg.md)
+compares a true rail-tail easter egg with an after-medallion challenger without
+changing the accepted calendar renderer.
+
 ### Unified occurrence projection
 
 Интеграция из contract/donor `feature/related-events-compact-unified-20260721`
@@ -21,7 +35,10 @@ cards и hydrated discovery используют один pure
 создаёт family. Exact compact labels: `2, 9 ноября 19:00` и
 `4 ноября 17:00, 19:00`; rail переносит тот же DTO в две строки с полным
 `aria-label`. Date lists применяют `per-date`, ranked/entity lists —
-`per-family`, event detail — always-visible selector. Полный contract и handoff:
+`per-family`, event detail — always-visible selector. Search snapshot хранит
+member ids, compact label и полный accessibility label; сервер сворачивает family
+до logical pagination, после LLM rerank и в fallback, поэтому sibling не
+всплывает на следующей странице. Полный contract и handoff:
 [`REL-045`–`REL-050`](../linked-events/requirements.md) и
 [`handoff.md`](../linked-events/handoff.md). Это не wholesale merge старых labs
 и не меняет production-root status страницы.
@@ -898,3 +915,60 @@ Do not use the generic media poster bucket default (`kenigevents`) as the static
 - Как именно bucket/CDN будет отдавать 410 для удалённых URLs, если object storage не умеет это нативно без CDN/edge rules?
 - Какой минимальный набор listing pages нужен в MVP: главная, город, дата, выходные, категория?
 - Какие desktop modules нужны в MVP: персональный grid на главной, правый rail, отдельные блоки по датам/категориям или только сортировка в общем списке?
+
+## Mobile calendar rail research v22 (2026-07-21)
+
+В `v22` параллакс-вариант `right-corner-hero` принят как основной вариант
+мобильной календарной страницы; статическая версия остаётся только контрольной.
+Перемещение декора замедлено до компенсации `scrollY × 0.28` (видимая скорость
+героя примерно `0.72×` скорости страницы), а `prefers-reduced-motion` полностью
+отключает transform. Случайные `baseAlpha` и порядок исчезновения создаются один
+раз на загрузку. Изменение только высоты viewport из-за browser chrome не
+пересоздаёт seed, расписание или DOM плиток; при скролле вперёд opacity каждой
+плитки может только уменьшаться, при обратном скролле — только увеличиваться.
+
+Компактный rail сохраняет fail-closed правило: OCR и неизвестный text-mode не
+кропаются только ради заполнения карточки. Исключение допускается для конкретного
+визуально подтверждённого `visual_only` asset и не переносится на соседние
+`unknown`. Для такого одиночного фото используется горизонтальное окно `5:4`
+(`140×112`) с focal-aware `cover`; при отсутствии focal metadata допустим центр
+`0.5/0.5`. Исследовательский override события `6764`/постера `13792` имеет
+источник решения `user-verified-visual-only-v22`. Его исходник `180×320` не даёт
+настоящей Retina-детализации: `2x/3x` rendition здесь лишь апскейл, поэтому
+production-ready исправление требует повторного semantic/geometry enrichment и
+более крупного источника, а не расширения override на весь каталог.
+
+Обязательные browser gates для этого варианта: отсутствие горизонтального
+overflow на `320/390px`, декодирование media, окно события `6764` ровно `5:4`
+без искажения, неизменность hero schedule при height-only resize, монотонность
+tile opacity в обе стороны, новый random field после reload, transform
+`22.4±1px` на `scrollY=80` и `transform:none` при reduced motion.
+
+## Mobile calendar feedback v23 (2026-07-21)
+
+На странице `Сегодня` прошедший start без явного `end_at` нельзя называть
+завершившимся и нельзя дополнять выдуманной длительностью. Когда точное время
+начала уже прошло, row сохраняет semantic state `is-started`, получает
+фактическую подпись `Уже началось` и тот же принятый neutral/desaturated visual
+treatment, что помогает отличить его от будущих событий. `all_day` и
+`day_program` не обесцвечиваются. Начальный scroll marker ставится перед первым
+будущим событием с точным временем и не использует программу дня как target.
+
+Pinned mobile subheader сохраняет высоту `64px` и появляется атомарно вместе с
+текстом/фоном. Его двухстрочная иерархия: `24 июля · 20 событий` и ниже город
+`Вся область ⌄` / compact multiselect `Калининград +2 ⌄`. Дата — единственный
+сильный текст (`18/18`), count и city — `10.5/12` muted; pill/border отсутствуют,
+terracotta остаётся только у стрелки. Селекторы обязаны быть scoped: общий
+`.sticky-date span` запрещён, потому что он превращал `20 событий` в две строки
+и визуально смешивал count с city. Gates проверяют nowrap на `320/390px`, safe
+lane справа от brand tag и совместное появление backdrop/content.
+
+Calendar v23 и Astro Search публикуются разными noindex prefixes, но образуют
+один mobile journey: calendar bottom-nav ведёт в проверенный Astro `/poisk/`, а
+Search и materialized-query pages возвращают тот же четырёхпунктовый dock с
+активным `Поиск`. На Search скрыт только старый горизонтальный desktop nav,
+который визуально попадал под fixed brand top-sheet; сам top-sheet и Search
+donor не перестраиваются. Preview base URLs задаются публичными build-time env,
+поэтому в source нет зашитого versioned prefix. Dock и mobile drawer используют
+один resolver; v24 acceptance проверяет, что calendar/personal links ведут в
+принятый v23 prefix, а Search — обратно в текущий v24 prefix.

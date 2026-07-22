@@ -122,6 +122,13 @@ def fake_search_response() -> dict[str, Any]:
             "href": "/sobytiya/arhitekturno-urbanisticheskaya-studiya-zanyatie-3-formiruem-kontseptsii-i-kaliningrad-6310/",
             "absolute_url": "https://kenigevents.ru/sobytiya/arhitekturno-urbanisticheskaya-studiya-zanyatie-3-formiruem-kontseptsii-i-kaliningrad-6310/",
             "event_type": "лекция",
+            "image_url": "https://static.kenigevents.ru/p/dh16/21/2111009450924c4948058765c7664636c636ccb3489bce9b46331e634e630c77.webp",
+            "image_alt": "Фотография события",
+            "image_text_mode": "visual_only",
+            "image_media_role": "unknown_document",
+            "image_width": 800,
+            "image_height": 534,
+            "focal_y": 0.5,
             "display_date": "2 июля",
             "display_time": "18:30",
             "display_date_time": "2 июля · 18:30",
@@ -180,7 +187,7 @@ def fake_search_response() -> dict[str, Any]:
         },
         "items": [item],
         "fallback_items": [fallback],
-        "has_more": True,
+        "has_more": False,
         "next_offset": 12,
         "retrieved_count": 12,
         "llm_verifier": {"requested": True, "used": True, "status": "ok"},
@@ -306,6 +313,28 @@ async def run_smoke(args: argparse.Namespace) -> int:
             if dist.name.startswith("preview-"):
                 await page.route(f"https://static.kenigevents.ru/{dist.name}/**", route_static_cdn_assets)
 
+            await page.add_init_script(
+                """
+                (() => {
+                  window.__searchProgressAudit = [];
+                  const nativeSetAttribute = Element.prototype.setAttribute;
+                  const nativeRemoveAttribute = Element.prototype.removeAttribute;
+                  Element.prototype.setAttribute = function(name, value) {
+                    if (name === 'aria-valuenow' && this.matches?.('[data-search-progress]')) {
+                      window.__searchProgressAudit.push(Number(value));
+                    }
+                    return nativeSetAttribute.call(this, name, value);
+                  };
+                  Element.prototype.removeAttribute = function(name) {
+                    if (name === 'aria-valuenow' && this.matches?.('[data-search-progress]')) {
+                      window.__searchProgressAudit.push(null);
+                    }
+                    return nativeRemoveAttribute.call(this, name);
+                  };
+                })();
+                """
+            )
+
             async def route_supabase(route):
                 request = route.request
                 url = request.url
@@ -330,7 +359,7 @@ async def run_smoke(args: argparse.Namespace) -> int:
                         body=json.dumps(fake_user(), ensure_ascii=False),
                     )
                     return
-                if url.endswith("/rest/v1/rpc/get_event_search_quota_v1"):
+                if url.endswith("/rest/v1/rpc/get_event_search_quota_v1") or url.endswith("/rest/v1/rpc/get_event_search_quota_v2"):
                     await route.fulfill(
                         status=200,
                         content_type="application/json; charset=utf-8",
@@ -353,12 +382,29 @@ async def run_smoke(args: argparse.Namespace) -> int:
                             body=json.dumps(fake_search_response(), ensure_ascii=False),
                         )
                         return
-                    progress = [
-                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "accepted", "progress": 2, "label": "Запрос принят"},
-                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "embedding", "progress": 28, "label": "Понимаю смысл запроса"},
-                        {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "llm_verify", "progress": 72, "label": "Проверяю релевантность"},
-                        {"type": "result", "request_id": "00000000-0000-4000-8000-000000000001", "progress": 100, "label": "Готово", "data": fake_search_response()},
-                    ]
+                    call_number = len(calls)
+                    if call_number == 2:
+                        # Keep the second request alive beyond the first
+                        # request's 650ms completion-reset window.
+                        await asyncio.sleep(1.0)
+                    if call_number == 3:
+                        progress = [
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000003", "stage": "accepted", "progress": 2, "label": "Запрос принят"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000003", "stage": "embedding", "progress": 28, "label": "Понимаю смысл запроса"},
+                            {"type": "error", "request_id": "00000000-0000-4000-8000-000000000003", "status": 503, "error": "provider_unavailable", "message": "Поиск временно недоступен"},
+                        ]
+                    else:
+                        progress = [
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "accepted", "progress": 2, "label": "Запрос принят"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "vector_search", "progress": 55, "label": "Ищу события"},
+                            # Deliberately late/lower frames exercise both the
+                            # stage-rank and numeric monotonic guards.
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "validate", "progress": 10, "label": "Проверяю запрос"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "llm_verify", "progress": 72, "label": "Проверяю релевантность"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "vector_results", "progress": 62, "label": "Варианты найдены"},
+                            {"type": "progress", "request_id": "00000000-0000-4000-8000-000000000001", "stage": "finalize", "progress": 96, "label": "Собираю результат"},
+                            {"type": "result", "request_id": "00000000-0000-4000-8000-000000000001", "progress": 100, "label": "Готово", "data": fake_search_response()},
+                        ]
                     await route.fulfill(
                         status=200,
                         content_type="application/x-ndjson; charset=utf-8",
@@ -431,6 +477,35 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await page.locator("[data-search-input]").first.fill("урбанистика в четверг вечером по регистрации")
             await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
+            await expect(page.locator("[data-search-skeletons]").first).to_be_visible()
+            await expect(page.locator("[data-search-skeletons] .authorized-search__skeleton-media").first).to_be_visible()
+            if args.screenshot_dir:
+                screenshot_dir = Path(args.screenshot_dir)
+                screenshot_dir.mkdir(parents=True, exist_ok=True)
+                await page.screenshot(path=str(screenshot_dir / "search-loading-390x844.png"), full_page=False)
+            if await page.locator("[data-search-results] [data-event-card]").count() != 0:
+                raise AssertionError("provisional vector phase must keep the large-card skeleton, not render unstable cards")
+            button_progress = await page.locator("[data-search-submit]").first.evaluate(
+                "button => getComputedStyle(button).getPropertyValue('--search-progress').trim()"
+            )
+            if button_progress in {"", "0%"}:
+                raise AssertionError(f"search progress must paint inside the submit button: {button_progress!r}")
+            button_progress_paint = await page.locator("[data-search-submit]").first.evaluate(
+                """button => {
+                  const base = getComputedStyle(button);
+                  const fill = getComputedStyle(button, '::before');
+                  return {
+                    base: base.backgroundColor,
+                    fill: fill.backgroundColor,
+                    fillWidth: parseFloat(fill.width),
+                    buttonWidth: button.getBoundingClientRect().width,
+                  };
+                }"""
+            )
+            if button_progress_paint["fill"] != "rgb(152, 64, 31)":
+                raise AssertionError(f"mobile Search progress fill must use the accepted visible accent: {button_progress_paint}")
+            if button_progress_paint["fillWidth"] < 4 or button_progress_paint["fillWidth"] >= button_progress_paint["buttonWidth"]:
+                raise AssertionError(f"Search button must expose an in-progress partial fill: {button_progress_paint}")
 
             results = page.locator("[data-search-results]").first
             await expect(results).to_be_visible()
@@ -445,14 +520,30 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(first_card).to_have_attribute("data-event-id", "6310")
             await expect(first_card).to_have_attribute("data-feed-card-variant", "split-actions")
             await expect(first_card).to_have_attribute("data-rank", "0")
+            await expect(first_card).to_have_attribute("data-card-media-presentation", "flow")
+            await expect(first_card).to_have_attribute("data-card-media-treatment", "visual-cover")
+            first_image = first_card.locator("[data-card-image]")
+            await expect(first_image).to_have_attribute("data-card-authoritative-fit", "cover")
+            if await first_image.evaluate("image => getComputedStyle(image).objectFit") != "cover":
+                raise AssertionError("runtime Search photo must use the donor cover treatment")
+            if await first_card.evaluate("card => Boolean(card.style.gridRow || card.style.gridColumn)"):
+                raise AssertionError("runtime Search flow card must not inherit related-grid placement")
             await expect(first_card.locator("[data-feedback-action='like']")).to_be_visible()
             await expect(first_card.locator("[data-native-share]")).to_be_visible()
             await expect(first_card.locator("[data-feedback-action='not_interested']")).to_be_visible()
             await expect(first_card.locator(".feedback-button--calendar")).to_be_visible()
-            await expect(page.get_by_text("Возможно, вам будет интересно")).to_be_hidden()
-            await expect(page.locator("[data-search-more]").first).to_be_visible()
+            await expect(page.get_by_text("Результаты поиска", exact=True)).to_be_visible()
+            await expect(page.get_by_text("Нашли то, что искали?", exact=True)).to_be_visible()
+            await expect(page.get_by_role("button", name="Да, нашёл")).to_be_visible()
+            await expect(page.get_by_role("button", name="Нет, не нашёл")).to_be_visible()
+            await expect(page.get_by_text("Ещё можно посмотреть", exact=True)).to_be_visible()
+            await expect(page.locator("[data-search-results] [data-event-card][data-event-id='5878']")).to_be_visible()
+            await expect(page.locator("[data-search-more]").first).to_be_hidden()
+            await expect(page.locator("[data-search-skeletons]").first).to_be_hidden()
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
             await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")
+            if args.screenshot_dir:
+                await page.screenshot(path=str(Path(args.screenshot_dir) / "search-results-390x844.png"), full_page=True)
 
             cards = page.locator("[data-search-results] [data-event-card]")
             card_count = await cards.count()
@@ -472,11 +563,54 @@ async def run_smoke(args: argparse.Namespace) -> int:
             if body.get("use_llm_verifier") is not True:
                 raise AssertionError(f"user-facing search must request bounded LLM verifier: {body}")
 
+            # Start another request before the first run's owned 650ms reset
+            # can fire. It must remain busy until its delayed response arrives.
+            await page.locator("[data-search-input]").first.fill("джаз на выходных")
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
+            await page.wait_for_timeout(750)
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
+            await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Ищу")
+            await expect(page.locator("[data-search-results]").first).to_be_visible(timeout=5000)
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
+
+            # A terminal stream error must return the control to an explicit
+            # retryable state; the next submit must recover normally.
+            await page.locator("[data-search-input]").first.fill("событие с временной ошибкой")
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-status][role='alert']").first).to_be_visible(timeout=5000)
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
+            await expect(page.locator("[data-search-submit-label]").first).to_contain_text("Искать")
+
+            await page.locator("[data-search-input]").first.fill("повторный поиск после ошибки")
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await expect(page.locator("[data-search-results]").first).to_be_visible(timeout=5000)
+            await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "false")
+
+            progress_audit = await page.evaluate("() => window.__searchProgressAudit || []")
+            runs: list[list[int]] = []
+            current_run: list[int] = []
+            for value in progress_audit:
+                if value is None:
+                    if current_run:
+                        runs.append(current_run)
+                        current_run = []
+                else:
+                    current_run.append(int(value))
+            if current_run:
+                runs.append(current_run)
+            if len(runs) < 4:
+                raise AssertionError(f"expected progress evidence for success/race/error/retry runs: {runs}")
+            for run in runs:
+                if any(right < left for left, right in zip(run, run[1:])):
+                    raise AssertionError(f"search progress moved backward: {runs}")
+
             await browser.close()
     print(
         "authorized_search_ui_smoke=ok "
         f"dist={dist.name} cards={card_count} first_event=6310 "
-        f"scrolled_event={scrolled_event_id} scroll_y={scroll_y} request_calls={len(calls)}"
+        f"scrolled_event={scrolled_event_id} scroll_y={scroll_y} request_calls={len(calls)} "
+        f"progress_runs={runs}"
     )
     return 0
 
@@ -624,6 +758,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", help="Path to site/dist/<preview-id>. Defaults to latest preview-* build.")
     parser.add_argument("--supabase-url", default="https://example.supabase.co")
+    parser.add_argument("--screenshot-dir", default="", help="Optional directory for mocked loading/result screenshots.")
     parser.add_argument(
         "--real-edge",
         action="store_true",

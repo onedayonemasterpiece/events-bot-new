@@ -108,9 +108,9 @@ test('desktop static continuation emits stable initial skeleton geometry', async
   assert.match(desktop, /packRelatedCardRows/u);
   assert.match(desktop, /desktopRelatedLayout=\{layout\}/u);
   assert.match(card, /--lab-row-media-ratio:/u);
-  assert.match(card, /desktopRelatedCrop && 'event-card__media-shell--dynamic'/u);
-  assert.match(card, /desktopRelatedCrop && 'is-image-loading'/u);
-  assert.match(card, /aria-busy=\{desktopRelatedCrop \? 'true' : undefined\}/u);
+  assert.match(card, /\(desktopRelatedCrop \|\| mobileFlowMedia\) && 'event-card__media-shell--dynamic'/u);
+  assert.match(card, /\(desktopRelatedCrop \|\| mobileFlowMedia\) && 'is-image-loading'/u);
+  assert.match(card, /aria-busy=\{desktopRelatedCrop \|\| mobileFlowMedia \? 'true' : undefined\}/u);
   assert.match(card, /onload=\{imageLoadHandler\}/u);
   assert.match(card, /onerror=\{imageErrorHandler\}/u);
   assert.match(built, /data-lab-related-card="true"/u);

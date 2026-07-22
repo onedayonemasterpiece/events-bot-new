@@ -1,0 +1,68 @@
+---
+import EventCard from '../../../components/EventCard.astro';
+import EventLayout from '../../../layouts/EventLayout.astro';
+import {
+  getMaterializedSearchCollection,
+  getMaterializedSearchCollectionEvents,
+  getMaterializedSearchCollectionReferenceDate,
+  materializedSearchCollections,
+} from '../../../data/searchCollections';
+import { absoluteUrl, getPreviewBuild, siteHomeHref, SITE_NAME, withBase } from '../../../lib/events';
+
+export function getStaticPaths() {
+  return materializedSearchCollections.map((collection) => ({ params: { slug: collection.slug } }));
+}
+
+const { slug } = Astro.params;
+const collection = getMaterializedSearchCollection(String(slug));
+if (!collection) throw new Error(`Unknown materialized Search collection: ${slug}`);
+const events = getMaterializedSearchCollectionEvents(collection.slug);
+const canonicalUrl = absoluteUrl(`/podborki/${collection.slug}/`);
+const title = `${collection.title} | ${SITE_NAME}`;
+const updatedDate = getPreviewBuild().current_date;
+const referenceDate = getMaterializedSearchCollectionReferenceDate();
+---
+<EventLayout title={title} description={collection.description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="search" noindex>
+  <main id="main">
+    <div class="page-shell page-shell--search-collection">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={siteHomeHref()}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <a href={withBase('/poisk/')}>Поиск</a>
+        <span aria-hidden="true">/</span>
+        <span>{collection.title}</span>
+      </nav>
+
+      <section class="section-card">
+        <div class="section-card__inner">
+          <p class="eyebrow">Готовая подборка</p>
+          <h1>{collection.title}</h1>
+          <p class="lead">{collection.description}</p>
+          <p class="collection-criteria"><strong>Как собрана:</strong> {collection.criteria}</p>
+          <p class="muted-note">Данные афиши обновлены {updatedDate}; подборка рассчитана на {referenceDate}. Это не личный сохранённый поиск.</p>
+        </div>
+      </section>
+
+      <section class="section-card collection-results" aria-labelledby="collection-results-title">
+        <div class="section-card__inner">
+          <h2 id="collection-results-title">{events.length ? `${events.length} событий` : 'Подходящих событий пока нет'}</h2>
+          {events.length ? (
+            <div class="cards-grid" data-search-collection-results>
+              {events.map((event) => <EventCard event={event} mobileFlowMedia />)}
+            </div>
+          ) : (
+            <p class="muted-note">Критерии оставлены без расширения: мы не добавляем похожие события только ради заполнения страницы.</p>
+          )}
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .collection-results { margin-top: 1rem; }
+  .collection-criteria { max-width: 64ch; }
+  @media (max-width: 759px) {
+    .page-shell--search-collection .cards-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

@@ -16,8 +16,8 @@ const HeadingTag = headingLevel;
   <div class="authorized-search__head">
     <div class="authorized-search__copy">
       <p class="eyebrow">Умный поиск</p>
-      <HeadingTag>Найти событие по описанию</HeadingTag>
-      <p class="muted-note">Войдите через Яндекс и напишите обычной фразой, что хочется найти. Результаты появятся лентой: карточки можно лайкать, скрывать как «не интересно», добавлять в календарь и делиться.</p>
+      <HeadingTag>{standalone ? 'Найти событие' : 'Найти событие по описанию'}</HeadingTag>
+      <p class="muted-note">{standalone ? 'Опишите желание обычной фразой — жанр, настроение, время или с кем хотите пойти.' : 'Войдите через Яндекс и напишите обычной фразой, что хочется найти. Результаты появятся лентой: карточки можно лайкать, скрывать как «не интересно», добавлять в календарь и делиться.'}</p>
     </div>
     <div class="authorized-search__auth">
       <button type="button" class="secondary-button authorized-search__login" data-search-login>
@@ -46,17 +46,32 @@ const HeadingTag = headingLevel;
   </div>
   {!enabled && <p class="authorized-search__status">Поиск не активирован в этой сборке: нет публичных Supabase env.</p>}
   <form class="authorized-search__form" data-search-form hidden>
-    <label class="sr-only" for="authorized-event-search-input">Что хочется найти</label>
-    <input id="authorized-event-search-input" type="search" data-search-input placeholder="Например: джаз на выходных" autocomplete="off" />
-    <button type="submit" class="cta-button authorized-search__submit" data-search-submit style="--search-progress: 0%;">
+    <label class:list={[!standalone && 'sr-only', standalone && 'authorized-search__query-label']} for="authorized-event-search-input">Что хочется сделать?</label>
+    {standalone ? (
+      <textarea id="authorized-event-search-input" rows="3" maxlength="180" data-search-input placeholder="Например: послушать хор или сходить с детьми бесплатно" autocomplete="off"></textarea>
+    ) : (
+      <input id="authorized-event-search-input" type="search" maxlength="180" data-search-input placeholder="Например: джаз на выходных" autocomplete="off" />
+    )}
+    <button type="submit" class="cta-button authorized-search__submit" data-search-submit>
       <span class="authorized-search__submit-label" data-search-submit-label>Искать</span>
     </button>
   </form>
+  <div class="authorized-search__progress" data-search-progress role="progressbar" aria-label="Ход поиска" aria-valuemin="0" aria-valuemax="100" hidden>
+    <span class="authorized-search__progress-bar" data-search-progress-bar aria-hidden="true"></span>
+  </div>
+  <p class="authorized-search__progress-label" data-search-progress-label role="status" aria-live="polite" aria-atomic="true" hidden></p>
   <p class="authorized-search__status" data-search-status aria-live="polite">{enabled ? 'Войдите, чтобы включить поиск.' : ''}</p>
   <div class="authorized-search__skeletons" data-search-skeletons hidden aria-hidden="true">
-    <div class="authorized-search__skeleton-card"></div>
-    <div class="authorized-search__skeleton-card"></div>
-    <div class="authorized-search__skeleton-card"></div>
+    {[0, 1].map(() => (
+      <div class="authorized-search__skeleton-card">
+        <div class="authorized-search__skeleton-media"></div>
+        <div class="authorized-search__skeleton-body"><span></span><span></span></div>
+        <div class="authorized-search__skeleton-actions"><span></span><span></span></div>
+      </div>
+    ))}
+    <div class="authorized-search__skeleton-card authorized-search__skeleton-card--peek">
+      <div class="authorized-search__skeleton-media"></div>
+    </div>
   </div>
   <div class="authorized-search__results" data-search-results hidden></div>
   <button type="button" class="secondary-button authorized-search__more" data-search-more hidden>Показать ещё</button>
@@ -65,6 +80,7 @@ const HeadingTag = headingLevel;
 
 <script>
   import { createClient } from '@supabase/supabase-js';
+  import { resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
 
   const roots = Array.from(document.querySelectorAll('[data-authorized-search]'));
   for (const root of roots) {
@@ -78,6 +94,9 @@ const HeadingTag = headingLevel;
     const input = root.querySelector('[data-search-input]');
     const submit = root.querySelector('[data-search-submit]');
     const submitLabel = root.querySelector('[data-search-submit-label]');
+    const progress = root.querySelector('[data-search-progress]');
+    const progressBar = root.querySelector('[data-search-progress-bar]');
+    const progressLabel = root.querySelector('[data-search-progress-label]');
     const userBadge = root.querySelector('[data-search-user]');
     const userName = root.querySelector('[data-search-user-name]');
     const accountMenu = root.querySelector('[data-search-account]');
@@ -95,8 +114,14 @@ const HeadingTag = headingLevel;
     let fallbackStarted = false;
     let feedbackShown = false;
     let lastResultEventIds = [];
+    let pendingFallbackItems = [];
     let authCallbackHadError = false;
     let progressValue = 0;
+    let progressStageRank = 0;
+    let progressMilestoneRank = 0;
+    let searchEpoch = 0;
+    let activeSearchController = null;
+    let completionResetTimer = null;
     const searchSlowNoticeMs = 6500;
     const authSessionTimeoutMs = 8000;
     const authCallbackTimeoutMs = 20000;
@@ -333,16 +358,133 @@ const HeadingTag = headingLevel;
       return { ok: true, query };
     }
 
-    function setSearchProgress(value, label) {
-      progressValue = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
-      if (submit) submit.style.setProperty('--search-progress', `${progressValue}%`);
-      if (submitLabel) submitLabel.textContent = progressValue >= 100 ? 'Готово' : `Ищу… ${progressValue}%`;
-      if (label) setStatus(label);
+    const searchStageOrder = {
+      opening: 0,
+      accepted: 1,
+      auth: 2,
+      validate: 3,
+      result_cache: 4,
+      quota: 5,
+      embedding: 6,
+      vector_search: 7,
+      vector_results: 8,
+      preview_visible: 9,
+      llm_verify: 10,
+      fallback: 11,
+      finalize: 12,
+      result: 13,
+    };
+
+    function isCurrentSearchEpoch(epoch) {
+      return epoch === searchEpoch;
     }
 
-    function resetSearchProgress() {
-      if (submit) submit.style.setProperty('--search-progress', '0%');
+    function milestoneForSearchStage(stage, fallbackLabel) {
+      if (stage === 'result') return { rank: 6, label: fallbackLabel || 'Готово' };
+      if (stage === 'finalize') return { rank: 5, label: fallbackLabel || 'Собираю результат…' };
+      if (stage === 'llm_verify' || stage === 'fallback') return { rank: 4, label: fallbackLabel || 'Проверяю найденные варианты…' };
+      if (stage === 'preview_visible') return { rank: 3, label: fallbackLabel || 'Варианты уже видны. Проверяю точность…' };
+      if (stage === 'vector_results') return { rank: 2, label: fallbackLabel || 'Варианты найдены…' };
+      if (stage === 'embedding' || stage === 'vector_search') return { rank: 1, label: fallbackLabel || 'Ищу события…' };
+      return { rank: 0, label: fallbackLabel || 'Открываю поиск…' };
+    }
+
+    function announceSearchMilestone(stage, label) {
+      if (!progressLabel) return;
+      const milestone = milestoneForSearchStage(stage, label);
+      if (milestone.rank < progressMilestoneRank) return;
+      // Repeated backend events within one broad phase update the bar without
+      // making a screen reader announce every internal implementation stage.
+      if (milestone.rank === progressMilestoneRank && progressLabel.textContent) return;
+      progressMilestoneRank = milestone.rank;
+      progressLabel.textContent = milestone.label;
+      progressLabel.hidden = false;
+      if (progress) progress.setAttribute('aria-valuetext', milestone.label);
+    }
+
+    function beginSearchProgress(epoch, label) {
+      if (!isCurrentSearchEpoch(epoch)) return;
+      progressValue = 0;
+      progressStageRank = searchStageOrder.opening;
+      progressMilestoneRank = 0;
+      if (completionResetTimer != null) {
+        window.clearTimeout(completionResetTimer);
+        completionResetTimer = null;
+      }
+      if (progress) {
+        progress.hidden = false;
+        progress.classList.add('is-indeterminate');
+        progress.removeAttribute('aria-valuenow');
+        progress.style.setProperty('--progress', '36%');
+      }
+      if (progressBar) progressBar.style.width = '36%';
+      if (submit) {
+        submit.classList.add('is-progress-indeterminate');
+        submit.style.setProperty('--search-progress', '36%');
+      }
+      if (submitLabel) submitLabel.textContent = 'Ищу…';
+      announceSearchMilestone('opening', label || 'Открываю поиск…');
+    }
+
+    function setSearchProgress(value, label, options = {}) {
+      const { epoch = searchEpoch, stage = '' } = options;
+      if (!isCurrentSearchEpoch(epoch)) return;
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return;
+      const nextStageRank = searchStageOrder[stage] ?? progressStageRank;
+      if (nextStageRank < progressStageRank) return;
+      progressStageRank = nextStageRank;
+      progressValue = Math.max(progressValue, Math.max(0, Math.min(100, Math.round(numeric))));
+      if (progress) {
+        progress.hidden = false;
+        progress.classList.remove('is-indeterminate');
+        progress.setAttribute('aria-valuenow', String(progressValue));
+        progress.style.setProperty('--progress', `${progressValue}%`);
+      }
+      if (progressBar) progressBar.style.width = `${progressValue}%`;
+      if (submit) {
+        submit.classList.remove('is-progress-indeterminate');
+        submit.style.setProperty('--search-progress', `${progressValue}%`);
+      }
+      if (submitLabel) submitLabel.textContent = progressValue >= 100 ? 'Готово' : 'Ищу…';
+      announceSearchMilestone(stage, label);
+    }
+
+    function resetSearchProgress(epoch = searchEpoch) {
+      if (!isCurrentSearchEpoch(epoch)) return;
+      if (completionResetTimer != null) {
+        window.clearTimeout(completionResetTimer);
+        completionResetTimer = null;
+      }
+      progressValue = 0;
+      progressStageRank = 0;
+      progressMilestoneRank = 0;
+      if (progress) {
+        progress.hidden = true;
+        progress.classList.remove('is-indeterminate');
+        progress.removeAttribute('aria-valuenow');
+        progress.removeAttribute('aria-valuetext');
+        progress.style.setProperty('--progress', '0%');
+      }
+      if (progressBar) progressBar.style.width = '0%';
+      if (submit) {
+        submit.classList.remove('is-progress-indeterminate');
+        submit.style.setProperty('--search-progress', '0%');
+      }
+      if (progressLabel) {
+        progressLabel.hidden = true;
+        progressLabel.textContent = '';
+      }
       if (submitLabel) submitLabel.textContent = 'Искать';
+    }
+
+    function scheduleSearchProgressReset(epoch) {
+      if (!isCurrentSearchEpoch(epoch)) return;
+      if (completionResetTimer != null) window.clearTimeout(completionResetTimer);
+      completionResetTimer = window.setTimeout(() => {
+        completionResetTimer = null;
+        resetSearchProgress(epoch);
+      }, 650);
     }
 
     function setSkeletonLoading(isLoading) {
@@ -397,8 +539,11 @@ const HeadingTag = headingLevel;
 
     function renderCards(items, rankBase = offset) {
       const renderer = window.KenigEventsRenderEventCard;
+      // Search is a ranked mobile feed, not a one-column desktop recommendation
+      // row. Preserve rank while applying the shared mobile media contract.
+      const packed = items.map((item) => ({ item, layout: resolveMobileEventCardMedia(item) }));
       const rendered = typeof renderer === 'function'
-        ? items.map((candidate, index) => renderer({ candidate: { ...candidate, base_similarity: candidate.semantic_score || candidate.base_similarity || 0 }, rank: rankBase + index, personal_score: candidate.semantic_score || candidate.base_similarity || 0 }, 'split-actions')).filter(Boolean).join('')
+        ? packed.map(({ item: candidate, layout }, index) => renderer({ candidate: { ...candidate, base_similarity: candidate.semantic_score || candidate.base_similarity || 0 }, rank: rankBase + index, personal_score: candidate.semantic_score || candidate.base_similarity || 0 }, 'split-actions', layout)).filter(Boolean).join('')
         : '';
       if (rendered) return rendered;
       setStatus('Результаты найдены, но карточки временно недоступны. Обновите страницу и попробуйте снова.', 'error');
@@ -459,12 +604,22 @@ const HeadingTag = headingLevel;
       return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
     }
 
-    function appendSectionHeading(text) {
+    function appendSectionHeading(text, kind = '') {
       if (!results) return;
       const heading = document.createElement('h3');
       heading.className = 'authorized-search__fallback-title';
+      if (kind) heading.dataset.searchSection = kind;
       heading.textContent = text;
       results.appendChild(heading);
+    }
+
+    function appendEmptyExactState() {
+      if (!results || results.querySelector('[data-search-empty-exact]')) return;
+      const note = document.createElement('p');
+      note.className = 'authorized-search__empty';
+      note.dataset.searchEmptyExact = 'true';
+      note.textContent = 'По вашему запросу ничего не найдено';
+      results.appendChild(note);
     }
 
     function candidateEventId(item) {
@@ -508,11 +663,12 @@ const HeadingTag = headingLevel;
     }
 
     function appendFeedbackPrompt(query) {
-      if (!results || feedbackShown || lastResultEventIds.length < 3) return;
+      if (!results || feedbackShown) return;
       feedbackShown = true;
       const wrap = document.createElement('div');
       wrap.className = 'authorized-search__feedback';
-      wrap.innerHTML = `<strong>Похоже на то, что вы искали?</strong><div class="authorized-search__feedback-actions"><button type="button" data-search-feedback="matched">Совпало с ожиданиями</button><button type="button" data-search-feedback="missed">Не совпало</button></div><p class="muted-note">Хорошие запросы попадут в очередь поисковых тегов: после LLM-унификации для них будет создана статическая страница.</p>`;
+      wrap.dataset.searchFeedbackEndcap = 'true';
+      wrap.innerHTML = `<strong>Нашли то, что искали?</strong><div class="authorized-search__feedback-actions"><button type="button" data-search-feedback="matched">Да, нашёл</button><button type="button" data-search-feedback="missed">Нет, не нашёл</button></div><p class="muted-note">Ответ поможет улучшить поиск и будущие готовые подборки.</p>`;
       wrap.querySelectorAll('[data-search-feedback]').forEach((button) => {
         button.addEventListener('click', () => {
           if (wrap.dataset.feedbackState === 'saving' || wrap.dataset.feedbackState === 'saved') return;
@@ -536,10 +692,7 @@ const HeadingTag = headingLevel;
           }, 0);
         });
       });
-      const cards = results.querySelectorAll('[data-event-card]');
-      const anchor = cards[Math.min(3, cards.length - 1)];
-      if (anchor?.parentElement === results) anchor.insertAdjacentElement('afterend', wrap);
-      else results.appendChild(wrap);
+      results.appendChild(wrap);
     }
 
     function setResultContext(data) {
@@ -592,6 +745,14 @@ const HeadingTag = headingLevel;
     }
 
     function clearResults() {
+      if (activeSearchController) {
+        searchEpoch += 1;
+        activeSearchController.abort();
+        activeSearchController = null;
+        setMoreLoading(false);
+        setSearchLoading(false);
+        resetSearchProgress(searchEpoch);
+      }
       if (results) { results.innerHTML = ''; results.hidden = true; setResultContext({}); }
       setSkeletonLoading(false);
       if (more) more.hidden = true;
@@ -599,6 +760,7 @@ const HeadingTag = headingLevel;
       fallbackStarted = false;
       feedbackShown = false;
       lastResultEventIds = [];
+      pendingFallbackItems = [];
     }
 
     function markInsertedCards(startIndex, phase, pageOffset) {
@@ -653,55 +815,58 @@ const HeadingTag = headingLevel;
       const fallbackItems = collapseSearchOccurrenceFamilies(rawFallbackItems, seenFamilies);
       if (!results) return { itemCount: items.length, fallbackCount: fallbackItems.length };
 
-      if (!append || !isVector) removeVectorPreview(pageOffset);
-      if (!append) {
-        results.innerHTML = '';
-        fallbackStarted = false;
-        if (!isVector) lastResultEventIds = [];
-      }
-
-      setResultContext(data);
       if (isVector) {
         const verifierPending = data?.llm_verifier?.status === 'pending';
-        if (items.length > 0 && results.children.length === 0) appendSectionHeading('Нашёл по смыслу');
-        insertVectorPreviewHtml(items, pageOffset, pageOffset);
-        if (items.length > 0) appendPhaseNote(
-          verifierPending
-            ? 'Проверяю эти варианты: финальная выдача может стать короче или поменять порядок.'
-            : 'Быстрые варианты по смыслу.',
-          pageOffset,
-        );
-        results.hidden = !results.children.length;
-        if (results.children.length) setSkeletonLoading(false);
+        // Vector candidates are provisional. Keep the canonical-card skeleton
+        // stable until the verified payload arrives instead of reshuffling UI.
+        results.hidden = true;
         setStatus(items.length > 0
-          ? (verifierPending ? 'Нашёл варианты по смыслу. ИИ проверяет точность…' : 'Нашёл варианты по смыслу.')
-          : 'Векторный поиск пока не нашёл карточки. Проверяю дальше…');
+          ? (verifierPending ? 'Нашёл варианты. Проверяю точность…' : 'Нашёл варианты. Собираю карточки…')
+          : 'Поиск пока не нашёл карточки. Проверяю дальше…');
         return { itemCount: items.length, fallbackCount: 0 };
       }
 
-      if (!append && items.length > 0 && results.children.length === 0) {
-        appendSectionHeading('Результаты поиска');
+      removeVectorPreview(pageOffset);
+      if (!append) {
+        results.innerHTML = '';
+        fallbackStarted = false;
+        lastResultEventIds = [];
+        pendingFallbackItems = [];
       }
+      setResultContext(data);
+
+      if (!append && results.children.length === 0) appendSectionHeading('Результаты поиска', 'exact');
       insertCardHtml(items, pageOffset, 'final', pageOffset);
       lastResultEventIds.push(...items.map(candidateEventId).filter((id) => id != null));
-      if (items.length === 0 && !fallbackStarted) {
-        appendSectionHeading('Возможно, вам будет интересно');
-        fallbackStarted = true;
-      }
-      if (fallbackItems.length) {
-        if (!fallbackStarted) {
-          appendSectionHeading('Возможно, вам будет интересно');
-          fallbackStarted = true;
+
+      const fallbackKeys = new Set(pendingFallbackItems.map(searchOccurrenceFamilyKey));
+      for (const item of fallbackItems) {
+        const key = searchOccurrenceFamilyKey(item);
+        if (!fallbackKeys.has(key)) {
+          pendingFallbackItems.push(item);
+          fallbackKeys.add(key);
         }
-        insertCardHtml(fallbackItems, pageOffset + items.length, 'final', pageOffset);
-        lastResultEventIds.push(...fallbackItems.map(candidateEventId).filter((id) => id != null));
       }
-      appendFeedbackPrompt(currentQuery || input?.value || '');
+
+      // Exact results own pagination. Discovery and feedback are an endcap and
+      // cannot appear while another exact page is still available.
+      if (!data?.has_more) {
+        if (lastResultEventIds.length === 0) appendEmptyExactState();
+        appendFeedbackPrompt(currentQuery || input?.value || '');
+        const exactIds = new Set(lastResultEventIds);
+        const discoveryItems = pendingFallbackItems.filter((item) => !exactIds.has(candidateEventId(item)));
+        if (discoveryItems.length) {
+          appendSectionHeading('Ещё можно посмотреть', 'discovery');
+          fallbackStarted = true;
+          insertCardHtml(discoveryItems, pageOffset + items.length, 'final', pageOffset);
+        }
+      }
       results.hidden = !results.children.length;
       return { itemCount: items.length, fallbackCount: fallbackItems.length };
     }
 
-    async function invokeEventSearchJson(endpoint, body, session, reason = 'json_fallback') {
+    async function invokeEventSearchJson(endpoint, body, session, reason = 'json_fallback', options = {}) {
+      const { epoch = searchEpoch, signal } = options;
       const fallbackBody = reason === 'stream_stalled'
         ? { ...body, use_llm_verifier: false, stream_rescue: true }
         : body;
@@ -714,14 +879,17 @@ const HeadingTag = headingLevel;
           Accept: 'application/json',
         },
         body: JSON.stringify(fallbackBody),
+        signal,
       });
+      if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
-      setSearchProgress(100, reason === 'stream_stalled' ? 'Показал быстрые карточки' : 'Готово');
+      setSearchProgress(100, reason === 'stream_stalled' ? 'Показал быстрые карточки' : 'Готово', { epoch, stage: 'result' });
       return { data: payload, error: null, rescued: reason === 'stream_stalled' };
     }
 
     async function invokeEventSearch(body, session, options = {}) {
+      const { epoch = searchEpoch, signal } = options;
       const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -732,16 +900,18 @@ const HeadingTag = headingLevel;
           Accept: 'application/x-ndjson',
         },
         body: JSON.stringify(body),
+        signal,
       });
+      if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/x-ndjson')) {
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
-        setSearchProgress(100, 'Готово');
+        setSearchProgress(100, 'Готово', { epoch, stage: 'result' });
         return { data: payload, error: null };
       }
       const reader = response.body?.getReader();
-      if (!reader) return invokeEventSearchJson(endpoint, body, session, 'stream_unavailable');
+      if (!reader) return invokeEventSearchJson(endpoint, body, session, 'stream_unavailable', { epoch, signal });
       const decoder = new TextDecoder();
       let buffer = '';
       let finalData = null;
@@ -757,8 +927,9 @@ const HeadingTag = headingLevel;
         return Promise.race([reader.read(), timeout]).finally(() => window.clearTimeout(timeoutId));
       };
       async function finishWithResult(event) {
+        if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
         finalData = event.data;
-        setSearchProgress(100, event.label || 'Готово');
+        setSearchProgress(100, event.label || 'Готово', { epoch, stage: 'result' });
         try {
           await reader.cancel();
         } catch (_error) {
@@ -768,11 +939,12 @@ const HeadingTag = headingLevel;
         return { data: finalData, error: null };
       }
       function handleStreamEvent(event) {
+        if (!isCurrentSearchEpoch(epoch)) return;
         receivedStreamEvent = true;
         if (event.type === 'progress') {
-          setSearchProgress(event.progress, event.label || 'Поиск продолжается…');
+          setSearchProgress(event.progress, event.label || 'Поиск продолжается…', { epoch, stage: event.stage || '' });
           if (event.stage === 'vector_results' && event.data) {
-            options.onVectorResult?.(event.data);
+            options.onVectorResult?.(event.data, event);
           }
         } else if (event.type === 'error') {
           finalError = event;
@@ -782,8 +954,9 @@ const HeadingTag = headingLevel;
         const readResult = await readWithFirstChunkTimeout();
         if (readResult?.streamTimedOut) {
           try { await reader.cancel(); } catch (_error) {}
+          if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
           setStatus('Поток прогресса не дошёл до браузера. Переключаюсь на быстрые карточки…');
-          return invokeEventSearchJson(endpoint, body, session, 'stream_stalled');
+          return invokeEventSearchJson(endpoint, body, session, 'stream_stalled', { epoch, signal });
         }
         const { value, done } = readResult;
         if (done) break;
@@ -806,7 +979,7 @@ const HeadingTag = headingLevel;
           const event = JSON.parse(tail);
           if (event.type === 'result') {
             finalData = event.data;
-            setSearchProgress(100, event.label || 'Готово');
+            setSearchProgress(100, event.label || 'Готово', { epoch, stage: 'result' });
           } else {
             handleStreamEvent(event);
           }
@@ -815,7 +988,7 @@ const HeadingTag = headingLevel;
         }
       }
       if (!finalData && !finalError && !receivedStreamEvent) {
-        return invokeEventSearchJson(endpoint, body, session, 'stream_stalled');
+        return invokeEventSearchJson(endpoint, body, session, 'stream_stalled', { epoch, signal });
       }
       return finalError ? { data: null, error: finalError } : { data: finalData, error: null };
     }
@@ -837,24 +1010,24 @@ const HeadingTag = headingLevel;
       }
       const query = validation.query;
       if (input) input.value = query;
-      setSearchLoading(true, { showSkeleton: false });
+      const epoch = searchEpoch + 1;
+      searchEpoch = epoch;
+      activeSearchController?.abort();
+      const controller = new AbortController();
+      activeSearchController = controller;
+      setSearchLoading(true, { showSkeleton: !append });
       if (append) setMoreLoading(true);
       let vectorRendered = false;
-      setSearchProgress(1, append ? 'Загружаю следующую пачку…' : 'Запускаю поиск…');
-      const progressTimers = [
-        window.setTimeout(() => { if (loading) setSearchProgress(28, 'Понимаю смысл запроса'); }, 500),
-        window.setTimeout(() => { if (loading) setSearchProgress(55, 'Ищу события'); }, 1200),
-        window.setTimeout(() => { if (loading) setSearchProgress(74, 'Проверяю, что подходит лучше'); }, 1800),
-        window.setTimeout(() => { if (loading) setSearchProgress(92, 'Собираю карточки'); }, 3200),
-        window.setTimeout(() => {
-          if (!loading) return;
-          if (vectorRendered) {
-            setStatus('Результаты уже есть ниже. Финальная ИИ-проверка идёт дольше ожидаемого; карточки можно смотреть, а список обновится сам.', 'info');
-          } else {
-            setStatus('Ищу дольше обычного. Не останавливаю поиск: как только появятся первые карточки, покажу их здесь.', 'info');
-          }
-        }, searchSlowNoticeMs),
-      ];
+      let completed = false;
+      beginSearchProgress(epoch, append ? 'Открываю следующую страницу…' : 'Открываю поиск…');
+      const slowNoticeTimer = window.setTimeout(() => {
+        if (!isCurrentSearchEpoch(epoch) || !loading) return;
+        if (vectorRendered) {
+          setStatus('Варианты уже найдены. Финальная проверка идёт дольше обычного; скелетон сменится готовыми карточками.', 'info');
+        } else {
+          setStatus('Ищу дольше обычного. Не останавливаю поиск: как только появятся первые карточки, покажу их здесь.', 'info');
+        }
+      }, searchSlowNoticeMs);
       if (more && !append) more.hidden = true;
       try {
         if (!append || query !== currentQuery) {
@@ -863,22 +1036,30 @@ const HeadingTag = headingLevel;
           fallbackStarted = false;
           feedbackShown = false;
           lastResultEventIds = [];
+          pendingFallbackItems = [];
           if (results) {
             results.innerHTML = '';
             setResultContext({});
           }
         }
         const pageOffset = offset;
-        const { data, error } = await invokeEventSearch(
+        const searchResponse = await invokeEventSearch(
           { query, limit: 8, offset: pageOffset, candidate_window: 10, include_fallback: true, use_llm_verifier: true, allow_llm_fallback: false },
           session,
           {
-            onVectorResult: (vectorData) => {
+            epoch,
+            signal: controller.signal,
+            onVectorResult: (vectorData, streamEvent) => {
+              if (!isCurrentSearchEpoch(epoch)) return;
               vectorRendered = true;
               renderSearchPayload(vectorData, { append, phase: 'vector', pageOffset });
+              setSearchProgress(streamEvent?.progress, 'Варианты найдены. Проверяю точность…', { epoch, stage: 'preview_visible' });
             },
           },
         );
+        const { data, error, stale = false } = searchResponse;
+        if (!isCurrentSearchEpoch(epoch) || controller.signal.aborted) return;
+        if (stale) return;
         if (error) {
           const statusCode = Number(error?.status || error?.context?.status || 0);
           if (statusCode === 401 || statusCode === 403 || error?.error === 'auth_required') {
@@ -900,6 +1081,7 @@ const HeadingTag = headingLevel;
         const items = Array.isArray(data?.items) ? data.items : [];
         const fallbackItems = Array.isArray(data?.fallback_items) ? data.fallback_items : [];
         renderSearchPayload(data, { append, phase: 'final', pageOffset });
+        completed = true;
         const nextOffset = Number(data?.next_offset);
         offset = Number.isFinite(nextOffset) && nextOffset >= pageOffset ? nextOffset : pageOffset + items.length;
         if (more) more.hidden = !data?.has_more;
@@ -911,17 +1093,18 @@ const HeadingTag = headingLevel;
         if (results && results.children.length) setSkeletonLoading(false);
         if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
       } catch (error) {
-        const message = String(error?.message || error);
+        if (!isCurrentSearchEpoch(epoch) || controller.signal.aborted || error?.name === 'AbortError') return;
         if (vectorRendered && results?.children.length) setStatus('Показал быстрые результаты по смыслу. Финальный ответ не пришёл, но найденные карточки остаются на экране.', 'info');
         else setStatus('Поиск не сработал в браузере. Попробуйте ещё раз.', 'error');
       } finally {
-        for (const timer of progressTimers) window.clearTimeout(timer);
+        window.clearTimeout(slowNoticeTimer);
+        if (!isCurrentSearchEpoch(epoch)) return;
+        if (activeSearchController === controller) activeSearchController = null;
         setSkeletonLoading(false);
         setMoreLoading(false);
         setSearchLoading(false);
-        window.setTimeout(() => {
-          if (!loading) resetSearchProgress();
-        }, 650);
+        if (completed) scheduleSearchProgressReset(epoch);
+        else resetSearchProgress(epoch);
       }
     }
 

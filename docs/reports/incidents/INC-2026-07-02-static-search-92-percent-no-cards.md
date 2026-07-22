@@ -97,6 +97,12 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - Changed the Edge Function default verification window fallback from 20 to 10 and made pgvector search honor `offset` for subsequent batches.
 - Exposed `has_more` while later vector windows remain available.
 - Wired the existing shimmer-card CSS into actual search skeleton DOM/JS so users see card-shaped loading placeholders.
+- 2026-07-22 regression hardening: restored immediate initial skeleton display,
+  made it structurally match the canonical large Search card, kept provisional
+  vector candidates behind that stable loading surface, and moved the visible
+  monotonic progress fill into the submit button. The semantic progressbar
+  remains available to assistive technology. Public preview evidence is still
+  required before this incident can close.
 
 ## Follow-up Actions
 

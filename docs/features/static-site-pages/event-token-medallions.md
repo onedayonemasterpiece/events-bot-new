@@ -259,7 +259,7 @@ a presentation-only rule: it must not widen alias matching or add a second
 {
   "badges": {
     "charity": {"value": true, "confidence": 0.88, "evidence": "часть средств направят в фонд…"},
-    "kids_or_family": {"value": true, "confidence": 0.91, "evidence": "6+, семейный спектакль"},
+    "kids_or_family": {"value": "family", "age_band": ["school_age"], "confidence": 0.91, "evidence": "семейный спектакль для детей 7–12 лет", "conflicts": []},
     "video_recording": {"value": "planned", "confidence": 0.82, "evidence": "будет доступна запись трансляции"},
     "pushkin_card": {"value": true, "confidence": 0.98, "evidence": "оплата по Пушкинской карте"},
     "organizer_slug": {"value": "world-ocean-museum", "confidence": 0.94, "evidence": "source account / venue alias"}
@@ -274,7 +274,7 @@ a presentation-only rule: it must not widen alias matching or add a second
 | Field | Accept when | Reject / review when |
 | --- | --- | --- |
 | `charity` | source says благотворительный, сбор средств, пожертвование, proceeds/support to a named fund/person/cause | generic `бесплатно`, `в поддержку культуры`, venue sponsorship without donation; confidence `<0.80` goes to review |
-| `kids_or_family` | explicit age 0+/6+, `для детей`, family event, children's workshop/performance | 12+/16+/18+, adult venue context, fairy-tale title for adult theatre without audience evidence |
+| `kids_or_family` | source-grounded `для детей`, explicit family format or children's workshop/performance, with audience evidence and no conflicts | `0+`/`6+` alone, noisy legacy topics alone, 12+/16+/18+, adult venue context, fairy-tale title for adult theatre without audience evidence |
 | `video_recording` | source promises recording/stream or already links video | event merely has a promo video/poster video; distinguish `available`, `planned`, `livestream_only` |
 | `pushkin_card` | existing DB `pushkin_card=true`, source text, ticket system/program evidence | organizer generally participates but this event has excluded ticket category; mark review |
 | `organizer_slug` | exact source account, venue alias, official organizer line, manually curated mapping | title mentions an institution as subject but not organizer/venue |
@@ -284,6 +284,10 @@ Confidence policy:
 - `>=0.80`: auto-accepted when evidence span is present;
 - `0.50–0.79`: render only in admin/review tooling, not public token;
 - `<0.50`: reject;
+
+The full admission/audience surface contract, including composed search and
+the decision to defer a decorative children asset, is canonical in
+[`../unsigned-personalization/audience-admission-discovery.md`](../unsigned-personalization/audience-admission-discovery.md).
 - every public `charity`, `kids_or_family`, `video_recording` token must be traceable to source evidence or curated venue/organizer policy.
 
 ## Accessibility and SEO/GEO

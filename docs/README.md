@@ -32,6 +32,8 @@
 - Interest clubs implementation RC, identity ADR and gated release plan: `docs/features/interest-clubs/README.md`
 - Static personal announcements release map: `docs/features/static-personal-announcements/README.md`
 - Static event-page production plan, 10-day Telegraph cutover and tests: `docs/features/static-site-pages/release-plan.md`, `docs/features/static-site-pages/test-scenarios.md`
+- Unified mobile header/bottom-nav/toast shell: `docs/features/static-site-pages/mobile-shell.md`
+- Free + children search/admission/audience contract: `docs/features/unsigned-personalization/audience-admission-discovery.md`
 
 - Static-site service share: `docs/features/static-site-pages/service-sharing.md`
 - Service-share preview runbook: `docs/operations/service-sharing-preview.md`

@@ -155,7 +155,8 @@ const shareFileName = `kenigevents-${event.slug}`;
 
   if (!document.documentElement.dataset.desktopPhoneCopyBound) {
     document.documentElement.dataset.desktopPhoneCopyBound = 'true';
-    const resetTimers = new WeakMap<HTMLButtonElement, number>();
+    const resetTimers = new Map<HTMLButtonElement, number>();
+    const copyEpochs = new WeakMap<HTMLButtonElement, number>();
     document.addEventListener('click', async (event) => {
       const button = event.target instanceof Element
         ? event.target.closest<HTMLButtonElement>('[data-desktop-phone-copy]')
@@ -168,6 +169,9 @@ const shareFileName = `kenigevents-${event.slug}`;
       const status = button.querySelector<HTMLElement>('[data-desktop-phone-status]');
       const currentTimer = resetTimers.get(button);
       if (currentTimer) window.clearTimeout(currentTimer);
+      resetTimers.delete(button);
+      const epoch = Number(copyEpochs.get(button) || 0) + 1;
+      copyEpochs.set(button, epoch);
 
       button.dataset.phoneRevealed = 'true';
       if (label) label.textContent = phoneDisplay;
@@ -179,20 +183,28 @@ const shareFileName = `kenigevents-${event.slug}`;
         button.dataset.copyState = 'success';
         if (toast) toast.textContent = 'Номер скопирован';
         if (status) status.textContent = 'Номер скопирован';
+        if (window.matchMedia('(max-width: 759px)').matches) (window as any).KenigEventsToast?.show?.({ message:'Номер скопирован', type:'success', dedupeKey:'phone-copy', announce:false });
       } catch {
         button.dataset.copyState = 'error';
         if (toast) toast.textContent = 'Не удалось скопировать';
         if (status) status.textContent = `Не удалось скопировать. Номер: ${phoneDisplay}`;
+        if (window.matchMedia('(max-width: 759px)').matches) (window as any).KenigEventsToast?.show?.({ message:'Не удалось скопировать номер', type:'error', dedupeKey:'phone-copy', announce:false });
       } finally {
         button.removeAttribute('aria-busy');
       }
 
       const timer = window.setTimeout(() => {
+        if (copyEpochs.get(button) !== epoch) return;
         delete button.dataset.copyState;
         if (status) status.textContent = '';
+        resetTimers.delete(button);
       }, 2400);
       resetTimers.set(button, timer);
     });
+    window.addEventListener('pagehide', () => {
+      resetTimers.forEach((timer) => window.clearTimeout(timer));
+      resetTimers.clear();
+    }, { once:true });
   }
 </script>
 
@@ -281,6 +293,7 @@ const shareFileName = `kenigevents-${event.slug}`;
   }
   .desktop-prototype__phone-copy[data-copy-state="success"] .desktop-prototype__phone-toast { opacity:1; transform:translate(-50%,0); }
   .desktop-prototype__phone-copy[data-copy-state="error"] .desktop-prototype__phone-toast { opacity:1; transform:translate(-50%,0); background:#8c3327; }
+  @media (max-width:759px) { .desktop-prototype__phone-toast { display:none; } }
   @media (prefers-reduced-motion:no-preference) {
     .desktop-prototype__phone-toast { transition:opacity .16s ease, transform .16s ease; }
   }

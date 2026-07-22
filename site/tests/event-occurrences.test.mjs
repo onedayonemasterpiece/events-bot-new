@@ -128,10 +128,11 @@ test('card collapse policy is per-date for temporal lists and per-family for ent
 });
 
 test('production surfaces and live search producer wire per-date, per-family and selector policies explicitly', async () => {
-  const [eventsSource, searchSource, edgeSearchSource, vectorSyncSource, layoutSource, detailSource, listItemSource] = await Promise.all([
+  const [eventsSource, searchSource, edgeSearchSource, edgeFamilySource, vectorSyncSource, layoutSource, detailSource, listItemSource] = await Promise.all([
     readFile(new URL('../src/lib/events.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/AuthorizedEventSearch.astro', import.meta.url), 'utf8'),
     readFile(new URL('../../supabase/functions/event-search/index.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../supabase/functions/event-search/occurrence-families.ts', import.meta.url), 'utf8'),
     readFile(new URL('../../scripts/sync_event_search_vectors_to_supabase.py', import.meta.url), 'utf8'),
     readFile(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8'),
     readFile(new URL('../src/pages/sobytiya/[slug].astro', import.meta.url), 'utf8'),
@@ -141,7 +142,9 @@ test('production surfaces and live search producer wire per-date, per-family and
   assert.match(eventsSource, /getPopularEvents[\s\S]*collapseOccurrenceCards\(ranked, 'per-family'\)/u);
   assert.match(eventsSource, /getStaticRelatedCandidates[\s\S]*collapseOccurrenceCards\([\s\S]*'per-family'/u);
   assert.match(searchSource, /collapseSearchOccurrenceFamilies\(rawItems, seenFamilies\)/u);
-  assert.match(edgeSearchSource, /collapseOccurrenceFamilies\(\(Array\.isArray\(rows\)/u);
+  assert.match(edgeSearchSource, /paginateOccurrenceFamilies\(\s*rankedCandidates,/u);
+  assert.match(edgeSearchSource, /collapseOccurrenceFamilies\(\s*llmResult\.used/u);
+  assert.match(edgeFamilySource, /memberIds\.includes\(eventId\)/u);
   assert.match(vectorSyncSource, /build_occurrence_projections[\s\S]*reciprocal explicit occurrence families/u);
   assert.match(layoutSource, /collapseRankedOccurrenceFamilies\(rankedBeforeOccurrenceCollapse\)/u);
   assert.match(detailSource, /occurrencePresentation=\{occurrencePresentation\}/u);

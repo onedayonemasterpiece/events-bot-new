@@ -745,10 +745,10 @@ async function assertFooterShortcuts(page, origin, route) {
   invariant(['BODY', 'HTML'].includes(await page.evaluate(() => document.activeElement?.tagName)), 'footer BODY specimen unexpectedly owns focused control');
   await page.keyboard.press('KeyP');
   await page.waitForFunction(() => window.__releaseGateClipboard.images.length === 1, null, { timeout: 8_000 });
-  await page.waitForFunction(() => /Карточка скопирована/iu.test(document.querySelector('[data-keyboard-action-toast]')?.textContent || ''), null, { timeout: 8_000 });
+  await page.waitForFunction(() => /Карточка скопирована/iu.test(document.querySelector('[data-mobile-toast-message]')?.textContent || ''), null, { timeout: 8_000 });
   await page.keyboard.press('KeyS');
   await page.waitForFunction(() => window.__releaseGateClipboard.text.at(-1)?.endsWith('\nhttps://kenigevents.ru/'), null, { timeout: 8_000 });
-  await page.waitForFunction(() => /Текст и ссылка скопированы/iu.test(document.querySelector('[data-keyboard-action-toast]')?.textContent || ''), null, { timeout: 8_000 });
+  await page.waitForFunction(() => /Текст и ссылка скопированы/iu.test(document.querySelector('[data-mobile-toast-message]')?.textContent || ''), null, { timeout: 8_000 });
 
   // Keep a real event owner focused but offscreen. The footer viewport owns the
   // service shortcuts; the test never focuses either footer button.
@@ -764,7 +764,7 @@ async function assertFooterShortcuts(page, origin, route) {
   // its success state. Wait on that concrete UI signal before sending S;
   // otherwise the still-busy P transaction can legitimately reject the next
   // shortcut on slower/prefixed candidate assets.
-  await page.waitForFunction(() => /Карточка скопирована/iu.test(document.querySelector('[data-keyboard-action-toast]')?.textContent || ''), null, { timeout: 8_000 });
+  await page.waitForFunction(() => /Карточка скопирована/iu.test(document.querySelector('[data-mobile-toast-message]')?.textContent || ''), null, { timeout: 8_000 });
   await page.keyboard.press('KeyS');
   await page.waitForFunction(() => window.__releaseGateClipboard.text.length >= 2 && window.__releaseGateClipboard.text.at(-1)?.endsWith('\nhttps://kenigevents.ru/'), null, { timeout: 8_000 });
   invariant(await footer.locator('[data-service-share-intent="image"]:focus, [data-service-share-intent="text"]:focus').count() === 0, 'browser gate must not focus footer controls');

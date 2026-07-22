@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
+  MOBILE_EVENT_CARD_VISUAL_RATIO,
   packRelatedCardRows,
+  resolveMobileEventCardMedia,
   resolveRelatedCardMediaTreatment,
 } from '../src/lib/relatedCardLayout.mjs';
 import {
@@ -110,6 +112,66 @@ test('row packing permits an incomplete row only as the final row for every supp
   }
 });
 
+test('one-column flow packing preserves search rank and carries no grid presentation intent', () => {
+  const ranked = [
+    imageEvent(31, 1600, 1000, classifiedPhoto()),
+    imageEvent(32, 800, 1200, { image_text_mode:'ocr_text' }),
+    imageEvent(33, 1200, 900, classifiedPhoto()),
+  ];
+  const packed = packRelatedCardRows(ranked, {
+    rowSize:1,
+    mediaTreatment:'hybrid',
+    presentation:'flow',
+  });
+
+  assert.deepEqual(packed.map(({ item }) => item.id), [31, 32, 33]);
+  assert.ok(packed.every(({ layout }) => layout.presentation === 'flow'));
+  assert.deepEqual(packed.map(({ layout }) => layout.rowColumn), [0, 0, 0]);
+});
+
+test('unknown OCR dimensions fail closed instead of claiming a measured 20% crop', () => {
+  const unknownDocument = imageEvent(41, 0, 0, { image_text_mode:'ocr_text' });
+  const decision = resolveRelatedCardMediaTreatment(unknownDocument, 4 / 5);
+  const [packed] = packRelatedCardRows([unknownDocument], { rowSize:1, presentation:'flow' });
+
+  assert.equal(decision.fit, 'contain');
+  assert.equal(decision.mediaTreatment, 'document-contain');
+  assert.equal(decision.cropReason, 'document_dimensions_unknown');
+  assert.equal(decision.coverCrop, null);
+  assert.equal(decision.potentialCoverCrop, null);
+  assert.equal(packed.layout.rowWorstCrop, null);
+});
+
+test('mobile large cards keep visual media at horizontal 5:4 and documents intrinsic', () => {
+  const frog = imageEvent(4785, 2000, 660, {
+    image_text_mode:'visual_only',
+    media_role:'unknown_document',
+    safe_crop:false,
+  });
+  const visual = resolveMobileEventCardMedia(frog);
+  assert.equal(MOBILE_EVENT_CARD_VISUAL_RATIO, 5 / 4);
+  assert.equal(visual.rowRatio, 5 / 4);
+  assert.equal(visual.fit, 'cover');
+  assert.equal(visual.rowMode, 'mobile-visual-fixed-5x4');
+
+  const knownPoster = resolveMobileEventCardMedia(imageEvent(6998, 1200, 1800, { image_text_mode:'ocr_text' }));
+  assert.equal(knownPoster.rowRatio, 2 / 3);
+  assert.equal(knownPoster.fit, 'contain');
+  assert.equal(knownPoster.useNaturalAspect, true);
+
+  const unknownPoster = resolveMobileEventCardMedia(imageEvent(6999, 0, 0, { image_text_mode:'ocr_text' }));
+  assert.equal(unknownPoster.rowRatio, 4 / 5, 'unknown posters reserve a portrait skeleton until decode');
+  assert.equal(unknownPoster.cropReason, 'mobile_document_decode_natural');
+  assert.equal(unknownPoster.useNaturalAspect, true);
+});
+
+test('desktop recommendation packing remains adaptive and independent from mobile flow', () => {
+  const frog = imageEvent(4785, 2000, 660, { image_text_mode:'visual_only' });
+  const [desktop] = packRelatedCardRows([frog], { rowSize:1, presentation:'related-grid' });
+  const mobile = resolveMobileEventCardMedia(frog);
+  assert.equal(desktop.layout.rowRatio, 8 / 5);
+  assert.equal(mobile.rowRatio, 5 / 4);
+});
 test('optimizer may place the first OCR item in the final remainder to keep full rows feasible and compact', () => {
   const document = (id, width, height) => imageEvent(id, width, height, { image_text_mode:'ocr_text' });
   const packed = packRelatedCardRows([

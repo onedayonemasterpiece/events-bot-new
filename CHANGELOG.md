@@ -2,6 +2,87 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added two isolated mobile rail prototypes for the `Янтарный космонавт`
+  easter egg: a physical-tail placement after the final like and an
+  after-medallion challenger. Both keep the accepted `112px` rail geometry,
+  use transparent retina WebP assets, persistent low-amplitude glow/float/glint
+  motion until collection,
+  accessible found feedback and a complete reduced-motion fallback.
+
+- Added the mobile Search completion boundary: after all exact pages, users can
+  answer `Да, нашёл` / `Нет, не нашёл`, then continue into the separately named
+  `Ещё можно посмотреть` discovery block; an empty exact set is stated plainly.
+
+- Added a compact transparent 3x WebP leather backing for the mobile brand
+  tag, cropped from the supplied `mobile-head-skinny.png` without anisotropic
+  distortion. `Полюбить Калининград` remains live text and the wide-o
+  `Анонсы` remains the canonical SVG, so both stay retina-sharp over the skin.
+
+- Added a reference-4 glass-depth correction for the mobile menu: the accepted
+  closed brand tag itself remains visible as the open-state anchor, the weaker
+  glass samples a darker backdrop, account and Share use distinct surfaces,
+  and `О сервисе` opens an in-place factual drill-down without moving Share.
+  The menu Share now uses the production `data-native-share` image-first
+  contract, including an image File plus text/URL when the platform supports it.
+
+- Added a full-viewport reference-4 mobile-menu successor: the canonical
+  `Полюбить Калининград / Анонсы` lockup, a tighter source-faithful leather
+  close crop, genuinely translucent single-layer glass, a coherent Phosphor
+  Thin icon set, unambiguous `0 ₽` Free sign and growth-led Popular icon. The
+  entire menu, including Share, fits `320×700` without scrolling and hides the
+  competing lower dock while open; the standard closed tag remains unchanged.
+
+- Added an exact expanded-state adaptation of the supplied mobile-menu
+  reference: a live warm glass sheet, canonical wide-o `Анонсы` home mark,
+  SVGRepo icon-led navigation, date chips and account/favorite/share utility.
+  The leather close control is a direct retina crop from the reference and is
+  confined to the open state; the accepted standard closed brand tag remains
+  unchanged.
+
+- Added a reference-4-derived mobile navigation challenger with a right-side
+  leather tab, the canonical wide-o `Анонсы` wordmark, exact
+  `Сегодня / Завтра / Выходные` shortcuts and factual release navigation. It
+  preserves the accepted whole-object drawer motion and bottom dock, rejects
+  fake reference destinations, and uses a real lightweight scrim close target
+  instead of a full-screen glass/body-lock takeover.
+
+- Added a J/K/L mobile header-contrast lab in response to Telegram review.
+  It replaces the repeated bordered-cell menu with typographic, asymmetric and
+  heavy terracotta compositions, keeps one factual IA and the accepted moving
+  brand-tag behavior, and holds the lower dock/footer light so header weight can
+  be evaluated independently.
+
+- Added a factual G/H/I mobile navigation lab based on the real static-site
+  routes and the release-plan branch. It preserves the accepted moving brand-tag
+  plane and v23 Calendar/Popular rails, keeps `Главная` explicit, compares the
+  current drawer with the first-release account/favorites target, and presents
+  Festivals only as a non-clickable post-release slot.
+
+- Added a separate D/E/F mobile global-navigation research lab. It keeps the
+  accepted whole-object brand-tag motion and v23 Calendar/Popular rails, while
+  comparing two fully invariant global planes with one explicitly bounded
+  hybrid. Search progress remains inside its submit CTA; footer policy is part
+  of each separately linked prototype rather than an accidental per-page drift.
+
+- Rebuilt the noindex mobile shell A/B/C lab around the canonical whole-object
+  drawer motion: the cream top plane and 120×84 brand tag now slide together,
+  while accepted Calendar/Popular v23 rails and the 64px dock remain untouched.
+  Three flat typographic plane/footer policies share a Search CTA whose visible,
+  monotonic progress fill is contained inside the button. The rejected fixed-tag
+  plus detached-sheet v1 is not a production donor.
+
+- Added `послушать хор` to the editorial fill-only Search query examples.
+- Defined one mobile discovery shell for Search and materialized collections:
+  shared header/drawer ownership, route-driven bottom navigation, safe-area
+  tokens and a single header-attached transient toast region with a five-second
+  reverse countdown, pause/dedupe and persistent action/error states.
+- Added the cross-surface admission/audience discovery contract. Explicit free
+  intent is a hard eligibility rule; child/family suitability requires
+  evidence-backed LLM output, so no decorative child medallion is shipped from
+  noisy topic or age-rating inference.
+
 ### Fixed
 
 - Fixed keyboard traversal after compact recommendation reordering: card entry,
@@ -23,6 +104,99 @@
   forbidden and the canonical data repair is held for owner-approved rollout.
   OCR-incompatible ranked prefixes use a bounded three-candidate alternate
   window instead of reintroducing middle singleton/pair rows.
+- Made the standalone mobile Search button's real backend progress visibly
+  legible with the existing opaque terracotta fill and kept its indeterminate
+  segment partially inside the button instead of letting the whole band leave
+  the viewport. Also fixed the amber A/B prototypes to inherit the accepted
+  reference-4 v13 menu from the assembled Calendar donor rather than silently
+  re-rendering the legacy tonal menu.
+
+- Restored the accepted large standalone mobile Search field on the real
+  `/poisk/` runtime: visible `Что хочется сделать?` label, three-row textarea,
+  flat page composition and the existing full-width in-button backend progress.
+  Yandex/Supabase auth, skeletons and canonical large result cards are unchanged;
+  compact embedded Search keeps its one-line input.
+
+- Fixed the mobile Search shell regression: the accepted reference-4 v13
+  leather/glass navigation is now a reusable Astro component owned by
+  `EventLayout`, rather than a disconnected Python-only lab. The real Search
+  runtime keeps its large canonical cards, skeleton and in-button progress;
+  the legacy desktop footer is suppressed on mobile navigation surfaces, and
+  the unified review assembly reuses the accepted v23 Calendar/Popular donor
+  instead of routing phone navigation back to old Astro listings.
+
+- Restored canonical large `split-actions` cards in mobile Search and an
+  immediate matching card skeleton while data is fetched. Provisional vector
+  candidates no longer replace the skeleton or reshuffle the page, generic
+  fallback no longer appears before exact pagination is exhausted, and the
+  monotonic visible progress is again contained inside the Search button.
+
+- Mobile menu reference-4 v13 raises the closed shell stacking context above
+  sticky shelf/city headers (while keeping it below the bottom navigation), so
+  the leather tag is no longer clipped or made unclickable during real-device
+  scrolling.
+
+- Restored the accepted global service-share contract in the reference-4
+  mobile menu: Share now delegates to the existing footer controller and sends
+  the versioned KenigEvents service card, service copy and canonical homepage,
+  never the first event/page image. Raised the closed leather tag above sticky
+  group headers and clips its offscreen open-state position only after motion
+  settles, preventing the one-frame Android bottom leak during the first swipe.
+
+- Stabilized the full-screen reference-4 mobile drawer against Android Chrome
+  viewport-bar changes: the closed leather tag now uses matched percentage
+  geometry rather than animated `dvh`, and the open plane is never taller than
+  the viewport. Internal touch scrolling cannot chain to the document or reveal
+  a blank lower strip. The donor chevron was removed, both brand lockups were
+  aligned to the accepted three-line rhythm, and the `0 ₽` glyph now matches
+  the optical weight and spacing of the surrounding thin icon family.
+
+- Fixed the reference-4 mobile-menu motion regression: the primary summary tag
+  no longer counter-transforms and floats over the expanded glass plane. It now
+  rides down with the drawer and is fully outside the viewport when open; the
+  expanded top-left mark is a separate flat home lockup rather than a second
+  leather tag.
+
+- Superseded the rejected reference-4 v6 prototype, which had incorrectly
+  replaced the standard closed tag and reduced the supplied glass/icon menu to
+  an opaque compact panel. The v7 lab preserves every requested reference item
+  except `Скоро` and `Мои билеты`, keeps the bottom dock visible, and makes the
+  leather close control sticky on small-screen menu scroll.
+
+- Fixed mobile Search media framing after real result-card regressions:
+  `visual_only` images such as «Царевна Лягушка» now fill the shared horizontal
+  5:4 frame, while OCR/document images keep their decoded intrinsic ratio so
+  missing snapshot dimensions cannot create artificial black top/bottom fields.
+  Search and static query collections share this resolver; the desktop
+  recommendation-row optimizer and focus-6408 contract remain unchanged.
+- Restored the accepted mobile calendar v23 journey from Search v24. The bottom
+  dock and mobile drawer now share one route resolver, so `Афиша`, `Даты` and
+  `Для меня` no longer open legacy same-prefix Astro pages while `Поиск` returns
+  to the current v24 build.
+
+- Fixed mobile authorized-search cards to consume the accepted static compact
+  crop contract, including intrinsic media dimensions, semantic role and focal
+  position, while keeping linear result order free of related-grid placement.
+  Unknown document geometry remains fail-closed instead of being cropped.
+- Removed the competing synthetic Search progress timers: the submit now uses
+  one request-epoch-owned, monotonic backend NDJSON state machine with a
+  separate accessible progressbar, stale-response protection and reduced-motion
+  behavior.
+- Kept the shared mobile-toast producer valid inside EventLayout's inline
+  browser runtime; the generated Search page now initializes the canonical card
+  renderer instead of falling back to “cards temporarily unavailable”. The
+  authorized UI smoke now checks a real visual-image `cover` treatment and the
+  intentionally separate fallback-result section.
+- Fixed zero-provider-call vector-sync verification so it audits every event
+  and document kind instead of stopping after the first item when the call cap
+  is already reached.
+- Kept the mobile toast below the header's protruding brand handle by including
+  its overhang in the shared top-chrome geometry instead of covering the logo.
+
+- Hardened authorized event search occurrence collapse: reciprocal family DTOs
+  are paginated only after collapse, deduplicated again after LLM reranking and
+  share the same seen-set with fallback results; malformed one-way metadata
+  remains separate and the highest-ranked member stays representative.
 
 - Unified linked-event occurrence projection across static detail, date lists,
   Popular, search, recommendations and personal continuation: only reciprocal
@@ -390,6 +564,24 @@
   because its separate daily budget is exhausted.
 
 ### Changed
+- **Mobile calendar/Search v23 research:** restored the proven v58 Astro Search
+  with a separate progress submit and canonical large `EventCard` results,
+  replaced the fake v22 Search with honest static query-learning links, added a
+  factual `Уже началось` treatment and future-timed autoscroll for Today,
+  restored Orpheus's end-of-rail future-date recap, and replaced the broken
+  sticky date/count/city wrapping with one scoped two-row hierarchy. The final
+  mobile shell now removes the clipped horizontal header nav, shares the
+  four-item calendar/Search bottom dock, and re-materializes relative static
+  collections against an explicit visible reference date so `ближайшие
+  выходные` cannot hand off a past-weekend card.
+- **Mobile calendar/search v22 research contract:** make the slower
+  resize-stable, directionally monotonic right-corner parallax the primary
+  mobile calendar variant; restore a verified `visual_only` horizontal `5:4`
+  crop for event `6764` without weakening unknown/OCR fail-closed behavior;
+  allow the date-list time block to show the next explicit occurrence; and
+  define `/poisk/` point-of-intent auth plus a visibly simulated, centrally
+  curated query cloud. Yandex remains the only active production auth provider;
+  the email flow in this prototype is explicitly research-only.
 - **Static-site documentation and E2E index**: linked the event-page release/test contracts from canonical feature/docs routing, distinguished preview component checks, mocked Playwright demo tests and draft Gherkin from missing production E2E, and replaced the open-ended one-month Telegraph wording with a D0-to-D10 cutover contract that preserves legacy URLs and keeps aggregate Telegraph surfaces separate.
 - **Smart Update image geometry crowd bound**: cap geometry responses at the 25
   largest/clearest faces so crowd images keep crop-relevant boxes without

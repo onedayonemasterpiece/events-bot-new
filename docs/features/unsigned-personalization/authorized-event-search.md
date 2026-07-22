@@ -4,7 +4,15 @@
 
 ## Product contract
 
-Authenticated users get a one-line **Умный поиск** on a dedicated `/poisk/` page and, for the preview canary, on listing/index pages. The mobile terracotta tag drawer, desktop header and footer expose a plain navigation link **Поиск** to `/poisk/`; the search form itself is not placed inside the drawer so the header remains compact. The user can type a natural-language intent, for example “урбанистика”, “детский мастер-класс” or “джаз вечером”. Results are rendered as the same event cards used in `Смотрите дальше`:
+Authenticated users get **Умный поиск** on a dedicated `/poisk/` page and, for
+the preview canary, on listing/index pages. The standalone mobile page uses a
+large multiline intent field; compact embedded placements may keep the
+one-line control. The mobile terracotta tag drawer, desktop header and footer
+expose a plain navigation link **Поиск** to `/poisk/`; the search form itself is
+not placed inside the drawer so the header remains compact. The user can type a
+natural-language intent, for example “урбанистика”, “детский мастер-класс” or
+“джаз вечером”. Results are rendered as the same event cards used in
+`Смотрите дальше`:
 
 - card opens the event detail page;
 - like / unlike updates local personalization state;
@@ -15,6 +23,215 @@ Authenticated users get a one-line **Умный поиск** on a dedicated `/po
 When vector results are exhausted, the UI starts a separate section **«Возможно, вам будет интересно»**. This is fallback/discovery, not a continuation of exact search relevance.
 
 Anonymous users have quota `0`: the UI shows “Войти через Яндекс”. Search is not available until Supabase Auth has a valid session.
+
+### Mobile point-of-intent entry and query cloud (v22 research)
+
+На mobile `/poisk/` — самостоятельный пункт нижней навигации; он активен на
+странице поиска, а календарная date-strip там не дублируется. Поле запроса видно
+анонимному пользователю сразу, поэтому можно сформулировать намерение до входа.
+Auth раскрывается inline после submit, запрос сохраняется в поле, но результаты
+до действующей session не подменяются демо-данными. Это point-of-value gate:
+постоянный большой login CTA в каждой шапке не нужен. Те же auth entry points
+могут появляться в `Для меня` и при явном durable save/sync; после входа общим
+сквозным контролом становится компактный avatar/account menu.
+
+Порядок inline auth: поле email и `Получить код`, разделитель `или`, затем
+`Войти через Яндекс`. Yandex PKCE возвращает на очищенный текущий URL и сохраняет
+введённый запрос. **Production status на 2026-07-21:** реально подключён только
+`custom:yandex`; email OTP/code UI в `v22` — исследовательская демонстрация
+состояний из ещё не применённого identity-controller и не должен называться
+рабочей production-авторизацией до отдельного rollout/acceptance.
+
+Облако над поиском обозначается как `Подборки по запросам` и разделяется с
+персональными сохранениями. Его целевой источник — централизованно
+нормализованные LLM и одобренные редакцией общеполезные запросы, которые после
+накопления становятся регулярно обновляемыми статическими tag pages. Пока таких
+страниц нет, prototype обязан показывать `Демо` и
+`data-prototype-simulated=true`: chips только подставляют текст в query/`?q`, не
+ведут на вымышленные `/tag/` и не утверждают, что пользователь их сохранял.
+Личные сохранённые поиски — отдельный auth-only объект.
+
+Mobile acceptance: touch targets не меньше `44px`, input font не меньше `16px`,
+нет overflow на `320/390px`, auth error/status объявляется через `aria-live`, а
+browser evidence охватывает anonymous, auth-required и signed-in/result states.
+
+### v23 donor correction and query-learning pages
+
+Самостоятельный Search UI из calendar `v22` superseded: arrow внутри input,
+fake Yandex/email states и маленькие bespoke result rows не переносятся дальше.
+Канонический mobile donor — визуальный v58 (`abbcf7a13d…`) и актуальная Search
+revision `2ef8dd834d…`. Текущий Astro `AuthorizedEventSearch` сохраняет отдельный
+full-width submit под input; `::before` отображает `--search-progress`, а
+результаты строятся только общим runtime `EventCard`. Yandex/Supabase PKCE,
+session restore, NDJSON/vector-first и stalled-stream JSON rescue не
+переписываются. Email не является частью этого donor и не показывается.
+
+Ниже поиска располагается тихая секция `Готовые подборки` с полными живыми
+фразами, которые одновременно учат формулировать запрос. Централизованно
+нормализованный и одобренный запрос с materialized result set — обычная
+crawlable ссылка на регулярно обновляемую static page; просмотр такой страницы
+не расходует online embedding/LLM quota. Если static page ещё не создана,
+пример может только подставить текст в input без auto-submit, network request
+или вымышленного URL. Личные сохранённые поиски — отдельная auth-only секция и
+не называются публичными подборками.
+
+Mobile gates: input и progress-submit остаются раздельными; submit получает
+`aria-busy` и видимый percent/progress; live/mocked results используют крупный
+canonical `EventCard`; materialized links реально открывают static pages;
+fill-only example не навигирует и не отправляет форму; на `320/390px` отсутствует
+horizontal overflow.
+
+В noindex mobile research preview страницы `/poisk/` и `/podborki/*` монтируют
+один `MobileSearchBottomNav`: `Афиша / Даты / Поиск / Для меня`, где `Поиск`
+активен. Он не переписывает `AuthorizedEventSearch`; на mobile скрывается только
+конфликтующий горизонтальный `.site-nav`, а существующая brand/top-sheet
+механика остаётся. Между раздельными calendar/Search preview используются
+`PUBLIC_MOBILE_CALENDAR_BASE_URL` и `PUBLIC_MOBILE_SEARCH_BASE_URL`; без них
+компонент возвращается к обычным `withBase(...)` links.
+
+Research materialization может получить явную дату среза через
+`PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE`. Страница обязана одновременно
+показывать дату обновления source catalog и дату, на которую рассчитана
+подборка: это не разрешение маскировать старые данные. Перед пользовательской
+передачей относительный запрос вроде `ближайшие выходные` не может содержать
+прошедший weekend. В v23 public preview срез `2026-07-21` даёт карточки 25–26
+июля. Research routes остаются `noindex`; production crawlable materialization
+разрешается только после подключения регулярно обновляемого canonical job.
+
+### v24 runtime crop and progress contract
+
+Search-result cards use one shared **mobile large-card** media resolver; they
+are not one-column desktop recommendation rows. `visual_only` media receives a
+stable horizontal `5:4` frame (`width / height = 1.25`) with focal-aware
+`cover`. This is the product's earlier “4:5 horizontal” convention expressed
+unambiguously in CSS aspect-ratio order. OCR/document media is never cropped:
+known dimensions reserve the intrinsic ratio, while a missing snapshot first
+reserves a poster-like `4:5` skeleton and is reconciled from decoded
+`naturalWidth / naturalHeight`. This removes
+artificial top/bottom fields without cutting poster text. Search maps ranked
+items directly through `resolveMobileEventCardMedia`, so result order stays
+authoritative and no related-grid coordinates enter the linear DOM. Static
+materialized Search collections opt into the same resolver.
+
+The Supabase search snapshot contract is `event-card-v3-media-layout` and
+includes `image_media_role`, `image_width`, `image_height` and `focal_y`.
+Known `visual_only` media is focal-aware `cover`. OCR and unknown text mode
+remain fail-closed `contain`; missing dimensions are not invented as crop
+evidence, but decoded browser geometry may replace the provisional skeleton
+ratio. The exporter and browser renderer must be upgraded together; a newer
+renderer may not invent semantic crop permission. The desktop related-card
+optimizer and its `6408` crop gates remain unchanged and surface-specific.
+
+The backend vector-sync verification must inspect the whole requested corpus
+even when `--max-provider-calls 0`. That value forbids new Gemini calls; it does
+not permit an early exit after the first document. A zero-call
+`--require-complete` audit is green only when every requested document kind has
+an existing embedding with the current text hash.
+
+Search progress has a single owner: backend NDJSON stages. The old client-side
+28/55/74/92% timers are removed. Until the first frame the adjacent semantic
+progressbar is indeterminate; after that its value and stage rank are monotonic,
+and `result` completes at 100%. Every request owns an epoch, `AbortController`
+and completion-reset timer: stale chunks or a previous run's delayed reset
+cannot mutate the current button. The submit remains a button with
+`aria-busy`; progress semantics live on a separate referenced
+`role="progressbar"`. Reduced-motion disables cosmetic interpolation without
+removing state feedback. Search/auth/quota explanations remain inline because
+they are contextual form state, not transient global toasts.
+
+The editorial fill-only examples include the compact intent `послушать хор`.
+Like the other rows marked `пример`, it only fills the input and never submits
+the query without an explicit press on `Искать`.
+
+Mobile chrome and transient-message ownership are defined once in
+[`mobile-shell.md`](../static-site-pages/mobile-shell.md); admission/audience
+queries and the explicit decision not to ship an unverified child medallion are
+canonical in
+[`audience-admission-discovery.md`](audience-admission-discovery.md).
+
+### v25 large-card loading and result-endcap contract
+
+Mobile Search renders the same canonical large `EventCard` / `split-actions`
+component as `Смотрите дальше`; compact calendar rails and copied
+`.event-row` markup are not valid Search results. The shared mobile resolver
+remains authoritative: `visual_only` media reserves a horizontal `5:4` cover
+with focal protection, while OCR/document media keeps its intrinsic ratio and
+`contain` treatment.
+
+An initial request immediately shows a structural large-card skeleton: two
+full cards and a short preview of the third, each with a `5:4` media slot,
+text lines and split-action placeholders. Provisional vector candidates update
+only the backend-owned monotonic progress/status; they do not replace the
+skeleton or reshuffle temporary cards. The visible progress fill lives inside
+the submit button. A visually hidden adjacent `role=progressbar` retains the
+same monotonic values and labels for assistive technology, so there is still
+one progress owner and one visible progress surface.
+
+Result order is fixed:
+
+1. `Результаты поиска` and the exact `items` pages;
+2. while `has_more=true`, only `Показать ещё` is added — fallback is buffered;
+3. after exact exhaustion, `Нашли то, что искали?` with `Да, нашёл` →
+   `matched` and `Нет, не нашёл` → `missed`;
+4. only then `Ещё можно посмотреть` and deduplicated `fallback_items`.
+
+If exact `items` are empty, the endcap begins with
+`По вашему запросу ничего не найдено`, still records the explicit user verdict,
+and may continue into honest discovery. Generic `fallback_items` are never
+called personalized: `По вашим интересам` is reserved for a separately sourced
+personal-feed response whose mode actually confirms personalization.
+
+### v26 unified mobile-shell integration
+
+The v25 Search sequence and card renderer remain unchanged. The correction is
+outside Search: `EventLayout` now mounts the accepted reference-4 v13 mobile
+menu as `Reference4MobileMenu.astro`, suppresses the legacy desktop footer on
+mobile navigation surfaces, and composes the review prefix with the accepted
+v23 Calendar/Popular donor. This prevents a functional Search page from
+visually reverting as soon as the user opens the header or follows the bottom
+dock. Canonical geometry, routes and assembly/gate evidence are documented in
+[`mobile-shell.md`](../static-site-pages/mobile-shell.md#astro-integration-and-unified-searchcalendar-preview-v14-2026-07-22).
+
+### v27 standalone Search intent field correction
+
+The unified shell had ported the real Search runtime but not the accepted
+standalone field composition from mobile-shell unification v2. That omission
+made `/poisk/` look like the earlier compact/card form even though results,
+skeletons and backend progress were current.
+
+On mobile standalone Search the accepted contract is now restored in the real
+`AuthorizedEventSearch` component:
+
+- a flat page canvas rather than a rounded white form card;
+- heading `Найти событие` and visible label `Что хочется сделать?`;
+- a three-row, `82px` minimum-height `textarea` with the project font and a
+  strong bottom rule;
+- the existing full-width submit with visible backend-owned progress **inside**
+  the dark button;
+- normal document flow into the existing large-card skeleton, exact results,
+  feedback and discovery endcap.
+
+This is a presentation correction, not a second Search implementation.
+Yandex/Supabase PKCE, session restore, the NDJSON stream, monotonic progress,
+request epochs, skeleton and canonical large result cards remain unchanged.
+Fill-only query examples accept both the standalone `textarea` and the compact
+embedded `input`; they still never auto-submit.
+
+### v28 visible in-button progress correction
+
+The progress geometry and backend-owned NDJSON stages were working in v27, but
+the standalone button's fill was effectively invisible: translucent near-black
+was painted over a near-black button (about `1.01:1` contrast). In addition, the
+indeterminate `36%` segment spent part of its cycle completely outside the
+button, so a screenshot—or a user's glance—could show no progress at all.
+
+The mobile standalone button now uses the existing opaque shell terracotta
+`#98401f` for its `::before` fill. Its indeterminate travel stays at least
+partially within the clipped button (`-70%` to `180%`); determinate widths remain
+monotonic and owned only by streamed backend stages. There is no percentage
+label and no second visible progress bar: the submit button itself is the one
+progress surface, with the separate visually hidden `role=progressbar` retained
+for assistive technology.
 
 ## Search feedback and public tag candidates
 

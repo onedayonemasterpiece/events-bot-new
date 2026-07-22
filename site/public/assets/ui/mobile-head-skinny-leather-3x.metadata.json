@@ -1,0 +1,26 @@
+{
+  "source": "docs/features/static-site-pages/references/mobile-head-skinny.png",
+  "source_size": [
+    2016,
+    2094
+  ],
+  "crop_xyxy": [
+    110,
+    700,
+    1565,
+    1718
+  ],
+  "crop_reason": "lower horizontal leather crop preserves side stitching, bottom seam and rounded foot without anisotropic distortion; top continues beyond viewport",
+  "alpha_mask": "top-square, bottom-radius 160 source px; CSS supplies shadow",
+  "output_size": [
+    360,
+    252
+  ],
+  "intended_css_size": [
+    120,
+    84
+  ],
+  "retina_scale": 3,
+  "format": "WebP RGBA",
+  "quality": 82
+}

@@ -551,6 +551,19 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-po
 
 const searchHtml = readFileSync(join(root, 'poisk/index.html'), 'utf8');
 const searchVisibleHtml = stripGeneratedCode(searchHtml);
+const mobileCalendarBase = String(process.env.PUBLIC_MOBILE_CALENDAR_BASE_URL || '').replace(/\/+$/u, '');
+const mobileSearchBase = String(process.env.PUBLIC_MOBILE_SEARCH_BASE_URL || '').replace(/\/+$/u, '');
+if (mobileCalendarBase || mobileSearchBase) {
+  if (!mobileCalendarBase || !mobileSearchBase) throw new Error('Cross-preview mobile navigation requires both calendar and Search base URLs');
+  for (const expectedHref of [
+    `${mobileCalendarBase}/populyarnoe/`,
+    `${mobileCalendarBase}/segodnya/`,
+    `${mobileCalendarBase}/dlya-menya/`,
+    `${mobileSearchBase}/poisk/`,
+  ]) {
+    if (!searchHtml.includes(`href="${expectedHref}"`)) throw new Error(`Search mobile navigation misses composed destination: ${expectedHref}`);
+  }
+}
 if (!searchHtml.includes('data-authorized-search') || !searchHtml.includes('data-search-login') || !searchHtml.includes('custom:yandex') || !searchHtml.includes('data-supabase-url')) throw new Error('Authorized search page must render Yandex/Supabase search UI when public env is provided');
 const bundledJs = readdirSync(join(root, '_astro')).filter((name) => name.endsWith('.js')).map((name) => readFileSync(join(root, '_astro', name), 'utf8')).join('\n');
 if (!bundledJs.includes('flowType:"pkce"') || !bundledJs.includes('detectSessionInUrl:!1') || !bundledJs.includes('exchangeCodeForSession') || !bundledJs.includes('error_description') || !/searchParams\.delete\([^)]*\)/u.test(bundledJs) || !bundledJs.includes('hash=""')) throw new Error('Authorized search must use PKCE OAuth and clean same-page redirect URLs before Yandex login');
@@ -560,6 +573,7 @@ if (!searchVisibleHtml.includes('authorized-search__yandex-icon') || !searchVisi
 if (searchVisibleHtml.includes('Пока без запроса') || searchVisibleHtml.includes('cards-grid') || /<article class="event-card/u.test(searchVisibleHtml)) throw new Error('Dedicated search page must not show prefilled static result cards before a query');
 if (!searchVisibleHtml.includes('Поисковые теги') || !bundledJs.includes('ke_search_feedback_queue_v1') || !bundledJs.includes('record_event_search_feedback_v1')) throw new Error('Search page must include feedback/tag candidate UX and RPC wiring');
 if (!bundledJs.includes('stream_stalled') || !bundledJs.includes('stream_rescue') || !bundledJs.includes('Поток прогресса не дошёл до браузера')) throw new Error('Authorized search must include mobile stream-stall JSON rescue fallback');
+if (!bundledJs.includes('mobile_document_decode_natural') || !bundledJs.includes('naturalAspectReconciled')) throw new Error('Authorized search must reconcile missing document geometry after image decode');
 if (!controlHtml.includes('/poisk/')) throw new Error('Mobile/desktop navigation must expose the authorized search page link');
 if (!controlHtml.includes('/vystavki/') || !controlHtml.includes('/populyarnoe/') || !controlHtml.includes('/partnerstvo/')) throw new Error('Navigation must expose exhibitions, popular and partnership pages');
 if (!controlHtml.includes('/partners/') || !controlHtml.includes('Инфопартнёры')) throw new Error('Footer/mobile navigation must expose the info partners page link');

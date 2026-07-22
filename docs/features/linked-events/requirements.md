@@ -232,6 +232,24 @@
   screen reader; один полный `aria-label` проговаривает все даты и времена без
   сокращённых месяцев. Overflow не обрезает единственный смысловой slot:
   сложное расписание использует честный fallback или ссылку на selector.
+- **REL-058 — Next occurrence in date-list time block.** Только в мобильном
+  date-list/per-date rail допустима additive-проекция ближайшего будущего
+  sibling внутри левого блока времени: `19:00` / `24 июля` /
+  `25 июля 17:00`. Текущая строка остаётся occurrence текущей даты, вся rail
+  открывает её detail URL, а следующая дата не становится отдельной ссылкой и
+  не меняет правила `per-date`. Visual subtree скрыт от screen reader; полный
+  label сообщает: `Текущий показ: 24 июля в 19:00. Следующий показ: 25 июля в
+  17:00.` В длинной photo/digest rail допустимо намеренное второе visual-only
+  напоминание `Ещё даты / 25 июля · 17:00` сразу после digest и перед первым
+  medallion: левый блок даёт немедленную ориентацию, а recap сохраняет контекст
+  у конца rail. Обе проекции обязаны строиться из одного DTO; recap не создаёт
+  отдельный link/action и скрывает повторённые fragments от screen reader.
+  Family строится только из взаимных explicit `other_date_ids`;
+  отменённые/silent siblings исключаются. В date-list recap показываются только
+  будущие относительно текущей occurrence даты, поэтому на строке 25 июля
+  прошлый показ 24 июля обратно не выводится. Это surface-specific variant
+  REL-050, а не изменение точных compact labels REL-045 для Popular, поиска,
+  рекомендаций и personal feed.
 
 ## 8. Personalization и feedback
 

@@ -1,0 +1,9 @@
+{
+  "source": "docs/features/static-site-pages/references/mobile menu reference (4).png",
+  "source_bbox": [878, 231, 1211, 563],
+  "source_crop_note": "v8 removes 44 source pixels (11.7% of v7 crop height) from the top while retaining the original stitched leather, X and label; no generative or painted texture",
+  "output": "reference4-leather-close-v8.webp",
+  "output_size": [333, 332],
+  "format": "WebP lossless",
+  "css_treatment": "layout drop-shadow only"
+}

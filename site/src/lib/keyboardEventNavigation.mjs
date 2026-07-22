@@ -132,9 +132,6 @@ export function initKeyboardEventNavigation(options = {}) {
   };
   const root = doc.querySelector('[data-desktop-clean-event]');
   const status = doc.querySelector('[data-keyboard-prototype-status]');
-  const actionToast = doc.querySelector('[data-keyboard-action-toast]');
-  const actionToastIcon = actionToast?.querySelector('[data-keyboard-action-toast-icon]');
-  const actionToastText = actionToast?.querySelector('[data-keyboard-action-toast-text]');
   const startButton = doc.querySelector('[data-keyboard-prototype-start]');
 
   const isVisible = (element) => {
@@ -428,7 +425,6 @@ export function initKeyboardEventNavigation(options = {}) {
     }
 
     let statusTimer;
-    let actionToastTimer;
     let gallerySpaceArm = null;
     let downGesture = null;
     let downGestureTimer = null;
@@ -490,17 +486,9 @@ export function initKeyboardEventNavigation(options = {}) {
     };
 
     function showActionToast(message, state = 'success') {
-      if (!(actionToast instanceof win.HTMLElement) || !(actionToastText instanceof win.HTMLElement)) return;
-      win.clearTimeout(actionToastTimer);
-      actionToastText.textContent = message;
-      actionToast.dataset.state = state;
-      if (actionToastIcon instanceof win.HTMLElement) actionToastIcon.textContent = state === 'error' ? '!' : '✓';
-      actionToast.hidden = false;
-      scheduleFrame(() => actionToast.classList.add('is-visible'));
-      actionToastTimer = scheduleTimeout(() => {
-        actionToast.classList.remove('is-visible');
-        scheduleTimeout(() => { actionToast.hidden = true; }, 180);
-      }, 2600);
+      const detail = { message, type: state, dedupeKey: 'keyboard-action', announce: false };
+      if (win.KenigEventsToast?.show) win.KenigEventsToast.show(detail);
+      else win.dispatchEvent(new win.CustomEvent('kenigevents:toast', { detail }));
     }
 
     const fallbackCopyText = (value) => {
