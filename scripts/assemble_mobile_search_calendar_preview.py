@@ -56,19 +56,52 @@ ARTIFACT_CSS = r"""
   position: absolute;
   z-index: 0;
   left: 50%;
-  bottom: 5px;
-  width: 82px;
-  height: 24px;
+  bottom: 0;
+  width: 94px;
+  height: 68px;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(255,210,83,.92) 0 18%, rgba(255,167,22,.62) 42%, rgba(255,153,0,0) 74%);
-  filter: blur(4px);
-  opacity: .72;
-  transform: translate3d(-50%,0,0) scaleX(.84);
+  background: radial-gradient(ellipse at 50% 76%, rgba(255,236,156,.58) 0 10%, rgba(255,190,43,.42) 28%, rgba(255,157,12,.18) 48%, rgba(255,153,0,0) 72%);
+  opacity: .76;
+  transform: translate3d(-50%,0,0) scale(.96);
+  transform-origin: 50% 76%;
+}
+.amber-artifact::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 6px;
+  box-sizing: border-box;
+  width: 78px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,238,174,.94);
+  background: radial-gradient(ellipse, rgba(255,220,118,.28) 0 38%, rgba(255,180,35,.08) 58%, transparent 72%);
+  box-shadow: 0 0 5px rgba(255,221,116,.88), 0 0 13px rgba(255,163,20,.52);
+  opacity: .9;
+  transform: translate3d(-50%,0,0) scale(.96);
   transform-origin: center;
+}
+.amber-artifact__rays {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: 8px;
+  width: 88px;
+  height: 76px;
+  pointer-events: none;
+  background:
+    linear-gradient(78deg, transparent 42%, rgba(255,205,92,.22) 49%, transparent 55%),
+    linear-gradient(102deg, transparent 43%, rgba(255,222,130,.18) 50%, transparent 57%);
+  -webkit-mask-image: linear-gradient(to top, #000 0 10%, rgba(0,0,0,.74) 40%, transparent 88%);
+  mask-image: linear-gradient(to top, #000 0 10%, rgba(0,0,0,.74) 40%, transparent 88%);
+  opacity: .54;
+  transform: translate3d(-50%,0,0) scaleX(.92);
+  transform-origin: 50% 100%;
 }
 .amber-artifact__visual {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 74px;
   height: 96px;
   display: grid;
@@ -121,31 +154,45 @@ ARTIFACT_CSS = r"""
 }
 .amber-artifact__found svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; }
 .amber-artifact.is-awake:not(.is-collected) .amber-artifact__visual {
-  animation: amber-arrive 480ms cubic-bezier(.22,.9,.3,1.22) both, amber-float 2600ms 520ms cubic-bezier(.45,.05,.55,.95) 2 alternate;
+  animation: amber-arrive 420ms cubic-bezier(.175,.885,.32,1.275) both, amber-float 3000ms 440ms ease-in-out infinite alternate;
 }
 .amber-artifact.is-awake:not(.is-collected)::before {
-  animation: amber-glow 2600ms 520ms cubic-bezier(.45,.05,.55,.95) 2 alternate;
+  animation: amber-glow 3000ms 440ms ease-in-out infinite alternate;
+}
+.amber-artifact.is-awake:not(.is-collected)::after {
+  animation: amber-ring 3000ms 440ms ease-in-out infinite alternate;
+}
+.amber-artifact.is-awake:not(.is-collected) .amber-artifact__rays {
+  animation: amber-rays 3000ms 440ms ease-in-out infinite alternate;
 }
 .amber-artifact.is-awake:not(.is-collected) .amber-artifact__shine {
-  animation: amber-shine 760ms 900ms cubic-bezier(.22,.78,.24,1) 1 both;
+  animation: amber-shine-cycle 5200ms 760ms linear infinite both;
 }
 .amber-artifact.is-collecting .amber-artifact__visual { animation: amber-found 430ms cubic-bezier(.22,.86,.3,1) both; }
-.amber-artifact.is-collected::before { opacity: .32; transform: translate3d(-50%,0,0) scaleX(.7); }
+.amber-artifact.is-collected::before { opacity: .28; transform: translate3d(-50%,0,0) scale(.82); }
+.amber-artifact.is-collected::after { opacity: .42; box-shadow:0 0 4px rgba(255,190,60,.38); transform:translate3d(-50%,0,0) scale(.86); }
+.amber-artifact.is-collected .amber-artifact__rays { opacity: .16; }
 .amber-artifact.is-collected .amber-artifact__visual { transform: translate3d(0,1px,0) scale(.94); filter: saturate(.82); }
 .amber-artifact.is-collected .amber-artifact__found { opacity: 1; transform: translate3d(0,0,0); transition: opacity 180ms ease-out, transform 220ms ease-out; }
 .amber-artifact:focus-visible { outline: 3px solid rgba(15,118,110,.66); outline-offset: -4px; }
-@keyframes amber-arrive { from { opacity:0; transform:translate3d(18px,4px,0) scale(.82) rotate(2deg); } to { opacity:1; transform:translate3d(0,0,0) scale(1) rotate(0); } }
-@keyframes amber-float { from { transform:translate3d(0,0,0) rotate(-.7deg); } to { transform:translate3d(0,-3px,0) rotate(1deg); } }
-@keyframes amber-glow { from { opacity:.55; transform:translate3d(-50%,0,0) scaleX(.78); } to { opacity:.9; transform:translate3d(-50%,-1px,0) scaleX(1); } }
-@keyframes amber-shine { 0% { opacity:0; transform:translate3d(-72px,0,0); } 30% { opacity:.62; } 100% { opacity:0; transform:translate3d(72px,0,0); } }
+@keyframes amber-arrive { from { opacity:0; transform:translate3d(16px,3px,0) scale(.84) rotate(1.5deg); } to { opacity:1; transform:translate3d(0,-1px,0) scale(1) rotate(0); } }
+@keyframes amber-float { from { transform:translate3d(0,1.5px,0) rotate(-.65deg); } to { transform:translate3d(0,-2.5px,0) rotate(.65deg); } }
+@keyframes amber-glow { from { opacity:.62; transform:translate3d(-50%,0,0) scale(.94); } to { opacity:.86; transform:translate3d(-50%,-1px,0) scale(1.05); } }
+@keyframes amber-ring { from { opacity:.72; transform:translate3d(-50%,0,0) scale(.95); } to { opacity:1; transform:translate3d(-50%,-1px,0) scale(1.04); } }
+@keyframes amber-rays { from { opacity:.36; transform:translate3d(-50%,1px,0) scaleX(.9); } to { opacity:.62; transform:translate3d(-50%,-1px,0) scaleX(1.02); } }
+@keyframes amber-shine-cycle { 0%,100% { opacity:0; transform:translate3d(-72px,0,0); } 3% { opacity:0; } 6% { opacity:.58; } 12.5% { opacity:0; transform:translate3d(72px,0,0); } 12.6%,99% { opacity:0; transform:translate3d(72px,0,0); } }
 @keyframes amber-found { 0% { transform:scale(1) rotate(0); filter:brightness(1); } 45% { transform:scale(1.09) rotate(-1.5deg); filter:brightness(1.28); } 100% { transform:scale(.94) rotate(0); filter:brightness(1); } }
 @media (prefers-reduced-motion: reduce) {
   .amber-artifact,
   .amber-artifact::before,
+  .amber-artifact::after,
+  .amber-artifact__rays,
   .amber-artifact__visual,
   .amber-artifact__shine,
   .amber-artifact__found { animation: none !important; transition: none !important; transform: none !important; }
-  .amber-artifact::before { transform: translate3d(-50%,0,0) !important; }
+  .amber-artifact::before,
+  .amber-artifact::after,
+  .amber-artifact__rays { transform: translate3d(-50%,0,0) !important; }
   .amber-artifact__shine { display:none; }
 }
 """
@@ -260,6 +307,7 @@ def artifact_markup(build_id: str, placement: str) -> str:
         f'<button class="amber-artifact" type="button" data-amber-artifact '
         f'data-artifact-placement="{placement}" aria-pressed="false" '
         f'aria-label="Секретный артефакт «Янтарный космонавт». Нажмите, чтобы найти">'
+        f'<span class="amber-artifact__rays" aria-hidden="true"></span>'
         f'<span class="amber-artifact__visual" aria-hidden="true">'
         f'<img src="{asset}-1x.webp" srcset="{asset}-1x.webp 1x, {asset}-2x.webp 2x, {asset}-3x.webp 3x" '
         f'width="74" height="96" alt="" decoding="async">'
@@ -310,17 +358,16 @@ def inject_artifact(page_html: str, *, build_id: str, event_id: str, placement: 
     return page_html
 
 
-def build_artifact_prototypes(output: Path, donor: Path, build_id: str) -> list[dict[str, str]]:
-    source = donor / ARTIFACT_SOURCE_PAGE / "index.html"
+def build_artifact_prototypes(output: Path, build_id: str) -> list[dict[str, str]]:
+    # The A/B pages must inherit the already assembled accepted v13 menu.  A
+    # second render after the module-global donor was restored caused the old
+    # tonal menu to leak into v27.
+    source = output / ARTIFACT_SOURCE_PAGE / "index.html"
     if not source.exists():
         raise RuntimeError(f"Artifact source page is missing: {source}")
-    rendered = render_donor_page(
-        source,
-        build_id=build_id,
-        current="calendar",
-        title="24 июля",
-        meta="исследование артефакта",
-    )
+    rendered = source.read_text()
+    if 'class="reference4-menu"' not in rendered or 'class="tone-service"' in rendered:
+        raise RuntimeError("Artifact A/B must inherit the accepted Reference4 menu")
     records = event_row_records(rendered)
     candidates = [record for record in records if record["has_medallion"]][:12]
     if len(candidates) < 2:
@@ -447,7 +494,7 @@ def main() -> None:
     finally:
         shell.plane_content = previous_plane
 
-    artifact_manifest = build_artifact_prototypes(output, donor, args.build_id)
+    artifact_manifest = build_artifact_prototypes(output, args.build_id)
 
     if temporary.exists():
         shutil.rmtree(temporary)

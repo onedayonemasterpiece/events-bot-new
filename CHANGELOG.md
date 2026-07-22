@@ -7,7 +7,8 @@
 - Added two isolated mobile rail prototypes for the `Янтарный космонавт`
   easter egg: a physical-tail placement after the final like and an
   after-medallion challenger. Both keep the accepted `112px` rail geometry,
-  use transparent retina WebP assets, finite glow/float/shimmer motion,
+  use transparent retina WebP assets, persistent low-amplitude glow/float/glint
+  motion until collection,
   accessible found feedback and a complete reduced-motion fallback.
 
 - Added the mobile Search completion boundary: after all exact pages, users can
@@ -83,6 +84,13 @@
   noisy topic or age-rating inference.
 
 ### Fixed
+
+- Made the standalone mobile Search button's real backend progress visibly
+  legible with the existing opaque terracotta fill and kept its indeterminate
+  segment partially inside the button instead of letting the whole band leave
+  the viewport. Also fixed the amber A/B prototypes to inherit the accepted
+  reference-4 v13 menu from the assembled Calendar donor rather than silently
+  re-rendering the legacy tonal menu.
 
 - Restored the accepted large standalone mobile Search field on the real
   `/poisk/` runtime: visible `Что хочется сделать?` label, three-row textarea,

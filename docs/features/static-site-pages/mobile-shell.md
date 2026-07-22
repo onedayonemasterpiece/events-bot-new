@@ -918,3 +918,19 @@ placement prototypes. They add only a sibling button to a copied v23 rail and
 do not change rail height, event link, like control, crop, gesture or medallion
 rendering. Product decision and exact specimens are canonical in
 [`amber-artifact-easter-egg.md`](amber-artifact-easter-egg.md).
+
+### v28 menu rollout and prototype regression guard
+
+The accepted reference-4 v13 leather/glass menu is the single mobile menu for
+all `EventLayout` pages and for every Calendar/Popular/date donor assembled into
+the mobile preview. The root splash is intentionally outside this navigation
+surface; non-HTML feeds and manifests do not receive a menu.
+
+The first artifact A/B build accidentally re-rendered its donor after the
+temporary accepted-shell override had been restored, so those two pages alone
+received the old tonal menu. v28 derives both artifact pages from the already
+assembled `date-2026-07-24/index.html` and injects only the artifact control.
+Generated-output gates require `.reference4-menu` and reject the old
+`.tone-service` / `.tone-grid` plane. The accepted closed leather tag, glass
+plane, complete IA, service Share, dock suppression and viewport-fit behavior
+are therefore identical on Search, Calendar, Popular and both artifact links.

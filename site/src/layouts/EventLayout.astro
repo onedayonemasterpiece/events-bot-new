@@ -473,8 +473,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         to { transform: translateX(290%); }
       }
       @keyframes authorized-search-submit-indeterminate {
-        from { transform: translateX(-110%); }
-        to { transform: translateX(390%); }
+        from { transform: translateX(-70%); }
+        to { transform: translateX(180%); }
       }
       .authorized-search__results { margin-top: 1rem; display: grid; gap: 1rem; }
       .authorized-search__skeletons { margin-top: 1rem; display: grid; gap: 0.85rem; }
@@ -2332,6 +2332,10 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           border-radius: 8px;
           background: #221a14;
           color: #fffdf8;
+        }
+        .authorized-search--standalone .authorized-search__submit::before {
+          /* Accepted mobile donor: the button itself is the progress surface. */
+          background: #98401f;
         }
         .cta-button, .secondary-button { width: 100%; }
         .feedback-button--negative span { display: none; }

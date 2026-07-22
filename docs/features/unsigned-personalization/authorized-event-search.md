@@ -217,6 +217,22 @@ request epochs, skeleton and canonical large result cards remain unchanged.
 Fill-only query examples accept both the standalone `textarea` and the compact
 embedded `input`; they still never auto-submit.
 
+### v28 visible in-button progress correction
+
+The progress geometry and backend-owned NDJSON stages were working in v27, but
+the standalone button's fill was effectively invisible: translucent near-black
+was painted over a near-black button (about `1.01:1` contrast). In addition, the
+indeterminate `36%` segment spent part of its cycle completely outside the
+button, so a screenshot—or a user's glance—could show no progress at all.
+
+The mobile standalone button now uses the existing opaque shell terracotta
+`#98401f` for its `::before` fill. Its indeterminate travel stays at least
+partially within the clipped button (`-70%` to `180%`); determinate widths remain
+monotonic and owned only by streamed backend stages. There is no percentage
+label and no second visible progress bar: the submit button itself is the one
+progress surface, with the separate visually hidden `role=progressbar` retained
+for assistive technology.
+
 ## Search feedback and public tag candidates
 
 The dedicated `/poisk/` page now exposes seed query chips and, after enough

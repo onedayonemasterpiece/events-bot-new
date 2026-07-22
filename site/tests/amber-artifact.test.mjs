@@ -15,6 +15,8 @@ test('standalone Search restores the accepted flat large textarea without replac
   assert.match(layout, /\.authorized-search--standalone \{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/u);
   assert.match(layout, /\.authorized-search--standalone \.authorized-search__form textarea \{[\s\S]*?min-height:\s*82px;[\s\S]*?border-bottom:\s*2px solid/u);
   assert.match(layout, /\.authorized-search--standalone \.authorized-search__submit \{[\s\S]*?min-height:\s*50px;[\s\S]*?width:\s*100%/u);
+  assert.match(layout, /\.authorized-search--standalone \.authorized-search__submit::before \{[\s\S]*?background:\s*#98401f/u);
+  assert.match(layout, /@keyframes authorized-search-submit-indeterminate \{\s*from \{ transform: translateX\(-70%\); \}\s*to \{ transform: translateX\(180%\); \}/u);
   assert.match(learning, /input instanceof HTMLInputElement \|\| input instanceof HTMLTextAreaElement/u);
 });
 
@@ -25,6 +27,8 @@ test('amber prototype builds two isolated placements without nesting a button in
   assert.match(assembler, /f'<\/button>\{artifact\}<\/span><\/div><\/article>'/u);
   assert.match(assembler, /data-artifact-placement/u);
   assert.match(assembler, /artifact-prototypes\.json/u);
+  assert.match(assembler, /source = output \/ ARTIFACT_SOURCE_PAGE \/ "index\.html"/u);
+  assert.match(assembler, /Artifact A\/B must inherit the accepted Reference4 menu/u);
 });
 
 test('amber artifact is retina-ready, bounded to the rail and motion-accessible', async () => {
@@ -36,6 +40,9 @@ test('amber artifact is retina-ready, bounded to the rail and motion-accessible'
   assert.match(assembler, /height:\s*112px/u);
   assert.match(assembler, /IntersectionObserver/u);
   assert.match(assembler, /intersectionRatio < \.72/u);
+  assert.match(assembler, /amber-float 3000ms 440ms ease-in-out infinite alternate/u);
+  assert.match(assembler, /amber-shine-cycle 5200ms 760ms linear infinite/u);
+  assert.match(assembler, /amber-artifact__rays/u);
   assert.match(assembler, /prefers-reduced-motion:\s*reduce/u);
   assert.match(assembler, /kenigevents:artifact-collected/u);
   assert.match(assembler, /aria-live="polite"/u);

@@ -490,6 +490,22 @@ async def run_smoke(args: argparse.Namespace) -> int:
             )
             if button_progress in {"", "0%"}:
                 raise AssertionError(f"search progress must paint inside the submit button: {button_progress!r}")
+            button_progress_paint = await page.locator("[data-search-submit]").first.evaluate(
+                """button => {
+                  const base = getComputedStyle(button);
+                  const fill = getComputedStyle(button, '::before');
+                  return {
+                    base: base.backgroundColor,
+                    fill: fill.backgroundColor,
+                    fillWidth: parseFloat(fill.width),
+                    buttonWidth: button.getBoundingClientRect().width,
+                  };
+                }"""
+            )
+            if button_progress_paint["fill"] != "rgb(152, 64, 31)":
+                raise AssertionError(f"mobile Search progress fill must use the accepted visible accent: {button_progress_paint}")
+            if button_progress_paint["fillWidth"] < 4 or button_progress_paint["fillWidth"] >= button_progress_paint["buttonWidth"]:
+                raise AssertionError(f"Search button must expose an in-progress partial fill: {button_progress_paint}")
 
             results = page.locator("[data-search-results]").first
             await expect(results).to_be_visible()

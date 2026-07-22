@@ -50,12 +50,16 @@ logo or a space-themed event marker.
   scaling and no rail-height change.
 - Source-derived assets: `74×96`, `149×192`, `223×288` WebP selected through
   `1x/2x/3x srcset`. CSS pixels stay constant on retina displays.
-- A soft oval amber glow sits under the object. A masked highlight crosses the
-  alpha shape once; there is no rectangular shine layer.
+- A broad warm halo, a bright thin lower ring and two faint masked rays sit
+  under the object. They reproduce the supplied reference's light coming from
+  below without adding a rectangular shine layer.
 - Motion begins only when at least `72%` of the horizontally hidden control is
-  visible. Entry is `480ms` with a small `18px`/scale arrival. Idle consists of
-  only two `2600ms` alternations: `3px` lift and at most `1°` rotation, coupled
-  to the glow. Shimmer runs once. There is no permanent carousel animation.
+  visible. Entry is `420ms` with a small `18px`/scale arrival. Until collection,
+  the object keeps a calm `3000ms` alternate float (`2.5px`, at most `0.65°`),
+  coupled to the halo/ring. A brief masked glint recurs inside a restrained
+  `5200ms` cycle. It does not stop after one gesture: the collectible remains
+  legible as a game object until the user taps it, while avoiding continuous
+  high-amplitude jumping.
 - Tap interrupts the idle, gives one `430ms` scale/brightness acknowledgement,
   then leaves a quieter object plus a visible check and `Найден` label.
 - `prefers-reduced-motion: reduce` removes arrival, float, glow pulse, shimmer
@@ -85,15 +89,15 @@ Before production:
 5. test GPU cost and scroll continuity on a low-end Android device;
 6. re-run the rail physical-end like/negative-swipe regression gates.
 
-## Exact v27 specimens
+## Exact v28 specimens
 
-Build: `preview-20260722-mobile-search-amber-artifact-v27`.
+Build: `preview-20260722-mobile-search-artifact-menu-v28`.
 
-- **A — tail:** `/artifact-tail/`, event `5511`,
-  `Рок-опера «Орфей и Эвридика»`. Swipe to the physical end: the artifact is
+- **A — tail:** `/artifact-tail/`, event `6907`,
+  `Эдит Пиаф. На Балу удачи`. Swipe to the physical end: the artifact is
   after the large like.
-- **B — after medallion:** `/artifact-after-medallion/`, event `6972`,
-  `Лекция «Порядок в доме: как создать систему, которая работает сама»`.
+- **B — after medallion:** `/artifact-after-medallion/`, event `5511`,
+  `Рок-опера «Орфей и Эвридика»`.
   The artifact is immediately after the Signal medallion and before the like.
 
 Targets are selected pseudorandomly but deterministically from real 24 July
@@ -111,9 +115,10 @@ records the event ids/titles for QA and handoff.
   URL stable and sets the non-colour found state, no horizontal page overflow;
 - reduced-motion browser context: no artifact animation or shimmer;
 - Gemini 3.1 Pro (High) product/motion formation review selected A as the MVP
-  leader and identified B's badge/like ambiguity as the critical risk. The
-  implementation intentionally tightens its proposed continuous idle motion to
-  a finite sequence to protect scroll calm and battery. Its post-implementation
-  acceptance returned **PASS** for Search, motion and accessibility, with one
-  pre-production manual gate: low-end Android scroll/tap/FPS testing. It found
-  no blocker for publishing the isolated noindex research preview.
+  leader and identified B's badge/like ambiguity as the critical risk. The v28
+  review requires a persistent but low-amplitude game-motion cue until tap,
+  synchronised glow and an entirely static reduced-motion fallback. The only
+  remaining production gate is manual scroll/tap/FPS testing on low-end Android;
+  this does not block the isolated noindex research preview. Its final v28
+  implementation acceptance returned **PASS / GO** for Search progress,
+  artifact visual/motion and the reference-4 menu rollout.
