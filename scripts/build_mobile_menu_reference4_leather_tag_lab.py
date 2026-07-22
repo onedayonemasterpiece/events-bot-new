@@ -18,7 +18,7 @@ from urllib.parse import quote_plus
 import build_mobile_shell_factual_nav_lab as factual
 
 
-BUILD_ID_DEFAULT = "preview-20260722-mobile-menu-reference4-leather-tag-lab-v11"
+BUILD_ID_DEFAULT = "preview-20260722-mobile-menu-reference4-leather-tag-lab-v12"
 
 VARIANTS = {
     "p": {
@@ -72,6 +72,8 @@ def plane_content(variant: str, base: str, current: str) -> str:
     asset_root = asset_root_from_base(base)
     wordmark = f"{asset_root}/assets/v2/brand/announcements-wordmark-ui.svg"
     leather = f"{asset_root}/assets/ui/reference4-leather-close-v8.webp"
+    service_share_manifest = f"{asset_root}/service-share/current/manifest.json"
+    service_share_controller = f"{asset_root}/assets/service-share/controller.js"
     search_base = factual.href(base, "search")
 
     def query(value: str) -> str:
@@ -127,21 +129,43 @@ def plane_content(variant: str, base: str, current: str) -> str:
             </a>
           </nav>
         </div>
-        <section class="reference4-menu__utility" aria-label="Аккаунт и сервис">
+        <section
+          class="reference4-menu__utility"
+          aria-label="Аккаунт и сервис"
+          data-service-share-root
+          data-service-share-surface="menu"
+          data-service-share-desktop-mode="d0"
+          data-service-share-manifest-url="{service_share_manifest}"
+          data-service-share-canonical-url="https://kenigevents.ru/"
+          data-nosnippet
+        >
           <div class="reference4-menu__account-row">
             <button type="button" data-reference4-login>Войти</button>
             <a href="{factual.href(base, 'favorites')}"{factual.active(current, 'favorites')}>{icon(asset_root, 'favorite')}<span>Избранное</span></a>
           </div>
-          <button class="reference4-menu__share" type="button" data-reference4-share data-native-share data-share-title="Анонсы" data-share-text="Афиша Калининграда и области"><span data-share-label>Поделиться</span>{icon(asset_root, 'share')}</button>
+          <button
+            class="reference4-menu__share"
+            type="button"
+            data-reference4-share
+            data-service-share-button
+            data-service-share-intent="mobile"
+            aria-label="Поделиться анонсами KenigEvents"
+            aria-describedby="reference4-service-share-status"
+            aria-busy="false"
+          ><span>Поделиться</span>{icon(asset_root, 'share')}</button>
+          <span id="reference4-service-share-status" class="sr-only" data-service-share-status role="status" aria-live="polite" aria-atomic="true"></span>
+          <a class="sr-only" data-service-share-fallback href="https://kenigevents.ru/" hidden>https://kenigevents.ru/</a>
         </section>
       </div>
+      <script type="module" src="{service_share_controller}"></script>
     """
 
 
 REFERENCE4_CSS = r'''
-/* v11: one viewport-sized plane; closed geometry cancels by percentages and never follows dynamic dvh. */
-.variant-reference4-leather-tag .mobile-discovery-menu{--plane-h:100%;inset:0!important;width:100%;height:auto;transform:translate3d(0,-100%,0);overscroll-behavior:none}
-.variant-reference4-leather-tag .mobile-discovery-menu[open]{transform:translate3d(0,0,0)}
+/* v12: stable viewport plane, sticky-safe closed tag and settled clipping against Android viewport bounce. */
+.variant-reference4-leather-tag .mobile-discovery-menu{--plane-h:100%;inset:0!important;z-index:41;width:100%;height:auto;overflow:visible;pointer-events:none;transform:translate3d(0,-100%,0);overscroll-behavior:none}
+.variant-reference4-leather-tag .mobile-discovery-menu[open]{transform:translate3d(0,0,0);pointer-events:auto}
+.variant-reference4-leather-tag .mobile-discovery-menu[open].is-open-settled{overflow:clip}
 .variant-reference4-leather-tag .mobile-discovery-menu.is-closing{transform:translate3d(0,-100%,0)}
 .shell-menu-open .variant-reference4-leather-tag .mobile-discovery-menu,.shell-menu-open.variant-reference4-leather-tag .mobile-discovery-menu{z-index:60}
 body.shell-menu-open .shell-header{z-index:60!important}
@@ -210,6 +234,20 @@ REFERENCE4_JS = r'''
     const serviceOpen = menu?.querySelector('[data-reference4-service-open]');
     const serviceBack = menu?.querySelector('[data-reference4-service-back]');
     const panel = menu?.querySelector('.mobile-discovery-menu__panel');
+    let settleTimer = 0;
+
+    const clearSettled = () => {
+      clearTimeout(settleTimer);
+      menu?.classList.remove('is-open-settled');
+    };
+    const scheduleSettled = () => {
+      clearSettled();
+      const settle = () => {
+        if (menu?.open && !menu.classList.contains('is-closing')) menu.classList.add('is-open-settled');
+      };
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) requestAnimationFrame(settle);
+      else settleTimer = setTimeout(settle, 360);
+    };
 
     const syncScrollSurface = () => {
       if (!panel) return;
@@ -229,6 +267,7 @@ REFERENCE4_JS = r'''
     serviceBack?.addEventListener('click', () => showService(false));
 
     close?.addEventListener('click', () => {
+      clearSettled();
       showService(false);
       summary?.click();
       setTimeout(() => summary?.focus({ preventScroll: true }), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 360);
@@ -238,150 +277,22 @@ REFERENCE4_JS = r'''
       document.documentElement.classList.toggle('shell-menu-open', menu.open);
       if (menu.open) {
         panel.scrollTop = 0;
+        scheduleSettled();
         requestAnimationFrame(() => {
           syncScrollSurface();
           close?.focus({ preventScroll: true });
         });
       } else {
+        clearSettled();
         showService(false);
       }
     });
+    new MutationObserver(() => {
+      if (menu?.classList.contains('is-closing') && menu.classList.contains('is-open-settled')) clearSettled();
+    }).observe(menu, { attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', syncScrollSurface, { passive: true });
     window.visualViewport?.addEventListener('resize', syncScrollSurface, { passive: true });
 
-    const share = menu?.querySelector('[data-reference4-share]');
-    if (!share) return;
-
-    // Keep the production EventLayout data-native-share contract. On an event
-    // page the global menu inherits the already reviewed event payload; listing
-    // labs fall back to page metadata and the first real event image.
-    const pageShare = [...document.querySelectorAll('[data-native-share]')].find((candidate) => candidate !== share);
-    if (pageShare) {
-      for (const [key, value] of Object.entries(pageShare.dataset)) {
-        if (key.startsWith('share') && value) share.dataset[key] = value;
-      }
-    } else {
-      const heading = document.querySelector('main h1')?.textContent?.trim();
-      const description = document.querySelector('.page-head p')?.textContent?.trim();
-      const eventImage = document.querySelector('.event-media img, .event-hero img, main img:not(.event-medallion)');
-      const srcset = eventImage?.getAttribute('srcset') || '';
-      const largestSrc = srcset.split(',').map((part) => part.trim().split(/\s+/)[0]).filter(Boolean).at(-1);
-      share.dataset.shareTitle = heading ? `${heading} — Анонсы` : 'Анонсы';
-      share.dataset.shareText = description || 'Афиша Калининграда и области';
-      share.dataset.shareUrl = location.href;
-      share.dataset.shareImage = largestSrc || eventImage?.currentSrc || eventImage?.src || '';
-      share.dataset.shareImageType = 'image/webp';
-      share.dataset.shareFileName = `kenigevents-${document.body.dataset.page || 'afisha'}`;
-    }
-
-    let statusTimer = 0;
-    const setShareStatus = (message = '', busy = false) => {
-      clearTimeout(statusTimer);
-      const label = share.querySelector('[data-share-label]');
-      if (!label) return;
-      const original = share.dataset.shareOriginalLabel || label.textContent || 'Поделиться';
-      share.dataset.shareOriginalLabel = original;
-      label.textContent = message || original;
-      share.disabled = Boolean(busy);
-      if (!busy && message && message !== original) {
-        statusTimer = setTimeout(() => { label.textContent = original; }, 2200);
-      }
-    };
-    const payload = (files = null) => {
-      const data = {
-        title: share.dataset.shareTitle || document.title,
-        text: share.dataset.shareText || '',
-        url: share.dataset.shareUrl || location.href,
-      };
-      if (files) data.files = files;
-      return data;
-    };
-    const fileName = (blob) => {
-      const raw = String(share.dataset.shareFileName || 'kenigevents-event').replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '').slice(0, 80) || 'kenigevents-event';
-      const type = blob?.type || share.dataset.shareImageType || '';
-      if (/png/iu.test(type)) return `${raw}.png`;
-      if (/webp/iu.test(type)) return `${raw}.webp`;
-      return `${raw}.jpg`;
-    };
-    const wrapCanvasText = (ctx, text, maxWidth, maxLines) => {
-      const words = String(text || '').split(/\s+/u).filter(Boolean);
-      const lines = [];
-      let line = '';
-      for (const word of words) {
-        const test = line ? `${line} ${word}` : word;
-        if (ctx.measureText(test).width <= maxWidth || !line) line = test;
-        else { lines.push(line); line = word; if (lines.length >= maxLines) break; }
-      }
-      if (line && lines.length < maxLines) lines.push(line);
-      return lines;
-    };
-    const canvasBlob = (canvas, type = 'image/png', quality = .92) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
-    const generatedShareImage = async () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1080;
-      canvas.height = 1350;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
-      const title = share.dataset.shareTitle || document.title;
-      ctx.fillStyle = '#fff7ea'; ctx.fillRect(0, 0, 1080, 1350);
-      const gradient = ctx.createLinearGradient(0, 0, 1080, 470);
-      gradient.addColorStop(0, '#793014'); gradient.addColorStop(.58, '#a54821'); gradient.addColorStop(1, '#2f2118');
-      ctx.fillStyle = gradient; ctx.fillRect(0, 0, 1080, 470);
-      ctx.fillStyle = '#fffdf8'; ctx.font = '900 54px system-ui, sans-serif'; ctx.fillText('Полюбить Калининград', 72, 112);
-      ctx.font = '950 104px system-ui, sans-serif'; ctx.fillText('Анонсы', 72, 220);
-      ctx.fillStyle = '#30241b'; ctx.font = '950 76px system-ui, sans-serif';
-      let y = 590;
-      wrapCanvasText(ctx, title, 936, 4).forEach((line) => { ctx.fillText(line, 72, y); y += 88; });
-      ctx.fillStyle = '#793014'; ctx.font = '900 34px system-ui, sans-serif'; ctx.fillText('Открыть подборку:', 72, 1194);
-      ctx.fillStyle = '#2f2118'; ctx.font = '760 28px system-ui, sans-serif';
-      wrapCanvasText(ctx, share.dataset.shareUrl || location.href, 936, 2).forEach((line, index) => ctx.fillText(line, 72, 1242 + index * 38));
-      return canvasBlob(canvas);
-    };
-    const shareBlob = async (blob) => {
-      if (!blob || !window.File || !navigator.canShare || !navigator.share) return false;
-      const file = new File([blob], fileName(blob), { type: blob.type || 'image/png' });
-      const withImage = payload([file]);
-      if (!navigator.canShare(withImage)) return false;
-      await navigator.share(withImage);
-      setShareStatus('Поделились');
-      return true;
-    };
-    const fallbackShare = async () => {
-      const data = payload();
-      if (navigator.share) {
-        await navigator.share(data);
-        setShareStatus('Поделились ссылкой');
-      } else {
-        await navigator.clipboard.writeText([data.text, data.url].filter(Boolean).join('\n'));
-        setShareStatus('Ссылка скопирована');
-      }
-    };
-
-    share.addEventListener('click', async (event) => {
-      event.preventDefault();
-      const imageUrl = share.dataset.shareImage || '';
-      setShareStatus('Готовим картинку…', true);
-      try {
-        if (imageUrl && window.File && navigator.canShare) {
-          const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
-          if (response.ok && await shareBlob(await response.blob())) return;
-        }
-        const generated = await generatedShareImage();
-        if (generated && await shareBlob(generated)) return;
-        await fallbackShare();
-      } catch (error) {
-        if (error?.name === 'AbortError') { setShareStatus('Поделиться'); return; }
-        try {
-          const generated = await generatedShareImage();
-          if (generated && await shareBlob(generated)) return;
-          await fallbackShare();
-        } catch (_) {
-          setShareStatus('Не удалось');
-        }
-      } finally {
-        share.disabled = false;
-      }
-    });
   });
 })();
 '''
@@ -416,7 +327,12 @@ def main() -> None:
 
     project_icons = root / "site" / "public" / "assets" / "icons" / "reference4-v8"
     project_ui = root / "site" / "public" / "assets" / "ui"
+    project_service_share = root / "site" / "public" / "service-share"
+    service_share_controller = root / "site" / "src" / "lib" / "service-share" / "controller.js"
     shutil.copytree(project_icons, output / "assets" / "icons" / "reference4-v8", dirs_exist_ok=True)
+    shutil.copytree(project_service_share, output / "service-share", dirs_exist_ok=True)
+    (output / "assets" / "service-share").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(service_share_controller, output / "assets" / "service-share" / "controller.js")
     (output / "assets" / "ui").mkdir(parents=True, exist_ok=True)
     for filename in (
         "reference4-leather-close-v8.webp",

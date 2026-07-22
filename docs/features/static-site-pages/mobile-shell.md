@@ -774,3 +774,47 @@ Gemini 3.1 Pro's first acceptance correctly rejected bbox-only brand alignment;
 after the `-1px` optical side-bearing compensation it rechecked the final
 render, found no regression and returned `SHIP research preview` in
 `gemini-acceptance.txt`.
+
+## Service Share and Android clip correction, v12, 2026-07-22
+
+Device review of v11 exposed two remaining compositor defects and one product
+contract regression. The same research builder now emits
+`preview-20260722-mobile-menu-reference4-leather-tag-lab-v12`.
+
+The closed drawer stacking context is `41`, above the page/group sticky layers
+(`30/40`), while the wrapper remains `pointer-events:none` and only the
+summary is interactive. Thus a scrolled Popular group header can no longer cut
+through the leather tag. During opening the accepted whole object still moves
+without clipping. After the 320ms transform has settled, the wrapper receives
+`is-open-settled` and `overflow:clip`; the class is removed before close motion.
+This clips the summary whose layout position is `top:100%`, preventing Android
+visual-viewport bounce from briefly exposing it at the bottom. The guard uses a
+fallback timer plus a class mutation observer and must not be implemented as a
+window scroll handler.
+
+Menu Share is a **service share**, not page/event share. The v11 DOM scan,
+first-event-image selection and generated canvas fallback have been removed.
+The menu now exposes the same `data-service-share-root`, manifest, button,
+status and canonical fallback contract as `ServiceShareAction.astro`. The
+builder copies the existing `site/src/lib/service-share/controller.js` without
+forking its behavior, plus the versioned `site/public/service-share/` bundle.
+The current manifest supplies:
+
+- canonical URL `https://kenigevents.ru/`;
+- copy `Полюбить Калининград Анонсы — события всего региона`;
+- the accepted `72,414` byte WebP service card, named by the controller
+  `kenigevents-service-20260715-896b8af26ac6679f.webp`.
+
+Playwright at `320×700` confirms the closed summary remains the hit target over
+scrolled Popular content (`z-index 41 > 30`), mid-opening remains unclipped,
+and settled open state uses `overflow:clip`. The first and second CDP touch
+drags leave the document at the same `scrollY`, keep blank bottom `0` and never
+hit the summary at the lower viewport pixel. At `320×620`, only the panel moves
+to `scrollTop=46`; close removes clipping before reverse motion and restores
+summary `y=0`. The native-share stub receives the exact service copy, canonical
+URL and one `image/webp` File of `72,414` bytes. All 12 routes remain HTTP 200,
+fit at `320×700` and have zero horizontal overflow. Evidence:
+`artifacts/codex/mobile-menu-reference4-v12-20260722/{gemini-design-review.txt,qa-a.txt,qa-resize-close.txt,route-qa.txt,closed-sticky-320.png,open-mid-320.png,open-settled-320.png,open-after-two-drags-320.png}`.
+Gemini 3.1 Pro independently rechecked all six gates against the final code and
+renders and returned `SHIP research preview` with no blocking defect; its raw
+acceptance is `gemini-acceptance.txt` in the same artifact directory.

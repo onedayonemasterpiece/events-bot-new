@@ -74,6 +74,13 @@
 
 ### Fixed
 
+- Restored the accepted global service-share contract in the reference-4
+  mobile menu: Share now delegates to the existing footer controller and sends
+  the versioned KenigEvents service card, service copy and canonical homepage,
+  never the first event/page image. Raised the closed leather tag above sticky
+  group headers and clips its offscreen open-state position only after motion
+  settles, preventing the one-frame Android bottom leak during the first swipe.
+
 - Stabilized the full-screen reference-4 mobile drawer against Android Chrome
   viewport-bar changes: the closed leather tag now uses matched percentage
   geometry rather than animated `dvh`, and the open plane is never taller than
