@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added a reference-4 glass-depth correction for the mobile menu: the accepted
+  closed brand tag itself remains visible as the open-state anchor, the weaker
+  glass samples a darker backdrop, account and Share use distinct surfaces,
+  and `О сервисе` opens an in-place factual drill-down without moving Share.
+  The menu Share now uses the production `data-native-share` image-first
+  contract, including an image File plus text/URL when the platform supports it.
+
 - Added a full-viewport reference-4 mobile-menu successor: the canonical
   `Полюбить Калининград / Анонсы` lockup, a tighter source-faithful leather
   close crop, genuinely translucent single-layer glass, a coherent Phosphor

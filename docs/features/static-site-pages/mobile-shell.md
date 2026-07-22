@@ -612,3 +612,67 @@ shared path; the visible close action restores focus to the standard summary.
 
 Evidence lives in
 `artifacts/codex/mobile-menu-reference4-v8-20260722/{report.json,failures.json,open-320.png,open-390.png,gemini-design-review.md,gemini-final-acceptance.md}`.
+
+## Reference 4 glass-depth correction, v9, 2026-07-22
+
+Telegram review superseded the v8 expanded-state lockup: the detached white
+wordmark lost contrast over the bright page, the account and Share surfaces
+read as one card, and the menu-specific Share had regressed to a link-only
+implementation. The corrective research builder is
+`scripts/build_mobile_menu_reference4_glass_depth_lab.py`; build id is
+`preview-20260722-mobile-menu-reference4-glass-depth-lab-v9`, variant `P`.
+
+### One tag, two states
+
+v9 does not draw a second terracotta brand object. The accepted
+`.mobile-discovery-menu__summary` remains the same `120×84` DOM node and the
+same closed visual. While the full-height plane translates into view, an equal
+opposite transform keeps that tag at `x=12, y=0`; the leather control remains
+the explicit right-side Close action. This preserves the familiar brand anchor
+without the low-contrast detached white lockup or competing duplicate logo.
+
+The sheet uses a darker backdrop sample and weaker glass than v8:
+`blur(22px) saturate(.96) brightness(.84)` with low-alpha warm overlays. The
+main list and utility remain translucent, but sticky page headings cannot paint
+above the drawer: the shell header is promoted to the drawer stacking level
+while open. The utility is deliberately two-zone: a slightly dark recessed
+account track above a separate light Share surface. The typographic Free sign
+remains the unambiguous `0 ₽`, enlarged to `16px` (`15px` at `<=350px`) inside
+its 30px circle.
+
+### Factual service drill-down
+
+The former direct `Партнёры` row becomes `О сервисе`. It does not expand the
+eight-row card. A horizontal drill-down swaps the list plane in place and keeps
+Share fixed, exposing only factual destinations already present in the site:
+`Инфопартнёры` (`/partners/`), `Информационное партнёрство`
+(`/partnerstvo/`) and the canonical `Правообладателям` mail action. No invented
+`О проекте` route is emitted.
+
+### Native Share reuse
+
+The menu action now carries the production `data-native-share` contract used by
+`EventHero`, `EventCtaPanel`, `EventCard` and handled in `EventLayout.astro`.
+On an event surface it inherits the reviewed event payload, including title,
+text, canonical URL and image metadata. The standalone research build mirrors
+the same image-first chain: fetch the page/event image, wrap it in a `File`,
+guard with `navigator.canShare`, call `navigator.share` with text + URL + file,
+then fall back to the branded generated image and finally link/copy. It must not
+be replaced again with a menu-local link-only `navigator.share(payload)` call.
+
+### Acceptance
+
+Playwright at `320×700` confirms all 12 factual routes return 200, the retained
+tag stays `12,0,120×84`, the panel has no initial vertical scroll, Share ends at
+`y=649`, and the menu has no horizontal overflow. At `390×844`, Share ends at
+`y=714`. The drill-down leaves Share at the same coordinates and updates
+`aria-hidden` / `aria-expanded`. A stubbed native-share probe received title,
+text, page URL and an `image/webp` File (`18,852` bytes), rather than only a
+Pinterest/site link.
+
+Gemini 3.1 Pro (High) separately inspected the source reference, both owner
+screenshots, the implementation and 320/390 renders. Its first review defined
+the scrim/glass/utility correction; final acceptance passed six of seven owner
+checks and blocked only on the still-small 12px `0 ₽`. After its concrete
+15/16px correction, the blocking item is resolved. Evidence:
+`artifacts/codex/mobile-menu-reference4-v9-20260722/{gemini-visual-review.txt,gemini-acceptance.txt,open-320-final.png,open-390-fixed.png,service-320.png,route-qa.txt,share-probe.js}`.
