@@ -50,7 +50,7 @@ const splitCtaRegressionHtml = source(`${splitCtaRegressionRoute}/index.html`);
 const registrationCtaRegressionHtml = source(`${registrationCtaRegressionRoute}/index.html`);
 const freeCalendarCtaRegressionHtml = source(`${freeCalendarCtaRegressionRoute}/index.html`);
 if (!footerRegressionHtml.includes('data-site-footer="service-v1"')) fail('accepted service footer marker missing');
-if ((footerRegressionHtml.match(/Информационное партнёрство/gu) || []).length !== 1) fail('accepted service footer duplicates partnership link');
+if ((footerRegressionHtml.match(/>Партнёры</gu) || []).length !== 1 || (footerRegressionHtml.match(/>Стать партнёром</gu) || []).length !== 1) fail('accepted service footer must expose distinct Partners and partnership links exactly once');
 if (!footerRegressionHtml.includes('Пользовательское соглашение') || !footerRegressionHtml.includes('Политика обработки персональных данных')) fail('accepted service footer legal links missing');
 if (!footerRegressionHtml.includes('data-desktop-family="editorial"') || !footerRegressionHtml.includes('data-action-layout="stacked"')) fail('accepted Editorial CTA regression marker missing');
 if (!splitCtaRegressionHtml.includes('data-desktop-family="split"') || !splitCtaRegressionHtml.includes('data-action-layout="inline"')) fail('accepted Split CTA regression marker missing');

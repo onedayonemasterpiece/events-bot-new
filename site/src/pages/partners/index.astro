@@ -5,7 +5,7 @@ import type { InfoPartner } from '../../data/info-partners';
 import { siteHomeHref, absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 
 const title = `Партнёры | ${SITE_NAME}`;
-const description = 'Полюбить Калининград Анонсы выступает информационным партнёром организаций: компактная сетка партнёрских логотипов.';
+const description = 'Партнёры Полюбить Калининград Анонсы: компактная сетка партнёрских логотипов.';
 const canonicalUrl = absoluteUrl('/partners/');
 const webpSource = (partner: InfoPartner) => Boolean(partner.logoUrl?.endsWith('.webp') && partner.logoFallbackUrl);
 const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.webp') ? (partner.logoFallbackUrl || partner.logoUrl) : partner.logoUrl;
@@ -21,11 +21,11 @@ const primaryLogoSrc = (partner: InfoPartner) => partner.logoUrl?.endsWith('.web
 
       <header class="partners-heading">
         <p class="eyebrow">Партнёры</p>
-        <h1>Полюбить Калининград Анонсы выступает информационным партнёром организаций</h1>
+        <h1>Партнёры Полюбить Калининград Анонсы</h1>
         <p>Логотипы ведут на сайты партнёров.</p>
       </header>
 
-      <section class="partners-grid" aria-label="Список информационных партнёров">
+      <section class="partners-grid" aria-label="Список партнёров">
         {INFO_PARTNERS.map((partner) => (
           <a
             class={`partner-tile partner-tile--${partner.logoShape} partner-tile--${partner.logoSurface || 'light'} ${partner.compactLabel ? 'partner-tile--with-meta' : 'partner-tile--logo-only'} ${partner.priority === 'primary' ? 'partner-tile--primary' : ''}`}

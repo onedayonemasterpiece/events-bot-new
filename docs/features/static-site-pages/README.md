@@ -285,7 +285,10 @@ prototype только для целостного mobile journey: без дос
 сигналов он явно называет выдачу cold-start fallback и использует `per-family`;
 это не новый SEO landing и не заявление о готовой production personalization.
 В hub и handoff обязательно фиксируется, что Search принят визуально, но его
-реальный auth/backend journey ещё не принят.
+реальный auth/backend journey ещё не принят. Даже без публичных Supabase env
+`/poisk/` рендерит честно отключённый трёхстрочный prompt и образцы skeleton
+карточек: пользователь видит форму будущего продукта, но disabled CTA и status
+не выдают макет за работающий поиск.
 
 Generated-output gate `npm --prefix site run check:unified-prototype` проверяет
 наличие и взаимную перелинковку типов страниц, preview canonical/noindex,
@@ -338,7 +341,7 @@ and historical ПК/favicon variants are rejected. Canonical geometry and usage:
 
 ### Партнёры
 
-Сервисная institutional-страница `/partners/` добавлена как статическая preview-страница для партнёров. Пользовательское имя раздела во всех navigation/footer surfaces — строго `Партнёры`; внутренний тип сотрудничества по-прежнему может называться информационным партнёрством. Она не меняет event-detail модель: стартовый список партнёров хранится отдельно в `site/src/data/info-partners.ts`, рендерится в `site/src/pages/partners/index.astro` и попадает в `sitemap.xml`. Страница должна оставаться компактной плоской logo-first bento-доской: на mobile — 4 плотные колонки с full-occupancy bento placement, где `80 историй` занимает 2×2 hero-ячейку, на tablet/desktop — 8-колоночные aspect-aware spans для широких и вертикальных логотипов; высота grid-рядов и logo/caption frames фиксированы, а подпись не управляет размером ячейки. Текущий contract запрещает публичные категории вроде `Пригородные маршруты`/`Лекции и музыка`, неверный label `КППК / РЖД`, тяжёлые card borders/backgrounds/shadows и декоративные highlight-плашки. Внешний переход — вся плитка партнёра с `rel="nofollow noopener noreferrer"`; отдельный CTA `Сайт партнёра` не рендерится. Каноника фичи: `docs/features/info-partners/README.md`.
+Сервисная institutional-страница `/partners/` добавлена как статическая preview-страница для партнёров. Пользовательское имя каталога во всех navigation/footer surfaces и его H1 — строго `Партнёры`; отдельный collaboration CTA называется `Стать партнёром`, чтобы не подменять каталог описанием типа сотрудничества. Она не меняет event-detail модель: стартовый список партнёров хранится отдельно в `site/src/data/info-partners.ts`, рендерится в `site/src/pages/partners/index.astro` и попадает в `sitemap.xml`. Страница должна оставаться компактной плоской logo-first bento-доской: на mobile — 4 плотные колонки с full-occupancy bento placement, где `80 историй` занимает 2×2 hero-ячейку, на tablet/desktop — 8-колоночные aspect-aware spans для широких и вертикальных логотипов; высота grid-рядов и logo/caption frames фиксированы, а подпись не управляет размером ячейки. Текущий contract запрещает публичные категории вроде `Пригородные маршруты`/`Лекции и музыка`, неверный label `КППК / РЖД`, тяжёлые card borders/backgrounds/shadows и декоративные highlight-плашки. Внешний переход — вся плитка партнёра с `rel="nofollow noopener noreferrer"`; отдельный CTA `Сайт партнёра` не рендерится. Каноника фичи: `docs/features/info-partners/README.md`.
 
 
 ### Kaggle CPU build handoff

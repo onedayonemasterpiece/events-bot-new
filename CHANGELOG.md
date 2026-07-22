@@ -115,6 +115,11 @@
 
 ### Fixed
 
+- Kept the disabled Search backend honest while rendering its accepted visual
+  prototype (three-line prompt and loading-card skeletons), and made the
+  public partnership vocabulary unambiguous: `Партнёры` is the directory,
+  while the separate collaboration CTA is `Стать партнёром`.
+
 - Fixed keyboard traversal after compact recommendation reordering: card entry,
   Home/End and all four arrows now follow the rendered visual row/column matrix,
   including wrapped rows, a ragged final row and related/continuation bridges,

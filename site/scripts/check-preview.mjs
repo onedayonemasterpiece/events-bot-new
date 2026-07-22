@@ -751,11 +751,11 @@ if (!controlHtml.includes('/partners/') || !controlHtml.includes('Партнёр
 
 const partnersHtml = readFileSync(join(root, 'partners/index.html'), 'utf8');
 const partnersVisibleHtml = stripGeneratedCode(partnersHtml);
-for (const needle of ['Информационные партнёры', 'КППК', 'Знание', '80 историй', 'Кантата', 'Акт Опус']) {
+for (const needle of ['Партнёры Полюбить Калининград Анонсы', 'КППК', 'Знание', '80 историй', 'Кантата', 'Акт Опус']) {
   if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses ${needle}`);
 }
 for (const needle of [
-  'Полюбить Калининград Анонсы выступает информационным партнёром организаций',
+  'Партнёры Полюбить Калининград Анонсы',
   'АО «КППК»',
   'Просветительский фестиваль к 80-летию Калининградской области',
   'Образовательная программа фестиваля',
@@ -786,7 +786,7 @@ if (!exhibitionsHtml.includes('Выставки и долгие форматы')
 const popularListingHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
 if (!popularListingHtml.includes('Популярное') || !popularListingHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
 const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
-if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
+if (!partnershipHtml.includes('Стать партнёром') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
 
 const todayHtml = readFileSync(join(root, 'segodnya/index.html'), 'utf8');
 if (/Мосийенко|Мосиенко/u.test(todayHtml)) throw new Error('Today listing must not show the false long-range Evgeny Mosiyenko lecture/exhibition item');

@@ -28,6 +28,18 @@ test('technical seed-tag copy is removed from the Search page', () => {
   assert.match(collections, /phrase: 'послушать хор'/u);
 });
 
+test('disabled backend still renders an honest visual Search prototype', () => {
+  assert.doesNotMatch(donor, /\{enabled && \(\s*<section id="poisk"/u);
+  assert.match(donor, /Что хочется сделать\?/u);
+  assert.match(donor, /rows="3"/u);
+  assert.match(donor, /readonly=\{!enabled\}/u);
+  assert.match(donor, /data-search-submit disabled=\{!enabled\}/u);
+  assert.match(donor, /Поиск пока не запускается/u);
+  assert.match(donor, /Это визуальный прототип/u);
+  assert.match(donor, /Образец состояния загрузки результатов/u);
+  assert.match(donor, /data-search-skeletons hidden=\{enabled\}/u);
+});
+
 test('materialized collection routes use canonical large EventCard without bespoke result rows', () => {
   assert.match(collectionPage, /import EventCard from/u);
   assert.match(collectionPage, /events\.map\(\(event\) => <EventCard event=\{event\} mobileFlowMedia \/>\)/u);

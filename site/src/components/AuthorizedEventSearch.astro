@@ -11,7 +11,6 @@ const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:ya
 const enabled = Boolean(supabaseUrl && supabaseKey);
 const HeadingTag = headingLevel;
 ---
-{enabled && (
 <section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
   <div class="authorized-search__head">
     <div class="authorized-search__copy">
@@ -19,7 +18,7 @@ const HeadingTag = headingLevel;
       <HeadingTag>{standalone ? 'Найти событие' : 'Найти событие по описанию'}</HeadingTag>
       <p class="muted-note">{standalone ? 'Опишите желание обычной фразой — жанр, настроение, время или с кем хотите пойти.' : 'Войдите через Яндекс и напишите обычной фразой, что хочется найти. Результаты появятся лентой: карточки можно лайкать, скрывать как «не интересно», добавлять в календарь и делиться.'}</p>
     </div>
-    <div class="authorized-search__auth">
+    {enabled && <div class="authorized-search__auth">
       <button type="button" class="secondary-button authorized-search__login" data-search-login>
         <span class="authorized-search__yandex-icon" aria-hidden="true">Я</span>
         <span>Войти через Яндекс</span>
@@ -42,26 +41,26 @@ const HeadingTag = headingLevel;
           <button type="button" class="authorized-search__logout" data-search-logout>Выйти из аккаунта</button>
         </div>
       </details>
-    </div>
+    </div>}
   </div>
-  {!enabled && <p class="authorized-search__status">Поиск не активирован в этой сборке: нет публичных Supabase env.</p>}
-  <form class="authorized-search__form" data-search-form hidden>
+  <form class="authorized-search__form" data-search-form hidden={enabled} aria-disabled={!enabled ? 'true' : undefined}>
     <label class:list={[!standalone && 'sr-only', standalone && 'authorized-search__query-label']} for="authorized-event-search-input">Что хочется сделать?</label>
     {standalone ? (
-      <textarea id="authorized-event-search-input" rows="3" maxlength="180" data-search-input placeholder="Например: послушать хор или сходить с детьми бесплатно" autocomplete="off"></textarea>
+      <textarea id="authorized-event-search-input" rows="3" maxlength="180" data-search-input placeholder="Например: послушать хор или сходить с детьми бесплатно" autocomplete="off" readonly={!enabled}></textarea>
     ) : (
       <input id="authorized-event-search-input" type="search" maxlength="180" data-search-input placeholder="Например: джаз на выходных" autocomplete="off" />
     )}
-    <button type="submit" class="cta-button authorized-search__submit" data-search-submit>
-      <span class="authorized-search__submit-label" data-search-submit-label>Искать</span>
+    <button type="submit" class="cta-button authorized-search__submit" data-search-submit disabled={!enabled}>
+      <span class="authorized-search__submit-label" data-search-submit-label>{enabled ? 'Искать' : 'Поиск пока не запускается'}</span>
     </button>
   </form>
   <div class="authorized-search__progress" data-search-progress role="progressbar" aria-label="Ход поиска" aria-valuemin="0" aria-valuemax="100" hidden>
     <span class="authorized-search__progress-bar" data-search-progress-bar aria-hidden="true"></span>
   </div>
   <p class="authorized-search__progress-label" data-search-progress-label role="status" aria-live="polite" aria-atomic="true" hidden></p>
-  <p class="authorized-search__status" data-search-status aria-live="polite">{enabled ? 'Войдите, чтобы включить поиск.' : ''}</p>
-  <div class="authorized-search__skeletons" data-search-skeletons hidden aria-hidden="true">
+  <p class="authorized-search__status" data-search-status aria-live="polite">{enabled ? 'Войдите, чтобы включить поиск.' : 'Это визуальный прототип: поле, запуск поиска и вход в этой noindex-сборке не подключены.'}</p>
+  {!enabled && <p class="authorized-search__prototype-label">Образец состояния загрузки результатов</p>}
+  <div class="authorized-search__skeletons" data-search-skeletons hidden={enabled} aria-hidden="true">
     {[0, 1].map(() => (
       <div class="authorized-search__skeleton-card">
         <div class="authorized-search__skeleton-media"></div>
@@ -76,7 +75,6 @@ const HeadingTag = headingLevel;
   <div class="authorized-search__results" data-search-results hidden></div>
   <button type="button" class="secondary-button authorized-search__more" data-search-more hidden>Показать ещё</button>
 </section>
-)}
 
 <script>
   import { createClient } from '@supabase/supabase-js';

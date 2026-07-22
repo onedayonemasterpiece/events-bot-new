@@ -196,7 +196,7 @@ test('service share prompt uses the canonical inline announcements wordmark', as
   assert.doesNotMatch(share, />Поделиться афишей</u);
 });
 
-test('accepted service footer is global, cohesive and does not duplicate partnership navigation', async () => {
+test('accepted service footer is global, cohesive and exposes Partners separately from the partnership CTA', async () => {
   const component = await read('src/components/SiteFooter.astro');
   const socialIcon = await read('src/components/SocialIcon.astro');
   const maxMetadata = JSON.parse(await read('public/assets/social/max-colored-official.svg.metadata.json'));
@@ -207,7 +207,8 @@ test('accepted service footer is global, cohesive and does not duplicate partner
 
   assert.match(component, /data-site-footer="service-v1"/u);
   assert.match(component, /site-footer--service-v1/u);
-  assert.equal((component.match(/>Информационное партнёрство</gu) || []).length, 1);
+  assert.equal((component.match(/>Партнёры</gu) || []).length, 1);
+  assert.equal((component.match(/>Стать партнёром</gu) || []).length, 1);
   assert.match(component, /Пользовательское соглашение/u);
   assert.match(component, /Политика обработки персональных данных/u);
   assert.match(component, /role="link" aria-disabled="true" data-footer-future-document/u);
