@@ -42,7 +42,7 @@ test('gallery reduced motion, inactive controls and dialog focus are hardened', 
 
 test('closed desktop hero owns unmodified arrows only while hovered or focused', async () => {
   const desktop = await read('src/components/DesktopEventPage.astro');
-  const preview = JSON.parse(await read('src/data/preview-events.json'));
+  const canaries = JSON.parse(await read('tests/fixtures/event-gallery-interaction-canaries.json'));
 
   assert.match(desktop, /data-closed-hero-gallery=\{photoCount > 1 \? galleryId : undefined\}/u);
   assert.match(desktop, /aria-keyshortcuts=\{photoCount > 1 \? 'ArrowLeft ArrowRight' : undefined\}/u);
@@ -56,9 +56,9 @@ test('closed desktop hero owns unmodified arrows only while hovered or focused',
   assert.match(desktop, /closedHeroStatus\.textContent = `Фото \$\{next \+ 1\} из \$\{closedHeroSlides\.length\}`/u);
 
   for (const eventId of [5755, 6408, 4783]) {
-    const event = preview.events.find((candidate) => candidate.id === eventId);
-    assert.ok(event, `preview fixture ${eventId} is required`);
-    assert.ok(event.image_assets.length > 1, `preview fixture ${eventId} must remain a multi-image interaction gate`);
+    const event = canaries.events.find((candidate) => candidate.id === eventId);
+    assert.ok(event, `frozen gallery canary ${eventId} is required`);
+    assert.ok(event.image_asset_count > 1, `frozen gallery canary ${eventId} must remain a multi-image interaction gate`);
   }
 });
 

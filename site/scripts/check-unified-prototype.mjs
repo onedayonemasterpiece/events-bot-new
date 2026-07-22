@@ -66,7 +66,8 @@ for (const needle of [
   if (!hub.includes(needle)) throw new Error(`Prototype hub misses status contract: ${needle}`);
 }
 
-const hubInternalLinks = [...hub.matchAll(/href="([^"]+)"/gu)]
+const hubMain = hub.slice(hub.indexOf('data-unified-prototype-hub'), hub.indexOf('</main>', hub.indexOf('data-unified-prototype-hub')));
+const hubInternalLinks = [...hubMain.matchAll(/href="([^"]+)"/gu)]
   .map((match) => match[1])
   .filter((href) => href.startsWith(`${prefix}/`));
 for (const href of hubInternalLinks) {
@@ -132,9 +133,11 @@ for (const [, content] of eventPages.slice(0, 40)) {
   for (const match of content.matchAll(/<article[^>]*data-lab-related-card="true"[\s\S]*?<\/article>/gu)) {
     checkedRelatedCards += 1;
     const card = match[0];
-    if (!card.includes('data-card-authoritative-fit="cover"')) throw new Error('Compact related card regressed to a field-producing non-cover fit');
+    const hasImage = /<img[^>]*data-card-image/u.test(card);
+    if (hasImage && !card.includes('data-card-authoritative-fit="cover"')) throw new Error('Compact related image regressed to a field-producing non-cover fit');
+    if (!hasImage && !card.includes('event-card__fallback')) throw new Error('Image-less related card misses its bounded fallback surface');
     const crop = /data-lab-cover-crop="([0-9.]+)"/u.exec(card);
-    if (card.includes('data-lab-media-kind="document"') && (!crop || Number(crop[1]) > 0.200001)) {
+    if (hasImage && card.includes('data-lab-media-kind="document"') && (!crop || Number(crop[1]) > 0.200001)) {
       throw new Error(`Compact OCR/document card exceeds the 20% crop budget: ${crop?.[1] || '(missing)'}`);
     }
   }

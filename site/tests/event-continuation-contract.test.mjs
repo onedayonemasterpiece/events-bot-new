@@ -9,21 +9,19 @@ import { packRelatedCardRows, RELATED_CARD_MAX_DOCUMENT_CROP } from '../src/lib/
 
 const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-test('event 3934 and its continuation use globally packed OCR-safe row geometry', async () => {
-  const payload = JSON.parse(await readFile(path.join(siteRoot, 'src/data/preview-events.json'), 'utf8'));
-  const byId = new Map(payload.events.map((event) => [event.id, event]));
-  const ids = [3934, 6593, 6821, 6907, 4784, 6407];
-  const cards = ids.map((id) => {
-    const event = byId.get(id);
-    assert.ok(event, `fixture event ${id} exists`);
-    const asset = event.image_assets?.find((item) => item.src === event.image_url) || event.image_assets?.[0];
-    return {
-      event_id: event.id,
-      image_text_mode: event.image_text_mode,
-      image_width: asset?.width || 0,
-      image_height: asset?.height || 0,
-    };
-  });
+test('event 3934 crop canary and its continuation use globally packed OCR-safe row geometry', () => {
+  // Keep this algorithm test independent from the rolling preview catalog:
+  // production events legitimately expire, while the accepted geometry must
+  // remain frozen. The ratios mirror the reviewed mixed two-row specimen.
+  const cards = [
+    { event_id:3934, image_text_mode:'ocr_text', image_width:600, image_height:1200 },
+    { event_id:6593, image_text_mode:'ocr_text', image_width:1000, image_height:1000 },
+    { event_id:6821, image_text_mode:'visual_only', image_width:1600, image_height:900 },
+    { event_id:6907, image_text_mode:'visual_only', image_width:700, image_height:1000 },
+    { event_id:4784, image_text_mode:'visual_only', image_width:1500, image_height:1000 },
+    { event_id:6407, image_text_mode:'visual_only', image_width:900, image_height:1000 },
+  ];
+  const ids = cards.map((event) => event.event_id);
 
   const packed = packRelatedCardRows(cards, { limit: 6, rowSize: 3, mediaTreatment: 'hybrid' });
   assert.equal(packed.length, 6);
