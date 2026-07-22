@@ -396,6 +396,11 @@ Artifacts: `artifacts/codex/mobile-shell-factual-nav-v4-20260722/gemini-product-
 
 ## Reference-4 leather-tab challenger v6, 2026-07-22
 
+> **Superseded / rejected after owner review.** v6 неправильно применил
+> референс к закрытому состоянию: заменил стандартную левую бренд-бирку,
+> отказался от стекла и иконок и перенёс лишь общую композиционную идею. Он не
+> является donor для следующей итерации.
+
 Отдельный вариант M адаптирует композиционный принцип из
 `references/mobile menu reference (4).png`, но не копирует бутафорскую
 навигацию референса. Builder —
@@ -461,3 +466,83 @@ Gemini 3.1 Pro (High) отдельно выполнил product/design review и
 на кожаную фактуру. Artifacts:
 `artifacts/codex/mobile-menu-reference4-20260722/gemini-adaptation-review.md`,
 `gemini-implementation-acceptance.md`, `gemini-arbitration-review.md`.
+
+## Exact expanded menu from reference 4, v7, 2026-07-22
+
+Вариант N исправляет root cause v6: файл
+`references/mobile menu reference (4).png` трактуется только как контракт
+**раскрытого** меню. Builder —
+`scripts/build_mobile_menu_reference4_exact_lab.py`, build id —
+`preview-20260722-mobile-menu-reference4-exact-lab-v7`.
+
+### State contract
+
+- Закрытая `.mobile-discovery-menu__summary` целиком принадлежит существующему
+  `build_mobile_shell_unification_lab.py`: слева, `120×84`, однотонная
+  `#98401f`, тот же endorsement, wide-o wordmark и chevron. Новый builder не
+  переопределяет её markup, размеры, положение или материал.
+- После раскрытия стандартная summary только скрывается. Отдельная правая
+  кнопка закрытия живёт внутри glass sheet и вызывает общий close path с
+  возвратом focus на стандартную бирку.
+- Leather surface — прямой lossless crop `333×376` из пользовательского
+  референса, отображаемый `112×126 CSS px` на обычном телефоне. Alpha mask
+  отделяет силуэт; CSS добавляет только внешние drop shadows. Source bbox и
+  processing записаны в
+  `site/public/assets/ui/reference4-leather-close.metadata.json`.
+
+### Expanded surface and IA
+
+Sheet занимает доступную высоту до неизменного нижнего dock и использует
+реальный `backdrop-filter: blur(25px) saturate(.9)`, тёплый полупрозрачный
+gradient, стеклянные cards и белые edges. Dock остаётся видимым и приглушается;
+нажатия на него блокируются, пока menu open. На `320×700` sheet имеет один
+вертикальный scroll surface, а sticky leather close остаётся на `y=0`.
+
+Верхний home-link — канонический
+`announcements-wordmark-ui.svg#announcements-wordmark-ui`, белый, без typeset и
+искажения. Далее идут точные chips `Сегодня / Завтра / Выходные`. Единственный
+большой list card сохраняет все пункты референса, кроме явно исключённых
+`Скоро` и `Мои билеты`:
+
+1. Бесплатно;
+2. Детям;
+3. Выставки;
+4. Фестивали;
+5. Популярное;
+6. Партнёры;
+7. Поиск;
+8. Для меня.
+
+Поскольку отдельные production routes Бесплатно/Детям/Фестивали ещё не
+материализованы, эти строки truthfully ведут в Search с заполненным `q`, а не
+на fake destinations. Utility card содержит `Войти`, `Избранное` и рабочее
+действие `Поделиться`.
+
+### Icons and asset provenance
+
+Строки используют визуально проверенное единое семейство Dazzle Line Icons из
+SVG Repo. `Бесплатно` — явная композиция Euro Circle + Slash; Share Nodes выбран
+отдельно за максимально близкий к референсу трёхузловой силуэт. Durable SVG,
+точные SVG Repo IDs и CC BY 4.0/CC0 attribution находятся в
+`site/public/assets/icons/reference4/ATTRIBUTION.md`. Иконки выводятся mask-слоем
+в одном цвете и одном оптическом размере; пути не перерисовываются.
+
+### Acceptance
+
+Local Playwright: `8` open/closed cases на Home/Today/Search/Popular при
+320/390 CSS px и DPR 3, плюс `12` route checks. Подтверждено:
+
+- стандартный closed bbox всегда `x=12, y=0, 120×84`, материал не изменён;
+- open panel всегда `y=0`, leather close `y=0` до и после small-screen scroll;
+- horizontal overflow, clipped/short targets и page errors — `0`;
+- 8 точных list labels, 3 даты, `Поделиться`; `Скоро` и `Мои билеты` отсутствуют;
+- live blur/gradient, dimmed inert dock, canonical wide-o symbol и direct
+  `333×376` leather crop присутствуют;
+- закрытие возвращает focus на standard summary.
+
+Gemini 3.1 Pro (High) получил точный, непереинтерпретируемый owner contract,
+исходный reference, 320/390 screenshots и код. Строгая product/design review
+подтвердила faithful adaptation, а финальная reacceptance после уменьшения
+chevrons и sticky-close дала **SHIP (research preview)** без blockers. Evidence:
+`artifacts/codex/mobile-menu-reference4-v7-20260722/gemini-design-review.md` и
+`gemini-final-acceptance.md`.

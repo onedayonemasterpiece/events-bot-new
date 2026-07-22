@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added an exact expanded-state adaptation of the supplied mobile-menu
+  reference: a live warm glass sheet, canonical wide-o `Анонсы` home mark,
+  SVGRepo icon-led navigation, date chips and account/favorite/share utility.
+  The leather close control is a direct retina crop from the reference and is
+  confined to the open state; the accepted standard closed brand tag remains
+  unchanged.
+
 - Added a reference-4-derived mobile navigation challenger with a right-side
   leather tab, the canonical wide-o `Анонсы` wordmark, exact
   `Сегодня / Завтра / Выходные` shortcuts and factual release navigation. It
@@ -47,6 +54,12 @@
   noisy topic or age-rating inference.
 
 ### Fixed
+
+- Superseded the rejected reference-4 v6 prototype, which had incorrectly
+  replaced the standard closed tag and reduced the supplied glass/icon menu to
+  an opaque compact panel. The v7 lab preserves every requested reference item
+  except `Скоро` and `Мои билеты`, keeps the bottom dock visible, and makes the
+  leather close control sticky on small-screen menu scroll.
 
 - Fixed mobile Search media framing after real result-card regressions:
   `visual_only` images such as «Царевна Лягушка» now fill the shared horizontal

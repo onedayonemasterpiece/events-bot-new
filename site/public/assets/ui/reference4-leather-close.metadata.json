@@ -1,0 +1,8 @@
+{
+  "title": "Mobile menu reference 4 leather close tab crop",
+  "source": "docs/features/static-site-pages/references/mobile menu reference (4).png",
+  "source_bbox_px": [878, 187, 1211, 563],
+  "source_size_px": [1376, 3064],
+  "processing": "Direct lossless crop from user-provided reference; silhouette alpha mask only. Layout shadow is restored in CSS.",
+  "usage": "Research preview expanded-menu close control only. Not the standard closed KenigEvents brand tag."
+}
