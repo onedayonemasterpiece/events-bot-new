@@ -1,0 +1,85 @@
+mode: serial_integrator_after_read_only_parallel
+repo: /home/dev/projects/events-bot-new
+base_ref: hotfix/static-event-compact-row-occurrence-20260721@3e9fd074
+base_branch: hotfix/static-event-compact-row-occurrence-20260721
+integration_branch: integration/static-unified-prototype-20260722
+global_constraints:
+  - real exported data only; no production-root generation or promotion
+  - unique noindex preview prefix; stable root and stable ICS unchanged
+  - preserve accepted crop/row/keyboard/occurrence contracts
+  - Search visual shell is in scope; functional Search remains explicitly unaccepted until live test
+verification_owner: /root
+stop_conditions:
+  - merge would overwrite newer incident fix without a verified reconciliation
+  - preview upload would touch keys outside the unique build prefix
+lanes:
+  - id: discovery-page-types
+    role: planner
+    effort: medium
+    requirement_ids: [R02, R06]
+    target: static route inventory and link graph
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: route/specimen matrix
+    verification_scope: inspection_only
+    status: completed
+  - id: discovery-donors
+    role: planner
+    effort: high
+    requirement_ids: [R03, R04]
+    target: branch ancestry, compatibility and integration order
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: donor/conflict map
+    verification_scope: inspection_only
+    status: spawned
+  - id: discovery-contracts
+    role: reviewer
+    effort: high
+    requirement_ids: [R04, R07]
+    target: non-negotiable product and incident contracts
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: acceptance checklist
+    verification_scope: inspection_only
+    status: spawned
+  - id: discovery-preview
+    role: planner
+    effort: medium
+    requirement_ids: [R05, R07, R08]
+    target: real-data export, preview publication and safety gates
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: shared-read-only
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: safe build/deploy matrix
+    verification_scope: inspection_only
+    status: completed
+  - id: integration
+    role: merge_reviewer
+    effort: maximum-available
+    requirement_ids: [R01, R03, R04, R05, R06, R07, R08]
+    target: unified responsive prototype
+    depends_on: [discovery-page-types, discovery-donors, discovery-contracts, discovery-preview]
+    execution_mode: serial_after_dependency
+    branch: integration/static-unified-prototype-20260722
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-prototype-20260722
+    writable_files: ['site/**', 'scripts/**', 'docs/**', 'CHANGELOG.md', '.codex/integration/static-unified-prototype-20260722/**']
+    forbidden_files: ['production database', 'stable bucket root', 'stable ICS namespace']
+    expected_output: committed integration, tests, unique noindex links, integration report
+    verification_scope: full_local_and_live_preview
+    status: planned
