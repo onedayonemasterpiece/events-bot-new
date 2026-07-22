@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added a compact transparent 3x WebP leather backing for the mobile brand
+  tag, cropped from the supplied `mobile-head-skinny.png` without anisotropic
+  distortion. `Полюбить Калининград` remains live text and the wide-o
+  `Анонсы` remains the canonical SVG, so both stay retina-sharp over the skin.
+
 - Added a reference-4 glass-depth correction for the mobile menu: the accepted
   closed brand tag itself remains visible as the open-state anchor, the weaker
   glass samples a darker backdrop, account and Share use distinct surfaces,
@@ -68,6 +73,12 @@
   noisy topic or age-rating inference.
 
 ### Fixed
+
+- Fixed the reference-4 mobile-menu motion regression: the primary summary tag
+  no longer counter-transforms and floats over the expanded glass plane. It now
+  rides down with the drawer and is fully outside the viewport when open; the
+  expanded top-left mark is a separate flat home lockup rather than a second
+  leather tag.
 
 - Superseded the rejected reference-4 v6 prototype, which had incorrectly
   replaced the standard closed tag and reduced the supplied glass/icon menu to

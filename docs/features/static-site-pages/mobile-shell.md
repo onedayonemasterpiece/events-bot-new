@@ -621,6 +621,9 @@ read as one card, and the menu-specific Share had regressed to a link-only
 implementation. The corrective research builder is
 `scripts/build_mobile_menu_reference4_glass_depth_lab.py`; build id is
 `preview-20260722-mobile-menu-reference4-glass-depth-lab-v9`, variant `P`.
+This state was subsequently superseded by v10: holding the summary stationary
+with a counter-transform made the closed tag float incorrectly above the open
+menu.
 
 ### One tag, two states
 
@@ -676,3 +679,53 @@ the scrim/glass/utility correction; final acceptance passed six of seven owner
 checks and blocked only on the still-small 12px `0 ₽`. After its concrete
 15/16px correction, the blocking item is resolved. Evidence:
 `artifacts/codex/mobile-menu-reference4-v9-20260722/{gemini-visual-review.txt,gemini-acceptance.txt,open-320-final.png,open-390-fixed.png,service-320.png,route-qa.txt,share-probe.js}`.
+
+## Moving leather brand tag, v10, 2026-07-22
+
+The v10 research builder is
+`scripts/build_mobile_menu_reference4_leather_tag_lab.py`; build id is
+`preview-20260722-mobile-menu-reference4-leather-tag-lab-v10`, variant `P`.
+It corrects the v9 motion model rather than hiding the symptom:
+
+- closed, the summary remains `x=12, y=0, 120×84`;
+- during opening it travels down with the same parent plane (`y=564.5` in the
+  captured 320px animation frame);
+- fully open it starts at `y=700` for `320×700` and `y=844` for `390×844`, so
+  no part of the primary tag can float above or intercept the expanded menu;
+- the expanded top-left home target is a separate flat typographic lockup on
+  glass, not another leather object. It passes the point hit-test at `24,42`.
+
+### Leather asset and retina typography
+
+`mobile-head-skinny.png` is not distorted from its portrait tag into a wide
+rectangle. The durable asset
+`site/public/assets/ui/mobile-head-skinny-leather-3x.webp` uses source crop
+`xyxy 110,700,1565,1718`, preserving the side stitching, lower stitched seam
+and rounded foot at the target `120:84` ratio. An explicit alpha mask removes
+the photographed phone/background; CSS supplies the responsive drop shadow.
+The result is a transparent `360×252` 3x WebP of about `12.5 KB`. Processing
+metadata lives next to it in
+`mobile-head-skinny-leather-3x.metadata.json`.
+
+The raster contains leather only. `Полюбить Калининград` remains live HTML and
+the wide-o `Анонсы` remains the canonical SVG; white ink color, a small dark
+text shadow and an SVG drop shadow make them read as applied to the leather
+without sacrificing retina sharpness. The open lockup is dark typographic ink
+with no background, border or radius, avoiding a duplicate-tag illusion.
+
+### Playwright and consultant acceptance
+
+Visual QA captures closed, mid-animation and fully open states at 320px, plus
+the open 390px state. It verifies actual z-order/hit targets instead of only
+static geometry. All 12 generated routes return 200; each 320px panel has
+`scrollHeight == clientHeight == 700`, panel horizontal overflow `0`, Share
+ends at `y=649`, and the leather Close remains at `y=0`. The existing
+image-first Share probe still receives title, text, URL and an `image/webp`
+File.
+
+Gemini 3.1 Pro (High) inspected the new source, original expanded reference,
+closed/mid/open renders and implementation. Its design review confirmed the
+lower horizontal crop and required removal of the counter-transform. Final
+critical acceptance marked all five owner requirements PASS and returned
+`SHIP research preview`, with no blocking visual defect. Evidence:
+`artifacts/codex/mobile-menu-reference4-v10-20260722/{gemini-design-review.txt,gemini-acceptance.txt,closed-320-final.png,mid-320-final.png,open-320-final.png,open-390.png,visual-motion-qa.txt,route-qa.txt,share-probe.txt}`.
