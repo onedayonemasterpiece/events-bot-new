@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added a reference-4-derived mobile navigation challenger with a right-side
+  leather tab, the canonical wide-o `Анонсы` wordmark, exact
+  `Сегодня / Завтра / Выходные` shortcuts and factual release navigation. It
+  preserves the accepted whole-object drawer motion and bottom dock, rejects
+  fake reference destinations, and uses a real lightweight scrim close target
+  instead of a full-screen glass/body-lock takeover.
+
 - Added a J/K/L mobile header-contrast lab in response to Telegram review.
   It replaces the repeated bordered-cell menu with typographic, asymmetric and
   heavy terracotta compositions, keeps one factual IA and the accepted moving
