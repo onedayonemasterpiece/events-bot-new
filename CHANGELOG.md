@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added a factual G/H/I mobile navigation lab based on the real static-site
+  routes and the release-plan branch. It preserves the accepted moving brand-tag
+  plane and v23 Calendar/Popular rails, keeps `Главная` explicit, compares the
+  current drawer with the first-release account/favorites target, and presents
+  Festivals only as a non-clickable post-release slot.
+
 - Added a separate D/E/F mobile global-navigation research lab. It keeps the
   accepted whole-object brand-tag motion and v23 Calendar/Popular rails, while
   comparing two fully invariant global planes with one explicitly bounded

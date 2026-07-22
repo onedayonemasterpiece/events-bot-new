@@ -277,3 +277,69 @@ overflow/page errors, один current dock item и отсутствие вну�
 plane. Дополнительно D/E обязаны иметь один и тот же normalized panel text на
 всех четырёх страницах, а F — один invariant global subtree и ровно одну
 contextual row фиксированной высоты `48px`.
+
+## Factual-navigation lab v4, 2026-07-22
+
+D/E/F lab не является источником информационной архитектуры: его абстрактные
+`Рубрики / Площадки / Подборки` отклонены. Новый noindex-lab строится от
+фактических `HEADER_NAVIGATION`, `DRAWER_NAVIGATION`, `MobileBottomNav` и от
+контрактов ветки `origin/docs/static-site-release-plan-20260717`. Builder —
+`scripts/build_mobile_shell_factual_nav_lab.py`, build id —
+`preview-20260721-mobile-shell-factual-nav-lab-v4`.
+
+Top plane остаётся **глобальным и одинаковым** при переходе между Главной,
+календарём, Популярным, Поиском и Для меня. Выбранный пункт нижнего dock не
+меняет состав верхнего меню. Сохраняется принятая механика: cream plane и
+бренд-бирка являются одним moving object; плоскость полностью уезжает вверх, а
+бирка остаётся её нижним краем. Calendar/Popular rails, crop, gestures и
+медальоны наследуются из v23 donor, а Search progress остаётся внутри submit
+CTA.
+
+### Фактическая карта
+
+- current: `Главная`, `Сегодня`, `Завтра`, `Выходные`, `Выставки`,
+  `Популярное`, `Клубы` (feature flag), `Поиск`, `Для меня`,
+  `Инфопартнёры`;
+- bottom dock: `Афиша`, `Даты`, `Поиск`, `Для меня`;
+- first release target: глобальные account actions и `Моё избранное`;
+- post-release only: `Фестивали`. Пока `/festivali/` отсутствует, этот пункт
+  допустим только как неактивный `Фестивали · позже`, без `href`;
+- institutional footer: `Инфопартнёры`, `Информационное партнёрство`,
+  `Правообладателям`.
+
+В current drawer название `Все анонсы` заменено на явно запрошенное владельцем
+`Главная`; URL остаётся `/`. `Городской обзор` не включён в меню: в release plan
+это возможный блок Главной, а не отдельный destination. Не существующие сейчас
+`Площадки`, `Организаторы` и `Журнал` не выдаются за live top-level routes.
+
+| Вариант | Назначение | Plane | Что проверяем |
+|---|---|---|---|
+| G «Текущий сайт» | контроль фактической IA сегодня | только существующие current destinations | насколько достаточен минимальный drawer без roadmap-функций |
+| H «Первый релиз» | основной release-кандидат | current + account/service + `Моё избранное` | универсальная глобальная оболочка без ложных обещаний |
+| I «Релиз + фестивали» | проверка будущей ёмкости | H + неактивный `Фестивали · позже` | выдержит ли компоновка будущий раздел без преждевременного live-route |
+
+Главные страницы вариантов действительно находятся в корне variant URL;
+Search находится на `/poisk/`. Lab также материализует локальные страницы всех
+показываемых ссылок, чтобы сравнение на телефоне не перебрасывало на старые
+preview templates.
+
+### Gate
+
+Local Playwright покрывает `3 × 4 × 2` состояния при 320/390 CSS px и DPR 3:
+whole-object bbox, отсутствие horizontal overflow и clipping, стабильный текст
+plane между страницами, фактические четыре labels dock и truthfulness фестиваля.
+Дополнительно проверяются 36 variant-route URL. Вариант I обязан иметь ровно
+один `aria-disabled` festival item и ноль ссылок на `/festivali/`; G/H не имеют
+festival item.
+
+Запрошенная внешняя приёмка Gemini Pro была инициирована через agy для
+`gemini-3.1-pro-preview` (High), но 2026-07-22 UTC остановлена provider gate:
+`Your current account is not eligible for Antigravity, because it is not
+currently available in your location` на redacted interactive account lane.
+Evidence: `artifacts/codex/mobile-shell-factual-nav-v4-20260721/gemini-product.typescript`.
+Допустимый fallback Claude `Opus` также заблокирован отсутствующей авторизацией
+(`Not logged in · Please run /login`; evidence:
+`artifacts/codex/mobile-shell-factual-nav-v4-20260721/opus-fallback-product.md`).
+Поэтому v4 нельзя маркировать как завершивший external consultant review:
+фактическая IA подтверждена кодом и release-plan branch, а внешняя критическая
+приёмка остаётся pending.
