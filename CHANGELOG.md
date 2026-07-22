@@ -74,6 +74,11 @@
 
 ### Fixed
 
+- Mobile menu reference-4 v13 raises the closed shell stacking context above
+  sticky shelf/city headers (while keeping it below the bottom navigation), so
+  the leather tag is no longer clipped or made unclickable during real-device
+  scrolling.
+
 - Restored the accepted global service-share contract in the reference-4
   mobile menu: Share now delegates to the existing footer controller and sends
   the versioned KenigEvents service card, service copy and canonical homepage,

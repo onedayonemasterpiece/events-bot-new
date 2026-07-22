@@ -18,12 +18,12 @@ from urllib.parse import quote_plus
 import build_mobile_shell_factual_nav_lab as factual
 
 
-BUILD_ID_DEFAULT = "preview-20260722-mobile-menu-reference4-leather-tag-lab-v12"
+BUILD_ID_DEFAULT = "preview-20260722-mobile-menu-reference4-leather-tag-lab-v13"
 
 VARIANTS = {
     "p": {
         "name": "Кожаная выезжающая бирка · reference 4",
-        "subtitle": "кожаная бирка едет с плоскостью; utility разделён; image-first Share",
+        "subtitle": "кожаная бирка едет с плоскостью; utility разделён; service-card Share",
         "body_class": "variant-reference4-leather-tag",
     },
 }
@@ -162,7 +162,8 @@ def plane_content(variant: str, base: str, current: str) -> str:
 
 
 REFERENCE4_CSS = r'''
-/* v12: stable viewport plane, sticky-safe closed tag and settled clipping against Android viewport bounce. */
+/* v13: stable viewport plane, parent-level sticky layering and settled clipping against Android viewport bounce. */
+.variant-reference4-leather-tag .shell-header{z-index:39}
 .variant-reference4-leather-tag .mobile-discovery-menu{--plane-h:100%;inset:0!important;z-index:41;width:100%;height:auto;overflow:visible;pointer-events:none;transform:translate3d(0,-100%,0);overscroll-behavior:none}
 .variant-reference4-leather-tag .mobile-discovery-menu[open]{transform:translate3d(0,0,0);pointer-events:auto}
 .variant-reference4-leather-tag .mobile-discovery-menu[open].is-open-settled{overflow:clip}

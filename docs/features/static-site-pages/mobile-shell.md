@@ -818,3 +818,31 @@ fit at `320×700` and have zero horizontal overflow. Evidence:
 Gemini 3.1 Pro independently rechecked all six gates against the final code and
 renders and returned `SHIP research preview` with no blocking defect; its raw
 acceptance is `gemini-acceptance.txt` in the same artifact directory.
+
+## Closed tag stacking-context correction, v13, 2026-07-22
+
+Real-device review of v12 showed that its sticky-header gate tested the drawer
+child's computed `z-index`, but missed the parent stacking context. The closed
+`.mobile-discovery-menu` had `z-index:41`, yet it remained inside
+`.shell-header` at `z-index:26`; an external `.group-head` at `z-index:30`
+therefore painted over and intercepted the lower 20px of the `120×84` leather
+tag whenever the shelf header stuck at `top:64px`.
+
+The variant-scoped fix raises the **closed parent shell header** to `z-index:39`.
+This gives the mobile stack an explicit order: shelf headers `30`, filtered-city
+context `38`, closed shell/tag `39`, bottom navigation `40`, open full-screen
+menu `60`. The transparent header remains `pointer-events:none`; only the
+visible summary keeps `pointer-events:auto`. No rail, sticky shelf geometry,
+tag geometry or drawer motion changes.
+
+The regression gate must scan multiple page offsets at which a shelf header is
+actively sticky, not a single arbitrary offset. At each geometric intersection
+it must assert both the parent/peer stack order and that
+`elementFromPoint(60,70)` resolves to the leather summary. The original failure
+is captured at `360×700`, `scrollY=160..720`: summary `y=0..84`, group header
+`y=64..144`, hit target `.group-head`. Evidence and Gemini 3.1 Pro review:
+`artifacts/codex/mobile-menu-reference4-v13-20260722/{scan-before.txt,scan-after.txt,before-overlap-360.png,after-overlap-360.png,qa-a.txt,qa-resize-close.txt,route-qa.txt,gemini-fix-review.txt,gemini-acceptance.txt}`.
+The post-fix scan covers 37 active geometric intersections and resolves the
+overlap point to the summary in every case. Gemini 3.1 Pro passed sticky
+overlap, pointer target, z-order, open/close motion, service Share and all
+routes, returning `SHIP research preview`.
