@@ -74,6 +74,14 @@
 
 ### Fixed
 
+- Stabilized the full-screen reference-4 mobile drawer against Android Chrome
+  viewport-bar changes: the closed leather tag now uses matched percentage
+  geometry rather than animated `dvh`, and the open plane is never taller than
+  the viewport. Internal touch scrolling cannot chain to the document or reveal
+  a blank lower strip. The donor chevron was removed, both brand lockups were
+  aligned to the accepted three-line rhythm, and the `0 ₽` glyph now matches
+  the optical weight and spacing of the surrounding thin icon family.
+
 - Fixed the reference-4 mobile-menu motion regression: the primary summary tag
   no longer counter-transforms and floats over the expanded glass plane. It now
   rides down with the drawer and is fully outside the viewport when open; the

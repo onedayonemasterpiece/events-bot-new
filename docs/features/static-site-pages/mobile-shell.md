@@ -729,3 +729,48 @@ lower horizontal crop and required removal of the counter-transform. Final
 critical acceptance marked all five owner requirements PASS and returned
 `SHIP research preview`, with no blocking visual defect. Evidence:
 `artifacts/codex/mobile-menu-reference4-v10-20260722/{gemini-design-review.txt,gemini-acceptance.txt,closed-320-final.png,mid-320-final.png,open-320-final.png,open-390.png,visual-motion-qa.txt,route-qa.txt,share-probe.txt}`.
+
+## Stable viewport drawer and aligned brand, v11, 2026-07-22
+
+Telegram device review found three defects which desktop static geometry alone
+did not expose: the closed tag could interpolate vertically while Android
+Chrome changed the dynamic viewport, the first swipe over the open menu could
+chain to browser/document scrolling and reveal a blank lower strip, and both
+brand lockups were optically misaligned. The same research builder now emits
+`preview-20260722-mobile-menu-reference4-leather-tag-lab-v11`.
+
+The fullscreen wrapper is no longer `calc(100dvh + tag)`. It is a single fixed
+`inset:0` viewport plane. Closed state uses `translateY(-100%)`, while the
+summary is positioned at `top:100%`; because both percentages resolve from the
+same box, the visible tag remains exactly at `y=0` without animating whenever
+the mobile URL bar changes viewport height. Open state is exactly one viewport
+high and the summary begins at its lower edge. The panel owns the only allowed
+vertical scroll surface, uses `overscroll-behavior:none`, and switches between
+`touch-action:none` when content fits and `pan-y` when content genuinely
+overflows. Both `html` and `body` are scroll-locked while open. The old generic
+document-scroll auto-close listener is deliberately omitted for this fullscreen
+variant: a deliberate panel swipe must never be interpreted as a close signal.
+
+The closed leather tag keeps its `120×84` WebP and live Retina typography, but
+removes the donor chevron. Endorsement receives a `-1px` optical compensation
+against the live font's side bearing while the canonical wordmark box remains
+at `x=26`. The open flat brand uses the accepted three-line
+rhythm — `Полюбить`, `Калининград`, `Анонсы` — without becoming a second
+leather object. The Free icon uses the unambiguous `0 ₽` label with U+200A hair
+space, a 1px circle, regular-weight 14px type and reduced optical opacity so it
+matches the Phosphor Thin family instead of reading as the darkest icon.
+
+Playwright acceptance now includes interaction, not only screenshots. At
+`320×700`, scrolling the closed page from `scrollY=0` to `420` leaves summary
+`y=0` (`delta=0`). Open motion captures the same summary between `y=0` and
+`y=700`; fully open panel bounds are exactly `0..700`. Two CDP touch drags over
+the non-scrollable panel leave document `scrollY=0`, panel `scrollTop=0` and
+blank bottom `0`. After resizing to `320×620`, the panel becomes internally
+scrollable and a touch drag moves only its `scrollTop` to `46`; document
+`scrollY` and blank bottom remain `0`. At `390×844`, panel bottom and viewport
+bottom are both `844`, and re-close returns summary to `y=0`. Evidence:
+`artifacts/codex/mobile-menu-reference4-v11-20260722/{gemini-design-review.txt,visual-motion-scroll-qa.txt,public-visual-motion-scroll-qa.txt,closed-320-final.png,open-320-final.png,open-390.png}`.
+Gemini 3.1 Pro's first acceptance correctly rejected bbox-only brand alignment;
+after the `-1px` optical side-bearing compensation it rechecked the final
+render, found no regression and returned `SHIP research preview` in
+`gemini-acceptance.txt`.
