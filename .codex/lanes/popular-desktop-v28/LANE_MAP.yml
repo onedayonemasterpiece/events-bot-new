@@ -1,0 +1,48 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: d58119ba
+base_branch: origin/hotfix/static-listing-desktop-preview-regression-20260720
+integration_branch: integration/popular-desktop-v28-20260720
+global_constraints:
+  - desktop Popular only; mobile renderers and mobile CSS are forbidden
+  - reuse ListingEventCard; no parallel card implementation
+  - no card-level popularity reasons and no per-shelf expansion controls
+  - preserve the five evidence shelves, then optionally add one warm-profile shelf
+verification_owner: root
+stop_conditions:
+  - mobile regression in the 360/390/430 matrix
+  - desktop listing regression at 1366/1536/1920
+lanes:
+  - id: popular-desktop-v28
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09]
+    target: desktop Popular eligibility, grouping, lifecycle context, optional personalization and release evidence
+    depends_on: []
+    execution_mode: serial_after_dependency
+    branch: integration/popular-desktop-v28-20260720
+    worktree: /home/dev/.codex/worktrees/events-bot-new/popular-desktop-v28-20260720
+    writable_files:
+      - site/src/pages/populyarnoe/index.astro
+      - site/src/components/listings/PopularListingSurface.astro
+      - site/src/components/listings/PopularBehaviorRows.astro
+      - site/src/components/listings/ListingEventCard.astro
+      - site/src/components/listings/ListingControls.astro
+      - site/src/components/listings/PopularPersonalizedRow.astro
+      - site/src/lib/events.ts
+      - site/src/lib/listingPresentation.ts
+      - site/src/lib/popularPersonalization.mjs
+      - site/src/layouts/EventLayout.astro
+      - site/scripts/check-preview.mjs
+      - site/tests/popular-desktop-listing.test.mjs
+      - docs/features/static-site-pages/
+      - docs/operations/e2e-scenarios.md
+      - CHANGELOG.md
+    forbidden_files:
+      - site/src/components/listings/PopularMobileBehaviorRows.astro
+      - site/src/components/listings/PopularMobileAdaptiveRows.astro
+      - site/src/components/listings/PopularMobileGroupContext.astro
+      - site/src/components/listings/ListingMobileDensitySwitch.astro
+      - any CSS inside max-width mobile media queries
+    expected_output: committed desktop-only implementation, tests, documentation, immutable preview
+    verification_scope: full_local
+    status: committed

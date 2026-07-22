@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Бесплатно">
+  <circle cx="256" cy="256" r="238" fill="#f7f3ec" stroke="#5f5a54" stroke-width="10"/>
+  <circle cx="256" cy="256" r="216" fill="none" stroke="#8a847d" stroke-width="5" stroke-dasharray="3 17" stroke-linecap="round"/>
+  <path d="M256 75l10 21 23 3-17 17 4 23-20-11-20 11 4-23-17-17 23-3z" fill="#5f5a54"/>
+  <text x="256" y="285" fill="#302d29" font-family="Arial, sans-serif" font-size="142" font-weight="850" text-anchor="middle">0 ₽</text>
+  <text x="256" y="350" fill="#5f5a54" font-family="Arial, sans-serif" font-size="43" font-weight="800" letter-spacing="4" text-anchor="middle">БЕСПЛАТНО</text>
+</svg>

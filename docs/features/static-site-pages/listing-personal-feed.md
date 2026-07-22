@@ -8,12 +8,22 @@ listing runtime/cache projection only.
 
 ## Product rule
 
-Current main appends the dynamic slot to `/segodnya/`, `/zavtra/`,
-`/vyhodnye/`, `/populyarnoe/` and `/vystavki/`; the unified target may disable
-the generic slot on a surface that owns a more specific finite continuation.
-The section is **not pre-rendered with personal cards** in static HTML. It stays
-hidden until the browser can use a cached personal list or fetch one from the
-same-origin catalog/backend.
+Static date listing pages (`/segodnya/`, `/zavtra/`, `/vyhodnye/`) and
+`/vystavki/` may end with a dynamic personal continuation. The section is
+**not pre-rendered with personal cards** in static HTML. It stays hidden until
+the browser can use a compatible cached personal list or fetch one from the
+same-origin catalog/backend. Event detail owns its separate finite continuation
+and must not also append the generic listing slot.
+
+`/populyarnoe/` remains excluded from this generic slot. Its primary job is a
+bounded behavioral overview. Desktop V28 adds one compact continuation,
+`Вам может быть интересно`: it uses the same cross-site local profile only with
+explicit consent and at least three strong signals, then reveals exactly four
+affinity candidates plus one anti-bubble candidate. Page-wide family
+exclusions apply; if the honest 4+1 set cannot be formed, the whole shelf stays
+absent. It has no independent Popular profile, backend read or generic personal
+response. See
+[`listing-surfaces-v28-desktop-popular.md`](listing-surfaces-v28-desktop-popular.md).
 
 This keeps SEO-safe deterministic listing content first, then adds a personal continuation only for real users.
 

@@ -1,68 +1,8 @@
 {
   "schema_version": "interest-clubs-static-v1",
   "projection_version": 1,
-  "generated_at": "2026-07-17T00:00:00Z",
-  "current_date": "2026-07-17",
-  "source": "review-fixture-v1",
-  "clubs": [
-    {
-      "id": 1,
-      "slug": "game-vibes",
-      "name": "Game Vibes",
-      "topic": "Настольные игры",
-      "description": "Публичное игровое сообщество с разными форматами настольных и ролевых игр.",
-      "city": "Калининград",
-      "typical_venue": null,
-      "activity": {
-        "meeting_count": 25,
-        "distinct_date_count": 19,
-        "first_observed_date": "2026-03-13",
-        "last_observed_date": "2026-07-26",
-        "future_meeting_count": 2
-      },
-      "future_meetings": [
-        {
-          "event_id": 6929,
-          "title": "Настольные игры",
-          "start_date": "2026-07-19",
-          "start_time": null,
-          "display_time": null,
-          "city": "Калининград",
-          "venue_name": "Сигнал",
-          "event_path": null,
-          "source_url": "https://t.me/signalkld/11317"
-        },
-        {
-          "event_id": 6835,
-          "title": "Гоблинское сражение",
-          "start_date": "2026-07-26",
-          "start_time": null,
-          "display_time": null,
-          "city": "Калининград",
-          "venue_name": "Клуб настольных игр Газебо",
-          "event_path": null,
-          "source_url": "https://t.me/signalkld/11285"
-        }
-      ],
-      "updated_at": null
-    },
-    {
-      "id": 2,
-      "slug": "klub-issledovateley-neyronok",
-      "name": "Клуб исследователей нейронок",
-      "topic": "ИИ и нейросети",
-      "description": "Встречи и совместные лаборатории о нейросетях, промптинге и практических задачах.",
-      "city": "Калининград",
-      "typical_venue": "Сигнал",
-      "activity": {
-        "meeting_count": 9,
-        "distinct_date_count": 8,
-        "first_observed_date": "2026-02-11",
-        "last_observed_date": "2026-07-04",
-        "future_meeting_count": 0
-      },
-      "future_meetings": [],
-      "updated_at": null
-    }
-  ]
+  "generated_at": "2026-07-18T18:21:59.862991+00:00",
+  "current_date": "2026-07-18",
+  "source": "disabled-by-build-gate",
+  "clubs": []
 }

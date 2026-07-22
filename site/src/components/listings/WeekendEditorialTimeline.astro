@@ -1,0 +1,149 @@
+---
+import ListingEventCard from './ListingEventCard.astro';
+import ListingTimeMarker from './ListingTimeMarker.astro';
+import type { ListingTimeGroup } from '../../lib/listingPresentation';
+import { listingDaypart } from '../../lib/listingPresentation';
+
+interface DayInput {
+  key: 'sat' | 'sun';
+  title: string;
+  date: string;
+  groups: ListingTimeGroup[];
+}
+interface Props { days: DayInput[] }
+const { days } = Astro.props;
+const groupMaps = new Map(days.map((day) => [day.key, new Map(day.groups.map((group) => [group.key, group]))]));
+const keys = [...new Set(days.flatMap((day) => day.groups.map((group) => group.key)))]
+  .sort((left, right) => left === 'untimed' ? 1 : right === 'untimed' ? -1 : left.localeCompare(right));
+// Priority is page-global, not scoped to the first time key. Sparse early rows
+// often contain a single card, while the next row is already in the initial
+// desktop viewport. Let the parser discover and prioritize the first four real
+// media cards in document chronology.
+const priorityEventIds = new Set(
+  keys.flatMap((key) => days.flatMap((day) => groupMaps.get(day.key)?.get(key)?.events || []))
+    .slice(0, 4)
+    .map((event) => event.id),
+);
+
+---
+<div class="ke-weekend-timeline" data-ds-component="WeekendEditorialTimeline" data-ds-version="5">
+  {keys.map((key) => {
+    const groups = days.map((day) => groupMaps.get(day.key)?.get(key));
+    const label = key === 'untimed' ? 'Время уточняется' : key;
+    const daypart = listingDaypart(key === 'untimed' ? null : key);
+    return (
+      <section
+        id={`weekend-time-${key}`}
+        class="ke-weekend-time-row"
+        data-weekend-time-row
+        data-listing-daypart={daypart}
+        aria-labelledby={`weekend-time-${key}-title`}
+      >
+        <ListingTimeMarker
+          id={`weekend-time-${key}-title`}
+          label={label}
+          className="ke-weekend-time-rail"
+          dayCounts={days.map((day, index) => ({
+            key: day.key,
+            label: day.key === 'sat' ? 'Сб' : 'Вс',
+            count: groups[index]?.events.length || 0,
+          }))}
+        />
+        {days.map((day, index) => {
+          const group = groups[index];
+          const packedEvents = group?.events || [];
+          return (
+            <div
+              class:list={['ke-weekend-time-cell', `ke-weekend-time-cell--${day.key}`]}
+              role="group"
+              aria-labelledby={`weekend-time-${key}-title weekend-${day.key}-label`}
+            >
+              <div
+                id={`weekend-${day.key}-${key}`}
+                class="ke-weekend-time-cell__content"
+                data-listing-time-group
+                data-listing-date={day.date}
+                data-listing-day={day.key}
+                data-listing-time={key}
+                data-listing-daypart={daypart}
+                hidden={!group?.events.length}
+              >
+                <div class="ke-time-group__flow" data-listing-weekend-flow data-listing-packed="false">
+                  {packedEvents.map((event) => {
+                    const priority = priorityEventIds.has(event.id);
+                    return <ListingEventCard event={event} density="weekend" priority={priority} />;
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </section>
+    );
+  })}
+</div>
+
+<script>
+  const weekendFlowOrder = new WeakMap();
+  function projectedCardWidth(card) {
+    const style = getComputedStyle(card);
+    const mediaHeight = Number.parseFloat(style.getPropertyValue('--ke-listing-media-height')) || 178;
+    const ratio = Number.parseFloat(style.getPropertyValue('--ke-listing-image-ratio')) || 1.2;
+    const tail = Number.parseFloat(style.getPropertyValue('--ke-listing-tail-width')) || 0;
+    return mediaHeight * ratio + tail;
+  }
+  function projectedRows(cards, capacity, gap) {
+    let rows = 0;
+    let used = 0;
+    cards.forEach((card) => {
+      const width = projectedCardWidth(card);
+      if (!rows || used + gap + width > capacity + 0.5) { rows += 1; used = width; }
+      else used += gap + width;
+    });
+    return rows;
+  }
+  function packWeekendFlow(flow) {
+    const original = weekendFlowOrder.get(flow) || [...flow.querySelectorAll(':scope > [data-listing-item]')];
+    weekendFlowOrder.set(flow, original);
+    const visible = original.filter((card) => !card.hidden);
+    original.forEach((card) => flow.appendChild(card));
+    if (visible.length < 3) { flow.dataset.listingPacked = 'false'; return; }
+    const style = getComputedStyle(flow);
+    const gap = Number.parseFloat(style.columnGap) || 14;
+    const capacity = flow.clientWidth;
+    const baselineRows = projectedRows(visible, capacity, gap);
+    const ranked = visible
+      .map((card, index) => ({ card, index, width: projectedCardWidth(card) }))
+      .sort((left, right) => right.width - left.width || left.index - right.index);
+    const bins = [];
+    ranked.forEach((item) => {
+      const target = bins
+        .map((bin, index) => ({ bin, index, remaining: capacity - bin.used - gap - item.width }))
+        .filter((candidate) => candidate.remaining >= -0.5)
+        .sort((left, right) => left.remaining - right.remaining)[0];
+      if (target) {
+        target.bin.items.push(item);
+        target.bin.used += gap + item.width;
+      } else bins.push({ used: item.width, items: [item] });
+    });
+    if (bins.length >= baselineRows) { flow.dataset.listingPacked = 'false'; return; }
+    bins
+      .map((bin) => ({ ...bin, first: Math.min(...bin.items.map((item) => item.index)) }))
+      .sort((left, right) => left.first - right.first)
+      .flatMap((bin) => bin.items.sort((left, right) => left.index - right.index))
+      .forEach((item) => flow.appendChild(item.card));
+    original.filter((card) => card.hidden).forEach((card) => flow.appendChild(card));
+    flow.dataset.listingPacked = 'true';
+  }
+  let weekendPackFrame = 0;
+  function scheduleWeekendPacking() {
+    cancelAnimationFrame(weekendPackFrame);
+    weekendPackFrame = requestAnimationFrame(() => {
+      document.querySelectorAll('[data-listing-weekend-flow]').forEach(packWeekendFlow);
+    });
+  }
+  scheduleWeekendPacking();
+  document.fonts?.ready.then(scheduleWeekendPacking);
+  addEventListener('resize', scheduleWeekendPacking, { passive: true });
+  document.addEventListener('kenigevents:listing-personal-filter', scheduleWeekendPacking);
+</script>

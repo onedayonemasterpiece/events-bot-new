@@ -1,10 +1,23 @@
 # Static event-page release UI contract
 
-> Status: **release baseline pending product/design sign-off**.
+> Status: **design-system baseline implemented; immutable RC preview and product/design sign-off pending**.
 
 ## Purpose
 
 This is the single current UI acceptance contract. Historical hero/date/decision/onboarding labs remain research evidence and must not silently redefine the release baseline.
+
+The canonical component catalog is [the static-site design system](design-system/README.md), rendered at `/lab/design-system/`. Release sign-off must name an immutable preview build id and git SHA and must include that route; screenshots or approval of one event page are not sufficient.
+
+## Design-system gate
+
+- shared foundations come only from `site/src/styles/design-system.css`;
+- approved primitives come from `site/src/components/design-system/`;
+- approved product components have a visible registry row with runtime source and state coverage;
+- every registered component exposes an integer version; material redesigns add `vN+1`, keep `vN` as visibly deprecated with a replacement relation, and include a complete production-consumer migration;
+- any new pattern starts as an explicit lab/candidate and is promoted only after approval;
+- page-local forks of approved buttons, fields, badges, cards, feedback states or geometry block release;
+- mixed component versions without a named feature flag, consumer list, owner and removal deadline block release;
+- `npm run check:design-system` and the generated catalog assertions in `npm run check:preview` pass on the RC SHA.
 
 ## Required surfaces
 
@@ -26,7 +39,15 @@ This is the single current UI acceptance contract. Historical hero/date/decision
 - slow network and unavailable optional backend;
 - real Android/iOS browser checks for auth, calendar and share;
 - visual baselines tied to one immutable preview build id;
+- `/lab/design-system/` reviewed at the acceptance widths with default/hover/focus/pressed/loading/disabled/error/degraded states;
 - product/design owner signs off exact branch/SHA and open deviations.
+
+## Current component decisions
+
+- `EventCard split-actions` is the `v2` release baseline; production consumer migration is complete.
+- `EventCard overlay-controls` is deprecated `v1`, replaced by `EventCard v2`, and retained only in the catalog for regression comparison.
+- Hero families remain governed by `/lab/hero/`; the default used by real pages is also visible in the design-system catalog.
+- `Button`, `Badge`, `Field` and `StatePanel` are approved primitives. New visual variants require a registry/state/check update rather than local CSS.
 
 ## Branch rule
 

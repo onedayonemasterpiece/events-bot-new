@@ -5,6 +5,7 @@ import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import MobileBottomNav, { type MobileSection } from '../components/MobileBottomNav.astro';
 import MobileToastRegion from '../components/MobileToastRegion.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
+import '../styles/design-system.css';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 import type { PreviewEvent } from '../lib/types';
@@ -28,9 +29,10 @@ interface Props {
   mobileSection?: MobileSection;
   mobileBottomMode?: MobileBottomMode;
   noindex?: boolean;
+  disableViewportZoom?: boolean;
 }
 
-const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent, mobileTopMode, mobileSection: explicitMobileSection, mobileBottomMode, noindex = false } = Astro.props;
+const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent, mobileTopMode, mobileSection: explicitMobileSection, mobileBottomMode, noindex = false, disableViewportZoom = false } = Astro.props;
 const robots = noindex
   ? 'noindex,nofollow,noarchive'
   : (IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive'));
@@ -132,7 +134,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content={disableViewportZoom ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' : 'width=device-width, initial-scale=1'} />
     <meta name="robots" content={robots} />
     {IS_SECRET_CANDIDATE && <meta name="referrer" content="no-referrer" />}
     <title>{title}</title>
@@ -213,7 +215,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         position: absolute;
         left: 1rem;
         top: 1rem;
-        z-index: 20;
+        z-index: 80;
         transform: translateY(-180%);
         background: var(--text);
         color: #fff;
@@ -222,15 +224,18 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
       .skip-link:focus { transform: translateY(0); }
       .site-header {
-        position: relative;
-        z-index: 20;
+        position: sticky;
+        top: 0;
+        height: var(--ke-site-header-bar-height);
+        min-height: var(--ke-site-header-bar-height);
+        z-index: 60;
         border-bottom: 1px solid rgba(121, 48, 20, 0.12);
-        background: rgba(255, 250, 242, 0.96);
+        background: var(--ke-color-header);
         box-shadow: 0 6px 22px rgba(69,45,28,0.035);
       }
       .site-header__inner {
         position: relative;
-        width: min(1440px, calc(100% - clamp(3rem, 5vw, 6rem)));
+        width: min(var(--ke-content-wide-max), calc(100% - clamp(3rem, 5vw, 6rem)));
         margin: 0 auto;
         height: 56px;
         min-height: 56px;
@@ -247,12 +252,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         display: block;
         padding: 18px 24px 16px;
         border-radius: 0 0 12px 12px;
-        background: #98401f;
+        background: var(--ke-color-brand-tag);
         color: #fffaf2;
         text-decoration: none;
         transition: background-color 160ms ease;
       }
-      .site-header__brand-tag:hover { background: #893719; }
+      .site-header__brand-tag:hover { background: var(--ke-color-brand-tag-hover); }
       .site-header__desktop-lockup { display: grid; grid-template-rows: 12px auto; align-content: start; gap: 4px; }
       .site-header__desktop-lockup .announcements-lockup__endorsement { overflow: visible; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; line-height: 12px; text-transform: uppercase; white-space: nowrap; }
       .site-header__desktop-lockup .announcements-lockup__wordmark { display: block; width: 192px; height: auto; color: #fff; overflow: visible; }
@@ -719,7 +724,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         align-content: end;
         padding: max(18px, calc(env(safe-area-inset-top) + 14px)) 12px 12px;
         border-radius: 0 0 12px 12px;
-        background: #98401f;
+        background: var(--ke-color-brand-tag);
         color: #fffdf8;
         text-decoration: none;
         box-shadow: 0 20px 42px rgba(0,0,0,0.28), 0 1px 0 rgba(255,255,255,0.12) inset;
@@ -1798,7 +1803,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           padding: max(1.35rem, calc(env(safe-area-inset-top) + 0.95rem)) 0.75rem 1rem;
           border: 0;
           border-radius: 0 0 12px 12px;
-          background: #98401f;
+          background: var(--ke-color-brand-tag);
           color: #fffdf8;
           box-shadow: 0 12px 28px rgba(72, 45, 25, 0.24);
           text-decoration: none;
@@ -1810,7 +1815,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           box-shadow: 0 10px 24px rgba(72, 45, 25, 0.22);
         }
         @media (hover:hover) and (pointer:fine) {
-          .mobile-discovery-menu__summary:hover { background:#893719; }
+          .mobile-discovery-menu__summary:hover { background:var(--ke-color-brand-tag-hover); }
         }
         .mobile-discovery-menu__lockup {
           position: relative;
@@ -2937,7 +2942,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         }
 
         function listingItems() {
-          return Array.from(document.querySelectorAll('[data-listing-item]'));
+          return Array.from(document.querySelectorAll('[data-listing-item]:not([data-listing-supplemental="true"])'));
         }
 
         function listingItemShouldHide(item, hiddenIds) {

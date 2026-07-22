@@ -34,7 +34,7 @@ const description = `Отдельная static-страница выставок
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
-          <ListingPersonalFilter total={events.length} label="выставки" />
+          <ListingPersonalFilter total={events.length} label="выставки" version={2} />
           <h2>{events.length ? `Найдено: ${events.length}` : 'Сейчас выставки в fixture не найдены'}</h2>
           <div class="listing-stack">
             {events.map((event) => <EventListItem event={event} />)}

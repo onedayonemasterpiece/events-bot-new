@@ -1,0 +1,19 @@
+---
+import ListingTimeNav, { type NavItem } from './ListingTimeNav.astro';
+import { LISTING_DAYPARTS, type ListingTimeGroup } from '../../lib/listingPresentation';
+interface DayInput { key: 'sat' | 'sun'; short: string; dateLabel: string; groups: ListingTimeGroup[]; }
+interface Props { days: DayInput[]; }
+const { days } = Astro.props;
+const items: NavItem[] = LISTING_DAYPARTS.map((part) => {
+  const groups = [...new Set(days.flatMap((day) => day.groups.filter((group) => group.daypart === part.key).map((group) => group.key)))]
+    .sort((left, right) => left.localeCompare(right))
+    .map((key) => ({
+      key, label: key,
+      count: days.reduce((sum, day) => sum + (day.groups.find((group) => group.key === key)?.events.length || 0), 0),
+      target: `weekend-time-${key}`,
+    }));
+  const count = groups.reduce((sum, group) => sum + group.count, 0);
+  return { ...part, exact: groups, count, href: groups[0] ? `#${groups[0].target}` : '' };
+}).filter((item) => item.count > 0);
+---
+<ListingTimeNav items={items} force label="По времени выходных" />

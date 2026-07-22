@@ -1,0 +1,59 @@
+---
+interface Props {
+  variant?: 'primary' | 'secondary' | 'quiet' | 'inverse' | 'danger';
+  size?: 'compact' | 'default' | 'large';
+  state?: 'default' | 'hover' | 'focus' | 'pressed' | 'loading' | 'disabled';
+  href?: string;
+  type?: 'button' | 'submit' | 'reset';
+  ariaLabel?: string;
+  iconOnly?: boolean;
+  pressed?: boolean;
+}
+
+const {
+  variant = 'primary',
+  size = 'default',
+  state = 'default',
+  href,
+  type = 'button',
+  ariaLabel,
+  iconOnly = false,
+  pressed,
+} = Astro.props;
+const disabled = state === 'disabled' || state === 'loading';
+const className = [
+  'ke-button',
+  `ke-button--${variant}`,
+  size !== 'default' ? `ke-button--${size}` : '',
+  iconOnly ? 'ke-button--icon' : '',
+].filter(Boolean).join(' ');
+---
+{href ? (
+  <a
+    class={className}
+    href={disabled ? undefined : href}
+    role={disabled ? 'link' : undefined}
+    aria-label={ariaLabel}
+    aria-disabled={disabled ? 'true' : undefined}
+    aria-busy={state === 'loading' ? 'true' : undefined}
+    aria-pressed={pressed}
+    tabindex={disabled ? -1 : undefined}
+    data-preview-state={state === 'default' ? undefined : state}
+  >
+    {state === 'loading' && <span class="ke-button__spinner" aria-hidden="true"></span>}
+    <slot />
+  </a>
+) : (
+  <button
+    class={className}
+    type={type}
+    aria-label={ariaLabel}
+    aria-busy={state === 'loading' ? 'true' : undefined}
+    aria-pressed={pressed}
+    disabled={disabled}
+    data-preview-state={state === 'default' ? undefined : state}
+  >
+    {state === 'loading' && <span class="ke-button__spinner" aria-hidden="true"></span>}
+    <slot />
+  </button>
+)}

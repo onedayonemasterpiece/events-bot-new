@@ -36,6 +36,7 @@
 | Footer/media/continuation rollout | `ADD-V12-09..12` | Component + public Playwright | global service footer, related-card skeleton, portrait/wide CTA families, bounded desktop continuation | native share and long-session analytics |
 | Desktop event keyboard navigation | `ADD-KEY-01..07` | Component + Chromium secret-candidate route | `node --test site/tests/keyboard-event-navigation-production.test.mjs`; `npm --prefix site run check:keyboard-event-navigation` | Firefox/Safari, screen reader, high contrast and root rollout |
 | Generated event release journeys | `ADD-KEY-08..10`, `ADD-DISC-08..13` | Blocking Chromium production/candidate gate | `npm --prefix site run check:browser-release -- --root <generated-root>`; Smart Update/Kaggle invokes it before each archive | native Safari remains a root-rollout gate |
+| Listing CSS + sticky stack | `ADD-V12-13` | Built CSS + public Playwright | four listing routes at `1366×768`, `1536×864`, `1920×1080`; header `0..57`, rail starts at `57` | cross-browser sticky behavior |
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
@@ -104,6 +105,12 @@
   similarity to wider anti-bubble discovery; the latter may mix profile,
   non-rejected vector tail and diverse upcoming fallback rather than looping
   within one theatre/event type.
+- **ADD-V12-13 — One styled listing shell.** Built Today, Tomorrow, Weekend and
+  Popular HTML must resolve the shared listing selectors. After a real scroll,
+  the global header stays sticky at `0..57px`, the discovery rail starts at
+  `57px` below it, its z-index remains lower, representative card media stays
+  bounded, the focused skip link remains above the header and no route creates horizontal overflow. Run with
+  `STATIC_SITE_REVIEW_BASE_URL=… npm --prefix site run check:listing-desktop-geometry`.
 
 ### Desktop keyboard navigation V7
 
@@ -291,6 +298,9 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-DISC-05 — Качество «Похожих событий».** Список действительно семантически похож, не содержит исходное событие, дубль или ту же программу из блока «Другие даты», не повторяет карточки и имеет безопасный fallback при отсутствии vectors/LLM verdict.
 - **ADD-DISC-06 — Автоматическое обновление похожих.** После effectful Smart Update нового/изменённого события, debounce и Kaggle-прохода новый verified related graph попадает в опубликованный static manifest; reverse-affected старые события также обновляются.
 - **ADD-DISC-07 — «Популярное» из общей статистики.** Порядок использует единую консолидированную статистику источников и сайта; проверить source-only, site-only и смешанный пример, freshness/last-good и отсутствие отдельной скрытой формулы страницы. Для `multi_source` нужны две независимые внешние publisher-family: собственные `kldevents`/`kenigevents` и VK `231920894`/`231828790` схлопываются в одну owned-family и не превращают один внешний анонс в ложное подтверждение «в нескольких источниках».
+- **ADD-DISC-08 — Desktop Popular: актуальность и family dedup.** На момент `build.generated_at` уже начавшееся разовое событие отсутствует, ещё идущее многодневное остаётся; normalized family встречается только один раз на пяти полках, а другие даты свернуты в `ещё N показов` без суммирования engagement.
+- **ADD-DISC-09 — Desktop Popular: честные короткие полки.** Порядок полок фиксирован (`fast_growth`, `multi_source`, `discussed`, `frequently_shared`, fallback), каждая показанная evidence-полка содержит 3–5 реальных кандидатов в одной строке; нет fillers, card-level reason, чипов и load-more. Break Summer Fest `5130` присутствует в актуальной глобальной выдаче.
+- **ADD-DISC-10 — Desktop Popular: warm-only 4+1.** Cold/no-consent/несовместимый профиль и два сильных сигнала не создают шестую полку; совместимый профиль с тремя сигналами получает ровно 4 affinity + 1 anti-bubble после исключения hidden/not-interested и уже показанных families; недостаточный пул скрывает полку целиком и не меняет mobile V26 order.
 
 ### Избранное, календарь и уведомления
 
@@ -535,6 +545,64 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-CUTOVER-07 — Aggregate scope не выключается случайно.** Event-detail D10
   не останавливает month/weekend/festival Telegraph pages; их отдельный switch
   разрешён только после static parity и собственного acceptance pack.
+
+### Mobile Popular density comparison
+
+- **ADD-LISTING-05 — Compact packing without scale regression.** На
+  `360/390px` больше половины ranked events участвуют в парных рядах, но media
+  height побайтно/геометрически совпадает с V23. Разрешены только mobile
+  Popular gutter/gap corrections; OCR crop, rank reorder и masonry запрещены.
+- **ADD-LISTING-06 — Pinch mirrors the visible density control.** Только
+  `/populyarnoe/` запрещает browser zoom; pinch-in включает `Компактно`,
+  pinch-out — `Крупно`, изменяя те же `aria-checked/hidden/inert` состояния.
+  Один жест срабатывает один раз, single-touch scroll не отменяется, dock
+  остаётся доступным для keyboard/screen-reader пользователей.
+- **ADD-LISTING-07 — Compact pictogram truth.** Пиктограмма `Компактно`
+  содержит ровно две контурные плитки и не меняет доступное текстовое имя
+  кнопки.
+- **ADD-LISTING-01 — Exact canonical large card.** На `/populyarnoe/` при
+  ширине до `720px` режим `Крупно` рендерит общий `EventCard.astro` с
+  `split-actions`, совпадающий с `Смотрите дальше`; отдельный
+  `listing-proof`/копия DOM запрещены.
+- **ADD-LISTING-02 — Ordered adaptive compact flow.** `Компактно` сохраняет тот
+  же дедуплицированный порядок event IDs, использует существующий
+  `ListingEventCard`, одинаковую media height и последовательный flex-wrap без
+  masonry/order: на реальной выборке есть и парный ряд, и singleton, без
+  horizontal overflow и нового crop правила для OCR.
+- **ADD-LISTING-03 — Full-width accessible dock.** На `360/390/430px` нижний
+  переключатель закреплён в `bottom:0`, занимает всю ширину viewport, имеет две
+  цели минимум 48px и safe-area/padding compensation. Неактивное представление
+  одновременно `hidden` и `inert`, выбранное состояние и ближайший event anchor
+  сохраняются. При переключении в обе стороны остаётся тот же просматриваемый
+  `event_id` и его верхняя координата с допуском 1px; контрольный пример —
+  `4689`, `Фестиваль добровольчества #МЫВМЕСТЕ`. Щипок над карточкой обязан
+  предпочесть именно затронутый `event_id`.
+- **ADD-LISTING-04 — Breakpoint and desktop non-regression.** На `720px` видны
+  только mobile family и dock, на `721px` — только desktop family без dock. На
+  `1366/1536/1920px` геометрия десктопного Popular совпадает с V22 при одном
+  snapshot; режимы телефона не влияют на фильтры и их счётчики.
+- **ADD-LISTING-08 — Mobile chrome uses one navigation hierarchy.** На
+  `360/390/430px` обычная `.site-nav` скрыта только для mobile Popular, а общий
+  `.mobile-discovery-menu` остаётся доступен. Четыре listing routes занимают
+  один ряд высотой 44px без стрелок, cities-only rail — один статический ряд
+  высотой 48px без пустого второго уровня и overlap с мобильной биркой.
+- **ADD-LISTING-09 — Popular group hierarchy is visible.** В обоих мобильных
+  режимах заголовок каждой категории имеет минимум `24px/900`, спокойный счётчик
+  и явный смысловой разрыв перед следующей группой. После ухода исходного заголовка
+  он становится компактной sticky-меткой справа, а не полноширинным слоем chrome.
+- **ADD-LISTING-10 — Compact evidence does not defeat scan density.** В compact
+  режиме внешняя evidence-ось занимает 28px только для ненулевых social proof и
+  44px при наличии медальона. Медальоны 40px непрозрачны, безопасный overlay
+  остаётся внутри wide non-OCR. На `390px` paired share не хуже V24, media
+  height/ratio неизменны, а полный документ не становится выше универсального
+  under-photo прототипа.
+- **ADD-LISTING-11 — Mobile sticky group context.** На `360/390/430px` текущий
+  подзаголовок после прилипания занимает не более `min(100vw - 156px, 288px)`, прижат
+  вправо, не перекрывает ручку mobile drawer и не перехватывает pointer events. Следующая
+  группа нативно выталкивает предыдущую без double-label frame; переключение density
+  сохраняет и event anchor, и активную категорию. Исходящий header не сбрасывает
+  compact-стиль по приближённому bottom-threshold, а уходит только за нативной границей секции.
+  На `721px+` sticky-контракт не применяется.
 
 ### UI, accessibility и browser matrix
 

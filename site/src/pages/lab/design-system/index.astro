@@ -1,0 +1,558 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import Badge from '../../../components/design-system/Badge.astro';
+import Button from '../../../components/design-system/Button.astro';
+import CopyAction from '../../../components/design-system/CopyAction.astro';
+import Field from '../../../components/design-system/Field.astro';
+import StatePanel from '../../../components/design-system/StatePanel.astro';
+import EventCard from '../../../components/EventCard.astro';
+import CalendarLink from '../../../components/CalendarLink.astro';
+import EventCtaPanel from '../../../components/EventCtaPanel.astro';
+import EventFacts from '../../../components/EventFacts.astro';
+import EventHero from '../../../components/EventHero.astro';
+import EventListItem from '../../../components/EventListItem.astro';
+import EventMediaRail from '../../../components/EventMediaRail.astro';
+import EventTokenMedallions from '../../../components/EventTokenMedallions.astro';
+import Icon from '../../../components/Icon.astro';
+import InterestClubCard from '../../../components/InterestClubCard.astro';
+import ListingPersonalFilter from '../../../components/ListingPersonalFilter.astro';
+import PersonalFeedSlot from '../../../components/PersonalFeedSlot.astro';
+import SocialIcon from '../../../components/SocialIcon.astro';
+import AnnouncementsLockup from '../../../components/brand/AnnouncementsLockup.astro';
+import ListingEventCard from '../../../components/listings/ListingEventCard.astro';
+import ListingDiscoveryRail from '../../../components/listings/ListingDiscoveryRail.astro';
+import ExactTimeTimeline from '../../../components/listings/ExactTimeTimeline.astro';
+import ListingTimeNav from '../../../components/listings/ListingTimeNav.astro';
+import ListingTimeMarker from '../../../components/listings/ListingTimeMarker.astro';
+import ListingPageHeader from '../../../components/listings/ListingPageHeader.astro';
+import WeekendEditorialTimeline from '../../../components/listings/WeekendEditorialTimeline.astro';
+import type { PreviewEvent } from '../../../lib/types';
+import { absoluteUrl, getEvents, SITE_NAME, withBase } from '../../../lib/events';
+import { getInterestClubs } from '../../../lib/clubs';
+import { groupListingEvents } from '../../../lib/listingPresentation';
+
+const events = getEvents();
+const baseEvent = events.find((event) => event.id === 5878) || events[0];
+const photoEvent = events.find((event) => event.image_media_role === 'event_photo')
+  || events.find((event) => event.image_text_mode === 'visual_only')
+  || baseEvent;
+const medallionEvent = events.find((event) => event.pushkin_card) || baseEvent;
+const club = getInterestClubs()[0];
+const mediaAssets = photoEvent.image_assets || [];
+const listingEvents = events.filter((event) => event.start_time || event.display_time).slice(0, 8);
+const listingGroups = groupListingEvents(listingEvents);
+const listingCities = [...new Set(listingEvents.map((event) => event.city || 'Калининградская область'))].map((name) => ({ name, count: listingEvents.filter((event) => (event.city || 'Калининградская область') === name).length }));
+
+function eventVariant(id: number, patch: Partial<PreviewEvent>): PreviewEvent {
+  return { ...baseEvent, ...patch, id, source_prod_id: id, ticket: { ...baseEvent.ticket, ...(patch.ticket || {}) } };
+}
+
+const freeEvent = eventVariant(990001, {
+  title: 'Открытая лекция о городе',
+  ticket: { kind: 'free', label: 'Вход свободный', href: null, status: 'free', is_free: true, price_label: null, note: 'Регистрация не требуется' },
+});
+const soldOutEvent = eventVariant(990002, {
+  title: 'Спектакль — билеты закончились',
+  ticket: { kind: 'status', label: 'Билеты закончились', href: null, status: 'sold_out', is_free: false, price_label: null, note: 'Следите за дополнительными датами' },
+});
+
+const buttonStates = [
+  { state: 'default', label: 'Обычное' },
+  { state: 'hover', label: 'Наведение' },
+  { state: 'focus', label: 'Фокус' },
+  { state: 'pressed', label: 'Нажатие' },
+  { state: 'loading', label: 'Загрузка' },
+  { state: 'disabled', label: 'Недоступно' },
+] as const;
+const colors = [
+  ['Brand action', 'var(--ke-color-brand-600)', '#a54821'],
+  ['Brand tag', 'var(--ke-color-brand-tag)', '#98401f'],
+  ['Accent', 'var(--ke-color-accent-600)', '#0f766e'],
+  ['Ink', 'var(--ke-color-ink)', '#221a14'],
+  ['Muted', 'var(--ke-color-muted)', '#6d6259'],
+  ['Canvas', 'var(--ke-color-canvas)', '#fbf7ef'],
+  ['Surface', 'var(--ke-color-surface)', '#fffdf8'],
+] as const;
+const spacing = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16];
+const iconNames = ['heart', 'calendar', 'dislike', 'share', 'pin', 'ticket', 'info', 'spark', 'lock', 'image', 'phone', 'copy', 'check'] as const;
+const title = `Дизайн-система | ${SITE_NAME}`;
+const description = 'Канонический каталог токенов, состояний и продуктовых компонентов статического сайта KenigEvents.';
+const canonicalUrl = absoluteUrl('/lab/design-system/');
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main">
+    <div class="page-shell ds-catalog">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Дизайн-система</span>
+      </nav>
+
+      <section class="section-card ds-catalog__intro">
+        <div class="section-card__inner">
+          <div class="ds-catalog__status-row">
+            <Badge tone="success">Каноника</Badge>
+            <Badge tone="accent">Версия 1.0</Badge>
+            <Badge>Astro SSG</Badge>
+          </div>
+          <p class="eyebrow">KenigEvents UI</p>
+          <h1>Дизайн-система статического сайта</h1>
+          <p class="lead">Один открываемый стенд для согласования интерфейса: foundations, мелкие интерактивные элементы, состояния данных и укрупнённые продуктовые компоненты. Здесь показан реальный runtime-код, а не отдельный макет.</p>
+          <nav class="ds-catalog__toc" aria-label="Разделы дизайн-системы">
+            <a href="#foundations">Foundations</a>
+            <a href="#actions">Действия</a>
+            <a href="#fields">Поля</a>
+            <a href="#states">Состояния</a>
+            <a href="#product-components">Product UI</a>
+            <a href="#registry">Реестр</a>
+          </nav>
+        </div>
+      </section>
+
+      <section class="section-card ds-catalog__section" id="foundations">
+        <div class="section-card__inner">
+          <div class="ds-catalog__section-head">
+            <div><p class="eyebrow">01 · Foundations</p><h2>Токены</h2></div>
+            <Badge tone="success">Approved</Badge>
+          </div>
+          <h3>Семантические цвета</h3>
+          <div class="ds-swatch-grid">
+            {colors.map(([name, color, value]) => (
+              <article class="ds-swatch">
+                <span class="ds-swatch__sample" style={`--swatch:${color}`}></span>
+                <strong>{name}</strong>
+                <code>{value}</code>
+              </article>
+            ))}
+          </div>
+
+          <div class="ds-foundation-grid">
+            <div>
+              <h3>Типографика</h3>
+              <div class="ds-type-samples">
+                <p class="ds-type-sample ds-type-sample--display">Город говорит</p>
+                <p class="ds-type-sample ds-type-sample--heading">События на выходные</p>
+                <p class="ds-type-sample ds-type-sample--body">Базовый текст остаётся не меньше 16 px, с удобным межстрочным интервалом и длиной строки до 68 знаков.</p>
+                <p class="ds-type-sample ds-type-sample--label">LABEL / 12 PX / 800</p>
+              </div>
+            </div>
+            <div>
+              <h3>Сетка 4 px</h3>
+              <div class="ds-spacing-list">
+                {spacing.map((step) => (
+                  <div><code>{step}</code><span style={`--space:var(--ke-space-${step})`}></span><small>{step * 4} px</small></div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <h3>Радиусы и elevation</h3>
+          <div class="ds-elevation-grid">
+            <div class="ds-elevation ds-elevation--1">Surface / shadow 1</div>
+            <div class="ds-elevation ds-elevation--2">Card / shadow 2</div>
+            <div class="ds-elevation ds-elevation--3">Overlay / shadow 3</div>
+          </div>
+
+          <h3>Brand lockup и favicon</h3>
+          <div class="ds-brand-grid">
+            <div class="ds-brand-lockup"><AnnouncementsLockup variant="desktop" /></div>
+            {[16, 32, 64, 128].map((size) => (
+              <div class="ds-favicon-sample"><img src={withBase('/favicon.svg')} width={size} height={size} alt="" /><code>{size}px</code></div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card ds-catalog__section" id="actions">
+        <div class="section-card__inner">
+          <div class="ds-catalog__section-head">
+            <div><p class="eyebrow">02 · Primitives</p><h2>Кнопки и метки</h2></div>
+            <Badge tone="success">Approved</Badge>
+          </div>
+          <p class="muted-note">Все интерактивные зоны не меньше 44×44 px. Focus не скрывается; hover никогда не является единственным способом понять действие.</p>
+          <h3>Primary — все состояния</h3>
+          <div class="ds-state-row">
+            {buttonStates.map(({ state, label }) => (
+              <div class="ds-state-sample"><Button state={state}>{label}</Button><code>{state}</code></div>
+            ))}
+          </div>
+          <h3>Иерархия действий</h3>
+          <div class="ds-state-row">
+            <Button variant="primary">Купить билет</Button>
+            <Button variant="secondary"><Icon name="calendar" /> В календарь</Button>
+            <Button variant="quiet"><Icon name="share" /> Поделиться</Button>
+            <Button variant="danger">Удалить</Button>
+            <Button variant="secondary" size="large">Крупное действие</Button>
+            <Button variant="secondary" iconOnly ariaLabel="Добавить в избранное"><Icon name="heart" /></Button>
+          </div>
+          <h3>Иконочное копирование</h3>
+          <p class="muted-note">Значение остаётся обычным текстом, а кнопка показывает только общепринятую иконку. Успех меняет copy на check в том же квадрате; скрытый live-status озвучивает результат.</p>
+          <div class="ds-copy-grid">
+            <div class="ds-copy-fixture">
+              <span><small>Телефон</small><strong>+7 911 868-89-55</strong></span>
+              <CopyAction value="+79118688955" ariaLabel="Скопировать номер +7 911 868-89-55" successLabel="Номер скопирован" />
+            </div>
+            <div class="ds-copy-fixture ds-copy-fixture--inverse">
+              <span><small>Телефон на тёмной поверхности</small><strong>+7 911 868-89-55</strong></span>
+              <CopyAction variant="inverse" size="large" value="+79118688955" ariaLabel="Скопировать номер +7 911 868-89-55" successLabel="Номер скопирован" />
+            </div>
+            <div class="ds-copy-state-fixture">
+              <CopyAction value="Пример" ariaLabel="Скопировать пример" previewState="success" resetDelayMs={0} />
+              <code>success · check + live status</code>
+            </div>
+            <div class="ds-copy-state-fixture">
+              <CopyAction value="Пример" ariaLabel="Скопировать пример" previewState="error" resetDelayMs={0} />
+              <code>error · ! + live recovery</code>
+            </div>
+          </div>
+          <h3>Состояния выбора и статуса</h3>
+          <div class="ds-state-row">
+            <Button variant="secondary" pressed={false}><Icon name="heart" /> Нравится</Button>
+            <Button variant="secondary" pressed={true}><Icon name="heart" /> Выбрано</Button>
+            <Badge>Нейтрально</Badge>
+            <Badge tone="brand">Концерт</Badge>
+            <Badge tone="accent">Популярно</Badge>
+            <Badge tone="success">Бесплатно</Badge>
+            <Badge tone="warning">Осталось мало мест</Badge>
+            <Badge tone="danger">Отменено</Badge>
+          </div>
+          <h3>Единый набор иконок</h3>
+          <ul class="ds-icon-grid" role="list">
+            {iconNames.map((name) => <li><Icon name={name} /><code>{name}</code></li>)}
+          </ul>
+          <h3>Иконки каналов</h3>
+          <div class="ds-social-icons" aria-label="Иконки социальных каналов">
+            {(['telegram', 'vk', 'max'] as const).map((name) => <div><SocialIcon name={name} /><code>{name}</code></div>)}
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card ds-catalog__section" id="fields">
+        <div class="section-card__inner">
+          <div class="ds-catalog__section-head">
+            <div><p class="eyebrow">03 · Inputs</p><h2>Поля ввода</h2></div>
+            <Badge tone="success">Approved</Badge>
+          </div>
+          <div class="ds-field-grid">
+            <Field id="ds-query-default" label="Поиск событий" placeholder="Например, джаз на выходных" hint="Введите жанр, место или свободное описание." type="search" />
+            <Field id="ds-query-focus" label="Активное поле" value="уличный спектакль" hint="Видимый keyboard focus." state="focus" type="search" />
+            <Field id="ds-email-error" label="Email" value="info@" hint="Введите полный адрес электронной почты." state="error" type="email" />
+            <Field id="ds-query-disabled" label="Недоступное поле" value="Поиск временно недоступен" hint="Причина всегда объясняется рядом." state="disabled" />
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card ds-catalog__section" id="states">
+        <div class="section-card__inner">
+          <div class="ds-catalog__section-head">
+            <div><p class="eyebrow">04 · Feedback</p><h2>Состояния данных</h2></div>
+            <Badge tone="success">Approved</Badge>
+          </div>
+          <div class="ds-panel-grid">
+            <StatePanel title="Пока ничего нет" message="Измените фильтры или вернитесь ко всем событиям." actionLabel="Показать все" actionHref={withBase('/segodnya/')} mark="0" />
+            <StatePanel tone="loading" title="Подбираем события" message="Статический контент остаётся доступным, пока загружается персональное дополнение." />
+            <StatePanel tone="danger" title="Не удалось обновить" message="Последняя проверенная версия сохранена. Можно повторить запрос." actionLabel="Повторить" mark="!" />
+            <StatePanel tone="warning" title="Данные могут устареть" message="Уточните время и наличие билетов у организатора." mark="!" />
+            <StatePanel tone="success" title="Добавлено в календарь" message="Файл готов. Событие можно открыть в системном календаре." mark="✓" />
+            <StatePanel tone="info" title="Работаем без персонализации" message="Отказ от consent не мешает просмотру афиши, страниц событий и календаря." mark="i" />
+          </div>
+          <h3>Skeleton</h3>
+          <div class="ds-skeleton-card" aria-label="Пример состояния загрузки">
+            <span class="ke-skeleton ds-skeleton-card__media">Изображение</span>
+            <span class="ke-skeleton ds-skeleton-card__title">Заголовок</span>
+            <span class="ke-skeleton ds-skeleton-card__line">Строка</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-card ds-catalog__section" id="product-components">
+        <div class="section-card__inner">
+          <div class="ds-catalog__section-head">
+            <div><p class="eyebrow">05 · Product components</p><h2>Укрупнённые компоненты</h2></div>
+            <Badge tone="accent">Real fixtures</Badge>
+          </div>
+
+          <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>Hero события</h3><p>Актуальный default; все media-композиции вынесены в отдельный hero lab.</p></div><Badge tone="success">Approved</Badge></div>
+            <div class="ds-component-stage ds-component-stage--wide">
+              <EventHero event={photoEvent} headingTag="h3" />
+            </div>
+            <Button variant="secondary" href={withBase('/lab/hero/')}>Открыть все hero-состояния</Button>
+          </article>
+
+          <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>Факты и медальоны</h3><p>Короткое решение до длинного описания.</p></div><Badge tone="success">Approved</Badge></div>
+            <div class="ds-component-stage"><EventFacts event={medallionEvent} /><EventTokenMedallions event={medallionEvent} /></div>
+          </article>
+
+          <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>CTA panel</h3><p>Платно, бесплатно и sold out — одна структура, разные честные состояния.</p></div><Badge tone="success">Approved</Badge></div>
+            <div class="ds-product-grid"><EventCtaPanel event={baseEvent} /><EventCtaPanel event={freeEvent} /><EventCtaPanel event={soldOutEvent} /></div>
+          </article>
+
+          <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>Карточка discovery</h3><p>Split-actions — release baseline. Overlay сохранён только для regression/lab comparison.</p></div><Badge tone="success">Baseline</Badge></div>
+            <div class="ds-card-comparison">
+              <div><Badge tone="success">split-actions</Badge><EventCard event={baseEvent} variant="split-actions" /></div>
+              <div><Badge tone="danger">overlay · deprecated</Badge><EventCard event={photoEvent} variant="overlay-controls" /></div>
+            </div>
+          </article>
+
+          <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>Листинг по точному времени</h3><p>Общий candidate для «Сегодня», «Завтра» и двухколоночных «Выходных»: гибридная навигация, intrinsic flow и surface-specific media selection.</p></div><Badge tone="warning">Candidate</Badge></div>
+            <div class="ds-component-stage">
+              <ListingPageHeader title="Сегодня" dateLabel="пятница, 17 июля" count={listingEvents.length} current="today" />
+              <ListingDiscoveryRail cities={listingCities} total={listingEvents.length} label="каталоге">
+                <ListingTimeNav groups={listingGroups} idPrefix="ds-time" />
+              </ListingDiscoveryRail>
+              <ListingTimeMarker id="ds-time-marker" label="18:00" count={3} />
+              <ExactTimeTimeline groups={listingGroups} idPrefix="ds-time" date="2026-07-17" />
+              <ListingEventCard event={baseEvent} />
+              <WeekendEditorialTimeline days={[
+                { key: 'sat', title: 'Суббота', date: '2026-07-18', groups: listingGroups.slice(0, 2) },
+                { key: 'sun', title: 'Воскресенье', date: '2026-07-19', groups: listingGroups.slice(2, 4) },
+              ]} />
+            </div>
+          </article>
+
+          <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>Строка листинга</h3><p>Компактный desktop/tablet формат с responsive переходом на mobile.</p></div><Badge tone="success">Approved</Badge></div>
+            <div class="ds-component-stage"><EventListItem event={baseEvent} /></div>
+          </article>
+
+          {mediaAssets.length > 1 && (
+            <article class="ds-component-block">
+              <div class="ds-component-block__head"><div><h3>Media rail</h3><p>Несколько изображений, overflow-count и доступные подписи кнопок.</p></div><Badge tone="success">Approved</Badge></div>
+              <div class="ds-component-stage"><EventMediaRail assets={mediaAssets} galleryId="ds-gallery-preview" eventTitle={photoEvent.title} maxVisible={4} /></div>
+            </article>
+          )}
+
+          {club && (
+            <article class="ds-component-block">
+              <div class="ds-component-block__head"><div><h3>Клуб по интересам</h3><p>Отдельная product card поверх общих foundations.</p></div><Badge tone="accent">Feature-gated</Badge></div>
+              <div class="ds-component-stage ds-component-stage--narrow"><InterestClubCard club={club} /></div>
+            </article>
+          )}
+
+          <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>Calendar action</h3><p>Самостоятельный action и тот же компонент внутри CTA panel.</p></div><Badge tone="success">Approved</Badge></div>
+            <div class="ds-component-stage"><CalendarLink event={baseEvent} className="ke-button ke-button--secondary" /></div>
+          </article>
+
+          <article class="ds-component-block">
+            <div class="ds-component-block__head"><div><h3>Personalization enhancements</h3><p>Принудительно раскрытые lab-состояния; в runtime они появляются только после успешной client-side и consent проверки.</p></div><Badge tone="warning">Conditional</Badge></div>
+            <div class="ds-component-stage ds-force-visible">
+              <ListingPersonalFilter total={12} label="каталоге" version={1} />
+              <ListingPersonalFilter total={12} label="каталоге" version={2} />
+              <PersonalFeedSlot context="today" />
+            </div>
+            <Button variant="secondary" href={withBase('/poisk/')}>Открыть auth/search surface</Button>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-card ds-catalog__section" id="registry">
+        <div class="section-card__inner">
+          <div class="ds-catalog__section-head">
+            <div><p class="eyebrow">06 · Governance</p><h2>Реестр компонентов</h2></div>
+            <Badge tone="brand">Single source</Badge>
+          </div>
+          <div class="ds-table-wrap" tabindex="0" role="region" aria-label="Реестр компонентов дизайн-системы">
+            <table class="ds-registry">
+              <thead><tr><th>Компонент</th><th>Версия</th><th>Статус</th><th>Runtime source</th><th>Проверка / миграция</th></tr></thead>
+              <tbody>
+
+                <tr data-ds-component="Button" data-ds-version="1"><td>Button</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Button.astro</code></td><td>default/hover/focus/pressed/loading/disabled</td></tr>
+                <tr data-ds-component="CopyAction" data-ds-version="1"><td>CopyAction</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>design-system/CopyAction.astro</code></td><td>secondary/inverse + success/error + clipboard fallback</td></tr>
+                <tr data-ds-component="Badge" data-ds-version="1"><td>Badge</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Badge.astro</code></td><td>6 semantic tones</td></tr>
+                <tr data-ds-component="Field" data-ds-version="1"><td>Field</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Field.astro</code></td><td>default/focus/error/disabled</td></tr>
+                <tr data-ds-component="StatePanel" data-ds-version="1"><td>StatePanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/StatePanel.astro</code></td><td>empty/loading/error/stale/success/offline</td></tr>
+                <tr data-ds-component="EventHero" data-ds-version="1"><td>EventHero</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventHero.astro</code></td><td><a href={withBase('/lab/hero/')}>hero lab</a></td></tr>
+                <tr data-ds-component="EventCard" data-ds-version="2"><td>EventCard · split-actions</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCard.astro</code></td><td>canonical card used directly by event-detail continuation and Popular large mode</td></tr>
+                <tr data-ds-component="EventCard" data-ds-version="3" data-ds-replaced-by="EventCard@2"><td>EventCard · listing-proof fork</td><td><code>v3</code></td><td><Badge tone="danger">rejected</Badge></td><td><code>removed</code></td><td>rejected: branch-local variant imitated rather than reused the canonical split-actions card</td></tr>
+                <tr data-ds-component="EventCard" data-ds-version="1" data-ds-replaced-by="EventCard@2"><td>EventCard · overlay-controls</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventCard.astro</code></td><td>replaced by EventCard v2; lab-only</td></tr>
+                <tr data-ds-component="ListingPageHeader" data-ds-version="2"><td>ListingPageHeader · mobile single-row routes</td><td><code>v2</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingPageHeader.astro</code></td><td>shared desktop shell; Popular phone routes become one quiet text-tab row</td></tr>
+                <tr data-ds-component="ListingPageHeader" data-ds-version="1" data-ds-replaced-by="ListingPageHeader@2"><td>ListingPageHeader</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingPageHeader.astro</code></td><td>replaced: four mobile routes wrapped into a heavy two-row pill grid</td></tr>
+                <tr data-ds-component="ListingControls" data-ds-version="5"><td>ListingControls · common scanning edge</td><td><code>v5</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>city/personal/type filtering + exact left alignment for singleton envelopes + corrected sticky targets</td></tr>
+                <tr data-ds-component="ListingControls" data-ds-version="4" data-ds-replaced-by="ListingControls@5"><td>ListingControls · adaptive direct cities</td><td><code>v4</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>replaced: singleton envelope centering broke the common scanning edge</td></tr>
+                <tr data-ds-component="ListingControls" data-ds-version="3" data-ds-replaced-by="ListingControls@4"><td>ListingControls · selected city chips</td><td><code>v3</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>replaced: fixed city density and image-only singleton centering</td></tr>
+                <tr data-ds-component="ListingControls" data-ds-version="2" data-ds-replaced-by="ListingControls@3"><td>ListingControls · direct city chips</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>replaced by ListingControls v3 selected-state contract</td></tr>
+                <tr data-ds-component="ListingControls" data-ds-version="1" data-ds-replaced-by="ListingControls@2"><td>ListingControls · city disclosure</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingControls.astro</code></td><td>replaced by ListingControls v2; catalog record only</td></tr>
+                <tr data-ds-component="ListingTimeNav" data-ds-version="2"><td>ListingTimeNav · inverse sticky rail</td><td><code>v2</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingTimeNav.astro</code></td><td>full-bleed graphite rail + right alignment + Weekend summaries</td></tr>
+                <tr data-ds-component="ListingTimeNav" data-ds-version="1" data-ds-replaced-by="ListingTimeNav@2"><td>ListingTimeNav · translucent shell rail</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingTimeNav.astro</code></td><td>replaced: left gap exposed moving content</td></tr>
+                <tr data-ds-component="ListingTimeMarker" data-ds-version="3"><td>ListingTimeMarker · quiet temporal evidence</td><td><code>v3</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingTimeMarker.astro</code></td><td>shared sticky time axis + neutral weekday chips + lightweight per-day counts</td></tr>
+                <tr data-ds-component="ListingTimeMarker" data-ds-version="2" data-ds-replaced-by="ListingTimeMarker@3"><td>ListingTimeMarker · safe stacked sticky</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingTimeMarker.astro</code></td><td>replaced: colored weekday chips competed with event evidence</td></tr>
+                <tr data-ds-component="ListingTimeMarker" data-ds-version="1" data-ds-replaced-by="ListingTimeMarker@2"><td>ListingTimeMarker</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingTimeMarker.astro</code></td><td>replaced: Weekend marker could be covered by persistent day heads</td></tr>
+                <tr data-ds-component="ExactTimeTimeline" data-ds-version="2"><td>ExactTimeTimeline · strong time rail</td><td><code>v2</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ExactTimeTimeline.astro</code></td><td>shared ListingTimeMarker + intrinsic wrap</td></tr>
+                <tr data-ds-component="ExactTimeTimeline" data-ds-version="1" data-ds-replaced-by="ExactTimeTimeline@2"><td>ExactTimeTimeline · compact axis</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ExactTimeTimeline.astro</code></td><td>replaced: weaker 18px time typography</td></tr>
+                <tr data-ds-component="WeekendEditorialTimeline" data-ds-version="5"><td>WeekendEditorialTimeline · measured responsive packing</td><td><code>v5</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/WeekendEditorialTimeline.astro</code></td><td>packs against the actual lane width and only reorders when the projected row count decreases</td></tr>
+                <tr data-ds-component="WeekendEditorialTimeline" data-ds-version="4" data-ds-replaced-by="WeekendEditorialTimeline@5"><td>WeekendEditorialTimeline · stable within-hour packing</td><td><code>v4</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/WeekendEditorialTimeline.astro</code></td><td>replaced: fixed server-side lane width missed 1536/1920 packing opportunities</td></tr>
+                <tr data-ds-component="WeekendEditorialTimeline" data-ds-version="3" data-ds-replaced-by="WeekendEditorialTimeline@4"><td>WeekendEditorialTimeline · safe editorial lanes</td><td><code>v3</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/WeekendEditorialTimeline.astro</code></td><td>replaced: source order caused avoidable extra rows inside the same exact-time group</td></tr>
+                <tr data-ds-component="WeekendEditorialTimeline" data-ds-version="2" data-ds-replaced-by="WeekendEditorialTimeline@3"><td>WeekendEditorialTimeline · shared time rail</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/WeekendEditorialTimeline.astro</code></td><td>replaced: sticky marker overlapped heads and count pills competed with time</td></tr>
+                <tr data-ds-component="WeekendEditorialTimeline" data-ds-version="1" data-ds-replaced-by="WeekendEditorialTimeline@2"><td>WeekendEditorialTimeline · duplicate heads</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/WeekendEditorialTimeline.astro</code></td><td>replaced: duplicate sticky day row and generic count</td></tr>
+                <tr data-ds-component="WeekendTimeMatrix" data-ds-version="1" data-ds-replaced-by="WeekendEditorialTimeline@2"><td>WeekendTimeMatrix</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/WeekendTimeMatrix.astro</code></td><td>replaced: center time rail read as a spreadsheet</td></tr>
+                <tr data-ds-component="ListingDiscoveryRail" data-ds-version="5"><td>ListingDiscoveryRail · mobile cities-only plane</td><td><code>v5</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingDiscoveryRail.astro</code></td><td>keeps the shared desktop plane; Popular phone cities use one static 48px row without a ghost tier</td></tr>
+                <tr data-ds-component="ListingDiscoveryRail" data-ds-version="4" data-ds-replaced-by="ListingDiscoveryRail@5"><td>ListingDiscoveryRail · stable CSS-first plane</td><td><code>v4</code></td><td><Badge tone="danger">superseded</Badge></td><td><code>components/listings/ListingDiscoveryRail.astro</code></td><td>replaced on phones: cities-only inherited the generic 96px two-row reservation</td></tr>
+                <tr data-ds-component="ListingDiscoveryRail" data-ds-version="3" data-ds-replaced-by="ListingDiscoveryRail@4"><td>ListingDiscoveryRail · one adaptive plane</td><td><code>v3</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingDiscoveryRail.astro</code></td><td>replaced: observer-driven compact state lagged behind scrolling</td></tr>
+                <tr data-ds-component="ListingDiscoveryRail" data-ds-version="2" data-ds-replaced-by="ListingDiscoveryRail@3"><td>ListingDiscoveryRail · measured adaptive discovery</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingDiscoveryRail.astro</code></td><td>replaced: city and time controls remained two stacked subheaders</td></tr>
+                <tr data-ds-component="ListingDiscoveryRail" data-ds-version="1" data-ds-replaced-by="ListingDiscoveryRail@2"><td>ListingDiscoveryRail · quiet direct discovery</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingDiscoveryRail.astro</code></td><td>replaced: hard-coded city-row geometry and one-density labels</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="9"><td>ListingEventCard · native lazy media</td><td><code>v9</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>parser-discoverable native lazy src/srcset + opaque safe overlay + quiet independent social proof</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="8" data-ds-replaced-by="ListingEventCard@9"><td>ListingEventCard · width-aware evidence packing</td><td><code>v8</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: JS withheld image URLs until a 200px observer intersection and made fast scroll visibly late</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="7" data-ds-replaced-by="ListingEventCard@8"><td>ListingEventCard · complete compact evidence</td><td><code>v7</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: low-resolution media height and evidence placement varied across surfaces</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="6" data-ds-replaced-by="ListingEventCard@7"><td>ListingEventCard · compact evidence rail</td><td><code>v6</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: proof could evict a third identity and overlay eligibility used rejected raw media</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="5" data-ds-replaced-by="ListingEventCard@6"><td>ListingEventCard · OCR-safe social proof</td><td><code>v5</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: separate medallion and proof rails consumed 104px</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="4" data-ds-replaced-by="ListingEventCard@5"><td>ListingEventCard · decision actions</td><td><code>v4</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: listing actions implied premature Share/Like/Calendar conversion</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="3" data-ds-replaced-by="ListingEventCard@4"><td>ListingEventCard · reviewed responsive crop</td><td><code>v3</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: missing-OCR fail-open crop and visually dominant action/identity rails</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="2" data-ds-replaced-by="ListingEventCard@3"><td>ListingEventCard · responsive media</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: fixed 256px sizes and narrow unreviewed thumbnails</td></tr>
+                <tr data-ds-component="ListingEventCard" data-ds-version="1" data-ds-replaced-by="ListingEventCard@2"><td>ListingEventCard · TH-P1</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingEventCard.astro</code></td><td>replaced: original-only lazy media and fallback ratio regression</td></tr>
+                <tr data-ds-component="WeekendRangeNav" data-ds-version="2"><td>WeekendRangeNav · date cloud with continuation</td><td><code>v2</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/WeekendRangeNav.astro</code></td><td>six direct weekend ranges + separate decorative long-arrow continuation</td></tr>
+                <tr data-ds-component="WeekendRangeNav" data-ds-version="1" data-ds-replaced-by="WeekendRangeNav@2"><td>WeekendRangeNav · future date cloud</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/WeekendRangeNav.astro</code></td><td>replaced: continuation arrow was nested in and visually weakened the final link</td></tr>
+                <tr data-ds-component="PopularMobileBehaviorRows" data-ds-version="4"><td>PopularMobileBehaviorRows · sticky group context</td><td><code>v4</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/PopularMobileBehaviorRows.astro</code></td><td>canonical large EventCards retain the strong section heading and expose a right-aligned sticky context label</td></tr>
+                <tr data-ds-component="PopularMobileBehaviorRows" data-ds-version="3" data-ds-replaced-by="PopularMobileBehaviorRows@4"><td>PopularMobileBehaviorRows · explicit category rhythm</td><td><code>v3</code></td><td><Badge tone="danger">superseded</Badge></td><td><code>components/listings/PopularMobileBehaviorRows.astro</code></td><td>replaced: category context disappeared during long mobile scrolls</td></tr>
+                <tr data-ds-component="PopularMobileBehaviorRows" data-ds-version="2" data-ds-replaced-by="PopularMobileBehaviorRows@3"><td>PopularMobileBehaviorRows · canonical large cards</td><td><code>v2</code></td><td><Badge tone="danger">superseded</Badge></td><td><code>components/listings/PopularMobileBehaviorRows.astro</code></td><td>replaced: category headings read like ordinary card spacing on phones</td></tr>
+                <tr data-ds-component="PopularMobileAdaptiveRows" data-ds-version="3"><td>PopularMobileAdaptiveRows · sticky compact context</td><td><code>v3</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/PopularMobileAdaptiveRows.astro</code></td><td>the measured evidence spine stays unchanged while group context remains visible during the denser scan</td></tr>
+                <tr data-ds-component="PopularMobileAdaptiveRows" data-ds-version="2" data-ds-replaced-by="PopularMobileAdaptiveRows@3"><td>PopularMobileAdaptiveRows · compact evidence spine</td><td><code>v2</code></td><td><Badge tone="danger">superseded</Badge></td><td><code>components/listings/PopularMobileAdaptiveRows.astro</code></td><td>replaced: category context disappeared during long mobile scrolls</td></tr>
+                <tr data-ds-component="PopularMobileAdaptiveRows" data-ds-version="1" data-ds-replaced-by="PopularMobileAdaptiveRows@2"><td>PopularMobileAdaptiveRows · intrinsic compact wrap</td><td><code>v1</code></td><td><Badge tone="danger">superseded</Badge></td><td><code>components/listings/PopularMobileAdaptiveRows.astro</code></td><td>replaced: 40/64px evidence rails consumed up to 42% of narrow cards</td></tr>
+                <tr data-ds-component="PopularMobileGroupContext" data-ds-version="1"><td>PopularMobileGroupContext · non-scroll context state</td><td><code>v1</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/PopularMobileGroupContext.astro</code></td><td>IntersectionObserver only toggles compact visual state; native sticky owns section-boundary replacement</td></tr>
+                <tr data-ds-component="PopularMobileBehaviorRows" data-ds-version="1" data-ds-replaced-by="PopularMobileBehaviorRows@2"><td>PopularMobileBehaviorRows · equal EventCard grid</td><td><code>v1</code></td><td><Badge tone="danger">comparison only</Badge></td><td><code>V22 public snapshot</code></td><td>preserved at its immutable V22 URL for separate evaluation</td></tr>
+                <tr data-ds-component="PopularBehaviorRows" data-ds-version="3" data-ds-replaced-by="PopularMobileBehaviorRows@1 + PopularBehaviorRows@2"><td>PopularBehaviorRows · unscoped EventCard replacement</td><td><code>v3</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/PopularBehaviorRows.astro</code></td><td>rejected: replaced the accepted desktop composition and made the phone large mode a hidden horizontal shelf</td></tr>
+                <tr data-ds-component="PopularBehaviorRows" data-ds-version="2"><td>PopularBehaviorRows · accepted desktop behavioral rows</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/listings/PopularBehaviorRows.astro</code></td><td>desktop-only heterogeneous ListingEventCard flow preserved byte-for-byte from V20</td></tr>
+                <tr data-ds-component="PopularBehaviorRows" data-ds-version="1" data-ds-replaced-by="PopularBehaviorRows@2"><td>PopularBehaviorRows · behavioral overview</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/PopularBehaviorRows.astro</code></td><td>replaced: mobile inherited conflicting desktop/card geometry</td></tr>
+                <tr data-ds-component="PopularCategoryFilter" data-ds-version="1" data-ds-replaced-by="PopularBehaviorRows@1"><td>PopularCategoryFilter · exact event types</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/PopularCategoryFilter.astro</code></td><td>rejected: deterministic event-type constructor obscured the quick popularity overview</td></tr>
+                <tr data-ds-component="ListingMobileDensitySwitch" data-ds-version="6"><td>ListingMobileDensitySwitch · semantic anchor plus context sync</td><td><code>v6</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/listings/ListingMobileDensitySwitch.astro</code></td><td>preserves the viewed event and notifies the sticky category enhancement after the active tree changes</td></tr>
+                <tr data-ds-component="ListingMobileDensitySwitch" data-ds-version="5" data-ds-replaced-by="ListingMobileDensitySwitch@6"><td>ListingMobileDensitySwitch · semantic event anchor</td><td><code>v5</code></td><td><Badge tone="danger">superseded</Badge></td><td><code>components/listings/ListingMobileDensitySwitch.astro</code></td><td>replaced: active category context was not explicitly refreshed after density changes</td></tr>
+                <tr data-ds-component="ListingMobileDensitySwitch" data-ds-version="4" data-ds-replaced-by="ListingMobileDensitySwitch@5"><td>ListingMobileDensitySwitch · buttons plus pinch density</td><td><code>v4</code></td><td><Badge tone="danger">superseded</Badge></td><td><code>components/listings/ListingMobileDensitySwitch.astro</code></td><td>replaced: nearest sticky-floor heuristic could switch context to a neighbouring event</td></tr>
+                <tr data-ds-component="ListingMobileDensitySwitch" data-ds-version="3" data-ds-replaced-by="ListingMobileDensitySwitch@4"><td>ListingMobileDensitySwitch · button-only density</td><td><code>v3</code></td><td><Badge tone="danger">superseded</Badge></td><td><code>V23 public snapshot</code></td><td>full-width control retained in v4; lacked the owner-requested pinch shortcut</td></tr>
+                <tr data-ds-component="ListingMobileDensitySwitch" data-ds-version="2" data-ds-replaced-by="ListingMobileDensitySwitch@3"><td>ListingMobileDensitySwitch · floating full / two-per-row density</td><td><code>v2</code></td><td><Badge tone="danger">comparison only</Badge></td><td><code>V22 public snapshot</code></td><td>preserved for equal-grid comparison; floating pill was too easy to miss</td></tr>
+                <tr data-ds-component="ListingMobileDensitySwitch" data-ds-version="1" data-ds-replaced-by="ListingMobileDensitySwitch@2"><td>ListingMobileDensitySwitch · ambiguous compact list</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/listings/ListingMobileDensitySwitch.astro</code></td><td>replaced: Компактно opened a one-column horizontal-row treatment rather than two cards per row</td></tr>
+                <tr data-ds-component="EventListItem" data-ds-version="1"><td>EventListItem</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventListItem.astro</code></td><td>mobile/tablet/desktop</td></tr>
+                <tr data-ds-component="EventCtaPanel" data-ds-version="1"><td>EventCtaPanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCtaPanel.astro</code></td><td>paid/free/sold out</td></tr>
+                <tr data-ds-component="CalendarLink" data-ds-version="1"><td>CalendarLink</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/CalendarLink.astro</code></td><td>eligible/ineligible via event contract</td></tr>
+                <tr data-ds-component="EventFacts" data-ds-version="1"><td>EventFacts</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventFacts.astro</code></td><td>date/place/admission/festival</td></tr>
+                <tr data-ds-component="EventTokenMedallions" data-ds-version="1"><td>EventTokenMedallions</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventTokenMedallions.astro</code></td><td>organizer/source/program/semantic pills</td></tr>
+                <tr data-ds-component="EventMediaRail" data-ds-version="1"><td>EventMediaRail</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventMediaRail.astro</code></td><td>multi-image/overflow</td></tr>
+                <tr data-ds-component="InterestClubCard" data-ds-version="1"><td>InterestClubCard</td><td><code>v1</code></td><td><Badge tone="accent">feature-gated</Badge></td><td><code>components/InterestClubCard.astro</code></td><td>current fixture + responsive</td></tr>
+                <tr data-ds-component="ListingPersonalFilter" data-ds-version="3"><td>ListingPersonalFilter · optional floating mode</td><td><code>v3</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>quiet bottom-center research prototype; yields to the footer and stays separate from discovery navigation</td></tr>
+                <tr data-ds-component="ListingPersonalFilter" data-ds-version="2" data-ds-replaced-by="ListingPersonalFilter@3"><td>ListingPersonalFilter · explicit full default</td><td><code>v2</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>replaced on listing surfaces: inline placement overloaded the sticky discovery plane</td></tr>
+                <tr data-ds-component="ListingPersonalFilter" data-ds-version="1" data-ds-replaced-by="ListingPersonalFilter@2"><td>ListingPersonalFilter · implicit personal</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>replaced by ListingPersonalFilter v2; catalog-only</td></tr>
+                <tr data-ds-component="PersonalFeedSlot" data-ds-version="1"><td>PersonalFeedSlot</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/PersonalFeedSlot.astro</code></td><td>loading/filled/retry in personalization E2E</td></tr>
+                <tr data-ds-component="AuthorizedEventSearch" data-ds-version="1"><td>AuthorizedEventSearch</td><td><code>v1</code></td><td><Badge tone="warning">conditional</Badge></td><td><code>components/AuthorizedEventSearch.astro</code></td><td><a href={withBase('/poisk/')}>auth/search route</a></td></tr>
+                <tr data-ds-component="IconSocialIcon" data-ds-version="1"><td>Icon / SocialIcon</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/Icon.astro</code></td><td>complete visible icon inventory</td></tr>
+                <tr data-ds-component="AnnouncementsLockup" data-ds-version="1"><td>AnnouncementsLockup</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/brand/AnnouncementsLockup.astro</code></td><td>desktop/mobile/favicon sizes</td></tr>
+
+              </tbody>
+            </table>
+          </div>
+          <p class="muted-note">Правило: материальная переработка создаёт следующую версию компонента. Старая и новая версии остаются видимыми до sign-off, затем все production consumers переходят на новую версию, а старая становится deprecated и удаляется после нулевого consumer audit. Локальные копии утверждённой геометрии запрещены.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .ds-catalog { display: grid; gap: var(--ke-space-4); }
+  .ds-catalog__intro h1 { max-width: 17ch; }
+  .ds-catalog__status-row,
+  .ds-catalog__toc,
+  .ds-state-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ke-space-3); }
+  .ds-catalog__toc { margin-top: var(--ke-space-6); }
+  .ds-catalog__toc a { min-height: var(--ke-control-min); display: inline-flex; align-items: center; border-bottom: 2px solid var(--ke-color-brand-600); color: var(--ke-color-brand-700); font-weight: 800; text-decoration: none; }
+  .ds-catalog__section { scroll-margin-top: var(--ke-space-4); }
+  .ds-catalog__section h3 { margin-top: var(--ke-space-8); }
+  .ds-catalog__section-head,
+  .ds-component-block__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--ke-space-4); }
+  .ds-catalog__section-head h2,
+  .ds-component-block__head h3,
+  .ds-component-block__head p { margin: 0; }
+  .ds-component-block__head p { color: var(--ke-color-muted); }
+  .ds-swatch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); gap: var(--ke-space-3); }
+  .ds-swatch { display: grid; gap: var(--ke-space-1); overflow: hidden; border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-md); background: var(--ke-color-surface-strong); }
+  .ds-swatch > :not(.ds-swatch__sample) { margin-inline: var(--ke-space-3); }
+  .ds-swatch code { margin-bottom: var(--ke-space-3); color: var(--ke-color-muted); }
+  .ds-swatch__sample { min-height: 74px; background: var(--swatch); border-bottom: 1px solid var(--ke-color-line); }
+  .ds-foundation-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr); gap: var(--ke-space-8); }
+  .ds-type-samples { display: grid; gap: var(--ke-space-4); }
+  .ds-type-sample { margin: 0; }
+  .ds-type-sample--display { font-size: var(--ke-font-size-700); font-weight: 950; line-height: 0.95; letter-spacing: -0.055em; }
+  .ds-type-sample--heading { font-size: var(--ke-font-size-600); font-weight: 900; line-height: var(--ke-line-tight); }
+  .ds-type-sample--body { max-width: 68ch; font-size: var(--ke-font-size-300); line-height: var(--ke-line-body); }
+  .ds-type-sample--label { font-size: var(--ke-font-size-100); font-weight: 800; letter-spacing: 0.08em; }
+  .ds-spacing-list { display: grid; gap: var(--ke-space-2); }
+  .ds-spacing-list div { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 3.4rem; gap: var(--ke-space-2); align-items: center; }
+  .ds-spacing-list span { width: var(--space); max-width: 100%; height: 0.75rem; border-radius: var(--ke-radius-pill); background: var(--ke-color-brand-600); }
+  .ds-elevation-grid,
+  .ds-brand-grid,
+  .ds-field-grid,
+  .ds-panel-grid,
+  .ds-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ke-space-4); }
+  .ds-elevation { min-height: 120px; display: grid; place-items: center; border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-4); background: var(--ke-color-surface); text-align: center; font-weight: 850; }
+  .ds-elevation--1 { box-shadow: var(--ke-shadow-1); }
+  .ds-elevation--2 { box-shadow: var(--ke-shadow-2); }
+  .ds-elevation--3 { box-shadow: var(--ke-shadow-3); }
+  .ds-brand-grid { grid-template-columns: minmax(240px, 1fr) repeat(4, minmax(72px, auto)); align-items: center; }
+  .ds-brand-lockup { min-height: 120px; display: grid; place-items: center; border-radius: var(--ke-radius-lg); padding: var(--ke-space-5); background: var(--ke-color-brand-tag); color: var(--ke-color-surface-strong); }
+  .ds-brand-lockup :global(.announcements-lockup) { display: grid; gap: var(--ke-space-1); }
+  .ds-brand-lockup :global(.announcements-lockup__endorsement) { font-size: var(--ke-font-size-100); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  .ds-brand-lockup :global(.announcements-lockup__wordmark) { width: min(100%, 240px); height: auto; color: currentColor; }
+  .ds-favicon-sample { min-height: 120px; display: grid; place-items: center; align-content: center; gap: var(--ke-space-2); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); background: var(--ke-color-surface-strong); }
+  .ds-icon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: var(--ke-space-2); margin: 0; padding: 0; list-style: none; }
+  .ds-icon-grid li { min-height: 88px; display: grid; place-items: center; align-content: center; gap: var(--ke-space-2); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-md); background: var(--ke-color-surface-strong); color: var(--ke-color-brand-700); }
+  .ds-icon-grid :global(.icon) { width: 24px; height: 24px; fill: currentColor; }
+  .ds-social-icons { display: flex; flex-wrap: wrap; gap: var(--ke-space-4); }
+  .ds-social-icons div { min-width: 100px; min-height: 92px; display: grid; place-items: center; align-content: center; gap: var(--ke-space-2); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-md); background: var(--ke-color-surface-strong); }
+  .ds-social-icons :global(.social-icon) { width: 36px; height: 36px; }
+  .ds-state-row { align-items: flex-end; }
+  .ds-state-sample { display: grid; gap: var(--ke-space-2); justify-items: start; }
+  .ds-state-sample code { color: var(--ke-color-muted); font-size: var(--ke-font-size-100); }
+  .ds-copy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ke-space-3); max-width: 840px; }
+  .ds-copy-fixture { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: var(--ke-space-4); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-3); background: var(--ke-color-surface-strong); }
+  .ds-copy-fixture > span { min-width: 0; display: grid; gap: var(--ke-space-1); }
+  .ds-copy-fixture small { color: var(--ke-color-muted); font-size: var(--ke-font-size-100); }
+  .ds-copy-fixture strong { font-size: var(--ke-font-size-300); font-variant-numeric: tabular-nums; white-space: nowrap; user-select: all; }
+  .ds-copy-fixture--inverse { border-color: var(--ke-color-control-inverse-line); background: var(--ke-color-ink); color: var(--ke-color-control-inverse); }
+  .ds-copy-fixture--inverse small { color: var(--ke-color-control-inverse); opacity: .78; }
+  .ds-copy-state-fixture { min-height: 76px; display: flex; align-items: center; gap: var(--ke-space-3); border: 1px dashed var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-3); background: var(--ke-color-surface); }
+  .ds-copy-state-fixture code { color: var(--ke-color-muted); font-size: var(--ke-font-size-100); }
+  .ds-field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ds-skeleton-card { width: min(100%, 340px); display: grid; gap: var(--ke-space-3); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); padding: var(--ke-space-4); background: var(--ke-color-surface-strong); }
+  .ds-skeleton-card__media { min-height: 180px; }
+  .ds-skeleton-card__title { min-height: 1.6rem; width: 80%; }
+  .ds-skeleton-card__line { min-height: 1rem; width: 56%; }
+  .ds-component-block { display: grid; gap: var(--ke-space-4); padding-block: var(--ke-space-6); border-top: 1px solid var(--ke-color-line); }
+  .ds-component-stage { display: grid; gap: var(--ke-space-4); min-width: 0; overflow: hidden; border: 1px dashed color-mix(in srgb, var(--ke-color-brand-600) 30%, var(--ke-color-line)); border-radius: var(--ke-radius-lg); padding: var(--ke-space-4); background: color-mix(in srgb, var(--ke-color-canvas-soft) 42%, var(--ke-color-surface)); }
+  .ds-component-stage--wide { margin-inline: calc(var(--ke-space-4) * -1); padding-inline: 0; }
+  .ds-component-stage--narrow { max-width: 560px; }
+  .ds-force-visible :global(.listing-filter[hidden]) { display: flex !important; }
+  .ds-force-visible :global(.listing-filter-bar[hidden]) { position: static; display: block !important; }
+  .ds-force-visible :global(.personal-feed-section[hidden]) { display: block !important; }
+  .ds-card-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ke-space-5); max-width: 840px; }
+  .ds-card-comparison > div { min-width: 0; display: grid; gap: var(--ke-space-2); align-content: start; }
+  .ds-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-lg); }
+  .ds-table-wrap:focus-visible { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 68%, transparent); outline-offset: 3px; }
+  .ds-registry { width: 100%; min-width: 720px; border-collapse: collapse; background: var(--ke-color-surface-strong); }
+  .ds-registry th,
+  .ds-registry td { padding: var(--ke-space-3); border-bottom: 1px solid var(--ke-color-line); text-align: left; vertical-align: top; }
+  .ds-registry th { background: var(--ke-color-canvas-soft); font-size: var(--ke-font-size-200); }
+  .ds-registry tr:last-child td { border-bottom: 0; }
+  .ds-registry code { overflow-wrap: anywhere; }
+
+  @media (max-width: 900px) {
+    .ds-foundation-grid,
+    .ds-elevation-grid,
+    .ds-brand-grid,
+    .ds-product-grid { grid-template-columns: 1fr; }
+    .ds-panel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 680px) {
+    .ds-catalog__section-head,
+    .ds-component-block__head { display: grid; }
+    .ds-field-grid,
+    .ds-panel-grid,
+    .ds-copy-grid,
+    .ds-card-comparison { grid-template-columns: 1fr; }
+    .ds-catalog__toc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ds-catalog__toc a { justify-content: center; }
+    .ds-component-stage { margin-inline: calc(var(--ke-space-4) * -1); border-inline: 0; border-radius: 0; }
+  }
+</style>

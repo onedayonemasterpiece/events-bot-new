@@ -44,6 +44,22 @@ Representative live pairs:
 - 2026-05-30 operator request to investigate current production duplicates.
 - Quantified from a freshly pulled prod snapshot (the prior local snapshot was 11 days stale and under-counted).
 - No alert fired. Each create succeeded structurally; the dedup chain answered "no match" because the true sibling was never in the shortlist.
+- 2026-07-17 date-listing visual review found a new «Эпидемия» recurrence:
+  canonical `4671` at `20:00` and wrapper-title row `6859` at `19:00`. The newer
+  row carries the same qTickets source already attached to `4671`; poster
+  perceptual evidence is near-identical. This is the same wrapper + doors/start
+  drift class, not a listing-layout defect.
+
+### 2026-07-17 preview containment (not production remediation)
+
+The immutable V10 listing preview uses a copied production snapshot and marks
+`6859` duplicate/merged into `4671` only inside that review artifact. Evidence
+is stored under
+`artifacts/codex/listing-time-nav-media-v10-20260717/epidemia-*.json` and the
+reconciled SQLite copy; artifacts are intentionally not committed. Production
+was not changed by this UI task and still requires the official Smart Update /
+operator merge flow. No UI title regex, fuzzy browser merge or permanent id
+blacklist was introduced.
 
 ## Timeline
 

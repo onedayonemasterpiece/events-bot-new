@@ -58,6 +58,12 @@
 - `INC-2026-07-19-static-builder-root-overlay-recurrence.md`
   - Scope: Fly root writable overlay, `/tmp` Kaggle video outputs, retained static-site artifacts and scratch readiness.
   - Must not regress: terminal outputs remain bounded, active/recoverable handoffs are preserved, `/healthz`/preflight detects an unwritable root scratch filesystem before scheduled jobs dead-letter.
+- `INC-2026-07-20-static-listing-desktop-preview-regression.md`
+  - Scope: shared static listing CSS ownership and the desktop sticky stack for
+    Today, Tomorrow, Weekend and Popular.
+  - Must not regress: every built listing route contains the shared design
+    system; the real header remains at viewport top and discovery rails stick
+    below it; mobile Popular V26 remains unchanged.
 
 - `INC-2026-07-19-static-site-stale-builder-lease.md`
   - Scope: host-validated StaticSiteBuilder terminal reconciliation, exact-owner

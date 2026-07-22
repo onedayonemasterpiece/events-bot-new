@@ -1,0 +1,30 @@
+---
+interface Props {
+  id: string;
+  label: string;
+  value?: string;
+  placeholder?: string;
+  hint?: string;
+  state?: 'default' | 'hover' | 'focus' | 'error' | 'disabled';
+  type?: 'text' | 'search' | 'email';
+}
+const { id, label, value, placeholder, hint, state = 'default', type = 'text' } = Astro.props;
+const error = state === 'error';
+const hintId = hint ? `${id}-hint` : undefined;
+const className = ['ke-field', error ? 'ke-field--error' : ''].filter(Boolean).join(' ');
+---
+<label class={className} data-preview-state={state === 'default' || error || state === 'disabled' ? undefined : state}>
+  <span class="ke-field__label">{label}</span>
+  <input
+    class="ke-field__control"
+    id={id}
+    name={id}
+    type={type}
+    value={value}
+    placeholder={placeholder}
+    disabled={state === 'disabled'}
+    aria-invalid={error ? 'true' : undefined}
+    aria-describedby={hintId}
+  />
+  {hint && <span class="ke-field__hint" id={hintId}>{hint}</span>}
+</label>

@@ -335,6 +335,35 @@
   published video-render trees are removed only after assertion-validated
   terminal persistence, with startup reconciliation; publish-only and log
   download trees are also bounded and cleaned.
+- Improved desktop-only Popular without changing its parallel mobile trees:
+  already unavailable one-off events fail closed, repeating occurrences share
+  one card with compact date context, the five evidence shelves deduplicate
+  families page-wide, and a sixth `Вам может быть интересно` shelf appears only
+  as an honest warm-profile 4+1 affinity/anti-bubble set.
+- Fixed the shared static listing shell after a divergent integration dropped
+  its design-system import and sticky header contract: Today, Tomorrow,
+  Weekend and Popular now ship the same styled desktop surface, keep the real
+  site header above discovery rails while scrolling, and fail preview checks
+  if any listing route loses its compiled listing CSS again.
+- Added mobile-only sticky context for Popular groups: the existing strong
+  category heading compacts into a right-aligned, non-interactive label after
+  it reaches the viewport, remains section-bounded, and refreshes across both
+  density modes without changing desktop Popular geometry.
+- Improved only mobile Popular context and scan hierarchy: density buttons and
+  pinch now preserve the same viewed event, the existing mobile drawer replaces
+  duplicate phone navigation, routes/cities collapse into light single rows,
+  category boundaries become explicit, and measured 28/44px evidence spines
+  improve compact packing without the vertical cost of universal under-photo
+  metadata. Desktop Popular geometry remains unchanged.
+- Improved only the mobile Popular density layer: reclaimed unused shell width
+  so a majority of ranked events can pack two-up without smaller media, changed
+  the compact pictogram to two tiles, and added a route-scoped pinch-in/out
+  shortcut that mirrors the still-visible accessible density dock.
+- Fixed mobile Popular density prototyping without regressing desktop: the
+  large mode now renders the exact shared `EventCard split-actions` component,
+  the compact mode uses an ordered intrinsic-width one/two-card wrap, and a
+  full-viewport-width bottom dock switches only the active accessible tree;
+  the prior equal two-column specimen remains a separate comparison URL.
 - Fixed static event detail parity so a one-photo Editorial page keeps the same
   CTA side-motion/docking state machine as a multi-photo page; the optional
   thumbnail rail no longer controls the page-family behavior.

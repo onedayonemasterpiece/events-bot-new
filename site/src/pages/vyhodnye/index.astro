@@ -1,51 +1,34 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
-import EventListItem from '../../components/EventListItem.astro';
+import WeekendListingSurface from '../../components/listings/WeekendListingSurface.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { IS_PRODUCTION_FAMILY, siteHomeHref, absoluteUrl, getWeekendEvents, getWeekendRange, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, getAvailableWeekendRanges, getCurrentDate, getWeekendEvents, getWeekendRange, SITE_NAME } from '../../lib/events';
 
 const events = getWeekendEvents();
 const weekend = getWeekendRange();
-const canonicalUrl = absoluteUrl('/vyhodnye/');
-const title = `События на выходные в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на ближайшие выходные ${weekend.label}: афиша, билеты, регистрация и календарь.`;
+const ranges = getAvailableWeekendRanges();
+const index = ranges.findIndex((range) => range.start === weekend.start);
+const previousRange = index > 0 ? ranges[index - 1] : null;
+const nextRange = index >= 0 && index < ranges.length - 1 ? ranges[index + 1] : null;
+const rangeLinks = ranges.slice(Math.max(0, index), Math.min(ranges.length, Math.max(0, index) + 6)).map((range) => ({
+  href: range.start === weekend.start ? '/vyhodnye/' : `/vyhodnye/${range.start}/`,
+  label: range.label,
+  selected: range.start === weekend.start,
+  actualCurrent: range.start === weekend.start,
+}));
 ---
-<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="weekend">
-  <main id="main">
-    <div class="page-shell">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={siteHomeHref()}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        <span>Выходные</span>
-      </nav>
-      <section class="section-card">
-        <div class="section-card__inner">
-          <p class="eyebrow">Выходные</p>
-          <h1 style="max-width: 14ch;">Куда сходить на выходных</h1>
-          <p class="lead">События, которые начинаются или продолжаются в интервале {weekend.label}. Это первый static-list слой перед будущими фильтрами.</p>
-          <div class="source-links">
-            <a href={withBase('/segodnya/')}>Смотреть сегодня</a>
-            <a href={withBase('/zavtra/')}>Смотреть завтра</a>
-            <a href={siteHomeHref()}>{IS_PRODUCTION_FAMILY ? 'Все анонсы' : 'Все тестовые страницы'}</a>
-          </div>
-        </div>
-      </section>
-
-      <AuthorizedEventSearch />
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <ListingPersonalFilter total={events.length} label="на выходных" />
-          <h2>{events.length ? `Найдено: ${events.length}` : 'На эти выходные в fixture нет событий'}</h2>
-          <div class="listing-stack">
-            {events.map((event) => <EventListItem event={event} />)}
-          </div>
-        </div>
-      </section>
-
-      <PersonalFeedSlot context="weekend" />
-    </div>
+<EventLayout title={`События на выходные в Калининграде | ${SITE_NAME}`} description={`События на ближайшие выходные ${weekend.label}, по дням и точному времени начала.`} canonicalUrl={absoluteUrl('/vyhodnye/')} structuredData={[]} headerCurrent="weekend">
+  <main id="main" class="ke-listing-page">
+    <WeekendListingSurface
+      events={events}
+      start={weekend.start}
+      end={weekend.end}
+      dateLabel={weekend.label}
+      currentDate={getCurrentDate()}
+      previous={previousRange ? { href: `/vyhodnye/${previousRange.start}/`, label: previousRange.label } : null}
+      next={nextRange ? { href: `/vyhodnye/${nextRange.start}/`, label: nextRange.label } : null}
+      ranges={rangeLinks}
+    />
+    <div class="ke-listing-shell"><PersonalFeedSlot context="weekend" /></div>
   </main>
 </EventLayout>

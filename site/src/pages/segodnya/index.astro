@@ -1,102 +1,17 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import AuthorizedEventSearch from '../../components/AuthorizedEventSearch.astro';
-import EventListItem from '../../components/EventListItem.astro';
+import DateListingSurface from '../../components/listings/DateListingSurface.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import { IS_PRODUCTION_FAMILY, siteHomeHref, absoluteUrl, eventDaypart, getCurrentDate, getTodayContinuingEvents, getTodayPrimaryEvents, SITE_NAME, withBase } from '../../lib/events';
-import type { EventDaypart } from '../../lib/events';
+import { absoluteUrl, getCurrentDate, getPreviewBuild, getTodayPrimaryEvents, SITE_NAME } from '../../lib/events';
 
 const currentDate = getCurrentDate();
 const events = getTodayPrimaryEvents();
-const continuingSectionEvents = getTodayContinuingEvents();
-const displayedEventsCount = events.length;
-const foundLabel = continuingSectionEvents.length
-  ? `Сегодня: ${events.length} · отдельно выставки и долгие форматы: ${continuingSectionEvents.length}`
-  : (displayedEventsCount ? `Найдено: ${displayedEventsCount}` : 'На сегодня в fixture нет событий');
-const canonicalUrl = absoluteUrl('/segodnya/');
-const title = `События сегодня в Калининграде | ${SITE_NAME}`;
-const description = `Статический preview-листинг событий на ${currentDate}: быстрые события сегодня отдельно от выставок и долгих форматов.`;
-const dayparts: Array<{ key: EventDaypart; label: string; note: string }> = [
-  { key: 'morning', label: 'Утро', note: '06:00–11:59' },
-  { key: 'day', label: 'День', note: '12:00–16:59 · без времени' },
-  { key: 'evening', label: 'Вечер', note: '17:00–21:59' },
-  { key: 'night', label: 'Ночь', note: '22:00–05:59' },
-];
-const sections = dayparts
-  .map((section) => ({ ...section, events: events.filter((event) => eventDaypart(event) === section.key) }));
+const dateLabel = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' })
+  .format(new Date(`${currentDate}T12:00:00+02:00`));
 ---
-<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="today">
-  <main id="main">
-    <div class="page-shell">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={siteHomeHref()}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        <span>Сегодня</span>
-      </nav>
-      <section class="section-card">
-        <div class="section-card__inner">
-          <p class="eyebrow">Сегодня</p>
-          <h1 style="max-width: 14ch;">Что идёт сегодня</h1>
-          <p class="lead">Сначала показываем события, которые начинаются сегодня. Выставки и длинные ежедневные форматы вынесены ниже и в отдельную страницу, чтобы они не забивали быстрый список.</p>
-          <div class="source-links">
-            <a href={withBase('/zavtra/')}>Смотреть завтра</a>
-            <a href={withBase('/vyhodnye/')}>Смотреть выходные</a>
-            <a href={withBase('/vystavki/')}>Выставки</a>
-            <a href={siteHomeHref()}>{IS_PRODUCTION_FAMILY ? 'Все анонсы' : 'Все тестовые страницы'}</a>
-          </div>
-        </div>
-      </section>
-
-      <AuthorizedEventSearch />
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <ListingPersonalFilter total={displayedEventsCount} label="сегодня" />
-          <h2>{foundLabel}</h2>
-          {sections.length ? (
-            <div class="listing-dayparts">
-              {sections.map((section) => (
-                <section class="listing-daypart" data-listing-daypart aria-labelledby={`today-${section.key}`}>
-                  <div class="listing-daypart__header">
-                    <div>
-                      <p class="eyebrow">{section.note}</p>
-                      <h3 id={`today-${section.key}`}>{section.label}</h3>
-                    </div>
-                    <span class="listing-daypart__count" data-listing-daypart-count>{section.events.length}</span>
-                  </div>
-                  {section.events.length ? (
-                    <div class="listing-stack">
-                      {section.events.map((event) => <EventListItem event={event} />)}
-                    </div>
-                  ) : (
-                    <p class="muted-note">Пока нет событий в этом интервале.</p>
-                  )}
-                </section>
-              ))}
-            </div>
-          ) : (
-            <p class="muted-note">Событий на выбранную дату нет.</p>
-          )}
-          {continuingSectionEvents.length ? (
-            <section class="listing-daypart listing-daypart--continuing" data-listing-daypart aria-labelledby="today-continuing">
-              <div class="listing-daypart__header">
-                <div>
-                  <p class="eyebrow">Продолжаются</p>
-                  <h3 id="today-continuing">Идут сейчас</h3>
-                </div>
-                <span class="listing-daypart__count" data-listing-daypart-count>{continuingSectionEvents.length}</span>
-              </div>
-              <p class="muted-note">Длинные выставки и форматы, которые не начинаются сегодня, но доступны сейчас.</p>
-              <div class="listing-stack">
-                {continuingSectionEvents.map((event) => <EventListItem event={event} />)}
-              </div>
-            </section>
-          ) : null}
-        </div>
-      </section>
-
-      <PersonalFeedSlot context="today" />
-    </div>
+<EventLayout title={`События сегодня в Калининграде | ${SITE_NAME}`} description={`События сегодня, ${dateLabel}, сгруппированные по времени начала.`} canonicalUrl={absoluteUrl('/segodnya/')} structuredData={[]} headerCurrent="today">
+  <main id="main" class="ke-listing-page">
+    <DateListingSurface kind="today" title="Сегодня" date={currentDate} dateLabel={dateLabel} events={events} generatedAt={getPreviewBuild().generated_at} />
+    <div class="ke-listing-shell"><PersonalFeedSlot context="today" /></div>
   </main>
 </EventLayout>

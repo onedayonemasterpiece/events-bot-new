@@ -1,0 +1,77 @@
+---
+import { LISTING_DAYPARTS, type ListingTimeGroup } from '../../lib/listingPresentation';
+
+export interface NavExactItem { key: string; label: string; count: number; target: string; }
+export interface NavItem { key: string; label: string; count: number; href: string; exact: NavExactItem[]; }
+export interface DaySummary { key: 'sat' | 'sun'; short: string; dateLabel: string; count: number; }
+interface Props {
+  groups?: ListingTimeGroup[];
+  idPrefix?: string;
+  label?: string;
+  compact?: boolean;
+  earlierCount?: number;
+  items?: NavItem[];
+  daySummaries?: DaySummary[];
+  force?: boolean;
+}
+const {
+  groups = [], idPrefix = '', label = 'По времени', compact = false,
+  earlierCount = 0, items: suppliedItems, daySummaries = [], force = false,
+} = Astro.props;
+const computedItems: NavItem[] = LISTING_DAYPARTS.map((part) => {
+  const matching = groups.filter((group) => group.daypart === part.key);
+  return {
+    ...part,
+    count: matching.reduce((sum, group) => sum + group.events.length, 0),
+    href: matching[0] ? `#${idPrefix}-${matching[0].key}` : '',
+    exact: matching.map((group) => ({ key: group.key, label: group.label, count: group.events.length, target: `${idPrefix}-${group.key}` })),
+  };
+}).filter((item) => item.count > 0);
+const navItems = suppliedItems || computedItems;
+const timedGroupCount = groups.filter((group) => group.key !== 'untimed').length;
+const total = groups.reduce((sum, group) => sum + group.events.length, 0);
+const showNav = force || timedGroupCount > 3 || total > 6 || earlierCount > 0;
+---
+{showNav ? (
+  <nav class:list={['ke-time-nav', compact && 'ke-time-nav--compact']} aria-label={label} data-ds-component="ListingTimeNav" data-ds-version="2" data-listing-time-nav>
+    <div class="ke-time-nav__inner">
+      {daySummaries.length ? (
+        <div class="ke-time-nav__days" aria-label="Дни выходных">
+          {daySummaries.map((day) => (
+            <span class:list={['ke-time-nav__day', `ke-time-nav__day--${day.key}`]} id={`weekend-${day.key}-label`} data-weekend-day-summary={day.key}>
+              <b>{day.short}</b><span>{day.dateLabel}</span><strong data-weekend-day-count={day.key}>{day.count}</strong>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div class="ke-time-nav__links">
+        {earlierCount > 0 ? (
+          <span class="ke-time-nav__item"><a href="#today-earlier" data-listing-earlier-link><span>Ранее</span><strong data-listing-earlier-nav-count>{earlierCount}</strong></a></span>
+        ) : null}
+        {navItems.map((item) => (
+          <span class="ke-time-nav__item">
+            <a href={item.href} data-listing-daypart-link={item.key}>
+              <span>{item.label}</span>
+              <strong data-listing-daypart-count={item.key}>{item.count}</strong>
+            </a>
+            {item.exact.length >= 5 ? (
+              <details class="ke-time-nav__exact" data-time-nav-disclosure>
+                <summary aria-label={`Показать точное время: ${item.label}`} title={`Точное время: ${item.label}`}><span aria-hidden="true">⌄</span></summary>
+                <div class:list={['ke-time-nav__popover', daySummaries.length && 'ke-time-nav__popover--weekend']}>
+                  <p>{item.label}</p>
+                  <ul>
+                    {item.exact.map((exact) => (
+                      <li data-exact-time-item={exact.key}>
+                        <a href={`#${exact.target}`} data-time-nav-exact-target={exact.target}>{exact.label}<strong>{exact.count}</strong></a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            ) : null}
+          </span>
+        ))}
+      </div>
+    </div>
+  </nav>
+) : null}

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "festival_medallion_assets_v1",
   "generatedAt": "2026-07-04T00:00:00Z",
-  "usage": "Minimal Telegram RichMessage festival inventory; current slice contains the source-faithful KGD80 medallion required by event 6811.",
+  "usage": "Curated festival and venue-brand medallions for event details and separately approved visual-only listing overlays.",
   "items": [
     {
       "slug": "kgd80-80-stories",
@@ -17,7 +17,31 @@
       "renderNote": "Официальный SVG с сайта фестиваля; в круг вписан знак/композиция hero-логотипа.",
       "sourcePath": "site/src/assets/festivals/source/kgd80-logo-hero.svg",
       "retrievedAt": "2026-07-03",
-      "category": "festival"
+      "category": "festival",
+      "listingStatus": "listing_ready",
+      "listingBinding": "festival"
+    },
+    {
+      "slug": "kaup",
+      "name": "Кауп",
+      "shortName": "Кауп",
+      "aliases": [
+        "Кауп",
+        "Поселение викингов Кауп"
+      ],
+      "sourcePage": "https://www.kaup39.ru/",
+      "sourceUrl": "https://static.tildacdn.com/tild3166-3161-4133-a638-363932633936/Logo_wh_main.svg",
+      "sourceFile": "kaup-logo.svg",
+      "background": "#26372D",
+      "ring": "#B9A06A",
+      "avatarUrl": "/assets/festivals/kaup.svg",
+      "ariaLabel": "Локация: поселение викингов «Кауп»",
+      "renderNote": "Официальный знак поселения викингов «Кауп», повторно использован из принятой venue-medallions ветки как площадочный бренд для listing overlay без OCR.",
+      "sourcePath": "site/src/assets/festivals/source/kaup-logo.svg",
+      "retrievedAt": "2026-07-03",
+      "category": "venue_brand",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     }
   ]
 }

@@ -12,3 +12,14 @@ the committed runtime SVG with local headless Chromium
 Python Telegram strip renderer consumes the Pillow-readable PNG.
 
 No OpenAI image generation/editing was used.
+
+## Venue-brand source reused for listing overlays
+
+| Slug | Category | Brand | Source | Runtime | Note |
+| --- | --- | --- | --- | --- | --- |
+| `kaup` | `venue_brand` | Кауп | https://static.tildacdn.com/tild3166-3161-4133-a638-363932633936/Logo_wh_main.svg | `/assets/festivals/kaup.svg` | Official Kaup mark reused from `origin/feature/static-site-venue-medallions-20260703`; listing overlay is allowed only for `image_text_mode=visual_only`. |
+
+V13 records `kaup` as `listing_ready` + `venue` and
+`kgd80-80-stories` as `listing_ready` + `festival`. These are structured
+bindings, not evidence that an image is crop-safe; `visual_only` remains the
+mandatory overlay gate and crop evidence remains asset-specific.

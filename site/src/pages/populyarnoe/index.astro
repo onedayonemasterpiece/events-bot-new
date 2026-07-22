@@ -1,77 +1,16 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import EventListItem from '../../components/EventListItem.astro';
-import ListingPersonalFilter from '../../components/ListingPersonalFilter.astro';
-import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { siteHomeHref, absoluteUrl, getPopularEvents, SITE_NAME, withBase } from '../../lib/events';
+import PopularListingSurface from '../../components/listings/PopularListingSurface.astro';
+import { absoluteUrl, getPopularDesktopEvents, getPopularEvents, SITE_NAME } from '../../lib/events';
 
-const events = getPopularEvents(20);
+const events = getPopularEvents(100);
+const desktopEvents = getPopularDesktopEvents(160);
 const canonicalUrl = absoluteUrl('/populyarnoe/');
 const title = `Популярные события Калининграда | ${SITE_NAME}`;
 const description = 'Лента популярных событий по социальной активности: лайки, репосты, просмотры и реакции источников нормализуются в компактный скоринг.';
-const reasonLabels: Record<string, string> = {
-  fast_growth: 'Быстро набирает внимание',
-  frequently_shared: 'Часто делятся',
-  discussed: 'Обсуждают',
-  multi_source: 'В нескольких источниках',
-};
 ---
-<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="popular">
-  <main id="main">
-    <div class="page-shell">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={siteHomeHref()}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        <span>Популярное</span>
-      </nav>
-      <section class="section-card">
-        <div class="section-card__inner">
-          <p class="eyebrow">По реакции аудитории</p>
-          <h1 style="max-width: 12ch;">Популярное</h1>
-          <p class="lead">События, которые заметнее откликнулись в источниках: реакции, репосты и просмотры учитываются относительно общего уровня, а не как голые абсолютные числа.</p>
-          <div class="source-links">
-            <a href={withBase('/segodnya/')}>Сегодня</a>
-            <a href={withBase('/vystavki/')}>Выставки</a>
-            <a href={withBase('/poisk/')}>Поиск</a>
-          </div>
-        </div>
-      </section>
-
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner">
-          <ListingPersonalFilter total={events.length} label="популярное" />
-          <h2>{events.length ? `Найдено: ${events.length}` : 'Пока нет событий с заметной соцактивностью'}</h2>
-          <div class="listing-stack">
-            {events.map((event) => (
-              <div class="popular-item">
-                <EventListItem event={event} />
-                {event.popularity_reason_codes?.length ? (
-                  <div class="popular-reasons" aria-label="Почему событие в популярном">
-                    {event.popularity_reason_codes.slice(0, 2).map((reason) => (
-                      <span>{reasonLabels[reason] || reason}</span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <PersonalFeedSlot context="popular" />
-    </div>
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} headerCurrent="popular" disableViewportZoom>
+  <main id="main" class="ke-listing-page">
+    <PopularListingSurface events={events} desktopEvents={desktopEvents} />
   </main>
 </EventLayout>
-
-<style>
-  .popular-item { display: grid; gap: .55rem; }
-  .popular-reasons { display: flex; flex-wrap: wrap; gap: .4rem; padding-inline: .25rem; }
-  .popular-reasons span {
-    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-    border-radius: 999px;
-    padding: .28rem .62rem;
-    font-size: .78rem;
-    font-weight: 650;
-    line-height: 1.2;
-  }
-</style>

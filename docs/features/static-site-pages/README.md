@@ -336,6 +336,33 @@ parity before promotion.  Canonical identity and staged production gates:
 
 ## Historical public preview evidence
 
+The current desktop `Популярное` contract is documented in
+[`listing-surfaces-v28-desktop-popular.md`](listing-surfaces-v28-desktop-popular.md):
+five short evidence shelves use a stricter build-time availability cutoff and
+page-wide family deduplication, while an optional sixth 4+1 shelf applies the
+existing local profile only for warm consented visitors. Mobile V26 rendering
+is deliberately unchanged.
+
+The current mobile `Популярное` sticky group-context pass is documented in
+[`listing-surfaces-v26-mobile-sticky-groups.md`](listing-surfaces-v26-mobile-sticky-groups.md):
+it keeps the full semantic category heading, then compacts that same heading
+into a right-aligned sticky label while its group is being scanned. The V25
+context and hierarchy baseline remains documented in
+[`listing-surfaces-v25-mobile-context.md`](listing-surfaces-v25-mobile-context.md):
+it preserves the same viewed event across both density controls, replaces the
+desktop-like phone header stack with the existing mobile navigation contract,
+makes ranked categories visually explicit and narrows compact evidence rails
+after measuring the rejected all-under-photo alternative. The V24 density and
+pinch baseline remains documented in
+[`listing-surfaces-v24-mobile-pinch.md`](listing-surfaces-v24-mobile-pinch.md).
+The V23
+component-reuse baseline remains documented in
+[`listing-surfaces-v23-mobile-adaptive.md`](listing-surfaces-v23-mobile-adaptive.md):
+the large phone mode directly reuses canonical `EventCard split-actions`, the
+adaptive compact mode keeps intrinsic listing-card geometry and immutable rank
+order, and the accepted V22 desktop plus equal two-column phone specimen remains
+available separately for regression/comparison.
+
 Latest main-reachable checked public preview evidence as of 2026-07-17 is
 `preview-20260717-interest-clubs-prod-canary`: 303 current/future events, checked
 Astro output and the gated club projection. Exact SHA/counts/manifest/HTTP evidence

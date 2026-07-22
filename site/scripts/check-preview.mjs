@@ -69,6 +69,169 @@ for (const variant of ['inline', 'rail-time-first', 'rail-date-first']) {
 }
 if (!occurrenceLabHtml.includes('data-occurrence-variant="mobile"')) throw new Error('Occurrence lab misses the accepted always-visible mobile selector');
 if (occurrenceLabHtml.includes('Также:')) throw new Error('Occurrence lab must not render the rejected legacy other-times copy');
+
+const listingRoutes = ['segodnya', 'zavtra', 'vyhodnye', 'populyarnoe'];
+for (const route of listingRoutes) {
+  const html = readFileSync(join(root, route, 'index.html'), 'utf8');
+  const stylesheetHrefs = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/gu)].map((match) => match[1]);
+  const bundledCss = stylesheetHrefs
+    .map((href) => href.replace(/^https?:\/\/[^/]+/u, '').replace(`/${buildId}/`, ''))
+    .filter((href) => href.startsWith('_astro/'))
+    .map((href) => readFileSync(join(root, href), 'utf8'))
+    .join('\n');
+  const normalizedCss = bundledCss.replace(/\s+/gu, '');
+  for (const contract of ['.ke-listing-shell', '.ke-listing-discovery-rail', '.ke-listing-card']) {
+    if (!bundledCss.includes(contract)) throw new Error(`Listing route ${route} misses design-system CSS contract ${contract}`);
+  }
+  for (const contract of [
+    '.site-header{position:sticky;top:0;',
+    '.ke-listing-discovery-rail{position:sticky;top:var(--ke-site-header-bar-height);',
+    '.ke-listing-card__media{position:relative;',
+  ]) {
+    if (!normalizedCss.includes(contract)) throw new Error(`Listing route ${route} misses compiled desktop geometry contract ${contract}`);
+  }
+  if (!html.includes('class="ke-listing-page')) throw new Error(`Listing route ${route} misses the shared listing-page root`);
+}
+const eventLayoutSource = readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8');
+for (const headerContract of [
+  "import '../styles/design-system.css';",
+  '.site-header {',
+  'position: sticky;',
+  'top: 0;',
+  'height: var(--ke-site-header-bar-height);',
+  'z-index: 60;',
+]) {
+  if (!eventLayoutSource.includes(headerContract)) throw new Error(`Shared static header contract misses ${headerContract}`);
+}
+
+const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
+for (const marker of [
+  'data-listing-variant="POPULAR-V26"',
+  'data-desktop-popular-version="V28"',
+  'data-popular-representation="desktop"',
+  'data-popular-representation="mobile-large"',
+  'data-popular-representation="mobile-adaptive"',
+  'data-ds-component="ListingMobileDensitySwitch"',
+  'data-ds-version="6"',
+  'data-ds-component="PopularMobileGroupContext"',
+  'data-popular-group-sentinel',
+  'ke-popular-behavior__head-label',
+]) {
+  if (!popularHtml.includes(marker)) throw new Error(`Popular V26 misses ${marker}`);
+}
+const popularDesktopAt = popularHtml.indexOf('data-popular-representation="desktop"');
+const popularLargeAt = popularHtml.indexOf('data-popular-representation="mobile-large"');
+const popularAdaptiveAt = popularHtml.indexOf('data-popular-representation="mobile-adaptive"');
+const popularDockAt = popularHtml.indexOf('data-listing-mobile-density-dock');
+if (!(popularDesktopAt < popularLargeAt && popularLargeAt < popularAdaptiveAt && popularAdaptiveAt < popularDockAt)) {
+  throw new Error('Popular V26 representations are not isolated in desktop / large / adaptive order');
+}
+const popularDesktopHtml = popularHtml.slice(popularDesktopAt, popularLargeAt);
+const popularPersonalizedAt = popularDesktopHtml.indexOf('data-popular-personalized');
+if (popularPersonalizedAt < 0) throw new Error('Popular desktop V28 misses the optional personalized shelf');
+const popularDesktopGlobalHtml = popularDesktopHtml.slice(0, popularPersonalizedAt);
+const popularLargeHtml = popularHtml.slice(popularLargeAt, popularAdaptiveAt);
+const popularAdaptiveHtml = popularHtml.slice(popularAdaptiveAt, popularDockAt);
+const listingIds = (html) => [...html.matchAll(/data-listing-item(?:="")?[^>]*data-event-id="(\d+)"/gu)].map((match) => match[1]);
+const popularDesktopIds = listingIds(popularDesktopGlobalHtml);
+const popularLargeIds = listingIds(popularLargeHtml);
+const popularAdaptiveIds = listingIds(popularAdaptiveHtml);
+if (popularDesktopIds.length === 0 || new Set(popularDesktopIds).size !== popularDesktopIds.length) {
+  throw new Error('Popular desktop V28 ranking must be present and event-id deduplicated');
+}
+if (popularLargeIds.join(',') !== popularAdaptiveIds.join(',')) {
+  throw new Error('Popular V26 mobile density representations must preserve identical ranked event order');
+}
+const popularDesktopFamilyKeys = [...popularDesktopGlobalHtml.matchAll(/data-listing-family-key="([^"]+)"/gu)].map((match) => match[1]);
+if (popularDesktopFamilyKeys.length !== popularDesktopIds.length || new Set(popularDesktopFamilyKeys).size !== popularDesktopFamilyKeys.length) {
+  throw new Error('Popular desktop V28 must allocate every event family only once across global shelves');
+}
+const popularDesktopReasons = [...popularDesktopGlobalHtml.matchAll(/data-popular-reason="([^"]+)"/gu)].map((match) => match[1]);
+if (popularDesktopReasons.join(',') !== 'fast_growth,multi_source,discussed,frequently_shared,score_fallback') {
+  throw new Error(`Popular desktop V28 shelf order drifted: ${popularDesktopReasons.join(',')}`);
+}
+const popularDesktopGroupCounts = [...popularDesktopGlobalHtml.matchAll(/data-popular-group-count(?:="")?[^>]*>(\d+)</gu)].map((match) => Number(match[1]));
+if (popularDesktopGroupCounts.length !== 5 || popularDesktopGroupCounts.some((count) => count < 3 || count > 5)) {
+  throw new Error(`Popular desktop V28 shelves must remain one short evidence row (3–5 cards): ${popularDesktopGroupCounts.join(',')}`);
+}
+const temporalLabels = [...popularDesktopGlobalHtml.matchAll(/data-listing-temporal-status(?:="")?[^>]*>([^<]+)</gu)].map((match) => match[1]);
+if (temporalLabels.length !== popularDesktopIds.length || temporalLabels.some((label) => !label.trim())) {
+  throw new Error('Popular desktop V28 cards must expose compact lifecycle/date context');
+}
+if (!popularDesktopGlobalHtml.includes('ещё 1 показ')) {
+  throw new Error('Popular desktop V28 must collapse repeated dates into one family card');
+}
+if (!popularDesktopIds.includes('5130')) {
+  throw new Error('Popular desktop V28 regression: Break Summer Fest must remain discoverable');
+}
+const popularEventById = new Map(eventsData.events.map((event) => [String(event.id), event]));
+const popularReference = Date.parse(eventsData.build.generated_at);
+const popularDesktopEligible = (event) => {
+  if (!event || ['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive'].includes(String(event.lifecycle_status || '').toLowerCase())) return false;
+  const endAt = Date.parse(event.end_at || '');
+  if (Number.isFinite(endAt)) return endAt > popularReference;
+  if (event.end_date && event.end_date !== event.start_date) return event.end_date >= eventsData.build.current_date;
+  const startsAt = Date.parse(event.starts_at || '');
+  if (Number.isFinite(startsAt)) return startsAt >= popularReference;
+  return event.start_date >= eventsData.build.current_date;
+};
+if (popularDesktopIds.some((id) => !popularDesktopEligible(popularEventById.get(id)))) {
+  throw new Error('Popular desktop V28 includes an already unavailable event at build time');
+}
+const elapsedMobileIds = popularLargeIds.filter((id) => !popularDesktopEligible(popularEventById.get(id)));
+if (!elapsedMobileIds.length || elapsedMobileIds.some((id) => popularDesktopIds.includes(id))) {
+  throw new Error('Popular desktop V28 must be stricter than the preserved mobile projection at the time boundary');
+}
+const personalPoolHtml = popularDesktopHtml.slice(popularPersonalizedAt);
+const personalIds = listingIds(personalPoolHtml);
+const personalFamilies = [...personalPoolHtml.matchAll(/data-listing-family-key="([^"]+)"/gu)].map((match) => match[1]);
+if (personalIds.length < 5 || personalFamilies.length !== personalIds.length || new Set(personalFamilies).size !== personalFamilies.length) {
+  throw new Error('Popular desktop V28 personal candidate pool must be family-deduplicated and sufficiently deep');
+}
+if (personalFamilies.some((key) => popularDesktopFamilyKeys.includes(key))) {
+  throw new Error('Popular desktop V28 personal candidate pool must exclude globally visible families');
+}
+if (!/data-popular-personalized[^>]*hidden/u.test(popularDesktopHtml)) {
+  throw new Error('Popular desktop V28 personal shelf must remain absent for cold start');
+}
+if (!popularLargeHtml.includes('event-card--split-actions') || popularLargeHtml.includes('listing-proof')) {
+  throw new Error('Popular V26 large mode must reuse canonical EventCard split-actions without listing-proof');
+}
+if (!popularAdaptiveHtml.includes('data-ds-component="ListingEventCard"') || !/data-popular-mobile-layout="adaptive"[^>]*hidden[^>]*inert/u.test(popularAdaptiveHtml)) {
+  throw new Error('Popular V26 adaptive mode must use inactive-by-default ListingEventCard rows');
+}
+if (!popularHtml.includes('maximum-scale=1, user-scalable=no')) throw new Error('Popular V26 must disable page zoom only on its gesture-enabled listing route');
+const popularCss = readFileSync(join(siteDir, 'src/styles/design-system.css'), 'utf8');
+for (const cssContract of [
+  '[data-popular-representation="mobile-adaptive"] .ke-popular-behavior__row',
+  'flex-wrap: wrap',
+  'right: 0;',
+  'left: 0;',
+  'width: 100%;',
+  'width: min(calc(100% - 24px), var(--ke-content-listing-max));',
+  'gap: 20px 8px;',
+  'touch-action: pan-y;',
+  '--ke-listing-mobile-tail-width: 28px;',
+  '--ke-listing-mobile-tail-width: 44px;',
+  'body:has(.ke-popular-listing) .site-nav { display: none; }',
+  'position: sticky;',
+  'top: var(--ke-popular-group-sticky-top);',
+  'max-width: min(calc(100vw - 156px), 288px);',
+  '.ke-popular-behavior__group:not(:last-child)',
+  'padding-bottom: 72px;',
+  'text-align: right;',
+  'pointer-events: none;',
+]) {
+  if (!popularCss.includes(cssContract)) throw new Error(`Popular V26 CSS misses ${cssContract}`);
+}
+const densitySource = readFileSync(join(siteDir, 'src/components/listings/ListingMobileDensitySwitch.astro'), 'utf8');
+for (const gestureContract of ['pinchDistance', "matchMedia('(max-width: 720px)')", "ratio <= 0.84 ? 'adaptive'", "ratio >= 1.16 ? 'large'", "{ passive: false }", "dataset.listingPinchReady = 'true'", 'preferredEventId', 'dataset.listingContextEventId = anchorId', "new CustomEvent('listing:density-change'"]) {
+  if (!densitySource.includes(gestureContract)) throw new Error(`Popular V26 pinch/context contract misses ${gestureContract}`);
+}
+const groupContextSource = readFileSync(join(siteDir, 'src/components/listings/PopularMobileGroupContext.astro'), 'utf8');
+for (const stickyContract of ['IntersectionObserver', 'data-popular-group-sentinel', "querySelectorAll('[data-popular-mobile-layout] [data-popular-behavior-group]')", 'observer.observe(group)', "matchMedia('(max-width: 720px)')", "addEventListener('listing:density-change'", "classList.toggle('is-stuck'", 'getBoundingClientRect']) {
+  if (!groupContextSource.includes(stickyContract)) throw new Error(`Popular V26 sticky group context misses ${stickyContract}`);
+}
 for (const scenario of templateContract.lab_scenarios) {
   const scenarioHtml = readFileSync(join(root, `lab/event-desktop/examples/${scenario}/index.html`), 'utf8');
   if (!scenarioHtml.includes(`data-event-template-contract="${templateContract.contract_id}"`)) {
@@ -612,8 +775,8 @@ if (!compactPartnersCss.includes('@media(min-width:980px)') || !compactPartnersC
 if (!partnersHtml.includes('--partner-col-start: 1') || !partnersHtml.includes('--partner-col-span: 4') || !partnersHtml.includes('--partner-row-span: 2') || !partnersHtml.includes('--partner-mobile-col-start: 3') || !partnersHtml.includes('--partner-mobile-col-span: 2')) throw new Error('Info partners tiles must keep explicit bento placement variables for greedy logo spans');
 const exhibitionsHtml = readFileSync(join(root, 'vystavki/index.html'), 'utf8');
 if (!exhibitionsHtml.includes('Выставки и долгие форматы') || !exhibitionsHtml.includes('listing-stack')) throw new Error('Exhibitions listing must exist as a separate section/page');
-const popularHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
-if (!popularHtml.includes('Популярное') || !popularHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
+const popularListingHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
+if (!popularListingHtml.includes('Популярное') || !popularListingHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
 const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');
 if (!partnershipHtml.includes('Информационное партнёрство') || !partnershipHtml.includes('Ласточка')) throw new Error('Partnership page must keep the current reference/test block');
 

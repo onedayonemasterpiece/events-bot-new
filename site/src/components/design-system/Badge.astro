@@ -1,0 +1,9 @@
+---
+interface Props {
+  tone?: 'neutral' | 'brand' | 'accent' | 'success' | 'warning' | 'danger';
+  label?: string;
+}
+const { tone = 'neutral', label } = Astro.props;
+const className = ['ke-badge', tone !== 'neutral' ? `ke-badge--${tone}` : ''].filter(Boolean).join(' ');
+---
+<span class={className} aria-label={label}><slot /></span>

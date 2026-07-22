@@ -1,0 +1,23 @@
+---
+import ListingControls from './ListingControls.astro';
+
+interface Props {
+  cities: Array<{ name: string; count: number }>;
+  total: number;
+  label: string;
+  hasTime?: boolean;
+}
+const { cities, total, label, hasTime = true } = Astro.props;
+---
+<div
+  class:list={['ke-listing-discovery-rail', !hasTime && 'ke-listing-discovery-rail--cities-only']}
+  data-ds-component="ListingDiscoveryRail"
+  data-ds-version="5"
+  data-listing-discovery-rail
+  data-has-time={hasTime ? 'true' : 'false'}
+>
+  <div class="ke-listing-discovery-rail__inner">
+    <ListingControls cities={cities} total={total} label={label} />
+    {hasTime ? <div class="ke-listing-discovery-rail__time"><slot /></div> : null}
+  </div>
+</div>

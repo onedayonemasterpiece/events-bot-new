@@ -1,0 +1,33 @@
+---
+interface DayCount { key: 'sat' | 'sun'; label: 'Сб' | 'Вс'; count: number; }
+interface Props { id: string; label: string; count?: number; dayCounts?: DayCount[]; className?: string; }
+const { id, label, count, dayCounts = [], className = '' } = Astro.props;
+function eventCountLabel(value: number): string {
+  const mod100 = value % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'событий';
+  const mod10 = value % 10;
+  if (mod10 === 1) return 'событие';
+  if (mod10 >= 2 && mod10 <= 4) return 'события';
+  return 'событий';
+}
+---
+<header class:list={['ke-listing-time-marker', className]} data-ds-component="ListingTimeMarker" data-ds-version="3">
+  <h2 id={id} tabindex="-1">{label}</h2>
+  {dayCounts.length ? (
+    <div class="ke-listing-time-marker__day-counts" aria-label="Количество событий по дням">
+      {dayCounts.map((day) => (
+        <span
+          class:list={['ke-listing-time-marker__day-chip', `ke-listing-time-marker__day-chip--${day.key}`]}
+          data-listing-weekend-day-count-chip={day.key}
+          aria-label={`${day.label}: ${day.count} ${eventCountLabel(day.count)}`}
+          hidden={day.count === 0}
+        >
+          <b>{day.label.toLowerCase()}</b>
+          <span><strong data-listing-weekend-day-count-value>{day.count}</strong> <i data-listing-weekend-day-count-label>{eventCountLabel(day.count)}</i></span>
+        </span>
+      ))}
+    </div>
+  ) : typeof count === 'number' ? (
+    <span class="ke-listing-time-marker__count" data-listing-group-count>{count} {eventCountLabel(count)}</span>
+  ) : null}
+</header>

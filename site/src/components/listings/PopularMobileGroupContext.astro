@@ -1,0 +1,49 @@
+<span hidden data-ds-component="PopularMobileGroupContext" data-ds-version="1"></span>
+
+<script>
+  function initPopularMobileGroupContext() {
+    document.querySelectorAll('[data-date-listing="popular"]').forEach((surface) => {
+      if (surface.dataset.popularGroupContextReady === 'true') return;
+      const mobile = window.matchMedia('(max-width: 720px)');
+      const sentinels = Array.from(surface.querySelectorAll('[data-popular-group-sentinel]'));
+      const groups = Array.from(surface.querySelectorAll('[data-popular-mobile-layout] [data-popular-behavior-group]'));
+      if (sentinels.length === 0) return;
+      surface.dataset.popularGroupContextReady = 'true';
+
+      const stickyTop = () => {
+        const value = getComputedStyle(surface).getPropertyValue('--ke-popular-group-sticky-top');
+        return Number.parseFloat(value) || 8;
+      };
+
+      const refresh = () => {
+        const top = stickyTop();
+        sentinels.forEach((sentinel) => {
+          const group = sentinel.closest('[data-popular-behavior-group]');
+          const head = group?.querySelector('.ke-popular-behavior__head');
+          const layout = group?.closest('[data-popular-mobile-layout]');
+          if (!group || !head || !layout) return;
+          const active = mobile.matches && !layout.hidden;
+          const stuck = active
+            && sentinel.getBoundingClientRect().top <= top + 0.5;
+          head.classList.toggle('is-stuck', stuck);
+        });
+      };
+
+      const observer = new IntersectionObserver(refresh, {
+        root: null,
+        rootMargin: `-${Math.ceil(stickyTop())}px 0px 0px 0px`,
+        threshold: [0, 1],
+      });
+      sentinels.forEach((sentinel) => observer.observe(sentinel));
+      groups.forEach((group) => observer.observe(group));
+      const queueRefresh = () => window.requestAnimationFrame(refresh);
+      window.addEventListener('resize', queueRefresh, { passive: true });
+      mobile.addEventListener?.('change', queueRefresh);
+      surface.addEventListener('listing:density-change', queueRefresh);
+      refresh();
+    });
+  }
+
+  initPopularMobileGroupContext();
+  document.addEventListener('astro:page-load', initPopularMobileGroupContext);
+</script>

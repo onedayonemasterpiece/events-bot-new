@@ -1,0 +1,160 @@
+<div
+  class="ke-listing-mobile-density-dock"
+  data-ds-component="ListingMobileDensitySwitch"
+  data-ds-version="6"
+  data-listing-mobile-density-dock
+  data-nosnippet
+>
+  <div class="ke-listing-mobile-density-switch" role="radiogroup" aria-label="Размер карточек">
+    <button type="button" role="radio" aria-checked="true" tabindex="0" data-listing-density-button="large">
+      <span class="ke-listing-mobile-density-switch__icon ke-listing-mobile-density-switch__icon--large" aria-hidden="true"></span>
+      Крупно
+    </button>
+    <button type="button" role="radio" aria-checked="false" tabindex="-1" aria-label="Компактный адаптивный поток" data-listing-density-button="adaptive">
+      <span class="ke-listing-mobile-density-switch__icon ke-listing-mobile-density-switch__icon--compact" aria-hidden="true"></span>
+      Компактно
+    </button>
+  </div>
+</div>
+
+<script>
+  const DENSITY_STORAGE_KEY = 'ke_listing_density_v2';
+  const DENSITIES = ['large', 'adaptive'];
+
+  function initListingMobileDensitySwitch() {
+    document.querySelectorAll('[data-listing-mobile-density-dock]').forEach((dock) => {
+      if (dock.dataset.listingDensityReady === 'true') return;
+      const surface = dock.closest('[data-date-listing="popular"]');
+      const buttons = Array.from(dock.querySelectorAll('[data-listing-density-button]'));
+      if (!surface || buttons.length !== 2) return;
+      dock.dataset.listingDensityReady = 'true';
+
+      const syncButtons = (density) => {
+        buttons.forEach((button) => {
+          const selected = button.dataset.listingDensityButton === density;
+          button.setAttribute('aria-checked', selected ? 'true' : 'false');
+          button.tabIndex = selected ? 0 : -1;
+        });
+      };
+
+      const representationFor = (density) => density === 'adaptive' ? 'mobile-adaptive' : 'mobile-large';
+      const layoutFor = (density) => surface.querySelector(`[data-popular-mobile-layout="${density}"]`);
+      const mobileDensityMedia = window.matchMedia('(max-width: 720px)');
+      const pinchDistance = (touches) => {
+        if (touches.length < 2) return null;
+        const [first, second] = touches;
+        return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+      };
+
+      const visibleAnchor = (density = surface.dataset.mobileCardDensity, preferredEventId = null) => {
+        const dockTop = dock.getBoundingClientRect().top;
+        const viewTop = 8;
+        const viewBottom = Math.min(window.innerHeight - 8, dockTop > 0 ? dockTop - 8 : window.innerHeight - 8);
+        const viewCenterX = window.innerWidth / 2;
+        const viewCenterY = viewTop + ((viewBottom - viewTop) / 2);
+        const candidates = Array.from(surface.querySelectorAll(`[data-popular-representation="${representationFor(density)}"] [data-listing-item]`))
+          .map((card) => {
+            const rect = card.getBoundingClientRect();
+            const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+            const visibleHeight = Math.max(0, Math.min(rect.bottom, viewBottom) - Math.max(rect.top, viewTop));
+            const visibleArea = visibleWidth * visibleHeight;
+            const centerDistance = Math.abs((rect.left + rect.right) / 2 - viewCenterX)
+              + Math.abs((rect.top + rect.bottom) / 2 - viewCenterY);
+            return { card, rect, visibleArea, centerDistance };
+          })
+          .filter(({ visibleArea }) => visibleArea > 0);
+        const preferred = preferredEventId
+          ? candidates.find(({ card }) => card.dataset.eventId === preferredEventId)
+          : null;
+        return preferred || candidates.sort((left, right) => (
+          right.visibleArea - left.visibleArea
+          || left.centerDistance - right.centerDistance
+        ))[0] || null;
+      };
+
+      const setDensity = (density, { persist = true, preserveAnchor = true, preferredEventId = null } = {}) => {
+        if (!DENSITIES.includes(density)) return;
+        const anchor = preserveAnchor ? visibleAnchor(undefined, preferredEventId) : null;
+        const anchorId = anchor?.card.dataset.eventId;
+        const anchorTop = anchor?.rect.top;
+        surface.querySelectorAll('[data-popular-mobile-layout]').forEach((layout) => {
+          const active = layout === layoutFor(density);
+          layout.toggleAttribute('hidden', !active);
+          layout.toggleAttribute('inert', !active);
+          layout.setAttribute('aria-hidden', active ? 'false' : 'true');
+        });
+        surface.dataset.mobileCardDensity = density;
+        syncButtons(density);
+        surface.dispatchEvent(new CustomEvent('listing:density-change', { detail: { density } }));
+        if (persist) {
+          try { window.localStorage.setItem(DENSITY_STORAGE_KEY, density); } catch {}
+        }
+        if (!anchorId || !Number.isFinite(anchorTop)) return;
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+          const current = surface.querySelector(`[data-popular-representation="${representationFor(density)}"] [data-listing-item][data-event-id="${CSS.escape(anchorId)}"]`);
+          if (!current) return;
+          const delta = current.getBoundingClientRect().top - anchorTop;
+          if (Math.abs(delta) > 1) {
+            const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+            window.scrollTo({ top: Math.max(0, Math.min(maxScroll, window.scrollY + delta)), left: 0, behavior: 'instant' });
+          }
+          surface.dataset.listingContextEventId = anchorId;
+        }));
+      };
+
+      const initial = DENSITIES.includes(surface.dataset.mobileCardDensity) ? surface.dataset.mobileCardDensity : 'large';
+      setDensity(initial, { persist: false, preserveAnchor: false });
+      buttons.forEach((button, index) => {
+        button.addEventListener('click', () => setDensity(button.dataset.listingDensityButton));
+        button.addEventListener('keydown', (event) => {
+          let nextIndex = index;
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + buttons.length) % buttons.length;
+          else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % buttons.length;
+          else if (event.key === 'Home') nextIndex = 0;
+          else if (event.key === 'End') nextIndex = buttons.length - 1;
+          else return;
+          event.preventDefault();
+          const next = buttons[nextIndex];
+          next.focus();
+          setDensity(next.dataset.listingDensityButton);
+        });
+      });
+
+      let pinchStart = null;
+      let pinchCommitted = false;
+      const resetPinch = (event) => {
+        if (event.touches?.length >= 2) return;
+        pinchStart = null;
+        pinchCommitted = false;
+      };
+      surface.addEventListener('touchstart', (event) => {
+        if (!mobileDensityMedia.matches) return;
+        const distance = pinchDistance(event.touches);
+        if (!distance) return;
+        pinchStart = distance;
+        pinchCommitted = false;
+        surface.dataset.listingPinchEventId = event.target.closest('[data-listing-item]')?.dataset.eventId || '';
+      }, { passive: true });
+      surface.addEventListener('touchmove', (event) => {
+        if (!mobileDensityMedia.matches) return;
+        const distance = pinchDistance(event.touches);
+        if (!distance || !pinchStart) return;
+        event.preventDefault();
+        if (pinchCommitted) return;
+        const ratio = distance / pinchStart;
+        const nextDensity = ratio <= 0.84 ? 'adaptive' : ratio >= 1.16 ? 'large' : null;
+        if (!nextDensity) return;
+        pinchCommitted = true;
+        if (surface.dataset.mobileCardDensity !== nextDensity) {
+          setDensity(nextDensity, { preferredEventId: surface.dataset.listingPinchEventId || null });
+        }
+      }, { passive: false });
+      surface.addEventListener('touchend', resetPinch, { passive: true });
+      surface.addEventListener('touchcancel', resetPinch, { passive: true });
+      surface.dataset.listingPinchReady = 'true';
+    });
+  }
+
+  initListingMobileDensitySwitch();
+  document.addEventListener('astro:page-load', initListingMobileDensitySwitch);
+</script>

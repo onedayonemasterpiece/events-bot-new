@@ -1,0 +1,420 @@
+---
+import { cityKey } from '../../lib/listingPresentation';
+
+interface Props {
+  cities: Array<{ name: string; count: number }>;
+  total: number;
+  label: string;
+}
+const { cities, total, label } = Astro.props;
+const showCities = cities.length > 1;
+---
+<section
+  class="ke-listing-controls"
+  aria-label="Фильтры списка"
+  data-ds-component="ListingControls"
+  data-ds-version="5"
+  data-listing-controls
+>
+  {showCities ? (
+    <fieldset class="ke-city-filter ke-city-filter--direct" data-listing-city-filter>
+      <legend>Города</legend>
+      <label class="ke-filter-chip ke-filter-chip--all" data-listing-city-count={total}>
+        <input type="checkbox" value="all" checked data-listing-city-all />
+        <i class="ke-filter-chip__check" aria-hidden="true">✓</i>
+        <span>Все</span><strong>{total}</strong>
+      </label>
+      {cities.map((city) => (
+        <label class="ke-filter-chip" data-listing-city-count={city.count}>
+          <input type="checkbox" value={cityKey(city.name)} data-listing-city-input />
+          <i class="ke-filter-chip__check" aria-hidden="true">✓</i>
+          <span>{city.name}</span><strong>{city.count}</strong>
+        </label>
+      ))}
+    </fieldset>
+  ) : null}
+  <p class="ke-visually-hidden" role="status" aria-live="polite" data-listing-result-status></p>
+  <div class="ke-listing-empty" data-listing-empty hidden>
+    <strong>Нет событий с такими фильтрами</strong>
+    <button type="button" class="ke-button ke-button--secondary ke-button--compact" data-listing-enable-all>Включить все города</button>
+  </div>
+</section>
+
+<script>
+  const CITY_STORAGE_KEY = 'ke_listing_cities_v1';
+
+  function readCitySelection() {
+    try {
+      const raw = localStorage.getItem(CITY_STORAGE_KEY);
+      if (raw === null) return null;
+      const value = JSON.parse(raw);
+      return Array.isArray(value) ? new Set(value.map(String)) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeCitySelection(values) {
+    try { localStorage.setItem(CITY_STORAGE_KEY, JSON.stringify([...values])); } catch (_) {}
+  }
+
+  function primaryListingItems() {
+    const popular = document.querySelector('[data-date-listing="popular"]');
+    if (!popular) return [...document.querySelectorAll('[data-listing-item]')];
+    const representation = window.matchMedia('(max-width: 720px)').matches
+      ? (popular.dataset.mobileCardDensity === 'adaptive' ? 'mobile-adaptive' : 'mobile-large')
+      : 'desktop';
+    return [...popular.querySelectorAll(`[data-popular-representation="${representation}"] [data-listing-item]:not([data-listing-supplemental="true"])`)];
+  }
+
+  function visibleListingItems() {
+    return primaryListingItems().filter((item) => !item.hidden);
+  }
+
+  let rowEndFrame = 0;
+  function syncListingRowEnds() {
+    document.querySelectorAll('.ke-time-group__flow').forEach((flow) => {
+      const cards = [...flow.querySelectorAll(':scope > [data-listing-item]')].filter((card) => !card.hidden);
+      cards.forEach((card) => {
+        card.removeAttribute('data-listing-row-end');
+        card.removeAttribute('data-listing-full-title');
+        card.style.removeProperty('--ke-listing-row-tail');
+        card.style.removeProperty('--ke-listing-singleton-envelope');
+        card.style.removeProperty('--ke-listing-singleton-visual');
+        card.querySelector('.ke-listing-card__copy')?.style.removeProperty('width');
+      });
+      flow.dataset.listingSingleton = cards.length === 1 ? 'true' : 'false';
+      if (!cards.length) return;
+      const flowRight = flow.getBoundingClientRect().right;
+      const rows = [];
+      cards.forEach((card) => {
+        const rect = card.getBoundingClientRect();
+        let row = rows.find((candidate) => Math.abs(candidate.top - rect.top) <= 2);
+        if (!row) { row = { top: rect.top, cards: [] }; rows.push(row); }
+        row.cards.push({ card, rect });
+      });
+      rows.forEach((row) => {
+        const last = [...row.cards].sort((left, right) => left.rect.right - right.rect.right).at(-1);
+        if (!last) return;
+        const tail = Math.max(0, flowRight - last.rect.right);
+        const available = Math.max(0, flowRight - last.rect.left);
+        const singleton = cards.length === 1;
+        if (!singleton && (tail < 72 || available < 280)) return;
+        if (singleton) return;
+        last.card.setAttribute('data-listing-row-end', 'true');
+        last.card.setAttribute('data-listing-full-title', 'true');
+        last.card.style.setProperty('--ke-listing-row-tail', `${tail}px`);
+        const copy = last.card.querySelector('.ke-listing-card__copy');
+        if (copy) copy.style.width = `${Math.min(420, available)}px`;
+      });
+      if (cards.length === 1) {
+        const card = cards[0];
+        const style = getComputedStyle(card);
+        const mediaHeight = Number.parseFloat(style.getPropertyValue('--ke-listing-media-height')) || 0;
+        const mediaRatio = Number.parseFloat(style.getPropertyValue('--ke-listing-image-ratio')) || 1;
+        const tailWidth = Number.parseFloat(style.getPropertyValue('--ke-listing-tail-width')) || 0;
+        // Derive the visual envelope from canonical media geometry. Measuring
+        // a previously expanded flex child would feed its width back into the
+        // next pass and create UI side fields around natural/OCR media.
+        const visualWidth = Math.min(flow.getBoundingClientRect().width, mediaHeight * mediaRatio + tailWidth);
+        const envelope = Math.min(flow.getBoundingClientRect().width, Math.max(visualWidth, 420));
+        card.style.setProperty('--ke-listing-singleton-envelope', `${envelope}px`);
+        card.style.setProperty('--ke-listing-singleton-visual', `${visualWidth}px`);
+        card.setAttribute('data-listing-full-title', 'true');
+        const copy = card.querySelector('.ke-listing-card__copy');
+        if (copy) copy.style.width = '100%';
+      }
+    });
+    requestAnimationFrame(() => {
+      document.querySelectorAll('[data-listing-full-title]').forEach((card) => {
+        const title = card.querySelector('.ke-listing-card__title');
+        if (!title) return;
+        const lineHeight = Number.parseFloat(getComputedStyle(title).lineHeight) || 21;
+        if (title.getBoundingClientRect().height / lineHeight > 4.05) {
+          card.removeAttribute('data-listing-row-end');
+          card.removeAttribute('data-listing-full-title');
+          card.style.removeProperty('--ke-listing-row-tail');
+          card.querySelector('.ke-listing-card__copy')?.style.removeProperty('width');
+        }
+      });
+    });
+  }
+
+  function scheduleListingRowEnds() {
+    cancelAnimationFrame(rowEndFrame);
+    rowEndFrame = requestAnimationFrame(() => {
+      rowEndFrame = requestAnimationFrame(syncListingRowEnds);
+    });
+  }
+
+  function syncTimeGroups() {
+    document.querySelectorAll('[data-popular-behavior-group]').forEach((group) => {
+      const count = [...group.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
+      group.hidden = count === 0;
+      const countNode = group.querySelector('[data-popular-group-count]');
+      if (countNode) countNode.textContent = String(count);
+    });
+    document.querySelectorAll('[data-listing-time-group]').forEach((group) => {
+      const count = [...group.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
+      group.hidden = count === 0;
+      const countNode = group.querySelector('[data-listing-group-count]');
+      if (countNode) countNode.textContent = `${count} ${eventCountLabel(count)}`;
+    });
+    document.querySelectorAll('[data-listing-time-nav]').forEach((nav) => {
+      nav.querySelectorAll('[data-listing-daypart-link]').forEach((link) => {
+        const daypart = link.dataset.listingDaypartLink;
+        const groups = [...document.querySelectorAll(`[data-listing-time-group][data-listing-daypart="${daypart}"]`)]
+          .filter((group) => !group.closest('[data-listing-earlier]'));
+        const count = groups.flatMap((group) => [...group.querySelectorAll('[data-listing-item]')]).filter((item) => !item.hidden).length;
+        link.dataset.listingHref ||= link.getAttribute('href') || '';
+        if (count === 0) { link.removeAttribute('href'); link.setAttribute('aria-disabled', 'true'); link.setAttribute('tabindex', '-1'); }
+        else { link.setAttribute('href', link.dataset.listingHref); link.removeAttribute('aria-disabled'); link.removeAttribute('tabindex'); }
+        const countNode = link.querySelector('[data-listing-daypart-count]');
+        if (countNode) countNode.textContent = String(count);
+      });
+      nav.querySelectorAll('[data-time-nav-exact-target]').forEach((link) => {
+        const target = document.getElementById(link.dataset.timeNavExactTarget || '');
+        const count = target ? [...target.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length : 0;
+        const item = link.closest('[data-exact-time-item]');
+        if (item) item.hidden = count === 0 || Boolean(target?.closest('[data-listing-earlier]'));
+        const countNode = link.querySelector('strong');
+        if (countNode) countNode.textContent = String(count);
+      });
+      const earlierLink = nav.querySelector('[data-listing-earlier-link]');
+      if (earlierLink) {
+        const earlier = document.querySelector('[data-listing-earlier]');
+        const count = earlier ? [...earlier.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length : 0;
+        earlierLink.dataset.listingHref ||= earlierLink.getAttribute('href') || '';
+        if (count === 0) {
+          earlierLink.removeAttribute('href');
+          earlierLink.setAttribute('aria-disabled', 'true');
+          earlierLink.setAttribute('tabindex', '-1');
+        } else {
+          earlierLink.setAttribute('href', earlierLink.dataset.listingHref);
+          earlierLink.removeAttribute('aria-disabled');
+          earlierLink.removeAttribute('tabindex');
+        }
+        const navCount = earlierLink.querySelector('[data-listing-earlier-nav-count]');
+        if (navCount) navCount.textContent = String(count);
+      }
+    });
+    document.querySelectorAll('[data-listing-earlier]').forEach((earlier) => {
+      const count = [...earlier.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
+      earlier.hidden = count === 0;
+      const countNode = earlier.querySelector('[data-listing-earlier-count]');
+      if (countNode) countNode.textContent = `${count} ${eventCountLabel(count)}`;
+    });
+    document.querySelectorAll('[data-weekend-day-summary]').forEach((head) => {
+      const key = head.dataset.weekendDaySummary;
+      const count = [...document.querySelectorAll(`[data-listing-day="${key}"] [data-listing-item]`)].filter((item) => !item.hidden).length;
+      const countNode = head.querySelector('[data-weekend-day-count]');
+      if (countNode) {
+        countNode.dataset.weekendDayCountValue = String(count);
+        countNode.textContent = `${count} ${eventCountLabel(count)}`;
+      }
+    });
+    document.querySelectorAll('[data-weekend-time-row]').forEach((row) => {
+      const count = [...row.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length;
+      row.hidden = count === 0;
+      row.querySelectorAll('[data-listing-weekend-day-count-chip]').forEach((chip) => {
+        const key = chip.dataset.listingWeekendDayCountChip;
+        const dayCount = [...row.querySelectorAll(`[data-listing-day="${key}"] [data-listing-item]`)].filter((item) => !item.hidden).length;
+        chip.hidden = dayCount === 0;
+        const value = chip.querySelector('[data-listing-weekend-day-count-value]');
+        if (value) value.textContent = String(dayCount);
+        const countLabel = chip.querySelector('[data-listing-weekend-day-count-label]');
+        if (countLabel) countLabel.textContent = eventCountLabel(dayCount);
+        const label = key === 'sat' ? 'Сб' : 'Вс';
+        chip.setAttribute('aria-label', `${label}: ${dayCount} ${eventCountLabel(dayCount)}`);
+      });
+    });
+    document.querySelectorAll('[data-date-listing="today"], [data-date-listing="tomorrow"]').forEach((surface) => {
+      const upcoming = surface.querySelector('[data-listing-upcoming-groups]');
+      const count = upcoming ? [...upcoming.querySelectorAll('[data-listing-item]')].filter((item) => !item.hidden).length : 0;
+      surface.dataset.listingDensity = count > 0 && count <= 4 ? 'sparse' : 'regular';
+    });
+  }
+
+  function eventCountLabel(count) {
+    const mod100 = count % 100;
+    if (mod100 >= 11 && mod100 <= 14) return 'событий';
+    const mod10 = count % 10;
+    if (mod10 === 1) return 'событие';
+    if (mod10 >= 2 && mod10 <= 4) return 'события';
+    return 'событий';
+  }
+
+  function applyListingFilters() {
+    const controls = document.querySelector('[data-listing-controls]');
+    if (!controls) return;
+    const cityInputs = [...controls.querySelectorAll('[data-listing-city-input]')];
+    const all = controls.querySelector('[data-listing-city-all]');
+    const useAll = !all || all.checked;
+    const enabled = new Set(cityInputs.filter((input) => input.checked).map((input) => input.value));
+    const hasCityFilter = cityInputs.length > 0;
+    const selectedType = document.querySelector('[data-listing-type-input]:checked')?.value || 'all';
+    document.querySelectorAll('[data-listing-item]').forEach((item) => {
+      const cityMatch = !hasCityFilter || useAll || enabled.has(item.dataset.listingCity || '');
+      const personalMatch = item.dataset.personalHidden !== 'true';
+      const typeMatch = selectedType === 'all' || item.dataset.listingEventType === selectedType;
+      item.hidden = !(cityMatch && personalMatch && typeMatch);
+    });
+    const facetedItems = primaryListingItems()
+      .filter((item) => item.dataset.personalHidden !== 'true')
+      .filter((item) => selectedType === 'all' || item.dataset.listingEventType === selectedType);
+    controls.querySelectorAll('[data-listing-city-count]').forEach((label) => {
+      const input = label.querySelector('input');
+      const count = input?.matches('[data-listing-city-all]')
+        ? facetedItems.length
+        : facetedItems.filter((item) => item.dataset.listingCity === input?.value).length;
+      label.dataset.listingCityCount = String(count);
+      const value = label.querySelector('strong');
+      if (value) value.textContent = String(count);
+    });
+    if (all) all.indeterminate = false;
+    syncTimeGroups();
+    const visible = visibleListingItems().length;
+    const total = primaryListingItems().length;
+    document.querySelectorAll('[data-listing-page-count]').forEach((node) => {
+      const value = node.querySelector('[data-listing-page-count-value]');
+      const label = node.querySelector('[data-listing-page-count-label]');
+      if (value) value.textContent = String(visible);
+      if (label) label.textContent = eventCountLabel(visible);
+    });
+    const empty = controls.querySelector('[data-listing-empty]');
+    if (empty) empty.hidden = visible > 0;
+    const status = controls.querySelector('[data-listing-result-status]');
+    if (status) status.textContent = `Показано ${visible} из ${total} событий.`;
+    scheduleListingRowEnds();
+  }
+
+  function initListingControls() {
+    const controls = document.querySelector('[data-listing-controls]');
+    if (!controls || controls.dataset.listingControlsReady === 'true') return;
+    controls.dataset.listingControlsReady = 'true';
+    const cityInputs = [...controls.querySelectorAll('[data-listing-city-input]')];
+    const all = controls.querySelector('[data-listing-city-all]');
+    const stored = readCitySelection();
+    if (stored !== null && !stored.has('all') && stored.size !== cityInputs.length) {
+      cityInputs.forEach((input) => { input.checked = stored.has(input.value); });
+      if (cityInputs.length > 0 && !cityInputs.some((input) => input.checked)) {
+        if (all) all.checked = true;
+      } else if (all) {
+        all.checked = false;
+      }
+    }
+    controls.addEventListener('change', (event) => {
+      const input = event.target.closest('input');
+      if (!input) return;
+      if (input.matches('[data-listing-city-all]')) {
+        input.checked = true;
+        cityInputs.forEach((item) => { item.checked = false; });
+      } else if (input.matches('[data-listing-city-input]')) {
+        if (all) all.checked = false;
+        if (!cityInputs.some((item) => item.checked)) {
+          if (all) all.checked = true;
+        }
+      }
+      writeCitySelection(all?.checked
+        ? new Set(['all'])
+        : new Set(cityInputs.filter((item) => item.checked).map((item) => item.value)));
+      applyListingFilters();
+    });
+    controls.querySelector('[data-listing-enable-all]')?.addEventListener('click', () => {
+      cityInputs.forEach((item) => { item.checked = false; });
+      if (all) all.checked = true;
+      writeCitySelection(new Set(['all']));
+      applyListingFilters();
+    });
+
+    function stickyOffset(target) {
+      const header = document.querySelector('.site-header');
+      const discovery = document.querySelector('[data-listing-discovery-rail]');
+      const heads = target.closest('[data-date-listing="weekend"]')?.querySelector('.ke-weekend-heads');
+      return (header?.getBoundingClientRect().height || 0)
+        + (discovery?.getBoundingClientRect().height || 0)
+        + (heads?.getBoundingClientRect().height || 0)
+        + 12;
+    }
+
+    async function alignListingTarget(target, options = {}) {
+      if (!target) return;
+      const heading = target.querySelector('h2, h3');
+      const alignmentProbe = target.matches?.('[data-weekend-time-row]')
+        ? (target.querySelector('.ke-weekend-time-rail') || target)
+        : target;
+      const desired = stickyOffset(target);
+      const rect = target.getBoundingClientRect();
+      const alreadyUseful = options.preserveIfVisible !== false
+        && rect.top >= desired - 2
+        && rect.top < innerHeight * 0.72;
+      if (!alreadyUseful) {
+        target.scrollIntoView({ block: 'start', behavior: 'instant' });
+        for (let pass = 0; pass < 5; pass += 1) {
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const correction = alignmentProbe.getBoundingClientRect().top - stickyOffset(target);
+          if (Math.abs(correction) <= 1) break;
+          scrollBy({ top: correction, behavior: 'instant' });
+        }
+      }
+      heading?.focus({ preventScroll: true });
+    }
+    window.KEAlignListingTarget = alignListingTarget;
+
+    document.addEventListener('click', (event) => {
+      const earlierLink = event.target.closest('[data-listing-earlier-link]');
+      if (earlierLink) {
+        const details = document.querySelector('[data-listing-earlier]');
+        if (details) details.open = true;
+      }
+      const link = event.target.closest('[data-time-nav-exact-target], [data-listing-daypart-link]');
+      if (!link) return;
+      event.preventDefault();
+      const targetId = link.dataset.timeNavExactTarget || (link.getAttribute('href') || '').replace(/^#/, '');
+      const target = document.getElementById(targetId);
+      link.closest('details')?.removeAttribute('open');
+      if (target) {
+        history.pushState(null, '', `#${target.id}`);
+        alignListingTarget(target, { preserveIfVisible: Boolean(link.dataset.listingDaypartLink === 'morning') });
+      }
+    });
+    document.addEventListener('toggle', (event) => {
+      const details = event.target;
+      if (!details.matches?.('[data-time-nav-disclosure][open]')) return;
+      document.querySelectorAll('[data-time-nav-disclosure][open]').forEach((other) => {
+        if (other !== details) other.removeAttribute('open');
+      });
+    }, true);
+    document.addEventListener('pointerdown', (event) => {
+      document.querySelectorAll('[data-time-nav-disclosure][open]').forEach((details) => {
+        if (!details.contains(event.target)) details.removeAttribute('open');
+      });
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      const opened = document.querySelector('[data-time-nav-disclosure][open]');
+      if (!opened) return;
+      opened.removeAttribute('open');
+      opened.querySelector('summary')?.focus();
+    });
+    window.KEApplyListingFilters = applyListingFilters;
+    document.addEventListener('kenigevents:listing-personal-filter', applyListingFilters);
+    applyListingFilters();
+    document.fonts?.ready.then(scheduleListingRowEnds);
+    const flowWidths = new WeakMap();
+    const observer = new ResizeObserver((entries) => {
+      const changed = entries.some((entry) => {
+        const width = entry.contentRect.width;
+        const previous = flowWidths.get(entry.target);
+        flowWidths.set(entry.target, width);
+        return previous === undefined || Math.abs(previous - width) > 1;
+      });
+      if (changed) scheduleListingRowEnds();
+    });
+    document.querySelectorAll('.ke-time-group__flow').forEach((flow) => observer.observe(flow));
+    window.addEventListener('resize', scheduleListingRowEnds, { passive: true });
+    window.addEventListener('pageshow', scheduleListingRowEnds, { once: true });
+  }
+
+  initListingControls();
+</script>

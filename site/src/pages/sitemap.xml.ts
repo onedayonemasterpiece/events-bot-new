@@ -30,6 +30,7 @@ export const GET: APIRoute = () => {
     { loc: absoluteUrl('/partnerstvo/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/review/'), lastmod: now },
+    { loc: absoluteUrl('/lab/design-system/'), lastmod: now },
     ...HERO_REVIEW_CASES.map((item) => ({ loc: absoluteUrl(`/lab/hero/review/${item.caseId}/`), lastmod: now })),
     { loc: absoluteUrl('/lab/event-mobile/'), lastmod: now },
     ...MOBILE_EVENT_REVIEW_CASES.map(({ variant, scenario }) => ({
