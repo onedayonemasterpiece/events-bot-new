@@ -10,6 +10,10 @@ donor and receive the byte-for-byte v13 expanded-menu CSS/JS and markup.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import html as html_lib
+import json
+import random
 import re
 import shutil
 import sys
@@ -23,6 +27,175 @@ import build_mobile_shell_unification_lab as shell  # noqa: E402
 
 
 DEFAULT_DONOR = shell.DONOR_DEFAULT
+ARTIFACT_SOURCE_PAGE = "date-2026-07-24"
+
+ARTIFACT_CSS = r"""
+/* Isolated amber-artifact placement research; rail geometry stays 112 CSS px. */
+.amber-artifact {
+  position: relative;
+  isolation: isolate;
+  flex: 0 0 94px;
+  width: 94px;
+  height: 112px;
+  min-width: 94px;
+  min-height: 112px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #221a14;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.amber-artifact::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: 5px;
+  width: 82px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255,210,83,.92) 0 18%, rgba(255,167,22,.62) 42%, rgba(255,153,0,0) 74%);
+  filter: blur(4px);
+  opacity: .72;
+  transform: translate3d(-50%,0,0) scaleX(.84);
+  transform-origin: center;
+}
+.amber-artifact__visual {
+  position: relative;
+  z-index: 1;
+  width: 74px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  transform-origin: 50% 72%;
+}
+.amber-artifact__visual img {
+  grid-area: 1 / 1;
+  width: 74px;
+  height: 96px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 5px 7px rgba(157,78,0,.26));
+}
+.amber-artifact__shine {
+  grid-area: 1 / 1;
+  width: 74px;
+  height: 96px;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(108deg, transparent 22%, rgba(255,255,255,.82) 46%, rgba(255,226,142,.42) 56%, transparent 76%);
+  -webkit-mask: url("./assets/gamification/amber-cosmonaut-3x.webp") center / contain no-repeat;
+  mask: url("./assets/gamification/amber-cosmonaut-3x.webp") center / contain no-repeat;
+  transform: translate3d(-72px,0,0);
+}
+.amber-artifact__found {
+  position: absolute;
+  z-index: 3;
+  right: 2px;
+  bottom: 5px;
+  min-width: 52px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border: 1px solid rgba(121,48,20,.22);
+  border-radius: 999px;
+  background: rgba(255,253,248,.94);
+  color: #793014;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0;
+  transform: translate3d(0,5px,0);
+  pointer-events: none;
+}
+.amber-artifact__found svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; }
+.amber-artifact.is-awake:not(.is-collected) .amber-artifact__visual {
+  animation: amber-arrive 480ms cubic-bezier(.22,.9,.3,1.22) both, amber-float 2600ms 520ms cubic-bezier(.45,.05,.55,.95) 2 alternate;
+}
+.amber-artifact.is-awake:not(.is-collected)::before {
+  animation: amber-glow 2600ms 520ms cubic-bezier(.45,.05,.55,.95) 2 alternate;
+}
+.amber-artifact.is-awake:not(.is-collected) .amber-artifact__shine {
+  animation: amber-shine 760ms 900ms cubic-bezier(.22,.78,.24,1) 1 both;
+}
+.amber-artifact.is-collecting .amber-artifact__visual { animation: amber-found 430ms cubic-bezier(.22,.86,.3,1) both; }
+.amber-artifact.is-collected::before { opacity: .32; transform: translate3d(-50%,0,0) scaleX(.7); }
+.amber-artifact.is-collected .amber-artifact__visual { transform: translate3d(0,1px,0) scale(.94); filter: saturate(.82); }
+.amber-artifact.is-collected .amber-artifact__found { opacity: 1; transform: translate3d(0,0,0); transition: opacity 180ms ease-out, transform 220ms ease-out; }
+.amber-artifact:focus-visible { outline: 3px solid rgba(15,118,110,.66); outline-offset: -4px; }
+@keyframes amber-arrive { from { opacity:0; transform:translate3d(18px,4px,0) scale(.82) rotate(2deg); } to { opacity:1; transform:translate3d(0,0,0) scale(1) rotate(0); } }
+@keyframes amber-float { from { transform:translate3d(0,0,0) rotate(-.7deg); } to { transform:translate3d(0,-3px,0) rotate(1deg); } }
+@keyframes amber-glow { from { opacity:.55; transform:translate3d(-50%,0,0) scaleX(.78); } to { opacity:.9; transform:translate3d(-50%,-1px,0) scaleX(1); } }
+@keyframes amber-shine { 0% { opacity:0; transform:translate3d(-72px,0,0); } 30% { opacity:.62; } 100% { opacity:0; transform:translate3d(72px,0,0); } }
+@keyframes amber-found { 0% { transform:scale(1) rotate(0); filter:brightness(1); } 45% { transform:scale(1.09) rotate(-1.5deg); filter:brightness(1.28); } 100% { transform:scale(.94) rotate(0); filter:brightness(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .amber-artifact,
+  .amber-artifact::before,
+  .amber-artifact__visual,
+  .amber-artifact__shine,
+  .amber-artifact__found { animation: none !important; transition: none !important; transform: none !important; }
+  .amber-artifact::before { transform: translate3d(-50%,0,0) !important; }
+  .amber-artifact__shine { display:none; }
+}
+"""
+
+ARTIFACT_JS = r"""
+(() => {
+  const buttons = [...document.querySelectorAll('[data-amber-artifact]')];
+  if (!buttons.length) return;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const live = document.querySelector('[data-amber-artifact-live]');
+  const storageKey = (button) => `ke_amber_artifact_prototype_v1:${button.dataset.artifactPlacement || 'unknown'}`;
+  const setCollected = (button, collected) => {
+    button.classList.toggle('is-collected', collected);
+    button.setAttribute('aria-pressed', String(collected));
+    button.setAttribute('aria-label', collected
+      ? 'Артефакт «Янтарный космонавт» найден'
+      : 'Секретный артефакт «Янтарный космонавт». Нажмите, чтобы найти');
+  };
+  for (const button of buttons) {
+    try { setCollected(button, localStorage.getItem(storageKey(button)) === 'found'); } catch (_) { setCollected(button, false); }
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (button.classList.contains('is-collected')) return;
+      button.classList.add('is-collecting');
+      setCollected(button, true);
+      try { localStorage.setItem(storageKey(button), 'found'); } catch (_) {}
+      if (live) live.textContent = 'Найден артефакт «Янтарный космонавт»';
+      window.dispatchEvent(new CustomEvent('kenigevents:artifact-collected', { detail: {
+        artifactId: 'amber_cosmonaut',
+        placement: button.dataset.artifactPlacement || 'unknown',
+        eventId: button.closest('.event-row')?.dataset.event || '',
+      }}));
+      setTimeout(() => button.classList.remove('is-collecting'), reduced ? 0 : 460);
+    });
+  }
+  if (reduced || !('IntersectionObserver' in window)) {
+    buttons.forEach((button) => button.classList.add('is-awake'));
+    return;
+  }
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting || entry.intersectionRatio < .72) continue;
+      entry.target.classList.add('is-awake');
+      observer.unobserve(entry.target);
+    }
+  }, { threshold: [.72] });
+  buttons.forEach((button) => observer.observe(button));
+})();
+"""
 
 
 def unified_bottom_nav(base: str, current: str) -> str:
@@ -79,6 +252,106 @@ def write_page(output: Path, slug: str, html: str) -> None:
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
     (destination / "index.html").write_text(html)
+
+
+def artifact_markup(build_id: str, placement: str) -> str:
+    asset = f"/{build_id}/assets/gamification/amber-cosmonaut"
+    return (
+        f'<button class="amber-artifact" type="button" data-amber-artifact '
+        f'data-artifact-placement="{placement}" aria-pressed="false" '
+        f'aria-label="Секретный артефакт «Янтарный космонавт». Нажмите, чтобы найти">'
+        f'<span class="amber-artifact__visual" aria-hidden="true">'
+        f'<img src="{asset}-1x.webp" srcset="{asset}-1x.webp 1x, {asset}-2x.webp 2x, {asset}-3x.webp 3x" '
+        f'width="74" height="96" alt="" decoding="async">'
+        f'<span class="amber-artifact__shine"></span></span>'
+        f'<span class="amber-artifact__found" aria-hidden="true">'
+        f'<svg viewBox="0 0 20 20"><path d="m4 10 4 4 8-9"/></svg><span>Найден</span></span>'
+        f'</button>'
+    )
+
+
+def event_row_records(page_html: str) -> list[dict[str, str]]:
+    records = []
+    for match in re.finditer(r'<article class="event-row" data-event="(?P<id>\d+)".*?</article>', page_html, flags=re.S):
+        row = match.group(0)
+        title_match = re.search(r'<span class="event-title">(.*?)</span>', row, flags=re.S)
+        title = re.sub(r'<[^>]+>', '', title_match.group(1) if title_match else f'Событие {match.group("id")}')
+        records.append({
+            "id": match.group("id"),
+            "title": html_lib.unescape(title).strip(),
+            "row": row,
+            "has_medallion": "event-medallion-slot" in row,
+        })
+    return records
+
+
+def inject_artifact(page_html: str, *, build_id: str, event_id: str, placement: str) -> str:
+    row_pattern = re.compile(rf'<article class="event-row" data-event="{re.escape(event_id)}".*?</article>', flags=re.S)
+    match = row_pattern.search(page_html)
+    if not match:
+        raise RuntimeError(f"Artifact target event {event_id} is missing")
+    row = match.group(0)
+    artifact = artifact_markup(build_id, placement)
+    if placement == "after-medallion":
+        needle = '</a><button type="button" class="event-like-cta"'
+        if "event-medallion-slot" not in row or needle not in row:
+            raise RuntimeError(f"Event {event_id} does not support after-medallion placement")
+        row = row.replace(needle, f'</a>{artifact}<button type="button" class="event-like-cta"', 1)
+    elif placement == "tail":
+        needle = '</button></span></div></article>'
+        if not row.endswith(needle):
+            raise RuntimeError(f"Event {event_id} rail tail contract changed")
+        row = row[:-len(needle)] + f'</button>{artifact}</span></div></article>'
+    else:
+        raise ValueError(f"Unknown artifact placement: {placement}")
+    page_html = page_html[:match.start()] + row + page_html[match.end():]
+    page_html = page_html.replace('</head>', f'<link rel="stylesheet" href="/{build_id}/artifact.css"></head>', 1)
+    page_html = page_html.replace('</body>', f'<p class="sr-only" data-amber-artifact-live aria-live="polite"></p><script src="/{build_id}/artifact.js"></script></body>', 1)
+    return page_html
+
+
+def build_artifact_prototypes(output: Path, donor: Path, build_id: str) -> list[dict[str, str]]:
+    source = donor / ARTIFACT_SOURCE_PAGE / "index.html"
+    if not source.exists():
+        raise RuntimeError(f"Artifact source page is missing: {source}")
+    rendered = render_donor_page(
+        source,
+        build_id=build_id,
+        current="calendar",
+        title="24 июля",
+        meta="исследование артефакта",
+    )
+    records = event_row_records(rendered)
+    candidates = [record for record in records if record["has_medallion"]][:12]
+    if len(candidates) < 2:
+        raise RuntimeError("Artifact A/B needs two rail rows with medallions")
+    seed = int.from_bytes(hashlib.sha256(build_id.encode("utf-8")).digest()[:8], "big")
+    rng = random.Random(seed)
+    rng.shuffle(candidates)
+    specs = [
+        ("artifact-tail", "tail", candidates[0]),
+        ("artifact-after-medallion", "after-medallion", candidates[1]),
+    ]
+    manifest = []
+    for slug, placement, record in specs:
+        variant_html = inject_artifact(
+            rendered,
+            build_id=build_id,
+            event_id=record["id"],
+            placement=placement,
+        )
+        write_page(output, slug, variant_html)
+        manifest.append({
+            "route": f"/{build_id}/{slug}/",
+            "placement": placement,
+            "sourcePage": f"/{build_id}/{ARTIFACT_SOURCE_PAGE}/",
+            "eventId": record["id"],
+            "eventTitle": record["title"],
+        })
+    (output / "artifact.css").write_text(ARTIFACT_CSS)
+    (output / "artifact.js").write_text(ARTIFACT_JS)
+    (output / "artifact-prototypes.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    return manifest
 
 
 def main() -> None:
@@ -174,6 +447,8 @@ def main() -> None:
     finally:
         shell.plane_content = previous_plane
 
+    artifact_manifest = build_artifact_prototypes(output, donor, args.build_id)
+
     if temporary.exists():
         shutil.rmtree(temporary)
 
@@ -183,10 +458,13 @@ def main() -> None:
         f'  "buildId": "{args.build_id}",\n'
         '  "search": "Astro AuthorizedEventSearch + canonical EventCard",\n'
         '  "calendar": "accepted v23 donor",\n'
-        '  "shell": "reference-4 leather tag v13"\n'
+        '  "shell": "reference-4 leather tag v13",\n'
+        '  "artifactLab": "two isolated amber-cosmonaut rail placements"\n'
         '}\n'
     )
     print(f"Unified mobile preview assembled at {output}")
+    for item in artifact_manifest:
+        print(f"Artifact {item['placement']}: {item['eventId']} · {item['eventTitle']} · {item['route']}")
 
 
 if __name__ == "__main__":

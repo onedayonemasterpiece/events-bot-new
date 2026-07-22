@@ -16,8 +16,8 @@ const HeadingTag = headingLevel;
   <div class="authorized-search__head">
     <div class="authorized-search__copy">
       <p class="eyebrow">Умный поиск</p>
-      <HeadingTag>Найти событие по описанию</HeadingTag>
-      <p class="muted-note">Войдите через Яндекс и напишите обычной фразой, что хочется найти. Результаты появятся лентой: карточки можно лайкать, скрывать как «не интересно», добавлять в календарь и делиться.</p>
+      <HeadingTag>{standalone ? 'Найти событие' : 'Найти событие по описанию'}</HeadingTag>
+      <p class="muted-note">{standalone ? 'Опишите желание обычной фразой — жанр, настроение, время или с кем хотите пойти.' : 'Войдите через Яндекс и напишите обычной фразой, что хочется найти. Результаты появятся лентой: карточки можно лайкать, скрывать как «не интересно», добавлять в календарь и делиться.'}</p>
     </div>
     <div class="authorized-search__auth">
       <button type="button" class="secondary-button authorized-search__login" data-search-login>
@@ -46,8 +46,12 @@ const HeadingTag = headingLevel;
   </div>
   {!enabled && <p class="authorized-search__status">Поиск не активирован в этой сборке: нет публичных Supabase env.</p>}
   <form class="authorized-search__form" data-search-form hidden>
-    <label class="sr-only" for="authorized-event-search-input">Что хочется найти</label>
-    <input id="authorized-event-search-input" type="search" data-search-input placeholder="Например: джаз на выходных" autocomplete="off" />
+    <label class:list={[!standalone && 'sr-only', standalone && 'authorized-search__query-label']} for="authorized-event-search-input">Что хочется сделать?</label>
+    {standalone ? (
+      <textarea id="authorized-event-search-input" rows="3" maxlength="180" data-search-input placeholder="Например: послушать хор или сходить с детьми бесплатно" autocomplete="off"></textarea>
+    ) : (
+      <input id="authorized-event-search-input" type="search" maxlength="180" data-search-input placeholder="Например: джаз на выходных" autocomplete="off" />
+    )}
     <button type="submit" class="cta-button authorized-search__submit" data-search-submit>
       <span class="authorized-search__submit-label" data-search-submit-label>Искать</span>
     </button>

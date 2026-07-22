@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added two isolated mobile rail prototypes for the `Янтарный космонавт`
+  easter egg: a physical-tail placement after the final like and an
+  after-medallion challenger. Both keep the accepted `112px` rail geometry,
+  use transparent retina WebP assets, finite glow/float/shimmer motion,
+  accessible found feedback and a complete reduced-motion fallback.
+
 - Added the mobile Search completion boundary: after all exact pages, users can
   answer `Да, нашёл` / `Нет, не нашёл`, then continue into the separately named
   `Ещё можно посмотреть` discovery block; an empty exact set is stated plainly.
@@ -77,6 +83,12 @@
   noisy topic or age-rating inference.
 
 ### Fixed
+
+- Restored the accepted large standalone mobile Search field on the real
+  `/poisk/` runtime: visible `Что хочется сделать?` label, three-row textarea,
+  flat page composition and the existing full-width in-button backend progress.
+  Yandex/Supabase auth, skeletons and canonical large result cards are unchanged;
+  compact embedded Search keeps its one-line input.
 
 - Fixed the mobile Search shell regression: the accepted reference-4 v13
   leather/glass navigation is now a reusable Astro component owned by

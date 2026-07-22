@@ -20,6 +20,9 @@ snapshot lacks dimensions. The desktop compact related-row optimizer remains a
 separate contract and never supplies Search placement geometry. Search progress is backend-streamed and monotonic rather
 than simulated by client timers. The exact runtime/search contract lives in
 [`authorized-event-search.md`](../unsigned-personalization/authorized-event-search.md).
+The isolated [amber-artifact placement research](amber-artifact-easter-egg.md)
+compares a true rail-tail easter egg with an after-medallion challenger without
+changing the accepted calendar renderer.
 
 ### Unified occurrence projection
 

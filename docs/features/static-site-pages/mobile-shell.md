@@ -902,3 +902,19 @@ Gemini 3.1 Pro (High) reviewed the root-cause fix rather than proposing a new
 IA and returned **GO**, provided the exact v13 geometry, full IA, Search runtime,
 mobile/desktop isolation and footer policy remain invariant. Review artifact:
 `artifacts/codex/mobile-search-unified-shell-v26-20260722/gemini-shell-review.md`.
+
+### v27 Search field and amber-artifact research overlay
+
+The v26 shell and accepted v23 Calendar/Popular donor remain unchanged. v27
+corrects a narrower integration miss: the large standalone Search field had
+existed in the accepted mobile-shell unification v2 lab but was not transferred
+into the real `AuthorizedEventSearch`. `/poisk/` now uses the visible
+`Что хочется сделать?` label, a three-row multiline field and the same
+full-width in-button backend progress. Embedded Search stays compact. Runtime,
+auth, result cards and skeletons are not forked.
+
+The same assembly script also emits two isolated, noindex amber-artifact
+placement prototypes. They add only a sibling button to a copied v23 rail and
+do not change rail height, event link, like control, crop, gesture or medallion
+rendering. Product decision and exact specimens are canonical in
+[`amber-artifact-easter-egg.md`](amber-artifact-easter-egg.md).

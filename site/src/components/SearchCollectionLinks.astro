@@ -45,7 +45,7 @@ import { withBase } from '../lib/events';
       control.addEventListener('click', () => {
         const query = control.getAttribute('data-search-query-fill') || '';
         const input = document.querySelector('[data-authorized-search] [data-search-input]');
-        if (!(input instanceof HTMLInputElement) || !query) return;
+        if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) || !query) return;
         input.value = query;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         const searchRoot = input.closest('[data-authorized-search]');

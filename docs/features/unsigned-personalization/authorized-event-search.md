@@ -4,7 +4,15 @@
 
 ## Product contract
 
-Authenticated users get a one-line **Умный поиск** on a dedicated `/poisk/` page and, for the preview canary, on listing/index pages. The mobile terracotta tag drawer, desktop header and footer expose a plain navigation link **Поиск** to `/poisk/`; the search form itself is not placed inside the drawer so the header remains compact. The user can type a natural-language intent, for example “урбанистика”, “детский мастер-класс” or “джаз вечером”. Results are rendered as the same event cards used in `Смотрите дальше`:
+Authenticated users get **Умный поиск** on a dedicated `/poisk/` page and, for
+the preview canary, on listing/index pages. The standalone mobile page uses a
+large multiline intent field; compact embedded placements may keep the
+one-line control. The mobile terracotta tag drawer, desktop header and footer
+expose a plain navigation link **Поиск** to `/poisk/`; the search form itself is
+not placed inside the drawer so the header remains compact. The user can type a
+natural-language intent, for example “урбанистика”, “детский мастер-класс” or
+“джаз вечером”. Results are rendered as the same event cards used in
+`Смотрите дальше`:
 
 - card opens the event detail page;
 - like / unlike updates local personalization state;
@@ -183,6 +191,31 @@ v23 Calendar/Popular donor. This prevents a functional Search page from
 visually reverting as soon as the user opens the header or follows the bottom
 dock. Canonical geometry, routes and assembly/gate evidence are documented in
 [`mobile-shell.md`](../static-site-pages/mobile-shell.md#astro-integration-and-unified-searchcalendar-preview-v14-2026-07-22).
+
+### v27 standalone Search intent field correction
+
+The unified shell had ported the real Search runtime but not the accepted
+standalone field composition from mobile-shell unification v2. That omission
+made `/poisk/` look like the earlier compact/card form even though results,
+skeletons and backend progress were current.
+
+On mobile standalone Search the accepted contract is now restored in the real
+`AuthorizedEventSearch` component:
+
+- a flat page canvas rather than a rounded white form card;
+- heading `Найти событие` and visible label `Что хочется сделать?`;
+- a three-row, `82px` minimum-height `textarea` with the project font and a
+  strong bottom rule;
+- the existing full-width submit with visible backend-owned progress **inside**
+  the dark button;
+- normal document flow into the existing large-card skeleton, exact results,
+  feedback and discovery endcap.
+
+This is a presentation correction, not a second Search implementation.
+Yandex/Supabase PKCE, session restore, the NDJSON stream, monotonic progress,
+request epochs, skeleton and canonical large result cards remain unchanged.
+Fill-only query examples accept both the standalone `textarea` and the compact
+embedded `input`; they still never auto-submit.
 
 ## Search feedback and public tag candidates
 
