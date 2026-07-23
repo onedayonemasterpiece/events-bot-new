@@ -2,6 +2,31 @@
 
 Автоматический мердж события из разных источников без ручной модерации, с сохранением списка источников и защитой якорных полей.
 
+## Transport-scoped duration forecast
+
+If an event has no extracted end/duration, Smart Update may persist a separate
+`event.duration_forecast_minutes` value for return-transport planning:
+
+- the eligibility gate runs before the provider call and accepts only a valid
+  single-day event with a non-default start that already matches an implemented
+  rail city, an exact bus city+venue+start tuple, or exact KAUP venue policy;
+- unrelated events make no duration LLM request, which bounds cost and avoids
+  generating unused predictions;
+- `_ask_gemma_json(..., label="duration_forecast")` uses the normal configured
+  Smart Update production key/model path and only event-scoped source/OCR
+  material; it is not an `agy` consultation and is not run by Astro/Kaggle;
+- output must be an integer `15…720` minutes with confidence at least `0.5`;
+  insufficient evidence, invalid output and provider failure fail closed;
+- explicit source duration/end always wins and clears a stale forecast;
+- the nullable forecast never changes canonical public timing. Static export
+  may pass it to the transport helper, which labels it internally and exposes
+  only a neutral approximate-end caveat.
+
+Schema/bootstrap support lives in `models.py` and `db.py`; create and update
+paths both invoke the same helper. Regression coverage is in
+`tests/test_smart_update_duration_forecast.py` and
+`tests/test_static_site_preview_duration.py`.
+
 ## Изображения: единый automatic gate
 
 Все новые event images входят через `_apply_posters()` этого pipeline. Второе и

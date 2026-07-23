@@ -11,6 +11,22 @@ snapshot по текущему 90-дневному freshness contract, а не �
 не сохраняется ради заполнения. Ссылка будущей встречи появляется только если
 точный event материализован внутри того же preview prefix.
 
+R3 presentation adapts the supplied `klubs (2).png` concept rather than
+copying it literally. Desktop uses one complete, count-aware row (up to three
+equal columns); mobile keeps the established light one-card flow. Only Game
+Vibes currently has a trustworthy documentary cover, reused from approved
+event `2897` / source post `https://t.me/signalkld/9929` with local checksum
+metadata. Generated/neural announcement art is not presented as documentary
+club media; those cards use the deterministic CSS fallback.
+
+The catalog owns a scoped desktop keyboard controller. Left/Right follow the
+flattened rendered order, Up/Down select the nearest column in the adjacent
+visual row, Home/End select the catalog edges, and Enter activates only the
+focused card's primary action. Nested links keep native behavior; Escape
+returns focus to the card. Shortcut hints are reserved in layout but visible
+only for the focused card/action, and no catalog shortcut leaks into the
+global event-card router.
+
 Канонические документы:
 
 - архитектурное решение: [ADR-001](adr-001-identity-pipeline.md);

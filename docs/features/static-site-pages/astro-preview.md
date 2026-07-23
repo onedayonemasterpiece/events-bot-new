@@ -47,14 +47,26 @@ optimized responsive personal-card feed, Search, current clubs, six-logo Partner
 deep-page breadcrumbs and the two event-detail regressions (`6686`, `6529`).
 It is still a review build, not a root rollout.
 
-The R2 correction supersedes the read-only Search specimen and manual duration
-consultation: Search is built only with a safe public Supabase configuration
-and resumes the saved intent after Yandex PKCE; duration estimates are generated
-or reused by the key-driven StaticSiteBuilder stage before Astro. It also
-restores V7 hotkeys to named immutable previews, applies exact source-keyed
-media reviews to compact related rows, moves desktop Editorial breadcrumbs
-onto the lower hero edge and progressively paints the unchanged desktop tag
-with the reviewed leather crop over its solid terracotta fallback.
+The R3 correction supersedes the read-only Search specimen and the obsolete
+build-time duration provider: Search is built only with a safe public Supabase
+configuration and resumes the saved intent after Yandex PKCE; a deterministic
+test-only smoke can mock the PKCE/session boundary without adding a production
+auth bypass. Missing duration is estimated earlier by Smart Update only for
+events that an implemented transport surface can use, stored as the separate
+nullable `duration_forecast_minutes` field and merely exported by the builder.
+It also restores V7 hotkeys to named immutable previews, applies exact
+source-keyed media reviews to compact related rows, moves desktop Editorial
+breadcrumbs onto the lower hero edge and progressively paints the unchanged
+desktop tag with a border-preserving leather crop over its immediate
+terracotta fallback.
+
+R3 additionally audits every organizer/festival manifest entry against current
+and retained production events, restores event-detail festival resolution and
+Telegram-readable fallbacks, verifies the current Museum of Resort Fashion
+event resolves `mumod`, and adapts the clubs catalog with geometry-scoped
+hotkeys plus a source-grounded Game Vibes cover. The Goblin recommendation on
+event `6529` is an exact-source reviewed `5:4` derivative: as visual-only media
+it must fill the row and may not expose letterbox fields.
 
 The published R2 review object is
 <https://kenigevents.ru/preview-20260723-unified-corrections-r2/__preview/>.

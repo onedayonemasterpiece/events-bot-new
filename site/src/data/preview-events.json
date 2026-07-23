@@ -27162,7 +27162,8 @@
       "popularity_reason_codes": [
         "frequently_shared"
       ],
-      "popularity_signal_score": 2.5
+      "popularity_signal_score": 2.5,
+      "duration_forecast_minutes": 120
     },
     {
       "id": 6915,

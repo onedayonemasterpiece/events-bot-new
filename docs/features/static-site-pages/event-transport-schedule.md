@@ -15,34 +15,36 @@ The event page offers neutral travel help inside the reading flow:
 
 This is a release feature of the event page, not a standalone campaign. It is included in the [official presentation checklist](presentation-release-checklist.md).
 
-### Missing duration in immutable review candidates
+### Missing duration: Smart Update forecast
 
-The public/root contract continues to prefer explicit source-grounded end time
-or duration. A noindex review build may carry a separately versioned
-`llm_estimated` duration only when the estimate, plausible range, confidence,
-input hash and conservative routing value are recorded in
-`site/src/data/event-duration-estimates.json`.
+Explicit source-grounded end time or duration always wins. When neither was
+extracted, **Smart Update**, not Astro or StaticSiteBuilder, may estimate one
+event duration and persist it separately as
+`event.duration_forecast_minutes`. This field is transport-planning evidence;
+it never rewrites the public event time and is cleared when a later source
+provides an explicit duration/end.
 
-This is a reproducible build-time provider call, not an `agy` consultation.
-`site/scripts/enrich-event-duration-estimates.py` uses the repository
-`google_ai.client.GoogleAIClient`, the configured `GOOGLE_API_KEY*` pool and
-the shared Supabase rate limiter. Its bounded structured response is validated,
-cached by prompt/input identity and fails closed when no acceptable result is
-available. The StaticSiteBuilder invokes the enrichment stage after exporting
-the event snapshot and before building preview/secret/production artifacts, so
-future operation does not depend on an interactive agent. The current
-cost-conscious model lane is `gemini-3.1-flash-lite`; external product
-acceptance remains a separate Gemini Pro/Opus task.
+The ecological eligibility gate runs before the LLM call. A candidate must
+have a valid single-day date and non-default start time and must already match
+an implemented transport surface: a reviewed rail city, an exact supported
+bus city+venue+start tuple, or the exact KAUP venue policy. All other events
+skip the provider entirely. Smart Update uses its normal configured production
+LLM/key path with the event-scoped source packet; confidence below `0.5`,
+invalid output, insufficient evidence or provider failure leaves the forecast
+empty. Valid values are `15…720` minutes.
 
-For event `6529`, the key-driven stage records a likely 120 minutes and a
-conservative routing duration of 150 minutes. With the existing access buffer,
-the candidate therefore offers usable same-day returns at `18:56` and `19:43`;
-it never suggests the following morning. The visitor sees only the practical
-schedule and a neutral uncertainty caveat. Model ids, provider names,
-confidence, prompt/provenance and words such as `экспериментальный` are
-internal build evidence and must not appear in public copy. If neither source
-duration nor a valid cached/provider estimate exists, the component fails
-closed rather than inventing a return shortlist.
+The static exporter only validates and copies the persisted nullable field.
+Astro performs no provider request. Transport projects the forecast only when
+no explicit end/source duration exists and marks the projection internally as
+`forecast`; without either source timing or forecast it keeps the safe
+same-day cutoff behavior. Public copy says only that the end time is
+approximate and should be checked with the organizer. Model/provider names,
+confidence, prompts and service diagnostics are forbidden in HTML.
+
+The R3 review fixture for event `6529` carries the already reviewed
+`duration_forecast_minutes=120`, yielding practical same-day returns without
+offering a morning train after an overnight wait. The fixture demonstrates the
+persisted contract; future production values arrive only through Smart Update.
 
 ## 2026-07-15 integration evidence
 

@@ -117,12 +117,12 @@ Rules:
   that a short-lived runner has already committed and make Kaggle report a
   false `invalid token`/busy resource failure.
 - Data export: `site/scripts/export-production-preview-data.py`.
-- Immediately after export and before every root-proof, secret-candidate or
-  preview Astro build, the kernel runs the cached server-side duration
-  enrichment. It defaults to `gemini-3.1-flash-lite`, uses only named
-  `GOOGLE_API_KEY*` plus Supabase-limiter credentials from the existing
-  encrypted Kaggle secret datasets, and never places values in command
-  arguments or logs. A valid cache hit needs no provider key or SDK call.
+- Duration enrichment is not a StaticSiteBuilder/Kaggle responsibility.
+  Smart Update may persist `event.duration_forecast_minutes` before the
+  snapshot is handed off, and only for candidates that pass the implemented
+  transport eligibility gate. Export validates/copies that nullable value;
+  Kaggle/Astro never calls an LLM provider for missing duration and never
+  creates a parallel estimate cache.
   Controls are `STATIC_SITE_DURATION_ENRICHMENT`,
   `STATIC_SITE_DURATION_MODEL`, `STATIC_SITE_DURATION_GOOGLE_KEY_ENVS`,
   `STATIC_SITE_DURATION_MAX_EVENTS` (1–50) and optional

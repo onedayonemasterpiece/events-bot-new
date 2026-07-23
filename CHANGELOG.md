@@ -4,6 +4,18 @@
 
 ### Added
 
+- Added a production-backed 38-entry medallion usage audit with exact
+  event/field/alias/surface evidence, deterministic Telegram PNG fallbacks,
+  event-detail festival resolution and Playwright inventory gates for 27
+  organizer plus 10 festival and one venue-brand tokens.
+- Added transport-scoped Smart Update duration forecasting: eligible
+  single-day rail/bus/KAUP events persist a separate nullable forecast only
+  when source timing is absent; static generation only exports it and never
+  calls a duration provider.
+- Added a reference-adapted clubs catalog with one provenance-backed Game Vibes
+  cover, deterministic fallback art and geometry-scoped focus/arrow/Home/End/
+  Enter keyboard navigation.
+
 - Added a deterministic, source-faithful RZD Lastochka transport medallion to the static-site medallions lab with accessible semantics and documented provenance; it remains lab-only pending grounded route eligibility.
 - Restored the complete static medallion inventory: 27 organizer/venue entries, 10 festival identities plus the Kaup venue brand, and the deterministic free-admission sign, including Museum of Resort Fashion and Greza Khutor.
 - Added the 2026-07-23 noindex unified-correction candidate contract: selective
@@ -106,6 +118,13 @@
 
 ### Changed
 
+- Refined the desktop leather tag to retain side stitches, bottom seam and
+  outer edging over an immediate terracotta fallback; source-keyed visual-only
+  recommendation corrections now fill compact `5:4` frames without fields.
+- Added controlled Search auth acceptance: the deterministic test lane mocks
+  only PKCE/session boundaries, while the real Edge mode uses a temporary
+  Supabase user and leaves the production Yandex/Supabase path unchanged.
+
 - Corrected the unified noindex prototype for review: anonymous Search intent
   is editable and resumes through real Yandex/Supabase authorization; named
   immutable previews mount the accepted desktop hotkey navigator; related rows
@@ -135,6 +154,14 @@
   explicit owner disposition rather than accepting its recommendations wholesale.
 
 ### Fixed
+
+- Restored current Museum of Resort Fashion (`mumod`) and structured festival
+  medallions on event detail, plus Pillow-readable fallbacks for eight
+  SVG-primary identities; Unicode boundaries and ambiguous/conflicting
+  evidence continue to fail closed.
+- Fixed the `Гоблинское сражение` recommendation on event `6529` with a
+  source-keyed reviewed derivative so no contain/letterbox branch can expose
+  fields, and preserved the focused-card-only calendar `K` hint.
 
 - Fixed Search showing a skeleton before any request and unified its standalone
   field/button styling; made unknown/error event media fail closed to

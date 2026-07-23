@@ -255,6 +255,26 @@ traceable to `fa367ea372e3` on
 acceptance must compare manifest slugs, referenced runtime files and the lab
 DOM—not only check whichever items happen to be visible in one screenshot.
 
+The production-backed 2026-07-23 usage audit is
+[static-medallion-usage-audit-2026-07-23](../../reports/static-medallion-usage-audit-2026-07-23.md).
+It evaluates all 38 manifest entries with the real static resolver and the
+Telegram resolver, records the exact field/alias and event ids, distinguishes
+event-detail / Telegram / lab-only reachability, and verifies runtime plus
+source/provenance assets. Current result: 28 used, 10 unused, 0 unreachable and
+no current/historical fail-closed conflict. In particular, event `6529`
+resolves `mumod`; `dramteatr39`, `kaup` and structured festivals resolve on
+real events; `greza-khutor` is historically grounded but has no current event;
+RZD Lastochka remains deliberately lab-only.
+
+SVG-primary identities that Telegram's Pillow renderer could not consume now
+carry deterministic same-stem 512×512 PNG fallbacks: `dramteatr39`,
+`yantar-hall`, `dom-iskusstv`, `mumod`, `kaup`,
+`kaliningrad-street-food`, `grozd-festival` and `more-vnutri`. Browser SVGs
+remain primary. The event-detail resolver may use `venue_address` only as
+structured venue evidence and festival artwork only from the structured
+`festival` field; title/description inference and weakened Unicode boundaries
+remain forbidden.
+
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 
 ### Pushkin-card asset
