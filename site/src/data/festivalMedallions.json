@@ -1,7 +1,7 @@
 {
   "schemaVersion": "festival_medallion_assets_v1",
   "generatedAt": "2026-07-23T00:00:00Z",
-  "usage": "Complete recovered festival visual-QA inventory: 10 festival identities plus the Kaup venue brand, retaining separately accepted listing-ready bindings where declared.",
+  "usage": "Complete recovered festival visual-QA inventory: 10 festival identities plus the Kaup venue brand, using accepted source-faithful assets.",
   "items": [
     {
       "slug": "kgd80-80-stories",
@@ -18,6 +18,11 @@
       "sourcePath": "site/src/assets/festivals/source/kgd80-logo-hero.svg",
       "retrievedAt": "2026-07-03",
       "category": "festival",
+      "aliases": [
+        "80 историй о главном",
+        "Фестиваль 80 историй о главном"
+      ],
+      "fallbackPngUrl": "/assets/festivals/kgd80-80-stories.png",
       "listingStatus": "listing_ready",
       "listingBinding": "festival"
     },
@@ -37,7 +42,12 @@
       "retrievedAt": "2026-07-03",
       "category": "festival",
       "fallbackPngUrl": "/assets/festivals/kaliningrad-city-jazz.png",
-      "assetFormat": "webp-raster-primary"
+      "assetFormat": "webp-raster-primary",
+      "aliases": [
+        "Kaliningrad City Jazz",
+        "Калининград Сити Джаз",
+        "Сити Джаз"
+      ]
     },
     {
       "slug": "kaliningrad-street-food",
@@ -53,7 +63,14 @@
       "renderNote": "Официальный SVG Kaliningrad Street Food; знак широковат, поэтому используется как крупная brand-плашка внутри круга.",
       "sourcePath": "site/src/assets/festivals/source/street-food-kaliningrad-logo.svg",
       "retrievedAt": "2026-07-03",
-      "category": "festival"
+      "category": "festival",
+      "aliases": [
+        "Городской пикник Kaliningrad Street Food",
+        "Kaliningrad Street Food",
+        "Street Food",
+        "Калининград Стрит Фуд"
+      ],
+      "fallbackPngUrl": "/assets/festivals/kaliningrad-street-food.png"
     },
     {
       "slug": "grozd-festival",
@@ -69,7 +86,12 @@
       "renderNote": "Официальный SVG-слой с сайта фестиваля; белый wordmark сохранён на тёмном фиолетовом фоне.",
       "sourcePath": "site/src/assets/festivals/source/grozd-layer13.svg",
       "retrievedAt": "2026-07-03",
-      "category": "festival"
+      "category": "festival",
+      "aliases": [
+        "Гроздь",
+        "Фестиваль Гроздь"
+      ],
+      "fallbackPngUrl": "/assets/festivals/grozd-festival.png"
     },
     {
       "slug": "koroche",
@@ -87,7 +109,11 @@
       "sourcePath": "site/src/assets/festivals/source/koroche-official.png",
       "retrievedAt": "2026-07-03",
       "fallbackPngUrl": "/assets/festivals/koroche.png",
-      "assetFormat": "webp-raster-primary"
+      "assetFormat": "webp-raster-primary",
+      "aliases": [
+        "Короче",
+        "Фестиваль Короче"
+      ]
     },
     {
       "slug": "ostrova",
@@ -105,7 +131,11 @@
       "sourcePath": "site/src/assets/festivals/source/ostrova-logo-alt.png",
       "retrievedAt": "2026-07-03",
       "fallbackPngUrl": "/assets/festivals/ostrova.png",
-      "assetFormat": "webp-raster-primary"
+      "assetFormat": "webp-raster-primary",
+      "aliases": [
+        "Острова",
+        "Семейно-музейный фестиваль Острова"
+      ]
     },
     {
       "slug": "more-vnutri",
@@ -121,7 +151,12 @@
       "ariaLabel": "Фестиваль: Море внутри",
       "renderNote": "Официальный SVG-логотип сайта фестиваля; использован как чистый знак вместо афишной обложки Telegram.",
       "sourcePath": "site/src/assets/festivals/source/more-vnutri.svg",
-      "retrievedAt": "2026-07-03"
+      "retrievedAt": "2026-07-03",
+      "aliases": [
+        "Море внутри",
+        "Фестиваль Море внутри"
+      ],
+      "fallbackPngUrl": "/assets/festivals/more-vnutri.png"
     },
     {
       "slug": "simfoniya-vetra",
@@ -139,7 +174,11 @@
       "sourcePath": "site/src/assets/festivals/source/simfoniya-vetra-bkf.svg",
       "retrievedAt": "2026-07-03",
       "fallbackPngUrl": "/assets/festivals/simfoniya-vetra.png",
-      "assetFormat": "webp-raster-primary"
+      "assetFormat": "webp-raster-primary",
+      "aliases": [
+        "Симфония ветра",
+        "Симфония ветра фестиваль искусств"
+      ]
     },
     {
       "slug": "bahosluzhenie",
@@ -157,7 +196,11 @@
       "sourcePath": "site/src/assets/festivals/source/bahosluzhenie-logo.png",
       "retrievedAt": "2026-07-03",
       "fallbackPngUrl": "/assets/festivals/bahosluzhenie.png",
-      "assetFormat": "webp-raster-primary"
+      "assetFormat": "webp-raster-primary",
+      "aliases": [
+        "Бахослужение",
+        "Международный музыкальный фестиваль Бахослужение"
+      ]
     },
     {
       "slug": "tolkin-fest",
@@ -175,7 +218,12 @@
       "sourcePath": "site/src/assets/festivals/source/tolkin-fest-logo.png",
       "retrievedAt": "2026-07-03",
       "fallbackPngUrl": "/assets/festivals/tolkin-fest.png",
-      "assetFormat": "webp-raster-primary"
+      "assetFormat": "webp-raster-primary",
+      "aliases": [
+        "Толкин Фест",
+        "Tolkin Fest",
+        "Толкинфест"
+      ]
     },
     {
       "slug": "kaup",
@@ -187,17 +235,20 @@
       "background": "#26372D",
       "ring": "#B9A06A",
       "avatarUrl": "/assets/festivals/kaup.svg",
-      "ariaLabel": "Локация: поселение викингов «Кауп»",
-      "renderNote": "Официальный знак поселения викингов «Кауп», повторно использован из принятой venue-medallions ветки как площадочный бренд для listing overlay без OCR.",
+      "ariaLabel": "Локация и бренд: Кауп",
+      "renderNote": "Официальный знак поселения викингов «Кауп». Система хранит Кауп как локацию (`Поселение викингов Кауп`); в фестивальной лаборатории этот знак оставлен как площадочный бренд для событий Каупа без отдельного чистого логотипа.",
       "sourcePath": "site/src/assets/festivals/source/kaup-logo.svg",
       "retrievedAt": "2026-07-03",
       "category": "venue_brand",
-      "listingStatus": "listing_ready",
-      "listingBinding": "venue",
       "aliases": [
         "Кауп",
-        "Поселение викингов Кауп"
-      ]
+        "Поселение викингов Кауп",
+        "Большой Кауп",
+        "Ночной Кауп"
+      ],
+      "fallbackPngUrl": "/assets/festivals/kaup.png",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     }
   ]
 }

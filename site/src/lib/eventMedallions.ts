@@ -1,7 +1,7 @@
 import type { PreviewEvent } from './types';
 
-export type MedallionIdentityCategory = 'venue_brand' | 'festival_brand' | 'organizer';
-export type MedallionEvidenceField = 'venue_name' | 'festival' | 'source_url' | 'festival_policy';
+export type MedallionIdentityCategory = 'venue_brand' | 'festival_brand' | 'festival' | 'organizer';
+export type MedallionEvidenceField = 'venue_name' | 'venue_address' | 'festival' | 'source_url' | 'festival_policy';
 
 export interface OrganizerMedallionDefinition {
   slug: string;
@@ -68,7 +68,7 @@ function aliasesFor(item: OrganizerMedallionDefinition): string[] {
 
 function firstAliasEvidence(
   item: OrganizerMedallionDefinition,
-  field: Extract<MedallionEvidenceField, 'venue_name' | 'festival'>,
+  field: Extract<MedallionEvidenceField, 'venue_name' | 'venue_address' | 'festival'>,
   value: string | null | undefined,
 ): MedallionEvidence | null {
   for (const alias of aliasesFor(item)) {
@@ -120,6 +120,8 @@ function sourceEvidence(item: OrganizerMedallionDefinition, sourceUrls: string[]
 function evidenceRank(evidence: MedallionEvidence): number {
   if (evidence.field === 'venue_name' && evidence.match === 'exact') return 50;
   if (evidence.field === 'venue_name') return 40;
+  if (evidence.field === 'venue_address' && evidence.match === 'exact') return 38;
+  if (evidence.field === 'venue_address') return 36;
   if (evidence.field === 'festival' && evidence.match === 'exact') return 35;
   if (evidence.field === 'festival') return 30;
   if (evidence.field === 'source_url') return 20;
@@ -127,7 +129,7 @@ function evidenceRank(evidence: MedallionEvidence): number {
 }
 
 export function resolveEventMedallions(
-  event: Pick<PreviewEvent, 'venue_name' | 'festival' | 'source_url' | 'source_urls'>,
+  event: Pick<PreviewEvent, 'venue_name' | 'address' | 'festival' | 'source_url' | 'source_urls'>,
   items: OrganizerMedallionDefinition[],
 ): EventMedallionResolution {
   const sourceUrls = Array.from(new Set([...(event.source_urls || []), event.source_url].filter(Boolean).map(String)));
@@ -141,8 +143,10 @@ export function resolveEventMedallions(
     const category = item.category || 'organizer';
     let evidence: MedallionEvidence | null = null;
     if (category === 'venue_brand') {
-      evidence = firstAliasEvidence(item, 'venue_name', event.venue_name) || sourceEvidence(item, sourceUrls);
-    } else if (category === 'festival_brand') {
+      evidence = firstAliasEvidence(item, 'venue_name', event.venue_name)
+        || firstAliasEvidence(item, 'venue_address', event.address)
+        || sourceEvidence(item, sourceUrls);
+    } else if (category === 'festival_brand' || category === 'festival') {
       evidence = firstAliasEvidence(item, 'festival', event.festival) || sourceEvidence(item, sourceUrls);
     } else {
       evidence = firstAliasEvidence(item, 'venue_name', event.venue_name) || sourceEvidence(item, sourceUrls);

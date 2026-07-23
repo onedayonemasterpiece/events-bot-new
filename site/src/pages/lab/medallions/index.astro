@@ -88,9 +88,9 @@ const freeListing = {
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <h2>Организаторы и площадки — {organizers.length}</h2>
-          <ul class="event-token-row medallion-catalog-grid" role="list">
+          <ul class="event-token-row medallion-catalog-grid" role="list" data-medallion-catalog="organizers">
             {organizers.map((item) => (
-              <li class={`event-token event-token--organizer event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
+              <li class={`event-token event-token--organizer event-token--${item.slug}`} data-medallion-slug={item.slug} aria-label={item.ariaLabel || item.name} title={item.name}>
                 <span class="event-token__circle" aria-hidden="true">
                   <picture>
                     {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}
@@ -113,9 +113,9 @@ const freeListing = {
         <div class="section-card__inner">
           <h2>Фестивали — {festivals.length}</h2>
           <p class="muted-note">Чистые официальные логотипы и проверенные публичные аватары; афишные обложки без отдельного ручного cutout/QA сюда не включены.</p>
-          <ul class="event-token-row medallion-catalog-grid" role="list">
+          <ul class="event-token-row medallion-catalog-grid" role="list" data-medallion-catalog="festivals">
             {festivals.map((item) => (
-              <li class={`event-token event-token--festival event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
+              <li class={`event-token event-token--festival event-token--${item.slug}`} data-medallion-slug={item.slug} aria-label={item.ariaLabel || item.name} title={item.name}>
                 <span class="event-token__circle" aria-hidden="true">
                   <picture>
                     {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}
@@ -139,9 +139,9 @@ const freeListing = {
           <div class="section-card__inner">
             <h2>Фестивальные площадки и бренды — {venueBrands.length}</h2>
             <p class="muted-note">Узнаваемые площадки и бренды фестивальных событий, но не самостоятельные фестивали.</p>
-            <ul class="event-token-row medallion-catalog-grid" role="list">
+            <ul class="event-token-row medallion-catalog-grid" role="list" data-medallion-catalog="venue-brands">
               {venueBrands.map((item) => (
-                <li class={`event-token event-token--festival event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
+                <li class={`event-token event-token--festival event-token--${item.slug}`} data-medallion-slug={item.slug} aria-label={item.ariaLabel || item.name} title={item.name}>
                   <span class="event-token__circle" aria-hidden="true">
                     <picture>
                       {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}

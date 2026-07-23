@@ -1,6 +1,7 @@
 ---
 import Icon from './Icon.astro';
 import organizerMedallions from '../data/organizerMedallions.json';
+import festivalMedallions from '../data/festivalMedallions.json';
 import type { PreviewEvent } from '../lib/types';
 import { eventAdmissionLabel, isTicketSoldOut, withBase } from '../lib/events';
 import {
@@ -37,9 +38,17 @@ function normalize(value: unknown): string {
 }
 
 const manifest = organizerMedallions as { items?: OrganizerMedallionDefinition[] };
+const festivalManifest = festivalMedallions as { items?: OrganizerMedallionDefinition[] };
+const organizerItems = manifest.items || [];
+const organizerSlugs = new Set(organizerItems.map((item) => item.slug));
+const eventPageFestivalItems = (festivalManifest.items || []).filter((item) => (
+  item.category === 'festival'
+  && item.slug !== 'kgd80-80-stories'
+  && !organizerSlugs.has(item.slug)
+));
 const sourceUrls = Array.from(new Set([...(event.source_urls || []), event.source_url].filter(Boolean).map((url) => String(url))));
 const sourceCount = Number.isFinite(event.source_count) && Number(event.source_count) > 0 ? Number(event.source_count) : sourceUrls.length;
-const organizerResolution = resolveEventMedallions(event, manifest.items || []);
+const organizerResolution = resolveEventMedallions(event, [...organizerItems, ...eventPageFestivalItems]);
 const organizers = organizerResolution.identities;
 const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
 const admissionLabel = eventAdmissionLabel(event);
@@ -140,7 +149,7 @@ if (hasCharity) {
     tone: 'green',
   });
 }
-const hasFestivalLogoToken = organizers.some(({ item }) => item.slug === 'kgd80' || item.slug === 'kantata-festival');
+const hasFestivalLogoToken = organizers.some(({ item }) => item.category === 'festival_brand' || item.category === 'festival');
 if (event.festival && !hasFestivalLogoToken && tokens.length < 6) {
   tokens.push({
     kind: 'pill',

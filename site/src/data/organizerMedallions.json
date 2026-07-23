@@ -380,7 +380,8 @@
       "sourcePath": "site/src/assets/organizers/source/kaup-logo.svg",
       "retrievedAt": "2026-07-03",
       "assetFormat": "svg",
-      "category": "venue_brand"
+      "category": "venue_brand",
+      "fallbackPngUrl": "/assets/festivals/kaup.png"
     },
     {
       "slug": "dramteatr39",
@@ -410,7 +411,8 @@
       "sourcePath": "site/src/assets/organizers/source/dramteatr39.logo.svg",
       "retrievedAt": "2026-07-03",
       "assetFormat": "svg-embedded-source-svg-cropped",
-      "category": "venue_brand"
+      "category": "venue_brand",
+      "fallbackPngUrl": "/assets/organizers/dramteatr39.png"
     },
     {
       "slug": "yantar-hall",
@@ -441,7 +443,8 @@
       "sourcePath": "site/src/assets/organizers/source/yantar-hall.yh_ya_logo.svg",
       "retrievedAt": "2026-07-03",
       "assetFormat": "svg-embedded-source-svg",
-      "category": "venue_brand"
+      "category": "venue_brand",
+      "fallbackPngUrl": "/assets/organizers/yantar-hall.png"
     },
     {
       "slug": "muzteatr39",
@@ -504,7 +507,8 @@
       "sourcePath": "site/src/assets/organizers/source/dom-iskusstv.teatr-estrady.svg",
       "retrievedAt": "2026-07-03",
       "assetFormat": "svg-embedded-source-svg",
-      "category": "venue_brand"
+      "category": "venue_brand",
+      "fallbackPngUrl": "/assets/organizers/dom-iskusstv.png"
     },
     {
       "slug": "city-jazz-club",
@@ -654,7 +658,8 @@
       "sourcePath": "site/src/assets/organizers/source/mumod.logo.svg",
       "retrievedAt": "2026-07-03",
       "assetFormat": "svg-embedded-source-svg",
-      "category": "venue_brand"
+      "category": "venue_brand",
+      "fallbackPngUrl": "/assets/organizers/mumod.png"
     },
     {
       "slug": "kldzoo",

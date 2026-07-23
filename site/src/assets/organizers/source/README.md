@@ -50,3 +50,11 @@ exports a structured organizer field; the duplicate `kgd80` identity remains
 `detail_only`. This listing behavior reuses the source-faithful assets introduced
 by commits `00b9bfd6`, `4c249a8e`, `849aaeaa` and `fa367ea3`; no artwork was
 redrawn for V13.
+
+Telegram/Pillow fallback audit (2026-07-23): the accepted SVG runtime assets
+`dramteatr39`, `yantar-hall`, `dom-iskusstv` and `mumod` received deterministic
+512×512 RGBA same-stem PNG renders from the checked-in SVGs. `kaup` received
+the equivalent fallback in the festival runtime tree. These files are transport
+fallbacks only; the browser continues to use the source-faithful SVG primary.
+The local conversion used CairoSVG 2.9.0 with explicit 512×512 output and no
+generative image tooling.
