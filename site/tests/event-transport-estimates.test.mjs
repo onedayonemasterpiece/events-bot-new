@@ -8,7 +8,7 @@ const schedulesUrl = new URL('../src/data/transportSchedules.json', import.meta.
 const estimatesUrl = new URL('../src/data/event-duration-estimates.json', import.meta.url);
 const componentUrl = new URL('../src/components/EventTransportSchedule.astro', import.meta.url);
 
-async function loadEventTransport() {
+async function loadEventTransport({ preview = true } = {}) {
   const [moduleSource, scheduleSource, estimateSource] = await Promise.all([
     fs.readFile(moduleUrl, 'utf8'),
     fs.readFile(schedulesUrl, 'utf8'),
@@ -24,11 +24,13 @@ async function loadEventTransport() {
       `const durationEstimatesData = ${estimateSource};`,
     )
     .replace("import type { PreviewEvent } from './types';", '');
+  if (preview) source = source.replace('import.meta.env?.PUBLIC_PREVIEW_BUILD_ID', "'test-preview'");
   const javascript = stripTypeScriptTypes(source, { mode: 'transform' });
   return import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`);
 }
 
 const eventTransport = await loadEventTransport();
+const productionTransport = await loadEventTransport({ preview: false });
 
 const estimateEvent = {
   id: 6529,
@@ -41,7 +43,7 @@ const estimateEvent = {
   event_type: 'мастер-класс',
 };
 
-test('6529 uses the key-driven build-time estimate and same-day returns', () => {
+test('6529 uses the preview-only conservative estimate and same-day returns', () => {
   const suggestion = eventTransport.getEventTransportSuggestion(estimateEvent);
   assert.ok(suggestion);
   assert.equal(suggestion.eventEnd, null, 'an estimate must not become a canonical event end');
@@ -50,9 +52,11 @@ test('6529 uses the key-driven build-time estimate and same-day returns', () => 
     {
       sourceStatus: suggestion.durationEstimate?.sourceStatus,
       canonicalEnd: suggestion.durationEstimate?.canonicalEnd,
+      modelId: suggestion.durationEstimate?.modelId,
       mostLikelyMinutes: suggestion.durationEstimate?.mostLikelyMinutes,
       plausibleMinMinutes: suggestion.durationEstimate?.plausibleMinMinutes,
       plausibleMaxMinutes: suggestion.durationEstimate?.plausibleMaxMinutes,
+      confidence: suggestion.durationEstimate?.confidence,
       conservativeRoutingMinutes: suggestion.durationEstimate?.conservativeRoutingMinutes,
       predictedEndTime: suggestion.durationEstimate?.predictedEndTime,
       returnAccessMinutes: suggestion.returnAccessMinutes,
@@ -61,9 +65,11 @@ test('6529 uses the key-driven build-time estimate and same-day returns', () => 
     {
       sourceStatus: 'llm_estimated',
       canonicalEnd: false,
+      modelId: 'gemini-3.1-pro-low',
       mostLikelyMinutes: 120,
       plausibleMinMinutes: 90,
       plausibleMaxMinutes: 180,
+      confidence: 'medium',
       conservativeRoutingMinutes: 150,
       predictedEndTime: '17:30',
       returnAccessMinutes: 25,
@@ -92,12 +98,13 @@ test('unknown duration without an estimate fails closed at the same-day boundary
   assert.ok(calendarEntries.every(({ train }) => !train.nextDay && train.serviceDate === estimateEvent.start_date));
 });
 
-test('build-time provider estimates are available to production static generation', () => {
-  const suggestion = eventTransport.getEventTransportSuggestion(estimateEvent);
+test('preview-only estimates stay disabled when no preview build id exists', () => {
+  const suggestion = productionTransport.getEventTransportSuggestion(estimateEvent);
   assert.ok(suggestion);
-  assert.equal(suggestion.eventEndBasis, 'llm_estimated');
-  assert.equal(suggestion.durationEstimate?.conservativeRoutingMinutes, 150);
-  assert.deepEqual(suggestion.returns.map((train) => train.departure), ['18:56', '19:43']);
+  assert.equal(suggestion.eventEndBasis, 'schedule_cutoff');
+  assert.equal(suggestion.durationEstimate, null);
+  assert.deepEqual(suggestion.returns, []);
+  assert.equal(suggestion.lastSameDayReturn?.departure, '22:45');
 });
 
 test('3103 explicit end remains authoritative over the optional estimate path', () => {
@@ -120,13 +127,11 @@ test('3103 explicit end remains authoritative over the optional estimate path', 
   assert.deepEqual(suggestion.returns.map((train) => train.departure), ['20:36', '21:43']);
 });
 
-test('transport UI keeps provider mechanics private and never offers next-morning waiting', async () => {
+test('transport UI labels the prediction and never offers next-morning waiting for unknown ends', async () => {
   const source = await fs.readFile(componentUrl, 'utf8');
-  assert.match(source, /Время окончания не указано/u);
-  assert.match(source, /уточните продолжительность у организатора/u);
-  assert.doesNotMatch(source, /Экспериментальн/u);
-  assert.doesNotMatch(source, /прогноз ИИ/u);
-  assert.doesNotMatch(source, /Gemini|Gemma|confidence|modelId/u);
+  assert.match(source, /Экспериментальный прогноз длительности — около/u);
+  assert.match(source, /Это прогноз ИИ, а не подтверждённое время окончания/u);
+  assert.match(source, /Обязательно уточните его у организатора/u);
   assert.match(source, /поезд на следующий день не предлагаем/u);
   assert.doesNotMatch(source, /Первый поезд .*следующ/u);
   assert.doesNotMatch(source, /После полуночи есть рейс/u);

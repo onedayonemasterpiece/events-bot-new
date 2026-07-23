@@ -1,34 +1,25 @@
 {
-  "version": 2,
-  "scope": "build_time",
-  "generated_at": "2026-07-23T08:35:57.249337+00:00",
-  "prompt_version": "static-event-duration-v1",
-  "model": {
-    "provider": "Google Gemini API",
-    "gateway": "google_ai.client.GoogleAIClient",
-    "id": "gemini-3.1-flash-lite"
-  },
-  "candidate_limit": 1,
+  "version": 1,
+  "scope": "preview_only",
+  "generated_at": "2026-07-23T06:35:15Z",
   "estimates": [
     {
       "event_id": 6529,
       "source_status": "llm_estimated",
-      "generation_method": "provider_api",
       "canonical_end": false,
       "model": {
-        "provider": "Google Gemini API",
-        "gateway": "google_ai.client.GoogleAIClient",
-        "id": "gemini-3.1-flash-lite"
+        "provider": "Google",
+        "id": "gemini-3.1-pro-low",
+        "label": "Gemini 3.1 Pro (Low)"
       },
-      "prompt_version": "static-event-duration-v1",
-      "input_hash": "c6ab883556865182372cc2fb6bfca74fc825c591162d661020621abb3a26d33f",
-      "estimated_at": "2026-07-23T08:35:57.249337+00:00",
+      "estimated_at": "2026-07-23T06:35:15Z",
+      "provenance": "artifacts/codex/static-unified-corrections-20260723/gemini-duration-6529/response.json",
       "most_likely_minutes": 120,
       "plausible_min_minutes": 90,
       "plausible_max_minutes": 180,
       "confidence": "medium",
-      "conservative_routing_minutes": 150
+      "conservative_routing_minutes": 150,
+      "user_facing_rationale": "Ткачество мини-панно с нуля требует времени на освоение техники. Обычно такие занятия для новичков идут 1.5–2.5 часа."
     }
-  ],
-  "failures": []
+  ]
 }
