@@ -1,0 +1,14 @@
+{
+  "schema_version": "interest-club-cover-source-v1",
+  "club_slug": "game-vibes",
+  "source_event_id": 2897,
+  "source_event_title": "Вавилон",
+  "source_event_date": "2026-03-14",
+  "source_post_url": "https://t.me/signalkld/9929",
+  "original_asset_url": "https://lnvfarbbofsnkedbfhlt.supabase.co/storage/v1/object/public/events-ics/p/dh16/63/6390ec9c973349b265cd664de36c86acc70c534ce24cc0ccd00b18221c361e49.webp",
+  "retrieved_at": "2026-07-23T00:00:00Z",
+  "sha256": "2722133536e3eeb695a0185751d48aacf251a4ae1b544c7b90981c8386f63672",
+  "width": 960,
+  "height": 1280,
+  "audit_note": "Existing approved event-source photograph of the physical board-game setup. Selected instead of the generated/illustrative art attached to newer club events."
+}

@@ -1,0 +1,25 @@
+<p id="club-catalog-keyboard-instructions" class="visually-hidden">
+  На карточке клуба используйте стрелки для перехода в визуальном порядке, Home и End для начала и конца списка, Enter для открытия клуба.
+</p>
+<p class="visually-hidden" data-club-keyboard-status role="status" aria-live="polite" aria-atomic="true"></p>
+
+<script>
+  import { initClubCatalogNavigation } from './clubCatalogNavigation.mjs';
+
+  window.KenigEventsClubCatalogNavigation?.destroy?.();
+  window.KenigEventsClubCatalogNavigation = initClubCatalogNavigation();
+</script>
+
+<style>
+  .visually-hidden {
+    position:absolute;
+    width:1px;
+    height:1px;
+    padding:0;
+    margin:-1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    white-space:nowrap;
+    border:0;
+  }
+</style>

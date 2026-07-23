@@ -1,6 +1,8 @@
 ---
+import { Image } from 'astro:assets';
 import { displayDateValue } from '../lib/events';
 import { interestClubHref } from '../lib/clubs';
+import { getInterestClubCover } from '../data/interest-club-covers';
 import type { InterestClub } from '../lib/types';
 
 interface Props {
@@ -10,51 +12,212 @@ interface Props {
 const { club } = Astro.props;
 const place = [club.city, club.typical_venue].filter(Boolean).join(' · ');
 const activityLabel = `${club.activity.distinct_date_count} ${club.activity.distinct_date_count === 1 ? 'дата' : club.activity.distinct_date_count < 5 ? 'даты' : 'дат'} в каталоге`;
+const clubHref = interestClubHref(club);
+const cover = getInterestClubCover(club.slug);
+const titleId = `club-card-title-${club.id}`;
 ---
-<article class="club-card">
-  <div class="club-card__head">
-    <p class="club-card__topic">{club.topic}</p>
+<article
+  class="club-card"
+  data-club-card
+  data-club-name={club.name}
+  data-cover-state={cover ? 'ready' : 'fallback'}
+  tabindex="0"
+  aria-labelledby={titleId}
+  aria-describedby="club-catalog-keyboard-instructions"
+  aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End Enter"
+>
+  <div class="club-card__media">
+    <div class="club-card__fallback" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </div>
+    {cover && (
+      <Image
+        class="club-card__cover"
+        data-club-cover
+        src={cover.image}
+        alt={cover.alt}
+        widths={[480, 720, 960]}
+        sizes="(max-width: 760px) calc(100vw - 24px), (max-width: 1180px) 50vw, 580px"
+        loading="lazy"
+        decoding="async"
+      />
+    )}
+    <div class="club-card__veil" aria-hidden="true"></div>
+  </div>
+
+  <div class="club-card__content">
+    <div class="club-card__head">
+      <p class="club-card__topic">{club.topic}</p>
     {club.activity.future_meeting_count > 0 && (
       <span class="club-card__future">Ближайших встреч: {club.activity.future_meeting_count}</span>
     )}
+    </div>
+    <h2 id={titleId}><a href={clubHref} data-club-primary-action>{club.name}</a></h2>
+    {club.description && <p class="club-card__description">{club.description}</p>}
+    <dl class="club-card__facts">
+      {place && <div><dt>Где</dt><dd>{place}</dd></div>}
+      <div><dt>Активность</dt><dd>{activityLabel}</dd></div>
+      <div><dt>Наблюдаем</dt><dd>{displayDateValue(club.activity.first_observed_date)} — {displayDateValue(club.activity.last_observed_date)}</dd></div>
+    </dl>
+    <div class="club-card__footer">
+      <span class="club-card__keyboard-hint" aria-hidden="true"><kbd>← ↑ ↓ →</kbd><kbd>Enter</kbd></span>
+      <a class="club-card__link" href={clubHref} aria-label={`Подробнее о клубе «${club.name}»`}>
+        Подробнее <span aria-hidden="true">→</span><kbd aria-hidden="true">Enter</kbd>
+      </a>
+    </div>
   </div>
-  <h2><a href={interestClubHref(club)}>{club.name}</a></h2>
-  {club.description && <p class="club-card__description">{club.description}</p>}
-  <dl class="club-card__facts">
-    {place && <div><dt>Где</dt><dd>{place}</dd></div>}
-    <div><dt>Активность</dt><dd>{activityLabel}</dd></div>
-    <div><dt>Наблюдаем</dt><dd>{displayDateValue(club.activity.first_observed_date)} — {displayDateValue(club.activity.last_observed_date)}</dd></div>
-  </dl>
-  <a class="club-card__link" href={interestClubHref(club)} aria-label={`Подробнее о клубе «${club.name}»`}>Подробнее <span aria-hidden="true">→</span></a>
 </article>
 
 <style>
   .club-card {
+    position: relative;
     display: grid;
-    align-content: start;
-    gap: .8rem;
+    align-items: end;
     min-width: 0;
-    padding: clamp(1rem, 2.6vw, 1.4rem);
-    border: 1px solid rgba(121,48,20,.14);
-    border-radius: 24px;
-    background: linear-gradient(180deg, #fffdf8, #fff8ed);
-    box-shadow: 0 14px 32px rgba(72,45,25,.08);
+    min-height: clamp(28rem, 43vw, 34rem);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.62);
+    border-radius: 28px;
+    background: #17343a;
+    color: #fff;
+    box-shadow: 0 22px 48px rgba(42,38,34,.17);
+    isolation: isolate;
+    outline: none;
+    transition: transform 180ms ease, box-shadow 180ms ease;
+  }
+  .club-card:hover { transform: translateY(-3px); box-shadow: 0 28px 56px rgba(42,38,34,.23); }
+  .club-card__media,
+  .club-card__fallback,
+  .club-card__cover,
+  .club-card__veil { position:absolute; inset:0; width:100%; height:100%; }
+  .club-card__media { z-index:-1; overflow:hidden; }
+  .club-card__cover { object-fit:cover; object-position:center 48%; }
+  .club-card__fallback {
+    overflow:hidden;
+    background:
+      radial-gradient(circle at 25% 18%, rgba(251,205,112,.48), transparent 27%),
+      radial-gradient(circle at 80% 24%, rgba(117,211,204,.3), transparent 25%),
+      linear-gradient(145deg, #17353d 0%, #1b263d 45%, #311f2d 100%);
+  }
+  .club-card__fallback::before {
+    content:"";
+    position:absolute;
+    width:18rem;
+    height:18rem;
+    right:-4rem;
+    top:1rem;
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:50%;
+    box-shadow:0 0 0 2.5rem rgba(255,255,255,.035), 0 0 0 5rem rgba(255,255,255,.025);
+  }
+  .club-card__fallback span {
+    position:absolute;
+    width:5rem;
+    height:5rem;
+    border:1px solid rgba(255,255,255,.3);
+    border-radius:20px;
+    transform:rotate(45deg);
+  }
+  .club-card__fallback span:nth-child(1) { top:18%; left:15%; }
+  .club-card__fallback span:nth-child(2) { top:31%; left:34%; width:2.6rem; height:2.6rem; }
+  .club-card__fallback span:nth-child(3) { top:13%; right:16%; width:3.3rem; height:3.3rem; }
+  .club-card__veil {
+    background:
+      linear-gradient(180deg, rgba(8,15,19,.08) 8%, rgba(8,15,19,.34) 42%, rgba(8,13,17,.94) 100%),
+      linear-gradient(90deg, rgba(8,13,17,.16), transparent 65%);
+  }
+  .club-card[data-cover-state="fallback"] .club-card__cover { display:none; }
+  .club-card__content {
+    display:grid;
+    gap:.8rem;
+    width:100%;
+    min-width:0;
+    padding:clamp(1.1rem,2.4vw,1.65rem);
   }
   .club-card__head { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
-  .club-card__topic { margin:0; color:var(--primary-strong); font-size:.82rem; font-weight:900; letter-spacing:.045em; text-transform:uppercase; }
-  .club-card__future { flex:0 0 auto; padding:.2rem .55rem; border-radius:999px; background:var(--accent-soft); color:#075f59; font-size:.78rem; font-weight:850; }
-  h2 { margin:0; font-size:clamp(1.35rem, 3vw, 1.75rem); line-height:1.15; }
-  h2 a { min-height:44px; display:inline-flex; align-items:center; text-decoration:none; }
-  h2 a:hover { color:var(--primary); text-decoration:underline; }
-  .club-card__description { margin:0; color:var(--muted); }
-  .club-card__facts { display:grid; gap:.4rem; margin:.1rem 0 0; }
-  .club-card__facts div { display:grid; grid-template-columns:6.5rem minmax(0,1fr); gap:.6rem; padding-top:.4rem; border-top:1px solid rgba(121,48,20,.09); }
-  dt { color:var(--muted); font-size:.84rem; }
-  dd { min-width:0; margin:0; overflow-wrap:anywhere; font-weight:700; }
-  .club-card__link { width:max-content; min-height:44px; display:inline-flex; align-items:center; gap:.4rem; color:var(--primary-strong); font-weight:900; }
+  .club-card__topic { margin:0; color:#e9fffd; font-size:.82rem; font-weight:850; letter-spacing:.055em; text-transform:uppercase; }
+  .club-card__future { flex:0 0 auto; padding:.3rem .62rem; border:1px solid rgba(255,255,255,.58); border-radius:999px; background:rgba(244,154,37,.92); color:#24170c; font-size:.76rem; font-weight:900; box-shadow:0 8px 20px rgba(31,20,12,.2); }
+  h2 { margin:0; font-size:clamp(1.55rem,3vw,2.15rem); line-height:1.08; text-wrap:balance; }
+  h2 a { min-height:44px; display:inline-flex; align-items:center; color:inherit; text-decoration:none; }
+  h2 a:hover { text-decoration:underline; }
+  .club-card__description { max-width:55ch; margin:0; color:rgba(255,255,255,.88); line-height:1.48; }
+  .club-card__facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:.15rem 0 0; border-top:1px solid rgba(255,255,255,.28); }
+  .club-card__facts div { min-width:0; padding:.6rem .65rem 0 0; }
+  .club-card__facts div + div { padding-left:.65rem; border-left:1px solid rgba(255,255,255,.24); }
+  dt { color:rgba(255,255,255,.68); font-size:.76rem; }
+  dd { min-width:0; margin:.1rem 0 0; overflow-wrap:anywhere; font-size:.88rem; font-weight:760; line-height:1.35; }
+  .club-card__footer { display:flex; align-items:center; justify-content:space-between; gap:.75rem; min-height:44px; }
+  .club-card__link { min-width:0; min-height:44px; display:inline-flex; align-items:center; gap:.42rem; margin-left:auto; color:#a9ddff; font-weight:900; text-decoration:none; }
+  .club-card__link:hover { color:#d8efff; text-decoration:underline; }
+  .club-card__keyboard-hint,
+  .club-card__link kbd {
+    display:inline-flex;
+    gap:.3rem;
+    visibility:hidden;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 140ms ease;
+  }
+  kbd {
+    min-width:24px;
+    padding:.2rem .38rem;
+    border:1px solid currentColor;
+    border-radius:6px;
+    font:800 .68rem/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+    text-align:center;
+  }
+  @media (min-width: 1024px) {
+    .club-card:focus-visible {
+      outline:3px solid #f4b942;
+      outline-offset:5px;
+      transform:translateY(-3px);
+      box-shadow:0 28px 58px rgba(42,38,34,.26);
+    }
+    .club-card:focus-visible .club-card__keyboard-hint,
+    .club-card__link:focus-visible kbd { visibility:visible; opacity:.72; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .club-card,
+    .club-card__keyboard-hint,
+    .club-card__link kbd { transition:none; }
+    .club-card:hover,
+    .club-card:focus-visible { transform:none; }
+  }
+  @media (max-width: 760px) {
+    .club-card {
+      display:block;
+      min-height:0;
+      border-color:rgba(121,48,20,.14);
+      background:linear-gradient(180deg,#fffdf8,#fff8ed);
+      color:var(--text);
+      box-shadow:0 14px 32px rgba(72,45,25,.08);
+    }
+    .club-card:hover { transform:none; box-shadow:0 14px 32px rgba(72,45,25,.08); }
+    .club-card__media {
+      position:relative;
+      z-index:0;
+      width:100%;
+      height:auto;
+      aspect-ratio:16 / 9;
+    }
+    .club-card__veil { background:linear-gradient(180deg,transparent 58%,rgba(8,13,17,.2)); }
+    .club-card__content { padding:1rem; }
+    .club-card__topic { color:var(--primary-strong); }
+    .club-card__future { border-color:rgba(121,48,20,.12); }
+    .club-card__description { color:var(--muted); }
+    .club-card__facts { border-color:rgba(121,48,20,.12); }
+    .club-card__facts div + div { border-left-color:rgba(121,48,20,.12); }
+    dt { color:var(--muted); }
+    .club-card__link { color:var(--primary-strong); }
+    .club-card__link:hover { color:var(--primary); }
+  }
   @media (max-width: 430px) {
+    .club-card { border-radius:22px; }
     .club-card__head { display:grid; }
     .club-card__future { width:max-content; }
-    .club-card__facts div { grid-template-columns:1fr; gap:.05rem; }
+    .club-card__facts { grid-template-columns:1fr; }
+    .club-card__facts div { padding:.55rem 0 0; }
+    .club-card__facts div + div { padding-left:0; border-top:1px solid rgba(121,48,20,.1); border-left:0; }
+    .club-card__footer { justify-content:flex-end; }
   }
 </style>
