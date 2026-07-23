@@ -113,6 +113,7 @@ const HeadingTag = headingLevel;
     let lastResultEventIds = [];
     let pendingFallbackItems = [];
     let authCallbackHadError = false;
+    let searchStartPending = false;
     let progressValue = 0;
     let progressStageRank = 0;
     let progressMilestoneRank = 0;
@@ -554,6 +555,21 @@ const HeadingTag = headingLevel;
       more.classList.toggle('is-loading', isLoading);
       more.setAttribute('aria-busy', isLoading ? 'true' : 'false');
       more.textContent = isLoading ? 'Загружаю ещё…' : moreDefaultLabel;
+    }
+
+    function abortActiveSearch() {
+      const controller = activeSearchController;
+      if (!controller) return false;
+      // Invalidate the request before aborting it so its catch/finally path and
+      // any already queued stream frame cannot repaint the accepted CTA.
+      searchEpoch += 1;
+      activeSearchController = null;
+      controller.abort();
+      setSkeletonLoading(false);
+      setMoreLoading(false);
+      setSearchLoading(false);
+      resetSearchProgress(searchEpoch);
+      return true;
     }
 
     function withTimeout(promise, ms, message) {
@@ -1038,23 +1054,34 @@ const HeadingTag = headingLevel;
     }
 
     async function runSearch({ append = false } = {}) {
-      if (!supabase || loading) return;
-      const { data: sessionData } = await supabase.auth.getSession();
+      if (!supabase || loading || searchStartPending) return;
+      searchStartPending = true;
+      let sessionData;
+      try {
+        ({ data: sessionData } = await supabase.auth.getSession());
+      } catch (_error) {
+        searchStartPending = false;
+        setStatus('Не удалось проверить вход. Попробуйте ещё раз.', 'error');
+        return;
+      }
       const session = sessionData?.session || null;
       if (!session?.user || !session?.access_token) {
         clearResults();
         const validation = validateSearchInput(input?.value || '');
         if (!validation.ok) {
+          searchStartPending = false;
           setStatus(validation.message, 'error');
           return;
         }
         if (input) input.value = validation.query;
         saveSearchDraft(validation.query, true);
+        searchStartPending = false;
         await beginYandexLogin();
         return;
       }
       const validation = validateSearchInput(input?.value || '');
       if (!validation.ok) {
+        searchStartPending = false;
         setStatus(validation.message, 'error');
         return;
       }
@@ -1065,6 +1092,7 @@ const HeadingTag = headingLevel;
       activeSearchController?.abort();
       const controller = new AbortController();
       activeSearchController = controller;
+      searchStartPending = false;
       setSearchLoading(true, { showSkeleton: !append });
       if (append) setMoreLoading(true);
       let vectorRendered = false;
@@ -1278,6 +1306,7 @@ const HeadingTag = headingLevel;
         await beginYandexLogin();
       });
       logout?.addEventListener('click', async () => {
+        abortActiveSearch();
         await supabase.auth.signOut();
         clearResults();
         lastResultEventIds = [];
@@ -1298,6 +1327,7 @@ const HeadingTag = headingLevel;
         await runSearch({ append: false });
       });
       more?.addEventListener('click', async () => runSearch({ append: true }));
+      window.addEventListener('pagehide', abortActiveSearch, { once: true });
       supabase.auth.onAuthStateChange((_event, session) => {
         // Supabase warns against awaiting Supabase calls inside this callback.
         // Render from the callback payload and defer any follow-up RPCs.
