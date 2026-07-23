@@ -2,7 +2,7 @@
 
 > **Status:** public `noindex` review prototype; calendar view only.
 > **Route:** `/festivali/` inside an immutable preview prefix.
-> **Current candidate:** `preview-20260723-festivals-calendar-r5`.
+> **Current candidate:** `preview-20260723-festivals-calendar-r6`.
 
 The page uses the unified Astro header, footer and mobile dock. It presents 21
 regional festivals from July through December 2026. The category view remains
@@ -17,13 +17,18 @@ The left month marker, name, mood symbol and copy form one sticky shelf below
 the unified header and sticky month switcher. The shelf remains at `126.6px`
 while its month is in view and is pushed out by the next section.
 
-R5 corrects the remaining card-internal hierarchy. Title, place and category
-now sit on one bounded translucent lower surface instead of relying on a dark
-photo gradient alone. The surface uses an opaque fallback plus
-`backdrop-filter` blur/saturation, so the copy stays readable on both very
-light and visually noisy covers. At `820–1000px`, padding, type and chip
-geometry tighten together to preserve a gap between the top facts and lower
-caption without increasing the packed row height.
+R6 supersedes the rejected R5 card treatment. R5 was closer than the original
+split-body cards but remained a nested-card composition: its large rounded,
+bordered glass panel visually cut the photograph in two. R6 restores the donor
+mechanic as one uninterrupted photo canvas. A seamless lower gradient protects
+the title and place; only the compact category chip keeps a translucent
+backdrop. The date is a solid KenigEvents-primary badge, while official and
+pending states use quiet green and amber fills without decorative dots.
+
+At `820–1000px`, category type and icon geometry tighten together so all labels
+remain complete rather than ellipsized. Place and category copy use lighter
+weights and category labels render in lowercase, preserving the reference
+hierarchy beneath the stronger festival title.
 
 The category chip no longer uses improvised Unicode marks. It uses nine
 unchanged `24×24`, two-pixel, round-cap glyphs from SVG Repo's CC0 Lucide Line
@@ -103,10 +108,11 @@ The rendered contract is:
 - at `390px`, the page repacks into two equal columns; only the
   below-`340px` safety fallback becomes one column.
 
-The date and full status are top overlays; title, one-line place and icon-led
-theme share a readable glass lower block. Four-up rows no longer collapse
-status text to a bare dot. Source/provenance stays in the data contract and
-card destination rather than consuming visible card height.
+The date and full status are top overlays; title and one-line place sit directly
+on the lower image gradient, followed by an icon-led translucent theme chip.
+There is no bordered or rounded caption panel inside the card. Four-up rows no
+longer collapse status text to a bare dot. Source/provenance stays in the data
+contract and card destination rather than consuming visible card height.
 
 This is a close implementation of the donor's **card and timeline mechanic**,
 not a pixel-for-pixel copy of its unrelated page chrome: the inventory, image
@@ -132,15 +138,22 @@ The `2026-07-23` Playwright gate uses `887×900`, `1440×900`, `390×844` and
 - all viewports: zero horizontal overflow, 21 decoded images, no browser or
   first-party request errors, same-height cards per row.
 
-Measured R5 values are `1488.8px`, `2279.4px` and `3043.6px`
-respectively. The previous `r1` timeline measured `5729.6px` at the
-reference-width viewport and `10148.8px` on mobile.
+The final R6 candidate measures `1640.3px` at the `887px` reference viewport
+and returns to the dense `2279.4px` envelope at `1440px`; it has no
+topline/caption intersections and renders every category without truncation.
+The reference-width rows reproduce the donor card proportions while remaining
+far denser than the withdrawn `r1`, whose timeline measured `5729.6px`.
 
 The earlier R3 Gemini Pro `KEEP` is retained only as an external review
 artifact, not as product acceptance: subsequent owner inspection found the
 off-system serif, missing sticky shelf, page-local service note and moving
-hover. R4 closed those gaps; R5 supersedes it with the corrected readable
-glass-caption and curated category-icon system.
+hover. A fresh Gemini 3.1 Pro High comparison scored R4 `2/10` and R5 `5/10`,
+explicitly rejecting R5 as still “по мотивам”. After R6 removed the nested
+caption card, the acceptance pass scored the mechanic `8.5/10` and returned
+`CONDITIONAL KEEP`; its three remaining typography/badge corrections are
+included in the final candidate and covered by the overlay behavior gate. The
+follow-up gate passed every card/timeline criterion, scored the final candidate
+`9/10` and returned `KEEP`.
 
 ## Checks and preview
 
@@ -148,14 +161,14 @@ Run:
 
 ```bash
 npm --prefix site run test:festival-timeline-layout
-PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r5 npm --prefix site run build:preview
-PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r5 npm --prefix site run check:unified-prototype
+PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r6 npm --prefix site run build:preview
+PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r6 npm --prefix site run check:unified-prototype
 ```
 
 Review candidate:
 
-- page: <https://kenigevents.ru/preview-20260723-festivals-calendar-r5/festivali/>;
-- hub: <https://kenigevents.ru/preview-20260723-festivals-calendar-r5/__preview/>.
+- page: <https://kenigevents.ru/preview-20260723-festivals-calendar-r6/festivali/>;
+- hub: <https://kenigevents.ru/preview-20260723-festivals-calendar-r6/__preview/>.
 
 The immutable URL is a public bearer link, not authentication. It must not be
 promoted to the production root before product acceptance and a refresh owner

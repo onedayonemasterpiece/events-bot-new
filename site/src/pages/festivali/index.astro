@@ -204,7 +204,7 @@ const structuredData = [{
                         <div class="festival-card__veil" aria-hidden="true"></div>
                         <div class="festival-card__topline">
                           <span class="festival-card__date" title={item.dateLabel}>{item.compactDateLabel}</span>
-                          <span class="festival-card__status" title={item.statusLabel}><i aria-hidden="true"></i><span>{item.compactStatusLabel}</span></span>
+                          <span class="festival-card__status" title={item.statusLabel}>{item.compactStatusLabel}</span>
                         </div>
                         <div class="festival-card__caption">
                           <h3>{item.title}</h3>
@@ -433,18 +433,18 @@ const structuredData = [{
   .festival-card {
     position: relative;
     min-width: 0;
-    aspect-ratio: var(--festival-card-aspect);
+    aspect-ratio: calc(var(--festival-card-aspect) * 0.9);
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    border-radius: clamp(10px, 1.15vw, 16px);
+    border: 1px solid rgba(57, 39, 27, 0.08);
+    border-radius: clamp(8px, 0.78vw, 11px);
     background: #31261f;
-    box-shadow: 0 9px 24px rgba(52, 32, 18, 0.14);
+    box-shadow: 0 5px 16px rgba(52, 32, 18, 0.12);
     isolation: isolate;
     transition: border-color 160ms ease, box-shadow 160ms ease;
   }
   .festival-card:hover {
-    border-color: rgba(255, 255, 255, 0.72);
-    box-shadow: 0 12px 28px rgba(52, 32, 18, 0.18);
+    border-color: rgba(57, 39, 27, 0.16);
+    box-shadow: 0 7px 20px rgba(52, 32, 18, 0.16);
   }
   .festival-card__link { display: block; width: 100%; height: 100%; color: #fff; text-decoration: none; }
   .festival-card__link:focus-visible {
@@ -460,21 +460,33 @@ const structuredData = [{
     inset: 0;
     z-index: 1;
     background:
-      linear-gradient(180deg, rgba(20, 13, 9, 0.42) 0%, transparent 30%),
-      linear-gradient(0deg, rgba(20, 13, 9, 0.52) 0%, rgba(20, 13, 9, 0.16) 46%, transparent 70%);
+      linear-gradient(180deg, rgba(20, 13, 9, 0.3) 0%, transparent 24%),
+      linear-gradient(
+        0deg,
+        rgba(15, 11, 9, 0.92) 0%,
+        rgba(15, 11, 9, 0.76) 22%,
+        rgba(15, 11, 9, 0.3) 48%,
+        transparent 72%
+      );
     pointer-events: none;
   }
   .festival-card--document .festival-card__veil {
     background:
-      linear-gradient(180deg, rgba(20, 13, 9, 0.36) 0%, transparent 20%),
-      linear-gradient(0deg, rgba(20, 13, 9, 0.56) 0%, rgba(20, 13, 9, 0.18) 34%, transparent 58%);
+      linear-gradient(180deg, rgba(20, 13, 9, 0.3) 0%, transparent 22%),
+      linear-gradient(
+        0deg,
+        rgba(15, 11, 9, 0.92) 0%,
+        rgba(15, 11, 9, 0.72) 20%,
+        rgba(15, 11, 9, 0.26) 45%,
+        transparent 68%
+      );
   }
 
   .festival-card__topline {
     position: absolute;
-    top: clamp(0.62rem, 1.2vw, 0.9rem);
-    right: clamp(0.62rem, 1.2vw, 0.9rem);
-    left: clamp(0.62rem, 1.2vw, 0.9rem);
+    top: clamp(0.5rem, 0.84vw, 0.7rem);
+    right: clamp(0.5rem, 0.84vw, 0.7rem);
+    left: clamp(0.5rem, 0.84vw, 0.7rem);
     z-index: 2;
     display: flex;
     align-items: flex-start;
@@ -485,65 +497,57 @@ const structuredData = [{
   .festival-card__status {
     display: inline-flex;
     align-items: center;
-    min-height: 1.35rem;
-    padding: 0.22rem 0.42rem;
-    border: 1px solid rgba(255, 255, 255, 0.38);
-    border-radius: 999px;
-    background: rgba(28, 19, 14, 0.7);
-    font-size: clamp(0.56rem, 0.68vw, 0.65rem);
-    font-weight: 800;
+    min-height: 1.24rem;
+    padding: 0.25rem 0.44rem;
+    border: 0;
+    border-radius: 4px;
+    font-size: clamp(0.54rem, 0.62vw, 0.6rem);
+    font-weight: 700;
     line-height: 1.15;
     white-space: nowrap;
-    backdrop-filter: blur(8px);
   }
   .festival-card__date {
     min-width: 0;
     overflow: hidden;
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 7px rgba(34, 20, 12, 0.18);
     text-overflow: ellipsis;
   }
   .festival-card__status {
     flex: 0 0 auto;
     max-width: 100%;
-    gap: 0.3rem;
-    background: rgba(255, 253, 248, 0.9);
-    color: #38281f;
+    background: #e8f5e9;
+    color: #24743b;
+    box-shadow: 0 2px 7px rgba(34, 20, 12, 0.12);
   }
-  .festival-card__status i {
-    flex: 0 0 auto;
-    width: 0.42rem;
-    height: 0.42rem;
-    border-radius: 50%;
-    background: var(--accent);
+  .festival-card--program-pending .festival-card__status,
+  .festival-card--date-pending .festival-card__status {
+    background: #fff1bd;
+    color: #76540a;
   }
-  .festival-card--program-pending .festival-card__status i,
-  .festival-card--date-pending .festival-card__status i { background: #bd7b13; }
 
   .festival-card__caption {
     position: absolute;
-    right: clamp(0.48rem, 0.85vw, 0.72rem);
-    bottom: clamp(0.48rem, 0.85vw, 0.72rem);
-    left: clamp(0.48rem, 0.85vw, 0.72rem);
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 2;
     min-width: 0;
-    padding: clamp(0.58rem, 0.92vw, 0.78rem);
+    padding: 0 clamp(0.64rem, 0.92vw, 0.82rem) clamp(0.62rem, 0.88vw, 0.76rem);
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    border-radius: clamp(9px, 1vw, 13px);
-    background:
-      linear-gradient(135deg, rgba(28, 21, 17, 0.78), rgba(16, 13, 11, 0.56));
-    box-shadow:
-      0 10px 24px rgba(12, 8, 6, 0.22),
-      inset 0 1px rgba(255, 255, 255, 0.1);
-    -webkit-backdrop-filter: blur(14px) saturate(125%);
-    backdrop-filter: blur(14px) saturate(125%);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
   .festival-card__caption p {
-    margin: 0.3rem 0 0;
-    color: rgba(255, 255, 255, 0.86);
+    margin: 0.24rem 0 0;
+    color: rgba(255, 255, 255, 0.9);
     overflow: hidden;
-    font-size: clamp(0.6rem, 0.74vw, 0.68rem);
-    font-weight: 680;
-    line-height: 1.35;
+    font-size: clamp(0.61rem, 0.72vw, 0.68rem);
+    font-weight: 470;
+    line-height: 1.3;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -555,10 +559,10 @@ const structuredData = [{
     text-wrap: balance;
     font-family: var(--ke-font-sans);
     overflow: hidden;
-    font-size: clamp(1rem, 1.42vw, 1.42rem);
-    font-weight: 820;
-    letter-spacing: -0.035em;
-    line-height: 1.08;
+    font-size: clamp(0.98rem, 1.3vw, 1.3rem);
+    font-weight: 760;
+    letter-spacing: -0.03em;
+    line-height: 1.06;
     text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -567,20 +571,20 @@ const structuredData = [{
     display: inline-flex;
     align-items: center;
     max-width: 100%;
-    margin-top: 0.42rem;
-    padding: 0.25rem 0.48rem;
+    margin-top: 0.38rem;
+    padding: 0.25rem 0.42rem;
     overflow: hidden;
-    border: 1px solid rgba(176, 240, 230, 0.25);
-    border-radius: 999px;
-    background: rgba(48, 101, 93, 0.32);
-    color: rgba(232, 255, 251, 0.96);
-    font-size: clamp(0.56rem, 0.66vw, 0.63rem);
-    font-weight: 740;
+    border: 0;
+    border-radius: 5px;
+    background: rgba(15, 15, 15, 0.56);
+    color: rgba(255, 255, 255, 0.96);
+    font-size: clamp(0.56rem, 0.64vw, 0.62rem);
+    font-weight: 500;
     line-height: 1;
     text-overflow: ellipsis;
     white-space: nowrap;
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
   }
   .festival-card__theme i {
     flex: 0 0 auto;
@@ -595,50 +599,52 @@ const structuredData = [{
   .festival-card__theme span {
     min-width: 0;
     overflow: hidden;
+    text-transform: lowercase;
     text-overflow: ellipsis;
   }
-  .festival-row--4 .festival-card__topline { gap: 0.28rem; }
+  .festival-row--4 .festival-card__topline { gap: 0.26rem; }
   .festival-row--4 .festival-card__date,
   .festival-row--4 .festival-card__status {
-    min-height: 1.22rem;
-    padding: 0.18rem 0.32rem;
-    font-size: clamp(0.52rem, 0.61vw, 0.59rem);
+    min-height: 1.2rem;
+    padding: 0.21rem 0.36rem;
+    font-size: clamp(0.5rem, 0.56vw, 0.55rem);
   }
-  .festival-row--4 .festival-card__status { gap: 0.22rem; }
-  .festival-row--4 .festival-card__status i {
-    width: 0.36rem;
-    height: 0.36rem;
+  .festival-row--4 .festival-card__caption {
+    padding: 0 clamp(0.58rem, 0.76vw, 0.68rem) clamp(0.56rem, 0.72vw, 0.65rem);
   }
-  .festival-row--4 .festival-card__caption { padding: 0.52rem 0.56rem 0.56rem; }
-  .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.9rem, 1.12vw, 1.08rem); }
-  .festival-row--4 .festival-card__caption p { margin-top: 0.24rem; }
-  .festival-row--4 .festival-card__theme { margin-top: 0.34rem; }
+  .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.94rem, 1.08vw, 1.06rem); }
+  .festival-row--4 .festival-card__caption p { margin-top: 0.2rem; }
+  .festival-row--4 .festival-card__theme { margin-top: 0.32rem; }
+
+  @media (min-width: 1100px) {
+    .festival-card { aspect-ratio: var(--festival-card-aspect); }
+  }
 
   @media (min-width: 820px) and (max-width: 1000px) {
     .festival-card__caption,
     .festival-row--4 .festival-card__caption {
-      padding: 0.44rem 0.48rem 0.47rem;
+      padding: 0 0.62rem 0.62rem;
     }
     .festival-card__caption h3,
     .festival-row--4 .festival-card__caption h3 {
-      font-size: 0.9rem;
+      font-size: 0.96rem;
       line-height: 1.05;
     }
     .festival-card__caption p,
     .festival-row--4 .festival-card__caption p {
       margin-top: 0.2rem;
-      font-size: 0.56rem;
+      font-size: 0.6rem;
     }
     .festival-card__theme,
     .festival-row--4 .festival-card__theme {
-      margin-top: 0.26rem;
-      padding: 0.18rem 0.34rem;
-      font-size: 0.53rem;
+      margin-top: 0.3rem;
+      padding: 0.21rem 0.34rem;
+      font-size: 0.5rem;
     }
     .festival-card__theme i {
-      width: 0.68rem;
-      height: 0.68rem;
-      margin-right: 0.22rem;
+      width: 0.64rem;
+      height: 0.64rem;
+      margin-right: 0.2rem;
     }
   }
 

@@ -279,6 +279,11 @@
 - Made free event-detail ranges calendar-primary with the exact
   `Добавить в календарь` CTA and valid all-day range ICS; on split/OCR desktop
   pages all identity/free medallions stay inline so none is clipped.
+- Reworked the festival-calendar cards from the rejected nested glass-caption
+  treatment into the reference-faithful single-photo canvas: seamless lower
+  gradient, solid date and quiet status badges, complete lowercase SVGRepo
+  category chips, lighter supporting type and denser donor-like proportions.
+
 - Removed the event-detail mobile breadcrumb/back row, kept wide adaptive Share
   actions labelled, and prevented the sticky ticket action from reappearing at
   the footer after the related-event boundary.
