@@ -1,5 +1,6 @@
 ---
 import EventCard from '../../../components/EventCard.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
 import EventLayout from '../../../layouts/EventLayout.astro';
 import {
   getMaterializedSearchCollection,
@@ -25,13 +26,13 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
 <EventLayout title={title} description={collection.description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="search" noindex>
   <main id="main">
     <div class="page-shell page-shell--search-collection">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={siteHomeHref()}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        <a href={withBase('/poisk/')}>Поиск</a>
-        <span aria-hidden="true">/</span>
-        <span>{collection.title}</span>
-      </nav>
+      <Breadcrumbs
+        parents={[
+          { label:'Афиша', href:siteHomeHref() },
+          { label:'Поиск', href:withBase('/poisk/') },
+        ]}
+        current={collection.title}
+      />
 
       <section class="section-card">
         <div class="section-card__inner">

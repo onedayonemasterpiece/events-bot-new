@@ -3,6 +3,7 @@ import Icon from './Icon.astro';
 import EventCard from './EventCard.astro';
 import EventTokenMedallions from './EventTokenMedallions.astro';
 import EventOccurrenceNav from './EventOccurrenceNav.astro';
+import Breadcrumbs from './Breadcrumbs.astro';
 import EventFallbackArt from './EventFallbackArt.astro';
 import DesktopEventActionPanel from './DesktopEventActionPanel.astro';
 import EventTransportSchedule from './EventTransportSchedule.astro';
@@ -25,6 +26,7 @@ import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
 import { selectEventMediaByQuality } from '../lib/eventMediaQuality';
 import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
 import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
+import { eventBreadcrumbParents } from '../lib/breadcrumbs';
 
 type Candidate = 'editorial' | 'split';
 type MediaPolicy = 'non-ocr' | 'ocr';
@@ -522,6 +524,12 @@ const descriptionHtml = (event.description_html || '')
 
         <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long']} data-scroll-content={usesLongFlow ? '' : undefined} data-editorial-content-flow={candidate === 'editorial' ? '' : undefined}>
           <div class="desktop-prototype__info" data-title-panel>
+            <Breadcrumbs
+              parents={eventBreadcrumbParents(event)}
+              current={event.title}
+              display="desktop"
+              className="desktop-prototype__breadcrumbs"
+            />
             <div class="desktop-prototype__kicker">
               <span>{event.event_type || 'событие'}</span>
               <EventOccurrenceNav event={event} presentation={resolvedOccurrencePresentation} variant="desktop" />

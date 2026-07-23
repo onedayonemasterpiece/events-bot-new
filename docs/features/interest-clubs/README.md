@@ -4,6 +4,13 @@
 
 **Production canary live 2026-07-17.** Implementation PR #54 и release PR #60 достижимы из `origin/main`; Fly runtime v1688 работает с relation pipeline, static projection и public gates ON. В production импортированы шесть confirmed identities и две shadow identities; public freshness/boundary gates опубликовали четыре клуба на canonical root routes. Точные SHA, counts, hashes, rollback и HTTP evidence записаны в [release plan](release-plan.md#production-evidence-2026-07-17). Семидневное наблюдение Stage 5 ещё продолжается и не подменяется фактом deploy.
 
+Для noindex candidate от 2026-07-23 проекция пересчитана из свежего SQLite
+snapshot по текущему 90-дневному freshness contract, а не скопирована из
+старого root HTML. Она содержит три current identity (`game-vibes`,
+`neural-researchers`, `technology-researchers`); устаревшая четвёртая карточка
+не сохраняется ради заполнения. Ссылка будущей встречи появляется только если
+точный event материализован внутри того же preview prefix.
+
 Канонические документы:
 
 - архитектурное решение: [ADR-001](adr-001-identity-pipeline.md);

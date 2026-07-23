@@ -41,6 +41,12 @@ The preview-only `/dlya-menya/` page is an honest finite cold-start specimen,
 not a new production SEO route. A successful local build or prefix upload never
 authorizes root promotion or a stable calendar rewrite.
 
+The 2026-07-23 correction candidate additionally keeps every reviewed surface
+inside one mutually linked prefix: the dynamic Exhibitions presentation,
+one-column large-card personal feed, Search, current clubs, six-logo Partners,
+deep-page breadcrumbs and the two event-detail regressions (`6686`, `6529`).
+It is still a review build, not a root rollout.
+
 ## 2026-07-18 v12 fidelity and production-rail contract
 
 V12 applies the accepted component system to automatic generation rather than

@@ -1,5 +1,6 @@
 ---
 import EventLayout from '../../../layouts/EventLayout.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
 import { siteHomeAbsoluteUrl, siteHomeHref, absoluteUrl, displayDateValue, SITE_NAME, withBase } from '../../../lib/events';
 import { getInterestClubBySlug, getInterestClubs, interestClubAbsoluteUrl, interestClubMeetingHref } from '../../../lib/clubs';
 
@@ -38,13 +39,13 @@ const structuredData = [
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={structuredData} headerCurrent="clubs">
   <main id="main">
     <article class="page-shell club-detail">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={siteHomeHref()}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        <a href={withBase('/kluby-po-interesam/')}>Клубы по интересам</a>
-        <span aria-hidden="true">/</span>
-        <span>{club.name}</span>
-      </nav>
+      <Breadcrumbs
+        parents={[
+          { label:'Афиша', href:siteHomeHref() },
+          { label:'Клубы по интересам', href:withBase('/kluby-po-interesam/') },
+        ]}
+        current={club.name}
+      />
 
       <header class="section-card club-detail__hero">
         <div class="section-card__inner">
@@ -105,7 +106,6 @@ const structuredData = [
 
 <style>
   .club-detail { display:grid; gap:1rem; }
-  .crumbs a { min-height:44px; }
   .club-detail__hero { background:linear-gradient(135deg, #fffdf8, rgba(215,240,236,.7)); }
   .club-detail__hero h1 { max-width:19ch; font-size:clamp(2.2rem, 6vw, 4.8rem); line-height:.98; }
   .club-detail__facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; margin:1.3rem 0 0; }

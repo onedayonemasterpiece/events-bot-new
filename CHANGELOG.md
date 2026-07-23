@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added the 2026-07-23 noindex unified-correction candidate contract: selective
+  semantic breadcrumbs on deep pages, a fresh current-club projection, ICAE
+  Kaliningrad on the six-logo partner board, and an explicitly labelled
+  Gemini-estimated same-day rail shortlist for event `6529`.
+
 - Added one immutable, noindex unified static-site review prototype on fresh
   production-snapshot data: a responsive page-type hub links Calendar,
   desktop/mobile Popular, Exhibitions, Search/materialized collections,
@@ -98,6 +103,10 @@
 
 ### Changed
 
+- Promoted the accepted Exhibitions personal presentation to the integrated
+  review `/vystavki/` with dynamic current-event projection, and made the
+  review-only `/dlya-menya/` use the canonical one-column large-card feed.
+
 - Unified the current desktop and mobile discovery donors without flattening
   their accepted responsive compositions. Public navigation now uses the short
   label `Партнёры`; the preview-only `Для меня` route states its cold-start
@@ -114,6 +123,11 @@
   explicit owner disposition rather than accepting its recommendations wholesale.
 
 ### Fixed
+
+- Fixed Search showing a skeleton before any request and unified its standalone
+  field/button styling; made unknown/error event media fail closed to
+  document-safe framing so text-heavy poster `6686` is not destructively
+  cropped.
 
 - Kept the disabled Search backend honest while rendering its accepted visual
   prototype (three-line prompt and loading-card skeletons), and made the

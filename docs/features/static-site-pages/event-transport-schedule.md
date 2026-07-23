@@ -15,6 +15,21 @@ The event page offers neutral travel help inside the reading flow:
 
 This is a release feature of the event page, not a standalone campaign. It is included in the [official presentation checklist](presentation-release-checklist.md).
 
+### Missing duration in immutable review candidates
+
+The public/root contract continues to prefer explicit source-grounded end time
+or duration. A noindex review build may carry a separately versioned
+`llm_estimated` duration only when the estimate, plausible range, confidence
+and conservative routing value are recorded in
+`site/src/data/event-duration-estimates.json`. The UI must call it an estimate.
+
+For event `6529`, Gemini 3.1 Pro estimated a likely 120 minutes and a
+conservative routing duration of 150 minutes. With the existing access buffer,
+the candidate therefore offers usable same-day returns at `18:56` and `19:43`.
+It never suggests the following morning. If neither source duration nor an
+approved preview estimate exists, the component fails closed to the last
+same-day boundary instead of asking a visitor to wait overnight.
+
 ## 2026-07-15 integration evidence
 
 The current accepted full-data candidate is

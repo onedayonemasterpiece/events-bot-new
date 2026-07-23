@@ -27,6 +27,13 @@ response. See
 
 This keeps SEO-safe deterministic listing content first, then adds a personal continuation only for real users.
 
+### Review-only `/dlya-menya/` surface
+
+The finite cold-start route uses the same canonical large `EventCard` renderer
+as ranked Search results and lays it out as a one-column document feed at every
+breakpoint. A bespoke 3/2/1 compact grid is forbidden: it changes the accepted
+large-card media geometry and reintroduces a second crop implementation.
+
 ## Runtime behavior
 
 1. Page renders static listing sections only.

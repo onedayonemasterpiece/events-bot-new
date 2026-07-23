@@ -1,6 +1,7 @@
 import type { PreviewEvent } from './types';
-import { displayDate, eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, siteHomeHref, SITE_NAME, SITE_ORIGIN } from './events';
+import { displayDate, eventAbsoluteUrl, eventCalendarHref, isCalendarEligible, isExternalHttpUrl, SITE_NAME, SITE_ORIGIN } from './events';
 import { eventImageUrl } from './assets';
+import { eventBreadcrumbParents } from './breadcrumbs';
 
 const KALININGRAD_TZ_OFFSET = '+02:00';
 
@@ -106,10 +107,12 @@ export function buildEventJsonLd(event: PreviewEvent) {
 
 export function buildBreadcrumbJsonLd(event: PreviewEvent) {
   const items = [
-    { name: SITE_NAME, item: new URL(siteHomeHref(), `${SITE_ORIGIN}/`).toString() },
-    event.city ? { name: event.city, item: new URL(siteHomeHref(`?city=${encodeURIComponent(event.city)}`), `${SITE_ORIGIN}/`).toString() } : undefined,
+    ...eventBreadcrumbParents(event).map((parent) => ({
+      name: parent.label,
+      item: new URL(parent.href, `${SITE_ORIGIN}/`).toString(),
+    })),
     { name: event.title, item: eventAbsoluteUrl(event) },
-  ].filter(Boolean) as Array<{ name: string; item: string }>;
+  ];
 
   return {
     '@context': 'https://schema.org',

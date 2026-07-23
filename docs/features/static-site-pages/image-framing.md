@@ -8,6 +8,11 @@
   with `cover`; semantic-role uncertainty must not turn a non-OCR photograph
   into a letterboxed document. OCR/text/unknown hero media keeps the stricter
   full-poster `contain` policy.
+- Missing `image_text_mode`, missing OCR evidence, or
+  `media_semantic_status=error|unknown` is **not** permission to infer
+  `visual_only`. Large event media fails closed to document-safe `contain`
+  until classification succeeds. This protects text-heavy posters such as the
+  `6686` regression without an event-id exception.
 - Compact cards never have unused bands around an image: every packed card uses
   `cover`, in both static related rows and hydrated continuation rows.
 - A normal OCR/document card defines an exact feasible row ratio and is not

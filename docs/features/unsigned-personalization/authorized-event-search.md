@@ -24,6 +24,12 @@ When vector results are exhausted, the UI starts a separate section **«Возм
 
 Anonymous users have quota `0`: the UI shows “Войти через Яндекс”. Search is not available until Supabase Auth has a valid session.
 
+The structural skeleton is initially hidden and may become visible only after
+the user submits a request and the runtime enters loading. An empty untouched
+query is not a loading state. The standalone desktop and mobile surface share
+the same multiline field and dark full-width submit treatment; a disabled
+preview must not reveal a specimen skeleton or a second visual language.
+
 ### Mobile point-of-intent entry and query cloud (v22 research)
 
 На mobile `/poisk/` — самостоятельный пункт нижней навигации; он активен на

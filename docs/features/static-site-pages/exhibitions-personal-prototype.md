@@ -1,16 +1,25 @@
 # Прототип персональной страницы «Выставки»
 
-> **Статус:** отдельный интерактивный product/UI prototype; production `/vystavki/` не изменён.
+> **Статус:** presentation contract promoted to the noindex integrated review
+> `/vystavki/`; production root is not promoted.
 > **Маршрут:** `/lab/exhibitions-personal/` в обычной Astro-сборке.
 > **Источник визуального подхода:** `docs/reference/Выставки UI UX.png`.
 > **Последний immutable preview:** `preview-20260720-exhibitions-personal-v12-465c2bc5`.
 
 ## Зачем нужен отдельный прототип
 
-Текущая `/vystavki/` остаётся production-like статическим списком. Лабораторная
-страница проверяет другой продуктовый цикл: пользователь быстро разбирает новые
-выставки, явными действиями формирует интересы, затем получает персонально
-упорядоченную подборку и только при необходимости раскрывает длинный хвост.
+Лабораторная страница проверила другой продуктовый цикл: пользователь быстро
+разбирает новые выставки, явными действиями формирует интересы, затем получает
+персонально упорядоченную подборку и только при необходимости раскрывает
+длинный хвост. В integrated noindex candidate эта presentation/interaction
+механика используется и на `/vystavki/`, но данные больше не являются
+донорским July fixture.
+
+Public-review route сначала получает кандидатов через
+`getOngoingExhibitionEvents()`, сохраняя date filtering и occurrence collapse,
+а затем строит bucket-проекцию. Неактивные, истёкшие, невыставочные, duplicate
+id и точные нормализованные title repeats отбрасываются fail-closed. Донорская
+страница остаётся визуальным contract, а не источником production данных.
 
 Прототип не добавлен в sitemap и не является обещанием готовой серверной
 персонализации. Его localStorage-ключ `ke_exhibitions_prototype_v1` намеренно не

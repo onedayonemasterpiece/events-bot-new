@@ -1,7 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import InterestClubCard from '../../components/InterestClubCard.astro';
-import { siteHomeHref, absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 import { getInterestClubs, interestClubAbsoluteUrl } from '../../lib/clubs';
 
 const clubs = getInterestClubs();
@@ -34,12 +34,6 @@ const structuredData = [
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={structuredData} headerCurrent="clubs">
   <main id="main">
     <div class="page-shell club-page">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={siteHomeHref()}>Афиша</a>
-        <span aria-hidden="true">/</span>
-        <span>Клубы по интересам</span>
-      </nav>
-
       <header class="club-intro section-card">
         <div class="section-card__inner">
           <p class="eyebrow">Сообщества региона</p>
@@ -69,7 +63,6 @@ const structuredData = [
 
 <style>
   .club-page { display:grid; gap:1rem; }
-  .crumbs a { min-height:44px; }
   .club-intro { overflow:hidden; background:linear-gradient(135deg, rgba(255,253,248,.98), rgba(215,240,236,.72)); }
   .club-intro h1 { max-width:14ch; }
   .club-intro__count { width:max-content; margin:1.2rem 0 0; padding:.4rem .75rem; border-radius:999px; background:#fff; color:var(--primary-strong); font-weight:900; }

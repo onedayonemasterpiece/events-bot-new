@@ -1,7 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import EventCard from '../../components/EventCard.astro';
-import { absoluteUrl, getPopularEvents, SITE_NAME, siteHomeHref, withBase } from '../../lib/events';
+import { absoluteUrl, getPopularEvents, SITE_NAME, withBase } from '../../lib/events';
 
 // This is a review-only cold-start surface. The real profile remains local and
 // consented; without enough reactions we show a finite diverse fallback rather
@@ -14,9 +14,6 @@ const description = 'Адаптивный прототип личной лент
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="personal" noindex>
   <main id="main" class="personal-page" data-personal-prototype>
     <div class="page-shell">
-      <nav class="crumbs" aria-label="Хлебные крошки">
-        <a href={siteHomeHref()}>Афиша</a><span aria-hidden="true">/</span><span>Для меня</span>
-      </nav>
       <header class="personal-page__head">
         <p class="eyebrow">Личная лента · прототип</p>
         <h1>Для меня</h1>
