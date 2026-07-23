@@ -220,34 +220,6 @@ Secondary CTAs:
 - **Сохранить** — MVP can be local-only after consent; if no consent, show “сохранить в браузере?” prompt or keep for post-MVP.
 - **Не интересно / скрыть похожее** — only on related cards, not on the current event hero.
 
-### 5.1 Mobile physical CTA visual test
-
-The mobile action dock keeps the accepted action hierarchy but may use a
-CSS-only physical treatment in immutable noindex review candidates:
-
-- one warm ebony/chocolate module, not a separate black or metallic theme;
-- the primary ticket/registration/source action spans the full first row and
-  keeps its visible label plus the matching ticket or phone icon;
-- calendar, share and like occupy three equal secondary columns; below the
-  400px action-container breakpoint their prose labels are visually hidden,
-  while their full accessible names remain available;
-- idle depth comes from restrained gradients plus inset highlights and warm
-  shadows; `:active` reverses the shadow and moves the control down by one
-  pixel; fine-pointer hover may lift by one pixel;
-- calendar success is persistent teal via `.is-calendar-added`; like success
-  is persistent rose via `aria-pressed="true"`. Both remain readable without a
-  toast and must not rely on colour alone: the calendar label/state changes
-  through the existing controller and the heart changes from outline to solid;
-- keyboard focus uses a high-contrast teal `focus-visible` ring. Primary height
-  is at least 54px, secondary height at least 52px, and all controls remain at
-  least 44px in both dimensions at 320–430px;
-- reduced-motion removes movement/transitions; the visual test adds no raster
-  texture or extra network request.
-
-The reference price/header is intentionally not duplicated inside the dock:
-admission remains a separate event fact. Heavy leather/metal texture, neon
-gaming chrome and long success captions are also excluded.
-
 CTA quality rules:
 
 - one primary action per viewport;

@@ -2,13 +2,6 @@
 
 ## [Unreleased]
 
-### Changed
-
-- Refined the mobile event hero CTA as a CSS-only warm-ebony physical control:
-  the ticket action now carries its icon and pressed/hover/focus states, while
-  equal calendar/share/like controls keep accessible compact labels and
-  persistent teal/rose success states without adding image texture requests.
-
 ### Fixed
 
 - Unified linked-event occurrence projection across static detail, date lists,
