@@ -135,6 +135,24 @@ if (!festivals.includes('data-festival-timeline') || !festivals.includes('data-f
 if ((festivals.match(/data-festival-card=/gu) || []).length !== 21) {
   throw new Error('Festival calendar card count does not match its curated source projection');
 }
+if ((festivals.match(/data-protected-crop-fit="cover"/gu) || []).length < 21
+  || (festivals.match(/data-media-source-kind=/gu) || []).length !== 21
+  || (festivals.match(/data-media-confidence=/gu) || []).length !== 21) {
+  throw new Error('Festival cards must use reviewed, provenance-bound, full-cover media');
+}
+if (festivals.includes('afisha80let.visit-kaliningrad.ru')
+  || festivals.includes('festival-card__body')
+  || festivals.includes('festival-card__source')) {
+  throw new Error('Festival cards regressed to aggregator media or split white-body composition');
+}
+for (const row of festivals.matchAll(/<div[^>]*data-festival-row[^>]*>/gu)) {
+  const remainder = /data-row-remainder="(true|false)"/u.exec(row[0])?.[1];
+  const width = /data-row-width-fraction="([0-9.]+)"/u.exec(row[0])?.[1];
+  if (!remainder || !width) throw new Error('Festival row misses fullness metadata');
+  if (remainder === 'false' && Math.abs(Number(width) - 1) > 0.0001) {
+    throw new Error(`Non-final festival row no longer fills 100%: ${width}`);
+  }
+}
 for (const month of ['july', 'august', 'september', 'october', 'november', 'december']) {
   if (!festivals.includes(`data-festival-month="${month}"`)) throw new Error(`Festival calendar misses ${month}`);
 }

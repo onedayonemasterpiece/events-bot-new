@@ -46,6 +46,10 @@ The prototype hub also owns the noindex `/festivali/` calendar timeline. Its
 one-to-four-card packing are canonical in
 [`festival-timeline.md`](festival-timeline.md). It is a review route, not a
 production festival directory or acceptance of the deferred category view.
+The current `r3` correction withdraws the split-body `r1` candidate: cards are
+now full-cover overlays in donor-density rows, the `390px` layout keeps two
+columns, and all media is hash-bound to festival/organiser/venue provenance
+without the regional anniversary aggregator.
 
 The 2026-07-23 correction candidate additionally keeps every reviewed surface
 inside one mutually linked prefix: the dynamic Exhibitions presentation,

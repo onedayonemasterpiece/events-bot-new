@@ -28,6 +28,7 @@
     "publish:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs publish",
     "test:static-release": "node --test scripts/static-release.behavior.test.mjs",
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
+    "test:festival-timeline-layout": "node --experimental-strip-types --test scripts/festival-timeline-layout.behavior.test.mjs",
     "test:browser-release-gate": "node --test scripts/browser-release-gate.behavior.test.mjs",
     "test:occurrences": "node --experimental-strip-types --test tests/event-occurrences.test.mjs",
     "astro": "astro"
