@@ -341,6 +341,7 @@ features:
     event_page_consultant_review_application_2026_06_27: docs/features/static-site-pages/consultant-review-application-matrix-2026-06-27.md
     event_page_merged_skeleton: docs/features/static-site-pages/event-page-merged-skeleton.md
     astro_preview: docs/features/static-site-pages/astro-preview.md
+    festival_calendar_timeline: docs/features/static-site-pages/festival-timeline.md
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
     release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
