@@ -45,8 +45,21 @@ wholesale; only the listed commits were cherry-picked.
   and 390×844, including zero horizontal overflow, initial-hidden Search
   skeleton, responsive breadcrumbs, shared personal-feed packing, protected
   event 6686 media and same-day event 6529 returns.
-- Browser screenshots/metrics and final live external acceptance are recorded
-  in task-local non-committed artifacts.
+- Immutable preview deployment:
+  `https://kenigevents.ru/preview-20260723-unified-corrections-r1/__preview/`;
+  all eight reviewed routes returned HTTP 200 with `noindex`. The deployment
+  script wrote only the immutable preview prefix and did not modify the
+  production root or stable `/ics`.
+- Live browser acceptance: 16/16 route/viewport checks passed against the
+  public URL.
+- Final external acceptance: **PASS** from valid
+  `gemini-3.1-pro-low` (`Gemini 3.1 Pro (Low)` in provider log), with R01–R08
+  all PASS and no mandatory pre-review fixes. The only non-blocking
+  recommendation was to add exhibitions-specific card metrics to the browser
+  collector.
+- Browser screenshots/metrics and Gemini prompt, response and provider log are
+  recorded in task-local non-committed artifacts under
+  `artifacts/codex/static-unified-corrections-20260723/`.
 
 ## Closure audit
 
