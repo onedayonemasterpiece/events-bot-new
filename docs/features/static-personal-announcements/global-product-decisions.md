@@ -77,6 +77,13 @@
    быть доступны. Награда или влияние social share на шансы не включаются без
    отдельного legal/privacy/anti-fraud решения. До принятия product spec эта
    feature не блокирует первую публичную презентацию и не имеет production code.
+41. **Фестивальные анонсы получают отдельный post-release subscription stream.**
+   Один festival-only редакционный продукт публикуется через отдельные
+   KenigEvents destinations в Telegram, VK и MAX: от первичного анонса выпуска
+   до существенных уточнений программы/расписания. На canonical detail pages
+   фестивалей появляется CTA выбора этих трёх destinations. Обычные event posts
+   в поток не копируются; создание каналов и publisher остаются отдельной
+   реализацией после принятия identity/ownership/idempotency contract.
 
 ## Consequences
 

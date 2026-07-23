@@ -30,6 +30,7 @@
 | Anonymous personalization | `USR-10..12`, `ADD-PERS-*` | Demo-only + Draft | `tests/playwright/static_personalization_contract.spec.ts` (9 mocked demo tests); `tests/e2e/features/static_site_personalization.feature` (`@draft`, no Behave steps) | current Astro/public E2E and backend persistence |
 | Share/calendar/maps/email/native browser | `USR-02/03/06/07/13/15/16`, `ADD-SHARE/FAV/MAIL/TR-*` | Manual/native or Planned | per-scenario evidence | real target applications and not-yet-implemented durable flows |
 | Atomic release and Telegraph cutover | `ADD-BUILD-*`, `ADD-CUTOVER-*` | Planned | future production publisher/resolver suite | весь production cutover contract |
+| Festival channels and page CTA | `ADD-FEST-CHANNEL-*` | Planned | future festival revision fan-out + festival-page browser/native checks | live Telegram/VK/MAX destinations, idempotent update continuity and public CTA |
 
 ### Release evidence row contract
 
@@ -222,6 +223,30 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
   не останавливает month/weekend/festival Telegraph pages; их отдельный switch
   разрешён только после static parity и собственного acceptance pack.
 
+### Festival-only channels and subscription CTA
+
+- **ADD-FEST-CHANNEL-01 — Только фестивальный lifecycle.** В отдельные
+  KenigEvents destinations не попадают обычные standalone event posts, raw
+  source reposts или автоматический пост на каждый linked event. Допустимы
+  edition-level first announcement, programme publication, meaningful schedule/
+  logistics clarification и cancellation/correction.
+- **ADD-FEST-CHANNEL-02 — Revision-bound idempotency.** Один accepted
+  `edition + revision + message_kind` создаёт не более одной публикации в каждом
+  target. Retry failed MAX/VK/Telegram не дублирует уже успешные targets и
+  сохраняет один correlation trail.
+- **ADD-FEST-CHANNEL-03 — Честное уточнение.** После первичного анонса изменение
+  расписания публикуется во всех трёх destinations с явным delta, теми же
+  canonical edition facts/link и semantic parity; устаревший факт не остаётся
+  единственной видимой актуальной инструкцией.
+- **ADD-FEST-CHANNEL-04 — CTA на странице фестиваля.** Canonical festival detail
+  показывает один понятный entry CTA и доступный выбор Telegram/VK/MAX с
+  production URLs. Keyboard, touch, screen reader и no-JS работают; переход
+  наружу не показывается как подтверждённая подписка.
+- **ADD-FEST-CHANNEL-05 — Partial failure и rollback.** Live canary сохраняет
+  public post URLs по каждому target, безопасно догоняет один failed target,
+  доказывает отсутствие дублей и позволяет остановить fan-out/скрыть
+  неработающий destination CTA без отката canonical festival page.
+
 ### UI, accessibility и browser matrix
 
 - **ADD-UI-01 — Единая навигационная модель.** Mobile tag/menu и desktop header сохраняют одинаковые destinations, labels, порядок, active state, избранное и identity semantics.
@@ -243,7 +268,7 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 - **ADD-OBS-01 — Ошибки видимы и коррелируются.** Build/search/share/email/transport/personalization failure оставляет run/request correlation evidence без PII; UI не сообщает успех, если backend действие не принято.
 - **ADD-OBS-02 — Чистая клиентская сессия.** На каждой page family нет неожиданных console errors, unhandled rejections, failed first-party requests, hydration mismatch и повторяющегося telemetry spam.
 
-## Release-orchestration scenarios из полного Stage 0–12 checklist
+## Release-orchestration scenarios из полного Stage 0–13 checklist
 
 Эти IDs восстанавливают требования, которые не помещались в прежние широкие
 `ADD-*` families. Они остаются `Planned`, пока ID не связан с runnable test/manual

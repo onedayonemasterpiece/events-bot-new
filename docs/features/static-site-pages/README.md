@@ -4,8 +4,8 @@
 > **Scope for MVP:** только публичные страницы **событий** на `kenigevents.ru`  
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
-> **Full release scope:** [247-item Stage 0–13 readiness checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md) (228-item recovered baseline plus later reconciled requirements).
-> **Presentation gate / test inventory:** [presentation checklist](presentation-release-checklist.md) · [221 scenarios](test-scenarios.md).
+> **Full release scope:** [252-item Stage 0–13 readiness checklist](../../reports/static-personal-announcements-release-readiness-2026-07-11.md) (228-item recovered baseline plus later reconciled requirements).
+> **Presentation gate / test inventory:** [presentation checklist](presentation-release-checklist.md) · [226 scenarios](test-scenarios.md).
 > **Recovery audit:** [sources, side branches and current status](../../reports/static-site-release-context-recovery-2026-07-17.md).
 
 ## Implementation status

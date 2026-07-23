@@ -5,8 +5,9 @@
 > аварийного обрыва предыдущей задачи и возвращена в main-based release branch.
 > Базовый восстановленный реестр содержит **228 отдельных checkbox-требований**
 > в Stage 0–11; пять D0–D10, семь video-guide, пять calendar/personal-hub, одна
-> social brand-tag и одна easter-eggs discovery строка добавлены при сверке,
-> поэтому текущая версия Stage 0–13 содержит **247 checkbox-требований**;
+> social brand-tag, одна easter-eggs discovery и пять festival-channel строк
+> добавлены при сверке, поэтому текущая версия Stage 0–13 содержит
+> **252 checkbox-требования**;
 > scope **F1–F18, H1, M1–M6** и не сводится к пяти задачам production-платформы.
 > Источники и расхождения с текущим `origin/main` зафиксированы в
 > [отчёте восстановления](static-site-release-context-recovery-2026-07-17.md).
@@ -26,7 +27,7 @@
 | Interest clubs | `98180d1e`, `6b234a52` и evidence `6cdae545` достигли `origin/main`; production canary включён | Stage 11 research/implementation baseline частично superseded; обязательны семидневное наблюдение, freshness/false-merge/rollback closure и отдельное решение о stable release. |
 | Full event-site publisher | `62ba7110` и последующее hardening остаются вне `origin/main` | Stage 2 production publish/promotion остаётся Blocked независимо от успешного preview. |
 | Design-system catalog | candidate `128a2d6a` находится в side branch | Это полезный F5 candidate, но не main/release truth и не заменяет immutable RC sign-off. |
-| Test inventory | 221 стабильных scenario IDs задокументированы | Автоматическая traceability пока нулевая: ID не встречаются в tests/scripts; это отдельный P0 release-evidence gap. |
+| Test inventory | 226 стабильных scenario IDs задокументированы | Автоматическая traceability пока нулевая: ID не встречаются в tests/scripts; это отдельный P0 release-evidence gap. |
 
 Текущий общий verdict остаётся **NO-GO**. Ни один новый merged slice не отменяет
 остальные требования реестра или 14-дневное quality window.
@@ -536,6 +537,11 @@ links и только на D10 запрещает создание новых ev
 - [ ] На event cards/details показать canonical `В рамках фестиваля …` link; медальон не заменяет relationship semantics.
 - [ ] Festival-only and relation changes schedule one coalesced standard build; checked artifact, manifest, atomic current pointer, CDN parity, stale/rollback and catalog/link parity pass.
 - [ ] После собственного festival UI/UX freeze rerun Playwright/a11y/no-JS and SEO/GEO audits for the new page family. Canonical contract: [static festival release](../features/festivals/static-site-release.md).
+- [ ] Утвердить единый public name, handles, description, administrators/moderators, credential boundary и recovery ownership для отдельных фестивальных destinations KenigEvents в Telegram, VK и MAX.
+- [ ] Зафиксировать festival-only publication policy от первого анонса выпуска до programme/schedule/date/time/venue/ticket/transport clarification или cancellation; обычные event posts, raw reposts и шум «один пост на каждый пункт программы» исключены.
+- [ ] Реализовать versioned edition-revision fan-out с semantic parity и idempotency per target: retry одного failed Telegram/VK/MAX target не дублирует уже успешные публикации, а clarification явно сообщает изменившиеся факты.
+- [ ] На каждой canonical festival detail page показать доступный CTA «Подписаться на фестивальные анонсы» с актуальными Telegram/VK/MAX destinations, keyboard/touch/screen-reader/no-JS contract и честной outbound-click telemetry без ложного subscription-success.
+- [ ] Пройти live canary «первичный анонс → уточнение расписания» во всех трёх destinations, включая partial-target failure/retry, duplicate prevention, correction/rollback и сохранённые public URL/evidence.
 
 ### Stage 10 — Важный пострелизный релиз operations dashboard
 
