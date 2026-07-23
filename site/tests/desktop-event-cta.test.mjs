@@ -69,10 +69,22 @@ test('registration and free-calendar semantic cases are frozen as Split specimen
 test('Editorial hierarchy and production role-first media boundaries stay intact', async () => {
   const page = await read('src/components/DesktopEventPage.astro');
   const presentation = await read('src/lib/desktopEventPresentation.ts');
+  const panel = await read('src/components/DesktopEventActionPanel.astro');
+  const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
 
   assert.match(page, /family="editorial"/u);
   assert.match(page, /family="split"/u);
   assert.match(presentation, /isTechnicallyStrongEventMedia/u);
   assert.match(presentation, /media_semantic_status === 'classified'/u);
   assert.match(presentation, /media_role === 'event_photo'/u);
+  assert.match(panel, /data-event-id=\{event\.id\}/u);
+  assert.match(panel, /data-event-title=\{event\.title\}/u);
+  assert.match(panel, /data-action-treatment=\{family === 'editorial' \? 'physical-editorial' : 'split'\}/u);
+  assert.match(panel, /\[data-action-treatment="physical-editorial"\][^}]*repeating-linear-gradient/su);
+  assert.match(panel, /\[data-action-treatment="physical-editorial"\][^}]*box-shadow:[^}]*inset/su);
+  assert.match(panel, /prefers-reduced-motion:reduce/u);
+  assert.match(lab, /slug: 'cta-editorial-6529-baseline', eventId: 6529, candidate: 'editorial'/u);
+  assert.match(lab, /7a75b552c70672a59b921db5fafd74b190839442e004a76f02269a2fe979f904/u);
+  assert.match(lab, /width:1280,\s*height:960/u);
+  assert.match(lab, /slug:'master-klass-dekorativnoe-mini-panno-tkanye-uzory-zelenogradsk-6529'/u);
 });

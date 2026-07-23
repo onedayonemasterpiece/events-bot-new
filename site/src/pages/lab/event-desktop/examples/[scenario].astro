@@ -34,6 +34,7 @@ type Scenario = {
   splitPortraitSourceIndexes?: number[];
   splitViewerHiddenSourceIndexes?: number[];
   relatedMediaTreatment?: 'cover' | 'ambient' | 'hybrid';
+  fixture?: 'baseline-6529-editorial';
   mediaRoleOverrides?: Record<number, EventImageMediaRole>;
   mediaDimensionOverrides?: Record<number, { width: number; height: number }>;
 };
@@ -64,6 +65,7 @@ const scenarios: Scenario[] = [
   { slug: 'editorial-photo-continuous', eventId: 5658, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'continuous', editorialCropPolicy: 'bounded-cover', heroObjectPosition: '50% 80%', editorialRail: true, autoRotate: true, ocrSourceIndexes: [4] },
   { slug: 'editorial-photo-continuous-wide', eventId: 5201, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'continuous', editorialCropPolicy: 'bounded-cover', heroObjectPosition: '50% 50%', editorialRail: true, autoRotate: false },
   { slug: 'editorial-photo-continuous-near-square', eventId: 6583, candidate: 'editorial', mediaPolicy: 'non-ocr', editorialMotion: 'continuous', editorialCropPolicy: 'bottom-safe', heroObjectPosition: '50% 100%', editorialRail: true, autoRotate: false },
+  { slug: 'cta-editorial-6529-baseline', eventId: 6529, candidate: 'editorial', mediaPolicy: 'non-ocr', fixture: 'baseline-6529-editorial', editorialMotion: 'continuous', editorialCropPolicy: 'bottom-safe', heroImageIndex: 0, heroWidth: 1280, heroHeight: 960, heroObjectPosition: '50% 100%', editorialRail: true, autoRotate: false, relatedMediaTreatment: 'hybrid' },
   { slug: 'editorial-ocr-companion', eventId: 6323, candidate: 'editorial', mediaPolicy: 'ocr', editorialMotion: 'pinned', heroImageIndex: 2, heroWidth: 2560, heroHeight: 1703, heroObjectPosition: '50% 52%', ocrCompanionImageIndex: 0, ocrCompanionLayout: 'separate', editorialRail: true, autoRotate: false, ocrSourceIndexes: [0, 1], mediaRoleOverrides:kupalaRoles, mediaDimensionOverrides:kupalaDimensions },
   { slug: 'editorial-ocr-companion-arrival', eventId: 4671, candidate: 'editorial', mediaPolicy: 'ocr', transport: true, showTransport: true, editorialMotion: 'continuous', heroImageIndex: 3, heroWidth: 2560, heroHeight: 1709, heroObjectPosition: '50% 50%', ocrCompanionImageIndex: 0, ocrCompanionLayout: 'arrival', editorialRail: false, autoRotate: false, ocrSourceIndexes: [0, 5], duplicateSourceIndexes: [5], mediaRoleOverrides:epidemicRoles, mediaDimensionOverrides:epidemicDimensions },
   { slug: 'split-ocr', eventId: 5077, candidate: 'split', mediaPolicy: 'ocr', heroImageIndex: 0, duplicateSourceIndexes: [1] },
@@ -91,6 +93,7 @@ export function getStaticPaths() {
     'editorial-photo-continuous',
     'editorial-photo-continuous-wide',
     'editorial-photo-continuous-near-square',
+    'cta-editorial-6529-baseline',
     'editorial-ocr-companion',
     'editorial-ocr-companion-arrival',
     'split-ocr',
@@ -118,10 +121,63 @@ const scenario = scenarios.find((item) => item.slug === Astro.params.scenario);
 if (!scenario) throw new Error(`Unknown clean desktop event scenario: ${Astro.params.scenario}`);
 const sourceEvent = merged.get(scenario.eventId);
 if (!sourceEvent) throw new Error(`Clean desktop event ${scenario.eventId} is missing`);
-const thumbnailOverrides = (thumbnailOverridesData.events as Record<string, Record<string, EventImageDerivative[]>>)[String(sourceEvent.id)] || {};
+const baseline6529Editorial:Partial<PreviewEvent> = {
+  title:'Декоративное мини-панно «Тканые узоры»',
+  // Keep the current canonical slug so the lab CTA downloads the real generated
+  // ICS; the frozen contract concerns the accepted Editorial media/layout.
+  slug:'master-klass-dekorativnoe-mini-panno-tkanye-uzory-zelenogradsk-6529',
+  image_url:'https://static.kenigevents.ru/p/image/v2/7a/7a75b552c70672a59b921db5fafd74b190839442e004a76f02269a2fe979f904.webp',
+  image_alt:'Фотография мастер-класса «Декоративное мини-панно «Тканые узоры»»',
+  image_text_mode:'visual_only',
+  image_media_role:'event_photo',
+  likes_count:18,
+  shares_count:4,
+  image_assets:[
+    {
+      src:'https://static.kenigevents.ru/p/image/v2/7a/7a75b552c70672a59b921db5fafd74b190839442e004a76f02269a2fe979f904.webp',
+      width:1280,
+      height:960,
+      alt:'Фотография мастер-класса «Декоративное мини-панно «Тканые узоры»»',
+      image_text_mode:'visual_only',
+      media_role:'event_photo',
+      media_role_confidence:1,
+      media_semantic_status:'classified',
+      image_kind:'photo',
+      recommended_hero_fit:'cover',
+      recommended_object_position:'50% 60%',
+      safe_crop:true,
+      thumbnail_sources:[
+        { src:'https://static.kenigevents.ru/p/thumb/v1/7a/7a75b552c70672a59b921db5fafd74b190839442e004a76f02269a2fe979f904/256.webp', width:256, height:192 },
+        { src:'https://static.kenigevents.ru/p/thumb/v1/7a/7a75b552c70672a59b921db5fafd74b190839442e004a76f02269a2fe979f904/512.webp', width:512, height:384 },
+      ],
+    },
+    {
+      src:'https://static.kenigevents.ru/p/image/v2/c9/c9e0ebf4d9e8e8ff40c3c79fa5c67818a0f28bcb5c85c9778c6dc1db0b82af69.webp',
+      width:655,
+      height:874,
+      alt:'Расписание мастер-класса «Декоративное мини-панно «Тканые узоры»»',
+      image_text_mode:'ocr_text',
+      media_role:'program_or_schedule',
+      media_role_confidence:1,
+      media_semantic_status:'classified',
+      image_kind:'document',
+      recommended_hero_fit:'contain',
+      recommended_object_position:'50% 50%',
+      safe_crop:false,
+      thumbnail_sources:[
+        { src:'https://static.kenigevents.ru/p/thumb/v1/c9/c9e0ebf4d9e8e8ff40c3c79fa5c67818a0f28bcb5c85c9778c6dc1db0b82af69/256.webp', width:192, height:256 },
+        { src:'https://static.kenigevents.ru/p/thumb/v1/c9/c9e0ebf4d9e8e8ff40c3c79fa5c67818a0f28bcb5c85c9778c6dc1db0b82af69/512.webp', width:384, height:512 },
+      ],
+    },
+  ],
+};
+const fixtureEvent = scenario.fixture === 'baseline-6529-editorial'
+  ? { ...sourceEvent, ...baseline6529Editorial } as PreviewEvent
+  : sourceEvent;
+const thumbnailOverrides = (thumbnailOverridesData.events as Record<string, Record<string, EventImageDerivative[]>>)[String(fixtureEvent.id)] || {};
 const event:PreviewEvent = {
-  ...sourceEvent,
-  image_assets:(sourceEvent.image_assets || []).map((asset, sourceIndex) => ({
+  ...fixtureEvent,
+  image_assets:(fixtureEvent.image_assets || []).map((asset, sourceIndex) => ({
     ...asset,
     thumbnail_sources:thumbnailOverrides[String(sourceIndex)] || asset.thumbnail_sources,
   })),

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated only the wide-photo Editorial event CTA with the requested tactile
+  dark/orange surfaces and complete hover, press, focus, saved-calendar and
+  saved-like states. Added an event `6529` frozen Editorial visual specimen and
+  a Playwright geometry gate that keeps its original hero, family, placement
+  and exact desktop panel rectangle; Split and mobile templates remain
+  unchanged.
+
 ### Fixed
 
 - Unified linked-event occurrence projection across static detail, date lists,

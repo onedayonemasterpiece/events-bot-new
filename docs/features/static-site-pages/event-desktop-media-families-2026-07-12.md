@@ -4,6 +4,30 @@ Status: **accepted desktop families promoted to the shared production component 
 
 Acceptance restoration (2026-07-15): the v11 desktop compositions were first restored on top of the approved shared announcement lockup and favicon at <https://kenigevents.ru/preview-20260715t-desktop-v11-acceptance/lab/event-desktop/>. The accepted implementation is now the shared `site/src/components/DesktopEventPage.astro`, used by both the frozen lab fixtures and every generated production-integration event route. Current families are Continuous Editorial and Split; `editorial-photo-continuous`, `split-low-resolution` and `editorial-ocr-companion-arrival` remain the frozen design references. The efficient viewer restores the previous visible group when navigating back and uses the event title/date/time in its top bar. Transport is an additive block inside the same long reading flow. Mobile v4 remains a separate unchanged breakpoint surface.
 
+## Editorial CTA physical treatment — 2026-07-23
+
+The accepted **Continuous Editorial** layout now has a dedicated physical CTA
+treatment in `DesktopEventActionPanel.astro`. It applies only when
+`family="editorial"`; Split and mobile contracts are unchanged. The dark panel,
+orange ticket action and compact utility buttons use deterministic CSS
+gradients, fine grain, inset highlights and deep shadows to reproduce the
+specified tactile surfaces without raster UI assets. Hover lifts, pressed inset
+states, a `3px` warm focus ring, warm persisted calendar/like states and
+`prefers-reduced-motion` behavior are part of the contract.
+
+The frozen browser specimen is
+`/lab/event-desktop/examples/cta-editorial-6529-baseline/`. It fixes event
+`6529` to the accepted photo-first Editorial input: the
+`7a75…f904` wide event photo (`1280×960`, `visual_only`, `event_photo`) remains
+the full-bleed hero, the title/rail stay in their accepted positions and the CTA
+remains `stacked` at the lower right. At `1366×768` its exact panel rectangle is
+`x=928.890625, y=508.546875, 421.109375×224.0625`; at `1920×1080` it is
+`x=1360, y=686.390625, 544×231.5`. A CTA revision fails acceptance if any of
+those four coordinates changes by more than `1px`, if the family becomes Split,
+or if the hero asset/geometry changes. This fixture exists specifically to
+prevent a portrait poster/current-catalog snapshot from silently replacing the
+ordered horizontal reference during review.
+
 Related-card media is a hard, testable desktop contract rather than an aesthetic fallback:
 
 - `visual_only` / `event_photo` always fills the media cell with `cover`; side/top/bottom fields are forbidden;

@@ -56,8 +56,11 @@ const shareFileName = `kenigevents-${event.slug}`;
   class:list={['desktop-prototype__action', className]}
   data-feedback-scope
   data-desktop-action-panel
+  data-event-id={event.id}
+  data-event-title={event.title}
   data-action-family={family}
   data-action-layout={family === 'split' ? 'inline' : 'stacked'}
+  data-action-treatment={family === 'editorial' ? 'physical-editorial' : 'split'}
   data-primary-action-kind={calendarPrimary ? 'calendar' : (ctaIsTelephone ? 'phone' : 'default')}
   aria-label="Действия события"
 >
@@ -333,5 +336,153 @@ const shareFileName = `kenigevents-${event.slug}`;
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]),
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { transition:none; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { width:0; max-width:0; opacity:0; }
+
+  /*
+   * Editorial-only physical CTA treatment. Geometry remains owned by the
+   * accepted Editorial page composition: no box-model or placement property
+   * below may change the frozen panel rectangle.
+   */
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] {
+    background:
+      linear-gradient(115deg, rgba(255,255,255,.055), transparent 24%, rgba(255,255,255,.018) 52%, transparent 74%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, rgba(0,0,0,.014) 1px 3px),
+      linear-gradient(145deg, #383532 0%, #2c2927 42%, #211f1d 100%) !important;
+    box-shadow:
+      0 20px 38px rgba(24,18,14,.42),
+      0 5px 12px rgba(24,18,14,.24),
+      inset 1px 1px 0 rgba(255,255,255,.18),
+      inset -1px -1px 0 rgba(0,0,0,.62),
+      inset 0 0 0 2px rgba(13,12,11,.34) !important;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] > p span {
+    color:#cfc3b9;
+    text-shadow:0 1px 0 rgba(0,0,0,.74);
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] > p strong {
+    color:#fff9f1;
+    text-shadow:0 1px 0 rgba(0,0,0,.78);
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action) {
+    background:
+      linear-gradient(115deg, rgba(255,255,255,.16), transparent 28%, rgba(255,255,255,.035) 60%, transparent),
+      repeating-linear-gradient(35deg, rgba(255,255,255,.018) 0 1px, rgba(0,0,0,.018) 1px 3px),
+      linear-gradient(155deg, #ca5c2c 0%, #b84c20 58%, #9f3f19 100%) !important;
+    color:#fff9f3 !important;
+    text-shadow:0 1px 1px rgba(67,20,7,.68);
+    box-shadow:
+      0 9px 15px rgba(65,23,9,.38),
+      0 2px 3px rgba(17,12,9,.5),
+      inset 1px 1px 0 rgba(255,226,208,.46),
+      inset -1px -1px 0 rgba(66,19,6,.72),
+      inset 0 0 0 2px rgba(63,22,9,.43) !important;
+    transition:transform .16s ease, box-shadow .16s ease, filter .16s ease;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action:focus-visible) {
+    outline:3px solid #f1ae79;
+    outline-offset:3px;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] .desktop-prototype__action-row {
+    align-items:center;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action) {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,.09), transparent 42%),
+      linear-gradient(155deg, #3c3936 0%, #302d2b 62%, #292725 100%) !important;
+    color:#fff8ef !important;
+    text-shadow:0 1px 0 rgba(0,0,0,.68);
+    box-shadow:
+      0 5px 9px rgba(13,11,9,.34),
+      0 1px 2px rgba(0,0,0,.72),
+      inset 1px 1px 0 rgba(255,255,255,.16),
+      inset -1px -1px 0 rgba(0,0,0,.6),
+      inset 0 0 0 1px rgba(11,10,9,.52) !important;
+    transition:transform .14s ease, box-shadow .14s ease, filter .14s ease;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action[data-calendar-adaptive-label]) {
+    width:52px;
+    min-width:52px;
+    padding-inline:.3rem;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) {
+    width:0;
+    max-width:0;
+    opacity:0;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action:focus-visible) {
+    outline:3px solid #f1ae79;
+    outline-offset:3px;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global([data-calendar-action].is-calendar-added),
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global([data-calendar-action].is-calendar-added:hover),
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global([data-feedback-action="like"][aria-pressed="true"]),
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global([data-feedback-action="like"][aria-pressed="true"]:hover) {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,.1), transparent 42%),
+      linear-gradient(155deg, #85432f 0%, #713421 100%) !important;
+    border-color:#c96c4d !important;
+    color:#ffb397 !important;
+    box-shadow:
+      0 5px 12px rgba(93,36,20,.4),
+      inset 1px 1px 0 rgba(255,194,165,.25),
+      inset -1px -1px 0 rgba(51,15,8,.7),
+      inset 0 0 0 1px rgba(210,102,68,.56) !important;
+  }
+  @media (hover:hover) and (pointer:fine) {
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action:hover) {
+      background:
+        linear-gradient(115deg, rgba(255,255,255,.2), transparent 28%, rgba(255,255,255,.045) 60%, transparent),
+        repeating-linear-gradient(35deg, rgba(255,255,255,.018) 0 1px, rgba(0,0,0,.018) 1px 3px),
+        linear-gradient(155deg, #d46a39 0%, #c05325 58%, #ad451b 100%) !important;
+      box-shadow:
+        0 12px 20px rgba(91,29,8,.44),
+        0 3px 4px rgba(17,12,9,.52),
+        inset 1px 1px 0 rgba(255,232,216,.56),
+        inset -1px -1px 0 rgba(73,20,6,.68),
+        inset 0 0 0 2px rgba(89,27,8,.42) !important;
+      filter:saturate(1.04);
+      transform:translateY(-1px);
+    }
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action:hover) {
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.15), transparent 44%),
+        linear-gradient(155deg, #4a4541 0%, #383431 100%) !important;
+      box-shadow:
+        0 8px 13px rgba(14,11,9,.38),
+        inset 1px 1px 0 rgba(255,255,255,.22),
+        inset -1px -1px 0 rgba(0,0,0,.6),
+        inset 0 0 0 1px rgba(11,10,9,.48) !important;
+      transform:translateY(-1px);
+    }
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action:active) {
+    filter:saturate(.98) brightness(.93);
+    transform:translateY(1px);
+    box-shadow:
+      0 3px 7px rgba(47,18,8,.35),
+      inset 0 3px 6px rgba(60,18,5,.68),
+      inset 1px 1px 0 rgba(255,218,197,.2),
+      inset 0 0 0 2px rgba(69,19,6,.52) !important;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action:active) {
+    filter:brightness(.91);
+    transform:translateY(1px);
+    box-shadow:
+      0 2px 4px rgba(10,9,8,.32),
+      inset 0 3px 5px rgba(0,0,0,.62),
+      inset 1px 1px 0 rgba(255,255,255,.08),
+      inset 0 0 0 1px rgba(9,8,7,.58) !important;
+  }
+  @media (prefers-reduced-motion:reduce) {
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action),
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action) {
+      transition:none;
+    }
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action:hover),
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action:active),
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action:hover),
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action:active) {
+      transform:none;
+    }
+  }
 
 </style>
