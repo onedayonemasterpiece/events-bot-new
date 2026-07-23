@@ -141,140 +141,84 @@
       background: rgba(255, 253, 248, 0.52);
     }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      display: flex;
+      flex-wrap: wrap;
       align-items: stretch;
-      gap: 0.48rem;
-      padding: 0.58rem;
-      border: 1px solid rgba(255, 248, 239, 0.1);
-      border-radius: 20px;
-      background:
-        radial-gradient(110% 85% at 50% -18%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 68%),
-        linear-gradient(175deg, #302823 0%, #1e1915 100%);
-      box-shadow:
-        0 18px 36px -8px rgba(35, 27, 22, 0.42),
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.46);
+      gap: 0.42rem;
+      padding: 0.48rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      background: #292521;
+      box-shadow: 0 14px 28px rgba(41, 37, 33, 0.18);
       container-type: inline-size;
       container-name: mobile-action-dock;
     }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .cta-button {
-      grid-column: 1 / -1;
+      flex: 1 0 100%;
       width: 100%;
-      min-height: 54px;
-      border-color: rgba(255, 199, 164, 0.22);
-      border-radius: 13px;
-      background: linear-gradient(180deg, #be552a 0%, #9a3f1d 100%);
-      color: #fffaf2;
-      box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.34),
-        inset 0 -2px 4px rgba(63, 20, 7, 0.28),
-        0 5px 14px rgba(133, 47, 17, 0.38);
-      text-shadow: 0 1px 1px rgba(62, 22, 8, 0.34);
-      transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 160ms ease;
+      min-height: 52px;
+      border-radius: 14px;
+      box-shadow: none;
     }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .secondary-button {
-      width: 100%;
+      flex: 1 1 7.15rem;
+      width: auto;
       min-width: 0;
-      min-height: 52px;
-      padding: 0.55rem 0.4rem;
+      min-height: 48px;
+      padding: 0.55rem 0.48rem;
       border-color: rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      background: linear-gradient(180deg, #3b332d 0%, #29231f 100%);
-      color: #eee3d4;
-      box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.12),
-        inset 0 -1px 1px rgba(0, 0, 0, 0.28),
-        0 3px 6px rgba(0, 0, 0, 0.28);
+      border-radius: 13px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #fffaf2;
+      box-shadow: none;
       font-size: 0.84rem;
       line-height: 1.05;
-      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.32);
-      transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease, transform 160ms ease;
     }
-    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .cta-button--disabled {
-      grid-column: 1 / -1;
-    }
-    @media (hover: hover) and (pointer: fine) {
-      [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .cta-button:hover {
-        border-color: rgba(255, 210, 184, 0.34);
-        background: linear-gradient(180deg, #ca6131 0%, #a84720 100%);
-        box-shadow:
-          inset 0 1px 1px rgba(255, 255, 255, 0.4),
-          inset 0 -2px 4px rgba(63, 20, 7, 0.24),
-          0 7px 18px rgba(169, 64, 26, 0.46);
-        transform: translateY(-1px);
-      }
-      [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:hover {
-        border-color: rgba(255, 255, 255, 0.18);
-        background: linear-gradient(180deg, #473d35 0%, #322a24 100%);
-        color: #fffaf2;
-        box-shadow:
-          inset 0 1px 1px rgba(255, 255, 255, 0.16),
-          0 5px 10px rgba(0, 0, 0, 0.3);
-        transform: translateY(-1px);
-      }
-    }
-    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .cta-button:active {
-      border-color: rgba(255, 183, 143, 0.2);
-      background: #8d3718;
-      box-shadow: inset 0 4px 7px rgba(47, 14, 4, 0.52);
-      transform: translateY(1px);
-    }
-    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:active {
-      border-color: rgba(255, 255, 255, 0.06);
-      background: #211b17;
-      box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.5);
-      transform: translateY(1px);
-    }
-    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > :is(a, button):focus-visible {
-      outline: 3px solid #5eead4;
-      outline-offset: 2px;
+    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.13);
     }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like {
       position: relative;
+      flex: 0 0 56px;
+      width: 56px;
       min-height: 52px;
       overflow: hidden;
-      padding-inline: 0.4rem;
-      color: #eee3d4;
+      padding-inline: 0.42rem;
+      color: #fffaf2;
+      transition: color 180ms ease, background 180ms ease, border-color 180ms ease;
     }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] {
-      border-color: rgba(255, 110, 132, 0.58) !important;
-      background: linear-gradient(180deg, rgba(170, 42, 63, 0.92), rgba(108, 25, 43, 0.96)) !important;
-      color: #ffd8df !important;
-      box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.18),
-        inset 0 -1px 2px rgba(44, 4, 14, 0.45),
-        0 0 0 1px rgba(255, 102, 128, 0.18),
-        0 4px 12px rgba(153, 30, 52, 0.34) !important;
+      border-color: transparent !important;
+      background: #b54d22 !important;
+      color: #fff !important;
+      box-shadow: none !important;
+      transform: none;
     }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-outline { display: none; }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like[aria-pressed="true"] .icon__heart-solid { display: block !important; }
-    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > [data-calendar-action].is-calendar-added,
-    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > [data-calendar-action].is-calendar-added:hover {
-      border-color: rgba(94, 234, 212, 0.54) !important;
-      background: linear-gradient(180deg, rgba(18, 113, 105, 0.94), rgba(10, 74, 70, 0.98)) !important;
-      color: #cffff7 !important;
-      box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.17),
-        inset 0 -1px 2px rgba(1, 38, 35, 0.46),
-        0 0 0 1px rgba(45, 212, 191, 0.16),
-        0 4px 12px rgba(13, 118, 110, 0.32) !important;
-    }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions .icon { width: 1.28rem; height: 1.28rem; }
     [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions .feedback-count:empty { display: none; }
   }
 
+  @media (max-width: 379px) {
+    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .secondary-button:not(.feedback-button--like) {
+      flex-basis: 5.9rem;
+      padding-inline: 0.34rem;
+      font-size: 0.79rem;
+    }
+  }
+
   @container mobile-action-dock (max-width: 400px) {
     [data-mobile-event-production] .event-hero__actions > .secondary-button {
-      padding-inline: 0.32rem;
+      flex: 0 0 52px;
+      width: 52px;
+      padding-inline: 0.38rem;
     }
     [data-mobile-event-production] .event-hero__actions > .secondary-button > span:not(.feedback-count) { display: none; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > :is(.cta-button, .secondary-button) {
-      transition: none;
-      transform: none;
-    }
+    [data-mobile-event-production][data-actions-treatment="dock"] .event-hero__actions > .feedback-button--like { transition: none; }
   }
 </style>

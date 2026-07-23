@@ -11,6 +11,7 @@ import {
 
 interface Props {
   event: PreviewEvent;
+  showAdmission?: boolean;
 }
 
 type Token = {
@@ -30,7 +31,7 @@ type Token = {
   evidence?: MedallionEvidence;
 };
 
-const { event } = Astro.props;
+const { event, showAdmission = true } = Astro.props;
 
 function normalize(value: unknown): string {
   return String(value || '').toLowerCase().replace(/<[^>]*>/gu, ' ').replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
@@ -151,7 +152,10 @@ if (event.festival && !hasFestivalLogoToken && tokens.length < 6) {
     tone: 'brown',
   });
 }
-const visibleTokens = tokens.slice(0, 6);
+const admissionTokenKeys = new Set(['free-admission', 'price', 'sold-out']);
+const visibleTokens = tokens
+  .filter((token) => showAdmission || !admissionTokenKeys.has(token.key))
+  .slice(0, 6);
 
 function tokenStyle(token: Token): string | undefined {
   const parts: string[] = [];
