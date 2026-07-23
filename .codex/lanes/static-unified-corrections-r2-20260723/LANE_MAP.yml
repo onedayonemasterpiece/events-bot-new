@@ -58,13 +58,13 @@ lanes:
       - site/src/components/OptimizedEventCardGrid.astro
       - site/src/components/EventCard.astro
       - site/src/components/KeyboardEventNavigationPrototype.astro
-      - site/src/components/DesktopEventPage.astro
       - site/tests/visual-keyboard-regressions.test.mjs
       - site/tests/event-detail-runtime-regressions.test.mjs
       - .codex/lanes/L02-R2/RESULTS.md
     forbidden_files:
       - site/src/components/AuthorizedEventSearch.astro
       - site/src/components/EventTransportSchedule.astro
+      - site/src/components/DesktopEventPage.astro
       - site/src/layouts/EventLayout.astro
       - docs/**
       - CHANGELOG.md
