@@ -150,8 +150,15 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
       z-index:3!important; box-sizing:border-box!important; width:var(--shell-tag-w)!important;
       height:var(--shell-tag-h)!important; min-height:0!important; display:flex!important;
       flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:4px; overflow:hidden;
-      padding:0 0 12px 14px!important; border:0!important; border-radius:0!important;
-      background:transparent var(--reference4-tag) center/100% 100% no-repeat!important;
+      padding:0 0 12px 14px!important; border:0!important; border-radius:0 0 14px 14px!important;
+      /* The accepted stitched WebP remains the visible skin. Solid terracotta
+         paints first, so the live white lockup is readable during image decode
+         and remains usable if the asset request fails. */
+      background-color:#98401f!important;
+      background-image:var(--reference4-tag)!important;
+      background-position:center!important;
+      background-size:100% 100%!important;
+      background-repeat:no-repeat!important;
       color:#fffaf4; box-shadow:none!important;
       filter:drop-shadow(0 8px 8px rgba(52,25,16,.22)) drop-shadow(0 15px 20px rgba(52,25,16,.14));
       list-style:none; cursor:pointer; pointer-events:auto; touch-action:manipulation;
