@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   MOBILE_EVENT_CARD_VISUAL_RATIO,
   packRelatedCardRows,
+  relatedCardPrimaryImageAsset,
   resolveMobileEventCardMedia,
   resolveRelatedCardMediaTreatment,
 } from '../src/lib/relatedCardLayout.mjs';
@@ -95,8 +96,66 @@ test('the Dog-page photo canaries cannot regress to contain bands and may reorde
   ]);
   assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
   assert.ok(packed.every(({ layout }) => layout.rowRatio >= 5 / 4 && layout.rowRatio <= 8 / 5));
-  assert.notDeepEqual(packed.map(({ item }) => item.id), [5757, 6586, 6318, 6652], 'packing may reorder cards across rows');
+  assert.deepEqual(new Set(packed.map(({ item }) => item.id)), new Set([5757, 6586, 6318, 6652]),
+    'packing may reorder cards but must preserve the selected set');
   assert.deepEqual([...new Set(packed.map(({ layout }) => layout.rowIndex))].map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length), [3, 1]);
+});
+
+test('6686 visual-only recommendation trio stays a compact horizontal equal-height row', () => {
+  // Exact row reported in the 2026-07-23 acceptance screenshot. Event 6764
+  // looked like a photograph but its failed producer classification made the
+  // deployed r1 artifact treat it as a tall document. Once the producer
+  // supplies the required visual_only evidence, the layout contract itself
+  // must never recreate the portrait 0.703125 row.
+  const packed = packRelatedCardRows([
+    imageEvent(6764, 180, 320, classifiedPhoto()),
+    imageEvent(7023, 1850, 1000, classifiedPhoto()),
+    imageEvent(7022, 2000, 1000, classifiedPhoto()),
+  ], { rowSize:3, mediaTreatment:'hybrid' });
+
+  assert.deepEqual(packed.map(({ item }) => item.id), [6764, 7023, 7022]);
+  assert.ok(packed.every(({ layout }) => layout.mediaKind === 'visual'));
+  assert.ok(packed.every(({ layout }) => layout.fit === 'cover'));
+  assert.ok(packed.every(({ layout }) => layout.rowIndex === 0));
+  assert.ok(packed.every(({ layout }) => layout.rowRatio >= 5 / 4 && layout.rowRatio < 1.3),
+    `expected the compact 5:4 neighbourhood, got ${packed[0]?.layout.rowRatio}`);
+  assert.equal(new Set(packed.map(({ layout }) => layout.rowRatio)).size, 1,
+    'one rendered row must expose one shared media height');
+});
+
+test('6764 reuses the source-keyed reviewed still instead of stretching its failed 180x320 thumbnail row', () => {
+  const source = 'https://static.kenigevents.ru/p/dh16/67/67139633d0b0f304736438629a31e307818390f81a5f003c3dec1e7c989e9839.webp';
+  const event = {
+    id:6764,
+    image_url:source,
+    image_text_mode:'unknown',
+    image_assets:[{
+      src:source,
+      width:180,
+      height:320,
+      image_text_mode:'unknown',
+      media_role:'unknown_document',
+      media_semantic_status:'error',
+      safe_crop:false,
+    }],
+  };
+  const reviewed = relatedCardPrimaryImageAsset(event);
+  assert.equal(reviewed.src, '/assets/listing-media/67139633d0b0f304736438629a31e307818390f81a5f003c3dec1e7c989e9839-1080.webp');
+  assert.equal(reviewed.width, 1080);
+  assert.equal(reviewed.height, 720);
+  assert.equal(reviewed.image_text_mode, 'visual_only');
+  assert.equal(reviewed.media_semantic_status, 'classified');
+  assert.equal(reviewed.media_role, 'event_photo');
+  assert.equal(reviewed.listing_crop_evidence, 'source-reviewed');
+
+  const packed = packRelatedCardRows([
+    event,
+    imageEvent(7023, 1850, 1000, classifiedPhoto()),
+    imageEvent(7022, 2000, 1000, classifiedPhoto()),
+  ], { rowSize:3, mediaTreatment:'hybrid' });
+  assert.ok(packed.every(({ layout }) => layout.mediaKind === 'visual' && layout.fit === 'cover'));
+  assert.ok(packed.every(({ layout }) => layout.rowRatio === 5 / 4));
+  assert.equal(new Set(packed.map(({ layout }) => layout.rowIndex)).size, 1);
 });
 
 test('row packing permits an incomplete row only as the final row for every supported count', () => {
@@ -219,11 +278,12 @@ test('hero and desktop gallery share the semantic-error contain contract', async
   assert.doesNotMatch(personal, /repeat\(2,\s*minmax\(0,\s*1fr\)\)/u);
 });
 
-test('desktop recommendation packing remains adaptive and independent from mobile flow', () => {
+test('desktop and mobile photo-only rows share the canonical compact 5:4 frame', () => {
   const frog = imageEvent(4785, 2000, 660, { image_text_mode:'visual_only' });
   const [desktop] = packRelatedCardRows([frog], { rowSize:1, presentation:'related-grid' });
   const mobile = resolveMobileEventCardMedia(frog);
-  assert.equal(desktop.layout.rowRatio, 8 / 5);
+  assert.equal(desktop.layout.rowRatio, 5 / 4);
+  assert.equal(desktop.layout.rowMode, 'visual-compact-5x4');
   assert.equal(mobile.rowRatio, 5 / 4);
 });
 test('optimizer may place the first OCR item in the final remainder to keep full rows feasible and compact', () => {
@@ -384,6 +444,9 @@ test('card K hint is reserved in layout but visible only inside the focused card
   assert.match(component, /\.related-calendar-shortcut:not\(\[hidden\]\) \{ display:inline-grid; \}/u,
     'the hidden keycap keeps its horizontal space so focus does not shift card actions');
   assert.match(component, /\[data-event-card\]:focus-within \.related-calendar-shortcut:not\(\[hidden\]\)[\s\S]*visibility:visible;[\s\S]*opacity:\.58;/u);
+  assert.match(component, /\.keyboard-shortcut-badge[\s\S]*visibility:hidden;[\s\S]*opacity:0;/u);
+  assert.match(component, /\[data-keyboard-shortcut-target\]:focus-visible > \.keyboard-shortcut-badge,[\s\S]*\[data-keyboard-event-surface\]:focus-visible \.keyboard-shortcut-badge[\s\S]*visibility:visible;[\s\S]*opacity:\.58;/u,
+    'current-event K/S badges are owned by the visibly focused action surface, not ambient page chrome');
 });
 
 test('visible footer owns P/S from body or an offscreen managed event owner', () => {

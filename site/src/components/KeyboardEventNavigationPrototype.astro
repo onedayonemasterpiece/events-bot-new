@@ -29,7 +29,14 @@ const { showQuickstart = true } = Astro.props;
   S копирует название и ссылку, C копирует полное описание, P копирует афишу текущего события. Стрелки влево и вправо в верхнем блоке листают фотографии,
   стрелка вверх открывает полноэкранную галерею, а стрелка вниз закрывает её и возвращает к событию.
 </p>
-<p class="sr-only" data-keyboard-prototype-status role="status" aria-live="polite" aria-atomic="true"></p>
+<p
+  class="sr-only"
+  data-keyboard-event-navigation-mounted
+  data-keyboard-prototype-status
+  role="status"
+  aria-live="polite"
+  aria-atomic="true"
+></p>
 
 <script>
   import { initKeyboardEventNavigation } from '../lib/keyboardEventNavigation.mjs';
@@ -95,8 +102,14 @@ const { showQuickstart = true } = Astro.props;
       font:700 8px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace;
       letter-spacing:0;
       text-align:center;
-      opacity:.46;
+      visibility:hidden;
+      opacity:0;
       pointer-events:none;
+    }
+    [data-keyboard-shortcut-target]:focus-visible > .keyboard-shortcut-badge,
+    [data-keyboard-event-surface]:focus-visible .keyboard-shortcut-badge {
+      visibility:visible;
+      opacity:.58;
     }
     .service-share-inline-shortcut {
       display:inline-grid;

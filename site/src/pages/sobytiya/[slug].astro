@@ -19,7 +19,7 @@ import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-ov
 import type { EventImageDerivative, PreviewEvent } from '../../lib/types';
 import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
 import { eventBreadcrumbParents } from '../../lib/breadcrumbs';
-import { IS_PRODUCTION_FAMILY, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { IS_PRODUCTION_FAMILY, PREVIEW_BUILD_ID, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -90,7 +90,12 @@ const desktopEvent: PreviewEvent = Object.keys(desktopThumbnailOverrides).length
     }
   : event;
 const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
+// Immutable noindex review builds are real interactive acceptance artifacts,
+// not inert screenshots. Keep the production rollout flag, but mount the
+// reviewed router in every named preview so keyboard acceptance cannot silently
+// disappear merely because the artifact is outside the production family.
 const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
+  || PREVIEW_BUILD_ID !== 'local'
   || String(import.meta.env.PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE || '') === '1')
   && String(import.meta.env.PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED || '1') !== '0';
 ---

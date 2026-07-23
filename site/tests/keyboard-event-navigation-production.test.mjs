@@ -7,9 +7,19 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 test('production route mounts reviewed keyboard navigation for immutable artifacts behind its flag', async () => {
   const route = await read('src/pages/sobytiya/[slug].astro');
   assert.match(route, /import KeyboardEventNavigation from '..\/..\/components\/KeyboardEventNavigation\.astro'/u);
-  assert.match(route, /IS_PRODUCTION_FAMILY[\s\S]*PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE[\s\S]*PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED/u);
+  assert.match(route, /IS_PRODUCTION_FAMILY[\s\S]*PREVIEW_BUILD_ID !== 'local'[\s\S]*PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE[\s\S]*PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED/u);
   assert.match(route, /\{keyboardEventNavigationEnabled && <KeyboardEventNavigation \/>\}/u);
   assert.doesNotMatch(route, /KeyboardEventNavigationPrototype/u);
+});
+
+test('named noindex previews cannot silently omit the event keyboard router', async () => {
+  const [route, component] = await Promise.all([
+    read('src/pages/sobytiya/[slug].astro'),
+    read('src/components/KeyboardEventNavigationPrototype.astro'),
+  ]);
+  assert.match(route, /PREVIEW_BUILD_ID !== 'local'/u);
+  assert.match(component, /data-keyboard-event-navigation-mounted/u);
+  assert.match(component, /window\.KenigEventsKeyboardNavigation = initKeyboardEventNavigation\(\)/u);
 });
 
 test('prototype-only lab route is not shipped by either production artifact profile', async () => {
@@ -22,9 +32,13 @@ test('prototype-only lab route is not shipped by either production artifact prof
 });
 
 test('desktop similar cards use the same discovery controller and broad hydration survives a resize race', async () => {
-  const desktop = await read('src/components/DesktopEventPage.astro');
+  const [desktop, optimizedGrid] = await Promise.all([
+    read('src/components/DesktopEventPage.astro'),
+    read('src/components/OptimizedEventCardGrid.astro'),
+  ]);
   const layout = await read('src/layouts/EventLayout.astro');
-  assert.match(desktop, /data-related-start[\s\S]*data-discovery-feed[\s\S]*data-discovery-src/u);
+  assert.match(desktop, /data-related-start[\s\S]*<OptimizedEventCardGrid/u);
+  assert.match(optimizedGrid, /data-discovery-feed=\{!responsiveMobile \? '' : undefined\}[\s\S]*data-discovery-src=\{discoverySrc\}/u);
   assert.match(layout, /personalFeedHydrationInFlight = new WeakSet\(\)/u);
   assert.match(layout, /if \(personalFeedSectionCanHydrate\(section\)\) personalFeedReached\.add\(section\)/u);
   assert.doesNotMatch(layout, /personalFeedReached\.add\(section\);\s*\n\s*hydratePersonalFeedSlots/u);
@@ -52,7 +66,7 @@ test('keyboard visual feedback delegates to the one layout toast while SR status
   const prototype = await read('src/components/KeyboardEventNavigationPrototype.astro');
   const router = await read('src/lib/keyboardEventNavigation.mjs');
   const layout = await read('src/layouts/EventLayout.astro');
-  assert.match(prototype, /data-keyboard-prototype-status role="status" aria-live="polite"/u);
+  assert.match(prototype, /data-keyboard-prototype-status[\s\S]*role="status"[\s\S]*aria-live="polite"/u);
   assert.doesNotMatch(prototype, /data-keyboard-action-toast|keyboard-action-toast/u);
   assert.match(router, /KenigEventsToast\?\.show/u);
   assert.match(router, /kenigevents:toast/u);

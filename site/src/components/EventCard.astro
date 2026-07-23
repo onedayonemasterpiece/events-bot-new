@@ -2,9 +2,9 @@
 import Icon from './Icon.astro';
 import EventOccurrenceLabel from './EventOccurrenceLabel.astro';
 import type { PreviewEvent } from '../lib/types';
-import { displayDate, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOccurrencePresentation, isCalendarEligible } from '../lib/events';
+import { displayDate, eventAbsoluteUrl, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventAdmissionLabel, getOccurrencePresentation, isCalendarEligible, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
-import { resolveMobileEventCardMedia, resolveRelatedCardMediaTreatment } from '../lib/relatedCardLayout.mjs';
+import { relatedCardPrimaryImageAsset, resolveMobileEventCardMedia, resolveRelatedCardMediaTreatment } from '../lib/relatedCardLayout.mjs';
 type CardVariant = 'overlay-controls' | 'split-actions';
 interface DesktopRelatedLayout {
   mediaRatio: number;
@@ -41,7 +41,10 @@ const dateTimeLabel = occurrencePresentation.compactLabel;
 const statusLabel = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count ?? 0;
-const imageUrl = eventImageUrl(event.image_url);
+const primaryImageAsset = relatedCardPrimaryImageAsset(event);
+const imageUrl = primaryImageAsset?.src?.startsWith('/')
+  ? withBase(primaryImageAsset.src)
+  : eventImageUrl(primaryImageAsset?.src || event.image_url);
 const shareText = [event.title, [dateLabel, event.display_time, event.venue_name || event.city].filter(Boolean).join(' · '), statusLabel].filter(Boolean).join('\n');
 const shareImageType = imageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : imageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
 const shareFileName = `kenigevents-${event.slug}`;
@@ -57,8 +60,7 @@ function normalizeObjectPosition(value: string | null | undefined) {
 // event_photo role. Compact event-detail recommendation cards instead use the
 // shared relatedCardLayout surface contract below (all media fills; OCR is
 // grouped into a row where its cover crop stays within the 20% budget).
-const imageMediaRole = event.image_media_role || 'unknown_document';
-const primaryImageAsset = event.image_assets?.find((asset) => asset.src === event.image_url) || event.image_assets?.[0];
+const imageMediaRole = primaryImageAsset?.media_role || event.image_media_role || 'unknown_document';
 const intrinsicMediaRatio = desktopRelatedLayout?.mediaRatio
   || (primaryImageAsset?.width && primaryImageAsset?.height ? primaryImageAsset.width / primaryImageAsset.height : 4 / 5);
 const cardTargetAspect = desktopRelatedCrop

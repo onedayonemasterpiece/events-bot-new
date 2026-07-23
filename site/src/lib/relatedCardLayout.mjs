@@ -1,9 +1,9 @@
 import { resolveEventImageCrop } from './imageCrop.mjs';
+import listingMediaOverrides from '../data/listingMediaOverrides.json' with { type:'json' };
 
 // CSS aspect ratios are width / height. The compact default is therefore the
 // horizontal 5:4 counterpart of the product's "4:5 by height" rule.
 const PREFERRED_VISUAL_RATIO = 5 / 4;
-const MAX_VISUAL_RATIO = 8 / 5;
 const VERY_TALL_DOCUMENT_RATIO = 4 / 5;
 const MAX_DOCUMENT_CROP = 0.2;
 // The desktop recommendation column is about 360px wide at the acceptance
@@ -14,6 +14,9 @@ const BASE_BODY_HEIGHT = 109;
 const EXTRA_TEXT_LINE_HEIGHT = 23;
 const UTILITY_AND_FEEDBACK_HEIGHT = 114;
 const EPSILON = 1e-9;
+const REVIEWED_MEDIA_OVERRIDES = Array.isArray(listingMediaOverrides?.items)
+  ? listingMediaOverrides.items
+  : [];
 
 function finiteRatio(value, fallback) {
   const ratio = Number(value);
@@ -53,7 +56,33 @@ function normalizedObjectPosition(value) {
   return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : '';
 }
 
-function primaryImageAsset(item) {
+function applyReviewedMediaOverride(asset) {
+  if (!asset?.src) return asset;
+  // The manifest is keyed by the canonical source bytes/URL, never by event
+  // id. Reusing it here makes compact cards consume the same human-reviewed
+  // producer evidence as listing cards without weakening fail-closed handling
+  // for any other unknown/error asset.
+  const reviewed = REVIEWED_MEDIA_OVERRIDES.find((entry) => entry?.sourceSrc === asset.src);
+  if (!reviewed?.cropEvidence) return asset;
+  return {
+    ...asset,
+    src:reviewed.replacementSrc || asset.src,
+    width:Number(reviewed.width || asset.width || 0),
+    height:Number(reviewed.height || asset.height || 0),
+    image_text_mode:reviewed.imageTextMode || asset.image_text_mode,
+    media_semantic_status:'classified',
+    media_role:'event_photo',
+    media_role_confidence:1,
+    image_kind:'photo',
+    safe_crop:true,
+    focal_point:{ x:.5, y:.5 },
+    recommended_object_position:reviewed.objectPosition || asset.recommended_object_position || '50% 50%',
+    thumbnail_sources:reviewed.thumbnailSources || asset.thumbnail_sources,
+    listing_crop_evidence:'source-reviewed',
+  };
+}
+
+export function relatedCardPrimaryImageAsset(item) {
   const candidate = item?.candidate || item || {};
   const display = displayPayload(item);
   const assets = display?.image_assets || candidate?.image_assets || item?.image_assets || [];
@@ -61,8 +90,8 @@ function primaryImageAsset(item) {
   const asset = Array.isArray(assets)
     ? assets.find((entry) => entry?.src === primarySrc) || assets[0]
     : null;
-  if (asset) return asset;
-  return {
+  if (asset) return applyReviewedMediaOverride(asset);
+  return applyReviewedMediaOverride({
     src: primarySrc,
     width: Number(display?.image_width || candidate?.image_width || item?.image_width || 0),
     height: Number(display?.image_height || candidate?.image_height || item?.image_height || 0),
@@ -76,13 +105,13 @@ function primaryImageAsset(item) {
     geometry_coordinate_space: display?.geometry_coordinate_space || candidate?.geometry_coordinate_space || item?.geometry_coordinate_space,
     face_boxes: display?.face_boxes || candidate?.face_boxes || item?.face_boxes,
     valuable_region: display?.valuable_region || candidate?.valuable_region || item?.valuable_region,
-  };
+  });
 }
 
 function visualFallbackObjectPosition(item) {
   const candidate = item?.candidate || item || {};
   const display = displayPayload(item);
-  const asset = primaryImageAsset(item);
+  const asset = relatedCardPrimaryImageAsset(item);
   const explicit = normalizedObjectPosition(
     display?.image_object_position
       || candidate?.image_object_position
@@ -100,7 +129,7 @@ function visualFallbackObjectPosition(item) {
 }
 
 export function relatedCardMediaGeometry(item) {
-  const asset = primaryImageAsset(item);
+  const asset = relatedCardPrimaryImageAsset(item);
   const display = displayPayload(item);
   const rawImageTextMode = asset?.image_text_mode || display?.image_text_mode || 'unknown';
   const semanticStatus = asset?.media_semantic_status || display?.media_semantic_status || '';
@@ -176,7 +205,7 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
       coverCrop:potentialCoverCrop,
     };
   }
-  const crop = resolveEventImageCrop(geometry?.asset || primaryImageAsset(item), targetAspect);
+  const crop = resolveEventImageCrop(geometry?.asset || relatedCardPrimaryImageAsset(item), targetAspect);
   const objectPosition = crop.fit === 'cover'
     ? (crop.objectPosition || visualFallbackObjectPosition(item))
     : visualFallbackObjectPosition(item);
@@ -238,12 +267,6 @@ export function resolveMobileEventCardMedia(item, options = {}) {
   };
 }
 
-function geometricMean(ratios, fallback = PREFERRED_VISUAL_RATIO) {
-  return ratios.length
-    ? Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length)
-    : fallback;
-}
-
 function documentTargetInterval(entry) {
   // Ordinary OCR posters stay uncropped. Only an unusually tall document may
   // spend up to the explicit 20% area budget to keep its whole row compact.
@@ -265,11 +288,14 @@ function rowTarget(row) {
         : 'document-led-uncropped',
     };
   }
-  const visualRatios = row.map(({ ratio }) => ratio);
-  const evidenceRatio = geometricMean(visualRatios);
   return {
-    targetRatio:Math.min(MAX_VISUAL_RATIO, Math.max(PREFERRED_VISUAL_RATIO, evidenceRatio)),
-    rowMode:evidenceRatio > PREFERRED_VISUAL_RATIO + EPSILON ? 'visual-horizontal-adaptive' : 'visual-compact-5x4',
+    // A photo-only recommendation row has no semantic neighbour that needs to
+    // dictate its height. Use the canonical compact 5:4 frame rather than
+    // deriving an ever-wider row from source geometry; every image still fills
+    // that shared frame through cover and the optimizer remains free to move
+    // cards between rows.
+    targetRatio:PREFERRED_VISUAL_RATIO,
+    rowMode:'visual-compact-5x4',
   };
 }
 
