@@ -8,6 +8,10 @@
   source-backed July–December 2026 festivals, real organiser/venue media,
   explicit pending-date states and chronological one-to-four-card row packing
   inside the unified static-site header, footer and mobile shell.
+- Added a hash-bound 21-cover festival media ledger and behavior gate with
+  exact festival/organiser/venue provenance, semantic class, confidence and
+  stale-asset detection.
+
 - Added a base-aware installable web app manifest and an Android-only mobile
   footer install action that appears only for a real one-shot
   `beforeinstallprompt`, clears on `appinstalled`, and stays absent on
@@ -134,6 +138,13 @@
 
 ### Changed
 
+- Reworked the festival calendar after reference/rules review: full-cover
+  overlay cards now use global one-to-four-card packing, compact final
+  remainders, a two-column `390px` layout and pixel-bounded desktop/mobile
+  density. The split-body `r1` candidate is withdrawn.
+- Replaced all nine regional-anniversary-overlay covers and four
+  contextually incorrect festival images with reviewed first-party festival,
+  organiser or venue media.
 - Unified mobile interest-club cards with the accepted desktop full-cover dark
   overlay family and preserved the luminous top-right upcoming-meetings badge.
 - Kept the full mobile menu genuinely translucent on both light and dark hero
