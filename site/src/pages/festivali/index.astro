@@ -78,7 +78,6 @@ for (const month of monthSections) {
     throw new Error(`Festival timeline could not safely pack every ${month.label} item`);
   }
 }
-const publishedDateCount = resolvedItems.filter((item) => item.status !== 'date-pending').length;
 const structuredData = [{
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -115,12 +114,11 @@ const structuredData = [{
       <div class="festival-hero__copy">
         <p class="festival-eyebrow">Календарь региона · июль—декабрь 2026</p>
         <h1 id="festival-title">Время <em>фестивалей</em></h1>
-        <p>Музыка, кино, еда, театр и море — по месяцам, с опубликованными датами и честными пометками там, где программа ещё формируется.</p>
+        <p>Музыка, кино, гастрономия, театр и море — фестивали Калининграда и области по месяцам.</p>
       </div>
       <dl class="festival-hero__facts" aria-label="Коротко о календаре">
         <div><dt>Фестивалей</dt><dd>{resolvedItems.length}</dd></div>
-        <div><dt>Месяцев</dt><dd>6</dd></div>
-        <div><dt>С датами</dt><dd>{publishedDateCount}</dd></div>
+        <div><dt>Сезон</dt><dd>Июль—декабрь</dd></div>
       </dl>
     </section>
 
@@ -142,11 +140,13 @@ const structuredData = [{
           data-festival-month={month.key}
         >
           <header class="festival-month__rail">
-            <div class="festival-month__marker" aria-hidden="true"></div>
-            <div class="festival-month__heading">
-              <h2 id={`month-title-${month.key}`}>{month.label}</h2>
-              <span class="festival-month__symbol" aria-hidden="true">{month.symbol}</span>
-              <p>{month.mood}</p>
+            <div class="festival-month__shelf">
+              <div class="festival-month__marker" aria-hidden="true"></div>
+              <div class="festival-month__heading">
+                <h2 id={`month-title-${month.key}`}>{month.label}</h2>
+                <span class="festival-month__symbol" aria-hidden="true">{month.symbol}</span>
+                <p>{month.mood}</p>
+              </div>
             </div>
           </header>
 
@@ -220,12 +220,6 @@ const structuredData = [{
         </section>
       ))}
     </div>
-
-    <aside class="festival-footer-note">
-      <span class="festival-status-dot" aria-hidden="true"></span>
-      <p><strong>Календарь обновляется.</strong> Точные даты не подставляем по аналогии с прошлым годом: ожидающие программу и площадку фестивали отмечены прямо на карточках.</p>
-      <a href={withBase('/__preview/')}>Все страницы прототипа <span aria-hidden="true">→</span></a>
-    </aside>
   </main>
 </EventLayout>
 
@@ -234,6 +228,7 @@ const structuredData = [{
     width: min(1240px, calc(100% - 2rem));
     margin: 0 auto;
     padding: clamp(1rem, 3vw, 2.4rem) 0 clamp(5.5rem, 8vw, 7rem);
+    font-family: var(--ke-font-sans);
   }
 
   .festival-hero {
@@ -278,14 +273,14 @@ const structuredData = [{
 
   .festival-hero h1 {
     margin: 0;
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: clamp(3.2rem, 7vw, 6.4rem);
-    font-weight: 500;
+    font-family: var(--ke-font-sans);
+    font-size: clamp(3rem, 6.6vw, 5.8rem);
+    font-weight: 850;
     letter-spacing: -0.065em;
-    line-height: 0.88;
+    line-height: 0.9;
   }
 
-  .festival-hero h1 em { color: var(--primary); font-weight: 400; }
+  .festival-hero h1 em { color: var(--primary); font-style: normal; font-weight: inherit; }
   .festival-hero__copy > p:last-child {
     max-width: 690px;
     margin: 1.25rem 0 0;
@@ -296,8 +291,8 @@ const structuredData = [{
 
   .festival-hero__facts {
     display: grid;
-    grid-template-columns: repeat(3, minmax(72px, 1fr));
-    min-width: min(100%, 320px);
+    grid-template-columns: auto minmax(160px, 1fr);
+    min-width: min(100%, 360px);
     margin: 0;
     padding: 0.85rem 0;
     border-block: 1px solid rgba(121, 48, 20, 0.18);
@@ -313,8 +308,10 @@ const structuredData = [{
   }
   .festival-hero__facts dd {
     margin: 0.15rem 0 0;
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-family: var(--ke-font-sans);
+    font-size: clamp(1.35rem, 2.4vw, 2.15rem);
+    font-weight: 780;
+    letter-spacing: -0.045em;
     line-height: 1;
   }
 
@@ -354,7 +351,11 @@ const structuredData = [{
     scroll-margin-top: 9rem;
   }
 
-  .festival-month__rail { position: relative; }
+  .festival-month__rail {
+    position: relative;
+    align-self: stretch;
+    min-height: 100%;
+  }
   .festival-month__rail::after {
     content: "";
     position: absolute;
@@ -365,6 +366,12 @@ const structuredData = [{
     background: linear-gradient(var(--primary), rgba(165, 72, 33, 0.18));
   }
   .festival-month:last-child .festival-month__rail::after { bottom: 55%; }
+  .festival-month__shelf {
+    position: sticky;
+    top: calc(var(--ke-site-header-bar-height) + 4.35rem);
+    z-index: 3;
+    min-height: 6.8rem;
+  }
   .festival-month__marker {
     position: absolute;
     top: 0.42rem;
@@ -383,9 +390,9 @@ const structuredData = [{
   }
   .festival-month__heading h2 {
     margin: 0;
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: var(--ke-font-sans);
     font-size: clamp(1.22rem, 1.8vw, 1.55rem);
-    font-weight: 500;
+    font-weight: 800;
     letter-spacing: -0.04em;
     line-height: 1;
   }
@@ -426,16 +433,20 @@ const structuredData = [{
     background: #31261f;
     box-shadow: 0 9px 24px rgba(52, 32, 18, 0.14);
     isolation: isolate;
-    transition: transform 180ms ease, box-shadow 180ms ease;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
   }
   .festival-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 20px 36px rgba(52, 32, 18, 0.2);
+    border-color: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 12px 28px rgba(52, 32, 18, 0.18);
   }
   .festival-card__link { display: block; width: 100%; height: 100%; color: #fff; text-decoration: none; }
+  .festival-card__link:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.94);
+    outline-offset: -5px;
+    border-radius: inherit;
+  }
   .festival-card__media { position: absolute; inset: 0; margin: 0; }
-  .festival-card__media img { width: 100%; height: 100%; object-fit: cover; transition: transform 420ms ease; }
-  .festival-card:hover .festival-card__media img { transform: scale(1.018); }
+  .festival-card__media img { width: 100%; height: 100%; object-fit: cover; }
 
   .festival-card__veil {
     position: absolute;
@@ -458,9 +469,9 @@ const structuredData = [{
     right: clamp(0.62rem, 1.2vw, 0.9rem);
     left: clamp(0.62rem, 1.2vw, 0.9rem);
     z-index: 2;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
     align-items: flex-start;
+    justify-content: space-between;
     gap: 0.4rem;
   }
   .festival-card__date,
@@ -478,7 +489,13 @@ const structuredData = [{
     white-space: nowrap;
     backdrop-filter: blur(8px);
   }
+  .festival-card__date {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .festival-card__status {
+    flex: 0 0 auto;
     max-width: 100%;
     gap: 0.3rem;
     background: rgba(255, 253, 248, 0.9);
@@ -517,12 +534,12 @@ const structuredData = [{
     max-width: 21ch;
     margin: 0;
     text-wrap: balance;
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: var(--ke-font-sans);
     overflow: hidden;
     font-size: clamp(1rem, 1.55vw, 1.55rem);
-    font-weight: 500;
-    letter-spacing: -0.035em;
-    line-height: 1.02;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1.04;
     text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -553,45 +570,19 @@ const structuredData = [{
     font-style: normal;
     line-height: 0.8;
   }
-  .festival-row--4 .festival-card__status { max-width: 6.8rem; }
-  @media (min-width: 761px) {
-    .festival-row--4 .festival-card__status span {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
+  .festival-row--4 .festival-card__topline { gap: 0.28rem; }
+  .festival-row--4 .festival-card__date,
+  .festival-row--4 .festival-card__status {
+    min-height: 1.22rem;
+    padding: 0.18rem 0.32rem;
+    font-size: clamp(0.52rem, 0.61vw, 0.59rem);
+  }
+  .festival-row--4 .festival-card__status { gap: 0.22rem; }
+  .festival-row--4 .festival-card__status i {
+    width: 0.36rem;
+    height: 0.36rem;
   }
   .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.9rem, 1.2vw, 1.18rem); }
-
-  .festival-footer-note {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 1rem 1.15rem;
-    border: 1px solid rgba(15, 118, 110, 0.17);
-    border-radius: 18px;
-    background: rgba(215, 240, 236, 0.52);
-    color: var(--muted);
-    font-size: 0.82rem;
-  }
-  .festival-footer-note p { flex: 1 1 auto; margin: 0; }
-  .festival-footer-note strong { color: var(--text); }
-  .festival-footer-note a { flex: 0 0 auto; color: var(--primary-strong); font-weight: 780; }
-  .festival-status-dot {
-    flex: 0 0 auto;
-    width: 0.58rem;
-    height: 0.58rem;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.11);
-  }
 
   @media (max-width: 819px) {
     .festival-hero { grid-template-columns: 1fr; min-height: 0; }
@@ -623,10 +614,14 @@ const structuredData = [{
     .festival-month-nav a span:last-child { display: none; }
     .festival-month { display: block; scroll-margin-top: 9rem; }
     .festival-month__rail {
+      padding: 0 0 0.65rem 0.25rem;
+    }
+    .festival-month__shelf {
+      position: static;
       display: flex;
       align-items: center;
       gap: 0.65rem;
-      padding: 0 0 0.65rem 0.25rem;
+      min-height: 0;
     }
     .festival-month__rail::after { display: none; }
     .festival-month__marker { position: static; width: 0.7rem; height: 0.7rem; }
@@ -670,8 +665,6 @@ const structuredData = [{
     .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.9rem, 4.15vw, 1.08rem); }
     .festival-card__caption p { font-size: 0.58rem; }
     .festival-card__theme { font-size: 0.55rem; }
-    .festival-footer-note { align-items: flex-start; flex-wrap: wrap; }
-    .festival-footer-note a { width: 100%; margin-left: 1.35rem; }
   }
 
   @media (max-width: 370px) {
@@ -692,9 +685,6 @@ const structuredData = [{
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .festival-card,
-    .festival-card__media img { transition: none; }
-    .festival-card:hover { transform: none; }
-    .festival-card:hover .festival-card__media img { transform: none; }
+    .festival-card { transition: none; }
   }
 </style>

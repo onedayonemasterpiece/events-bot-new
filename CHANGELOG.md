@@ -138,6 +138,11 @@
 
 ### Changed
 
+- Corrected the festival calendar desktop presentation after owner review:
+  shared Inter typography now covers the hero, month rail and cards; every
+  four-up card keeps its full status; each month has a real sticky left shelf;
+  page-local prototype/service copy is removed; and card hover no longer moves
+  either the tile or its image.
 - Reworked the festival calendar after reference/rules review: full-cover
   overlay cards now use global one-to-four-card packing, compact final
   remainders, a two-column `390px` layout and pixel-bounded desktop/mobile
