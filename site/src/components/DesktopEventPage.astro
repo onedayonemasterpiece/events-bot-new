@@ -155,9 +155,19 @@ const typedFallbackArt = preferredUrl ? null : resolveEventFallbackArt(event);
 const preferredWidth = heroWidth || preferredAsset?.width || 1600;
 const preferredHeight = heroHeight || preferredAsset?.height || 1000;
 const ratio = preferredWidth / preferredHeight;
+const failClosedImageTextMode = (
+  mode: EventImageAsset['image_text_mode'] | PreviewEvent['image_text_mode'] | null | undefined,
+  semanticStatus: EventImageAsset['media_semantic_status'] | null | undefined,
+): EventImageAsset['image_text_mode'] => {
+  if (semanticStatus === 'error') return 'unknown';
+  return mode === 'ocr_text' || mode === 'visual_only' ? mode : 'unknown';
+};
 const preferredImageTextMode = forcedOcrSourceIndexes.has(heroImageIndex)
   ? 'ocr_text'
-  : preferredAsset?.image_text_mode || event.image_text_mode || 'unknown';
+  : failClosedImageTextMode(
+      preferredAsset?.image_text_mode || event.image_text_mode,
+      preferredAsset?.media_semantic_status,
+    );
 // The desktop stage/gallery is a carousel surface: every non-OCR image fills
 // it. OCR/document media stays whole; missing bbox metadata may never demote a
 // classified non-OCR photo to letterboxed contain.
@@ -174,7 +184,12 @@ const selectedHeroMustContain = selectedHeroIsOcr || preferredCrop.fit !== 'cove
 const effectiveSplitMediaFit: SplitMediaFit = selectedMediaMode === 'visual_only'
   ? 'viewport-cover'
   : (splitMediaFit === 'viewport-cover' ? 'viewport-contain' : splitMediaFit);
-const fallbackMediaRole = (mode: EventImageAsset['image_text_mode']): EventImageMediaRole => mode === 'visual_only' ? 'event_photo' : 'unknown_document';
+const fallbackMediaRole = (
+  semanticStatus?: EventImageAsset['media_semantic_status'],
+  classifiedRole?: EventImageAsset['media_role'],
+): EventImageMediaRole => semanticStatus === 'classified' && classifiedRole
+  ? classifiedRole
+  : 'unknown_document';
 const mediaRoleLabel = (role: EventImageMediaRole) => ({
   event_identity_poster: 'Афиша',
   attendee_information: 'Полезная информация',
@@ -203,7 +218,7 @@ const galleryImages = (() => {
     seen.add(src);
     const imageTextMode = sourceIndex !== undefined && forcedOcrSourceIndexes.has(sourceIndex)
       ? 'ocr_text'
-      : asset?.image_text_mode || fallbackMode || 'unknown';
+      : failClosedImageTextMode(asset?.image_text_mode || fallbackMode, asset?.media_semantic_status);
     const dimensions = sourceIndex === undefined ? undefined : mediaDimensionOverrides[sourceIndex];
     const crop = imageTextMode === 'visual_only'
       ? { fit:'cover' as const, objectPosition:asset?.recommended_object_position || '50% 50%', reason:'visual_only_gallery_fill' }
@@ -219,7 +234,7 @@ const galleryImages = (() => {
       // A classified role always wins and poster semantics remain fail-closed.
       media_role: (sourceIndex === undefined ? undefined : mediaRoleOverrides[sourceIndex])
         || (asset?.media_semantic_status === 'classified' ? asset.media_role : undefined)
-        || fallbackMediaRole(imageTextMode),
+        || fallbackMediaRole(asset?.media_semantic_status, asset?.media_role),
       media_semantic_status:asset?.media_semantic_status,
       recommended_hero_fit:asset?.recommended_hero_fit,
       safe_crop:asset?.safe_crop,
@@ -236,7 +251,7 @@ const galleryImages = (() => {
   else if (event.image_url) {
     const src = eventImageUrl(event.image_url) || event.image_url;
     seen.add(src);
-    out.push({ src, alt: heroAlt, image_text_mode: event.image_text_mode, media_role: fallbackMediaRole(event.image_text_mode), width: preferredWidth, height: preferredHeight });
+    out.push({ src, alt: heroAlt, image_text_mode: event.image_text_mode, media_role: event.image_media_role || 'unknown_document', width: preferredWidth, height: preferredHeight });
   }
   rawAssets.forEach((asset, index) => {
     if (qualityAdmittedSourceIndexSet.has(index)) add(asset, event.image_text_mode, index);

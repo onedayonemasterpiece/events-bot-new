@@ -102,13 +102,22 @@ function visualFallbackObjectPosition(item) {
 export function relatedCardMediaGeometry(item) {
   const asset = primaryImageAsset(item);
   const display = displayPayload(item);
-  const imageTextMode = asset?.image_text_mode || display?.image_text_mode || 'unknown';
+  const rawImageTextMode = asset?.image_text_mode || display?.image_text_mode || 'unknown';
+  const semanticStatus = asset?.media_semantic_status || display?.media_semantic_status || '';
+  // A semantic-classifier error invalidates any optimistic visual treatment
+  // carried by a stale or partial payload. Pending assets may still use an
+  // explicit image_text_mode, but missing evidence always resolves unknown.
+  const imageTextMode = semanticStatus === 'error'
+    ? 'unknown'
+    : ['ocr_text', 'visual_only'].includes(rawImageTextMode) ? rawImageTextMode : 'unknown';
   const documentMedia = imageTextMode !== 'visual_only';
   const width = Number(asset?.width || display?.image_width || 0);
   const height = Number(asset?.height || display?.image_height || 0);
   const dimensionsKnown = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
   return {
     asset,
+    imageTextMode,
+    semanticStatus,
     documentMedia,
     dimensionsKnown,
     ratio: finiteRatio(dimensionsKnown ? width / height : 0, documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO),
@@ -128,6 +137,20 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
   const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO);
   const potentialCoverCrop = cropFraction(mediaRatio, targetAspect);
   if (geometry?.documentMedia) {
+    // Unknown classification and explicit classifier errors have no positive
+    // crop evidence. Even known pixel dimensions cannot turn them into the
+    // bounded-cover OCR exception: they remain whole on every EventCard.
+    if (geometry?.imageTextMode === 'unknown' || geometry?.semanticStatus === 'error') {
+      return {
+        mediaKind:'document',
+        mediaTreatment:'document-contain',
+        fit:'contain',
+        objectPosition:'50% 50%',
+        cropReason:geometry?.semanticStatus === 'error' ? 'semantic_error_fail_closed' : 'unknown_media_fail_closed',
+        potentialCoverCrop:null,
+        coverCrop:null,
+      };
+    }
     // A fallback aspect ratio is useful for reserving layout space but is not
     // evidence that an OCR/document image fits the 20% crop budget. Unknown
     // intrinsic geometry therefore stays contained and exposes no numeric crop

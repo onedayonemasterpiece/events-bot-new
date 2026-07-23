@@ -33,7 +33,7 @@ const description = 'Адаптивный прототип личной лент
           <h2 id="personal-feed-title">С чего можно начать</h2>
           <p>Одна карточка на взаимно связанную семью дат; совпадения по названию, площадке или типу сами по себе не склеиваются.</p>
         </div>
-        <div class="cards-grid">
+        <div class="authorized-search__results personal-page__feed-list" data-personal-feed-results>
           {events.map((event) => <EventCard event={event} mobileFlowMedia />)}
         </div>
       </section>
@@ -52,7 +52,8 @@ const description = 'Адаптивный прототип личной лент
   .personal-page__feed { margin-top: 1rem; }
   .personal-page__feed > div:first-child { max-width: 62ch; margin-bottom: 1rem; }
   .personal-page__feed h2 { margin: .15rem 0 .45rem; font-size: clamp(1.8rem, 3vw, 3rem); }
-  .personal-page__feed .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  @media (max-width: 880px) { .personal-page__feed .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 620px) { .personal-page__feed .cards-grid { grid-template-columns: 1fr; } }
+  /* Search and the personal cold-start surface are both ranked large-card
+     feeds. Keep ordinary one-column document flow at every breakpoint rather
+     than reintroducing a compact 3/2/1 listing grid around EventCard. */
+  .personal-page__feed-list { grid-template-columns: minmax(0, 1fr); }
 </style>

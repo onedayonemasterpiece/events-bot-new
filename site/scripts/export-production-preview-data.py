@@ -1182,6 +1182,14 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         geometry = current_geometry_metadata(metadata) if metadata else None
         ocr = str(metadata.get("ocr_text") or "")
         stored_mode = clean_text(metadata.get("image_text_mode")).lower()
+        semantic_status = clean_text(metadata.get("media_semantic_status")).lower()
+        raw_role = clean_text(metadata.get("media_role")).lower()
+        # Missing OCR output is not positive evidence that an asset is a
+        # photograph. Preserve explicit producer classifications and the
+        # narrow reviewed legacy overrides, but otherwise export `unknown` so
+        # every consuming surface fails closed to contain. A classified
+        # event-photo role is also affirmative visual evidence from the LLM
+        # semantic pass; pending/error rows with neither signal remain unknown.
         mode = (
             "visual_only"
             if event_id in FORCE_VISUAL_IMAGE_MODE_IDS
@@ -1190,9 +1198,9 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
             else "ocr_text"
             if meaningful_ocr(ocr)
             else "visual_only"
+            if semantic_status == "classified" and raw_role == "event_photo"
+            else "unknown"
         )
-        semantic_status = clean_text(metadata.get("media_semantic_status")).lower()
-        raw_role = clean_text(metadata.get("media_role")).lower()
         media_role = raw_role if semantic_status == "classified" and raw_role in EVENT_IMAGE_MEDIA_ROLES else None
         if index == 0 and not metadata.get("width"):
             probed_width, probed_height = first_width, first_height
@@ -1228,7 +1236,7 @@ def collect_images(con: sqlite3.Connection, event_id: int, photo_urls_raw: Any, 
         elif role_for_ui == "attendee_information":
             alt = f"Полезная информация для посетителей события «{title}»"
         else:
-            alt = f"Фотография события «{title}»"
+            alt = f"Изображение события «{title}»"
         crop_eligible = bool(
             geometry
             and mode == "visual_only"

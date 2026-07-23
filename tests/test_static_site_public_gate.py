@@ -235,7 +235,9 @@ def test_collect_images_uses_one_url_per_approved_logical_poster() -> None:
         "https://static.kenigevents.ru/a.webp",
     ]
     assert assets[0]["media_role"] == "unknown_document"
+    assert assets[0]["image_text_mode"] == "unknown"
     assert assets[0]["recommended_hero_fit"] == "contain"
+    assert _mode == "unknown"
     assert _role == "unknown_document"
 
 
@@ -269,6 +271,8 @@ def test_collect_images_canonicalizes_current_bucket_and_rejects_other_hosts() -
     assert [asset["src"] for asset in assets] == [
         "https://static.kenigevents.ru/p/a.webp"
     ]
+    assert _mode == "unknown"
+    assert assets[0]["image_text_mode"] == "unknown"
 
 
 def test_collect_images_does_not_fallback_when_only_quarantined_rows_exist() -> None:

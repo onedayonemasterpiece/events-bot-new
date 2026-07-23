@@ -52,12 +52,22 @@ const mediaQualitySelection = selectEventMediaByQuality(rawImageAssets);
 const admittedImageAssets = mediaQualitySelection.admittedSourceIndexes.map((index) => rawImageAssets[index]).filter(Boolean);
 const requestedPrimaryImageUrl = eventImageUrl(event.image_url);
 const primaryImageAsset = admittedImageAssets.find((asset) => eventImageUrl(asset.src) === requestedPrimaryImageUrl) || admittedImageAssets[0];
+function failClosedImageTextMode(
+  mode: EventImageAsset['image_text_mode'] | PreviewEvent['image_text_mode'] | null | undefined,
+  semanticStatus: EventImageAsset['media_semantic_status'] | null | undefined,
+): EventImageAsset['image_text_mode'] {
+  if (semanticStatus === 'error') return 'unknown';
+  return mode === 'ocr_text' || mode === 'visual_only' ? mode : 'unknown';
+}
+const primaryImageTextMode = failClosedImageTextMode(
+  primaryImageAsset?.image_text_mode || event.image_text_mode,
+  primaryImageAsset?.media_semantic_status,
+);
 const primaryLowResolutionPortrait = admittedImageAssets.length === 1
-  && (primaryImageAsset?.image_text_mode || event.image_text_mode) !== 'visual_only'
+  && primaryImageTextMode !== 'visual_only'
   && isLowResolutionPortraitEventMedia(primaryImageAsset);
 const primaryImageUrl = eventImageUrl(primaryImageAsset?.src || event.image_url);
 const typedFallbackArt = primaryImageUrl ? null : resolveEventFallbackArt(event);
-const primaryImageTextMode = primaryImageAsset?.image_text_mode || event.image_text_mode;
 const galleryCtaImageUrl = eventImageUrl(galleryCta?.image_url);
 const derivedMode: HeroMode = primaryImageUrl ? (primaryImageTextMode === 'visual_only' ? 'photo-cover' : 'poster-stage') : 'fallback-art';
 const heroMode = modeOverride || derivedMode;
@@ -151,7 +161,9 @@ const galleryImages = (() => {
       image_text_mode: primaryImageTextMode,
       recommended_object_position: heroObjectPosition || undefined,
       recommended_hero_fit: heroMode === 'photo-cover' ? primaryHeroCrop.fit : 'contain',
-      media_role: primaryImageAsset?.media_role || event.image_media_role,
+      media_role: primaryImageAsset?.media_semantic_status === 'classified'
+        ? primaryImageAsset.media_role
+        : 'unknown_document',
       width: primaryImageAsset?.width,
       height: primaryImageAsset?.height,
       low_resolution_portrait: primaryLowResolutionPortrait,
@@ -160,19 +172,20 @@ const galleryImages = (() => {
     });
   }
   for (const asset of admittedImageAssets) {
-    const galleryCrop = (asset.image_text_mode || 'unknown') === 'visual_only'
+    const galleryImageTextMode = failClosedImageTextMode(asset.image_text_mode, asset.media_semantic_status);
+    const galleryCrop = galleryImageTextMode === 'visual_only'
       ? { fit:'cover' as const, objectPosition:normalizeObjectPosition(asset.recommended_object_position) || '50% 50%', reason:'visual_only_gallery_fill' }
       : { fit:'contain' as const, objectPosition:'50% 50%', reason:'document_media' };
     push({
       src: eventImageUrl(asset.src) || asset.src,
       alt: asset.alt || heroAlt,
-      image_text_mode: asset.image_text_mode || 'unknown',
+      image_text_mode: galleryImageTextMode,
       recommended_object_position: galleryCrop.fit === 'cover' ? galleryCrop.objectPosition : undefined,
       recommended_hero_fit: galleryCrop.fit,
-      media_role: asset.media_role,
+      media_role: asset.media_semantic_status === 'classified' ? asset.media_role : 'unknown_document',
       width: asset.width,
       height: asset.height,
-      low_resolution_portrait: (asset.image_text_mode || 'unknown') !== 'visual_only'
+      low_resolution_portrait: galleryImageTextMode !== 'visual_only'
         && admittedImageAssets.length === 1 && isLowResolutionPortraitEventMedia(asset),
       protected_crop_fit: galleryCrop.fit,
       protected_crop_reason: galleryCrop.reason,

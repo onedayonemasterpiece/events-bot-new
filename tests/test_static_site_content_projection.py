@@ -205,3 +205,87 @@ def test_collect_images_honours_stored_ocr_mode_without_ocr_text() -> None:
     assert assets[0]["image_text_mode"] == "ocr_text"
     assert assets[0]["recommended_hero_fit"] == "contain"
     assert assets[0]["safe_crop"] is False
+
+
+def _media_mode_connection() -> sqlite3.Connection:
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute(
+        """
+        create table eventposter(
+          id integer primary key,
+          event_id integer,
+          supabase_url text,
+          catbox_url text,
+          ocr_text text,
+          image_text_mode text,
+          review_status text,
+          display_order integer,
+          width integer,
+          height integer,
+          media_role text,
+          media_role_confidence real,
+          media_semantic_status text,
+          safe_crop integer
+        )
+        """
+    )
+    return con
+
+
+def test_collect_images_missing_mode_fails_closed_for_pending_and_error_rows() -> None:
+    EXPORTER.SKIP_IMAGE_PROBES = True
+    con = _media_mode_connection()
+    con.executemany(
+        "insert into eventposter values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            (
+                1, 6686, "https://static.kenigevents.ru/p/unclassified-error.webp", None,
+                None, None, "approved", 0, 1080, 1350,
+                "event_photo", 0.0, "error", 0,
+            ),
+            (
+                2, 6686, "https://static.kenigevents.ru/p/unclassified-pending.webp", None,
+                None, None, "approved", 1, 1080, 1350,
+                None, 0.0, "pending", 0,
+            ),
+        ],
+    )
+
+    _primary, mode, role, assets = EXPORTER.collect_images(con, 6686, "[]", "Событие")
+
+    assert mode == "unknown"
+    assert role == "unknown_document"
+    assert [asset["image_text_mode"] for asset in assets] == ["unknown", "unknown"]
+    assert [asset["media_role"] for asset in assets] == ["unknown_document", "unknown_document"]
+    assert all(asset["recommended_hero_fit"] == "contain" for asset in assets)
+    assert all(asset["safe_crop"] is False for asset in assets)
+
+
+def test_collect_images_preserves_classified_visual_and_mixed_6529_schedule() -> None:
+    EXPORTER.SKIP_IMAGE_PROBES = True
+    con = _media_mode_connection()
+    con.executemany(
+        "insert into eventposter values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            (
+                1, 6529, "https://static.kenigevents.ru/p/6529-photo.webp", None,
+                None, "visual_only", "approved", 0, 1600, 1000,
+                "event_photo", 0.99, "classified", 1,
+            ),
+            (
+                2, 6529, "https://static.kenigevents.ru/p/6529-schedule.webp", None,
+                "18:00 — открытие\n20:00 — концерт", "ocr_text", "approved", 1, 1080, 1600,
+                "program_or_schedule", 0.98, "classified", 0,
+            ),
+        ],
+    )
+
+    primary, mode, role, assets = EXPORTER.collect_images(con, 6529, "[]", "Событие")
+
+    assert primary.endswith("/6529-photo.webp")
+    assert mode == "visual_only"
+    assert role == "event_photo"
+    assert [asset["image_text_mode"] for asset in assets] == ["visual_only", "ocr_text"]
+    assert [asset["recommended_hero_fit"] for asset in assets] == ["contain", "contain"]
+    assert assets[1]["media_role"] == "program_or_schedule"

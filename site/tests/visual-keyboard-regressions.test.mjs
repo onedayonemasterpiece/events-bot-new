@@ -165,6 +165,54 @@ test('mobile large cards keep visual media at horizontal 5:4 and documents intri
   assert.equal(unknownPoster.useNaturalAspect, true);
 });
 
+test('semantic errors and unknown modes contain while classified visual-only controls cover', () => {
+  const semanticError = imageEvent(6686, 1080, 1350, {
+    image_text_mode:'visual_only',
+    media_semantic_status:'error',
+    media_role:'event_photo',
+    safe_crop:true,
+  });
+  const missingMode = imageEvent(6687, 1080, 1350, {
+    image_text_mode:'unknown',
+    media_semantic_status:'pending',
+    media_role:'unknown_document',
+    safe_crop:false,
+  });
+  const classifiedVisual = imageEvent(6529, 1600, 1000, classifiedPhoto());
+
+  for (const event of [semanticError, missingMode]) {
+    const related = resolveRelatedCardMediaTreatment(event, 5 / 4);
+    const mobile = resolveMobileEventCardMedia(event);
+    assert.equal(related.mediaKind, 'document');
+    assert.equal(related.fit, 'contain');
+    assert.equal(mobile.mediaKind, 'document');
+    assert.equal(mobile.fit, 'contain');
+  }
+
+  const visual = resolveMobileEventCardMedia(classifiedVisual);
+  assert.equal(visual.mediaKind, 'visual');
+  assert.equal(visual.fit, 'cover');
+});
+
+test('hero and desktop gallery share the semantic-error contain contract', async () => {
+  const [hero, desktop, personal] = await Promise.all([
+    read('src/components/EventHero.astro'),
+    read('src/components/DesktopEventPage.astro'),
+    read('src/pages/dlya-menya/index.astro'),
+  ]);
+
+  assert.match(hero, /if \(semanticStatus === 'error'\) return 'unknown'/u);
+  assert.match(hero, /galleryImageTextMode = failClosedImageTextMode\(asset\.image_text_mode, asset\.media_semantic_status\)/u);
+  assert.match(hero, /asset\.media_semantic_status === 'classified' \? asset\.media_role : 'unknown_document'/u);
+  assert.match(desktop, /if \(semanticStatus === 'error'\) return 'unknown'/u);
+  assert.match(desktop, /failClosedImageTextMode\(asset\?\.image_text_mode \|\| fallbackMode, asset\?\.media_semantic_status\)/u);
+  assert.match(desktop, /semanticStatus === 'classified' && classifiedRole/u);
+  assert.doesNotMatch(desktop, /fallbackMediaRole[\s\S]{0,320}mode === 'visual_only' \? 'event_photo'/u);
+  assert.match(personal, /class="authorized-search__results personal-page__feed-list"/u);
+  assert.doesNotMatch(personal, /repeat\(3,\s*minmax\(0,\s*1fr\)\)/u);
+  assert.doesNotMatch(personal, /repeat\(2,\s*minmax\(0,\s*1fr\)\)/u);
+});
+
 test('desktop recommendation packing remains adaptive and independent from mobile flow', () => {
   const frog = imageEvent(4785, 2000, 660, { image_text_mode:'visual_only' });
   const [desktop] = packRelatedCardRows([frog], { rowSize:1, presentation:'related-grid' });
@@ -206,10 +254,15 @@ test('incompatible ranked OCR prefix uses a bounded alternate instead of opening
 test('captured Dog-page production payloads reject the exact 22%/32% photo-band regression', () => {
   const packed = packRelatedCardRows(cropCanaries.visuals, { rowSize:3, mediaTreatment:'hybrid' });
   assert.deepEqual(new Set(packed.map(({ item }) => item.id)), new Set([5757, 6586, 6318, 5756]));
-  assert.ok(packed.every(({ layout }) => layout.mediaKind === 'visual'));
-  assert.ok(packed.every(({ layout }) => layout.mediaTreatment === 'visual-cover' && layout.fit === 'cover'));
-  assert.equal(packed[0].layout.objectPosition, '50% 25%', 'asset focal metadata must survive the restored cover path');
-  assert.ok(packed.every(({ layout }) => layout.rowRatio >= 5 / 4 && layout.rowRatio <= 8 / 5));
+  const classified = packed.filter(({ item }) => item.image_assets[0].media_semantic_status === 'classified');
+  const semanticError = packed.find(({ item }) => item.image_assets[0].media_semantic_status === 'error');
+  assert.ok(classified.every(({ layout }) => layout.mediaKind === 'visual'));
+  assert.ok(classified.every(({ layout }) => layout.mediaTreatment === 'visual-cover' && layout.fit === 'cover'));
+  assert.equal(packed.find(({ item }) => item.id === 5757)?.layout.objectPosition, '50% 25%', 'asset focal metadata must survive the restored cover path');
+  assert.equal(semanticError?.layout.mediaKind, 'document');
+  assert.equal(semanticError?.layout.mediaTreatment, 'document-contain');
+  assert.equal(semanticError?.layout.fit, 'contain');
+  assert.equal(semanticError?.layout.cropReason, 'semantic_error_fail_closed');
 
   const document = resolveRelatedCardMediaTreatment(cropCanaries.document, 1);
   assert.equal(document.mediaKind, 'document');
