@@ -171,20 +171,22 @@ const titleId = `club-card-title-${club.id}`;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.56),
       0 2px 4px rgba(75,35,9,.22),
-      0 13px 25px rgba(244,145,37,.36);
+      0 8px 11px rgba(255,194,96,.58),
+      0 18px 28px rgba(244,145,37,.5);
     pointer-events:none;
   }
   .club-card__future--desktop::after {
     content:"";
     position:absolute;
     z-index:-1;
-    top:calc(100% - .22rem);
-    right:10%;
-    left:10%;
-    height:1.35rem;
+    top:calc(100% - .12rem);
+    right:5%;
+    left:5%;
+    height:1.75rem;
     border-radius:50%;
-    background:radial-gradient(ellipse at top,rgba(255,181,72,.55),rgba(244,145,37,.18) 48%,transparent 74%);
-    filter:blur(6px);
+    background:radial-gradient(ellipse at top,rgba(255,218,151,.9),rgba(255,169,54,.62) 34%,rgba(244,145,37,.22) 62%,transparent 80%);
+    filter:blur(5px);
+    mix-blend-mode:screen;
     pointer-events:none;
   }
   .club-card__future--mobile { display:none; }

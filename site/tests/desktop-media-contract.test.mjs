@@ -96,24 +96,23 @@ test('server and runtime card branches use OCR mode so every non-OCR image cover
   assert.match(layout, /reviewedAsset\?\.listing_crop_evidence/u);
 });
 
-test('desktop tag uses blank source leather, live lockup, complete edging and terracotta fallback', async () => {
+test('desktop tag uses cleaned blank leather, live lockup, complete edging and terracotta fallback', async () => {
   const layout = await read('src/layouts/EventLayout.astro');
-  const metadata = JSON.parse(await read('public/assets/ui/desktop-head-leather-r4.metadata.json'));
-  const asset = await read('public/assets/ui/desktop-head-leather-r4.webp', null);
-  const master = await read('src/assets/ui/desktop-head-leather-r4-master.webp', null);
+  const metadata = JSON.parse(await read('public/assets/ui/desktop-head-leather-r5.metadata.json'));
+  const asset = await read('public/assets/ui/desktop-head-leather-r5.webp', null);
+  const master = await read('src/assets/ui/desktop-head-leather-r5-master.webp', null);
 
   assert.deepEqual(metadata.output_dimensions_px, [960, 352]);
   assert.equal(metadata.output_aspect_ratio, '30:11');
   assert.equal(metadata.chosen_source, 'docs/features/static-site-pages/references/head-skin-desctop (2).png');
   assert.equal(metadata.rejected_source, 'docs/features/static-site-pages/references/head-skin-desctop (1).png');
-  assert.deepEqual(metadata.crop_box_px, [242, 0, 2599, 900]);
   assert.match(metadata.selection, /without baked raster lettering[\s\S]*live AnnouncementsLockup[\s\S]*sharp/u);
-  assert.match(metadata.crop_policy, /both side edges[\s\S]*lower stitched seam[\s\S]*rounded foot[\s\S]*shadow/u);
-  assert.match(metadata.alpha_mask, /rounded lower corners[\s\S]*pale reference page removed/u);
+  assert.match(metadata.cleanup_policy, /stitched outer edge[\s\S]*offset dark backing[\s\S]*pale horizontal extraction remnant/u);
+  assert.match(metadata.alpha_mask, /rounded-rectangle silhouette[\s\S]*no hard clipping/u);
   assert.equal(sha256(asset), metadata.output_sha256);
   assert.equal(sha256(master), metadata.master_sha256);
 
-  assert.match(layout, /--desktop-brand-tag-skin:url\('\$\{withBase\('\/assets\/ui\/desktop-head-leather-r4\.webp'\)\}'\)/u);
+  assert.match(layout, /--desktop-brand-tag-skin:url\('\$\{withBase\('\/assets\/ui\/desktop-head-leather-r5\.webp'\)\}'\)/u);
   assert.match(layout, /<AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" \/>/u);
   assert.match(layout, /\.site-header__brand-tag,\s*\.hero-gallery__brand\s*\{[\s\S]*background-color:#98401f;[\s\S]*background-image:var\(--desktop-brand-tag-skin\);/u);
   assert.match(layout, /background-size:100% 100%/u);

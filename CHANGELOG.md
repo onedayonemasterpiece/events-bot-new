@@ -123,6 +123,10 @@
 
 ### Changed
 
+- Cleaned the desktop leather tag asset so the offset lower/right backing and
+  pale extraction remnant no longer show outside the stitched face; strengthened
+  the clubs `Ближайших встреч` accent into a visibly lower-directed glow and
+  started the central presentation UI-debt register.
 - Replaced the desktop tag texture with the clean supplied stitched-leather
   variant under the live SVG/DOM wordmark, preserving the complete edging and
   immediate terracotta fallback; compacted desktop event breadcrumbs without

@@ -82,6 +82,14 @@ count in the upper-right media corner with a restrained downward glow. These
 are desktop acceptance changes; the existing mobile compositions remain the
 review baseline for a later pass.
 
+R5 is a bounded presentation-polish successor to R4. It removes the offset dark
+backing and pale extraction remnant that remained visible below/right of the
+desktop leather face, while preserving the stitched outer edge and live
+SVG/DOM lockup. It also makes the existing `Ближайших встреч` club-card accent
+visibly glow below the label on desktop. The first item is tracked in the
+central presentation debt register as `TD-PRESENTATION-UI-001`; mobile layout
+and behavior remain unchanged pending the next explicit review.
+
 The published R2 review object is
 <https://kenigevents.ru/preview-20260723-unified-corrections-r2/__preview/>.
 Generated and live browser gates passed; valid `agy`

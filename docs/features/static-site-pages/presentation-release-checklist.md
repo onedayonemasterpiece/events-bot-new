@@ -51,6 +51,18 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
 - [ ] **Blocked** — final Pixel/desktop/keyboard/contrast review on the frozen presentation candidate.
 - [ ] **Blocked** — presentation copy/sign-off by product owner, including estimate, night-service and explicit no-return wording.
 
+### Presentation UI debt register
+
+This is the central register for visual/product work that is intentionally
+deferred until the final presentation freeze or the first post-presentation
+iteration. New items receive stable `TD-PRESENTATION-UI-*` identifiers instead
+of being left only in review chats.
+
+- [x] **Done in R5 — `TD-PRESENTATION-UI-001`:** the desktop club-card label
+  `Ближайших встреч` was correctly positioned but its intended lower glow was
+  not visually legible over the media. R5 strengthens the compact,
+  lower-directed glow without changing mobile placement or card geometry.
+
 ## 4. Schedule freshness
 
 - [x] **Done in reference audit** — all 13 direction/product pages from the official КППК schedule index inventoried with effective dates, exact image URLs and SHA-256; current coastal, Балтийск, eastern, Багратионовск, Мамоново, Железнодорожный and Краснолесье matrices manually reviewed.

@@ -314,6 +314,7 @@ features:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
     release_plan: docs/features/static-site-pages/release-plan.md
+    presentation_release_checklist: docs/features/static-site-pages/presentation-release-checklist.md
     test_scenarios: docs/features/static-site-pages/test-scenarios.md
     release_umbrella: docs/features/static-personal-announcements/README.md
     release_readiness: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md

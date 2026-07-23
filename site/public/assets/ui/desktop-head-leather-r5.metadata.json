@@ -1,0 +1,29 @@
+{
+  "asset": "/assets/ui/desktop-head-leather-r5.webp",
+  "purpose": "Desktop announcements tag, cleaned blank source leather with live SVG/text lockup",
+  "chosen_source": "docs/features/static-site-pages/references/head-skin-desctop (2).png",
+  "rejected_source": "docs/features/static-site-pages/references/head-skin-desctop (1).png",
+  "selection": "Variant 2 is the same stitched leather without baked raster lettering; live AnnouncementsLockup stays sharp at 240x88, accessible, themeable, and avoids double/raster-soft text.",
+  "source_sha256": "850bd59d25a27f8e795002126f8a8c36167b1301578984324ffb708fac93a6a5",
+  "source_dimensions_px": [
+    3028,
+    1408
+  ],
+  "parent_asset": "/assets/ui/desktop-head-leather-r4.webp",
+  "cleanup_policy": "Retain the leather face, stitched outer edge and antialiased rounded foot; remove the offset dark backing and pale horizontal extraction remnant below/right of the face. Refit the cleaned face to the existing 30:11 runtime box.",
+  "alpha_mask": "Antialiased lower rounded-rectangle silhouette multiplied with the source alpha after the face-only crop; no hard clipping of the stitched edge.",
+  "master_asset": "src/assets/ui/desktop-head-leather-r5-master.webp",
+  "master_dimensions_px": [
+    1920,
+    704
+  ],
+  "master_sha256": "01674e496f607a83ff4b04a8b4eec815ac005accad8012325e19b75d14476a63",
+  "output_dimensions_px": [
+    960,
+    352
+  ],
+  "output_aspect_ratio": "30:11",
+  "output_sha256": "2b51f46b803181800e7c5acadfd663306f84fe5134d7baaa0da7c34102068827",
+  "format": "WebP RGBA quality 92",
+  "fallback": "CSS background-color #98401f paints immediately beneath the transparent WebP; the live SVG/text lockup remains DOM content."
+}

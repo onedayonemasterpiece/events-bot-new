@@ -108,9 +108,11 @@ test('club catalog keeps full desktop rows, scoped hotkeys, fallback and mobile 
         && badgeRect.right <= cardRect.right,
       position: style.position,
       whiteSpace: style.whiteSpace,
-      lowerGlow: style.boxShadow.includes('rgba(244, 145, 37')
+      lowerGlow: style.boxShadow.includes('rgba(255, 194, 96')
+        && style.boxShadow.includes('rgba(244, 145, 37')
         && glow.backgroundImage.includes('radial-gradient')
-        && Number.parseFloat(glow.top) >= badgeRect.height - 7,
+        && glow.mixBlendMode === 'screen'
+        && Number.parseFloat(glow.top) >= badgeRect.height - 5,
     };
   });
   assert.equal(desktopBadgeLayout.position, 'absolute');

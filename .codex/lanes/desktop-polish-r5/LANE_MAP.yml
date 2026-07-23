@@ -1,0 +1,67 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: cce340030beec8e84d016460b00e5b50adf995b8
+base_branch: integration/desktop-polish-medallion-slots-r4-20260723
+integration_branch: integration/desktop-polish-cleanup-r5-20260723
+global_constraints:
+  - preserve the accepted R4 desktop and mobile behavior except for the named presentation polish
+  - publish only a new immutable noindex prefix
+  - never overwrite R4 or production
+  - keep presentation debt in the canonical release checklist
+  - use the approved local Telegram human-session lane, never S22
+verification_owner: INT-R5
+stop_conditions:
+  - dirty baseline from unrelated work
+  - leather cleanup clips the stitched outer edge
+  - glow introduces overflow or obscures card content
+requirements:
+  - id: R01
+    requirement: record presentation UI debt centrally
+    area: docs
+    dependencies: []
+    conflict_risk: low
+    done_when: canonical presentation checklist contains a stable debt register item
+  - id: R02
+    requirement: remove the stray lower/right layers from the desktop leather tag
+    area: desktop brand asset
+    dependencies: []
+    conflict_risk: medium
+    done_when: public close-up keeps the leather edge and stitching without the offset backing artifacts
+  - id: R03
+    requirement: make the desktop nearest-meetings label visibly glow below
+    area: interest club card
+    dependencies: []
+    conflict_risk: low
+    done_when: public desktop screenshot and computed style show a restrained lower-directed glow
+  - id: R04
+    requirement: send the review URLs to the requested Telegram thread
+    area: release handoff
+    dependencies: [R02, R03]
+    conflict_risk: medium
+    done_when: message is sent and verified through the approved E2E human session
+lanes:
+  - id: INT-R5
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R01, R02, R03, R04]
+    target: implement, validate, publish, and hand off the small coupled R5 polish
+    depends_on: []
+    execution_mode: serial
+    branch: integration/desktop-polish-cleanup-r5-20260723
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files:
+      - .codex/lanes/desktop-polish-r5/**
+      - docs/features/static-site-pages/presentation-release-checklist.md
+      - docs/features/static-site-pages/astro-preview.md
+      - docs/routes.yml
+      - CHANGELOG.md
+      - site/src/layouts/EventLayout.astro
+      - site/src/components/InterestClubCard.astro
+      - site/public/assets/ui/desktop-head-leather-r5.*
+      - site/src/assets/ui/desktop-head-leather-r5-master.webp
+      - site/tests/desktop-media-contract.test.mjs
+      - site/tests/interest-club-catalog*.mjs
+    forbidden_files: []
+    expected_output: clean pushed branch, immutable R5 preview, public screenshots, Telegram receipt
+    verification_scope: full_local
+    status: in_progress
