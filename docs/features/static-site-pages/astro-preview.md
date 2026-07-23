@@ -86,9 +86,24 @@ R5 is a bounded presentation-polish successor to R4. It removes the offset dark
 backing and pale extraction remnant that remained visible below/right of the
 desktop leather face, while preserving the stitched outer edge and live
 SVG/DOM lockup. It also makes the existing `Ближайших встреч` club-card accent
-visibly glow below the label on desktop. The first item is tracked in the
-central presentation debt register as `TD-PRESENTATION-UI-001`; mobile layout
-and behavior remain unchanged pending the next explicit review.
+visibly glow below the label on desktop. That glow was the first item entered
+in the central presentation debt register (`TD-PRESENTATION-UI-001`) and was
+closed in the same R5 pass after the user explicitly allowed the deferred polish
+to ship now. Mobile layout and behavior remain unchanged pending the next
+explicit review.
+
+Immutable R5 review routes:
+
+- <https://kenigevents.ru/preview-20260723-unified-corrections-r5/__preview/>;
+- <https://kenigevents.ru/preview-20260723-unified-corrections-r5/kluby-po-interesam/>;
+- <https://kenigevents.ru/preview-20260723-unified-corrections-r5/sobytiya/dekorativnoe-mini-panno-tkanye-uzory-zelenogradsk-6529/>.
+
+The links were delivered to the requested `KenigEvents · UI review` Telegram
+forum thread as verified message `608` (topic anchor `548`). Public Chromium
+smoke at `1440×900` and `390×844` returned HTTP `200`, preserved
+`noindex,nofollow,noarchive`, and found no horizontal overflow, broken images,
+console errors or page errors. The 390 px run is technical smoke only, not
+mobile product acceptance.
 
 The published R2 review object is
 <https://kenigevents.ru/preview-20260723-unified-corrections-r2/__preview/>.

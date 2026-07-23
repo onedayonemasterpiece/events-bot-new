@@ -64,4 +64,4 @@ lanes:
     forbidden_files: []
     expected_output: clean pushed branch, immutable R5 preview, public screenshots, Telegram receipt
     verification_scope: full_local
-    status: in_progress
+    status: complete
