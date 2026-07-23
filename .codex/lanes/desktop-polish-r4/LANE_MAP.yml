@@ -86,4 +86,4 @@ lanes:
     forbidden_files: []
     expected_output: clean pushed branch, immutable preview, public desktop evidence, Gemini verdict
     verification_scope: full_local
-    status: committed
+    status: complete
