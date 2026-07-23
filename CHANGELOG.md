@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added deterministic desktop event-medallion layout roles: one structured
+  festival/organizer/venue-fallback Main may occupy the centered TopSlot, while
+  Secondary identities use InlineSlot; empty zones do not render and the
+  fail-closed resolver/Unicode boundaries remain unchanged.
 - Added a production-backed 38-entry medallion usage audit with exact
   event/field/alias/surface evidence, deterministic Telegram PNG fallbacks,
   event-detail festival resolution and Playwright inventory gates for 27
@@ -119,6 +123,12 @@
 
 ### Changed
 
+- Replaced the desktop tag texture with the clean supplied stitched-leather
+  variant under the live SVG/DOM wordmark, preserving the complete edging and
+  immediate terracotta fallback; compacted desktop event breadcrumbs without
+  shrinking their effective pointer target.
+- Moved the clubs future-meeting count to the upper-right desktop media corner
+  with a restrained lower-only glow; the mobile placement is unchanged.
 - Refined the desktop leather tag to retain side stitches, bottom seam and
   outer edging over an immediate terracotta fallback; source-keyed visual-only
   recommendation corrections now fill compact `5:4` frames without fields.

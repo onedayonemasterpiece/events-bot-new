@@ -68,6 +68,20 @@ hotkeys plus a source-grounded Game Vibes cover. The Goblin recommendation on
 event `6529` is an exact-source reviewed `5:4` derivative: as visual-only media
 it must fill the row and may not expose letterbox fields.
 
+The R4 desktop review keeps the R3 data/runtime contracts and changes only the
+review presentation. The desktop `240×88` brand tag now uses the clean supplied
+`head-skin-desctop (2).png` leather as a local alpha WebP under the existing
+live SVG/DOM lockup; the stitched side edges, lower seam, rounded foot and
+contact shadow remain visible, while `#98401f` paints immediately before load
+or after an image failure. Event `6686` uses a genuinely compact breadcrumb
+line with an out-of-flow expanded pointer target, so the type, date and title
+move into the first viewport. Event `6529` renders its resolved `mumod`
+identity in the centered desktop TopSlot and does not manufacture an InlineSlot
+from price/audience fact pills. The clubs catalog places a real future-meeting
+count in the upper-right media corner with a restrained downward glow. These
+are desktop acceptance changes; the existing mobile compositions remain the
+review baseline for a later pass.
+
 The published R2 review object is
 <https://kenigevents.ru/preview-20260723-unified-corrections-r2/__preview/>.
 Generated and live browser gates passed; valid `agy`

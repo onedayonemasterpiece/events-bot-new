@@ -2071,7 +2071,7 @@ const descriptionHtml = (event.description_html || '')
       left:calc(3vw + .65rem);
       z-index:6;
       isolation:isolate;
-      max-width:min(520px,calc((100vw - var(--editorial-side) - 6vw) / 2 - 4.25rem));
+      max-width:min(330px,calc((100vw - var(--editorial-side) - 6vw) / 2 - 5.75rem));
       margin:0;
       color:#fffaf2;
       font-size:.7rem;
@@ -2097,7 +2097,13 @@ const descriptionHtml = (event.description_html || '')
       color:rgba(255,250,242,.68) !important;
     }
     :global(.desktop-prototype__breadcrumbs.product-breadcrumbs a) {
-      min-height:26px;
+      position:relative;
+      min-height:26px !important;
+    }
+    :global(.desktop-prototype__breadcrumbs.product-breadcrumbs a::before) {
+      content:"";
+      position:absolute;
+      inset:-9px -6px;
     }
     :global(.desktop-prototype__breadcrumbs.product-breadcrumbs ol),
     :global(.desktop-prototype__breadcrumbs.product-breadcrumbs li) {

@@ -157,10 +157,11 @@ test('desktop breadcrumbs keep semantics while becoming compact and secondary', 
   assert.match(breadcrumbs, /aria-label="Хлебные крошки"/u);
   assert.match(breadcrumbs, /<ol>/u);
   assert.match(breadcrumbs, /aria-current="page"/u);
-  assert.match(desktop, /desktop-prototype__breadcrumbs\.product-breadcrumbs a\) \{\s*min-height:26px;/u);
+  assert.match(desktop, /desktop-prototype__breadcrumbs\.product-breadcrumbs a\) \{[\s\S]*min-height:26px !important;/u);
+  assert.match(desktop, /desktop-prototype__breadcrumbs\.product-breadcrumbs a::before\) \{[\s\S]*inset:-9px -6px;/u);
   assert.match(desktop, /product-breadcrumbs:not\(\.desktop-prototype__breadcrumbs--overlay\)[\s\S]*font-size:\.7rem/u);
   assert.match(desktop, /\.desktop-clean-event--split \.desktop-prototype__info \{[\s\S]*padding-top:clamp\(\.55rem,.9vw,.85rem\)/u);
-  assert.match(desktop, /max-width:min\(520px,calc\(\(100vw - var\(--editorial-side\) - 6vw\) \/ 2 - 4\.25rem\)\)/u);
+  assert.match(desktop, /max-width:min\(330px,calc\(\(100vw - var\(--editorial-side\) - 6vw\) \/ 2 - 5\.75rem\)\)/u);
 });
 
 test('desktop and mobile transport consume one persisted Smart Update duration forecast', async () => {

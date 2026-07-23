@@ -106,6 +106,37 @@ Admission / actions
 
 The medallion row stays in normal document flow on the event detail page, not as a floating overlay over poster text. Overlays are allowed only after a visual QA pass proves they do not cover OCR/poster text.
 
+#### Desktop Main / Secondary slots
+
+The accepted desktop detail composition has two explicit zones:
+
+- **TopSlot** is the one accent position centered on the upper seam of the
+  information card;
+- **InlineSlot** is the ordinary in-card row below the primary metadata.
+
+Classification runs only after the existing structured, fail-closed identity
+resolver. A structured festival/festival brand is Main before an organizer;
+an exact resolved venue brand is the fallback Main when neither exists (the
+current `6529` MUMOD event). Additional resolved identities, source signs,
+Pushkin Card and other identity/program marks are Secondary. Title, summary,
+description and loose venue/type similarity must not create or promote a Main
+identity; Unicode alias boundaries and ambiguity/conflict rejection remain
+unchanged.
+
+Rendering is exhaustive:
+
+| Resolved medallions | TopSlot | InlineSlot |
+| --- | --- | --- |
+| Main + one or more Secondary | Main only | all Secondary |
+| exactly one Main | Main only | not rendered |
+| Secondary only | not rendered | all Secondary |
+| empty | not rendered | not rendered |
+
+Compact admission/audience price pills are facts rather than identity
+medallions. They keep their existing inline/mobile treatment but do not create
+an otherwise empty desktop InlineSlot. Mobile keeps the existing default inline
+component until its separate acceptance pass.
+
 ### Sizes
 
 Runtime event-page medallions are intentionally larger than ordinary chips: they are a visual trust/recognition layer under the hero, not small metadata labels. Organizer medallions should prefer SVG `avatarUrl` assets. If the source is not SVG/vector-safe, use WebP as the primary browser asset and keep PNG only as QA/fallback.

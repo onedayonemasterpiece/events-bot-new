@@ -19,6 +19,12 @@ event `2897` / source post `https://t.me/signalkld/9929` with local checksum
 metadata. Generated/neural announcement art is not presented as documentary
 club media; those cards use the deterministic CSS fallback.
 
+In the R4 desktop review, `Ближайших встреч: N` is a non-interactive factual
+overlay in the card media's upper-right corner. Its warm light is directional
+and appears below the badge rather than as a full advertising halo. The label
+does not wrap and stays inside the card. Mobile intentionally retains the R3
+badge in the content heading until the later mobile review.
+
 The catalog owns a scoped desktop keyboard controller. Left/Right follow the
 flattened rendered order, Up/Down select the nearest column in the adjacent
 visual row, Home/End select the catalog edges, and Enter activates only the

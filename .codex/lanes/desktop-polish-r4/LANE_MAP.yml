@@ -34,7 +34,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/features/]
     expected_output: committed implementation, visual comparison, fallback and desktop screenshot evidence
     verification_scope: full_local
-    status: planned
+    status: merged
   - id: L02-R4
     role: worker
     effort: high
@@ -55,7 +55,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/features/]
     expected_output: committed desktop-only layout with explicit priority contract and regression tests
     verification_scope: full_local
-    status: planned
+    status: merged
   - id: L03-R4
     role: worker
     effort: high
@@ -72,7 +72,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/features/]
     expected_output: committed desktop badge geometry/glow with responsive regression coverage
     verification_scope: full_local
-    status: planned
+    status: merged
   - id: INT
     role: merge_reviewer
     effort: high
@@ -86,4 +86,4 @@ lanes:
     forbidden_files: []
     expected_output: clean pushed branch, immutable preview, public desktop evidence, Gemini verdict
     verification_scope: full_local
-    status: planned
+    status: committed
