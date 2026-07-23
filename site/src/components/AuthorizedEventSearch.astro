@@ -43,7 +43,7 @@ const HeadingTag = headingLevel;
       </details>
     </div>}
   </div>
-  <form class="authorized-search__form" data-search-form hidden={enabled} aria-disabled={!enabled ? 'true' : undefined}>
+  <form class="authorized-search__form" data-search-form aria-disabled={!enabled ? 'true' : undefined}>
     <label class:list={[!standalone && 'sr-only', standalone && 'authorized-search__query-label']} for="authorized-event-search-input">Что хочется сделать?</label>
     {standalone ? (
       <textarea id="authorized-event-search-input" rows="3" maxlength="180" data-search-input placeholder="Например: послушать хор или сходить с детьми бесплатно" autocomplete="off" readonly={!enabled}></textarea>
@@ -126,6 +126,8 @@ const HeadingTag = headingLevel;
 
     const pkceCookiePrefix = 'ke_pkce_';
     const authIntentKey = 'ke_yandex_auth_intent_v1';
+    const searchDraftKey = 'ke_authorized_search_draft_v1';
+    const searchDraftMaxAgeMs = 30 * 60 * 1000;
 
     function isPkceCodeVerifierKey(key) {
       return typeof key === 'string' && key.endsWith('-code-verifier');
@@ -280,6 +282,49 @@ const HeadingTag = headingLevel;
       removeJsonStorage(authIntentKey);
     }
 
+    function saveSearchDraft(query, pending = false) {
+      writeJsonStorage(searchDraftKey, {
+        query: String(query || '').slice(0, maxQueryLength),
+        pending: Boolean(pending),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    function readSearchDraft() {
+      const draft = readJsonStorage(searchDraftKey);
+      const updatedAt = Date.parse(String(draft?.updated_at || ''));
+      if (
+        !draft
+        || typeof draft.query !== 'string'
+        || !Number.isFinite(updatedAt)
+        || Date.now() - updatedAt > searchDraftMaxAgeMs
+      ) {
+        removeJsonStorage(searchDraftKey);
+        return null;
+      }
+      const validation = validateSearchInput(draft.query);
+      if (!validation.ok) {
+        removeJsonStorage(searchDraftKey);
+        return null;
+      }
+      return { ...draft, query: validation.query };
+    }
+
+    function restoreSearchDraft() {
+      const draft = readSearchDraft();
+      if (draft && input && !input.value) input.value = draft.query;
+      return draft;
+    }
+
+    async function runPendingSearchDraft() {
+      const draft = readSearchDraft();
+      if (!draft?.pending || loading) return false;
+      removeJsonStorage(searchDraftKey);
+      if (input) input.value = draft.query;
+      await runSearch({ append: false });
+      return true;
+    }
+
     function supabaseProjectRef() {
       try {
         return new URL(root.dataset.supabaseUrl).host.split('.', 1)[0];
@@ -310,7 +355,9 @@ const HeadingTag = headingLevel;
         login.disabled = checking;
       }
       if (logout) logout.hidden = !signedIn;
-      if (form) form.hidden = !signedIn;
+      // A configured search accepts a draft before authentication. Submission
+      // preserves that draft through Yandex PKCE and runs it after the callback.
+      if (form) form.hidden = false;
       if (userBadge) userBadge.hidden = !signedIn;
       if (userName && signedIn) userName.textContent = displayUserName(session.user);
       if (signedIn) renderAvatar(session.user);
@@ -996,8 +1043,14 @@ const HeadingTag = headingLevel;
       const session = sessionData?.session || null;
       if (!session?.user || !session?.access_token) {
         clearResults();
-        await updateAuth();
-        setStatus('Сначала войдите через Яндекс.', 'error');
+        const validation = validateSearchInput(input?.value || '');
+        if (!validation.ok) {
+          setStatus(validation.message, 'error');
+          return;
+        }
+        if (input) input.value = validation.query;
+        saveSearchDraft(validation.query, true);
+        await beginYandexLogin();
         return;
       }
       const validation = validateSearchInput(input?.value || '');
@@ -1196,24 +1249,33 @@ const HeadingTag = headingLevel;
       return { attempted: true, signedIn };
     }
 
+    async function beginYandexLogin() {
+      const redirectTo = cleanAuthRedirectUrl();
+      markAuthIntent('login_started', { redirect_to: redirectTo });
+      renderAuthState(null, { preserveError: true, checking: true });
+      setStatus('Открываю вход через Яндекс…');
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: root.dataset.yandexProvider || 'custom:yandex',
+        options: { redirectTo },
+      });
+      if (error) {
+        markAuthIntent('login_start_failed', { reason: String(error.message || error).slice(0, 120) });
+        renderAuthState(null, { preserveError: true });
+        setStatus('Не удалось открыть вход через Яндекс. Запрос сохранён — попробуйте войти ещё раз.', 'error');
+        return false;
+      }
+      return true;
+    }
+
     if (enabled) {
       supabase = createClient(root.dataset.supabaseUrl, root.dataset.supabaseKey, {
         auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce', storage: authStorage },
       });
       login?.addEventListener('click', async () => {
-        const redirectTo = cleanAuthRedirectUrl();
-        markAuthIntent('login_started', { redirect_to: redirectTo });
-        renderAuthState(null, { preserveError: true, checking: true });
-        setStatus('Открываю вход через Яндекс…');
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: root.dataset.yandexProvider || 'custom:yandex',
-          options: { redirectTo },
-        });
-        if (error) {
-          markAuthIntent('login_start_failed', { reason: String(error.message || error).slice(0, 120) });
-          renderAuthState(null, { preserveError: true });
-          setStatus('Не удалось открыть вход через Яндекс. Попробуйте ещё раз.', 'error');
-        }
+        const validation = validateSearchInput(input?.value || '');
+        if (validation.ok) saveSearchDraft(validation.query, true);
+        else removeJsonStorage(searchDraftKey);
+        await beginYandexLogin();
       });
       logout?.addEventListener('click', async () => {
         await supabase.auth.signOut();
@@ -1251,6 +1313,7 @@ const HeadingTag = headingLevel;
         renderAuthState(null, { preserveError: true, checking: true });
         setStatus('Проверяю сохранённый вход через Яндекс…');
       }
+      restoreSearchDraft();
       handleAuthCallback()
         .then((callback) => {
           if (callback.signedIn) return true;
@@ -1258,7 +1321,13 @@ const HeadingTag = headingLevel;
           renderAuthState(null);
           return false;
         })
-        .then((signedIn) => { if (!signedIn && !authCallbackHadError) showAuthCallbackError(); });
+        .then(async (signedIn) => {
+          if (!signedIn && !authCallbackHadError) {
+            showAuthCallbackError();
+            return;
+          }
+          if (signedIn) await runPendingSearchDraft();
+        });
     }
   }
 </script>

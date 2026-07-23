@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { loadPreviewPublicConfig, requirePreviewAuthorizedSearch } from './preview-public-env.mjs';
 
 function safeBuildId(value) {
   if (!value || !/^preview-[a-zA-Z0-9._-]+$/.test(value) || value.includes('/')) {
@@ -24,10 +25,13 @@ const astroAssetBaseUrl = (process.env.PUBLIC_ASTRO_ASSET_BASE_URL || '')
   .replace(/\{buildId\}/g, buildId)
   .replace(/\{BUILD_ID\}/g, buildId)
   .replace(/\/+$/u, '');
+const publicSearchConfig = loadPreviewPublicConfig(siteDir, process.env);
+requirePreviewAuthorizedSearch(publicSearchConfig, process.env);
 
 rmSync(distDir, { recursive: true, force: true });
 const env = {
   ...process.env,
+  ...publicSearchConfig.values,
   SITE_BASE_PATH: `/${buildId}`,
   PUBLIC_PREVIEW_BUILD_ID: buildId,
   PUBLIC_SITE_ORIGIN: process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru',
@@ -50,7 +54,14 @@ rmSync(stagedDistDir, { recursive: true, force: true });
 renameSync(distDir, stagedDistDir);
 mkdirSync(join(distDir, buildId), { recursive: true });
 renameSync(stagedDistDir, join(distDir, buildId));
-writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({ buildId, generatedAt: now.toISOString(), basePath: `/${buildId}`, astroAssetBaseUrl: astroAssetBaseUrl || null }, null, 2));
+writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({
+  buildId,
+  generatedAt: now.toISOString(),
+  basePath: `/${buildId}`,
+  astroAssetBaseUrl: astroAssetBaseUrl || null,
+  authorizedSearchConfigured: publicSearchConfig.configured,
+}, null, 2));
 console.log(`Preview build ready: dist/${buildId}/`);
 console.log(`Preview URL: https://kenigevents.ru/${buildId}/__preview/`);
 if (astroAssetBaseUrl) console.log(`Astro asset CDN: ${astroAssetBaseUrl}/_astro/`);
+console.log(`Authorized Search: ${publicSearchConfig.configured ? 'configured with browser-safe public values' : 'disabled (public config unavailable)'}`);

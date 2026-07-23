@@ -369,7 +369,9 @@ async def run_smoke(args: argparse.Namespace) -> int:
                     )
                     return
                 if url.endswith("/functions/v1/event-search"):
-                    await asyncio.sleep(0.25)
+                    # Keep the loading state observable even after the pre-auth
+                    # callback smoke warmed the client/session caches.
+                    await asyncio.sleep(0.6)
                     try:
                         calls.append(json.loads(request.post_data or "{}"))
                     except json.JSONDecodeError:
@@ -420,7 +422,8 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(root).to_be_visible()
             await expect(page.locator("[data-search-login]").first).to_be_visible()
             await expect(page.locator("[data-search-logout]").first).to_be_hidden()
-            await expect(page.locator("[data-search-form]").first).to_be_hidden()
+            await expect(page.locator("[data-search-form]").first).to_be_visible()
+            await expect(page.locator("[data-search-input]").first).to_be_editable()
             await expect(page.locator("[data-search-results]").first).to_be_hidden()
             await expect(page.locator("[data-search-more]").first).to_be_hidden()
             if await page.locator("[data-event-card]").count() != 0:
@@ -428,19 +431,19 @@ async def run_smoke(args: argparse.Namespace) -> int:
 
             await page.goto(f"{base_url}{preview_path}?auth-smoke=1&code=missing-verifier-code", wait_until="networkidle")
             await expect(page.locator("[data-search-login]").first).to_be_visible()
-            await expect(page.locator("[data-search-form]").first).to_be_hidden()
+            await expect(page.locator("[data-search-form]").first).to_be_visible()
+            await expect(page.locator("[data-search-input]").first).to_be_editable()
             await expect(page.locator("[data-search-status]").first).to_contain_text("сессия входа устарела")
             if "code=" in page.url:
                 raise AssertionError("failed PKCE callback must remove stale code from the visible URL")
 
-            storage_key = storage_key_for_supabase_url(supabase_url)
-            await page.add_init_script(
-                f"""
-                try {{
-                  localStorage.setItem('{storage_key}-code-verifier', JSON.stringify('ui-smoke-code-verifier'));
-                }} catch (_) {{}}
-                """
-            )
+            # A signed-out visitor can type first. Submit stores the validated
+            # draft, starts Yandex PKCE, and the successful callback below must
+            # restore and execute that exact query without another click.
+            pending_query = "урбанистика в четверг вечером по регистрации"
+            await page.locator("[data-search-input]").first.fill(pending_query)
+            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await page.wait_for_url(f"{supabase_url}/auth/v1/authorize**", timeout=5000)
             await page.goto(f"{base_url}{preview_path}?auth-smoke=1&code=ui-smoke-auth-code", wait_until="networkidle")
             root = page.locator("[data-authorized-search]").first
             await expect(root).to_be_visible()
@@ -457,6 +460,14 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await page.keyboard.press("Escape")
             await expect(page.locator("[data-search-logout]").first).to_be_hidden()
             await expect(page.locator("[data-search-form]").first).to_be_visible()
+            await expect(page.locator("[data-search-results]").first).to_be_visible(timeout=5000)
+            await expect(page.locator("[data-search-results] [data-event-card]").first).to_have_attribute("data-event-id", "6310")
+            if not calls or calls[0].get("query") != pending_query:
+                raise AssertionError(f"pending pre-auth query did not run after callback: {calls}")
+            pending_draft = await page.evaluate("() => localStorage.getItem('ke_authorized_search_draft_v1')")
+            if pending_draft is not None:
+                raise AssertionError("pending pre-auth query must be consumed after callback")
+            calls.clear()
 
             await page.goto(f"{base_url}{preview_path}?new-link-smoke=1", wait_until="networkidle")
             await page.wait_for_function(
