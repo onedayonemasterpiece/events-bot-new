@@ -138,6 +138,10 @@
 
 ### Changed
 
+- Rebuilt the festival-card lower hierarchy as a bounded translucent glass
+  caption with a desktop-density safeguard, clearer title/place contrast and
+  one coherent nine-icon CC0 Lucide Line category set curated through the
+  shared SVGRepo library; improvised Unicode category symbols are removed.
 - Corrected the festival calendar desktop presentation after owner review:
   shared Inter typography now covers the hero, month rail and cards; every
   four-up card keeps its full status; each month has a real sticky left shelf;

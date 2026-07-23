@@ -2,7 +2,7 @@
 
 > **Status:** public `noindex` review prototype; calendar view only.
 > **Route:** `/festivali/` inside an immutable preview prefix.
-> **Current candidate:** `preview-20260723-festivals-calendar-r4`.
+> **Current candidate:** `preview-20260723-festivals-calendar-r5`.
 
 The page uses the unified Astro header, footer and mobile dock. It presents 21
 regional festivals from July through December 2026. The category view remains
@@ -10,12 +10,29 @@ deferred. The first `r1` candidate is withdrawn: it shortened the donor
 mechanic, used split image/body cards and repeated media from the regional
 anniversary aggregator.
 
-R4 is the desktop correction after owner review. The page now consumes the
+R4 was the first desktop correction after owner review. The page now consumes the
 shared `--ke-font-sans` stack (`Inter` with the same system fallbacks as the
 rest of the static site) everywhere; the local Georgia override is removed.
 The left month marker, name, mood symbol and copy form one sticky shelf below
 the unified header and sticky month switcher. The shelf remains at `126.6px`
 while its month is in view and is pushed out by the next section.
+
+R5 corrects the remaining card-internal hierarchy. Title, place and category
+now sit on one bounded translucent lower surface instead of relying on a dark
+photo gradient alone. The surface uses an opaque fallback plus
+`backdrop-filter` blur/saturation, so the copy stays readable on both very
+light and visually noisy covers. At `820–1000px`, padding, type and chip
+geometry tighten together to preserve a gap between the top facts and lower
+caption without increasing the packed row height.
+
+The category chip no longer uses improvised Unicode marks. It uses nine
+unchanged `24×24`, two-pixel, round-cap glyphs from SVG Repo's CC0 Lucide Line
+family. Their durable project copies and exact item links are recorded in
+`site/public/assets/icons/festival-categories/ATTRIBUTION.md`; the same assets
+are catalogued in the shared SVG library under
+`icons/svgrepo/ui/festival-categories/`. CSS consumes the original SVGs as
+alpha masks so their geometry stays source-faithful while colour follows the
+chip.
 
 The calendar contains no page-local prototype explanation, data-quality note
 or link to the prototype hub. Pending dates/programmes remain on their cards
@@ -87,9 +104,9 @@ The rendered contract is:
   below-`340px` safety fallback becomes one column.
 
 The date and full status are top overlays; title, one-line place and icon-led
-theme are bottom overlays. Four-up rows no longer collapse status text to a
-bare dot. Source/provenance stays in the data contract and card destination
-rather than consuming visible card height.
+theme share a readable glass lower block. Four-up rows no longer collapse
+status text to a bare dot. Source/provenance stays in the data contract and
+card destination rather than consuming visible card height.
 
 This is a close implementation of the donor's **card and timeline mechanic**,
 not a pixel-for-pixel copy of its unrelated page chrome: the inventory, image
@@ -115,14 +132,15 @@ The `2026-07-23` Playwright gate uses `887×900`, `1440×900`, `390×844` and
 - all viewports: zero horizontal overflow, 21 decoded images, no browser or
   first-party request errors, same-height cards per row.
 
-Measured R4 values are `1488.8px`, `2279.4px` and `3043.6px`
+Measured R5 values are `1488.8px`, `2279.4px` and `3043.6px`
 respectively. The previous `r1` timeline measured `5729.6px` at the
 reference-width viewport and `10148.8px` on mobile.
 
 The earlier R3 Gemini Pro `KEEP` is retained only as an external review
 artifact, not as product acceptance: subsequent owner inspection found the
 off-system serif, missing sticky shelf, page-local service note and moving
-hover. R4 closes those concrete gaps and is the new review candidate.
+hover. R4 closed those gaps; R5 supersedes it with the corrected readable
+glass-caption and curated category-icon system.
 
 ## Checks and preview
 
@@ -130,14 +148,14 @@ Run:
 
 ```bash
 npm --prefix site run test:festival-timeline-layout
-PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r4 npm --prefix site run build:preview
-PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r4 npm --prefix site run check:unified-prototype
+PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r5 npm --prefix site run build:preview
+PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r5 npm --prefix site run check:unified-prototype
 ```
 
 Review candidate:
 
-- page: <https://kenigevents.ru/preview-20260723-festivals-calendar-r4/festivali/>;
-- hub: <https://kenigevents.ru/preview-20260723-festivals-calendar-r4/__preview/>.
+- page: <https://kenigevents.ru/preview-20260723-festivals-calendar-r5/festivali/>;
+- hub: <https://kenigevents.ru/preview-20260723-festivals-calendar-r5/__preview/>.
 
 The immutable URL is a public bearer link, not authentication. It must not be
 promoted to the production root before product acceptance and a refresh owner
