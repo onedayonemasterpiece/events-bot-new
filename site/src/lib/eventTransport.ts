@@ -41,25 +41,26 @@ interface TransportScheduleData {
 interface EventDurationEstimateRecord {
   event_id: number;
   source_status: 'llm_estimated';
+  generation_method: 'provider_api';
   canonical_end: false;
   model: {
     provider: string;
+    gateway: string;
     id: string;
-    label: string;
   };
+  prompt_version: string;
+  input_hash: string;
   estimated_at: string;
-  provenance: string;
   most_likely_minutes: number;
   plausible_min_minutes: number;
   plausible_max_minutes: number;
   confidence: 'low' | 'medium' | 'high';
   conservative_routing_minutes: number;
-  user_facing_rationale: string;
 }
 
 interface EventDurationEstimateData {
   version: number;
-  scope: 'preview_only';
+  scope: 'build_time';
   generated_at: string;
   estimates: EventDurationEstimateRecord[];
 }
@@ -84,17 +85,10 @@ export type EventEndBasis = 'explicit' | 'llm_estimated' | 'schedule_cutoff';
 export interface EventDurationEstimate {
   sourceStatus: 'llm_estimated';
   canonicalEnd: false;
-  modelProvider: string;
-  modelId: string;
-  modelLabel: string;
-  estimatedAt: string;
-  provenance: string;
   mostLikelyMinutes: number;
   plausibleMinMinutes: number;
   plausibleMaxMinutes: number;
-  confidence: 'low' | 'medium' | 'high';
   conservativeRoutingMinutes: number;
-  rationale: string;
   predictedEndTime: string;
 }
 
@@ -132,7 +126,6 @@ export interface EventTransportSuggestion {
 
 const schedules = scheduleData as TransportScheduleData;
 const durationEstimates = durationEstimatesData as EventDurationEstimateData;
-const previewDurationEstimatesEnabled = Boolean(import.meta.env?.PUBLIC_PREVIEW_BUILD_ID);
 
 const EVENT_TYPE_GENITIVE: Record<string, string> = {
   'выставка': 'выставки',
@@ -196,11 +189,12 @@ function clockFromMinutes(value: number): string {
   return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
 }
 
-function previewDurationEstimate(eventId: number, eventStartMinutes: number): EventDurationEstimate | null {
-  if (!previewDurationEstimatesEnabled || durationEstimates.scope !== 'preview_only') return null;
+function buildTimeDurationEstimate(eventId: number, eventStartMinutes: number): EventDurationEstimate | null {
+  if (durationEstimates.scope !== 'build_time' || durationEstimates.version < 2) return null;
   const estimate = durationEstimates.estimates.find((item) => item.event_id === eventId);
   if (!estimate
     || estimate.source_status !== 'llm_estimated'
+    || estimate.generation_method !== 'provider_api'
     || estimate.canonical_end !== false
     || !Number.isInteger(estimate.most_likely_minutes)
     || !Number.isInteger(estimate.plausible_min_minutes)
@@ -210,25 +204,21 @@ function previewDurationEstimate(eventId: number, eventStartMinutes: number): Ev
     || estimate.plausible_min_minutes > estimate.most_likely_minutes
     || estimate.most_likely_minutes > estimate.plausible_max_minutes
     || estimate.conservative_routing_minutes < estimate.most_likely_minutes
+    || estimate.conservative_routing_minutes > estimate.plausible_max_minutes
     || !estimate.model?.id
-    || !estimate.provenance
+    || estimate.model.gateway !== 'google_ai.client.GoogleAIClient'
+    || !estimate.prompt_version
+    || !/^[0-9a-f]{64}$/u.test(estimate.input_hash)
     || !Number.isFinite(Date.parse(estimate.estimated_at))) {
     return null;
   }
   return {
     sourceStatus: estimate.source_status,
     canonicalEnd: false,
-    modelProvider: estimate.model.provider,
-    modelId: estimate.model.id,
-    modelLabel: estimate.model.label,
-    estimatedAt: estimate.estimated_at,
-    provenance: estimate.provenance,
     mostLikelyMinutes: estimate.most_likely_minutes,
     plausibleMinMinutes: estimate.plausible_min_minutes,
     plausibleMaxMinutes: estimate.plausible_max_minutes,
-    confidence: estimate.confidence,
     conservativeRoutingMinutes: estimate.conservative_routing_minutes,
-    rationale: estimate.user_facing_rationale,
     predictedEndTime: clockFromMinutes(eventStartMinutes + estimate.conservative_routing_minutes),
   };
 }
@@ -387,7 +377,7 @@ export function getEventTransportSuggestion(
 
   const normalizedType = normalizeEventType(event.event_type);
   const eventEndRaw = timeToMinutes(event.time_range_end);
-  const durationEstimate = eventEndRaw === null ? previewDurationEstimate(event.id, eventStartMinutes) : null;
+  const durationEstimate = eventEndRaw === null ? buildTimeDurationEstimate(event.id, eventStartMinutes) : null;
   const eventEndBasis: EventEndBasis = eventEndRaw !== null
     ? 'explicit'
     : durationEstimate

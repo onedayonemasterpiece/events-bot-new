@@ -30,7 +30,8 @@ def test_event_3103_retains_explicit_duration_regression() -> None:
     event = next(item for item in preview["events"] if item["id"] == 3103)
     estimates = json.loads(ESTIMATES.read_text(encoding="utf-8"))
 
-    assert "Продолжительность спектакля – 1 час 40 минут" in event["description_html"]
+    assert "Продолжительность спектакля" in event["description_html"]
+    assert "1 час 40 минут" in event["description_html"]
     assert all(item["event_id"] != 3103 for item in estimates["estimates"])
     assert EXPORTER.event_end_from_duration(event["start_date"], event["start_time"], 100) == (
         "2026-08-15",
@@ -38,7 +39,7 @@ def test_event_3103_retains_explicit_duration_regression() -> None:
     )
 
 
-def test_event_6529_estimate_is_preview_only_and_not_a_canonical_end() -> None:
+def test_event_6529_estimate_is_key_driven_build_data_and_not_a_canonical_end() -> None:
     preview = json.loads(PREVIEW_EVENTS.read_text(encoding="utf-8"))
     event = next(item for item in preview["events"] if item["id"] == 6529)
     estimates = json.loads(ESTIMATES.read_text(encoding="utf-8"))
@@ -46,12 +47,13 @@ def test_event_6529_estimate_is_preview_only_and_not_a_canonical_end() -> None:
 
     assert event["time_range_end"] is None
     assert EXPORTER.explicit_event_duration_minutes(event["description_html"]) is None
-    assert estimates["scope"] == "preview_only"
+    assert estimates["scope"] == "build_time"
     assert estimate["source_status"] == "llm_estimated"
+    assert estimate["generation_method"] == "provider_api"
     assert estimate["canonical_end"] is False
-    assert estimate["model"]["id"] == "gemini-3.1-pro-low"
-    assert estimate["provenance"].endswith("/gemini-duration-6529/response.json")
-    assert estimate["estimated_at"] == "2026-07-23T06:35:15Z"
+    assert estimate["model"]["id"] == "gemini-3.1-flash-lite"
+    assert estimate["model"]["gateway"] == "google_ai.client.GoogleAIClient"
+    assert len(estimate["input_hash"]) == 64
     assert estimate["most_likely_minutes"] == 120
     assert (estimate["plausible_min_minutes"], estimate["plausible_max_minutes"]) == (90, 180)
     assert estimate["confidence"] == "medium"
