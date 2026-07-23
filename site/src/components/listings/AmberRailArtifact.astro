@@ -1,0 +1,116 @@
+---
+import { withBase } from '../../lib/events';
+
+interface Props {
+  eventId: number;
+  placement?: 'tail';
+}
+const { eventId, placement = 'tail' } = Astro.props;
+const asset = withBase('/assets/gamification/amber-cosmonaut');
+const maskAsset = withBase('/assets/gamification/amber-cosmonaut-3x.webp');
+---
+<button
+  class="amber-artifact"
+  style={`--amber-artifact-mask:url("${maskAsset}")`}
+  type="button"
+  data-amber-artifact
+  data-artifact-placement={placement}
+  data-artifact-event-id={eventId}
+  aria-pressed="false"
+  aria-label="Секретный артефакт «Янтарный космонавт». Нажмите, чтобы найти"
+>
+  <span class="amber-artifact__rays" aria-hidden="true"></span>
+  <span class="amber-artifact__visual" aria-hidden="true">
+    <img
+      src={`${asset}-1x.webp`}
+      srcset={`${asset}-1x.webp 1x, ${asset}-2x.webp 2x, ${asset}-3x.webp 3x`}
+      width="74"
+      height="96"
+      alt=""
+      decoding="async"
+    />
+    <span class="amber-artifact__shine"></span>
+  </span>
+  <span class="amber-artifact__found" aria-hidden="true">
+    <svg viewBox="0 0 20 20"><path d="m4 10 4 4 8-9"></path></svg><span>Найден</span>
+  </span>
+  <span class="amber-artifact__live" aria-live="polite"></span>
+</button>
+
+<style is:global>
+  .amber-artifact{position:relative;isolation:isolate;flex:0 0 94px;width:94px;height:112px;min-width:94px;min-height:112px;display:grid;place-items:center;overflow:hidden;padding:0;border:0;border-radius:0;background:transparent;color:#221a14;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .amber-artifact::before{content:"";position:absolute;z-index:0;left:50%;bottom:0;width:94px;height:68px;border-radius:50%;background:radial-gradient(ellipse at 50% 76%,rgba(255,236,156,.58) 0 10%,rgba(255,190,43,.42) 28%,rgba(255,157,12,.18) 48%,rgba(255,153,0,0) 72%);opacity:.76;transform:translate3d(-50%,0,0) scale(.96);transform-origin:50% 76%}
+  .amber-artifact::after{content:"";position:absolute;z-index:1;left:50%;bottom:6px;box-sizing:border-box;width:78px;height:17px;border-radius:50%;border:1.5px solid rgba(255,238,174,.94);background:radial-gradient(ellipse,rgba(255,220,118,.28) 0 38%,rgba(255,180,35,.08) 58%,transparent 72%);box-shadow:0 0 5px rgba(255,221,116,.88),0 0 13px rgba(255,163,20,.52);opacity:.9;transform:translate3d(-50%,0,0) scale(.96);transform-origin:center}
+  .amber-artifact__rays{position:absolute;z-index:0;left:50%;bottom:8px;width:88px;height:76px;pointer-events:none;background:linear-gradient(78deg,transparent 42%,rgba(255,205,92,.22) 49%,transparent 55%),linear-gradient(102deg,transparent 43%,rgba(255,222,130,.18) 50%,transparent 57%);-webkit-mask-image:linear-gradient(to top,#000 0 10%,rgba(0,0,0,.74) 40%,transparent 88%);mask-image:linear-gradient(to top,#000 0 10%,rgba(0,0,0,.74) 40%,transparent 88%);opacity:.54;transform:translate3d(-50%,0,0) scaleX(.92);transform-origin:50% 100%}
+  .amber-artifact__visual{position:relative;z-index:2;width:74px;height:96px;display:grid;place-items:center;transform-origin:50% 72%}
+  .amber-artifact__visual img{grid-area:1/1;width:74px;height:96px;display:block;object-fit:contain;pointer-events:none;filter:drop-shadow(0 5px 7px rgba(157,78,0,.26))}
+  .amber-artifact__shine{grid-area:1/1;width:74px;height:96px;opacity:0;pointer-events:none;background:linear-gradient(108deg,transparent 22%,rgba(255,255,255,.82) 46%,rgba(255,226,142,.42) 56%,transparent 76%);-webkit-mask:var(--amber-artifact-mask) center/contain no-repeat;mask:var(--amber-artifact-mask) center/contain no-repeat;transform:translate3d(-72px,0,0)}
+  .amber-artifact__found{position:absolute;z-index:3;right:2px;bottom:5px;min-width:52px;min-height:24px;display:inline-flex;align-items:center;justify-content:center;gap:3px;padding:2px 5px;border:1px solid rgba(121,48,20,.22);border-radius:999px;background:rgba(255,253,248,.94);color:#793014;font-family:inherit;font-size:9px;font-weight:800;line-height:1;opacity:0;transform:translate3d(0,5px,0);pointer-events:none}
+  .amber-artifact__found svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2}
+  .amber-artifact__live{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+  .amber-artifact.is-awake:not(.is-collected) .amber-artifact__visual{animation:amber-arrive 420ms cubic-bezier(.175,.885,.32,1.275) both,amber-float 3000ms 440ms ease-in-out infinite alternate}
+  .amber-artifact.is-awake:not(.is-collected)::before{animation:amber-glow 3000ms 440ms ease-in-out infinite alternate}
+  .amber-artifact.is-awake:not(.is-collected)::after{animation:amber-ring 3000ms 440ms ease-in-out infinite alternate}
+  .amber-artifact.is-awake:not(.is-collected) .amber-artifact__rays{animation:amber-rays 3000ms 440ms ease-in-out infinite alternate}
+  .amber-artifact.is-awake:not(.is-collected) .amber-artifact__shine{animation:amber-shine-cycle 5200ms 760ms linear infinite both}
+  .amber-artifact.is-collecting .amber-artifact__visual{animation:amber-found 430ms cubic-bezier(.22,.86,.3,1) both}
+  .amber-artifact.is-collected::before{opacity:.28;transform:translate3d(-50%,0,0) scale(.82)}
+  .amber-artifact.is-collected::after{opacity:.42;box-shadow:0 0 4px rgba(255,190,60,.38);transform:translate3d(-50%,0,0) scale(.86)}
+  .amber-artifact.is-collected .amber-artifact__rays{opacity:.16}
+  .amber-artifact.is-collected .amber-artifact__visual{transform:translate3d(0,1px,0) scale(.94);filter:saturate(.82)}
+  .amber-artifact.is-collected .amber-artifact__found{opacity:1;transform:translate3d(0,0,0);transition:opacity 180ms ease-out,transform 220ms ease-out}
+  .amber-artifact:focus-visible{outline:3px solid rgba(15,118,110,.66);outline-offset:-4px}
+  @keyframes amber-arrive{from{opacity:0;transform:translate3d(16px,3px,0) scale(.84) rotate(1.5deg)}to{opacity:1;transform:translate3d(0,-1px,0) scale(1) rotate(0)}}
+  @keyframes amber-float{from{transform:translate3d(0,1.5px,0) rotate(-.65deg)}to{transform:translate3d(0,-2.5px,0) rotate(.65deg)}}
+  @keyframes amber-glow{from{opacity:.62;transform:translate3d(-50%,0,0) scale(.94)}to{opacity:.86;transform:translate3d(-50%,-1px,0) scale(1.05)}}
+  @keyframes amber-ring{from{opacity:.72;transform:translate3d(-50%,0,0) scale(.95)}to{opacity:1;transform:translate3d(-50%,-1px,0) scale(1.04)}}
+  @keyframes amber-rays{from{opacity:.36;transform:translate3d(-50%,1px,0) scaleX(.9)}to{opacity:.62;transform:translate3d(-50%,-1px,0) scaleX(1.02)}}
+  @keyframes amber-shine-cycle{0%,100%{opacity:0;transform:translate3d(-72px,0,0)}3%{opacity:0}6%{opacity:.58}12.5%{opacity:0;transform:translate3d(72px,0,0)}12.6%,99%{opacity:0;transform:translate3d(72px,0,0)}}
+  @keyframes amber-found{0%{transform:scale(1) rotate(0);filter:brightness(1)}45%{transform:scale(1.09) rotate(-1.5deg);filter:brightness(1.28)}100%{transform:scale(.94) rotate(0);filter:brightness(1)}}
+  @media(prefers-reduced-motion:reduce){.amber-artifact,.amber-artifact::before,.amber-artifact::after,.amber-artifact__rays,.amber-artifact__visual,.amber-artifact__shine,.amber-artifact__found{animation:none!important;transition:none!important;transform:none!important}.amber-artifact::before,.amber-artifact::after,.amber-artifact__rays{transform:translate3d(-50%,0,0)!important}.amber-artifact__shine{display:none}}
+</style>
+
+<script>
+  document.querySelectorAll('[data-amber-artifact]').forEach((button) => {
+    if (button.dataset.amberArtifactReady === 'true') return;
+    button.dataset.amberArtifactReady = 'true';
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const live = button.querySelector('.amber-artifact__live');
+    const storageKey = `ke_amber_artifact_prototype_v1:${button.dataset.artifactPlacement || 'unknown'}`;
+    const setCollected = (collected) => {
+      button.classList.toggle('is-collected', collected);
+      button.setAttribute('aria-pressed', String(collected));
+      button.setAttribute('aria-label', collected
+        ? 'Артефакт «Янтарный космонавт» найден'
+        : 'Секретный артефакт «Янтарный космонавт». Нажмите, чтобы найти');
+    };
+    try { setCollected(localStorage.getItem(storageKey) === 'found'); } catch { setCollected(false); }
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (button.classList.contains('is-collected')) return;
+      button.classList.add('is-collecting');
+      setCollected(true);
+      try { localStorage.setItem(storageKey, 'found'); } catch {}
+      if (live) live.textContent = 'Найден артефакт «Янтарный космонавт»';
+      window.dispatchEvent(new CustomEvent('kenigevents:artifact-collected', { detail: {
+        artifactId: 'amber_cosmonaut',
+        placement: button.dataset.artifactPlacement || 'unknown',
+        eventId: button.dataset.artifactEventId || '',
+      }}));
+      setTimeout(() => button.classList.remove('is-collecting'), reduced ? 0 : 460);
+    });
+    if (reduced || !('IntersectionObserver' in window)) {
+      button.classList.add('is-awake');
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting || entry.intersectionRatio < .72) continue;
+        button.classList.add('is-awake');
+        observer.disconnect();
+      }
+    }, { threshold: [.72] });
+    observer.observe(button);
+  });
+</script>

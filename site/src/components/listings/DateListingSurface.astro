@@ -7,6 +7,7 @@ import ListingTimeNav from './ListingTimeNav.astro';
 import ExactTimeTimeline from './ExactTimeTimeline.astro';
 import MobileListingRailSurface from './MobileListingRailSurface.astro';
 import ListingPersonalFilter from '../ListingPersonalFilter.astro';
+import { getCurrentDate } from '../../lib/events';
 
 interface Props {
   kind: 'today' | 'tomorrow';
@@ -65,6 +66,8 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
     feedMeta="Фото → о событии → лайк"
     current={kind}
     cities={cities}
+    calendarToday={getCurrentDate()}
+    calendarDate={date}
   />
   <div class="ke-listing-desktop-body" data-listing-representation="desktop">
   {kind === 'today' ? (

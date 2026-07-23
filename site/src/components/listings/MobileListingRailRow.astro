@@ -4,16 +4,20 @@ import { displayDate, eventAdmissionLabel, eventHref, getOccurrencePresentation,
 import { eventImageUrl } from '../../lib/assets';
 import { occurrenceTime } from '../../lib/eventOccurrences';
 import { selectListingImage } from '../../lib/listingPresentation';
+import { resolveMobileListingRailMedia } from '../../lib/mobileListingRailMedia.mjs';
 import { getListingIdentityMedallions } from '../../lib/listingVenueMedallions';
+import AmberRailArtifact from './AmberRailArtifact.astro';
 
 interface Props {
   event: PreviewEvent;
   occurrenceMode?: 'per-date' | 'per-family';
   priority?: boolean;
+  amberArtifactTail?: boolean;
 }
 
-const { event, occurrenceMode = 'per-date', priority = false } = Astro.props;
+const { event, occurrenceMode = 'per-date', priority = false, amberArtifactTail = false } = Astro.props;
 const image = selectListingImage(event, 1.25);
+const railMedia = resolveMobileListingRailMedia(event, image);
 const imageUrl = image.src?.startsWith('/') ? withBase(image.src) : eventImageUrl(image.src);
 const occurrence = occurrenceMode === 'per-family' ? getOccurrencePresentation(event) : null;
 const dateLine = occurrence?.railDateLine || displayDate(event);
@@ -24,8 +28,8 @@ const identities = getListingIdentityMedallions(event).slice(0, event.ticket?.is
 const admission = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const href = eventHref(event);
-const mediaFit = image.mode === 'visual-crop' && image.adaptiveCrop ? 'cover' : 'contain';
-const mediaWidth = Math.max(62, Math.min(199, Math.round(112 * (image.ratio || 1))));
+const mediaFit = railMedia.fit;
+const mediaWidth = railMedia.width;
 const style = `--media-width:${mediaWidth}px;--focus-x:${image.objectPosition.split(' ')[0] || '50%'};--focus-y:${image.objectPosition.split(' ')[1] || '50%'};--rail-media-fit:${mediaFit}`;
 const useDatePrimary = occurrenceMode === 'per-family' && Boolean(occurrence);
 const noExactTime = !timeLine;
@@ -41,6 +45,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
   data-event-id={event.id}
   data-listing-city={event.city || 'Калининградская область'}
   data-listing-event-type={event.event_type || 'other'}
+  data-mobile-rail-media-reason={railMedia.reason}
 >
   <div class="rail-window" tabindex="0" aria-label={`${event.title}. ${scheduleAria}. Фото, описание и действия доступны горизонтальным листанием`}>
     <span class="dislike-underlay" aria-hidden="true"><span>Неинтересно</span></span>
@@ -65,12 +70,16 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
               {likesCount > 0 && <span class="event-signal event-signal--like" data-small-like><span>♥</span><span>{likesCount}</span></span>}
             </span>
           </span>
-          <span class="event-cue" aria-hidden="true"></span>
+          <span class="event-cue" aria-hidden="true">
+            <svg viewBox="0 0 48 23"><path d="M3 11.5H40M31 2.5L40 11.5L31 20.5"></path></svg>
+          </span>
         </span>
         {imageUrl ? (
           <span
-            class:list={['event-media', mediaFit === 'contain' && 'event-media--natural', event.image_text_mode === 'ocr_text' && 'event-media--ocr']}
+            class:list={['event-media', 'is-loading', mediaFit === 'contain' && 'event-media--natural', event.image_text_mode === 'ocr_text' && 'event-media--ocr']}
             data-image-text-mode={event.image_text_mode}
+            data-media-state="loading"
+            data-rail-media-reason={railMedia.reason}
             style={style}
           >
             <img
@@ -117,6 +126,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M16.5 4.5c2.206 0 4 1.794 4 4 0 4.67-5.543 8.94-8.5 11.023C9.043 17.44 3.5 13.17 3.5 8.5c0-2.206 1.794-4 4-4 1.298 0 2.522.638 3.273 1.706L12 7.953l1.227-1.746c.75-1.07 1.975-1.707 3.273-1.707m0-1.5c-1.862 0-3.505.928-4.5 2.344C11.005 3.928 9.362 3 7.5 3 4.462 3 2 5.462 2 8.5c0 5.72 6.5 10.438 10 12.85 3.5-2.412 10-7.13 10-12.85C22 5.462 19.538 3 16.5 3Z" /></svg>
         <strong data-like-count>{likesCount}</strong>
       </button>
+      {amberArtifactTail && <AmberRailArtifact eventId={event.id} placement="tail" />}
     </span>
   </div>
 </article>

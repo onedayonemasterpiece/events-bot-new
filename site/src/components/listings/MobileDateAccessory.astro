@@ -1,0 +1,149 @@
+---
+import { getAvailableWeekendRanges, getWeekendRange, withBase } from '../../lib/events';
+
+interface Props {
+  today: string;
+  selectedDate: string;
+  current: 'today' | 'tomorrow' | 'weekend';
+  weekendEnd?: string;
+}
+const { today, selectedDate, current, weekendEnd = '' } = Astro.props;
+const DAY = 86_400_000;
+const parseDate = (value: string) => new Date(`${value}T12:00:00+02:00`);
+const isoDate = (date: Date) => date.toISOString().slice(0, 10);
+const tomorrow = isoDate(new Date(parseDate(today).getTime() + DAY));
+const currentWeekendStart = getWeekendRange().start;
+const availableWeekendStarts = new Set(getAvailableWeekendRanges().map((range) => range.start));
+const dates = Array.from({ length: 42 }, (_, index) => {
+  const date = new Date(parseDate(today).getTime() + index * DAY);
+  const iso = isoDate(date);
+  const weekday = new Intl.DateTimeFormat('ru-RU', { weekday:'short', timeZone:'Europe/Kaliningrad' })
+    .format(date).replace('.', '').toLocaleUpperCase('ru-RU');
+  const day = date.getUTCDate();
+  const month = new Intl.DateTimeFormat('ru-RU', { month:'short', timeZone:'Europe/Kaliningrad' })
+    .format(date).replace('.', '').toLocaleUpperCase('ru-RU');
+  const isSaturday = date.getUTCDay() === 6;
+  const isSunday = date.getUTCDay() === 0;
+  const nextDate = new Date(date.getTime() + DAY);
+  const href: string | null = iso === today
+    ? '/segodnya/'
+    : iso === tomorrow
+      ? '/zavtra/'
+      : isSaturday && availableWeekendStarts.has(iso)
+        ? (iso === currentWeekendStart ? '/vyhodnye/' : `/vyhodnye/${iso}/`)
+        : null;
+  return {
+    iso,
+    weekday,
+    day,
+    month,
+    href,
+    isSaturday,
+    isSunday,
+    isWeekendRange: isSaturday,
+    rangeLabel: isSaturday ? `${day}–${nextDate.getUTCDate()}` : String(day),
+    selected: current === 'weekend'
+      ? iso === selectedDate
+      : iso === selectedDate,
+  };
+});
+const selectedLabel = current === 'weekend' && weekendEnd
+  ? `${selectedDate} — ${weekendEnd}`
+  : selectedDate;
+---
+<div class="date-accessory" data-mobile-date-accessory data-selected-date={selectedDate}>
+  <nav class="date-rail" aria-label="Выбор даты">
+    {dates.map((item, index) => item.href ? (
+      <a
+        class:list={[
+          'date-chip',
+          item.iso === today && 'date-chip--today',
+          (item.isSaturday || item.isSunday) && 'date-chip--weekend',
+          item.isWeekendRange && 'date-chip--weekend-range',
+        ]}
+        href={withBase(item.href)}
+        data-date={item.iso}
+        aria-current={item.selected ? 'date' : undefined}
+        aria-label={item.isWeekendRange ? `Выходные, ${item.rangeLabel} ${item.month.toLocaleLowerCase('ru-RU')}` : `${item.weekday}, ${item.day} ${item.month.toLocaleLowerCase('ru-RU')}`}
+      >
+        <span>{item.isWeekendRange ? 'СБ+ВС' : item.weekday}</span>
+        <strong>{item.rangeLabel}</strong>
+        <small>{index === 0 || item.day === 1 ? item.month : ''}</small>
+      </a>
+    ) : (
+      <span
+        class:list={[
+          'date-chip',
+          'date-chip--disabled',
+          item.iso === today && 'date-chip--today',
+          (item.isSaturday || item.isSunday) && 'date-chip--weekend',
+          item.isWeekendRange && 'date-chip--weekend-range',
+        ]}
+        data-date={item.iso}
+        aria-current={item.selected ? 'date' : undefined}
+        aria-disabled="true"
+        aria-label={`${item.weekday}, ${item.day} ${item.month.toLocaleLowerCase('ru-RU')}. Страница событий пока не опубликована`}
+      >
+        <span>{item.isWeekendRange ? 'СБ+ВС' : item.weekday}</span>
+        <strong>{item.rangeLabel}</strong>
+        <small>{index === 0 || item.day === 1 ? item.month : ''}</small>
+      </span>
+    ))}
+  </nav>
+  <button type="button" class="date-calendar-trigger" data-calendar-open aria-haspopup="dialog" aria-label="Открыть календарь">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.25A2.75 2.75 0 0 1 21 6.75v11.5A2.75 2.75 0 0 1 18.25 21H5.75A2.75 2.75 0 0 1 3 18.25V6.75A2.75 2.75 0 0 1 5.75 4H6V3a1 1 0 0 1 1-1ZM5 9v9.25c0 .41.34.75.75.75h12.5c.41 0 .75-.34.75-.75V9H5Z" clip-rule="evenodd"></path></svg>
+  </button>
+</div>
+<div class="calendar-sheet" data-calendar-sheet hidden aria-hidden="true">
+  <section class="calendar-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-calendar-title">
+    <header>
+      <div><h2 id="mobile-calendar-title">Выбрать дату</h2><p>Ближайшие шесть недель · {selectedLabel}</p></div>
+      <button type="button" data-calendar-close aria-label="Закрыть">×</button>
+    </header>
+    <div class="calendar-grid">
+      {dates.map((item) => item.href ? (
+        <a href={withBase(item.href)} data-calendar-date={item.iso} aria-current={item.selected ? 'date' : undefined}>
+          <span>{item.weekday}</span><b>{item.day}</b>
+        </a>
+      ) : (
+        <span data-calendar-date={item.iso} aria-current={item.selected ? 'date' : undefined} aria-disabled="true">
+          <span>{item.weekday}</span><b>{item.day}</b>
+        </span>
+      ))}
+    </div>
+  </section>
+</div>
+
+<script>
+  document.querySelectorAll('[data-mobile-date-accessory]').forEach((accessory) => {
+    if (accessory.dataset.calendarReady === 'true') return;
+    accessory.dataset.calendarReady = 'true';
+    const sheet = accessory.nextElementSibling;
+    const trigger = accessory.querySelector('[data-calendar-open]');
+    const close = sheet?.querySelector('[data-calendar-close]');
+    const selected = accessory.querySelector('[aria-current="date"]');
+    const centerSelected = () => selected?.scrollIntoView({ inline:'center', block:'nearest', behavior:'instant' });
+    const closeSheet = () => {
+      if (!sheet || sheet.hidden) return;
+      sheet.classList.remove('is-open');
+      sheet.setAttribute('aria-hidden', 'true');
+      setTimeout(() => { sheet.hidden = true; trigger?.focus(); }, 220);
+    };
+    const openSheet = () => {
+      if (!sheet) return;
+      sheet.hidden = false;
+      sheet.setAttribute('aria-hidden', 'false');
+      requestAnimationFrame(() => {
+        sheet.classList.add('is-open');
+        sheet.querySelector('[data-calendar-close]')?.focus();
+        sheet.querySelector('[aria-current="date"]')?.scrollIntoView({ block:'center', behavior:'instant' });
+      });
+    };
+    requestAnimationFrame(centerSelected);
+    addEventListener('pageshow', centerSelected);
+    trigger?.addEventListener('click', openSheet);
+    close?.addEventListener('click', closeSheet);
+    sheet?.addEventListener('click', (event) => { if (event.target === sheet) closeSheet(); });
+    addEventListener('keydown', (event) => { if (event.key === 'Escape' && !sheet?.hidden) closeSheet(); });
+  });
+</script>

@@ -78,6 +78,31 @@ The prototype stores only a placement-scoped found bit in browser
 placement and event id. It writes nothing to SQLite or Supabase. This keeps the
 two links independently testable and avoids inventing a persistence schema.
 
+### Direct noindex `/vyhodnye/` research trigger
+
+The accepted A-tail specimen is also available directly on the real mobile
+weekend listing, but only in a non-production build with the explicit research
+gate:
+
+```text
+PUBLIC_SITE_MODE=preview # or secret_candidate
+PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH=tail
+```
+
+Open `/vyhodnye/` at a mobile width, find **«Теремок»** (event `6939`) in the
+**«Суббота, 25 июля»** shelf, and swipe that event rail all the way right. The
+`94×112` artifact is the sibling immediately after the large like. It wakes
+when at least `72%` is visible; tap it to set the local found state. With
+reduced motion it is fully static.
+
+The deployed research preview must retain its `noindex` boundary. The artifact
+is absent from ordinary preview builds without the flag and is hard-blocked in
+production even if the flag is accidentally present. If event `6939` is no
+longer in the current data snapshot, the build deterministically uses the first
+Saturday event (or the first weekend event) so the explicitly enabled research
+surface remains directly discoverable. The direct placement preserves the
+prototype's browser-only `localStorage` state and does not add a database write.
+
 Before production:
 
 1. confirm redistribution/derivative rights and provenance for the supplied
