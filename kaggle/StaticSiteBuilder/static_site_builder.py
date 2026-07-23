@@ -31,7 +31,6 @@ PLAYWRIGHT_CHROMIUM_INSTALL_COMMAND = (
     '--only-shell',
     'chromium',
 )
-_PYTHON_DEP_SIGNATURES: set[tuple[str, ...]] = set()
 
 
 def sha256_file(path: Path) -> str:
@@ -309,117 +308,13 @@ def load_encrypted_secrets_to_env() -> None:
 
 
 def ensure_python_deps_for_gemma(config: dict) -> None:
-    duration_enabled = config.get('duration_enrichment', True) is not False
-    if not (
-        config.get('gemma_related_verify')
-        or config.get('related_mode') == 'pgvector'
-        or config.get('sync_pgvector_vectors')
-        or duration_enabled
-    ):
+    if not (config.get('gemma_related_verify') or config.get('related_mode') == 'pgvector' or config.get('sync_pgvector_vectors')):
         return
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 16, 'progress_label': 'python deps для Gemma limiter'})
     packages = ['cryptography>=42.0.0']
-    if config.get('gemma_related_verify') or duration_enabled:
+    if config.get('gemma_related_verify'):
         packages.extend(['supabase==2.16.0', 'google-genai>=1.75.0'])
-    signature = tuple(packages)
-    if signature in _PYTHON_DEP_SIGNATURES:
-        return
     run(['python3', '-m', 'pip', 'install', '--quiet', *packages], cwd=WORKING, env=os.environ.copy())
-    _PYTHON_DEP_SIGNATURES.add(signature)
-
-
-def duration_enrichment_contract(config: dict) -> dict | None:
-    """Validate the bounded server-side duration enrichment configuration."""
-
-    if config.get('duration_enrichment', True) is False:
-        return None
-    model = str(config.get('duration_model') or 'gemini-3.1-flash-lite').strip()
-    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,127}', model):
-        raise ValueError('duration enrichment model id is invalid')
-    raw_key_envs = str(config.get('duration_key_envs') or 'GOOGLE_API_KEY4')
-    key_envs = [part.strip() for part in raw_key_envs.split(',') if part.strip()]
-    if not key_envs or any(not re.fullmatch(r'[A-Z][A-Z0-9_]{1,63}', name) for name in key_envs):
-        raise ValueError('duration enrichment key env list is invalid')
-    max_events = int(config.get('duration_max_events') or 12)
-    if max_events < 1 or max_events > 50:
-        raise ValueError('duration enrichment max events must be between 1 and 50')
-    return {
-        'model': model,
-        'key_envs': key_envs,
-        'max_events': max_events,
-        'require_complete': bool(config.get('duration_require_complete')),
-    }
-
-
-def enrich_event_durations(config: dict) -> dict:
-    """Run cached key-driven duration enrichment before every Astro build."""
-
-    contract = duration_enrichment_contract(config)
-    if contract is None:
-        return {'enabled': False, 'status': 'disabled'}
-    script = SITE_DIR / 'scripts' / 'enrich-event-duration-estimates.py'
-    if not script.exists():
-        raise FileNotFoundError(f'duration enrichment script missing: {script}')
-
-    # Cache hits do not import the provider SDK or make a model call. Runtime
-    # credentials are still prepared when available so cache misses can use the
-    # shared GoogleAIClient + Supabase limiter without Codex/agy assistance.
-    ensure_python_deps_for_gemma(config)
-    load_encrypted_secrets_to_env()
-    for secret_name in [
-        *contract['key_envs'],
-        'SUPABASE_URL',
-        'SUPABASE_KEY',
-        'SUPABASE_SERVICE_KEY',
-        'SUPABASE_SERVICE_ROLE_KEY',
-    ]:
-        load_kaggle_secret_to_env(secret_name)
-
-    output_path = SITE_DIR / 'src/data/event-duration-estimates.json'
-    command = [
-        'python3',
-        str(script),
-        '--events', str(SITE_DIR / 'src/data/preview-events.json'),
-        '--schedules', str(SITE_DIR / 'src/data/transportSchedules.json'),
-        '--output', str(output_path),
-        '--model', contract['model'],
-        '--key-envs', ','.join(contract['key_envs']),
-        '--max-events', str(contract['max_events']),
-    ]
-    if contract['require_complete']:
-        command.append('--require-complete')
-    enrichment_env = os.environ.copy()
-    enrichment_env['PYTHONPATH'] = str(SITE_DIR) + (
-        os.pathsep + enrichment_env['PYTHONPATH']
-        if enrichment_env.get('PYTHONPATH')
-        else ''
-    )
-    status_event(
-        'alive',
-        phase='export',
-        status='alive',
-        progress={
-            'phase': 'export',
-            'progress_percent': 22,
-            'progress_label': 'оценка длительности для вечернего транспорта',
-        },
-    )
-    run(command, cwd=SITE_DIR, env=enrichment_env)
-    payload = json.loads(output_path.read_text(encoding='utf-8'))
-    if payload.get('scope') != 'build_time' or int(payload.get('version') or 0) < 2:
-        raise RuntimeError('duration enrichment output contract is invalid')
-    estimates = payload.get('estimates')
-    failures = payload.get('failures')
-    if not isinstance(estimates, list) or not isinstance(failures, list):
-        raise RuntimeError('duration enrichment output rows are invalid')
-    return {
-        'enabled': True,
-        'status': 'ok' if not failures else 'partial',
-        'model': contract['model'],
-        'estimate_count': len(estimates),
-        'failure_count': len(failures),
-        'candidate_limit': contract['max_events'],
-    }
 
 
 def export_preview_data_if_configured(config: dict) -> None:
@@ -573,7 +468,6 @@ def main() -> int:
             env['PUBLIC_ICS_BASE_URL'] = str(config['ics_base_url'])
         apply_public_authorized_search_env(env, config)
         export_preview_data_if_configured(config)
-        duration_enrichment = enrich_event_durations(config)
         apply_public_authorized_search_env(env, config)
         env = ensure_node22(env)
 
@@ -687,7 +581,6 @@ def main() -> int:
             'event_count': event_count, 'artifacts': artifacts, 'failure_class': None,
             'input_fingerprint': config.get('input_fingerprint'),
             'build_clock': build_clock,
-            'duration_enrichment': duration_enrichment,
             **result_details,
         }
         RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
