@@ -29,10 +29,13 @@ This keeps SEO-safe deterministic listing content first, then adds a personal co
 
 ### Review-only `/dlya-menya/` surface
 
-The finite cold-start route uses the same canonical large `EventCard` renderer
-as ranked Search results and lays it out as a one-column document feed at every
-breakpoint. A bespoke 3/2/1 compact grid is forbidden: it changes the accepted
-large-card media geometry and reintroduces a second crop implementation.
+The finite cold-start route uses the same
+`OptimizedEventCardGrid`/`EventCard` pair as desktop event-detail
+recommendations. Desktop rows are packed in threes by the global crop/height
+optimizer; non-final rows are full and every row has equal media/card heights.
+Below the desktop breakpoint the component uses one canonical large card per
+row rather than reusing desktop row geometry. A bespoke unoptimized 3/2/1 CSS
+grid is forbidden because it reintroduces a second crop implementation.
 
 ## Runtime behavior
 

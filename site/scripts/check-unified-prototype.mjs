@@ -1,5 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -90,6 +92,12 @@ if (!personal.includes('data-personal-prototype') || !personal.includes('Cold st
   throw new Error('Personal review route must remain honest about its cold-start fallback');
 }
 const personalMain = personal.slice(personal.indexOf('data-personal-prototype'), personal.indexOf('</main>', personal.indexOf('data-personal-prototype')));
+if (!personalMain.includes('personal-page__feed-list') || !personalMain.includes('data-personal-feed-results') || !personalMain.includes('data-optimized-event-card-grid')) {
+  throw new Error('Personal review route must share the optimized Event-detail large-card grid');
+}
+if (personalMain.includes('data-product-breadcrumbs')) {
+  throw new Error('Personal review route regressed to decorative top-level breadcrumbs');
+}
 const personalFamilyKeys = [...personalMain.matchAll(/data-occurrence-member-ids="([^"]+)"/gu)].map((match) => match[1]);
 if (personalFamilyKeys.length < 6 || new Set(personalFamilyKeys).size !== personalFamilyKeys.length) {
   throw new Error('Personal review route must render a finite per-family real-data card set');
@@ -106,8 +114,31 @@ for (const marker of [
 }
 
 const partners = html('partners/index.html');
-if (!/<(?:h1|p)[^>]*>Партнёры<\//u.test(partners) || partners.includes('>Инфопартнёры<')) {
+if (!/<(?:h1|p)[^>]*>Партнёры<\//u.test(partners) || partners.includes('>Инфопартнёры<') || !partners.includes('https://klgd.myatom.ru/') || !partners.includes('/assets/partners/icae-kaliningrad.svg')) {
   throw new Error('Partners surface does not use the accepted short public label');
+}
+
+const search = html('poisk/index.html');
+if (!/data-search-skeletons[^>]*\shidden(?:\s|>)/u.test(search)) throw new Error('Search shows loading skeletons before a request');
+if (search.includes('data-product-breadcrumbs') || search.includes('data-product-parent-link')) throw new Error('Top-level Search must not render decorative breadcrumbs');
+
+const exhibitions = html('vystavki/index.html');
+if (!exhibitions.includes('data-exhibitions-prototype') || !exhibitions.includes('data-mode-switch') || exhibitions.includes('listing-stack')) {
+  throw new Error('Public-review Exhibitions does not use the accepted dynamic personal donor');
+}
+
+if (interestClubsData.source !== 'sqlite-interest-clubs-v1' || interestClubsData.clubs.length < 1) {
+  throw new Error('Clubs must come from the current SQLite policy projection and cannot be empty');
+}
+const clubs = html('kluby-po-interesam/index.html');
+if (clubs.includes('data-product-breadcrumbs') || clubs.includes('Подтверждённых клубов пока нет')) {
+  throw new Error('Top-level Clubs regressed to decorative breadcrumbs or an empty donor fixture');
+}
+for (const club of interestClubsData.clubs) {
+  const detail = html(`kluby-po-interesam/${club.slug}/index.html`);
+  if (!detail.includes('data-product-breadcrumbs') || !detail.includes('data-product-parent-link') || !detail.includes('aria-current="page"')) {
+    throw new Error(`Deep club page ${club.slug} misses the responsive breadcrumb contract`);
+  }
 }
 
 const eventPages = [];
@@ -128,16 +159,41 @@ const railPage = eventPages.find(([, content]) => content.includes('data-transpo
 if (!busPage) throw new Error('Fresh real-data build misses a bus-navigation event specimen');
 if (!railPage) throw new Error('Fresh real-data build misses a rail-navigation event specimen');
 
+const event6686 = eventsData.events.find((event) => event.id === 6686);
+const event6529 = eventsData.events.find((event) => event.id === 6529);
+if (!event6686 || !event6529) throw new Error('Fresh real-data build misses the 6686/6529 acceptance regressions');
+const event6686Html = html(`sobytiya/${event6686.slug}/index.html`);
+const event6529Html = html(`sobytiya/${event6529.slug}/index.html`);
+if (!event6686Html.includes('data-product-breadcrumbs') || !event6686Html.includes('data-product-parent-link')) {
+  throw new Error('Deep event page misses responsive semantic breadcrumbs');
+}
+if (!event6686Html.includes('data-selected-media-semantic-status="error"') || !/data-clean-hero-image[^>]*data-protected-crop-fit="contain"/u.test(event6686Html)) {
+  throw new Error('Text-heavy semantic-error media 6686 is not protected by fail-closed contain');
+}
+if (!event6529Html.includes('Экспериментальный прогноз длительности') || !event6529Html.includes('18:56') || !event6529Html.includes('19:43') || event6529Html.includes('06:42')) {
+  throw new Error('6529 must show the labelled same-day estimated return shortlist without a next-morning train');
+}
+
 let checkedRelatedCards = 0;
 for (const [, content] of eventPages.slice(0, 40)) {
   for (const match of content.matchAll(/<article[^>]*data-lab-related-card="true"[\s\S]*?<\/article>/gu)) {
     checkedRelatedCards += 1;
     const card = match[0];
     const hasImage = /<img[^>]*data-card-image/u.test(card);
-    if (hasImage && !card.includes('data-card-authoritative-fit="cover"')) throw new Error('Compact related image regressed to a field-producing non-cover fit');
+    const targetRatio = Number(/data-lab-media-ratio="([0-9.]+)"/u.exec(card)?.[1]);
+    const imageSize = /<img[^>]*data-card-image[^>]*width="(\d+)"[^>]*height="(\d+)"/u.exec(card);
+    const naturalRatio = imageSize ? Number(imageSize[1]) / Number(imageSize[2]) : Number.NaN;
+    const exactDocumentFrame = card.includes('data-card-authoritative-fit="contain"')
+      && card.includes('data-lab-media-kind="document"')
+      && Number.isFinite(targetRatio)
+      && Number.isFinite(naturalRatio)
+      && Math.abs(targetRatio - naturalRatio) <= 0.002;
+    if (hasImage && !card.includes('data-card-authoritative-fit="cover"')) {
+      if (!exactDocumentFrame) throw new Error('Compact related image regressed to a field-producing non-cover fit');
+    }
     if (!hasImage && !card.includes('event-card__fallback')) throw new Error('Image-less related card misses its bounded fallback surface');
     const crop = /data-lab-cover-crop="([0-9.]+)"/u.exec(card);
-    if (hasImage && card.includes('data-lab-media-kind="document"') && (!crop || Number(crop[1]) > 0.200001)) {
+    if (hasImage && card.includes('data-lab-media-kind="document"') && !exactDocumentFrame && (!crop || Number(crop[1]) > 0.200001)) {
       throw new Error(`Compact OCR/document card exceeds the 20% crop budget: ${crop?.[1] || '(missing)'}`);
     }
   }

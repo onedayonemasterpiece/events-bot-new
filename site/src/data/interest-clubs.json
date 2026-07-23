@@ -1,7 +1,7 @@
 {
   "schema_version": "interest-clubs-static-v1",
   "projection_version": 1,
-  "generated_at": "2026-07-23T06:39:45.981816+00:00",
+  "generated_at": "2026-07-23T06:55:06.777309+00:00",
   "current_date": "2026-07-23",
   "source": "sqlite-interest-clubs-v1",
   "clubs": [
@@ -29,8 +29,8 @@
           "display_time": "13:00",
           "city": "Калининград",
           "venue_name": "Сигнал",
-          "event_path": null,
-          "source_url": null
+          "event_path": "/sobytiya/den-vseh-igr-dvi-kaliningrad-6990/",
+          "source_url": "https://t.me/signalkld/11349"
         }
       ],
       "updated_at": "2026-07-17 13:37:10.386546"

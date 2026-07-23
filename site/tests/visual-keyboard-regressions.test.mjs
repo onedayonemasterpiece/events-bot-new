@@ -195,10 +195,11 @@ test('semantic errors and unknown modes contain while classified visual-only con
 });
 
 test('hero and desktop gallery share the semantic-error contain contract', async () => {
-  const [hero, desktop, personal] = await Promise.all([
+  const [hero, desktop, personal, optimizedGrid] = await Promise.all([
     read('src/components/EventHero.astro'),
     read('src/components/DesktopEventPage.astro'),
     read('src/pages/dlya-menya/index.astro'),
+    read('src/components/OptimizedEventCardGrid.astro'),
   ]);
 
   assert.match(hero, /if \(semanticStatus === 'error'\) return 'unknown'/u);
@@ -208,7 +209,12 @@ test('hero and desktop gallery share the semantic-error contain contract', async
   assert.match(desktop, /failClosedImageTextMode\(asset\?\.image_text_mode \|\| fallbackMode, asset\?\.media_semantic_status\)/u);
   assert.match(desktop, /semanticStatus === 'classified' && classifiedRole/u);
   assert.doesNotMatch(desktop, /fallbackMediaRole[\s\S]{0,320}mode === 'visual_only' \? 'event_photo'/u);
-  assert.match(personal, /class="authorized-search__results personal-page__feed-list"/u);
+  assert.match(personal, /<OptimizedEventCardGrid/u);
+  assert.match(personal, /className="personal-page__feed-list"/u);
+  assert.match(desktop, /<OptimizedEventCardGrid/u);
+  assert.match(optimizedGrid, /packRelatedCardRows\(events/u);
+  assert.match(optimizedGrid, /responsiveMobile/u);
+  assert.match(optimizedGrid, /data-optimized-event-card-grid/u);
   assert.doesNotMatch(personal, /repeat\(3,\s*minmax\(0,\s*1fr\)\)/u);
   assert.doesNotMatch(personal, /repeat\(2,\s*minmax\(0,\s*1fr\)\)/u);
 });

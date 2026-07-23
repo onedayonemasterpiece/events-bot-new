@@ -1,6 +1,6 @@
 ---
 import Icon from './Icon.astro';
-import EventCard from './EventCard.astro';
+import OptimizedEventCardGrid from './OptimizedEventCardGrid.astro';
 import EventTokenMedallions from './EventTokenMedallions.astro';
 import EventOccurrenceNav from './EventOccurrenceNav.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
@@ -25,7 +25,6 @@ import { eventImageUrl } from '../lib/assets';
 import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
 import { selectEventMediaByQuality } from '../lib/eventMediaQuality';
 import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
-import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
 import { eventBreadcrumbParents } from '../lib/breadcrumbs';
 
 type Candidate = 'editorial' | 'split';
@@ -124,27 +123,6 @@ const hiddenDuplicateSourceIndexes = new Set(duplicateSourceIndexes);
 const relatedWithRoles = surface === 'lab' ? related.map((item) => item.image_media_role
   ? item
   : ({ ...item, image_media_role:item.image_text_mode === 'visual_only' ? 'event_photo' : 'unknown_document' } as PreviewEvent)) : related;
-type DesktopRelatedLayout = {
-  mediaRatio:number;
-  rowRatio:number;
-  rowIndex:number;
-  rowColumn:number;
-  rowMode:string;
-  mediaKind:'document' | 'visual';
-  mediaTreatment:'document-safe-cover' | 'visual-cover';
-  fit:'contain' | 'cover';
-  objectPosition:string;
-  cropReason:string;
-  coverCrop:number;
-  potentialCoverCrop:number;
-  rowWorstCrop:number;
-  rowCost:number;
-};
-const relatedForRender = packRelatedCardRows(relatedWithRoles, {
-  limit:10,
-  rowSize:3,
-  mediaTreatment:relatedMediaTreatment,
-}) as Array<{ item:PreviewEvent; layout:DesktopRelatedLayout }>;
 const heroAlt = event.image_alt || `Афиша события «${event.title}»`;
 const rawAssets = event.image_assets || [];
 const qualitySelection = surface === 'production'
@@ -611,19 +589,17 @@ const descriptionHtml = (event.description_html || '')
         <p class="eyebrow">Продолжить выбор</p>
         <h2 id={`related-${event.id}`}>Смотрите дальше</h2>
       </header>
-      <div
-        class="cards-grid cards-grid--immersive desktop-clean-related__grid"
-        data-lab-row-normalize
-        data-discovery-feed
-        data-surface="event_detail_related"
-        data-layout-mode="module"
-        data-algorithm-id={eventDetailRelatedAlgorithmId()}
-        data-current-event-id={event.id}
-        data-discovery-src={withBase(`/data/discovery/${event.id}.json`)}
-        data-feed-card-variant="split-actions"
-      >
-        {relatedForRender.map(({ item, layout }) => <EventCard event={item} variant="split-actions" desktopRelatedCrop desktopRelatedLayout={layout} />)}
-      </div>
+      <OptimizedEventCardGrid
+        events={relatedWithRoles}
+        limit={10}
+        rowSize={3}
+        mediaTreatment={relatedMediaTreatment}
+        className="desktop-clean-related__grid"
+        surface="event_detail_related"
+        algorithmId={eventDetailRelatedAlgorithmId()}
+        currentEventId={event.id}
+        discoverySrc={withBase(`/data/discovery/${event.id}.json`)}
+      />
     </div>
   </section>
 
@@ -1885,19 +1861,6 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-event--reading .desktop-clean-practical__grid article { min-height:130px; }
     .desktop-clean-event--reading .desktop-clean-travel { grid-column:2; grid-row:5; width:auto; margin:0 clamp(1.5rem,3.6vw,4.5rem) clamp(5rem,9vw,9rem); grid-template-columns:1fr; }
     .desktop-clean-event--reading .desktop-prototype__media-rail { right:1rem; bottom:1rem; }
-
-    /* Shared desktop related rows: EventCard owns exact fit/position; this
-       surface supplies geometry only and never overrides the crop decision. */
-    .desktop-clean-related__grid :global([data-lab-related-card]) { height:100%; grid-template-rows:auto minmax(0,1fr) minmax(58px,auto) minmax(56px,auto); }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-link) { display:block; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media-shell) { position:relative; isolation:isolate; width:100%; height:auto !important; aspect-ratio:var(--lab-row-media-ratio) !important; overflow:hidden; background:#d2c5b7; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__media) { position:absolute !important; z-index:2; inset:0; width:100% !important; height:100% !important; }
-    .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media-shell) { background:linear-gradient(135deg,#e4ddd2,#d4c7b9); }
-    .desktop-clean-related__grid :global([data-lab-media-kind="visual"] .event-card__media) { background:transparent !important; }
-    .desktop-clean-related__grid :global([data-card-authoritative-fit="contain"]) { background:#15110f; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__body) { min-height:0; align-content:start; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__utility-row) { min-height:58px; }
-    .desktop-clean-related__grid :global([data-lab-related-card] .event-card__feedback--under) { min-height:56px; }
   }
   @media (min-width:1024px) and (max-height:720px) {
     .desktop-prototype__stage { --stage-height:calc(100svh - 72px); min-height:520px; }

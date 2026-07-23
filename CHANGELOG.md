@@ -105,7 +105,8 @@
 
 - Promoted the accepted Exhibitions personal presentation to the integrated
   review `/vystavki/` with dynamic current-event projection, and made the
-  review-only `/dlya-menya/` use the canonical one-column large-card feed.
+  review-only `/dlya-menya/` share the canonical optimized Event-detail card
+  rows on desktop and the large one-card flow on mobile.
 
 - Unified the current desktop and mobile discovery donors without flattening
   their accepted responsive compositions. Public navigation now uses the short

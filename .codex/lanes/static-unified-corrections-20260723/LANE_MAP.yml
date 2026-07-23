@@ -41,7 +41,7 @@ lanes:
       - CHANGELOG.md
     expected_output: One committed focused implementation with dynamic data tests and RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L02
     role: worker
     effort: high
@@ -64,7 +64,7 @@ lanes:
       - CHANGELOG.md
     expected_output: One committed patch with initial-hidden and runtime-reveal tests plus RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L03
     role: worker
     effort: high
@@ -90,7 +90,7 @@ lanes:
       - CHANGELOG.md
     expected_output: One committed patch using current policy data/provenance with focused tests and RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L04
     role: worker
     effort: high
@@ -116,7 +116,7 @@ lanes:
       - CHANGELOG.md
     expected_output: One committed optional-estimate implementation, 6529 specimen, negative controls and RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L05
     role: worker
     effort: high
@@ -145,7 +145,7 @@ lanes:
       - CHANGELOG.md
     expected_output: One committed fail-closed media/personal-feed patch with exporter and resolver tests plus RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L06
     role: planner
     effort: high
@@ -165,4 +165,4 @@ lanes:
     forbidden_files: []
     expected_output: Integrated selective-hierarchy breadcrumb contract with desktop/mobile/a11y/SEO tests.
     verification_scope: full_local
-    status: planned
+    status: merged

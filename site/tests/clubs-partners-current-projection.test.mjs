@@ -46,8 +46,8 @@ test('future-meeting actions fail closed unless their exact event is materialize
     assert.equal(meeting.source_url, null, 'an unmaterialized meeting must not fall back to an external action');
   }
   assert.equal(meetings[0].event_id, 6990);
-  assert.equal(eventSlugById.has(6990), false);
-  assert.equal(meetings[0].event_path, null);
+  assert.equal(eventSlugById.has(6990), true);
+  assert.equal(meetings[0].event_path, `/sobytiya/${eventSlugById.get(6990)}/`);
 });
 
 test('ICAE is the deterministic sixth partner and uses one byte-faithful local official SVG', async () => {

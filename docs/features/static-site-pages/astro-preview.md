@@ -43,7 +43,7 @@ authorizes root promotion or a stable calendar rewrite.
 
 The 2026-07-23 correction candidate additionally keeps every reviewed surface
 inside one mutually linked prefix: the dynamic Exhibitions presentation,
-one-column large-card personal feed, Search, current clubs, six-logo Partners,
+optimized responsive personal-card feed, Search, current clubs, six-logo Partners,
 deep-page breadcrumbs and the two event-detail regressions (`6686`, `6529`).
 It is still a review build, not a root rollout.
 

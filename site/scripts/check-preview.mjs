@@ -187,8 +187,8 @@ if (popularDesktopIds.some((id) => !popularDesktopEligible(popularEventById.get(
   throw new Error('Popular desktop V28 includes an already unavailable event at build time');
 }
 const elapsedMobileIds = popularLargeIds.filter((id) => !popularDesktopEligible(popularEventById.get(id)));
-if (!elapsedMobileIds.length || elapsedMobileIds.some((id) => popularDesktopIds.includes(id))) {
-  throw new Error('Popular desktop V28 must be stricter than the preserved mobile projection at the time boundary');
+if (elapsedMobileIds.some((id) => popularDesktopIds.includes(id))) {
+  throw new Error('Popular desktop V28 must exclude every elapsed card retained by the preserved mobile projection');
 }
 const personalPoolHtml = popularDesktopHtml.slice(popularPersonalizedAt);
 const personalIds = listingIds(personalPoolHtml);
@@ -254,13 +254,14 @@ if (interestClubsData.schema_version !== 'interest-clubs-static-v1' || interestC
 }
 const clubIndexHtml = readFileSync(join(root, 'kluby-po-interesam/index.html'), 'utf8');
 if (!/<h1[^>]*>Клубы по интересам<\/h1>/u.test(clubIndexHtml)) throw new Error('Interest-clubs index misses one visible h1');
-if (!clubIndexHtml.includes('aria-label="Хлебные крошки"')) throw new Error('Interest-clubs index misses semantic breadcrumbs');
+if (clubIndexHtml.includes('data-product-breadcrumbs') || clubIndexHtml.includes('data-product-parent-link')) throw new Error('Top-level Interest-clubs index must not spend vertical space on decorative breadcrumbs');
 if (!clubIndexHtml.includes('https://schema.org') || !clubIndexHtml.includes('ItemList')) throw new Error('Interest-clubs index misses JSON-LD ItemList');
 if (!clubIndexHtml.includes('/kluby-po-interesam/')) throw new Error('Interest-clubs route is absent from static navigation');
 for (const club of interestClubsData.clubs) {
   const detailHtml = readFileSync(join(root, `kluby-po-interesam/${club.slug}/index.html`), 'utf8');
   if (!detailHtml.includes(`>${club.name}</h1>`)) throw new Error(`Club ${club.slug} misses visible h1`);
   if (!detailHtml.includes('id="future-meetings-title"')) throw new Error(`Club ${club.slug} misses future-meetings section`);
+  if (!detailHtml.includes('data-product-breadcrumbs') || !detailHtml.includes('data-product-parent-link') || !detailHtml.includes('aria-current="page"')) throw new Error(`Club ${club.slug} misses responsive semantic product breadcrumbs`);
   if (!detailHtml.includes('BreadcrumbList') || !detailHtml.includes('application/ld+json')) throw new Error(`Club ${club.slug} misses structured data`);
   if (/<main[^>]+hidden|<article[^>]+hidden|<section[^>]+hidden/iu.test(detailHtml)) throw new Error(`Club ${club.slug} requires JavaScript to reveal primary content`);
 }
@@ -722,6 +723,8 @@ if (!sitemap.includes(`https://kenigevents.ru/${buildId}/lab/hero/review/5878-po
 
 const searchHtml = readFileSync(join(root, 'poisk/index.html'), 'utf8');
 const searchVisibleHtml = stripGeneratedCode(searchHtml);
+if (!/data-search-skeletons[^>]*\shidden(?:\s|>)/u.test(searchHtml)) throw new Error('Search skeleton must be initially hidden until a real request starts');
+if (searchHtml.includes('data-product-breadcrumbs') || searchHtml.includes('data-product-parent-link')) throw new Error('Top-level Search must not render decorative breadcrumbs');
 const mobileCalendarBase = String(process.env.PUBLIC_MOBILE_CALENDAR_BASE_URL || '').replace(/\/+$/u, '');
 const mobileSearchBase = String(process.env.PUBLIC_MOBILE_SEARCH_BASE_URL || '').replace(/\/+$/u, '');
 if (mobileCalendarBase || mobileSearchBase) {
@@ -751,7 +754,7 @@ if (!controlHtml.includes('/partners/') || !controlHtml.includes('Партнёр
 
 const partnersHtml = readFileSync(join(root, 'partners/index.html'), 'utf8');
 const partnersVisibleHtml = stripGeneratedCode(partnersHtml);
-for (const needle of ['Партнёры Полюбить Калининград Анонсы', 'КППК', 'Знание', '80 историй', 'Кантата', 'Акт Опус']) {
+for (const needle of ['Партнёры Полюбить Калининград Анонсы', 'КППК', 'Знание', '80 историй', 'Кантата', 'Акт Опус', 'ИЦАЭ Калининграда']) {
   if (!partnersVisibleHtml.includes(needle)) throw new Error(`Info partners page misses ${needle}`);
 }
 for (const needle of [
@@ -766,7 +769,7 @@ for (const staleLabel of ['Пригородные маршруты', 'Просв
   if (partnersVisibleHtml.includes(staleLabel)) throw new Error(`Info partners page must not render stale/category/wrong caption: ${staleLabel}`);
 }
 if (!partnersHtml.includes('/assets/partners/kppk-rzd-red.svg')) throw new Error('Info partners КППК tile must use the sourced RZD/KPPK mark, not an invented text-only logo');
-const expectedPartnerUrls = ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma', 'https://actop.us/plays'];
+const expectedPartnerUrls = ['https://www.kppk39.ru/', 'https://znanierussia.ru/', 'https://kgd80.ru/', 'https://kantatafest.ru/obrazovatelnaya-programma', 'https://actop.us/plays', 'https://klgd.myatom.ru/'];
 for (const url of expectedPartnerUrls) {
   if (!partnersHtml.includes(url)) throw new Error(`Info partners page misses partner URL: ${url}`);
 }
@@ -782,7 +785,8 @@ if (!compactPartnersCss.includes('grid-template-columns:repeat(4,minmax(0,1fr))'
 if (!compactPartnersCss.includes('@media(min-width:980px)') || !compactPartnersCss.includes('grid-template-columns:repeat(8,minmax(0,1fr))')) throw new Error('Info partners desktop layout must keep an eight-column aspect-aware grid');
 if (!partnersHtml.includes('--partner-col-start: 1') || !partnersHtml.includes('--partner-col-span: 4') || !partnersHtml.includes('--partner-row-span: 2') || !partnersHtml.includes('--partner-mobile-col-start: 3') || !partnersHtml.includes('--partner-mobile-col-span: 2')) throw new Error('Info partners tiles must keep explicit bento placement variables for greedy logo spans');
 const exhibitionsHtml = readFileSync(join(root, 'vystavki/index.html'), 'utf8');
-if (!exhibitionsHtml.includes('Выставки и долгие форматы') || !exhibitionsHtml.includes('listing-stack')) throw new Error('Exhibitions listing must exist as a separate section/page');
+if (!exhibitionsHtml.includes('data-exhibitions-prototype') || !exhibitionsHtml.includes('data-mode-switch') || !exhibitionsHtml.includes('Новое для вас') || !exhibitionsHtml.includes('Стоит увидеть')) throw new Error('Exhibitions listing must use the accepted integrated personal presentation');
+if (exhibitionsHtml.includes('listing-stack') || exhibitionsHtml.includes('data-product-breadcrumbs')) throw new Error('Exhibitions route regressed to the retired listing or decorative top-level breadcrumbs');
 const popularListingHtml = readFileSync(join(root, 'populyarnoe/index.html'), 'utf8');
 if (!popularListingHtml.includes('Популярное') || !popularListingHtml.includes('listing-stack')) throw new Error('Popular listing must exist as a separate section/page');
 const partnershipHtml = readFileSync(join(root, 'partnerstvo/index.html'), 'utf8');

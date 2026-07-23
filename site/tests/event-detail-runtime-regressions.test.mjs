@@ -103,10 +103,12 @@ test('dynamic recommendation media reserves geometry through load and failure', 
 test('desktop static continuation emits stable initial skeleton geometry', async () => {
   const card = await read('src/components/EventCard.astro');
   const desktop = await read('src/components/DesktopEventPage.astro');
+  const optimizedGrid = await read('src/components/OptimizedEventCardGrid.astro');
   const built = await readBuilt('sobytiya/spektakl-garazh-kaliningrad-5658/index.html');
 
-  assert.match(desktop, /packRelatedCardRows/u);
-  assert.match(desktop, /desktopRelatedLayout=\{layout\}/u);
+  assert.match(desktop, /<OptimizedEventCardGrid/u);
+  assert.match(optimizedGrid, /packRelatedCardRows/u);
+  assert.match(optimizedGrid, /desktopRelatedLayout=\{layout\}/u);
   assert.match(card, /--lab-row-media-ratio:/u);
   assert.match(card, /\(desktopRelatedCrop \|\| mobileFlowMedia\) && 'event-card__media-shell--dynamic'/u);
   assert.match(card, /\(desktopRelatedCrop \|\| mobileFlowMedia\) && 'is-image-loading'/u);

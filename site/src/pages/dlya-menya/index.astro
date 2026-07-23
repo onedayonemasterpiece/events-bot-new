@@ -1,6 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import EventCard from '../../components/EventCard.astro';
+import OptimizedEventCardGrid from '../../components/OptimizedEventCardGrid.astro';
 import { absoluteUrl, getPopularEvents, SITE_NAME, withBase } from '../../lib/events';
 
 // This is a review-only cold-start surface. The real profile remains local and
@@ -30,9 +30,16 @@ const description = 'Адаптивный прототип личной лент
           <h2 id="personal-feed-title">С чего можно начать</h2>
           <p>Одна карточка на взаимно связанную семью дат; совпадения по названию, площадке или типу сами по себе не склеиваются.</p>
         </div>
-        <div class="authorized-search__results personal-page__feed-list" data-personal-feed-results>
-          {events.map((event) => <EventCard event={event} mobileFlowMedia />)}
-        </div>
+        <OptimizedEventCardGrid
+          events={events}
+          limit={18}
+          rowSize={3}
+          responsiveMobile
+          personalFeed
+          className="personal-page__feed-list"
+          surface="personal_cold_start"
+          algorithmId="personal-cold-start-optimized-v1"
+        />
       </section>
     </div>
   </main>
@@ -49,8 +56,7 @@ const description = 'Адаптивный прототип личной лент
   .personal-page__feed { margin-top: 1rem; }
   .personal-page__feed > div:first-child { max-width: 62ch; margin-bottom: 1rem; }
   .personal-page__feed h2 { margin: .15rem 0 .45rem; font-size: clamp(1.8rem, 3vw, 3rem); }
-  /* Search and the personal cold-start surface are both ranked large-card
-     feeds. Keep ordinary one-column document flow at every breakpoint rather
-     than reintroducing a compact 3/2/1 listing grid around EventCard. */
-  .personal-page__feed-list { grid-template-columns: minmax(0, 1fr); }
+  /* The same optimized row component owns desktop Event-detail and Personal
+     crop/equal-height behavior. Mobile deliberately returns to one large card
+     per row rather than forcing a three-column desktop packing solution. */
 </style>
