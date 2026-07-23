@@ -597,6 +597,17 @@ def event_end_from_duration(start_date: str, start_time: str | None, duration_mi
     return end.strftime("%Y-%m-%d"), end.strftime("%H:%M")
 
 
+def forecast_event_duration_minutes(value: Any) -> int | None:
+    """Validate a persisted Smart Update forecast without inferring at build time."""
+    if isinstance(value, bool):
+        return None
+    try:
+        duration = int(value)
+    except (TypeError, ValueError):
+        return None
+    return duration if 15 <= duration <= 12 * 60 else None
+
+
 def price_label(row: sqlite3.Row) -> str | None:
     lo = row["ticket_price_min"]
     hi = row["ticket_price_max"]
@@ -1903,6 +1914,9 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "end_date": end_date,
         "end_at": end_at,
         "time_range_end": time_end,
+        "duration_forecast_minutes": forecast_event_duration_minutes(
+            row_get(row, "duration_forecast_minutes")
+        ),
         "timezone": TZ,
         "display_date": start_date,
         "display_time": display_time,

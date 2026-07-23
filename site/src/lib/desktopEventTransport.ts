@@ -11,17 +11,27 @@ function plainText(html: string): string {
 }
 
 /**
- * Desktop-only repair for an explicit source-labelled duration that has not
- * yet reached `time_range_end` in the preview export. This never infers a
- * duration from event type or surrounding prose.
+ * Transport-only end-time projection. Explicit source timing always wins;
+ * Smart Update's persisted forecast is consumed only when no explicit end or
+ * source-labelled duration reached the preview export. With neither, return
+ * the event unchanged so each transport surface keeps its safe fallback.
  */
 export function desktopEventWithExplicitEnd(event: PreviewEvent): PreviewEvent {
   if (event.time_range_end || !event.start_time) return event;
   const text = plainText(event.description_html || '');
   const match = /продолжительность(?:\s+[а-яё-]+){0,3}\s*(?:[:—–-]|составляет)\s*(?:(\d{1,2})\s*(?:ч(?:ас(?:а|ов)?)?))?\s*(?:(\d{1,3})\s*(?:мин(?:ут(?:а|ы)?)?))?/iu.exec(text);
-  if (!match || (!match[1] && !match[2])) return event;
-  const durationMinutes = Number(match[1] || 0) * 60 + Number(match[2] || 0);
-  if (durationMinutes <= 0 || durationMinutes > 24 * 60) return event;
+  const explicitDurationMinutes = match && (match[1] || match[2])
+    ? Number(match[1] || 0) * 60 + Number(match[2] || 0)
+    : null;
+  const forecastDurationMinutes = Number(event.duration_forecast_minutes);
+  const durationMinutes = explicitDurationMinutes && explicitDurationMinutes <= 24 * 60
+    ? explicitDurationMinutes
+    : Number.isInteger(forecastDurationMinutes)
+      && forecastDurationMinutes >= 15
+      && forecastDurationMinutes <= 12 * 60
+      ? forecastDurationMinutes
+      : null;
+  if (!durationMinutes) return event;
   const startMatch = /^(\d{2}):(\d{2})$/u.exec(event.start_time);
   if (!startMatch) return event;
   const startMinutes = Number(startMatch[1]) * 60 + Number(startMatch[2]);

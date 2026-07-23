@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "site" / "scripts" / "export-production-preview-data.py"
@@ -10,8 +11,9 @@ SPEC = importlib.util.spec_from_file_location("export_production_preview_data", 
 assert SPEC and SPEC.loader
 EXPORTER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(EXPORTER)
-PREVIEW_EVENTS = SCRIPT.parents[1] / "src" / "data" / "preview-events.json"
-ESTIMATES = SCRIPT.parents[1] / "src" / "data" / "event-duration-estimates.json"
+TRANSPORT_HELPER = (
+    Path(__file__).resolve().parents[1] / "site" / "src" / "lib" / "desktopEventTransport.ts"
+)
 
 
 def test_extracts_only_explicitly_labeled_event_duration() -> None:
@@ -25,34 +27,50 @@ def test_derives_transport_safe_end_time_from_explicit_duration() -> None:
     assert EXPORTER.event_end_from_duration("2026-07-12", "23:30", 90) == ("2026-07-13", "01:00")
 
 
-def test_event_3103_retains_explicit_duration_regression() -> None:
-    preview = json.loads(PREVIEW_EVENTS.read_text(encoding="utf-8"))
-    event = next(item for item in preview["events"] if item["id"] == 3103)
-    estimates = json.loads(ESTIMATES.read_text(encoding="utf-8"))
+def test_exports_only_valid_persisted_duration_forecast() -> None:
+    assert EXPORTER.forecast_event_duration_minutes(95) == 95
+    assert EXPORTER.forecast_event_duration_minutes("120") == 120
+    assert EXPORTER.forecast_event_duration_minutes(None) is None
+    assert EXPORTER.forecast_event_duration_minutes(0) is None
+    assert EXPORTER.forecast_event_duration_minutes(721) is None
 
-    assert "Продолжительность спектакля – 1 час 40 минут" in event["description_html"]
-    assert all(item["event_id"] != 3103 for item in estimates["estimates"])
-    assert EXPORTER.event_end_from_duration(event["start_date"], event["start_time"], 100) == (
-        "2026-08-15",
-        "19:40",
+
+def test_transport_end_uses_explicit_then_forecast_then_safe_null_fallback() -> None:
+    script = f"""
+import {{ desktopEventWithExplicitEnd }} from {json.dumps(TRANSPORT_HELPER.as_uri())};
+const base = {{ start_time: '17:00', time_range_end: null, description_html: '' }};
+const explicit = desktopEventWithExplicitEnd({{
+  ...base,
+  description_html: '<p>Продолжительность: 45 минут</p>',
+  duration_forecast_minutes: 120,
+}});
+const forecast = desktopEventWithExplicitEnd({{
+  ...base,
+  duration_forecast_minutes: 120,
+}});
+const fallback = desktopEventWithExplicitEnd({{ ...base }});
+const extractedEnd = desktopEventWithExplicitEnd({{
+  ...base,
+  time_range_end: '18:20',
+  duration_forecast_minutes: 120,
+}});
+process.stdout.write(JSON.stringify({{
+  explicit: explicit.time_range_end,
+  forecast: forecast.time_range_end,
+  fallback: fallback.time_range_end,
+  extractedEnd: extractedEnd.time_range_end,
+}}));
+"""
+    completed = subprocess.run(
+        ["node", "--experimental-strip-types", "--input-type=module", "-e", script],
+        cwd=Path(__file__).resolve().parents[1],
+        check=True,
+        capture_output=True,
+        text=True,
     )
-
-
-def test_event_6529_estimate_is_preview_only_and_not_a_canonical_end() -> None:
-    preview = json.loads(PREVIEW_EVENTS.read_text(encoding="utf-8"))
-    event = next(item for item in preview["events"] if item["id"] == 6529)
-    estimates = json.loads(ESTIMATES.read_text(encoding="utf-8"))
-    estimate = next(item for item in estimates["estimates"] if item["event_id"] == 6529)
-
-    assert event["time_range_end"] is None
-    assert EXPORTER.explicit_event_duration_minutes(event["description_html"]) is None
-    assert estimates["scope"] == "preview_only"
-    assert estimate["source_status"] == "llm_estimated"
-    assert estimate["canonical_end"] is False
-    assert estimate["model"]["id"] == "gemini-3.1-pro-low"
-    assert estimate["provenance"].endswith("/gemini-duration-6529/response.json")
-    assert estimate["estimated_at"] == "2026-07-23T06:35:15Z"
-    assert estimate["most_likely_minutes"] == 120
-    assert (estimate["plausible_min_minutes"], estimate["plausible_max_minutes"]) == (90, 180)
-    assert estimate["confidence"] == "medium"
-    assert estimate["conservative_routing_minutes"] == 150
+    assert json.loads(completed.stdout) == {
+        "explicit": "17:45",
+        "forecast": "19:00",
+        "fallback": None,
+        "extractedEnd": "18:20",
+    }

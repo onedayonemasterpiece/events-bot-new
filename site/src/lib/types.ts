@@ -108,6 +108,7 @@ export interface PreviewEvent {
   end_date: string | null;
   end_at: string | null;
   time_range_end: string | null;
+  duration_forecast_minutes?: number | null;
   timezone: string;
   display_date: string;
   display_time: string | null;

@@ -388,6 +388,7 @@ class Database:
                     emoji TEXT,
                     end_date TEXT,
                     end_date_is_inferred BOOLEAN NOT NULL DEFAULT 0,
+                    duration_forecast_minutes INTEGER,
                     identity_status TEXT NOT NULL DEFAULT 'canonical',
                     merged_into_event_id INTEGER,
                     date_is_inferred BOOLEAN NOT NULL DEFAULT 0,
@@ -492,6 +493,7 @@ class Database:
             await _add_column(conn, "event", "preview_3d_url TEXT")
             await _add_column(conn, "event", "time_is_default BOOLEAN NOT NULL DEFAULT 0")
             await _add_column(conn, "event", "end_date_is_inferred BOOLEAN NOT NULL DEFAULT 0")
+            await _add_column(conn, "event", "duration_forecast_minutes INTEGER")
             await _add_column(
                 conn, "event", "identity_status TEXT NOT NULL DEFAULT 'canonical'"
             )

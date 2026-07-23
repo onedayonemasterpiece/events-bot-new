@@ -15,6 +15,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -248,6 +249,7 @@ def _resolve_smart_update_model(label: str | None) -> str:
                 "anchor_role_review",
                 "create_bundle_grounding",
                 "occurrence_scope_review",
+                "duration_forecast",
             }
             or label_l.endswith(":fact_first_cov")
         ):
@@ -263,6 +265,7 @@ def _resolve_smart_update_model(label: str | None) -> str:
         "create_bundle_grounding",
         "occurrence_scope_review",
         "location_grounding_review",
+        "duration_forecast",
     }:
         return SMART_UPDATE_FACTS_MODEL
     # Pure writer stages (split-create / fact-first paths). The fact-first
@@ -602,6 +605,258 @@ class SmartUpdateResult:
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
     queue_notes: list[str] = field(default_factory=list)
+
+
+_DURATION_FORECAST_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "duration_minutes": {"type": ["integer", "null"]},
+        "confidence": {"type": "number"},
+        "reason_short": {"type": "string"},
+    },
+    "required": ["duration_minutes", "confidence", "reason_short"],
+    "additionalProperties": False,
+}
+_EXPLICIT_EVENT_DURATION_RE = re.compile(
+    r"продолжительность(?:\s+[а-яё-]+){0,3}\s*"
+    r"(?:[:—–-]|составляет)\s*"
+    r"(?:(\d{1,2})\s*(?:ч(?:ас(?:а|ов)?)?|h))?\s*"
+    r"(?:(\d{1,3})\s*(?:мин(?:ут(?:а|ы)?)?|m))?",
+    re.IGNORECASE,
+)
+_EVENT_TIME_RANGE_RE = re.compile(
+    r"^\s*(\d{1,2})[:.](\d{2})\s*(?:[—–-]|\.\.)\s*"
+    r"(\d{1,2})[:.](\d{2})\s*$"
+)
+_TRANSPORT_DATA_ROOT = Path(__file__).resolve().parent / "site" / "src" / "data"
+
+
+def _valid_duration_minutes(value: Any, *, maximum: int = 12 * 60) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        duration = int(value)
+    except (TypeError, ValueError):
+        return None
+    return duration if 15 <= duration <= maximum else None
+
+
+def _duration_from_explicit_time_range(value: str | None) -> int | None:
+    match = _EVENT_TIME_RANGE_RE.match(str(value or ""))
+    if not match:
+        return None
+    start = int(match.group(1)) * 60 + int(match.group(2))
+    end = int(match.group(3)) * 60 + int(match.group(4))
+    if start >= 24 * 60 or end >= 24 * 60:
+        return None
+    if end <= start:
+        end += 24 * 60
+    return _valid_duration_minutes(end - start)
+
+
+def _explicit_event_duration_minutes(*values: Any) -> int | None:
+    """Extract only source-labelled duration or a complete explicit time range."""
+
+    for value in values:
+        time_range_duration = _duration_from_explicit_time_range(
+            value if isinstance(value, str) else None
+        )
+        if time_range_duration is not None:
+            return time_range_duration
+        text = str(value or "")
+        match = _EXPLICIT_EVENT_DURATION_RE.search(text)
+        if not match or not any(match.groups()):
+            continue
+        duration = int(match.group(1) or 0) * 60 + int(match.group(2) or 0)
+        valid = _valid_duration_minutes(duration, maximum=24 * 60)
+        if valid is not None:
+            return valid
+    return None
+
+
+def _duration_grounding_corpora(
+    candidate: EventCandidate,
+    event: Event | None = None,
+) -> list[str]:
+    values: list[str | None] = [
+        candidate.time,
+        candidate.source_text,
+        candidate.raw_excerpt,
+        candidate.occurrence_scope_text,
+    ]
+    for poster in candidate.posters or []:
+        values.extend([poster.ocr_text, poster.ocr_title])
+    if event is not None:
+        values.extend(
+            [
+                getattr(event, "time", None),
+                getattr(event, "source_text", None),
+                getattr(event, "description", None),
+            ]
+        )
+        values.extend(getattr(event, "source_texts", None) or [])
+    return [str(value).strip() for value in values if str(value or "").strip()]
+
+
+def _event_has_explicit_duration_or_end(
+    candidate: EventCandidate,
+    event: Event | None = None,
+) -> bool:
+    if _explicit_event_duration_minutes(*_duration_grounding_corpora(candidate, event)):
+        return True
+    start_date = str(
+        getattr(event, "date", None) or candidate.date or ""
+    ).strip()
+    end_date = str(
+        getattr(event, "end_date", None) or candidate.end_date or ""
+    ).strip()
+    return bool(start_date and end_date and end_date != start_date)
+
+
+def _normalize_transport_anchor(value: Any) -> str:
+    return re.sub(
+        r"[^а-яa-z0-9]+",
+        " ",
+        str(value or "").casefold().replace("ё", "е"),
+    ).strip()
+
+
+@lru_cache(maxsize=1)
+def _transport_duration_eligibility_directory() -> dict[str, Any]:
+    """Load the static transport directory fail-closed without provider calls."""
+
+    try:
+        rail = json.loads(
+            (_TRANSPORT_DATA_ROOT / "transportSchedules.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        bus = json.loads(
+            (_TRANSPORT_DATA_ROOT / "busTransportSchedules.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    except Exception:
+        logger.warning("smart_update: transport duration directory unavailable", exc_info=True)
+        return {"rail_cities": set(), "bus_routes": []}
+    rail_cities = {
+        _normalize_transport_anchor(route.get("city"))
+        for route in rail.get("routes", [])
+        if _normalize_transport_anchor(route.get("city"))
+    }
+    bus_routes = []
+    for route in bus.get("routes", []):
+        bus_routes.append(
+            {
+                "cities": {
+                    _normalize_transport_anchor(value)
+                    for value in route.get("cities", [])
+                    if _normalize_transport_anchor(value)
+                },
+                "venues": {
+                    _normalize_transport_anchor(value)
+                    for value in route.get("venues", [])
+                    if _normalize_transport_anchor(value)
+                },
+                "event_start": str(route.get("event_start") or "").strip(),
+            }
+        )
+    return {"rail_cities": rail_cities, "bus_routes": bus_routes}
+
+
+def _transport_duration_forecast_eligible(
+    candidate: EventCandidate,
+    event: Event | None = None,
+) -> bool:
+    """Mirror only transport surfaces that can use an event end time."""
+
+    start_date = str(getattr(event, "date", None) or candidate.date or "").strip()
+    end_date = str(
+        getattr(event, "end_date", None) or candidate.end_date or ""
+    ).strip()
+    start_time = str(getattr(event, "time", None) or candidate.time or "").strip()
+    time_match = re.search(r"(\d{1,2})[:.](\d{2})", start_time)
+    if (
+        not re.fullmatch(r"\d{4}-\d{2}-\d{2}", start_date)
+        or not time_match
+        or bool(getattr(event, "time_is_default", False) or candidate.time_is_default)
+        or (end_date and end_date != start_date)
+    ):
+        return False
+    start_clock = f"{int(time_match.group(1)):02d}:{int(time_match.group(2)):02d}"
+    city = _normalize_transport_anchor(
+        getattr(event, "city", None) or candidate.city
+    )
+    venue = _normalize_transport_anchor(
+        getattr(event, "location_name", None) or candidate.location_name
+    )
+    directory = _transport_duration_eligibility_directory()
+    if city and city in directory["rail_cities"]:
+        return True
+    if venue in {"поселение викингов кауп", "кауп", "kaup"}:
+        return True
+    return any(
+        city in route["cities"]
+        and venue in route["venues"]
+        and start_clock == route["event_start"]
+        for route in directory["bus_routes"]
+    )
+
+
+async def _ensure_transport_duration_forecast(
+    event: Event,
+    candidate: EventCandidate,
+) -> bool:
+    """Populate or clear the transport-only duration forecast on an Event."""
+
+    if _event_has_explicit_duration_or_end(candidate, event):
+        if getattr(event, "duration_forecast_minutes", None) is not None:
+            event.duration_forecast_minutes = None
+            return True
+        return False
+    if getattr(event, "duration_forecast_minutes", None) is not None:
+        return False
+    if SMART_UPDATE_LLM_DISABLED or not _transport_duration_forecast_eligible(
+        candidate, event
+    ):
+        return False
+
+    source_material = "\n\n".join(_duration_grounding_corpora(candidate, event))
+    prompt = (
+        "Оцени ожидаемую продолжительность одного события только для планирования "
+        "обратного транспорта. Это прогноз, а не извлечённый факт.\n"
+        "Используй только event-scoped материалы ниже. Не считай часами события "
+        "часы работы площадки, длительность выставки в днях, окно фестиваля или "
+        "время сбора гостей. Если материалов недостаточно, верни duration_minutes=null.\n"
+        "Верни целое число минут от 15 до 720, confidence от 0 до 1 и короткую причину.\n\n"
+        f"event_type: {str(getattr(event, 'event_type', None) or candidate.event_type or '').strip()!r}\n"
+        f"event_start: {str(getattr(event, 'time', None) or candidate.time or '').strip()!r}\n"
+        f"source_material:\n{_clip_to_readable_boundary(source_material, 5000)}"
+    )
+    data = await _ask_gemma_json(
+        prompt,
+        _DURATION_FORECAST_SCHEMA,
+        max_tokens=120,
+        label="duration_forecast",
+    )
+    if not isinstance(data, dict):
+        return False
+    duration = _valid_duration_minutes(data.get("duration_minutes"))
+    try:
+        confidence = float(data.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    if duration is None or not math.isfinite(confidence) or confidence < 0.5:
+        return False
+    event.duration_forecast_minutes = duration
+    logger.info(
+        "smart_update.duration_forecast event_id=%s minutes=%s confidence=%.2f source_type=%s",
+        getattr(event, "id", None),
+        duration,
+        confidence,
+        candidate.source_type,
+    )
+    return True
 
 
 def _candidate_age_corpora(candidate: EventCandidate) -> list[str]:
@@ -16772,6 +17027,7 @@ async def _smart_event_update_impl(
                 [p for p in candidate.posters if (p.supabase_url or p.catbox_url)]
             ),
         )
+        await _ensure_transport_duration_forecast(new_event, candidate)
         create_age_decision = _candidate_age_decision(
             candidate,
             semantic_payload=bundled_age_payload,
@@ -18119,6 +18375,9 @@ async def _smart_event_update_impl(
             event_db.creator_id = candidate.creator_id
             updated_fields = True
             updated_keys.append("creator_id")
+        if await _ensure_transport_duration_forecast(event_db, candidate):
+            updated_fields = True
+            updated_keys.append("duration_forecast_minutes")
 
         added_posters, added_poster_urls, preview_invalidated, pruned_posters, photo_urls_changed = await _apply_posters(
             session,

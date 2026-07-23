@@ -410,6 +410,9 @@ class Event(SQLModel, table=True):
     emoji: Optional[str] = None
     end_date: Optional[str] = None
     end_date_is_inferred: bool = False
+    # LLM-estimated duration used only for transport planning when no explicit
+    # source duration/end was extracted. Public event timing remains unchanged.
+    duration_forecast_minutes: Optional[int] = None
     identity_status: str = "canonical"
     merged_into_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
     date_is_inferred: bool = False
