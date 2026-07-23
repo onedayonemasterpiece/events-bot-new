@@ -100,6 +100,29 @@
       "imageTextMode": "visual_only",
       "cropEvidence": "source-still-reviewed-20260718",
       "objectPosition": "85% 45%"
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/30/30004c004a40d8d88098216418ec988e00ca298b20b32127294c048c00184002.webp",
+      "sourceSha256": "270d87c39451bf3536655620827036b11cdf9494af44dc8c3e8cdafa8648b6a4",
+      "replacementSrc": "/assets/card-media/goblin-battle-reviewed-5x4.webp",
+      "width": 1000,
+      "height": 800,
+      "imageTextMode": "visual_only",
+      "imageKind": "illustration",
+      "cropEvidence": "source-still-reviewed-no-ocr-20260723",
+      "objectPosition": "50% 50%",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourcePageEventId": 6835,
+      "acceptancePageEventId": 6529,
+      "cropBox": [
+        0,
+        245,
+        691,
+        798
+      ]
     }
   ]
 }

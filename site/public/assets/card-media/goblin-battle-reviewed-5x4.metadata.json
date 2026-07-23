@@ -1,0 +1,26 @@
+{
+  "asset": "/assets/card-media/goblin-battle-reviewed-5x4.webp",
+  "purpose": "Reviewed compact-card derivative for the Goblin battle illustration shown in event 6529 recommendations",
+  "source": "https://static.kenigevents.ru/p/dh16/30/30004c004a40d8d88098216418ec988e00ca298b20b32127294c048c00184002.webp",
+  "source_dimensions_px": [
+    691,
+    1000
+  ],
+  "source_sha256": "270d87c39451bf3536655620827036b11cdf9494af44dc8c3e8cdafa8648b6a4",
+  "diagnosis": "The immutable source has no baked bands and no OCR; visible card fields came from contain framing after stale unknown_document semantics.",
+  "crop_box_px": [
+    0,
+    245,
+    691,
+    798
+  ],
+  "crop_policy": "Source-keyed reviewed 5:4 action crop retaining all central combatants; never applied to other sources or OCR media.",
+  "output_dimensions_px": [
+    1000,
+    800
+  ],
+  "output_aspect_ratio": "5:4",
+  "output_sha256": "e5511d8110ccdbe7b2daca6771833110129b1c7cfba3a6e481ca8278a49b7669",
+  "format": "WebP",
+  "quality": 86
+}

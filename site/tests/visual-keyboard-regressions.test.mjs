@@ -146,7 +146,7 @@ test('6764 reuses the source-keyed reviewed still instead of stretching its fail
   assert.equal(reviewed.image_text_mode, 'visual_only');
   assert.equal(reviewed.media_semantic_status, 'classified');
   assert.equal(reviewed.media_role, 'event_photo');
-  assert.equal(reviewed.listing_crop_evidence, 'source-reviewed');
+  assert.equal(reviewed.listing_crop_evidence, 'source-video-frame-0-reviewed');
 
   const packed = packRelatedCardRows([
     event,

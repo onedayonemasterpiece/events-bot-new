@@ -56,10 +56,10 @@ function normalizeObjectPosition(value: string | null | undefined) {
   const raw = (value || '').trim();
   return /^[a-z0-9.%\s-]+$/i.test(raw) ? raw : null;
 }
-// Shared/default cards unlock cropping only through the LLM-authored
-// event_photo role. Compact event-detail recommendation cards instead use the
-// shared relatedCardLayout surface contract below (all media fills; OCR is
-// grouped into a row where its cover crop stays within the 20% budget).
+// Compact recommendation cards use the shared row contract. Outside that
+// contract, explicit image-text evidence wins over stale semantic roles:
+// visual-only media fills, while OCR/unknown documents remain fail-closed.
+const imageTextMode = primaryImageAsset?.image_text_mode || event.image_text_mode || 'unknown';
 const imageMediaRole = primaryImageAsset?.media_role || event.image_media_role || 'unknown_document';
 const intrinsicMediaRatio = desktopRelatedLayout?.mediaRatio
   || (primaryImageAsset?.width && primaryImageAsset?.height ? primaryImageAsset.width / primaryImageAsset.height : 4 / 5);
@@ -74,12 +74,12 @@ const relatedMediaDecision = desktopRelatedCrop
   : mobileFlowMedia ? resolveMobileEventCardMedia(event) : null;
 const documentMedia = desktopRelatedCrop
   ? relatedMediaDecision?.mediaKind === 'document'
-  : mobileFlowMedia ? relatedMediaDecision?.mediaKind === 'document' : imageMediaRole !== 'event_photo';
+  : mobileFlowMedia ? relatedMediaDecision?.mediaKind === 'document' : imageTextMode !== 'visual_only';
 const mediaShellClass = [
   'event-card__media-shell',
   documentMedia ? 'event-card__media-shell--document' : 'event-card__media-shell--cover',
   (desktopRelatedCrop || mobileFlowMedia) && 'event-card__media-shell--dynamic',
-  (desktopRelatedCrop || mobileFlowMedia) && 'is-image-loading',
+  'is-image-loading',
 ].filter(Boolean).join(' ');
 // Responsive cards without an exact recommendation-row ratio fail closed. No
 // surface CSS may later reinterpret the decision made here.
@@ -112,9 +112,7 @@ const mediaShellStyle = [
   documentMedia ? `--card-focal-y:${focalY};--card-focal-offset:${focalOffset}%` : null,
   (desktopRelatedCrop || mobileFlowMedia) ? `--dynamic-media-ratio:${desktopRelatedLayout?.rowRatio || relatedMediaDecision?.rowRatio || intrinsicMediaRatio}` : null,
 ].filter(Boolean).join(';');
-const imageLoadHandler = desktopRelatedCrop || mobileFlowMedia
-  ? `const shell=this.closest('.event-card__media-shell');${mobileFlowMedia && relatedMediaDecision?.useNaturalAspect ? "if(shell&&this.naturalWidth>0&&this.naturalHeight>0){shell.style.setProperty('--dynamic-media-ratio',this.naturalWidth+' / '+this.naturalHeight);shell.dataset.naturalAspectReconciled='true';}" : ''}shell?.classList.remove('is-image-loading');shell?.classList.add('is-image-loaded');shell?.removeAttribute('aria-busy');`
-  : undefined;
+const imageLoadHandler = `const shell=this.closest('.event-card__media-shell');${mobileFlowMedia && relatedMediaDecision?.useNaturalAspect ? "if(shell&&this.naturalWidth>0&&this.naturalHeight>0){shell.style.setProperty('--dynamic-media-ratio',this.naturalWidth+' / '+this.naturalHeight);shell.dataset.naturalAspectReconciled='true';}" : ''}shell?.classList.remove('is-image-loading');shell?.classList.add('is-image-loaded');shell?.removeAttribute('aria-busy');`;
 const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.closest('.event-card__media-shell')?.removeAttribute('aria-busy'); this.hidden = true; this.removeAttribute('src');";
 const fixedLayoutMetric = (value: number | null | undefined, digits: number) => Number.isFinite(value) ? Number(value).toFixed(digits) : undefined;
 ---
@@ -143,7 +141,7 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
 >
   <a class="event-card__media-link" href={href} data-card-media-link data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
-      <span class={mediaShellClass} data-card-media-shell data-media-role={imageMediaRole} style={mediaShellStyle || undefined} aria-busy={desktopRelatedCrop || mobileFlowMedia ? 'true' : undefined}>
+      <span class={mediaShellClass} data-card-media-shell data-media-role={imageMediaRole} style={mediaShellStyle || undefined} aria-busy="true">
         <span class="event-card__image-fallback" data-card-image-fallback aria-hidden="true">
           <span data-card-fallback-date>{dateLabel}</span>
           <strong data-card-fallback-type>{event.event_type || 'событие'}</strong>
@@ -161,6 +159,7 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
           data-card-authoritative-fit={cardCrop.fit}
           data-protected-crop-fit={cardCrop.fit}
           data-protected-crop-reason={cardCrop.cropReason}
+          data-card-media-review={primaryImageAsset?.listing_crop_evidence}
           style={cardImageStyle}
           onload={imageLoadHandler}
           onerror={imageErrorHandler}

@@ -1,16 +1,27 @@
 {
   "asset": "/assets/ui/desktop-head-leather.webp",
-  "purpose": "Desktop announcements tag leather material",
+  "purpose": "Desktop announcements tag leather material with visible edging",
   "source": "docs/features/static-site-pages/references/head-desctop-skin.png",
   "source_sha256": "31e96796af745b6c080b9159f267f804c03e943f4ae22cb5e099e4b69d94d907",
-  "source_dimensions_px": [2752, 1536],
-  "crop_box_px": [180, 620, 1236, 1007],
-  "crop_policy": "Interior leather only; excludes the stitched panel border, device edge and page background.",
-  "output_dimensions_px": [960, 352],
+  "source_dimensions_px": [
+    2752,
+    1536
+  ],
+  "crop_box_px": [
+    76,
+    807,
+    1372,
+    1282
+  ],
+  "crop_policy": "Lower leather crop preserves both side stitches, the bottom seam, rounded foot and visible outer edging; the top continues beyond the attached tag.",
+  "alpha_mask": "Top square, bottom radius 56 output pixels; transparent lower corners reveal the terracotta CSS fallback.",
+  "output_dimensions_px": [
+    960,
+    352
+  ],
   "output_aspect_ratio": "30:11",
-  "output_sha256": "3b58da4485a5bd8b2805631dd4256ba06bb7ff09a05141e8679d8828cd16776d",
-  "format": "WebP",
-  "quality": 84,
-  "recipe": "Pillow: Image.open(source).convert('RGB').crop((180,620,1236,1007)).resize((960,352), Image.Resampling.LANCZOS).save(output,'WEBP',quality=84,method=6,exact=True)",
-  "fallback": "The CSS background-color remains #98401f/var(--ke-color-brand-tag) so the tag and white wordmark paint before or without this image."
+  "output_sha256": "27592dd8b47cccebf7c4f17ff138de0db8309324f82f5afb0913c3a5bb777509",
+  "format": "WebP RGBA",
+  "quality": 88,
+  "fallback": "The CSS background-color #98401f remains under the transparent WebP and paints immediately if the image is pending or fails."
 }

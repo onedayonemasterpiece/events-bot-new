@@ -92,7 +92,7 @@ test('dynamic recommendation media reserves geometry through load and failure', 
   assert.match(layout, /sourceCard\.cloneNode\(true\)/u);
   assert.match(layout, /'event-card__media-shell--dynamic'[\s\S]*imageUrl \? 'is-image-loading'/u);
   assert.match(layout, /--dynamic-media-ratio/u);
-  assert.match(card, /const imageLoadHandler = desktopRelatedCrop[\s\S]*is-image-loaded/u);
+  assert.match(card, /const imageLoadHandler = [\s\S]*is-image-loaded/u);
   assert.match(card, /const imageErrorHandler = [\s\S]*is-image-missing/u);
   assert.match(card, /onload=\{imageLoadHandler\}/u);
   assert.match(card, /onerror=\{imageErrorHandler\}/u);
@@ -111,8 +111,8 @@ test('desktop static continuation emits stable initial skeleton geometry', async
   assert.match(optimizedGrid, /desktopRelatedLayout=\{layout\}/u);
   assert.match(card, /--lab-row-media-ratio:/u);
   assert.match(card, /\(desktopRelatedCrop \|\| mobileFlowMedia\) && 'event-card__media-shell--dynamic'/u);
-  assert.match(card, /\(desktopRelatedCrop \|\| mobileFlowMedia\) && 'is-image-loading'/u);
-  assert.match(card, /aria-busy=\{desktopRelatedCrop \|\| mobileFlowMedia \? 'true' : undefined\}/u);
+  assert.match(card, /'is-image-loading'/u);
+  assert.match(card, /aria-busy="true"/u);
   assert.match(card, /onload=\{imageLoadHandler\}/u);
   assert.match(card, /onerror=\{imageErrorHandler\}/u);
   assert.match(built, /data-lab-related-card="true"/u);

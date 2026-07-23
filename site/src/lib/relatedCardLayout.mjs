@@ -58,27 +58,28 @@ function normalizedObjectPosition(value) {
 
 function applyReviewedMediaOverride(asset) {
   if (!asset?.src) return asset;
-  // The manifest is keyed by the canonical source bytes/URL, never by event
-  // id. Reusing it here makes compact cards consume the same human-reviewed
-  // producer evidence as listing cards without weakening fail-closed handling
-  // for any other unknown/error asset.
-  const reviewed = REVIEWED_MEDIA_OVERRIDES.find((entry) => entry?.sourceSrc === asset.src);
-  if (!reviewed?.cropEvidence) return asset;
+  const reviewed = REVIEWED_MEDIA_OVERRIDES.find((entry) => (
+    entry?.sourceSrc === asset.src
+    && entry?.imageTextMode === 'visual_only'
+    && entry?.cropEvidence
+  ));
+  if (!reviewed) return asset;
   return {
     ...asset,
+    original_src:asset.src,
     src:reviewed.replacementSrc || asset.src,
     width:Number(reviewed.width || asset.width || 0),
     height:Number(reviewed.height || asset.height || 0),
-    image_text_mode:reviewed.imageTextMode || asset.image_text_mode,
+    image_text_mode:'visual_only',
     media_semantic_status:'classified',
     media_role:'event_photo',
     media_role_confidence:1,
-    image_kind:'photo',
+    image_kind:reviewed.imageKind || 'illustration',
     safe_crop:true,
-    focal_point:{ x:.5, y:.5 },
+    focal_point:reviewed.focalPoint || asset.focal_point || { x:.5, y:.5 },
     recommended_object_position:reviewed.objectPosition || asset.recommended_object_position || '50% 50%',
     thumbnail_sources:reviewed.thumbnailSources || asset.thumbnail_sources,
-    listing_crop_evidence:'source-reviewed',
+    listing_crop_evidence:reviewed.cropEvidence,
   };
 }
 
