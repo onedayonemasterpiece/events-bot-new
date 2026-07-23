@@ -1,0 +1,147 @@
+mode: full_fanout_then_serial_integration
+repo: /home/dev/projects/events-bot-new
+base_ref: bf35dddbd3a9abfd6e88f302b7d39e4b75dfa572
+base_branch: integration/static-unified-prototype-corrections-20260723
+integration_branch: integration/static-unified-prototype-corrections-20260723
+global_constraints:
+  - Build only a new immutable noindex review prefix; do not mutate the production root.
+  - Preserve the canonical crop contract in docs/features/static-site-pages/image-framing.md exactly.
+  - Production duration enrichment must use a provider API key and a reproducible command; agy is acceptance-only.
+  - Do not expose model ids, confidence, provenance, or experimental/service copy in public event UI.
+  - Preserve occurrence-family behavior and INC-2026-07-18-dramteatr-same-day-event-glue.
+  - Every behavior change must update canonical docs and CHANGELOG during integration.
+verification_owner: /root
+stop_conditions:
+  - Any worker worktree is dirty before implementation.
+  - A lane requires editing another active lane's writable scope.
+  - Search can only be made cosmetically editable without a real result path.
+  - Provider API/key conventions cannot be located or verified.
+lanes:
+  - id: L01
+    role: worker
+    effort: high
+    requirement_ids: [R01]
+    target: Make the noindex Search surface genuinely usable with the existing real search backend while preserving the initial-hidden skeleton.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-unified-r2/search
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-r2-search
+    writable_files:
+      - site/src/components/AuthorizedEventSearch.astro
+      - site/src/pages/poisk/**
+      - site/scripts/build-preview.mjs
+      - site/scripts/deploy-preview-yc.mjs
+      - site/tests/search-*.*
+      - .codex/lanes/L01-R2/RESULTS.md
+    forbidden_files:
+      - site/src/lib/relatedCardLayout.mjs
+      - site/src/components/DesktopEventPage.astro
+      - site/src/components/KeyboardEventNavigationPrototype.astro
+      - site/src/components/EventTransportSchedule.astro
+      - site/src/layouts/EventLayout.astro
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Committed implementation, real-query browser or contract evidence, focused tests and RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L02
+    role: worker
+    effort: high
+    requirement_ids: [R02, R04]
+    target: Correct compact related-card row geometry and restore predictable event-detail keyboard navigation.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-unified-r2/cards-nav
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-r2-cards-nav
+    writable_files:
+      - site/src/lib/relatedCardLayout.mjs
+      - site/src/components/OptimizedEventCardGrid.astro
+      - site/src/components/EventCard.astro
+      - site/src/components/KeyboardEventNavigationPrototype.astro
+      - site/src/components/DesktopEventPage.astro
+      - site/tests/visual-keyboard-regressions.test.mjs
+      - site/tests/event-detail-runtime-regressions.test.mjs
+      - .codex/lanes/L02-R2/RESULTS.md
+    forbidden_files:
+      - site/src/components/AuthorizedEventSearch.astro
+      - site/src/components/EventTransportSchedule.astro
+      - site/src/layouts/EventLayout.astro
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Committed row-geometry/navigation implementation with event 6686 and 6529 regressions and RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L03
+    role: worker
+    effort: high
+    requirement_ids: [R03]
+    target: Add reproducible provider-key duration enrichment and remove service/model language from public transport UI.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-unified-r2/duration-api
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-r2-duration-api
+    writable_files:
+      - site/scripts/**
+      - site/src/data/event-duration-estimates.json
+      - site/src/lib/eventTransport.ts
+      - site/src/components/EventTransportSchedule.astro
+      - site/tests/event-transport-estimates.test.mjs
+      - tests/test_static_site_preview_duration.py
+      - .codex/lanes/L03-R2/RESULTS.md
+    forbidden_files:
+      - site/src/components/AuthorizedEventSearch.astro
+      - site/src/lib/relatedCardLayout.mjs
+      - site/src/components/DesktopEventPage.astro
+      - site/src/layouts/EventLayout.astro
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Committed API-key pipeline, regenerated or verified specimen, public-copy tests and RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L04
+    role: worker
+    effort: high
+    requirement_ids: [R05, R06]
+    target: Implement desktop event breadcrumb/sheet composition and progressive leather desktop brand tag.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-unified-r2/desktop-chrome
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-r2-desktop-chrome
+    writable_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/components/Breadcrumbs.astro
+      - site/src/components/DesktopEventPage.astro
+      - site/public/assets/ui/**
+      - site/tests/breadcrumbs-contract.test.mjs
+      - site/tests/desktop-brand-tag*.*
+      - .codex/lanes/L04-R2/RESULTS.md
+    forbidden_files:
+      - site/src/components/AuthorizedEventSearch.astro
+      - site/src/lib/relatedCardLayout.mjs
+      - site/src/components/KeyboardEventNavigationPrototype.astro
+      - site/src/components/EventTransportSchedule.astro
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Committed visual chrome implementation, deterministic asset recipe/evidence, focused tests and RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L05
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R07]
+    target: Reconcile all lanes, update canonical docs/CHANGELOG, build/deploy and perform live plus Gemini Pro acceptance.
+    depends_on: [L01, L02, L03, L04]
+    execution_mode: serial_after_dependency
+    branch: integration/static-unified-prototype-corrections-20260723
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-prototype-20260722
+    writable_files:
+      - .codex/integration/**
+      - .codex/lanes/static-unified-corrections-r2-20260723/**
+      - docs/**
+      - CHANGELOG.md
+      - site/scripts/check-preview.mjs
+      - site/scripts/check-unified-prototype.mjs
+    forbidden_files: []
+    expected_output: Clean integrated branch, immutable public preview, complete test evidence and closure audit.
+    verification_scope: full_local
+    status: planned
