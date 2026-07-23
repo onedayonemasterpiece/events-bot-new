@@ -1,0 +1,138 @@
+mode: read_only_parallel_then_serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 5b237ae6d43e54cfe013cb804b705420f38bd6ff
+base_branch: integration/desktop-polish-cleanup-r5-20260723
+integration_branch: integration/mobile-acceptance-r6-20260723
+global_constraints:
+  - preserve accepted R5 desktop behavior except the named leather alpha-edge correction
+  - publish only a new immutable noindex prefix; do not overwrite production or R5
+  - keep event-medallion matching fail-closed and source-grounded
+  - do not use OpenAI image generation; deterministic alpha processing only
+  - use agy Gemini Pro class for critical design review and acceptance
+  - use only the approved local Telegram E2E human session; never S22
+verification_owner: INT-R6
+stop_conditions:
+  - baseline becomes dirty from unrelated work
+  - the tag correction clips the leather volume or stitched edge
+  - mobile changes introduce horizontal overflow or hide the only primary event action
+  - PWA install CTA appears without Android plus beforeinstallprompt eligibility
+requirements:
+  - id: R01
+    requirement: remove visible black subpixel side strips from the leather tag using a soft alpha edge while preserving volume, stitching, and immediate fallback
+    area: brand asset/header
+    dependencies: []
+    conflict_risk: medium
+    done_when: desktop close-up at 1x and 2x has no black side hairline and retains the dimensional perimeter
+  - id: R02
+    requirement: make mobile interest-club cards visually equivalent to the accepted desktop card composition
+    area: interest clubs
+    dependencies: []
+    conflict_risk: medium
+    done_when: mobile uses the same media-overlay hierarchy, dark treatment, metadata and CTA grammar without overflow
+  - id: R03
+    requirement: hide event breadcrumbs/back breadcrumb chrome on mobile while preserving desktop breadcrumbs
+    area: event detail chrome
+    dependencies: []
+    conflict_risk: low
+    done_when: 390px event pages render no breadcrumb row and desktop remains unchanged
+  - id: R04
+    requirement: remove the duplicate bottom ticket CTA when the primary ticket action already exists
+    area: event detail footer
+    dependencies: []
+    conflict_risk: medium
+    interpretation: remove only the duplicated footer buy action; never remove the sole valid ticket action
+    done_when: one primary ticket action remains and the footer does not repeat it
+  - id: R05
+    requirement: show the Share text label whenever the adaptive share action is the remaining wide primary action
+    area: adaptive event actions
+    dependencies: [R04]
+    conflict_risk: medium
+    done_when: wide solo Share has icon plus text; compact multi-action layouts may remain icon-only with aria-label
+  - id: R06
+    requirement: restore the implemented free-admission medallion on eligible mobile event pages and verify Letnyaya Rapsodiya
+    area: event medallions
+    dependencies: []
+    conflict_risk: high
+    done_when: eligible real event resolves and renders the accepted free medallion on mobile without weakening matching
+  - id: R07
+    requirement: keep the mobile menu genuinely translucent on light and dark hero backgrounds while preserving logo readability with adaptive highlights
+    area: mobile menu/header
+    dependencies: [R01]
+    conflict_risk: high
+    done_when: light/dark specimens retain glass transparency and readable logo/menu contrast
+  - id: R08
+    requirement: show a footer install-app CTA only on Android and only while a real one-shot beforeinstallprompt is available
+    area: PWA/runtime
+    dependencies: []
+    conflict_risk: high
+    done_when: CTA is absent on iOS/desktop/non-installable/installed states, prompts once, and resets on appinstalled
+  - id: R09
+    requirement: publish R6 and send every mutually linked review page type to the requested Telegram topic
+    area: release handoff
+    dependencies: [R01, R02, R03, R04, R05, R06, R07, R08]
+    conflict_risk: medium
+    done_when: immutable noindex preview passes gates and a verified Telegram message contains the complete route catalog
+lanes:
+  - id: MAP-CLUB-TAG
+    role: planner
+    effort: medium
+    requirement_ids: [R01, R02]
+    target: map exact asset/CSS/component paths and acceptance risks for tag and mobile clubs
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: code map with suggested minimal change points and tests
+    verification_scope: inspection_only
+    status: complete
+  - id: MAP-EVENT
+    role: planner
+    effort: high
+    requirement_ids: [R03, R04, R05, R06]
+    target: map mobile event chrome/actions/free-medallion resolution and real event specimens
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: code/data map, ambiguity resolution, regression targets
+    verification_scope: inspection_only
+    status: complete
+  - id: MAP-MENU-PWA
+    role: planner
+    effort: high
+    requirement_ids: [R07, R08]
+    target: map mobile menu backdrop contracts and current manifest/service-worker/installability support
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: minimal glass/PWA architecture with test points
+    verification_scope: inspection_only
+    status: complete
+  - id: INT-R6
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R09]
+    target: gather Telegram screenshots, run Gemini review, implement all R01-R08, validate, publish, and hand off R09
+    depends_on: [MAP-CLUB-TAG, MAP-EVENT, MAP-MENU-PWA]
+    execution_mode: serial_after_dependency
+    branch: integration/mobile-acceptance-r6-20260723
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files:
+      - .codex/lanes/mobile-acceptance-r6/**
+      - site/**
+      - docs/features/static-site-pages/**
+      - docs/features/interest-clubs/**
+      - docs/routes.yml
+      - docs/README.md
+      - CHANGELOG.md
+    forbidden_files: []
+    expected_output: clean pushed branch, immutable R6 preview, full Telegram route catalog
+    verification_scope: full_local
+    status: in_progress
