@@ -1,12 +1,16 @@
 ---
 import EventLayout from '../../../layouts/EventLayout.astro';
 import medallionData from '../../../data/organizerMedallions.json';
+import festivalMedallions from '../../../data/festivalMedallions.json';
 import { absoluteUrl, SITE_NAME, withBase } from '../../../lib/events';
 
 const canonicalUrl = absoluteUrl('/lab/medallions/');
 const title = `Лаборатория медальонов | ${SITE_NAME}`;
 const description = 'Визуальная проверка медальонов организаторов и быстрых признаков событий для статических страниц KenigEvents.';
 const organizers = (medallionData as { items: Array<{ slug: string; name: string; shortName?: string; avatarUrl: string; fallbackPngUrl?: string; ariaLabel?: string; renderNote?: string; background?: string; ring?: string; sourcePage?: string }> }).items;
+const festivalItems = (festivalMedallions as { items: Array<{ slug: string; name: string; shortName?: string; avatarUrl: string; fallbackPngUrl?: string; ariaLabel?: string; renderNote?: string; sourcePage?: string; category?: string }> }).items;
+const festivals = festivalItems.filter((item) => item.category !== 'venue_brand');
+const venueBrands = festivalItems.filter((item) => item.category === 'venue_brand');
 const webpSource = (url: string) => url.endsWith('.webp');
 const primaryImageSrc = (avatarUrl: string, fallbackPngUrl?: string) => avatarUrl.endsWith('.webp') ? (fallbackPngUrl || avatarUrl) : avatarUrl;
 const sourceTokens = [
@@ -38,6 +42,12 @@ const pushkin = {
   ariaLabel: 'Можно оплатить Пушкинской картой',
   renderNote: 'Единый композитный PNG из исходников: бюст внутри круглого медальона, исходная надпись «Пушкинская карта» наложена поверх круга и выступает вправо.',
 };
+const freeListing = {
+  slug: 'free-listing-medallion',
+  name: 'Бесплатно',
+  avatarUrl: '/assets/badges/free-listing-medallion.svg',
+  ariaLabel: 'Бесплатное событие: 0 рублей',
+};
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
   <main id="main">
@@ -51,7 +61,7 @@ const pushkin = {
         <div class="section-card__inner">
           <p class="eyebrow">Визуальный QA</p>
           <h1>Медальоны событий</h1>
-          <p class="lead">Страница для проверки размеров, цветовой гаммы и читаемости медальонов. «Дом китобоя» собран как простой стековый знак из исходных слов логотипа: «дом» над «Китобоя», а синий фон и светлое кольцо взяты из публичной социальной палитры.</p>
+          <p class="lead">Актуализированный каталог для проверки размеров, цветовой гаммы и читаемости. Восстановлены все найденные реализации: {organizers.length} медальонов организаторов и площадок, {festivals.length} фестивальных знаков и {venueBrands.length} фестивальный бренд площадки.</p>
         </div>
       </section>
 
@@ -59,7 +69,7 @@ const pushkin = {
         <div class="section-card__inner">
           <h2>Транспорт: электропоезд «Ласточка»</h2>
           <p class="muted-note">Иконка маршрута без обещания актуального расписания: крупный головной вагон остаётся узнаваемым и читаемым даже в компактном круглом токене.</p>
-          <ul class="event-token-row" role="list">
+          <ul class="event-token-row medallion-catalog-grid" role="list">
             {transportTokens.map((item) => (
               <li class={`event-token event-token--transport event-token--${item.slug}`} aria-label={item.ariaLabel} title={item.name}>
                 <span class="event-token__circle" aria-hidden="true">
@@ -68,6 +78,7 @@ const pushkin = {
                     <img src={withBase(item.fallbackPngUrl)} alt="" loading="eager" decoding="async" />
                   </picture>
                 </span>
+                <span class="medallion-catalog-label">{item.name}</span>
               </li>
             ))}
           </ul>
@@ -76,8 +87,8 @@ const pushkin = {
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
-          <h2>Организаторы</h2>
-          <ul class="event-token-row" role="list">
+          <h2>Организаторы и площадки — {organizers.length}</h2>
+          <ul class="event-token-row medallion-catalog-grid" role="list">
             {organizers.map((item) => (
               <li class={`event-token event-token--organizer event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
                 <span class="event-token__circle" aria-hidden="true">
@@ -86,6 +97,7 @@ const pushkin = {
                     <img src={withBase(primaryImageSrc(item.avatarUrl, item.fallbackPngUrl))} alt="" loading="lazy" decoding="async" />
                   </picture>
                 </span>
+                <span class="medallion-catalog-label">{item.shortName || item.name}</span>
               </li>
             ))}
           </ul>
@@ -99,8 +111,55 @@ const pushkin = {
 
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
+          <h2>Фестивали — {festivals.length}</h2>
+          <p class="muted-note">Чистые официальные логотипы и проверенные публичные аватары; афишные обложки без отдельного ручного cutout/QA сюда не включены.</p>
+          <ul class="event-token-row medallion-catalog-grid" role="list">
+            {festivals.map((item) => (
+              <li class={`event-token event-token--festival event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
+                <span class="event-token__circle" aria-hidden="true">
+                  <picture>
+                    {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}
+                    <img src={withBase(primaryImageSrc(item.avatarUrl, item.fallbackPngUrl))} alt="" loading="lazy" decoding="async" />
+                  </picture>
+                </span>
+                <span class="medallion-catalog-label">{item.shortName || item.name}</span>
+              </li>
+            ))}
+          </ul>
+          <div class="source-links">
+            {festivals.map((item) => (
+              <a href={item.sourcePage} target="_blank" rel="noopener noreferrer">{item.shortName || item.name}</a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {venueBrands.length > 0 && (
+        <section class="section-card" style="margin-top: 1rem;">
+          <div class="section-card__inner">
+            <h2>Фестивальные площадки и бренды — {venueBrands.length}</h2>
+            <p class="muted-note">Узнаваемые площадки и бренды фестивальных событий, но не самостоятельные фестивали.</p>
+            <ul class="event-token-row medallion-catalog-grid" role="list">
+              {venueBrands.map((item) => (
+                <li class={`event-token event-token--festival event-token--${item.slug}`} aria-label={item.ariaLabel || item.name} title={item.name}>
+                  <span class="event-token__circle" aria-hidden="true">
+                    <picture>
+                      {webpSource(item.avatarUrl) && <source srcset={withBase(item.avatarUrl)} type="image/webp" />}
+                      <img src={withBase(primaryImageSrc(item.avatarUrl, item.fallbackPngUrl))} alt="" loading="lazy" decoding="async" />
+                    </picture>
+                  </span>
+                  <span class="medallion-catalog-label">{item.shortName || item.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
           <h2>Программы и признаки</h2>
-          <ul class="event-token-row" role="list">
+          <ul class="event-token-row medallion-catalog-grid" role="list">
             <li class="event-token event-token--pushkin" aria-label={pushkin.ariaLabel} title={pushkin.name}>
               <span class="event-token__pushkin-frame" aria-hidden="true">
                 <picture>
@@ -108,6 +167,13 @@ const pushkin = {
                   <img class="event-token__pushkin-composite" src={withBase(pushkin.fallbackPngUrl)} alt="" loading="lazy" decoding="async" />
                 </picture>
               </span>
+              <span class="medallion-catalog-label">{pushkin.name}</span>
+            </li>
+            <li class={`event-token event-token--badge event-token--${freeListing.slug}`} aria-label={freeListing.ariaLabel} title={freeListing.name}>
+              <span class="event-token__circle" aria-hidden="true">
+                <img src={withBase(freeListing.avatarUrl)} alt="" loading="lazy" decoding="async" />
+              </span>
+              <span class="medallion-catalog-label">{freeListing.name}</span>
             </li>
           </ul>
         </div>
@@ -116,7 +182,7 @@ const pushkin = {
       <section class="section-card" style="margin-top: 1rem;">
         <div class="section-card__inner">
           <h2>Источник</h2>
-          <ul class="event-token-row" role="list">
+          <ul class="event-token-row medallion-catalog-grid" role="list">
             {sourceTokens.map((item) => (
               <li class={`event-token event-token--source event-token--${item.slug}`} aria-label={item.ariaLabel} title={item.name} style="--token-brand-bg: #fff; --token-brand-ring: #282828;">
                 <span class="event-token__circle" aria-hidden="true">
@@ -125,6 +191,7 @@ const pushkin = {
                     <img src={withBase(item.fallbackPngUrl)} alt="" loading="lazy" decoding="async" />
                   </picture>
                 </span>
+                <span class="medallion-catalog-label">{item.name}</span>
               </li>
             ))}
           </ul>
@@ -133,3 +200,28 @@ const pushkin = {
     </div>
   </main>
 </EventLayout>
+
+<style>
+  .medallion-catalog-grid {
+    align-items: flex-start;
+  }
+
+  .medallion-catalog-grid .event-token {
+    align-self: stretch;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.6rem;
+    height: auto;
+  }
+
+  .medallion-catalog-label {
+    display: block;
+    width: 100%;
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 820;
+    line-height: 1.18;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+</style>

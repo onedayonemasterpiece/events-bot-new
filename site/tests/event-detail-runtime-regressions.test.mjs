@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -267,4 +267,31 @@ test('Dramatic Theatre medallion is present in the accepted manifest', async () 
   const built = await readBuiltEvent(5756);
   assert.match(built, /\/assets\/organizers\/dramteatr39\.svg/u);
   assert.match(built, /Калининградский драматический театр/u);
+});
+
+test('complete recovered medallion inventory stays in the manifests and lab', async () => {
+  const organizerManifest = JSON.parse(await read('src/data/organizerMedallions.json'));
+  const festivalManifest = JSON.parse(await read('src/data/festivalMedallions.json'));
+  const organizerSlugs = new Set(organizerManifest.items.map((item) => item.slug));
+  const festivalSlugs = new Set(festivalManifest.items.map((item) => item.slug));
+
+  assert.equal(organizerManifest.items.length, 27);
+  assert.equal(festivalManifest.items.length, 11);
+  for (const slug of ['mumod', 'greza-khutor', 'yantar-hall', 'ruin-keepers']) {
+    assert.ok(organizerSlugs.has(slug), `${slug} must remain in the organizer inventory`);
+  }
+  for (const slug of ['kaliningrad-city-jazz', 'more-vnutri', 'tolkin-fest', 'kaup']) {
+    assert.ok(festivalSlugs.has(slug), `${slug} must remain in the festival inventory`);
+  }
+  for (const item of [...organizerManifest.items, ...festivalManifest.items]) {
+    await access(path.join(siteRoot, 'public', item.avatarUrl));
+    if (item.fallbackPngUrl) await access(path.join(siteRoot, 'public', item.fallbackPngUrl));
+  }
+
+  const built = await readBuilt('lab/medallions/index.html');
+  assert.match(built, /Организаторы и площадки — 27/u);
+  assert.match(built, /Музей курортной моды/u);
+  assert.match(built, /\/assets\/organizers\/mumod\.svg/u);
+  assert.match(built, /Фестивали — 10/u);
+  assert.match(built, /\/assets\/badges\/free-listing-medallion\.svg/u);
 });

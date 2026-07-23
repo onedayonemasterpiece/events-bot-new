@@ -11,6 +11,12 @@
 
 ### Fixed
 
+- Restored the complete implemented medallion inventory after integration loss:
+  27 organizer/venue/festival-brand entries (including the Museum of Resort
+  Fashion and Greza Khutor), 10 festival identities plus the Kaup venue brand,
+  and the deterministic free-admission sign. The medallions lab now renders the
+  recovered manifests and provenance-backed runtime assets instead of the
+  reduced 13-organizer/KGD80-only slice.
 - Unified linked-event occurrence projection across static detail, date lists,
   Popular, search, recommendations and personal continuation: only reciprocal
   explicit `other_date_ids` create a family; date lists remain per-date while

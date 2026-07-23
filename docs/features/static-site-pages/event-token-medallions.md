@@ -131,7 +131,7 @@ Asset inventory:
 - runtime optimized assets: `site/public/assets/organizers/`; primary organizer assets are SVG except explicit raster exceptions;
 - source originals + provenance README: `site/src/assets/organizers/source/`;
 - browser-facing organizer/venue manifest: `site/src/data/organizerMedallions.json`;
-- the current minimal KGD80 festival manifest and runtime tree: `site/src/data/festivalMedallions.json` and `site/public/assets/festivals/`;
+- the complete 11-item festival/venue-brand manifest and runtime tree: `site/src/data/festivalMedallions.json` and `site/public/assets/festivals/`;
 - asset/provenance inventory is canonical in `site/src/assets/organizers/source/README.md` and `site/src/assets/festivals/source/README.md` rather than duplicated here.
 
 2026-07-02 SVG pass:
@@ -176,6 +176,31 @@ base; alias matching itself was not broken. Full-catalog preview acceptance must
 therefore render event `5756` and assert both the local
 `/assets/organizers/dramteatr39.svg` URL and the theatre label. A visual asset
 present only in branch history is not considered integrated.
+
+The 2026-07-23 full-history audit extends that regression contract to the whole
+catalog. It recovered:
+
+- 13 organizer/venue implementations lost from the integration base:
+  `yantar-hall`, `muzteatr39`, `dom-iskusstv`, `city-jazz-club`,
+  `rostec-arena`, `bar-bastion`, `signal`, `mumod`, `kldzoo`,
+  `locostandup`, `kaliningrad-art-museum`, `brachert` and `ruin-keepers`;
+- the accepted poll-selected `greza-khutor` implementation found in the
+  original working tree;
+- 10 festival identities missing from the reduced KGD80-only manifest:
+  `kaliningrad-city-jazz`, `kaliningrad-street-food`, `grozd-festival`,
+  `koroche`, `ostrova`, `more-vnutri`, `simfoniya-vetra`,
+  `bahosluzhenie`, `tolkin-fest` and the existing `kaup` venue-brand entry;
+- the deterministic `free-listing-medallion` sign from implementation commit
+  `4d2c6169`.
+
+The resulting QA inventory is 27 organizer/venue/festival-brand entries in
+`organizerMedallions.json`, 10 festival identities plus one venue brand in
+`festivalMedallions.json`, and the standalone transport/source/program signs
+shown in `/lab/medallions/`. The accepted organizer/festival source snapshot is
+traceable to `fa367ea372e3` on
+`origin/integration/static-site-medallions-release-20260712`. A full-catalog
+acceptance must compare manifest slugs, referenced runtime files and the lab
+DOM—not only check whichever items happen to be visible in one screenshot.
 
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 
