@@ -56,6 +56,14 @@ media reviews to compact related rows, moves desktop Editorial breadcrumbs
 onto the lower hero edge and progressively paints the unchanged desktop tag
 with the reviewed leather crop over its solid terracotta fallback.
 
+The published R2 review object is
+<https://kenigevents.ru/preview-20260723-unified-corrections-r2/__preview/>.
+Generated and live browser gates passed; valid `agy`
+`gemini-3.1-pro-low` resolved to `Gemini 3.1 Pro (Low)` and returned
+**CONDITIONAL** only on the remaining real-user Yandex OAuth round-trip. This
+is a manual identity-provider gate, not permission to replace the real result
+path with a demo or to promote the production root.
+
 ## 2026-07-18 v12 fidelity and production-rail contract
 
 V12 applies the accepted component system to automatic generation rather than

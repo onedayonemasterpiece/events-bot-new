@@ -145,4 +145,4 @@ lanes:
     forbidden_files: []
     expected_output: Clean integrated branch, immutable public preview, complete test evidence and closure audit.
     verification_scope: full_local
-    status: in_progress
+    status: completed
