@@ -170,8 +170,23 @@ if (!event6686Html.includes('data-product-breadcrumbs') || !event6686Html.includ
 if (!event6686Html.includes('data-selected-media-semantic-status="error"') || !/data-clean-hero-image[^>]*data-protected-crop-fit="contain"/u.test(event6686Html)) {
   throw new Error('Text-heavy semantic-error media 6686 is not protected by fail-closed contain');
 }
-if (!event6529Html.includes('Экспериментальный прогноз длительности') || !event6529Html.includes('18:56') || !event6529Html.includes('19:43') || event6529Html.includes('06:42')) {
-  throw new Error('6529 must show the labelled same-day estimated return shortlist without a next-morning train');
+const forbiddenDurationServiceCopy = [
+  'Экспериментальный прогноз длительности',
+  'Gemini',
+  'Gemma',
+  'gemini-3.1-flash-lite',
+  'confidence',
+  'прогноз ИИ',
+];
+if (!event6529Html.includes('data-event-end-basis="llm_estimated"')
+  || !event6529Html.includes('18:56')
+  || !event6529Html.includes('19:43')
+  || event6529Html.includes('06:42')
+  || forbiddenDurationServiceCopy.some((copy) => event6529Html.includes(copy))) {
+  throw new Error('6529 must show the clean same-day estimated return shortlist without model/service copy or a next-morning train');
+}
+if (!event6529Html.includes('data-keyboard-event-navigation-mounted')) {
+  throw new Error('6529 named preview page must mount the reviewed keyboard navigation');
 }
 
 let checkedRelatedCards = 0;

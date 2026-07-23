@@ -19,16 +19,30 @@ This is a release feature of the event page, not a standalone campaign. It is in
 
 The public/root contract continues to prefer explicit source-grounded end time
 or duration. A noindex review build may carry a separately versioned
-`llm_estimated` duration only when the estimate, plausible range, confidence
-and conservative routing value are recorded in
-`site/src/data/event-duration-estimates.json`. The UI must call it an estimate.
+`llm_estimated` duration only when the estimate, plausible range, confidence,
+input hash and conservative routing value are recorded in
+`site/src/data/event-duration-estimates.json`.
 
-For event `6529`, Gemini 3.1 Pro estimated a likely 120 minutes and a
+This is a reproducible build-time provider call, not an `agy` consultation.
+`site/scripts/enrich-event-duration-estimates.py` uses the repository
+`google_ai.client.GoogleAIClient`, the configured `GOOGLE_API_KEY*` pool and
+the shared Supabase rate limiter. Its bounded structured response is validated,
+cached by prompt/input identity and fails closed when no acceptable result is
+available. The StaticSiteBuilder invokes the enrichment stage after exporting
+the event snapshot and before building preview/secret/production artifacts, so
+future operation does not depend on an interactive agent. The current
+cost-conscious model lane is `gemini-3.1-flash-lite`; external product
+acceptance remains a separate Gemini Pro/Opus task.
+
+For event `6529`, the key-driven stage records a likely 120 minutes and a
 conservative routing duration of 150 minutes. With the existing access buffer,
-the candidate therefore offers usable same-day returns at `18:56` and `19:43`.
-It never suggests the following morning. If neither source duration nor an
-approved preview estimate exists, the component fails closed to the last
-same-day boundary instead of asking a visitor to wait overnight.
+the candidate therefore offers usable same-day returns at `18:56` and `19:43`;
+it never suggests the following morning. The visitor sees only the practical
+schedule and a neutral uncertainty caveat. Model ids, provider names,
+confidence, prompt/provenance and words such as `экспериментальный` are
+internal build evidence and must not appear in public copy. If neither source
+duration nor a valid cached/provider estimate exists, the component fails
+closed rather than inventing a return shortlist.
 
 ## 2026-07-15 integration evidence
 

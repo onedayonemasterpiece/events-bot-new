@@ -43,7 +43,7 @@ lanes:
       - CHANGELOG.md
     expected_output: Committed implementation, real-query browser or contract evidence, focused tests and RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L02
     role: worker
     effort: high
@@ -71,7 +71,7 @@ lanes:
       - CHANGELOG.md
     expected_output: Committed row-geometry/navigation implementation with event 6686 and 6529 regressions and RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L03
     role: worker
     effort: high
@@ -98,7 +98,7 @@ lanes:
       - CHANGELOG.md
     expected_output: Committed API-key pipeline, regenerated or verified specimen, public-copy tests and RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L04
     role: worker
     effort: high
@@ -125,7 +125,7 @@ lanes:
       - CHANGELOG.md
     expected_output: Committed visual chrome implementation, deterministic asset recipe/evidence, focused tests and RESULTS.md.
     verification_scope: targeted
-    status: planned
+    status: merged
   - id: L05
     role: merge_reviewer
     effort: high
@@ -145,4 +145,4 @@ lanes:
     forbidden_files: []
     expected_output: Clean integrated branch, immutable public preview, complete test evidence and closure audit.
     verification_scope: full_local
-    status: planned
+    status: in_progress

@@ -1,6 +1,6 @@
 # Desktop keyboard event navigation V7
 
-> **Status:** reviewed V7 is integrated into the primary event template for immutable noindex secret candidates; production-root rollout remains disabled
+> **Status:** reviewed V7 is integrated into the primary event template for named immutable noindex previews; production-root rollout remains disabled
 > **Scope:** every secret-candidate event detail at `min-width: 1024px`, plus two frozen regression fixtures
 > **Fixtures:** `6408` Split / multi-image and `6593` Editorial / one-image
 
@@ -250,11 +250,20 @@ these are true:
 - the desktop media query matches;
 - `PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED` is not `0`.
 
-The current preproduction default is enabled for the complete secret candidate;
-setting the flag to `0` is the immediate rollback. Root-form production builds,
+The current preproduction default is enabled for every named immutable
+`/preview-*` candidate; setting the flag to `0` is the immediate rollback.
+This prevents a newly assembled review prefix from silently losing the
+accepted interaction merely because a one-off force flag was omitted.
+Root-form production builds,
 listings and mobile install no keyboard router. There is no remote shortcut
 collector: the allowlisted daily facts remain local and contain no event, URL,
 title, key history or precise timestamp.
+
+The `6529` generated-page regression is spatial rather than DOM-order based:
+after the optimizer repacks cards, `ArrowDown` enters the first visible related
+card and `ArrowRight` moves to its visible right-hand neighbour. Calendar `K`
+keycaps remain hidden in ambient cards and appear only for the focused
+card/action owner.
 
 The module exposes an explicit `init()`/`destroy()` controller, owns global
 listeners with `AbortController`, disconnects mutation observers and cancels

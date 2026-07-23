@@ -18,7 +18,7 @@ The endorsement remains HTML text for accessibility, localization and crisp smal
 | Property | Contract |
 |---|---:|
 | Tag | `240×88px` |
-| Fill / shadow | `#98401f` / none |
+| Fill / shadow | leather WebP over `#98401f` fallback / none |
 | Radius | `0 0 12px 12px` |
 | Padding | `18px 24px 16px` |
 | Internal rows | `12px auto`, gap `4px` |
@@ -27,6 +27,16 @@ The endorsement remains HTML text for accessibility, localization and crisp smal
 | Header bar / overlap | `56px` / `31px` |
 
 The lockup remains the same size from `1024px` through `1920px`; elastic whitespace, not logo scaling, absorbs viewport changes. It anchors to the shared left container edge while the five-link navigation anchors right.
+
+The desktop material layer is
+`site/public/assets/ui/desktop-head-leather.webp`, a deterministic `30:11`
+crop from the supplied `head-desctop-skin.png`. It changes only the material:
+the `240×88` geometry, radius, padding, live endorsement and SVG wordmark stay
+unchanged. The real CSS background remains solid `#98401f`; the WebP is an
+enhancement painted above it. Therefore the tag is immediately legible before
+the image decodes and remains identical in hierarchy if the asset fails. Crop
+coordinates, hashes and the Pillow recipe live beside the asset in
+`desktop-head-leather.metadata.json`.
 
 ## Mobile lockup
 
@@ -59,6 +69,8 @@ The prior slow side-to-side title sway is removed. A permanent identity should r
 - Keep `4–5px` vertical separation between endorsement architecture and service wordmark.
 - Do not add a separate PK monogram inside the full-name tag.
 - Do not use gradient, bevel, inner cream tile, stroke or outline around the wordmark.
+- Do not crop stitching, phone chrome or unrelated page background into the
+  desktop leather material.
 - Do not center the two tiers or scale `Анонсы` independently per viewport.
 - Do not animate letters or infer navigation active state from event taxonomy.
 

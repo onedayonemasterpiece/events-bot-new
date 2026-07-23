@@ -22,13 +22,33 @@ natural-language intent, for example “урбанистика”, “детск
 
 When vector results are exhausted, the UI starts a separate section **«Возможно, вам будет интересно»**. This is fallback/discovery, not a continuation of exact search relevance.
 
-Anonymous users have quota `0`: the UI shows “Войти через Яндекс”. Search is not available until Supabase Auth has a valid session.
+Anonymous users have quota `0`, but the intent field remains editable. On
+submit the current query is saved for no longer than 30 minutes and the user is
+sent through the existing Yandex PKCE flow. After the callback the query is
+restored, consumed and submitted automatically with the valid Supabase
+session. Results are never replaced with anonymous/demo data.
 
 The structural skeleton is initially hidden and may become visible only after
 the user submits a request and the runtime enters loading. An empty untouched
 query is not a loading state. The standalone desktop and mobile surface share
 the same multiline field and dark full-width submit treatment; a disabled
 preview must not reveal a specimen skeleton or a second visual language.
+
+### v29 immutable-preview runtime configuration
+
+The unified noindex candidate uses the real authorized Search path rather than
+a read-only visual specimen. `site/scripts/preview-public-env.mjs` resolves only
+the browser-safe personalization Supabase URL, publishable key and auth
+provider from the supported `PUBLIC_*`, `STATIC_SITE_PUBLIC_*` and
+`PERSONALIZATION_*` aliases. It may read the repository `.env` while building
+a linked worktree, but it never forwards service-role keys or provider secrets
+into the Astro client bundle.
+
+`PREVIEW_REQUIRE_AUTHORIZED_SEARCH=1` is a release gate: the preview build must
+fail instead of publishing a cosmetically enabled form when the safe public
+configuration is absent. Acceptance requires editable anonymous input, saved
+PKCE intent, hidden pre-submit skeleton and a real Edge Function result smoke;
+the final human Yandex round-trip remains an identity-provider acceptance step.
 
 ### Mobile point-of-intent entry and query cloud (v22 research)
 

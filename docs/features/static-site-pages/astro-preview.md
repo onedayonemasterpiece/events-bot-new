@@ -47,6 +47,15 @@ optimized responsive personal-card feed, Search, current clubs, six-logo Partner
 deep-page breadcrumbs and the two event-detail regressions (`6686`, `6529`).
 It is still a review build, not a root rollout.
 
+The R2 correction supersedes the read-only Search specimen and manual duration
+consultation: Search is built only with a safe public Supabase configuration
+and resumes the saved intent after Yandex PKCE; duration estimates are generated
+or reused by the key-driven StaticSiteBuilder stage before Astro. It also
+restores V7 hotkeys to named immutable previews, applies exact source-keyed
+media reviews to compact related rows, moves desktop Editorial breadcrumbs
+onto the lower hero edge and progressively paints the unchanged desktop tag
+with the reviewed leather crop over its solid terracotta fallback.
+
 ## 2026-07-18 v12 fidelity and production-rail contract
 
 V12 applies the accepted component system to automatic generation rather than

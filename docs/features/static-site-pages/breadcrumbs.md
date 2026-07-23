@@ -22,6 +22,14 @@ Breadcrumbs are **selective hierarchy**, not permanent page chrome.
 - The path never depends on `referrer`, browser history, the listing that
   happened to be used, or a client-only state.
 
+On desktop event Editorial pages the hierarchy is rendered as a quiet overlay
+at the lower edge of the hero photograph, ending just above the cream content
+sheet. White type and a restrained under-glow preserve legibility without
+creating a competing bar. The sheet receives matching rounded top corners.
+The overlay must not cover the primary subject or become taller than its single
+line. Mobile/tablet keeps the separate named-parent link in normal flow; it
+does not inherit the photographic overlay.
+
 The rule intentionally removes decorative one-hop chains such as
 `Афиша / Поиск`: they duplicate the global navigation and cost roughly
 `56–87px` of vertical space in the current implementation.
@@ -88,6 +96,8 @@ Evidence directory:
   `.crumbs`.
 - Event detail shows full breadcrumbs at `1024px+` and exactly one parent link
   below `1024px`.
+- On desktop Editorial event detail, the breadcrumb overlay ends above the
+  rounded content sheet and remains readable over both light and dark photos.
 - Search-collection and club-detail pages follow the same responsive rule.
 - No visible or JSON-LD path contains a non-materialized category/city URL.
 - Keyboard focus, tap target, `aria-current`, ordered-list structure and
@@ -104,4 +114,3 @@ Compare external-entry event sessions for:
 - bounce/exit and scroll depth.
 
 Do not call the contract successful merely because the link is rendered.
-

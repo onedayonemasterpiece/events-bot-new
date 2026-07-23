@@ -28,6 +28,11 @@
   reduces the whole-page height or aligns with a horizontal neighbour.
 - Framing metadata is versioned with the media/content hash and may be manually
   overridden.
+- A human-reviewed override is keyed by the exact source media URL/hash, not by
+  event id, title or visual similarity. Every consumer of that same source
+  (`EventCard`, related rows and hydrated continuations) must apply the same
+  reviewed role, dimensions and replacement asset. This is metadata reuse, not
+  semantic inference.
 
 ## Global compact-row optimizer
 
@@ -111,3 +116,10 @@ The browser/static renderer consumes metadata but does not run vision models.
 - visual regression for hero/card/list/gallery/share formats;
 - safe fallback when metadata is missing/low confidence;
 - content change invalidates stale focal metadata.
+
+The `6686` event-detail regression additionally verifies that source media used
+by event `6764` reuses its existing reviewed `visual_only` replacement
+(`1080×720`) in the related grid. The resulting three-card row is full, uses a
+shared horizontal `5/4` frame and `cover`, and has equal measured media and
+outer-card heights. Other `unknown/error` media still fail closed; this
+regression does not introduce an event-id exception.

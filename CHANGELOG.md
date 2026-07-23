@@ -6,8 +6,9 @@
 
 - Added the 2026-07-23 noindex unified-correction candidate contract: selective
   semantic breadcrumbs on deep pages, a fresh current-club projection, ICAE
-  Kaliningrad on the six-logo partner board, and an explicitly labelled
-  Gemini-estimated same-day rail shortlist for event `6529`.
+  Kaliningrad on the six-logo partner board, and a build-time key-driven
+  duration estimate that produces a practical same-day rail shortlist for
+  event `6529` without exposing model/service metadata in public copy.
 
 - Added one immutable, noindex unified static-site review prototype on fresh
   production-snapshot data: a responsive page-type hub links Calendar,
@@ -102,6 +103,14 @@
   deep-research prompt. No production behavior or scheduler was changed.
 
 ### Changed
+
+- Corrected the unified noindex prototype for review: anonymous Search intent
+  is editable and resumes through real Yandex/Supabase authorization; named
+  immutable previews mount the accepted desktop hotkey navigator; related rows
+  reuse exact source-keyed media reviews and preserve full compact `5:4` rows;
+  desktop event breadcrumbs sit quietly over the hero above a rounded content
+  sheet; and the unchanged desktop brand tag gains a deterministic leather
+  WebP over its immediate terracotta fallback.
 
 - Promoted the accepted Exhibitions personal presentation to the integrated
   review `/vystavki/` with dynamic current-event projection, and made the
