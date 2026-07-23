@@ -1,5 +1,15 @@
 # Transport artwork sources
 
+## `rzd-lastochka-medallion.png` / `.webp`
+
+- Product-owner reference: `docs/features/static-site-pages/medalions-free-ref/rzd-lastochka.png`, supplied on 2026-07-23.
+- Reference metadata: 2284×1856 RGBA PNG; SHA-256 `1b152b873a5f16c597fc3ba1fe03ac428d751676a61c94354aeca80387b0a6a8`.
+- The deterministic builder `site/scripts/build-rzd-lastochka-medallion.py` crops the cab plus first passenger door, replaces only the near-white studio field with ice grey `#F0F3F6`, and exports a 768×768 PNG plus lossless WebP.
+- Runtime assets: `site/public/assets/transport/rzd-lastochka-medallion.webp` with PNG fallback.
+- The lab wraps the asset in the shared circular token with a `#E21A22` ring. It is a transport hint, not an official live timetable, ticketing surface or carrier logo.
+- Gemini 3.1 Pro (High) was consulted separately as product reviewer and visual designer; both reviews recommended a source-faithful circular cab crop without a visible label or schedule claims.
+- No generative image creation or editing was used.
+
 ## `kppk-lastochka.png`
 
 - Supplied by the product owner in the repository working tree as `docs/reference/Frame 214 (3).png` on 2026-07-11.

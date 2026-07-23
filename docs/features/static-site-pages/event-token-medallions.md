@@ -184,7 +184,7 @@ Asset inventory:
 - runtime optimized assets: `site/public/assets/organizers/`; primary organizer assets are SVG except explicit raster exceptions;
 - source originals + provenance README: `site/src/assets/organizers/source/`;
 - browser-facing organizer/venue manifest: `site/src/data/organizerMedallions.json`;
-- the current minimal KGD80 festival manifest and runtime tree: `site/src/data/festivalMedallions.json` and `site/public/assets/festivals/`;
+- the complete 11-item festival/venue-brand manifest and runtime tree: `site/src/data/festivalMedallions.json` and `site/public/assets/festivals/`;
 - asset/provenance inventory is canonical in `site/src/assets/organizers/source/README.md` and `site/src/assets/festivals/source/README.md` rather than duplicated here.
 
 2026-07-02 SVG pass:
@@ -203,6 +203,23 @@ Asset inventory:
 
 No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving WebP/PNG fallback export.
 
+### Transport medallions
+
+The medallions lab includes a source-faithful **RZD Lastochka** transport token:
+
+- runtime: `/assets/transport/rzd-lastochka-medallion.webp` with PNG fallback;
+- source: `docs/features/static-site-pages/medalions-free-ref/rzd-lastochka.png`;
+- shape: shared circle token, ice-grey `#F0F3F6` field and red `#E21A22` ring;
+- crop: cab plus first passenger door so the train remains recognizable at roughly 90–112px;
+- semantics: `Транспортная подсказка: электропоезд «Ласточка»`; no visible schedule, ticket promise or official-service claim.
+
+The token is currently a **lab specimen only**. Production event-page wiring
+requires separate grounded route eligibility; it must not infer a train
+connection from city or venue keywords alone. The deterministic builder is
+`site/scripts/build-rzd-lastochka-medallion.py`. Gemini 3.1 Pro (High) product
+and design consultations both selected the circular cab crop over a full-train
+strip or wide text composite. No generative image editing was used.
+
 ### Manifest-inventory regression contract
 
 The runtime manifest and the optimized asset must move together. The July 2026
@@ -212,6 +229,31 @@ base; alias matching itself was not broken. Full-catalog preview acceptance must
 therefore render event `5756` and assert both the local
 `/assets/organizers/dramteatr39.svg` URL and the theatre label. A visual asset
 present only in branch history is not considered integrated.
+
+The 2026-07-23 full-history audit extends that regression contract to the whole
+catalog. It recovered:
+
+- 13 organizer/venue implementations lost from the integration base:
+  `yantar-hall`, `muzteatr39`, `dom-iskusstv`, `city-jazz-club`,
+  `rostec-arena`, `bar-bastion`, `signal`, `mumod`, `kldzoo`,
+  `locostandup`, `kaliningrad-art-museum`, `brachert` and `ruin-keepers`;
+- the accepted poll-selected `greza-khutor` implementation found in the
+  original working tree;
+- 10 festival identities missing from the reduced KGD80-only manifest:
+  `kaliningrad-city-jazz`, `kaliningrad-street-food`, `grozd-festival`,
+  `koroche`, `ostrova`, `more-vnutri`, `simfoniya-vetra`,
+  `bahosluzhenie`, `tolkin-fest` and the existing `kaup` venue-brand entry;
+- the deterministic `free-listing-medallion` sign from implementation commit
+  `4d2c6169`.
+
+The resulting QA inventory is 27 organizer/venue/festival-brand entries in
+`organizerMedallions.json`, 10 festival identities plus one venue brand in
+`festivalMedallions.json`, and the standalone transport/source/program signs
+shown in `/lab/medallions/`. The accepted organizer/festival source snapshot is
+traceable to `fa367ea372e3` on
+`origin/integration/static-site-medallions-release-20260712`. A full-catalog
+acceptance must compare manifest slugs, referenced runtime files and the lab
+DOM—not only check whichever items happen to be visible in one screenshot.
 
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 

@@ -23,3 +23,5 @@ V13 records `kaup` as `listing_ready` + `venue` and
 `kgd80-80-stories` as `listing_ready` + `festival`. These are structured
 bindings, not evidence that an image is crop-safe; `visual_only` remains the
 mandatory overlay gate and crop evidence remains asset-specific.
+
+The 2026-07-23 recovery restores the complete 10-festival plus one venue-brand source set from the accepted inventory. SVG assets are local wrappers or official SVGs; raster assets are source-faithful local square compositions made with Sharp from official/public assets for visual QA. No OpenAI image generation/editing was used.

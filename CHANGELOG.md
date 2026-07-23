@@ -4,6 +4,8 @@
 
 ### Added
 
+- Added a deterministic, source-faithful RZD Lastochka transport medallion to the static-site medallions lab with accessible semantics and documented provenance; it remains lab-only pending grounded route eligibility.
+- Restored the complete static medallion inventory: 27 organizer/venue entries, 10 festival identities plus the Kaup venue brand, and the deterministic free-admission sign, including Museum of Resort Fashion and Greza Khutor.
 - Added the 2026-07-23 noindex unified-correction candidate contract: selective
   semantic breadcrumbs on deep pages, a fresh current-club projection, ICAE
   Kaliningrad on the six-logo partner board, and a build-time key-driven
