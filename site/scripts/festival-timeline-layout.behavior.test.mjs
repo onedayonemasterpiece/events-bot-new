@@ -100,3 +100,15 @@ test('category chips use the curated local SVGRepo Lucide family', async () => {
     assert.match(svg, /stroke-width="2"/);
   }
 });
+
+test('desktop cards keep the donor single-canvas overlay contract', async () => {
+  const page = await readFile(new URL('../src/pages/festivali/index.astro', import.meta.url), 'utf8');
+
+  assert.match(page, /\.festival-card__caption\s*\{[\s\S]*?background:\s*transparent;/);
+  assert.match(page, /\.festival-card__date\s*\{[\s\S]*?background:\s*var\(--primary\);/);
+  assert.match(page, /linear-gradient\([\s\S]*?rgba\(15,\s*11,\s*9,\s*0\.92\)[\s\S]*?transparent 72%/);
+  assert.match(page, /\.festival-card__theme span\s*\{[\s\S]*?text-transform:\s*lowercase;/);
+  const captionBlock = page.match(/\.festival-card__caption\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.ok(captionBlock);
+  assert.doesNotMatch(captionBlock, /backdrop-filter/);
+});
