@@ -37,7 +37,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/]
     expected_output: committed implementation and targeted tests
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: L02
     role: worker
     effort: high
@@ -64,7 +64,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/features/static-site-pages/event-token-medallions.md]
     expected_output: committed fixes plus full generated audit artifact and browser evidence
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: L03
     role: worker
     effort: high
@@ -86,7 +86,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/]
     expected_output: committed UI/assets/regressions with screenshots
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: L04
     role: worker
     effort: high
@@ -109,7 +109,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/]
     expected_output: committed responsive club prototype and keyboard tests
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: L05
     role: worker
     effort: high
@@ -127,7 +127,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/, site/src/pages/poisk/]
     expected_output: committed test-only acceptance path and evidence
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: INT
     role: merge_reviewer
     effort: high
@@ -141,4 +141,4 @@ lanes:
     forbidden_files: []
     expected_output: clean pushed integration branch, immutable preview and closure report
     verification_scope: full_local
-    status: planned
+    status: completed
