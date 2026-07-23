@@ -27,9 +27,8 @@ test('EventLayout is the single mobile shell owner with canonical route mapping'
   assert.match(drawer, /transform:translate3d\(0,-100%,0\)/u);
   assert.match(drawer, /height:100%!important/u);
   assert.match(drawer, /backdrop-filter:blur\(22px\) saturate\(\.96\) brightness\(\.84\)/u);
-  assert.match(drawer, /\.reference4-menu__brand::before \{[\s\S]*radial-gradient\(ellipse at 38% 60%[\s\S]*backdrop-filter:blur\(7px\) brightness\(1\.12\)/u);
-  assert.match(drawer, /filter:drop-shadow\(0 1px 1px rgba\(255,255,255,.92\)\) drop-shadow\(0 2px 5px rgba\(24,14,10,.32\)\)/u);
-  assert.match(drawer, /@supports not \(\(backdrop-filter:blur\(1px\)\)[\s\S]*\.reference4-menu__brand::before \{[\s\S]*background:rgba\(255,250,243,.7\)/u);
+  assert.doesNotMatch(drawer, /\.reference4-menu__brand::before/u);
+  assert.match(drawer, /\.reference4-menu__brand \{[\s\S]*filter:drop-shadow\(0 1px 1px rgba\(255,255,255,.28\)\)/u);
   assert.match(drawer, /html\.shell-menu-open \.mobile-bottom-nav/u);
   assert.match(drawer, /data-service-share-root/u);
   assert.match(drawer, /hydrateServiceShareActions/u);

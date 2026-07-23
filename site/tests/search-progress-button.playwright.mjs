@@ -188,9 +188,13 @@ test('390px Search CTA follows accepted progress lifecycle', { skip: !hasPreview
 
     const searchUrl = `${origin}/${previewName}/poisk/`;
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
-    await page.evaluate(() => {
-      localStorage.setItem('sb-search-r9-auth-token-code-verifier', JSON.stringify('r9-code-verifier'));
-    });
+    const configuredSupabaseUrl = await page.locator('[data-authorized-search]').getAttribute('data-supabase-url');
+    const configuredProjectRef = configuredSupabaseUrl
+      ? new URL(configuredSupabaseUrl).hostname.split('.', 1)[0]
+      : 'search-r9';
+    await page.evaluate((projectRef) => {
+      localStorage.setItem(`sb-${projectRef}-auth-token-code-verifier`, JSON.stringify('r9-code-verifier'));
+    }, configuredProjectRef);
     await page.goto(`${searchUrl}?code=r9-code`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized'));
 

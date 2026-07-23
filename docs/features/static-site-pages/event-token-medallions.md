@@ -161,12 +161,19 @@ Runtime event-page medallions are intentionally larger than ordinary chips: they
 
 | Surface | Desktop | Tablet | Mobile |
 | --- | --- | --- | --- |
-| Detail circle/avatar | `clamp(88px, 23vw, 112px)` | same responsive token | about `90px` on a 390px mobile viewport |
+| Detail circle/avatar | `clamp(88px, 23vw, 112px)` | same responsive token | `clamp(84px, 23vw, 92px)`, about `89.7px` on a 390px viewport |
 | Pushkin-card medallion | visual black circle uses the same `--token-size` as organizer circles; the wordmark may protrude to the right inside one composite image | same responsive token | same circle diameter as organizer medallions; composite width is larger only because of the original wordmark |
 | Detail pill height | 56px | 48px | 44px minimum hit/scan area |
 | Gap | 12px | 10px | 8px |
 | V15 listing external circle | `52…60px`, max 3 | desktop acceptance only | deferred |
 | V15 listing overlay circle | `60px`, max 1 | desktop acceptance only | deferred |
+
+On mobile event detail, `Main` / `Secondary` remains a semantic placement and
+priority distinction, not a size distinction. Organizer, venue, program,
+source and free-admission circular tokens share the same visual diameter and
+bottom baseline. The Pushkin composite may be wider only because its original
+wordmark extends to the right; its black circle still follows the shared
+diameter.
 
 Special crop notes:
 

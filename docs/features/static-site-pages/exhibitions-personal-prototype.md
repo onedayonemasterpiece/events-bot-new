@@ -640,3 +640,13 @@ overflow. Проверены также тихое листание с delayed s
 transition у action toast и межгодовая дата. Публичный immutable preview
 ответил `HTTP 200`. Финальный gate `Gemini 3.1 Pro (High)` дал `ACCEPT` без
 P0/P1/P2 замечаний.
+
+### R9 owner correction: mobile seal scale, 2026-07-23
+
+Последующая приёмка цельной мобильной сборки признала `36px` визуально слишком
+мелкими. Публичная и лабораторная выставочные поверхности поэтому используют
+`44×44px` institutional seal и на desktop, и на mobile. Семантика V12 не
+меняется: это один неинтерактивный fail-closed sibling photo deck, выше фото и
+ниже `+N`, вне pager/gallery/photo count. Проверка на `320/390/430px` обязана
+подтверждать отсутствие перекрытия счётчика, horizontal overflow и broken
+image.

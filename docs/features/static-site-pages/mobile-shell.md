@@ -987,3 +987,43 @@ Generated-output gates require `.reference4-menu` and reject the old
 `.tone-service` / `.tone-grid` plane. The accepted closed leather tag, glass
 plane, complete IA, service Share, dock suppression and viewport-fit behavior
 are therefore identical on Search, Calendar, Popular and both artifact links.
+
+## Integrated mobile acceptance R9, 2026-07-23
+
+The integrated noindex prototype keeps v23/v28 as the rail and navigation
+donor rather than replacing it with compact cards. The following corrections
+are part of the shared Astro implementation:
+
+- full mobile event detail uses the same
+  `mobile-head-skinny-leather-3x.webp` Reference4 tag as the other mobile
+  surfaces. Its live white lockup paints over an immediate `#98401f` fallback;
+  the open glass plane keeps the dark wordmark without a second pale scrim;
+- rail media reserves its final `112px` physical slot while loading. A bounded
+  skeleton remains until the image has loaded and decoded, then either reveals
+  the image or changes to a stable error surface without moving the row;
+- a single explicitly classified `visual_only` tall source uses a `140×112`
+  landscape `5:4` cover window. `ocr_text`, `unknown`, protected-document media
+  and multi-image rows keep their fail-closed authored geometry;
+- date pages use the full `56px` horizontal date accessory above the bottom
+  dock, including the current-date chip, generated weekend ranges and calendar
+  sheet. Only generated routes are links; unavailable dates remain honest
+  disabled cells rather than 404 links;
+- after the page hero leaves the viewport, a compact title is exposed in the
+  existing `64px` header lane. Popular/group and Weekend day shelf headings
+  remain native `position:sticky` at `top:64px`; their ancestors must not
+  introduce clipping or overflow that disables sticking;
+- the continuation cue is one exact `48×23` inline SVG path with a horizontal
+  shaft and symmetric head. CSS border/rotation arrows are rejected because
+  fractional rendering produced the crooked Android result;
+- standalone Search retains the accepted full-width in-button progress fill.
+  It owns one request epoch, blocks synchronous double submits and resets on
+  success, error, abort, logout and page exit. This is acceptance of the visual
+  and lifecycle contract, not a claim that the real authenticated Search
+  journey has been owner-accepted.
+
+The amber artifact remains an explicitly enabled **noindex research layer**.
+The accepted A-tail button is a sibling after the large like, never part of the
+event link or medallion set. It uses local browser state only and is excluded
+from production output; its exact placement and motion contract remain
+canonical in
+[`amber-artifact-easter-egg.md`](amber-artifact-easter-egg.md).

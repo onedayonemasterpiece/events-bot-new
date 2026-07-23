@@ -133,7 +133,7 @@
 - Unified mobile interest-club cards with the accepted desktop full-cover dark
   overlay family and preserved the luminous top-right upcoming-meetings badge.
 - Kept the full mobile menu genuinely translucent on both light and dark hero
-  contexts while adding a local luminous glass scrim behind the canonical
+  contexts without adding a second local glass/scrim card behind the canonical
   lockup.
 
 - Cleaned the desktop leather tag asset so the offset lower/right backing and
@@ -183,6 +183,19 @@
 
 ### Fixed
 
+- Completed the R9 mobile acceptance pass: full event detail reuses the shared
+  leather tag with an immediate terracotta fallback; circular organizer/free
+  medallions share one diameter and baseline; exhibition seals are owner-sized
+  to `44px`; and Search preserves the accepted in-button progress lifecycle
+  across duplicate submit, success, error, abort and logout.
+- Restored the complete date-page mobile behavior around the physical v23/v28
+  rails: decode-aware media skeletons, `140×112` single-visual `5:4` crop,
+  fail-closed OCR/unknown geometry, full date accessory/calendar sheet,
+  physically sticky compact title and shelf headings, and a straight SVG
+  continuation arrow.
+- Integrated the accepted A-tail amber artifact only into explicitly enabled
+  noindex previews, after the rail like action with localStorage-only found
+  state and reduced-motion fallback; production output remains unchanged.
 - Restored physical `C`/`P` event-copy shortcuts from natural BODY focus in
   every keyboard layout while preserving footer, editable and dialog
   arbitration.
