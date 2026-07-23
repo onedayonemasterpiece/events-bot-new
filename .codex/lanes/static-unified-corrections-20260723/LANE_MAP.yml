@@ -1,0 +1,168 @@
+mode: full_fanout_then_serial_integration
+repo: /home/dev/projects/events-bot-new
+base_ref: 5c2db86811c34355a1894748b87af73fdb5b19e3
+base_branch: integration/static-unified-prototype-20260722
+integration_branch: integration/static-unified-prototype-corrections-20260723
+global_constraints:
+  - Build only a new immutable noindex review prefix; do not mutate the production root.
+  - Do not merge old donor branches wholesale or restore stale preview data.
+  - Workers may not edit shared generated-output gates, canonical docs, CHANGELOG.md, or each other's files.
+  - Integration must retain occurrence-family and INC-2026-07-18 regression behavior.
+  - Media changes must satisfy INC-2026-07-20-static-event-keyboard-visual-regressions.
+  - Search changes must retain INC-2026-07-02-static-search-92-percent-no-cards runtime loading behavior.
+  - Exhibition promotion must retain INC-2026-07-02-exhibition-duplicates-static-site defensive quality rules.
+verification_owner: /root
+stop_conditions:
+  - Any worker sees unrelated dirty state in its new worktree.
+  - A lane requires changing a file owned by another active worker.
+  - Real-data export cannot be reproduced from one consistent snapshot.
+  - Gemini Pro provenance cannot be proved for the requested product/acceptance review.
+lanes:
+  - id: L01
+    role: worker
+    effort: high
+    requirement_ids: [R01]
+    target: Dynamic promotion of the exhibitions-personal donor surface to the review exhibitions route.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-unified-corrections/exhibitions
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-corrections-exhibitions
+    writable_files:
+      - site/src/pages/vystavki/**
+      - site/src/components/ExhibitionsPersonalSurface.astro
+      - site/src/lib/exhibitionsPersonal.*
+      - site/tests/exhibitions-public*.*
+      - .codex/lanes/L01/RESULTS.md
+    forbidden_files:
+      - site/src/data/preview-events.json
+      - site/scripts/check-preview.mjs
+      - site/scripts/check-unified-prototype.mjs
+      - docs/**
+      - CHANGELOG.md
+    expected_output: One committed focused implementation with dynamic data tests and RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L02
+    role: worker
+    effort: high
+    requirement_ids: [R03]
+    target: Correct initial Search loading state and unify accepted control styling.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-unified-corrections/search
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-corrections-search
+    writable_files:
+      - site/src/components/AuthorizedEventSearch.astro
+      - site/src/layouts/EventLayout.astro
+      - site/tests/search-learning.test.mjs
+      - site/tests/search-initial-state*.*
+      - .codex/lanes/L02/RESULTS.md
+    forbidden_files:
+      - site/scripts/check-preview.mjs
+      - site/scripts/check-unified-prototype.mjs
+      - docs/**
+      - CHANGELOG.md
+    expected_output: One committed patch with initial-hidden and runtime-reveal tests plus RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L03
+    role: worker
+    effort: high
+    requirement_ids: [R04, R05]
+    target: Restore a fresh clubs projection contract and add the ICAE partner tile/asset.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-unified-corrections/clubs-partners
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-corrections-clubs-partners
+    writable_files:
+      - site/src/data/interest-clubs.json
+      - site/src/data/info-partners.ts
+      - site/src/assets/partners/source/icae-kaliningrad.logo-footer-h.svg
+      - site/public/assets/partners/icae-kaliningrad.svg
+      - site/src/assets/partners/source/README.md
+      - site/src/pages/[preview]/index.astro
+      - site/tests/clubs-partners*.*
+      - .codex/lanes/L03/RESULTS.md
+    forbidden_files:
+      - site/scripts/check-preview.mjs
+      - site/scripts/check-unified-prototype.mjs
+      - docs/**
+      - CHANGELOG.md
+    expected_output: One committed patch using current policy data/provenance with focused tests and RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L04
+    role: worker
+    effort: high
+    requirement_ids: [R08]
+    target: Add a clearly labelled prototype duration estimate path and safe same-day rail shortlist.
+    depends_on:
+      - Gemini Pro estimate artifact supplied by integrator
+    execution_mode: parallel
+    branch: agent/static-unified-corrections/transport
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-corrections-transport
+    writable_files:
+      - site/src/lib/eventTransport.ts
+      - site/src/components/EventTransportSchedule.astro
+      - site/src/data/event-duration-estimates.json
+      - site/tests/event-transport-estimates*.*
+      - tests/test_static_site_preview_duration.py
+      - .codex/lanes/L04/RESULTS.md
+    forbidden_files:
+      - site/src/data/preview-events.json
+      - site/scripts/check-preview.mjs
+      - site/scripts/check-unified-prototype.mjs
+      - docs/**
+      - CHANGELOG.md
+    expected_output: One committed optional-estimate implementation, 6529 specimen, negative controls and RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L05
+    role: worker
+    effort: high
+    requirement_ids: [R02, R07]
+    target: Share the large personal-feed container and fail closed on unclassified/error media.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/static-unified-corrections/cards-ocr
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-corrections-cards-ocr
+    writable_files:
+      - site/src/pages/dlya-menya/index.astro
+      - site/scripts/export-production-preview-data.py
+      - site/src/lib/relatedCardLayout.mjs
+      - site/src/components/EventHero.astro
+      - site/src/components/DesktopEventPage.astro
+      - site/tests/visual-keyboard-regressions.test.mjs
+      - tests/test_static_site_content_projection.py
+      - tests/test_static_site_public_gate.py
+      - .codex/lanes/L05/RESULTS.md
+    forbidden_files:
+      - site/src/data/preview-events.json
+      - site/src/layouts/EventLayout.astro
+      - site/scripts/check-preview.mjs
+      - site/scripts/check-unified-prototype.mjs
+      - docs/**
+      - CHANGELOG.md
+    expected_output: One committed fail-closed media/personal-feed patch with exporter and resolver tests plus RESULTS.md.
+    verification_scope: targeted
+    status: planned
+  - id: L06
+    role: planner
+    effort: high
+    requirement_ids: [R06]
+    target: Implement the researched breadcrumb policy after all route-owning lanes merge.
+    depends_on: [L01, L02, L03, L05]
+    execution_mode: serial_after_dependency
+    branch: integration/static-unified-prototype-corrections-20260723
+    worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-prototype-20260722
+    writable_files:
+      - site/src/components/Breadcrumbs.astro
+      - site/src/pages/**
+      - site/src/components/DesktopEventPage.astro
+      - site/src/layouts/EventLayout.astro
+      - site/src/lib/seo.ts
+      - site/tests/breadcrumbs*.*
+    forbidden_files: []
+    expected_output: Integrated selective-hierarchy breadcrumb contract with desktop/mobile/a11y/SEO tests.
+    verification_scope: full_local
+    status: planned

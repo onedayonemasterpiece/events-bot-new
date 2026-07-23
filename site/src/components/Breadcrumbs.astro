@@ -1,0 +1,123 @@
+---
+import type { BreadcrumbItem } from '../lib/breadcrumbs';
+
+interface Props {
+  parents: BreadcrumbItem[];
+  current: string;
+  display?: 'responsive' | 'desktop' | 'mobile';
+  className?: string;
+}
+
+const {
+  parents,
+  current,
+  display = 'responsive',
+  className,
+} = Astro.props;
+const parent = parents.at(-1);
+---
+
+<nav
+  class:list={['product-breadcrumbs', `product-breadcrumbs--${display}`, className]}
+  aria-label="Хлебные крошки"
+  data-product-breadcrumbs
+  data-breadcrumbs-display={display}
+>
+  <ol>
+    {parents.map((item) => (
+      <li><a href={item.href}>{item.label}</a></li>
+    ))}
+    <li aria-current="page"><span title={current}>{current}</span></li>
+  </ol>
+</nav>
+
+{parent && (
+  <nav
+    class:list={['product-parent-link', `product-parent-link--${display}`, className]}
+    aria-label="К родительскому разделу"
+    data-product-parent-link
+    data-breadcrumbs-display={display}
+  >
+    <a href={parent.href}>
+      <span aria-hidden="true">←</span>
+      <span>{parent.label}</span>
+    </a>
+  </nav>
+)}
+
+<style>
+  .product-breadcrumbs {
+    min-width: 0;
+    margin: .55rem 0 1rem;
+    color: var(--muted, #74685f);
+    font-size: .88rem;
+  }
+  .product-breadcrumbs ol {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .42rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .product-breadcrumbs li {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: .42rem;
+  }
+  .product-breadcrumbs li:not(:last-child)::after {
+    color: color-mix(in srgb, currentColor 60%, transparent);
+    content: "›";
+  }
+  .product-breadcrumbs a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--primary-strong, #8e3216);
+    text-underline-offset: .16em;
+  }
+  .product-breadcrumbs li[aria-current="page"] {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+  .product-breadcrumbs li[aria-current="page"] span {
+    min-width: 0;
+    max-width: min(34vw, 22rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .product-parent-link {
+    display: none;
+    margin: .25rem 0 .65rem;
+  }
+  .product-parent-link a {
+    width: fit-content;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    color: var(--primary-strong, #8e3216);
+    font-size: .9rem;
+    font-weight: 780;
+    text-decoration: none;
+  }
+  .product-breadcrumbs--mobile { display: none; }
+  .product-parent-link--mobile { display: block; }
+  .product-parent-link--desktop { display: none; }
+
+  @media (max-width: 1023px) {
+    .product-breadcrumbs--responsive { display: none; }
+    .product-parent-link--responsive { display: block; }
+    .product-breadcrumbs--desktop,
+    .product-parent-link--desktop { display: none; }
+  }
+
+  @media (min-width: 1024px) {
+    .product-breadcrumbs--mobile,
+    .product-parent-link--mobile { display: none; }
+  }
+</style>
+
