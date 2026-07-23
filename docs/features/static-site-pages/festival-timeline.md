@@ -2,13 +2,24 @@
 
 > **Status:** public `noindex` review prototype; calendar view only.
 > **Route:** `/festivali/` inside an immutable preview prefix.
-> **Current candidate:** `preview-20260723-festivals-calendar-r3`.
+> **Current candidate:** `preview-20260723-festivals-calendar-r4`.
 
 The page uses the unified Astro header, footer and mobile dock. It presents 21
 regional festivals from July through December 2026. The category view remains
 deferred. The first `r1` candidate is withdrawn: it shortened the donor
 mechanic, used split image/body cards and repeated media from the regional
 anniversary aggregator.
+
+R4 is the desktop correction after owner review. The page now consumes the
+shared `--ke-font-sans` stack (`Inter` with the same system fallbacks as the
+rest of the static site) everywhere; the local Georgia override is removed.
+The left month marker, name, mood symbol and copy form one sticky shelf below
+the unified header and sticky month switcher. The shelf remains at `126.6px`
+while its month is in view and is pushed out by the next section.
+
+The calendar contains no page-local prototype explanation, data-quality note
+or link to the prototype hub. Pending dates/programmes remain on their cards
+because those are visitor-facing festival facts rather than operator copy.
 
 ## Data and honesty contract
 
@@ -75,9 +86,21 @@ The rendered contract is:
 - at `390px`, the page repacks into two equal columns; only the
   below-`340px` safety fallback becomes one column.
 
-The date and status are top overlays; title, one-line place and icon-led theme
-are bottom overlays. Source/provenance stays in the data contract and card
-destination rather than consuming visible card height.
+The date and full status are top overlays; title, one-line place and icon-led
+theme are bottom overlays. Four-up rows no longer collapse status text to a
+bare dot. Source/provenance stays in the data contract and card destination
+rather than consuming visible card height.
+
+This is a close implementation of the donor's **card and timeline mechanic**,
+not a pixel-for-pixel copy of its unrelated page chrome: the inventory, image
+ratios and KenigEvents tokens are real project inputs. The shared visual
+contract is nevertheless element-complete: full-bleed media, top date, top
+status, bottom title, place, category pill, same-height row, left rail, marker,
+month name, mood icon and mood copy.
+
+Desktop card hover must not translate the card or scale the image. It may only
+change non-geometric affordances (border and shadow); keyboard focus retains a
+visible inset outline.
 
 ## Pixel acceptance
 
@@ -92,17 +115,14 @@ The `2026-07-23` Playwright gate uses `887×900`, `1440×900`, `390×844` and
 - all viewports: zero horizontal overflow, 21 decoded images, no browser or
   first-party request errors, same-height cards per row.
 
-Measured candidate values are `1488.8px`, `2279.4px` and `3014.6px`
+Measured R4 values are `1488.8px`, `2279.4px` and `3043.6px`
 respectively. The previous `r1` timeline measured `5729.6px` at the
 reference-width viewport and `10148.8px` on mobile.
 
-The repeat Gemini Pro acceptance review (`gemini-3.1-pro-preview`) inspected
-the donor, desktop/mobile screenshots and 21-cover contact sheet and returned
-`KEEP` for noindex review: similarity `10/10`, desktop ecology `10/10`, mobile
-ecology `9/10`, media authenticity/diversity `10/10`, scanability `10/10`.
-Its only P1 suggestion was to stretch mobile solo remainders; that suggestion
-is not applied because the donor and `/617` explicitly permit a compact final
-remainder, and stretching it would restore the visual-weight regression.
+The earlier R3 Gemini Pro `KEEP` is retained only as an external review
+artifact, not as product acceptance: subsequent owner inspection found the
+off-system serif, missing sticky shelf, page-local service note and moving
+hover. R4 closes those concrete gaps and is the new review candidate.
 
 ## Checks and preview
 
@@ -110,14 +130,14 @@ Run:
 
 ```bash
 npm --prefix site run test:festival-timeline-layout
-PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r3 npm --prefix site run build:preview
-PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r3 npm --prefix site run check:unified-prototype
+PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r4 npm --prefix site run build:preview
+PREVIEW_BUILD_ID=preview-20260723-festivals-calendar-r4 npm --prefix site run check:unified-prototype
 ```
 
 Review candidate:
 
-- page: <https://kenigevents.ru/preview-20260723-festivals-calendar-r3/festivali/>;
-- hub: <https://kenigevents.ru/preview-20260723-festivals-calendar-r3/__preview/>.
+- page: <https://kenigevents.ru/preview-20260723-festivals-calendar-r4/festivali/>;
+- hub: <https://kenigevents.ru/preview-20260723-festivals-calendar-r4/__preview/>.
 
 The immutable URL is a public bearer link, not authentication. It must not be
 promoted to the production root before product acceptance and a refresh owner

@@ -129,6 +129,7 @@ if (!exhibitions.includes('data-exhibitions-prototype') || !exhibitions.includes
 }
 
 const festivals = html('festivali/index.html');
+const festivalsSource = readFileSync(join(siteDir, 'src/pages/festivali/index.astro'), 'utf8');
 if (!festivals.includes('data-festival-timeline') || !festivals.includes('data-festival-count="21"')) {
   throw new Error('Festival calendar must render the complete 21-item timeline');
 }
@@ -142,8 +143,16 @@ if ((festivals.match(/data-protected-crop-fit="cover"/gu) || []).length < 21
 }
 if (festivals.includes('afisha80let.visit-kaliningrad.ru')
   || festivals.includes('festival-card__body')
-  || festivals.includes('festival-card__source')) {
-  throw new Error('Festival cards regressed to aggregator media or split white-body composition');
+  || festivals.includes('festival-card__source')
+  || festivalsSource.includes('font-family: Georgia')
+  || festivalsSource.includes('festival-footer-note')
+  || festivalsSource.includes('Все страницы прототипа')) {
+  throw new Error('Festival page regressed to aggregator media, split cards, off-system type or public service copy');
+}
+if ((festivals.match(/festival-month__shelf/gu) || []).length < 6
+  || !/\.festival-month__shelf\s*\{[\s\S]*?position:\s*sticky/gu.test(festivalsSource)
+  || !festivalsSource.includes('font-family: var(--ke-font-sans)')) {
+  throw new Error('Festival calendar misses its desktop sticky month shelf or shared typography contract');
 }
 for (const row of festivals.matchAll(/<div[^>]*data-festival-row[^>]*>/gu)) {
   const remainder = /data-row-remainder="(true|false)"/u.exec(row[0])?.[1];
