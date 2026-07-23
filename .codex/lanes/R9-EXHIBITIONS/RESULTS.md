@@ -2,133 +2,118 @@
 
 ## Status
 
-Committed. R7 is acceptance-locked without changing the already-correct
-exhibitions card geometry.
+Committed. R7 now implements the latest owner acceptance: exhibition seals are
+`44×44 CSS px` on mobile as well as desktop.
 
 ## Requirement
 
-- **R7:** mobile exhibition medallion scale only.
+- **R7:** enlarge mobile exhibition medallions without changing card/deck
+  geometry, hierarchy, overflow behavior, or image reliability.
 
 ## Git
 
 - Base branch: `integration/mobile-acceptance-r9-20260723`
 - Base SHA: `74bb254c4d20c1e488568fde445515131e64cbd5`
 - Lane branch: `agent/mobile-acceptance-r9/exhibitions`
-- Implementation head SHA: `596fe6afc31a05902f48b3a93c7433f826be6b01`
+- Initial regression commit: `596fe6afc31a05902f48b3a93c7433f826be6b01`
+- Owner-acceptance implementation SHA:
+  `9bfc1fbf97d7132860707b25738bd7d6cd485267`
 
-## Exact donor provenance
+## Donor provenance and updated acceptance
 
 - Telegram topic: `KenigEvents · UI review`, topic anchor message `548`.
 - Telegram requirement message `549` names the exhibitions donor as
-  `integration/exhibitions-personal-discovery-prototype-20260719` with accepted
+  `integration/exhibitions-personal-discovery-prototype-20260719` at accepted
   tip `54cfa903`.
-- Accepted branch/tip:
-  `integration/exhibitions-personal-discovery-prototype-20260719@54cfa903`.
-- Immutable accepted preview:
+- Immutable historical donor:
   <https://kenigevents.ru/preview-20260720-exhibitions-personal-v12-465c2bc5/lab/exhibitions-personal/>.
-- The seal geometry itself entered that accepted history in
-  `9a4e36cdc52e34f3f3458ba65df2082f82f68d1c` and was then publicly accepted and
-  documented by `54cfa903`.
-- Exact accepted geometry: one institutional seal, `44px` desktop and `36px`
-  mobile, top-left of the deck, below the `+N` counter, outside photo-count and
-  gallery semantics, hidden after image failure.
+- The historical seal implementation entered that branch in
+  `9a4e36cdc52e34f3f3458ba65df2082f82f68d1c` and used `44px` desktop /
+  `36px` mobile.
+- The latest owner feedback after R8 explicitly supersedes only the mobile size
+  portion of that baseline. R9 therefore keeps the donor structure, offsets,
+  hierarchy, fail-closed behavior, and desktop size while increasing mobile to
+  `44×44 CSS px`.
 
-Telegram read evidence is stored outside git at:
+Telegram read evidence remains outside git at:
 `artifacts/codex/r9-exhibitions/telegram/messages-548-549-621-630.json`.
-The approved local E2E human session was used; the reserved S22 bundle was not
-used.
+The approved local E2E human session was used; S22 was not used.
 
-## Donor vs R8 measurements at 390px
+## Implementation
 
-Playwright measured the public donor and public R8 rather than inferring size
-from source alone:
+- Public `/vystavki/` surface:
+  `.ex-deck__medallion` at `<=820px` changed from `36×36` to `44×44`.
+- Lab exhibitions surface received the same rule so the review donor and public
+  component cannot drift.
+- Desktop remains `44×44`.
+- Placement remains `top:7px; left:7px` on mobile.
+- Seal remains below the `+N` counter (`z-index:260` vs `300`), outside
+  `deckMedia`, `aria-hidden`, noninteractive, and hidden by the existing broken
+  image handler.
+- Deck width, deck height, row grid, media count, and card content were not
+  changed.
 
-| Measurement | Accepted v12 donor | Current public R8 |
-|---|---:|---:|
-| Viewport | `390×844` | `390×844` |
-| Visible seal | `36×36` | `36×36` |
-| Deck | `331.21875×187.1875` | `331.21875×187.1875` |
-| Row width | `352` | `352` |
-| Document `scrollWidth/clientWidth` | `390/390` | `390/390` |
-| Seal overlaps `+N` | no | no |
-| Visible seal image | loaded, `320×320` intrinsic | loaded, `512×512` intrinsic |
-| Console/page errors | none | none |
+## Playwright evidence
 
-The comparison established that R8 had not actually drifted below the accepted
-`36px` mobile target. Increasing it would have diverged from the exact donor.
-Therefore this lane deliberately made no presentation/CSS change and instead
-added a focused regression gate that prevents the reported scale from being
-shrunk in a later integration.
+Local checked preview:
+`preview-r9-exhibitions-44`, route `/vystavki/`.
 
-Public comparison artifacts:
+| Width | Seal | Deck | Row width | Document width | `+N` overlap | Image | Console/page errors |
+|---:|---:|---:|---:|---:|---|---|---|
+| 320 | `44×44` | `261.21875×160` | `282` | `320/320` | no | loaded, intrinsic `512×512` | none |
+| 390 | `44×44` | `331.21875×187.1875` | `352` | `390/390` | no | loaded, intrinsic `512×512` | none |
+| 430 | `44×44` | `371.21875×206.390625` | `392` | `430/430` | no | loaded, intrinsic `512×512` | none |
 
-- `artifacts/codex/r9-exhibitions/playwright/public-comparison-390.json`
-- `artifacts/codex/r9-exhibitions/playwright/donor-regression/`
-- `artifacts/codex/r9-exhibitions/playwright/r8-regression/`
+For every width the seal remained fully inside the deck, document
+`scrollWidth` equaled `clientWidth`, and the loaded image had nonzero intrinsic
+dimensions.
 
-The locally built lane artifact reproduced the current geometry at 390px:
-`36×36` seal, `331.21875×187.1875` deck, `352px` row, no horizontal overflow,
-no counter overlap, loaded `512×512` intrinsic image, and no console errors.
-Screenshot and JSON:
-`artifacts/codex/r9-exhibitions/playwright/local-r9/`.
+Screenshots, JSON measurements, and command logs:
+
+- `artifacts/codex/r9-exhibitions/owner-44/playwright/exhibitions-medallion-320.png`
+- `artifacts/codex/r9-exhibitions/owner-44/playwright/exhibitions-medallion-390.png`
+- `artifacts/codex/r9-exhibitions/owner-44/playwright/exhibitions-medallion-430.png`
+- matching `.json` reports in the same directory
+- `artifacts/codex/r9-exhibitions/owner-44/build.log`
+- `artifacts/codex/r9-exhibitions/owner-44/check-preview.log`
 
 ## Files changed
 
+- `site/src/components/ExhibitionsPersonalSurface.astro`
+- `site/src/pages/lab/exhibitions-personal/index.astro`
+- `site/scripts/check-exhibitions-personal-prototype.mjs`
 - `site/tests/exhibitions-medallion-mobile.test.mjs`
-  - locks `44px` desktop / `36px` mobile in both public and lab surfaces;
-  - locks the donor offsets and z-index hierarchy;
-  - locks full-width/overflow-safe mobile deck geometry;
-  - locks one fail-closed institutional seal outside deck media semantics.
 - `site/tests/exhibitions-medallion-mobile.playwright.mjs`
-  - reusable 390px browser measurement and screenshot gate;
-  - asserts loaded image, no horizontal overflow, in-deck placement, no `+N`
-    overlap, and no console/page errors.
 - `.codex/lanes/R9-EXHIBITIONS/RESULTS.md`
 
-No generic event-detail medallion, rail, search, production code, asset,
-`CHANGELOG.md`, or canonical documentation file was edited.
+No generic event-detail medallion, rail, search, asset, `CHANGELOG.md`, or
+canonical documentation file was edited.
 
 ## Commands and validation
 
 - `node --test site/tests/exhibitions-medallion-mobile.test.mjs`
   - **PASS**, 2/2.
-- Public donor Playwright:
-  `EXHIBITIONS_URL=<accepted-v12-url> node site/tests/exhibitions-medallion-mobile.playwright.mjs`
-  - **PASS**, screenshot + measurements recorded.
-- Public R8 Playwright:
-  `EXHIBITIONS_URL=https://kenigevents.ru/preview-20260723-unified-corrections-r8/vystavki/ node site/tests/exhibitions-medallion-mobile.playwright.mjs`
-  - **PASS**, screenshot + measurements recorded.
-- `PREVIEW_BUILD_ID=preview-r9-exhibitions-local npm run build:preview`
-  - produced the checked local preview artifact.
-- `PREVIEW_BUILD_ID=preview-r9-exhibitions-local npm run check:preview`
+- `PREVIEW_BUILD_ID=preview-r9-exhibitions-44 npm run build:preview`
+  - **PASS**, 389 pages.
+- `PREVIEW_BUILD_ID=preview-r9-exhibitions-44 npm run check:preview`
   - **PASS**, 288 events.
-- Local Playwright against
-  `http://127.0.0.1:41739/preview-r9-exhibitions-local/vystavki/`
-  - **PASS**, screenshot + measurements recorded.
+- Reusable Playwright gate at `320`, `390`, and `430`:
+  - **PASS** at all widths;
+  - screenshots and JSON measurements recorded;
+  - no overflow, `+N` overlap, broken visible seal, or browser error.
 - `git diff --check`
   - **PASS**.
-
-An additional legacy
-`node site/scripts/check-exhibitions-personal-prototype.mjs` probe passed its
-medallion assertions but reported one pre-existing unrelated navigation
-assertion (`shared mobile navigation exposes current section for badge
-extension`). It is outside R7 and no navigation file was changed.
-
-Generated `site/dist` and `site/node_modules` were removed after QA to release
-disk space. Evidence under `artifacts/` is intentionally uncommitted.
 
 ## Documentation delta
 
 Per lane ownership, canonical docs and `CHANGELOG.md` were not edited. The
-integrator may add one concise R9 acceptance note stating that the canonical
-exhibitions seal remains `44px` desktop / `36px` mobile and is now covered by
-source plus Playwright regression gates. No broader documentation rewrite is
-needed.
+integrator should record that latest owner acceptance supersedes the historical
+v12 mobile value: exhibitions seals are now `44px` on mobile and desktop, while
+the one-seal/fail-closed/deck-hierarchy contract remains unchanged.
 
 ## Risks
 
-- The reported visual concern may have referred to a different medallion
-  surface. This lane intentionally did not touch generic event-detail
-  medallions; that is separately owned.
-- Intrinsic logo artwork can have internal whitespace even when its CSS seal is
-  exactly `36px`. Changing individual logo crops/assets is not part of R7.
+- Historical v12 documentation still says `36px` mobile until the integrator
+  reconciles the shared canonical docs/CHANGELOG.
+- Individual logo artwork may contain internal whitespace, but the seal box is
+  now consistently `44×44` and asset/crop changes remain outside R7.
