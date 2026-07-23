@@ -8,6 +8,9 @@ assert.ok(url, 'Set EXHIBITIONS_URL to a built /vystavki/ or /lab/exhibitions-pe
 
 const outputDir = path.resolve(process.env.EXHIBITIONS_ARTIFACT_DIR || 'artifacts/exhibitions-medallion-mobile');
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined;
+const viewportWidth = Number(process.env.EXHIBITIONS_VIEWPORT_WIDTH || 390);
+const viewportHeight = Number(process.env.EXHIBITIONS_VIEWPORT_HEIGHT || 844);
+assert.ok([320, 390, 430].includes(viewportWidth), 'EXHIBITIONS_VIEWPORT_WIDTH must be 320, 390, or 430');
 await mkdir(outputDir, { recursive: true });
 
 const browser = await chromium.launch({
@@ -16,7 +19,7 @@ const browser = await chromium.launch({
 });
 
 try {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ viewport: { width: viewportWidth, height: viewportHeight } });
   const consoleErrors = [];
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
@@ -65,9 +68,9 @@ try {
     };
   });
 
-  assert.deepEqual(measurements.viewport, { width: 390, height: 844 });
-  assert.equal(measurements.seal.width, 36);
-  assert.equal(measurements.seal.height, 36);
+  assert.deepEqual(measurements.viewport, { width: viewportWidth, height: viewportHeight });
+  assert.equal(measurements.seal.width, 44);
+  assert.equal(measurements.seal.height, 44);
   assert.ok(measurements.seal.imageComplete);
   assert.ok(measurements.seal.imageNaturalWidth > 0);
   assert.ok(measurements.seal.imageNaturalHeight > 0);
@@ -81,7 +84,7 @@ try {
   assert.equal(measurements.overlapsCounter, false);
   assert.deepEqual(consoleErrors, []);
 
-  const screenshot = path.join(outputDir, 'exhibitions-medallion-390.png');
+  const screenshot = path.join(outputDir, `exhibitions-medallion-${viewportWidth}.png`);
   await page.screenshot({ path: screenshot });
   const report = {
     url,
@@ -91,7 +94,7 @@ try {
     measurements,
   };
   await writeFile(
-    path.join(outputDir, 'exhibitions-medallion-390.json'),
+    path.join(outputDir, `exhibitions-medallion-${viewportWidth}.json`),
     `${JSON.stringify(report, null, 2)}\n`,
   );
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

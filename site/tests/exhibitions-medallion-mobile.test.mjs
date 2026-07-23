@@ -27,7 +27,7 @@ function declarations(css, selector, from = 0) {
   };
 }
 
-test('public and lab exhibition surfaces preserve the accepted 44/36px seal geometry', async () => {
+test('public and lab exhibition surfaces preserve the owner-accepted 44px seal geometry', async () => {
   const [surfaceSource, labSource] = await Promise.all([
     readFile(sourceUrl, 'utf8'),
     readFile(labUrl, 'utf8'),
@@ -49,8 +49,8 @@ test('public and lab exhibition surfaces preserve the accepted 44/36px seal geom
     const mobile = declarations(css, '.ex-deck__medallion {', mobileMedia);
     assert.match(mobile.body, /\btop:\s*7px\s*;/u, `${name}: mobile seal must retain the donor offset`);
     assert.match(mobile.body, /\bleft:\s*7px\s*;/u, `${name}: mobile seal must retain the donor offset`);
-    assert.match(mobile.body, /\bwidth:\s*36px\s*;/u, `${name}: mobile seal must remain the accepted readable 36px`);
-    assert.match(mobile.body, /\bheight:\s*36px\s*;/u, `${name}: mobile seal must remain square`);
+    assert.match(mobile.body, /\bwidth:\s*44px\s*;/u, `${name}: mobile seal must use the owner-accepted readable 44px`);
+    assert.match(mobile.body, /\bheight:\s*44px\s*;/u, `${name}: mobile seal must remain square`);
 
     const mobileDeck = declarations(css, '.ex-deck {', mobileMedia);
     assert.match(mobileDeck.body, /\binline-size:\s*100%\s*;/u, `${name}: seal sizing must not narrow the mobile deck`);
