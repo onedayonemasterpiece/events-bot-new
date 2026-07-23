@@ -183,6 +183,21 @@
 
 ### Fixed
 
+- Restored the accepted v23/v28 mobile rail interactions and proof states:
+  shared hollow/filled heart icons, red start-edge negative pull with explicit
+  confirmation, terminal left-overpull Like, pointer/touch cancellation and
+  Undo now use the canonical feedback controls instead of inert decoration.
+  Post-drag link clicks are capture-suppressed and feedback completion follows
+  the actual `aria-pressed` mutation instead of a race-prone fixed timeout.
+- Removed rail image fields for the real Pianissimo event `5296` with the
+  donor's face-safe `140×112` cover, and source-reviewed the no-text alternate
+  Teremok image for a bounded `90×112` vertical `4:5` cover while keeping all
+  OCR/unknown/unreviewed media fail-closed behind explicit per-asset no-OCR
+  provenance.
+- Enabled the existing `Море внутри` festival medallion on the mobile rail for
+  event `4211` through its structured festival binding; it stays external to
+  the OCR image and does not grant crop permission.
+
 - Completed the R9 mobile acceptance pass: full event detail reuses the shared
   leather tag with an immediate terracotta fallback; circular organizer/free
   medallions share one diameter and baseline; exhibition seals use a readable

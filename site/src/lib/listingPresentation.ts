@@ -299,6 +299,7 @@ interface ListingMediaOverride {
   height?: number;
   imageTextMode?: 'ocr_text' | 'visual_only' | 'unknown';
   cropEvidence?: string;
+  noOcrReviewed?: boolean;
   objectPosition?: string;
   alt?: string;
   useNatural?: boolean;
@@ -331,6 +332,7 @@ function withListingMediaOverride(event: PreviewEvent, asset: EventImageAsset | 
     focal_point: item.cropEvidence ? { x: 0.5, y: 0.5 } : asset.focal_point,
     recommended_object_position: item.objectPosition || asset.recommended_object_position,
     listing_crop_evidence: item.cropEvidence ? 'source-reviewed' : asset.listing_crop_evidence,
+    listing_no_ocr_review: item.noOcrReviewed === true,
     listing_use_natural: item.useNatural === true,
   };
 }
@@ -356,9 +358,22 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
     && asset.safe_crop === true
     && Boolean(asset.focal_point)
   ));
+  const isSourceReviewedVisual = (asset: EventImageAsset) => (
+    asset.listing_crop_evidence === 'source-reviewed'
+    && asset.listing_no_ocr_review === true
+    && asset.image_text_mode === 'visual_only'
+    && asset.media_semantic_status === 'classified'
+    && asset.media_role === 'event_photo'
+    && Number(asset.media_role_confidence || 0) >= 0.9
+    && asset.safe_crop === true
+    && Boolean(asset.focal_point)
+  );
   const visualOnly = assets.filter((asset) => (
     asset.image_text_mode === 'visual_only'
-    && event.image_text_mode !== 'ocr_text'
+    // An event may have an OCR primary poster and a separately reviewed
+    // no-text photo. Only explicit per-asset source review may override the
+    // event-level fail-closed marker.
+    && (event.image_text_mode !== 'ocr_text' || isSourceReviewedVisual(asset))
     && asset.media_role !== 'event_identity_poster'
     && asset.media_role !== 'program_or_schedule'
     && asset.media_role !== 'attendee_information'
@@ -399,11 +414,12 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
     && asset.image_kind === 'photo'
   );
   const isPoster = Boolean(asset && asset.media_semantic_status === 'classified' && asset.media_role === 'event_identity_poster');
+  const sourceReviewedVisual = Boolean(asset && isSourceReviewedVisual(asset));
   const textProtected = Boolean(
     asset
     && (
       asset.image_text_mode !== 'visual_only'
-      || event.image_text_mode === 'ocr_text'
+      || (event.image_text_mode === 'ocr_text' && !sourceReviewedVisual)
       || ['event_identity_poster', 'program_or_schedule', 'attendee_information'].includes(asset.media_role || '')
     )
   );

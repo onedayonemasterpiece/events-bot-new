@@ -106,6 +106,49 @@ for (const route of listingRoutes) {
     if (!normalizedCss.includes(contract)) throw new Error(`Listing route ${route} misses accepted v23 mobile rail contract ${contract}`);
   }
 }
+const mobileRailRow = (route, eventId) => {
+  const html = readFileSync(join(root, route, 'index.html'), 'utf8');
+  const start = html.indexOf(`data-event="${eventId}"`);
+  const end = html.indexOf('</article>', start);
+  if (start < 0 || end < 0) throw new Error(`Mobile rail canary ${eventId} is missing from ${route}`);
+  return html.slice(start, end);
+};
+const pianissimoRail = mobileRailRow('date-2026-07-24', 5296);
+for (const marker of [
+  'data-mobile-rail-media-reason="single_safe_visual_landscape_5x4"',
+  '--media-width:140px',
+  '--rail-media-fit:cover',
+  'data-image-text-mode="visual_only"',
+  '--focus-x:65%',
+]) {
+  if (!pianissimoRail.includes(marker)) throw new Error(`Pianissimo 5296 rail crop regression: missing ${marker}`);
+}
+const teremokRail = mobileRailRow('vyhodnye', 6939);
+for (const marker of [
+  'data-mobile-rail-media-reason="reviewed_multi_visual_portrait_4x5"',
+  '--media-width:90px',
+  '--rail-media-fit:cover',
+  'data-image-text-mode="visual_only"',
+  '00450088000040066194318c30c61a8433adac94241ca7180611098703ce2949.webp',
+]) {
+  if (!teremokRail.includes(marker)) throw new Error(`Teremok 6939 rail crop regression: missing ${marker}`);
+}
+const moreRail = mobileRailRow('date-2026-08-08', 4211);
+if (!moreRail.includes('data-image-text-mode="ocr_text"') || !moreRail.includes('--rail-media-fit:contain')) {
+  throw new Error('More vnutri 4211 OCR media must remain fail-closed');
+}
+if (!moreRail.includes('/assets/festivals/more-vnutri.svg')) {
+  throw new Error('More vnutri 4211 misses its structured external festival medallion');
+}
+for (const row of [pianissimoRail, teremokRail, moreRail]) {
+  if ((row.match(/icon--heart/gu) || []).length !== 3 || !row.includes('icon__heart-outline') || !row.includes('icon__heart-solid')) {
+    throw new Error('Mobile rail must use the shared hollow/solid heart component for proof, underlay and action');
+  }
+}
+const mobileRailSurfaceSource = readFileSync(join(siteDir, 'src/components/listings/MobileListingRailSurface.astro'), 'utf8');
+for (const gestureMarker of ['setDislike', 'setLikePull', 'finishLike', 'data-rail-confirm-negative', "touchmove", "pointercancel"]) {
+  if (!mobileRailSurfaceSource.includes(gestureMarker)) throw new Error(`Mobile rail lost accepted gesture runtime: ${gestureMarker}`);
+}
 const reference4MenuSource = readFileSync(join(siteDir, 'src/components/Reference4MobileMenu.astro'), 'utf8');
 if (reference4MenuSource.includes('.reference4-menu__brand::before')) {
   throw new Error('Reference-4 menu must not paint a local logo scrim over the accepted glass plane');

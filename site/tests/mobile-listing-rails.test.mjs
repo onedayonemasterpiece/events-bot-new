@@ -24,6 +24,12 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   }
   assert.match(row, /occurrenceMode === 'per-family' \? getOccurrencePresentation\(event\) : null/u);
   assert.match(row, /resolveMobileListingRailMedia\(event, image\)/u);
+  assert.match(row, /import Icon from '\.\.\/Icon\.astro'/u);
+  assert.equal((row.match(/<Icon name="heart" \/>/gu) || []).length, 3);
+  assert.doesNotMatch(row, />♥</u);
+  assert.match(row, /data-feedback-action="not_interested"/u);
+  assert.match(row, /data-feedback-count/u);
+  assert.match(row, /data-image-text-mode=\{selectedImageTextMode\}/u);
   assert.match(row, /data-media-state="loading"/u);
   assert.match(surface, /mobile-rail-media-skeleton/u);
   assert.match(surface, /if \(img\.complete\) decodeLoaded\(\)/u);
@@ -45,6 +51,35 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.doesNotMatch(accessory, /aria-disabled="true"/u);
   assert.match(await read('src/pages/date-[date].astro'), /Array\.from\(\{ length: 42 \}/u);
   assert.match(await read('src/pages/date-[date].astro'), /<DateListingSurface kind="date"/u);
+});
+
+test('accepted donor edge gestures and hollow-to-filled system heart states are executable contracts', async () => {
+  const surface = await read('src/components/listings/MobileListingRailSurface.astro');
+  for (const token of [
+    'setDislike',
+    'setLikePull',
+    'finishLike',
+    'touchstart',
+    'touchmove',
+    'pointerdown',
+    'pointermove',
+    'pointercancel',
+    'data-rail-confirm-negative',
+    'data-rail-action-toast',
+  ]) assert.match(surface, new RegExp(token, 'u'), token);
+  assert.match(surface, /progress >= \.86 && dx >= 140/u);
+  assert.match(surface, /physical >= 120/u);
+  assert.match(surface, /Math\.abs\(dx\) >= Math\.abs\(dy\) \* 1\.25/u);
+  assert.match(surface, /\.rail-window\.is-settling \.event-track\{transition:transform 400ms cubic-bezier\(\.2,\.8,\.2,1\)/u);
+  assert.match(surface, /\.event-like-cta\[aria-pressed=true\] \.icon__heart-outline\{display:none\}/u);
+  assert.match(surface, /\.event-like-cta\[aria-pressed=true\] \.icon__heart-solid\{display:block!important\}/u);
+  assert.match(surface, /if \(!event\.isTrusted\) return/u);
+  assert.match(surface, /event\.stopImmediatePropagation\(\)/u);
+  assert.match(surface, /\}, \{ capture:true \}\);/u);
+  assert.match(surface, /const waitForPressed =/u);
+  assert.doesNotMatch(surface, /setTimeout\(\(\) => \{[\s\S]{0,160}aria-pressed[\s\S]{0,160}\}, 80\)/u);
+  assert.match(surface, /body\.rail-confirm-open \.mobile-bottom-nav\{opacity:0;visibility:hidden;pointer-events:none\}/u);
+  assert.match(surface, /const reduced = matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches/u);
 });
 
 test('accepted sticky hierarchy and straight 48x23 arrow are literal contracts', async () => {
@@ -88,4 +123,35 @@ test('search, personal, exhibitions and event continuation do not inherit the li
   for (const path of paths) {
     assert.doesNotMatch(await read(path), /MobileListingRailSurface/u, path);
   }
+});
+
+test('real-data canaries retain Pianissimo/Teremok crop evidence and More vnutri structured binding', async () => {
+  const [preview, overrides, festivals] = await Promise.all([
+    read('src/data/preview-events.json').then(JSON.parse),
+    read('src/data/listingMediaOverrides.json').then(JSON.parse),
+    read('src/data/festivalMedallions.json').then(JSON.parse),
+  ]);
+  const pianissimo = preview.events.find((event) => event.id === 5296);
+  assert.ok(pianissimo, 'Pianissimo 5296 must be in the current real-data snapshot');
+  assert.equal(pianissimo.image_assets.length, 1);
+  assert.equal(pianissimo.image_assets[0].image_text_mode, 'visual_only');
+  assert.equal(pianissimo.image_assets[0].safe_crop, true);
+
+  const teremok = preview.events.find((event) => event.id === 6939);
+  assert.ok(teremok, 'Teremok 6939 must be in the current real-data snapshot');
+  const reviewedSrc = 'https://static.kenigevents.ru/p/dh16/00/00450088000040066194318c30c61a8433adac94241ca7180611098703ce2949.webp';
+  const reviewedAsset = teremok.image_assets.find((asset) => asset.src === reviewedSrc);
+  assert.ok(reviewedAsset);
+  const review = overrides.items.find((item) => item.sourceSrc === reviewedSrc);
+  assert.equal(review?.imageTextMode, 'visual_only');
+  assert.match(review?.cropEvidence || '', /reviewed-no-ocr/u);
+  assert.equal(review?.noOcrReviewed, true);
+  const retainedArea = Math.min((reviewedAsset.width / reviewedAsset.height) / .8, .8 / (reviewedAsset.width / reviewedAsset.height));
+  assert.ok(retainedArea >= .8, `Teremok 4:5 crop retained only ${retainedArea}`);
+
+  const more = preview.events.find((event) => event.id === 4211);
+  assert.equal(more?.festival, 'МОРЕ ВНУТРИ');
+  const moreManifest = festivals.items.find((item) => item.slug === 'more-vnutri');
+  assert.equal(moreManifest?.listingStatus, 'listing_ready');
+  assert.equal(moreManifest?.listingBinding, 'festival');
 });

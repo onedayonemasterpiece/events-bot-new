@@ -10,8 +10,8 @@ function closeEnough(actual, expected, tolerance = 1) {
   assert.ok(Math.abs(actual - expected) <= tolerance, `expected ${actual} to be within ${tolerance}px of ${expected}`);
 }
 
-async function contextFor(width, { failRemoteImages = false, delayRemoteImages = 0, reducedMotion = 'no-preference' } = {}) {
-  const context = await browser.newContext({ viewport: { width, height: width === 320 ? 700 : 844 }, reducedMotion });
+async function contextFor(width, { failRemoteImages = false, delayRemoteImages = 0, reducedMotion = 'no-preference', hasTouch = false } = {}) {
+  const context = await browser.newContext({ viewport: { width, height: width === 320 ? 700 : 844 }, reducedMotion, hasTouch });
   await context.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -181,6 +181,103 @@ for (const width of [320, 390]) {
     return getComputedStyle(node.querySelector('.amber-artifact__visual')).animationName;
   });
   assert.equal(animation, 'none');
+  await context.close();
+}
+
+{
+  const context = await contextFor(390);
+  const page = await context.newPage();
+  for (const canary of [
+    { route:'/date-2026-07-24/', id:'5296', width:140, reason:'single_safe_visual_landscape_5x4', mode:'visual_only' },
+    { route:'/vyhodnye/', id:'6939', width:90, reason:'reviewed_multi_visual_portrait_4x5', mode:'visual_only' },
+  ]) {
+    await page.goto(`${baseUrl}${canary.route}`, { waitUntil:'domcontentloaded' });
+    const row = page.locator(`[data-mobile-listing-row][data-event-id="${canary.id}"]`);
+    await row.waitFor();
+    const media = await row.locator('.event-media').evaluate((node) => ({
+      width: node.getBoundingClientRect().width,
+      height: node.getBoundingClientRect().height,
+      fit: getComputedStyle(node.querySelector('img')).objectFit,
+      reason: node.dataset.railMediaReason,
+      mode: node.dataset.imageTextMode,
+    }));
+    closeEnough(media.width, canary.width);
+    closeEnough(media.height, 112);
+    assert.equal(media.fit, 'cover');
+    assert.equal(media.reason, canary.reason);
+    assert.equal(media.mode, canary.mode);
+  }
+
+  await page.goto(`${baseUrl}/date-2026-08-08/`, { waitUntil:'domcontentloaded' });
+  const more = page.locator('[data-mobile-listing-row][data-event-id="4211"]');
+  await more.waitFor();
+  assert.equal(await more.locator('img[src*="/assets/festivals/more-vnutri.svg"]').count(), 1);
+  assert.equal(await more.locator('.event-media').getAttribute('data-image-text-mode'), 'ocr_text');
+  assert.equal(await more.locator('.event-medallion-slot').evaluate((node) => Boolean(node.closest('.event-media'))), false);
+  await context.close();
+}
+
+{
+  const context = await contextFor(390);
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/date-2026-07-24/`, { waitUntil:'domcontentloaded' });
+  const row = page.locator('[data-mobile-listing-row][data-event-id="5296"]');
+  const rail = row.locator('.rail-window');
+  const like = row.locator('[data-like]');
+  assert.equal(await like.locator('.icon__heart-outline').count(), 1);
+  assert.equal(await like.locator('.icon__heart-solid').count(), 1);
+
+  await row.scrollIntoViewIfNeeded();
+  const box = await rail.boundingBox();
+  const initialUrl = page.url();
+  await page.mouse.move(box.x + 42, box.y + 56);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 350, box.y + 56, { steps:8 });
+  assert.equal(await rail.evaluate((node) => node.classList.contains('is-armed')), true);
+  assert.ok(Number(await rail.evaluate((node) => getComputedStyle(node).getPropertyValue('--dislike-progress'))) >= .86);
+  await page.mouse.up();
+  await page.locator('[data-rail-confirm].is-open').waitFor();
+  assert.equal(page.url(), initialUrl);
+  await page.locator('[data-rail-confirm-cancel]').click();
+  await page.locator('[data-rail-confirm]').waitFor({ state:'hidden' });
+
+  await rail.evaluate((node) => { node.scrollLeft = node.scrollWidth; });
+  await like.evaluate((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopImmediatePropagation();
+      button.setAttribute('aria-pressed', 'true');
+    }, { capture:true, once:true });
+  });
+  await page.mouse.move(box.x + 280, box.y + 56);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 130, box.y + 56, { steps:8 });
+  assert.equal(await rail.evaluate((node) => node.classList.contains('is-like-armed')), true);
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector('[data-event-id="5296"] [data-like]')?.getAttribute('aria-pressed') === 'true');
+  const heartDisplay = await like.evaluate((button) => ({
+    outline: getComputedStyle(button.querySelector('.icon__heart-outline')).display,
+    solid: getComputedStyle(button.querySelector('.icon__heart-solid')).display,
+  }));
+  assert.equal(heartDisplay.outline, 'none');
+  assert.notEqual(heartDisplay.solid, 'none');
+  assert.equal(page.url(), initialUrl);
+  await context.close();
+}
+
+{
+  const context = await contextFor(390, { hasTouch:true });
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/date-2026-07-24/`, { waitUntil:'domcontentloaded' });
+  const row = page.locator('[data-mobile-listing-row][data-event-id="5296"]');
+  const rail = row.locator('.rail-window');
+  await rail.evaluate((node) => {
+    const touch = (x) => new Touch({ identifier:1, target:node, clientX:x, clientY:56, pageX:x, pageY:56 });
+    node.dispatchEvent(new TouchEvent('touchstart', { touches:[touch(22)], targetTouches:[touch(22)], changedTouches:[touch(22)], bubbles:true }));
+    node.dispatchEvent(new TouchEvent('touchmove', { touches:[touch(372)], targetTouches:[touch(372)], changedTouches:[touch(372)], bubbles:true, cancelable:true }));
+    node.dispatchEvent(new TouchEvent('touchend', { touches:[], targetTouches:[], changedTouches:[touch(372)], bubbles:true }));
+  });
+  await page.locator('[data-rail-confirm].is-open').waitFor();
+  await page.locator('[data-rail-confirm-cancel]').click();
   await context.close();
 }
 

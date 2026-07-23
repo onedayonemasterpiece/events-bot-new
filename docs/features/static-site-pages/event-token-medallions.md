@@ -386,6 +386,12 @@ Date/Popular listing cards use a stricter compact projection than event detail:
 - proof never evicts venue/festival/Free identity, and a zero proof metric has
   no DOM node or reserved width.
 
+The mobile physical rail uses the same structured external-identity exception.
+`more-vnutri` is `listing_ready` with `listingBinding=festival`; therefore real
+event `4211` resolves the token from its structured `festival: "МОРЕ ВНУТРИ"`
+field. The token remains outside the OCR poster, so this binding grants neither
+crop permission nor an on-image overlay.
+
 Controls: Tretyakovka photo `6950` and Zoo fallback `6957` prove the lower-right
 overlay; event `6811` proves all three identities plus two proof rows in both
 regular and Weekend densities. Canonical product contract:

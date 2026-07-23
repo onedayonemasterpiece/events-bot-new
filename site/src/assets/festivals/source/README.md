@@ -37,7 +37,9 @@ image tooling.
 | `kaup` | `venue_brand` | Кауп | https://static.tildacdn.com/tild3166-3161-4133-a638-363932633936/Logo_wh_main.svg | `/assets/festivals/kaup.svg` | Official Kaup mark reused from `origin/feature/static-site-venue-medallions-20260703`; listing overlay is allowed only for `image_text_mode=visual_only`. |
 
 V13 records `kaup` as `listing_ready` + `venue` and
-`kgd80-80-stories` as `listing_ready` + `festival`. These are structured
+`kgd80-80-stories` as `listing_ready` + `festival`. The R10 rail regression
+also records `more-vnutri` as `listing_ready` + `festival`, resolving real event
+`4211` only from its structured festival field. These are structured
 bindings, not evidence that an image is crop-safe; `visual_only` remains the
 mandatory overlay gate and crop evidence remains asset-specific.
 

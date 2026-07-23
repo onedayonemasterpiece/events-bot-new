@@ -123,6 +123,13 @@
         691,
         798
       ]
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/00/00450088000040066194318c30c61a8433adac94241ca7180611098703ce2949.webp",
+      "imageTextMode": "visual_only",
+      "cropEvidence": "source-still-reviewed-no-ocr-20260723",
+      "noOcrReviewed": true,
+      "objectPosition": "50% 50%"
     }
   ]
 }

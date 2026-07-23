@@ -6,6 +6,7 @@ import { occurrenceTime } from '../../lib/eventOccurrences';
 import { selectListingImage } from '../../lib/listingPresentation';
 import { resolveMobileListingRailMedia } from '../../lib/mobileListingRailMedia.mjs';
 import { getListingIdentityMedallions } from '../../lib/listingVenueMedallions';
+import Icon from '../Icon.astro';
 import AmberRailArtifact from './AmberRailArtifact.astro';
 
 interface Props {
@@ -30,6 +31,7 @@ const likesCount = event.likes_count || 0;
 const href = eventHref(event);
 const mediaFit = railMedia.fit;
 const mediaWidth = railMedia.width;
+const selectedImageTextMode = image.asset?.image_text_mode || event.image_text_mode || 'unknown';
 const style = `--media-width:${mediaWidth}px;--focus-x:${image.objectPosition.split(' ')[0] || '50%'};--focus-y:${image.objectPosition.split(' ')[1] || '50%'};--rail-media-fit:${mediaFit}`;
 const useDatePrimary = occurrenceMode === 'per-family' && Boolean(occurrence);
 const noExactTime = !timeLine;
@@ -43,13 +45,14 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
   data-feedback-scope
   data-event={event.id}
   data-event-id={event.id}
+  data-event-title={event.title}
   data-listing-city={event.city || 'Калининградская область'}
   data-listing-event-type={event.event_type || 'other'}
   data-mobile-rail-media-reason={railMedia.reason}
 >
   <div class="rail-window" tabindex="0" aria-label={`${event.title}. ${scheduleAria}. Фото, описание и действия доступны горизонтальным листанием`}>
     <span class="dislike-underlay" aria-hidden="true"><span>Неинтересно</span></span>
-    <span class="like-underlay" aria-hidden="true"><span>♥</span></span>
+    <span class="like-underlay" aria-hidden="true"><Icon name="heart" /></span>
     <span class="event-track">
       <a class="event-link" href={href} data-prefetch aria-label={`${event.title}. ${scheduleAria}`}>
         <span class="track-start"></span>
@@ -67,7 +70,10 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
             <span class="event-title">{event.title}</span>
             <span class="event-description">{place}</span>
             <span class="event-signals">
-              {likesCount > 0 && <span class="event-signal event-signal--like" data-small-like><span>♥</span><span>{likesCount}</span></span>}
+              <span class="event-signal event-signal--like" data-small-like hidden={likesCount <= 0}>
+                <Icon name="heart" />
+                <span data-small-like-count>{likesCount}</span>
+              </span>
             </span>
           </span>
           <span class="event-cue" aria-hidden="true">
@@ -76,8 +82,8 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         </span>
         {imageUrl ? (
           <span
-            class:list={['event-media', 'is-loading', mediaFit === 'contain' && 'event-media--natural', event.image_text_mode === 'ocr_text' && 'event-media--ocr']}
-            data-image-text-mode={event.image_text_mode}
+            class:list={['event-media', 'is-loading', mediaFit === 'contain' && 'event-media--natural', selectedImageTextMode === 'ocr_text' && 'event-media--ocr']}
+            data-image-text-mode={selectedImageTextMode}
             data-media-state="loading"
             data-rail-media-reason={railMedia.reason}
             style={style}
@@ -123,9 +129,20 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         aria-pressed="false"
         aria-label={`Поставить лайк: ${event.title}. Сейчас ${likesCount}`}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M16.5 4.5c2.206 0 4 1.794 4 4 0 4.67-5.543 8.94-8.5 11.023C9.043 17.44 3.5 13.17 3.5 8.5c0-2.206 1.794-4 4-4 1.298 0 2.522.638 3.273 1.706L12 7.953l1.227-1.746c.75-1.07 1.975-1.707 3.273-1.707m0-1.5c-1.862 0-3.505.928-4.5 2.344C11.005 3.928 9.362 3 7.5 3 4.462 3 2 5.462 2 8.5c0 5.72 6.5 10.438 10 12.85 3.5-2.412 10-7.13 10-12.85C22 5.462 19.538 3 16.5 3Z" /></svg>
-        <strong data-like-count>{likesCount}</strong>
+        <Icon name="heart" />
+        <strong data-like-count data-feedback-count>{likesCount}</strong>
       </button>
+      <button
+        type="button"
+        class="rail-negative-control"
+        data-rail-negative-control
+        data-feedback-action="not_interested"
+        data-event-id={event.id}
+        data-event-title={event.title}
+        aria-pressed="false"
+        tabindex="-1"
+        hidden
+      >Не интересно</button>
       {amberArtifactTail && <AmberRailArtifact eventId={event.id} placement="tail" />}
     </span>
   </div>

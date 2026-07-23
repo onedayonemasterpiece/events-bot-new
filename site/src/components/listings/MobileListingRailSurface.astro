@@ -89,6 +89,19 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
       weekendEnd={weekendEnd}
     />
   )}
+  <div class="rail-confirm-sheet" data-rail-confirm hidden role="dialog" aria-modal="true" aria-labelledby={`rail-confirm-title-${current}`}>
+    <section class="rail-confirm-panel">
+      <h2 id={`rail-confirm-title-${current}`}>Пометить событие как неинтересное?</h2>
+      <p>Событие исчезнет из этой подборки.</p>
+      <div>
+        <button type="button" data-rail-confirm-cancel>Отмена</button>
+        <button type="button" data-rail-confirm-negative>Не интересно</button>
+      </div>
+    </section>
+  </div>
+  <div class="rail-action-toast" data-rail-action-toast hidden role="status" aria-live="polite">
+    <span></span><button type="button">Отменить</button>
+  </div>
 </div>
 
 <style is:global>
@@ -126,17 +139,18 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
     .ke-mobile-listing-rails--v23 .mobile-v23-sections{display:block;overflow:visible}.ke-mobile-listing-rails--v23 .group{position:relative;display:block;overflow:visible}.ke-mobile-listing-rails--v23 .group[hidden]{display:none}.ke-mobile-listing-rails--v23 .group-head{position:sticky;z-index:30;top:64px;min-height:54px;padding:9px 12px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-block:1px solid var(--rail-line);background:rgba(251,247,239,.985);box-shadow:0 6px 12px rgba(72,45,25,.045)}.ke-mobile-listing-rails--v23[data-mobile-v23-page=popular] .group-head{box-sizing:border-box;height:80px;min-height:80px;padding:21px 12px 4px}.ke-mobile-listing-rails--v23 .group-head__copy{min-width:0;display:flex;align-items:center;gap:7px}.ke-mobile-listing-rails--v23 .group-head__icon{width:18px;height:18px;flex:0 0 18px;color:var(--rail-primary)}.ke-mobile-listing-rails--v23 .group-head__icon svg{display:block;width:100%;height:100%;fill:currentColor}.ke-mobile-listing-rails--v23 .group-head h2{margin:0;font:880 17px/19px Inter,system-ui;letter-spacing:-.025em}.ke-mobile-listing-rails--v23[data-mobile-v23-page=popular] .group-head h2{font-size:18px;line-height:20px}.ke-mobile-listing-rails--v23 .group-head p{margin:3px 0 0;color:var(--rail-muted);font:700 10px/12px Inter,system-ui}.ke-mobile-listing-rails--v23 .group-head>span{flex:none;min-width:28px;text-align:right;color:var(--rail-primary);font:900 12px/1 Inter,system-ui}
     .ke-mobile-listing-rails--v23 .event-list{display:grid;gap:10px;padding:10px 0 24px}.ke-mobile-listing-rails--v23 .event-row{height:112px;min-width:0;overflow:hidden}.ke-mobile-listing-rails--v23 .event-row[hidden]{display:none}
     .ke-mobile-listing-rails--v23 .rail-window{--dislike-progress:0;--like-progress:0;--rail-max:0px;--rail-view-width:100vw;position:relative;display:block;width:100vw;height:112px;overflow-x:auto;overflow-y:hidden;border:0;border-radius:0;background:transparent;box-shadow:none;color:inherit;text-decoration:none;scrollbar-width:none;overscroll-behavior-inline:contain;touch-action:pan-x pan-y;cursor:grab;-webkit-tap-highlight-color:transparent}.ke-mobile-listing-rails--v23 .rail-window::-webkit-scrollbar{display:none}.ke-mobile-listing-rails--v23 .rail-window.is-dragging{cursor:grabbing}.ke-mobile-listing-rails--v23 .event-link{display:contents;color:inherit;text-decoration:none}.ke-mobile-listing-rails--v23 .event-link:focus-visible{outline:none}.ke-mobile-listing-rails--v23 .event-link:focus-visible .event-summary{outline:3px solid rgba(15,118,110,.62);outline-offset:-3px}
-    .ke-mobile-listing-rails--v23 .event-track{position:relative;z-index:1;width:max-content;height:112px;display:flex;align-items:center;gap:7px;padding:0 12px 0 0;background:transparent;border:0;border-radius:0;box-shadow:none;transform:translate3d(0,0,0)}
-    .ke-mobile-listing-rails--v23 .dislike-underlay{position:absolute;z-index:0;inset:0 auto 0 0;width:100vw;display:flex;align-items:center;padding-left:12px;background:linear-gradient(90deg,rgba(177,38,38,.94),rgba(177,38,38,.34) 55%,rgba(177,38,38,0));opacity:var(--dislike-progress);color:#fff;pointer-events:none}.ke-mobile-listing-rails--v23 .dislike-underlay span{font:900 10px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .like-underlay{position:absolute;z-index:0;top:0;bottom:0;left:var(--rail-max);width:var(--rail-view-width);display:flex;align-items:center;justify-content:flex-end;padding-right:4px;background:linear-gradient(270deg,rgba(47,122,86,.96),rgba(47,122,86,.42) 58%,rgba(47,122,86,0));opacity:var(--like-progress);color:#fff;pointer-events:none}
-    .ke-mobile-listing-rails--v23 .track-start{flex:0 0 5px;width:5px;height:1px}.ke-mobile-listing-rails--v23 .event-summary{position:relative;flex:0 0 296px;width:296px;height:112px;display:flex;align-items:center;gap:14px;padding:15px 12px;border:1px solid rgba(121,48,20,.13);border-radius:14px 10px 10px 14px;background:var(--rail-surface);box-shadow:0 7px 18px rgba(72,45,25,.065)}
+    .ke-mobile-listing-rails--v23 .event-track{position:relative;z-index:1;width:max-content;height:112px;display:flex;align-items:center;gap:7px;padding:0 12px 0 0;background:transparent;border:0;border-radius:0;box-shadow:none;transform:translate3d(0,0,0)}.ke-mobile-listing-rails--v23 .rail-window.is-dislike-active .event-track,.ke-mobile-listing-rails--v23 .rail-window.is-like-pulling .event-track{will-change:transform}.ke-mobile-listing-rails--v23 .rail-window.is-settling .event-track{transition:transform 400ms cubic-bezier(.2,.8,.2,1)}
+    .ke-mobile-listing-rails--v23 .dislike-underlay{position:absolute;z-index:0;inset:0 auto 0 0;width:100vw;display:flex;align-items:center;padding-left:12px;background:linear-gradient(90deg,rgba(177,38,38,.94),rgba(177,38,38,.34) 55%,rgba(177,38,38,0));opacity:var(--dislike-progress);color:#fff;pointer-events:none}.ke-mobile-listing-rails--v23 .dislike-underlay span{opacity:0;font:900 10px/1 Inter,system-ui;transition:opacity 140ms ease}.ke-mobile-listing-rails--v23 .rail-window.is-armed .dislike-underlay span{opacity:1}.ke-mobile-listing-rails--v23 .like-underlay{position:absolute;z-index:0;top:0;bottom:0;left:var(--rail-max);width:var(--rail-view-width);display:flex;align-items:center;justify-content:flex-end;padding-right:4px;background:linear-gradient(270deg,rgba(47,122,86,.96),rgba(47,122,86,.42) 58%,rgba(47,122,86,0));opacity:var(--like-progress);color:#fff;pointer-events:none}.ke-mobile-listing-rails--v23 .like-underlay svg{width:32px;height:32px;fill:currentColor}.ke-mobile-listing-rails--v23 .like-underlay .icon__heart-outline{display:none}.ke-mobile-listing-rails--v23 .like-underlay .icon__heart-solid{display:block!important}
+    .ke-mobile-listing-rails--v23 .track-start{flex:0 0 5px;width:5px;height:1px}.ke-mobile-listing-rails--v23 .event-summary{position:relative;isolation:isolate;flex:0 0 296px;width:296px;height:112px;display:flex;align-items:center;gap:14px;padding:15px 12px;border:1px solid rgba(121,48,20,.13);border-radius:14px 10px 10px 14px;background:var(--rail-surface);box-shadow:0 7px 18px rgba(72,45,25,.065)}.ke-mobile-listing-rails--v23 .event-summary::after{content:"";position:absolute;z-index:-1;inset:0;border-radius:inherit;background:rgba(177,38,38,calc(var(--dislike-progress) * .13));pointer-events:none}
     .ke-mobile-listing-rails--v23 .event-time{flex:0 0 96px;width:96px;height:82px;display:grid;place-content:center;gap:3px;border-radius:8px;background:var(--rail-time-surface);color:var(--rail-time-ink);text-align:center}.ke-mobile-listing-rails--v23 .event-time strong{font:860 28px/1 Inter,system-ui;letter-spacing:-.07em;font-variant-numeric:tabular-nums}.ke-mobile-listing-rails--v23 .event-time span{max-width:86px;overflow:hidden;font:760 9.5px/1.05 Inter,system-ui;text-overflow:ellipsis;white-space:nowrap;opacity:.92}.ke-mobile-listing-rails--v23 .event-time--date-primary strong{font-size:16px;line-height:17px;letter-spacing:-.025em}.ke-mobile-listing-rails--v23 .event-time--no-time .program-label{font-size:13px;line-height:14px;letter-spacing:-.02em}
-    .ke-mobile-listing-rails--v23 .event-info{flex:0 0 162px;width:162px;height:78px;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px}.ke-mobile-listing-rails--v23 .event-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font:850 15px/17px Inter,system-ui;letter-spacing:-.027em;hyphens:auto}.ke-mobile-listing-rails--v23 .event-description{display:block;overflow:hidden;padding-right:7px;color:var(--rail-muted);font:680 10.5px/12px Inter,system-ui;text-overflow:ellipsis;white-space:nowrap}.ke-mobile-listing-rails--v23 .event-signals{min-height:13px;display:flex;align-items:center;gap:8px;padding-right:54px;color:#756b64;font:760 10.5px/12px Inter,system-ui;white-space:nowrap}.ke-mobile-listing-rails--v23 .event-signal{display:inline-flex;align-items:center;gap:3px}
+    .ke-mobile-listing-rails--v23 .event-info{flex:0 0 162px;width:162px;height:78px;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px}.ke-mobile-listing-rails--v23 .event-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font:850 15px/17px Inter,system-ui;letter-spacing:-.027em;hyphens:auto}.ke-mobile-listing-rails--v23 .event-description{display:block;overflow:hidden;padding-right:7px;color:var(--rail-muted);font:680 10.5px/12px Inter,system-ui;text-overflow:ellipsis;white-space:nowrap}.ke-mobile-listing-rails--v23 .event-signals{min-height:13px;display:flex;align-items:center;gap:8px;padding-right:54px;color:#756b64;font:760 10.5px/12px Inter,system-ui;white-space:nowrap}.ke-mobile-listing-rails--v23 .event-signal{display:inline-flex;align-items:center;gap:3px}.ke-mobile-listing-rails--v23 .event-signal[hidden]{display:none}.ke-mobile-listing-rails--v23 .event-signal svg{width:12px;height:12px;fill:currentColor}.ke-mobile-listing-rails--v23 .event-signal .icon__heart-solid{display:none!important}.ke-mobile-listing-rails--v23 .event-row.is-liked .event-signal .icon__heart-outline{display:none}.ke-mobile-listing-rails--v23 .event-row.is-liked .event-signal .icon__heart-solid{display:block!important}
     .ke-mobile-listing-rails--v23 .event-cue{position:absolute;right:6px;bottom:12px;width:48px;height:23px;display:block;color:var(--rail-cue)}.ke-mobile-listing-rails--v23 .event-cue svg{display:block;width:48px;height:23px;overflow:visible}.ke-mobile-listing-rails--v23 .event-cue path{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
     .ke-mobile-listing-rails--v23 .event-media{position:relative;flex:0 0 var(--media-width);width:var(--media-width);height:112px;overflow:hidden;border-radius:12px;background:linear-gradient(105deg,#e9dece 8%,#fff7eb 20%,#e9dece 34%);background-size:220% 100%;animation:mobile-rail-media-skeleton 1.25s ease-in-out infinite}.ke-mobile-listing-rails--v23 .event-media img{display:block;width:100%;height:100%;opacity:0;object-fit:var(--rail-media-fit);object-position:var(--focus-x,50%) var(--focus-y,50%);transition:opacity 180ms ease;pointer-events:none;user-select:none}.ke-mobile-listing-rails--v23 .event-media.is-loaded{animation:none;background:transparent}.ke-mobile-listing-rails--v23 .event-media.is-loaded img{opacity:1}.ke-mobile-listing-rails--v23 .event-media.is-error{animation:none;background:#e9dece}.ke-mobile-listing-rails--v23 .event-media--natural.is-loaded{background:#211d1a}@keyframes mobile-rail-media-skeleton{to{background-position-x:-220%}}
     .ke-mobile-listing-rails--v23 .event-digest{flex:0 0 168px;width:168px;height:112px;display:flex;align-items:center;padding:8px 10px;color:var(--rail-text)}.ke-mobile-listing-rails--v23 .event-digest__body{width:148px;max-height:96px;display:grid;gap:4px}.ke-mobile-listing-rails--v23 .event-digest b{font:850 8.5px/10px Inter,system-ui;letter-spacing:.045em;text-transform:uppercase}.ke-mobile-listing-rails--v23 .event-digest span{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:6;font:690 10.5px/12.5px Inter,system-ui}
     .ke-mobile-listing-rails--v23 .event-medallion-slot{position:relative;flex:0 0 94px;width:94px;height:112px;display:grid;place-items:center;overflow:visible}.ke-mobile-listing-rails--v23 .event-medallion-slot picture{display:block;width:86px;height:86px}.ke-mobile-listing-rails--v23 .event-medallion{display:block;width:86px;height:86px;border:0;border-radius:50%;object-fit:contain;box-shadow:0 0 0 2px rgba(121,48,20,.13),0 7px 16px rgba(72,45,25,.12)}.ke-mobile-listing-rails--v23 .event-medallion--free{box-shadow:none}
-    .ke-mobile-listing-rails--v23 .event-like-cta{flex:0 0 auto;min-width:58px;height:56px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border:0;border-radius:12px;background:transparent;color:rgba(58,48,40,.70);font:inherit;cursor:pointer}.ke-mobile-listing-rails--v23 .event-like-cta svg{width:28px;height:28px;flex:none;fill:currentColor}.ke-mobile-listing-rails--v23 .event-like-cta strong{font:900 15px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .event-like-cta[aria-pressed=true]{background:rgba(201,52,52,.10);color:#c93434}
+    .ke-mobile-listing-rails--v23 .event-like-cta{flex:0 0 auto;min-width:58px;height:56px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border:0;border-radius:12px;background:transparent;color:rgba(58,48,40,.70);font:inherit;cursor:pointer;transition:background-color 160ms ease,color 160ms ease,transform 160ms ease}.ke-mobile-listing-rails--v23 .event-like-cta svg{width:28px;height:28px;flex:none;fill:currentColor}.ke-mobile-listing-rails--v23 .event-like-cta .icon__heart-solid{display:none!important}.ke-mobile-listing-rails--v23 .event-like-cta strong{font:900 15px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .event-like-cta[aria-pressed=true]{background:rgba(201,52,52,.10);color:#c93434}.ke-mobile-listing-rails--v23 .event-like-cta[aria-pressed=true] .icon__heart-outline{display:none}.ke-mobile-listing-rails--v23 .event-like-cta[aria-pressed=true] .icon__heart-solid{display:block!important}.ke-mobile-listing-rails--v23 .rail-window.is-like-pulling .event-like-cta{background:rgba(47,122,86,.12);color:#2f7a56}.ke-mobile-listing-rails--v23 .rail-window.is-like-armed .event-like-cta{transform:scale(1.08)}
     .ke-mobile-listing-rails--v23 .empty{margin:24px 12px;padding:20px 16px;border-radius:14px;background:rgba(121,48,20,.06);text-align:center}
+    .ke-mobile-listing-rails--v23 .rail-confirm-sheet[hidden],.ke-mobile-listing-rails--v23 .rail-action-toast[hidden]{display:none}.ke-mobile-listing-rails--v23 .rail-confirm-sheet{position:fixed;z-index:110;inset:0;display:flex;align-items:flex-end;background:rgba(34,26,20,.38);opacity:0;transition:opacity 220ms ease}.ke-mobile-listing-rails--v23 .rail-confirm-sheet.is-open{opacity:1}.ke-mobile-listing-rails--v23 .rail-confirm-panel{width:min(430px,100%);padding:22px 16px calc(18px + env(safe-area-inset-bottom));border-radius:22px 22px 0 0;background:#fffdf8;box-shadow:0 -18px 48px rgba(34,26,20,.20);transform:translate3d(0,calc(100% + 18px),0);transition:transform 360ms cubic-bezier(.16,1,.3,1)}.ke-mobile-listing-rails--v23 .rail-confirm-sheet.is-open .rail-confirm-panel{transform:none}.ke-mobile-listing-rails--v23 .rail-confirm-panel h2{margin:0;font:900 20px/1.1 Inter,system-ui}.ke-mobile-listing-rails--v23 .rail-confirm-panel p{margin:8px 0 20px;color:var(--rail-muted);font:700 12px/1.35 Inter,system-ui}.ke-mobile-listing-rails--v23 .rail-confirm-panel>div{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ke-mobile-listing-rails--v23 .rail-confirm-panel button{min-height:48px;border:0;border-radius:14px;font:850 13px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 [data-rail-confirm-cancel]{background:#efe3d3;color:var(--rail-text)}.ke-mobile-listing-rails--v23 [data-rail-confirm-negative]{background:#ad2f2f;color:#fff}.ke-mobile-listing-rails--v23 .rail-action-toast{position:fixed;z-index:111;left:12px;right:12px;bottom:calc(128px + env(safe-area-inset-bottom));min-height:52px;padding:8px 8px 8px 14px;border-radius:14px;background:#2b2521;color:#fff;box-shadow:0 12px 30px rgba(34,26,20,.24);display:flex;align-items:center;justify-content:space-between;gap:12px;font:750 11px/1.25 Inter,system-ui}.ke-mobile-listing-rails--v23 .rail-action-toast button{min-width:82px;min-height:38px;border:0;border-radius:10px;background:#fffdf8;color:var(--rail-primary-strong);font:850 11px/1 Inter,system-ui}body.rail-confirm-open .mobile-bottom-nav{opacity:0;visibility:hidden;pointer-events:none}
     .ke-mobile-listing-rails--v23 .date-accessory{position:fixed;z-index:39;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));height:56px;border-top:1px solid rgba(121,48,20,.13);border-bottom:1px solid rgba(121,48,20,.10);background:rgba(255,253,248,.985);backdrop-filter:blur(14px)}.ke-mobile-listing-rails--v23 .date-rail{height:56px;display:flex;align-items:center;gap:6px;padding:4px 66px 4px 12px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}.ke-mobile-listing-rails--v23 .date-rail::-webkit-scrollbar{display:none}.ke-mobile-listing-rails--v23 .date-chip{flex:0 0 60px;width:60px;height:48px;display:grid;place-content:center;justify-items:center;gap:2px;border:0;border-radius:13px;background:transparent;color:#665b52;text-decoration:none;scroll-snap-align:center}.ke-mobile-listing-rails--v23 .date-chip--disabled{opacity:.48;cursor:not-allowed}.ke-mobile-listing-rails--v23 .date-chip span{font:800 9.5px/1 Inter,system-ui;text-transform:uppercase}.ke-mobile-listing-rails--v23 .date-chip strong{font:900 18px/1 Inter,system-ui;font-variant-numeric:tabular-nums}.ke-mobile-listing-rails--v23 .date-chip small{font:800 8px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .date-chip--weekend:not([aria-current=date])>span{color:#945247}.ke-mobile-listing-rails--v23 .date-chip--today:not([aria-current=date]){box-shadow:inset 0 0 0 1px rgba(121,48,20,.22)}.ke-mobile-listing-rails--v23 .date-chip[aria-current=date]{background:var(--rail-primary);color:#fff;box-shadow:0 5px 12px rgba(121,48,20,.18);opacity:1}.ke-mobile-listing-rails--v23 .date-chip--weekend-range{flex-basis:74px;width:74px}.ke-mobile-listing-rails--v23 .date-chip--weekend-range strong{font-size:16px}.ke-mobile-listing-rails--v23 .date-calendar-trigger{position:absolute;z-index:2;right:5px;top:5px;width:50px;height:46px;border:0;border-left:1px solid rgba(121,48,20,.12);border-radius:11px;background:rgba(255,253,248,.98);color:var(--rail-primary);box-shadow:-8px 0 12px rgba(255,253,248,.94)}.ke-mobile-listing-rails--v23 .date-calendar-trigger svg{width:23px;height:23px;fill:currentColor}
     .ke-mobile-listing-rails--v23 .calendar-sheet[hidden]{display:none}.ke-mobile-listing-rails--v23 .calendar-sheet{position:fixed;z-index:100;inset:0;display:flex;align-items:flex-end;background:rgba(34,26,20,.34);opacity:0;transition:opacity 220ms ease-out}.ke-mobile-listing-rails--v23 .calendar-sheet.is-open{opacity:1}.ke-mobile-listing-rails--v23 .calendar-panel{width:min(430px,100%);max-height:82dvh;padding:18px 14px calc(16px + env(safe-area-inset-bottom));border-radius:20px 20px 0 0;background:#fffdf8;box-shadow:0 -16px 42px rgba(34,26,20,.18);transform:translate3d(0,calc(100% + 18px),0);transition:transform 360ms cubic-bezier(.16,1,.3,1)}.ke-mobile-listing-rails--v23 .calendar-sheet.is-open .calendar-panel{transform:none}.ke-mobile-listing-rails--v23 .calendar-panel header{display:flex;justify-content:space-between}.ke-mobile-listing-rails--v23 .calendar-panel h2{margin:0;font:900 20px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .calendar-panel p{margin:6px 0 14px;color:var(--rail-muted);font:700 11px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .calendar-panel header button{width:44px;height:44px;border:0;border-radius:50%;background:rgba(34,26,20,.07);font-size:22px}.ke-mobile-listing-rails--v23 .calendar-grid{max-height:58dvh;overflow:auto;display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.ke-mobile-listing-rails--v23 .calendar-grid>[data-calendar-date]{min-width:0;height:52px;border-radius:11px;display:grid;place-content:center;justify-items:center;gap:3px;color:var(--rail-text);text-decoration:none}.ke-mobile-listing-rails--v23 .calendar-grid>[data-calendar-date]>span{font:800 8px/1 Inter,system-ui;color:var(--rail-muted)}.ke-mobile-listing-rails--v23 .calendar-grid>[data-calendar-date]>b{font:900 16px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .calendar-grid>a[aria-current=date]{background:var(--rail-primary);color:#fff}.ke-mobile-listing-rails--v23 .calendar-grid>[aria-disabled=true]{opacity:.42;pointer-events:none}.ke-mobile-listing-rails--v23 .calendar-grid>[data-calendar-date]:nth-child(7n+6):not([aria-current=date]),.ke-mobile-listing-rails--v23 .calendar-grid>[data-calendar-date]:nth-child(7n):not([aria-current=date]){color:#945247}
     body:has(.ke-mobile-listing-rails--v23) .mobile-bottom-nav{background:rgba(255,253,248,.98);backdrop-filter:blur(14px)}
@@ -156,7 +170,106 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
     const buttons = [...surface.querySelectorAll('[data-mobile-v23-city]')];
     const pinSentinel = surface.querySelector('[data-mobile-listing-pin-sentinel]');
     const stickyTitle = surface.querySelector('[data-mobile-listing-sticky-title]');
+    const confirm = surface.querySelector('[data-rail-confirm]');
+    const toast = surface.querySelector('[data-rail-action-toast]');
+    const toastText = toast?.querySelector('span');
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let selectedCity = 'all';
+    let confirmRow = null;
+    let toastUndo = null;
+    let toastTimer = 0;
     let pinFrame = 0;
+    const refreshGroups = () => {
+      let visible = 0;
+      surface.querySelectorAll('[data-mobile-v23-group]').forEach((group) => {
+        const count = [...group.querySelectorAll('[data-mobile-listing-row]')].filter((row) => !row.hidden).length;
+        group.hidden = count === 0;
+        visible += count;
+        const countNode = group.querySelector('[data-mobile-v23-group-count]');
+        if (countNode) countNode.textContent = String(count);
+      });
+      if (empty) empty.hidden = visible !== 0;
+    };
+    const syncRowVisibility = (row) => {
+      const cityFiltered = selectedCity !== 'all' && row.dataset.listingCity !== selectedCity;
+      row.dataset.cityFiltered = cityFiltered ? 'true' : 'false';
+      row.hidden = cityFiltered || row.dataset.notInterested === 'true';
+    };
+    const showToast = (message, undo) => {
+      if (!toast || !toastText) return;
+      clearTimeout(toastTimer);
+      toastText.textContent = message;
+      toastUndo = undo || null;
+      const undoButton = toast.querySelector('button');
+      if (undoButton) undoButton.hidden = !toastUndo;
+      toast.hidden = false;
+      toastTimer = setTimeout(() => { toast.hidden = true; toastUndo = null; }, 4500);
+    };
+    const waitForPressed = (button, expected, timeout = 1500) => new Promise((resolve) => {
+      if (!button) { resolve(false); return; }
+      const value = String(expected);
+      if (button.getAttribute('aria-pressed') === value) { resolve(true); return; }
+      let settled = false;
+      let timer = 0;
+      const observer = new MutationObserver(() => {
+        if (button.getAttribute('aria-pressed') === value) finish(true);
+      });
+      const finish = (matched) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        observer.disconnect();
+        resolve(matched);
+      };
+      timer = setTimeout(() => finish(false), timeout);
+      observer.observe(button, { attributes:true, attributeFilter:['aria-pressed'] });
+    });
+    toast?.addEventListener('click', (event) => {
+      if (!event.target.closest('button') || !toastUndo) return;
+      const undo = toastUndo;
+      toastUndo = null;
+      toast.hidden = true;
+      undo();
+    });
+    const closeConfirm = () => {
+      if (!confirm) return;
+      confirm.classList.remove('is-open');
+      document.body.classList.remove('rail-confirm-open');
+      setTimeout(() => { confirm.hidden = true; }, reduced ? 0 : 240);
+    };
+    const openConfirm = (row) => {
+      if (!confirm) return;
+      confirmRow = row;
+      const heading = confirm.querySelector('h2');
+      const copy = confirm.querySelector('p');
+      const liked = row.classList.contains('is-liked');
+      if (heading) heading.textContent = liked ? 'Сначала заменить лайк?' : 'Пометить событие как неинтересное?';
+      if (copy) copy.textContent = liked ? 'Негативный сигнал заменит ваш лайк. Подтвердите действие явно.' : 'Событие исчезнет из этой подборки.';
+      confirm.hidden = false;
+      document.body.classList.add('rail-confirm-open');
+      requestAnimationFrame(() => confirm.classList.add('is-open'));
+    };
+    confirm?.addEventListener('click', (event) => {
+      if (event.target === confirm || event.target.closest('[data-rail-confirm-cancel]')) closeConfirm();
+      if (!event.target.closest('[data-rail-confirm-negative]') || !confirmRow) return;
+      const row = confirmRow;
+      const negative = row.querySelector('[data-rail-negative-control]');
+      const like = row.querySelector('[data-like]');
+      const wasLiked = row.classList.contains('is-liked');
+      closeConfirm();
+      negative?.click();
+      void waitForPressed(negative, true).then((pressed) => {
+        if (!pressed) return;
+        showToast('Событие отмечено как неинтересное', () => {
+          negative.click();
+          if (wasLiked) {
+            void waitForPressed(negative, false).then((cleared) => {
+              if (cleared && like?.getAttribute('aria-pressed') !== 'true') like?.click();
+            });
+          }
+        });
+      });
+    });
     const syncPinnedTitle = () => {
       pinFrame = 0;
       const pinned = Boolean(pinSentinel && pinSentinel.getBoundingClientRect().top <= 64);
@@ -164,31 +277,246 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
       stickyTitle?.setAttribute('aria-hidden', String(!pinned));
     };
     function applyCity(city) {
-      let visible = 0;
+      selectedCity = city;
       rows.forEach((row) => {
-        row.hidden = city !== 'all' && row.dataset.listingCity !== city;
-        if (!row.hidden) visible += 1;
+        syncRowVisibility(row);
       });
-      surface.querySelectorAll('[data-mobile-v23-group]').forEach((group) => {
-        const count = [...group.querySelectorAll('[data-mobile-listing-row]')].filter((row) => !row.hidden).length;
-        group.hidden = count === 0;
-        const countNode = group.querySelector('[data-mobile-v23-group-count]');
-        if (countNode) countNode.textContent = String(count);
-      });
+      refreshGroups();
       buttons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.mobileV23City === city)));
       if (label) label.textContent = city === 'all' ? 'Вся область' : city;
-      if (empty) empty.hidden = visible !== 0;
       if (picker) picker.open = false;
     }
     buttons.forEach((button) => button.addEventListener('click', () => applyCity(button.dataset.mobileV23City || 'all')));
-    surface.querySelectorAll('.rail-window').forEach((rail) => {
+    rows.forEach((row) => {
+      const rail = row.querySelector('.rail-window');
+      const track = row.querySelector('.event-track');
+      const likeButton = row.querySelector('[data-like]');
+      const negativeButton = row.querySelector('[data-rail-negative-control]');
+      const smallLike = row.querySelector('[data-small-like]');
+      if (!rail || !track) return;
+      row.dataset.notInterested = negativeButton?.getAttribute('aria-pressed') === 'true' ? 'true' : 'false';
+      const syncFeedbackVisuals = () => {
+        const liked = likeButton?.getAttribute('aria-pressed') === 'true';
+        const negative = negativeButton?.getAttribute('aria-pressed') === 'true';
+        row.classList.toggle('is-liked', liked);
+        row.dataset.notInterested = negative ? 'true' : 'false';
+        if (smallLike && likeButton) {
+          const count = Number(likeButton.querySelector('[data-like-count]')?.textContent || '0');
+          const countNode = smallLike.querySelector('[data-small-like-count]');
+          if (countNode) countNode.textContent = String(count);
+          smallLike.hidden = count <= 0;
+        }
+        syncRowVisibility(row);
+        refreshGroups();
+      };
+      if (likeButton) new MutationObserver(syncFeedbackVisuals).observe(likeButton, { attributes:true, attributeFilter:['aria-pressed'], childList:true, subtree:true });
+      if (negativeButton) new MutationObserver(syncFeedbackVisuals).observe(negativeButton, { attributes:true, attributeFilter:['aria-pressed'] });
+      syncFeedbackVisuals();
       rail.scrollLeft = 0;
-      const sync = () => {
+      const syncRailMetrics = () => {
         rail.style.setProperty('--rail-max', `${Math.max(0, rail.scrollWidth - rail.clientWidth)}px`);
         rail.style.setProperty('--rail-view-width', `${rail.clientWidth}px`);
       };
-      requestAnimationFrame(sync);
-      new ResizeObserver(sync).observe(rail);
+      requestAnimationFrame(syncRailMetrics);
+      new ResizeObserver(syncRailMetrics).observe(rail);
+      let down = false;
+      let dragged = false;
+      let startX = 0;
+      let startY = 0;
+      let startScroll = 0;
+      let mode = 'idle';
+      let likeAnchorX = 0;
+      let touchStartScroll = 0;
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchLastX = 0;
+      let touchLastY = 0;
+      let touchMode = 'idle';
+      let touchLikeAnchorX = 0;
+      let suppressClick = false;
+      let suppressClickTimer = 0;
+      const armClickSuppression = () => {
+        suppressClick = true;
+        clearTimeout(suppressClickTimer);
+        suppressClickTimer = setTimeout(() => {
+          suppressClick = false;
+          dragged = false;
+        }, 550);
+      };
+      const isLiked = () => row.classList.contains('is-liked');
+      const edgeEligible = () => !isLiked() && !reduced;
+      const maxScroll = () => Math.max(0, rail.scrollWidth - rail.clientWidth);
+      const atEnd = () => maxScroll() - rail.scrollLeft <= 1;
+      const likeEligible = () => atEnd() && edgeEligible();
+      const setDislike = (dx) => {
+        const denominator = Math.max(1, innerWidth - 24 - startX);
+        const progress = Math.max(0, Math.min(1, dx / denominator));
+        const visual = Math.min(96, Math.max(0, dx * .32));
+        const armed = progress >= .86 && dx >= 140;
+        rail.classList.add('is-dislike-active');
+        rail.classList.toggle('is-armed', armed);
+        rail.style.setProperty('--dislike-progress', String(progress));
+        const copy = rail.querySelector('.dislike-underlay span');
+        if (copy) copy.textContent = armed ? 'Отпустите, чтобы отметить неинтересным' : 'Неинтересно';
+        track.style.transform = `translate3d(${visual}px,0,0)`;
+        return armed;
+      };
+      const resetDislike = () => {
+        rail.classList.remove('is-dislike-active', 'is-armed');
+        rail.classList.add('is-settling');
+        rail.style.setProperty('--dislike-progress', '0');
+        const copy = rail.querySelector('.dislike-underlay span');
+        if (copy) copy.textContent = 'Неинтересно';
+        track.style.transform = 'translate3d(0,0,0)';
+        setTimeout(() => rail.classList.remove('is-settling'), reduced ? 0 : 410);
+      };
+      const setLikePull = (overpull) => {
+        const physical = Math.max(0, overpull);
+        const progress = Math.max(0, Math.min(1, physical / 120));
+        const visual = Math.min(96, physical * .32);
+        const armed = physical >= 120;
+        rail.classList.add('is-like-pulling');
+        rail.classList.toggle('is-like-armed', armed);
+        rail.style.setProperty('--like-progress', String(progress));
+        track.style.transform = `translate3d(${-visual}px,0,0)`;
+        return armed;
+      };
+      const resetLikePull = () => {
+        rail.classList.remove('is-like-pulling', 'is-like-armed');
+        rail.classList.add('is-settling');
+        rail.style.setProperty('--like-progress', '0');
+        track.style.transform = 'translate3d(0,0,0)';
+        setTimeout(() => rail.classList.remove('is-settling'), reduced ? 0 : 410);
+      };
+      const finishLike = (armed) => {
+        if (!armed || isLiked()) { resetLikePull(); return; }
+        armClickSuppression();
+        likeButton?.click();
+        resetLikePull();
+        void waitForPressed(likeButton, true).then((pressed) => {
+          if (!pressed) return;
+          showToast('Событие добавлено в понравившиеся', () => likeButton.click());
+        });
+      };
+      rail.addEventListener('dragstart', (event) => event.preventDefault());
+      rail.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button') || event.pointerType !== 'mouse' || event.button !== 0) return;
+        down = true;
+        dragged = false;
+        mode = 'pending';
+        startX = event.clientX;
+        startY = event.clientY;
+        startScroll = rail.scrollLeft;
+        likeAnchorX = 0;
+      });
+      rail.addEventListener('pointermove', (event) => {
+        if (!down) return;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        const horizontal = Math.abs(dx) >= Math.abs(dy) * 1.25;
+        if (mode === 'pending' && Math.hypot(dx, dy) > 12) {
+          if (dx > 0 && horizontal && startScroll <= 1 && edgeEligible()) mode = 'dislike';
+          else if (dx < 0 && horizontal && likeEligible()) { mode = 'like'; likeAnchorX = startX; }
+          else mode = 'scroll';
+        }
+        if (mode === 'dislike') {
+          dragged = true;
+          event.preventDefault();
+          rail.setPointerCapture?.(event.pointerId);
+          setDislike(dx);
+        } else if (mode === 'like') {
+          dragged = true;
+          event.preventDefault();
+          rail.setPointerCapture?.(event.pointerId);
+          setLikePull(likeAnchorX - event.clientX);
+        } else if (mode === 'scroll' && Math.abs(dx) > 7) {
+          dragged = true;
+          rail.classList.add('is-dragging');
+          event.preventDefault();
+          rail.setPointerCapture?.(event.pointerId);
+          rail.scrollLeft = startScroll - dx;
+          if (dx < 0 && horizontal && likeEligible()) {
+            mode = 'like';
+            likeAnchorX = event.clientX;
+            rail.classList.remove('is-dragging');
+          }
+        }
+      });
+      rail.addEventListener('pointerup', () => {
+        if (dragged) armClickSuppression();
+        if (mode === 'dislike') {
+          const armed = rail.classList.contains('is-armed');
+          resetDislike();
+          if (armed) openConfirm(row);
+        } else if (mode === 'like') finishLike(rail.classList.contains('is-like-armed'));
+        down = false;
+        mode = 'idle';
+        rail.classList.remove('is-dragging');
+      });
+      rail.addEventListener('pointercancel', () => {
+        if (dragged) armClickSuppression();
+        if (mode === 'dislike') resetDislike();
+        if (mode === 'like') resetLikePull();
+        down = false;
+        mode = 'idle';
+        rail.classList.remove('is-dragging');
+      });
+      rail.addEventListener('touchstart', (event) => {
+        const touch = event.touches[0];
+        touchStartScroll = rail.scrollLeft;
+        touchStartX = touchLastX = touch?.clientX || 0;
+        touchStartY = touchLastY = touch?.clientY || 0;
+        touchMode = 'pending';
+        touchLikeAnchorX = 0;
+      }, { passive:true });
+      rail.addEventListener('touchmove', (event) => {
+        const touch = event.touches[0];
+        if (!touch) return;
+        touchLastX = touch.clientX;
+        touchLastY = touch.clientY;
+        const dx = touchLastX - touchStartX;
+        const dy = touchLastY - touchStartY;
+        const horizontal = Math.abs(dx) >= Math.abs(dy) * 1.25;
+        if (touchMode === 'pending' && Math.hypot(dx, dy) > 12) {
+          if (dx > 0 && horizontal && touchStartScroll <= 1 && edgeEligible()) {
+            touchMode = 'dislike';
+            startX = touchStartX;
+          } else if (dx < 0 && horizontal && likeEligible()) {
+            touchMode = 'like';
+            touchLikeAnchorX = touchStartX;
+          } else touchMode = 'native';
+        }
+        if (touchMode === 'native' && dx < 0 && horizontal && likeEligible()) {
+          touchMode = 'like';
+          touchLikeAnchorX = touchLastX;
+        }
+        if (touchMode === 'dislike') { dragged = true; event.preventDefault(); setDislike(dx); }
+        else if (touchMode === 'like') { dragged = true; event.preventDefault(); setLikePull(touchLikeAnchorX - touchLastX); }
+      }, { passive:false });
+      rail.addEventListener('touchend', () => {
+        if (dragged) armClickSuppression();
+        if (touchMode === 'dislike') {
+          const armed = rail.classList.contains('is-armed');
+          resetDislike();
+          if (armed) openConfirm(row);
+        } else if (touchMode === 'like') finishLike(rail.classList.contains('is-like-armed'));
+        touchMode = 'idle';
+      }, { passive:true });
+      rail.addEventListener('touchcancel', () => {
+        if (dragged) armClickSuppression();
+        if (touchMode === 'dislike') resetDislike();
+        if (touchMode === 'like') resetLikePull();
+        touchMode = 'idle';
+      }, { passive:true });
+      rail.addEventListener('click', (event) => {
+        if (!event.isTrusted) return;
+        if (!suppressClick && !dragged) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        suppressClick = false;
+        dragged = false;
+      }, { capture:true });
     });
     surface.querySelectorAll('.event-media img').forEach((img) => {
       const shell = img.closest('.event-media');

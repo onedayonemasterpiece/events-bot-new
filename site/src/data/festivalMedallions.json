@@ -156,7 +156,9 @@
         "Море внутри",
         "Фестиваль Море внутри"
       ],
-      "fallbackPngUrl": "/assets/festivals/more-vnutri.png"
+      "fallbackPngUrl": "/assets/festivals/more-vnutri.png",
+      "listingStatus": "listing_ready",
+      "listingBinding": "festival"
     },
     {
       "slug": "simfoniya-vetra",

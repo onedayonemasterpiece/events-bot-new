@@ -1001,9 +1001,16 @@ are part of the shared Astro implementation:
 - rail media reserves its final `112px` physical slot while loading. A bounded
   skeleton remains until the image has loaded and decoded, then either reveals
   the image or changes to a stable error surface without moving the row;
-- a single explicitly classified `visual_only` tall source uses a `140×112`
-  landscape `5:4` cover window. `ocr_text`, `unknown`, protected-document media
-  and multi-image rows keep their fail-closed authored geometry;
+- every single explicitly classified, crop-safe `visual_only` source uses the
+  donor's `140×112` landscape `5:4` cover window regardless of the source
+  orientation. A separately source-reviewed no-text portrait selected from a
+  mixed OCR/photo inventory may use a `90×112` vertical `4:5` cover window only
+  when at least 80% of its area remains. Overriding an event-level OCR marker
+  additionally requires the explicit per-asset `listing_no_ocr_review=true`
+  provenance bit; generic crop review is not sufficient. `ocr_text`, `unknown`, unreviewed and
+  protected-document media keep their fail-closed authored geometry. The
+  selected asset's own classification controls its rail class; an OCR primary
+  poster must not poison an explicitly reviewed alternate photo;
 - date pages use the full `56px` horizontal date accessory above the bottom
   dock, including the current-date chip, generated weekend ranges and calendar
   sheet. All 42 cells are real links: today/tomorrow keep their named routes,
@@ -1016,6 +1023,17 @@ are part of the shared Astro implementation:
 - the continuation cue is one exact `48×23` inline SVG path with a horizontal
   shaft and symmetric head. CSS border/rotation arrows are rejected because
   fractional rendering produced the crooked Android result;
+- rail social proof and the terminal action both reuse the shared
+  `Icon.astro` heart: hollow by default and filled only for the liked state.
+  The accepted edge mechanics are executable, not decorative: a horizontal
+  pull right from the physical start reveals the red negative layer and opens
+  explicit confirmation at `>=86%` plus `>=140px`; a `>=120px` left overpull
+  from the physical end applies Like. Mouse/pointer and touch paths share the
+  same state machine, cancel settles the track, reduced motion disables edge
+  actions, and both outcomes expose a 4.5-second Undo. Trusted post-drag clicks
+  are intercepted in capture phase so the underlying event link cannot fire;
+  canonical feedback state completion is observed through `aria-pressed`
+  mutations rather than guessed with a fixed delay;
 - standalone Search retains the accepted full-width in-button progress fill.
   It owns one request epoch, blocks synchronous double submits and resets on
   success, error, abort, logout and page exit. A pending pre-request session

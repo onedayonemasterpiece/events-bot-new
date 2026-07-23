@@ -73,6 +73,12 @@ export interface EventImageAsset {
   geometry_reason_code?: string;
   /** Build-time technical quality signal; it never replaces semantic LLM media classification. */
   quality_score?: number;
+  /** Exact source-review evidence used by listing/card presentation overrides. */
+  listing_crop_evidence?: string;
+  /** Explicit source review that this individual asset contains no OCR text. */
+  listing_no_ocr_review?: boolean;
+  /** Preserve authored geometry for a reviewed listing asset. */
+  listing_use_natural?: boolean;
 }
 
 export interface TicketInfo {
