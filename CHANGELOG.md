@@ -4,11 +4,10 @@
 
 ### Changed
 
-- Replaced the horizontal Split-desktop event CTA bar with the requested
-  CSS-only tactile ticket card: one admission header, a dominant ticket action
-  and equal calendar/share/like controls with physical interaction states.
-  Split pages now avoid repeating the admission-price medallion, while mobile
-  and Editorial CTA layouts remain unchanged.
+- Refined the mobile event hero CTA as a CSS-only warm-ebony physical control:
+  the ticket action now carries its icon and pressed/hover/focus states, while
+  equal calendar/share/like controls keep accessible compact labels and
+  persistent teal/rose success states without adding image texture requests.
 
 ### Fixed
 

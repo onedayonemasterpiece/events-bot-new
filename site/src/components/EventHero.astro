@@ -238,10 +238,10 @@ const showTicketCta = Boolean(ctaHref);
     <HeadingTag class="event-hero__title">{event.title}</HeadingTag>
     <div class="source-links event-hero__actions event-main-actions" aria-label="Быстрые действия события">
       {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
-      {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>}
+      {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone ? <Icon name="phone" /> : <Icon name="ticket" />}<span>{ctaLabel}</span></a>}
       {soldOut && !showTicketCta && <span class="secondary-button cta-button--disabled" aria-disabled="true">{ctaLabel}</span>}
       {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}
-      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={admissionLabel}>
+      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={admissionLabel} aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}>
         <Icon name="share" />
         <span data-share-label>Поделиться</span>
         <span class="feedback-count" data-share-count>{shareCountLabel}</span>

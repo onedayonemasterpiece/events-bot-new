@@ -125,9 +125,7 @@ test('desktop medallion wrapper exposes venue ring and shadow without changing i
 
   assert.match(desktop, /\.desktop-prototype__medallions \{ min-height:0; overflow:visible; \}/u);
   assert.match(desktop, /\.desktop-prototype__medallions :global\(\.event-token-row\) \{ gap:\.55rem; overflow:visible;/u);
-  assert.match(desktop, /<EventTokenMedallions event=\{event\} showAdmission=\{candidate !== 'split'\} \/>/u);
   assert.match(medallions, /resolveEventMedallions\(event, manifest\.items \|\| \[\]\)/u);
-  assert.match(medallions, /showAdmission \|\| !admissionTokenKeys\.has\(token\.key\)/u);
   assert.match(medallions, /data-identity-resolution=\{organizerResolution\.failClosedReason \|\| 'resolved'\}/u);
 });
 
@@ -166,16 +164,15 @@ test('desktop action geometry follows the resolved media family', async () => {
   assert.ok(panelRow.indexOf('data-native-share') < panelRow.indexOf('data-feedback-action="like"'));
   assert.match(panel, /family\?: 'split' \| 'editorial'/u);
   assert.match(panel, /data-action-family=\{family\}/u);
-  assert.match(panel, /data-action-layout="stacked"/u);
-  assert.match(panel, /data-action-treatment=\{family === 'split' \? 'ticket-card' : 'editorial'\}/u);
-  assert.match(panel, /data-action-treatment="ticket-card"[^}]*width: min\(100%, 340px\)/su);
+  assert.match(panel, /data-action-layout=\{family === 'split' \? 'inline' : 'stacked'\}/u);
+  assert.match(panel, /data-action-layout="inline"[^}]*grid-template-columns:minmax\(112px,max-content\) minmax\(0,1fr\) auto !important/su);
   assert.match(panel, /data-action-layout="stacked"[^}]*grid-template-columns:minmax\(0,1fr\) !important/su);
   assert.match(panel, /data-action-layout="stacked"[^}]*grid-template-rows:auto auto auto !important/su);
   assert.match(desktop, /family="editorial"/u);
   assert.match(desktop, /family="split"/u);
-  assert.match(desktop, /panel\.dataset\.actionLayout = 'stacked'/u);
-  assert.match(desktop, /panel\.dataset\.actionFit = panel\.dataset\.actionFamily === 'split' \? 'ticket-card' : 'stacked'/u);
-  assert.doesNotMatch(desktop, /measureInlineActionPanel/u);
+  assert.match(desktop, /const splitFamily = panel\.dataset\.actionFamily === 'split'/u);
+  assert.match(desktop, /if \(!splitFamily\) return/u);
+  assert.match(desktop, /return !\(outside \|\| overlaps \|\| primaryLabelDoesNotFit \|\| overflows\)/u);
   assert.doesNotMatch(panel, /data-primary-action-kind="phone"\] \{/u);
   assert.match(legacyPanel, /data-event-cta-action-row="calendar-share-like"/u);
   assert.match(lab, /slug: 'cta-phone-invariant', eventId: 6551/u);
@@ -251,7 +248,7 @@ test('secret candidate keeps expiry-proof Split and Editorial CTA geometry fixtu
   assert.match(secretBuilder, /registrationCtaRegressionRoute,[\s\S]*freeCalendarCtaRegressionRoute/u);
   assert.match(secretChecker, /registration CTA regression marker missing/u);
   assert.match(secretChecker, /calendar-primary CTA regression marker missing/u);
-  assert.match(secretChecker, /data-action-treatment="ticket-card"/u);
+  assert.match(secretChecker, /data-action-layout="inline"/u);
   assert.match(secretChecker, /data-action-layout="stacked"/u);
   assert.match(browserGate, /lab\/event-desktop\/examples\/cta-phone-invariant.*split/u);
   assert.match(browserGate, /lab\/event-desktop\/examples\/cta-registration-invariant.*split.*Зарегистрироваться/u);

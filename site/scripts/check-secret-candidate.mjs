@@ -53,9 +53,9 @@ if (!footerRegressionHtml.includes('data-site-footer="service-v1"')) fail('accep
 if ((footerRegressionHtml.match(/Информационное партнёрство/gu) || []).length !== 1) fail('accepted service footer duplicates partnership link');
 if (!footerRegressionHtml.includes('Пользовательское соглашение') || !footerRegressionHtml.includes('Политика обработки персональных данных')) fail('accepted service footer legal links missing');
 if (!footerRegressionHtml.includes('data-desktop-family="editorial"') || !footerRegressionHtml.includes('data-action-layout="stacked"')) fail('accepted Editorial CTA regression marker missing');
-if (!splitCtaRegressionHtml.includes('data-desktop-family="split"') || !splitCtaRegressionHtml.includes('data-action-layout="stacked"') || !splitCtaRegressionHtml.includes('data-action-treatment="ticket-card"')) fail('accepted Split ticket-card CTA regression marker missing');
-if (!registrationCtaRegressionHtml.includes('data-action-treatment="ticket-card"') || !registrationCtaRegressionHtml.includes('Зарегистрироваться')) fail('registration CTA regression marker missing');
-if (!freeCalendarCtaRegressionHtml.includes('data-action-treatment="ticket-card"') || !freeCalendarCtaRegressionHtml.includes('В календарь')) fail('calendar-primary CTA regression marker missing');
+if (!splitCtaRegressionHtml.includes('data-desktop-family="split"') || !splitCtaRegressionHtml.includes('data-action-layout="inline"')) fail('accepted Split CTA regression marker missing');
+if (!registrationCtaRegressionHtml.includes('data-action-layout="inline"') || !registrationCtaRegressionHtml.includes('Зарегистрироваться')) fail('registration CTA regression marker missing');
+if (!freeCalendarCtaRegressionHtml.includes('data-action-layout="inline"') || !freeCalendarCtaRegressionHtml.includes('В календарь')) fail('calendar-primary CTA regression marker missing');
 for (const event of eventsData.events) {
   const eventHtml = source(`sobytiya/${event.slug}/index.html`);
   source(`sobytiya/${event.slug}/event.ics`); source(`data/discovery/${event.id}.json`);

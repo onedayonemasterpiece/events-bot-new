@@ -55,16 +55,13 @@ const shareFileName = `kenigevents-${event.slug}`;
 <aside
   class:list={['desktop-prototype__action', className]}
   data-feedback-scope
-  data-event-id={event.id}
-  data-event-title={event.title}
   data-desktop-action-panel
   data-action-family={family}
-  data-action-layout="stacked"
-  data-action-treatment={family === 'split' ? 'ticket-card' : 'editorial'}
+  data-action-layout={family === 'split' ? 'inline' : 'stacked'}
   data-primary-action-kind={calendarPrimary ? 'calendar' : (ctaIsTelephone ? 'phone' : 'default')}
   aria-label="Действия события"
 >
-  <p class="desktop-prototype__ticket-header"><span>вход</span><strong>{admissionLabel}</strong></p>
+  <p><span>вход</span><strong>{admissionLabel}</strong></p>
   {calendarPrimary ? (
     <CalendarLink event={event} className="desktop-prototype__primary-action" />
   ) : ctaIsTelephone && phoneValue ? (
@@ -218,6 +215,16 @@ const shareFileName = `kenigevents-${event.slug}`;
   .desktop-prototype__action[data-action-layout="stacked"] > p { grid-column:1 !important; grid-row:1 !important; }
   .desktop-prototype__action[data-action-layout="stacked"] > :global(.desktop-prototype__primary-action) { grid-column:1 !important; grid-row:2 !important; }
   .desktop-prototype__action[data-action-layout="stacked"] > .desktop-prototype__action-row { grid-column:1 !important; grid-row:3 !important; }
+  .desktop-prototype__action[data-action-layout="inline"] {
+    grid-template-columns:minmax(112px,max-content) minmax(0,1fr) auto !important;
+    grid-template-rows:auto !important;
+    align-items:center !important;
+    column-gap:clamp(.65rem,1.4vw,.95rem);
+    row-gap:0;
+  }
+  .desktop-prototype__action[data-action-layout="inline"] > p { grid-column:1 !important; grid-row:1 !important; }
+  .desktop-prototype__action[data-action-layout="inline"] > :global(.desktop-prototype__primary-action) { grid-column:2 !important; grid-row:1 !important; min-width:0; }
+  .desktop-prototype__action[data-action-layout="inline"] > .desktop-prototype__action-row { grid-column:3 !important; grid-row:1 !important; justify-self:end; }
   .desktop-prototype__action > p { display: grid; gap: .06rem; margin: 0; }
   .desktop-prototype__action > p span {
     color: #d7c9bc;
@@ -326,191 +333,5 @@ const shareFileName = `kenigevents-${event.slug}`;
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label]),
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { transition:none; }
   :global(.desktop-prototype__action[data-action-density="compact"] .desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) { width:0; max-width:0; opacity:0; }
-
-  .desktop-prototype__action[data-action-treatment="ticket-card"] {
-    box-sizing: border-box;
-    width: min(100%, 340px);
-    max-width: 340px;
-    justify-self: start;
-    align-self: start;
-    grid-template-columns: minmax(0, 1fr) !important;
-    grid-template-rows: auto auto auto !important;
-    gap: 16px;
-    padding: 22px;
-    overflow: visible;
-    border: 1px solid rgba(255, 250, 242, .08);
-    border-radius: 22px;
-    background:
-      radial-gradient(120% 88% at 8% -12%, rgba(255, 255, 255, .15) 0%, rgba(255, 255, 255, 0) 48%),
-      repeating-linear-gradient(92deg, rgba(255, 255, 255, .012) 0 1px, rgba(0, 0, 0, .018) 1px 3px),
-      linear-gradient(155deg, #353230 0%, #242220 54%, #1d1b19 100%);
-    color: #fffaf2;
-    box-shadow:
-      0 22px 38px -18px rgba(25, 18, 13, .72),
-      0 8px 18px -12px rgba(25, 18, 13, .56),
-      inset 1px 1px 0 rgba(255, 255, 255, .2),
-      inset -1px -1px 0 rgba(0, 0, 0, .58);
-    container: desktop-ticket-card / inline-size;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] > .desktop-prototype__ticket-header {
-    gap: 4px;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] > .desktop-prototype__ticket-header span {
-    color: #c7bbb0;
-    font-size: 12px;
-    font-weight: 850;
-    letter-spacing: .12em;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] > .desktop-prototype__ticket-header strong {
-    color: #fffaf2;
-    font-size: 28px;
-    font-weight: 900;
-    line-height: 1.05;
-    letter-spacing: -.02em;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, .42);
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] > :global(.desktop-prototype__primary-action) {
-    width: 100%;
-    min-width: 0;
-    min-height: 58px;
-    padding: .8rem 1rem;
-    border: 1px solid rgba(255, 192, 153, .24);
-    border-radius: 15px;
-    background:
-      radial-gradient(100% 120% at 50% -42%, rgba(255, 255, 255, .2) 0%, rgba(255, 255, 255, 0) 62%),
-      linear-gradient(180deg, #ca5a2c 0%, #a8431d 100%);
-    color: #fffaf2;
-    font-size: 1rem;
-    font-weight: 900;
-    text-shadow: 0 1px 1px rgba(72, 21, 5, .52);
-    box-shadow:
-      inset 0 1px 1px rgba(255, 255, 255, .36),
-      inset 0 -2px 4px rgba(75, 22, 5, .28),
-      0 6px 13px rgba(15, 10, 7, .42),
-      0 0 0 3px rgba(16, 12, 9, .34);
-    transition:
-      background 180ms ease,
-      border-color 180ms ease,
-      box-shadow 180ms ease,
-      transform 160ms ease;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] > :global(.desktop-prototype__primary-action .icon) {
-    width: 1.4rem;
-    height: 1.4rem;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] > .desktop-prototype__action-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    gap: 10px;
-    width: 100%;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action) {
-    box-sizing: border-box;
-    width: 100%;
-    min-width: 0;
-    min-height: 54px;
-    padding: .42rem;
-    border: 1px solid rgba(255, 255, 255, .08);
-    border-radius: 13px;
-    background: linear-gradient(180deg, #3d3936 0%, #2d2a28 100%);
-    color: #eee4db;
-    box-shadow:
-      inset 0 1px 1px rgba(255, 255, 255, .13),
-      inset 0 -1px 1px rgba(0, 0, 0, .35),
-      0 4px 7px rgba(0, 0, 0, .32);
-    text-shadow: 0 1px 1px rgba(0, 0, 0, .42);
-    transition:
-      background 180ms ease,
-      border-color 180ms ease,
-      box-shadow 180ms ease,
-      color 180ms ease,
-      transform 160ms ease;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action[data-calendar-adaptive-label]) {
-    width: 100%;
-    padding-inline: .42rem;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action[data-calendar-adaptive-label] [data-calendar-label]) {
-    display: none;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action .icon) {
-    width: 28px;
-    height: 28px;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action strong) {
-    font-size: .9rem;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action[aria-pressed="true"]),
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action.is-calendar-added) {
-    border-color: rgba(224, 103, 58, .58) !important;
-    background: linear-gradient(180deg, rgba(115, 54, 37, .98), rgba(66, 34, 27, .98)) !important;
-    color: #f28a65 !important;
-    box-shadow:
-      inset 0 2px 4px rgba(0, 0, 0, .36),
-      0 0 0 1px rgba(213, 84, 39, .18),
-      0 0 12px rgba(205, 76, 34, .2) !important;
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action[aria-pressed="true"] .icon),
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action.is-calendar-added .icon) {
-    filter: drop-shadow(0 0 4px rgba(232, 105, 61, .45));
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] > :global(.desktop-prototype__primary-action:focus-visible),
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action:focus-visible) {
-    outline: 3px solid #f1ae79;
-    outline-offset: 3px;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .desktop-prototype__action[data-action-treatment="ticket-card"] > :global(.desktop-prototype__primary-action:hover) {
-      border-color: rgba(255, 211, 183, .42);
-      background:
-        radial-gradient(100% 120% at 50% -42%, rgba(255, 255, 255, .26) 0%, rgba(255, 255, 255, 0) 62%),
-        linear-gradient(180deg, #d66834 0%, #b94c21 100%);
-      box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, .42),
-        inset 0 -2px 4px rgba(75, 22, 5, .22),
-        0 8px 17px rgba(175, 61, 22, .48),
-        0 0 0 3px rgba(33, 20, 14, .32);
-      transform: translateY(-1px);
-    }
-    .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action:hover) {
-      border-color: rgba(255, 255, 255, .16);
-      background: linear-gradient(180deg, #48433f 0%, #35312e 100%);
-      color: #fffaf2;
-      box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, .18),
-        0 6px 10px rgba(0, 0, 0, .36);
-      transform: translateY(-1px);
-    }
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] > :global(.desktop-prototype__primary-action:active) {
-    border-color: rgba(255, 174, 126, .2);
-    background: #983916;
-    box-shadow:
-      inset 0 5px 8px rgba(49, 12, 2, .58),
-      0 0 0 3px rgba(33, 20, 14, .24);
-    transform: translateY(1px);
-  }
-  .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action:active) {
-    border-color: rgba(255, 255, 255, .04);
-    background: #282421;
-    box-shadow: inset 0 3px 5px rgba(0, 0, 0, .55);
-    transform: translateY(1px);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .desktop-prototype__action[data-action-treatment="ticket-card"] > :global(.desktop-prototype__primary-action),
-    .desktop-prototype__action[data-action-treatment="ticket-card"] :global(.desktop-prototype__icon-action) {
-      transition: none;
-      transform: none;
-    }
-  }
-  @container desktop-ticket-card (max-width: 300px) {
-    .desktop-prototype__action[data-action-treatment="ticket-card"] {
-      gap: 13px;
-      padding: 18px;
-    }
-    .desktop-prototype__action[data-action-treatment="ticket-card"] > .desktop-prototype__ticket-header strong {
-      font-size: 24px;
-    }
-  }
 
 </style>

@@ -220,32 +220,33 @@ Secondary CTAs:
 - **Сохранить** — MVP can be local-only after consent; if no consent, show “сохранить в браузере?” prompt or keep for post-MVP.
 - **Не интересно / скрыть похожее** — only on related cards, not on the current event hero.
 
-### 5.1 Split-desktop physical ticket CTA
+### 5.1 Mobile physical CTA visual test
 
-The horizontal Split desktop event page uses a dedicated tactile ticket card,
-not the legacy full-column one-row action bar and not the mobile action dock:
+The mobile action dock keeps the accepted action hierarchy but may use a
+CSS-only physical treatment in immutable noindex review candidates:
 
-- the Split panel is a self-contained 320–340px vertical card aligned to the
-  start of the event information column;
-- its three levels are immutable: admission label and price, one dominant
-  full-width ticket/registration/calendar action, then one equal row of
-  calendar/share/like controls;
-- the admission pill is suppressed only for Split desktop because the card
-  header becomes the single price presentation; organizer, source, festival
-  and other non-admission medallions remain available;
-- depth is deterministic CSS: restrained warm-ebony gradients, a subtle
-  brushed-line layer, inset rim highlights and warm shadows. No raster texture
-  or image-generation request is part of the control;
-- fine-pointer hover lifts a control by one pixel; `:active` reverses the
-  external shadow into an inset press; `focus-visible` uses a high-contrast
-  warm ring;
-- calendar `.is-calendar-added` and like `aria-pressed="true"` use persistent
-  orange material states, while their existing semantic labels and icon
-  changes remain the non-colour state signal;
-- the primary target is at least 58px high and the secondary targets at least
-  54px; reduced-motion removes movement and transitions;
-- Editorial desktop and production mobile compositions keep their own
-  previously accepted CTA geometry.
+- one warm ebony/chocolate module, not a separate black or metallic theme;
+- the primary ticket/registration/source action spans the full first row and
+  keeps its visible label plus the matching ticket or phone icon;
+- calendar, share and like occupy three equal secondary columns; below the
+  400px action-container breakpoint their prose labels are visually hidden,
+  while their full accessible names remain available;
+- idle depth comes from restrained gradients plus inset highlights and warm
+  shadows; `:active` reverses the shadow and moves the control down by one
+  pixel; fine-pointer hover may lift by one pixel;
+- calendar success is persistent teal via `.is-calendar-added`; like success
+  is persistent rose via `aria-pressed="true"`. Both remain readable without a
+  toast and must not rely on colour alone: the calendar label/state changes
+  through the existing controller and the heart changes from outline to solid;
+- keyboard focus uses a high-contrast teal `focus-visible` ring. Primary height
+  is at least 54px, secondary height at least 52px, and all controls remain at
+  least 44px in both dimensions at 320–430px;
+- reduced-motion removes movement/transitions; the visual test adds no raster
+  texture or extra network request.
+
+The reference price/header is intentionally not duplicated inside the dock:
+admission remains a separate event fact. Heavy leather/metal texture, neon
+gaming chrome and long success captions are also excluded.
 
 CTA quality rules:
 

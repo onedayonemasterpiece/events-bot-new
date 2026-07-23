@@ -28,20 +28,25 @@ test('free one-day events use one actionable calendar primary', async () => {
   assert.match(panel, /\{!calendarPrimary && <CalendarLink event=\{event\} className="desktop-prototype__icon-action" compact \/>\}/u);
 });
 
-test('Split CTA is the tactile stacked ticket card rather than the legacy inline bar', async () => {
+test('Split CTA collapses utilities, remeasures, and only then stacks', async () => {
   const panel = await read('src/components/DesktopEventActionPanel.astro');
   const page = await read('src/components/DesktopEventPage.astro');
-  assert.match(panel, /data-action-layout="stacked"/u);
-  assert.match(panel, /data-action-treatment=\{family === 'split' \? 'ticket-card' : 'editorial'\}/u);
-  assert.match(panel, /data-feedback-scope[\s\S]*data-event-id=\{event\.id\}[\s\S]*data-event-title=\{event\.title\}/u);
-  assert.match(panel, /data-action-treatment="ticket-card"[^}]*width: min\(100%, 340px\)/su);
-  assert.match(panel, /data-action-treatment="ticket-card"[^}]*grid-template-columns: minmax\(0, 1fr\) !important/su);
-  assert.match(panel, /data-action-treatment="ticket-card"[^}]*linear-gradient\(180deg, #ca5a2c 0%, #a8431d 100%\)/su);
-  assert.match(panel, /data-action-treatment="ticket-card"[^}]*grid-template-columns: repeat\(auto-fit, minmax\(0, 1fr\)\)/su);
+  const fit = page.slice(page.indexOf('const fitActionPanel'));
+
+  const comfortable = fit.indexOf("panel.dataset.actionDensity = 'comfortable'");
+  const firstMeasure = fit.indexOf('if (measureInlineActionPanel(panel))', comfortable);
+  const compact = fit.indexOf("panel.dataset.actionDensity = 'compact'", firstMeasure);
+  const secondMeasure = fit.indexOf('if (measureInlineActionPanel(panel))', compact);
+  const stacked = fit.indexOf("panel.dataset.actionLayout = 'stacked'", secondMeasure);
+  assert.ok(comfortable >= 0 && comfortable < firstMeasure);
+  assert.ok(firstMeasure < compact && compact < secondMeasure && secondMeasure < stacked);
+
+  assert.match(page, /primaryLabelDoesNotFit/u);
+  assert.match(page, /const wrapped = labelRect\.height > lineHeight \* 1\.35/u);
+  assert.match(page, /primaryLabel\.scrollWidth > primaryLabel\.clientWidth \+ 1/u);
+  assert.match(page, /panel\.dataset\.actionFit = 'icons'/u);
+  assert.match(panel, /data-action-density="compact"[^}]*\[data-calendar-label\][^}]*width:0; max-width:0; opacity:0/su);
   assert.match(panel, /desktop-prototype__primary-action[^}]*white-space: nowrap/su);
-  assert.match(page, /className="desktop-prototype__action--ticket-card" family="split"/u);
-  assert.doesNotMatch(page, /const measureInlineActionPanel/u);
-  assert.match(page, /panel\.dataset\.actionFit = panel\.dataset\.actionFamily === 'split' \? 'ticket-card' : 'stacked'/u);
 });
 
 test('registration and free-calendar semantic cases are frozen as Split specimens', async () => {
@@ -57,7 +62,7 @@ test('registration and free-calendar semantic cases are frozen as Split specimen
   assert.equal(free?.ticket.href, null);
   assert.match(lab, /slug: 'cta-registration-invariant', eventId: 6811, candidate: 'split'/u);
   assert.match(lab, /slug: 'cta-free-calendar-invariant', eventId: 6901, candidate: 'split'/u);
-  assert.match(browserGate, /cta-registration-invariant" split "Зарегистрироваться" 3/u);
+  assert.match(browserGate, /cta-registration-invariant" split "Зарегистрироваться" 3 icons/u);
   assert.match(browserGate, /cta-free-calendar-invariant" split "В календарь" 2 calendar-primary/u);
 });
 

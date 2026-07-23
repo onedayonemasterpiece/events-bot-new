@@ -514,10 +514,10 @@ const descriptionHtml = (event.description_html || '')
             <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
             {candidate === 'editorial' && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
             <p class="desktop-prototype__place"><Icon name="pin" /><span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span></p>
-            <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} showAdmission={candidate !== 'split'} /></div>
+            <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} /></div>
           </div>
 
-          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--ticket-card" family="split" />}
+          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--inline" family="split" />}
 
           {usesLongFlow && (
             <div class="desktop-prototype__flow-body" data-continuous-event-body>
@@ -688,11 +688,93 @@ const descriptionHtml = (event.description_html || '')
     if (cleanRoot && desktopViewport.matches) {
       document.body.classList.add('desktop-clean-event-page');
       const actionPanels = Array.from(cleanRoot.querySelectorAll<HTMLElement>('[data-desktop-action-panel]'));
-      actionPanels.forEach((panel) => {
-        panel.dataset.actionLayout = 'stacked';
-        panel.dataset.actionFit = panel.dataset.actionFamily === 'split' ? 'ticket-card' : 'stacked';
+      const actionPanelWidths = new WeakMap<HTMLElement, number>();
+      const measureInlineActionPanel = (panel:HTMLElement) => {
+        const panelRect = panel.getBoundingClientRect();
+        const styles = getComputedStyle(panel);
+        const leftLimit = panelRect.left + (Number.parseFloat(styles.paddingLeft) || 0) - 2;
+        const rightLimit = panelRect.right - (Number.parseFloat(styles.paddingRight) || 0) + 2;
+        const primary = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__primary-action');
+        const primaryLabel = primary?.querySelector<HTMLElement>('[data-desktop-primary-label], [data-calendar-label], [data-desktop-phone-label]');
+        const actionRow = panel.querySelector<HTMLElement>(':scope > .desktop-prototype__action-row');
+        const children = [
+          panel.querySelector<HTMLElement>(':scope > p:first-child'),
+          primary,
+          actionRow,
+        ].filter((item): item is HTMLElement => Boolean(item));
+        const outside = children.some((item) => {
+          const rect = item.getBoundingClientRect();
+          return rect.left < leftLimit || rect.right > rightLimit;
+        });
+        const overlaps = children.some((item, index) => children.slice(index + 1).some((other) => {
+          const first = item.getBoundingClientRect();
+          const second = other.getBoundingClientRect();
+          return Math.min(first.right, second.right) - Math.max(first.left, second.left) > 2;
+        }));
+        const primaryLabelDoesNotFit = (() => {
+          if (!primary || !primaryLabel) return false;
+          const primaryRect = primary.getBoundingClientRect();
+          const labelRect = primaryLabel.getBoundingClientRect();
+          const labelStyle = getComputedStyle(primaryLabel);
+          const lineHeight = Number.parseFloat(labelStyle.lineHeight)
+            || Number.parseFloat(labelStyle.fontSize)
+            || 16;
+          const wrapped = labelRect.height > lineHeight * 1.35;
+          const clipped = labelRect.left < primaryRect.left - 1
+            || labelRect.right > primaryRect.right + 1
+            || primaryLabel.scrollWidth > primaryLabel.clientWidth + 1;
+          return wrapped || clipped;
+        })();
+        const overflows = panel.scrollWidth > panel.clientWidth + 1
+          || Boolean(primary && primary.scrollWidth > primary.clientWidth + 2)
+          || Boolean(actionRow && actionRow.scrollWidth > actionRow.clientWidth + 2);
+        return !(outside || overlaps || primaryLabelDoesNotFit || overflows);
+      };
+      const fitActionPanel = (panel:HTMLElement, force = false) => {
+        const width = panel.getBoundingClientRect().width;
+        const previousWidth = actionPanelWidths.get(panel);
+        if (!force && previousWidth !== undefined && Math.abs(previousWidth - width) < .5) return;
+        actionPanelWidths.set(panel, width);
+        const splitFamily = panel.dataset.actionFamily === 'split';
+        // The component family chooses the intended composition. Only Split
+        // attempts the accepted one-row geometry; Editorial keeps the tall
+        // three-row card. Measure actual rendered children before allowing the
+        // Split row so dynamic labels/counters can still fail closed.
+        panel.dataset.actionFit = splitFamily ? 'measuring' : 'stacked';
+        panel.dataset.actionLayout = splitFamily ? 'inline' : 'stacked';
         panel.dataset.actionDensity = 'comfortable';
+        if (!splitFamily) return;
+        if (measureInlineActionPanel(panel)) {
+          panel.dataset.actionFit = 'comfortable';
+          return;
+        }
+
+        // Preserve the compact Split hierarchy before giving up its one-row
+        // composition: both secondary utilities become icon controls first
+        // (share already is one; the calendar label is hidden synchronously),
+        // then the real children are measured again.
+        panel.dataset.actionDensity = 'compact';
+        if (measureInlineActionPanel(panel)) {
+          panel.dataset.actionFit = 'icons';
+          return;
+        }
+
+        panel.dataset.actionLayout = 'stacked';
+        panel.dataset.actionFit = 'stacked';
+      };
+      actionPanels.forEach((panel) => {
+        fitActionPanel(panel, true);
+        new ResizeObserver(() => fitActionPanel(panel)).observe(panel);
+        new MutationObserver(() => fitActionPanel(panel, true)).observe(panel, {
+          childList:true,
+          characterData:true,
+          subtree:true,
+        });
       });
+      const refitActionPanels = () => actionPanels.forEach((panel) => fitActionPanel(panel, true));
+      window.requestAnimationFrame(refitActionPanels);
+      window.addEventListener('load', refitActionPanels, { once:true });
+      document.fonts?.ready.then(refitActionPanels);
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
       const mediaFrame = cleanRoot.querySelector<HTMLElement>('[data-media-frame]');
       const heroImage = cleanRoot.querySelector<HTMLImageElement>('[data-clean-hero-image]');
@@ -1840,9 +1922,7 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-transport:empty { display:none; }
     .desktop-clean-transport :global(.event-transport),
     .desktop-clean-transport :global(.event-bus-transport) { margin:0; }
-    :global(.desktop-prototype__action--ticket-card) {
-      margin:0 clamp(1.5rem,3.6vw,4.5rem) 1.5rem;
-    }
+    :global(.desktop-prototype__action--inline) { margin:0 clamp(1.5rem,3vw,3.2rem); border-radius:24px; }
 
     /* Editorial: one continuous slab plus one bounded sticky right stack. */
     .desktop-clean-event--editorial .desktop-prototype__canvas { overflow:visible; }
