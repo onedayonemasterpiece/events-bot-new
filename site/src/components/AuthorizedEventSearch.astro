@@ -59,8 +59,7 @@ const HeadingTag = headingLevel;
   </div>
   <p class="authorized-search__progress-label" data-search-progress-label role="status" aria-live="polite" aria-atomic="true" hidden></p>
   <p class="authorized-search__status" data-search-status aria-live="polite">{enabled ? 'Войдите, чтобы включить поиск.' : 'Это визуальный прототип: поле, запуск поиска и вход в этой noindex-сборке не подключены.'}</p>
-  {!enabled && <p class="authorized-search__prototype-label">Образец состояния загрузки результатов</p>}
-  <div class="authorized-search__skeletons" data-search-skeletons hidden={enabled} aria-hidden="true">
+  <div class="authorized-search__skeletons" data-search-skeletons hidden aria-hidden="true">
     {[0, 1].map(() => (
       <div class="authorized-search__skeleton-card">
         <div class="authorized-search__skeleton-media"></div>

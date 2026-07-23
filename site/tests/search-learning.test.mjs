@@ -28,7 +28,7 @@ test('technical seed-tag copy is removed from the Search page', () => {
   assert.match(collections, /phrase: 'послушать хор'/u);
 });
 
-test('disabled backend still renders an honest visual Search prototype', () => {
+test('disabled backend keeps the honest controls without exposing a loading specimen', () => {
   assert.doesNotMatch(donor, /\{enabled && \(\s*<section id="poisk"/u);
   assert.match(donor, /Что хочется сделать\?/u);
   assert.match(donor, /rows="3"/u);
@@ -36,8 +36,9 @@ test('disabled backend still renders an honest visual Search prototype', () => {
   assert.match(donor, /data-search-submit disabled=\{!enabled\}/u);
   assert.match(donor, /Поиск пока не запускается/u);
   assert.match(donor, /Это визуальный прототип/u);
-  assert.match(donor, /Образец состояния загрузки результатов/u);
-  assert.match(donor, /data-search-skeletons hidden=\{enabled\}/u);
+  assert.doesNotMatch(donor, /Образец состояния загрузки результатов|authorized-search__prototype-label/u);
+  assert.match(donor, /data-search-skeletons hidden aria-hidden="true"/u);
+  assert.doesNotMatch(donor, /data-search-skeletons hidden=\{enabled\}/u);
 });
 
 test('materialized collection routes use canonical large EventCard without bespoke result rows', () => {
@@ -76,8 +77,9 @@ test('search progress stays backend-owned while its visible surface is the submi
 test('search keeps a canonical-card skeleton until final results and separates the endcap', () => {
   assert.match(donor, /authorized-search__skeleton-media/u);
   assert.match(eventLayout, /\.authorized-search__skeleton-media[^}]*aspect-ratio:\s*5\s*\/\s*4/u);
-  assert.match(eventLayout, /data-search-enabled="false"[^}]*authorized-search__skeletons[^}]*repeat\(3, minmax\(0, 1fr\)\)/u);
-  assert.match(eventLayout, /data-search-enabled="false"[^}]*authorized-search__skeleton-card:not\(:first-child\)[^}]*display:\s*none/u);
+  assert.match(donor, /data-search-skeletons hidden aria-hidden="true"/u, 'generated Search starts with its skeleton hidden');
+  assert.doesNotMatch(eventLayout, /data-search-enabled="false"[^}]*authorized-search__skeleton/u, 'disabled builds do not reveal a loading specimen');
+  assert.match(donor, /function setSkeletonLoading\(isLoading\) \{\s*if \(skeletons\) skeletons\.hidden = !isLoading;/u);
   assert.match(donor, /setSearchLoading\(true, \{ showSkeleton: !append \}\)/u);
   assert.match(donor, /if \(isVector\) \{[\s\S]*?results\.hidden = true;[\s\S]*?return \{ itemCount:/u);
   assert.doesNotMatch(donor, /if \(isVector\) \{[\s\S]*?insertVectorPreviewHtml\(/u);
@@ -87,6 +89,17 @@ test('search keeps a canonical-card skeleton until final results and separates t
   assert.match(donor, /data-search-feedback="matched">Да, нашёл/u);
   assert.match(donor, /data-search-feedback="missed">Нет, не нашёл/u);
   assert.match(donor, /По вашему запросу ничего не найдено/u);
+});
+
+test('standalone Search shares the accepted textarea and button controls at every viewport', () => {
+  const mobileBreakpoint = eventLayout.indexOf('@media (max-width: 560px)');
+  assert.notEqual(mobileBreakpoint, -1);
+  const sharedCss = eventLayout.slice(0, mobileBreakpoint);
+  const mobileCss = eventLayout.slice(mobileBreakpoint);
+  assert.match(sharedCss, /\.authorized-search--standalone \.authorized-search__form textarea \{[\s\S]*?min-height:\s*82px;[\s\S]*?border-bottom:\s*2px solid var\(--text\);[\s\S]*?font-size:\s*1\.3125rem;/u);
+  assert.match(sharedCss, /\.authorized-search--standalone \.authorized-search__submit \{[\s\S]*?width:\s*100%;[\s\S]*?min-height:\s*50px;[\s\S]*?border-radius:\s*8px;[\s\S]*?background:\s*#221a14;/u);
+  assert.match(sharedCss, /\.authorized-search--standalone \.authorized-search__submit::before \{[\s\S]*?background:\s*#98401f;/u);
+  assert.doesNotMatch(mobileCss, /\.authorized-search--standalone \.authorized-search__(?:form textarea|submit)(?:::before)?\s*\{/u, 'mobile does not fork the accepted shared controls');
 });
 
 test('search progress is monotonic, epoch guarded and reset only by its owning request', () => {
