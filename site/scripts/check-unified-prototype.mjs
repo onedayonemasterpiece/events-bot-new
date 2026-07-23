@@ -34,6 +34,7 @@ const primaryRoutes = [
   'vyhodnye/',
   'populyarnoe/',
   'vystavki/',
+  'festivali/',
   'poisk/',
   'podborki/dzhaz-na-vyhodnyh/',
   'podborki/besplatno-s-detmi/',
@@ -125,6 +126,23 @@ if (search.includes('data-product-breadcrumbs') || search.includes('data-product
 const exhibitions = html('vystavki/index.html');
 if (!exhibitions.includes('data-exhibitions-prototype') || !exhibitions.includes('data-mode-switch') || exhibitions.includes('listing-stack')) {
   throw new Error('Public-review Exhibitions does not use the accepted dynamic personal donor');
+}
+
+const festivals = html('festivali/index.html');
+if (!festivals.includes('data-festival-timeline') || !festivals.includes('data-festival-count="21"')) {
+  throw new Error('Festival calendar must render the complete 21-item timeline');
+}
+if ((festivals.match(/data-festival-card=/gu) || []).length !== 21) {
+  throw new Error('Festival calendar card count does not match its curated source projection');
+}
+for (const month of ['july', 'august', 'september', 'october', 'november', 'december']) {
+  if (!festivals.includes(`data-festival-month="${month}"`)) throw new Error(`Festival calendar misses ${month}`);
+}
+for (const marker of ['Точные даты уточняются', 'Предварительный период', 'data-festival-row']) {
+  if (!festivals.includes(marker)) throw new Error(`Festival calendar misses honesty/layout marker: ${marker}`);
+}
+if (!festivals.includes(`${prefix}/assets/festivals/timeline/city-jazz.webp`)) {
+  throw new Error('Festival calendar media escaped the immutable preview prefix');
 }
 
 if (interestClubsData.source !== 'sqlite-interest-clubs-v1' || interestClubsData.clubs.length < 1) {

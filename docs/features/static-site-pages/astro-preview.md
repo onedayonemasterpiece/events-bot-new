@@ -41,6 +41,12 @@ The preview-only `/dlya-menya/` page is an honest finite cold-start specimen,
 not a new production SEO route. A successful local build or prefix upload never
 authorizes root promotion or a stable calendar rewrite.
 
+The prototype hub also owns the noindex `/festivali/` calendar timeline. Its
+21-item July–December projection, source/status honesty rules and compact
+one-to-four-card packing are canonical in
+[`festival-timeline.md`](festival-timeline.md). It is a review route, not a
+production festival directory or acceptance of the deferred category view.
+
 The 2026-07-23 correction candidate additionally keeps every reviewed surface
 inside one mutually linked prefix: the dynamic Exhibitions presentation,
 optimized responsive personal-card feed, Search, current clubs, six-logo Partners,

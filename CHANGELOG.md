@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added a noindex festival calendar prototype at `/festivali/`: 21
+  source-backed July–December 2026 festivals, real organiser/venue media,
+  explicit pending-date states and chronological one-to-four-card row packing
+  inside the unified static-site header, footer and mobile shell.
 - Added a base-aware installable web app manifest and an Android-only mobile
   footer install action that appears only for a real one-shot
   `beforeinstallprompt`, clears on `appinstalled`, and stays absent on
