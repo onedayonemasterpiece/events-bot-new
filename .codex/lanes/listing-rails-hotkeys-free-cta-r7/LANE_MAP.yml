@@ -1,0 +1,109 @@
+mode: read_only_parallel_then_serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: 65ee3c9ff6a21c37313758790558152005ba8b9e
+base_branch: integration/mobile-acceptance-r6-20260723
+integration_branch: integration/listing-rails-hotkeys-free-cta-r7-20260723
+global_constraints:
+  - preserve accepted R6 desktop and mobile behavior outside the named regressions
+  - publish only a new immutable noindex R7 prefix; do not modify production or R5/R6
+  - keep event-medallion matching fail-closed and separate identity medallions from admission facts
+  - use agy Gemini Pro class both before implementation and for final acceptance
+  - update canonical documentation and CHANGELOG with every behavior change
+verification_owner: INT-R7
+stop_conditions:
+  - a fix weakens keyboard input-field guards or fires a command while typing
+  - an admission badge displaces or reclassifies an organizer identity medallion
+  - a mobile listing falls back to scaled desktop cards or gains horizontal overflow
+  - a no-ticket event loses its usable primary action
+requirements:
+  - id: R01
+    requirement: make C and P event-page copy shortcuts work from the same physical keys in Russian and Latin keyboard layouts
+    area: event keyboard navigation
+    dependencies: []
+    conflict_risk: medium
+    done_when: KeyC and KeyP trigger the correct copy actions in Latin and Russian layouts while editable targets and modifiers remain guarded
+  - id: R02
+    requirement: restore the dedicated free-admission medallion and keep the Yantar Hall identity medallion inline when the portrait/OCR desktop template cannot safely host TopSlot
+    area: event medallions
+    dependencies: []
+    conflict_risk: high
+    done_when: event 6667 visibly renders the free badge and an uncropped Yantar Hall medallion in valid slots on desktop and mobile
+  - id: R03
+    requirement: promote Add to calendar to the terracotta primary CTA whenever tickets are not required
+    area: event primary actions
+    dependencies: [R02]
+    conflict_risk: high
+    done_when: event 6667 has a terracotta Add to calendar primary action and no disabled Tickets not required pseudo-action
+  - id: R04
+    requirement: render the accepted mobile rail version on Today, Tomorrow, Weekend, Popular, Personal, collections and other non-exhibition listing surfaces
+    area: mobile listings
+    dependencies: []
+    conflict_risk: high
+    done_when: every supported page type uses mobile-native rails/cards rather than a scaled desktop layout and has no horizontal overflow
+  - id: R05
+    requirement: obtain critical design and code guidance from agy Gemini before implementation and a demanding public-preview acceptance after implementation
+    area: external review
+    dependencies: [R01, R02, R03, R04]
+    conflict_risk: medium
+    done_when: both Gemini Pro-class artifacts exist and final verdict contains no unresolved required change
+lanes:
+  - id: MAP-HOTKEYS
+    role: planner
+    effort: medium
+    requirement_ids: [R01]
+    target: locate the keyboard event contract, regression tests, and layout-independent physical-key solution
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: exact code/test/doc map and risks
+    verification_scope: inspection_only
+    status: planned
+  - id: MAP-EVENT-ACTIONS
+    role: planner
+    effort: high
+    requirement_ids: [R02, R03]
+    target: trace event 6667 medallion resolution, slot eligibility and desktop/mobile action hierarchy
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: exact code/data/test/doc map and safe slot/action rules
+    verification_scope: inspection_only
+    status: planned
+  - id: MAP-MOBILE-RAILS
+    role: planner
+    effort: high
+    requirement_ids: [R04]
+    target: inventory all listing routes, accepted mobile rail donor, routing and responsive regressions
+    depends_on: []
+    execution_mode: parallel
+    branch: read-only
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: route-component matrix, donor contract and regression tests
+    verification_scope: inspection_only
+    status: planned
+  - id: INT-R7
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R05]
+    target: consult Gemini, implement R01-R04 serially, validate, publish R7 and run Gemini acceptance
+    depends_on: [MAP-HOTKEYS, MAP-EVENT-ACTIONS, MAP-MOBILE-RAILS]
+    execution_mode: serial_after_dependency
+    branch: integration/listing-rails-hotkeys-free-cta-r7-20260723
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files:
+      - .codex/lanes/listing-rails-hotkeys-free-cta-r7/**
+      - site/**
+      - docs/features/static-site-pages/**
+      - CHANGELOG.md
+    forbidden_files: []
+    expected_output: clean pushed branch, immutable R7 preview and closure report
+    verification_scope: full_local_and_public
+    status: planned
