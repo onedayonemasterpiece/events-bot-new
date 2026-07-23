@@ -1,0 +1,41 @@
+---
+import EventLayout from '../layouts/EventLayout.astro';
+import DateListingSurface from '../components/listings/DateListingSurface.astro';
+import PersonalFeedSlot from '../components/PersonalFeedSlot.astro';
+import { absoluteUrl, getCurrentDate, getDateEvents, SITE_NAME } from '../lib/events';
+
+export function getStaticPaths() {
+  const dayMs = 86_400_000;
+  const today = new Date(`${getCurrentDate()}T12:00:00+02:00`);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(today.getTime() + index * dayMs).toISOString().slice(0, 10);
+    return { params: { date }, props: { date } };
+  });
+}
+
+const { date } = Astro.props;
+const events = getDateEvents(date);
+const formattedDate = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'Europe/Kaliningrad',
+}).format(new Date(`${date}T12:00:00+02:00`));
+const title = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'Europe/Kaliningrad',
+}).format(new Date(`${date}T12:00:00+02:00`));
+---
+<EventLayout
+  title={`События ${formattedDate} в Калининградской области | ${SITE_NAME}`}
+  description={`События на ${formattedDate}, сгруппированные по времени начала.`}
+  canonicalUrl={absoluteUrl(`/date-${date}/`)}
+  structuredData={[]}
+  mobileSection="dates"
+>
+  <main id="main" class="ke-listing-page">
+    <DateListingSurface kind="date" title={title} date={date} dateLabel={formattedDate} events={events} />
+    <div class="ke-listing-shell"><PersonalFeedSlot context="date" /></div>
+  </main>
+</EventLayout>

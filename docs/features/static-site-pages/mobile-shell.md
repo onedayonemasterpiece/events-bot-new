@@ -1006,8 +1006,9 @@ are part of the shared Astro implementation:
   and multi-image rows keep their fail-closed authored geometry;
 - date pages use the full `56px` horizontal date accessory above the bottom
   dock, including the current-date chip, generated weekend ranges and calendar
-  sheet. Only generated routes are links; unavailable dates remain honest
-  disabled cells rather than 404 links;
+  sheet. All 42 cells are real links: today/tomorrow keep their named routes,
+  Saturdays use the generated weekend route and the remaining dates use
+  generated `/date-YYYY-MM-DD/` pages, including honest empty states;
 - after the page hero leaves the viewport, a compact title is exposed in the
   existing `64px` header lane. Popular/group and Weekend day shelf headings
   remain native `position:sticky` at `top:64px`; their ancestors must not
@@ -1017,9 +1018,11 @@ are part of the shared Astro implementation:
   fractional rendering produced the crooked Android result;
 - standalone Search retains the accepted full-width in-button progress fill.
   It owns one request epoch, blocks synchronous double submits and resets on
-  success, error, abort, logout and page exit. This is acceptance of the visual
-  and lifecycle contract, not a claim that the real authenticated Search
-  journey has been owner-accepted.
+  success, error, abort, logout and page exit. A pending pre-request session
+  check is epoch-invalidated too, so its late continuation cannot restart the
+  CTA after logout. This is acceptance of the visual and lifecycle contract,
+  not a claim that the real authenticated Search journey has been
+  owner-accepted.
 
 The amber artifact remains an explicitly enabled **noindex research layer**.
 The accepted A-tail button is a sibling after the large like, never part of the

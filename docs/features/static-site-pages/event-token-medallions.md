@@ -73,7 +73,7 @@ the large detail-page token row:
 - render at most one resolved `venue_brand` or primary `organizer`;
 - keep the seal outside `deckMedia`, photo `+N`, keyboard pager and fullscreen
   gallery semantics;
-- desktop size is `44×44px`, mobile `36×36px`; it sits `8px` / `7px` from the
+- desktop and mobile size is `44×44px`; it sits `8px` / `7px` from the
   top-left of the deck, above photographs and below the `+N` counter;
 - the seal is non-interactive and `aria-hidden`, because the same venue name is
   already present as card text;

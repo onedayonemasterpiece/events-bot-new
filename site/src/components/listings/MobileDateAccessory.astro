@@ -4,7 +4,7 @@ import { getAvailableWeekendRanges, getWeekendRange, withBase } from '../../lib/
 interface Props {
   today: string;
   selectedDate: string;
-  current: 'today' | 'tomorrow' | 'weekend';
+  current: 'today' | 'tomorrow' | 'weekend' | 'date';
   weekendEnd?: string;
 }
 const { today, selectedDate, current, weekendEnd = '' } = Astro.props;
@@ -31,7 +31,7 @@ const dates = Array.from({ length: 42 }, (_, index) => {
       ? '/zavtra/'
       : isSaturday && availableWeekendStarts.has(iso)
         ? (iso === currentWeekendStart ? '/vyhodnye/' : `/vyhodnye/${iso}/`)
-        : null;
+        : `/date-${iso}/`;
   return {
     iso,
     weekday,
@@ -53,7 +53,7 @@ const selectedLabel = current === 'weekend' && weekendEnd
 ---
 <div class="date-accessory" data-mobile-date-accessory data-selected-date={selectedDate}>
   <nav class="date-rail" aria-label="Выбор даты">
-    {dates.map((item, index) => item.href ? (
+    {dates.map((item, index) => (
       <a
         class:list={[
           'date-chip',
@@ -70,24 +70,6 @@ const selectedLabel = current === 'weekend' && weekendEnd
         <strong>{item.rangeLabel}</strong>
         <small>{index === 0 || item.day === 1 ? item.month : ''}</small>
       </a>
-    ) : (
-      <span
-        class:list={[
-          'date-chip',
-          'date-chip--disabled',
-          item.iso === today && 'date-chip--today',
-          (item.isSaturday || item.isSunday) && 'date-chip--weekend',
-          item.isWeekendRange && 'date-chip--weekend-range',
-        ]}
-        data-date={item.iso}
-        aria-current={item.selected ? 'date' : undefined}
-        aria-disabled="true"
-        aria-label={`${item.weekday}, ${item.day} ${item.month.toLocaleLowerCase('ru-RU')}. Страница событий пока не опубликована`}
-      >
-        <span>{item.isWeekendRange ? 'СБ+ВС' : item.weekday}</span>
-        <strong>{item.rangeLabel}</strong>
-        <small>{index === 0 || item.day === 1 ? item.month : ''}</small>
-      </span>
     ))}
   </nav>
   <button type="button" class="date-calendar-trigger" data-calendar-open aria-haspopup="dialog" aria-label="Открыть календарь">
@@ -101,14 +83,10 @@ const selectedLabel = current === 'weekend' && weekendEnd
       <button type="button" data-calendar-close aria-label="Закрыть">×</button>
     </header>
     <div class="calendar-grid">
-      {dates.map((item) => item.href ? (
+      {dates.map((item) => (
         <a href={withBase(item.href)} data-calendar-date={item.iso} aria-current={item.selected ? 'date' : undefined}>
           <span>{item.weekday}</span><b>{item.day}</b>
         </a>
-      ) : (
-        <span data-calendar-date={item.iso} aria-current={item.selected ? 'date' : undefined} aria-disabled="true">
-          <span>{item.weekday}</span><b>{item.day}</b>
-        </span>
       ))}
     </div>
   </section>

@@ -6,7 +6,7 @@ interface Props {
   title: string;
   dateLabel: string;
   count: number;
-  current: 'today' | 'tomorrow' | 'weekend' | 'popular';
+  current: 'today' | 'tomorrow' | 'weekend' | 'popular' | 'date';
 }
 const { title, dateLabel, count, current } = Astro.props;
 const routes = [

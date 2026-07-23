@@ -559,12 +559,15 @@ const HeadingTag = headingLevel;
 
     function abortActiveSearch() {
       const controller = activeSearchController;
-      if (!controller) return false;
+      const pendingSessionCheck = searchStartPending;
+      if (!controller && !pendingSessionCheck) return false;
       // Invalidate the request before aborting it so its catch/finally path and
-      // any already queued stream frame cannot repaint the accepted CTA.
+      // any already queued session/stream continuation cannot repaint the
+      // accepted CTA after logout or page exit.
       searchEpoch += 1;
+      searchStartPending = false;
       activeSearchController = null;
-      controller.abort();
+      controller?.abort();
       setSkeletonLoading(false);
       setMoreLoading(false);
       setSearchLoading(false);
@@ -1055,15 +1058,18 @@ const HeadingTag = headingLevel;
 
     async function runSearch({ append = false } = {}) {
       if (!supabase || loading || searchStartPending) return;
+      const sessionCheckEpoch = searchEpoch;
       searchStartPending = true;
       let sessionData;
       try {
         ({ data: sessionData } = await supabase.auth.getSession());
       } catch (_error) {
+        if (sessionCheckEpoch !== searchEpoch) return;
         searchStartPending = false;
         setStatus('Не удалось проверить вход. Попробуйте ещё раз.', 'error');
         return;
       }
+      if (sessionCheckEpoch !== searchEpoch || !searchStartPending) return;
       const session = sessionData?.session || null;
       if (!session?.user || !session?.access_token) {
         clearResults();

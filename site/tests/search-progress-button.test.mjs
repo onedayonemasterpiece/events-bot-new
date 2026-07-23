@@ -35,7 +35,10 @@ test('R8 guards duplicate submits and owns success/error/abort/reset transitions
   assert.match(search, /if \(nextStageRank < progressStageRank\) return/u);
   assert.match(search, /if \(completed\) scheduleSearchProgressReset\(epoch\);\s*else resetSearchProgress\(epoch\);/u);
   assert.match(search, /function abortActiveSearch\(\)/u);
-  assert.match(search, /searchEpoch \+= 1;[\s\S]*?controller\.abort\(\);[\s\S]*?resetSearchProgress\(searchEpoch\)/u);
+  assert.match(search, /const pendingSessionCheck = searchStartPending/u);
+  assert.match(search, /searchEpoch \+= 1;[\s\S]*?searchStartPending = false;[\s\S]*?controller\?\.abort\(\);[\s\S]*?resetSearchProgress\(searchEpoch\)/u);
+  assert.match(search, /const sessionCheckEpoch = searchEpoch;\s*searchStartPending = true/u);
+  assert.match(search, /if \(sessionCheckEpoch !== searchEpoch \|\| !searchStartPending\) return/u);
   assert.match(search, /logout\?\.addEventListener\('click', async \(\) => \{\s*abortActiveSearch\(\);/u);
   assert.match(search, /window\.addEventListener\('pagehide', abortActiveSearch, \{ once: true \}\)/u);
 });

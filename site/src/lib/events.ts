@@ -830,6 +830,12 @@ export function getTomorrowEvents(): PreviewEvent[] {
   return collapseLinkedSessionEvents(getEvents().filter((event) => event.start_date === tomorrow && !isExhibitionLikeEvent(event)));
 }
 
+export function getDateEvents(date: string): PreviewEvent[] {
+  return collapseLinkedSessionEvents(
+    getEvents().filter((event) => event.start_date === date && !isExhibitionLikeEvent(event)),
+  );
+}
+
 export function eventDaypart(event: Pick<PreviewEvent, 'start_time' | 'display_time'>): EventDaypart {
   const rawTime = event.start_time || event.display_time || '';
   const match = /(\d{1,2}):(\d{2})/u.exec(rawTime);

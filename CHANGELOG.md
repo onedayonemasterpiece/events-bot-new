@@ -190,9 +190,13 @@
   across duplicate submit, success, error, abort and logout.
 - Restored the complete date-page mobile behavior around the physical v23/v28
   rails: decode-aware media skeletons, `140×112` single-visual `5:4` crop,
-  fail-closed OCR/unknown geometry, full date accessory/calendar sheet,
+  fail-closed OCR/unknown geometry, a fully linked 42-day date
+  accessory/calendar sheet with generated `/date-YYYY-MM-DD/` pages,
   physically sticky compact title and shelf headings, and a straight SVG
   continuation arrow.
+- Closed the Search pre-request session race so logout or page exit also
+  invalidates a pending `getSession()` continuation before it can restart the
+  accepted progress CTA.
 - Integrated the accepted A-tail amber artifact only into explicitly enabled
   noindex previews, after the rail like action with localStorage-only found
   state and reduced-motion fallback; production output remains unchanged.

@@ -108,9 +108,9 @@ for (const width of [320, 390]) {
     const hrefs = [...new Set(links.map((link) => link.href))];
     return Promise.all(hrefs.map(async (href) => ({ href, status: (await fetch(href)).status })));
   });
-  assert.ok(dateHrefStatuses.length >= 2);
+  assert.equal(await page.locator('[data-mobile-date-accessory] .date-rail a[href]').count(), 42);
   assert.deepEqual(dateHrefStatuses.filter(({ status }) => status !== 200), []);
-  assert.ok(await page.locator('[data-mobile-date-accessory] [aria-disabled="true"]').count() > 0);
+  assert.equal(await page.locator('[data-mobile-date-accessory] [aria-disabled="true"]').count(), 0);
   await page.locator('[data-calendar-open]').click();
   await page.locator('[data-calendar-sheet]:not([hidden]) .calendar-panel').waitFor();
   assert.equal(await page.locator('[data-calendar-sheet] [data-calendar-date]').count(), 42);

@@ -601,7 +601,7 @@ overflow.
 detail-page ряду из крупных `90–112px` токенов. Рассмотрены четыре варианта:
 отдельный ряд ломает вертикальный ритм, inline-аватар у площадки слишком
 утилитарен, а логотип как фотография фатально искажает `+N`, pager и gallery.
-Принят один compact pattern: `44px` desktop / `36px` mobile institutional seal
+Принят один compact pattern: `44px` desktop / `44px` mobile institutional seal
 в левом верхнем углу photo deck.
 
 Seal использует существующий fail-closed `resolveEventMedallions`: показывается

@@ -10,7 +10,7 @@ import ListingPersonalFilter from '../ListingPersonalFilter.astro';
 import { getCurrentDate } from '../../lib/events';
 
 interface Props {
-  kind: 'today' | 'tomorrow';
+  kind: 'today' | 'tomorrow' | 'date';
   title: string;
   date: string;
   dateLabel: string;
@@ -34,7 +34,7 @@ const upcomingGroups = groupListingEvents(upcomingEvents);
 const cities = [...new Set(events.map((event) => event.city || 'Калининградская область'))]
   .map((name) => ({ name, count: events.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
-const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
+const idPrefix = kind === 'today' ? 'today-time' : kind === 'tomorrow' ? 'tomorrow-time' : `date-${date}-time`;
 const mobileDate = new Intl.DateTimeFormat('ru-RU', { day:'numeric', month:'long', timeZone:'Europe/Kaliningrad' })
   .format(new Date(`${date}T12:00:00+02:00`));
 const mobileWeekday = new Intl.DateTimeFormat('ru-RU', { weekday:'long', timeZone:'Europe/Kaliningrad' })
@@ -50,7 +50,7 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
   data-listing-has-time-nav="true"
 >
   <ListingPageHeader title={title} dateLabel={dateLabel} count={events.length} current={kind} />
-  <ListingDiscoveryRail cities={cities} total={events.length} label={kind === 'today' ? 'сегодня' : 'завтра'}>
+  <ListingDiscoveryRail cities={cities} total={events.length} label={kind === 'today' ? 'сегодня' : kind === 'tomorrow' ? 'завтра' : dateLabel}>
     <ListingTimeNav groups={upcomingGroups} idPrefix={idPrefix} earlierCount={earlierEvents.length} />
   </ListingDiscoveryRail>
 
@@ -97,7 +97,7 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
     <strong>Событий на эту дату пока нет</strong>
   </div>
   </div>
-  <ListingPersonalFilter total={events.length} label={kind === 'today' ? 'сегодня' : 'завтра'} version={2} placement="floating" />
+  <ListingPersonalFilter total={events.length} label={kind === 'today' ? 'сегодня' : kind === 'tomorrow' ? 'завтра' : dateLabel} version={2} placement="floating" />
 </div>
 
 {kind === 'today' ? (

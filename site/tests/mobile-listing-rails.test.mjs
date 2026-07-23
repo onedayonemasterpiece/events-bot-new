@@ -41,8 +41,10 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(accessory, /class="calendar-sheet"/u);
   assert.match(accessory, /class="calendar-grid"/u);
   assert.match(accessory, /getAvailableWeekendRanges\(\)/u);
-  assert.match(accessory, /aria-disabled="true"/u);
-  assert.doesNotMatch(accessory, /\/date-\$\{iso\}\//u);
+  assert.match(accessory, /`\/date-\$\{iso\}\/`/u);
+  assert.doesNotMatch(accessory, /aria-disabled="true"/u);
+  assert.match(await read('src/pages/date-[date].astro'), /Array\.from\(\{ length: 42 \}/u);
+  assert.match(await read('src/pages/date-[date].astro'), /<DateListingSurface kind="date"/u);
 });
 
 test('accepted sticky hierarchy and straight 48x23 arrow are literal contracts', async () => {
