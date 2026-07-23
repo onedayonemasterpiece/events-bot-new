@@ -185,8 +185,8 @@
 
 - Completed the R9 mobile acceptance pass: full event detail reuses the shared
   leather tag with an immediate terracotta fallback; circular organizer/free
-  medallions share one diameter and baseline; exhibition seals are owner-sized
-  to `44px`; and Search preserves the accepted in-button progress lifecycle
+  medallions share one diameter and baseline; exhibition seals use a readable
+  `44px` size; and Search preserves the accepted in-button progress lifecycle
   across duplicate submit, success, error, abort and logout.
 - Restored the complete date-page mobile behavior around the physical v23/v28
   rails: decode-aware media skeletons, `140×112` single-visual `5:4` crop,
