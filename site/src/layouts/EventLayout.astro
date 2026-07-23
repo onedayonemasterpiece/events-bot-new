@@ -258,12 +258,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         display: block;
         padding: 18px 24px 16px;
         border-radius: 0 0 12px 12px;
-        background: var(--ke-color-brand-tag);
+        background-color: var(--ke-color-brand-tag);
         color: #fffaf2;
         text-decoration: none;
         transition: background-color 160ms ease;
       }
-      .site-header__brand-tag:hover { background: var(--ke-color-brand-tag-hover); }
+      .site-header__brand-tag:hover { background-color: var(--ke-color-brand-tag-hover); }
       .site-header__desktop-lockup { display: grid; grid-template-rows: 12px auto; align-content: start; gap: 4px; }
       .site-header__desktop-lockup .announcements-lockup__endorsement { overflow: visible; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; line-height: 12px; text-transform: uppercase; white-space: nowrap; }
       .site-header__desktop-lockup .announcements-lockup__wordmark { display: block; width: 192px; height: auto; color: #fff; overflow: visible; }
@@ -836,6 +836,20 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         overflow: visible;
       }
       @media (min-width: 1024px) {
+        .site-header__brand-tag,
+        .hero-gallery__brand {
+          /*
+           * The solid brand colour is deliberately retained under the WebP:
+           * text and silhouette paint immediately, even before/without image load.
+           */
+          background-color: var(--ke-color-brand-tag);
+          background-image:
+            linear-gradient(rgba(91, 29, 12, 0.08), rgba(91, 29, 12, 0.08)),
+            var(--desktop-brand-tag-skin);
+          background-position: center;
+          background-size: cover;
+          background-repeat: no-repeat;
+        }
         .hero-gallery__brand { width:240px; min-height:88px; padding:18px 24px 16px; }
         .hero-gallery__lockup { width:192px; grid-template-rows:12px auto; gap:4px; }
         .hero-gallery__lockup .announcements-lockup__endorsement { display:block; font-size:11px; line-height:12px; white-space:nowrap; }
@@ -2412,7 +2426,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
     </style>
   </head>
-  <body class={bodyClass} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+  <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather.webp')}')`} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">

@@ -500,14 +500,25 @@ const descriptionHtml = (event.description_html || '')
           </aside>
         )}
 
+        {candidate === 'editorial' && (
+          <Breadcrumbs
+            parents={eventBreadcrumbParents(event)}
+            current={event.title}
+            display="desktop"
+            className="desktop-prototype__breadcrumbs desktop-prototype__breadcrumbs--overlay"
+          />
+        )}
+
         <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long']} data-scroll-content={usesLongFlow ? '' : undefined} data-editorial-content-flow={candidate === 'editorial' ? '' : undefined}>
           <div class="desktop-prototype__info" data-title-panel>
-            <Breadcrumbs
-              parents={eventBreadcrumbParents(event)}
-              current={event.title}
-              display="desktop"
-              className="desktop-prototype__breadcrumbs"
-            />
+            {candidate !== 'editorial' && (
+              <Breadcrumbs
+                parents={eventBreadcrumbParents(event)}
+                current={event.title}
+                display="desktop"
+                className="desktop-prototype__breadcrumbs"
+              />
+            )}
             <div class="desktop-prototype__kicker">
               <span>{event.event_type || 'событие'}</span>
               <EventOccurrenceNav event={event} presentation={resolvedOccurrencePresentation} variant="desktop" />
@@ -2011,6 +2022,52 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like[aria-pressed="true"]:hover) { color:#ff7a72; background:rgba(201,52,52,.16); }
     .desktop-clean-related__grid :global(.event-card--split-actions:focus-visible),
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button:focus-visible) { outline:3px solid #fffaf2; outline-offset:3px; }
+
+    /*
+     * Editorial hierarchy: breadcrumbs belong to the photograph, immediately
+     * above the reading sheet. They remain a semantic ordered nav; only their
+     * visual placement changes. The soft lower glow preserves legibility over
+     * unpredictable photography without turning the trail into a solid banner.
+     */
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage {
+      --desktop-sheet-top:clamp(430px,67svh,720px);
+    }
+    .desktop-clean-event--editorial .desktop-prototype__content-flow {
+      margin-top:var(--desktop-sheet-top);
+      overflow:visible;
+      border-radius:28px 28px 0 0;
+    }
+    :global(.desktop-prototype__breadcrumbs--overlay.product-breadcrumbs) {
+      position:absolute;
+      top:calc(var(--desktop-sheet-top) - 48px);
+      left:calc(3vw + .65rem);
+      z-index:6;
+      isolation:isolate;
+      max-width:min(720px,calc(100vw - var(--editorial-side) - 8vw));
+      margin:0;
+      color:#fffaf2;
+      font-size:.78rem;
+      font-weight:760;
+      letter-spacing:.015em;
+      text-shadow:0 2px 5px rgba(24,15,10,.92),0 0 14px rgba(24,15,10,.42);
+    }
+    :global(.desktop-prototype__breadcrumbs--overlay.product-breadcrumbs::after) {
+      content:"";
+      position:absolute;
+      z-index:-1;
+      inset:42% -1rem -.2rem;
+      border-radius:999px;
+      background:radial-gradient(ellipse at 40% 100%,rgba(255,236,207,.24),rgba(31,20,14,.42) 44%,transparent 76%);
+      filter:blur(9px);
+      pointer-events:none;
+    }
+    :global(.desktop-prototype__breadcrumbs--overlay.product-breadcrumbs a) {
+      color:#fffaf2 !important;
+      text-decoration-color:rgba(255,250,242,.45);
+    }
+    :global(.desktop-prototype__breadcrumbs--overlay.product-breadcrumbs li:not(:last-child)::after) {
+      color:rgba(255,250,242,.68) !important;
+    }
   }
 
   @media (min-width:1024px) and (max-width:1279px) {
@@ -2026,7 +2083,7 @@ const descriptionHtml = (event.description_html || '')
   }
 
   @media (min-width:1024px) and (max-height:720px) {
-    .desktop-clean-event--editorial .desktop-prototype__content-flow { margin-top:320px; }
+    .desktop-clean-event--editorial .desktop-prototype--editorial .desktop-prototype__stage { --desktop-sheet-top:320px; }
     .desktop-clean-event--editorial .desktop-editorial-side { margin-top:310px; }
   }
 
