@@ -1,8 +1,75 @@
 {
   "schema_version": "interest-clubs-static-v1",
   "projection_version": 1,
-  "generated_at": "2026-07-18T18:21:59.862991+00:00",
-  "current_date": "2026-07-18",
-  "source": "disabled-by-build-gate",
-  "clubs": []
+  "generated_at": "2026-07-23T06:39:45.981816+00:00",
+  "current_date": "2026-07-23",
+  "source": "sqlite-interest-clubs-v1",
+  "clubs": [
+    {
+      "id": 1,
+      "slug": "game-vibes",
+      "name": "Game Vibes",
+      "topic": "настольные игры",
+      "description": "Публичное игровое сообщество объединяет Codenames, ДВИ, квизы, D&D и другие игры; одинаковый source alias связывает разные темы и площадки.",
+      "city": null,
+      "typical_venue": null,
+      "activity": {
+        "meeting_count": 3,
+        "distinct_date_count": 3,
+        "first_observed_date": "2026-03-14",
+        "last_observed_date": "2026-07-26",
+        "future_meeting_count": 1
+      },
+      "future_meetings": [
+        {
+          "event_id": 6990,
+          "title": "День Всех Игр (ДВИ)",
+          "start_date": "2026-07-26",
+          "start_time": "13:00",
+          "display_time": "13:00",
+          "city": "Калининград",
+          "venue_name": "Сигнал",
+          "event_path": null,
+          "source_url": null
+        }
+      ],
+      "updated_at": "2026-07-17 13:37:10.386546"
+    },
+    {
+      "id": 2,
+      "slug": "neural-researchers",
+      "name": "Клуб исследователей нейронок",
+      "topic": "ИИ и нейросети",
+      "description": "Одинаковая именованная identity и публичный source Сигнала связывают лаборатории/встречи с разными практическими темами.",
+      "city": null,
+      "typical_venue": null,
+      "activity": {
+        "meeting_count": 2,
+        "distinct_date_count": 2,
+        "first_observed_date": "2026-02-11",
+        "last_observed_date": "2026-07-04",
+        "future_meeting_count": 0
+      },
+      "future_meetings": [],
+      "updated_at": "2026-07-17 13:37:10.397419"
+    },
+    {
+      "id": 3,
+      "slug": "technology-researchers",
+      "name": "Клуб исследователей технологий",
+      "topic": "электроника и технологии",
+      "description": "Повторяющиеся открытые встречи по пайке/Arduino/электронике сохраняют именованную identity и source при смене конкретного задания.",
+      "city": null,
+      "typical_venue": null,
+      "activity": {
+        "meeting_count": 3,
+        "distinct_date_count": 3,
+        "first_observed_date": "2026-03-14",
+        "last_observed_date": "2026-06-10",
+        "future_meeting_count": 0
+      },
+      "future_meetings": [],
+      "updated_at": "2026-07-17 13:37:10.406317"
+    }
+  ]
 }

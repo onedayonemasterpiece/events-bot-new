@@ -9,5 +9,6 @@ Runtime partner logos live in `site/public/assets/partners/`. The grid may use d
 | «80 историй о главном» | `/assets/partners/kgd80.svg` | `/home/dev/projects/kdg80/site/public/shared-assets/logo-80-istorii-hero.svg` | SVG primary, vertical hero lockup |
 | «Кантата» | `/assets/partners/kantata-education.webp` + PNG fallback | `Kantata_logo_Black_R.png` captured from `kantatafest.ru` Tilda page | WebP primary because source is raster PNG |
 | Театр «Акт Опус» | `/assets/partners/act-opus.webp` + PNG fallback | `https://actop.us/plays` Next image `logo_new_black.3136802c.png` | WebP primary because source is raster PNG |
+| ИЦАЭ Калининграда | `/assets/partners/icae-kaliningrad.svg` | Byte-faithful copy of the official horizontal footer mark `https://klgd.myatom.ru/wp-content/themes/icao2/image/logo-footer-h.svg`, captured 2026-07-23; source and runtime SHA-256 `e59541c9ffa5c4865d87c1273068b2440ebf89bc794de6d5d18387cc9a0f3797` | SVG primary, unmodified 288×50 official wide lockup |
 
 No OpenAI image generation/editing was used.
