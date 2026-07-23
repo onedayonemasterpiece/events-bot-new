@@ -1,75 +1,159 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
+import { withBase } from '../../lib/events';
 import MobileListingRailRow from './MobileListingRailRow.astro';
 
-interface Section { id: string; title?: string; events: PreviewEvent[]; }
+interface Section { id: string; title?: string; subtitle?: string; events: PreviewEvent[]; }
+interface City { name: string; count: number; }
 interface Props {
   sections: Section[];
   occurrenceMode?: 'per-date' | 'per-family';
+  title: string;
+  meta: string;
+  feedTitle: string;
+  feedMeta: string;
+  current: 'today' | 'tomorrow' | 'weekend' | 'popular';
+  cities?: City[];
 }
-const { sections, occurrenceMode = 'per-date' } = Astro.props;
+const { sections, occurrenceMode = 'per-date', title, meta, feedTitle, feedMeta, current, cities = [] } = Astro.props;
 let rowIndex = 0;
+const total = sections.reduce((sum, section) => sum + section.events.length, 0);
 ---
-<div class="ke-mobile-listing-rails" data-mobile-listing-rails>
-  {sections.map((section) => section.events.length > 0 && (
-    <section class="ke-mobile-listing-rails__section" aria-labelledby={`mobile-rail-${section.id}`}>
-      {section.title && <h2 id={`mobile-rail-${section.id}`}>{section.title}</h2>}
-      <div class="ke-mobile-listing-rails__rows">
-        {section.events.map((event) => {
-          const priority = rowIndex++ < 2;
-          return <MobileListingRailRow event={event} occurrenceMode={occurrenceMode} priority={priority} />;
-        })}
-      </div>
-    </section>
-  ))}
+<div class="ke-mobile-listing-rails ke-mobile-listing-rails--v23" data-mobile-listing-rails data-mobile-v23-page={current}>
+  <section class="page-head" aria-labelledby={`mobile-v23-title-${current}`}>
+    <h1 id={`mobile-v23-title-${current}`}>{title}</h1>
+    <p>{meta}</p>
+  </section>
+  <div class="feed-head">
+    <div class="feed-head__copy"><strong>{feedTitle}</strong><span>{feedMeta}</span></div>
+    {cities.length > 1 ? (
+      <details class="city-picker" data-mobile-v23-city-picker>
+        <summary data-mobile-v23-city-label>Вся область</summary>
+        <div class="city-picker__panel" role="group" aria-label="Города">
+          <button type="button" data-mobile-v23-city="all" aria-pressed="true"><span>Вся область</span><b>{total}</b></button>
+          {cities.map((city) => <button type="button" data-mobile-v23-city={city.name} aria-pressed="false"><span>{city.name}</span><b>{city.count}</b></button>)}
+        </div>
+      </details>
+    ) : <span class="city-pill">Вся область</span>}
+  </div>
+  <div class="mobile-v23-sections">
+    {sections.map((section) => section.events.length > 0 && (
+      <section class="group" aria-labelledby={`mobile-rail-${section.id}`} data-mobile-v23-group>
+        {section.title && (
+          <header class="group-head">
+            <div class="group-head__copy">
+              <span class="group-head__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M3 17.5 8.7 12l3.8 3.4L20.8 7v4H23V3h-8v2.2h4.2l-6.8 6.9-3.8-3.4L1.5 15.8 3 17.5Z" /></svg>
+              </span>
+              <div><h2 id={`mobile-rail-${section.id}`}>{section.title}</h2>{section.subtitle && <p>{section.subtitle}</p>}</div>
+            </div>
+            <span data-mobile-v23-group-count>{section.events.length}</span>
+          </header>
+        )}
+        <div class="event-list">
+          {section.events.map((event) => {
+            const priority = rowIndex++ < 2;
+            return <MobileListingRailRow event={event} occurrenceMode={occurrenceMode} priority={priority} />;
+          })}
+        </div>
+      </section>
+    ))}
+  </div>
+  <div class="empty" data-mobile-v23-empty hidden>Нет событий с такими фильтрами</div>
+  {current !== 'popular' && (
+    <nav class="date-accessory" aria-label="Даты">
+      <a href={withBase('/segodnya/')} aria-current={current === 'today' ? 'page' : undefined}><span>Сегодня</span><strong>Сегодня</strong></a>
+      <a href={withBase('/zavtra/')} aria-current={current === 'tomorrow' ? 'page' : undefined}><span>Завтра</span><strong>Завтра</strong></a>
+      <a href={withBase('/vyhodnye/')} aria-current={current === 'weekend' ? 'page' : undefined}><span>Сб+Вс</span><strong>Выходные</strong></a>
+    </nav>
+  )}
 </div>
 
 <style is:global>
   .ke-mobile-listing-rails { display:none; }
   @media (max-width:720px) {
-    html:has(.ke-mobile-listing-rails),
-    body:has(.ke-mobile-listing-rails) { max-width:100%; overflow-x:hidden; }
-    .ke-mobile-listing-rails { display:grid; gap:1rem; margin:.7rem 0 1.2rem; }
-    .ke-mobile-listing-rails__section { display:grid; gap:.45rem; min-width:0; }
-    .ke-mobile-listing-rails__section>h2 { margin:0; padding:0 .25rem; font-size:1rem; }
-    .ke-mobile-listing-rails__rows { display:grid; gap:.52rem; min-width:0; }
-    .ke-mobile-rail-row { position:relative; min-width:0; height:112px; border:1px solid rgba(80,52,38,.18); border-radius:20px; background:#fffaf2; box-shadow:0 8px 22px rgba(80,52,38,.08); overflow:hidden; }
-    .ke-mobile-rail-row__window { width:100%; height:112px; overflow-x:auto; overflow-y:hidden; overscroll-behavior-inline:contain; scroll-snap-type:x proximity; scrollbar-width:none; }
-    .ke-mobile-rail-row__window::-webkit-scrollbar { display:none; }
-    .ke-mobile-rail-row__track { display:flex; width:max-content; height:112px; padding-right:48px; }
-    .ke-mobile-rail-row__summary { box-sizing:border-box; width:min(76vw,296px); min-width:min(76vw,296px); height:112px; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-rows:auto 1fr auto; gap:.16rem .5rem; padding:.7rem .72rem; color:#251a15; text-decoration:none; scroll-snap-align:start; }
-    .ke-mobile-rail-row__summary>b { grid-column:1/-1; align-self:center; display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:1rem; line-height:1.04; letter-spacing:-.02em; }
-    .ke-mobile-rail-row__summary>span:last-child { grid-column:1/-1; overflow:hidden; color:#75675f; font-size:.68rem; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
-    .ke-mobile-rail-row__schedule { display:flex; align-items:baseline; gap:.35rem; color:#9c3f1d; font-size:.72rem; }
-    .ke-mobile-rail-row__schedule strong { white-space:nowrap; }
-    .ke-mobile-rail-row__schedule small { font-size:.68rem; font-weight:800; white-space:nowrap; }
-    .ke-mobile-rail-row__media { width:140px; min-width:140px; height:112px; display:grid; place-items:center; overflow:hidden; background:#211d1a; color:#fff; text-decoration:none; scroll-snap-align:start; }
-    .ke-mobile-rail-row__media img { width:100%; height:100%; object-fit:var(--rail-media-fit); object-position:var(--rail-object-position); }
-    .ke-mobile-rail-row__detail { box-sizing:border-box; width:260px; min-width:260px; height:112px; display:grid; align-content:center; gap:.22rem; padding:.65rem .75rem; color:#fff8ef; background:#27211e; text-decoration:none; scroll-snap-align:start; }
-    .ke-mobile-rail-row__detail small { color:#e4a27f; font-size:.62rem; font-weight:800; text-transform:uppercase; }
-    .ke-mobile-rail-row__detail strong { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:.82rem; line-height:1.15; }
-    .ke-mobile-rail-row__detail span { color:#d9cec8; font-size:.68rem; }
-    .ke-mobile-rail-row__tokens { height:112px; display:flex; align-items:center; gap:.55rem; padding:0 .85rem; background:#f2e8db; scroll-snap-align:start; }
-    .ke-mobile-rail-row__token { width:68px; height:68px; display:grid; place-items:center; overflow:hidden; border-radius:50%; background:#fff; box-shadow:0 0 0 3px #fff,0 7px 18px rgba(55,35,25,.18); }
-    .ke-mobile-rail-row__token picture,.ke-mobile-rail-row__token img { width:100%; height:100%; display:block; }
-    .ke-mobile-rail-row__token img { object-fit:contain; }
-    .ke-mobile-rail-row__like { position:absolute; z-index:2; right:.35rem; bottom:.35rem; min-width:38px; height:38px; display:flex; align-items:center; justify-content:center; gap:.15rem; padding:0 .45rem; border:0; border-radius:999px; color:#a23d28; background:rgba(255,250,242,.94); box-shadow:0 4px 12px rgba(50,30,20,.17); }
-    .ke-mobile-rail-row__like :where(svg,.icon) { width:18px; height:18px; }
-    .ke-mobile-rail-row__like span { font-size:.66rem; font-weight:800; }
-    .ke-listing-desktop-body,.ke-popular-mobile-existing { display:none !important; }
-    .ke-weekend-ranges { display:grid; gap:.35rem; }
-    .ke-weekend-ranges__flow { width:100%; }
-    .ke-weekend-range { max-width:100%; }
-    .ke-listing-discovery-rail .ke-listing-controls,
-    .ke-listing-discovery-rail > .ke-listing-controls {
-      box-sizing:border-box;
-      width:100%;
-      max-width:100%;
-      margin-left:0;
-      padding-inline:0;
-    }
-    .ke-listing-head,
-    .ke-listing-head>*,
-    .ke-listing-date-nav { min-width:0; max-width:100%; }
+    html:has(.ke-mobile-listing-rails--v23),body:has(.ke-mobile-listing-rails--v23){max-width:100%;overflow-x:hidden;background:#fbf7ef}
+    body:has(.ke-mobile-listing-rails--v23)::before{display:none}
+    body:has(.ke-mobile-listing-rails--v23) .site-header{position:fixed;inset:0 0 auto;height:64px;min-height:64px;border:0;background:transparent;box-shadow:none;pointer-events:none}
+    body:has(.ke-mobile-listing-rails--v23) .site-header__inner{width:100%;height:64px;min-height:64px;margin:0}
+    body:has(.ke-mobile-listing-rails--v23) .mobile-discovery-menu{pointer-events:none}
+    body:has(.ke-mobile-listing-rails--v23) .ke-listing-page{padding:64px 0 calc(120px + env(safe-area-inset-bottom));background:#fbf7ef}
+    body:has(.ke-mobile-listing-rails--v23) .ke-listing-shell{width:100%;max-width:none;margin:0;padding:0}
+    body:has(.ke-mobile-listing-rails--v23) .ke-listing-head,
+    body:has(.ke-mobile-listing-rails--v23) .ke-listing-discovery-rail,
+    body:has(.ke-mobile-listing-rails--v23) .ke-weekend-ranges,
+    body:has(.ke-mobile-listing-rails--v23) .ke-listing-desktop-body,
+    body:has(.ke-mobile-listing-rails--v23) .ke-popular-desktop,
+    body:has(.ke-mobile-listing-rails--v23) .ke-popular-mobile-existing,
+    body:has(.ke-mobile-listing-rails--v23) .ke-listing-empty,
+    body:has(.ke-mobile-listing-rails--v23) .listing-density-switch,
+    body:has(.ke-mobile-listing-rails--v23) .listing-personal-filter,
+    body:has(.ke-mobile-listing-rails--v23) .ke-personal-feed-slot{display:none!important}
+    .ke-mobile-listing-rails--v23{--rail-bg:#fbf7ef;--rail-surface:#fffdf8;--rail-text:#221a14;--rail-muted:#6d6259;--rail-line:#e1d3c2;--rail-primary:#a54821;--rail-primary-strong:#793014;--rail-time-surface:#efe3d3;--rail-time-ink:#793014;--rail-cue:#8a7f76;display:block;width:100%;margin:0;color:var(--rail-text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .ke-mobile-listing-rails--v23 .page-head{height:96px;padding:27px 12px 8px;display:flex;flex-direction:column;justify-content:flex-end}
+    .ke-mobile-listing-rails--v23 .page-head h1{margin:0;font:920 36px/.94 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.055em;white-space:nowrap}
+    .ke-mobile-listing-rails--v23 .page-head p{margin:7px 0 0;color:var(--rail-muted);font-size:11.5px;line-height:1.1;font-weight:720;white-space:normal}
+    .ke-mobile-listing-rails--v23 .feed-head{height:60px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--rail-line)}
+    .ke-mobile-listing-rails--v23 .feed-head__copy{display:grid;gap:3px;min-width:0}.ke-mobile-listing-rails--v23 .feed-head__copy strong{font-size:13px;line-height:1;font-weight:850}.ke-mobile-listing-rails--v23 .feed-head__copy span{color:var(--rail-muted);font-size:9.5px;line-height:1;font-weight:720;white-space:nowrap}
+    .ke-mobile-listing-rails--v23 .city-picker{position:relative;z-index:7;flex:none}.ke-mobile-listing-rails--v23 .city-picker>summary,.ke-mobile-listing-rails--v23 .city-pill{min-height:42px;max-width:146px;padding:0 28px 0 13px;border:1px solid rgba(121,48,20,.15);border-radius:999px;background:#fffdf8;color:var(--rail-text);display:flex;align-items:center;overflow:hidden;font:800 11px/1 Inter,system-ui;text-overflow:ellipsis;white-space:nowrap;list-style:none;cursor:pointer}.ke-mobile-listing-rails--v23 .city-picker>summary::-webkit-details-marker{display:none}.ke-mobile-listing-rails--v23 .city-picker>summary::after{content:'⌄';position:absolute;right:12px;color:var(--rail-primary)}
+    .ke-mobile-listing-rails--v23 .city-picker__panel{position:absolute;right:0;top:48px;width:min(330px,calc(100vw - 24px));max-height:56dvh;overflow:auto;padding:8px;border:1px solid rgba(121,48,20,.15);border-radius:16px;background:#fffdf8;box-shadow:0 18px 42px rgba(34,26,20,.18)}.ke-mobile-listing-rails--v23 .city-picker__panel button{width:100%;min-height:46px;padding:0 9px;border:0;border-bottom:1px solid rgba(121,48,20,.09);background:transparent;display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--rail-text);font:800 12px/1 Inter,system-ui;text-align:left}.ke-mobile-listing-rails--v23 .city-picker__panel button[aria-pressed=true]{color:var(--rail-primary)}
+    .ke-mobile-listing-rails--v23 .mobile-v23-sections{display:block}.ke-mobile-listing-rails--v23 .group{display:block}.ke-mobile-listing-rails--v23 .group[hidden]{display:none}.ke-mobile-listing-rails--v23 .group-head{position:sticky;z-index:6;top:64px;min-height:54px;padding:9px 12px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-block:1px solid var(--rail-line);background:rgba(251,247,239,.985);box-shadow:0 6px 12px rgba(72,45,25,.045)}.ke-mobile-listing-rails--v23 .group-head__copy{min-width:0;display:flex;align-items:center;gap:7px}.ke-mobile-listing-rails--v23 .group-head__icon{width:18px;height:18px;flex:0 0 18px;color:var(--rail-primary)}.ke-mobile-listing-rails--v23 .group-head__icon svg{display:block;width:100%;height:100%;fill:currentColor}.ke-mobile-listing-rails--v23 .group-head h2{margin:0;font:880 17px/19px Inter,system-ui;letter-spacing:-.025em}.ke-mobile-listing-rails--v23 .group-head p{margin:3px 0 0;color:var(--rail-muted);font:700 10px/12px Inter,system-ui}.ke-mobile-listing-rails--v23 .group-head>span{flex:none;min-width:28px;text-align:right;color:var(--rail-primary);font:900 12px/1 Inter,system-ui}
+    .ke-mobile-listing-rails--v23 .event-list{display:grid;gap:10px;padding:10px 0 24px}.ke-mobile-listing-rails--v23 .event-row{height:112px;min-width:0;overflow:hidden}.ke-mobile-listing-rails--v23 .event-row[hidden]{display:none}
+    .ke-mobile-listing-rails--v23 .rail-window{--dislike-progress:0;--like-progress:0;--rail-max:0px;--rail-view-width:100vw;position:relative;display:block;width:100vw;height:112px;overflow-x:auto;overflow-y:hidden;border:0;border-radius:0;background:transparent;box-shadow:none;color:inherit;text-decoration:none;scrollbar-width:none;overscroll-behavior-inline:contain;touch-action:pan-x pan-y;cursor:grab;-webkit-tap-highlight-color:transparent}.ke-mobile-listing-rails--v23 .rail-window::-webkit-scrollbar{display:none}.ke-mobile-listing-rails--v23 .rail-window.is-dragging{cursor:grabbing}.ke-mobile-listing-rails--v23 .event-link{display:contents;color:inherit;text-decoration:none}.ke-mobile-listing-rails--v23 .event-link:focus-visible{outline:none}.ke-mobile-listing-rails--v23 .event-link:focus-visible .event-summary{outline:3px solid rgba(15,118,110,.62);outline-offset:-3px}
+    .ke-mobile-listing-rails--v23 .event-track{position:relative;z-index:1;width:max-content;height:112px;display:flex;align-items:center;gap:7px;padding:0 12px 0 0;background:transparent;border:0;border-radius:0;box-shadow:none;transform:translate3d(0,0,0)}
+    .ke-mobile-listing-rails--v23 .dislike-underlay{position:absolute;z-index:0;inset:0 auto 0 0;width:100vw;display:flex;align-items:center;padding-left:12px;background:linear-gradient(90deg,rgba(177,38,38,.94),rgba(177,38,38,.34) 55%,rgba(177,38,38,0));opacity:var(--dislike-progress);color:#fff;pointer-events:none}.ke-mobile-listing-rails--v23 .dislike-underlay span{font:900 10px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .like-underlay{position:absolute;z-index:0;top:0;bottom:0;left:var(--rail-max);width:var(--rail-view-width);display:flex;align-items:center;justify-content:flex-end;padding-right:4px;background:linear-gradient(270deg,rgba(47,122,86,.96),rgba(47,122,86,.42) 58%,rgba(47,122,86,0));opacity:var(--like-progress);color:#fff;pointer-events:none}
+    .ke-mobile-listing-rails--v23 .track-start{flex:0 0 5px;width:5px;height:1px}.ke-mobile-listing-rails--v23 .event-summary{position:relative;flex:0 0 296px;width:296px;height:112px;display:flex;align-items:center;gap:14px;padding:15px 12px;border:1px solid rgba(121,48,20,.13);border-radius:14px 10px 10px 14px;background:var(--rail-surface);box-shadow:0 7px 18px rgba(72,45,25,.065)}
+    .ke-mobile-listing-rails--v23 .event-time{flex:0 0 96px;width:96px;height:82px;display:grid;place-content:center;gap:3px;border-radius:8px;background:var(--rail-time-surface);color:var(--rail-time-ink);text-align:center}.ke-mobile-listing-rails--v23 .event-time strong{font:860 28px/1 Inter,system-ui;letter-spacing:-.07em;font-variant-numeric:tabular-nums}.ke-mobile-listing-rails--v23 .event-time span{max-width:86px;overflow:hidden;font:760 9.5px/1.05 Inter,system-ui;text-overflow:ellipsis;white-space:nowrap;opacity:.92}.ke-mobile-listing-rails--v23 .event-time--date-primary strong{font-size:16px;line-height:17px;letter-spacing:-.025em}.ke-mobile-listing-rails--v23 .event-time--no-time .program-label{font-size:13px;line-height:14px;letter-spacing:-.02em}
+    .ke-mobile-listing-rails--v23 .event-info{flex:0 0 162px;width:162px;height:78px;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px}.ke-mobile-listing-rails--v23 .event-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font:850 15px/17px Inter,system-ui;letter-spacing:-.027em;hyphens:auto}.ke-mobile-listing-rails--v23 .event-description{display:block;overflow:hidden;padding-right:7px;color:var(--rail-muted);font:680 10.5px/12px Inter,system-ui;text-overflow:ellipsis;white-space:nowrap}.ke-mobile-listing-rails--v23 .event-signals{min-height:13px;display:flex;align-items:center;gap:8px;padding-right:54px;color:#756b64;font:760 10.5px/12px Inter,system-ui;white-space:nowrap}.ke-mobile-listing-rails--v23 .event-signal{display:inline-flex;align-items:center;gap:3px}
+    .ke-mobile-listing-rails--v23 .event-cue{position:absolute;right:6px;bottom:12px;width:48px;height:23px;display:block}.ke-mobile-listing-rails--v23 .event-cue::before,.ke-mobile-listing-rails--v23 .event-cue::after{content:"";position:absolute;right:6px;top:10px;background:var(--rail-cue)}.ke-mobile-listing-rails--v23 .event-cue::before{width:31px;height:3px;border-radius:99px}.ke-mobile-listing-rails--v23 .event-cue::after{width:12px;height:12px;top:5px;border-top:3px solid var(--rail-cue);border-right:3px solid var(--rail-cue);background:transparent;transform:rotate(45deg)}
+    .ke-mobile-listing-rails--v23 .event-media{position:relative;flex:0 0 var(--media-width);width:var(--media-width);height:112px;overflow:hidden;border-radius:12px;background:#e9dece}.ke-mobile-listing-rails--v23 .event-media img{display:block;width:100%;height:100%;object-fit:var(--rail-media-fit);object-position:var(--focus-x,50%) var(--focus-y,50%);pointer-events:none;user-select:none}.ke-mobile-listing-rails--v23 .event-media--natural{background:#211d1a}
+    .ke-mobile-listing-rails--v23 .event-digest{flex:0 0 168px;width:168px;height:112px;display:flex;align-items:center;padding:8px 10px;color:var(--rail-text)}.ke-mobile-listing-rails--v23 .event-digest__body{width:148px;max-height:96px;display:grid;gap:4px}.ke-mobile-listing-rails--v23 .event-digest b{font:850 8.5px/10px Inter,system-ui;letter-spacing:.045em;text-transform:uppercase}.ke-mobile-listing-rails--v23 .event-digest span{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:6;font:690 10.5px/12.5px Inter,system-ui}
+    .ke-mobile-listing-rails--v23 .event-medallion-slot{position:relative;flex:0 0 94px;width:94px;height:112px;display:grid;place-items:center;overflow:visible}.ke-mobile-listing-rails--v23 .event-medallion-slot picture{display:block;width:86px;height:86px}.ke-mobile-listing-rails--v23 .event-medallion{display:block;width:86px;height:86px;border:0;border-radius:50%;object-fit:contain;box-shadow:0 0 0 2px rgba(121,48,20,.13),0 7px 16px rgba(72,45,25,.12)}.ke-mobile-listing-rails--v23 .event-medallion--free{box-shadow:none}
+    .ke-mobile-listing-rails--v23 .event-like-cta{flex:0 0 auto;min-width:58px;height:56px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border:0;border-radius:12px;background:transparent;color:rgba(58,48,40,.70);font:inherit;cursor:pointer}.ke-mobile-listing-rails--v23 .event-like-cta svg{width:28px;height:28px;flex:none;fill:currentColor}.ke-mobile-listing-rails--v23 .event-like-cta strong{font:900 15px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .event-like-cta[aria-pressed=true]{background:rgba(201,52,52,.10);color:#c93434}
+    .ke-mobile-listing-rails--v23 .empty{margin:24px 12px;padding:20px 16px;border-radius:14px;background:rgba(121,48,20,.06);text-align:center}
+    .ke-mobile-listing-rails--v23 .date-accessory{position:fixed;z-index:39;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));height:56px;padding:4px 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;border-top:1px solid rgba(121,48,20,.13);border-bottom:1px solid rgba(121,48,20,.10);background:rgba(255,253,248,.985);backdrop-filter:blur(14px)}.ke-mobile-listing-rails--v23 .date-accessory a{min-width:0;height:48px;display:grid;place-content:center;justify-items:center;gap:2px;border-radius:13px;color:#665b52;text-decoration:none}.ke-mobile-listing-rails--v23 .date-accessory a span{font:800 8.5px/1 Inter,system-ui;text-transform:uppercase}.ke-mobile-listing-rails--v23 .date-accessory a strong{font:900 11px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .date-accessory a[aria-current=page]{background:var(--rail-primary);color:#fff;box-shadow:0 5px 12px rgba(121,48,20,.18)}
+    body:has(.ke-mobile-listing-rails--v23) .mobile-bottom-nav{background:rgba(255,253,248,.98);backdrop-filter:blur(14px)}
+    @media(max-width:359px){.ke-mobile-listing-rails--v23 .page-head,.ke-mobile-listing-rails--v23 .feed-head{padding-inline:8px}.ke-mobile-listing-rails--v23 .event-track{padding-right:8px}.ke-mobile-listing-rails--v23 .track-start{flex-basis:1px;width:1px}}
+    @media(prefers-reduced-motion:reduce){.ke-mobile-listing-rails--v23 *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
   }
 </style>
+
+<script>
+  document.querySelectorAll('[data-mobile-listing-rails]').forEach((surface) => {
+    if (surface.dataset.mobileV23Ready === 'true') return;
+    surface.dataset.mobileV23Ready = 'true';
+    const rows = [...surface.querySelectorAll('[data-mobile-listing-row]')];
+    const label = surface.querySelector('[data-mobile-v23-city-label]');
+    const empty = surface.querySelector('[data-mobile-v23-empty]');
+    const picker = surface.querySelector('[data-mobile-v23-city-picker]');
+    const buttons = [...surface.querySelectorAll('[data-mobile-v23-city]')];
+    function applyCity(city) {
+      let visible = 0;
+      rows.forEach((row) => {
+        row.hidden = city !== 'all' && row.dataset.listingCity !== city;
+        if (!row.hidden) visible += 1;
+      });
+      surface.querySelectorAll('[data-mobile-v23-group]').forEach((group) => {
+        const count = [...group.querySelectorAll('[data-mobile-listing-row]')].filter((row) => !row.hidden).length;
+        group.hidden = count === 0;
+        const countNode = group.querySelector('[data-mobile-v23-group-count]');
+        if (countNode) countNode.textContent = String(count);
+      });
+      buttons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.mobileV23City === city)));
+      if (label) label.textContent = city === 'all' ? 'Вся область' : city;
+      if (empty) empty.hidden = visible !== 0;
+      if (picker) picker.open = false;
+    }
+    buttons.forEach((button) => button.addEventListener('click', () => applyCity(button.dataset.mobileV23City || 'all')));
+    surface.querySelectorAll('.rail-window').forEach((rail) => {
+      rail.scrollLeft = 0;
+      const sync = () => {
+        rail.style.setProperty('--rail-max', `${Math.max(0, rail.scrollWidth - rail.clientWidth)}px`);
+        rail.style.setProperty('--rail-view-width', `${rail.clientWidth}px`);
+      };
+      requestAnimationFrame(sync);
+      new ResizeObserver(sync).observe(rail);
+    });
+  });
+  addEventListener('pageshow', () => document.querySelectorAll('.ke-mobile-listing-rails--v23 .rail-window').forEach((rail) => { rail.scrollLeft = 0; }));
+</script>

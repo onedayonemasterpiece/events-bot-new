@@ -94,9 +94,21 @@ for (const route of listingRoutes) {
   if (!html.includes('data-mobile-listing-rails') || !html.includes('data-mobile-listing-row')) {
     throw new Error(`Listing route ${route} misses the tracked accepted mobile event rail`);
   }
-  if (!normalizedCss.includes('@media(max-width:720px)') || !normalizedCss.includes('.ke-mobile-rail-row{') || !normalizedCss.includes('height:112px')) {
-    throw new Error(`Listing route ${route} misses the compiled 112px mobile rail geometry`);
+  for (const contract of [
+    '@media(max-width:720px)',
+    '.ke-mobile-listing-rails--v23.event-row{height:112px',
+    '.ke-mobile-listing-rails--v23.rail-window{',
+    'width:100vw;height:112px',
+    '.ke-mobile-listing-rails--v23.track-start{flex:005px;width:5px',
+    '.ke-mobile-listing-rails--v23.event-summary{',
+    'flex:00296px;width:296px;height:112px',
+  ]) {
+    if (!normalizedCss.includes(contract)) throw new Error(`Listing route ${route} misses accepted v23 mobile rail contract ${contract}`);
   }
+}
+const reference4MenuSource = readFileSync(join(siteDir, 'src/components/Reference4MobileMenu.astro'), 'utf8');
+if (reference4MenuSource.includes('.reference4-menu__brand::before')) {
+  throw new Error('Reference-4 menu must not paint a local logo scrim over the accepted glass plane');
 }
 const eventLayoutSource = readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8');
 for (const headerContract of [

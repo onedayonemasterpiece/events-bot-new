@@ -33,8 +33,14 @@ function dayDateLabel(date: string): string {
     <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
   </ListingDiscoveryRail>
   <MobileListingRailSurface
-    sections={days.map((day) => ({ id:`weekend-${day.key}`, title:`${day.title} · ${dayDateLabel(day.date)}`, events:day.events }))}
+    sections={days.map((day) => ({ id:`weekend-${day.key}`, title:`${day.title}, ${dayDateLabel(day.date)}`, events:day.events }))}
     occurrenceMode="per-date"
+    title="Выходные"
+    meta={`${dateLabel} · ${events.length} ${eventCountLabel(events.length)}`}
+    feedTitle="По времени"
+    feedMeta="Фото → о событии → лайк"
+    current="weekend"
+    cities={cities}
   />
   <div class="ke-listing-desktop-body" data-listing-representation="desktop">
   <div class="ke-weekend-board">

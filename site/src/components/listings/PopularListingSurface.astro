@@ -5,6 +5,7 @@ import {
   buildPopularDesktopPersonalizationCandidates,
   buildPopularListingGroups,
   deduplicateListingEvents,
+  eventCountLabel,
 } from '../../lib/listingPresentation';
 import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
@@ -27,7 +28,18 @@ const desktopPersonalizationCandidates = buildPopularDesktopPersonalizationCandi
   30,
 );
 const visibleEvents = groups.flatMap((group) => group.events);
-const mobileFamilyEvents = collapseOccurrenceCards(visibleEvents, 'per-family');
+const mobileFamilyGroups = groups.map((group) => ({
+  ...group,
+  events: collapseOccurrenceCards(group.events, 'per-family'),
+}));
+const mobileFamilyEvents = mobileFamilyGroups.flatMap((group) => group.events);
+const popularGroupSubtitles = {
+  fast_growth: 'Сильнее всего растут реакции',
+  multi_source: 'Встречаются в нескольких источниках',
+  discussed: 'На них активнее реагируют',
+  frequently_shared: 'Ими чаще делятся',
+  score_fallback: 'Популярное по совокупности сигналов',
+} as const;
 const cities = [...new Set(visibleEvents.map((event) => event.city || 'Калининградская область'))]
   .map((name) => ({ name, count: visibleEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
@@ -47,7 +59,21 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
       <PopularPersonalizedRow events={desktopPersonalizationCandidates} />
     </PopularBehaviorRows>
   </div>
-  <MobileListingRailSurface sections={[{ id:'popular', events:mobileFamilyEvents }]} occurrenceMode="per-family" />
+  <MobileListingRailSurface
+    sections={mobileFamilyGroups.map((group) => ({
+      id:`popular-${group.key}`,
+      title:group.label,
+      subtitle:popularGroupSubtitles[group.key],
+      events:group.events,
+    }))}
+    occurrenceMode="per-family"
+    title="Популярное"
+    meta={`По реакции аудитории · ${mobileFamilyEvents.length} ${eventCountLabel(mobileFamilyEvents.length)}`}
+    feedTitle="По реакции аудитории"
+    feedMeta="Категории сменяют друг друга"
+    current="popular"
+    cities={cities}
+  />
   <div class="ke-popular-mobile-existing" aria-hidden="true" inert>
     <PopularMobileBehaviorRows groups={groups} />
     <PopularMobileAdaptiveRows groups={groups} />

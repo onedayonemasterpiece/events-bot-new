@@ -186,9 +186,14 @@
 - Restored physical `C`/`P` event-copy shortcuts from natural BODY focus in
   every keyboard layout while preserving footer, editable and dialog
   arbitration.
-- Restored the accepted 112px mobile rails on Today, Tomorrow, Weekend and
-  Popular without shrinking desktop layouts; Popular collapses reciprocal
-  explicit occurrence families only.
+- Restored the exact accepted v23 physical mobile rails from the v28 donor on
+  Today, Tomorrow, Weekend and Popular: full-viewport `112px` rows, `5px`
+  track start, `296px` summary, image/digest/medallion continuation and a
+  separate like action, without shrinking desktop layouts. Popular collapses
+  reciprocal explicit occurrence families only.
+- Reverted the unaccepted rounded light scrim behind the open mobile-menu
+  wordmark; the dark live lockup again sits directly on the single translucent
+  reference-4 glass plane.
 - Made free event-detail ranges calendar-primary with the exact
   `Добавить в календарь` CTA and valid all-day range ICS; on split/OCR desktop
   pages all identity/free medallions stay inline so none is clipped.

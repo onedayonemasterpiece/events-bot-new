@@ -34,6 +34,11 @@ const cities = [...new Set(events.map((event) => event.city || 'Калининг
   .map((name) => ({ name, count: events.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
 const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
+const mobileDate = new Intl.DateTimeFormat('ru-RU', { day:'numeric', month:'long', timeZone:'Europe/Kaliningrad' })
+  .format(new Date(`${date}T12:00:00+02:00`));
+const mobileWeekday = new Intl.DateTimeFormat('ru-RU', { weekday:'long', timeZone:'Europe/Kaliningrad' })
+  .format(new Date(`${date}T12:00:00+02:00`));
+const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${eventCountLabel(events.length)}`;
 ---
 <div
   class="ke-listing-shell"
@@ -51,9 +56,15 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
   <MobileListingRailSurface
     sections={[
       ...(earlierEvents.length ? [{ id:`${kind}-earlier`, title:'Завершились', events:earlierEvents }] : []),
-      { id:`${kind}-upcoming`, title:kind === 'today' ? 'Сегодня' : 'Завтра', events:upcomingEvents },
+      { id:`${kind}-upcoming`, events:upcomingEvents },
     ]}
     occurrenceMode="per-date"
+    title={title}
+    meta={mobileMeta}
+    feedTitle="По времени"
+    feedMeta="Фото → о событии → лайк"
+    current={kind}
+    cities={cities}
   />
   <div class="ke-listing-desktop-body" data-listing-representation="desktop">
   {kind === 'today' ? (

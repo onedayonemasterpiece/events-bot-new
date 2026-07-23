@@ -912,14 +912,30 @@ transplants the exact v13 shell into donor date pages under the same build
 prefix so dock/menu transitions never fall back to old templates. It retains
 Astro generated labs and event pages so `check:preview` remains a valid gate.
 
-As of R7 the accepted `112px` event rail is a tracked Astro component rather
-than an assembly-only donor fragment. It renders at `<=720px` on Today,
-Tomorrow, Weekend and Popular; their desktop timelines/boards remain the
-single active desktop representation. Today/Tomorrow/Weekend are per-date.
-Popular collapses only reciprocal explicit `other_date_ids` families and never
-infers family identity from title/type/venue. Search, Personal, Exhibitions,
-Collections, Clubs and event-detail continuation retain their separately
-accepted mobile surfaces.
+The first R7 port was rejected because it reproduced a generic compact row
+instead of the accepted physical rail. The canonical implementation is the
+v23 donor embedded in
+`preview-20260722-mobile-search-artifact-menu-v28`, assembled from
+`integration/mobile-search-unified-v14-20260722@3f5b88f9`. The tracked Astro
+port must preserve its structural and geometric contract: full-viewport
+`.rail-window`, `112px` physical row, `5px` track start, `296×112px`
+`.event-summary`, then real-aspect `.event-media`, digest, medallions and the
+separate like action. A narrow image sliver at the right edge is the affordance
+for horizontal continuation; an inset card with an image inside the summary is
+not an accepted substitute.
+
+This exact rail renders at `<=720px` on Today, Tomorrow, Weekend and Popular;
+their desktop timelines/boards remain the single active desktop
+representation. Today/Tomorrow/Weekend are per-date. Popular collapses only
+reciprocal explicit `other_date_ids` families and never infers family identity
+from title/type/venue. Search, Personal, Exhibitions, Collections, Clubs and
+event-detail continuation retain their separately accepted mobile surfaces.
+
+The open reference-4 menu also follows v28 literally: the dark live wordmark
+sits directly on the one glass plane. Do not add a local rounded blur, glow or
+light scrim behind it; that creates a second glass card and visibly diverges
+from the accepted donor. Readability is provided only by the donor text color
+and restrained one-pixel drop shadow.
 
 Acceptance for build
 `preview-20260722-mobile-search-unified-shell-v26`:
