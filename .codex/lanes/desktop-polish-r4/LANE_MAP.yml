@@ -1,0 +1,89 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: ecafccbc4670940763f102a597254fb043b1b844
+base_branch: integration/medallion-duration-desktop-r3-20260723
+integration_branch: integration/desktop-polish-medallion-slots-r4-20260723
+global_constraints:
+  - desktop acceptance is primary; preserve current mobile behavior
+  - publish only a new immutable noindex prefix; never overwrite R3
+  - no production generation or auth bypass
+  - no OpenAI paid image generation
+  - use supplied local reference assets only
+  - canonical docs and CHANGELOG are integration-owned
+verification_owner: INT
+stop_conditions:
+  - dirty worker baseline
+  - worker changes outside owned scope
+  - medallion main/secondary classification weakens fail-closed identity resolution
+lanes:
+  - id: L01-R4
+    role: worker
+    effort: high
+    requirement_ids: [R01]
+    target: compare both supplied desktop leather sources and implement the stronger SVG-over-text/image composition
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/r4-desktop-leather/L01
+    worktree: /home/dev/.codex/worktrees/events-bot-new/r4-desktop-leather
+    writable_files:
+      - site/src/layouts/EventLayout.astro
+      - site/public/assets/ui/desktop-head-leather-r4.*
+      - site/src/assets/ui/**
+      - site/tests/desktop-media-contract.test.mjs
+      - .codex/lanes/L01-R4/RESULTS.md
+    forbidden_files: [CHANGELOG.md, docs/features/]
+    expected_output: committed implementation, visual comparison, fallback and desktop screenshot evidence
+    verification_scope: full_local
+    status: planned
+  - id: L02-R4
+    role: worker
+    effort: high
+    requirement_ids: [R02, R04]
+    target: compact desktop breadcrumbs and Main/Secondary medallion TopSlot/InlineSlot layout
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/r4-event-chrome/L02
+    worktree: /home/dev/.codex/worktrees/events-bot-new/r4-event-chrome
+    writable_files:
+      - site/src/components/DesktopEventPage.astro
+      - site/src/components/EventTokenMedallions.astro
+      - site/src/lib/eventMedallions.ts
+      - site/src/lib/types.ts
+      - site/tests/event-detail-runtime-regressions.test.mjs
+      - site/src/lib/event-medallions.test.mjs
+      - .codex/lanes/L02-R4/RESULTS.md
+    forbidden_files: [CHANGELOG.md, docs/features/]
+    expected_output: committed desktop-only layout with explicit priority contract and regression tests
+    verification_scope: full_local
+    status: planned
+  - id: L03-R4
+    role: worker
+    effort: high
+    requirement_ids: [R03]
+    target: move nearest-meetings badge to top-right of club cards and add restrained lower glow
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/r4-clubs-badge/L03
+    worktree: /home/dev/.codex/worktrees/events-bot-new/r4-clubs-badge
+    writable_files:
+      - site/src/components/InterestClubCard.astro
+      - site/tests/interest-club-catalog*.mjs
+      - .codex/lanes/L03-R4/RESULTS.md
+    forbidden_files: [CHANGELOG.md, docs/features/]
+    expected_output: committed desktop badge geometry/glow with responsive regression coverage
+    verification_scope: full_local
+    status: planned
+  - id: INT
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R05]
+    target: integrate lanes, update canonical docs/changelog, build/publish R4, run agy Gemini Pro acceptance
+    depends_on: [L01-R4, L02-R4, L03-R4]
+    execution_mode: serial_after_dependency
+    branch: integration/desktop-polish-medallion-slots-r4-20260723
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files: ['*']
+    forbidden_files: []
+    expected_output: clean pushed branch, immutable preview, public desktop evidence, Gemini verdict
+    verification_scope: full_local
+    status: planned
