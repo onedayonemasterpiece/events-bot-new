@@ -86,6 +86,42 @@ test('club catalog keeps full desktop rows, scoped hotkeys, fallback and mobile 
     overflow: 0,
   });
 
+  const desktopMeetingBadge = page.locator('[data-club-future-badge="desktop"]:visible');
+  assert.equal(await desktopMeetingBadge.count(), 1);
+  const desktopBadgeLayout = await desktopMeetingBadge.evaluate((badge) => {
+    const card = badge.closest('[data-club-card]');
+    const media = card.querySelector('.club-card__media');
+    const badgeRect = badge.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const mediaRect = media.getBoundingClientRect();
+    const style = getComputedStyle(badge);
+    const glow = getComputedStyle(badge, '::after');
+    return {
+      topInset: badgeRect.top - mediaRect.top,
+      rightInset: mediaRect.right - badgeRect.right,
+      insideMedia:
+        badgeRect.top >= mediaRect.top
+        && badgeRect.right <= mediaRect.right
+        && badgeRect.bottom <= mediaRect.bottom,
+      insideCard:
+        badgeRect.left >= cardRect.left
+        && badgeRect.right <= cardRect.right,
+      position: style.position,
+      whiteSpace: style.whiteSpace,
+      lowerGlow: style.boxShadow.includes('rgba(244, 145, 37')
+        && glow.backgroundImage.includes('radial-gradient')
+        && Number.parseFloat(glow.top) >= badgeRect.height - 7,
+    };
+  });
+  assert.equal(desktopBadgeLayout.position, 'absolute');
+  assert.equal(desktopBadgeLayout.whiteSpace, 'nowrap');
+  assert.equal(desktopBadgeLayout.insideMedia, true);
+  assert.equal(desktopBadgeLayout.insideCard, true);
+  assert.equal(desktopBadgeLayout.lowerGlow, true);
+  assert.ok(desktopBadgeLayout.topInset >= 12 && desktopBadgeLayout.topInset <= 24);
+  assert.ok(desktopBadgeLayout.rightInset >= 12 && desktopBadgeLayout.rightInset <= 24);
+  assert.equal(await page.locator('[data-club-future-badge="mobile"]:visible').count(), 0);
+
   const firstHint = cards.first().locator('.club-card__keyboard-hint');
   assert.equal(await firstHint.evaluate((node) => getComputedStyle(node).visibility), 'hidden');
   await cards.first().focus();
@@ -143,10 +179,17 @@ test('club catalog keeps full desktop rows, scoped hotkeys, fallback and mobile 
   const mobile = await page.evaluate(() => {
     const list = document.querySelector('[data-club-list]');
     const hint = document.querySelector('.club-card__keyboard-hint');
+    const desktopBadge = document.querySelector('[data-club-future-badge="desktop"]');
+    const mobileBadge = document.querySelector('[data-club-future-badge="mobile"]');
     return {
       columns: getComputedStyle(list).gridTemplateColumns.split(' ').length,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       hintVisibility: getComputedStyle(hint).visibility,
+      desktopBadgeDisplay: getComputedStyle(desktopBadge).display,
+      mobileBadgeDisplay: getComputedStyle(mobileBadge).display,
+      mobileBadgeInHead: mobileBadge.parentElement.classList.contains('club-card__head'),
+      mobileBadgeWithinViewport:
+        mobileBadge.getBoundingClientRect().right <= document.documentElement.clientWidth + 1,
       cardsWithinViewport: [...document.querySelectorAll('[data-club-card]')]
         .every((card) => card.getBoundingClientRect().right <= document.documentElement.clientWidth + 1),
     };
@@ -155,6 +198,10 @@ test('club catalog keeps full desktop rows, scoped hotkeys, fallback and mobile 
     columns: 1,
     overflow: 0,
     hintVisibility: 'hidden',
+    desktopBadgeDisplay: 'none',
+    mobileBadgeDisplay: 'flex',
+    mobileBadgeInHead: true,
+    mobileBadgeWithinViewport: true,
     cardsWithinViewport: true,
   });
   await page.close();

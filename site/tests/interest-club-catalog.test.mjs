@@ -75,3 +75,13 @@ test('catalog markup keeps shortcut hints focus-scoped and desktop columns count
   assert.match(controller, /const primary = card\.querySelector\('\[data-club-primary-action\]'\)/u);
   assert.match(controller, /matchMedia\('\(min-width: 1024px\)'\)/u);
 });
+
+test('future meeting badge uses the desktop media corner and preserves the mobile head placement', async () => {
+  const card = await read('src/components/InterestClubCard.astro');
+
+  assert.match(card, /class="club-card__future club-card__future--desktop"[\s\S]*data-club-future-badge="desktop"/u);
+  assert.match(card, /class="club-card__future club-card__future--mobile"[\s\S]*data-club-future-badge="mobile"/u);
+  assert.match(card, /\.club-card__future--desktop \{[\s\S]*position:absolute;[\s\S]*top:1\.2rem;[\s\S]*right:1\.2rem;/u);
+  assert.match(card, /\.club-card__future--desktop::after \{[\s\S]*top:calc\(100% - \.22rem\);[\s\S]*radial-gradient\(ellipse at top/u);
+  assert.match(card, /@media \(max-width: 760px\) \{[\s\S]*\.club-card__future--desktop \{ display:none; \}[\s\S]*\.club-card__future--mobile \{[\s\S]*display:inline-flex;/u);
+});

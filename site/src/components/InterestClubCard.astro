@@ -44,13 +44,26 @@ const titleId = `club-card-title-${club.id}`;
     )}
     <div class="club-card__veil" aria-hidden="true"></div>
   </div>
+  {club.activity.future_meeting_count > 0 && (
+    <span
+      class="club-card__future club-card__future--desktop"
+      data-club-future-badge="desktop"
+    >
+      Ближайших встреч: {club.activity.future_meeting_count}
+    </span>
+  )}
 
   <div class="club-card__content">
     <div class="club-card__head">
       <p class="club-card__topic">{club.topic}</p>
-    {club.activity.future_meeting_count > 0 && (
-      <span class="club-card__future">Ближайших встреч: {club.activity.future_meeting_count}</span>
-    )}
+      {club.activity.future_meeting_count > 0 && (
+        <span
+          class="club-card__future club-card__future--mobile"
+          data-club-future-badge="mobile"
+        >
+          Ближайших встреч: {club.activity.future_meeting_count}
+        </span>
+      )}
     </div>
     <h2 id={titleId}><a href={clubHref} data-club-primary-action>{club.name}</a></h2>
     {club.description && <p class="club-card__description">{club.description}</p>}
@@ -136,7 +149,45 @@ const titleId = `club-card-title-${club.id}`;
   }
   .club-card__head { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
   .club-card__topic { margin:0; color:#e9fffd; font-size:.82rem; font-weight:850; letter-spacing:.055em; text-transform:uppercase; }
-  .club-card__future { flex:0 0 auto; padding:.3rem .62rem; border:1px solid rgba(255,255,255,.58); border-radius:999px; background:rgba(244,154,37,.92); color:#24170c; font-size:.76rem; font-weight:900; box-shadow:0 8px 20px rgba(31,20,12,.2); }
+  .club-card__future {
+    flex:0 0 auto;
+    padding:.3rem .62rem;
+    border:1px solid rgba(255,255,255,.58);
+    border-radius:999px;
+    background:rgba(244,154,37,.92);
+    color:#24170c;
+    font-size:.76rem;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .club-card__future--desktop {
+    position:absolute;
+    z-index:2;
+    top:1.2rem;
+    right:1.2rem;
+    padding:.46rem .78rem;
+    border-color:rgba(255,244,218,.78);
+    background:linear-gradient(180deg,rgba(255,184,78,.98),rgba(238,135,29,.96));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.56),
+      0 2px 4px rgba(75,35,9,.22),
+      0 13px 25px rgba(244,145,37,.36);
+    pointer-events:none;
+  }
+  .club-card__future--desktop::after {
+    content:"";
+    position:absolute;
+    z-index:-1;
+    top:calc(100% - .22rem);
+    right:10%;
+    left:10%;
+    height:1.35rem;
+    border-radius:50%;
+    background:radial-gradient(ellipse at top,rgba(255,181,72,.55),rgba(244,145,37,.18) 48%,transparent 74%);
+    filter:blur(6px);
+    pointer-events:none;
+  }
+  .club-card__future--mobile { display:none; }
   h2 { margin:0; font-size:clamp(1.55rem,3vw,2.15rem); line-height:1.08; text-wrap:balance; }
   h2 a { min-height:44px; display:inline-flex; align-items:center; color:inherit; text-decoration:none; }
   h2 a:hover { text-decoration:underline; }
@@ -203,7 +254,12 @@ const titleId = `club-card-title-${club.id}`;
     .club-card__veil { background:linear-gradient(180deg,transparent 58%,rgba(8,13,17,.2)); }
     .club-card__content { padding:1rem; }
     .club-card__topic { color:var(--primary-strong); }
-    .club-card__future { border-color:rgba(121,48,20,.12); }
+    .club-card__future--desktop { display:none; }
+    .club-card__future--mobile {
+      display:inline-flex;
+      border-color:rgba(121,48,20,.12);
+      box-shadow:0 8px 20px rgba(31,20,12,.2);
+    }
     .club-card__description { color:var(--muted); }
     .club-card__facts { border-color:rgba(121,48,20,.12); }
     .club-card__facts div + div { border-left-color:rgba(121,48,20,.12); }
