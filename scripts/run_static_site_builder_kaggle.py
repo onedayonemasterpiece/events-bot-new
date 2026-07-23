@@ -377,14 +377,26 @@ def first_env(*names: str, default: str = '') -> str:
 
 
 def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
-    needs_runtime_secrets = bool(args.gemma_related_verify or args.related_mode == 'pgvector' or args.sync_pgvector_vectors)
+    duration_enabled = bool(getattr(args, 'duration_enrichment', True))
+    needs_runtime_secrets = bool(
+        args.gemma_related_verify
+        or args.related_mode == 'pgvector'
+        or args.sync_pgvector_vectors
+        or duration_enabled
+    )
     if not needs_runtime_secrets:
         return {}
     key_env = (args.gemma_related_key_env or 'GOOGLE_API_KEY4').strip() or 'GOOGLE_API_KEY4'
     embedding_key_env = (args.pgvector_embedding_key_env or 'GOOGLE_API_KEY4').strip() or 'GOOGLE_API_KEY4'
+    duration_key_envs = [
+        part.strip()
+        for part in str(getattr(args, 'duration_key_envs', '') or 'GOOGLE_API_KEY4').split(',')
+        if part.strip()
+    ]
     names = [
         key_env,
         embedding_key_env,
+        *duration_key_envs,
         'SUPABASE_URL',
         'SUPABASE_KEY',
         'SUPABASE_SERVICE_KEY',
@@ -413,6 +425,12 @@ def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
         missing.append('PERSONALIZATION_SUPABASE_URL')
     if args.related_mode == 'pgvector' and not any(payload.get(name) for name in ('PERSONALIZATION_SUPABASE_SECRET_KEY', 'PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY')):
         missing.append('PERSONALIZATION_SUPABASE_SECRET_KEY')
+    available_duration_keys = [name for name in duration_key_envs if payload.get(name)]
+    if duration_enabled and available_duration_keys:
+        if not payload.get('SUPABASE_URL'):
+            missing.append('SUPABASE_URL')
+        if not any(payload.get(name) for name in ('SUPABASE_SERVICE_KEY', 'SUPABASE_KEY', 'SUPABASE_SERVICE_ROLE_KEY')):
+            missing.append('SUPABASE_KEY/SUPABASE_SERVICE_KEY')
     if missing:
         raise RuntimeError(
             'Missing envs for encrypted Kaggle Gemma limiter dataset: '
@@ -605,6 +623,11 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'gemma_related_model': args.gemma_related_model,
         'gemma_related_key_env': args.gemma_related_key_env,
         'gemma_related_max_anchors': args.gemma_related_max_anchors,
+        'duration_enrichment': bool(getattr(args, 'duration_enrichment', True)),
+        'duration_model': str(getattr(args, 'duration_model', '') or 'gemini-3.1-flash-lite'),
+        'duration_key_envs': str(getattr(args, 'duration_key_envs', '') or 'GOOGLE_API_KEY4'),
+        'duration_max_events': int(getattr(args, 'duration_max_events', 12) or 12),
+        'duration_require_complete': bool(getattr(args, 'duration_require_complete', False)),
         'queued_at': datetime.now(timezone.utc).isoformat(),
         'payload_mode': 'dataset_source',
     }
@@ -747,6 +770,20 @@ def main() -> int:
     parser.add_argument('--gemma-related-model', default=os.getenv('STATIC_SITE_GEMMA_RELATED_MODEL', 'models/gemma-4-26b-a4b-it'))
     parser.add_argument('--gemma-related-key-env', default=os.getenv('STATIC_SITE_GEMMA_RELATED_KEY_ENV', 'GOOGLE_API_KEY4'))
     parser.add_argument('--gemma-related-max-anchors', type=int, default=int(os.getenv('STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS', '0') or '0'))
+    parser.add_argument(
+        '--duration-enrichment',
+        action=argparse.BooleanOptionalAction,
+        default=(os.getenv('STATIC_SITE_DURATION_ENRICHMENT', '1').strip().lower() in {'1', 'true', 'yes', 'on'}),
+        help='Run cached server-side duration enrichment after export and before all Astro builds.',
+    )
+    parser.add_argument('--duration-model', default=os.getenv('STATIC_SITE_DURATION_MODEL', 'gemini-3.1-flash-lite'))
+    parser.add_argument('--duration-key-envs', default=os.getenv('STATIC_SITE_DURATION_GOOGLE_KEY_ENVS', 'GOOGLE_API_KEY4'))
+    parser.add_argument('--duration-max-events', type=int, default=int(os.getenv('STATIC_SITE_DURATION_MAX_EVENTS', '12') or '12'))
+    parser.add_argument(
+        '--duration-require-complete',
+        action='store_true',
+        default=(os.getenv('STATIC_SITE_DURATION_REQUIRE_COMPLETE', '').strip().lower() in {'1', 'true', 'yes', 'on'}),
+    )
     parser.add_argument('--keep-secret-datasets', action='store_true', default=(os.getenv('STATIC_SITE_KEEP_SECRET_DATASETS', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--timeout-minutes', type=int, default=int(os.getenv('STATIC_SITE_KAGGLE_TIMEOUT_MINUTES', '45')))
     parser.add_argument('--poll-interval', type=int, default=int(os.getenv('STATIC_SITE_KAGGLE_POLL_INTERVAL', '30')))
