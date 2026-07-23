@@ -19,6 +19,16 @@ const sourceTokens = [
     renderNote: 'Показывается только для событий из @meowafisha, если у события не больше двух источников.',
   },
 ];
+const transportTokens = [
+  {
+    slug: 'rzd-lastochka',
+    name: 'Электропоезд «Ласточка»',
+    avatarUrl: '/assets/transport/rzd-lastochka-medallion.webp',
+    fallbackPngUrl: '/assets/transport/rzd-lastochka-medallion.png',
+    ariaLabel: 'Транспортная подсказка: электропоезд «Ласточка»',
+    renderNote: 'Крупный source-faithful кадр головного вагона. Это транспортная подсказка, а не live-расписание и не билетный сервис.',
+  },
+];
 const pushkin = {
   slug: 'pushkin-card',
   name: 'Пушкинская карта',
@@ -42,6 +52,25 @@ const pushkin = {
           <p class="eyebrow">Визуальный QA</p>
           <h1>Медальоны событий</h1>
           <p class="lead">Страница для проверки размеров, цветовой гаммы и читаемости медальонов. «Дом китобоя» собран как простой стековый знак из исходных слов логотипа: «дом» над «Китобоя», а синий фон и светлое кольцо взяты из публичной социальной палитры.</p>
+        </div>
+      </section>
+
+      <section class="section-card" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <h2>Транспорт: электропоезд «Ласточка»</h2>
+          <p class="muted-note">Иконка маршрута без обещания актуального расписания: крупный головной вагон остаётся узнаваемым и читаемым даже в компактном круглом токене.</p>
+          <ul class="event-token-row" role="list">
+            {transportTokens.map((item) => (
+              <li class={`event-token event-token--transport event-token--${item.slug}`} aria-label={item.ariaLabel} title={item.name}>
+                <span class="event-token__circle" aria-hidden="true">
+                  <picture>
+                    <source srcset={withBase(item.avatarUrl)} type="image/webp" />
+                    <img src={withBase(item.fallbackPngUrl)} alt="" loading="eager" decoding="async" />
+                  </picture>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 

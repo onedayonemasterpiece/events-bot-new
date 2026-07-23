@@ -150,6 +150,23 @@ Asset inventory:
 
 No OpenAI image generation/editing was used for these assets; they were produced by local SVG rendering/vectorization, source-faithful cropping and alpha-preserving WebP/PNG fallback export.
 
+### Transport medallions
+
+The medallions lab includes a source-faithful **RZD Lastochka** transport token:
+
+- runtime: `/assets/transport/rzd-lastochka-medallion.webp` with PNG fallback;
+- source: `docs/features/static-site-pages/medalions-free-ref/rzd-lastochka.png`;
+- shape: shared circle token, ice-grey `#F0F3F6` field and red `#E21A22` ring;
+- crop: cab plus first passenger door so the train remains recognizable at roughly 90–112px;
+- semantics: `Транспортная подсказка: электропоезд «Ласточка»`; no visible schedule, ticket promise or official-service claim.
+
+The token is currently a **lab specimen only**. Production event-page wiring
+requires separate grounded route eligibility; it must not infer a train
+connection from city or venue keywords alone. The deterministic builder is
+`site/scripts/build-rzd-lastochka-medallion.py`. Gemini 3.1 Pro (High) product
+and design consultations both selected the circular cab crop over a full-train
+strip or wide text composite. No generative image editing was used.
+
 ### Manifest-inventory regression contract
 
 The runtime manifest and the optimized asset must move together. The July 2026

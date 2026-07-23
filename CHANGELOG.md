@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added a deterministic, source-faithful RZD Lastochka transport medallion to
+  the static-site medallions lab: a readable cab crop with lossless WebP/PNG
+  assets, shared circular-token styling, accessible semantics, documented
+  provenance and no timetable or ticketing claim.
+
 ### Fixed
 
 - Unified linked-event occurrence projection across static detail, date lists,
