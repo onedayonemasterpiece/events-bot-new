@@ -76,3 +76,27 @@ test('every published card has hash-bound reviewed provenance from a first-party
     assert.equal(digest, media.assetSha256, `stale media hash for ${festival.slug}`);
   }
 });
+
+test('category chips use the curated local SVGRepo Lucide family', async () => {
+  const page = await readFile(new URL('../src/pages/festivali/index.astro', import.meta.url), 'utf8');
+  const iconFiles = [
+    '389049-book-open.svg',
+    '389059-camera.svg',
+    '389063-carrot.svg',
+    '389241-history.svg',
+    '389291-map-pin.svg',
+    '389324-music.svg',
+    '389330-palette.svg',
+    '389439-star.svg',
+    '389461-ticket.svg',
+  ];
+
+  assert.doesNotMatch(page, /categorySymbol/);
+  assert.match(page, /--festival-category-icon/);
+  for (const filename of iconFiles) {
+    assert.match(page, new RegExp(filename.replace('.', '\\.')));
+    const svg = await readFile(new URL(`../public/assets/icons/festival-categories/${filename}`, import.meta.url), 'utf8');
+    assert.match(svg, /viewBox="0 0 24 24"/);
+    assert.match(svg, /stroke-width="2"/);
+  }
+});
