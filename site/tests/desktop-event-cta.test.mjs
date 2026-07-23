@@ -83,8 +83,14 @@ test('Editorial hierarchy and production role-first media boundaries stay intact
   assert.match(panel, /\[data-action-treatment="physical-editorial"\][^}]*repeating-linear-gradient/su);
   assert.match(panel, /\[data-action-treatment="physical-editorial"\][^}]*box-shadow:[^}]*inset/su);
   assert.match(panel, /prefers-reduced-motion:reduce/u);
+  assert.match(panel, /:global\(\.like-burst\) \{ display:none; \}/u);
+  assert.match(panel, /content:"лайкнуто"/u);
+  assert.match(panel, /content:"добавлено"/u);
   assert.match(lab, /slug: 'cta-editorial-6529-baseline', eventId: 6529, candidate: 'editorial'/u);
   assert.match(lab, /7a75b552c70672a59b921db5fafd74b190839442e004a76f02269a2fe979f904/u);
   assert.match(lab, /width:1280,\s*height:960/u);
   assert.match(lab, /slug:'master-klass-dekorativnoe-mini-panno-tkanye-uzory-zelenogradsk-6529'/u);
+  assert.match(lab, /editorialBaselineChrome=\{scenario\.fixture === 'baseline-6529-editorial'\}/u);
+  assert.match(page, /desktop-prototype__baseline-breadcrumbs/u);
+  assert.match(page, /assets\/organizers\/mumod\.svg/u);
 });

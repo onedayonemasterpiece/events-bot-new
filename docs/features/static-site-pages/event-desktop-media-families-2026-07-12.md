@@ -28,6 +28,13 @@ or if the hero asset/geometry changes. This fixture exists specifically to
 prevent a portrait poster/current-catalog snapshot from silently replacing the
 ordered horizontal reference during review.
 
+The frozen lab specimen also restores the baseline-only museum medallion and
+overlay breadcrumbs as absolutely positioned chrome, so they cannot disappear
+from visual comparison or alter title/CTA geometry. Editorial persisted states
+show the compact reference labels (`лайкнуто` / `добавлено`) inside the existing
+utility row; the generic flying-heart burst is suppressed only inside this
+physical Editorial action panel.
+
 Related-card media is a hard, testable desktop contract rather than an aesthetic fallback:
 
 - `visual_only` / `event_photo` always fills the media cell with `cover`; side/top/bottom fields are forbidden;

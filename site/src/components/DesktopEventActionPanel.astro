@@ -348,11 +348,12 @@ const shareFileName = `kenigevents-${event.slug}`;
       repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, rgba(0,0,0,.014) 1px 3px),
       linear-gradient(145deg, #383532 0%, #2c2927 42%, #211f1d 100%) !important;
     box-shadow:
-      0 20px 38px rgba(24,18,14,.42),
-      0 5px 12px rgba(24,18,14,.24),
-      inset 1px 1px 0 rgba(255,255,255,.18),
-      inset -1px -1px 0 rgba(0,0,0,.62),
-      inset 0 0 0 2px rgba(13,12,11,.34) !important;
+      0 22px 42px rgba(20,15,12,.5),
+      0 7px 14px rgba(20,15,12,.32),
+      inset 2px 2px 0 rgba(255,255,255,.22),
+      inset -2px -2px 0 rgba(0,0,0,.68),
+      inset 0 0 0 2px rgba(12,11,10,.52),
+      inset 0 0 0 4px rgba(255,255,255,.035) !important;
   }
   .desktop-prototype__action[data-action-treatment="physical-editorial"] > p span {
     color:#cfc3b9;
@@ -370,11 +371,13 @@ const shareFileName = `kenigevents-${event.slug}`;
     color:#fff9f3 !important;
     text-shadow:0 1px 1px rgba(67,20,7,.68);
     box-shadow:
-      0 9px 15px rgba(65,23,9,.38),
-      0 2px 3px rgba(17,12,9,.5),
-      inset 1px 1px 0 rgba(255,226,208,.46),
-      inset -1px -1px 0 rgba(66,19,6,.72),
-      inset 0 0 0 2px rgba(63,22,9,.43) !important;
+      0 0 0 2px rgba(27,17,13,.72),
+      0 10px 17px rgba(55,20,8,.46),
+      0 3px 4px rgba(17,12,9,.62),
+      inset 0 3px 0 rgba(255,220,199,.48),
+      inset 2px 0 0 rgba(255,187,148,.18),
+      inset -2px -2px 0 rgba(64,17,5,.78),
+      inset 0 0 0 2px rgba(76,22,7,.48) !important;
     transition:transform .16s ease, box-shadow .16s ease, filter .16s ease;
   }
   .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action:focus-visible) {
@@ -391,11 +394,13 @@ const shareFileName = `kenigevents-${event.slug}`;
     color:#fff8ef !important;
     text-shadow:0 1px 0 rgba(0,0,0,.68);
     box-shadow:
-      0 5px 9px rgba(13,11,9,.34),
-      0 1px 2px rgba(0,0,0,.72),
-      inset 1px 1px 0 rgba(255,255,255,.16),
-      inset -1px -1px 0 rgba(0,0,0,.6),
-      inset 0 0 0 1px rgba(11,10,9,.52) !important;
+      0 0 0 2px rgba(15,13,12,.72),
+      0 6px 10px rgba(10,9,8,.42),
+      0 2px 2px rgba(0,0,0,.76),
+      inset 0 2px 0 rgba(255,255,255,.2),
+      inset 2px 0 0 rgba(255,255,255,.055),
+      inset -2px -2px 0 rgba(0,0,0,.66),
+      inset 0 0 0 1px rgba(11,10,9,.58) !important;
     transition:transform .14s ease, box-shadow .14s ease, filter .14s ease;
   }
   .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action[data-calendar-adaptive-label]) {
@@ -411,6 +416,28 @@ const shareFileName = `kenigevents-${event.slug}`;
   .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action:focus-visible) {
     outline:3px solid #f1ae79;
     outline-offset:3px;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.like-burst) { display:none; }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] .desktop-prototype__action-row::after {
+    align-self:center;
+    overflow:hidden;
+    color:#c8bbb1;
+    font-size:.78rem;
+    font-weight:760;
+    line-height:1;
+    opacity:0;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    content:"";
+    transition:opacity .16s ease;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] .desktop-prototype__action-row:has([data-feedback-action="like"][aria-pressed="true"])::after {
+    content:"лайкнуто";
+    opacity:1;
+  }
+  .desktop-prototype__action[data-action-treatment="physical-editorial"] .desktop-prototype__action-row:has([data-calendar-action].is-calendar-added)::after {
+    content:"добавлено";
+    opacity:1;
   }
   .desktop-prototype__action[data-action-treatment="physical-editorial"] :global([data-calendar-action].is-calendar-added),
   .desktop-prototype__action[data-action-treatment="physical-editorial"] :global([data-calendar-action].is-calendar-added:hover),
@@ -434,6 +461,7 @@ const shareFileName = `kenigevents-${event.slug}`;
         repeating-linear-gradient(35deg, rgba(255,255,255,.018) 0 1px, rgba(0,0,0,.018) 1px 3px),
         linear-gradient(155deg, #d46a39 0%, #c05325 58%, #ad451b 100%) !important;
       box-shadow:
+        0 0 20px rgba(218,91,38,.46),
         0 12px 20px rgba(91,29,8,.44),
         0 3px 4px rgba(17,12,9,.52),
         inset 1px 1px 0 rgba(255,232,216,.56),
@@ -474,7 +502,8 @@ const shareFileName = `kenigevents-${event.slug}`;
   }
   @media (prefers-reduced-motion:reduce) {
     .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action),
-    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action) {
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__icon-action),
+    .desktop-prototype__action[data-action-treatment="physical-editorial"] .desktop-prototype__action-row::after {
       transition:none;
     }
     .desktop-prototype__action[data-action-treatment="physical-editorial"] :global(.desktop-prototype__primary-action:hover),

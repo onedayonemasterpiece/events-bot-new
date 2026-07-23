@@ -217,6 +217,7 @@ const description = event.meta_description || event.summary || event.title;
     relatedMediaTreatment={scenario.relatedMediaTreatment}
     mediaRoleOverrides={scenario.mediaRoleOverrides}
     mediaDimensionOverrides={scenario.mediaDimensionOverrides}
+    editorialBaselineChrome={scenario.fixture === 'baseline-6529-editorial'}
   />
   {scenario.showTransport && (
     <div class="lab-mobile-transport page-shell" data-lab-mobile-transport>

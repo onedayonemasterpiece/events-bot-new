@@ -64,6 +64,7 @@ interface Props {
   presentationReason?: string;
   showTransport?: boolean;
   occurrencePresentation?: OccurrencePresentation;
+  editorialBaselineChrome?: boolean;
 }
 
 type GalleryImage = {
@@ -113,6 +114,7 @@ const {
   presentationReason = 'lab-fixture',
   showTransport = false,
   occurrencePresentation,
+  editorialBaselineChrome = false,
 } = Astro.props;
 const resolvedOccurrencePresentation = occurrencePresentation || getOccurrencePresentation(event);
 const forcedOcrSourceIndexes = new Set(ocrSourceIndexes);
@@ -505,8 +507,18 @@ const descriptionHtml = (event.description_html || '')
           </aside>
         )}
 
-        <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long']} data-scroll-content={usesLongFlow ? '' : undefined} data-editorial-content-flow={candidate === 'editorial' ? '' : undefined}>
-          <div class="desktop-prototype__info" data-title-panel>
+        <div class:list={['desktop-prototype__content-flow', usesLongFlow && 'desktop-prototype__content-flow--long', editorialBaselineChrome && 'desktop-prototype__content-flow--baseline-chrome']} data-scroll-content={usesLongFlow ? '' : undefined} data-editorial-content-flow={candidate === 'editorial' ? '' : undefined}>
+          <div class:list={['desktop-prototype__info', editorialBaselineChrome && 'desktop-prototype__info--baseline-chrome']} data-title-panel>
+            {editorialBaselineChrome && (
+              <>
+                <nav class="desktop-prototype__baseline-breadcrumbs" aria-label="Хлебные крошки">
+                  <a href={siteHomeHref()}>Афиша</a><span aria-hidden="true">›</span><span>{event.title}</span>
+                </nav>
+                <span class="desktop-prototype__baseline-medallion" aria-label="Площадка: Музей курортной моды" title="Музей курортной моды">
+                  <img src={withBase('/assets/organizers/mumod.svg')} alt="" width="512" height="512" />
+                </span>
+              </>
+            )}
             <div class="desktop-prototype__kicker">
               <span>{event.event_type || 'событие'}</span>
               <EventOccurrenceNav event={event} presentation={resolvedOccurrencePresentation} variant="desktop" />
@@ -1724,6 +1736,44 @@ const descriptionHtml = (event.description_html || '')
   .desktop-clean-event--ocr.is-safe-cover .desktop-prototype__media-image { object-fit:cover; }
   .desktop-prototype--non-ocr [data-desktop-parallax] .desktop-prototype__media-image { height:calc(100% + 112px); margin-top:-56px; transform:translate3d(0,var(--desktop-parallax-y,0),0) scale(1.025); will-change:transform; }
   .desktop-prototype__info { z-index:2; display:grid; align-content:start; gap:clamp(.62rem,1.5vh,1rem); color:var(--clean-ink); }
+  .desktop-prototype__content-flow--baseline-chrome { border-radius:28px 28px 0 0; }
+  .desktop-prototype__info--baseline-chrome { position:relative; overflow:visible; }
+  .desktop-prototype__baseline-breadcrumbs {
+    position:absolute;
+    left:.7rem;
+    bottom:calc(100% + .52rem);
+    z-index:5;
+    max-width:43ch;
+    display:flex;
+    align-items:center;
+    gap:.38rem;
+    overflow:hidden;
+    color:#fff;
+    font-size:.7rem;
+    font-weight:850;
+    line-height:1.1;
+    text-shadow:0 1px 3px rgba(0,0,0,.88);
+    white-space:nowrap;
+  }
+  .desktop-prototype__baseline-breadcrumbs a { min-height:0; color:#fff; text-underline-offset:.16em; }
+  .desktop-prototype__baseline-breadcrumbs span:last-child { overflow:hidden; text-overflow:ellipsis; }
+  .desktop-prototype__baseline-medallion {
+    position:absolute;
+    top:-58px;
+    left:50%;
+    z-index:6;
+    width:112px;
+    height:112px;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+    border:4px solid #fffaf2;
+    border-radius:50%;
+    background:#fcf9ed;
+    box-shadow:0 10px 22px rgba(42,28,18,.25);
+    transform:translateX(-50%);
+  }
+  .desktop-prototype__baseline-medallion img { width:100%; height:100%; display:block; object-fit:contain; }
   .desktop-prototype__kicker { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:.35rem .85rem; margin:0; color:#91401d; font-size:clamp(.7rem,1.25vw,.82rem); font-weight:900; letter-spacing:.07em; text-transform:uppercase; }
   .desktop-prototype__kicker time { display:flex; align-items:baseline; gap:.65rem; color:inherit; font-variant-numeric:tabular-nums; }
   .desktop-prototype__kicker time strong { font-size:clamp(.9rem,1.5vw,1.18rem); }
