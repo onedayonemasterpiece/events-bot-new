@@ -37,5 +37,9 @@ export function desktopEventWithExplicitEnd(event: PreviewEvent): PreviewEvent {
   const startMinutes = Number(startMatch[1]) * 60 + Number(startMatch[2]);
   const endMinutes = startMinutes + durationMinutes;
   const endTime = `${String(Math.floor((endMinutes % (24 * 60)) / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-  return { ...event, time_range_end:endTime };
+  return {
+    ...event,
+    time_range_end:endTime,
+    transport_end_basis: explicitDurationMinutes ? 'source_duration' : 'forecast',
+  };
 }

@@ -1,5 +1,4 @@
 import scheduleData from '../data/transportSchedules.json';
-import durationEstimatesData from '../data/event-duration-estimates.json';
 import type { PreviewEvent } from './types';
 
 interface TransportTrainRecord {
@@ -38,32 +37,6 @@ interface TransportScheduleData {
   routes: TransportRouteRecord[];
 }
 
-interface EventDurationEstimateRecord {
-  event_id: number;
-  source_status: 'llm_estimated';
-  canonical_end: false;
-  model: {
-    provider: string;
-    id: string;
-    label: string;
-  };
-  estimated_at: string;
-  provenance: string;
-  most_likely_minutes: number;
-  plausible_min_minutes: number;
-  plausible_max_minutes: number;
-  confidence: 'low' | 'medium' | 'high';
-  conservative_routing_minutes: number;
-  user_facing_rationale: string;
-}
-
-interface EventDurationEstimateData {
-  version: number;
-  scope: 'preview_only';
-  generated_at: string;
-  estimates: EventDurationEstimateRecord[];
-}
-
 export interface EventTrainOption {
   number: string;
   trainType: string;
@@ -79,24 +52,7 @@ export interface EventTrainOption {
 }
 
 export type EventTransportDirection = 'outbound' | 'return';
-export type EventEndBasis = 'explicit' | 'llm_estimated' | 'schedule_cutoff';
-
-export interface EventDurationEstimate {
-  sourceStatus: 'llm_estimated';
-  canonicalEnd: false;
-  modelProvider: string;
-  modelId: string;
-  modelLabel: string;
-  estimatedAt: string;
-  provenance: string;
-  mostLikelyMinutes: number;
-  plausibleMinMinutes: number;
-  plausibleMaxMinutes: number;
-  confidence: 'low' | 'medium' | 'high';
-  conservativeRoutingMinutes: number;
-  rationale: string;
-  predictedEndTime: string;
-}
+export type EventEndBasis = 'explicit' | 'forecast' | 'schedule_cutoff';
 
 export interface EventTransportCalendarEntry {
   direction: EventTransportDirection;
@@ -112,7 +68,6 @@ export interface EventTransportSuggestion {
   eventStart: string;
   eventEnd: string | null;
   eventEndBasis: EventEndBasis;
-  durationEstimate: EventDurationEstimate | null;
   returnAccessMinutes: number;
   returnAccessLabel: string;
   returnReadyTime: string | null;
@@ -131,8 +86,6 @@ export interface EventTransportSuggestion {
 }
 
 const schedules = scheduleData as TransportScheduleData;
-const durationEstimates = durationEstimatesData as EventDurationEstimateData;
-const previewDurationEstimatesEnabled = Boolean(import.meta.env?.PUBLIC_PREVIEW_BUILD_ID);
 
 const EVENT_TYPE_GENITIVE: Record<string, string> = {
   'выставка': 'выставки',
@@ -194,43 +147,6 @@ function normalizeEventType(value: string | null | undefined): string {
 function clockFromMinutes(value: number): string {
   const normalized = ((value % (24 * 60)) + (24 * 60)) % (24 * 60);
   return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
-}
-
-function previewDurationEstimate(eventId: number, eventStartMinutes: number): EventDurationEstimate | null {
-  if (!previewDurationEstimatesEnabled || durationEstimates.scope !== 'preview_only') return null;
-  const estimate = durationEstimates.estimates.find((item) => item.event_id === eventId);
-  if (!estimate
-    || estimate.source_status !== 'llm_estimated'
-    || estimate.canonical_end !== false
-    || !Number.isInteger(estimate.most_likely_minutes)
-    || !Number.isInteger(estimate.plausible_min_minutes)
-    || !Number.isInteger(estimate.plausible_max_minutes)
-    || !Number.isInteger(estimate.conservative_routing_minutes)
-    || estimate.plausible_min_minutes <= 0
-    || estimate.plausible_min_minutes > estimate.most_likely_minutes
-    || estimate.most_likely_minutes > estimate.plausible_max_minutes
-    || estimate.conservative_routing_minutes < estimate.most_likely_minutes
-    || !estimate.model?.id
-    || !estimate.provenance
-    || !Number.isFinite(Date.parse(estimate.estimated_at))) {
-    return null;
-  }
-  return {
-    sourceStatus: estimate.source_status,
-    canonicalEnd: false,
-    modelProvider: estimate.model.provider,
-    modelId: estimate.model.id,
-    modelLabel: estimate.model.label,
-    estimatedAt: estimate.estimated_at,
-    provenance: estimate.provenance,
-    mostLikelyMinutes: estimate.most_likely_minutes,
-    plausibleMinMinutes: estimate.plausible_min_minutes,
-    plausibleMaxMinutes: estimate.plausible_max_minutes,
-    confidence: estimate.confidence,
-    conservativeRoutingMinutes: estimate.conservative_routing_minutes,
-    rationale: estimate.user_facing_rationale,
-    predictedEndTime: clockFromMinutes(eventStartMinutes + estimate.conservative_routing_minutes),
-  };
 }
 
 function returnAccessProfile(event: Pick<PreviewEvent, 'venue_name' | 'city'>): { minutes: number; label: string } {
@@ -365,7 +281,7 @@ function getRoute(city: string | null | undefined): TransportRouteRecord | null 
 }
 
 export function getEventTransportSuggestion(
-  event: Pick<PreviewEvent, 'id' | 'city' | 'venue_name' | 'start_date' | 'end_date' | 'start_time' | 'time_range_end' | 'event_type'>,
+  event: Pick<PreviewEvent, 'id' | 'city' | 'venue_name' | 'start_date' | 'end_date' | 'start_time' | 'time_range_end' | 'event_type' | 'transport_end_basis'>,
 ): EventTransportSuggestion | null {
   const route = getRoute(event.city);
   const eventStartMinutes = timeToMinutes(event.start_time);
@@ -387,17 +303,10 @@ export function getEventTransportSuggestion(
 
   const normalizedType = normalizeEventType(event.event_type);
   const eventEndRaw = timeToMinutes(event.time_range_end);
-  const durationEstimate = eventEndRaw === null ? previewDurationEstimate(event.id, eventStartMinutes) : null;
   const eventEndBasis: EventEndBasis = eventEndRaw !== null
-    ? 'explicit'
-    : durationEstimate
-      ? 'llm_estimated'
-      : 'schedule_cutoff';
-  let eventEndMinutes = eventEndRaw ?? (
-    durationEstimate
-      ? eventStartMinutes + durationEstimate.conservativeRoutingMinutes
-      : null
-  );
+    ? event.transport_end_basis === 'forecast' ? 'forecast' : 'explicit'
+    : 'schedule_cutoff';
+  let eventEndMinutes = eventEndRaw;
   if (eventEndMinutes !== null && eventEndMinutes < eventStartMinutes) eventEndMinutes += 24 * 60;
   const accessProfile = returnAccessProfile(event);
   const returnReadyMinutes = eventEndMinutes === null ? null : eventEndMinutes + accessProfile.minutes;
@@ -460,7 +369,6 @@ export function getEventTransportSuggestion(
     eventStart: event.start_time || '',
     eventEnd: event.time_range_end || null,
     eventEndBasis,
-    durationEstimate,
     returnAccessMinutes: accessProfile.minutes,
     returnAccessLabel: accessProfile.label,
     returnReadyTime: returnReadyMinutes === null ? null : clockFromMinutes(returnReadyMinutes),
