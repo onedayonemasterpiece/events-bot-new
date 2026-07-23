@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  classifyEventMedallionLayout,
   matchMedallionAlias,
   resolveEventMedallions,
 } from './eventMedallions.ts';
@@ -12,6 +13,7 @@ import {
 const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const organizers = JSON.parse(await readFile(path.join(siteRoot, 'src/data/organizerMedallions.json'), 'utf8')).items;
 const festivals = JSON.parse(await readFile(path.join(siteRoot, 'src/data/festivalMedallions.json'), 'utf8')).items;
+const previewEvents = JSON.parse(await readFile(path.join(siteRoot, 'src/data/preview-events.json'), 'utf8')).events;
 const organizerSlugs = new Set(organizers.map((item) => item.slug));
 const eventPageFestivals = festivals.filter((item) => (
   item.category === 'festival'
@@ -71,6 +73,40 @@ test('current mumod, Dramatic Theatre, Kaup and historical Greza aliases resolve
   assert.deepEqual(slugs(event({ venue_name:'Драматический театр' })), ['dramteatr39']);
   assert.deepEqual(slugs(event({ venue_name:'Поселение викингов Кауп' })), ['kaup']);
   assert.deepEqual(slugs(event({ venue_name:'Грёза Хутор, пос. Тихомировка, Озёрск' })), ['greza-khutor']);
+});
+
+test('MUMOD is the single Main medallion and leaves InlineSlot empty', () => {
+  const mumodEvent = previewEvents.find((candidate) => candidate.id === 6529);
+  assert.ok(mumodEvent, 'current event 6529 must remain available as the MUMOD regression');
+  const resolution = resolveEventMedallions(mumodEvent, eventPageCatalog);
+  const layout = classifyEventMedallionLayout(resolution);
+
+  assert.equal(layout.main?.item.slug, 'mumod');
+  assert.deepEqual(layout.secondary, []);
+  assert.equal(layout.main?.evidence.field, 'venue_name');
+  assert.equal(layout.main?.evidence.match, 'exact');
+});
+
+test('structured festival is Main while the resolved venue remains Secondary', () => {
+  const resolution = resolveEventMedallions(event({
+    venue_name:'Янтарь холл',
+    festival:'ГРОЗДЬ',
+  }), eventPageCatalog);
+  const layout = classifyEventMedallionLayout(resolution);
+
+  assert.equal(layout.main?.item.slug, 'grozd-festival');
+  assert.deepEqual(layout.secondary.map(({ item }) => item.slug), ['yantar-hall']);
+  assert.equal(layout.main?.evidence.field, 'festival');
+  assert.equal(layout.secondary[0]?.evidence.field, 'venue_name');
+});
+
+test('principal layout classification consumes only fail-closed structured resolution', () => {
+  const resolution = resolveEventMedallions(event({ venue_name:'ММО Кафедральный собор' }), eventPageCatalog);
+  const layout = classifyEventMedallionLayout(resolution);
+
+  assert.equal(resolution.failClosedReason, 'ambiguous_venue_identity');
+  assert.equal(layout.main, undefined);
+  assert.deepEqual(layout.secondary, []);
 });
 
 test('festival artwork matches only the structured festival field', () => {

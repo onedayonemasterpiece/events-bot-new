@@ -131,6 +131,38 @@ test('desktop medallion wrapper exposes venue ring and shadow without changing i
   assert.match(medallions, /data-identity-resolution=\{organizerResolution\.failClosedReason \|\| 'resolved'\}/u);
 });
 
+test('desktop event chrome renders explicit Main and Secondary medallion slots', async () => {
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const medallions = await read('src/components/EventTokenMedallions.astro');
+  const resolver = await read('src/lib/eventMedallions.ts');
+
+  assert.match(desktop, /<EventTokenMedallions event=\{event\} layout="desktop-slots" \/>/u);
+  assert.match(medallions, /class:list=\{\['event-token-section', `event-token-section--\$\{group\.slot\}`\]\}/u);
+  assert.match(medallions, /data-medallion-slot=\{group\.slot\}/u);
+  assert.match(medallions, /data-medallion-role=\{token\.layoutRole \|\| 'secondary'\}/u);
+  assert.match(medallions, /data-main-medallion-slug=\{mainToken\?\.slug\}/u);
+  assert.match(medallions, /const desktopMedallionTokens = visibleTokens\.filter\(\(token\) => token\.kind !== 'pill'\)/u);
+  assert.match(resolver, /export function classifyEventMedallionLayout/u);
+  assert.match(resolver, /if \(category === 'festival_brand'\) return 400/u);
+  assert.match(resolver, /if \(category === 'organizer'\) return 300/u);
+  assert.match(desktop, /data-medallion-slot="top"[\s\S]*position:absolute/u);
+  assert.match(desktop, /left:50%;[\s\S]*transform:translate\(-50%,-50%\)/u);
+  assert.match(desktop, /\.desktop-prototype__info:has\(\[data-medallion-slot="top"\]\)/u);
+});
+
+test('desktop breadcrumbs keep semantics while becoming compact and secondary', async () => {
+  const desktop = await read('src/components/DesktopEventPage.astro');
+  const breadcrumbs = await read('src/components/Breadcrumbs.astro');
+
+  assert.match(breadcrumbs, /aria-label="Хлебные крошки"/u);
+  assert.match(breadcrumbs, /<ol>/u);
+  assert.match(breadcrumbs, /aria-current="page"/u);
+  assert.match(desktop, /desktop-prototype__breadcrumbs\.product-breadcrumbs a\) \{\s*min-height:26px;/u);
+  assert.match(desktop, /product-breadcrumbs:not\(\.desktop-prototype__breadcrumbs--overlay\)[\s\S]*font-size:\.7rem/u);
+  assert.match(desktop, /\.desktop-clean-event--split \.desktop-prototype__info \{[\s\S]*padding-top:clamp\(\.55rem,.9vw,.85rem\)/u);
+  assert.match(desktop, /max-width:min\(520px,calc\(\(100vw - var\(--editorial-side\) - 6vw\) \/ 2 - 4\.25rem\)\)/u);
+});
+
 test('desktop and mobile transport consume one persisted Smart Update duration forecast', async () => {
   const route = await read('src/pages/sobytiya/[slug].astro');
   const built = await readBuiltEvent(6529);

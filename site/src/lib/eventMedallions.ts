@@ -35,6 +35,11 @@ export interface EventMedallionResolution {
   conflictEvidence?: string[];
 }
 
+export interface EventMedallionLayout {
+  main?: ResolvedOrganizerMedallion;
+  secondary: ResolvedOrganizerMedallion[];
+}
+
 export function normalizeMedallionText(value: unknown): string {
   return String(value || '')
     .normalize('NFKC')
@@ -126,6 +131,41 @@ function evidenceRank(evidence: MedallionEvidence): number {
   if (evidence.field === 'festival') return 30;
   if (evidence.field === 'source_url') return 20;
   return 10;
+}
+
+/**
+ * Split already-resolved structured identities into the product layout roles.
+ *
+ * A structured festival is the strongest principal identity, followed by an
+ * explicit organizer. A venue becomes Main only when no festival/organizer
+ * resolved (for example the current MUMOD event). This keeps extra locations
+ * secondary without inventing organizer identity from title or description.
+ */
+export function classifyEventMedallionLayout(
+  resolution: EventMedallionResolution,
+): EventMedallionLayout {
+  if (resolution.identities.length === 0) return { secondary:[] };
+
+  const categoryRank = (item: OrganizerMedallionDefinition): number => {
+    const category = item.category || 'organizer';
+    if (category === 'festival_brand') return 400;
+    if (category === 'festival') return 390;
+    if (category === 'organizer') return 300;
+    return 200;
+  };
+  const ordered = resolution.identities
+    .map((identity, sourceOrder) => ({ identity, sourceOrder }))
+    .sort((left, right) => (
+      categoryRank(right.identity.item) - categoryRank(left.identity.item)
+      || evidenceRank(right.identity.evidence) - evidenceRank(left.identity.evidence)
+      || left.sourceOrder - right.sourceOrder
+      || left.identity.item.slug.localeCompare(right.identity.item.slug)
+    ));
+  const main = ordered[0]?.identity;
+  return {
+    main,
+    secondary:resolution.identities.filter((identity) => identity !== main),
+  };
 }
 
 export function resolveEventMedallions(

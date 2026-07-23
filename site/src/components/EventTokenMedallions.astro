@@ -5,13 +5,16 @@ import festivalMedallions from '../data/festivalMedallions.json';
 import type { PreviewEvent } from '../lib/types';
 import { eventAdmissionLabel, isTicketSoldOut, withBase } from '../lib/events';
 import {
+  classifyEventMedallionLayout,
   resolveEventMedallions,
   type MedallionEvidence,
+  type MedallionIdentityCategory,
   type OrganizerMedallionDefinition,
 } from '../lib/eventMedallions';
 
 interface Props {
   event: PreviewEvent;
+  layout?: 'inline' | 'desktop-slots';
 }
 
 type Token = {
@@ -29,9 +32,11 @@ type Token = {
   tone?: 'green' | 'brown' | 'blue' | 'purple' | 'neutral';
   slug?: string;
   evidence?: MedallionEvidence;
+  identityCategory?: MedallionIdentityCategory;
+  layoutRole?: 'main' | 'secondary';
 };
 
-const { event } = Astro.props;
+const { event, layout = 'inline' } = Astro.props;
 
 function normalize(value: unknown): string {
   return String(value || '').toLowerCase().replace(/<[^>]*>/gu, ' ').replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
@@ -50,6 +55,7 @@ const sourceUrls = Array.from(new Set([...(event.source_urls || []), event.sourc
 const sourceCount = Number.isFinite(event.source_count) && Number(event.source_count) > 0 ? Number(event.source_count) : sourceUrls.length;
 const organizerResolution = resolveEventMedallions(event, [...organizerItems, ...eventPageFestivalItems]);
 const organizers = organizerResolution.identities;
+const identityLayout = classifyEventMedallionLayout(organizerResolution);
 const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
 const admissionLabel = eventAdmissionLabel(event);
 const ticket = event.ticket || {};
@@ -59,6 +65,7 @@ const hasCharity = /благотвор|пожертв|донат/u.test(normaliz
 
 const tokens: Token[] = [];
 organizers.forEach(({ item:organizer, evidence }) => {
+  const layoutRole = identityLayout.main?.item.slug === organizer.slug ? 'main' : 'secondary';
   tokens.push({
     kind: 'organizer',
     key: `organizer:${organizer.slug}`,
@@ -72,6 +79,8 @@ organizers.forEach(({ item:organizer, evidence }) => {
     ring: organizer.ring,
     slug: organizer.slug,
     evidence,
+    identityCategory:organizer.category || 'organizer',
+    layoutRole,
   });
 });
 if (hasMeowAfishaSource && sourceCount > 0 && sourceCount <= 2) {
@@ -86,6 +95,7 @@ if (hasMeowAfishaSource && sourceCount > 0 && sourceCount <= 2) {
     background: '#FFFFFF',
     ring: '#282828',
     slug: 'meow-afisha',
+    layoutRole:'secondary',
   });
 }
 if (event.pushkin_card) {
@@ -99,6 +109,7 @@ if (event.pushkin_card) {
     imageUrl: '/assets/badges/pushkin-card-medallion.webp',
     fallbackImageUrl: '/assets/badges/pushkin-card-medallion.png',
     tone: 'purple',
+    layoutRole:'secondary',
   });
 }
 if (ticket.is_free) {
@@ -109,6 +120,7 @@ if (ticket.is_free) {
     ariaLabel: admissionLabel,
     icon: 'ticket',
     tone: 'green',
+    layoutRole:'secondary',
   });
 } else if (ticket.price_label) {
   tokens.push({
@@ -118,6 +130,7 @@ if (ticket.is_free) {
     ariaLabel: `Стоимость: ${ticket.price_label}`,
     icon: 'ticket',
     tone: 'brown',
+    layoutRole:'secondary',
   });
 } else if (isTicketSoldOut(event)) {
   tokens.push({
@@ -127,6 +140,7 @@ if (ticket.is_free) {
     ariaLabel: 'Билеты закончились',
     icon: 'ticket',
     tone: 'neutral',
+    layoutRole:'secondary',
   });
 }
 if (hasKids) {
@@ -137,6 +151,7 @@ if (hasKids) {
     ariaLabel: 'Подходит детям или семье по данным события',
     icon: 'spark',
     tone: 'blue',
+    layoutRole:'secondary',
   });
 }
 if (hasCharity) {
@@ -147,6 +162,7 @@ if (hasCharity) {
     ariaLabel: 'Благотворительное событие',
     icon: 'spark',
     tone: 'green',
+    layoutRole:'secondary',
   });
 }
 const hasFestivalLogoToken = organizers.some(({ item }) => item.category === 'festival_brand' || item.category === 'festival');
@@ -158,9 +174,25 @@ if (event.festival && !hasFestivalLogoToken && tokens.length < 6) {
     ariaLabel: `Фестиваль: ${event.festival}`,
     icon: 'info',
     tone: 'brown',
+    layoutRole:'secondary',
   });
 }
 const visibleTokens = tokens.slice(0, 6);
+// Admission/audience pills are compact facts rather than medallions. Keep
+// their accepted mobile inline treatment, but do not let them manufacture a
+// desktop InlineSlot when the event has one principal identity only.
+const desktopMedallionTokens = visibleTokens.filter((token) => token.kind !== 'pill');
+const mainToken = layout === 'desktop-slots'
+  ? desktopMedallionTokens.find((token) => token.layoutRole === 'main')
+  : undefined;
+const tokenGroups = layout === 'desktop-slots'
+  ? [
+      ...(mainToken ? [{ slot:'top' as const, tokens:[mainToken] }] : []),
+      ...(desktopMedallionTokens.some((token) => token !== mainToken)
+        ? [{ slot:'inline' as const, tokens:desktopMedallionTokens.filter((token) => token !== mainToken) }]
+        : []),
+    ]
+  : (visibleTokens.length ? [{ slot:'inline' as const, tokens:visibleTokens }] : []);
 
 function tokenStyle(token: Token): string | undefined {
   const parts: string[] = [];
@@ -173,44 +205,55 @@ function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
   return imageUrl.endsWith('.webp') ? (fallbackImageUrl || imageUrl) : imageUrl;
 }
 ---
-{visibleTokens.length > 0 && (
-  <section
-    class="event-token-section"
-    aria-label="Быстрые признаки события"
-    data-identity-resolution={organizerResolution.failClosedReason || 'resolved'}
-    data-identity-conflict={organizerResolution.conflictEvidence?.join('|')}
+{tokenGroups.length > 0 && (
+  <div
+    class:list={['event-token-layout', `event-token-layout--${layout}`]}
+    data-medallion-layout={layout}
+    data-main-medallion-slug={mainToken?.slug}
   >
-    <ul class="event-token-row" role="list">
-      {visibleTokens.map((token) => (
-        <li
-          class={`event-token event-token--${token.kind} event-token--${token.tone || 'custom'} ${token.slug ? `event-token--${token.slug}` : ''}`}
-          style={tokenStyle(token)}
-          data-medallion-evidence-field={token.evidence?.field}
-          data-medallion-evidence-alias={token.evidence?.alias}
-          data-medallion-evidence-match={token.evidence?.match}
-        >
-          {(token.kind === 'organizer' || token.kind === 'source') && token.imageUrl ? (
-            <span class="event-token__circle" aria-label={token.ariaLabel} title={token.title || token.label}>
-              <picture>
-                {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
-                <img src={withBase(primaryImageSrc(token.imageUrl, token.fallbackImageUrl))} alt="" loading="lazy" decoding="async" />
-              </picture>
-            </span>
-          ) : token.kind === 'pushkin' && token.imageUrl ? (
-            <span class="event-token__pushkin-frame" aria-label={token.ariaLabel} title={token.label}>
-              <picture>
-                {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
-                <img class="event-token__pushkin-composite" src={withBase(primaryImageSrc(token.imageUrl, token.fallbackImageUrl))} alt="" loading="lazy" decoding="async" />
-              </picture>
-            </span>
-          ) : (
-            <span class="event-token__pill" aria-label={token.ariaLabel} title={token.label}>
-              {token.icon && <Icon name={token.icon} />}
-              <span>{token.label}</span>
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
-  </section>
+    {tokenGroups.map((group) => (
+      <section
+        class:list={['event-token-section', `event-token-section--${group.slot}`]}
+        aria-label={group.slot === 'top' ? 'Главный организатор или фестиваль' : 'Быстрые признаки события'}
+        data-medallion-slot={group.slot}
+        data-identity-resolution={organizerResolution.failClosedReason || 'resolved'}
+        data-identity-conflict={organizerResolution.conflictEvidence?.join('|')}
+      >
+        <ul class="event-token-row" role="list">
+          {group.tokens.map((token) => (
+            <li
+              class={`event-token event-token--${token.kind} event-token--${token.tone || 'custom'} ${token.slug ? `event-token--${token.slug}` : ''}`}
+              style={tokenStyle(token)}
+              data-medallion-role={token.layoutRole || 'secondary'}
+              data-medallion-category={token.identityCategory}
+              data-medallion-evidence-field={token.evidence?.field}
+              data-medallion-evidence-alias={token.evidence?.alias}
+              data-medallion-evidence-match={token.evidence?.match}
+            >
+              {(token.kind === 'organizer' || token.kind === 'source') && token.imageUrl ? (
+                <span class="event-token__circle" aria-label={token.ariaLabel} title={token.title || token.label}>
+                  <picture>
+                    {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
+                    <img src={withBase(primaryImageSrc(token.imageUrl, token.fallbackImageUrl))} alt="" loading="lazy" decoding="async" />
+                  </picture>
+                </span>
+              ) : token.kind === 'pushkin' && token.imageUrl ? (
+                <span class="event-token__pushkin-frame" aria-label={token.ariaLabel} title={token.label}>
+                  <picture>
+                    {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
+                    <img class="event-token__pushkin-composite" src={withBase(primaryImageSrc(token.imageUrl, token.fallbackImageUrl))} alt="" loading="lazy" decoding="async" />
+                  </picture>
+                </span>
+              ) : (
+                <span class="event-token__pill" aria-label={token.ariaLabel} title={token.label}>
+                  {token.icon && <Icon name={token.icon} />}
+                  <span>{token.label}</span>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </div>
 )}
