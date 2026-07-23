@@ -11,7 +11,8 @@
 - Added transport-scoped Smart Update duration forecasting: eligible
   single-day rail/bus/KAUP events persist a separate nullable forecast only
   when source timing is absent; static generation only exports it and never
-  calls a duration provider.
+  calls a duration provider; desktop/mobile schedules and their linked ICS
+  files consume one shared projection without stale fallback trips.
 - Added a reference-adapted clubs catalog with one provenance-backed Game Vibes
   cover, deterministic fallback art and geometry-scoped focus/arrow/Home/End/
   Enter keyboard navigation.
@@ -20,8 +21,8 @@
 - Restored the complete static medallion inventory: 27 organizer/venue entries, 10 festival identities plus the Kaup venue brand, and the deterministic free-admission sign, including Museum of Resort Fashion and Greza Khutor.
 - Added the 2026-07-23 noindex unified-correction candidate contract: selective
   semantic breadcrumbs on deep pages, a fresh current-club projection, ICAE
-  Kaliningrad on the six-logo partner board, and a build-time key-driven
-  duration estimate that produces a practical same-day rail shortlist for
+  Kaliningrad on the six-logo partner board, and a persisted Smart Update
+  duration forecast that produces a practical same-day rail shortlist for
   event `6529` without exposing model/service metadata in public copy.
 
 - Added one immutable, noindex unified static-site review prototype on fresh

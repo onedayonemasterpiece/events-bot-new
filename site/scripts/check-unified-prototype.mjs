@@ -178,12 +178,14 @@ const forbiddenDurationServiceCopy = [
   'confidence',
   'прогноз ИИ',
 ];
-if (!event6529Html.includes('data-event-end-basis="llm_estimated"')
+const forecastBasisCount = (event6529Html.match(/data-event-end-basis="forecast"/gu) || []).length;
+if (forecastBasisCount !== 2
+  || event6529Html.includes('data-event-end-basis="schedule_cutoff"')
+  || !event6529Html.includes('17:50')
   || !event6529Html.includes('18:56')
-  || !event6529Html.includes('19:43')
   || event6529Html.includes('06:42')
   || forbiddenDurationServiceCopy.some((copy) => event6529Html.includes(copy))) {
-  throw new Error('6529 must show the clean same-day estimated return shortlist without model/service copy or a next-morning train');
+  throw new Error('6529 must show the same clean Smart Update forecast on desktop and mobile, without fallback/model copy/next-morning trains');
 }
 if (!event6529Html.includes('data-keyboard-event-navigation-mounted')) {
   throw new Error('6529 named preview page must mount the reviewed keyboard navigation');

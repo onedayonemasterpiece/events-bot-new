@@ -37,7 +37,9 @@ The static exporter only validates and copies the persisted nullable field.
 Astro performs no provider request. Transport projects the forecast only when
 no explicit end/source duration exists and marks the projection internally as
 `forecast`; without either source timing or forecast it keeps the safe
-same-day cutoff behavior. Public copy says only that the end time is
+same-day cutoff behavior. Desktop and mobile consume that same projection, and
+the transport ICS generator emits exactly the trip files linked by those
+responsive surfaces rather than retaining raw-fallback orphans. Public copy says only that the end time is
 approximate and should be checked with the organizer. Model/provider names,
 confidence, prompts and service diagnostics are forbidden in HTML.
 

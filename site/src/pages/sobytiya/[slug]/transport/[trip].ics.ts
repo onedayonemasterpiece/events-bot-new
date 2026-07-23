@@ -21,21 +21,14 @@ interface TransportIcsProps {
 
 export function getStaticPaths() {
   return getEvents().flatMap((event) => {
-    // Desktop can recover a strictly source-labelled duration that has not yet
-    // reached the export. Its return shortlist can therefore differ from the
-    // unchanged mobile shortlist. Generate the union so every rendered rail
-    // calendar link resolves, while keeping one canonical file per trip key.
-    const variants = [event, desktopEventWithExplicitEnd(event)];
-    const paths = new Map<string, ReturnType<typeof pathForTrip>>();
-    for (const variant of variants) {
-      const suggestion = getEventTransportSuggestion(variant);
-      if (!suggestion) continue;
-      for (const { direction, train } of eventTransportCalendarEntries(suggestion)) {
-        const trip = eventTransportTripKey(suggestion, direction, train);
-        paths.set(trip, pathForTrip(variant, suggestion, direction, train));
-      }
-    }
-    return [...paths.values()];
+    // Responsive event pages share one persisted Smart Update duration
+    // projection, so generate exactly the trips users can actually select.
+    // Keeping the raw fallback union would leave an unlinked stale ICS file.
+    const transportEvent = desktopEventWithExplicitEnd(event);
+    const suggestion = getEventTransportSuggestion(transportEvent);
+    if (!suggestion) return [];
+    return eventTransportCalendarEntries(suggestion).map(({ direction, train }) =>
+      pathForTrip(transportEvent, suggestion, direction, train));
   });
 }
 

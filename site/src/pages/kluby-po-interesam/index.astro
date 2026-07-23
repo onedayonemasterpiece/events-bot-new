@@ -38,7 +38,7 @@ const structuredData = [
       <header class="club-intro section-card">
         <div class="section-card__inner">
           <p class="eyebrow">Встречаться вокруг общего дела</p>
-          <h1><span>Сообщества региона</span> / Клубы по интересам</h1>
+          <h1>Клубы по интересам</h1>
           <p class="lead">Публичные сообщества Калининградской области, у которых подтверждено несколько встреч в разные даты. Площадка или похожее название сами по себе клубом не считаются.</p>
           <p class="club-intro__count" aria-live="polite">
             <span aria-hidden="true">▥</span>{clubs.length ? `В каталоге: ${clubs.length}` : 'Подтверждённых клубов пока нет'}
@@ -84,7 +84,6 @@ const structuredData = [
   }
   .club-intro .section-card__inner { display:grid; justify-items:center; padding:clamp(2.25rem,6vw,4.6rem) clamp(1rem,5vw,4rem); text-align:center; }
   .club-intro h1 { max-width:22ch; margin:.1rem 0 .8rem; font-size:clamp(2rem,4.4vw,3.65rem); line-height:1.05; letter-spacing:-.035em; text-wrap:balance; }
-  .club-intro h1 span { text-transform:uppercase; }
   .club-intro .lead { max-width:66ch; margin:0; color:#3d3935; font-size:clamp(1rem,1.6vw,1.18rem); line-height:1.55; }
   .club-intro__count { width:max-content; max-width:100%; display:inline-flex; align-items:center; gap:.45rem; margin:1.35rem 0 0; padding:.48rem .85rem; border:1px solid rgba(255,255,255,.88); border-radius:999px; background:rgba(255,255,255,.62); color:#263f43; box-shadow:0 10px 26px rgba(51,67,68,.13); font-weight:850; }
   .club-intro__count span { color:#6b7e80; }

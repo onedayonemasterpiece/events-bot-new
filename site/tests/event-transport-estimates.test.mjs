@@ -7,6 +7,7 @@ const helperUrl = new URL('../src/lib/desktopEventTransport.ts', import.meta.url
 const transportUrl = new URL('../src/lib/eventTransport.ts', import.meta.url);
 const schedulesUrl = new URL('../src/data/transportSchedules.json', import.meta.url);
 const componentUrl = new URL('../src/components/EventTransportSchedule.astro', import.meta.url);
+const transportIcsRouteUrl = new URL('../src/pages/sobytiya/[slug]/transport/[trip].ics.ts', import.meta.url);
 
 async function loadTypeScriptModule(url, replacements = []) {
   let source = await fs.readFile(url, 'utf8');
@@ -102,4 +103,11 @@ test('public transport UI is neutral and contains no provider/service diagnostic
   assert.match(source, /поезд на следующий день не предлагаем/u);
   assert.doesNotMatch(source, /Gemini|Gemma|модел[ьи]|provider|прогноз ИИ|служебн/iu);
   assert.doesNotMatch(source, /data-duration-estimate|data-predicted-event-end/iu);
+});
+
+test('transport ICS paths use the same single responsive forecast projection', async () => {
+  const source = await fs.readFile(transportIcsRouteUrl, 'utf8');
+  assert.match(source, /const transportEvent = desktopEventWithExplicitEnd\(event\)/u);
+  assert.match(source, /getEventTransportSuggestion\(transportEvent\)/u);
+  assert.doesNotMatch(source, /const variants = \[event,/u);
 });

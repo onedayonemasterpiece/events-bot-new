@@ -127,8 +127,20 @@ test('desktop medallion wrapper exposes venue ring and shadow without changing i
 
   assert.match(desktop, /\.desktop-prototype__medallions \{ min-height:0; overflow:visible; \}/u);
   assert.match(desktop, /\.desktop-prototype__medallions :global\(\.event-token-row\) \{ gap:\.55rem; overflow:visible;/u);
-  assert.match(medallions, /resolveEventMedallions\(event, manifest\.items \|\| \[\]\)/u);
+  assert.match(medallions, /resolveEventMedallions\(event, \[\.\.\.organizerItems, \.\.\.eventPageFestivalItems\]\)/u);
   assert.match(medallions, /data-identity-resolution=\{organizerResolution\.failClosedReason \|\| 'resolved'\}/u);
+});
+
+test('desktop and mobile transport consume one persisted Smart Update duration forecast', async () => {
+  const route = await read('src/pages/sobytiya/[slug].astro');
+  const built = await readBuiltEvent(6529);
+
+  assert.match(route, /const transportEvent = desktopEventWithExplicitEnd\(event\)/u);
+  assert.match(route, /<EventTransportSchedule event=\{transportEvent\} \/>/u);
+  assert.match(route, /<EventBusTransportSchedule event=\{transportEvent\} \/>/u);
+  assert.match(route, /<KaupTransportSchedule event=\{transportEvent\} compact \/>/u);
+  assert.equal((built.match(/data-event-end-basis="forecast"/gu) || []).length, 2);
+  assert.doesNotMatch(built, /data-event-end-basis="schedule_cutoff"/u);
 });
 
 test('desktop telephone remains a branded reveal-and-copy CTA', async () => {

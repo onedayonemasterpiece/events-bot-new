@@ -59,7 +59,7 @@ Status is `used` when at least one current event resolves the slug, `unused` whe
 
 - **Pushkin Card:** event-detail runtime is the composite badge and Telegram uses the same raster inventory; 30 current and 432 historical canonical events have `pushkin_card=true`.
 - **Free listing:** 38 current events use the event-detail free-admission pill. The standalone `free-listing-medallion.svg` is a lab/listing specimen and is not sent to Telegram.
-- **MEOW:** 9 current events reference MEOW in the primary database URL columns. Final event-detail eligibility additionally requires exported `source_count <= 2`; checked preview event 6911 correctly rendered no MEOW token. The actual Telegram resolver returned `meow-afisha` zero times.
+- **MEOW:** 9 current events reference MEOW in the primary database URL columns. Final event-detail eligibility additionally requires exported `source_count <= 2`; integrated preview event 7040 renders the source token at count 2, while event 6997 correctly renders none at count 6. The actual Telegram resolver returned `meow-afisha` zero times for the audited production snapshot.
 - **RZD Lastochka:** lab-only transport specimen. It has no event resolver eligibility and cannot be inferred from city/venue text.
 
 ## Reproduction

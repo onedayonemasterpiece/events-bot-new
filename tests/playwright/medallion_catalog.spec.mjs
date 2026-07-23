@@ -91,6 +91,7 @@ for (const viewport of [
       [5756, '/assets/organizers/dramteatr39.svg'],
       [6796, '/assets/festivals/kaup.svg'],
       [698, '/assets/badges/pushkin-card-medallion.webp'],
+      [7040, '/assets/sources/meow-afisha.webp'],
     ]) {
       const event = eventById.get(eventId);
       expect(event, `preview event ${eventId}`).toBeTruthy();
@@ -120,7 +121,7 @@ for (const viewport of [
       expect(width[0], `horizontal overflow on ${eventId}`).toBeLessThanOrEqual(width[1] + 1);
     }
 
-    const meow = eventById.get(6911);
+    const meow = eventById.get(6997);
     await page.goto(`${baseURL}/sobytiya/${meow.slug}/`, { waitUntil:'networkidle' });
     await expect(page.locator('.event-token--meow-afisha')).toHaveCount(0);
   });

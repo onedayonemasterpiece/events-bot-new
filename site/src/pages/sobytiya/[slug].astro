@@ -18,6 +18,7 @@ import { eventImageUrl } from '../../lib/assets';
 import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-overrides.json';
 import type { EventImageDerivative, PreviewEvent } from '../../lib/types';
 import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
+import { desktopEventWithExplicitEnd } from '../../lib/desktopEventTransport';
 import { eventBreadcrumbParents } from '../../lib/breadcrumbs';
 import { IS_PRODUCTION_FAMILY, PREVIEW_BUILD_ID, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
@@ -89,6 +90,11 @@ const desktopEvent: PreviewEvent = Object.keys(desktopThumbnailOverrides).length
         : ({ ...asset, thumbnail_sources:desktopThumbnailOverrides[String(index)] || asset.thumbnail_sources })),
     }
   : event;
+// Both responsive presentations must consume the same persisted Smart Update
+// duration projection. Otherwise the desktop schedule can offer realistic
+// same-day returns while the mobile schedule silently falls back to closing
+// time and suggests an implausibly late train.
+const transportEvent = desktopEventWithExplicitEnd(event);
 const desktopPresentation = buildDesktopEventPresentation(desktopEvent);
 // Immutable noindex review builds are real interactive acceptance artifacts,
 // not inert screenshots. Keep the production rollout flag, but mount the
@@ -162,9 +168,9 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
             <div class="prose" set:html={event.description_html} />
             <h2 style="margin-top: 1.2rem;">Коротко</h2>
             <EventFacts event={event} />
-            <EventTransportSchedule event={event} />
-            <EventBusTransportSchedule event={event} />
-            <KaupTransportSchedule event={event} compact />
+            <EventTransportSchedule event={transportEvent} />
+            <EventBusTransportSchedule event={transportEvent} />
+            <KaupTransportSchedule event={transportEvent} compact />
             {descriptionMeta.length > 0 && <p class="event-description-meta" data-nosnippet>{descriptionMeta.join(' · ')}</p>}
           </div>
           <p class="event-source-gate event-source-gate--section"><Icon name="lock" /> <span>Все источники, упоминания и расширенная статистика события будут доступны зарегистрированным пользователям.</span></p>
