@@ -82,7 +82,7 @@ lanes:
     branch: agent/static-unified-r2/duration-api
     worktree: /home/dev/.codex/worktrees/events-bot-new/static-unified-r2-duration-api
     writable_files:
-      - site/scripts/**
+      - site/scripts/*duration*
       - site/src/data/event-duration-estimates.json
       - site/src/lib/eventTransport.ts
       - site/src/components/EventTransportSchedule.astro
