@@ -1,0 +1,144 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: 68576d5b70f57164c00386b05cff126586c3f700
+base_branch: feature/rzd-lastochka-medallion-20260723
+integration_branch: integration/medallion-duration-desktop-r3-20260723
+global_constraints:
+  - do not touch the dirty primary checkout
+  - no production promotion; publish only an immutable noindex preview
+  - preserve fail-closed medallion matching and Unicode boundaries
+  - no production authentication bypass
+  - no OpenAI paid image generation
+  - canonical docs and CHANGELOG are integration-owned
+verification_owner: INT
+stop_conditions:
+  - dirty worker baseline
+  - schema change lacks migration/backward compatibility
+  - requested control commit cannot be reproduced
+lanes:
+  - id: L01
+    role: worker
+    effort: high
+    requirement_ids: [R01]
+    target: Smart Update transport-scoped duration forecast
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/r3-duration-forecast/L01
+    worktree: /home/dev/.codex/worktrees/events-bot-new/r3-duration-forecast
+    writable_files:
+      - smart_event_update.py
+      - models.py
+      - db.py
+      - site/src/lib/eventTransport.ts
+      - site/src/data/events.ts
+      - tests/
+      - site/src/lib/*.test.*
+      - .codex/lanes/L01/RESULTS.md
+    forbidden_files: [CHANGELOG.md, docs/]
+    expected_output: committed implementation and targeted tests
+    verification_scope: targeted
+    status: planned
+  - id: L02
+    role: worker
+    effort: high
+    requirement_ids: [R02, R03, R04]
+    target: full medallion usage audit, repairs and lab verification
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/r3-medallion-audit/L02
+    worktree: /home/dev/.codex/worktrees/events-bot-new/r3-medallion-audit
+    writable_files:
+      - site/src/data/*Medallions.json
+      - site/src/lib/eventMedallions.ts
+      - site/src/components/EventTokenMedallions.astro
+      - site/src/pages/lab/medallions/index.astro
+      - site/public/assets/organizers/
+      - site/public/assets/festivals/
+      - site/src/assets/organizers/source/
+      - site/src/assets/festivals/source/
+      - scripts/audit_event_medallions.*
+      - site/src/lib/*medallion*.test.*
+      - tests/playwright/*medallion*
+      - artifacts/codex/
+      - .codex/lanes/L02/RESULTS.md
+    forbidden_files: [CHANGELOG.md, docs/features/static-site-pages/event-token-medallions.md]
+    expected_output: committed fixes plus full generated audit artifact and browser evidence
+    verification_scope: full_local
+    status: planned
+  - id: L03
+    role: worker
+    effort: high
+    requirement_ids: [R06, R07]
+    target: border-preserving desktop leather and no-field card media
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/r3-desktop-media/L03
+    worktree: /home/dev/.codex/worktrees/events-bot-new/r3-desktop-media
+    writable_files:
+      - site/src/layouts/EventLayout.astro
+      - site/src/components/EventCard.astro
+      - site/src/lib/eventCard*
+      - site/public/assets/ui/
+      - site/src/assets/ui/
+      - site/tests/
+      - tests/
+      - .codex/lanes/L03/RESULTS.md
+    forbidden_files: [CHANGELOG.md, docs/]
+    expected_output: committed UI/assets/regressions with screenshots
+    verification_scope: full_local
+    status: planned
+  - id: L04
+    role: worker
+    effort: high
+    requirement_ids: [R08, R09]
+    target: clubs hotkeys and source-grounded visual cards
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/r3-clubs/L04
+    worktree: /home/dev/.codex/worktrees/events-bot-new/r3-clubs
+    writable_files:
+      - site/src/pages/kluby-po-interesam/
+      - site/src/components/*Club*
+      - site/src/data/*club*
+      - site/public/assets/clubs/
+      - site/src/assets/clubs/
+      - site/src/lib/*keyboard*
+      - site/tests/
+      - tests/
+      - .codex/lanes/L04/RESULTS.md
+    forbidden_files: [CHANGELOG.md, docs/]
+    expected_output: committed responsive club prototype and keyboard tests
+    verification_scope: full_local
+    status: planned
+  - id: L05
+    role: worker
+    effort: high
+    requirement_ids: [R05]
+    target: controlled authorized Search smoke
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/r3-search-smoke/L05
+    worktree: /home/dev/.codex/worktrees/events-bot-new/r3-search-smoke
+    writable_files:
+      - scripts/*search*
+      - tests/playwright/*search*
+      - site/tests/*search*
+      - .codex/lanes/L05/RESULTS.md
+    forbidden_files: [CHANGELOG.md, docs/, site/src/pages/poisk/]
+    expected_output: committed test-only acceptance path and evidence
+    verification_scope: targeted
+    status: planned
+  - id: INT
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R10, R11]
+    target: selected donor integration, docs, release gates, publish and consultant review
+    depends_on: [L01, L02, L03, L04, L05]
+    execution_mode: serial_after_dependency
+    branch: integration/medallion-duration-desktop-r3-20260723
+    worktree: /home/dev/.codex/worktrees/events-bot-new/integration-medallion-duration-desktop-r3
+    writable_files: ["*"]
+    forbidden_files: []
+    expected_output: clean pushed integration branch, immutable preview and closure report
+    verification_scope: full_local
+    status: planned
