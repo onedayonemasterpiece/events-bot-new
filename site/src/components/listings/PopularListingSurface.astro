@@ -14,6 +14,8 @@ import PopularMobileAdaptiveRows from './PopularMobileAdaptiveRows.astro';
 import ListingMobileDensitySwitch from './ListingMobileDensitySwitch.astro';
 import PopularMobileGroupContext from './PopularMobileGroupContext.astro';
 import PopularPersonalizedRow from './PopularPersonalizedRow.astro';
+import MobileListingRailSurface from './MobileListingRailSurface.astro';
+import { collapseOccurrenceCards } from '../../lib/eventOccurrences';
 
 interface Props { events: PreviewEvent[]; desktopEvents: PreviewEvent[]; }
 const events = deduplicateListingEvents(Astro.props.events);
@@ -25,6 +27,7 @@ const desktopPersonalizationCandidates = buildPopularDesktopPersonalizationCandi
   30,
 );
 const visibleEvents = groups.flatMap((group) => group.events);
+const mobileFamilyEvents = collapseOccurrenceCards(visibleEvents, 'per-family');
 const cities = [...new Set(visibleEvents.map((event) => event.city || 'Калининградская область'))]
   .map((name) => ({ name, count: visibleEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
@@ -44,9 +47,12 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
       <PopularPersonalizedRow events={desktopPersonalizationCandidates} />
     </PopularBehaviorRows>
   </div>
-  <PopularMobileBehaviorRows groups={groups} />
-  <PopularMobileAdaptiveRows groups={groups} />
-  <PopularMobileGroupContext />
+  <MobileListingRailSurface sections={[{ id:'popular', events:mobileFamilyEvents }]} occurrenceMode="per-family" />
+  <div class="ke-popular-mobile-existing" aria-hidden="true" inert>
+    <PopularMobileBehaviorRows groups={groups} />
+    <PopularMobileAdaptiveRows groups={groups} />
+    <PopularMobileGroupContext />
+  </div>
   <div class="ke-listing-empty" data-listing-no-events hidden={visibleEvents.length > 0}>
     <strong>Пока нет событий с подтверждённой активностью</strong>
   </div>

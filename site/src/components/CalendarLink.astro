@@ -1,10 +1,10 @@
 ---
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventCalendarHref, eventCalendarStateExpiryDay, isCalendarEligible } from '../lib/events';
-interface Props { event: PreviewEvent; className?: string; label?: string; compact?: boolean }
-const { event, className = 'secondary-button', label = 'В календарь', compact = false } = Astro.props;
-const canAddToCalendar = isCalendarEligible(event);
+import { eventCalendarHref, eventCalendarStateExpiryDay, isCalendarEligible, isEventDetailCalendarEligible } from '../lib/events';
+interface Props { event: PreviewEvent; className?: string; label?: string; compact?: boolean; surface?: 'listing' | 'detail' }
+const { event, className = 'secondary-button', label = 'В календарь', compact = false, surface = 'detail' } = Astro.props;
+const canAddToCalendar = surface === 'detail' ? isEventDetailCalendarEligible(event) : isCalendarEligible(event);
 const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 ---
 {canAddToCalendar && (

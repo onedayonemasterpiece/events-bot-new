@@ -526,7 +526,7 @@ const descriptionHtml = (event.description_html || '')
             <h1 id={`clean-event-title-${event.id}`} data-event-title>{event.title}</h1>
             {candidate === 'editorial' && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
             <p class="desktop-prototype__place"><Icon name="pin" /><span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span></p>
-            <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} layout="desktop-slots" /></div>
+            <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} layout="desktop-slots" allowTopSlot={candidate === 'editorial' && mediaPolicy === 'non-ocr'} /></div>
           </div>
 
           {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--inline" family="split" />}
@@ -1779,7 +1779,8 @@ const descriptionHtml = (event.description_html || '')
   .desktop-prototype__medallions :global(.event-token--festival),
   .desktop-prototype__medallions :global(.event-token--source),
   .desktop-prototype__medallions :global(.event-token--program),
-  .desktop-prototype__medallions :global(.event-token--pushkin) { --token-size:clamp(72px,7vw,94px); }
+  .desktop-prototype__medallions :global(.event-token--pushkin),
+  .desktop-prototype__medallions :global(.event-token--badge) { --token-size:clamp(72px,7vw,94px); }
   .desktop-prototype__action { z-index:3; display:grid; align-content:start; gap:clamp(.65rem,1.6vh,1rem); padding:clamp(1rem,2.2vw,1.4rem); color:#fffaf2; background:#292521; }
   .desktop-prototype__action>p { display:grid; gap:.06rem; margin:0; }
   .desktop-prototype__action>p span { color:#d7c9bc; font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
@@ -1909,7 +1910,8 @@ const descriptionHtml = (event.description_html || '')
     .desktop-prototype__medallions :global(.event-token--festival),
     .desktop-prototype__medallions :global(.event-token--source),
     .desktop-prototype__medallions :global(.event-token--program),
-    .desktop-prototype__medallions :global(.event-token--pushkin) { --token-size:72px; }
+    .desktop-prototype__medallions :global(.event-token--pushkin),
+    .desktop-prototype__medallions :global(.event-token--badge) { --token-size:72px; }
     .desktop-prototype__medallions :global(.event-token__pill) { display:none; }
     .desktop-prototype__action { gap:.5rem; padding:.85rem; }
     :global(.desktop-prototype__primary-action) { min-height:50px; }

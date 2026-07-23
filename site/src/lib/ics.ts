@@ -27,6 +27,13 @@ function formatDateOnly(date: string): string {
   return date.replace(/-/gu, '');
 }
 
+function nextDateOnly(date: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(date);
+  if (!match) throw new Error(`Invalid date for ICS: ${date}`);
+  const value = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1));
+  return `${value.getUTCFullYear()}${pad(value.getUTCMonth() + 1)}${pad(value.getUTCDate())}`;
+}
+
 function foldLine(line: string): string {
   const limit = 73;
   let out = '';
@@ -57,7 +64,14 @@ export function buildIcs(event: PreviewEvent): string {
     `DTSTAMP:${stamp}`,
   ];
 
-  if (event.starts_at) {
+  const isMultiDayRange = Boolean(event.end_date && event.end_date > event.start_date);
+  if (isMultiDayRange) {
+    // A public exhibition/date span describes availability across whole days,
+    // not one continuous multi-week timed appointment. RFC 5545 DTEND is
+    // exclusive, hence the day after the public end date.
+    lines.push(`DTSTART;VALUE=DATE:${formatDateOnly(event.start_date)}`);
+    lines.push(`DTEND;VALUE=DATE:${nextDateOnly(event.end_date!)}`);
+  } else if (event.starts_at) {
     lines.push(`DTSTART:${formatUtcDateTime(event.starts_at)}`);
     if (event.end_at && event.time_range_end) {
       lines.push(`DTEND:${formatUtcDateTime(event.end_at)}`);

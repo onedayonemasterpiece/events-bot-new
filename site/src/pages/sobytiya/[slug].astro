@@ -18,7 +18,7 @@ import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-ov
 import type { EventImageDerivative, PreviewEvent } from '../../lib/types';
 import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
 import { desktopEventWithExplicitEnd } from '../../lib/desktopEventTransport';
-import { IS_PRODUCTION_FAMILY, PREVIEW_BUILD_ID, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { IS_PRODUCTION_FAMILY, PREVIEW_BUILD_ID, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isEventDetailCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -51,9 +51,9 @@ const ogImageType = ogImage?.toLowerCase().includes('.webp') ? 'image/webp' : og
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
 const stickyDateLabel = occurrencePresentation.compactLabel;
-const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
+const stickyCalendarPrimary = isEventDetailCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;
-const stickyLabel = stickyCalendarPrimary ? 'В календарь' : ctaLabel;
+const stickyLabel = stickyCalendarPrimary ? 'Добавить в календарь' : ctaLabel;
 const calendarExpiryDay = eventCalendarStateExpiryDay(event);
 const stickyIsExternal = Boolean(stickyHref && stickyHref.startsWith('http'));
 const stickyIsTelephone = isTelephoneUrl(stickyHref);

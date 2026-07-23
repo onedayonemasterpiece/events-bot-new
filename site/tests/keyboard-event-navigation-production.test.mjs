@@ -55,6 +55,9 @@ test('prototype and production share the exact extracted V7 router', async () =>
   assert.match(router, /gallery_close_down/u);
   assert.match(router, /downGesture\?\.released && event\.timeStamp - downGesture\.at <= 430/u);
   assert.match(router, /\['KeyL', 'KeyK', 'KeyS', 'Enter'\]\.includes\(event\.code\)[\s\S]*bodyRecoveryArmed && bodyTarget/u);
+  assert.match(router, /\['KeyC', 'KeyP'\]\.includes\(event\.code\)[\s\S]*bodyTarget[\s\S]*coldBodyHeroEntryArmed \|\| bodyRecoveryArmed \|\| galleryHandoffArmed/u);
+  assert.match(router, /if \(event\.code === 'KeyC'\) void copyDescription\(\{ keyboard:true \}\);[\s\S]*else void copyPoster\(\{ keyboard:true \}\)/u);
+  assert.doesNotMatch(router, /event\.key === ['"][сз]['"]/u, 'layout independence must stay on physical code, not Cyrillic key aliases');
   assert.match(router, /let coldBodyHeroEntryArmed = true/u);
   assert.match(router, /inertCurrentEventPointer[\s\S]*bodyRecoveryArmed = true/u);
   assert.match(router, /\['KeyL', 'KeyK', 'KeyS'\]\.includes\(event\.code\)/u);

@@ -91,6 +91,12 @@ for (const route of listingRoutes) {
     if (!normalizedCss.includes(contract)) throw new Error(`Listing route ${route} misses compiled desktop geometry contract ${contract}`);
   }
   if (!html.includes('class="ke-listing-page')) throw new Error(`Listing route ${route} misses the shared listing-page root`);
+  if (!html.includes('data-mobile-listing-rails') || !html.includes('data-mobile-listing-row')) {
+    throw new Error(`Listing route ${route} misses the tracked accepted mobile event rail`);
+  }
+  if (!normalizedCss.includes('@media(max-width:720px)') || !normalizedCss.includes('.ke-mobile-rail-row{') || !normalizedCss.includes('height:112px')) {
+    throw new Error(`Listing route ${route} misses the compiled 112px mobile rail geometry`);
+  }
 }
 const eventLayoutSource = readFileSync(join(siteDir, 'src/layouts/EventLayout.astro'), 'utf8');
 for (const headerContract of [

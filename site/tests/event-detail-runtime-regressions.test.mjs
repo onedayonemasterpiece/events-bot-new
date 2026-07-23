@@ -90,13 +90,13 @@ test('mobile event actions preserve a readable wide Share label', async () => {
   assert.doesNotMatch(mobileStyles, /\.event-hero__actions > \.secondary-button > span:not\(\.feedback-count\) \{ display: none; \}/u);
 });
 
-test('mobile free admission uses the dedicated medallion without creating a desktop fact slot', async () => {
+test('free admission uses the dedicated inline medallion on mobile and desktop', async () => {
   const medallions = await read('src/components/EventTokenMedallions.astro');
   assert.match(medallions, /kind: 'badge',[\s\S]*key: 'free-admission'[\s\S]*imageUrl: '\/assets\/badges\/free-listing-medallion\.svg'/u);
   assert.match(medallions, /ariaLabel: 'Бесплатное событие: 0 рублей'/u);
   assert.match(medallions, /admissionBadge && !tokens\.slice\(0, 6\)\.includes\(admissionBadge\)/u);
   assert.match(medallions, /const desktopMedallionTokens = visibleTokens\.filter\(\(token\) => \([\s\S]*token\.kind === 'organizer'[\s\S]*token\.kind === 'source'[\s\S]*token\.kind === 'pushkin'/u);
-  assert.doesNotMatch(medallions, /desktopMedallionTokens[\s\S]{0,180}token\.kind === 'badge'/u);
+  assert.match(medallions, /desktopMedallionTokens[\s\S]{0,260}token\.kind === 'badge'/u);
 });
 
 test('dynamic recommendation media reserves geometry through load and failure', async () => {
@@ -154,13 +154,14 @@ test('desktop event chrome renders explicit Main and Secondary medallion slots',
   const medallions = await read('src/components/EventTokenMedallions.astro');
   const resolver = await read('src/lib/eventMedallions.ts');
 
-  assert.match(desktop, /<EventTokenMedallions event=\{event\} layout="desktop-slots" \/>/u);
+  assert.match(desktop, /<EventTokenMedallions event=\{event\} layout="desktop-slots" allowTopSlot=\{candidate === 'editorial' && mediaPolicy === 'non-ocr'\} \/>/u);
   assert.match(medallions, /class:list=\{\['event-token-section', `event-token-section--\$\{group\.slot\}`\]\}/u);
   assert.match(medallions, /data-medallion-slot=\{group\.slot\}/u);
   assert.match(medallions, /data-medallion-role=\{token\.layoutRole \|\| 'secondary'\}/u);
-  assert.match(medallions, /data-main-medallion-slug=\{mainToken\?\.slug\}/u);
+  assert.match(medallions, /data-main-medallion-slug=\{resolvedMainToken\?\.slug\}/u);
   assert.match(medallions, /const desktopMedallionTokens = visibleTokens\.filter\(\(token\) => \([\s\S]*token\.kind === 'organizer'[\s\S]*token\.kind === 'source'[\s\S]*token\.kind === 'pushkin'/u);
-  assert.doesNotMatch(medallions, /desktopMedallionTokens[\s\S]{0,180}token\.kind === 'badge'/u);
+  assert.match(medallions, /desktopMedallionTokens[\s\S]{0,260}token\.kind === 'badge'/u);
+  assert.match(medallions, /const mainToken = allowTopSlot \? resolvedMainToken : undefined/u);
   assert.match(resolver, /export function classifyEventMedallionLayout/u);
   assert.match(resolver, /if \(category === 'festival_brand'\) return 400/u);
   assert.match(resolver, /if \(category === 'organizer'\) return 300/u);
@@ -319,7 +320,7 @@ test('secret candidate keeps expiry-proof Split and Editorial CTA geometry fixtu
   assert.match(secretChecker, /data-action-layout="stacked"/u);
   assert.match(browserGate, /lab\/event-desktop\/examples\/cta-phone-invariant.*split/u);
   assert.match(browserGate, /lab\/event-desktop\/examples\/cta-registration-invariant.*split.*Зарегистрироваться/u);
-  assert.match(browserGate, /lab\/event-desktop\/examples\/cta-free-calendar-invariant.*split.*В календарь/u);
+  assert.match(browserGate, /lab\/event-desktop\/examples\/cta-free-calendar-invariant.*split.*Добавить в календарь/u);
   assert.match(browserGate, /lab\/event-desktop\/examples\/footer-service-v1.*editorial/u);
   assert.doesNotMatch(browserGate, /opera-i-dzhaz-znamensk-6876|myuzikl-alye-parusa-kaliningrad-4783/u);
 });

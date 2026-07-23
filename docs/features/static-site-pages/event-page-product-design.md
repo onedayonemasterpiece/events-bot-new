@@ -198,7 +198,7 @@ Primary CTA is selected by event facts:
 | `ticket_link` + paid/available | `Купить билет` | price range if known |
 | registration link | `Зарегистрироваться` | “может потребоваться регистрация” |
 | free + explicit registration link | `Зарегистрироваться` | admission property must still say `Бесплатно · регистрация` |
-| free without registration requirement | `В календарь` | calendar save is also the service saved-event action; source remains secondary |
+| free without registration requirement | `Добавить в календарь` | calendar save is also the service saved-event action; applies to a valid single date or explicit date range; source remains secondary |
 | phone-only booking | `Позвонить` on mobile, branded `Показать телефон` on desktop | the desktop copy-icon CTA reveals and copies the normalized number in one click, then confirms success without trying to open a dialer |
 | paid/ticketed, price unknown | `Билеты` | never invent `Узнать цену`, `Узнать условия` or `По билетам` |
 | source link only / unknown tickets | `Источник события` | honest secondary destination, no fake ticket CTA |
@@ -207,7 +207,11 @@ Primary CTA is selected by event facts:
 
 Secondary CTAs:
 
-- **Добавить в календарь** — always if date exists; ICS download link; on mobile must open/download predictably.
+- **Добавить в календарь** — always if a valid date or date range exists; ICS
+  download link; on mobile must open/download predictably. A multi-day range is
+  exported as all-day `DTSTART` plus exclusive next-day `DTEND`. The narrower
+  one-day eligibility of compact listing-card utilities is intentionally
+  separate and does not restrict an event-detail CTA.
 - On desktop, a secondary calendar action may adapt its visible label from local
   usage history while preserving its accessible name: show `В календарь` for a
   new user, fewer than three uses, or no use in the last 30 days; collapse to the

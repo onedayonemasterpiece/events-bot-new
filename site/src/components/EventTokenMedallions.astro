@@ -15,6 +15,7 @@ import {
 interface Props {
   event: PreviewEvent;
   layout?: 'inline' | 'desktop-slots';
+  allowTopSlot?: boolean;
 }
 
 type Token = {
@@ -36,7 +37,7 @@ type Token = {
   layoutRole?: 'main' | 'secondary';
 };
 
-const { event, layout = 'inline' } = Astro.props;
+const { event, layout = 'inline', allowTopSlot = true } = Astro.props;
 
 function normalize(value: unknown): string {
   return String(value || '').toLowerCase().replace(/<[^>]*>/gu, ' ').replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
@@ -186,17 +187,18 @@ const visibleTokens = tokens.length <= 6
         ? [...tokens.slice(0, 5), admissionBadge]
         : tokens.slice(0, 6)
     );
-// Admission/audience pills are compact facts rather than medallions. Keep
-// their accepted mobile inline treatment, but do not let them manufacture a
-// desktop InlineSlot when the event has one principal identity only.
+// Admission is a product-significant medallion on every event-detail surface.
+// It is always secondary and therefore can only render inline.
 const desktopMedallionTokens = visibleTokens.filter((token) => (
   token.kind === 'organizer'
   || token.kind === 'source'
   || token.kind === 'pushkin'
+  || token.kind === 'badge'
 ));
-const mainToken = layout === 'desktop-slots'
+const resolvedMainToken = layout === 'desktop-slots'
   ? desktopMedallionTokens.find((token) => token.layoutRole === 'main')
   : undefined;
+const mainToken = allowTopSlot ? resolvedMainToken : undefined;
 const tokenGroups = layout === 'desktop-slots'
   ? [
       ...(mainToken ? [{ slot:'top' as const, tokens:[mainToken] }] : []),
@@ -221,7 +223,8 @@ function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
   <div
     class:list={['event-token-layout', `event-token-layout--${layout}`]}
     data-medallion-layout={layout}
-    data-main-medallion-slug={mainToken?.slug}
+    data-main-medallion-slug={resolvedMainToken?.slug}
+    data-top-slot-enabled={allowTopSlot ? 'true' : 'false'}
   >
     {tokenGroups.map((group) => (
       <section

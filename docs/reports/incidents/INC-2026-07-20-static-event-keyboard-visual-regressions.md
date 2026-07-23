@@ -710,3 +710,19 @@ component is not enough when independent row and CSS policies can contradict
 it, and one-page keyboard unit flows are not evidence for cross-document or
 mixed-input behavior. A production-data candidate is accepted only after its
 actual visual geometry and real navigation paths are tested.
+
+## 2026-07-23 R7 follow-up: natural BODY copy ownership
+
+Owner testing on event `6529` found one remaining keyboard gap: physical
+`KeyC`/`KeyP` worked after focus entered the event action surface, but not from
+the natural `BODY` focus of a freshly opened page. Russian layout exposed the
+gap clearly (`KeyP` reports logical `key="з"`), although layout decoding was
+not the cause.
+
+The R7 correction keeps physical `KeyboardEvent.code` as the sole contract and
+does not add Cyrillic `event.key` aliases. On fresh/provenance-armed BODY it
+re-enters the event action surface with `preventScroll` and invokes description
+or poster copy. Footer service ownership is evaluated first; editable fields,
+dialogs, composition, modifiers and repeat remain fail-closed. Regression
+acceptance now includes natural BODY `KeyC`/`KeyP` with Cyrillic logical keys,
+not only a pre-focused action surface.

@@ -1,0 +1,100 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+import Icon from '../Icon.astro';
+import { displayDate, eventAdmissionLabel, eventHref, getOccurrencePresentation, withBase } from '../../lib/events';
+import { eventImageUrl } from '../../lib/assets';
+import { occurrenceTime } from '../../lib/eventOccurrences';
+import { selectListingImage } from '../../lib/listingPresentation';
+import { getListingIdentityMedallions } from '../../lib/listingVenueMedallions';
+
+interface Props {
+  event: PreviewEvent;
+  occurrenceMode?: 'per-date' | 'per-family';
+  priority?: boolean;
+}
+
+const { event, occurrenceMode = 'per-date', priority = false } = Astro.props;
+const image = selectListingImage(event, 1.25);
+const imageUrl = image.src?.startsWith('/') ? withBase(image.src) : eventImageUrl(image.src);
+const occurrence = occurrenceMode === 'per-family' ? getOccurrencePresentation(event) : null;
+const dateLine = occurrence?.railDateLine || displayDate(event);
+const timeLine = occurrence?.railTimeLine || occurrenceTime(event) || event.display_time || null;
+const scheduleAria = occurrence?.ariaLabel || [dateLine, timeLine].filter(Boolean).join(', ');
+const place = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'Место уточняется';
+const identities = getListingIdentityMedallions(event).slice(0, event.ticket?.is_free ? 1 : 2);
+const admission = eventAdmissionLabel(event);
+const likesCount = event.likes_count || 0;
+const href = eventHref(event);
+const mediaFit = image.mode === 'visual-crop' && image.adaptiveCrop ? 'cover' : 'contain';
+const style = `--rail-object-position:${image.objectPosition};--rail-media-fit:${mediaFit}`;
+const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medallion.avatarUrl.endsWith('.webp')
+  ? (medallion.fallbackPngUrl || medallion.avatarUrl)
+  : medallion.avatarUrl;
+---
+<article
+  class="ke-mobile-rail-row"
+  style={style}
+  data-mobile-listing-row
+  data-feedback-scope
+  data-event-id={event.id}
+  data-listing-city={event.city || 'Калининградская область'}
+>
+  <div class="ke-mobile-rail-row__window" tabindex="0" aria-label={`Карточка события. ${event.title}. ${scheduleAria}. Листайте по горизонтали для подробностей`}>
+    <div class="ke-mobile-rail-row__track">
+      <a class="ke-mobile-rail-row__summary" href={href} data-prefetch>
+        <span class="ke-mobile-rail-row__schedule" aria-label={scheduleAria}>
+          <strong>{dateLine}</strong>
+          {timeLine && <small>{timeLine}</small>}
+        </span>
+        <b>{event.title}</b>
+        <span>{place}</span>
+      </a>
+      <a class="ke-mobile-rail-row__media" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`}>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            width={image.asset?.width || undefined}
+            height={image.asset?.height || undefined}
+            alt={image.asset?.alt || event.image_alt || ''}
+            loading={priority ? 'eager' : 'lazy'}
+            fetchpriority={priority ? 'high' : 'auto'}
+            decoding="async"
+          />
+        ) : <span aria-hidden="true">{event.event_type || 'событие'}</span>}
+      </a>
+      <a class="ke-mobile-rail-row__detail" href={href} data-prefetch>
+        <small>{event.event_type || 'Событие'}</small>
+        <strong>{event.summary || event.title}</strong>
+        <span>{admission}</span>
+      </a>
+      <div class="ke-mobile-rail-row__tokens" aria-label="Свойства события">
+        {identities.map((medallion) => (
+          <span class="ke-mobile-rail-row__token" title={medallion.name} aria-label={medallion.ariaLabel}>
+            <picture>
+              {medallion.avatarUrl.endsWith('.webp') && medallion.fallbackPngUrl
+                ? <source srcset={withBase(medallion.avatarUrl)} type="image/webp" />
+                : null}
+              <img src={withBase(medallionFallbackSrc(medallion))} alt="" loading="lazy" decoding="async" />
+            </picture>
+          </span>
+        ))}
+        {event.ticket?.is_free && (
+          <span class="ke-mobile-rail-row__token" aria-label="Бесплатное событие">
+            <img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" loading="lazy" />
+          </span>
+        )}
+      </div>
+    </div>
+  </div>
+  <button
+    type="button"
+    class="ke-mobile-rail-row__like"
+    data-feedback-action="like"
+    data-event-id={event.id}
+    data-event-title={event.title}
+    data-base-count={likesCount}
+    aria-pressed="false"
+    aria-label={`Нравится: ${event.title}. Сейчас ${likesCount}`}
+  ><Icon name="heart" /><span data-feedback-count>{likesCount || ''}</span></button>
+</article>
+

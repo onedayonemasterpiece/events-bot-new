@@ -92,7 +92,10 @@
   event with an official source URL), while the
   retained `footer-service-v1` Editorial fixture keeps the three-row panel with
   calendar/share/like aligned on the bottom row. Review may additionally sample
-  live events, but expiry of `6876`, `4783`, `6551` or `5374` cannot remove or
+  live events. Real-data event `6667` is the range/free regression: Split OCR
+  keeps Yantar Hall plus `0 ₽` inline, has no TopSlot, and exposes exactly one
+  terracotta `Добавить в календарь` primary whose ICS is
+  `20260708` through exclusive `20260729`. Expiry of `6876`, `4783`, `6551` or `5374` cannot remove or
   false-fail this executable geometry contract. Editorial side motion and CTA
   docking use that same state machine with one or many distinct photos; absence
   of the optional thumbnail rail cannot disable motion or change the family.

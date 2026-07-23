@@ -55,6 +55,7 @@ production wrapper does not reimplement a second “similar” navigator.
 | Lost DOM focus (`body`) after a managed surface/card or inert current-event click | `L` / `K` / `S` / `Enter` | Re-enter the recorded logical owner and execute like / calendar / event copy / primary CTA once |
 | Current-event CTA or description copy group | `C` | Copy title, rendered lead/body and canonical URL |
 | Current-event CTA or description copy group | physical `P` | Copy the canonical event poster as PNG |
+| Fresh/provenance-armed event page with natural `body` focus | physical `C` / `P` | Re-enter the current-event surface without scroll and copy description / poster; works in Latin and Russian layouts |
 | Related or `Ещё события` card | Left/Right | Previous/next card in visual row order, wrapping to the adjacent visible row and then between card zones |
 | Related or `Ещё события` card | Up/Down | Nearest horizontal center in the visible row above/below; deterministic bridge between both card zones |
 | Any managed card | `Enter` / `L` / `K` / `S` | Open / like / calendar / copy selected event |
@@ -62,7 +63,7 @@ production wrapper does not reimplement a second “similar” navigator.
 | Gallery final recommendation | `Enter` / `Space` | Follow the real related-event link |
 | Consent dialog | `Escape` / `Enter` | Focus enters the lazy dialog; decline / accept, then restore its logical owner |
 | Focus inside service-share controls | physical `P` / `S` | Copy service PNG / service text and link |
-| Card, body or unrelated focus | `P` | No action; event/service image ownership stays unambiguous |
+| Card or unrelated focus | `P` | No action; event/service image ownership stays unambiguous |
 | Ordinary document context | `Space` | Native page scroll |
 
 The Down burst accepts only two distinct key gestures separated by keyup.
@@ -82,9 +83,11 @@ provenance is armed by the last meaningful focus/pointer owner being the CTA
 surface, a managed card or inert content inside the current-event root. A
 pointer/focus in the header, footer, editor or unrelated control disarms it.
 The logical owner is resolved and focused without scrolling before the action
-runs. `C` and `P` retain stricter explicit ownership because their payload can
-be ambiguous. A fresh page has a separate one-use hero-arrow entry: it never
-autofocuses, but the first physical Left/Right can enter a multi-image hero;
+runs. `C` and `P` accept only fresh or provenance-armed event BODY ownership,
+after footer arbitration, and first re-enter the event surface without scroll;
+they never use localized `event.key` aliases. A fresh page has a separate
+one-use event entry: it never autofocuses, but the first physical Left/Right
+can enter a multi-image hero and physical C/P can invoke the current event;
 any unrelated pointer/focus, window blur or hidden document revokes it.
 
 The continuation is a separate semantic zone outside

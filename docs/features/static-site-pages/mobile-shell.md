@@ -912,6 +912,15 @@ transplants the exact v13 shell into donor date pages under the same build
 prefix so dock/menu transitions never fall back to old templates. It retains
 Astro generated labs and event pages so `check:preview` remains a valid gate.
 
+As of R7 the accepted `112px` event rail is a tracked Astro component rather
+than an assembly-only donor fragment. It renders at `<=720px` on Today,
+Tomorrow, Weekend and Popular; their desktop timelines/boards remain the
+single active desktop representation. Today/Tomorrow/Weekend are per-date.
+Popular collapses only reciprocal explicit `other_date_ids` families and never
+infers family identity from title/type/venue. Search, Personal, Exhibitions,
+Collections, Clubs and event-detail continuation retain their separately
+accepted mobile surfaces.
+
 Acceptance for build
 `preview-20260722-mobile-search-unified-shell-v26`:
 

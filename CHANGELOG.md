@@ -9,8 +9,8 @@
   `beforeinstallprompt`, clears on `appinstalled`, and stays absent on
   desktop/iOS/already-installed/non-installable states.
 - Added the accepted dedicated `0 ₽` free-admission medallion to eligible
-  mobile event details, with event `6667` as the real-data regression, while
-  excluding admission facts from desktop Main/Secondary identity slots.
+  mobile and desktop event details, with event `6667` as the real-data
+  regression; it is always inline and never occupies the desktop TopSlot.
 - Added deterministic desktop event-medallion layout roles: one structured
   festival/organizer/venue-fallback Main may occupy the centered TopSlot, while
   Secondary identities use InlineSlot; empty zones do not render and the
@@ -183,6 +183,15 @@
 
 ### Fixed
 
+- Restored physical `C`/`P` event-copy shortcuts from natural BODY focus in
+  every keyboard layout while preserving footer, editable and dialog
+  arbitration.
+- Restored the accepted 112px mobile rails on Today, Tomorrow, Weekend and
+  Popular without shrinking desktop layouts; Popular collapses reciprocal
+  explicit occurrence families only.
+- Made free event-detail ranges calendar-primary with the exact
+  `Добавить в календарь` CTA and valid all-day range ICS; on split/OCR desktop
+  pages all identity/free medallions stay inline so none is clipped.
 - Removed the event-detail mobile breadcrumb/back row, kept wide adaptive Share
   actions labelled, and prevented the sticky ticket action from reappearing at
   the footer after the related-event boundary.

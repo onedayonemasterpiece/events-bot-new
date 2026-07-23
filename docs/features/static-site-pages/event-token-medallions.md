@@ -4,21 +4,20 @@
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Generic search/related cards are not medallion surfaces without separate approval.
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
-## Mobile free-admission token, 2026-07-23
+## Free-admission token, 2026-07-23
 
-Явное `ticket.is_free=true` теперь использует на mobile event detail уже
+Явное `ticket.is_free=true` теперь использует на event detail уже
 принятый source-grounded asset
 `/assets/badges/free-listing-medallion.svg`, а не ещё одну generic pill.
 Accessible name: `Бесплатное событие: 0 рублей`. Admission badge резервируется
 в ограниченном шестью элементами inline-наборе, поэтому не теряется за большим
 числом identity-токенов.
 
-Этот знак является фактом входа, а не `Main`/`Secondary` identity. Поэтому
-`layout="desktop-slots"` по-прежнему принимает только organizer/festival/source
-и Pushkin Card: бесплатность не создаёт пустой desktop InlineSlot и не меняет
-fail-closed resolution. Реальный regression specimen — событие `6667`
-`Летняя рапсодия`: mobile показывает Yantar Hall и отдельный `0 ₽` medallion,
-desktop layout не получает искусственный fact slot.
+Этот знак является фактом входа, а не `Main`/`Secondary` identity: он всегда
+Secondary и никогда не занимает TopSlot. В `layout="desktop-slots"` он
+рендерится в InlineSlot рядом с identity-токенами, не меняя fail-closed
+resolution. Реальный regression specimen — событие `6667` `Летняя рапсодия`:
+и mobile, и desktop показывают Yantar Hall и отдельный `0 ₽` medallion.
 
 ## Goal
 
@@ -124,11 +123,16 @@ The medallion row stays in normal document flow on the event detail page, not as
 
 #### Desktop Main / Secondary slots
 
-The accepted desktop detail composition has two explicit zones:
+The accepted horizontal-photo desktop detail composition has two explicit zones:
 
 - **TopSlot** is the one accent position centered on the upper seam of the
   information card;
 - **InlineSlot** is the ordinary in-card row below the primary metadata.
+
+TopSlot разрешён только для horizontal editorial template с подтверждённой
+`visual_only` фотографией. Split/OCR/portrait templates не имеют безопасного
+верхнего стыка: даже семантический Main остаётся в InlineSlot, чтобы круг не
+обрезался краем viewport/card.
 
 Classification runs only after the existing structured, fail-closed identity
 resolver. A structured festival/festival brand is Main before an organizer;
@@ -148,10 +152,8 @@ Rendering is exhaustive:
 | Secondary only | not rendered | all Secondary |
 | empty | not rendered | not rendered |
 
-Compact admission/audience price pills are facts rather than identity
-medallions. They keep their existing inline/mobile treatment but do not create
-an otherwise empty desktop InlineSlot. Mobile keeps the existing default inline
-component until its separate acceptance pass.
+Admission medallion is a fact rather than identity and always stays inline.
+Audience/price pills remain ordinary compact facts.
 
 ### Sizes
 

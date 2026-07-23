@@ -6,7 +6,7 @@ import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import EventFallbackArt from './EventFallbackArt.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
 import type { OccurrencePresentation } from '../lib/eventOccurrences';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isExternalHttpUrl, isCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isExternalHttpUrl, isEventDetailCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { isLowResolutionPortraitEventMedia, selectEventMediaByQuality } from '../lib/eventMediaQuality';
 import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
@@ -92,7 +92,7 @@ const shareText = [event.title, [dateTimeLabel, placeLabel].filter(Boolean).join
 const statusText = [event.event_type, heroAdmissionLabel].filter(Boolean).join(' · ');
 const shareImageType = primaryImageUrl?.toLowerCase().includes('.webp') ? 'image/webp' : primaryImageUrl?.toLowerCase().match(/\.png(?:[?#]|$)/) ? 'image/png' : 'image/jpeg';
 const shareFileName = `kenigevents-${event.slug}`;
-const canAddToCalendar = isCalendarEligible(event);
+const canAddToCalendar = isEventDetailCalendarEligible(event);
 const likesCount = event.likes_count || 0;
 const sharesCount = event.shares_count ?? 0;
 const likeCountLabel = likesCount > 0 ? String(likesCount) : '';
@@ -250,7 +250,7 @@ const showTicketCta = Boolean(ctaHref);
     {statusText && <p class="event-hero__eyebrow">{statusText}</p>}
     <HeadingTag class="event-hero__title">{event.title}</HeadingTag>
     <div class="source-links event-hero__actions event-main-actions" aria-label="Быстрые действия события">
-      {calendarPrimary && <CalendarLink event={event} className="cta-button" label="В календарь" />}
+      {calendarPrimary && <CalendarLink event={event} className="cta-button" label="Добавить в календарь" />}
       {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>}
       {soldOut && !showTicketCta && <span class="secondary-button cta-button--disabled" aria-disabled="true">{ctaLabel}</span>}
       {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}

@@ -1172,6 +1172,37 @@ export function initKeyboardEventNavigation(options = {}) {
         return;
       }
 
+      // Footer service shortcuts win over event shortcuts whenever the footer
+      // owns the current visual/focus scope.
+      if (footerOwnsShortcut(target, event.code)) {
+        const serviceAction = event.code === 'KeyP' ? footerImageAction : event.code === 'KeyS' ? footerTextAction : null;
+        if (serviceAction instanceof win.HTMLElement && !event.repeat) {
+          event.preventDefault();
+          if (footerShare instanceof win.HTMLElement) footerShare.dataset.keyboardShortcutPending = event.code === 'KeyP' ? 'service_copy_poster' : 'service_copy_text';
+          serviceAction.click();
+        }
+        return;
+      }
+
+      // C/P are physical-key shortcuts. KeyboardEvent.code intentionally makes
+      // them layout independent (KeyC/KeyP also when `key` is Cyrillic). On a
+      // freshly opened event the browser focus naturally belongs to BODY, so
+      // re-enter the event action surface without scrolling before copying.
+      if (['KeyC', 'KeyP'].includes(event.code)
+        && !event.repeat
+        && bodyTarget
+        && (coldBodyHeroEntryArmed || bodyRecoveryArmed || galleryHandoffArmed)) {
+        event.preventDefault();
+        surface.focus({ preventScroll:true });
+        captureLogicalOwner(surface);
+        coldBodyHeroEntryArmed = false;
+        galleryDestinationHandoffExpiresAt = 0;
+        bodyRecoveryArmed = true;
+        if (event.code === 'KeyC') void copyDescription({ keyboard:true });
+        else void copyPoster({ keyboard:true });
+        return;
+      }
+
       if (['KeyL', 'KeyK', 'KeyS', 'Enter'].includes(event.code)
         && !event.repeat && bodyRecoveryArmed && bodyTarget) {
         const scope = resolveLogicalOwner();
@@ -1194,16 +1225,6 @@ export function initKeyboardEventNavigation(options = {}) {
           } else {
             runAction(scope, event);
           }
-        }
-        return;
-      }
-
-      if (footerOwnsShortcut(target, event.code)) {
-        const serviceAction = event.code === 'KeyP' ? footerImageAction : event.code === 'KeyS' ? footerTextAction : null;
-        if (serviceAction instanceof win.HTMLElement && !event.repeat) {
-          event.preventDefault();
-          if (footerShare instanceof win.HTMLElement) footerShare.dataset.keyboardShortcutPending = event.code === 'KeyP' ? 'service_copy_poster' : 'service_copy_text';
-          serviceAction.click();
         }
         return;
       }

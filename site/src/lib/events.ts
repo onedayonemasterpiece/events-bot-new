@@ -223,6 +223,18 @@ export function isCalendarEligible(event: Pick<PreviewEvent, 'start_date' | 'end
   return !event.end_date || event.end_date === event.start_date;
 }
 
+/**
+ * Event-detail pages can export a complete date range. Compact listing cards
+ * intentionally keep the narrower one-day rule above so their quick action
+ * never implies a range the card does not explain.
+ */
+export function isEventDetailCalendarEligible(event: Pick<PreviewEvent, 'start_date' | 'end_date'>): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(event.start_date || '')) return false;
+  if (!event.end_date) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(event.end_date)) return false;
+  return event.end_date >= event.start_date;
+}
+
 function isFutureStartingEvent(event: Pick<PreviewEvent, 'start_date'>): boolean {
   return event.start_date >= getCurrentDate();
 }

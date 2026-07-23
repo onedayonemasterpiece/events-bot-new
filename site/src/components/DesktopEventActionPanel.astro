@@ -8,7 +8,7 @@ import {
   eventAdmissionLabel,
   eventTicketActionLabel,
   getOccurrencePresentation,
-  isCalendarEligible,
+  isEventDetailCalendarEligible,
   isExternalHttpUrl,
   isTelephoneUrl,
   isTicketSoldOut,
@@ -42,7 +42,7 @@ const phoneDisplay = normalizedPhoneDigits.length === 11 && normalizedPhoneDigit
 const soldOut = isTicketSoldOut(event);
 const calendarPrimary = !soldOut
   && event.ticket.kind === 'free'
-  && isCalendarEligible(event);
+  && isEventDetailCalendarEligible(event);
 const ctaLabel = !event.ticket.is_free && !event.ticket.price_label && ctaHref ? 'Билеты' : eventTicketActionLabel(event);
 const canonicalUrl = eventAbsoluteUrl(event);
 const likesCount = event.likes_count || 0;
@@ -63,7 +63,7 @@ const shareFileName = `kenigevents-${event.slug}`;
 >
   <p><span>вход</span><strong>{admissionLabel}</strong></p>
   {calendarPrimary ? (
-    <CalendarLink event={event} className="desktop-prototype__primary-action" />
+    <CalendarLink event={event} className="desktop-prototype__primary-action" label="Добавить в календарь" />
   ) : ctaIsTelephone && phoneValue ? (
     <button
       type="button"

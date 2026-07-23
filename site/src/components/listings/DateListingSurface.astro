@@ -5,6 +5,7 @@ import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingTimeNav from './ListingTimeNav.astro';
 import ExactTimeTimeline from './ExactTimeTimeline.astro';
+import MobileListingRailSurface from './MobileListingRailSurface.astro';
 import ListingPersonalFilter from '../ListingPersonalFilter.astro';
 
 interface Props {
@@ -47,6 +48,14 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
     <ListingTimeNav groups={upcomingGroups} idPrefix={idPrefix} earlierCount={earlierEvents.length} />
   </ListingDiscoveryRail>
 
+  <MobileListingRailSurface
+    sections={[
+      ...(earlierEvents.length ? [{ id:`${kind}-earlier`, title:'Завершились', events:earlierEvents }] : []),
+      { id:`${kind}-upcoming`, title:kind === 'today' ? 'Сегодня' : 'Завтра', events:upcomingEvents },
+    ]}
+    occurrenceMode="per-date"
+  />
+  <div class="ke-listing-desktop-body" data-listing-representation="desktop">
   {kind === 'today' ? (
     <details id="today-earlier" class="ke-earlier" data-listing-earlier hidden={earlierEvents.length === 0}>
       <summary>
@@ -72,6 +81,7 @@ const idPrefix = kind === 'today' ? 'today-time' : 'tomorrow-time';
   </div>
   <div class="ke-listing-empty" data-listing-no-events hidden={events.length > 0}>
     <strong>Событий на эту дату пока нет</strong>
+  </div>
   </div>
   <ListingPersonalFilter total={events.length} label={kind === 'today' ? 'сегодня' : 'завтра'} version={2} placement="floating" />
 </div>

@@ -14,7 +14,7 @@ import {
   eventCalendarStateExpiryDay,
   eventHref,
   eventTicketActionLabel,
-  isCalendarEligible,
+  isEventDetailCalendarEligible,
   isTelephoneUrl,
   withBase,
 } from '../../lib/events';
@@ -31,10 +31,10 @@ interface Props {
 const { event, related, variant, composition, modeOverride } = Astro.props;
 const ctaHref = eventActionHref(event);
 const ctaLabel = eventTicketActionLabel(event);
-const stickyCalendarPrimary = isCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
+const stickyCalendarPrimary = isEventDetailCalendarEligible(event) && (!ctaHref || event.ticket.kind === 'free');
 const compactLabelAction = stickyCalendarPrimary && ctaHref
   ? 'ticket'
-  : !stickyCalendarPrimary && isCalendarEligible(event)
+  : !stickyCalendarPrimary && isEventDetailCalendarEligible(event)
     ? (event.id % 2 === 0 ? 'calendar' : 'share')
     : 'share';
 const stickyHref = stickyCalendarPrimary ? eventCalendarHref(event) : ctaHref;

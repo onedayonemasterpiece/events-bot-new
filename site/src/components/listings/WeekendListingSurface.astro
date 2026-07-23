@@ -8,6 +8,7 @@ import ListingWeekendTimeNav from './ListingWeekendTimeNav.astro';
 import WeekendEditorialTimeline from './WeekendEditorialTimeline.astro';
 import WeekendRangeNav from './WeekendRangeNav.astro';
 import ListingPersonalFilter from '../ListingPersonalFilter.astro';
+import MobileListingRailSurface from './MobileListingRailSurface.astro';
 
 interface WeekendLink { href?: string | null; label: string; }
 interface WeekendRangeLink { href: string; label: string; selected?: boolean; actualCurrent?: boolean; }
@@ -31,6 +32,11 @@ function dayDateLabel(date: string): string {
   <ListingDiscoveryRail cities={cities} total={events.length} label="на выходных">
     <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
   </ListingDiscoveryRail>
+  <MobileListingRailSurface
+    sections={days.map((day) => ({ id:`weekend-${day.key}`, title:`${day.title} · ${dayDateLabel(day.date)}`, events:day.events }))}
+    occurrenceMode="per-date"
+  />
+  <div class="ke-listing-desktop-body" data-listing-representation="desktop">
   <div class="ke-weekend-board">
     <div class="ke-weekend-heads" aria-label="Дни выходных">
       <div class="ke-weekend-heads__time" aria-hidden="true"></div>
@@ -58,6 +64,7 @@ function dayDateLabel(date: string): string {
   ) : null}
   <div class="ke-weekend-autoposition" role="status" aria-live="polite" hidden data-weekend-autoposition-status>
     <span></span><button type="button" data-weekend-back-to-top>К началу</button>
+  </div>
   </div>
   <ListingPersonalFilter total={events.length} label="на выходных" version={2} placement="floating" />
 </div>

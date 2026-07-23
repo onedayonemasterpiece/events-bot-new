@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const read = (relativePath) => readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-test('free one-day events use one actionable calendar primary', async () => {
+test('free event-detail dates and ranges use one actionable calendar primary', async () => {
   const panel = await read('src/components/DesktopEventActionPanel.astro');
   const examples = JSON.parse(await read('src/data/desktop-event-examples.json'));
   const freeFixture = examples.events.find((event) => event.id === 6901);
@@ -17,14 +17,13 @@ test('free one-day events use one actionable calendar primary', async () => {
   };
   for (const event of [freeFixture, freeWithSource]) {
     assert.equal(event.ticket.kind, 'free');
-    assert.ok(!event.end_date || event.end_date === event.start_date);
   }
   assert.equal(freeFixture.ticket.href, null);
   assert.match(freeWithSource.ticket.href, /^https:\/\//u);
 
-  assert.match(panel, /const calendarPrimary = !soldOut\s*&& event\.ticket\.kind === 'free'\s*&& isCalendarEligible\(event\)/u);
+  assert.match(panel, /const calendarPrimary = !soldOut\s*&& event\.ticket\.kind === 'free'\s*&& isEventDetailCalendarEligible\(event\)/u);
   assert.doesNotMatch(panel, /event\.ticket\.kind === 'free'\s*&& !ctaHref/u);
-  assert.match(panel, /calendarPrimary \? \(\s*<CalendarLink event=\{event\} className="desktop-prototype__primary-action" \/>/u);
+  assert.match(panel, /calendarPrimary \? \(\s*<CalendarLink event=\{event\} className="desktop-prototype__primary-action" label="Добавить в календарь" \/>/u);
   assert.match(panel, /\{!calendarPrimary && <CalendarLink event=\{event\} className="desktop-prototype__icon-action" compact \/>\}/u);
 });
 
@@ -63,7 +62,22 @@ test('registration and free-calendar semantic cases are frozen as Split specimen
   assert.match(lab, /slug: 'cta-registration-invariant', eventId: 6811, candidate: 'split'/u);
   assert.match(lab, /slug: 'cta-free-calendar-invariant', eventId: 6901, candidate: 'split'/u);
   assert.match(browserGate, /cta-registration-invariant" split "Зарегистрироваться" 3 icons/u);
-  assert.match(browserGate, /cta-free-calendar-invariant" split "В календарь" 2 calendar-primary/u);
+  assert.match(browserGate, /cta-free-calendar-invariant" split "Добавить в календарь" 2 calendar-primary/u);
+});
+
+test('real free range 6667 has a detail calendar primary and inclusive all-day ICS span', async () => {
+  const events = JSON.parse(await read('src/data/preview-events.json')).events;
+  const event = events.find((candidate) => candidate.id === 6667);
+  const helpers = await read('src/lib/events.ts');
+  const ics = await read('src/lib/ics.ts');
+  assert.ok(event, 'event 6667 must remain in the real preview projection');
+  assert.equal(event.ticket.kind, 'free');
+  assert.equal(event.start_date, '2026-07-08');
+  assert.equal(event.end_date, '2026-07-28');
+  assert.match(helpers, /export function isEventDetailCalendarEligible/u);
+  assert.match(ics, /const isMultiDayRange = Boolean\(event\.end_date && event\.end_date > event\.start_date\)/u);
+  assert.match(ics, /DTSTART;VALUE=DATE:\$\{formatDateOnly\(event\.start_date\)\}/u);
+  assert.match(ics, /DTEND;VALUE=DATE:\$\{nextDateOnly\(event\.end_date!\)\}/u);
 });
 
 test('Editorial hierarchy and production role-first media boundaries stay intact', async () => {
