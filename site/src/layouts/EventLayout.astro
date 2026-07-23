@@ -158,6 +158,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {ogImageHeight && <meta property="og:image:height" content={String(ogImageHeight)} />}
     <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
+    <link rel="manifest" href={withBase('/manifest.webmanifest')} />
     <meta name="theme-color" content="#f7efe3" />
     <meta name="format-detection" content="telephone=yes" />
     {structuredData.map((item) => (
@@ -841,11 +842,22 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           /* Solid terracotta paints immediately below the transparent stitched
              WebP and remains the complete delayed/error fallback. */
           background-color:#98401f;
-          background-image:var(--desktop-brand-tag-skin);
+          /* The source preserves the leather backing and volume, including
+             very dark one-pixel side rails. A warm translucent glaze replaces
+             only those raster-edge pixels instead of clipping the object. */
+          background-image:
+            linear-gradient(90deg,
+              rgb(152,64,31) 0,
+              rgba(152,64,31,.72) 1px,
+              transparent 3px,
+              transparent calc(100% - 3px),
+              rgba(152,64,31,.72) calc(100% - 1px),
+              rgb(152,64,31) 100%),
+            var(--desktop-brand-tag-skin);
           background-position:center;
-          background-size:100% 100%;
+          background-size:100% 100%,100% 100%;
           background-repeat:no-repeat;
-          border:1px solid rgba(104,39,19,.34);
+          border:1px solid transparent;
           border-top:0;
           box-shadow:
             inset 0 1px 0 rgba(255,244,232,.18),
@@ -1574,6 +1586,14 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         height: 100%;
       }
       .event-token__circle img { object-fit: cover; }
+      .event-token--badge {
+        --token-size:clamp(88px,23vw,104px);
+      }
+      .event-token--badge .event-token__circle {
+        background:transparent;
+        box-shadow:0 11px 25px rgba(72,45,25,.12);
+      }
+      .event-token--badge .event-token__circle img { object-fit:contain; }
       .event-token__label {
         display: none;
         margin-left: -0.08rem;
@@ -4984,7 +5004,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         };
         if (sticky && marker && 'IntersectionObserver' in window) {
           const observer = new IntersectionObserver((entries) => {
-            stickyHiddenByFeed = entries.some((entry) => entry.isIntersecting);
+            // Once the related-feed boundary has moved above the viewport the
+            // footer must not resurrect the event CTA. Scrolling back above
+            // that boundary clears this state and restores the useful sticky
+            // action between the hero and recommendations.
+            stickyHiddenByFeed = entries.some((entry) => entry.isIntersecting || entry.boundingClientRect.top < 0);
             updateStickyCtaVisibility();
           }, { rootMargin: '0px 0px -18% 0px', threshold: 0.01 });
           observer.observe(marker);

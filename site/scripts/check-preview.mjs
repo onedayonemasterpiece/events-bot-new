@@ -263,7 +263,8 @@ for (const club of interestClubsData.clubs) {
   if (!detailHtml.includes('id="future-meetings-title"')) throw new Error(`Club ${club.slug} misses future-meetings section`);
   if (!detailHtml.includes('data-product-breadcrumbs') || !detailHtml.includes('data-product-parent-link') || !detailHtml.includes('aria-current="page"')) throw new Error(`Club ${club.slug} misses responsive semantic product breadcrumbs`);
   if (!detailHtml.includes('BreadcrumbList') || !detailHtml.includes('application/ld+json')) throw new Error(`Club ${club.slug} misses structured data`);
-  if (/<main[^>]+hidden|<article[^>]+hidden|<section[^>]+hidden/iu.test(detailHtml)) throw new Error(`Club ${club.slug} requires JavaScript to reveal primary content`);
+  const clubPrimaryHtml = detailHtml.replace(/<section[^>]*data-pwa-install-root[^>]*>[\s\S]*?<\/section>/giu, '');
+  if (/<main[^>]+hidden|<article[^>]+hidden|<section[^>]+hidden/iu.test(clubPrimaryHtml)) throw new Error(`Club ${club.slug} requires JavaScript to reveal primary content`);
 }
 
 
@@ -540,7 +541,7 @@ if (!controlHtml.includes('data-announcements-lockup="mobile"') || !controlHtml.
 if (controlHtml.includes('mobile-discovery-menu__chevron') || controlHtml.includes('⌄')) throw new Error('Mobile discovery drawer handle must not expose chevron/up/down icons');
 if ((controlVisibleHtml.match(/<h1\b/giu) || []).length !== 1) throw new Error('Event page must expose exactly one visible H1');
 if (!controlVisibleHtml.includes('event-hero__decision') || !controlVisibleHtml.includes('event-hero__actions')) throw new Error('Event hero must include decision block and first-screen actions in HTML');
-if (controlVisibleHtml.indexOf('data-event-hero') > controlVisibleHtml.indexOf('crumbs--after-hero')) throw new Error('Hero must render before mobile/after-hero breadcrumbs in event HTML');
+if (controlVisibleHtml.includes('crumbs--after-hero')) throw new Error('Event detail must not render the retired mobile breadcrumb/back row');
 let checkedMediaRegressionEvents = 0;
 for (const [id, expectedMode] of [[5370, 'visual_only'], [6322, 'visual_only'], [4512, 'visual_only'], [3730, 'visual_only'], [4913, 'visual_only'], [5878, 'ocr_text'], [6093, 'ocr_text'], [6437, 'ocr_text'], [6438, 'ocr_text']]) {
   const item = eventsData.events.find((event) => event.id === id);

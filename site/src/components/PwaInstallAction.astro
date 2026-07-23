@@ -1,0 +1,66 @@
+---
+import Icon from './Icon.astro';
+---
+
+<section class="pwa-install-action" data-pwa-install-root data-pwa-install-ready="false" hidden aria-labelledby="pwa-install-title">
+  <div class="pwa-install-action__copy">
+    <strong id="pwa-install-title">Анонсы на главном экране</strong>
+    <span>Открывайте афишу как приложение — без поиска вкладки в браузере.</span>
+  </div>
+  <button type="button" class="pwa-install-action__button" data-pwa-install-button hidden>
+    <Icon name="install" />
+    <span>Установить приложение</span>
+  </button>
+  <span class="sr-only" data-pwa-install-status role="status" aria-live="polite"></span>
+</section>
+
+<style>
+  .pwa-install-action {
+    display:none;
+  }
+  @media (max-width:759px) {
+    .pwa-install-action:not([hidden]) {
+      display:grid;
+      gap:.9rem;
+      padding:1rem;
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:20px;
+      background:
+        radial-gradient(circle at 88% 16%,rgba(245,177,143,.16),transparent 9rem),
+        rgba(255,255,255,.055);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+      color:#fff7ed;
+    }
+    .pwa-install-action__copy { display:grid; gap:.24rem; }
+    .pwa-install-action__copy strong { font-size:1rem; line-height:1.2; }
+    .pwa-install-action__copy span { color:#cdbfb4; font-size:.84rem; line-height:1.45; }
+    .pwa-install-action__button {
+      min-height:48px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:.55rem;
+      width:100%;
+      padding:.65rem 1rem;
+      border:1px solid rgba(255,244,232,.42);
+      border-radius:999px;
+      background:#fff8ee;
+      color:#552414;
+      font:inherit;
+      font-weight:850;
+      cursor:pointer;
+      touch-action:manipulation;
+    }
+    .pwa-install-action__button :global(.icon) { width:1.25rem; height:1.25rem; }
+    .pwa-install-action__button:active { transform:translateY(1px); }
+    .pwa-install-action__button:disabled { cursor:wait; opacity:.72; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    .pwa-install-action__button:active { transform:none; }
+  }
+</style>
+
+<script>
+  import { hydratePwaInstallActions } from '../lib/pwa-install-controller.js';
+  hydratePwaInstallActions();
+</script>

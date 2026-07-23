@@ -165,7 +165,10 @@ if (!event6686 || !event6529) throw new Error('Fresh real-data build misses the 
 const event6686Html = html(`sobytiya/${event6686.slug}/index.html`);
 const event6529Html = html(`sobytiya/${event6529.slug}/index.html`);
 if (!event6686Html.includes('data-product-breadcrumbs') || !event6686Html.includes('data-product-parent-link')) {
-  throw new Error('Deep event page misses responsive semantic breadcrumbs');
+  throw new Error('Deep event page misses desktop semantic breadcrumbs');
+}
+if (event6686Html.includes('crumbs--after-hero')) {
+  throw new Error('Deep event page regressed to the retired mobile breadcrumb/back row');
 }
 if (!event6686Html.includes('data-selected-media-semantic-status="error"') || !/data-clean-hero-image[^>]*data-protected-crop-fit="contain"/u.test(event6686Html)) {
   throw new Error('Text-heavy semantic-error media 6686 is not protected by fail-closed contain');

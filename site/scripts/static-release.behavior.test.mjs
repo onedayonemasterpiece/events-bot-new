@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   assertCandidateObjectKey, candidateBasePath, generateCandidateToken, safeCandidateToken,
-  treeHash, validateCatalogLedger,
+  cacheControl, contentType, treeHash, validateCatalogLedger,
 } from './release-contract.mjs';
 import { assertAnonymousListDisabled, publicationObjects } from './deploy-secret-candidate-yc.mjs';
 
@@ -36,6 +36,11 @@ test('ADD-BUILD-09 tree hash is order-independent and content-addressed', () => 
   const left = [{ key: 'b', sha256: '2'.repeat(64), size: 2 }, { key: 'a', sha256: '1'.repeat(64), size: 1 }];
   assert.equal(treeHash(left), treeHash([...left].reverse()));
   assert.notEqual(treeHash(left), treeHash([{ ...left[0], size: 3 }, left[1]]));
+});
+
+test('PWA manifest publishes with installable MIME and bounded revalidation', () => {
+  assert.equal(contentType('manifest.webmanifest'), 'application/manifest+json; charset=utf-8');
+  assert.equal(cacheControl('manifest.webmanifest'), 'public, max-age=300, must-revalidate');
 });
 
 test('ADD-BUILD-12 capacity/privacy preflight refuses public listing and accepts only AccessDenied', () => {

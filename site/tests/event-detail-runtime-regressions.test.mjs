@@ -79,6 +79,24 @@ test('personal continuation loads only near a visible similar-events boundary', 
   assert.match(layout, /const PERSONAL_FEED_RENDER_LIMIT = 18/u);
   assert.match(layout, /maxSameCategory: 3, maxSameVenue: 2/u);
   assert.match(layout, /\[data-related-start\] \[data-event-card\], \[data-discovery-feed\] \[data-event-card\]/u);
+  assert.match(layout, /entry\.isIntersecting \|\| entry\.boundingClientRect\.top < 0/u);
+});
+
+test('mobile event actions preserve a readable wide Share label', async () => {
+  const mobileStyles = await read('src/components/MobileEventProductionStyles.astro');
+  assert.match(mobileStyles, /\.secondary-button:not\(\[data-native-share\]\) > span:not\(\.feedback-count\) \{ display: none; \}/u);
+  assert.match(mobileStyles, /> \[data-native-share\] \{[\s\S]*flex:1 1 9rem;[\s\S]*min-width:8\.5rem;/u);
+  assert.match(mobileStyles, /> \[data-native-share\] \[data-share-label\] \{ display:inline; \}/u);
+  assert.doesNotMatch(mobileStyles, /\.event-hero__actions > \.secondary-button > span:not\(\.feedback-count\) \{ display: none; \}/u);
+});
+
+test('mobile free admission uses the dedicated medallion without creating a desktop fact slot', async () => {
+  const medallions = await read('src/components/EventTokenMedallions.astro');
+  assert.match(medallions, /kind: 'badge',[\s\S]*key: 'free-admission'[\s\S]*imageUrl: '\/assets\/badges\/free-listing-medallion\.svg'/u);
+  assert.match(medallions, /ariaLabel: 'Бесплатное событие: 0 рублей'/u);
+  assert.match(medallions, /admissionBadge && !tokens\.slice\(0, 6\)\.includes\(admissionBadge\)/u);
+  assert.match(medallions, /const desktopMedallionTokens = visibleTokens\.filter\(\(token\) => \([\s\S]*token\.kind === 'organizer'[\s\S]*token\.kind === 'source'[\s\S]*token\.kind === 'pushkin'/u);
+  assert.doesNotMatch(medallions, /desktopMedallionTokens[\s\S]{0,180}token\.kind === 'badge'/u);
 });
 
 test('dynamic recommendation media reserves geometry through load and failure', async () => {
@@ -141,7 +159,8 @@ test('desktop event chrome renders explicit Main and Secondary medallion slots',
   assert.match(medallions, /data-medallion-slot=\{group\.slot\}/u);
   assert.match(medallions, /data-medallion-role=\{token\.layoutRole \|\| 'secondary'\}/u);
   assert.match(medallions, /data-main-medallion-slug=\{mainToken\?\.slug\}/u);
-  assert.match(medallions, /const desktopMedallionTokens = visibleTokens\.filter\(\(token\) => token\.kind !== 'pill'\)/u);
+  assert.match(medallions, /const desktopMedallionTokens = visibleTokens\.filter\(\(token\) => \([\s\S]*token\.kind === 'organizer'[\s\S]*token\.kind === 'source'[\s\S]*token\.kind === 'pushkin'/u);
+  assert.doesNotMatch(medallions, /desktopMedallionTokens[\s\S]{0,180}token\.kind === 'badge'/u);
   assert.match(resolver, /export function classifyEventMedallionLayout/u);
   assert.match(resolver, /if \(category === 'festival_brand'\) return 400/u);
   assert.match(resolver, /if \(category === 'organizer'\) return 300/u);

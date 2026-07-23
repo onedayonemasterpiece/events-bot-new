@@ -4,6 +4,22 @@
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Generic search/related cards are not medallion surfaces without separate approval.
 > **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
 
+## Mobile free-admission token, 2026-07-23
+
+Явное `ticket.is_free=true` теперь использует на mobile event detail уже
+принятый source-grounded asset
+`/assets/badges/free-listing-medallion.svg`, а не ещё одну generic pill.
+Accessible name: `Бесплатное событие: 0 рублей`. Admission badge резервируется
+в ограниченном шестью элементами inline-наборе, поэтому не теряется за большим
+числом identity-токенов.
+
+Этот знак является фактом входа, а не `Main`/`Secondary` identity. Поэтому
+`layout="desktop-slots"` по-прежнему принимает только organizer/festival/source
+и Pushkin Card: бесплатность не создаёт пустой desktop InlineSlot и не меняет
+fail-closed resolution. Реальный regression specimen — событие `6667`
+`Летняя рапсодия`: mobile показывает Yantar Hall и отдельный `0 ₽` medallion,
+desktop layout не получает искусственный fact slot.
+
 ## Goal
 
 Add a visually large row of **quick-read event medallions** on the **event detail page** so a visitor can scan high-value facts about this конкретное событие before reading the full description:

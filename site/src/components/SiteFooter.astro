@@ -1,6 +1,7 @@
 ---
 import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import AnnouncementsWordmark from './brand/AnnouncementsWordmark.astro';
+import PwaInstallAction from './PwaInstallAction.astro';
 import ServiceShareAction from './ServiceShareAction.astro';
 import SocialIcon from './SocialIcon.astro';
 import { IS_PRODUCTION, SITE_ORIGIN, siteHomeHref, withBase } from '../lib/events';
@@ -73,6 +74,8 @@ const { socialLinks } = Astro.props;
         <p id="footer-documents-note">Ссылки закреплены в прототипе; тексты будут опубликованы после юридической проверки.</p>
       </nav>
     </div>
+
+    <PwaInstallAction />
 
     <div class="site-footer-prototype__bottom">
       <nav class="site-footer-prototype__social" aria-label="Соцсети Полюбить Калининград Анонсы">

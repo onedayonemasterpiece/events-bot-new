@@ -1,7 +1,6 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import DesktopEventPage from '../../components/DesktopEventPage.astro';
-import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import EventHero, { type HeroComposition } from '../../components/EventHero.astro';
 import EventFacts from '../../components/EventFacts.astro';
 import EventTransportSchedule from '../../components/EventTransportSchedule.astro';
@@ -19,7 +18,6 @@ import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-ov
 import type { EventImageDerivative, PreviewEvent } from '../../lib/types';
 import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
 import { desktopEventWithExplicitEnd } from '../../lib/desktopEventTransport';
-import { eventBreadcrumbParents } from '../../lib/breadcrumbs';
 import { IS_PRODUCTION_FAMILY, PREVIEW_BUILD_ID, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
@@ -153,13 +151,6 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
       </article>
 
       <div class="mobile-event-production__continuation">
-        <Breadcrumbs
-          parents={eventBreadcrumbParents(event)}
-          current={event.title}
-          display="mobile"
-          className="crumbs--after-hero"
-        />
-
         <div class="mobile-event-production__medallions"><EventTokenMedallions event={event} /></div>
 
         <section class="section-card section-card--quiet section-card--event-details mobile-event-production__details" style="margin-top: 1rem;">

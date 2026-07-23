@@ -152,6 +152,34 @@ feedback сохранения, calendar state, consent, gallery counters, like a
 - `prefers-reduced-motion` отключает декоративные перемещения, но не обратную
   связь состояния.
 
+## R6 mobile acceptance, 2026-07-23
+
+Последняя продуктовая приёмка уточняет event-detail и terminal behavior:
+
+- мобильная страница события не монтирует хлебные крошки или отдельную
+  `← Афиша`-строку; desktop semantic hierarchy и JSON-LD не меняются;
+- event sticky CTA скрыт над hero, доступен между hero и рекомендациями и после
+  прохождения границы связанных событий больше не появляется повторно у
+  подвала. Единственное основное действие при этом не удаляется;
+- если адаптивная панель оставляет широкую кнопку Share, она показывает
+  `Поделиться`, а не только пиктограмму;
+- меню остаётся одним настоящим полупрозрачным glass-слоем. Читаемость
+  canonical lockup на светлом и тёмном hero обеспечивает локальный светящийся
+  translucent scrim под логотипом, а не непрозрачная заливка всей панели;
+- около мобильного подвала находится progressive PWA action. Он скрыт по
+  умолчанию и открывается только на Android после фактического
+  `beforeinstallprompt`. Событие сохраняется для одного `prompt()`, кнопка
+  атомарно скрывается до ожидания системного диалога, а `appinstalled` очищает
+  состояние. Никакого постоянного флага «уже устанавливал» нет: после удаления
+  приложения новый browser event снова может вооружить кнопку.
+
+Manifest использует base-aware `id`, `scope`, `start_url`, `display=standalone`
+и PNG `192×192`/`512×512`; preview publisher отдельно сохраняет
+`application/manifest+json`. Поведение соответствует текущим контрактам
+[MDN `beforeinstallprompt`](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeinstallprompt_event),
+[MDN install prompt](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt)
+и [installability guide](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).
+
 ## Rejected alternatives
 
 - отдельный hardcoded bottom nav только для Search;

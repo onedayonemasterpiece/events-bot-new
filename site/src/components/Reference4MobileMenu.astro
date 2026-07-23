@@ -186,7 +186,20 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
     }
     body.mobile-shell-reference4 .mobile-discovery-menu__panel.is-scrollable { touch-action:pan-y; }
     .reference4-menu { box-sizing:border-box; position:relative; z-index:1; width:100%; min-height:100%; padding:0 14px 16px; font-family:inherit; color:#241b16; }
-    .reference4-menu__brand { box-sizing:border-box; width:150px; height:112px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:5px; padding:32px 0 12px; color:#2b211c; text-decoration:none; filter:drop-shadow(0 1px 1px rgba(255,255,255,.28)); }
+    .reference4-menu__brand {
+      position:relative; isolation:isolate; box-sizing:border-box; width:150px; height:112px;
+      display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:5px;
+      padding:32px 0 12px; color:#211713; text-decoration:none;
+      filter:drop-shadow(0 1px 1px rgba(255,255,255,.92)) drop-shadow(0 2px 5px rgba(24,14,10,.32));
+    }
+    .reference4-menu__brand::before {
+      content:""; position:absolute; inset:19px -12px 3px -12px; z-index:-1;
+      border:1px solid rgba(255,255,255,.24); border-radius:22px;
+      background:radial-gradient(ellipse at 38% 60%,rgba(255,252,247,.74),rgba(255,248,240,.38) 58%,transparent 82%);
+      box-shadow:0 0 26px rgba(255,247,233,.34),inset 0 1px 0 rgba(255,255,255,.3);
+      backdrop-filter:blur(7px) brightness(1.12); -webkit-backdrop-filter:blur(7px) brightness(1.12);
+      pointer-events:none;
+    }
     .reference4-menu__endorsement { font-size:9px; line-height:10px; font-weight:780; letter-spacing:.05em; text-transform:uppercase; white-space:normal; opacity:.92; }
     .reference4-menu__wordmark { display:block; width:104px; height:auto; color:currentColor; }
     .reference4-menu__brand:focus-visible { outline:3px solid #98401f; outline-offset:3px; border-radius:8px; }
@@ -226,6 +239,7 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
     @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
       body.mobile-shell-reference4 .mobile-discovery-menu--reference4 > .mobile-discovery-menu__panel { background:rgba(203,191,181,.94)!important; }
       .reference4-menu__list { background:rgba(255,252,247,.90); }
+      .reference4-menu__brand::before { background:rgba(255,250,243,.7); }
     }
   }
   @media (max-width:350px) {

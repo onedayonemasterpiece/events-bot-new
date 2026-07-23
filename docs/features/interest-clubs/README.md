@@ -13,7 +13,11 @@ snapshot по текущему 90-дневному freshness contract, а не �
 
 R3 presentation adapts the supplied `klubs (2).png` concept rather than
 copying it literally. Desktop uses one complete, count-aware row (up to three
-equal columns); mobile keeps the established light one-card flow. Only Game
+equal columns). R6 mobile acceptance replaces the separate light split-card
+with the same full-cover dark overlay family: cover/fallback fills the card,
+title/description/facts stay on the lower veil, and `Подробнее` keeps the same
+grammar. At `<=430px` facts wrap to two columns without horizontal overflow.
+Only Game
 Vibes currently has a trustworthy documentary cover, reused from approved
 event `2897` / source post `https://t.me/signalkld/9929` with local checksum
 metadata. Generated/neural announcement art is not presented as documentary
@@ -22,8 +26,8 @@ club media; those cards use the deterministic CSS fallback.
 In the R4 desktop review, `Ближайших встреч: N` is a non-interactive factual
 overlay in the card media's upper-right corner. Its warm light is directional
 and appears below the badge rather than as a full advertising halo. The label
-does not wrap and stays inside the card. Mobile intentionally retains the R3
-badge in the content heading until the later mobile review.
+does not wrap and stays inside the card. R6 mobile uses that same accepted
+media-corner badge instead of the retired content-heading duplicate.
 
 The catalog owns a scoped desktop keyboard controller. Left/Right follow the
 flattened rendered order, Up/Down select the nearest column in the adjacent

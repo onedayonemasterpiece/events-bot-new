@@ -4,6 +4,7 @@ import '../styles/design-system.css';
 
 const previewHref = import.meta.env.PUBLIC_ROOT_PREVIEW_HREF || withBase('/__preview/');
 const logoHref = withBase('/favicon.svg');
+const manifestHref = withBase('/manifest.webmanifest');
 ---
 <!doctype html>
 <html lang="ru">
@@ -14,6 +15,7 @@ const logoHref = withBase('/favicon.svg');
     <title>Полюбить Калининград Анонсы</title>
     <meta name="description" content="Афиша Калининграда без шума: события, концерты, выставки, лекции и семейные планы в одном месте." />
     <link rel="icon" href={logoHref} type="image/svg+xml" sizes="any" />
+    <link rel="manifest" href={manifestHref} />
     <meta name="theme-color" content="#fff6ea" />
     <style>
       * { box-sizing: border-box; }

@@ -86,6 +86,7 @@ export function contentType(key) {
     '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8',
     '.ics': 'text/calendar; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
     '.json': 'application/json; charset=utf-8', '.map': 'application/json; charset=utf-8',
+    '.webmanifest': 'application/manifest+json; charset=utf-8',
     '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml; charset=utf-8',
     '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
     '.gif': 'image/gif', '.woff': 'font/woff', '.woff2': 'font/woff2',
@@ -96,7 +97,7 @@ export function cacheControl(key, { secretCandidate = false } = {}) {
   if (secretCandidate) return 'private, no-store, max-age=0';
   if (key.startsWith('_astro/')) return 'public, max-age=31536000, immutable';
   if (key.endsWith('.html') || key === 'robots.txt' || key === 'sitemap.xml') return 'public, max-age=60, must-revalidate';
-  if (key.endsWith('.json') || key.endsWith('.ics')) return 'public, max-age=300, must-revalidate';
+  if (key.endsWith('.json') || key.endsWith('.webmanifest') || key.endsWith('.ics')) return 'public, max-age=300, must-revalidate';
   return 'public, max-age=3600, must-revalidate';
 }
 

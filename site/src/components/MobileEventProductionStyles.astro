@@ -210,12 +210,18 @@
   }
 
   @container mobile-action-dock (max-width: 400px) {
-    [data-mobile-event-production] .event-hero__actions > .secondary-button {
+    [data-mobile-event-production] .event-hero__actions > .secondary-button:not([data-native-share]) {
       flex: 0 0 52px;
       width: 52px;
       padding-inline: 0.38rem;
     }
-    [data-mobile-event-production] .event-hero__actions > .secondary-button > span:not(.feedback-count) { display: none; }
+    [data-mobile-event-production] .event-hero__actions > .secondary-button:not([data-native-share]) > span:not(.feedback-count) { display: none; }
+    [data-mobile-event-production] .event-hero__actions > [data-native-share] {
+      flex:1 1 9rem;
+      width:auto;
+      min-width:8.5rem;
+    }
+    [data-mobile-event-production] .event-hero__actions > [data-native-share] [data-share-label] { display:inline; }
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added a base-aware installable web app manifest and an Android-only mobile
+  footer install action that appears only for a real one-shot
+  `beforeinstallprompt`, clears on `appinstalled`, and stays absent on
+  desktop/iOS/already-installed/non-installable states.
+- Added the accepted dedicated `0 ₽` free-admission medallion to eligible
+  mobile event details, with event `6667` as the real-data regression, while
+  excluding admission facts from desktop Main/Secondary identity slots.
 - Added deterministic desktop event-medallion layout roles: one structured
   festival/organizer/venue-fallback Main may occupy the centered TopSlot, while
   Secondary identities use InlineSlot; empty zones do not render and the
@@ -123,6 +130,12 @@
 
 ### Changed
 
+- Unified mobile interest-club cards with the accepted desktop full-cover dark
+  overlay family and preserved the luminous top-right upcoming-meetings badge.
+- Kept the full mobile menu genuinely translucent on both light and dark hero
+  contexts while adding a local luminous glass scrim behind the canonical
+  lockup.
+
 - Cleaned the desktop leather tag asset so the offset lower/right backing and
   pale extraction remnant no longer show outside the stitched face; strengthened
   the clubs `Ближайших встреч` accent into a visibly lower-directed glow and
@@ -169,6 +182,13 @@
   explicit owner disposition rather than accepting its recommendations wholesale.
 
 ### Fixed
+
+- Removed the event-detail mobile breadcrumb/back row, kept wide adaptive Share
+  actions labelled, and prevented the sticky ticket action from reappearing at
+  the footer after the related-event boundary.
+- Replaced the desktop leather tag's opaque dark border and raster-side
+  hairline with a transparent border plus a three-pixel warm translucent edge
+  glaze, preserving the stitched volume and immediate terracotta fallback.
 
 - Restored current Museum of Resort Fashion (`mumod`) and structured festival
   medallions on event detail, plus Pillow-readable fallbacks for eight

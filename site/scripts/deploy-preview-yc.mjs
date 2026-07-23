@@ -96,6 +96,17 @@ if (existsSync(serviceShareCurrentManifest)) {
   const put = spawnSync('aws', ['--endpoint-url', endpoint, 's3', 'cp', serviceShareCurrentManifest, `s3://${bucket}/${buildId}/${rel}`, '--content-type', 'application/json; charset=utf-8', '--cache-control', 'no-cache, max-age=0', '--no-progress', ...dryRunArgs], { env: awsEnv, stdio: 'inherit' });
   if (put.status !== 0) process.exit(put.status || 1);
 }
+const pwaManifest = join(sourceDir, 'manifest.webmanifest');
+if (existsSync(pwaManifest)) {
+  const rel = pwaManifest.slice(sourceDir.length + 1);
+  const put = spawnSync('aws', [
+    '--endpoint-url', endpoint, 's3', 'cp', pwaManifest, `s3://${bucket}/${buildId}/${rel}`,
+    '--content-type', 'application/manifest+json; charset=utf-8',
+    '--cache-control', 'public, max-age=300, must-revalidate',
+    '--no-progress', ...dryRunArgs,
+  ], { env: awsEnv, stdio: 'inherit' });
+  if (put.status !== 0) process.exit(put.status || 1);
+}
 // Ensure calendar endpoints have the right metadata in one bounded AWS process.
 // Spawning one SDK process per event makes large previews exceed the launcher
 // lifetime even though every destination is the same accepted prefix.
@@ -117,6 +128,20 @@ const verifyTargets = [
   [`${publicBase}/${buildId}/__preview/`, 'main-domain preview index'],
   [`http://${bucket}.website.yandexcloud.net/${buildId}/__preview/`, 'website-endpoint preview index'],
 ];
+if (existsSync(pwaManifest)) {
+  verifyTargets.push([
+    `${publicBase}/${buildId}/manifest.webmanifest`,
+    'PWA manifest',
+    'application/manifest+json',
+  ]);
+  for (const size of [192, 512]) {
+    verifyTargets.push([
+      `${publicBase}/${buildId}/assets/pwa/announcements-${size}.png`,
+      `PWA ${size} icon`,
+      'image/png',
+    ]);
+  }
+}
 if (existsSync(serviceShareCurrentManifest)) {
   const manifestPublicUrl = `${publicBase}/${buildId}/service-share/current/manifest.json`;
   verifyTargets.push([manifestPublicUrl, 'F18 current manifest', 'application/json']);

@@ -76,7 +76,7 @@ test('catalog markup keeps shortcut hints focus-scoped and desktop columns count
   assert.match(controller, /matchMedia\('\(min-width: 1024px\)'\)/u);
 });
 
-test('future meeting badge uses the desktop media corner and preserves the mobile head placement', async () => {
+test('mobile club cards reuse the accepted desktop overlay and luminous corner badge', async () => {
   const card = await read('src/components/InterestClubCard.astro');
 
   assert.match(card, /class="club-card__future club-card__future--desktop"[\s\S]*data-club-future-badge="desktop"/u);
@@ -84,5 +84,10 @@ test('future meeting badge uses the desktop media corner and preserves the mobil
   assert.match(card, /\.club-card__future--desktop \{[\s\S]*position:absolute;[\s\S]*top:1\.2rem;[\s\S]*right:1\.2rem;/u);
   assert.match(card, /\.club-card__future--desktop \{[\s\S]*0 8px 11px rgba\(255,194,96,.58\),[\s\S]*0 18px 28px rgba\(244,145,37,.5\);/u);
   assert.match(card, /\.club-card__future--desktop::after \{[\s\S]*top:calc\(100% - \.12rem\);[\s\S]*radial-gradient\(ellipse at top[\s\S]*mix-blend-mode:screen;/u);
-  assert.match(card, /@media \(max-width: 760px\) \{[\s\S]*\.club-card__future--desktop \{ display:none; \}[\s\S]*\.club-card__future--mobile \{[\s\S]*display:inline-flex;/u);
+  assert.match(card, /\.club-card__future--mobile \{ display:none; \}/u);
+  assert.doesNotMatch(card, /@media \(max-width: 760px\) \{[\s\S]*\.club-card__future--desktop \{ display:none; \}/u);
+  assert.match(card, /@media \(max-width: 760px\) \{[\s\S]*\.club-card \{[\s\S]*min-height:28rem;/u);
+  assert.match(card, /@media \(max-width: 430px\) \{[\s\S]*\.club-card__facts \{ grid-template-columns:repeat\(2,minmax\(0,1fr\)\); \}/u);
+  assert.match(card, /\.club-card__media,[\s\S]*position:absolute; inset:0; width:100%; height:100%;/u);
+  assert.match(card, /\.club-card__veil \{[\s\S]*rgba\(8,13,17,.94\) 100%/u);
 });

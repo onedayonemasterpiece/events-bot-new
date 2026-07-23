@@ -18,7 +18,10 @@ Breadcrumbs are **selective hierarchy**, not permanent page chrome.
 - Desktop (`>=1024px`) uses the full, deterministic hierarchy and ends with
   the current page as non-interactive text.
 - Mobile/tablet (`<1024px`) replaces the chain with one `44px`-high named
-  parent link. It is a structural “up” link, never `history.back()`.
+  parent link on materialized Search collections and club detail. Event detail
+  is the deliberate exception: its immersive hero renders no breadcrumb/back
+  row at all. A structural “up” link, where present, is never
+  `history.back()`.
 - The path never depends on `referrer`, browser history, the listing that
   happened to be used, or a client-only state.
 
@@ -27,8 +30,9 @@ at the lower edge of the hero photograph, ending just above the cream content
 sheet. White type and a restrained under-glow preserve legibility without
 creating a competing bar. The sheet receives matching rounded top corners.
 The overlay must not cover the primary subject or become taller than its single
-line. Mobile/tablet keeps the separate named-parent link in normal flow; it
-does not inherit the photographic overlay.
+line. Mobile/tablet event detail omits the overlay and the former separate
+named-parent row so primary event information begins immediately after the
+hero.
 
 The rule intentionally removes decorative one-hop chains such as
 `Афиша / Поиск`: they duplicate the global navigation and cost roughly
@@ -42,8 +46,9 @@ Use only real, materialized parent destinations.
 2. Add a category parent only when that category has a genuine landing page.
    The current concrete case is `Выставки` → `/vystavki/`.
 3. The event title is the final desktop item with `aria-current="page"`.
-4. On mobile/tablet render only the nearest linked parent:
-   `← Выставки`, otherwise `← Афиша`.
+4. On mobile/tablet event detail render neither the chain nor a substitute
+   back row. Browser navigation and the global mobile discovery menu remain
+   responsible for returning to listings.
 
 Do not add a city node merely to make the chain longer. A city query is not a
 site hierarchy unless it is promoted to a stable, user-facing landing page.

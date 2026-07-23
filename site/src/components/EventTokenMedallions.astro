@@ -18,7 +18,7 @@ interface Props {
 }
 
 type Token = {
-  kind: 'organizer' | 'source' | 'pushkin' | 'pill';
+  kind: 'organizer' | 'source' | 'pushkin' | 'badge' | 'pill';
   key: string;
   label: string;
   shortLabel?: string;
@@ -114,12 +114,13 @@ if (event.pushkin_card) {
 }
 if (ticket.is_free) {
   tokens.push({
-    kind: 'pill',
+    kind: 'badge',
     key: 'free-admission',
     label: admissionLabel,
-    ariaLabel: admissionLabel,
-    icon: 'ticket',
-    tone: 'green',
+    title: admissionLabel,
+    ariaLabel: 'Бесплатное событие: 0 рублей',
+    imageUrl: '/assets/badges/free-listing-medallion.svg',
+    slug: 'free-admission',
     layoutRole:'secondary',
   });
 } else if (ticket.price_label) {
@@ -177,11 +178,22 @@ if (event.festival && !hasFestivalLogoToken && tokens.length < 6) {
     layoutRole:'secondary',
   });
 }
-const visibleTokens = tokens.slice(0, 6);
+const admissionBadge = tokens.find((token) => token.kind === 'badge' && token.key === 'free-admission');
+const visibleTokens = tokens.length <= 6
+  ? tokens
+  : (
+      admissionBadge && !tokens.slice(0, 6).includes(admissionBadge)
+        ? [...tokens.slice(0, 5), admissionBadge]
+        : tokens.slice(0, 6)
+    );
 // Admission/audience pills are compact facts rather than medallions. Keep
 // their accepted mobile inline treatment, but do not let them manufacture a
 // desktop InlineSlot when the event has one principal identity only.
-const desktopMedallionTokens = visibleTokens.filter((token) => token.kind !== 'pill');
+const desktopMedallionTokens = visibleTokens.filter((token) => (
+  token.kind === 'organizer'
+  || token.kind === 'source'
+  || token.kind === 'pushkin'
+));
 const mainToken = layout === 'desktop-slots'
   ? desktopMedallionTokens.find((token) => token.layoutRole === 'main')
   : undefined;
@@ -230,7 +242,7 @@ function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
               data-medallion-evidence-alias={token.evidence?.alias}
               data-medallion-evidence-match={token.evidence?.match}
             >
-              {(token.kind === 'organizer' || token.kind === 'source') && token.imageUrl ? (
+              {(token.kind === 'organizer' || token.kind === 'source' || token.kind === 'badge') && token.imageUrl ? (
                 <span class="event-token__circle" aria-label={token.ariaLabel} title={token.title || token.label}>
                   <picture>
                     {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}

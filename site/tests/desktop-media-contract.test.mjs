@@ -114,8 +114,10 @@ test('desktop tag uses cleaned blank leather, live lockup, complete edging and t
 
   assert.match(layout, /--desktop-brand-tag-skin:url\('\$\{withBase\('\/assets\/ui\/desktop-head-leather-r5\.webp'\)\}'\)/u);
   assert.match(layout, /<AnnouncementsLockup variant="desktop" class="site-header__desktop-lockup" \/>/u);
-  assert.match(layout, /\.site-header__brand-tag,\s*\.hero-gallery__brand\s*\{[\s\S]*background-color:#98401f;[\s\S]*background-image:var\(--desktop-brand-tag-skin\);/u);
-  assert.match(layout, /background-size:100% 100%/u);
-  assert.match(layout, /border:1px solid rgba\(104,39,19,.34\)/u);
+  assert.match(layout, /\.site-header__brand-tag,\s*\.hero-gallery__brand\s*\{[\s\S]*background-color:#98401f;[\s\S]*background-image:/u);
+  assert.match(layout, /linear-gradient\(90deg,[\s\S]*rgb\(152,64,31\) 0,[\s\S]*rgba\(152,64,31,.72\) 1px,[\s\S]*transparent 3px,[\s\S]*transparent calc\(100% - 3px\)[\s\S]*var\(--desktop-brand-tag-skin\)/u);
+  assert.match(layout, /background-size:100% 100%,100% 100%/u);
+  assert.match(layout, /border:1px solid transparent/u);
+  assert.doesNotMatch(layout, /border:1px solid rgba\(104,39,19,.34\)/u);
   assert.match(layout, /0 18px 32px rgba\(68,30,16,.13\)/u);
 });

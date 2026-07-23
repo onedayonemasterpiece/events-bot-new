@@ -1,0 +1,145 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+import {
+  createPwaInstallController,
+  isAndroidPlatform,
+  isStandaloneDisplay,
+} from '../src/lib/pwa-install-controller.js';
+
+const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+
+class FakeTarget {
+  constructor() {
+    this.listeners = new Map();
+  }
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) || [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  }
+  removeEventListener(type, listener) {
+    this.listeners.set(type, (this.listeners.get(type) || []).filter((item) => item !== listener));
+  }
+  dispatch(type, event = {}) {
+    for (const listener of this.listeners.get(type) || []) listener(event);
+  }
+}
+
+function fixture({
+  navigatorRef = { userAgent:'Mozilla/5.0 (Linux; Android 15)' },
+  standalone = false,
+} = {}) {
+  const windowRef = new FakeTarget();
+  windowRef.matchMedia = () => ({ matches:standalone });
+  const button = new FakeTarget();
+  button.hidden = false;
+  button.disabled = false;
+  const root = { hidden:false, dataset:{} };
+  const status = { textContent:'' };
+  const controller = createPwaInstallController({ windowRef, navigatorRef, root, button, status });
+  return { windowRef, navigatorRef, button, root, status, controller };
+}
+
+function installEvent(prompt = async () => {}) {
+  return {
+    prevented:false,
+    promptCalls:0,
+    preventDefault() { this.prevented = true; },
+    async prompt() {
+      this.promptCalls += 1;
+      return prompt();
+    },
+  };
+}
+
+test('platform helpers accept Android UAData/fallback and reject standalone display', () => {
+  assert.equal(isAndroidPlatform({ userAgentData:{ platform:'Android' }, userAgent:'' }), true);
+  assert.equal(isAndroidPlatform({ userAgent:'Mozilla/5.0 (Linux; Android 14)' }), true);
+  assert.equal(isAndroidPlatform({ userAgentData:{ platform:'iOS' }, userAgent:'iPhone' }), false);
+  assert.equal(isStandaloneDisplay({ matchMedia:() => ({ matches:true }) }, {}), true);
+  assert.equal(isStandaloneDisplay({ matchMedia:() => ({ matches:false }) }, { standalone:true }), true);
+});
+
+test('install CTA remains hidden until a real Android beforeinstallprompt event', () => {
+  const android = fixture();
+  assert.equal(android.root.hidden, true);
+  assert.equal(android.button.hidden, true);
+  assert.equal(android.controller.ready, false);
+
+  const event = installEvent();
+  android.windowRef.dispatch('beforeinstallprompt', event);
+  assert.equal(event.prevented, true);
+  assert.equal(android.root.hidden, false);
+  assert.equal(android.button.hidden, false);
+  assert.equal(android.root.dataset.pwaInstallReady, 'true');
+  assert.equal(android.controller.ready, true);
+
+  const desktop = fixture({ navigatorRef:{ userAgent:'Mozilla/5.0 (X11; Linux x86_64)' } });
+  const desktopEvent = installEvent();
+  desktop.windowRef.dispatch('beforeinstallprompt', desktopEvent);
+  assert.equal(desktopEvent.prevented, false);
+  assert.equal(desktop.root.hidden, true);
+
+  const standalone = fixture({ standalone:true });
+  const standaloneEvent = installEvent();
+  standalone.windowRef.dispatch('beforeinstallprompt', standaloneEvent);
+  assert.equal(standaloneEvent.prevented, false);
+  assert.equal(standalone.root.hidden, true);
+});
+
+test('one install event prompts once, hides before await, and a later event can re-arm after uninstall', async () => {
+  let resolvePrompt;
+  const pending = new Promise((resolve) => { resolvePrompt = resolve; });
+  const state = fixture();
+  const first = installEvent(() => pending);
+  state.windowRef.dispatch('beforeinstallprompt', first);
+
+  state.button.dispatch('click', { preventDefault() {} });
+  state.button.dispatch('click', { preventDefault() {} });
+  assert.equal(first.promptCalls, 1);
+  assert.equal(state.root.hidden, true);
+  assert.equal(state.button.hidden, true);
+  assert.equal(state.controller.ready, false);
+  resolvePrompt();
+  await pending;
+  await Promise.resolve();
+
+  const second = installEvent();
+  state.windowRef.dispatch('beforeinstallprompt', second);
+  assert.equal(state.controller.ready, true);
+  assert.equal(state.root.hidden, false);
+  state.windowRef.dispatch('appinstalled');
+  assert.equal(state.controller.ready, false);
+  assert.equal(state.root.hidden, true);
+  assert.equal(state.status.textContent, 'Приложение установлено.');
+});
+
+test('site exposes a base-aware installable manifest and footer-owned controller', async () => {
+  const [manifest, action, footer, layout, home, release, deploy] = await Promise.all([
+    read('src/pages/manifest.webmanifest.ts'),
+    read('src/components/PwaInstallAction.astro'),
+    read('src/components/SiteFooter.astro'),
+    read('src/layouts/EventLayout.astro'),
+    read('src/pages/index.astro'),
+    read('scripts/release-contract.mjs'),
+    read('scripts/deploy-preview-yc.mjs'),
+  ]);
+
+  assert.match(manifest, /const scope = withBase\('\/'\)/u);
+  assert.match(manifest, /start_url:siteHomeHref\(\)/u);
+  assert.match(manifest, /display:'standalone'/u);
+  assert.match(manifest, /prefer_related_applications:false/u);
+  assert.match(manifest, /announcements-192\.png/u);
+  assert.match(manifest, /announcements-512\.png/u);
+  assert.match(action, /data-pwa-install-root/u);
+  assert.match(action, /data-pwa-install-button hidden/u);
+  assert.match(action, /Установить приложение/u);
+  assert.match(footer, /<PwaInstallAction \/>/u);
+  assert.match(layout, /rel="manifest" href=\{withBase\('\/manifest\.webmanifest'\)\}/u);
+  assert.match(home, /const manifestHref = withBase\('\/manifest\.webmanifest'\)/u);
+  assert.match(home, /rel="manifest" href=\{manifestHref\}/u);
+  assert.match(release, /'\.webmanifest': 'application\/manifest\+json; charset=utf-8'/u);
+  assert.match(deploy, /manifest\.webmanifest[\s\S]*application\/manifest\+json; charset=utf-8/u);
+});
