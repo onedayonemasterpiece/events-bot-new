@@ -2,8 +2,9 @@
 
 ## Status
 
-Committed. R7 now implements the latest owner acceptance: exhibition seals are
-`44×44 CSS px` on mobile as well as desktop.
+Committed. R7 implements the integrated R9 correction: exhibition seals are
+`44×44 CSS px` on mobile as well as desktop. The owner requested that the
+mobile seals be enlarged, but did not prescribe this exact numeric size.
 
 ## Requirement
 
@@ -16,7 +17,7 @@ Committed. R7 now implements the latest owner acceptance: exhibition seals are
 - Base SHA: `74bb254c4d20c1e488568fde445515131e64cbd5`
 - Lane branch: `agent/mobile-acceptance-r9/exhibitions`
 - Initial regression commit: `596fe6afc31a05902f48b3a93c7433f826be6b01`
-- Owner-acceptance implementation SHA:
+- R9 scale implementation SHA:
   `9bfc1fbf97d7132860707b25738bd7d6cd485267`
 
 ## Donor provenance and updated acceptance
@@ -30,10 +31,10 @@ Committed. R7 now implements the latest owner acceptance: exhibition seals are
 - The historical seal implementation entered that branch in
   `9a4e36cdc52e34f3f3458ba65df2082f82f68d1c` and used `44px` desktop /
   `36px` mobile.
-- The latest owner feedback after R8 explicitly supersedes only the mobile size
-  portion of that baseline. R9 therefore keeps the donor structure, offsets,
-  hierarchy, fail-closed behavior, and desktop size while increasing mobile to
-  `44×44 CSS px`.
+- The latest owner feedback after R8 explicitly said the mobile seals were too
+  small. R9 therefore keeps the donor structure, offsets, hierarchy,
+  fail-closed behavior, and desktop size while choosing and validating
+  `44×44 CSS px` as the integrated correction.
 
 Telegram read evidence remains outside git at:
 `artifacts/codex/r9-exhibitions/telegram/messages-548-549-621-630.json`.
@@ -77,6 +78,10 @@ Screenshots, JSON measurements, and command logs:
 - `artifacts/codex/r9-exhibitions/owner-44/build.log`
 - `artifacts/codex/r9-exhibitions/owner-44/check-preview.log`
 
+`owner-44` is a historical artifact-directory name created by the worker. It
+is retained so the evidence links remain valid and must not be interpreted as
+proof that the owner specified or accepted the exact `44px` value.
+
 ## Files changed
 
 - `site/src/components/ExhibitionsPersonalSurface.astro`
@@ -107,9 +112,11 @@ canonical documentation file was edited.
 ## Documentation delta
 
 Per lane ownership, canonical docs and `CHANGELOG.md` were not edited. The
-integrator should record that latest owner acceptance supersedes the historical
-v12 mobile value: exhibitions seals are now `44px` on mobile and desktop, while
-the one-seal/fail-closed/deck-hierarchy contract remains unchanged.
+integrator should record that the R9 mobile correction supersedes the historical
+v12 mobile value: exhibition seals are now `44px` on mobile and desktop, while
+the one-seal/fail-closed/deck-hierarchy contract remains unchanged. This is an
+implemented and tested design choice in response to “too small”, not a claim
+that the owner specified or separately accepted the exact `44px` value.
 
 ## Risks
 

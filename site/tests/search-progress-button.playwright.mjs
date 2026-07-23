@@ -204,6 +204,20 @@ test('390px Search CTA follows accepted progress lifecycle', { skip: !hasPreview
     const input = page.locator('[data-search-input]');
     const form = page.locator('[data-search-form]');
 
+    // Exercise the exact pre-controller race: requestSubmit() reaches the
+    // pending getSession() await, then pagehide invalidates that continuation
+    // in the same browser task before the promise microtask can resume.
+    await input.fill('не продолжать после ухода со страницы');
+    await page.evaluate(() => {
+      document.querySelector('[data-search-form]')?.requestSubmit();
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+    });
+    await page.waitForTimeout(150);
+    assert.equal(await page.evaluate(() => window.__r9SearchCalls), 0, 'late getSession continuation must not start Search after pagehide');
+    assert.equal(await button.getAttribute('aria-busy'), 'false');
+    assert.equal((await label.textContent())?.trim(), 'Искать');
+    assert.equal(await progress.isHidden(), true);
+
     await input.fill('послушать хор');
     await form.evaluate((node) => {
       node.requestSubmit();
@@ -276,6 +290,31 @@ test('390px Search CTA follows accepted progress lifecycle', { skip: !hasPreview
     assert.equal((await label.textContent())?.trim(), 'Искать');
     assert.equal(await progress.isHidden(), true);
     assert.equal(await page.locator('[data-search-results] [data-event-card]').count(), 0);
+
+    // Re-enter a session and cover the same pre-controller race through the
+    // real logout handler. Both clicks occur in one browser task, so logout
+    // must invalidate the pending getSession() continuation before it can
+    // create an AbortController or invoke the Search function.
+    await page.evaluate((projectRef) => {
+      localStorage.setItem(`sb-${projectRef}-auth-token-code-verifier`, JSON.stringify('r9-code-verifier'));
+    }, configuredProjectRef);
+    await page.goto(`${searchUrl}?code=r9-code-pending-logout`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized'));
+    await input.fill('не продолжать после выхода');
+    const callsBeforePendingLogout = await page.evaluate(() => window.__r9SearchCalls);
+    await page.evaluate(() => {
+      document.querySelector('[data-search-form]')?.requestSubmit();
+      document.querySelector('[data-search-logout]')?.click();
+    });
+    await page.waitForTimeout(150);
+    assert.equal(
+      await page.evaluate(() => window.__r9SearchCalls),
+      callsBeforePendingLogout,
+      'late getSession continuation must not start Search after logout',
+    );
+    assert.equal(await button.getAttribute('aria-busy'), 'false');
+    assert.equal((await label.textContent())?.trim(), 'Искать');
+    assert.equal(await progress.isHidden(), true);
 
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     } finally {

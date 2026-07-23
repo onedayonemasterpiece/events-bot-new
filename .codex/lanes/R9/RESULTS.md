@@ -53,8 +53,10 @@ the stable production prefix are not changed.
   emitted-link HTTP checks, A-tail collection and reduced motion.
 - Exhibition Playwright: pass at `320`, `390` and `430px`; seal is exactly
   `44×44px`, complete, non-overlapping and without horizontal overflow.
-- Search Playwright: pass at `390×844`, DPR 2; progress state and duplicate
-  submit lifecycle verified against the configured preview project reference.
+- Search Playwright: pass at `390×844`, DPR 2; progress state, duplicate
+  submit lifecycle, and same-task pending-`getSession()` cancellation through
+  both `pagehide` and logout verified against the configured preview project
+  reference.
 - Integrated event screenshot at `390px`: no horizontal overflow; organizer
   and free medallions both measure `89.6875px` and share the same bottom edge.
 
