@@ -689,6 +689,35 @@ The export includes a narrow prompt-leak publication guard: rows whose title is 
 
 Live search/auth verification for the same build passed through the deployed Supabase `event-search` Edge Function. The browser smoke on `/poisk/` queried `интересно детям`, rendered `18` cards, and the latest audit row recorded `request_kind=llm_rerank`, `status=ok`, `result_count=12`, `embedding_model=gemini-embedding-2`, `embedding_key_env=GOOGLE_API_KEY5`, `llm_model=gemini-3.1-flash-lite`, `llm_policy=lite_first_gemma_overflow`, and first Lite attempt key `GOOGLE_API_KEY3`. This confirms the recovered branch is not running on a single KEY5 lane.
 
+## Mobile acceptance R6 — 2026-07-23
+
+The immutable noindex review build is published at
+<https://kenigevents.ru/preview-20260723-unified-corrections-r6/>. Its complete
+mutually linked page-type map is
+<https://kenigevents.ru/preview-20260723-unified-corrections-r6/__preview/>.
+Production was not changed.
+
+R6 removes the desktop leather tag's black subpixel side rails without clipping
+its stitched dimensional edge, unifies mobile club cards with the accepted
+desktop media-overlay composition, removes event breadcrumbs on mobile, keeps a
+single primary ticket action, labels a wide Share action, restores the dedicated
+free-admission medallion, and preserves real glass transparency in the mobile
+menu. The footer PWA action is Android-only and remains hidden until the browser
+provides a real one-shot `beforeinstallprompt`; it clears after prompting or
+`appinstalled`.
+
+Release evidence:
+
+- deployed source SHA: `da92ab4a`;
+- Astro export: `389` pages, including `288` event pages;
+- full static-site tests: `174/174` passed;
+- `check:preview` and `check:unified-prototype` passed;
+- public Chromium acceptance passed at mobile `390px` and desktop DPR 1/2 with
+  no horizontal overflow or broken images on the checked routes;
+- agy `gemini-3.1-pro-high` acceptance verdict: `GO`, `PASS 8/8`;
+- the full route catalog was delivered and read back successfully in Telegram
+  topic `KenigEvents · UI review`, topic anchor `548`, message `616`.
+
 Related/discovery data in this preview uses the two-document pgvector chain `event_pgvector_related_chain_v2_two_doc` with `embedding_document_version=related_v1`. Gemma strict related verification was not rerun for this full end-of-day refresh, so `strict_verified_related=false`; event pages still read the static related JSON and do not spend online embedding/LLM quota on page view.
 
 ## Counter freshness plan

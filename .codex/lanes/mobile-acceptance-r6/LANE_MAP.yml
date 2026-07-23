@@ -135,4 +135,4 @@ lanes:
     forbidden_files: []
     expected_output: clean pushed branch, immutable R6 preview, full Telegram route catalog
     verification_scope: full_local
-    status: in_progress
+    status: complete
