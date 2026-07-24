@@ -12,8 +12,8 @@
 ## Git
 
 - Base SHA: `7c34d29a2ad65fc6532d934a49d4d48604f79e82`
-- Implementation SHA: `cc840e4cc56bbfe3c5ca01ecf37bfe75187f240d`
-- Results head SHA: recorded by the final results commit.
+- Head SHA under test (implementation): `cc840e4cc56bbfe3c5ca01ecf37bfe75187f240d`
+- The final results-only commit SHA is reported in the lane handoff.
 - Branch: `agent/unified-r11/crop`
 
 ## Changed files
