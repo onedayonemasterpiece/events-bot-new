@@ -95,15 +95,24 @@ for (const width of [320, 390]) {
     const rail = node.querySelector('.date-rail').getBoundingClientRect();
     return {
       top: rect.top, bottom: rect.bottom, height: rect.height,
-      chipCount: node.querySelectorAll('.date-chip').length,
-      selectedCenter: selected.left + selected.width / 2,
-      railCenter: rail.left + rail.width / 2,
-    };
-  });
-  closeEnough(dateGeometry.bottom, (width === 320 ? 700 : 844) - 64);
-  closeEnough(dateGeometry.height, 56);
-  assert.equal(dateGeometry.chipCount, 42);
-  assert.ok(Math.abs(dateGeometry.selectedCenter - dateGeometry.railCenter) < 42);
+	      chipCount: node.querySelectorAll('.date-chip').length,
+	      selectedCenter: selected.left + selected.width / 2,
+	      railCenter: rail.left + rail.width / 2,
+	      railScrollLeft: node.querySelector('.date-rail').scrollLeft,
+	    };
+	  });
+	  closeEnough(dateGeometry.bottom, (width === 320 ? 700 : 844) - 64);
+	  closeEnough(dateGeometry.height, 56);
+	  assert.equal(dateGeometry.chipCount, 42);
+	  if (dateGeometry.railScrollLeft === 0 && dateGeometry.selectedCenter < dateGeometry.railCenter) {
+	    // An immutable build can start on the selected weekend itself. In that
+	    // case scrollIntoView cannot create negative scroll just to center an
+	    // early chip; keeping it fully visible at the leading edge is correct.
+	    assert.ok(dateGeometry.selectedCenter > 30);
+	    assert.ok(dateGeometry.selectedCenter < dateGeometry.railCenter);
+	  } else {
+	    assert.ok(Math.abs(dateGeometry.selectedCenter - dateGeometry.railCenter) < 42);
+	  }
   const dateHrefStatuses = await page.locator('[data-mobile-date-accessory] a[href]').evaluateAll(async (links) => {
     const hrefs = [...new Set(links.map((link) => link.href))];
     return Promise.all(hrefs.map(async (href) => ({ href, status: (await fetch(href)).status })));

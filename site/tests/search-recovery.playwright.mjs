@@ -10,6 +10,10 @@ const buildDir = process.env.SEARCH_RECOVERY_BUILD_DIR
   ? resolve(process.env.SEARCH_RECOVERY_BUILD_DIR)
   : resolve('dist');
 const hasBuild = existsSync(join(buildDir, 'poisk', 'index.html'));
+const builtSearchHtml = hasBuild ? readFileSync(join(buildDir, 'poisk', 'index.html'), 'utf8') : '';
+const builtSupabaseUrl = builtSearchHtml.match(/\bdata-supabase-url="([^"]+)"/u)?.[1] || 'https://example.supabase.co';
+const builtProjectRef = new URL(builtSupabaseUrl).hostname.split('.', 1)[0] || 'example';
+const builtCodeVerifierKey = `sb-${builtProjectRef}-auth-token-code-verifier`;
 const types = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
@@ -49,7 +53,7 @@ test('authenticated Search recovers from missing headers and stalled streams', {
     const browser = await chromium.launch({ headless: true });
     try {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-      await page.addInitScript(() => {
+      await page.addInitScript(({ codeVerifierKey }) => {
         window.__KENIGEVENTS_SEARCH_TEST_TIMEOUTS__ = {
           fetchHeaders: 80,
           streamIdle: 100,
@@ -168,8 +172,8 @@ test('authenticated Search recovers from missing headers and stalled streams', {
             headers: { 'content-type': 'application/x-ndjson; charset=utf-8' },
           }));
         };
-        localStorage.setItem('sb-example-auth-token-code-verifier', JSON.stringify('r11-code-verifier'));
-      });
+        localStorage.setItem(codeVerifierKey, JSON.stringify('r11-code-verifier'));
+      }, { codeVerifierKey: builtCodeVerifierKey });
 
       await page.goto(`${origin}/poisk/?code=r11-code`, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized'));
