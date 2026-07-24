@@ -11,6 +11,12 @@
 - Added a hash-bound 21-cover festival media ledger and behavior gate with
   exact festival/organiser/venue provenance, semantic class, confidence and
   stale-asset detection.
+- Added device-local, edition-scoped festival hearts with explicit no-subscription
+  copy, 21 stable `festival-edition:2026:*` keys and reload persistence isolated
+  from event likes and public counters.
+- Expanded the SVGRepo festival category set with CC0 saxophone, theatre masks,
+  anchor, microphone and people glyphs; cards may show a meaningful two-icon
+  combination while month rails expose a compact three-icons-plus-count inventory.
 
 - Added a base-aware installable web app manifest and an Android-only mobile
   footer install action that appears only for a real one-shot
@@ -137,6 +143,16 @@
   deep-research prompt. No production behavior or scheduler was changed.
 
 ### Changed
+
+- Enlarged festival date/status/place/category typography using formation-aware
+  compact labels, two-line place recovery and collision-tested 887/1440 desktop
+  geometry without changing the R6 timeline density or single-canvas card mechanic.
+- Routed every festival card to its declared official festival/organiser/venue
+  source instead of mixing four internal event-detail destinations into the
+  temporary no-detail-page calendar.
+- Audited official Telegram/VK video sources for all 21 festival cards: four
+  strong, thirteen conditional and four without a usable clip; playback remains
+  poster-first and deferred until edition/crop/embed checks are satisfied.
 
 - Rebuilt the festival-card lower hierarchy as a bounded translucent glass
   caption with a desktop-density safeguard, clearer title/place contrast and
