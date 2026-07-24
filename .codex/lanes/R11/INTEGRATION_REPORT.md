@@ -54,6 +54,18 @@ Worker evidence is recorded in:
   - active range `Точка и линия`.
 - Real authenticated Edge smoke: **PASS**, 9 cards plus pagination; see
   `artifacts/codex/r11-search-map/real-edge-smoke.txt`.
+- Public noindex smoke: **PASS** on the preview hub, date, Today, Weekend,
+  Popular and Search routes; desktop 1536px and mobile 390px browser loads
+  returned 200 with no page/request errors.
+
+## Handoff
+
+- Published preview:
+  `https://kenigevents.ru/preview-20260724-unified-corrections-r11/__preview/`
+- Upload verification: main domain and website endpoint **PASS**; all writes
+  remained under the versioned preview prefix.
+- Telegram topic handoff: message `687`, reply to topic root `548`, verified
+  through the approved E2E human session.
 
 ## External review
 
