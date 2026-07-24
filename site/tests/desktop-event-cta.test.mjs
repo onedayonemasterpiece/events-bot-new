@@ -70,6 +70,7 @@ test('Editorial hierarchy and production role-first media boundaries stay intact
   const page = await read('src/components/DesktopEventPage.astro');
   const presentation = await read('src/lib/desktopEventPresentation.ts');
   const panel = await read('src/components/DesktopEventActionPanel.astro');
+  const layout = await read('src/layouts/EventLayout.astro');
   const lab = await read('src/pages/lab/event-desktop/examples/[scenario].astro');
 
   assert.match(page, /family="editorial"/u);
@@ -84,8 +85,12 @@ test('Editorial hierarchy and production role-first media boundaries stay intact
   assert.match(panel, /\[data-action-treatment="physical-editorial"\][^}]*box-shadow:[^}]*inset/su);
   assert.match(panel, /prefers-reduced-motion:reduce/u);
   assert.match(panel, /:global\(\.like-burst\) \{ display:none; \}/u);
-  assert.match(panel, /content:"лайкнуто"/u);
+  assert.match(panel, /aria-pressed="true"\] \.icon__heart-solid\) \{ display:block !important; \}/u);
+  assert.match(panel, /content:"Вам нравится"/u);
+  assert.match(panel, /content:"Поделились"/u);
   assert.match(panel, /content:"добавлено"/u);
+  assert.match(panel, /data-share-label>Поделиться<\/span>/u);
+  assert.match(layout, /shareButton\.dataset\.shareState = localShares > 0 \? 'shared' : 'available'/u);
   assert.match(lab, /slug: 'cta-editorial-6529-baseline', eventId: 6529, candidate: 'editorial'/u);
   assert.match(lab, /7a75b552c70672a59b921db5fafd74b190839442e004a76f02269a2fe979f904/u);
   assert.match(lab, /width:1280,\s*height:960/u);

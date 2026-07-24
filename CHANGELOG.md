@@ -5,11 +5,13 @@
 ### Changed
 
 - Updated only the wide-photo Editorial event CTA with the requested tactile
-  dark/orange surfaces and complete hover, press, focus, saved-calendar and
-  saved-like states. Added an event `6529` frozen Editorial visual specimen and
+  dark/orange surfaces and complete hover, press, focus, saved-calendar,
+  saved-share and saved-like states. Added an event `6529` frozen Editorial visual specimen and
   a Playwright geometry gate that keeps its original hero, family, placement
   and exact desktop panel rectangle, including the original museum medallion
-  and breadcrumb chrome; Split and mobile templates remain unchanged.
+  and breadcrumb chrome. Raised directional highlights and warm state glows to
+  match the supplied material reference, and renamed the saved-like label to
+  `Вам нравится`; Split and mobile templates remain unchanged.
 
 ### Fixed
 

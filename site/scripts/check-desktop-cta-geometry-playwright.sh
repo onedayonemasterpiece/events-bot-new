@@ -36,3 +36,4 @@ check_geometry "split CTA fixture" "lab/event-desktop/examples/cta-phone-invaria
 check_geometry "registration CTA fixture" "lab/event-desktop/examples/cta-registration-invariant" split "Зарегистрироваться" 3 icons
 check_geometry "free calendar-primary CTA fixture" "lab/event-desktop/examples/cta-free-calendar-invariant" split "В календарь" 2 calendar-primary
 check_geometry "editorial CTA fixture" "lab/event-desktop/examples/footer-service-v1" editorial
+check_geometry "frozen event 6529 Editorial CTA fixture" "lab/event-desktop/examples/cta-editorial-6529-baseline" editorial "Купить билет" 3

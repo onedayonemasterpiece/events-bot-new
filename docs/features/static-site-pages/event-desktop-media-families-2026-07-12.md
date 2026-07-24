@@ -31,9 +31,12 @@ ordered horizontal reference during review.
 The frozen lab specimen also restores the baseline-only museum medallion and
 overlay breadcrumbs as absolutely positioned chrome, so they cannot disappear
 from visual comparison or alter title/CTA geometry. Editorial persisted states
-show the compact reference labels (`лайкнуто` / `добавлено`) inside the existing
-utility row; the generic flying-heart burst is suppressed only inside this
-physical Editorial action panel.
+show compact action labels (`Вам нравится`, `Поделились`, `добавлено`) inside
+the existing utility row; the generic flying-heart burst is suppressed only
+inside this physical Editorial action panel. The state matrix separately
+captures idle, hover, pointer-down, keyboard-focus and persisted variants; the
+directional highlight and warm state glow must remain visible without changing
+the frozen panel rectangle.
 
 Related-card media is a hard, testable desktop contract rather than an aesthetic fallback:
 

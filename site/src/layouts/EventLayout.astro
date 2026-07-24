@@ -4229,7 +4229,13 @@ const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 
             card.querySelectorAll('[data-share-count]').forEach((count) => {
               const shareButton = count.closest('[data-native-share]');
               const base = Number(shareButton?.dataset.shareBaseCount || '0');
-              count.textContent = formatCount(base + Number(current.shares || 0));
+              const localShares = Number(current.shares || 0);
+              const total = base + localShares;
+              count.textContent = formatCount(total);
+              if (shareButton) {
+                shareButton.dataset.shareState = localShares > 0 ? 'shared' : 'available';
+                shareButton.setAttribute('aria-label', `${localShares > 0 ? 'Поделиться снова' : 'Поделиться'}: ${card.dataset.eventTitle || 'событие'}. Сейчас ${total}`);
+              }
             });
             card.querySelectorAll('[data-feedback-action="not_interested"]').forEach((button) => {
               button.setAttribute('aria-pressed', current.not_interested ? 'true' : 'false');
