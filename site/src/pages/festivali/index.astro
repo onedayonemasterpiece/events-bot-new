@@ -1,13 +1,11 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import Icon from '../../components/Icon.astro';
 import { festivalTimeline, festivalTimelineMonths } from '../../data/festivalTimeline';
 import { festivalTimelineMedia } from '../../data/festivalTimelineMedia';
 import { packFestivalTimeline } from '../../lib/festivalTimelineLayout';
 import {
   absoluteUrl,
-  eventAbsoluteUrl,
-  eventHref,
-  getEventById,
   SITE_NAME,
   withBase,
 } from '../../lib/events';
@@ -34,44 +32,85 @@ const compactStatus = {
   'program-pending': 'программа позже',
   'date-pending': 'дата уточняется',
 } as const;
-const categoryIcon = (category: string) => {
-  if (/музык|песн|джаз/iu.test(category)) return '/assets/icons/festival-categories/389324-music.svg';
-  if (/гастроном|вино/iu.test(category)) return '/assets/icons/festival-categories/389063-carrot.svg';
-  if (/кино/iu.test(category)) return '/assets/icons/festival-categories/389059-camera.svg';
-  if (/театр/iu.test(category)) return '/assets/icons/festival-categories/389461-ticket.svg';
-  if (/истор|реконструк/iu.test(category)) return '/assets/icons/festival-categories/389241-history.svg';
-  if (/море|путешеств/iu.test(category)) return '/assets/icons/festival-categories/389291-map-pin.svg';
-  if (/литератур/iu.test(category)) return '/assets/icons/festival-categories/389049-book-open.svg';
-  if (/современн|искусств|косплей|культур/iu.test(category)) return '/assets/icons/festival-categories/389330-palette.svg';
-  return '/assets/icons/festival-categories/389439-star.svg';
+const denseCompactStatus = {
+  announced: 'официально',
+  'program-pending': 'прогр. позже',
+  'date-pending': 'дата позже',
+} as const;
+const denseDateLabel = (slug: string, fallback: string) => ({
+  shedevry: '1.10–29.11',
+  ostrova: '24.10–3.11',
+  'klub-puteshestvennikov': 'окт–дек',
+  'jazz-v-filarmonii': '13–18.11',
+}[slug] || fallback);
+const festivalIconPath = (filename: string) => `/assets/icons/festival-categories/${filename}`;
+const festivalCategoryIcons: Record<string, string[]> = {
+  'city-jazz': ['120598-saxophone.svg', '389324-music.svg'],
+  sosedi: ['389063-carrot.svg', '389494-users.svg'],
+  grozd: ['389063-carrot.svg'],
+  'more-vnutri': ['389330-palette.svg'],
+  'bolshoy-kaup': ['389241-history.svg', '389291-map-pin.svg'],
+  koroche: ['389059-camera.svg', '389461-ticket.svg'],
+  mimikriya: ['389330-palette.svg', '389439-star.svg'],
+  'territoriya-mira': ['389324-music.svg', '389291-map-pin.svg'],
+  'street-food': ['389063-carrot.svg', '389494-users.svg'],
+  'zhili-byli': ['103262-theatre-masks.svg'],
+  'narodov-mnogo': ['389494-users.svg', '389330-palette.svg'],
+  vitaliki: ['389302-mic.svg', '389324-music.svg'],
+  'vodnaya-assambleya': ['389003-anchor.svg', '389241-history.svg'],
+  shedevry: ['389324-music.svg'],
+  'dni-literatury': ['389049-book-open.svg'],
+  'tykvennyi-pir': ['389439-star.svg', '389063-carrot.svg'],
+  ostrova: ['103262-theatre-masks.svg'],
+  'klub-puteshestvennikov': ['389291-map-pin.svg', '389241-history.svg'],
+  'v-edinstve': ['389494-users.svg', '389330-palette.svg'],
+  'jazz-v-filarmonii': ['120598-saxophone.svg', '389324-music.svg'],
+  'dekabristskie-vechera': ['389324-music.svg', '389049-book-open.svg'],
 };
 const resolvedItems = festivalTimeline.map((item) => {
   const mediaRecord = festivalTimelineMedia[item.slug as keyof typeof festivalTimelineMedia];
   if (!mediaRecord || mediaRecord.semanticClass !== item.mediaMode) {
     throw new Error(`Festival media review is missing or stale for ${item.slug}`);
   }
-  const internalEvent = item.internalEventId ? getEventById(item.internalEventId) : undefined;
   const naturalAspect = item.imageWidth / item.imageHeight;
   const mobileAspect = item.mediaMode === 'document'
     ? (naturalAspect < 4 / 5 ? Math.min(4 / 5, naturalAspect / 0.8) : naturalAspect)
     : 16 / 10;
   return {
     ...item,
-    href: internalEvent ? eventHref(internalEvent) : item.sourceHref,
-    absoluteHref: internalEvent ? eventAbsoluteUrl(internalEvent) : item.sourceHref,
-    isExternal: !internalEvent,
-    linkLabel: internalEvent ? 'О событии' : item.sourceLabel,
+    festivalEditionKey: `festival-edition:2026:${item.slug}`,
+    href: item.sourceHref,
+    absoluteHref: item.sourceHref,
+    isExternal: true,
+    linkLabel: item.sourceLabel,
     mobileAspect,
     compactDateLabel: compactDate(item.dateLabel),
     compactStatusLabel: compactStatus[item.status],
-    categoryIcon: categoryIcon(item.category),
+    compactPlaceLabel: item.slug === 'jazz-v-filarmonii' ? 'Областная филармония' : item.place,
+    categoryIcons: (festivalCategoryIcons[item.slug] || ['389439-star.svg']).map(festivalIconPath),
     mediaRecord,
   };
 });
 const monthSections = festivalTimelineMonths
   .map((month) => {
     const items = resolvedItems.filter((item) => item.monthKey === month.key);
-    return { ...month, items, rows: packFestivalTimeline(items) };
+    const seenCategories = new Set<string>();
+    const categoryInventory = items.flatMap((item) => {
+      if (seenCategories.has(item.category)) return [];
+      seenCategories.add(item.category);
+      return [{ icon: item.categoryIcons[0], label: item.category }];
+    });
+    const visibleCategoryIcons = categoryInventory.length >= 5
+      ? categoryInventory.slice(0, 3)
+      : categoryInventory.slice(0, 4);
+    return {
+      ...month,
+      items,
+      categoryInventory,
+      visibleCategoryIcons,
+      hiddenCategoryCount: categoryInventory.length - visibleCategoryIcons.length,
+      rows: packFestivalTimeline(items),
+    };
   })
   .filter((month) => month.items.length > 0);
 for (const month of monthSections) {
@@ -132,6 +171,22 @@ const structuredData = [{
       ))}
     </nav>
 
+    <section class="festival-guide" aria-label="Как пользоваться календарём">
+      <div class="festival-guide__item">
+        <span class="festival-guide__icon festival-guide__icon--heart" aria-hidden="true"><Icon name="heart" /></span>
+        <p><strong>Сохраняйте любимые</strong><span>Сердце запомнит выбор на этом устройстве.</span></p>
+      </div>
+      <div class="festival-guide__item">
+        <span class="festival-guide__icon" aria-hidden="true">↗</span>
+        <p><strong>Проверяйте у организаторов</strong><span>Карточка ведёт на официальный источник или страницу фестиваля.</span></p>
+      </div>
+      <div class="festival-guide__item">
+        <span class="festival-guide__icon" aria-hidden="true">＋</span>
+        <p><strong>Подробности и уведомления — позже</strong><span>Сейчас подписка не оформляется и уведомления не отправляются.</span></p>
+      </div>
+      <span class="festival-guide__live" data-festival-like-live aria-live="polite"></span>
+    </section>
+
     <div class="festival-timeline">
       {monthSections.map((month) => (
         <section
@@ -145,6 +200,25 @@ const structuredData = [{
               <div class="festival-month__marker" aria-hidden="true"></div>
               <div class="festival-month__heading">
                 <h2 id={`month-title-${month.key}`}>{month.label}</h2>
+                <ul class="festival-month__categories" aria-label={`Категории фестивалей в ${month.label.toLowerCase()}`}>
+                  {month.visibleCategoryIcons.map((category) => (
+                    <li aria-label={category.label}>
+                      <i
+                        aria-hidden="true"
+                        style={`--festival-category-icon:url("${withBase(category.icon)}");`}
+                      ></i>
+                    </li>
+                  ))}
+                  {month.hiddenCategoryCount > 0 && (
+                    <li
+                      class="festival-month__categories-more"
+                      aria-label={`Ещё категорий: ${month.hiddenCategoryCount}`}
+                    >+{month.hiddenCategoryCount}</li>
+                  )}
+                </ul>
+                <span class="festival-month__categories-all">
+                  {month.categoryInventory.map((category) => category.label).join(', ')}
+                </span>
                 <span class="festival-month__symbol" aria-hidden="true">{month.symbol}</span>
                 <p>{month.mood}</p>
               </div>
@@ -168,6 +242,12 @@ const structuredData = [{
                   const item = resolvedItems.find((candidate) => candidate.slug === baseItem.slug)!;
                   const frameAspect = row.columnWeights[itemIndex];
                   const cropFraction = row.cropFractions[itemIndex];
+                  const denseRow = row.items.length === 4;
+                  const compactStatusRow = denseRow || row.items.length === 2;
+                  const visibleDateLabel = denseDateLabel(item.slug, item.compactDateLabel);
+                  const visibleStatusLabel = compactStatusRow
+                    ? denseCompactStatus[item.status]
+                    : item.compactStatusLabel;
                   return (
                     <article
                       class:list={[
@@ -203,21 +283,37 @@ const structuredData = [{
                         </figure>
                         <div class="festival-card__veil" aria-hidden="true"></div>
                         <div class="festival-card__topline">
-                          <span class="festival-card__date" title={item.dateLabel}>{item.compactDateLabel}</span>
-                          <span class="festival-card__status" title={item.statusLabel}>{item.compactStatusLabel}</span>
+                          <span class="festival-card__date" title={item.dateLabel}>{visibleDateLabel}</span>
+                          <span class="festival-card__status" title={item.statusLabel}>{visibleStatusLabel}</span>
                         </div>
                         <div class="festival-card__caption">
                           <h3>{item.title}</h3>
-                          <p class="festival-card__place">{item.place}</p>
+                          <p class="festival-card__place" title={item.place}>{item.compactPlaceLabel}</p>
                           <span class="festival-card__theme" title={item.category}>
-                            <i
-                              aria-hidden="true"
-                              style={`--festival-category-icon:url("${withBase(item.categoryIcon)}");`}
-                            ></i>
+                            <span class="festival-card__theme-icons" aria-hidden="true">
+                              {item.categoryIcons.map((icon, iconIndex) => (
+                                <i
+                                  class:list={[iconIndex > 0 && 'festival-card__theme-icon--secondary']}
+                                  style={`--festival-category-icon:url("${withBase(icon)}");`}
+                                ></i>
+                              ))}
+                            </span>
                             <span>{item.category}</span>
                           </span>
                         </div>
                       </a>
+                      <button
+                        type="button"
+                        class="festival-card__like"
+                        data-festival-like
+                        data-festival-key={item.festivalEditionKey}
+                        data-festival-title={item.title}
+                        aria-pressed="false"
+                        aria-label={`Отметить как понравившийся фестиваль: ${item.title}`}
+                        title="Отметить как понравившийся"
+                      >
+                        <Icon name="heart" />
+                      </button>
                     </article>
                   );
                 })}
@@ -229,6 +325,78 @@ const structuredData = [{
     </div>
   </main>
 </EventLayout>
+
+<script is:inline>
+  (() => {
+    const STORAGE_KEY = 'ke_festival_likes_v1';
+    const buttons = [...document.querySelectorAll('[data-festival-like]')];
+    if (!buttons.length) return;
+
+    let favorites = new Set();
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      if (Array.isArray(stored)) favorites = new Set(stored.filter((value) => typeof value === 'string'));
+    } catch {}
+
+    const live = document.querySelector('[data-festival-like-live]');
+    let liveTimer = 0;
+    const announce = (message) => {
+      if (!live) return;
+      window.clearTimeout(liveTimer);
+      live.textContent = message;
+      live.classList.add('is-visible');
+      liveTimer = window.setTimeout(() => live.classList.remove('is-visible'), 2600);
+    };
+
+    const updateButton = (button) => {
+      const key = button.dataset.festivalKey || '';
+      const title = button.dataset.festivalTitle || 'Фестиваль';
+      const liked = favorites.has(key);
+      button.setAttribute('aria-pressed', liked ? 'true' : 'false');
+      button.setAttribute(
+        'aria-label',
+        liked
+          ? `Убрать из понравившихся фестивалей: ${title}`
+          : `Отметить как понравившийся фестиваль: ${title}`,
+      );
+      button.title = liked ? 'Убрать из понравившихся' : 'Отметить как понравившийся';
+    };
+
+    buttons.forEach((button) => {
+      updateButton(button);
+      button.addEventListener('click', () => {
+        const key = button.dataset.festivalKey || '';
+        const title = button.dataset.festivalTitle || 'Фестиваль';
+        if (!key) return;
+        const liked = !favorites.has(key);
+        if (liked) favorites.add(key);
+        else favorites.delete(key);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify([...favorites]));
+        } catch {
+          if (liked) favorites.delete(key);
+          else favorites.add(key);
+          updateButton(button);
+          announce(`${title}: не удалось сохранить отметку — браузер блокирует локальное хранилище.`);
+          return;
+        }
+        updateButton(button);
+        announce(
+          liked
+            ? `${title}: отметили как понравившееся. Сохранено только в этом браузере.`
+            : `${title} — убрано из любимых.`,
+        );
+      });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-reset-personalization]')) return;
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      favorites.clear();
+      buttons.forEach(updateButton);
+    });
+  })();
+</script>
 
 <style>
   .festival-page {
@@ -352,6 +520,78 @@ const structuredData = [{
   .festival-month-nav a:hover { background: var(--bg-soft); color: var(--primary-strong); }
   .festival-month-nav a span:first-child { display: none; }
 
+  .festival-guide {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin: 0 0 clamp(1.8rem, 4vw, 3rem);
+    overflow: visible;
+    border: 1px solid rgba(121, 48, 20, 0.12);
+    border-radius: 18px;
+    background: rgba(255, 253, 248, 0.76);
+    box-shadow: 0 12px 34px rgba(72, 45, 25, 0.07);
+  }
+  .festival-guide__item {
+    display: grid;
+    grid-template-columns: 2.35rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+    padding: 0.92rem 1rem;
+    border-left: 1px solid rgba(121, 48, 20, 0.1);
+  }
+  .festival-guide__item:first-child { border-left: 0; }
+  .festival-guide__icon {
+    display: grid;
+    width: 2.35rem;
+    height: 2.35rem;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(15, 118, 110, 0.09);
+    color: #0f766e;
+    font-size: 1.15rem;
+    font-weight: 760;
+  }
+  .festival-guide__icon--heart {
+    background: rgba(165, 72, 33, 0.1);
+    color: var(--primary);
+  }
+  .festival-guide__icon :global(svg) { width: 1.15rem; height: 1.15rem; fill: currentColor; }
+  .festival-guide__item p { min-width: 0; margin: 0; line-height: 1.25; }
+  .festival-guide__item strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 790;
+  }
+  .festival-guide__item p span {
+    display: block;
+    margin-top: 0.18rem;
+    color: var(--muted);
+    font-size: 0.74rem;
+  }
+  .festival-guide__live {
+    position: fixed;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    z-index: 60;
+    max-width: min(25rem, calc(100vw - 2rem));
+    padding: 0.72rem 0.9rem;
+    border: 1px solid rgba(121, 48, 20, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 253, 248, 0.97);
+    box-shadow: 0 14px 40px rgba(36, 24, 16, 0.2);
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 670;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(0.5rem);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+  .festival-guide__live.is-visible { opacity: 1; transform: translateY(0); }
+
   .festival-month {
     display: grid;
     grid-template-columns: 132px minmax(0, 1fr);
@@ -414,8 +654,53 @@ const structuredData = [{
     max-width: 96px;
     margin: 0.32rem 0 0;
     color: var(--muted);
-    font-size: 0.67rem;
+    font-size: 0.7rem;
     line-height: 1.35;
+  }
+  .festival-month__categories {
+    display: flex;
+    width: 88px;
+    height: 18px;
+    align-items: center;
+    gap: 3px;
+    margin: 4px 0 0;
+    padding: 0;
+    overflow: hidden;
+    list-style: none;
+  }
+  .festival-month__categories li {
+    display: grid;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    border-radius: 5px;
+    background: rgba(165, 72, 33, 0.08);
+    color: var(--primary);
+  }
+  .festival-month__categories i {
+    display: block;
+    width: 12.5px;
+    height: 12.5px;
+    background: currentColor;
+    -webkit-mask: var(--festival-category-icon) center / contain no-repeat;
+    mask: var(--festival-category-icon) center / contain no-repeat;
+  }
+  .festival-month__categories .festival-month__categories-more {
+    flex-basis: 23px;
+    width: 23px;
+    font-size: 9.5px;
+    font-weight: 720;
+  }
+  .festival-month__categories-all {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .festival-month__cards {
     min-width: 0;
@@ -454,6 +739,42 @@ const structuredData = [{
   }
   .festival-card__media { position: absolute; inset: 0; margin: 0; }
   .festival-card__media img { width: 100%; height: 100%; object-fit: cover; }
+  .festival-card__like {
+    position: absolute;
+    top: clamp(2.35rem, 3.15vw, 2.85rem);
+    right: clamp(0.5rem, 0.84vw, 0.7rem);
+    z-index: 4;
+    display: grid;
+    width: clamp(1.75rem, 2.15vw, 2rem);
+    height: clamp(1.75rem, 2.15vw, 2rem);
+    padding: 0;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 50%;
+    background: rgba(18, 14, 12, 0.58);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
+    color: #fff;
+    cursor: pointer;
+    -webkit-backdrop-filter: blur(7px);
+    backdrop-filter: blur(7px);
+    transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
+  }
+  .festival-card__like:hover {
+    border-color: rgba(255, 255, 255, 0.72);
+    background: rgba(18, 14, 12, 0.76);
+  }
+  .festival-card__like:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.96);
+    outline-offset: 2px;
+  }
+  .festival-card__like :global(svg) { width: 1rem; height: 1rem; fill: currentColor; }
+  .festival-card__like[aria-pressed="true"] {
+    border-color: rgba(255, 255, 255, 0.86);
+    background: #fff;
+    color: var(--primary);
+  }
+  .festival-card__like[aria-pressed="true"] :global(.icon__heart-outline) { display: none; }
+  .festival-card__like[aria-pressed="true"] :global(.icon__heart-solid) { display: block !important; }
 
   .festival-card__veil {
     position: absolute;
@@ -497,13 +818,13 @@ const structuredData = [{
   .festival-card__status {
     display: inline-flex;
     align-items: center;
-    min-height: 1.24rem;
-    padding: 0.25rem 0.44rem;
+    min-height: 23px;
+    padding: 4px 6.5px;
     border: 0;
     border-radius: 4px;
-    font-size: clamp(0.54rem, 0.62vw, 0.6rem);
-    font-weight: 700;
-    line-height: 1.15;
+    font-size: clamp(10px, 0.76vw, 11px);
+    font-weight: 740;
+    line-height: 1.12;
     white-space: nowrap;
   }
   .festival-card__date {
@@ -543,14 +864,16 @@ const structuredData = [{
   }
   .festival-card__caption p {
     margin: 0.24rem 0 0;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.94);
     overflow: hidden;
-    font-size: clamp(0.61rem, 0.72vw, 0.68rem);
-    font-weight: 470;
-    line-height: 1.3;
+    font-size: clamp(10.5px, 0.83vw, 12.25px);
+    font-weight: 510;
+    line-height: 1.25;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: -webkit-box;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
   .festival-card__caption h3 {
     display: -webkit-box;
@@ -559,7 +882,7 @@ const structuredData = [{
     text-wrap: balance;
     font-family: var(--ke-font-sans);
     overflow: hidden;
-    font-size: clamp(0.98rem, 1.3vw, 1.3rem);
+    font-size: clamp(17.5px, 1.42vw, 21px);
     font-weight: 760;
     letter-spacing: -0.03em;
     line-height: 1.06;
@@ -576,45 +899,59 @@ const structuredData = [{
     overflow: hidden;
     border: 0;
     border-radius: 5px;
-    background: rgba(15, 15, 15, 0.56);
+    background: rgba(15, 15, 15, 0.66);
     color: rgba(255, 255, 255, 0.96);
-    font-size: clamp(0.56rem, 0.64vw, 0.62rem);
-    font-weight: 500;
+    font-size: clamp(9.25px, 0.74vw, 10.75px);
+    font-weight: 580;
     line-height: 1;
     text-overflow: ellipsis;
     white-space: nowrap;
     -webkit-backdrop-filter: blur(6px);
     backdrop-filter: blur(6px);
   }
-  .festival-card__theme i {
+  .festival-card__theme-icons {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    margin-right: 0.34rem;
+  }
+  .festival-card__theme-icons i {
     flex: 0 0 auto;
     display: block;
-    width: 0.78rem;
-    height: 0.78rem;
-    margin-right: 0.3rem;
+    width: clamp(11.5px, 0.94vw, 13.75px);
+    height: clamp(11.5px, 0.94vw, 13.75px);
     background: currentColor;
     -webkit-mask: var(--festival-category-icon) center / contain no-repeat;
     mask: var(--festival-category-icon) center / contain no-repeat;
   }
-  .festival-card__theme span {
+  .festival-card__theme > span:last-child {
     min-width: 0;
     overflow: hidden;
     text-transform: lowercase;
     text-overflow: ellipsis;
   }
-  .festival-row--4 .festival-card__topline { gap: 0.26rem; }
+  .festival-row--4 .festival-card__topline { gap: 3px; }
   .festival-row--4 .festival-card__date,
   .festival-row--4 .festival-card__status {
-    min-height: 1.2rem;
-    padding: 0.21rem 0.36rem;
-    font-size: clamp(0.5rem, 0.56vw, 0.55rem);
+    min-height: 22px;
+    padding: 3.5px 3px;
+    font-size: clamp(9.5px, 0.72vw, 10.75px);
   }
   .festival-row--4 .festival-card__caption {
     padding: 0 clamp(0.58rem, 0.76vw, 0.68rem) clamp(0.56rem, 0.72vw, 0.65rem);
   }
-  .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.94rem, 1.08vw, 1.06rem); }
+  .festival-row--4 .festival-card__caption h3 { font-size: clamp(16.5px, 1.28vw, 19px); }
   .festival-row--4 .festival-card__caption p { margin-top: 0.2rem; }
   .festival-row--4 .festival-card__theme { margin-top: 0.32rem; }
+  .festival-row--1 .festival-card__topline,
+  .festival-row--2 .festival-card__topline {
+    right: clamp(2.65rem, 3.35vw, 3rem);
+  }
+  .festival-row--1 .festival-card__like,
+  .festival-row--2 .festival-card__like {
+    top: clamp(0.5rem, 0.84vw, 0.7rem);
+  }
 
   @media (min-width: 1100px) {
     .festival-card { aspect-ratio: var(--festival-card-aspect); }
@@ -627,25 +964,31 @@ const structuredData = [{
     }
     .festival-card__caption h3,
     .festival-row--4 .festival-card__caption h3 {
-      font-size: 0.96rem;
-      line-height: 1.05;
+      font-size: 16.5px;
+      line-height: 1.06;
     }
+    .festival-row--4 .festival-card__caption h3 { font-size: 16px; }
     .festival-card__caption p,
     .festival-row--4 .festival-card__caption p {
       margin-top: 0.2rem;
-      font-size: 0.6rem;
+      font-size: 10.25px;
     }
     .festival-card__theme,
     .festival-row--4 .festival-card__theme {
       margin-top: 0.3rem;
-      padding: 0.21rem 0.34rem;
-      font-size: 0.5rem;
+      padding: 3px 5px;
+      font-size: 9px;
     }
-    .festival-card__theme i {
-      width: 0.64rem;
-      height: 0.64rem;
-      margin-right: 0.2rem;
+    .festival-card__theme-icons { gap: 0; margin-right: 0.24rem; }
+    .festival-card__theme-icons i {
+      width: 11px;
+      height: 11px;
     }
+    .festival-card__theme-icon--secondary { display: none !important; }
+    .festival-card__date { font-size: 9.75px; }
+    .festival-card__status { font-size: 9.5px; }
+    .festival-row--4 .festival-card__date { font-size: 9.5px; }
+    .festival-row--4 .festival-card__status { font-size: 9.25px; }
   }
 
   @media (max-width: 819px) {
@@ -676,6 +1019,13 @@ const structuredData = [{
     }
     .festival-month-nav a span:first-child { display: inline; }
     .festival-month-nav a span:last-child { display: none; }
+    .festival-guide { grid-template-columns: 1fr; }
+    .festival-guide__item {
+      padding: 0.8rem 0.9rem;
+      border-top: 1px solid rgba(121, 48, 20, 0.1);
+      border-left: 0;
+    }
+    .festival-guide__item:first-child { border-top: 0; }
     .festival-month { display: block; scroll-margin-top: 9rem; }
     .festival-month__rail {
       padding: 0 0 0.65rem 0.25rem;
@@ -699,6 +1049,7 @@ const structuredData = [{
     .festival-month__heading h2 { order: 1; font-size: 1.65rem; }
     .festival-month__heading p { order: 3; max-width: none; margin: 0; font-size: 0.67rem; }
     .festival-month__symbol { order: 2; margin: 0; }
+    .festival-month__categories { display: none; }
     .festival-month__cards { padding: 0 0 1.65rem; }
     .festival-row,
     .festival-row--4 {
@@ -724,6 +1075,7 @@ const structuredData = [{
     .festival-card__topline { top: 0.65rem; right: 0.65rem; left: 0.65rem; }
     .festival-card__date,
     .festival-card__status { min-height: 1.28rem; padding: 0.19rem 0.34rem; font-size: 0.56rem; }
+    .festival-card__like { top: 2.55rem; right: 0.65rem; width: 1.8rem; height: 1.8rem; }
     .festival-card__caption { right: 0.5rem; bottom: 0.5rem; left: 0.5rem; padding: 0.58rem; }
     .festival-card__caption h3,
     .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.9rem, 4.15vw, 1.08rem); }
@@ -749,6 +1101,8 @@ const structuredData = [{
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .festival-card { transition: none; }
+    .festival-card,
+    .festival-card__like,
+    .festival-guide__live { transition: none; }
   }
 </style>
