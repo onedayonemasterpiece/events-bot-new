@@ -159,3 +159,13 @@ lock, а `linked_event_ids` становится совместимым derived 
 страница должна ещё применять lifecycle-фильтры, переключать выбранную дату со
 всеми зависимыми CTA/calendar/source данными и не отправлять siblings в блок
 `semantic_related`.
+
+### Cross-month compact labels
+
+The formatter groups reciprocal occurrence dates by year and month instead of
+repeating the month for every date. Thus a same-time family renders
+`24, 25 июля, 27 сентября 19:00`; the two-line rail date is
+`24, 25 июл, 27 сен`, with the full grouped schedule in `aria-label`. The
+existing exact contracts `2, 9 ноября 19:00` and
+`4 ноября 17:00, 19:00` remain unchanged. This formatting change does not relax
+family identity: only reciprocal explicit `other_date_ids` may form a family.

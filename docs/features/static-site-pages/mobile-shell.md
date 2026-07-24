@@ -1048,3 +1048,27 @@ event link or medallion set. It uses local browser state only and is excluded
 from production output; its exact placement and motion contract remain
 canonical in
 [`amber-artifact-easter-egg.md`](amber-artifact-easter-egg.md).
+
+## R11 rail consent and temporal truth, 2026-07-24
+
+The red `Не интересно` edge is deliberately taught once per device:
+
+- the first completed negative swipe opens an `alertdialog`;
+- its copy says that the current event will be hidden and that later swipe
+  marks will be applied without confirmation, with Undo still available;
+- consent is persisted only after the canonical feedback control confirms
+  `aria-pressed="true"`; Cancel and storage failures keep the fail-closed
+  confirmation path;
+- subsequent negative swipes call the same canonical feedback action directly
+  and keep the 4.5-second Undo. Consent applies only to the swipe shortcut.
+
+On `Сегодня`, the browser recalculates temporal state against the Kaliningrad
+clock on load and once per minute. A row is visually past after an explicit
+`end_at`, or `started-earlier` after a start with no trustworthy duration has
+been behind the current time by at least one hour. Only the main event image is
+desaturated; identity/free medallions, text, controls and row order remain
+unchanged.
+
+Compact rail schedule tiles must never ellipsize the essential end date. A
+same-month range is written as `8–9 августа`; cross-month ranges retain both
+month names. The full schedule remains in the accessible label.

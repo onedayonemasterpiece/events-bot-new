@@ -1143,3 +1143,28 @@ Verification evidence:
 - local real-Edge Playwright smoke now proves scrollability, not only first-card render: `cards=12 first_event=5237 scrolled_event=6310 scroll_y=6073` on the third search after LLM quota exhaustion;
 - public-page real-Edge Playwright smoke on <https://kenigevents.ru/preview-20260629-event-pages-v55-auth-search-smoke/poisk/> rendered and scrolled through cards: `cards=16 first_event=5201 scrolled_event=698 scroll_y=9143`; screenshot artifact: `artifacts/codex/authorized-search-public-smoke-20260629/public-v55-scrolled-results.png`;
 - readiness probe and `npm --prefix site run check:preview` stayed green.
+
+## R11 bounded mobile liveness and identifiable account, 2026-07-24
+
+Telegram evidence `669–671` showed a real authenticated mobile request stuck at
+`Ищу… / Открываю поиск…`. Readiness and a real Edge smoke against the same R10
+build succeeded, so the failure was a client liveness hole rather than a claim
+that the deployed search backend was unavailable.
+
+Every search attempt has three bounded phases: response headers, every NDJSON
+`reader.read()` (including reads after the first progress frame), and the whole
+attempt. A header/idle stall cancels only that streaming attempt and runs the
+existing bounded JSON `stream_rescue` once with the verifier disabled. The
+rescue itself cannot wait forever. If it also fails, skeleton and progress
+vanish, the input becomes editable, the button returns to `Искать`, and
+retryable product copy replaces the dead state. Request epochs prevent a late
+timed-out response from repainting a newer query; logout and page exit still
+invalidate pending session and network continuations.
+
+The account control is identity, not decoration. It exposes
+`Профиль: <name/email>` to assistive technology and keeps the full identity in
+the account popover. A meaningful human name is preferred; otherwise the email
+is shown and its local part supplies the deterministic initial. A one-letter
+provider username cannot mask a known email. Opaque provider imagery is not the
+only explanation of the session, and an image failure falls back to the same
+initial.

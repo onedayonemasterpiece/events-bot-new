@@ -183,6 +183,22 @@
 
 ### Fixed
 
+- Fixed the R11 unified noindex prototype: the first mobile negative swipe now
+  explains and records one-time consent before later direct, undoable marks;
+  Today restores runtime past-event media desaturation; compact rail ranges no
+  longer hide their end date; and desktop date shelves retain the current date
+  after the hero leaves the viewport.
+- Fixed Popular lifecycle and occurrence copy across representations: ended
+  one-offs are excluded, active ranges remain through `end_date`, and repeated
+  month names collapse to labels such as `24, 25 июл, 27 сен`.
+- Fixed lower listing continuations to use the shared full-row,
+  minimum-document-height crop optimizer instead of independent card geometry,
+  preserving no-field photos and fail-closed OCR constraints.
+- Fixed authenticated mobile Search liveness with bounded header, stream-idle,
+  total-request and JSON-rescue phases; recovery always restores controls.
+  Account UI now exposes a meaningful name/email identity with a deterministic
+  initial instead of an ambiguous provider glyph.
+
 - Restored the accepted v23/v28 mobile rail interactions and proof states:
   shared hollow/filled heart icons, red start-edge negative pull with explicit
   confirmation, terminal left-overpull Like, pointer/touch cancellation and

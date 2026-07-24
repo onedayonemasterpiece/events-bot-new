@@ -80,3 +80,12 @@ Gemini 3.1 Pro High reviewed the four decisions and returned `PASS` with two cau
 - Profile evidence: `artifacts/codex/listing-surfaces-v19-current-media-20260718/perf/` (not committed).
 - Public preview: `https://kenigevents.ru/preview-20260718-date-listings-v19/`.
 - Visual review thread: `https://t.me/c/4337049383/122`, V19 messages `362–367`.
+
+## R11 retained date context
+
+A desktop date page keeps one discovery plane. Before it is pinned, the large
+page header owns the date. After that header leaves the viewport, the existing
+sticky discovery rail reveals a compact date at its left (`8 августа` plus the
+weekday), followed by the city and time controls. It must not create a second
+sticky bar, cover the leather brand reservation, shift the page, or appear on
+mobile where the accepted rail shell owns context.

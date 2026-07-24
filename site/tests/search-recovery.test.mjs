@@ -124,11 +124,17 @@ test('account avatar uses the first identity grapheme and exposes signed-in iden
     displayUserName({ email: 'alex@example.invalid', user_metadata: { name: 'Жанна' } }),
     'Жанна',
   );
+  assert.equal(
+    displayUserName({ email: 'alex@example.invalid', user_metadata: { preferred_username: 'A' } }),
+    'alex@example.invalid',
+    'a one-letter provider username must not mask a known email identity',
+  );
   assert.equal(userInitial('alex@example.invalid'), 'A');
   assert.equal(userInitial('жанна'), 'Ж');
   assert.equal(userInitial('👩‍💻 разработчик'), '👩‍💻');
   assert.doesNotMatch(search, /data-search-avatar-(?:img|icon)/u, 'opaque provider images and stacked icon fallbacks are absent');
   assert.match(search, /accountToggle\.setAttribute\('aria-label', `Аккаунт\. \$\{signedInLabel\}`\)/u);
   assert.match(search, /accountToggle\.setAttribute\('title', signedInLabel\)/u);
+  assert.match(search, /if \(accountLabel\) accountLabel\.textContent = name/u);
   assert.match(search, /<span>Вошли как<\/span>\s*<strong data-search-user-name>/u);
 });

@@ -16,6 +16,18 @@ function gitShortSha() {
 }
 
 const now = new Date();
+function dateInKaliningrad(value) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Kaliningrad',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const part = (type) => parts.find((item) => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+const effectiveCurrentDate = process.env.STATIC_SITE_CURRENT_DATE || dateInKaliningrad(now);
+const effectiveReferenceIso = process.env.STATIC_SITE_CURRENT_DATETIME || now.toISOString();
 const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').slice(0, 15).toLowerCase();
 const buildId = safeBuildId(process.env.PREVIEW_BUILD_ID || `preview-${stamp}-${gitShortSha()}`);
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
@@ -35,6 +47,8 @@ const env = {
   SITE_BASE_PATH: `/${buildId}`,
   PUBLIC_PREVIEW_BUILD_ID: buildId,
   PUBLIC_SITE_ORIGIN: process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru',
+  PUBLIC_STATIC_SITE_CURRENT_DATE: effectiveCurrentDate,
+  PUBLIC_STATIC_SITE_REFERENCE_ISO: effectiveReferenceIso,
   PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
   ENABLE_INTEREST_CLUB_STATIC_PROJECTION: process.env.ENABLE_INTEREST_CLUB_STATIC_PROJECTION || '1',
   ...(astroAssetBaseUrl ? { PUBLIC_ASTRO_ASSET_BASE_URL: astroAssetBaseUrl } : {}),
@@ -60,6 +74,8 @@ writeFileSync(join(distDir, buildId, 'preview-build.json'), JSON.stringify({
   basePath: `/${buildId}`,
   astroAssetBaseUrl: astroAssetBaseUrl || null,
   authorizedSearchConfigured: publicSearchConfig.configured,
+  currentDate: effectiveCurrentDate,
+  referenceIso: effectiveReferenceIso,
 }, null, 2));
 console.log(`Preview build ready: dist/${buildId}/`);
 console.log(`Preview URL: https://kenigevents.ru/${buildId}/__preview/`);

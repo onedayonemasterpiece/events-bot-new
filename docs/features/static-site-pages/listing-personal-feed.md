@@ -172,3 +172,23 @@ When CDN is enabled, card projection should already contain CDN-ready image URLs
 - Supabase JavaScript `rpc()` reference: https://supabase.com/docs/reference/javascript/rpc
 - Supabase RLS guide: https://supabase.com/docs/guides/database/postgres/row-level-security
 - Supabase API keys guide: https://supabase.com/docs/guides/getting-started/api-keys
+
+## Shared desktop row geometry, R11
+
+The crop/height optimizer is not specific to event detail. Every desktop
+personal continuation on date, Today, Tomorrow, Weekend and event-detail
+surfaces packs complete three-card rows before rendering:
+
+- non-final rows are always full and the only remainder is last;
+- every card and media viewport in one row has the same visible height;
+- reviewed `visual_only` media uses cover with no fields;
+- OCR/protected documents retain authored content and the documented maximum
+  crop; unknown media remains fail-closed;
+- the optimizer evaluates allowed row combinations and minimizes total document
+  height instead of accepting independent intrinsic card heights.
+
+Below the desktop breakpoint the packed coordinates are discarded. The shared
+mobile resolver owns the card: reviewed photos use the accepted horizontal
+`5:4` cover and protected documents retain natural geometry. A generic personal
+slot stays hidden beneath the dedicated mobile rail so two discovery feeds
+cannot hydrate on the same page.

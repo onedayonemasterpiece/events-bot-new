@@ -1,8 +1,7 @@
 # Listing surfaces V28 — desktop Popular
 
-**Scope:** only the desktop representation of `/populyarnoe/`. The V26 mobile
-large/adaptive trees, their order and their breakpoint CSS are a frozen
-parallel-work contract.
+**Scope:** the desktop presentation remains V28, while eligibility is one
+cross-representation truth contract for desktop and mobile `/populyarnoe/`.
 
 ## Product contract
 
@@ -24,14 +23,14 @@ the shared `ListingEventCard`; a zero count has no DOM node.
 
 ## Eligibility and repeated events
 
-The desktop projection is calculated against the export `generated_at`:
+Both projections are calculated against the same explicit build reference:
 
 - cancelled, postponed, merged, duplicate, deleted and inactive events fail
   closed;
-- a one-off event without a trustworthy end is removed once it starts;
-- an event with `end_at` remains eligible until that instant;
-- a multi-day event without a trustworthy closing hour remains eligible
-  through `end_date`.
+- an elapsed one-off is removed and a future one-off remains eligible;
+- a multi-day event is evaluated by `end_date` first and remains eligible
+  through that calendar day, even when an opening-day `end_at` is already past.
+  This is required for exhibitions and other genuine date ranges.
 
 Family identity is normalized title + event type + venue/city. A family is
 allocated once across all five shelves. Its highest-ranked upcoming occurrence
@@ -69,12 +68,12 @@ is last, so revealing it cannot move any of the already visible global cards.
 
 ## Isolation and gates
 
-- `getPopularEvents()` and `buildPopularListingGroups()` remain the mobile
-  projection.
-- `getPopularDesktopEvents()` and `buildPopularDesktopListing()` own the
-  stricter desktop projection.
-- `PopularListingSurface` passes the legacy groups unchanged to both mobile
-  renderers and the desktop groups only to `PopularBehaviorRows`.
+- `getPopularEvents()` and `getPopularDesktopEvents()` share one eligibility
+  predicate; only grouping and presentation differ.
+- the generated-output gate rejects an ineligible event ID in either tree.
+- a stale exported `current_date` must not silently define a newer preview:
+  the builder supplies an explicit deterministic reference or refreshes the
+  export before generation.
 - `ListingEventCard` gained optional `temporalLabel` / `familyKey` props; callers
   that do not pass them keep the previous DOM behavior.
 

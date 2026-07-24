@@ -95,6 +95,7 @@ const HeadingTag = headingLevel;
     const userName = root.querySelector('[data-search-user-name]');
     const accountMenu = root.querySelector('[data-search-account]');
     const accountToggle = root.querySelector('[data-search-account-toggle]');
+    const accountLabel = root.querySelector('.authorized-search__account-label');
     const avatarInitial = root.querySelector('[data-search-avatar-initial]');
     const results = root.querySelector('[data-search-results]');
     const skeletons = root.querySelector('[data-search-skeletons]');
@@ -211,7 +212,15 @@ const HeadingTag = headingLevel;
 
     function displayUserName(user) {
       const metadata = user?.user_metadata || {};
-      return metadata.preferred_username || metadata.name || metadata.full_name || user?.email || (user?.id ? `ID ${String(user.id).slice(0, 8)}` : 'пользователь');
+      const humanName = [metadata.name, metadata.full_name]
+        .map((value) => String(value || '').trim())
+        .find((value) => value.length >= 2);
+      const email = String(user?.email || '').trim();
+      const username = String(metadata.preferred_username || '').trim();
+      return humanName
+        || email
+        || (username.length >= 2 ? username : '')
+        || (user?.id ? `ID ${String(user.id).slice(0, 8)}` : 'пользователь');
     }
 
     function userInitial(name) {
@@ -236,6 +245,7 @@ const HeadingTag = headingLevel;
         accountToggle.setAttribute('aria-label', `Аккаунт. ${signedInLabel}`);
         accountToggle.setAttribute('title', signedInLabel);
       }
+      if (accountLabel) accountLabel.textContent = name;
     }
 
     function readJsonStorage(key) {

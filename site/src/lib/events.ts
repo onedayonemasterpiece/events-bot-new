@@ -41,6 +41,10 @@ export const ICS_BASE_URL = (
 
 const data = previewData as PreviewData;
 const related = relatedData as RelatedData;
+const previewCurrentDateOverride = String(import.meta.env.PUBLIC_STATIC_SITE_CURRENT_DATE || '').trim();
+const previewGeneratedAtOverride = String(import.meta.env.PUBLIC_STATIC_SITE_REFERENCE_ISO || '').trim();
+const hasCurrentDateOverride = /^\d{4}-\d{2}-\d{2}$/u.test(previewCurrentDateOverride);
+const hasGeneratedAtOverride = Number.isFinite(Date.parse(previewGeneratedAtOverride));
 
 export const RELATED_SCHEMA_VERSION = 'event-detail-related-v1' as const;
 export const TAXONOMY_VERSION = 'event-taxonomy-v1' as const;
@@ -51,7 +55,12 @@ export const LEGACY_VECTOR_RELATED_ALGORITHM_ID = 'event_vector_related_chain_v2
 export const PGVECTOR_RELATED_ALGORITHM_ID = 'event_pgvector_related_chain_v2_two_doc' as const;
 
 export function getPreviewBuild() {
-  return data.build;
+  if (!hasCurrentDateOverride && !hasGeneratedAtOverride) return data.build;
+  return {
+    ...data.build,
+    ...(hasCurrentDateOverride ? { current_date: previewCurrentDateOverride } : {}),
+    ...(hasGeneratedAtOverride ? { generated_at: previewGeneratedAtOverride } : {}),
+  };
 }
 
 export function getEvents(): PreviewEvent[] {
@@ -63,7 +72,7 @@ export function getEvents(): PreviewEvent[] {
 }
 
 export function getCurrentDate(): string {
-  return data.build.current_date;
+  return getPreviewBuild().current_date;
 }
 
 const RU_MONTHS = [
