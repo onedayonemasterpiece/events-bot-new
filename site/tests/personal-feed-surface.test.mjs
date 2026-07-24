@@ -29,6 +29,7 @@ async function readBuilt(relativePath) {
 
 test('personal feed keeps listing hydration hidden and exposes a bounded event-detail continuation', async () => {
   const source = await read('src/components/PersonalFeedSlot.astro');
+  assert.match(source, /'ke-personal-feed-slot'/u, 'mobile rail selector matches the generic personal-feed section');
   assert.match(source, /data-personal-feed-section/u);
   assert.match(source, /data-personal-feed-src/u);
   assert.match(source, /data-personal-feed-related-src/u);
@@ -47,6 +48,29 @@ test('personal feed keeps listing hydration hidden and exposes a bounded event-d
   assert.match(source, /repeat\(3, minmax\(0, 1fr\)\)/u);
   assert.match(source, /repeat\(2, minmax\(0, 1fr\)\)/u);
   assert.match(source, /grid-template-columns: minmax\(0, 1fr\)/u);
+});
+
+test('personal feed uses contiguous desktop row packing and independent mobile media decisions', async () => {
+  const [slot, layout] = await Promise.all([
+    read('src/components/PersonalFeedSlot.astro'),
+    read('src/layouts/EventLayout.astro'),
+  ]);
+
+  assert.match(layout, /function personalFeedUsesDesktopRows\(\)/u);
+  assert.match(layout, /window\.KenigEventsPackRelatedCardRows\(store\.items\.slice\(store\.rendered, Math\.min\(store\.items\.length, end \+ 3\)\), \{\s*limit: chunk\.length,\s*rowSize: 3,/u, 'every desktop context packs a bounded three-card-row chunk with alternates');
+  assert.doesNotMatch(layout, /eventDetail && typeof window\.KenigEventsPackRelatedCardRows/u, 'desktop packing is not event-detail-only');
+  assert.match(layout, /rowOffset = Math\.ceil\(slot\.querySelectorAll\(':scope > \[data-event-card\]'\)\.length \/ 3\)/u, 'later desktop chunks continue after existing row coordinates');
+  assert.match(layout, /layout: \{ \.\.\.layout, rowIndex: Number\(layout\.rowIndex\) \+ rowOffset \}/u);
+  assert.match(layout, /if \(packed\.length < chunk\.length && nextRendered < store\.items\.length\)[\s\S]*store\.desktopPackingComplete = true/u, 'an optimizer remainder is never followed by an incomplete middle row');
+  assert.match(layout, /loadMore\.hidden = Boolean\(store\.desktopPackingComplete\) \|\| store\.rendered >= store\.items\.length/u);
+  assert.match(layout, /chunk\.map\(\(item\) => \(\{ item, layout: window\.KenigEventsResolveMobileEventCardMedia\(item\) \}\)\)/u, 'mobile cards use the mobile media resolver');
+  assert.match(layout, /appendEventCard\(slot, item, slot\.dataset\.feedCardVariant \|\| 'split-actions', layout\)/u, 'both flows pass their resolved layout into the canonical card');
+  assert.doesNotMatch(layout, /chunk\.map\(\(item\) => \(\{ item, layout: null \}\)\)/u, 'mobile never falls back to unresolved desktop-template media');
+
+  assert.match(slot, /@media \(min-width: 1024px\) \{[\s\S]*\.personal-feed-section :global\(\[data-lab-related-card\]\)/u);
+  assert.match(slot, /\.personal-feed-section :global\(\[data-lab-related-card\] \.event-card__media-shell\)[\s\S]*aspect-ratio: var\(--lab-row-media-ratio\)/u);
+  assert.match(slot, /\.personal-feed-section :global\(\[data-lab-related-card\] \.event-card__body\)[\s\S]*min-height: 0/u);
+  assert.doesNotMatch(slot, /\.personal-feed-section--event-detail :global\(\[data-lab-related-card\]/u, 'desktop normalization covers every personal-feed context');
 });
 
 test('event-detail continuation uses six diverse cards with an honest non-personal fallback', async () => {

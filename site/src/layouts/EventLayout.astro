@@ -3677,6 +3677,10 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           return personalFeedDesktopMedia ? personalFeedDesktopMedia.matches : Number(window.innerWidth || 0) >= 1024;
         }
 
+        function personalFeedUsesDesktopRows() {
+          return personalFeedDesktopMedia ? personalFeedDesktopMedia.matches : Number(window.innerWidth || 0) >= 1024;
+        }
+
         function visibleHideStickyMarker() {
           const markers = Array.from(document.querySelectorAll('[data-hide-sticky-after]'));
           return markers.find((marker) => marker.getClientRects().length > 0) || markers[0] || null;
@@ -3706,22 +3710,43 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           const end = Math.min(store.items.length, store.rendered + PERSONAL_FEED_CHUNK_SIZE);
           const chunk = store.items.slice(store.rendered, end);
           let appended = 0;
+          let nextRendered = end;
           if (chunk.length) {
-            const eventDetail = section.dataset.listingContext === 'event-detail';
-            const packed = eventDetail && typeof window.KenigEventsPackRelatedCardRows === 'function'
-              ? window.KenigEventsPackRelatedCardRows(chunk, {
-                  limit: EVENT_DETAIL_CONTINUATION_LIMIT,
+            const desktopRows = personalFeedUsesDesktopRows();
+            let packed = desktopRows && typeof window.KenigEventsPackRelatedCardRows === 'function'
+              ? window.KenigEventsPackRelatedCardRows(store.items.slice(store.rendered, Math.min(store.items.length, end + 3)), {
+                  limit: chunk.length,
                   rowSize: 3,
                   mediaTreatment: 'hybrid',
                   geometry: window.KenigEventsRelatedCardMediaGeometry,
                 })
-              : chunk.map((item) => ({ item, layout: null }));
+              : !desktopRows && typeof window.KenigEventsResolveMobileEventCardMedia === 'function'
+                ? chunk.map((item) => ({ item, layout: window.KenigEventsResolveMobileEventCardMedia(item) }))
+                : [];
+            if (desktopRows) {
+              const rowOffset = Math.ceil(slot.querySelectorAll(':scope > [data-event-card]').length / 3);
+              const selected = new Set(packed.map(({ item }) => item));
+              const pool = store.items.slice(store.rendered, Math.min(store.items.length, end + 3));
+              const deferred = pool.filter((item) => !selected.has(item));
+              store.items.splice(store.rendered, pool.length, ...packed.map(({ item }) => item), ...deferred);
+              packed = packed.map(({ item, layout }) => ({
+                item,
+                layout: { ...layout, rowIndex: Number(layout.rowIndex) + rowOffset },
+              }));
+              nextRendered = store.rendered + packed.length;
+              // If even the bounded alternate pool cannot form the requested
+              // chunk, keep that optimizer remainder as the final row rather
+              // than appending a later row beneath an incomplete middle row.
+              if (packed.length < chunk.length && nextRendered < store.items.length) {
+                store.desktopPackingComplete = true;
+              }
+            }
             for (const { item, layout } of packed) {
               if (appendEventCard(slot, item, slot.dataset.feedCardVariant || 'split-actions', layout)) appended += 1;
             }
           }
-          store.rendered = end;
-          if (loadMore) loadMore.hidden = store.rendered >= store.items.length;
+          store.rendered = nextRendered;
+          if (loadMore) loadMore.hidden = Boolean(store.desktopPackingComplete) || store.rendered >= store.items.length;
           syncCardsFeedbackState(store.profile);
           syncPersonalFeedController(section);
           return appended;

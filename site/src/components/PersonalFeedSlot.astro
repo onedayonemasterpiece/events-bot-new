@@ -16,7 +16,7 @@ const explanation = isEventDetail
 const headingId = `personal-feed-${context}-title`;
 ---
 <section
-  class:list={['section-card', 'personal-feed-section', { 'personal-feed-section--event-detail': isEventDetail }]}
+  class:list={['section-card', 'personal-feed-section', 'ke-personal-feed-slot', { 'personal-feed-section--event-detail': isEventDetail }]}
   data-personal-feed-section
   data-personal-feed-src={withBase('/data/personal-feed.json')}
   data-personal-feed-related-src={relatedSrc ? withBase(relatedSrc) : undefined}
@@ -88,52 +88,54 @@ const headingId = `personal-feed-${context}-title`;
     align-items: stretch;
   }
 
-  .personal-feed-section--event-detail :global([data-lab-related-card]) {
-    height: 100%;
-    grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
-  }
+  @media (min-width: 1024px) {
+    .personal-feed-section :global([data-lab-related-card]) {
+      height: 100%;
+      grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
+    }
 
-  .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__media-link) {
-    display: block;
-  }
+    .personal-feed-section :global([data-lab-related-card] .event-card__media-link) {
+      display: block;
+    }
 
-  .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__media-shell) {
-    position: relative;
-    isolation: isolate;
-    width: 100%;
-    height: auto !important;
-    aspect-ratio: var(--lab-row-media-ratio) !important;
-    overflow: hidden;
-    background: #d2c5b7;
-  }
+    .personal-feed-section :global([data-lab-related-card] .event-card__media-shell) {
+      position: relative;
+      isolation: isolate;
+      width: 100%;
+      height: auto !important;
+      aspect-ratio: var(--lab-row-media-ratio) !important;
+      overflow: hidden;
+      background: #d2c5b7;
+    }
 
-  .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__media) {
-    position: absolute !important;
-    z-index: 2;
-    inset: 0;
-    width: 100% !important;
-    height: 100% !important;
-  }
+    .personal-feed-section :global([data-lab-related-card] .event-card__media) {
+      position: absolute !important;
+      z-index: 2;
+      inset: 0;
+      width: 100% !important;
+      height: 100% !important;
+    }
 
-  /* Keep row-local intrinsic chrome identical to the server-rendered rail.
-     The card stretches only to the tallest real content in its own row. */
-  .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__body) {
-    min-height: 0;
-    align-content: start;
-  }
+    /* Keep row-local intrinsic chrome identical to the server-rendered rail.
+       The card stretches only to the tallest real content in its own row. */
+    .personal-feed-section :global([data-lab-related-card] .event-card__body) {
+      min-height: 0;
+      align-content: start;
+    }
 
-  .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__utility-row) {
-    min-height: 58px;
-  }
+    .personal-feed-section :global([data-lab-related-card] .event-card__utility-row) {
+      min-height: 58px;
+    }
 
-  .personal-feed-section--event-detail :global([data-lab-related-card] .event-card__feedback--under) {
-    min-height: 56px;
-  }
+    .personal-feed-section :global([data-lab-related-card] .event-card__feedback--under) {
+      min-height: 56px;
+    }
 
-  /* EventCard/relatedCardLayout own the exact fit on both continuation
-     surfaces. The personal feed may style contain bands, never change fit. */
-  .personal-feed-section--event-detail :global([data-card-authoritative-fit="contain"]) {
-    background: #15110f;
+    /* EventCard/relatedCardLayout own the exact fit on every desktop personal
+       feed. The section may style contain bands, never change fit. */
+    .personal-feed-section :global([data-card-authoritative-fit="contain"]) {
+      background: #15110f;
+    }
   }
 
   .personal-feed-section__load-more,
