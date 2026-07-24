@@ -24,14 +24,11 @@ const HeadingTag = headingLevel;
         <span>Войти через Яндекс</span>
       </button>
       <details class="authorized-search__account-menu" data-search-user data-search-account hidden>
-        <summary class="authorized-search__account-toggle" data-search-account-toggle aria-label="Профиль пользователя">
+        <summary class="authorized-search__account-toggle" data-search-account-toggle aria-label="Аккаунт пользователя" title="Аккаунт">
           <span class="authorized-search__avatar" data-search-avatar aria-hidden="true">
-            <img data-search-avatar-img alt="" hidden />
-            <span class="authorized-search__avatar-initial" data-search-avatar-initial hidden></span>
-            <svg class="authorized-search__avatar-icon" data-search-avatar-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 12.2c2.5 0 4.5-2 4.5-4.5S14.5 3.2 12 3.2s-4.5 2-4.5 4.5 2 4.5 4.5 4.5Zm0 2.1c-3.7 0-7.2 1.9-8.8 4.8-.4.7.1 1.7 1 1.7h15.6c.9 0 1.4-1 1-1.7-1.6-2.9-5.1-4.8-8.8-4.8Z" fill="currentColor"></path>
-            </svg>
+            <span class="authorized-search__avatar-initial" data-search-avatar-initial>?</span>
           </span>
+          <span class="authorized-search__account-label">Аккаунт</span>
         </summary>
         <div class="authorized-search__account-popover" data-search-account-popover>
           <div class="authorized-search__account-info">
@@ -97,9 +94,8 @@ const HeadingTag = headingLevel;
     const userBadge = root.querySelector('[data-search-user]');
     const userName = root.querySelector('[data-search-user-name]');
     const accountMenu = root.querySelector('[data-search-account]');
-    const avatarImg = root.querySelector('[data-search-avatar-img]');
+    const accountToggle = root.querySelector('[data-search-account-toggle]');
     const avatarInitial = root.querySelector('[data-search-avatar-initial]');
-    const avatarIcon = root.querySelector('[data-search-avatar-icon]');
     const results = root.querySelector('[data-search-results]');
     const skeletons = root.querySelector('[data-search-skeletons]');
     const more = root.querySelector('[data-search-more]');
@@ -120,7 +116,15 @@ const HeadingTag = headingLevel;
     let searchEpoch = 0;
     let activeSearchController = null;
     let completionResetTimer = null;
+    const searchTimeoutOverrides = window.__KENIGEVENTS_SEARCH_TEST_TIMEOUTS__ || {};
+    const timeoutValue = (name, fallback) => {
+      const value = Number(searchTimeoutOverrides[name]);
+      return Number.isFinite(value) && value >= 25 ? value : fallback;
+    };
     const searchSlowNoticeMs = 6500;
+    const searchFetchHeadersTimeoutMs = timeoutValue('fetchHeaders', 10000);
+    const searchStreamIdleTimeoutMs = timeoutValue('streamIdle', 10000);
+    const searchOverallTimeoutMs = timeoutValue('overall', 45000);
     const authSessionTimeoutMs = 8000;
     const authCallbackTimeoutMs = 20000;
     const maxQueryLength = 180;
@@ -210,38 +214,28 @@ const HeadingTag = headingLevel;
       return metadata.preferred_username || metadata.name || metadata.full_name || user?.email || (user?.id ? `ID ${String(user.id).slice(0, 8)}` : 'пользователь');
     }
 
-    function userAvatarUrl(user) {
-      const metadata = user?.user_metadata || {};
-      const value = metadata.avatar_url || metadata.picture || metadata.avatar || metadata.photo_url || '';
-      if (typeof value !== 'string') return '';
-      try {
-        const url = new URL(value);
-        return url.protocol === 'https:' ? url.toString() : '';
-      } catch (_error) {
-        return '';
-      }
-    }
-
     function userInitial(name) {
       const normalized = String(name || '').trim();
-      const match = normalized.match(/[\p{L}\p{N}]/u);
-      return match ? match[0].toLocaleUpperCase('ru-RU') : '';
+      if (!normalized) return '?';
+      if (typeof Intl?.Segmenter === 'function') {
+        const segmenter = new Intl.Segmenter('ru-RU', { granularity: 'grapheme' });
+        const grapheme = Array.from(segmenter.segment(normalized), (part) => part.segment)
+          .find((part) => /\S/u.test(part));
+        if (grapheme) return grapheme.toLocaleUpperCase('ru-RU');
+      }
+      return Array.from(normalized)[0]?.toLocaleUpperCase('ru-RU') || '?';
     }
 
     function renderAvatar(user) {
       const name = displayUserName(user);
-      const picture = userAvatarUrl(user);
-      if (avatarImg) {
-        avatarImg.hidden = !picture;
-        if (picture) avatarImg.setAttribute('src', picture);
-        else avatarImg.removeAttribute('src');
-      }
-      const initial = picture ? '' : userInitial(name);
       if (avatarInitial) {
-        avatarInitial.textContent = initial;
-        avatarInitial.hidden = !initial;
+        avatarInitial.textContent = userInitial(name);
       }
-      if (avatarIcon) avatarIcon.hidden = Boolean(picture || initial);
+      if (accountToggle) {
+        const signedInLabel = `Вошли как ${name}`;
+        accountToggle.setAttribute('aria-label', `Аккаунт. ${signedInLabel}`);
+        accountToggle.setAttribute('title', signedInLabel);
+      }
     }
 
     function readJsonStorage(key) {
@@ -928,12 +922,81 @@ const HeadingTag = headingLevel;
       return { itemCount: items.length, fallbackCount: fallbackItems.length };
     }
 
+    function timeoutError(code) {
+      const error = new Error(code);
+      error.name = 'TimeoutError';
+      return error;
+    }
+
+    function abortError(signal) {
+      if (signal?.reason instanceof Error) return signal.reason;
+      return new DOMException('Search aborted', 'AbortError');
+    }
+
+    async function fetchWithSearchHeadersTimeout(endpoint, init, options = {}) {
+      const { signal, timeoutMs = searchFetchHeadersTimeoutMs } = options;
+      if (signal?.aborted) throw abortError(signal);
+      const requestController = new AbortController();
+      let timeoutId;
+      let rejectParentAbort;
+      const parentAbort = new Promise((_, reject) => {
+        rejectParentAbort = reject;
+      });
+      const onParentAbort = () => {
+        const reason = abortError(signal);
+        requestController.abort(reason);
+        rejectParentAbort(reason);
+      };
+      signal?.addEventListener('abort', onParentAbort, { once: true });
+      const headersTimeout = new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          const error = timeoutError('search_fetch_headers_timeout');
+          requestController.abort(error);
+          reject(error);
+        }, timeoutMs);
+      });
+      try {
+        return await Promise.race([
+          fetch(endpoint, { ...init, signal: requestController.signal }),
+          headersTimeout,
+          parentAbort,
+        ]);
+      } finally {
+        window.clearTimeout(timeoutId);
+        // Keep the parent linkage for the lifetime of the response body. Fetch
+        // resolves as soon as headers arrive, but logout/pagehide must still
+        // abort a stream that is currently being read.
+      }
+    }
+
+    async function readSearchChunkWithTimeout(reader, signal, timeoutMs = searchStreamIdleTimeoutMs) {
+      if (signal?.aborted) throw abortError(signal);
+      let timeoutId;
+      let rejectParentAbort;
+      const parentAbort = new Promise((_, reject) => {
+        rejectParentAbort = reject;
+      });
+      const onParentAbort = () => rejectParentAbort(abortError(signal));
+      signal?.addEventListener('abort', onParentAbort, { once: true });
+      const idleTimeout = new Promise((resolve) => {
+        timeoutId = window.setTimeout(() => resolve({ streamIdleTimedOut: true }), timeoutMs);
+      });
+      try {
+        // A new timer is created for every read, so any delivered chunk resets
+        // the stream-idle window rather than granting only one opening deadline.
+        return await Promise.race([reader.read(), idleTimeout, parentAbort]);
+      } finally {
+        window.clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', onParentAbort);
+      }
+    }
+
     async function invokeEventSearchJson(endpoint, body, session, reason = 'json_fallback', options = {}) {
       const { epoch = searchEpoch, signal } = options;
       const fallbackBody = reason === 'stream_stalled'
         ? { ...body, use_llm_verifier: false, stream_rescue: true }
         : body;
-      const response = await fetch(endpoint, {
+      const response = await fetchWithSearchHeadersTimeout(endpoint, {
         method: 'POST',
         headers: {
           apikey: root.dataset.supabaseKey,
@@ -942,8 +1005,7 @@ const HeadingTag = headingLevel;
           Accept: 'application/json',
         },
         body: JSON.stringify(fallbackBody),
-        signal,
-      });
+      }, { signal });
       if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
@@ -954,7 +1016,7 @@ const HeadingTag = headingLevel;
     async function invokeEventSearch(body, session, options = {}) {
       const { epoch = searchEpoch, signal } = options;
       const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
-      const response = await fetch(endpoint, {
+      const response = await fetchWithSearchHeadersTimeout(endpoint, {
         method: 'POST',
         headers: {
           apikey: root.dataset.supabaseKey,
@@ -963,8 +1025,7 @@ const HeadingTag = headingLevel;
           Accept: 'application/x-ndjson',
         },
         body: JSON.stringify(body),
-        signal,
-      });
+      }, { signal });
       if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/x-ndjson')) {
@@ -979,31 +1040,36 @@ const HeadingTag = headingLevel;
       let buffer = '';
       let finalData = null;
       let finalError = null;
-      let receivedStreamEvent = false;
-      const firstChunkTimeoutMs = 7200;
-      const readWithFirstChunkTimeout = () => {
-        if (receivedStreamEvent) return reader.read();
-        let timeoutId;
-        const timeout = new Promise((resolve) => {
-          timeoutId = window.setTimeout(() => resolve({ streamTimedOut: true }), firstChunkTimeoutMs);
-        });
-        return Promise.race([reader.read(), timeout]).finally(() => window.clearTimeout(timeoutId));
-      };
+      let jsonRescueAttempted = false;
+      function cancelSearchReader() {
+        try {
+          const cancellation = reader.cancel();
+          cancellation?.catch(() => {});
+        } catch (_error) {
+          // Cancellation is best-effort after a proxy/browser stream stall.
+        }
+      }
+      async function rescueStalledStream() {
+        if (jsonRescueAttempted) {
+          return { data: null, error: { error: 'search_stream_stalled' } };
+        }
+        jsonRescueAttempted = true;
+        cancelSearchReader();
+        if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
+        setStatus('Связь с поиском замедлилась. Переключаюсь на обычный ответ…');
+        return invokeEventSearchJson(endpoint, body, session, 'stream_stalled', { epoch, signal });
+      }
       async function finishWithResult(event) {
         if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
         finalData = event.data;
         setSearchProgress(100, event.label || 'Готово', { epoch, stage: 'result' });
-        try {
-          await reader.cancel();
-        } catch (_error) {
-          // Some browsers throw when cancelling an already closed stream. The
-          // result event is authoritative, so the UI should not wait for EOF.
-        }
+        // The result event is authoritative. Do not let an already-stalled
+        // browser stream keep the UI waiting for cancellation acknowledgement.
+        cancelSearchReader();
         return { data: finalData, error: null };
       }
       function handleStreamEvent(event) {
         if (!isCurrentSearchEpoch(epoch)) return;
-        receivedStreamEvent = true;
         if (event.type === 'progress') {
           setSearchProgress(event.progress, event.label || 'Поиск продолжается…', { epoch, stage: event.stage || '' });
           if (event.stage === 'vector_results' && event.data) {
@@ -1014,12 +1080,9 @@ const HeadingTag = headingLevel;
         }
       }
       while (true) {
-        const readResult = await readWithFirstChunkTimeout();
-        if (readResult?.streamTimedOut) {
-          try { await reader.cancel(); } catch (_error) {}
-          if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
-          setStatus('Поток прогресса не дошёл до браузера. Переключаюсь на быстрые карточки…');
-          return invokeEventSearchJson(endpoint, body, session, 'stream_stalled', { epoch, signal });
+        const readResult = await readSearchChunkWithTimeout(reader, signal);
+        if (readResult?.streamIdleTimedOut) {
+          return rescueStalledStream();
         }
         const { value, done } = readResult;
         if (done) break;
@@ -1050,8 +1113,8 @@ const HeadingTag = headingLevel;
           // Ignore malformed trailing stream fragments.
         }
       }
-      if (!finalData && !finalError && !receivedStreamEvent) {
-        return invokeEventSearchJson(endpoint, body, session, 'stream_stalled', { epoch, signal });
+      if (!finalData && !finalError) {
+        return rescueStalledStream();
       }
       return finalError ? { data: null, error: finalError } : { data: finalData, error: null };
     }
@@ -1103,6 +1166,8 @@ const HeadingTag = headingLevel;
       if (append) setMoreLoading(true);
       let vectorRendered = false;
       let completed = false;
+      let overallWatchdogTimer;
+      let overallWatchdogTimedOut = false;
       beginSearchProgress(epoch, append ? 'Открываю следующую страницу…' : 'Открываю поиск…');
       const slowNoticeTimer = window.setTimeout(() => {
         if (!isCurrentSearchEpoch(epoch) || !loading) return;
@@ -1127,7 +1192,7 @@ const HeadingTag = headingLevel;
           }
         }
         const pageOffset = offset;
-        const searchResponse = await invokeEventSearch(
+        const searchRequest = invokeEventSearch(
           { query, limit: 8, offset: pageOffset, candidate_window: 10, include_fallback: true, use_llm_verifier: true, allow_llm_fallback: false },
           session,
           {
@@ -1141,6 +1206,15 @@ const HeadingTag = headingLevel;
             },
           },
         );
+        const overallWatchdog = new Promise((_, reject) => {
+          overallWatchdogTimer = window.setTimeout(() => {
+            overallWatchdogTimedOut = true;
+            const error = timeoutError('search_overall_timeout');
+            controller.abort(error);
+            reject(error);
+          }, searchOverallTimeoutMs);
+        });
+        const searchResponse = await Promise.race([searchRequest, overallWatchdog]);
         const { data, error, stale = false } = searchResponse;
         if (!isCurrentSearchEpoch(epoch) || controller.signal.aborted) return;
         if (stale) return;
@@ -1177,11 +1251,21 @@ const HeadingTag = headingLevel;
         if (results && results.children.length) setSkeletonLoading(false);
         if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
       } catch (error) {
-        if (!isCurrentSearchEpoch(epoch) || controller.signal.aborted || error?.name === 'AbortError') return;
-        if (vectorRendered && results?.children.length) setStatus('Показал быстрые результаты по смыслу. Финальный ответ не пришёл, но найденные карточки остаются на экране.', 'info');
-        else setStatus('Поиск не сработал в браузере. Попробуйте ещё раз.', 'error');
+        if (!isCurrentSearchEpoch(epoch)) return;
+        if (overallWatchdogTimedOut || error?.message === 'search_overall_timeout') {
+          setStatus('Поиск занял слишком много времени. Поле уже снова доступно — попробуйте ещё раз.', 'error');
+        } else if (controller.signal.aborted || error?.name === 'AbortError') {
+          return;
+        } else if (error?.message === 'search_fetch_headers_timeout') {
+          setStatus('Поиск не открылся из-за нестабильной связи. Поле уже снова доступно — попробуйте ещё раз.', 'error');
+        } else if (vectorRendered && results?.children.length) {
+          setStatus('Показал быстрые результаты по смыслу. Финальный ответ не пришёл, но найденные карточки остаются на экране.', 'info');
+        } else {
+          setStatus('Поиск сейчас не ответил. Попробуйте ещё раз.', 'error');
+        }
       } finally {
         window.clearTimeout(slowNoticeTimer);
+        window.clearTimeout(overallWatchdogTimer);
         if (!isCurrentSearchEpoch(epoch)) return;
         if (activeSearchController === controller) activeSearchController = null;
         setSkeletonLoading(false);

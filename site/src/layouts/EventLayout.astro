@@ -386,10 +386,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
       .authorized-search__account-menu { position: relative; }
       .authorized-search__account-toggle {
-        width: 52px;
+        width: auto;
         min-height: 52px;
-        display: grid;
-        place-items: center;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.48rem;
+        padding: 0.25rem 0.72rem 0.25rem 0.28rem;
         list-style: none;
         border: 1px solid rgba(121,48,20,0.16);
         border-radius: 999px;
@@ -403,8 +405,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       .authorized-search__account-toggle::marker { content: ""; }
       .authorized-search__account-toggle:hover { background: #fff7ea; border-color: rgba(165,72,33,0.30); }
       .authorized-search__avatar {
-        width: 42px;
-        height: 42px;
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
         display: grid;
         place-items: center;
         overflow: hidden;
@@ -412,14 +415,11 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         background: linear-gradient(135deg, rgba(165,72,33,0.18), rgba(15,118,110,0.16));
         color: var(--primary-strong);
       }
-      .authorized-search__avatar img,
-      .authorized-search__avatar-initial,
-      .authorized-search__avatar-icon {
+      .authorized-search__avatar-initial {
         grid-area: 1 / 1;
         width: 100%;
         height: 100%;
       }
-      .authorized-search__avatar img { object-fit: cover; border-radius: inherit; }
       .authorized-search__avatar-initial {
         display: grid;
         place-items: center;
@@ -427,7 +427,16 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         font-size: 1rem;
         line-height: 1;
       }
-      .authorized-search__avatar-icon { width: 1.45rem; height: 1.45rem; opacity: 0.86; }
+      .authorized-search__account-label {
+        max-width: 8rem;
+        overflow: hidden;
+        color: var(--primary-strong);
+        font-size: 0.86rem;
+        font-weight: 850;
+        line-height: 1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .authorized-search__account-popover {
         position: absolute;
         top: calc(100% + 0.55rem);
