@@ -36,7 +36,12 @@ const {
 let rowIndex = 0;
 const total = sections.reduce((sum, section) => sum + section.events.length, 0);
 ---
-<div class="ke-mobile-listing-rails ke-mobile-listing-rails--v23" data-mobile-listing-rails data-mobile-v23-page={current}>
+<div
+  class="ke-mobile-listing-rails ke-mobile-listing-rails--v23"
+  data-mobile-listing-rails
+  data-mobile-v23-page={current}
+  data-mobile-listing-date={calendarDate || undefined}
+>
   <section class="page-head" aria-labelledby={`mobile-v23-title-${current}`}>
     <h1 id={`mobile-v23-title-${current}`}>{title}</h1>
     <p>{meta}</p>
@@ -92,7 +97,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
   <div class="rail-confirm-sheet" data-rail-confirm hidden role="dialog" aria-modal="true" aria-labelledby={`rail-confirm-title-${current}`}>
     <section class="rail-confirm-panel">
       <h2 id={`rail-confirm-title-${current}`}>Пометить событие как неинтересное?</h2>
-      <p>Событие исчезнет из этой подборки.</p>
+      <p>После подтверждения следующие свайпы будут отмечать события без подтверждения. Любую отметку можно отменить.</p>
       <div>
         <button type="button" data-rail-confirm-cancel>Отмена</button>
         <button type="button" data-rail-confirm-negative>Не интересно</button>
@@ -142,10 +147,11 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
     .ke-mobile-listing-rails--v23 .event-track{position:relative;z-index:1;width:max-content;height:112px;display:flex;align-items:center;gap:7px;padding:0 12px 0 0;background:transparent;border:0;border-radius:0;box-shadow:none;transform:translate3d(0,0,0)}.ke-mobile-listing-rails--v23 .rail-window.is-dislike-active .event-track,.ke-mobile-listing-rails--v23 .rail-window.is-like-pulling .event-track{will-change:transform}.ke-mobile-listing-rails--v23 .rail-window.is-settling .event-track{transition:transform 400ms cubic-bezier(.2,.8,.2,1)}
     .ke-mobile-listing-rails--v23 .dislike-underlay{position:absolute;z-index:0;inset:0 auto 0 0;width:100vw;display:flex;align-items:center;padding-left:12px;background:linear-gradient(90deg,rgba(177,38,38,.94),rgba(177,38,38,.34) 55%,rgba(177,38,38,0));opacity:var(--dislike-progress);color:#fff;pointer-events:none}.ke-mobile-listing-rails--v23 .dislike-underlay span{opacity:0;font:900 10px/1 Inter,system-ui;transition:opacity 140ms ease}.ke-mobile-listing-rails--v23 .rail-window.is-armed .dislike-underlay span{opacity:1}.ke-mobile-listing-rails--v23 .like-underlay{position:absolute;z-index:0;top:0;bottom:0;left:var(--rail-max);width:var(--rail-view-width);display:flex;align-items:center;justify-content:flex-end;padding-right:4px;background:linear-gradient(270deg,rgba(47,122,86,.96),rgba(47,122,86,.42) 58%,rgba(47,122,86,0));opacity:var(--like-progress);color:#fff;pointer-events:none}.ke-mobile-listing-rails--v23 .like-underlay svg{width:32px;height:32px;fill:currentColor}.ke-mobile-listing-rails--v23 .like-underlay .icon__heart-outline{display:none}.ke-mobile-listing-rails--v23 .like-underlay .icon__heart-solid{display:block!important}
     .ke-mobile-listing-rails--v23 .track-start{flex:0 0 5px;width:5px;height:1px}.ke-mobile-listing-rails--v23 .event-summary{position:relative;isolation:isolate;flex:0 0 296px;width:296px;height:112px;display:flex;align-items:center;gap:14px;padding:15px 12px;border:1px solid rgba(121,48,20,.13);border-radius:14px 10px 10px 14px;background:var(--rail-surface);box-shadow:0 7px 18px rgba(72,45,25,.065)}.ke-mobile-listing-rails--v23 .event-summary::after{content:"";position:absolute;z-index:-1;inset:0;border-radius:inherit;background:rgba(177,38,38,calc(var(--dislike-progress) * .13));pointer-events:none}
-    .ke-mobile-listing-rails--v23 .event-time{flex:0 0 96px;width:96px;height:82px;display:grid;place-content:center;gap:3px;border-radius:8px;background:var(--rail-time-surface);color:var(--rail-time-ink);text-align:center}.ke-mobile-listing-rails--v23 .event-time strong{font:860 28px/1 Inter,system-ui;letter-spacing:-.07em;font-variant-numeric:tabular-nums}.ke-mobile-listing-rails--v23 .event-time span{max-width:86px;overflow:hidden;font:760 9.5px/1.05 Inter,system-ui;text-overflow:ellipsis;white-space:nowrap;opacity:.92}.ke-mobile-listing-rails--v23 .event-time--date-primary strong{font-size:16px;line-height:17px;letter-spacing:-.025em}.ke-mobile-listing-rails--v23 .event-time--no-time .program-label{font-size:13px;line-height:14px;letter-spacing:-.02em}
+    .ke-mobile-listing-rails--v23 .event-time{flex:0 0 96px;width:96px;height:82px;display:grid;place-content:center;gap:3px;border-radius:8px;background:var(--rail-time-surface);color:var(--rail-time-ink);text-align:center}.ke-mobile-listing-rails--v23 .event-time strong{font:860 28px/1 Inter,system-ui;letter-spacing:-.07em;font-variant-numeric:tabular-nums}.ke-mobile-listing-rails--v23 .event-time span{max-width:86px;overflow:hidden;font:760 9.5px/1.05 Inter,system-ui;text-overflow:ellipsis;white-space:nowrap;opacity:.92}.ke-mobile-listing-rails--v23 .event-time .event-date-line--range{width:86px;max-width:86px;overflow:visible;overflow-wrap:anywhere;font-size:9px;line-height:1.08;text-overflow:clip;white-space:normal}.ke-mobile-listing-rails--v23 .event-time--date-primary strong{font-size:16px;line-height:17px;letter-spacing:-.025em}.ke-mobile-listing-rails--v23 .event-time--no-time .program-label{font-size:13px;line-height:14px;letter-spacing:-.02em}
     .ke-mobile-listing-rails--v23 .event-info{flex:0 0 162px;width:162px;height:78px;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px}.ke-mobile-listing-rails--v23 .event-title{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font:850 15px/17px Inter,system-ui;letter-spacing:-.027em;hyphens:auto}.ke-mobile-listing-rails--v23 .event-description{display:block;overflow:hidden;padding-right:7px;color:var(--rail-muted);font:680 10.5px/12px Inter,system-ui;text-overflow:ellipsis;white-space:nowrap}.ke-mobile-listing-rails--v23 .event-signals{min-height:13px;display:flex;align-items:center;gap:8px;padding-right:54px;color:#756b64;font:760 10.5px/12px Inter,system-ui;white-space:nowrap}.ke-mobile-listing-rails--v23 .event-signal{display:inline-flex;align-items:center;gap:3px}.ke-mobile-listing-rails--v23 .event-signal[hidden]{display:none}.ke-mobile-listing-rails--v23 .event-signal svg{width:12px;height:12px;fill:currentColor}.ke-mobile-listing-rails--v23 .event-signal .icon__heart-solid{display:none!important}.ke-mobile-listing-rails--v23 .event-row.is-liked .event-signal .icon__heart-outline{display:none}.ke-mobile-listing-rails--v23 .event-row.is-liked .event-signal .icon__heart-solid{display:block!important}
     .ke-mobile-listing-rails--v23 .event-cue{position:absolute;right:6px;bottom:12px;width:48px;height:23px;display:block;color:var(--rail-cue)}.ke-mobile-listing-rails--v23 .event-cue svg{display:block;width:48px;height:23px;overflow:visible}.ke-mobile-listing-rails--v23 .event-cue path{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
     .ke-mobile-listing-rails--v23 .event-media{position:relative;flex:0 0 var(--media-width);width:var(--media-width);height:112px;overflow:hidden;border-radius:12px;background:linear-gradient(105deg,#e9dece 8%,#fff7eb 20%,#e9dece 34%);background-size:220% 100%;animation:mobile-rail-media-skeleton 1.25s ease-in-out infinite}.ke-mobile-listing-rails--v23 .event-media img{display:block;width:100%;height:100%;opacity:0;object-fit:var(--rail-media-fit);object-position:var(--focus-x,50%) var(--focus-y,50%);transition:opacity 180ms ease;pointer-events:none;user-select:none}.ke-mobile-listing-rails--v23 .event-media.is-loaded{animation:none;background:transparent}.ke-mobile-listing-rails--v23 .event-media.is-loaded img{opacity:1}.ke-mobile-listing-rails--v23 .event-media.is-error{animation:none;background:#e9dece}.ke-mobile-listing-rails--v23 .event-media--natural.is-loaded{background:#211d1a}@keyframes mobile-rail-media-skeleton{to{background-position-x:-220%}}
+    .ke-mobile-listing-rails--v23 .event-media.is-loaded.is-temporally-muted>img{opacity:.46;filter:grayscale(.72) saturate(.32)}
     .ke-mobile-listing-rails--v23 .event-digest{flex:0 0 168px;width:168px;height:112px;display:flex;align-items:center;padding:8px 10px;color:var(--rail-text)}.ke-mobile-listing-rails--v23 .event-digest__body{width:148px;max-height:96px;display:grid;gap:4px}.ke-mobile-listing-rails--v23 .event-digest b{font:850 8.5px/10px Inter,system-ui;letter-spacing:.045em;text-transform:uppercase}.ke-mobile-listing-rails--v23 .event-digest span{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:6;font:690 10.5px/12.5px Inter,system-ui}
     .ke-mobile-listing-rails--v23 .event-medallion-slot{position:relative;flex:0 0 94px;width:94px;height:112px;display:grid;place-items:center;overflow:visible}.ke-mobile-listing-rails--v23 .event-medallion-slot picture{display:block;width:86px;height:86px}.ke-mobile-listing-rails--v23 .event-medallion{display:block;width:86px;height:86px;border:0;border-radius:50%;object-fit:contain;box-shadow:0 0 0 2px rgba(121,48,20,.13),0 7px 16px rgba(72,45,25,.12)}.ke-mobile-listing-rails--v23 .event-medallion--free{box-shadow:none}
     .ke-mobile-listing-rails--v23 .event-like-cta{flex:0 0 auto;min-width:58px;height:56px;padding:0 8px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border:0;border-radius:12px;background:transparent;color:rgba(58,48,40,.70);font:inherit;cursor:pointer;transition:background-color 160ms ease,color 160ms ease,transform 160ms ease}.ke-mobile-listing-rails--v23 .event-like-cta svg{width:28px;height:28px;flex:none;fill:currentColor}.ke-mobile-listing-rails--v23 .event-like-cta .icon__heart-solid{display:none!important}.ke-mobile-listing-rails--v23 .event-like-cta strong{font:900 15px/1 Inter,system-ui}.ke-mobile-listing-rails--v23 .event-like-cta[aria-pressed=true]{background:rgba(201,52,52,.10);color:#c93434}.ke-mobile-listing-rails--v23 .event-like-cta[aria-pressed=true] .icon__heart-outline{display:none}.ke-mobile-listing-rails--v23 .event-like-cta[aria-pressed=true] .icon__heart-solid{display:block!important}.ke-mobile-listing-rails--v23 .rail-window.is-like-pulling .event-like-cta{background:rgba(47,122,86,.12);color:#2f7a56}.ke-mobile-listing-rails--v23 .rail-window.is-like-armed .event-like-cta{transform:scale(1.08)}
@@ -174,6 +180,22 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
     const toast = surface.querySelector('[data-rail-action-toast]');
     const toastText = toast?.querySelector('span');
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const negativeSwipeConsentKey = 'ke_rail_negative_swipe_consent_v1';
+    const hasNegativeSwipeConsent = () => {
+      try {
+        return localStorage.getItem(negativeSwipeConsentKey) === 'true';
+      } catch (_) {
+        return false;
+      }
+    };
+    const rememberNegativeSwipeConsent = () => {
+      try {
+        localStorage.setItem(negativeSwipeConsentKey, 'true');
+        return localStorage.getItem(negativeSwipeConsentKey) === 'true';
+      } catch (_) {
+        return false;
+      }
+    };
     let selectedCity = 'all';
     let confirmRow = null;
     let toastUndo = null;
@@ -244,22 +266,22 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
       const copy = confirm.querySelector('p');
       const liked = row.classList.contains('is-liked');
       if (heading) heading.textContent = liked ? 'Сначала заменить лайк?' : 'Пометить событие как неинтересное?';
-      if (copy) copy.textContent = liked ? 'Негативный сигнал заменит ваш лайк. Подтвердите действие явно.' : 'Событие исчезнет из этой подборки.';
+      if (copy) copy.textContent = liked
+        ? 'Негативный сигнал заменит ваш лайк. После подтверждения следующие свайпы будут отмечать события без подтверждения. Любую отметку можно отменить.'
+        : 'После подтверждения следующие свайпы будут отмечать события без подтверждения. Любую отметку можно отменить.';
       confirm.hidden = false;
       document.body.classList.add('rail-confirm-open');
       requestAnimationFrame(() => confirm.classList.add('is-open'));
     };
-    confirm?.addEventListener('click', (event) => {
-      if (event.target === confirm || event.target.closest('[data-rail-confirm-cancel]')) closeConfirm();
-      if (!event.target.closest('[data-rail-confirm-negative]') || !confirmRow) return;
-      const row = confirmRow;
-      const negative = row.querySelector('[data-rail-negative-control]');
-      const like = row.querySelector('[data-like]');
+    const commitNegative = (row, { rememberSwipeConsent = false } = {}) => {
+      const negative = row?.querySelector('[data-rail-negative-control]');
+      const like = row?.querySelector('[data-like]');
+      if (!negative) return Promise.resolve(false);
       const wasLiked = row.classList.contains('is-liked');
-      closeConfirm();
-      negative?.click();
-      void waitForPressed(negative, true).then((pressed) => {
-        if (!pressed) return;
+      negative.click();
+      return waitForPressed(negative, true).then((pressed) => {
+        if (!pressed) return false;
+        if (rememberSwipeConsent) rememberNegativeSwipeConsent();
         showToast('Событие отмечено как неинтересное', () => {
           negative.click();
           if (wasLiked) {
@@ -268,7 +290,22 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
             });
           }
         });
+        return true;
       });
+    };
+    const commitSwipeNegative = (row) => {
+      if (hasNegativeSwipeConsent()) {
+        void commitNegative(row);
+        return;
+      }
+      openConfirm(row);
+    };
+    confirm?.addEventListener('click', (event) => {
+      if (event.target === confirm || event.target.closest('[data-rail-confirm-cancel]')) closeConfirm();
+      if (!event.target.closest('[data-rail-confirm-negative]') || !confirmRow) return;
+      const row = confirmRow;
+      closeConfirm();
+      void commitNegative(row, { rememberSwipeConsent:true });
     });
     const syncPinnedTitle = () => {
       pinFrame = 0;
@@ -447,7 +484,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
         if (mode === 'dislike') {
           const armed = rail.classList.contains('is-armed');
           resetDislike();
-          if (armed) openConfirm(row);
+          if (armed) commitSwipeNegative(row);
         } else if (mode === 'like') finishLike(rail.classList.contains('is-like-armed'));
         down = false;
         mode = 'idle';
@@ -498,7 +535,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
         if (touchMode === 'dislike') {
           const armed = rail.classList.contains('is-armed');
           resetDislike();
-          if (armed) openConfirm(row);
+          if (armed) commitSwipeNegative(row);
         } else if (touchMode === 'like') finishLike(rail.classList.contains('is-like-armed'));
         touchMode = 'idle';
       }, { passive:true });
@@ -518,6 +555,36 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
         dragged = false;
       }, { capture:true });
     });
+    const syncTodayTemporalMedia = () => {
+      if (surface.dataset.mobileV23Page !== 'today') return;
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone:'Europe/Kaliningrad',
+        year:'numeric',
+        month:'2-digit',
+        day:'2-digit',
+      }).formatToParts(new Date());
+      const clock = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+      const kaliningradDate = `${clock.year}-${clock.month}-${clock.day}`;
+      const listingDate = surface.dataset.mobileListingDate || '';
+      const now = Date.now();
+      rows.forEach((row) => {
+        const endAt = row.dataset.eventEndAt || '';
+        const startAt = row.dataset.eventStartsAt || '';
+        const endMs = Date.parse(endAt);
+        const startMs = Date.parse(startAt);
+        const hasExplicitEnd = endAt.trim().length > 0;
+        const completed = Number.isFinite(endMs) && endMs <= now;
+        const startedEarlier = !hasExplicitEnd
+          && kaliningradDate === listingDate
+          && Number.isFinite(startMs)
+          && startMs <= now - 60 * 60 * 1000;
+        const state = completed ? 'past' : startedEarlier ? 'started-earlier' : 'current';
+        row.dataset.mobileRailTemporalState = state;
+        row.querySelector('.event-media')?.classList.toggle('is-temporally-muted', state !== 'current');
+      });
+    };
+    syncTodayTemporalMedia();
+    if (surface.dataset.mobileV23Page === 'today') setInterval(syncTodayTemporalMedia, 60_000);
     surface.querySelectorAll('.event-media img').forEach((img) => {
       const shell = img.closest('.event-media');
       if (!shell || shell.dataset.mediaRuntimeReady === 'true') return;

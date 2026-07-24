@@ -667,6 +667,34 @@
   padding-left: 304px;
   box-sizing: border-box;
 }
+.ke-listing-discovery-rail--with-date-context .ke-listing-discovery-rail__inner {
+  grid-template-columns: 112px minmax(0, 1fr) max-content;
+  gap: 12px;
+}
+.ke-listing-discovery-rail__date-context {
+  min-width: 0;
+  height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  visibility: hidden;
+  opacity: 0;
+  color: var(--ke-color-copy);
+  transition: opacity var(--ke-listing-motion);
+}
+.ke-listing-discovery-rail__date-context strong,
+.ke-listing-discovery-rail__date-context small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ke-listing-discovery-rail__date-context strong { font-size: .82rem; line-height: 1.05; }
+.ke-listing-discovery-rail__date-context small { color: var(--ke-color-muted); font-size: .68rem; line-height: 1.05; }
+.ke-listing-discovery-rail.is-pinned .ke-listing-discovery-rail__date-context {
+  visibility: visible;
+  opacity: 1;
+}
 .ke-listing-discovery-rail--cities-only .ke-listing-discovery-rail__inner { grid-template-columns: minmax(0, 1fr); }
 .ke-listing-discovery-rail .ke-listing-controls,
 .ke-listing-discovery-rail > .ke-listing-controls {
@@ -1153,6 +1181,8 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
 @media (max-width: 980px) {
   :root { --ke-listing-discovery-height: 96px; }
   .ke-listing-discovery-rail__inner { width: calc(100% - 24px); grid-template-columns: 1fr; grid-template-rows: 48px 48px; gap: 0; padding-left: 0; }
+  .ke-listing-discovery-rail__date-context { display: none; }
+  .ke-listing-discovery-rail--with-date-context .ke-listing-discovery-rail__inner { grid-template-columns: 1fr; gap: 0; }
   .ke-listing-discovery-rail--cities-only .ke-listing-discovery-rail__inner { grid-template-rows: 1fr; }
   .ke-listing-discovery-rail .ke-listing-controls,
   .ke-listing-discovery-rail > .ke-listing-controls,

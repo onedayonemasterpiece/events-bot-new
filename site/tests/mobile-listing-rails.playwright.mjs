@@ -214,6 +214,15 @@ for (const width of [320, 390]) {
   assert.equal(await more.locator('img[src*="/assets/festivals/more-vnutri.svg"]').count(), 1);
   assert.equal(await more.locator('.event-media').getAttribute('data-image-text-mode'), 'ocr_text');
   assert.equal(await more.locator('.event-medallion-slot').evaluate((node) => Boolean(node.closest('.event-media'))), false);
+  const compactRange = await more.locator('.event-date-line--range').evaluate((node) => ({
+    text: node.textContent?.trim(),
+    overflow: getComputedStyle(node).textOverflow,
+    whiteSpace: getComputedStyle(node).whiteSpace,
+  }));
+  assert.equal(compactRange.text, '8–9 августа');
+  assert.equal(compactRange.overflow, 'clip');
+  assert.equal(compactRange.whiteSpace, 'normal');
+  assert.match(await more.locator('.event-time').getAttribute('aria-label'), /8 августа — до 9 августа/u);
   await context.close();
 }
 
@@ -240,6 +249,36 @@ for (const width of [320, 390]) {
   assert.equal(page.url(), initialUrl);
   await page.locator('[data-rail-confirm-cancel]').click();
   await page.locator('[data-rail-confirm]').waitFor({ state:'hidden' });
+  assert.equal(await page.evaluate(() => localStorage.getItem('ke_rail_negative_swipe_consent_v1')), null);
+
+  const negative = row.locator('[data-rail-negative-control]');
+  await negative.evaluate((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopImmediatePropagation();
+      button.setAttribute('aria-pressed', button.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+    }, { capture:true });
+  });
+  const negativeSwipe = async () => {
+    await page.mouse.move(box.x + 42, box.y + 56);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 350, box.y + 56, { steps:8 });
+    await page.mouse.up();
+  };
+  await negativeSwipe();
+  await page.locator('[data-rail-confirm].is-open').waitFor();
+  await page.locator('[data-rail-confirm-negative]').click();
+  await page.waitForFunction(() => localStorage.getItem('ke_rail_negative_swipe_consent_v1') === 'true');
+  assert.equal(await negative.getAttribute('aria-pressed'), 'true');
+  await page.locator('[data-rail-action-toast] button').click();
+  await page.waitForFunction(() => document.querySelector('[data-event-id="5296"] [data-rail-negative-control]')?.getAttribute('aria-pressed') === 'false');
+  await row.waitFor({ state:'visible' });
+
+  await negativeSwipe();
+  await page.waitForFunction(() => document.querySelector('[data-event-id="5296"] [data-rail-negative-control]')?.getAttribute('aria-pressed') === 'true');
+  assert.equal(await page.locator('[data-rail-confirm].is-open').count(), 0);
+  await page.locator('[data-rail-action-toast] button').click();
+  await page.waitForFunction(() => document.querySelector('[data-event-id="5296"] [data-rail-negative-control]')?.getAttribute('aria-pressed') === 'false');
+  await row.waitFor({ state:'visible' });
 
   await rail.evaluate((node) => { node.scrollLeft = node.scrollWidth; });
   await like.evaluate((button) => {
@@ -278,6 +317,78 @@ for (const width of [320, 390]) {
   });
   await page.locator('[data-rail-confirm].is-open').waitFor();
   await page.locator('[data-rail-confirm-cancel]').click();
+  await context.close();
+}
+
+{
+  const context = await contextFor(1366);
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/segodnya/`, { waitUntil:'domcontentloaded' });
+  const rail = page.locator('[data-listing-discovery-rail]');
+  const dateContext = rail.locator('[data-listing-rail-date-context]');
+  assert.equal(await dateContext.getAttribute('aria-hidden'), 'true');
+  await rail.evaluate((node) => scrollTo(0, node.getBoundingClientRect().top + scrollY + 160));
+  await page.waitForFunction(() => document.querySelector('[data-listing-discovery-rail]')?.classList.contains('is-pinned'));
+  const pinned = await rail.evaluate((node) => {
+    const context = node.querySelector('[data-listing-rail-date-context]');
+    const controls = node.querySelector('.ke-listing-controls');
+    const time = node.querySelector('.ke-listing-discovery-rail__time');
+    const brand = document.querySelector('.site-header__brand-tag');
+    const box = (element) => element?.getBoundingClientRect();
+    return {
+      context: box(context),
+      controls: box(controls),
+      time: box(time),
+      brand: box(brand),
+      visibility: getComputedStyle(context).visibility,
+      hidden: context.getAttribute('aria-hidden'),
+      railTop: box(node).top,
+      headerBottom: box(document.querySelector('.site-header')).bottom,
+    };
+  });
+  assert.equal(pinned.visibility, 'visible');
+  assert.equal(pinned.hidden, 'false');
+  closeEnough(pinned.railTop, pinned.headerBottom);
+  assert.ok(pinned.context.left >= pinned.brand.right);
+  assert.ok(pinned.controls.width > 0);
+  assert.ok(pinned.time.width > 0);
+  await context.close();
+}
+
+{
+  const context = await contextFor(390);
+  const page = await context.newPage();
+  await page.clock.install({ time: new Date('2026-07-24T10:00:00.000Z') });
+  await page.goto(`${baseUrl}/segodnya/`, { waitUntil:'domcontentloaded' });
+  const row = page.locator('[data-mobile-listing-row]:has(.event-media)').first();
+  await row.waitFor();
+  await row.evaluate((node) => {
+    node.closest('[data-mobile-listing-rails]').dataset.mobileListingDate = '2026-07-24';
+    node.dataset.eventEndAt = new Date(Date.now() - 1000).toISOString();
+    delete node.dataset.eventStartsAt;
+  });
+  await page.clock.fastForward(60_000);
+  assert.equal(await row.getAttribute('data-mobile-rail-temporal-state'), 'past');
+  const ended = await row.evaluate((node) => ({
+    rowFilter: getComputedStyle(node).filter,
+    mediaFilter: getComputedStyle(node.querySelector('.event-media > img')).filter,
+  }));
+  assert.equal(ended.rowFilter, 'none');
+  assert.notEqual(ended.mediaFilter, 'none');
+
+  await row.evaluate((node) => {
+    delete node.dataset.eventEndAt;
+    node.dataset.eventStartsAt = new Date(Date.now() - 61 * 60 * 1000).toISOString();
+  });
+  await page.clock.fastForward(60_000);
+  assert.equal(await row.getAttribute('data-mobile-rail-temporal-state'), 'started-earlier');
+
+  await row.evaluate((node) => {
+    node.dataset.eventEndAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  });
+  await page.clock.fastForward(60_000);
+  assert.equal(await row.getAttribute('data-mobile-rail-temporal-state'), 'current');
+  assert.equal(await row.locator('.event-media').evaluate((node) => node.classList.contains('is-temporally-muted')), false);
   await context.close();
 }
 

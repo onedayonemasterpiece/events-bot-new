@@ -23,6 +23,9 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
     assert.match(row, new RegExp(`['"]${donorClass}(?:['"]|--)`, 'u'), donorClass);
   }
   assert.match(row, /occurrenceMode === 'per-family' \? getOccurrencePresentation\(event\) : null/u);
+  assert.match(row, /displayDateRange\(event\.start_date, event\.end_date\)\.replace\(\/\\s\+—\\s\+\/u, '–'\)/u);
+  assert.match(row, /const scheduleAria = compactRailDateRange\s*\? \[fullDateLine, timeLine\]\.filter\(Boolean\)\.join\(', '\)/u);
+  assert.match(row, /'event-date-line--range'/u);
   assert.match(row, /resolveMobileListingRailMedia\(event, image\)/u);
   assert.match(row, /import Icon from '\.\.\/Icon\.astro'/u);
   assert.equal((row.match(/<Icon name="heart" \/>/gu) || []).length, 3);
@@ -80,6 +83,54 @@ test('accepted donor edge gestures and hollow-to-filled system heart states are 
   assert.doesNotMatch(surface, /setTimeout\(\(\) => \{[\s\S]{0,160}aria-pressed[\s\S]{0,160}\}, 80\)/u);
   assert.match(surface, /body\.rail-confirm-open \.mobile-bottom-nav\{opacity:0;visibility:hidden;pointer-events:none\}/u);
   assert.match(surface, /const reduced = matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches/u);
+});
+
+test('negative swipe consent is device-local, fail-closed and granted only after the canonical action commits', async () => {
+  const surface = await read('src/components/listings/MobileListingRailSurface.astro');
+  assert.match(surface, /const negativeSwipeConsentKey = 'ke_rail_negative_swipe_consent_v1'/u);
+  assert.match(surface, /const hasNegativeSwipeConsent = \(\) => \{[\s\S]*try \{[\s\S]*localStorage\.getItem\(negativeSwipeConsentKey\)[\s\S]*catch \(_\) \{\s*return false;/u);
+  assert.match(surface, /const rememberNegativeSwipeConsent = \(\) => \{[\s\S]*try \{[\s\S]*localStorage\.setItem\(negativeSwipeConsentKey, 'true'\)[\s\S]*catch \(_\) \{\s*return false;/u);
+  assert.match(surface, /const commitNegative = \(row,[\s\S]*negative\.click\(\);[\s\S]*waitForPressed\(negative, true\)\.then\(\(pressed\) => \{\s*if \(!pressed\) return false;\s*if \(rememberSwipeConsent\) rememberNegativeSwipeConsent\(\);/u);
+  assert.match(surface, /const commitSwipeNegative = \(row\) => \{\s*if \(hasNegativeSwipeConsent\(\)\) \{\s*void commitNegative\(row\);/u);
+  assert.match(surface, /void commitNegative\(row, \{ rememberSwipeConsent:true \}\)/u);
+  assert.match(surface, /следующие свайпы будут отмечать события без подтверждения\. Любую отметку можно отменить/u);
+  assert.match(surface, /showToast\('Событие отмечено как неинтересное', \(\) => \{\s*negative\.click\(\)/u);
+  assert.doesNotMatch(surface, /data-rail-confirm-cancel[\s\S]{0,180}rememberNegativeSwipeConsent/u);
+});
+
+test('today mobile rail mutes only ended or one-hour-old main media and leaves desktop cards untouched', async () => {
+  const [surface, row] = await Promise.all([
+    read('src/components/listings/MobileListingRailSurface.astro'),
+    read('src/components/listings/MobileListingRailRow.astro'),
+  ]);
+  assert.match(row, /data-event-starts-at=\{event\.starts_at \|\| undefined\}/u);
+  assert.match(row, /data-event-end-at=\{event\.end_at \|\| undefined\}/u);
+  assert.match(surface, /timeZone:'Europe\/Kaliningrad'/u);
+  assert.match(surface, /const completed = Number\.isFinite\(endMs\) && endMs <= now/u);
+  assert.match(surface, /const startedEarlier = !hasExplicitEnd[\s\S]*startMs <= now - 60 \* 60 \* 1000/u);
+  assert.match(surface, /syncTodayTemporalMedia\(\);\s*if \(surface\.dataset\.mobileV23Page === 'today'\) setInterval\(syncTodayTemporalMedia, 60_000\)/u);
+  assert.match(surface, /row\.querySelector\('\.event-media'\)\?\.classList\.toggle\('is-temporally-muted', state !== 'current'\)/u);
+  assert.match(surface, /\.ke-mobile-listing-rails--v23 \.event-media\.is-loaded\.is-temporally-muted>img\{opacity:\.46;filter:grayscale\(\.72\) saturate\(\.32\)\}/u);
+  assert.doesNotMatch(surface, /\.event-row\.is-temporally-muted|\.event-medallion[^}]*filter:/u);
+});
+
+test('desktop date context occupies the existing discovery plane and is rail-locally revealed only when pinned', async () => {
+  const [rail, dateSurface, styles] = await Promise.all([
+    read('src/components/listings/ListingDiscoveryRail.astro'),
+    read('src/components/listings/DateListingSurface.astro'),
+    read('src/styles/design-system.css'),
+  ]);
+  assert.match(dateSurface, /dateContext=\{\{ date: mobileDate, weekday: mobileWeekday \}\}/u);
+  assert.match(rail, /data-listing-rail-date-context aria-hidden="true"[\s\S]*<strong>\{dateContext\.date\}<\/strong>[\s\S]*<small>\{dateContext\.weekday\}<\/small>/u);
+  assert.ok(rail.indexOf('data-listing-rail-date-context') < rail.indexOf('<ListingControls'));
+  assert.match(rail, /const pinned = desktop\.matches && scrollY > 0 && Math\.abs\(railBox\.top - headerBottom\) <= 1/u);
+  assert.match(rail, /rail\.classList\.toggle\('is-pinned', pinned\)/u);
+  assert.match(rail, /context\?\.setAttribute\('aria-hidden', String\(!pinned\)\)/u);
+  assert.doesNotMatch(rail, /document\.body\.classList/u);
+  assert.match(styles, /\.ke-listing-discovery-rail--with-date-context \.ke-listing-discovery-rail__inner \{\s*grid-template-columns: 112px minmax\(0, 1fr\) max-content;/u);
+  assert.match(styles, /\.ke-listing-discovery-rail\.is-pinned \.ke-listing-discovery-rail__date-context/u);
+  assert.match(styles, /@media \(max-width: 980px\)[\s\S]*\.ke-listing-discovery-rail__date-context \{ display: none; \}/u);
+  assert.match(styles, /\.ke-listing-discovery-rail__inner \{[\s\S]*padding-left: 304px;/u);
 });
 
 test('accepted sticky hierarchy and straight 48x23 arrow are literal contracts', async () => {
@@ -151,6 +202,8 @@ test('real-data canaries retain Pianissimo/Teremok crop evidence and More vnutri
 
   const more = preview.events.find((event) => event.id === 4211);
   assert.equal(more?.festival, 'МОРЕ ВНУТРИ');
+  assert.equal(more?.start_date, '2026-08-08');
+  assert.equal(more?.end_date, '2026-08-09');
   const moreManifest = festivals.items.find((item) => item.slug === 'more-vnutri');
   assert.equal(moreManifest?.listingStatus, 'listing_ready');
   assert.equal(moreManifest?.listingBinding, 'festival');

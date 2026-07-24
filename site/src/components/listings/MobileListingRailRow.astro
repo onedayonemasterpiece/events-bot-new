@@ -1,6 +1,6 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
-import { displayDate, eventAdmissionLabel, eventHref, getOccurrencePresentation, withBase } from '../../lib/events';
+import { displayDate, displayDateRange, eventAdmissionLabel, eventHref, getOccurrencePresentation, withBase } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
 import { occurrenceTime } from '../../lib/eventOccurrences';
 import { selectListingImage } from '../../lib/listingPresentation';
@@ -21,9 +21,15 @@ const image = selectListingImage(event, 1.25);
 const railMedia = resolveMobileListingRailMedia(event, image);
 const imageUrl = image.src?.startsWith('/') ? withBase(image.src) : eventImageUrl(image.src);
 const occurrence = occurrenceMode === 'per-family' ? getOccurrencePresentation(event) : null;
-const dateLine = occurrence?.railDateLine || displayDate(event);
+const fullDateLine = displayDate(event);
+const compactRailDateRange = event.end_date && event.end_date !== event.start_date
+  ? displayDateRange(event.start_date, event.end_date).replace(/\s+—\s+/u, '–')
+  : null;
+const dateLine = compactRailDateRange || occurrence?.railDateLine || fullDateLine;
 const timeLine = occurrence?.railTimeLine || occurrenceTime(event) || event.display_time || null;
-const scheduleAria = occurrence?.ariaLabel || [dateLine, timeLine].filter(Boolean).join(', ');
+const scheduleAria = compactRailDateRange
+  ? [fullDateLine, timeLine].filter(Boolean).join(', ')
+  : occurrence?.ariaLabel || [fullDateLine, timeLine].filter(Boolean).join(', ');
 const place = [event.city, event.venue_name].filter(Boolean).join(' · ') || 'Место уточняется';
 const identities = getListingIdentityMedallions(event).slice(0, event.ticket?.is_free ? 1 : 2);
 const admission = eventAdmissionLabel(event);
@@ -46,6 +52,8 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
   data-event={event.id}
   data-event-id={event.id}
   data-event-title={event.title}
+  data-event-starts-at={event.starts_at || undefined}
+  data-event-end-at={event.end_at || undefined}
   data-listing-city={event.city || 'Калининградская область'}
   data-listing-event-type={event.event_type || 'other'}
   data-mobile-rail-media-reason={railMedia.reason}
@@ -59,11 +67,11 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         <span class:list={['event-summary', useDatePrimary && 'event-summary--family']}>
           <span class:list={['event-time', useDatePrimary && 'event-time--date-primary', noExactTime && 'event-time--no-time']} aria-label={scheduleAria}>
             {useDatePrimary ? (
-              <><strong>{dateLine}</strong>{timeLine && <span>{timeLine}</span>}</>
+              <><strong>{dateLine}</strong>{timeLine && <span class="event-date-line">{timeLine}</span>}</>
             ) : noExactTime ? (
-              <><strong class="program-label">Программа<br />дня</strong><span>{dateLine}</span></>
+              <><strong class="program-label">Программа<br />дня</strong><span class:list={['event-date-line', compactRailDateRange && 'event-date-line--range']}>{dateLine}</span></>
             ) : (
-              <><strong>{timeLine}</strong><span>{dateLine}</span></>
+              <><strong>{timeLine}</strong><span class:list={['event-date-line', compactRailDateRange && 'event-date-line--range']}>{dateLine}</span></>
             )}
           </span>
           <span class="event-info">
