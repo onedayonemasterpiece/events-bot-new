@@ -235,21 +235,32 @@ if (!popularDesktopIds.includes('5130')) {
 }
 const popularEventById = new Map(eventsData.events.map((event) => [String(event.id), event]));
 const popularReference = Date.parse(eventsData.build.generated_at);
-const popularDesktopEligible = (event) => {
+const popularEligible = (event) => {
   if (!event || ['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive'].includes(String(event.lifecycle_status || '').toLowerCase())) return false;
-  const endAt = Date.parse(event.end_at || '');
-  if (Number.isFinite(endAt)) return endAt > popularReference;
   if (event.end_date && event.end_date !== event.start_date) return event.end_date >= eventsData.build.current_date;
+  if (event.start_date > eventsData.build.current_date) return true;
+  if (event.start_date < eventsData.build.current_date) return false;
+  if (!Number.isFinite(popularReference)) return false;
   const startsAt = Date.parse(event.starts_at || '');
   if (Number.isFinite(startsAt)) return startsAt >= popularReference;
-  return event.start_date >= eventsData.build.current_date;
+  const startTime = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/u.exec(String(event.start_time || '').trim());
+  if (!startTime) return false;
+  const referenceTime = new Intl.DateTimeFormat('en-CA', {
+    timeZone: event.timezone || 'Europe/Kaliningrad',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(popularReference));
+  const part = (type) => Number(referenceTime.find((item) => item.type === type)?.value || 0);
+  const eventSeconds = Number(startTime[1]) * 3600 + Number(startTime[2]) * 60 + Number(startTime[3] || 0);
+  const referenceSeconds = part('hour') * 3600 + part('minute') * 60 + part('second');
+  return eventSeconds >= referenceSeconds;
 };
-if (popularDesktopIds.some((id) => !popularDesktopEligible(popularEventById.get(id)))) {
-  throw new Error('Popular desktop V28 includes an already unavailable event at build time');
-}
-const elapsedMobileIds = popularLargeIds.filter((id) => !popularDesktopEligible(popularEventById.get(id)));
-if (elapsedMobileIds.some((id) => popularDesktopIds.includes(id))) {
-  throw new Error('Popular desktop V28 must exclude every elapsed card retained by the preserved mobile projection');
+const popularIds = [...new Set([...popularDesktopIds, ...popularLargeIds, ...popularAdaptiveIds])];
+const ineligiblePopularIds = popularIds.filter((id) => !popularEligible(popularEventById.get(id)));
+if (ineligiblePopularIds.length !== 0) {
+  throw new Error(`Popular includes ineligible event ids at build time: ${ineligiblePopularIds.join(',')}`);
 }
 const personalPoolHtml = popularDesktopHtml.slice(popularPersonalizedAt);
 const personalIds = listingIds(personalPoolHtml);

@@ -4,9 +4,11 @@ import { eventImageUrl } from './assets';
 import {
   collapseOccurrenceCards,
   formatOccurrencePresentation,
+  isPopularEligible,
   resolveOccurrenceFamily,
   type OccurrenceFamily,
   type OccurrencePresentation,
+  type PopularEligibilityReference,
 } from './eventOccurrences';
 import type {
   DiscoveryDisplayPayload,
@@ -17,6 +19,8 @@ import type {
   RelatedData,
   RelatedManifestCandidate,
 } from './types';
+
+export { isPopularEligible };
 
 export const SITE_NAME = 'Полюбить Калининград Анонсы';
 export const SITE_ORIGIN = (import.meta.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
@@ -693,9 +697,22 @@ export function eventPopularityScore(event: PreviewEvent): number {
   return Number((likeScore * 0.38 + shareScore * 0.24 + viewScore * 0.24 + sourceScore * 0.10 + localScore * 0.04).toFixed(4));
 }
 
-export function getPopularEvents(limit = 20): PreviewEvent[] {
+function popularEligibilityReference(
+  overrides: Partial<PopularEligibilityReference> = {},
+): PopularEligibilityReference {
+  return {
+    currentDate: overrides.currentDate || getCurrentDate(),
+    referenceIso: overrides.referenceIso || getPreviewBuild().generated_at,
+  };
+}
+
+export function getPopularEvents(
+  limit = 20,
+  reference: Partial<PopularEligibilityReference> = {},
+): PreviewEvent[] {
+  const eligibilityReference = popularEligibilityReference(reference);
   const ranked = getEvents()
-    .filter((event) => eventIntersectsDateRange(event, getCurrentDate(), '9999-12-31'))
+    .filter((event) => isPopularEligible(event, eligibilityReference))
     .map((event) => ({ event, score: eventPopularityScore(event) }))
     .filter((item) => item.score > 0 || (item.event.likes_count || 0) > 0 || (item.event.source_views_count || 0) > 0)
     .sort((left, right) => right.score - left.score || (left.event.starts_at || left.event.start_date).localeCompare(right.event.starts_at || right.event.start_date) || left.event.id - right.event.id)
@@ -703,39 +720,22 @@ export function getPopularEvents(limit = 20): PreviewEvent[] {
   return collapseOccurrenceCards(ranked, 'per-family').slice(0, Math.max(0, limit));
 }
 
-const INELIGIBLE_POPULAR_LIFECYCLES = new Set(['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive']);
-
-/**
- * Desktop Popular is a decision shortcut, so it must not surface a one-off
- * event the visitor can no longer attend. Mobile keeps its existing ranked
- * projection until the parallel mobile listing work is reconciled.
- */
-export function isPopularDesktopEligible(event: PreviewEvent, referenceIso = getPreviewBuild().generated_at): boolean {
-  const lifecycle = String(event.lifecycle_status || '').toLowerCase();
-  if (INELIGIBLE_POPULAR_LIFECYCLES.has(lifecycle)) return false;
-  if (!eventIntersectsDateRange(event, getCurrentDate(), '9999-12-31')) return false;
-
-  const reference = Date.parse(referenceIso);
-  if (!Number.isFinite(reference)) return true;
-
-  const endAt = Date.parse(event.end_at || '');
-  if (Number.isFinite(endAt)) return endAt > reference;
-
-  // A multi-day festival or exhibition remains useful until its final day
-  // even when the export has no trustworthy closing hour.
-  if (isMultiDayEvent(event)) return (event.end_date || event.start_date) >= getCurrentDate();
-
-  const startsAt = Date.parse(event.starts_at || '');
-  if (Number.isFinite(startsAt)) return startsAt >= reference;
-
-  if (event.start_date !== getCurrentDate() || !event.start_time) return event.start_date >= getCurrentDate();
-  const localStart = Date.parse(`${event.start_date}T${event.start_time}:00+02:00`);
-  return !Number.isFinite(localStart) || localStart >= reference;
+/** @deprecated Use the shared isPopularEligible contract. */
+export function isPopularDesktopEligible(
+  event: PreviewEvent,
+  referenceIso = getPreviewBuild().generated_at,
+  currentDate = getCurrentDate(),
+): boolean {
+  return isPopularEligible(event, { currentDate, referenceIso });
 }
 
-export function getPopularDesktopEvents(limit = 100): PreviewEvent[] {
+export function getPopularDesktopEvents(
+  limit = 100,
+  reference: Partial<PopularEligibilityReference> = {},
+): PreviewEvent[] {
+  const eligibilityReference = popularEligibilityReference(reference);
   return getEvents()
-    .filter((event) => isPopularDesktopEligible(event))
+    .filter((event) => isPopularEligible(event, eligibilityReference))
     .map((event) => ({ event, score: eventPopularityScore(event) }))
     .filter((item) => item.score > 0 || (item.event.likes_count || 0) > 0 || (item.event.source_views_count || 0) > 0)
     .sort((left, right) => right.score - left.score || (left.event.starts_at || left.event.start_date).localeCompare(right.event.starts_at || right.event.start_date) || left.event.id - right.event.id)

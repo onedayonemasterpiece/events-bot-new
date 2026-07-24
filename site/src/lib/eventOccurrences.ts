@@ -50,11 +50,17 @@ export interface OccurrencePresentation {
   isComplexSchedule: boolean;
 }
 
+export interface PopularEligibilityReference {
+  currentDate: string;
+  referenceIso: string;
+}
+
 const MONTHS_LONG = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
 ];
 const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const INELIGIBLE_POPULAR_LIFECYCLES = new Set(['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive']);
 
 type DateParts = { year: number; month: number; day: number };
 
@@ -79,6 +85,86 @@ export function occurrenceSlotKey(event: Pick<PreviewEvent, 'id' | 'start_date' 
   const time = occurrenceTime(event);
   // Unknown times are not equal slots: collapsing them would invent identity.
   return `${event.start_date}|${time || `unknown:${event.id}`}`;
+}
+
+function localReferenceParts(reference: Date, timezone: string): {
+  date: string;
+  seconds: number;
+} | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || 'Europe/Kaliningrad',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(reference);
+    const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || '';
+    const year = value('year');
+    const month = value('month');
+    const day = value('day');
+    const hour = Number(value('hour'));
+    const minute = Number(value('minute'));
+    const second = Number(value('second'));
+    if (!year || !month || !day || !Number.isFinite(hour) || !Number.isFinite(minute) || !Number.isFinite(second)) return null;
+    return {
+      date: `${year}-${month}-${day}`,
+      seconds: hour * 3600 + minute * 60 + second,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One availability contract for every Popular representation.
+ *
+ * A range is useful through its final calendar day, regardless of an
+ * opening-day end_at. One-off events use their start instant on the current
+ * day, while future calendar dates remain eligible without depending on a
+ * potentially stale timestamp projection.
+ */
+export function isPopularEligible(
+  event: Pick<
+    PreviewEvent,
+    'lifecycle_status' | 'start_date' | 'end_date' | 'starts_at' | 'start_time' | 'timezone'
+  >,
+  reference: PopularEligibilityReference,
+): boolean {
+  const lifecycle = String(event.lifecycle_status || '').trim().toLowerCase();
+  if (INELIGIBLE_POPULAR_LIFECYCLES.has(lifecycle)) return false;
+
+  const currentDate = String(reference.currentDate || '');
+  if (!parseDate(event.start_date) || !parseDate(currentDate)) return false;
+
+  if (event.end_date && event.end_date !== event.start_date) {
+    if (!parseDate(event.end_date) || event.end_date < event.start_date) return false;
+    return event.end_date >= currentDate;
+  }
+
+  if (event.start_date > currentDate) return true;
+  if (event.start_date < currentDate) return false;
+
+  const referenceTime = Date.parse(reference.referenceIso || '');
+  if (!Number.isFinite(referenceTime)) return false;
+
+  const startsAt = Date.parse(event.starts_at || '');
+  if (Number.isFinite(startsAt)) return startsAt >= referenceTime;
+
+  const startTime = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/u.exec(String(event.start_time || '').trim());
+  if (!startTime) return false;
+  const hour = Number(startTime[1]);
+  const minute = Number(startTime[2]);
+  const second = Number(startTime[3] || 0);
+  if (hour > 23 || minute > 59 || second > 59) return false;
+
+  const localReference = localReferenceParts(new Date(referenceTime), event.timezone);
+  if (!localReference) return false;
+  if (event.start_date !== localReference.date) return event.start_date > localReference.date;
+  return hour * 3600 + minute * 60 + second >= localReference.seconds;
 }
 
 function publicLifecycle(event: Pick<PreviewEvent, 'lifecycle_status'>): boolean {
@@ -199,15 +285,19 @@ function formatDateSet(values: string[], style: 'long' | 'short', currentYear: n
   if (!unique.length) return '';
   if (parts.some((part) => !part)) return (aria ? joinHuman(unique) : unique.join(', '));
   const valid = parts as DateParts[];
-  const sameMonth = valid.every((part) => part.month === valid[0].month && part.year === valid[0].year);
-  if (sameMonth) {
-    const days = valid.map((part) => String(part.day));
-    const joinedDays = aria ? joinHuman(days) : days.join(', ');
-    const month = (style === 'short' ? MONTHS_SHORT : MONTHS_LONG)[valid[0].month - 1];
-    return `${joinedDays} ${month}${valid[0].year !== currentYear ? ` ${valid[0].year}` : ''}`;
+  const groups = new Map<string, DateParts[]>();
+  for (const part of valid) {
+    const key = `${part.year}-${String(part.month).padStart(2, '0')}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)?.push(part);
   }
-  const formatted = unique.map((date) => formatSingleDate(date, style, currentYear));
-  return aria ? joinHuman(formatted) : formatted.join(', ');
+  const formattedGroups = [...groups.values()].map((group) => {
+    const days = group.map((part) => String(part.day));
+    const joinedDays = aria ? joinHuman(days) : days.join(', ');
+    const month = (style === 'short' ? MONTHS_SHORT : MONTHS_LONG)[group[0].month - 1];
+    return `${joinedDays} ${month}${group[0].year !== currentYear ? ` ${group[0].year}` : ''}`;
+  });
+  return aria ? joinHuman(formattedGroups) : formattedGroups.join(', ');
 }
 
 function dateRowText(row: OccurrenceDateRow, currentYear: number): string {

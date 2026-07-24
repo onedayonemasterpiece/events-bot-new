@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   collapseOccurrenceCards,
   formatOccurrencePresentation,
+  isPopularEligible,
   resolveOccurrenceFamily,
 } from '../src/lib/eventOccurrences.ts';
 
@@ -58,6 +59,70 @@ test('same time across months remains compact without hiding month boundaries', 
   const result = presentation(november, [november, december]);
   assert.equal(result.compactLabel, '30 ноября, 2 декабря 19:00');
   assert.equal(result.railDateLine, '30 ноя, 2 дек');
+});
+
+test('same time groups every stable year-month and joins groups accessibly', () => {
+  const julyFirst = event(50, '2026-07-24', '19:00', [51, 52]);
+  const julySecond = event(51, '2026-07-25', '19:00', [50, 52]);
+  const september = event(52, '2026-09-27', '19:00', [50, 51]);
+  const result = presentation(julyFirst, [julyFirst, julySecond, september], '2026-07-23');
+  assert.equal(result.compactLabel, '24, 25 июля, 27 сентября 19:00');
+  assert.equal(result.railDateLine, '24, 25 июл, 27 сен');
+  assert.equal(result.railTimeLine, '19:00');
+  assert.equal(result.ariaLabel, '24 и 25 июля и 27 сентября в 19:00');
+});
+
+test('Popular eligibility rejects non-public lifecycle states', () => {
+  const reference = { currentDate: '2026-07-24', referenceIso: '2026-07-24T12:00:00+02:00' };
+  for (const lifecycle_status of ['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive']) {
+    assert.equal(isPopularEligible(event(60, '2026-07-25', '19:00', [], {
+      lifecycle_status,
+      timezone: 'Europe/Kaliningrad',
+      starts_at: '2026-07-25T19:00:00+02:00',
+    }), reference), false, lifecycle_status);
+  }
+});
+
+test('Popular eligibility keeps ranges through end_date before considering end_at', () => {
+  const reference = { currentDate: '2026-07-24', referenceIso: '2026-07-24T12:00:00+02:00' };
+  const continuing = event(61, '2026-07-20', '10:00', [], {
+    end_date: '2026-07-24',
+    end_at: '2026-07-20T18:00:00+02:00',
+    starts_at: '2026-07-20T10:00:00+02:00',
+    timezone: 'Europe/Kaliningrad',
+  });
+  const ended = event(62, '2026-07-20', '10:00', [], {
+    end_date: '2026-07-23',
+    end_at: '2026-07-20T18:00:00+02:00',
+    starts_at: '2026-07-20T10:00:00+02:00',
+    timezone: 'Europe/Kaliningrad',
+  });
+  assert.equal(isPopularEligible(continuing, reference), true);
+  assert.equal(isPopularEligible(ended, reference), false);
+});
+
+test('Popular eligibility accepts future one-offs and gates same-day events by start instant', () => {
+  const reference = { currentDate: '2026-07-24', referenceIso: '2026-07-24T12:00:30+02:00' };
+  const future = event(63, '2026-07-25', '09:00', [], {
+    starts_at: '2026-07-24T08:00:00+02:00',
+    timezone: 'Europe/Kaliningrad',
+  });
+  const elapsed = event(64, '2026-07-24', '11:59', [], {
+    starts_at: '2026-07-24T11:59:00+02:00',
+    timezone: 'Europe/Kaliningrad',
+  });
+  const upcoming = event(65, '2026-07-24', '12:01', [], {
+    starts_at: null,
+    timezone: 'Europe/Kaliningrad',
+  });
+  const unknownTime = event(66, '2026-07-24', null, [], {
+    starts_at: null,
+    timezone: 'Europe/Kaliningrad',
+  });
+  assert.equal(isPopularEligible(future, reference), true);
+  assert.equal(isPopularEligible(elapsed, reference), false);
+  assert.equal(isPopularEligible(upcoming, reference), true);
+  assert.equal(isPopularEligible(unknownTime, reference), false);
 });
 
 test('mixed date/time matrix falls back to explicit semicolon groups', () => {
@@ -139,7 +204,8 @@ test('production surfaces and live search producer wire per-date, per-family and
     readFile(new URL('../src/components/EventListItem.astro', import.meta.url), 'utf8'),
   ]);
   assert.match(eventsSource, /collapseLinkedSessionEvents[\s\S]*collapseOccurrenceCards\(events, 'per-date'\)/u);
-  assert.match(eventsSource, /getPopularEvents[\s\S]*collapseOccurrenceCards\(ranked, 'per-family'\)/u);
+  assert.match(eventsSource, /getPopularEvents[\s\S]*?filter\(\(event\) => isPopularEligible\(event, eligibilityReference\)\)[\s\S]*?collapseOccurrenceCards\(ranked, 'per-family'\)/u);
+  assert.match(eventsSource, /getPopularDesktopEvents[\s\S]*?filter\(\(event\) => isPopularEligible\(event, eligibilityReference\)\)/u);
   assert.match(eventsSource, /getStaticRelatedCandidates[\s\S]*collapseOccurrenceCards\([\s\S]*'per-family'/u);
   assert.match(searchSource, /collapseSearchOccurrenceFamilies\(rawItems, seenFamilies\)/u);
   assert.match(edgeSearchSource, /paginateOccurrenceFamilies\(\s*rankedCandidates,/u);
