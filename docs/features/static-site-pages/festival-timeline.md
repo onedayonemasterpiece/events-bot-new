@@ -2,7 +2,7 @@
 
 > **Status:** public `noindex` review prototype; calendar view only.
 > **Route:** `/festivali/` inside an immutable preview prefix.
-> **Current candidate:** `preview-20260724-festivals-calendar-r7`.
+> **Current candidate:** `preview-20260726-festivals-calendar-r8`.
 
 The page uses the unified Astro header, footer and mobile dock. It presents 21
 regional festivals from July through December 2026. The category view remains
@@ -13,7 +13,7 @@ anniversary aggregator.
 R4 was the first desktop correction after owner review. The page now consumes the
 shared `--ke-font-sans` stack (`Inter` with the same system fallbacks as the
 rest of the static site) everywhere; the local Georgia override is removed.
-The left month marker, name, mood symbol and copy form one sticky shelf below
+The left month marker, name, category inventory and copy form one sticky shelf below
 the unified header and sticky month switcher. The shelf remains at `126.6px`
 while its month is in view and is pushed out by the next section.
 
@@ -25,18 +25,20 @@ the title and place; only the compact category chip keeps a translucent
 backdrop. The date is a solid KenigEvents-primary badge, while official and
 pending states use quiet green and amber fills without decorative dots.
 
-R7 keeps that accepted single-canvas mechanic and changes only the information
-layer. Desktop date, status, place and category text now use formation-aware
-sizes rather than one blanket scale factor. Dense rows receive truthful compact
-presentation labels while the full wording remains in the title and accessible
-card name. Place copy may use two lines. The 887 and 1440 gates reject label
-overflow, card-caption collisions and any change to R6 row density.
+R8 keeps that accepted single-canvas mechanic and increases the R7 card type by
+approximately 20%: desktop titles render at `21–25.2px`, place copy at
+`12.6–14.7px`, date/status badges at `12–13.2px` and category copy at
+`11.1–12.9px`. Dense `820–1000px` formations use explicit `19.2–19.8px`
+titles, `12.3px` places and `11.1–11.7px` badges, with a third title line when
+needed rather than truncating a festival name. Place copy may use two lines.
 
-Each month rail now includes a quiet one-line category inventory directly below
-the month name. One to four categories show their primary icons; months with
-five or more show three icons and a `+N` cell. The complete category list
-remains accessible. The rail never wraps, scrolls or becomes a second taxonomy
-navigation.
+Each month rail now exposes every represented category, not a sampled
+`3 + N` summary. The inventory wraps inside the sticky rail in three
+`28×28px` cells per row with a `21×21px` glyph. Category-to-icon assignment is
+one canonical map keyed by the displayed category, so the same category cannot
+change icon because of card order or month. Both jazz events are explicitly
+categorised as `Джаз`. All rail icons use KenigEvents primary terracotta; the
+unexplained green decorative month glyphs were removed.
 
 At `820–1000px`, category type and icon geometry tighten together so all labels
 remain complete rather than ellipsized. Place and category copy use lighter
@@ -46,8 +48,11 @@ hierarchy beneath the stronger festival title.
 The category chip no longer uses improvised Unicode marks. Its baseline uses
 twelve unchanged glyphs from SVG Repo's CC0 Lucide Line family, plus two
 visually reviewed semantic exceptions: a saxophone for jazz and comedy/tragedy
-masks for theatre. Meaningful two-axis festivals may show two icons at full
-desktop size; compact formations keep only the primary glyph. Their durable
+masks for theatre. The former dense saxophone was rejected after a ten-candidate
+contact-sheet comparison at `18/24/32px`; SVG Repo
+`480248-saxophone-2.svg` preserves a legible neck, body and bell at the actual
+UI sizes. Meaningful two-axis categories may show two icons at full desktop
+size; compact formations keep only the primary glyph. Their durable
 project copies and exact item links are recorded in
 `site/public/assets/icons/festival-categories/ATTRIBUTION.md`; the same assets
 are catalogued in the shared SVG library under
@@ -63,7 +68,7 @@ notifications.
 
 ## Festival hearts and entity boundary
 
-R7 deliberately does not reuse the numeric event-feedback controller. Only
+R8 deliberately does not reuse the numeric event-feedback controller. Only
 four of 21 cards map to an exact current event, the Fly `festival` rows do not
 provide a safe series/edition identity for all cards, and Supabase exposes only
 a SELECT-only aggregate event counter with no actor-owned festival write RPC.
@@ -139,7 +144,7 @@ Only `Гроздь`, `Море внутри` and `Короче` have selected cu
 Most other exact videos are archive recaps. Future playback must remain
 poster-first and click-to-load, keep the uncropped frame in an overlay/contained
 player, avoid autoplay, and revalidate source availability before release.
-This R7 candidate does not download or embed those videos.
+This R8 candidate does not download or embed those videos.
 The exact 21-row source/shape/duration ledger is
 [`festival-video-audit-2026.md`](festival-video-audit-2026.md).
 
@@ -171,6 +176,9 @@ The rendered contract is:
 
 The date and status are top overlays; title and a one/two-line place sit directly
 on the lower image gradient, followed by an icon-led translucent theme chip.
+The independent festival heart is aligned to the bottom-right card edge; the
+theme chip reserves its footprint, so the heart never interrupts the title or
+place and never overlaps the category.
 There is no bordered or rounded caption panel inside the card. Four-up rows no
 longer collapse status text to a bare dot. Source/provenance stays in the data
 contract and card destination rather than consuming visible card height.
@@ -180,7 +188,7 @@ not a pixel-for-pixel copy of its unrelated page chrome: the inventory, image
 ratios and KenigEvents tokens are real project inputs. The shared visual
 contract is nevertheless element-complete: full-bleed media, top date, top
 status, bottom title, place, category pill, same-height row, left rail, marker,
-month name, mood icon and mood copy.
+month name, complete category inventory and mood copy.
 
 Desktop card hover must not translate the card or scale the image. It may only
 change non-geometric affordances (border and shadow); keyboard focus retains a
@@ -191,7 +199,7 @@ visible inset outline.
 The Playwright gate uses `887×900`, `1440×900`, `390×844` and
 `320×700`. Required envelopes:
 
-- `887px`: card plane `700–710px`, timeline `≤1650px`;
+- `887px`: card plane `700–710px`, timeline `≤1700px`;
 - `1440px`: timeline `≤2300px`; four-up `≤300px`, three-up `≤260px`,
   two-up/solo `≤225px`;
 - `390px`: two columns, regular tiles `184–214px`, August `≤950px`, full
@@ -199,13 +207,14 @@ The Playwright gate uses `887×900`, `1440×900`, `390×844` and
 - all viewports: zero horizontal overflow, 21 decoded images, no browser or
   first-party request errors, same-height cards per row.
 
-R7 keeps the R6 timeline measures: `1640.3px` at the `887px` reference viewport
-and `2279.4px` at `1440px`. It has no topline/caption/heart intersections and
-renders every compact date/status without truncation. At 887 the minimum
-date/status gap is `3.23px` and minimum topline-to-caption clearance is
-`31.5px`; at 1440 the corresponding values are `73.33px` and `68.81px`. All 21
-hearts remain outside their card anchors and persist across a same-browser
-reload.
+R8 measures `1698.1px` at the `887px` reference viewport and retains
+`2279.4px` at `1440px`. The small height increase at 887 is the bounded cost of
+the larger type and complete three-line names. Both widths have zero
+topline/caption, date/status, heart/category or horizontal-overflow collisions.
+At 1440 the measured title is `22.18–24.48px`, place `14.4px`, date
+`12.38–13.10px` and category `12.82px`; at 887 the corresponding sizes are
+`19.2–19.8px`, `12.3px`, `11.4–11.7px` and `10.8px`. All 21 hearts remain
+outside their card anchors and persist across a same-browser reload.
 The reference-width rows reproduce the donor card proportions while remaining
 far denser than the withdrawn `r1`, whose timeline measured `5729.6px`.
 
@@ -220,14 +229,15 @@ included in the final candidate and covered by the overlay behavior gate. The
 follow-up gate passed every card/timeline criterion, scored the final candidate
 `9/10` and returned `KEEP`.
 
-A fresh R7 review was requested through agy with
-`gemini-3.1-pro-high`, but Antigravity rejected the authenticated account before
-conversation creation because the service is unavailable for its current
-location. The policy fallback `a-opus` hit the same eligibility gate. Two
-bounded direct `gemini-3.1-pro-preview` API attempts then returned `429
-RESOURCE_EXHAUSTED` with zero free-tier quota. R7 is therefore accepted only by
-the measured binary gates and manual reference comparison; no Gemini/Opus
-response is claimed.
+A fresh R8 visual prescription was requested twice through agy with the exact
+listed model id `gemini-3.1-pro-high`. Antigravity rejected the authenticated
+account before conversation creation because the service is unavailable for
+its current location. A bounded direct `gemini-3.1-pro-preview` request with
+the R7 screenshot and ten-candidate jazz contact sheet returned `429
+RESOURCE_EXHAUSTED` with zero free-tier quota. R8 therefore does not claim
+Gemini participation or approval. The icon choice is the recorded manual
+contact-sheet result and the page is accepted only by measured binary gates and
+visual inspection.
 
 ## Checks and preview
 
@@ -235,14 +245,14 @@ Run:
 
 ```bash
 npm --prefix site run test:festival-timeline-layout
-PREVIEW_BUILD_ID=preview-20260724-festivals-calendar-r7 npm --prefix site run build:preview
-PREVIEW_BUILD_ID=preview-20260724-festivals-calendar-r7 npm --prefix site run check:unified-prototype
+PREVIEW_BUILD_ID=preview-20260726-festivals-calendar-r8 npm --prefix site run build:preview
+PREVIEW_BUILD_ID=preview-20260726-festivals-calendar-r8 npm --prefix site run check:unified-prototype
 ```
 
 Review candidate:
 
-- page: <https://kenigevents.ru/preview-20260724-festivals-calendar-r7/festivali/>;
-- hub: <https://kenigevents.ru/preview-20260724-festivals-calendar-r7/__preview/>.
+- page: <https://kenigevents.ru/preview-20260726-festivals-calendar-r8/festivali/>;
+- hub: <https://kenigevents.ru/preview-20260726-festivals-calendar-r8/__preview/>.
 
 The immutable URL is a public bearer link, not authentication. It must not be
 promoted to the production root before product acceptance and a refresh owner

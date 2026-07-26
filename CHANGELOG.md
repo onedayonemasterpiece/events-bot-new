@@ -16,7 +16,7 @@
   from event likes and public counters.
 - Expanded the SVGRepo festival category set with CC0 saxophone, theatre masks,
   anchor, microphone and people glyphs; cards may show a meaningful two-icon
-  combination while month rails expose a compact three-icons-plus-count inventory.
+  combination while month rails expose the complete represented-category inventory.
 
 - Added a base-aware installable web app manifest and an Android-only mobile
   footer install action that appears only for a real one-shot
@@ -143,6 +143,18 @@
   deep-research prompt. No production behavior or scheduler was changed.
 
 ### Changed
+
+- Increased festival-card title, place, date/status and category typography by
+  approximately 20%, allowing a third title line in dense desktop formations
+  while preserving zero measured overlay collisions at 887 and 1440 pixels.
+- Made month-rail category icons deterministic by displayed category, enlarged
+  them to `21px` inside `28px` cells, exposed every month category, unified
+  their colour and removed the unexplained green decorative month glyphs.
+- Replaced the ambiguous dense jazz saxophone with SVG Repo CC0
+  `480248-saxophone-2.svg`, selected from a ten-candidate `18/24/32px` contact
+  sheet; both jazz festivals now use the explicit `Джаз` category.
+- Moved every independent festival heart to the bottom-right card edge and
+  reserved its footprint in the category chip so the controls never overlap.
 
 - Enlarged festival date/status/place/category typography using formation-aware
   compact labels, two-line place recovery and collision-tested 887/1440 desktop

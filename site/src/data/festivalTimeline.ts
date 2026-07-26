@@ -22,12 +22,12 @@ export interface FestivalTimelineItem {
 }
 
 export const festivalTimelineMonths = [
-  { key: 'july', label: 'Июль', shortLabel: 'Июл', symbol: '◌', mood: 'Джаз открывает большой фестивальный сезон.' },
-  { key: 'august', label: 'Август', shortLabel: 'Авг', symbol: '✦', mood: 'Главный месяц: море, кино, музыка и история.' },
-  { key: 'september', label: 'Сентябрь', shortLabel: 'Сен', symbol: '≈', mood: 'Городские пикники, сцены и встречи у воды.' },
-  { key: 'october', label: 'Октябрь', shortLabel: 'Окт', symbol: '◇', mood: 'Театр, книги и музыка переходят в залы.' },
-  { key: 'november', label: 'Ноябрь', shortLabel: 'Ноя', symbol: '♪', mood: 'Культурные традиции и осенний джаз.' },
-  { key: 'december', label: 'Декабрь', shortLabel: 'Дек', symbol: '✳', mood: 'Камерный финал года в Кафедральном соборе.' },
+  { key: 'july', label: 'Июль', shortLabel: 'Июл', mood: 'Джаз открывает большой фестивальный сезон.' },
+  { key: 'august', label: 'Август', shortLabel: 'Авг', mood: 'Главный месяц: море, кино, музыка и история.' },
+  { key: 'september', label: 'Сентябрь', shortLabel: 'Сен', mood: 'Городские пикники, сцены и встречи у воды.' },
+  { key: 'october', label: 'Октябрь', shortLabel: 'Окт', mood: 'Театр, книги и музыка переходят в залы.' },
+  { key: 'november', label: 'Ноябрь', shortLabel: 'Ноя', mood: 'Культурные традиции и осенний джаз.' },
+  { key: 'december', label: 'Декабрь', shortLabel: 'Дек', mood: 'Камерный финал года в Кафедральном соборе.' },
 ] as const;
 
 /**
@@ -44,7 +44,7 @@ export const festivalTimeline: FestivalTimelineItem[] = [
     dateLabel: '31 июля — 2 августа',
     monthKey: 'july',
     place: 'Калининград',
-    category: 'Музыка',
+    category: 'Джаз',
     description: 'Большая джазовая сцена под открытым небом в самом центре города.',
     status: 'announced',
     statusLabel: 'Даты объявлены',
@@ -383,7 +383,7 @@ export const festivalTimeline: FestivalTimelineItem[] = [
     dateLabel: '13–18 ноября',
     monthKey: 'november',
     place: 'Калининградская областная филармония',
-    category: 'Музыка',
+    category: 'Джаз',
     description: 'Шесть дней джаза — от камерных составов до больших концертных программ.',
     status: 'program-pending',
     statusLabel: 'Ждём программу',
