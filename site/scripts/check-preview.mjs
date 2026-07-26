@@ -60,6 +60,9 @@ for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
 }
+const previewBuild = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
+const previewCurrentDate = String(previewBuild.currentDate || eventsData.build.current_date || '');
+const previewReferenceIso = String(previewBuild.referenceIso || eventsData.build.generated_at || '');
 const occurrenceLabHtml = readFileSync(join(root, 'lab/occurrences/index.html'), 'utf8');
 for (const compactLabel of ['2, 9 ноября 19:00', '4 ноября 17:00, 19:00']) {
   if (!occurrenceLabHtml.includes(compactLabel)) throw new Error(`Occurrence lab misses compact label: ${compactLabel}`);
@@ -113,15 +116,36 @@ const mobileRailRow = (route, eventId) => {
   if (start < 0 || end < 0) throw new Error(`Mobile rail canary ${eventId} is missing from ${route}`);
   return html.slice(start, end);
 };
-const pianissimoRail = mobileRailRow('date-2026-07-24', 5296);
-for (const marker of [
-  'data-mobile-rail-media-reason="single_safe_visual_landscape_5x4"',
-  '--media-width:140px',
-  '--rail-media-fit:cover',
-  'data-image-text-mode="visual_only"',
-  '--focus-x:65%',
-]) {
-  if (!pianissimoRail.includes(marker)) throw new Error(`Pianissimo 5296 rail crop regression: missing ${marker}`);
+const pianissimoRoute = 'date-2026-07-24';
+const pianissimoRoutePath = join(root, pianissimoRoute, 'index.html');
+let pianissimoRail = '';
+if (existsSync(pianissimoRoutePath)) {
+  pianissimoRail = mobileRailRow(pianissimoRoute, 5296);
+  for (const marker of [
+    'data-mobile-rail-media-reason="single_safe_visual_landscape_5x4"',
+    '--media-width:140px',
+    '--rail-media-fit:cover',
+    'data-image-text-mode="visual_only"',
+    '--focus-x:65%',
+  ]) {
+    if (!pianissimoRail.includes(marker)) throw new Error(`Pianissimo 5296 rail crop regression: missing ${marker}`);
+  }
+} else {
+  // A current-date preview intentionally does not generate expired date pages.
+  // Keep the accepted crop canary grounded in the immutable real event asset
+  // instead of making the release gate depend on a stale calendar window.
+  const pianissimo = eventsData.events.find((event) => event.id === 5296);
+  const asset = pianissimo?.image_assets?.[0];
+  if (
+    pianissimo?.start_date !== '2026-07-24'
+    || pianissimo?.image_text_mode !== 'visual_only'
+    || asset?.image_text_mode !== 'visual_only'
+    || asset?.safe_crop !== true
+    || Number(asset?.width || 0) <= Number(asset?.height || 0)
+    || Math.abs(Number(asset?.focal_point?.x || 0) - 0.65) > 0.001
+  ) {
+    throw new Error('Expired Pianissimo 5296 source crop regression');
+  }
 }
 const teremokRail = mobileRailRow('vyhodnye', 6939);
 for (const marker of [
@@ -140,7 +164,7 @@ if (!moreRail.includes('data-image-text-mode="ocr_text"') || !moreRail.includes(
 if (!moreRail.includes('/assets/festivals/more-vnutri.svg')) {
   throw new Error('More vnutri 4211 misses its structured external festival medallion');
 }
-for (const row of [pianissimoRail, teremokRail, moreRail]) {
+for (const row of [pianissimoRail, teremokRail, moreRail].filter(Boolean)) {
   if ((row.match(/icon--heart/gu) || []).length !== 3 || !row.includes('icon__heart-outline') || !row.includes('icon__heart-solid')) {
     throw new Error('Mobile rail must use the shared hollow/solid heart component for proof, underlay and action');
   }
@@ -230,16 +254,13 @@ if (temporalLabels.length !== popularDesktopIds.length || temporalLabels.some((l
 if (!popularDesktopGlobalHtml.includes('ещё 1 показ')) {
   throw new Error('Popular desktop V28 must collapse repeated dates into one family card');
 }
-if (!popularDesktopIds.includes('5130')) {
-  throw new Error('Popular desktop V28 regression: Break Summer Fest must remain discoverable');
-}
 const popularEventById = new Map(eventsData.events.map((event) => [String(event.id), event]));
-const popularReference = Date.parse(eventsData.build.generated_at);
+const popularReference = Date.parse(previewReferenceIso);
 const popularEligible = (event) => {
   if (!event || ['cancelled', 'postponed', 'duplicate', 'merged', 'deleted', 'inactive'].includes(String(event.lifecycle_status || '').toLowerCase())) return false;
-  if (event.end_date && event.end_date !== event.start_date) return event.end_date >= eventsData.build.current_date;
-  if (event.start_date > eventsData.build.current_date) return true;
-  if (event.start_date < eventsData.build.current_date) return false;
+  if (event.end_date && event.end_date !== event.start_date) return event.end_date >= previewCurrentDate;
+  if (event.start_date > previewCurrentDate) return true;
+  if (event.start_date < previewCurrentDate) return false;
   if (!Number.isFinite(popularReference)) return false;
   const startsAt = Date.parse(event.starts_at || '');
   if (Number.isFinite(startsAt)) return startsAt >= popularReference;
@@ -257,6 +278,12 @@ const popularEligible = (event) => {
   const referenceSeconds = part('hour') * 3600 + part('minute') * 60 + part('second');
   return eventSeconds >= referenceSeconds;
 };
+const breakSummerEligible = popularEligible(popularEventById.get('5130'));
+if (popularDesktopIds.includes('5130') !== breakSummerEligible) {
+  throw new Error(
+    `Popular desktop V28 Break Summer lifecycle regression: eligible=${breakSummerEligible}`,
+  );
+}
 const popularIds = [...new Set([...popularDesktopIds, ...popularLargeIds, ...popularAdaptiveIds])];
 const ineligiblePopularIds = popularIds.filter((id) => !popularEligible(popularEventById.get(id)));
 if (ineligiblePopularIds.length !== 0) {

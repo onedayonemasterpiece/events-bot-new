@@ -269,12 +269,17 @@ The medallions lab includes a source-faithful **RZD Lastochka** transport token:
 - crop: cab plus first passenger door so the train remains recognizable at roughly 90–112px;
 - semantics: `Транспортная подсказка: электропоезд «Ласточка»`; no visible schedule, ticket promise or official-service claim.
 
-The token is currently a **lab specimen only**. Production event-page wiring
-requires separate grounded route eligibility; it must not infer a train
-connection from city or venue keywords alone. The deterministic builder is
-`site/scripts/build-rzd-lastochka-medallion.py`. Gemini 3.1 Pro (High) product
-and design consultations both selected the circular cab crop over a full-train
-strip or wide text composite. No generative image editing was used.
+The noindex event-detail prototype now renders this token only when the same
+`getEventTransportSuggestion(desktopEventWithExplicitEnd(event))` projection
+that renders the real rail schedule is non-null. A city, venue, title or
+description match cannot create the token. It is always a `Secondary` transport
+fact in `InlineSlot`; it can never become `Main` or occupy `TopSlot`. Event
+`6529` is the real-data regression: MUMOD remains the Main identity and
+Lastochka appears inline only because a grounded schedule is available. The
+deterministic builder is `site/scripts/build-rzd-lastochka-medallion.py`.
+Gemini 3.1 Pro (High) product and design consultations both selected the
+circular cab crop over a full-train strip or wide text composite. No generative
+image editing was used.
 
 ### Manifest-inventory regression contract
 
@@ -319,8 +324,10 @@ event-detail / Telegram / lab-only reachability, and verifies runtime plus
 source/provenance assets. Current result: 28 used, 10 unused, 0 unreachable and
 no current/historical fail-closed conflict. In particular, event `6529`
 resolves `mumod`; `dramteatr39`, `kaup` and structured festivals resolve on
-real events; `greza-khutor` is historically grounded but has no current event;
-RZD Lastochka remains deliberately lab-only.
+real events; `greza-khutor` is historically grounded but has no current event.
+RZD Lastochka is reachable on event detail only through a grounded generated
+rail suggestion; it remains absent from Telegram and from events without that
+payload.
 
 SVG-primary identities that Telegram's Pillow renderer could not consume now
 carry deterministic same-stem 512×512 PNG fallbacks: `dramteatr39`,
@@ -330,6 +337,15 @@ remain primary. The event-detail resolver may use `venue_address` only as
 structured venue evidence and festival artwork only from the structured
 `festival` field; title/description inference and weakened Unicode boundaries
 remain forbidden.
+
+For a listing-only organizer fact that is known from an audited source but is
+missing from the current structured event schema, the manifest may carry an
+explicit `listingEventIds` allow-list. This is a curated relation, not a text
+matcher: its evidence is `event_id / curated_event`, it is accepted only for
+`listingStatus=listing_ready` plus `listingBinding=organizer`, and it must not
+read title, summary or description. Event `7018` is the regression for
+`ruin-keepers`; the unrelated structured venue `центр «Крупорушка»` must not
+match by itself.
 
 For unknown organizers use a neutral initials medallion (`МК`, `Ф`, etc.) only after the normalized organizer name is known. Do not guess logos.
 

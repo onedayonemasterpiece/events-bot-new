@@ -843,3 +843,18 @@ UI mapping was added.
 - labeled visual evidence and the QA summary were delivered to Telegram forum
   topic `KenigEvents · UI review` / `Главная, Популярное, списки — wireframes`,
   message ids `273–278` (topic anchor `122`).
+
+## R12 current-clock preview gate, 2026-07-26
+
+`check:preview` reads `currentDate` and `referenceIso` from the generated
+`preview-build.json`, not from stale snapshot metadata. Lifecycle assertions
+therefore agree with the pages produced by `build:preview`: an already-ended
+Break Summer event is forbidden from Popular after its date, while it remains
+required when the same gate runs against an earlier eligible build clock.
+
+Generated-output canaries also respect the generated calendar window. When the
+historical `date-2026-07-24` route exists, the gate checks the full Pianissimo
+rail DOM. When a current build correctly omits that expired date page, the gate
+checks the immutable real event `5296` media classification, safe-crop flag,
+wide geometry and focal point instead of failing because an obsolete route is
+absent.

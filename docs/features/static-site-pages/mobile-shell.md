@@ -1069,6 +1069,15 @@ been behind the current time by at least one hour. Only the main event image is
 desaturated; identity/free medallions, text, controls and row order remain
 unchanged.
 
+An immutable noindex preview may remain open after its projected
+`data-mobile-listing-date` has elapsed. In that case a no-`end_at` row must not
+revert to vivid merely because the listing date no longer equals today's
+Kaliningrad date: the elapsed listing day is `past` and its main image stays
+muted. A trustworthy explicit end remains authoritative, including an
+explicitly future multi-day end. Regression coverage uses real 2026-07-26 rows
+`7018`, `6956` and `7043`, a controlled browser clock, a post-midnight pass and
+a desktop-isolation check.
+
 Compact rail schedule tiles must never ellipsize the essential end date. A
 same-month range is written as `8–9 августа`; cross-month ranges retain both
 month names. The full schedule remains in the accessible label.

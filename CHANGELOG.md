@@ -183,6 +183,16 @@
 
 ### Fixed
 
+- Fixed mobile `Сегодня` temporal truth across midnight and immutable previews:
+  no-end events from an elapsed listing day keep the accepted muted main image,
+  while an explicit end remains authoritative and desktop cards stay isolated.
+  Preview gates now read the generated build clock and keep historical crop
+  canaries without requiring an expired date route.
+- Restored the existing `Хранители руин` medallion for event `7018` through an
+  explicit curated event-id listing binding without prose inference, and
+  promoted the existing RZD Lastochka specimen to event-detail runtime only
+  when the grounded rail-schedule projection exists. Lastochka is always a
+  Secondary InlineSlot token; MUMOD remains Main on control event `6529`.
 - Fixed the R11 unified noindex prototype: the first mobile negative swipe now
   explains and records one-time consent before later direct, undoable marks;
   Today restores runtime past-event media desaturation; compact rail ranges no
