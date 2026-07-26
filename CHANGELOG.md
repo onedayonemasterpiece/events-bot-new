@@ -273,6 +273,8 @@
 - Enforced the secret-candidate `nosnippet` robots policy even on pages that
   are also intrinsically private/noindex, and scoped footer acceptance checks
   to the footer instead of counting matching mobile-menu labels.
+- Closed every temporary `Database` in the Kaggle-status regression suite so
+  its aiosqlite workers terminate and the mandatory pre-deploy test exits.
 - Fixed mobile `Сегодня` temporal truth across midnight and immutable previews:
   no-end events from an elapsed listing day keep the accepted muted main image,
   while an explicit end remains authoritative and desktop cards stay isolated.

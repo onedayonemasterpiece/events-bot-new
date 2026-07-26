@@ -618,6 +618,7 @@ async def test_kaggle_run_config_and_alive_callback(tmp_path, monkeypatch):
         count_row = await cur.fetchone()
         await cur.close()
     assert count_row[0] == 1
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -665,6 +666,7 @@ async def test_kaggle_run_event_http_handler_records_event(tmp_path, monkeypatch
         row = await cur.fetchone()
         await cur.close()
     assert row == ("kernel_started", "preflight")
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -710,6 +712,7 @@ async def test_publish_target_events_are_recorded_as_status_history(tmp_path, mo
     assert [row[0] for row in rows] == ["publish_target_started", "publish_target_done"]
     assert [row[1] for row in rows] == ["running", "done"]
     assert json.loads(rows[1][2])["external_url"] == "https://t.me/kenigevents/3997"
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -757,6 +760,7 @@ async def test_resource_lease_blocks_parallel_holder(tmp_path, monkeypatch):
     assert status == 200
     assert body["resource_action"] == "blocked"
     assert body["holder_run_id"] == first["run_id"]
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -845,6 +849,7 @@ async def test_alive_renews_resource_lease_and_coalesces_history(tmp_path, monke
     assert renewed_expires > old_expires
     assert ledger[0]
     assert json.loads(ledger[1])["progress_label"] == "кадры 11/100"
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -889,6 +894,7 @@ async def test_expired_resource_lease_is_marked_on_next_run_config(tmp_path, mon
         await cur.close()
     assert row[0] == "expired"
     assert row[1]
+    await db.close()
 
 
 def test_kaggle_status_client_redacts_token_in_local_jsonl(tmp_path):
