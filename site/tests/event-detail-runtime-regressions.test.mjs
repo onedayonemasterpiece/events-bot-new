@@ -186,6 +186,7 @@ test('desktop breadcrumbs keep semantics while becoming compact and secondary', 
 
 test('desktop and mobile transport consume one persisted Smart Update duration forecast', async () => {
   const route = await read('src/pages/sobytiya/[slug].astro');
+  const medallions = await read('src/components/EventTokenMedallions.astro');
   const built = await readBuiltEvent(6529);
 
   assert.match(route, /const transportEvent = desktopEventWithExplicitEnd\(event\)/u);
@@ -194,6 +195,23 @@ test('desktop and mobile transport consume one persisted Smart Update duration f
   assert.match(route, /<KaupTransportSchedule event=\{transportEvent\} compact \/>/u);
   assert.equal((built.match(/data-event-end-basis="forecast"/gu) || []).length, 2);
   assert.doesNotMatch(built, /data-event-end-basis="schedule_cutoff"/u);
+  assert.match(medallions, /getEventTransportSuggestion\(desktopEventWithExplicitEnd\(event\)\)/u);
+  assert.match(medallions, /kind:'program',[\s\S]*key:`transport:\$\{railTransport\.slug\}`[\s\S]*layoutRole:'secondary'/u);
+  assert.equal((built.match(/rzd-lastochka-medallion\.webp/gu) || []).length, 2);
+  assert.match(built, /data-medallion-slot="inline"[\s\S]*event-token--program event-token--custom event-token--rzd-lastochka[\s\S]*data-medallion-role="secondary"/u);
+  for (const topSlot of built.matchAll(/<section[^>]*data-medallion-slot="top"[\s\S]*?<\/section>/gu)) {
+    assert.doesNotMatch(topSlot[0], /rzd-lastochka/u);
+  }
+});
+
+test('July 26 listing renders event 7018 with its exact curated Ruin Keepers medallion', async () => {
+  const built = await readBuilt('date-2026-07-26/index.html');
+  const row = built.match(/<article class="event-row"[^>]*data-event="7018"[\s\S]*?<\/article>/u)?.[0];
+  assert.ok(row, 'event 7018 must remain in the generated July 26 mobile listing');
+  assert.match(row, /data-event-title="Воскресник в Озёрске"/u);
+  assert.match(row, /Озёрск · центр «Крупорушка»/u);
+  assert.match(row, /aria-label="Организатор: Хранители руин"/u);
+  assert.match(row, /\/assets\/organizers\/ruin-keepers\.webp/u);
 });
 
 test('desktop telephone remains a branded reveal-and-copy CTA', async () => {

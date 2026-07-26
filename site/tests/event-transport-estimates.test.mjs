@@ -5,6 +5,7 @@ import test from 'node:test';
 
 const helperUrl = new URL('../src/lib/desktopEventTransport.ts', import.meta.url);
 const transportUrl = new URL('../src/lib/eventTransport.ts', import.meta.url);
+const medallionsUrl = new URL('../src/lib/eventMedallions.ts', import.meta.url);
 const schedulesUrl = new URL('../src/data/transportSchedules.json', import.meta.url);
 const componentUrl = new URL('../src/components/EventTransportSchedule.astro', import.meta.url);
 const transportIcsRouteUrl = new URL('../src/pages/sobytiya/[slug]/transport/[trip].ics.ts', import.meta.url);
@@ -18,6 +19,7 @@ async function loadTypeScriptModule(url, replacements = []) {
 }
 
 const helper = await loadTypeScriptModule(helperUrl);
+const medallions = await loadTypeScriptModule(medallionsUrl);
 const scheduleSource = await fs.readFile(schedulesUrl, 'utf8');
 const transport = await loadTypeScriptModule(transportUrl, [[
   "import scheduleData from '../data/transportSchedules.json';",
@@ -46,11 +48,29 @@ test('persisted forecast is projected separately and yields practical same-day r
 
   const suggestion = transport.getEventTransportSuggestion(projected);
   assert.ok(suggestion);
+  assert.deepEqual(medallions.resolveRailTransportMedallion(suggestion), {
+    slug:'rzd-lastochka',
+    name:'Электропоезд «Ласточка»',
+    avatarUrl:'/assets/transport/rzd-lastochka-medallion.webp',
+    fallbackPngUrl:'/assets/transport/rzd-lastochka-medallion.png',
+    ariaLabel:'Транспортная подсказка: электропоезд «Ласточка»',
+  });
   assert.equal(suggestion.eventEndBasis, 'forecast');
   assert.equal(suggestion.eventEnd, '17:00');
   assert.equal(suggestion.returnReadyTime, '17:25');
   assert.deepEqual(suggestion.returns.map((train) => train.departure), ['17:50', '18:56']);
   assert.ok(suggestion.returns.every((train) => !train.nextDay));
+});
+
+test('rail medallion eligibility fails closed without a generated rail payload', () => {
+  const suggestion = transport.getEventTransportSuggestion({
+    ...baseEvent,
+    id:7018,
+    city:'Озёрск',
+    venue_name:'центр «Крупорушка»',
+  });
+  assert.equal(suggestion, null);
+  assert.equal(medallions.resolveRailTransportMedallion(suggestion), null);
 });
 
 test('source-labelled duration wins over a persisted forecast', () => {

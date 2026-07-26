@@ -1,4 +1,5 @@
 import type { PreviewEvent } from './types';
+import type { EventTransportSuggestion } from './eventTransport';
 
 export type MedallionIdentityCategory = 'venue_brand' | 'festival_brand' | 'festival' | 'organizer';
 export type MedallionEvidenceField = 'venue_name' | 'venue_address' | 'festival' | 'source_url' | 'festival_policy';
@@ -38,6 +39,33 @@ export interface EventMedallionResolution {
 export interface EventMedallionLayout {
   main?: ResolvedOrganizerMedallion;
   secondary: ResolvedOrganizerMedallion[];
+}
+
+export interface RailTransportMedallionDefinition {
+  slug: 'rzd-lastochka';
+  name: string;
+  avatarUrl: string;
+  fallbackPngUrl: string;
+  ariaLabel: string;
+}
+
+const RZD_LASTOCHKA_MEDALLION: RailTransportMedallionDefinition = {
+  slug:'rzd-lastochka',
+  name:'Электропоезд «Ласточка»',
+  avatarUrl:'/assets/transport/rzd-lastochka-medallion.webp',
+  fallbackPngUrl:'/assets/transport/rzd-lastochka-medallion.png',
+  ariaLabel:'Транспортная подсказка: электропоезд «Ласточка»',
+};
+
+/**
+ * Project the accepted transport artwork only from the same grounded payload
+ * that renders EventTransportSchedule. City/title/venue prose is deliberately
+ * not accepted here: a null transport suggestion must remain a null token.
+ */
+export function resolveRailTransportMedallion(
+  suggestion: EventTransportSuggestion | null | undefined,
+): RailTransportMedallionDefinition | null {
+  return suggestion ? RZD_LASTOCHKA_MEDALLION : null;
 }
 
 export function normalizeMedallionText(value: unknown): string {

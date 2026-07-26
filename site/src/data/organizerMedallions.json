@@ -811,7 +811,12 @@
       "assetFormat": "webp-source-raster-official-png",
       "fallbackPngUrl": "/assets/organizers/ruin-keepers.png",
       "sourceFile": "recheck-20260704/ruin-keepers.official-logo.png",
-      "category": "venue_brand"
+      "category": "venue_brand",
+      "listingStatus": "listing_ready",
+      "listingBinding": "organizer",
+      "listingEventIds": [
+        7018
+      ]
     },
     {
       "slug": "greza-khutor",

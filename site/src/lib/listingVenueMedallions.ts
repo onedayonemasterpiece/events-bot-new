@@ -1,6 +1,13 @@
 import organizerMedallions from '../data/organizerMedallions.json';
 import festivalMedallions from '../data/festivalMedallions.json';
+import { matchMedallionAlias } from './eventMedallions';
 import type { EventImageAsset, PreviewEvent } from './types';
+
+export interface ListingMedallionEvidence {
+  field: 'venue_name' | 'festival' | 'event_id';
+  value: string;
+  match: 'exact' | 'bounded' | 'curated_event';
+}
 
 export interface ListingVenueMedallion {
   slug: string;
@@ -11,6 +18,7 @@ export interface ListingVenueMedallion {
   background?: string;
   ring?: string;
   ariaLabel: string;
+  evidence: ListingMedallionEvidence;
 }
 
 interface ManifestMedallion {
@@ -25,33 +33,26 @@ interface ManifestMedallion {
   ariaLabel?: string;
   listingStatus?: 'listing_ready' | 'detail_only' | 'blocked_missing_binding';
   listingBinding?: 'venue' | 'festival' | 'organizer';
-}
-
-function normalize(value: unknown): string {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/<[^>]*>/gu, ' ')
-    .replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ')
-    .replace(/\s+/gu, ' ')
-    .trim();
+  listingEventIds?: number[];
 }
 
 function namesFor(item: ManifestMedallion): string[] {
   return Array.from(new Set([item.name, item.shortName, ...(item.aliases || [])]
-    .map(normalize)
-    .filter((value) => value.length >= 3)));
+    .filter(Boolean)
+    .map(String)));
 }
 
 /** Exact or bounded phrase match; deliberately no fuzzy prose matching. */
-function matchesStructuredValue(item: ManifestMedallion, value: unknown): boolean {
-  const normalized = normalize(value);
-  if (!normalized) return false;
-  return namesFor(item).some((candidate) => {
-    if (candidate === normalized) return true;
-    if (candidate.length < 5) return false;
-    return (` ${normalized} `).includes(` ${candidate} `)
-      || (` ${candidate} `).includes(` ${normalized} `);
-  });
+function structuredEvidence(
+  item: ManifestMedallion,
+  field: 'venue_name' | 'festival',
+  value: unknown,
+): ListingMedallionEvidence | null {
+  for (const candidate of namesFor(item)) {
+    const match = matchMedallionAlias(value, candidate);
+    if (match) return { field, value:String(value), match };
+  }
+  return null;
 }
 
 const allItems: ManifestMedallion[] = [
@@ -59,16 +60,30 @@ const allItems: ManifestMedallion[] = [
   ...((festivalMedallions as { items?: ManifestMedallion[] }).items || []),
 ];
 
-function listingCandidates(event: PreviewEvent): ManifestMedallion[] {
-  const ready = allItems.filter((item) => item.listingStatus === 'listing_ready');
-  const matched = [
-    ...ready.filter((item) => item.listingBinding === 'venue' && matchesStructuredValue(item, event.venue_name)),
-    ...ready.filter((item) => item.listingBinding === 'festival' && matchesStructuredValue(item, event.festival)),
-  ];
-  return matched.filter((item, index) => matched.findIndex((candidate) => candidate.slug === item.slug) === index);
+interface ListingCandidate {
+  item: ManifestMedallion;
+  evidence: ListingMedallionEvidence;
 }
 
-function toListingMedallion(item: ManifestMedallion): ListingVenueMedallion {
+function listingCandidates(event: PreviewEvent): ListingCandidate[] {
+  const ready = allItems.filter((item) => item.listingStatus === 'listing_ready');
+  const matched: ListingCandidate[] = [];
+  for (const item of ready) {
+    const evidence = item.listingBinding === 'venue'
+      ? structuredEvidence(item, 'venue_name', event.venue_name)
+      : item.listingBinding === 'festival'
+        ? structuredEvidence(item, 'festival', event.festival)
+        : item.listingBinding === 'organizer' && item.listingEventIds?.includes(event.id)
+          ? { field:'event_id' as const, value:String(event.id), match:'curated_event' as const }
+          : null;
+    if (evidence) matched.push({ item, evidence });
+  }
+  return matched.filter(({ item }, index) => (
+    matched.findIndex((candidate) => candidate.item.slug === item.slug) === index
+  ));
+}
+
+function toListingMedallion({ item, evidence }: ListingCandidate): ListingVenueMedallion {
   return {
     slug: item.slug,
     name: item.name,
@@ -78,6 +93,7 @@ function toListingMedallion(item: ManifestMedallion): ListingVenueMedallion {
     background: item.background,
     ring: item.ring,
     ariaLabel: item.ariaLabel || `Локация: ${item.name}`,
+    evidence,
   };
 }
 
@@ -114,7 +130,7 @@ export function getListingVenueMedallion(event: PreviewEvent, selectedAsset?: Ev
     && ratio >= 1.2
   );
   if (!isNeutralFallback && !isSafeWidePhoto) return null;
-  const item = listingCandidates(event)[0];
-  if (!item) return null;
-  return toListingMedallion(item);
+  const candidate = listingCandidates(event)[0];
+  if (!candidate) return null;
+  return toListingMedallion(candidate);
 }

@@ -3,9 +3,12 @@ import Icon from './Icon.astro';
 import organizerMedallions from '../data/organizerMedallions.json';
 import festivalMedallions from '../data/festivalMedallions.json';
 import type { PreviewEvent } from '../lib/types';
+import { desktopEventWithExplicitEnd } from '../lib/desktopEventTransport';
+import { getEventTransportSuggestion } from '../lib/eventTransport';
 import { eventAdmissionLabel, isTicketSoldOut, withBase } from '../lib/events';
 import {
   classifyEventMedallionLayout,
+  resolveRailTransportMedallion,
   resolveEventMedallions,
   type MedallionEvidence,
   type MedallionIdentityCategory,
@@ -19,7 +22,7 @@ interface Props {
 }
 
 type Token = {
-  kind: 'organizer' | 'source' | 'pushkin' | 'badge' | 'pill';
+  kind: 'organizer' | 'source' | 'program' | 'pushkin' | 'badge' | 'pill';
   key: string;
   label: string;
   shortLabel?: string;
@@ -57,6 +60,9 @@ const sourceCount = Number.isFinite(event.source_count) && Number(event.source_c
 const organizerResolution = resolveEventMedallions(event, [...organizerItems, ...eventPageFestivalItems]);
 const organizers = organizerResolution.identities;
 const identityLayout = classifyEventMedallionLayout(organizerResolution);
+const railTransport = resolveRailTransportMedallion(
+  getEventTransportSuggestion(desktopEventWithExplicitEnd(event)),
+);
 const hasMeowAfishaSource = sourceUrls.some((url) => /(^|\/)t\.me\/meowafisha\//i.test(url) || /telegram\.me\/meowafisha\//i.test(url));
 const admissionLabel = eventAdmissionLabel(event);
 const ticket = event.ticket || {};
@@ -84,6 +90,19 @@ organizers.forEach(({ item:organizer, evidence }) => {
     layoutRole,
   });
 });
+if (railTransport) {
+  tokens.push({
+    kind:'program',
+    key:`transport:${railTransport.slug}`,
+    label:railTransport.name,
+    title:railTransport.name,
+    ariaLabel:railTransport.ariaLabel,
+    imageUrl:railTransport.avatarUrl,
+    fallbackImageUrl:railTransport.fallbackPngUrl,
+    slug:railTransport.slug,
+    layoutRole:'secondary',
+  });
+}
 if (hasMeowAfishaSource && sourceCount > 0 && sourceCount <= 2) {
   tokens.push({
     kind: 'source',
@@ -192,6 +211,7 @@ const visibleTokens = tokens.length <= 6
 const desktopMedallionTokens = visibleTokens.filter((token) => (
   token.kind === 'organizer'
   || token.kind === 'source'
+  || token.kind === 'program'
   || token.kind === 'pushkin'
   || token.kind === 'badge'
 ));
@@ -245,7 +265,7 @@ function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
               data-medallion-evidence-alias={token.evidence?.alias}
               data-medallion-evidence-match={token.evidence?.match}
             >
-              {(token.kind === 'organizer' || token.kind === 'source' || token.kind === 'badge') && token.imageUrl ? (
+              {(token.kind === 'organizer' || token.kind === 'source' || token.kind === 'program' || token.kind === 'badge') && token.imageUrl ? (
                 <span class="event-token__circle" aria-label={token.ariaLabel} title={token.title || token.label}>
                   <picture>
                     {token.imageUrl.endsWith('.webp') && token.fallbackImageUrl && <source srcset={withBase(token.imageUrl)} type="image/webp" />}
