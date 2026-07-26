@@ -106,8 +106,11 @@ test('today mobile rail mutes only ended or one-hour-old main media and leaves d
   assert.match(row, /data-event-starts-at=\{event\.starts_at \|\| undefined\}/u);
   assert.match(row, /data-event-end-at=\{event\.end_at \|\| undefined\}/u);
   assert.match(surface, /timeZone:'Europe\/Kaliningrad'/u);
+  assert.match(surface, /const listingDayElapsed = \/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/u\.test\(listingDate\)[\s\S]*listingDate < kaliningradDate/u);
   assert.match(surface, /const completed = Number\.isFinite\(endMs\) && endMs <= now/u);
-  assert.match(surface, /const startedEarlier = !hasExplicitEnd[\s\S]*startMs <= now - 60 \* 60 \* 1000/u);
+  assert.match(surface, /const elapsedListingDayWithoutEnd = !hasExplicitEnd && listingDayElapsed/u);
+  assert.match(surface, /const startedEarlier = !hasExplicitEnd[\s\S]*kaliningradDate === listingDate[\s\S]*startMs <= now - 60 \* 60 \* 1000/u);
+  assert.match(surface, /const state = completed \|\| elapsedListingDayWithoutEnd \? 'past' : startedEarlier \? 'started-earlier' : 'current'/u);
   assert.match(surface, /syncTodayTemporalMedia\(\);\s*if \(surface\.dataset\.mobileV23Page === 'today'\) setInterval\(syncTodayTemporalMedia, 60_000\)/u);
   assert.match(surface, /row\.querySelector\('\.event-media'\)\?\.classList\.toggle\('is-temporally-muted', state !== 'current'\)/u);
   assert.match(surface, /\.ke-mobile-listing-rails--v23 \.event-media\.is-loaded\.is-temporally-muted>img\{opacity:\.46;filter:grayscale\(\.72\) saturate\(\.32\)\}/u);

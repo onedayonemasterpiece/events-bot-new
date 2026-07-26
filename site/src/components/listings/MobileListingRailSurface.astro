@@ -566,6 +566,8 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
       const clock = Object.fromEntries(parts.map((part) => [part.type, part.value]));
       const kaliningradDate = `${clock.year}-${clock.month}-${clock.day}`;
       const listingDate = surface.dataset.mobileListingDate || '';
+      const listingDayElapsed = /^\d{4}-\d{2}-\d{2}$/u.test(listingDate)
+        && listingDate < kaliningradDate;
       const now = Date.now();
       rows.forEach((row) => {
         const endAt = row.dataset.eventEndAt || '';
@@ -574,11 +576,12 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
         const startMs = Date.parse(startAt);
         const hasExplicitEnd = endAt.trim().length > 0;
         const completed = Number.isFinite(endMs) && endMs <= now;
+        const elapsedListingDayWithoutEnd = !hasExplicitEnd && listingDayElapsed;
         const startedEarlier = !hasExplicitEnd
           && kaliningradDate === listingDate
           && Number.isFinite(startMs)
           && startMs <= now - 60 * 60 * 1000;
-        const state = completed ? 'past' : startedEarlier ? 'started-earlier' : 'current';
+        const state = completed || elapsedListingDayWithoutEnd ? 'past' : startedEarlier ? 'started-earlier' : 'current';
         row.dataset.mobileRailTemporalState = state;
         row.querySelector('.event-media')?.classList.toggle('is-temporally-muted', state !== 'current');
       });
