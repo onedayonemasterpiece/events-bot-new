@@ -70,7 +70,6 @@ if (astro.status !== 0) process.exit(astro.status || 1);
 
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });
 rmSync(join(distDir, 'lab'), { recursive: true, force: true });
-rmSync(join(distDir, 'partnerstvo', 'index.html'), { force: true });
 const todayPath = join(distDir, 'segodnya/index.html');
 let rootHtml = readFileSync(todayPath, 'utf8');
 rootHtml = replaceRequired(rootHtml, `<link rel="canonical" href="${siteOrigin}/segodnya/">`, `<link rel="canonical" href="${siteOrigin}/">`, 'today canonical');

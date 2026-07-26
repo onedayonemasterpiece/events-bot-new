@@ -55,6 +55,7 @@ for (const path of [
   'dlya-menya/index.html',
   'kluby-po-interesam/index.html',
   'partners/index.html',
+  'partnerstvo/index.html',
   'podborki/dzhaz-na-vyhodnyh/index.html',
   'podborki/besplatno-s-detmi/index.html',
   'podborki/stendap-na-etoy-nedele/index.html',
@@ -79,7 +80,7 @@ if (
 const festivalSlugs = festivalTimelineData.festivals.map((item) => item.slug);
 if (festivalSlugs.length !== new Set(festivalSlugs).size) fail('festival timeline contains duplicate slugs');
 for (const key of files.map((file) => file.key)) {
-  if (/^(?:__preview|lab)(?:\/|$)/u.test(key) || key === 'partnerstvo/index.html' || /^preview-[^/]+\//u.test(key)) fail(`preview/fixture route leaked: ${key}`);
+  if (/^(?:__preview|lab)(?:\/|$)/u.test(key) || /^preview-[^/]+\//u.test(key)) fail(`preview/fixture route leaked: ${key}`);
 }
 const eventById = new Map(eventsData.events.map((event) => [Number(event.id), event]));
 const eligibleIds = catalogData.eligible.map((item) => Number(item.event_id));
@@ -127,9 +128,10 @@ const robots = readFileSync(join(root, 'robots.txt'), 'utf8');
 if (robots !== `User-agent: *\nAllow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`) fail('robots policy is not production indexable');
 const sitemap = readFileSync(join(root, 'sitemap.xml'), 'utf8');
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/gu)].map((match) => match[1]);
-if (new Set(locs).size !== locs.length || locs.some((url) => !url.startsWith(`${siteOrigin}/`) || /\/(?:__preview|lab|_review|partnerstvo)(?:\/|$)/u.test(url))) fail('sitemap contains duplicate/off-origin/QA URLs');
+if (new Set(locs).size !== locs.length || locs.some((url) => !url.startsWith(`${siteOrigin}/`) || /\/(?:__preview|lab|_review)(?:\/|$)/u.test(url))) fail('sitemap contains duplicate/off-origin/QA URLs');
 for (const event of eventsData.events) if (!locs.includes(`${siteOrigin}/sobytiya/${event.slug}/`)) fail(`event missing from sitemap ${event.id}`);
 if (!locs.includes(`${siteOrigin}/festivali/`)) fail('festival calendar missing from sitemap');
+if (!locs.includes(`${siteOrigin}/partnerstvo/`)) fail('partnership page missing from sitemap');
 if (!Array.isArray(manifest.stable_ics) || manifest.stable_ics.length !== eventsData.events.length) fail('stable ICS manifest parity failed');
 for (const item of manifest.stable_ics) {
   if (item.target_key !== `ics/${item.event_id}.ics` || !manifestByKey.has(item.source_key)) fail(`invalid stable ICS mapping ${item.event_id}`);

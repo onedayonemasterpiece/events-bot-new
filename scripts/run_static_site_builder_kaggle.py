@@ -394,6 +394,10 @@ def build_runtime_secret_payload(args: argparse.Namespace) -> dict[str, str]:
         'PERSONALIZATION_SUPABASE_SECRET_KEY',
         'PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY',
         'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY',
+        # These are release gates, not credentials, but the Kaggle exporter and
+        # Astro build both need the exact values selected by the Fly runtime.
+        'ENABLE_INTEREST_CLUB_STATIC_PROJECTION',
+        'PUBLIC_INTEREST_CLUBS_ENABLED',
         'GOOGLE_API_LOCALNAME',
         'GOOGLE_AI_RESERVE_SCOPE_TO_DEFAULT_ENV',
         'GOOGLE_AI_RESERVE_DIRECT_RETRY',

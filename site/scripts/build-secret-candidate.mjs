@@ -76,7 +76,6 @@ for (const { route, staged } of retainedLabStaging) {
   mkdirSync(dirname(join(distDir, route)), { recursive: true });
   renameSync(staged, join(distDir, route));
 }
-rmSync(join(distDir, 'partnerstvo', 'index.html'), { force: true });
 let rootHtml = readFileSync(join(distDir, 'segodnya/index.html'), 'utf8');
 const todayCanonical = `${siteOrigin}${basePath}/segodnya/`;
 const rootCanonical = `${siteOrigin}${basePath}/`;

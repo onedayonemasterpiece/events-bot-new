@@ -260,6 +260,14 @@
 
 ### Fixed
 
+- Enabled the approved interest-club DB projection in the production
+  Smart Update → Kaggle handoff, fingerprinted both release gates and retained
+  generated club-detail routes; production builds no longer silently replace
+  the real catalog with the disabled empty state.
+- Promoted `/partnerstvo/` from a preview fixture to a production-ready service
+  page by removing the stale test timetable, retaining the route in
+  production/secret-candidate artifacts and enforcing its sitemap/output
+  presence so footer and mobile-menu links cannot resolve to 404.
 - Added a source-hash-bound no-OCR review for event `6821`'s portrait photo,
   so a stale semantic-classifier error can no longer force visible `contain`
   fields in production recommendation rows.

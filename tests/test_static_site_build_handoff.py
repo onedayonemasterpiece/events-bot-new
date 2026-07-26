@@ -179,6 +179,30 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     assert "--download-output" in cmd
 
 
+def test_kaggle_runtime_payload_forwards_interest_club_release_gates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    monkeypatch.setenv("GOOGLE_API_KEY4", "google-test")
+    monkeypatch.setenv("PERSONALIZATION_SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("PERSONALIZATION_SUPABASE_SECRET_KEY", "secret-test")
+    monkeypatch.setenv("ENABLE_INTEREST_CLUB_STATIC_PROJECTION", "1")
+    monkeypatch.setenv("PUBLIC_INTEREST_CLUBS_ENABLED", "1")
+    args = SimpleNamespace(
+        gemma_related_verify=False,
+        related_mode="pgvector",
+        sync_pgvector_vectors=True,
+        gemma_related_key_env="GOOGLE_API_KEY4",
+        pgvector_embedding_key_env="GOOGLE_API_KEY4",
+    )
+
+    payload = runner.build_runtime_secret_payload(args)
+
+    assert payload["ENABLE_INTEREST_CLUB_STATIC_PROJECTION"] == "1"
+    assert payload["PUBLIC_INTEREST_CLUBS_ENABLED"] == "1"
+
+
 def test_kaggle_runner_and_builder_forward_related_corpus_revision(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

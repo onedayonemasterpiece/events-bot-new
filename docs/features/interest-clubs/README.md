@@ -118,7 +118,7 @@ Reviewer получает candidate identity, proposed relation, normalized anch
 - disabled-by-default Smart Update handoff: `smart_event_update.py`;
 - disposable static projection: `site/scripts/export-production-preview-data.py` → `site/src/data/interest-clubs.json`;
 - gated index/detail UI: `site/src/pages/kluby-po-interesam/`;
-- release gates: `ENABLE_INTEREST_CLUB_PIPELINE`, `ENABLE_INTEREST_CLUB_STATIC_PROJECTION`, `PUBLIC_INTEREST_CLUBS_ENABLED` (все OFF по умолчанию).
+- release gates: `ENABLE_INTEREST_CLUB_PIPELINE`, `ENABLE_INTEREST_CLUB_STATIC_PROJECTION`, `PUBLIC_INTEREST_CLUBS_ENABLED`. Первые решения/связи по-прежнему fail-closed; в production static generation последние два флага включены явно, передаются в зашифрованный Kaggle runtime dataset и входят в input fingerprint. Поэтому approved DB-клубы не заменяются пустым состоянием при очередной сборке, а выключение любого флага остаётся явным rollback.
 
 Команда bootstrap без публичного approval:
 

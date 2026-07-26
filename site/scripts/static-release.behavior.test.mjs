@@ -37,6 +37,18 @@ test('production and candidate builds forward only normalized browser-safe searc
   }
 });
 
+test('production and secret-candidate profiles retain the production-ready partnership route', () => {
+  const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
+  const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
+  const productionCheck = readFileSync(new URL('./check-production.mjs', import.meta.url), 'utf8');
+  const candidateCheck = readFileSync(new URL('./check-secret-candidate.mjs', import.meta.url), 'utf8');
+  for (const source of [production, candidate]) {
+    assert.doesNotMatch(source, /rmSync\(join\(distDir, 'partnerstvo', 'index\.html'\)/u);
+  }
+  assert.match(productionCheck, /'partnerstvo\/index\.html'/u);
+  assert.match(candidateCheck, /source\('partnerstvo\/index\.html'\)/u);
+});
+
 test('secret-candidate robots policy overrides page-local noindex without losing nosnippet', () => {
   const layout = readFileSync(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
   assert.match(layout, /const robots = IS_SECRET_CANDIDATE\s*\?\s*'noindex,nofollow,noarchive,nosnippet'/u);

@@ -23295,6 +23295,10 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         ).strip(),
         "gemma_related_max_anchors": _env_int("STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS", 0),
         "secret_publish_enabled": _env_flag("ENABLE_STATIC_SITE_SECRET_PUBLISH"),
+        "interest_club_static_projection_enabled": _env_flag(
+            "ENABLE_INTEREST_CLUB_STATIC_PROJECTION"
+        ),
+        "public_interest_clubs_enabled": _env_flag("PUBLIC_INTEREST_CLUBS_ENABLED"),
         "public_personalization_supabase_url": _first_env(
             "STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL",
             "PUBLIC_PERSONALIZATION_SUPABASE_URL",

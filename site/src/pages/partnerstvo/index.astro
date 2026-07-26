@@ -4,10 +4,7 @@ import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
 
 const canonicalUrl = absoluteUrl('/partnerstvo/');
 const title = `Стать партнёром | ${SITE_NAME}`;
-const description = 'Партнёрство с Полюбить Калининград Анонсы: как помогать событиям быть заметнее и какие справочные блоки можно добавлять на статические страницы.';
-const toSvetlogorsk = ['6:37','8:00','9:05','9:38','10:15','10:40','11:12','11:36','12:16','12:41','13:13','13:37','14:17','14:42','15:40','16:18','16:43','17:15','17:55','18:14','18:49','19:55','21:00'];
-const fromSvetlogorsk = ['7:45','9:50','10:30','11:15','11:47','12:12','12:29','13:16','13:48','14:13','14:32','15:17','15:51','16:14','16:33','17:18','17:50','18:09','18:56','19:43','20:03','21:03','21:55'];
-const scheduleJson = 'https://static.kenigevents.ru/reference/transport/lastochka-svetlogorsk-test.json';
+const description = 'Партнёрство с Полюбить Калининград Анонсы: как организаторам, площадкам и городским проектам помогать событиям быть понятнее и заметнее.';
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
   <main id="main">
@@ -25,28 +22,17 @@ const scheduleJson = 'https://static.kenigevents.ru/reference/transport/lastochk
         </div>
       </section>
 
-      <section class="section-card" style="margin-top: 1rem;">
-        <div class="section-card__inner partnership-transport">
-          <p class="eyebrow">Тестовый справочный блок</p>
-          <h2>Ласточка на концерт в Светлогорск</h2>
-          <p class="muted-note">Это тестовый fixture для проверки Yandex Object Storage/CDN как источника публичной справочной информации. Перед production нужно заменить на официальный источник/актуальное расписание.</p>
-          <div class="train-reference-card">
-            <div class="train-reference-card__visual" aria-hidden="true">
-              <img src={withBase('/assets/icons/train-front-cc0.svg')} alt="" loading="lazy" decoding="async" />
-              <strong>Калининград ⇄ Светлогорск</strong>
-            </div>
-            <div class="train-reference-card__times">
-              <section>
-                <h3>Туда из Калининграда</h3>
-                <div class="time-chip-list">{toSvetlogorsk.map((time) => <span>{time}</span>)}</div>
-              </section>
-              <section>
-                <h3>Обратно из Светлогорска</h3>
-                <div class="time-chip-list">{fromSvetlogorsk.map((time) => <span>{time}</span>)}</div>
-              </section>
-            </div>
-          </div>
-          <p class="muted-note">JSON fixture на CDN: <a href={scheduleJson} target="_blank" rel="noopener noreferrer">lastochka-svetlogorsk-test.json</a></p>
+      <section class="section-card partnership-principles" style="margin-top: 1rem;">
+        <div class="section-card__inner">
+          <p class="eyebrow">Что можно улучшить вместе</p>
+          <h2>Полезная страница вместо рекламной плашки</h2>
+          <ul>
+            <li>проверенные даты, площадка, цена и основное действие;</li>
+            <li>понятные связанные даты и программа фестиваля;</li>
+            <li>справочные блоки маршрута только из актуальных источников;</li>
+            <li>корректные медальоны организатора, фестиваля и партнёров.</li>
+          </ul>
+          <p class="muted-note">Редакционные и коммерческие роли не смешиваются: партнёрство не меняет факты события и не гарантирует место в рекомендациях.</p>
         </div>
       </section>
     </div>

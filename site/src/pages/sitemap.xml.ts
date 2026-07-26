@@ -23,12 +23,12 @@ export const GET: APIRoute = () => {
     { loc: absoluteUrl('/populyarnoe/'), lastmod: now },
     { loc: absoluteUrl('/poisk/'), lastmod: now },
     { loc: absoluteUrl('/partners/'), lastmod: now },
+    { loc: absoluteUrl('/partnerstvo/'), lastmod: now },
     ...(INTEREST_CLUBS_PUBLIC_ENABLED ? [{ loc: absoluteUrl('/kluby-po-interesam/'), lastmod: now }] : []),
   ];
   const previewOnlyEntries = [
     { loc: absoluteUrl('/__preview/'), lastmod: now },
     ...publicEntries.slice(1),
-    { loc: absoluteUrl('/partnerstvo/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/'), lastmod: now },
     { loc: absoluteUrl('/lab/hero/review/'), lastmod: now },
     { loc: absoluteUrl('/lab/design-system/'), lastmod: now },

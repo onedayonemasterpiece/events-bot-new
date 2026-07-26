@@ -63,8 +63,9 @@ for (const file of files) {
 }
 if (manifest.tree_sha256 !== treeHash(files)) fail('candidate tree hash mismatch');
 for (const key of files.map((file) => file.key)) {
-  if (/^__preview(?:\/|$)/u.test(key) || (/^lab(?:\/|$)/u.test(key) && !retainedLabRoutes.some((route) => key.startsWith(`${route}/`))) || key === 'partnerstvo/index.html') fail(`QA route leaked ${key}`);
+  if (/^__preview(?:\/|$)/u.test(key) || (/^lab(?:\/|$)/u.test(key) && !retainedLabRoutes.some((route) => key.startsWith(`${route}/`)))) fail(`QA route leaked ${key}`);
 }
+source('partnerstvo/index.html');
 source(`${transportQaRoute}/index.html`);
 const footerRegressionHtml = source(`${footerRegressionRoute}/index.html`);
 const splitCtaRegressionHtml = source(`${splitCtaRegressionRoute}/index.html`);
