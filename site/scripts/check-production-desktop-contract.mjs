@@ -106,7 +106,11 @@ for (const { slug, file } of eventFiles) {
   }
   if (eventId === 5756) {
     if (!desktopHtml.includes('data-selected-media-policy="visual_only"')) failures.push(`${slug}: classified horizontal photo was not selected as the desktop hero`);
-    if (!desktopHtml.includes('data-desktop-gallery-fit="contain"')) failures.push(`${slug}: non-photo document is no longer protected by contain in the desktop gallery`);
+    const galleryTags = desktopHtml.match(/<img class="hero-gallery__image"[^>]+>/gu) || [];
+    const galleryContainsDocument = galleryTags.some((tag) => !tag.includes('data-image-text-mode="visual_only"'));
+    if (galleryContainsDocument && !desktopHtml.includes('data-desktop-gallery-fit="contain"')) {
+      failures.push(`${slug}: non-photo document is no longer protected by contain in the desktop gallery`);
+    }
   }
   if (eventId === 4671) {
     for (const marker of [

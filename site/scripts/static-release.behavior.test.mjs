@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +16,30 @@ test('ADD-BUILD-07 production/preview/candidate profiles use an explicit 256-bit
   assert.equal(safeCandidateToken(token), token);
   assert.equal(candidateBasePath(token), `/_review/${token}`);
   assert.throws(() => safeCandidateToken('timestamp-build-id'));
+});
+
+test('production and candidate root aliases preserve listing classes while adding release markers', () => {
+  const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
+  const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
+  assert.match(production, /replaceRequired\(rootHtml, '<main id="main"', '<main id="main" data-production-root-listing'/u);
+  assert.match(candidate, /replace\('<main id="main"', '<main id="main" data-secret-candidate-root-listing'/u);
+  assert.doesNotMatch(production, /'<main id="main">'/u);
+  assert.doesNotMatch(candidate, /'<main id="main">'/u);
+});
+
+test('production and candidate builds forward only normalized browser-safe search config', () => {
+  const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
+  const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
+  for (const source of [production, candidate]) {
+    assert.match(source, /loadPreviewPublicConfig\(siteDir, process\.env\)/u);
+    assert.match(source, /\.\.\.publicSearchConfig\.values/u);
+    assert.doesNotMatch(source, /PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY:\s*''/u);
+  }
+});
+
+test('secret-candidate robots policy overrides page-local noindex without losing nosnippet', () => {
+  const layout = readFileSync(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
+  assert.match(layout, /const robots = IS_SECRET_CANDIDATE\s*\?\s*'noindex,nofollow,noarchive,nosnippet'/u);
 });
 
 test('ADD-BUILD-09 catalog ledger rejects duplicate, missing, or unversioned eligibility evidence', () => {

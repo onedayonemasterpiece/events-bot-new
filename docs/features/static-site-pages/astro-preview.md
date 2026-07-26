@@ -196,6 +196,11 @@ experiment telemetry. The current production A/B/C mode remains `off`; a secret
 candidate is visual/product acceptance, not permission to promote root or start
 live experimentation.
 
+Every HTML document in an immutable secret candidate, including pages that are
+already private such as `/dlya-menya/` and `/podborki/*`, uses the stronger
+`noindex,nofollow,noarchive,nosnippet` policy plus `no-referrer`. Page-local
+`noindex` must not weaken that candidate-wide isolation contract.
+
 Final automated acceptance evidence for the corrected candidate:
 
 - source `a6ad22fba8b63e3dee7a71b8ca0837494c554033` is reachable from

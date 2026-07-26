@@ -6,6 +6,7 @@ import {
   CANDIDATE_MANIFEST_SCHEMA, candidateBasePath, fileInventory, pageCounts, safeCandidateToken,
   sha256, treeHash, validateCatalogLedger,
 } from './release-contract.mjs';
+import { loadPreviewPublicConfig, requirePreviewAuthorizedSearch } from './preview-public-env.mjs';
 
 const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const distDir = join(siteDir, 'dist');
@@ -18,6 +19,11 @@ const candidateRoot = join(distDir, basePath.slice(1));
 const siteOrigin = (process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
 const productionManifestBytes = readFileSync(productionManifestPath);
 const productionManifest = JSON.parse(productionManifestBytes);
+const publicSearchConfig = loadPreviewPublicConfig(siteDir, process.env);
+requirePreviewAuthorizedSearch(publicSearchConfig, {
+  ...process.env,
+  PREVIEW_REQUIRE_AUTHORIZED_SEARCH: process.env.SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH || '',
+});
 const transportExperimentMode = process.env.SECRET_CANDIDATE_TRANSPORT_EXPERIMENT_MODE || 'qa';
 const transportQaRoute = 'lab/event-desktop/examples/editorial-ocr-companion-arrival';
 const footerPrototypeRoute = 'lab/event-desktop/examples/footer-service-v1';
@@ -45,10 +51,10 @@ validateCatalogLedger(catalog, { repo_sha: productionManifest.repo_sha, run_id: 
 rmSync(distDir, { recursive: true, force: true });
 const env = {
   ...process.env,
+  ...publicSearchConfig.values,
   PUBLIC_SITE_MODE: 'secret_candidate', PUBLIC_SITE_ORIGIN: siteOrigin, SITE_BASE_PATH: basePath,
   PUBLIC_ICS_BASE_URL: '', PUBLIC_PREVIEW_BUILD_ID: '', PUBLIC_ROOT_PREVIEW_HREF: '',
   PUBLIC_ASTRO_ASSET_BASE_URL: '',
-  PUBLIC_PERSONALIZATION_SUPABASE_URL: '', PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: '',
   PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: transportExperimentMode,
   PUBLIC_STATIC_RELEASE_ID: productionManifest.build_id,
 };
@@ -77,7 +83,7 @@ const rootCanonical = `${siteOrigin}${basePath}/`;
 if (!rootHtml.includes(`<link rel="canonical" href="${todayCanonical}">`) || !rootHtml.includes(`<meta property="og:url" content="${todayCanonical}">`)) throw new Error('Cannot construct candidate root from today listing');
 rootHtml = rootHtml.replace(`<link rel="canonical" href="${todayCanonical}">`, `<link rel="canonical" href="${rootCanonical}">`);
 rootHtml = rootHtml.replace(`<meta property="og:url" content="${todayCanonical}">`, `<meta property="og:url" content="${rootCanonical}">`);
-rootHtml = rootHtml.replace('<main id="main">', '<main id="main" data-secret-candidate-root-listing>');
+rootHtml = rootHtml.replace('<main id="main"', '<main id="main" data-secret-candidate-root-listing');
 writeFileSync(join(distDir, 'index.html'), rootHtml);
 const staged = join(siteDir, `.secret-candidate-dist-${process.pid}`);
 rmSync(staged, { recursive: true, force: true });

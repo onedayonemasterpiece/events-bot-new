@@ -41,9 +41,9 @@ interface Props {
 }
 
 const { title, description, canonicalUrl, ogImage, ogImageAlt, ogImageType, ogImageWidth, ogImageHeight, ogType = 'article', structuredData = [], heroChrome = 'standard', headerCurrent, mobileTopMode, mobileSection: explicitMobileSection, mobileBottomMode, noindex = false, disableViewportZoom = false, headerBadge } = Astro.props;
-const robots = noindex
-  ? 'noindex,nofollow,noarchive'
-  : (IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive'));
+const robots = IS_SECRET_CANDIDATE
+  ? 'noindex,nofollow,noarchive,nosnippet'
+  : (noindex ? 'noindex,nofollow,noarchive' : (IS_PRODUCTION ? 'index,follow' : 'noindex,nofollow,noarchive'));
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const routePath = Astro.url.pathname.replace(/\/+$/u, '') || '/';
 const derivedMobileSection: MobileSection = heroChrome === 'immersive'

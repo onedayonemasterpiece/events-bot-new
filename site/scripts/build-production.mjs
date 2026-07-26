@@ -6,6 +6,7 @@ import {
   CHECK_CONTRACT_VERSION, RELEASE_MANIFEST_SCHEMA, fileInventory, pageCounts,
   safeBuildId, safeRunId, sha256, treeHash, validateCatalogLedger,
 } from './release-contract.mjs';
+import { loadPreviewPublicConfig, requirePreviewAuthorizedSearch } from './preview-public-env.mjs';
 
 const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = resolve(siteDir, '..');
@@ -48,10 +49,16 @@ if (currentGitSha) {
 }
 const siteOrigin = normalizeOrigin(process.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru');
 const icsBaseUrl = (process.env.PUBLIC_ICS_BASE_URL || 'https://static.kenigevents.ru/ics').replace(/\/+$/u, '');
+const publicSearchConfig = loadPreviewPublicConfig(siteDir, process.env);
+requirePreviewAuthorizedSearch(publicSearchConfig, {
+  ...process.env,
+  PREVIEW_REQUIRE_AUTHORIZED_SEARCH: process.env.PRODUCTION_REQUIRE_AUTHORIZED_SEARCH || '',
+});
 
 rmSync(distDir, { recursive: true, force: true });
 const env = {
   ...process.env,
+  ...publicSearchConfig.values,
   PUBLIC_SITE_MODE: 'production', PUBLIC_SITE_ORIGIN: siteOrigin, PUBLIC_ICS_BASE_URL: icsBaseUrl, SITE_BASE_PATH: '/',
   PUBLIC_ASSET_BASE_URL: process.env.PUBLIC_ASSET_BASE_URL || 'https://static.kenigevents.ru',
   PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: 'off', PUBLIC_STATIC_RELEASE_ID: buildId,
@@ -68,7 +75,7 @@ const todayPath = join(distDir, 'segodnya/index.html');
 let rootHtml = readFileSync(todayPath, 'utf8');
 rootHtml = replaceRequired(rootHtml, `<link rel="canonical" href="${siteOrigin}/segodnya/">`, `<link rel="canonical" href="${siteOrigin}/">`, 'today canonical');
 rootHtml = replaceRequired(rootHtml, `<meta property="og:url" content="${siteOrigin}/segodnya/">`, `<meta property="og:url" content="${siteOrigin}/">`, 'today og:url');
-rootHtml = replaceRequired(rootHtml, '<main id="main">', '<main id="main" data-production-root-listing>', 'root marker');
+rootHtml = replaceRequired(rootHtml, '<main id="main"', '<main id="main" data-production-root-listing', 'root marker');
 writeFileSync(join(distDir, 'index.html'), rootHtml);
 
 const eventsData = JSON.parse(readFileSync(eventsPath, 'utf8'));

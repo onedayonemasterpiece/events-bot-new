@@ -112,7 +112,7 @@ for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   if (intentionallyUnindexed) {
     if (!/<meta\s+name="robots"\s+content="noindex,nofollow,noarchive"/iu.test(source)) fail(`private/personal noindex policy missing from ${file.key}`);
   } else {
-    if (/noindex/iu.test(source)) fail(`noindex leaked into ${file.key}`);
+    if (/<meta\s+name="robots"\s+content="[^"]*\bnoindex\b[^"]*"/iu.test(source)) fail(`noindex leaked into ${file.key}`);
     if (!/<meta\s+name="robots"\s+content="index,follow"/iu.test(source)) fail(`index,follow missing from ${file.key}`);
   }
   if (/<meta\s+name="referrer"\s+content="no-referrer"/iu.test(source)) fail(`secret-candidate policy leaked into ${file.key}`);

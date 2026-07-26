@@ -721,7 +721,7 @@ PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY=...
 PUBLIC_YANDEX_AUTH_PROVIDER=custom:yandex
 ```
 
-The component uses `@supabase/supabase-js` and invokes Supabase Edge Function `event-search`. If public env is missing, the component renders nothing and the static pages stay unchanged.
+The component uses `@supabase/supabase-js` and invokes Supabase Edge Function `event-search`. If public env is missing, the dedicated page renders a disabled explanatory state instead of an inert-looking active form.
 
 Kaggle StaticSiteBuilder handoff also accepts the same public values through
 `--public-personalization-supabase-url`, `--public-personalization-supabase-publishable-key`
@@ -729,6 +729,14 @@ and `--public-yandex-auth-provider`. In production Smart Update handoff these ar
 `STATIC_SITE_PUBLIC_*`, then `PUBLIC_*`, then the browser-safe personalization URL/publishable
 key envs. Only URL + publishable key are exposed to Astro; Supabase secret/service keys remain
 backend-only for vector sync and Edge Function deployment.
+
+Production-root and secret-candidate builders normalize the same browser-safe
+aliases through `preview-public-env.mjs` before Astro starts. They never copy a
+secret/service-role key into the bundle. Release automation can set
+`PRODUCTION_REQUIRE_AUTHORIZED_SEARCH=1` and
+`SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH=1` to fail closed when the URL or
+publishable key is absent; review candidates no longer blank an otherwise valid
+public search configuration.
 
 Search results are rendered through the same global `window.KenigEventsRenderEventCard`
 renderer used by dynamic discovery/personal feeds. This is part of the acceptance

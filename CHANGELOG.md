@@ -262,6 +262,17 @@
 - Restored strict chronological order in the mobile Today rail by keeping one
   physical time stream; per-row `past`/`started-earlier`/`current` truth remains
   intact while the desktop completed-events disclosure stays separate.
+- Restored production/candidate root alias construction after the accepted
+  listing surface added a class to `<main>`; marker injection now preserves all
+  existing attributes instead of requiring an obsolete exact tag.
+- Restored authenticated search in production and secret-candidate builds by
+  forwarding only normalized browser-safe Supabase URL/publishable-key aliases;
+  optional fail-closed release flags now reject missing public search config.
+- Fixed the production indexing gate so explanatory body copy containing the
+  word `noindex` is not confused with an actual robots-meta directive.
+- Enforced the secret-candidate `nosnippet` robots policy even on pages that
+  are also intrinsically private/noindex, and scoped footer acceptance checks
+  to the footer instead of counting matching mobile-menu labels.
 - Fixed mobile `Сегодня` temporal truth across midnight and immutable previews:
   no-end events from an elapsed listing day keep the accepted muted main image,
   while an explicit end remains authoritative and desktop cards stay isolated.
