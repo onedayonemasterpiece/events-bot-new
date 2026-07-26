@@ -108,6 +108,60 @@ def test_static_site_preflight_rejects_critical_root_scratch(monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
+async def test_static_site_receipt_payload_retries_sqlite_writer_collision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+    import main
+    from db import Database
+    from models import JobOutbox, JobStatus, JobTask
+
+    monkeypatch.setenv("DB_TIMEOUT_SEC", "0.1")
+    database = tmp_path / "receipt-retry.sqlite"
+    db = Database(str(database))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(
+            JobOutbox(
+                event_id=1,
+                task=JobTask.static_site_build,
+                status=JobStatus.running,
+                payload={"before": True},
+                coalesce_key="static_site_build:prod",
+                next_run_at=main.datetime.now(main.timezone.utc),
+                updated_at=main.datetime.now(main.timezone.utc),
+            )
+        )
+        await session.commit()
+        job_id = int(
+            (
+                await session.execute(
+                    main.select(JobOutbox.id).order_by(JobOutbox.id.desc()).limit(1)
+                )
+            ).scalar_one()
+        )
+
+    blocker = sqlite3.connect(database, timeout=0)
+    blocker.execute("BEGIN IMMEDIATE")
+    blocker.execute("UPDATE joboutbox SET updated_at=updated_at WHERE id=?", (job_id,))
+    task = asyncio.create_task(
+        main._patch_static_site_request_payload(db, job_id, {"receipt": "exact"})
+    )
+    await asyncio.sleep(0.2)
+    blocker.rollback()
+    blocker.close()
+    await task
+
+    with sqlite3.connect(database) as connection:
+        payload = json.loads(
+            connection.execute("SELECT payload FROM joboutbox WHERE id=?", (job_id,)).fetchone()[0]
+        )
+    assert payload == {"before": True, "receipt": "exact"}
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_static_site_preflight_reconciles_exact_current_candidate_before_push(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

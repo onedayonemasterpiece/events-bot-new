@@ -1906,17 +1906,40 @@ def publish_secret_candidate_archive(
             aws_access_key_id=access_key_id,
             aws_secret_access_key=secret_access_key,
         )
+
+    def _is_create_conflict(exc: BaseException) -> bool:
+        response = getattr(exc, "response", None)
+        error = response.get("Error") if isinstance(response, Mapping) else None
+        code = str(error.get("Code") or "") if isinstance(error, Mapping) else ""
+        status = (
+            (response.get("ResponseMetadata") or {}).get("HTTPStatusCode")
+            if isinstance(response, Mapping)
+            else None
+        )
+        return code in {"PreconditionFailed", "ConditionalRequestConflict", "412", "409"} or status in {
+            409,
+            412,
+        }
+
     for item in objects:
-        with item["local_path"].open("rb") as handle:
-            s3_client.put_object(
-                Bucket=bucket,
-                Key=item["object_key"],
-                Body=handle,
-                IfNoneMatch="*",
-                ContentType=str(item.get("content_type") or "application/octet-stream"),
-                CacheControl="private, no-store, max-age=0",
-                Metadata={"sha256": str(item["sha256"])},
-            )
+        try:
+            with item["local_path"].open("rb") as handle:
+                s3_client.put_object(
+                    Bucket=bucket,
+                    Key=item["object_key"],
+                    Body=handle,
+                    IfNoneMatch="*",
+                    ContentType=str(item.get("content_type") or "application/octet-stream"),
+                    CacheControl="private, no-store, max-age=0",
+                    Metadata={"sha256": str(item["sha256"])},
+                )
+        except Exception as exc:
+            # A host retry after an SQLite receipt-write collision must adopt
+            # only the exact immutable objects it created on the first pass.
+            # The unconditional verification loop below binds bytes and MIME;
+            # every other storage error remains visible.
+            if not _is_create_conflict(exc):
+                raise
     for item in objects:
         response = s3_client.get_object(Bucket=bucket, Key=item["object_key"])
         body = response["Body"].read()

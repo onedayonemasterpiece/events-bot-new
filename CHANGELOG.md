@@ -260,6 +260,11 @@
 
 ### Fixed
 
+- Made the immutable secret-candidate handoff recoverable after a concurrent
+  SQLite writer outlives one ORM busy timeout: receipt payload writes now retry
+  in fresh bounded transactions, and an exact retry adopts only already-created
+  S3 objects whose bytes and MIME still match the signed manifest. It never
+  overwrites an object or weakens token/root isolation.
 - Enabled the approved interest-club DB projection in the production
   Smart Update → Kaggle handoff, fingerprinted both release gates and retained
   generated club-detail routes; production builds no longer silently replace

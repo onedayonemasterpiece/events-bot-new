@@ -883,3 +883,20 @@ rail DOM. When a current build correctly omits that expired date page, the gate
 checks the immutable real event `5296` media classification, safe-crop flag,
 wide geometry and focal point instead of failing because an obsolete route is
 absent.
+
+## Immutable candidate recovery after publication
+
+Secret-candidate publication is create-only under its random `_review/<token>/`
+prefix. A recovery pass never overwrites an object. When the first pass has
+already uploaded an object but a concurrent production SQLite writer prevents
+the host from persisting the final receipt, the exact retry may adopt that
+object only after the normal manifest-bound download verification confirms its
+size, SHA-256 and MIME type. Any other S3 error remains terminal/retryable under
+the existing failure classifier.
+
+The outbox receipt update itself uses four fresh ORM sessions with bounded
+backoff, in addition to SQLite's configured busy timeout. This keeps a
+many-minute, already-verified publication from being repeated merely because
+one Smart Update transaction temporarily owned the single SQLite writer. The
+claim/current-candidate commit remains the authority; root aliases and stable
+ICS keys are still inexpressible from this publisher.

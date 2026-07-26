@@ -22811,16 +22811,37 @@ async def _static_site_running_request(db: Database, event_id: int) -> tuple[int
 async def _patch_static_site_request_payload(
     db: Database, job_id: int, evidence: Mapping[str, Any]
 ) -> None:
-    async with db.get_session() as session:
-        row = await session.get(JobOutbox, job_id)
-        if row is None:
-            raise StaticSitePermanentError("static_site_request_missing_during_run")
-        payload = dict(row.payload or {})
-        payload.update(dict(evidence))
-        row.payload = payload
-        row.updated_at = datetime.now(timezone.utc)
-        session.add(row)
-        await session.commit()
+    # Publication can take many minutes and ends by persisting its immutable
+    # receipt.  A concurrent Smart Update writer must not turn that already
+    # verified publication into a duplicate remote build merely because one
+    # ORM busy timeout elapsed.  Each retry owns a fresh session/transaction.
+    attempts = 4
+    for attempt in range(1, attempts + 1):
+        try:
+            async with db.get_session() as session:
+                row = await session.get(JobOutbox, job_id)
+                if row is None:
+                    raise StaticSitePermanentError("static_site_request_missing_during_run")
+                payload = dict(row.payload or {})
+                payload.update(dict(evidence))
+                row.payload = payload
+                row.updated_at = datetime.now(timezone.utc)
+                session.add(row)
+                await session.commit()
+            return
+        except Exception as exc:
+            if not _is_sqlite_locked_error(exc) or attempt >= attempts:
+                raise
+            delay = 0.25 * (2 ** (attempt - 1))
+            logging.warning(
+                "static_site_build: request receipt sqlite locked "
+                "job_id=%s attempt=%s/%s retry_in=%.2fs",
+                job_id,
+                attempt,
+                attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
 
 async def _finish_static_site_candidate(

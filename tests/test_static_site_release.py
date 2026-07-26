@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from botocore.exceptions import ClientError
 
 from static_site_release import (
     CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA,
@@ -566,13 +567,22 @@ class _MemoryS3:
 
     def put_object(self, **kwargs):
         key = (kwargs["Bucket"], kwargs["Key"])
-        if key in self.objects or kwargs.get("IfNoneMatch") != "*":
+        if kwargs.get("IfNoneMatch") != "*":
             raise AssertionError("publisher attempted overwrite or non-conditional write")
+        if key in self.objects:
+            raise ClientError(
+                {
+                    "Error": {"Code": "PreconditionFailed", "Message": "already exists"},
+                    "ResponseMetadata": {"HTTPStatusCode": 412},
+                },
+                "PutObject",
+            )
         body = kwargs["Body"].read()
         self.objects[key] = {
             "Body": body,
             "ContentType": kwargs["ContentType"],
             "CacheControl": kwargs["CacheControl"],
+            "Metadata": dict(kwargs.get("Metadata") or {}),
         }
         return {"ETag": hashlib.md5(body).hexdigest()}  # nosec - in-memory S3 test token only
 
@@ -1000,6 +1010,25 @@ def test_add_build_10_secret_candidate_publish_is_create_only_and_root_isolated(
     assert receipt.root_mutation is False and receipt.stable_ics_mutation is False
     assert receipt.object_count == 2
     assert all(key.startswith(f"_review/{token}/") for _bucket, key in client.objects)
+
+    # Recovery after a receipt-write lock adopts only byte-identical objects
+    # under the same immutable token; it never performs an overwrite.
+    adopted = publish_secret_candidate_archive(
+        archive,
+        build_result={
+            "build_id": "production-test", "run_id": "static-site:test:run",
+            "snapshot": {"snapshot_id": "snapshot-test"}, "candidate": {"token": token},
+        },
+        extraction_root=tmp_path / "extract-retry", bucket="bucket",
+        endpoint="https://storage.invalid", region="ru-central1",
+        access_key_id="test", secret_access_key="test", s3_client=client,
+        list_preflight=lambda endpoint, bucket: True,
+        public_probe=lambda url: url.endswith(f"/_review/{token}/"),
+    )
+    assert adopted.object_count == receipt.object_count
+    assert adopted.manifest_sha256 == receipt.manifest_sha256
+    assert adopted.token_sha256 == receipt.token_sha256
+    assert adopted.public_url == receipt.public_url
 
 
 @pytest.mark.asyncio
