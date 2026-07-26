@@ -337,6 +337,29 @@ def test_fly_requires_vector_receipt_and_keeps_strict_gemma_verifier_off() -> No
     assert env["STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS"] == "0"
 
 
+def test_kaggle_builder_bridges_decrypted_public_club_flag_into_astro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    builder_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "static_site_builder_club_env_test", builder_path
+    )
+    assert spec and spec.loader
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+
+    astro_env = {"PUBLIC_SITE_ORIGIN": "https://kenigevents.ru"}
+    monkeypatch.setenv("PUBLIC_INTEREST_CLUBS_ENABLED", "1")
+    builder.apply_public_interest_clubs_env(astro_env)
+
+    assert astro_env["PUBLIC_INTEREST_CLUBS_ENABLED"] == "1"
+
+
 def test_static_site_build_kaggle_command_rejects_unknown_related_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     import main
 

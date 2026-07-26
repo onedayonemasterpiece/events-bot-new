@@ -448,6 +448,20 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
         env['PUBLIC_YANDEX_AUTH_PROVIDER'] = yandex_provider
 
 
+def apply_public_interest_clubs_env(env: dict[str, str]) -> None:
+    """Copy the decrypted public club release flag into Astro's build env.
+
+    ``env`` is intentionally snapshotted before the exporter loads the
+    encrypted runtime bundle. Search has an explicit post-load bridge above;
+    clubs need the same bridge or the exporter can write real club data while
+    Astro still renders the fail-closed empty catalog.
+    """
+
+    public_enabled = os.environ.get('PUBLIC_INTEREST_CLUBS_ENABLED', '').strip()
+    if public_enabled:
+        env['PUBLIC_INTEREST_CLUBS_ENABLED'] = public_enabled
+
+
 def main() -> int:
     started = datetime.now(timezone.utc).isoformat()
     try:
@@ -477,6 +491,7 @@ def main() -> int:
         apply_public_authorized_search_env(env, config)
         export_preview_data_if_configured(config)
         apply_public_authorized_search_env(env, config)
+        apply_public_interest_clubs_env(env)
         env = ensure_node22(env)
 
         status_event('preflight_ok', phase='preflight', status='done', progress={'phase': 'preflight', 'progress_percent': 15, 'progress_label': 'окружение готово'})

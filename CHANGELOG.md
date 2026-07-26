@@ -264,6 +264,10 @@
   Smart Update → Kaggle handoff, fingerprinted both release gates and retained
   generated club-detail routes; production builds no longer silently replace
   the real catalog with the disabled empty state.
+- Bridged the decrypted `PUBLIC_INTEREST_CLUBS_ENABLED` value into Astro's
+  explicit Kaggle build environment after export. This closes the release-only
+  gap where `interest-clubs.json` contained approved DB clubs but the rendered
+  index and `getStaticPaths()` still saw the fail-closed disabled flag.
 - Promoted `/partnerstvo/` from a preview fixture to a production-ready service
   page by removing the stale test timetable, retaining the route in
   production/secret-candidate artifacts and enforcing its sitemap/output

@@ -349,6 +349,12 @@ Related/discovery changes:
 - related chains in this preview are built by `event_sparse_related_chain_v1` with honest lexical/sparse retrieval (`local_tfidf_sparse_v1`) plus deterministic/facet scoring; this is not semantic vector search;
 - Gemma 4 26B verification ran only through `GoogleAIClient` + Supabase limiter. The full Kaggle run audited 45 anchors with 45 provider calls and ended `partial` because 4 provider calls timed out at 45s and 1 response was malformed; those anchors fall back to vector chains. The persisted cache is nevertheless usable for rebuild stability; a rerun with the same cache reported `cache_hit_no_provider`, `provider_calls=0`, `cache_hits=50`;
 - Kaggle no longer relies on UI secrets for API-started runs: the runner attaches encrypted split secret datasets and deletes them after the waited run.
+- Public release flags loaded from that encrypted bundle must be copied into
+  Astro's explicit subprocess environment after the export step. In particular,
+  `PUBLIC_INTEREST_CLUBS_ENABLED` is bridged after decryption so the DB exporter,
+  the clubs index and club-detail `getStaticPaths()` all observe the same
+  release decision; the generated-output gate fails if this regresses to an
+  empty catalog.
 
 Verification evidence: Kaggle `npm run check:preview` passed; public `curl -I` returned HTTP 200; `artifacts/codex/static-site-builder/playwright-v46d-public-check.cjs` passed against the published URL.
 
