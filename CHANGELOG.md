@@ -144,6 +144,15 @@
 
 ### Changed
 
+- Compressed the festival calendar's desktop hero, month switcher and usage
+  strip so the first festival starts at `517px` and remains identifiable at an
+  FHD/125%-equivalent `1536×700` viewport; replaced the vague campaign headline
+  and guide copy with a direct Kaliningrad-region calendar explanation.
+- Aligned the festival page's title, description, H1, Open Graph metadata,
+  image alternatives and JSON-LD around the 2026 Kaliningrad-region festival
+  calendar, including a reviewed `CollectionPage` and 21 ordered `Festival`
+  entities while keeping the immutable review preview `noindex`.
+
 - Increased festival-card title, place, date/status and category typography by
   approximately 20%, allowing a third title line in dense desktop formations
   while preserving zero measured overlay collisions at 887 and 1440 pixels.

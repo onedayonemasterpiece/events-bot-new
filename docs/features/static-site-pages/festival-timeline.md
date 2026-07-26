@@ -2,7 +2,7 @@
 
 > **Status:** public `noindex` review prototype; calendar view only.
 > **Route:** `/festivali/` inside an immutable preview prefix.
-> **Current candidate:** `preview-20260726-festivals-calendar-r8`.
+> **Current candidate:** `preview-20260726-festivals-calendar-r9`.
 
 The page uses the unified Astro header, footer and mobile dock. It presents 21
 regional festivals from July through December 2026. The category view remains
@@ -31,6 +31,32 @@ approximately 20%: desktop titles render at `21–25.2px`, place copy at
 `11.1–12.9px`. Dense `820–1000px` formations use explicit `19.2–19.8px`
 titles, `12.3px` places and `11.1–11.7px` badges, with a third title line when
 needed rather than truncating a festival name. Place copy may use two lines.
+
+R9 reduces the desktop pre-calendar stack without shrinking the global header
+or the accepted cards. At the effective `1536×864` CSS viewport produced by an
+FHD display at 125% scaling, the hero is `272.8px` high and the first festival
+starts at `517px`; the complete `224.3px` City Jazz card is visible. At a
+conservative `1536×700` browser content height its title still appears at
+`645px`. The former R8 positions were `380.6px` for the hero and `713.5px` for
+the first card, so the useful content now begins `196.5px` earlier.
+
+The top copy is now a literal answer to the page purpose rather than the
+campaign-like `Время фестивалей`: the unique H1 says `Фестивали
+Калининградской области`, the eyebrow supplies the 2026 period, and the visible
+summary explains covered cities/topics, dates, programme status and official
+organiser destinations. The compact three-part guide distinguishes a
+browser-local heart from future notification work and explains what card
+status and destination mean.
+
+The SEO/GEO contract uses one concise Russian title, one page-specific meta
+description, aligned H1/OG copy, descriptive image alternatives and an eager
+high-priority first card image. JSON-LD describes the page as a Russian
+`CollectionPage` with review date, Kaliningrad-region subject, publisher,
+primary image and an ascending 21-item list whose entities use Schema.org
+`Festival`. The aggregate deliberately does not claim Google Event rich-result
+eligibility: Google requires complete leaf pages for individual events. The
+preview remains `noindex`; these signals become indexable only after promotion
+to the canonical `/festivali/` route.
 
 Each month rail now exposes every represented category, not a sampled
 `3 + N` summary. The inventory wraps inside the sticky rail in three
@@ -61,14 +87,14 @@ alpha masks so their geometry stays source-faithful while colour follows the
 chip.
 
 The page contains one visitor-facing usage strip, not an operator/prototype
-note. It explains that cards go to official organisers, hearts are saved on
-the current device, and detailed pages/notifications are later work. It says
-explicitly that the current heart does not create a subscription and sends no
-notifications.
+note. It explains that cards go to official organisers, hearts are saved in
+the current browser, and detailed pages/notifications are later work. The
+current heart is described as a local bookmark and does not imply an active
+subscription.
 
 ## Festival hearts and entity boundary
 
-R8 deliberately does not reuse the numeric event-feedback controller. Only
+R9 deliberately does not reuse the numeric event-feedback controller. Only
 four of 21 cards map to an exact current event, the Fly `festival` rows do not
 provide a safe series/edition identity for all cards, and Supabase exposes only
 a SELECT-only aggregate event counter with no actor-owned festival write RPC.
@@ -144,7 +170,7 @@ Only `Гроздь`, `Море внутри` and `Короче` have selected cu
 Most other exact videos are archive recaps. Future playback must remain
 poster-first and click-to-load, keep the uncropped frame in an overlay/contained
 player, avoid autoplay, and revalidate source availability before release.
-This R8 candidate does not download or embed those videos.
+This R9 candidate does not download or embed those videos.
 The exact 21-row source/shape/duration ledger is
 [`festival-video-audit-2026.md`](festival-video-audit-2026.md).
 
@@ -197,11 +223,15 @@ visible inset outline.
 ## Pixel acceptance
 
 The Playwright gate uses `887×900`, `1440×900`, `390×844` and
-`320×700`. Required envelopes:
+`320×700`, plus the desktop above-fold probe at `1536×700/864`. Required
+envelopes:
 
 - `887px`: card plane `700–710px`, timeline `≤1700px`;
 - `1440px`: timeline `≤2300px`; four-up `≤300px`, three-up `≤260px`,
   two-up/solo `≤225px`;
+- `1536×700`: first card begins no lower than `530px`, and its title is visible
+  without scrolling;
+- `1536×864`: the complete first card is visible;
 - `390px`: two columns, regular tiles `184–214px`, August `≤950px`, full
   timeline `≤3200px`;
 - all viewports: zero horizontal overflow, 21 decoded images, no browser or
@@ -245,14 +275,14 @@ Run:
 
 ```bash
 npm --prefix site run test:festival-timeline-layout
-PREVIEW_BUILD_ID=preview-20260726-festivals-calendar-r8 npm --prefix site run build:preview
-PREVIEW_BUILD_ID=preview-20260726-festivals-calendar-r8 npm --prefix site run check:unified-prototype
+PREVIEW_BUILD_ID=preview-20260726-festivals-calendar-r9 npm --prefix site run build:preview
+PREVIEW_BUILD_ID=preview-20260726-festivals-calendar-r9 npm --prefix site run check:unified-prototype
 ```
 
 Review candidate:
 
-- page: <https://kenigevents.ru/preview-20260726-festivals-calendar-r8/festivali/>;
-- hub: <https://kenigevents.ru/preview-20260726-festivals-calendar-r8/__preview/>.
+- page: <https://kenigevents.ru/preview-20260726-festivals-calendar-r9/festivali/>;
+- hub: <https://kenigevents.ru/preview-20260726-festivals-calendar-r9/__preview/>.
 
 The immutable URL is a public bearer link, not authentication. It must not be
 promoted to the production root before product acceptance and a refresh owner

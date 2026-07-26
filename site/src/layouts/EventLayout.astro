@@ -24,9 +24,11 @@ interface Props {
   description: string;
   canonicalUrl: string;
   ogImage?: string | null;
+  ogImageAlt?: string | null;
   ogImageType?: string | null;
   ogImageWidth?: number | null;
   ogImageHeight?: number | null;
+  ogType?: 'article' | 'website';
   structuredData?: unknown[];
   heroChrome?: 'standard' | 'immersive';
   headerCurrent?: HeaderCurrent;
@@ -38,7 +40,7 @@ interface Props {
   headerBadge?: HeaderBadge;
 }
 
-const { title, description, canonicalUrl, ogImage, ogImageType, ogImageWidth, ogImageHeight, structuredData = [], heroChrome = 'standard', headerCurrent, mobileTopMode, mobileSection: explicitMobileSection, mobileBottomMode, noindex = false, disableViewportZoom = false, headerBadge } = Astro.props;
+const { title, description, canonicalUrl, ogImage, ogImageAlt, ogImageType, ogImageWidth, ogImageHeight, ogType = 'article', structuredData = [], heroChrome = 'standard', headerCurrent, mobileTopMode, mobileSection: explicitMobileSection, mobileBottomMode, noindex = false, disableViewportZoom = false, headerBadge } = Astro.props;
 const robots = noindex
   ? 'noindex,nofollow,noarchive'
   : (IS_PRODUCTION ? 'index,follow' : (IS_SECRET_CANDIDATE ? 'noindex,nofollow,noarchive,nosnippet' : 'noindex,nofollow,noarchive'));
@@ -147,12 +149,13 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     <meta name="description" content={safeDescription} />
     <link rel="canonical" href={canonicalUrl} />
     <meta property="og:site_name" content={SITE_NAME} />
-    <meta property="og:type" content="article" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={safeDescription} />
     <meta property="og:url" content={canonicalUrl} />
     {ogImage && <meta property="og:image" content={ogImage} />}
     {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
+    {ogImage && ogImageAlt && <meta property="og:image:alt" content={ogImageAlt} />}
     {ogImageType && <meta property="og:image:type" content={ogImageType} />}
     {ogImageWidth && <meta property="og:image:width" content={String(ogImageWidth)} />}
     {ogImageHeight && <meta property="og:image:height" content={String(ogImageHeight)} />}
