@@ -38,7 +38,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/**, medallion manifests/assets]
     expected_output: committed fix plus .codex/lanes/R12-SATURATION/RESULTS.md
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: R12-MEDALLIONS
     role: worker
     requirement_ids: [R12-02, R12-03]
@@ -51,7 +51,7 @@ lanes:
     forbidden_files: [CHANGELOG.md, docs/**, listing temporal components]
     expected_output: committed fix plus .codex/lanes/R12-MEDALLIONS/RESULTS.md
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: R12-INTEGRATOR
     role: merge_reviewer
     requirement_ids: [R12-04]
@@ -64,5 +64,5 @@ lanes:
     forbidden_files: []
     expected_output: integrated noindex preview and closure report
     verification_scope: full_local
-    status: planned
+    status: completed
 ```
