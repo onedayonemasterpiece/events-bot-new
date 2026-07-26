@@ -1,6 +1,7 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
 import { deduplicateListingEvents, eventCountLabel, groupListingEvents } from '../../lib/listingPresentation';
+import { chronologicalListingEvents } from '../../lib/listingChronology';
 import ListingDiscoveryRail from './ListingDiscoveryRail.astro';
 import ListingPageHeader from './ListingPageHeader.astro';
 import ListingTimeNav from './ListingTimeNav.astro';
@@ -18,7 +19,7 @@ interface Props {
   generatedAt?: string | null;
 }
 const { kind, title, date, dateLabel, events: rawEvents, generatedAt = null } = Astro.props;
-const events = deduplicateListingEvents(rawEvents);
+const events = chronologicalListingEvents(deduplicateListingEvents(rawEvents));
 const generatedAtMs = generatedAt ? Date.parse(generatedAt) : Number.NaN;
 
 function endedBeforeBuild(event: PreviewEvent): boolean {
@@ -29,6 +30,11 @@ function endedBeforeBuild(event: PreviewEvent): boolean {
 
 const earlierEvents = kind === 'today' ? events.filter(endedBeforeBuild) : [];
 const upcomingEvents = kind === 'today' ? events.filter((event) => !endedBeforeBuild(event)) : events;
+// Mobile is one physical time rail. Splitting it into “ended” and “upcoming”
+// sections moves an explicitly-ended 12:00 item before a 10:00 item without
+// an end time. Temporal truth remains encoded on each row; desktop retains the
+// expandable completed section.
+const mobileChronologicalEvents = events;
 const earlierGroups = groupListingEvents(earlierEvents);
 const upcomingGroups = groupListingEvents(upcomingEvents);
 const cities = [...new Set(events.map((event) => event.city || 'Калининградская область'))]
@@ -61,8 +67,7 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
 
   <MobileListingRailSurface
     sections={[
-      ...(earlierEvents.length ? [{ id:`${kind}-earlier`, title:'Завершились', events:earlierEvents }] : []),
-      { id:`${kind}-upcoming`, events:upcomingEvents },
+      { id:`${kind}-chronological`, events:mobileChronologicalEvents },
     ]}
     occurrenceMode="per-date"
     title={title}

@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { festivalTimeline } from '../src/data/festivalTimeline.ts';
 import { festivalTimelineMedia } from '../src/data/festivalTimelineMedia.ts';
 import { packFestivalTimeline } from '../src/lib/festivalTimelineLayout.ts';
+
+const festivalProjection = JSON.parse(
+  await readFile(new URL('../src/data/festival-timeline.json', import.meta.url), 'utf8'),
+);
+const festivalTimeline = festivalProjection.festivals;
 
 function item(index, overrides = {}) {
   return {
@@ -64,6 +68,7 @@ test('unknown semantic media fails closed instead of entering a packed cover row
 });
 
 test('every published card has hash-bound reviewed provenance from a first-party source', async () => {
+  assert.equal(festivalProjection.schema_version, 'festival-timeline-static-v1');
   assert.equal(festivalTimeline.length, 21);
   assert.equal(Object.keys(festivalTimelineMedia).length, 21);
   for (const festival of festivalTimeline) {

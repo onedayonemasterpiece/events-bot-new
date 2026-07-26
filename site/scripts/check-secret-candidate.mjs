@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import {
   CANDIDATE_MANIFEST_SCHEMA, candidateBasePath, fileInventory, safeCandidateToken, sha256, treeHash,
@@ -16,6 +17,26 @@ function source(key) { try { return readFileSync(join(root, key), 'utf8'); } cat
 const manifest = JSON.parse(source('secret-candidate-manifest.json'));
 if (manifest.schema_version !== CANDIDATE_MANIFEST_SCHEMA || manifest.site_mode !== 'secret_candidate' || manifest.publication_mode !== 'secret_link') fail('wrong candidate manifest profile');
 if (manifest.base_path !== basePath || manifest.token_sha256 !== sha256(token)) fail('candidate token/base mismatch');
+for (const route of [
+  'segodnya',
+  'zavtra',
+  'vyhodnye',
+  'vystavki',
+  'festivali',
+  'populyarnoe',
+  'poisk',
+  'dlya-menya',
+  'kluby-po-interesam',
+  'partners',
+]) source(`${route}/index.html`);
+for (const slug of ['dzhaz-na-vyhodnyh', 'besplatno-s-detmi', 'stendap-na-etoy-nedele']) {
+  source(`podborki/${slug}/index.html`);
+}
+if (
+  festivalTimelineData.schema_version !== 'festival-timeline-static-v1'
+  || festivalTimelineData.source !== 'sqlite-festival-calendar-v1'
+  || festivalTimelineData.database_row_count < 21
+) fail('DB-backed festival timeline receipt is incomplete');
 const transportExperiment = manifest.experiments?.transport_timetable_layout;
 const transportQaRoute = 'lab/event-desktop/examples/editorial-ocr-companion-arrival';
 const footerRegressionRoute = 'lab/event-desktop/examples/footer-service-v1';

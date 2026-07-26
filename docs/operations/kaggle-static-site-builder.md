@@ -117,6 +117,13 @@ Rules:
   that a short-lived runner has already committed and make Kaggle report a
   false `invalid token`/busy resource failure.
 - Data export: `site/scripts/export-production-preview-data.py`.
+- The full exporter requires the current `festival_calendar_item` catalog in
+  core Fly SQLite and writes `site/src/data/festival-timeline.json` with source
+  `sqlite-festival-calendar-v1`. Production and secret-candidate gates reject a
+  fixture/fallback source; the release manifest binds its hash, catalog
+  versions and DB/rendered row counts. Public festival-calendar rows
+  participate in the static input fingerprint, so a calendar update requests a
+  fresh build.
 - Duration enrichment is not a StaticSiteBuilder/Kaggle responsibility.
   Smart Update may persist `event.duration_forecast_minutes` before the
   snapshot is handed off, and only for candidates that pass the implemented

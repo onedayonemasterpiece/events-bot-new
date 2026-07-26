@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
 import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
+import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
 import busData from '../src/data/busTransportSchedules.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 
@@ -17,6 +18,7 @@ const required = [
   'zavtra/index.html',
   'vyhodnye/index.html',
   'vystavki/index.html',
+  'festivali/index.html',
   'populyarnoe/index.html',
   'poisk/index.html',
   'partnerstvo/index.html',
@@ -59,6 +61,9 @@ const required = [
 for (const rel of required) {
   const path = join(root, rel);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Missing required file: ${rel}`);
+}
+if (festivalTimelineData.schema_version !== 'festival-timeline-static-v1') {
+  throw new Error('Festival timeline projection schema is missing');
 }
 const previewBuild = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
 const previewCurrentDate = String(previewBuild.currentDate || eventsData.build.current_date || '');

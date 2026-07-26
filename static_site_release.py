@@ -567,6 +567,14 @@ _PUBLIC_FINGERPRINT_TABLES: dict[str, tuple[str, ...]] = {
         "public_status",
     ),
     "interest_club_event": ("club_id", "event_id", "status"),
+    "festival_calendar_item": (
+        "id", "calendar_year", "slug", "title", "description", "start_date",
+        "end_date", "date_precision", "date_label", "sort_date", "month_key",
+        "display_order", "place_label", "category", "status", "status_label",
+        "source_url", "source_label", "internal_event_id", "festival_id",
+        "cover_key", "image_width", "image_height", "media_mode",
+        "object_position", "catalog_version", "is_public",
+    ),
 }
 
 
@@ -632,6 +640,17 @@ def _table_projection_digest(
             f" WHERE event_id IN (SELECT id FROM event WHERE date >= ?{end_clause})"
         )
         params = (effective_date, effective_date) if end_clause else (effective_date,)
+    elif table == "festival_calendar_item" and {
+        "calendar_year",
+        "is_public",
+    }.issubset(columns):
+        current_year = date.fromisoformat(effective_date).year
+        where = (
+            " WHERE is_public=1 AND ("
+            "COALESCE(NULLIF(end_date,''),'') >= ? OR "
+            "(COALESCE(NULLIF(end_date,''),'')='' AND calendar_year>=?))"
+        )
+        params = (effective_date, current_year)
     for row in connection.execute(
         f'SELECT {quoted} FROM "{table}"{where} ORDER BY {order}', params
     ):

@@ -14,6 +14,7 @@ const REQUIRED_CHECKS = Object.freeze([
   'cold_and_pointer_keyboard',
   'gallery_cross_document',
   'footer_shortcuts',
+  'festival_calendar',
 ]);
 export const BROWSER_GATE_ACTION_TIMEOUT_MS = 8_000;
 export const BROWSER_GATE_NAVIGATION_TIMEOUT_MS = 12_000;
@@ -770,6 +771,39 @@ async function assertFooterShortcuts(page, origin, route) {
   invariant(await footer.locator('[data-service-share-intent="image"]:focus, [data-service-share-intent="text"]:focus').count() === 0, 'browser gate must not focus footer controls');
 }
 
+async function assertFestivalCalendar(page, origin, basePath) {
+  const route = `${basePath}/festivali/`.replace(/\/+/gu, '/');
+  const reports = [];
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto(`${origin}${route}`, { waitUntil:'domcontentloaded' });
+    const root = page.locator('[data-festival-timeline][data-festival-count="21"]');
+    invariant(await root.count() === 1, `festival calendar is missing at ${viewport.width}px`);
+    invariant(await root.locator('[data-festival-card]').count() === 21, `festival calendar lost cards at ${viewport.width}px`);
+    const images = root.locator('[data-festival-card] img');
+    invariant(await images.count() === 21, `festival calendar image inventory is incomplete at ${viewport.width}px`);
+    for (let index = 0; index < 21; index += 1) {
+      const image = images.nth(index);
+      await image.scrollIntoViewIfNeeded();
+      await image.evaluate((node) => node.decode?.().catch(() => undefined));
+    }
+    const geometry = await root.evaluate((element) => ({
+      cards: element.querySelectorAll('[data-festival-card]').length,
+      broken: [...element.querySelectorAll('[data-festival-card] img')]
+        .filter((image) => !image.complete || image.naturalWidth <= 0).length,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }));
+    invariant(geometry.broken === 0, `festival calendar has ${geometry.broken} broken images at ${viewport.width}px`);
+    invariant(geometry.overflow <= 1, `festival calendar overflows horizontally by ${geometry.overflow}px at ${viewport.width}px`);
+    reports.push({ viewport, ...geometry });
+  }
+  await page.setViewportSize({ width:1536, height:864 });
+  return reports;
+}
+
 async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '' }) {
   const routes = eventRoutes(root, basePath);
   const candidates = staticSpecimenCandidates(root, basePath, routes);
@@ -887,12 +921,16 @@ async function runBrowserGate({ root, basePath, origin, browser, artifactDir = '
     await assertFooterShortcuts(page, origin, specimen.route);
     checks.footer_shortcuts = 'ok';
     console.log('[browser-release-gate] footer_shortcuts=ok');
+    const festivalCalendar = await assertFestivalCalendar(page, origin, basePath);
+    checks.festival_calendar = 'ok';
+    console.log('[browser-release-gate] festival_calendar=ok');
     return {
       ok: true, checks,
       specimen: { route: specimen.route, gallery_target: specimen.targetPath, crop_routes: cropRoutes, hero_routes:heroRoutes },
       hero_gallery:heroGallery,
       keyboard:keyboardReports,
       spatial_keyboard:spatialKeyboard,
+      festival_calendar:festivalCalendar,
       media: [...related, ...continuation].map((item) => ({
         id:item.id,
         row:item.row,

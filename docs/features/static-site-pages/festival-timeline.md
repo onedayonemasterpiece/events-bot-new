@@ -1,8 +1,11 @@
 # Festival calendar timeline
 
-> **Status:** public `noindex` review prototype; calendar view only.
-> **Route:** `/festivali/` inside an immutable preview prefix.
-> **Current candidate:** `preview-20260726-festivals-calendar-r9`.
+> **Status:** integrated into the checked production generator; calendar view
+> only. Public root promotion is still blocked by the shared reader-atomic
+> publisher gate.
+> **Route:** canonical root-form `/festivali/`; review delivery remains an
+> immutable `noindex` candidate under `/_review/<token>/`.
+> **Accepted visual donor:** `preview-20260726-festivals-calendar-r9`.
 
 The page uses the unified Astro header, footer and mobile dock. It presents 21
 regional festivals from July through December 2026. The category view remains
@@ -113,14 +116,39 @@ festival-edition split, a complete 21-card mapping, owned state/RLS or a
 same-origin idempotent endpoint, separate channel consent, a change detector
 and an outbox/unsubscribe path.
 
-## Data and honesty contract
+## DB projection and honesty contract
 
-The production `festival` table was checked first. Its retained/archive rows
-and sparse current dates are not sufficient for this calendar, and individual
-programme events cannot be presented as festival-series records. The curated
-projection in `site/src/data/festivalTimeline.ts` therefore uses the official
-regional calendar only where a festival has no own current announcement, and
-otherwise links the festival, organiser or venue directly.
+The production `festival` table was checked first. Its retained/archive rows,
+non-unique series names and sparse current dates are not sufficient for this
+calendar, and inserting duplicate yearly `festival.name` rows would break
+legacy code paths that expect at most one match.
+
+The public annual editions therefore use a dedicated Fly SQLite table,
+`festival_calendar_item`. It is additive: it does not rewrite legacy
+`festival` rows or individual programme events. The accepted 2026 catalog is
+stored in `site/src/data/festivalTimelineSeed.json` and applied transactionally
+with:
+
+```bash
+python scripts/backfill_festival_calendar_2026.py --db /data/db.sqlite
+python scripts/backfill_festival_calendar_2026.py --db /data/db.sqlite --apply
+```
+
+Dry-run is the default. The backfill is idempotent, validates optional
+`festival`/`event` foreign keys and refuses year/order identity conflicts.
+Broad periods are intentionally nullable dates with a separate precision and
+reader-facing label; it never invents exact dates.
+
+`site/scripts/export-production-preview-data.py` is the only production page
+projection owner. It writes `site/src/data/festival-timeline.json` with source
+`sqlite-festival-calendar-v1`. `site/src/pages/festivali/index.astro` consumes
+that generated JSON and has no hardcoded TypeScript fallback. A full production
+export fails closed if the table/current-year catalog is absent, incomplete or
+contains duplicate slugs/orders. The checked release manifest records the
+projection hash, source, catalog versions and DB/rendered row counts.
+
+The bounded JSON committed to the repository is only a review fixture; the
+production exporter must overwrite it before `build:production`.
 
 Every item has:
 
@@ -269,21 +297,29 @@ Gemini participation or approval. The icon choice is the recorded manual
 contact-sheet result and the page is accepted only by measured binary gates and
 visual inspection.
 
-## Checks and preview
+## Checks and generated release
 
 Run:
 
 ```bash
 npm --prefix site run test:festival-timeline-layout
+pytest -q tests/test_festival_calendar_static_projection.py
 PREVIEW_BUILD_ID=preview-20260726-festivals-calendar-r9 npm --prefix site run build:preview
 PREVIEW_BUILD_ID=preview-20260726-festivals-calendar-r9 npm --prefix site run check:unified-prototype
 ```
+
+The production path additionally requires `build:production`,
+`check:production`, `build:secret-candidate`, `check:secret-candidate` and the
+Chromium release gate. Those gates require `/festivali/`, 21 current DB rows in
+the initial 2026 catalog, an indexable root-form route, a `noindex` prefixed
+candidate, decoded images and zero horizontal overflow at 1440 and 390 pixels.
 
 Review candidate:
 
 - page: <https://kenigevents.ru/preview-20260726-festivals-calendar-r9/festivali/>;
 - hub: <https://kenigevents.ru/preview-20260726-festivals-calendar-r9/__preview/>.
 
-The immutable URL is a public bearer link, not authentication. It must not be
-promoted to the production root before product acceptance and a refresh owner
-are agreed.
+The immutable URL is a public bearer link, not authentication. The repository
+still has no safe reader-atomic root publisher; generating and checking the
+root-form artifact is not a claim that `kenigevents.ru/festivali/` has been
+published.

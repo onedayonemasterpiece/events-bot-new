@@ -37,15 +37,19 @@ PREVIEW_BUILD_ID=preview-<unique-id> npm --prefix site run check:unified-prototy
 The reviewer enters through `/<id>/__preview/`; that hub owns the page-type
 inventory and links only targets inside the same prefix. It must state that the
 integrated Search visual is not acceptance of the live auth/backend journey.
-The preview-only `/dlya-menya/` page is an honest finite cold-start specimen,
-not a new production SEO route. A successful local build or prefix upload never
-authorizes root promotion or a stable calendar rewrite.
+The `/dlya-menya/` page is an honest finite cold-start surface. Production
+generation retains it for product navigation but keeps it explicitly noindex
+and outside the sitemap; it is not presented as server-personalized SEO
+content. A successful local build or prefix upload never authorizes root
+promotion or a stable calendar rewrite.
 
-The prototype hub also owns the noindex `/festivali/` calendar timeline. Its
-21-item July–December projection, source/status honesty rules and compact
-one-to-four-card packing are canonical in
-[`festival-timeline.md`](festival-timeline.md). It is a review route, not a
-production festival directory or acceptance of the deferred category view.
+The same Astro page set now includes `/festivali/` in production generation.
+Its 21-item July–December catalog is exported from core Fly SQLite rather than
+the former hardcoded TypeScript array. Source/status honesty rules, DB/backfill
+ownership and compact one-to-four-card packing are canonical in
+[`festival-timeline.md`](festival-timeline.md). Immutable review artifacts
+remain noindex; the generated root-form page does not imply that the still
+missing reader-atomic root publisher has been enabled.
 The current `r3` correction withdraws the split-body `r1` candidate: cards are
 now full-cover overlays in donor-density rows, the `390px` layout keeps two
 columns, and all media is hash-bound to festival/organiser/venue provenance

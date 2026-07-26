@@ -15,6 +15,19 @@
 - Текущая таблица `festival` хранит **выпуски**.
 - У каждого выпуска есть короткое имя серии (`name`) и подробное название (`full_name`).
 - Дополнительная мета серий/выпусков хранится в полях серии или вычисляется из данных.
+- Публичный годовой календарь `/festivali/` использует отдельную таблицу
+  `festival_calendar_item`. Это reviewed, year-scoped проекция календаря, а не
+  замена parser/Telegraph-модели `festival`: она допускает несколько лет одной
+  серии, не создавая опасных дублей `festival.name`.
+- Начальный каталог 2026 содержит 21 source-backed запись. Канонический seed —
+  `site/src/data/festivalTimelineSeed.json`, идемпотентный writer —
+  `scripts/backfill_festival_calendar_2026.py`, static projection —
+  `site/scripts/export-production-preview-data.py` →
+  `site/src/data/festival-timeline.json`.
+- Production export читает только Fly SQLite и fail-closed при отсутствии
+  текущего годового каталога. Встроенный TypeScript fallback запрещён; точность
+  дат хранится отдельно (`exact`, `month`, `month-range`, `start-only`), чтобы
+  не превращать широкое официальное окно в выдуманную точную дату.
 
 ## Связь с событиями
 

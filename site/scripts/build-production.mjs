@@ -13,6 +13,7 @@ const distDir = join(siteDir, 'dist');
 const catalogPath = join(siteDir, 'src/data/production-catalog.json');
 const eventsPath = join(siteDir, 'src/data/preview-events.json');
 const relatedPath = join(siteDir, 'src/data/preview-related.json');
+const festivalTimelinePath = join(siteDir, 'src/data/festival-timeline.json');
 const templateContractPath = join(siteDir, 'src/data/eventTemplateContract.json');
 const manifestPath = join(distDir, 'static-release-manifest.json');
 const buildPath = join(distDir, 'production-build.json');
@@ -72,6 +73,7 @@ writeFileSync(join(distDir, 'index.html'), rootHtml);
 
 const eventsData = JSON.parse(readFileSync(eventsPath, 'utf8'));
 const relatedData = JSON.parse(readFileSync(relatedPath, 'utf8'));
+const festivalTimelineData = JSON.parse(readFileSync(festivalTimelinePath, 'utf8'));
 const templateContract = JSON.parse(readFileSync(templateContractPath, 'utf8'));
 const desktopContract = spawnSync(process.execPath, [join(siteDir, 'scripts/check-production-desktop-contract.mjs')], { cwd: siteDir, env, stdio: 'inherit' });
 if (desktopContract.status !== 0) process.exit(desktopContract.status || 1);
@@ -108,6 +110,14 @@ const manifest = {
     template_source_sha: templateContract.accepted_source_sha,
     template_contract_schema: templateContract.schema_version,
     related: relatedData.schema_version || relatedData.algorithm || null,
+    festival_calendar: {
+      schema_version: festivalTimelineData.schema_version,
+      source: festivalTimelineData.source,
+      catalog_versions: festivalTimelineData.catalog_versions,
+      projection_sha256: sha256(readFileSync(festivalTimelinePath)),
+      database_row_count: festivalTimelineData.database_row_count,
+      rendered_count: festivalTimelineData.festivals.length,
+    },
     transport: 'event-transport-projection-v1', media: 'event-media-role-v1', age: 'event-age-projection-v1', occurrence: 'linked-event-ids-v1',
     transport_timetable_experiment: {
       experiment_key: 'transport_timetable_layout', experiment_version: 1, mode: 'off',

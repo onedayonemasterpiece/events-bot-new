@@ -24,10 +24,11 @@ The isolated [amber-artifact placement research](amber-artifact-easter-egg.md)
 compares a true rail-tail easter egg with an after-medallion challenger without
 changing the accepted calendar renderer.
 
-The noindex [`festival calendar timeline`](festival-timeline.md) extends the
-same shell with a curated July–December 2026 festival directory. It owns the
+The [`festival calendar timeline`](festival-timeline.md) is now part of the
+checked production generator and extends the same shell with a Fly
+SQLite-backed July–December 2026 festival directory. It owns the
 festival-specific source/status and flexible row-packing contract; the category
-view and production-root rollout remain out of scope.
+view and production-root publication remain out of scope.
 
 ### Unified occurrence projection
 

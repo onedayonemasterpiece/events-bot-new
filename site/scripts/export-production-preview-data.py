@@ -1974,12 +1974,49 @@ INTEREST_CLUB_REQUIRED_COLUMNS = {
 }
 INTEREST_CLUB_EVENT_REQUIRED_COLUMNS = {"club_id", "event_id", "status"}
 INTEREST_CLUB_EVENT_SOURCE_COLUMNS = ("source_url", "url", "public_url")
+FESTIVAL_TIMELINE_SCHEMA_VERSION = "festival-timeline-static-v1"
+FESTIVAL_TIMELINE_REQUIRED_COLUMNS = {
+    "id",
+    "calendar_year",
+    "slug",
+    "title",
+    "description",
+    "start_date",
+    "end_date",
+    "date_precision",
+    "date_label",
+    "sort_date",
+    "month_key",
+    "display_order",
+    "place_label",
+    "category",
+    "status",
+    "status_label",
+    "source_url",
+    "source_label",
+    "internal_event_id",
+    "festival_id",
+    "cover_key",
+    "image_width",
+    "image_height",
+    "media_mode",
+    "object_position",
+    "catalog_version",
+    "is_public",
+}
 
 
 def _sqlite_table_columns(con: sqlite3.Connection, table: str) -> set[str]:
     """Return a SQLite table contract without interpolating untrusted names."""
 
-    if table not in {"interest_club", "interest_club_event", "event", "event_source"}:
+    if table not in {
+        "interest_club",
+        "interest_club_event",
+        "event",
+        "event_source",
+        "festival",
+        "festival_calendar_item",
+    }:
         return set()
     try:
         return {str(row[1]) for row in con.execute(f"pragma table_info('{table}')")}
@@ -2164,6 +2201,142 @@ def build_interest_clubs_projection(
             }
         )
     projection["clubs"] = clubs
+    return projection
+
+
+def build_festival_timeline_projection(
+    con: sqlite3.Connection,
+    *,
+    current_date: str,
+    generated_at: str,
+    require_complete: bool,
+) -> dict[str, Any]:
+    """Export the public festival calendar from canonical core SQLite.
+
+    A full production candidate fails closed when the edition table or its
+    accepted initial 2026 catalog is missing.  Slice previews may still build an
+    explicit empty projection, but never fall back to the old hardcoded page
+    array.
+    """
+
+    columns = _sqlite_table_columns(con, "festival_calendar_item")
+    contract_available = FESTIVAL_TIMELINE_REQUIRED_COLUMNS.issubset(columns)
+    projection: dict[str, Any] = {
+        "schema_version": FESTIVAL_TIMELINE_SCHEMA_VERSION,
+        "projection_version": 1,
+        "generated_at": generated_at,
+        "current_date": current_date,
+        "source": (
+            "sqlite-festival-calendar-v1"
+            if contract_available
+            else "missing-db-contract"
+        ),
+        "catalog_versions": [],
+        "database_row_count": 0,
+        "festivals": [],
+    }
+    if not contract_available:
+        if require_complete:
+            raise ValueError(
+                "full production export requires festival_calendar_item schema"
+            )
+        return projection
+
+    current_year = date.fromisoformat(current_date).year
+    all_public_rows = con.execute(
+        """
+        SELECT *
+        FROM festival_calendar_item
+        WHERE calendar_year>=? AND is_public=1
+        ORDER BY calendar_year,display_order,id
+        """,
+        (current_year,),
+    ).fetchall()
+    projection["database_row_count"] = len(all_public_rows)
+    projection["catalog_versions"] = sorted(
+        {
+            clean_text(row_get(row, "catalog_version"))
+            for row in all_public_rows
+            if clean_text(row_get(row, "catalog_version"))
+        }
+    )
+    if require_complete:
+        current_rows = [
+            row for row in all_public_rows
+            if int(row_get(row, "calendar_year") or 0) == current_year
+        ]
+        current_slugs = {clean_text(row_get(row, "slug")) for row in current_rows}
+        current_orders = {int(row_get(row, "display_order") or 0) for row in current_rows}
+        minimum_current_rows = 21 if current_year == 2026 else 1
+        if (
+            len(current_rows) < minimum_current_rows
+            or len(current_slugs) != len(current_rows)
+            or len(current_orders) != len(current_rows)
+        ):
+            raise ValueError(
+                f"full production festival calendar requires unique {current_year} coverage"
+            )
+
+    festivals: list[dict[str, Any]] = []
+    for row in all_public_rows:
+        end_date = clean_text(row_get(row, "end_date"))
+        calendar_year = int(row_get(row, "calendar_year") or 0)
+        # Exact ended editions leave the current calendar. Broad/unknown-end
+        # periods remain only through their declared calendar year.
+        if end_date and end_date < current_date:
+            continue
+        if not end_date and calendar_year < current_year:
+            continue
+        slug = clean_text(row_get(row, "slug"))
+        source_url = clean_text(row_get(row, "source_url"))
+        cover_key = clean_text(row_get(row, "cover_key"))
+        if (
+            not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug)
+            or not source_url.startswith(("https://", "http://"))
+            or not cover_key.startswith("/assets/festivals/timeline/")
+        ):
+            if require_complete:
+                raise ValueError(f"invalid festival calendar row: {slug or row_get(row, 'id')}")
+            continue
+        festivals.append(
+            {
+                "databaseId": int(row_get(row, "id")),
+                "calendarYear": calendar_year,
+                "festivalId": (
+                    int(row_get(row, "festival_id"))
+                    if row_get(row, "festival_id") is not None
+                    else None
+                ),
+                "internalEventId": (
+                    int(row_get(row, "internal_event_id"))
+                    if row_get(row, "internal_event_id") is not None
+                    else None
+                ),
+                "slug": slug,
+                "title": clean_text(row_get(row, "title")),
+                "description": clean_text(row_get(row, "description")),
+                "startDate": clean_text(row_get(row, "start_date")) or None,
+                "endDate": end_date or None,
+                "datePrecision": clean_text(row_get(row, "date_precision")),
+                "dateLabel": clean_text(row_get(row, "date_label")),
+                "sortDate": clean_text(row_get(row, "sort_date")),
+                "monthKey": clean_text(row_get(row, "month_key")),
+                "displayOrder": int(row_get(row, "display_order")),
+                "place": clean_text(row_get(row, "place_label")),
+                "category": clean_text(row_get(row, "category")),
+                "status": clean_text(row_get(row, "status")),
+                "statusLabel": clean_text(row_get(row, "status_label")),
+                "sourceHref": source_url,
+                "sourceLabel": clean_text(row_get(row, "source_label")),
+                "image": cover_key,
+                "imageWidth": int(row_get(row, "image_width")),
+                "imageHeight": int(row_get(row, "image_height")),
+                "mediaMode": clean_text(row_get(row, "media_mode")),
+                "objectPosition": clean_text(row_get(row, "object_position")) or None,
+                "catalogVersion": clean_text(row_get(row, "catalog_version")),
+            }
+        )
+    projection["festivals"] = festivals
     return projection
 
 
@@ -3871,6 +4044,16 @@ def main() -> int:
     )
     (out_dir / "interest-clubs.json").write_text(
         json.dumps(clubs_projection, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    festival_projection = build_festival_timeline_projection(
+        con,
+        current_date=effective_date,
+        generated_at=generated_at,
+        require_complete=args.catalog_mode == "full",
+    )
+    (out_dir / "festival-timeline.json").write_text(
+        json.dumps(festival_projection, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     if args.skip_related:

@@ -10,7 +10,7 @@ import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHome
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 import type { PreviewEvent } from '../lib/types';
 
-export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'popular' | 'clubs';
+export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'festivals' | 'popular' | 'clubs';
 export type MobileTopMode = 'standard' | 'contextual' | 'immersive';
 export type MobileBottomMode = 'nav' | 'cta' | 'none';
 
@@ -132,6 +132,7 @@ const HEADER_NAVIGATION = [
   { key: 'tomorrow', label: 'Завтра', href: '/zavtra/' },
   { key: 'weekend', label: 'Выходные', href: '/vyhodnye/' },
   { key: 'exhibitions', label: 'Выставки', href: '/vystavki/' },
+  { key: 'festivals', label: 'Фестивали', href: '/festivali/' },
   { key: 'popular', label: 'Популярное', href: '/populyarnoe/' },
   { key: 'clubs', label: 'Клубы', href: '/kluby-po-interesam/' },
 ] as const;

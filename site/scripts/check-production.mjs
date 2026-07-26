@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import catalogData from '../src/data/production-catalog.json' with { type: 'json' };
+import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import {
   CHECK_CONTRACT_VERSION, RELEASE_MANIFEST_SCHEMA, fileInventory, sha256, treeHash, validateCatalogLedger,
@@ -42,7 +43,41 @@ for (const file of files) {
 if (manifest.tree_sha256 !== treeHash(files)) fail('tree hash mismatch');
 if (manifest.counts.file_count !== files.length || manifest.counts.bytes !== files.reduce((sum, file) => sum + file.size, 0)) fail('manifest aggregate counts mismatch');
 
-for (const path of ['index.html','segodnya/index.html','zavtra/index.html','vyhodnye/index.html','vystavki/index.html','populyarnoe/index.html','poisk/index.html','partners/index.html','robots.txt','sitemap.xml']) required(path);
+for (const path of [
+  'index.html',
+  'segodnya/index.html',
+  'zavtra/index.html',
+  'vyhodnye/index.html',
+  'vystavki/index.html',
+  'festivali/index.html',
+  'populyarnoe/index.html',
+  'poisk/index.html',
+  'dlya-menya/index.html',
+  'kluby-po-interesam/index.html',
+  'partners/index.html',
+  'podborki/dzhaz-na-vyhodnyh/index.html',
+  'podborki/besplatno-s-detmi/index.html',
+  'podborki/stendap-na-etoy-nedele/index.html',
+  'robots.txt',
+  'sitemap.xml',
+]) required(path);
+if (!files.some((file) => /^date-\d{4}-\d{2}-\d{2}\/index\.html$/u.test(file.key))) fail('generated date page family is missing');
+if (!files.some((file) => /^vyhodnye\/\d{4}-\d{2}-\d{2}\/index\.html$/u.test(file.key))) fail('generated weekend page family is missing');
+if (
+  festivalTimelineData.schema_version !== 'festival-timeline-static-v1'
+  || festivalTimelineData.source !== 'sqlite-festival-calendar-v1'
+  || !Array.isArray(festivalTimelineData.festivals)
+  || festivalTimelineData.database_row_count < 21
+) fail('DB-backed festival timeline receipt is incomplete');
+if (
+  manifest.versions?.festival_calendar?.schema_version !== festivalTimelineData.schema_version
+  || manifest.versions?.festival_calendar?.source !== festivalTimelineData.source
+  || manifest.versions?.festival_calendar?.projection_sha256
+    !== sha256(readFileSync(join(siteDir, 'src/data/festival-timeline.json')))
+  || manifest.versions?.festival_calendar?.rendered_count !== festivalTimelineData.festivals.length
+) fail('festival timeline release receipt/hash mismatch');
+const festivalSlugs = festivalTimelineData.festivals.map((item) => item.slug);
+if (festivalSlugs.length !== new Set(festivalSlugs).size) fail('festival timeline contains duplicate slugs');
 for (const key of files.map((file) => file.key)) {
   if (/^(?:__preview|lab)(?:\/|$)/u.test(key) || key === 'partnerstvo/index.html' || /^preview-[^/]+\//u.test(key)) fail(`preview/fixture route leaked: ${key}`);
 }
@@ -72,8 +107,14 @@ for (const event of eventsData.events) {
 const siteOrigin = manifest.site_origin;
 for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   const source = html(file.key);
-  if (/noindex/iu.test(source)) fail(`noindex leaked into ${file.key}`);
-  if (!/<meta\s+name="robots"\s+content="index,follow"/iu.test(source)) fail(`index,follow missing from ${file.key}`);
+  const intentionallyUnindexed = file.key === 'dlya-menya/index.html'
+    || /^podborki\/[^/]+\/index\.html$/u.test(file.key);
+  if (intentionallyUnindexed) {
+    if (!/<meta\s+name="robots"\s+content="noindex,nofollow,noarchive"/iu.test(source)) fail(`private/personal noindex policy missing from ${file.key}`);
+  } else {
+    if (/noindex/iu.test(source)) fail(`noindex leaked into ${file.key}`);
+    if (!/<meta\s+name="robots"\s+content="index,follow"/iu.test(source)) fail(`index,follow missing from ${file.key}`);
+  }
   if (/<meta\s+name="referrer"\s+content="no-referrer"/iu.test(source)) fail(`secret-candidate policy leaked into ${file.key}`);
   if (source.includes('/__preview/') || source.includes('/_review/') || source.includes('Preview · noindex')) fail(`preview/candidate reference leaked into ${file.key}`);
   const canonical = file.key === 'index.html' ? `${siteOrigin}/` : (file.key.endsWith('/index.html') ? `${siteOrigin}/${file.key.slice(0, -'index.html'.length)}` : null);
@@ -88,6 +129,7 @@ const sitemap = readFileSync(join(root, 'sitemap.xml'), 'utf8');
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/gu)].map((match) => match[1]);
 if (new Set(locs).size !== locs.length || locs.some((url) => !url.startsWith(`${siteOrigin}/`) || /\/(?:__preview|lab|_review|partnerstvo)(?:\/|$)/u.test(url))) fail('sitemap contains duplicate/off-origin/QA URLs');
 for (const event of eventsData.events) if (!locs.includes(`${siteOrigin}/sobytiya/${event.slug}/`)) fail(`event missing from sitemap ${event.id}`);
+if (!locs.includes(`${siteOrigin}/festivali/`)) fail('festival calendar missing from sitemap');
 if (!Array.isArray(manifest.stable_ics) || manifest.stable_ics.length !== eventsData.events.length) fail('stable ICS manifest parity failed');
 for (const item of manifest.stable_ics) {
   if (item.target_key !== `ics/${item.event_id}.ics` || !manifestByKey.has(item.source_key)) fail(`invalid stable ICS mapping ${item.event_id}`);

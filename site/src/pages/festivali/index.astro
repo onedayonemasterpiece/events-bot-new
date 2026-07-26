@@ -1,7 +1,11 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import Icon from '../../components/Icon.astro';
-import { festivalTimeline, festivalTimelineMonths } from '../../data/festivalTimeline';
+import festivalProjection from '../../data/festival-timeline.json';
+import {
+  festivalTimelineMonths,
+  type FestivalTimelineItem,
+} from '../../data/festivalTimeline';
 import { festivalTimelineMedia } from '../../data/festivalTimelineMedia';
 import { packFestivalTimeline } from '../../lib/festivalTimelineLayout';
 import {
@@ -14,7 +18,19 @@ const canonicalUrl = absoluteUrl('/festivali/');
 const title = 'Фестивали Калининградской области 2026 — календарь | Анонсы';
 const description = 'Календарь фестивалей Калининграда и Калининградской области на 2026 год: даты, города, направления, статус программы и официальные источники.';
 const pageSummary = 'Календарь фестивалей Калининграда и Калининградской области на 2026 год: музыка, кино, гастрономия, театр, история и семейные праздники. Сравнивайте даты и города, проверяйте статус программы и переходите к официальным сайтам и сообществам организаторов.';
-const lastReviewed = '2026-07-26';
+const festivalTimeline = festivalProjection.festivals as FestivalTimelineItem[];
+if (festivalProjection.schema_version !== 'festival-timeline-static-v1') {
+  throw new Error('Festival timeline projection schema is unsupported');
+}
+if (import.meta.env.PUBLIC_SITE_MODE === 'production' && festivalProjection.source !== 'sqlite-festival-calendar-v1') {
+  throw new Error('Production festival calendar must be exported from core SQLite');
+}
+const lastReviewed = festivalProjection.generated_at.slice(0, 10);
+const lastReviewedLabel = new Intl.DateTimeFormat('ru-RU', {
+  day:'numeric',
+  month:'long',
+  timeZone:'Europe/Kaliningrad',
+}).format(new Date(`${lastReviewed}T12:00:00+02:00`));
 const compactDate = (value: string) => value
   .replace('января', 'янв')
   .replace('февраля', 'фев')
@@ -195,7 +211,7 @@ const structuredData = [{
   ogImageHeight={1067}
   ogType="website"
   structuredData={structuredData}
-  noindex
+  headerCurrent="festivals"
 >
   <main id="main" class="festival-page" data-festival-timeline data-festival-count={resolvedItems.length}>
     <section class="festival-hero" aria-labelledby="festival-title">
@@ -207,7 +223,7 @@ const structuredData = [{
       <dl class="festival-hero__facts" aria-label="Коротко о календаре">
         <div><dt>Фестивалей</dt><dd>{resolvedItems.length}</dd></div>
         <div><dt>Период</dt><dd>Июль—декабрь</dd></div>
-        <div><dt>Проверено</dt><dd>26 июля</dd></div>
+        <div><dt>Проверено</dt><dd>{lastReviewedLabel}</dd></div>
       </dl>
     </section>
 

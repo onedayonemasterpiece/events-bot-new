@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added a dedicated, year-scoped `festival_calendar_item` SQLite model,
+  runtime DDL/Alembic migration and dry-run-first idempotent 2026 backfill for
+  the accepted 21 future festival records without duplicating legacy
+  `festival.name` editions.
+- Added a fail-closed DB festival projection to the production exporter and
+  release manifest, direct desktop/mobile Festivals navigation, sitemap and
+  production/secret/Chromium gates covering all 21 cards at desktop and mobile
+  widths.
 - Added a noindex festival calendar prototype at `/festivali/`: 21
   source-backed July–December 2026 festivals, real organiser/venue media,
   explicit pending-date states and chronological one-to-four-card row packing
@@ -144,6 +152,13 @@
 
 ### Changed
 
+- Moved `/festivali/` from its hardcoded TypeScript review catalog to generated
+  `sqlite-festival-calendar-v1` data while preserving the accepted R9 timeline,
+  media ledger, truthful broad-date labels and row-packing behavior.
+- Extended production generated-output coverage to the unified date, weekend,
+  exhibitions, festivals, Popular, Search, personal, clubs, partners and
+  materialized-collection page families; intentionally personal/query-derived
+  pages remain generated but excluded from the sitemap with explicit noindex.
 - Compressed the festival calendar's desktop hero, month switcher and usage
   strip so the first festival starts at `517px` and remains identifiable at an
   FHD/125%-equivalent `1536×700` viewport; replaced the vague campaign headline
@@ -244,6 +259,9 @@
 
 ### Fixed
 
+- Restored strict chronological order in the mobile Today rail by keeping one
+  physical time stream; per-row `past`/`started-earlier`/`current` truth remains
+  intact while the desktop completed-events disclosure stays separate.
 - Fixed mobile `Сегодня` temporal truth across midnight and immutable previews:
   no-end events from an elapsed listing day keep the accepted muted main image,
   while an explicit end remains authoritative and desktop cards stay isolated.

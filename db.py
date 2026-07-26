@@ -1709,6 +1709,54 @@ class Database:
                 "WHERE updated_at IS NULL"
             )
 
+            # Public year-scoped calendar editions are separate from the
+            # legacy festival-series rows.  Several parser paths still assume
+            # ``Festival.name`` resolves to at most one record, so inserting a
+            # second yearly row into ``festival`` would be unsafe.
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS festival_calendar_item(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    calendar_year INTEGER NOT NULL,
+                    slug TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    date_precision TEXT NOT NULL DEFAULT 'exact',
+                    date_label TEXT NOT NULL,
+                    sort_date TEXT NOT NULL,
+                    month_key TEXT NOT NULL,
+                    display_order INTEGER NOT NULL,
+                    place_label TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    status_label TEXT NOT NULL,
+                    source_url TEXT NOT NULL,
+                    source_label TEXT NOT NULL,
+                    internal_event_id INTEGER,
+                    festival_id INTEGER,
+                    cover_key TEXT NOT NULL,
+                    image_width INTEGER NOT NULL,
+                    image_height INTEGER NOT NULL,
+                    media_mode TEXT NOT NULL DEFAULT 'visual',
+                    object_position TEXT,
+                    catalog_version TEXT NOT NULL,
+                    is_public BOOLEAN NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(internal_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(festival_id) REFERENCES festival(id) ON DELETE SET NULL,
+                    UNIQUE(calendar_year, slug),
+                    UNIQUE(calendar_year, display_order)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_festival_calendar_item_public_month "
+                "ON festival_calendar_item(calendar_year,is_public,month_key,display_order)"
+            )
+
             await conn.execute(
                 """
                 CREATE TRIGGER IF NOT EXISTS festival_set_created_at

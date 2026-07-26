@@ -1468,6 +1468,82 @@ class Festival(SQLModel, table=True):
     )
 
 
+class FestivalCalendarItem(SQLModel, table=True):
+    """A public, year-scoped festival-calendar edition.
+
+    The legacy ``festival`` table is keyed by a non-unique series name and is
+    still consumed by parser/Telegraph paths that expect one matching row.
+    Calendar editions therefore live in their own table instead of creating
+    duplicate yearly ``festival.name`` rows.
+    """
+
+    __tablename__ = "festival_calendar_item"
+    __table_args__ = (
+        UniqueConstraint(
+            "calendar_year",
+            "slug",
+            name="ux_festival_calendar_item_year_slug",
+        ),
+        UniqueConstraint(
+            "calendar_year",
+            "display_order",
+            name="ux_festival_calendar_item_year_order",
+        ),
+        Index(
+            "ix_festival_calendar_item_public_month",
+            "calendar_year",
+            "is_public",
+            "month_key",
+            "display_order",
+        ),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    calendar_year: int
+    slug: str
+    title: str
+    description: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    date_precision: str = "exact"
+    date_label: str
+    sort_date: str
+    month_key: str
+    display_order: int
+    place_label: str
+    category: str
+    status: str
+    status_label: str
+    source_url: str
+    source_label: str
+    internal_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    festival_id: Optional[int] = Field(default=None, foreign_key="festival.id")
+    cover_key: str
+    image_width: int
+    image_height: int
+    media_mode: str = "visual"
+    object_position: Optional[str] = None
+    catalog_version: str
+    is_public: bool = True
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+        ),
+    )
+
+
 
 class FestivalQueueItem(SQLModel, table=True):
     __tablename__ = "festival_queue"

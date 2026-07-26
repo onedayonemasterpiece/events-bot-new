@@ -70,6 +70,7 @@ const successfulReport = {
     cold_and_pointer_keyboard: 'ok',
     gallery_cross_document: 'ok',
     footer_shortcuts: 'ok',
+    festival_calendar: 'ok',
   },
 };
 

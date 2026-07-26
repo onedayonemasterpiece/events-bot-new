@@ -39,6 +39,9 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(surface, /img\.addEventListener\('error', \(\) => done\(false\)/u);
   assert.doesNotMatch(menu, /\.reference4-menu__brand::before/u);
   assert.match(dates, /<MobileListingRailSurface[\s\S]*occurrenceMode="per-date"/u);
+  assert.match(dates, /const mobileChronologicalEvents = events;/u);
+  assert.match(dates, /id:`\$\{kind\}-chronological`, events:mobileChronologicalEvents/u);
+  assert.doesNotMatch(dates, /id:`\$\{kind\}-earlier`/u);
   assert.match(dates, /calendarToday=\{getCurrentDate\(\)\}/u);
   assert.match(weekend, /<MobileListingRailSurface[\s\S]*occurrenceMode="per-date"/u);
   assert.match(weekend, /calendarToday=\{currentDate \|\| start\}/u);

@@ -19,6 +19,7 @@ export const GET: APIRoute = () => {
     { loc: absoluteUrl('/zavtra/'), lastmod: now },
     { loc: absoluteUrl('/vyhodnye/'), lastmod: now },
     { loc: absoluteUrl('/vystavki/'), lastmod: now },
+    { loc: absoluteUrl('/festivali/'), lastmod: now },
     { loc: absoluteUrl('/populyarnoe/'), lastmod: now },
     { loc: absoluteUrl('/poisk/'), lastmod: now },
     { loc: absoluteUrl('/partners/'), lastmod: now },
