@@ -122,4 +122,8 @@ by event `6764` reuses its existing reviewed `visual_only` replacement
 (`1080×720`) in the related grid. The resulting three-card row is full, uses a
 shared horizontal `5/4` frame and `cover`, and has equal measured media and
 outer-card heights. Other `unknown/error` media still fail closed; this
-regression does not introduce an event-id exception.
+regression does not introduce an event-id exception. The portrait source
+currently selected for event `6821` has an independent exact URL/SHA-256
+no-OCR review after the semantic classifier returned `error`; the reviewed
+source is treated as a photograph and fills the card, while every unreviewed
+`unknown/error` source remains fail-closed.

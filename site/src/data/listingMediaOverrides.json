@@ -130,6 +130,22 @@
       "cropEvidence": "source-still-reviewed-no-ocr-20260723",
       "noOcrReviewed": true,
       "objectPosition": "50% 50%"
+    },
+    {
+      "sourceSrc": "https://static.kenigevents.ru/p/dh16/1a/1a120c130c4b046304e504c4078d0f8c0fc00a401a403240e2c0c98249034403.webp",
+      "sourceSha256": "0d0ca9a7d648260e5a9a95d2a7d2f9b5ca3ba5dd373aa6ea7ce52f0daf8baf4e",
+      "width": 861,
+      "height": 1024,
+      "imageTextMode": "visual_only",
+      "imageKind": "photo",
+      "cropEvidence": "source-still-reviewed-no-ocr-20260726",
+      "noOcrReviewed": true,
+      "objectPosition": "50% 40%",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.4
+      },
+      "sourcePageEventId": 6821
     }
   ]
 }

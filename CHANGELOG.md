@@ -260,6 +260,9 @@
 
 ### Fixed
 
+- Added a source-hash-bound no-OCR review for event `6821`'s portrait photo,
+  so a stale semantic-classifier error can no longer force visible `contain`
+  fields in production recommendation rows.
 - Fixed the Kaggle StaticSiteBuilder terminal lifecycle to release
   `static_site:builder` before its final report and to terminally record
   resource-acquisition failures, preventing failed kernels from blocking every

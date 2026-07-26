@@ -80,6 +80,32 @@ test('reviewed source correction cannot weaken OCR or spill to another source', 
   assert.equal(decision.coverCrop, 0);
 });
 
+test('reviewed no-OCR portrait 6821 fills recommendation cards despite stale classifier error', () => {
+  const sourceSrc = 'https://static.kenigevents.ru/p/dh16/1a/1a120c130c4b046304e504c4078d0f8c0fc00a401a403240e2c0c98249034403.webp';
+  const event = {
+    id:6821,
+    image_url:sourceSrc,
+    image_text_mode:'unknown',
+    image_assets:[{
+      src:sourceSrc,
+      width:861,
+      height:1024,
+      image_text_mode:'unknown',
+      media_role:'unknown_document',
+      media_semantic_status:'error',
+      safe_crop:false,
+    }],
+  };
+  const reviewed = relatedCardPrimaryImageAsset(event);
+  assert.equal(reviewed.image_text_mode, 'visual_only');
+  assert.equal(reviewed.listing_crop_evidence, 'source-still-reviewed-no-ocr-20260726');
+  assert.equal(reviewed.recommended_object_position, '50% 40%');
+  const decision = resolveRelatedCardMediaTreatment(event, 5 / 4);
+  assert.equal(decision.mediaKind, 'visual');
+  assert.equal(decision.mediaTreatment, 'visual-cover');
+  assert.equal(decision.fit, 'cover');
+});
+
 test('server and runtime card branches use OCR mode so every non-OCR image covers', async () => {
   const card = await read('src/components/EventCard.astro');
   const layout = await read('src/layouts/EventLayout.astro');
