@@ -72,6 +72,11 @@ Rules:
 - one private input dataset per run;
 - one immutable snapshot per build; new updates during a build queue a later build, they do not mutate the running build;
 - resource lease: `static_site:builder`; two production builds must not publish concurrently;
+- the kernel releases every acquired builder lease before sending its final
+  `report_written` callback, so an immediate worker teardown cannot strand an
+  exclusive lease; resource-acquisition failures are inside the guarded
+  lifecycle and therefore also produce a terminal failure report instead of a
+  permanently `running` ledger;
 - Kaggle writes only to a unique staging/release prefix, never directly to production root with `--delete`;
 - secret publication requires the bounded result, machine-readable release
   manifest and all production/secret checks to pass;

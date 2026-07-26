@@ -8,6 +8,7 @@
   runtime DDL/Alembic migration and dry-run-first idempotent 2026 backfill for
   the accepted 21 future festival records without duplicating legacy
   `festival.name` editions.
+
 - Added a fail-closed DB festival projection to the production exporter and
   release manifest, direct desktop/mobile Festivals navigation, sitemap and
   production/secret/Chromium gates covering all 21 cards at desktop and mobile
@@ -259,6 +260,10 @@
 
 ### Fixed
 
+- Fixed the Kaggle StaticSiteBuilder terminal lifecycle to release
+  `static_site:builder` before its final report and to terminally record
+  resource-acquisition failures, preventing failed kernels from blocking every
+  production retry for the full lease TTL.
 - Restored strict chronological order in the mobile Today rail by keeping one
   physical time stream; per-row `past`/`started-earlier`/`current` truth remains
   intact while the desktop completed-events disclosure stays separate.

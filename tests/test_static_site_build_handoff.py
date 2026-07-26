@@ -545,6 +545,83 @@ def test_static_site_kernel_loads_status_helper_from_mounted_dataset(tmp_path: P
     assert loader(output_dir="/tmp/output") == ("mounted", {"output_dir": "/tmp/output"})
 
 
+def test_static_site_kernel_releases_resource_before_terminal_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib.util
+
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location("static_site_builder_finish_order_test", kernel_path)
+    assert spec and spec.loader
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+    calls: list[str] = []
+
+    class StatusClient:
+        def release_resource(self, key: str) -> None:
+            calls.append(f"release:{key}")
+
+        def stop_alive(self) -> None:
+            calls.append("stop_alive")
+
+    kernel.STATUS_CLIENT = StatusClient()
+    kernel.ACQUIRED_RESOURCES[:] = ["static_site:builder"]
+    monkeypatch.setattr(
+        kernel,
+        "status_event",
+        lambda event, **_kwargs: calls.append(event),
+    )
+
+    kernel.finish_status(ok=False, message="failed")
+
+    assert calls == ["release:static_site:builder", "report_written", "stop_alive"]
+    assert kernel.ACQUIRED_RESOURCES == []
+
+
+def test_static_site_kernel_terminally_reports_status_bootstrap_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location("static_site_builder_bootstrap_failure_test", kernel_path)
+    assert spec and spec.loader
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+    calls: list[tuple[bool, str | None]] = []
+    monkeypatch.setattr(kernel, "WORKING", tmp_path)
+    monkeypatch.setattr(kernel, "RESULT_PATH", tmp_path / "static_site_build_result.json")
+    monkeypatch.setattr(
+        kernel,
+        "init_status",
+        lambda: (_ for _ in ()).throw(RuntimeError("resource busy")),
+    )
+    monkeypatch.setattr(kernel, "cleanup_transient_workspace", lambda: None)
+    monkeypatch.setattr(
+        kernel,
+        "finish_status",
+        lambda *, ok, message=None: calls.append((ok, message)),
+    )
+
+    with pytest.raises(RuntimeError, match="resource busy"):
+        kernel.main()
+
+    assert calls == [(False, "RuntimeError: resource busy")]
+    failure = json.loads((tmp_path / "static_site_build_result.json").read_text(encoding="utf-8"))
+    assert failure["ok"] is False
+    assert failure["error"] == "resource busy"
+
+
 def test_static_site_kernel_browser_command_deadline_is_forwarded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

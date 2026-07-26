@@ -171,12 +171,11 @@ def init_status() -> None:
 
 
 def finish_status(*, ok: bool, message: str | None = None) -> None:
+    # Release exclusive resources before publishing the terminal event.  A
+    # Kaggle worker can be torn down immediately after the terminal callback;
+    # making report_written the final network operation prevents a completed
+    # or failed build from leaving static_site:builder active for its full TTL.
     try:
-        if ok:
-            status_event('report_written', phase='report', status='done', progress={'phase': 'report', 'progress_percent': 100, 'progress_label': 'готово'}, message=message)
-        else:
-            status_event('report_written', phase='failed', status='failed', progress={'phase': 'failed', 'progress_label': 'ошибка'}, message=message)
-    finally:
         if STATUS_CLIENT is not None:
             for resource_key in list(ACQUIRED_RESOURCES):
                 try:
@@ -184,6 +183,12 @@ def finish_status(*, ok: bool, message: str | None = None) -> None:
                     ACQUIRED_RESOURCES.remove(resource_key)
                 except Exception as exc:
                     print(f'[kaggle_status] resource release failed: {exc}', flush=True)
+        if ok:
+            status_event('report_written', phase='report', status='done', progress={'phase': 'report', 'progress_percent': 100, 'progress_label': 'готово'}, message=message)
+        else:
+            status_event('report_written', phase='failed', status='failed', progress={'phase': 'failed', 'progress_label': 'ошибка'}, message=message)
+    finally:
+        if STATUS_CLIENT is not None:
             STATUS_CLIENT.stop_alive()
 
 
@@ -444,9 +449,12 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
 
 
 def main() -> int:
-    init_status()
     started = datetime.now(timezone.utc).isoformat()
     try:
+        # Status bootstrap belongs to the guarded lifecycle too.  In
+        # particular, a blocked resource acquisition must still write a
+        # terminal report instead of leaving a misleading "running" ledger.
+        init_status()
         config = read_config()
         build_clock = validate_build_clock(config)
         build_id = config.get('build_id') or os.environ.get('PREVIEW_BUILD_ID') or 'preview-kaggle-static-site'
