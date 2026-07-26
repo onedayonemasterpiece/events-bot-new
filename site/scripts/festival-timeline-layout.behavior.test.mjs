@@ -93,7 +93,7 @@ test('category chips use the expanded, attributed SVGRepo family', async () => {
     '389461-ticket.svg',
     '389494-users.svg',
   ];
-  const semanticIconFiles = ['120598-saxophone.svg', '103262-theatre-masks.svg'];
+  const semanticIconFiles = ['480248-saxophone-2.svg', '103262-theatre-masks.svg'];
 
   assert.doesNotMatch(page, /categorySymbol/);
   assert.match(page, /--festival-category-icon/);
@@ -109,10 +109,12 @@ test('category chips use the expanded, attributed SVGRepo family', async () => {
     assert.match(svg, /<svg[\s>]/);
     assert.match(svg, /viewBox=/);
   }
-  assert.match(page, /'city-jazz': \['120598-saxophone\.svg', '389324-music\.svg'\]/);
-  assert.match(page, /'zhili-byli': \['103262-theatre-masks\.svg'\]/);
+  assert.match(page, /'Джаз': \['480248-saxophone-2\.svg', '389324-music\.svg'\]/);
+  assert.match(page, /'Театр': \['103262-theatre-masks\.svg'\]/);
+  assert.match(page, /festivalCategoryIcons\[item\.category\]/);
   assert.match(page, /festival-month__categories/);
   assert.match(page, /festival-card__theme-icon--secondary/);
+  assert.doesNotMatch(page, /120598-saxophone\.svg/);
 });
 
 test('festival likes are local, edition-scoped, and separate from event feedback', async () => {
@@ -135,11 +137,15 @@ test('desktop metadata scale and dense labels stay explicit', async () => {
   assert.match(page, /'program-pending': 'прогр\. позже'/);
   assert.match(page, /shedevry: '1\.10–29\.11'/);
   assert.match(page, /'jazz-v-filarmonii': '13–18\.11'/);
-  assert.match(page, /font-size: clamp\(10px, 0\.76vw, 11px\)/);
-  assert.match(page, /font-size: clamp\(10\.5px, 0\.83vw, 12\.25px\)/);
+  assert.match(page, /font-size: clamp\(12px, 0\.91vw, 13\.2px\)/);
+  assert.match(page, /font-size: clamp\(12\.6px, 1vw, 14\.7px\)/);
+  assert.match(page, /font-size: clamp\(21px, 1\.7vw, 25\.2px\)/);
   assert.match(page, /-webkit-line-clamp: 2/);
-  assert.match(page, /categoryInventory\.length >= 5[\s\S]*?categoryInventory\.slice\(0, 3\)/);
-  assert.match(page, /festival-month__categories-more/);
+  assert.match(page, /month\.categoryInventory\.map/);
+  assert.match(page, /\.festival-month__categories li\s*\{[\s\S]*?width:\s*28px;[\s\S]*?height:\s*28px;/);
+  assert.match(page, /\.festival-month__categories i\s*\{[\s\S]*?width:\s*21px;[\s\S]*?height:\s*21px;/);
+  assert.doesNotMatch(page, /visibleCategoryIcons|hiddenCategoryCount|festival-month__categories-more/);
+  assert.doesNotMatch(page, /festival-month__symbol/);
 });
 
 test('desktop cards keep the donor single-canvas overlay contract', async () => {
@@ -152,4 +158,15 @@ test('desktop cards keep the donor single-canvas overlay contract', async () => 
   const captionBlock = page.match(/\.festival-card__caption\s*\{([^}]*)\}/)?.[1] ?? '';
   assert.ok(captionBlock);
   assert.doesNotMatch(captionBlock, /backdrop-filter/);
+  const likeBlock = page.match(/\.festival-card__like\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.match(likeBlock, /bottom:\s*clamp/);
+  assert.doesNotMatch(likeBlock, /\btop:/);
+});
+
+test('jazz is a stable semantic category instead of a slug-specific icon exception', () => {
+  const jazzItems = festivalTimeline.filter((festival) =>
+    ['city-jazz', 'jazz-v-filarmonii'].includes(festival.slug));
+  assert.equal(jazzItems.length, 2);
+  assert.ok(jazzItems.every((festival) => festival.category === 'Джаз'));
+  assert.equal(festivalTimeline.find((festival) => festival.slug === 'territoriya-mira')?.category, 'Музыка');
 });

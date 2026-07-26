@@ -18,13 +18,15 @@ plus two visually reviewed semantic exceptions for jazz and theatre.
 | General and family | `389439-star.svg` / `svgrepo-389439-star` | [Star #389439](https://www.svgrepo.com/svg/389439/star) |
 | Theatre | `389461-ticket.svg` / `svgrepo-389461-ticket` | [Ticket #389461](https://www.svgrepo.com/svg/389461/ticket) |
 | People and community | `389494-users.svg` / `svgrepo-389494-users` | [Users #389494](https://www.svgrepo.com/svg/389494/users) |
-| Jazz | `120598-saxophone.svg` / `svgrepo-120598-saxophone` | [Saxophone #120598](https://www.svgrepo.com/svg/120598/saxophone) |
+| Jazz | `480248-saxophone-2.svg` / `svgrepo-480248-saxophone-2` | [Saxophone 2 #480248](https://www.svgrepo.com/svg/480248/saxophone-2) |
 | Theatre | `103262-theatre-masks.svg` / `svgrepo-103262-theatre-masks` | [Theatre Masks #103262](https://www.svgrepo.com/svg/103262/theatre-masks) |
 
 The anchor, mic and users assets extend the same Lucide Line family. Saxophone
-and theatre masks are deliberate semantic exceptions selected after visual
-comparison at 8, 11 and 14 pixels: they are substantially easier to recognise
-than generic music and ticket symbols at the full card size. Compact layouts
+and theatre masks are deliberate semantic exceptions. The jazz glyph was
+reselected from a ten-candidate SVG Repo contact sheet rendered as the real
+monochrome mask at 18, 24 and 32 pixels. `480248-saxophone-2.svg` keeps the
+curved body, neck and bell readable at the 18-pixel card size and the 21-pixel
+month-rail size; the former dense `120598` glyph was retired. Compact layouts
 fall back to one primary glyph.
 
 All fourteen assets are listed by SVG Repo under the **CC0 License**. Their SVG

@@ -45,27 +45,22 @@ const denseDateLabel = (slug: string, fallback: string) => ({
 }[slug] || fallback);
 const festivalIconPath = (filename: string) => `/assets/icons/festival-categories/${filename}`;
 const festivalCategoryIcons: Record<string, string[]> = {
-  'city-jazz': ['120598-saxophone.svg', '389324-music.svg'],
-  sosedi: ['389063-carrot.svg', '389494-users.svg'],
-  grozd: ['389063-carrot.svg'],
-  'more-vnutri': ['389330-palette.svg'],
-  'bolshoy-kaup': ['389241-history.svg', '389291-map-pin.svg'],
-  koroche: ['389059-camera.svg', '389461-ticket.svg'],
-  mimikriya: ['389330-palette.svg', '389439-star.svg'],
-  'territoriya-mira': ['389324-music.svg', '389291-map-pin.svg'],
-  'street-food': ['389063-carrot.svg', '389494-users.svg'],
-  'zhili-byli': ['103262-theatre-masks.svg'],
-  'narodov-mnogo': ['389494-users.svg', '389330-palette.svg'],
-  vitaliki: ['389302-mic.svg', '389324-music.svg'],
-  'vodnaya-assambleya': ['389003-anchor.svg', '389241-history.svg'],
-  shedevry: ['389324-music.svg'],
-  'dni-literatury': ['389049-book-open.svg'],
-  'tykvennyi-pir': ['389439-star.svg', '389063-carrot.svg'],
-  ostrova: ['103262-theatre-masks.svg'],
-  'klub-puteshestvennikov': ['389291-map-pin.svg', '389241-history.svg'],
-  'v-edinstve': ['389494-users.svg', '389330-palette.svg'],
-  'jazz-v-filarmonii': ['120598-saxophone.svg', '389324-music.svg'],
-  'dekabristskie-vechera': ['389324-music.svg', '389049-book-open.svg'],
+  'Авторская песня': ['389302-mic.svg', '389324-music.svg'],
+  'Вино и гастрономия': ['389063-carrot.svg'],
+  'Гастрономия': ['389063-carrot.svg', '389494-users.svg'],
+  'Джаз': ['480248-saxophone-2.svg', '389324-music.svg'],
+  'История и реконструкция': ['389241-history.svg', '389291-map-pin.svg'],
+  'Кино': ['389059-camera.svg', '389461-ticket.svg'],
+  'Классическая музыка': ['389324-music.svg'],
+  'Косплей': ['389330-palette.svg', '389439-star.svg'],
+  'Культура народов': ['389494-users.svg', '389330-palette.svg'],
+  'Литература': ['389049-book-open.svg'],
+  'Море и техника': ['389003-anchor.svg', '389241-history.svg'],
+  'Музыка': ['389324-music.svg'],
+  'Путешествия': ['389291-map-pin.svg', '389241-history.svg'],
+  'Семейный фестиваль': ['389439-star.svg', '389063-carrot.svg'],
+  'Современное искусство': ['389330-palette.svg'],
+  'Театр': ['103262-theatre-masks.svg'],
 };
 const resolvedItems = festivalTimeline.map((item) => {
   const mediaRecord = festivalTimelineMedia[item.slug as keyof typeof festivalTimelineMedia];
@@ -87,7 +82,7 @@ const resolvedItems = festivalTimeline.map((item) => {
     compactDateLabel: compactDate(item.dateLabel),
     compactStatusLabel: compactStatus[item.status],
     compactPlaceLabel: item.slug === 'jazz-v-filarmonii' ? 'Областная филармония' : item.place,
-    categoryIcons: (festivalCategoryIcons[item.slug] || ['389439-star.svg']).map(festivalIconPath),
+    categoryIcons: (festivalCategoryIcons[item.category] || ['389439-star.svg']).map(festivalIconPath),
     mediaRecord,
   };
 });
@@ -100,15 +95,10 @@ const monthSections = festivalTimelineMonths
       seenCategories.add(item.category);
       return [{ icon: item.categoryIcons[0], label: item.category }];
     });
-    const visibleCategoryIcons = categoryInventory.length >= 5
-      ? categoryInventory.slice(0, 3)
-      : categoryInventory.slice(0, 4);
     return {
       ...month,
       items,
       categoryInventory,
-      visibleCategoryIcons,
-      hiddenCategoryCount: categoryInventory.length - visibleCategoryIcons.length,
       rows: packFestivalTimeline(items),
     };
   })
@@ -201,7 +191,7 @@ const structuredData = [{
               <div class="festival-month__heading">
                 <h2 id={`month-title-${month.key}`}>{month.label}</h2>
                 <ul class="festival-month__categories" aria-label={`Категории фестивалей в ${month.label.toLowerCase()}`}>
-                  {month.visibleCategoryIcons.map((category) => (
+                  {month.categoryInventory.map((category) => (
                     <li aria-label={category.label}>
                       <i
                         aria-hidden="true"
@@ -209,17 +199,10 @@ const structuredData = [{
                       ></i>
                     </li>
                   ))}
-                  {month.hiddenCategoryCount > 0 && (
-                    <li
-                      class="festival-month__categories-more"
-                      aria-label={`Ещё категорий: ${month.hiddenCategoryCount}`}
-                    >+{month.hiddenCategoryCount}</li>
-                  )}
                 </ul>
                 <span class="festival-month__categories-all">
                   {month.categoryInventory.map((category) => category.label).join(', ')}
                 </span>
-                <span class="festival-month__symbol" aria-hidden="true">{month.symbol}</span>
                 <p>{month.mood}</p>
               </div>
             </div>
@@ -643,54 +626,40 @@ const structuredData = [{
     letter-spacing: -0.04em;
     line-height: 1;
   }
-  .festival-month__symbol {
-    display: block;
-    margin-top: 0.42rem;
-    color: var(--accent);
-    font-size: 0.92rem;
-    line-height: 1;
-  }
   .festival-month__heading p {
     max-width: 96px;
-    margin: 0.32rem 0 0;
+    margin: 0.46rem 0 0;
     color: var(--muted);
     font-size: 0.7rem;
     line-height: 1.35;
   }
   .festival-month__categories {
     display: flex;
-    width: 88px;
-    height: 18px;
+    width: 96px;
     align-items: center;
-    gap: 3px;
-    margin: 4px 0 0;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 8px 0 0;
     padding: 0;
-    overflow: hidden;
     list-style: none;
   }
   .festival-month__categories li {
     display: grid;
-    flex: 0 0 18px;
-    width: 18px;
-    height: 18px;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
     place-items: center;
-    border-radius: 5px;
-    background: rgba(165, 72, 33, 0.08);
+    border-radius: 8px;
+    background: rgba(165, 72, 33, 0.1);
     color: var(--primary);
   }
   .festival-month__categories i {
     display: block;
-    width: 12.5px;
-    height: 12.5px;
+    width: 21px;
+    height: 21px;
     background: currentColor;
     -webkit-mask: var(--festival-category-icon) center / contain no-repeat;
     mask: var(--festival-category-icon) center / contain no-repeat;
-  }
-  .festival-month__categories .festival-month__categories-more {
-    flex-basis: 23px;
-    width: 23px;
-    font-size: 9.5px;
-    font-weight: 720;
   }
   .festival-month__categories-all {
     position: absolute;
@@ -741,12 +710,12 @@ const structuredData = [{
   .festival-card__media img { width: 100%; height: 100%; object-fit: cover; }
   .festival-card__like {
     position: absolute;
-    top: clamp(2.35rem, 3.15vw, 2.85rem);
-    right: clamp(0.5rem, 0.84vw, 0.7rem);
+    right: clamp(0.58rem, 0.88vw, 0.76rem);
+    bottom: clamp(0.58rem, 0.88vw, 0.76rem);
     z-index: 4;
     display: grid;
-    width: clamp(1.75rem, 2.15vw, 2rem);
-    height: clamp(1.75rem, 2.15vw, 2rem);
+    width: clamp(2rem, 2.35vw, 2.2rem);
+    height: clamp(2rem, 2.35vw, 2.2rem);
     padding: 0;
     place-items: center;
     border: 1px solid rgba(255, 255, 255, 0.34);
@@ -767,7 +736,7 @@ const structuredData = [{
     outline: 3px solid rgba(255, 255, 255, 0.96);
     outline-offset: 2px;
   }
-  .festival-card__like :global(svg) { width: 1rem; height: 1rem; fill: currentColor; }
+  .festival-card__like :global(svg) { width: 1.12rem; height: 1.12rem; fill: currentColor; }
   .festival-card__like[aria-pressed="true"] {
     border-color: rgba(255, 255, 255, 0.86);
     background: #fff;
@@ -818,11 +787,11 @@ const structuredData = [{
   .festival-card__status {
     display: inline-flex;
     align-items: center;
-    min-height: 23px;
-    padding: 4px 6.5px;
+    min-height: 27px;
+    padding: 4.5px 7.5px;
     border: 0;
     border-radius: 4px;
-    font-size: clamp(10px, 0.76vw, 11px);
+    font-size: clamp(12px, 0.91vw, 13.2px);
     font-weight: 740;
     line-height: 1.12;
     white-space: nowrap;
@@ -866,7 +835,7 @@ const structuredData = [{
     margin: 0.24rem 0 0;
     color: rgba(255, 255, 255, 0.94);
     overflow: hidden;
-    font-size: clamp(10.5px, 0.83vw, 12.25px);
+    font-size: clamp(12.6px, 1vw, 14.7px);
     font-weight: 510;
     line-height: 1.25;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.36);
@@ -882,7 +851,7 @@ const structuredData = [{
     text-wrap: balance;
     font-family: var(--ke-font-sans);
     overflow: hidden;
-    font-size: clamp(17.5px, 1.42vw, 21px);
+    font-size: clamp(21px, 1.7vw, 25.2px);
     font-weight: 760;
     letter-spacing: -0.03em;
     line-height: 1.06;
@@ -893,7 +862,7 @@ const structuredData = [{
   .festival-card__theme {
     display: inline-flex;
     align-items: center;
-    max-width: 100%;
+    max-width: calc(100% - 2.9rem);
     margin-top: 0.38rem;
     padding: 0.25rem 0.42rem;
     overflow: hidden;
@@ -901,7 +870,7 @@ const structuredData = [{
     border-radius: 5px;
     background: rgba(15, 15, 15, 0.66);
     color: rgba(255, 255, 255, 0.96);
-    font-size: clamp(9.25px, 0.74vw, 10.75px);
+    font-size: clamp(11.1px, 0.89vw, 12.9px);
     font-weight: 580;
     line-height: 1;
     text-overflow: ellipsis;
@@ -919,8 +888,8 @@ const structuredData = [{
   .festival-card__theme-icons i {
     flex: 0 0 auto;
     display: block;
-    width: clamp(11.5px, 0.94vw, 13.75px);
-    height: clamp(11.5px, 0.94vw, 13.75px);
+    width: clamp(14px, 1.13vw, 16.5px);
+    height: clamp(14px, 1.13vw, 16.5px);
     background: currentColor;
     -webkit-mask: var(--festival-category-icon) center / contain no-repeat;
     mask: var(--festival-category-icon) center / contain no-repeat;
@@ -934,25 +903,16 @@ const structuredData = [{
   .festival-row--4 .festival-card__topline { gap: 3px; }
   .festival-row--4 .festival-card__date,
   .festival-row--4 .festival-card__status {
-    min-height: 22px;
-    padding: 3.5px 3px;
-    font-size: clamp(9.5px, 0.72vw, 10.75px);
+    min-height: 25px;
+    padding: 4px 3.5px;
+    font-size: clamp(11.4px, 0.86vw, 12.9px);
   }
   .festival-row--4 .festival-card__caption {
     padding: 0 clamp(0.58rem, 0.76vw, 0.68rem) clamp(0.56rem, 0.72vw, 0.65rem);
   }
-  .festival-row--4 .festival-card__caption h3 { font-size: clamp(16.5px, 1.28vw, 19px); }
+  .festival-row--4 .festival-card__caption h3 { font-size: clamp(19.8px, 1.54vw, 22.8px); }
   .festival-row--4 .festival-card__caption p { margin-top: 0.2rem; }
   .festival-row--4 .festival-card__theme { margin-top: 0.32rem; }
-  .festival-row--1 .festival-card__topline,
-  .festival-row--2 .festival-card__topline {
-    right: clamp(2.65rem, 3.35vw, 3rem);
-  }
-  .festival-row--1 .festival-card__like,
-  .festival-row--2 .festival-card__like {
-    top: clamp(0.5rem, 0.84vw, 0.7rem);
-  }
-
   @media (min-width: 1100px) {
     .festival-card { aspect-ratio: var(--festival-card-aspect); }
   }
@@ -964,31 +924,35 @@ const structuredData = [{
     }
     .festival-card__caption h3,
     .festival-row--4 .festival-card__caption h3 {
-      font-size: 16.5px;
+      font-size: 19.8px;
       line-height: 1.06;
+      -webkit-line-clamp: 3;
     }
-    .festival-row--4 .festival-card__caption h3 { font-size: 16px; }
+    .festival-row--4 .festival-card__caption h3 { font-size: 19.2px; }
+    .festival-row--1 .festival-card {
+      aspect-ratio: calc(var(--festival-card-aspect) * 0.82);
+    }
     .festival-card__caption p,
     .festival-row--4 .festival-card__caption p {
       margin-top: 0.2rem;
-      font-size: 10.25px;
+      font-size: 12.3px;
     }
     .festival-card__theme,
     .festival-row--4 .festival-card__theme {
       margin-top: 0.3rem;
       padding: 3px 5px;
-      font-size: 9px;
+      font-size: 10.8px;
     }
     .festival-card__theme-icons { gap: 0; margin-right: 0.24rem; }
     .festival-card__theme-icons i {
-      width: 11px;
-      height: 11px;
+      width: 14px;
+      height: 14px;
     }
     .festival-card__theme-icon--secondary { display: none !important; }
-    .festival-card__date { font-size: 9.75px; }
-    .festival-card__status { font-size: 9.5px; }
-    .festival-row--4 .festival-card__date { font-size: 9.5px; }
-    .festival-row--4 .festival-card__status { font-size: 9.25px; }
+    .festival-card__date { font-size: 11.7px; }
+    .festival-card__status { font-size: 11.4px; }
+    .festival-row--4 .festival-card__date { font-size: 11.4px; }
+    .festival-row--4 .festival-card__status { font-size: 11.1px; }
   }
 
   @media (max-width: 819px) {
@@ -1048,7 +1012,6 @@ const structuredData = [{
     }
     .festival-month__heading h2 { order: 1; font-size: 1.65rem; }
     .festival-month__heading p { order: 3; max-width: none; margin: 0; font-size: 0.67rem; }
-    .festival-month__symbol { order: 2; margin: 0; }
     .festival-month__categories { display: none; }
     .festival-month__cards { padding: 0 0 1.65rem; }
     .festival-row,
@@ -1075,7 +1038,7 @@ const structuredData = [{
     .festival-card__topline { top: 0.65rem; right: 0.65rem; left: 0.65rem; }
     .festival-card__date,
     .festival-card__status { min-height: 1.28rem; padding: 0.19rem 0.34rem; font-size: 0.56rem; }
-    .festival-card__like { top: 2.55rem; right: 0.65rem; width: 1.8rem; height: 1.8rem; }
+    .festival-card__like { top: auto; right: 0.65rem; bottom: 0.65rem; width: 1.8rem; height: 1.8rem; }
     .festival-card__caption { right: 0.5rem; bottom: 0.5rem; left: 0.5rem; padding: 0.58rem; }
     .festival-card__caption h3,
     .festival-row--4 .festival-card__caption h3 { font-size: clamp(0.9rem, 4.15vw, 1.08rem); }
