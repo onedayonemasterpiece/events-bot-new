@@ -124,11 +124,39 @@ test('festival likes are local, edition-scoped, and separate from event feedback
   assert.match(page, /ke_festival_likes_v1/);
   assert.match(page, /data-festival-like/);
   assert.match(page, /Сохранено только в этом браузере/);
-  assert.match(page, /Сейчас подписка не оформляется и уведомления не отправляются/);
+  assert.match(page, /Позже отметка станет основой уведомлений; сейчас это локальная закладка/);
   assert.match(page, /href: item\.sourceHref/);
   assert.doesNotMatch(page, /eventHref\(/);
   assert.doesNotMatch(page, /data-feedback-action="like"/);
   assert.doesNotMatch(page, /liked_event_ids/);
+});
+
+test('compact hero gives the regional festival calendar a clear SEO and GEO identity', async () => {
+  const page = await readFile(new URL('../src/pages/festivali/index.astro', import.meta.url), 'utf8');
+  const layout = await readFile(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
+
+  assert.match(page, /Фестивали Калининградской области 2026 — календарь/);
+  assert.match(page, /<h1 id="festival-title">Фестивали <em>Калининградской области<\/em><\/h1>/);
+  assert.match(page, /Календарь фестивалей Калининграда и Калининградской области на 2026 год/);
+  assert.match(page, /официальным сайтам и сообществам организаторов/);
+  assert.match(page, /'@type': 'CollectionPage'/);
+  assert.match(page, /'@type': 'ItemList'/);
+  assert.match(page, /'@type': 'Festival'/);
+  assert.match(page, /itemListOrder: 'https:\/\/schema\.org\/ItemListOrderAscending'/);
+  assert.match(page, /dateModified: lastReviewed/);
+  assert.match(page, /lastReviewed,/);
+  assert.match(page, /inLanguage: 'ru-RU'/);
+  assert.match(page, /ogType="website"/);
+  assert.match(page, /ogImageAlt="Фестивали Калининградской области 2026"/);
+  assert.match(page, /alt=\{`\$\{item\.title\} — фестиваль, \$\{item\.place\}`\}/);
+  assert.match(page, /loading=\{item\.slug === 'city-jazz' \? 'eager' : 'lazy'\}/);
+  assert.match(page, /fetchpriority=\{item\.slug === 'city-jazz' \? 'high' : undefined\}/);
+  assert.match(layout, /ogType\?: 'article' \| 'website'/);
+  assert.match(layout, /<meta property="og:type" content=\{ogType\} \/>/);
+  assert.match(layout, /<meta property="og:image:alt" content=\{ogImageAlt\} \/>/);
+  assert.match(page, /\.festival-hero\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?padding:\s*clamp\(1\.35rem, 2\.15vw, 2rem\);/);
+  assert.match(page, /\.festival-month-nav\s*\{[\s\S]*?margin:\s*0\.55rem auto 1rem;/);
+  assert.match(page, /\.festival-guide\s*\{[\s\S]*?margin:\s*0 0 1\.25rem;/);
 });
 
 test('desktop metadata scale and dense labels stay explicit', async () => {
