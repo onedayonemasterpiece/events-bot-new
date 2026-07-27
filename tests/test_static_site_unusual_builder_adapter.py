@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 EXPORTER = ROOT / "site" / "scripts" / "export-production-preview-data.py"
 KAGGLE_BUILDER = ROOT / "kaggle" / "StaticSiteBuilder" / "static_site_builder.py"
+KAGGLE_RUNNER = ROOT / "scripts" / "run_static_site_builder_kaggle.py"
 
 
 def canonical_hash(value) -> str:
@@ -55,6 +56,49 @@ def test_kaggle_bge_preflight_repairs_transformers_incompatible_runtime(monkeypa
     assert len(commands) == 1
     assert "--upgrade" in commands[0]
     assert "FlagEmbedding==1.4.0" in commands[0]
+
+
+def test_kaggle_daily_share_loads_renderer_from_extracted_site(monkeypatch, tmp_path):
+    builder = load_kaggle_builder()
+    site_dir = tmp_path / "site"
+    scripts_dir = site_dir / "scripts"
+    data_dir = site_dir / "src" / "data"
+    scripts_dir.mkdir(parents=True)
+    data_dir.mkdir(parents=True)
+    (scripts_dir / "service_share_card.py").write_text(
+        "def build_daily_service_share(**kwargs):\n"
+        "    return {'asset_version':'v1','manifest_payload_hash':'a'*64,"
+        "'local_date':'2026-07-27','fresh_until':'2026-07-28',"
+        "'assets':{'png':{'width':1080,'height':1350}}}\n",
+        encoding="utf-8",
+    )
+    (data_dir / "preview-events.json").write_text(
+        json.dumps({"events": [{"id": 1, "title": "Event"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(builder, "SITE_DIR", site_dir)
+    monkeypatch.setattr(builder, "status_event", lambda *_args, **_kwargs: None)
+    sys.modules.pop("service_share_card", None)
+
+    result = builder.render_daily_service_share(
+        {
+            "build_id": "production-test",
+            "snapshot": {"snapshot_id": "snap", "sha256": "b" * 64},
+            "input_fingerprint": "c" * 64,
+        },
+        {"current_datetime": "2026-07-27T18:00:00+02:00"},
+    )
+
+    assert result["status"] == "ready"
+    assert result["width"] == 1080
+    assert result["height"] == 1350
+    assert str(scripts_dir) in sys.path
+
+
+def test_kaggle_runner_stages_daily_share_renderer_with_site_payload():
+    source = KAGGLE_RUNNER.read_text(encoding="utf-8")
+    assert "service_share_renderer = KERNEL_SRC / 'service_share_card.py'" in source
+    assert "staged_site / 'scripts' / service_share_renderer.name" in source
 
 
 def install_fake_semantic_modules(monkeypatch):

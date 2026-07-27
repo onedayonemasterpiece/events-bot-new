@@ -480,6 +480,9 @@ def export_preview_data_if_configured(config: dict) -> None:
 
 
 def render_daily_service_share(config: dict, build_clock: dict) -> dict:
+    scripts_dir = str(SITE_DIR / 'scripts')
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
     from service_share_card import build_daily_service_share
 
     preview_path = SITE_DIR / 'src' / 'data' / 'preview-events.json'

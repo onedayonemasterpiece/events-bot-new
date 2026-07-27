@@ -24,6 +24,8 @@
 - Fixed the Kaggle shared-BGE preflight to upgrade to the pinned,
   Transformers-5-compatible `FlagEmbedding==1.4.0`; the former 1.3.5 bootstrap
   failed on the current CPU image before BGE-M3 could load.
+- Fixed the Kaggle daily service-share handoff to import its renderer from the
+  extracted site payload rather than the notebook-only module path.
 - Added R15 static-site product contracts for horizontal `5:4` no-band mobile
   rail crops, persistent Free collection identity, daily service-share
   freshness, noindex calendar-first favorites, event-aware far-future calendar

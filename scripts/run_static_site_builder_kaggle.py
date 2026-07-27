@@ -288,6 +288,12 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
     unusual_fixture = ROOT / 'tests' / 'fixtures' / 'unusual_events_golden_v1.json'
     if unusual_fixture.exists():
         shutil.copy2(unusual_fixture, staged_site / 'scripts' / unusual_fixture.name)
+    service_share_renderer = KERNEL_SRC / 'service_share_card.py'
+    if service_share_renderer.exists():
+        shutil.copy2(
+            service_share_renderer,
+            staged_site / 'scripts' / service_share_renderer.name,
+        )
     if args.db and not args.export_in_kaggle:
         exporter = staged_site / 'scripts' / 'export-production-preview-data.py'
         cmd = [
