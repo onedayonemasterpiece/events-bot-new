@@ -37,6 +37,32 @@ Supabase/Postgres owns favorite/follow state with RLS by user identity. Local an
 - export/delete/account purge;
 - offline/static fallback that never blocks event navigation.
 
+## R15 saved-events page and event-aware calendar
+
+The saved-events route is an authenticated **noindex** utility surface. It
+renders a stable static shell/skeleton first, then hydrates through the shared
+origin-scoped Supabase auth runtime; it does not expose tokens in DOM state and
+does not invent an anonymous server profile.
+
+Within the future set, order is calendar-first:
+
+1. events explicitly added through the calendar/save action;
+2. then liked/favorited events not already represented above.
+
+The same event/occurrence cannot appear twice merely because both actions were
+used. Within a source tier the current implementation prefers the latest
+recorded save action, then stable input order and an event-ID fallback; it does
+not pretend that this is chronological event ordering. Past, cancelled, merged
+or inaccessible rows follow the lifecycle policy above rather than being
+silently mixed into the future list. Empty, signed-out and
+backend-unavailable states remain honest and retain navigation.
+
+The date calendar itself is event-aware: navigation extends through the
+furthest month that contains a public event in the generated availability
+manifest. Dates without events are not ordinary active targets—pointer events
+and keyboard activation must not accidentally select them—while month
+navigation, focus order and an explicit return path remain available.
+
 ## Public aggregate semantics
 
 The current contract plans durable saved-event state but does not yet provide a

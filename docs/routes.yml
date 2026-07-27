@@ -14,6 +14,7 @@ sections:
   product:
     mobile_discovery_shell: docs/features/static-site-pages/mobile-shell.md
     audience_admission_discovery: docs/features/unsigned-personalization/audience-admission-discovery.md
+    unusual_events: docs/features/unusual-events/README.md
   operations:
     incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md
@@ -169,6 +170,17 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  unusual_events:
+    status: implementation_candidate
+    docs: docs/features/unusual-events/README.md
+    semantic_retrieval: docs/features/unsigned-personalization/semantic-vector-retrieval.md
+    builder_runbook: docs/operations/kaggle-static-site-builder.md
+    e2e: docs/operations/e2e-scenarios.md
+    entrypoints:
+      - site/scripts/static_event_bge.py
+      - site/scripts/unusual_event_semantics.py
+      - site/src/pages/neobychnoe/index.astro
+
   interest_clubs:
     status: implementation_rc
     docs: docs/features/interest-clubs/README.md

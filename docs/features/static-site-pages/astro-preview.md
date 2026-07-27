@@ -55,6 +55,15 @@ now full-cover overlays in donor-density rows, the `390px` layout keeps two
 columns, and all media is hash-bound to festival/organiser/venue provenance
 without the regional anniversary aggregator.
 
+The R15 candidate additionally stages the static unusual-events manifest and
+daily service-share assets inside this same immutable snapshot/Kaggle handoff.
+It does not add a page-view scorer or another builder job. The shared BGE
+artifact, unusual cache/last-good receipt, `provider_calls=0`, migration
+notification suppression and real canary/rollback gates are canonical in
+[`unusual-events`](../unusual-events/README.md); until those gates have real
+evidence, `/neobychnoe/` remains candidate-only and no production-root
+promotion is implied.
+
 The 2026-07-23 correction candidate additionally keeps every reviewed surface
 inside one mutually linked prefix: the dynamic Exhibitions presentation,
 optimized responsive personal-card feed, Search, current clubs, six-logo Partners,

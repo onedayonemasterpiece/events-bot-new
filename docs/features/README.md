@@ -55,6 +55,9 @@
 - `docs/features/event-issue-reporting/README.md` — admin event-problem report and ArtKodex repair/history workflow
 - `docs/features/info-partners/README.md` — страница информационных партнёров на static-first сайте: логотипы организаций, nofollow-ссылки и связь со статусом/промо-кампаниями
 - `docs/features/static-site-easter-eggs/README.md` — post-release discovery механики региональных коллекционных пасхалок: promo activity, автоматическая режиссура, обратная связь/partner intake, аналитика и release gates без production implementation
+- `docs/features/unusual-events/README.md` — R15 implementation candidate:
+  `/neobychnoe/`, 15-family taxonomy, one shared BGE vector contract,
+  concept-level unread state and fail-closed Kaggle rollout
 
 ## Как добавлять новую фичу
 

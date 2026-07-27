@@ -219,6 +219,15 @@ Production-like render выполняется так:
 4. kernel публикует внутренние heartbeat/progress/status events и terminal report;
 5. scheduler не принимает opaque `FAILED/ERROR` без kernel log/status evidence.
 
+R15 routes the accepted final render through the existing coalesced
+StaticSiteBuilder snapshot/handoff rather than a browser or a second
+unmonitored scheduler. The daily local-date changes the build fingerprint even
+when event content is unchanged, so the current menu/footer asset is rebuilt at
+least once per day. The versioned PNG/WebP and current manifest advance
+atomically only after their dimensions, MIME and hashes validate. A failed
+render retains the previous verified asset, records stale age and cannot
+publish a partial replacement.
+
 Projection gates запрещают safe-zone intrusion, разрыв цепочки, слишком маленькие
 дальние кубы и hero без требуемого screen exit. Финальный master конвертируется
 централизованно, не в browser click.

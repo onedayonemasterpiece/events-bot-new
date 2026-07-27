@@ -107,6 +107,27 @@ PUBLIC_MOBILE_SEARCH_BASE_URL=https://kenigevents.ru/preview-20260721-mobile-sea
 - полная browser-приёмка реального Yandex round-trip остаётся обязательной на
   замороженном immutable candidate; mocked PKCE/Edge smoke не подменяет её.
 
+## R15 Collections and event-aware calendar
+
+The mobile drawer replaces the former standalone `Детям` row with one
+`Подборки` submenu. Its materialized destinations are `Детям`, `Необычное`,
+`Бесплатно` and `Клубы`; `Бесплатно` also remains a top-level fast action. A
+submenu item is a normal crawlable link only when its route is materialized in
+the current build. Icons come from the locally vendored,
+provenance-recorded SVGRepo set and keep one coherent stroke family; emoji or
+unrelated icon families are not fallback assets.
+
+`Необычное` may show one red dot under the shared concept-state contract in
+[`unusual-events`](../unusual-events/README.md). The dot means an unseen newly
+published concept, not a rebuild, and every menu/footer consumer reads the same
+controller.
+
+Calendar navigation reads the generated availability inventory and continues
+through the furthest month containing a public event. Empty days use disabled
+semantics and cannot be committed by stray pointer/keyboard input. This is a
+navigation constraint only; it does not alter canonical event dates or create
+placeholder events.
+
 ## Toast placement and height budget
 
 Shell публикует переменные:

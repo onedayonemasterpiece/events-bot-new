@@ -1,0 +1,1622 @@
+{
+  "schema_version": "unusual-events-golden-v1",
+  "as_of_date": "2026-07-27",
+  "source": {
+    "artifact_directory": "artifacts/codex/unusual-events-20260727",
+    "snapshot_file": "prod-events.json",
+    "snapshot_utc": "2026-07-27",
+    "snapshot_row_count": 6587,
+    "manual_review_file": "manual_future_taxonomy.csv",
+    "fact_policy": "Frozen title/date/type/location/summary/digest values are copied only from the read-only production snapshot; candidate concept evidence uses the manual taxonomy when present. No live-canary outcome is encoded.",
+    "snapshot_sha256": "9971db619edc59c347e4c9d35b473287d338bc59bb9b152bf284185787193b2d",
+    "manual_review_sha256": "769e67b3222dcf9713124dfa7845d01b8f542ebc925cdeb32dc051ca48365592"
+  },
+  "taxonomy": {
+    "schema_version": "unusual-family-taxonomy-v1",
+    "families": [
+      "open_dialogue",
+      "participatory",
+      "co_creation",
+      "behind_scenes",
+      "restricted_access",
+      "site_specific",
+      "after_hours",
+      "hybrid_format",
+      "living_history",
+      "field_science",
+      "rare_practice",
+      "gastro_experience",
+      "sensory_wellbeing",
+      "community_exchange",
+      "quirky_ritual"
+    ]
+  },
+  "evaluation_contract": {
+    "precision_at_20_min": 0.85,
+    "reference_precision_at_20": 0.88,
+    "reference_tolerance": 0.05,
+    "hard_negative_false_positive_rate_max": 0.05,
+    "confirmed_positive_recall_min": 0.8,
+    "duplicate_concepts_in_top_20_max": 1,
+    "identical_input_flip_rate_max": 0.02,
+    "minimum_distinct_families": 5,
+    "deterministic_exact_output_required": true,
+    "ineligible_published_max": 0,
+    "shared_vector_contract_required": true
+  },
+  "cases": [
+    {
+      "case_id": "positive:6112",
+      "event_id": 6112,
+      "label": "positive",
+      "expected_family": "open_dialogue",
+      "concept_id": "odnono_open_dialogue",
+      "facts": {
+        "title": "Живая встреча с Алексеем Мышкиным и концерт ODNONO",
+        "date": "2026-08-13",
+        "event_type": "встреча",
+        "location_name": "HUMAN concept",
+        "city": "Калининград",
+        "short_description": "Алексей Мышкин делится историями о творчестве и духовном поиске в формате живого общения без сцены.",
+        "search_digest": "Творческая встреча с Алексеем Мышкиным в формате открытого диалога без сцены. Обсуждение вопросов поиска себя, внутренней свободы и жизненного пути в камерной обстановке. Возрастное ограничение 12+."
+      },
+      "checked_reason": "Open dialogue without a stage is stated in the checked digest.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "odnono_open_dialogue",
+        "manual_family": "dialogue_club",
+        "manual_reason_ru": "открытый разговор с артистом без дистанции между сценой и аудиторией"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7141",
+      "event_id": 7141,
+      "label": "positive",
+      "expected_family": "participatory",
+      "concept_id": "musical_lotto",
+      "facts": {
+        "title": "Музыкальное лото: На веранде",
+        "date": "2026-08-06",
+        "event_type": "концерт",
+        "location_name": "ресторан Геркулес",
+        "city": "Калининград",
+        "short_description": "Развлекательная игра в музыкальное лото, где участники зачеркивают услышанные музыкальные композиции в специальных бланках.",
+        "search_digest": "Музыкальное лото — развлекательная игра, в которой участники зачеркивают услышанные музыкальные композиции в специальных бланках."
+      },
+      "checked_reason": "Participants mark heard compositions on game sheets.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "musical_lotto",
+        "manual_family": "participatory_cocreation",
+        "manual_reason_ru": "музыкальная игра вместо пассивного концерта"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7079",
+      "event_id": 7079,
+      "label": "positive",
+      "expected_family": "co_creation",
+      "concept_id": "healing_jam",
+      "facts": {
+        "title": "Healing Jam",
+        "date": "2026-07-28",
+        "event_type": "концерт",
+        "location_name": "Сигнал",
+        "city": "Калининград",
+        "short_description": "Вечер объединяет выступление экспериментального электронного музыканта и коллективную практику импровизации с использованием голоса и инструментов.",
+        "search_digest": "Вечер глубокой электроники и совместной импровизации сочетает в себе гипнотическое чилл-техно от Романа Рэма и коллективную звуковую практику, где участники создают общее музыкальное поле с помощью инструментов и голоса без разделения на сцену и зал."
+      },
+      "checked_reason": "The checked digest states collective voice/instrument improvisation without stage/audience separation.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "healing_jam",
+        "manual_family": "participatory_cocreation",
+        "manual_reason_ru": "общая звуковая импровизация без разделения на сцену и зал"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:5829",
+      "event_id": 5829,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "theatre_backstage",
+      "facts": {
+        "title": "Экскурсия «Закулисье театра»",
+        "date": "2026-08-07",
+        "event_type": "экскурсия",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+        "short_description": "Увлекательная экскурсия по скрытым от глаз зрителей театральным цехам, гримерным и сценическому пространству драматического театра.",
+        "search_digest": "Экскурсионная программа по закулисью драматического театра с посещением гримерных, костюмерной и производственных цехов. Включает знакомство с театральными профессиями, процессом создания декораций и неформальную беседу об истории и традициях театра. Группа ограничена 20 участниками."
+      },
+      "checked_reason": "The route visits dressing rooms, costume and production workshops hidden from the audience.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "theatre_backstage",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "доступ в скрытые театральные цеха и на сцену"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:6882",
+      "event_id": 6882,
+      "label": "positive",
+      "expected_family": "restricted_access",
+      "concept_id": "shipyard_access",
+      "facts": {
+        "title": "⚓️ Экскурсия на судостроительный завод «Янтарь»",
+        "date": "2026-07-28",
+        "event_type": "встреча",
+        "location_name": "Судостроительный завод «Янтарь»",
+        "city": "Калининград",
+        "short_description": "Приглашаем вас посетить судостроительный завод Янтарь и познакомиться с особенностями работы этого предприятия.",
+        "search_digest": "Экскурсия на судостроительный завод Янтарь с предварительным оформлением пропусков для всех участников мероприятия."
+      },
+      "checked_reason": "The shipyard visit requires advance participant passes.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "shipyard_access",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "экскурсия на режимное судостроительное предприятие"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:6924",
+      "event_id": 6924,
+      "label": "positive",
+      "expected_family": "site_specific",
+      "concept_id": "snail_whale_castle",
+      "facts": {
+        "title": "Улитка и кит",
+        "date": "2026-08-30",
+        "event_type": "спектакль",
+        "location_name": "Замок Нойхаузен",
+        "city": "Гурьевск",
+        "short_description": "Кукольный театр представляет музыкальный спектакль по мотивам известной детской книги о дружбе улитки и кита.",
+        "search_digest": "Музыкальная постановка кукольного театра по мотивам книги Джулии Дональдсон рассказывает трогательную историю о необычной дружбе и захватывающих приключениях, дополненную выразительным музыкальным сопровождением для создания особой атмосферы."
+      },
+      "checked_reason": "A musical puppet production is staged at Neuhausen Castle.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "snail_whale_castle",
+        "manual_family": "site_specific_hybrid",
+        "manual_reason_ru": "кукольный музыкальный спектакль в замке"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7071",
+      "event_id": 7071,
+      "label": "positive",
+      "expected_family": "after_hours",
+      "concept_id": "evening_brandenburg",
+      "facts": {
+        "title": "Вечерний Бранденбург: Легенды и музыка",
+        "date": "2026-07-30",
+        "event_type": "концерт",
+        "location_name": "Замок Бранденбург",
+        "city": "Ушаково",
+        "short_description": "Струнный квартет Impulse Orchestra исполняет классическую музыку и саундтреки после вечерней экскурсии по старинному замку.",
+        "search_digest": "Вечерний Бранденбург: Легенды и музыка в Ушаково"
+      },
+      "checked_reason": "An evening castle excursion precedes a string-quartet concert.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "evening_brandenburg",
+        "manual_family": "site_specific_hybrid",
+        "manual_reason_ru": "вечерняя экскурсия по замку плюс камерный концерт"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:4960",
+      "event_id": 4960,
+      "label": "positive",
+      "expected_family": "hybrid_format",
+      "concept_id": "pro_art",
+      "facts": {
+        "title": "ПРО.АРТ",
+        "date": "2026-07-29",
+        "event_type": "кинопоказ",
+        "location_name": "Дом железнодорожников (ДКЖ)",
+        "city": "Калининград",
+        "short_description": "Мультимедийное шоу объединяет живопись, музыку и танец в единое представление с живым оркестровым музыкальным сопровождением.",
+        "search_digest": "Мультимедийное шоу объединяет живопись, музыку, литературу, кино и танец, демонстрируя оживающие полотна великих художников от античности до авангарда под живое сопровождение оркестра в окружении тысяч свечей."
+      },
+      "checked_reason": "One show combines painting, music, literature, cinema, dance and live orchestra.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "pro_art",
+        "manual_family": "site_specific_hybrid",
+        "manual_reason_ru": "синтез живописи музыки литературы кино танца и живого оркестра"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:6191",
+      "event_id": 6191,
+      "label": "positive",
+      "expected_family": "living_history",
+      "concept_id": "big_kaup",
+      "facts": {
+        "title": "Фестиваль «Большой Кауп»",
+        "date": "2026-08-08",
+        "event_type": "ярмарка",
+        "location_name": "Поселение викингов Кауп",
+        "city": "Калининград",
+        "short_description": "Юбилейный фестиваль исторической реконструкции воссоздает быт и ремесла эпохи викингов на территории древнего торгового поселения.",
+        "search_digest": "Юбилейный фестиваль исторической реконструкции воссоздает атмосферу эпохи викингов IX–X веков через масштабные битвы, ремесленные мастерские, интерактивные игры и театрализованные огненные шоу на территории древнего торгового поселения."
+      },
+      "checked_reason": "The reconstruction festival recreates Viking-era life, crafts, battles and games at the settlement.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "big_kaup",
+        "manual_family": "living_history",
+        "manual_reason_ru": "историческая реконструкция и участие в пространстве поселения викингов"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:6996",
+      "event_id": 6996,
+      "label": "positive",
+      "expected_family": "field_science",
+      "concept_id": "science_walk_pond",
+      "facts": {
+        "title": "Наука всегда кстати: прогулка с учёным",
+        "date": "2026-07-23",
+        "event_type": "встреча",
+        "location_name": "пруд Поплавок",
+        "city": "Калининград",
+        "short_description": "Тематический вечер с кандидатом биологических наук поможет изучить методы исследования городских водоёмов и микроорганизмов.",
+        "search_digest": "Прогулка с учёным, посвящённая методам исследования городских водоёмов, определению состава микроорганизмов и оценке состояния экосистемы."
+      },
+      "checked_reason": "A scientist-led walk covers sampling urban ponds, microorganisms and ecosystem assessment.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": false,
+      "eligible": false,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7034",
+      "event_id": 7034,
+      "label": "positive",
+      "expected_family": "rare_practice",
+      "concept_id": "color_music_ink",
+      "facts": {
+        "title": "Мастер-класс «Цветомузыка»",
+        "date": "2026-07-30",
+        "event_type": "мастер-класс",
+        "location_name": "Филиал Третьяковской галереи",
+        "city": "Калининград",
+        "short_description": "Участники мастер-класса создают динамичные художественные композиции с помощью техники рисования яркими цветными чернилами на бумаге.",
+        "search_digest": "Участники занятия освоят технику работы с цветными чернилами для создания выразительных и динамичных художественных композиций. Творческий процесс ориентирован на аудиторию старше двенадцати лет и требует приобретения отдельного входного билета."
+      },
+      "checked_reason": "Participants practise composition with coloured inks.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "color_music_ink",
+        "manual_family": "rare_practice_route",
+        "manual_reason_ru": "работа с цветными чернилами как необычной художественной техникой"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7069",
+      "event_id": 7069,
+      "label": "positive",
+      "expected_family": "gastro_experience",
+      "concept_id": "uminami_x",
+      "facts": {
+        "title": "Uminami X",
+        "date": "2026-07-29",
+        "event_type": "встреча",
+        "location_name": "ресторан Uminami",
+        "city": "Калининград",
+        "short_description": "Шеф-повар ресторана «UMINAMI» Юрий Гуляев и шеф-повар ресторана «Интеллигенция 2.0» Александр Галуза.",
+        "search_digest": "Гастрономический вечер Uminami X с участием Юрия Гуляева и Александра Галузы"
+      },
+      "checked_reason": "The checked record is a one-evening collaboration between two chefs.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "uminami_x",
+        "manual_family": "gastro_experience",
+        "manual_reason_ru": "коллаборация двух шеф-поваров как одноразовый гастрономический вечер"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:2837",
+      "event_id": 2837,
+      "label": "positive",
+      "expected_family": "sensory_wellbeing",
+      "concept_id": "gong_session",
+      "facts": {
+        "title": "Восстановительная гонг-сессия",
+        "date": "2026-03-08",
+        "event_type": "sound healing",
+        "location_name": "«Ле Бурже»",
+        "city": "Калининград",
+        "short_description": "Глубокое звуковое погружение с использованием гонга и чаш способствует релаксации, восстановлению сил и внутренней гармонии.",
+        "search_digest": "Гонг-сессия в Калининграде предлагает уникальный способ расслабления и восстановления, позволяя отключиться от мыслей и забот благодаря глубоким вибрациям гонга и созданной атмосфере покоя. Это возможность подарить себе время для отдыха и перезагрузки."
+      },
+      "checked_reason": "The session centres on sensory immersion with gong and bowls.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": false,
+      "eligible": false,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:6767",
+      "event_id": 6767,
+      "label": "positive",
+      "expected_family": "community_exchange",
+      "concept_id": "eco_courtyard",
+      "facts": {
+        "title": "Летний Экодвор",
+        "date": "2026-08-08",
+        "event_type": "фестиваль",
+        "location_name": "Железнодорожные ворота",
+        "city": "Калининград",
+        "short_description": "Фестиваль объединяет лекции об экологии и мастер-классы по обмену ресурсами для осознанного образа жизни.",
+        "search_digest": "Фестиваль объединяет образовательную программу о лесоводстве и экологии с возможностью обмена вторсырьем, материалами для творчества и садовыми растениями. Посетителей ждут тематические лекции, мастер-классы и работа своп-рассадника."
+      },
+      "checked_reason": "The programme combines ecological learning with exchanges of recyclables, craft materials and plants.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "eco_courtyard",
+        "manual_family": "participatory_cocreation",
+        "manual_reason_ru": "лекции мастер-классы обмен вторсырьём и своп-рассадник"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:6365",
+      "event_id": 6365,
+      "label": "positive",
+      "expected_family": "quirky_ritual",
+      "concept_id": "hay_day",
+      "facts": {
+        "title": "🌾 День валяния в сене",
+        "date": "2026-07-27",
+        "event_type": "ярмарка",
+        "location_name": "Холмогорье",
+        "city": "Романово",
+        "short_description": "Тематический праздник в сказочной деревушке с прогулками по лесу и отдыхом у озера.",
+        "search_digest": "День валяния в сене в сказочной деревушке: прогулки по лесу, отдых у озера и атмосферная фотозона на сеновале для душевного отдыха."
+      },
+      "checked_reason": "The themed day centres on hay lounging and a hayloft photo scene.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "hay_day",
+        "manual_family": "quirky_ritual",
+        "manual_reason_ru": "игровой сельский праздник вокруг простого телесного опыта и фотосцены"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "hard_negative:5375",
+      "event_id": 5375,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "Сергей Жилин и «Фонограф-Джаз-Трио»: Упоение джазом",
+        "date": "2026-07-27",
+        "event_type": "концерт",
+        "location_name": "Янтарь холл",
+        "city": "Светлогорск",
+        "short_description": "Джазовый концерт коллектива «Фонограф-Джаз-Трио» под руководством народного артиста России Сергея Жилина.",
+        "search_digest": "Народный артист России Сергей Жилин и коллектив Фонограф-Джаз-Трио представляют программу с авторскими аранжировками, виртуозными импровизациями и смелыми сочетаниями джазовых ритмов с современными музыкальными стилями."
+      },
+      "checked_reason": "A conventional advertised jazz-trio concert; no unusual experience mechanism is stated.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6484",
+      "event_id": 6484,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "Вне подозрения",
+        "date": "2026-07-27",
+        "event_type": "спектакль",
+        "location_name": "Калининградский театр эстрады (Дом искусств)",
+        "city": "Калининград",
+        "short_description": "Драматический детектив рассказывает историю богатой женщины, которая неожиданно становится главной подозреваемой в запутанном деле об убийстве.",
+        "search_digest": "Драматический детектив рассказывает историю состоятельной женщины, которая оказывается втянута в расследование случайного убийства, сохраняя интригу и напряжение до самого финала через исследование тем верности, предательства и морали."
+      },
+      "checked_reason": "A conventional staged dramatic detective; plot novelty alone is not unusualness.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:3177",
+      "event_id": 3177,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "Золотой дубль",
+        "date": "2027-01-29",
+        "event_type": "movie",
+        "location_name": "Ростех Арена, Солнечный бульвар 25, Калининград",
+        "city": "Калининград",
+        "short_description": "Этот фильм повествует о жизненном пути и спортивных достижениях известного футболиста Никиты Симоняна, показывая цену побед.",
+        "search_digest": "«Золотой дубль» – это биографическая картина о Никите Симоняне, легендарном футболисте и тренере, чья жизнь и карьера стали символом эпохи отечественного спорта и вдохновляют на новые победы."
+      },
+      "checked_reason": "A conventional biographical film screening; unusualness is not inferred from subject matter.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:5297",
+      "event_id": 5297,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "🎹 Фестиваль Pianissimo: Игорь Сидоров",
+        "date": "2026-07-30",
+        "event_type": "концерт",
+        "location_name": "Филиал Третьяковской галереи",
+        "city": "Калининград",
+        "short_description": "Фестиваль Pianissimo представляет сольный концерт российского пианиста Игоря Сидорова в пространстве атриума филиала Третьяковской галереи.",
+        "search_digest": "Фестиваль Pianissimo представляет сольный концерт российского пианиста Игоря Сидорова в пространстве атриума филиала Третьяковской галереи."
+      },
+      "checked_reason": "A conventional solo piano concert in a museum atrium; venue alone is insufficient.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:7153",
+      "event_id": 7153,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "Концерт «Мировые шедевры на органе»",
+        "date": "2026-08-09",
+        "event_type": "концерт",
+        "location_name": "Филармония им. Светланова",
+        "city": "Калининград",
+        "short_description": "Органистка Мария Гаврилюк исполнит известные произведения классического репертуара в рамках концерта Мировые шедевры на органе.",
+        "search_digest": "Концерт Мировые шедевры на органе с участием органистки Марии Гаврилюк. В программе произведения Баха, Моцарта, Вивальди, Грига, Чайковского, Рахманинова и Гершвина."
+      },
+      "checked_reason": "A conventional organ recital; unlike the organ-excursion series, no access/explanation format is stated.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "non_event:6885",
+      "event_id": 6885,
+      "label": "non_event",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "Устройство тротуара по ул. Лужская",
+        "date": "2026-08-20",
+        "event_type": "акция",
+        "location_name": "ул. Лужская",
+        "city": "Калининград",
+        "short_description": "Устройство тротуара по ул.",
+        "search_digest": "Дорожные работы по устройству тротуара на улице Лужской в Калининграде"
+      },
+      "checked_reason": "The row describes roadworks to install a pavement, not an attendable event.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": false,
+      "expected_publication_eligible_as_of": false,
+      "eligible": false,
+      "frozen_tier": "abstain"
+    },
+    {
+      "case_id": "non_event:2749",
+      "event_id": 2749,
+      "label": "non_event",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "График работы Калининградской областной научной библиотеки",
+        "date": "2026-03-06",
+        "event_type": "информация",
+        "location_name": "Научная библиотека, Мира 9, Калининград",
+        "city": "Калининград",
+        "short_description": "Библиотека сообщает об изменениях в графике работы в связи с праздничными днями в марте.",
+        "search_digest": "Библиотека информирует о работе по расписанию, опубликованному на сайте, и о доступности электронных книг ЛитРес для удаленного пользования. По вопросам можно обращаться по телефону для получения консультаций и справок."
+      },
+      "checked_reason": "The row is a library opening-hours notice.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": false,
+      "expected_publication_eligible_as_of": false,
+      "eligible": false,
+      "frozen_tier": "abstain"
+    },
+    {
+      "case_id": "non_event:3919",
+      "event_id": 3919,
+      "label": "non_event",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "Замок Нойхаузен закрыт",
+        "date": "2026-04-16",
+        "event_type": "closure",
+        "location_name": "Замок Нойхаузен, Заречная 2А, Гурьевск",
+        "city": "Гурьевск",
+        "short_description": "Замок Нойхаузен временно не принимает посетителей из-за проведения важных ремонтных и восстановительных работ.",
+        "search_digest": "Замок Нойхаузен временно изменит график работы 16 апреля, замок будет закрыт до , администрация приносит извинения за неудобства, связанные с изменениями в расписании."
+      },
+      "checked_reason": "The row is a venue-closure notice.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": false,
+      "expected_publication_eligible_as_of": false,
+      "eligible": false,
+      "frozen_tier": "abstain"
+    },
+    {
+      "case_id": "non_event:6329",
+      "event_id": 6329,
+      "label": "non_event",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "Ремонт коммуникаций на Шевченко",
+        "date": "2026-07-01",
+        "event_type": null,
+        "location_name": "ул. Шевченко",
+        "city": "Калининград",
+        "short_description": "Калининградтеплосеть планировала проложить на Шевченко новые коммуникации в июле, но пятничная авария, по сути, форсировала начало.",
+        "search_digest": "Ремонт коммуникаций на улице Шевченко в Калининграде в июле."
+      },
+      "checked_reason": "The row describes utility repair works.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": false,
+      "expected_publication_eligible_as_of": false,
+      "eligible": false,
+      "frozen_tier": "abstain"
+    },
+    {
+      "case_id": "non_event:6746",
+      "event_id": 6746,
+      "label": "non_event",
+      "expected_family": null,
+      "concept_id": null,
+      "facts": {
+        "title": "Выходной день в АгроПарке",
+        "date": "2026-07-08",
+        "event_type": null,
+        "location_name": "АгроПарк «Некрасово поле»",
+        "city": "Калининград",
+        "short_description": "Понедельник является выходным днем в АгроПарке Некрасово поле для обеспечения безопасности и комфорта гостей.",
+        "search_digest": "Понедельник установлен как выходной день в АгроПарке Некрасово поле для обеспечения безопасности и комфорта гостей."
+      },
+      "checked_reason": "The row states an attraction day off rather than an attendable event.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_eventness_eligible": false,
+      "expected_publication_eligible_as_of": false,
+      "eligible": false,
+      "frozen_tier": "abstain"
+    },
+    {
+      "case_id": "positive:5754",
+      "event_id": 5754,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "theatre_backstage",
+      "facts": {
+        "title": "Мастер и Маргарита",
+        "date": "2026-08-02",
+        "event_type": "экскурсия",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+        "short_description": "Экскурсия по театру раскрывает секреты создания спектаклей и показывает работу скрытых от зрителей служб.",
+        "search_digest": "Посетители увидят изнанку постановочного процесса, побывают в декорационном цехе и гримерках, а также узнают об устройстве основной сцены и работе театральных служб. Программа завершается беседой об истории, традициях и современной жизни театра."
+      },
+      "checked_reason": "The theatre route exposes workshops, dressing rooms and backstage services.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "theatre_backstage",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "доступ в скрытые театральные цеха и на сцену"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:5755",
+      "event_id": 5755,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "theatre_backstage",
+      "facts": {
+        "title": "Зойкина квартира",
+        "date": "2026-08-08",
+        "event_type": "экскурсия",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+        "short_description": "Режиссер Михаил Салес проводит экскурсию по закулисью театра, раскрывая историю создания знаменитой пьесы Михаила Булгакова.",
+        "search_digest": "Участники экскурсии под руководством режиссера Михаила Салеса посетят скрытые от глаз зрителей пространства театра, включая гримерные, костюмерные и декорационный цех, а также обсудят историю создания знаменитой пьесы Михаила Булгакова."
+      },
+      "checked_reason": "This occurrence is the same backstage-theatre concept tied to a production.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "theatre_backstage",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "закулисная экскурсия с привязкой к конкретной постановке"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:5756",
+      "event_id": 5756,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "theatre_backstage",
+      "facts": {
+        "title": "Женитьба",
+        "date": "2026-08-09",
+        "event_type": "экскурсия",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+        "short_description": "Экскурсия по закулисью театра раскрывает секреты создания спектакля Женитьба под руководством народного артиста Михаила Салеса.",
+        "search_digest": "Экскурсия по закулисью спектакля в постановке народного артиста России Михаила Салема позволяет увидеть процесс создания сценического действия изнутри. Посещение организовано для групп из двадцати человек с учетом особенностей обзора в зале."
+      },
+      "checked_reason": "This occurrence is the same backstage-theatre concept tied to a production.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "theatre_backstage",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "закулисная экскурсия с привязкой к конкретной постановке"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:5757",
+      "event_id": 5757,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "theatre_backstage",
+      "facts": {
+        "title": "Собачье сердце",
+        "date": "2026-08-29",
+        "event_type": "экскурсия",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+        "short_description": "Экскурсия по закулисью театра раскрывает процесс создания спектакля и знакомит с работой всех театральных цехов.",
+        "search_digest": "Участники экскурсии посетят скрытые от глаз зрителей локации, включая костюмерную, декорационный цех, гримерные и сцену, чтобы узнать об устройстве театра и процессе создания спектакля по мотивам знаменитой чудовищной истории."
+      },
+      "checked_reason": "This occurrence is the same backstage-theatre concept tied to a production.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "theatre_backstage",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "закулисная экскурсия с привязкой к конкретной постановке"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:5781",
+      "event_id": 5781,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "theatre_backstage",
+      "facts": {
+        "title": "Экскурсия «Закулисье театра»",
+        "date": "2026-08-30",
+        "event_type": "экскурсия",
+        "location_name": "Драматический театр",
+        "city": "Калининград",
+        "short_description": "Участники экскурсии изучают техническое оснащение сцены и знакомятся с процессом подготовки театральных постановок изнутри.",
+        "search_digest": "Посетители основной сцены увидят скрытые от глаз механизмы работы труппы и узнают об устройстве сценического пространства. Экскурсия раскрывает изнанку постановочного процесса и технические особенности подготовки спектаклей для групп из 20 человек."
+      },
+      "checked_reason": "This occurrence exposes theatre stage mechanics and preparation.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "theatre_backstage",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "экскурсия по технической изнанке театра"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7144",
+      "event_id": 7144,
+      "label": "positive",
+      "expected_family": "participatory",
+      "concept_id": "musical_lotto",
+      "facts": {
+        "title": "Музыкальное лото: Хиты всех времен",
+        "date": "2026-08-16",
+        "event_type": "концерт",
+        "location_name": "Океан (караоке-клуб)",
+        "city": "Калининград",
+        "short_description": "Интерактивное музыкальное лото с программой из хитов всех времен для всех желающих участников.",
+        "search_digest": "Музыкальное лото с хитами всех времен, где участники зачеркивают услышанные композиции в специальных бланках."
+      },
+      "checked_reason": "This is another occurrence of the same participant music-lotto concept.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "musical_lotto",
+        "manual_family": "participatory_cocreation",
+        "manual_reason_ru": "повтор серии музыкальной игры"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7152",
+      "event_id": 7152,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "organ_excursion",
+      "facts": {
+        "title": "Концерт «Экскурсия к органу»",
+        "date": "2026-08-08",
+        "event_type": "концерт",
+        "location_name": "Филармония им. Светланова",
+        "city": "Калининград",
+        "short_description": "Концерт объединяет исполнение органной музыки и пояснения ведущей для знакомства с устройством этого инструмента.",
+        "search_digest": "Концерт «Экскурсия к органу» с программой от эпохи барокко до современности в исполнении Марии Гаврилюк и ведущей Н. Анисимовой."
+      },
+      "checked_reason": "A performance plus explanation of the organ and its construction.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "organ_excursion",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "концерт с объяснением устройства и возможностей органа"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7155",
+      "event_id": 7155,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "organ_excursion",
+      "facts": {
+        "title": "Концерт «Экскурсия к органу»",
+        "date": "2026-08-14",
+        "event_type": "концерт",
+        "location_name": "Филармония им. Светланова",
+        "city": "Калининград",
+        "short_description": "Концерт знакомит слушателей с устройством органа через исполнение произведений от эпохи барокко до современной музыки.",
+        "search_digest": "Программа знакомит слушателей с устройством и звучанием органа через произведения разных эпох, от барокко до саундтреков к современному кино. Исполнение музыки Марией Гаврилюк сопровождается комментариями ведущей Н. Анисимовой."
+      },
+      "checked_reason": "This is another occurrence of the same organ-excursion concept.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "organ_excursion",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "повтор серии концерта-экскурсии к органу"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7160",
+      "event_id": 7160,
+      "label": "positive",
+      "expected_family": "behind_scenes",
+      "concept_id": "organ_excursion",
+      "facts": {
+        "title": "Концерт «Экскурсия к органу»",
+        "date": "2026-08-22",
+        "event_type": "концерт",
+        "location_name": "Филармония им. Светланова",
+        "city": "Калининград",
+        "short_description": "Концерт представляет собой музыкальное путешествие с исполнением органных произведений разных эпох и комментариями ведущей программы.",
+        "search_digest": "Музыкальное путешествие по истории органного искусства объединяет сочинения Иоганна Себастьяна Баха с произведениями других эпох в сопровождении подробных комментариев ведущей, помогающих слушателям оценить возможности величественного инструмента."
+      },
+      "checked_reason": "This is another occurrence of the same organ-excursion concept.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "organ_excursion",
+        "manual_family": "behind_scenes_access",
+        "manual_reason_ru": "повтор серии концерта-экскурсии к органу"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7031",
+      "event_id": 7031,
+      "label": "positive",
+      "expected_family": "site_specific",
+      "concept_id": "harry_potter_screening",
+      "facts": {
+        "title": "🎥 Киновечер в студии «Экспеллиармус»",
+        "date": "2026-08-01",
+        "event_type": "кинопоказ",
+        "location_name": "студия «Экспеллиармус»",
+        "city": "Калининград",
+        "short_description": "Участники кинопоказа смотрят фильм о Гарри Поттере, создают магические сладости и проходят тематическую викторину.",
+        "search_digest": "Программа включает просмотр фильма о Гарри Поттере, тематическую викторину с призами и творческую мастерскую по созданию магических сладостей. Гости могут расположиться на мягких матах и сделать памятные снимки в фотозоне с атрибутикой факультетов."
+      },
+      "checked_reason": "The studio screening includes a quiz, themed sweets and a photo zone.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "harry_potter_screening",
+        "manual_family": "site_specific_hybrid",
+        "manual_reason_ru": "тематический киновечер в фанатской студии"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7038",
+      "event_id": 7038,
+      "label": "positive",
+      "expected_family": "site_specific",
+      "concept_id": "harry_potter_screening",
+      "facts": {
+        "title": "Киновечер в честь дня рождения Гарри Поттера",
+        "date": "2026-08-01",
+        "event_type": "кинопоказ",
+        "location_name": "студия «Экспеллиармус»",
+        "city": "Калининград",
+        "short_description": "Событие представляет собой тематический киновечер, который будет приурочен ко дню рождения Гарри Поттера.",
+        "search_digest": "Тематический киновечер в честь дня рождения Гарри Поттера."
+      },
+      "checked_reason": "This is a duplicate record for the same themed Harry Potter evening.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "harry_potter_screening",
+        "manual_family": "site_specific_hybrid",
+        "manual_reason_ru": "дубликат концепта тематического киновечера"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:6805",
+      "event_id": 6805,
+      "label": "positive",
+      "expected_family": "rare_practice",
+      "concept_id": "breakfast_with_artist",
+      "facts": {
+        "title": "Занятие «Завтрак с художником»",
+        "date": "2026-08-04",
+        "event_type": "мастер-класс",
+        "location_name": "Музей Изобразительных искусств",
+        "city": "Калининград",
+        "short_description": "Практическое занятие по рисованию скетчей, изучению композиции, света и формы под руководством педагога-художника.",
+        "search_digest": "Участники мастер-класса познакомятся с жанром натюрморта на примере работ русских художников ХХ века из коллекции Ярославского музея и освоят техники скетчинга под руководством педагога, создав собственные зарисовки в пространстве выставки."
+      },
+      "checked_reason": "Museum-exhibition sketching practice under an artist-teacher.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "breakfast_with_artist",
+        "manual_family": "rare_practice_route",
+        "manual_reason_ru": "скетчинг и беседа прямо в музейной экспозиции"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:6806",
+      "event_id": 6806,
+      "label": "positive",
+      "expected_family": "rare_practice",
+      "concept_id": "breakfast_with_artist",
+      "facts": {
+        "title": "🎨 Мастер-класс «Завтрак с художником»",
+        "date": "2026-08-11",
+        "event_type": "мастер-класс",
+        "location_name": "Музей Изобразительных искусств",
+        "city": "Калининград",
+        "short_description": "Участники мастер-класса изучают натюрморты русских художников и создают собственные скетчи в пространстве музейной художественной выставки.",
+        "search_digest": "Участники познакомятся с жанром натюрморта и творчеством русских художников ХХ века, изучат экспозицию выставки Предметные страсти и создадут собственные скетчи под руководством педагога с использованием предоставленных материалов."
+      },
+      "checked_reason": "This is another occurrence of the same museum sketching concept.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "breakfast_with_artist",
+        "manual_family": "rare_practice_route",
+        "manual_reason_ru": "повтор серии скетчинга в музейной экспозиции"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7022",
+      "event_id": 7022,
+      "label": "positive",
+      "expected_family": "rare_practice",
+      "concept_id": "architecture_film_cycle",
+      "facts": {
+        "title": "Сила утопии: Ле Корбюзье в Чандигархе",
+        "date": "2026-08-15",
+        "event_type": "кинопоказ",
+        "location_name": "Филиал Третьяковской галереи",
+        "city": "Калининград",
+        "short_description": "Документальный фильм рассказывает об истории проектирования индийского города Чандигарх архитекторами Ле Корбюзье и Альбертом Майером.",
+        "search_digest": "Документальный фильм рассказывает об истории проектирования индийского города Чандигарх, где архитекторы Альберт Майер и Ле Корбюзье воплотили концепцию гармоничного пространства, созданного по человеческому масштабу после обретения страной независимости."
+      },
+      "checked_reason": "A curated architecture-documentary cycle occurrence.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "architecture_film_cycle",
+        "manual_family": "rare_practice_route",
+        "manual_reason_ru": "кураторский цикл документального кино об архитектуре"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7023",
+      "event_id": 7023,
+      "label": "positive",
+      "expected_family": "rare_practice",
+      "concept_id": "architecture_film_cycle",
+      "facts": {
+        "title": "Кинопоказ «ЛАФ: ПАВИЛЬОН НА ВОДЕ»",
+        "date": "2026-08-12",
+        "event_type": "кинопоказ",
+        "location_name": "Филиал Третьяковской галереи",
+        "city": "Калининград",
+        "short_description": "Документальный фильм исследует творческое наследие архитектора Карло Скарпы через диалог философии и профессиональной экспертной оценки.",
+        "search_digest": "Документальная лента исследует творческое наследие архитектора Карло Скарпы через диалог японского философа Рёсукэ Охаси и историка Мауро Пьерконти, раскрывая глубинные связи между профессиональной экспертизой и восточной философией."
+      },
+      "checked_reason": "A curated architecture-documentary cycle occurrence.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "architecture_film_cycle",
+        "manual_family": "rare_practice_route",
+        "manual_reason_ru": "кураторский цикл документального кино об архитектуре"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7025",
+      "event_id": 7025,
+      "label": "positive",
+      "expected_family": "rare_practice",
+      "concept_id": "architecture_film_cycle",
+      "facts": {
+        "title": "Кинопоказ «Большая арка»",
+        "date": "2026-08-08",
+        "event_type": "кинопоказ",
+        "location_name": "Филиал Третьяковской галереи",
+        "city": "Калининград",
+        "short_description": "В рамках фестиваля ЛАФ состоится публичный показ документального фильма под названием Большая арка для зрителей.",
+        "search_digest": "Кинопоказ архитектурной драмы «Большая арка» в рамках фестиваля ЛАФ. В ролях Клас Банг и Ксавье Долан. Фильм посвящен истории международного конкурса на проект Большой арки в Париже 1983 года, политическим интригам и техническим вызовам. Возрастное ограничение 18+."
+      },
+      "checked_reason": "A curated architecture-film festival occurrence.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "architecture_film_cycle",
+        "manual_family": "rare_practice_route",
+        "manual_reason_ru": "кураторский цикл документального кино об архитектуре"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "positive:7053",
+      "event_id": 7053,
+      "label": "positive",
+      "expected_family": "rare_practice",
+      "concept_id": "architecture_film_cycle",
+      "facts": {
+        "title": "Кинопоказ «Леверенц. Божественная тьма»",
+        "date": "2026-08-29",
+        "event_type": "кинопоказ",
+        "location_name": "Филиал Третьяковской галереи",
+        "city": "Калининград",
+        "short_description": "Документальный фильм подробно освещает творческий путь и профессиональное общение известного архитектора Сигурда Леверенца с коллегами.",
+        "search_digest": "Документальная биографическая лента посвящена творческому пути архитектора Сигурда Леверенца и его профессиональному диалогу с коллегой Бернтом Нюбергом, раскрывая уникальные детали формирования авторского стиля мастера."
+      },
+      "checked_reason": "A curated architecture-documentary cycle occurrence.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": true,
+        "manual_concept_id": "architecture_film_cycle",
+        "manual_family": "rare_practice_route",
+        "manual_reason_ru": "кураторский цикл документального кино об архитектуре"
+      },
+      "expected_eventness_eligible": true,
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "core_unusual"
+    },
+    {
+      "case_id": "hard_negative:6272",
+      "event_id": 6272,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Мировая звезда итальянской музыки PUPO",
+        "date": "2026-07-29",
+        "event_type": "концерт",
+        "location_name": "Янтарь холл",
+        "city": "Светлогорск",
+        "short_description": "Итальянский певец и композитор Пупо исполнит свои знаменитые эстрадные хиты в рамках большого сольного концерта.",
+        "search_digest": "Живой концерт итальянского певца и композитора PUPO, в рамках которого прозвучат главные поп-хиты артиста, ставшие классикой мировой эстрады."
+      },
+      "checked_reason": "A conventional touring pop concert; artist prominence is not unusualness.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6921",
+      "event_id": 6921,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Гимн любви",
+        "date": "2026-07-29",
+        "event_type": "спектакль",
+        "location_name": "Янтарь холл",
+        "city": "Светлогорск",
+        "short_description": "Спектакль объединяет музыку и литературу для исследования истории искусства через новеллу Андре Моруа и шансон.",
+        "search_digest": "Спектакль-кабаре объединяет музыку, танец и драму, перенося зрителей из эпохи ампира и романсов в атмосферу Серебряного века. В основу постановки легла новелла Андре Моруа о становлении абстракционизма и феномене ценителей искусства."
+      },
+      "checked_reason": "A conventional staged musical love programme; theme and repertoire do not establish an unusual mechanism.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:7019",
+      "event_id": 7019,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Летний концерт студии современного танца «ЛЕО»",
+        "date": "2026-07-29",
+        "event_type": "концерт",
+        "location_name": "Центр культуры и досуга",
+        "city": "Гурьевск",
+        "short_description": "Студия современного танца «ЛЕО» представляет летний концерт.",
+        "search_digest": "Летний концерт студии современного танца «ЛЕО» в Гурьевске"
+      },
+      "checked_reason": "A conventional student dance-studio concert; performance variety alone is insufficient.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:7148",
+      "event_id": 7148,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Концерт «На балу у Кальмана»",
+        "date": "2026-07-29",
+        "event_type": "концерт",
+        "location_name": "Филармония им. Светланова",
+        "city": "Калининград",
+        "short_description": "Концерт «На балу у Кальмана» посвящён жизнерадостным произведениям венгерского композитора Имре Кальмана.",
+        "search_digest": "Музыкальная программа посвящена творчеству классика венской оперетты Имре Кальмана и включает арии, дуэты и оркестровые номера из знаменитых произведений в исполнении солистов и духового оркестра под управлением Виктора Бобкова и Романа Иванова."
+      },
+      "checked_reason": "A conventional operetta concert programme in a public hall.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6506",
+      "event_id": 6506,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Плохие парни",
+        "date": "2026-07-30",
+        "event_type": "спектакль",
+        "location_name": "Калининградский театр эстрады (Дом искусств)",
+        "city": "Калининград",
+        "short_description": "Изящная комедия Андрея Ковалёва исследует непростые взаимоотношения двух успешных мужчин в процессе переосмысления их жизненного пути.",
+        "search_digest": "Изящная комедия Андрея Ковалёва исследует непростые взаимоотношения начальника и подчинённого, предлагая зрителям проследить за тем, как двое успешных мужчин переосмысляют свой жизненный путь в ходе полуторачасового сценического диалога."
+      },
+      "checked_reason": "A conventional theatre performance; comedy/plot novelty is not an unusual experience mechanism.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6938",
+      "event_id": 6938,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Владимир Гудожников: Песни из кинофильмов",
+        "date": "2026-07-30",
+        "event_type": "концерт",
+        "location_name": "Янтарь холл",
+        "city": "Светлогорск",
+        "short_description": "Владимир Гудожников — лауреат I премии в номинации «Молодые исполнители» VIII международного конкурса вокалистов «Янтарный соловей».",
+        "search_digest": "Лауреат международных конкурсов и артист Санкт-Петербургской филармонии исполнит программу, составленную из популярных композиций к советским кинофильмам, включая саундтреки к картинам Москва слезам не верит и Бриллиантовая рука."
+      },
+      "checked_reason": "A conventional concert of songs from films.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6960",
+      "event_id": 6960,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Петросян 80",
+        "date": "2026-07-30",
+        "event_type": "концерт",
+        "location_name": "Янтарь холл",
+        "city": "Светлогорск",
+        "short_description": "Народный артист Евгений Петросян отмечает восьмидесятилетие большой сольной программой с лучшими монологами и новыми творческими номерами.",
+        "search_digest": "Народный артист РСФСР отмечает восьмидесятилетие большим сольным концертом, в программу которого вошли как легендарные монологи, ставшие классикой отечественной эстрады, так и совершенно новые творческие работы мастера."
+      },
+      "checked_reason": "A conventional anniversary stage comedy programme; celebrity/age is not unusualness.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:7149",
+      "event_id": 7149,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Концерт «Волшебный мир Хаяо Миядзаки»",
+        "date": "2026-07-30",
+        "event_type": "концерт",
+        "location_name": "Филармония им. Светланова",
+        "city": "Калининград",
+        "short_description": "Музыкальный концерт представляет саундтреки из анимационных фильмов знаменитого японского режиссера и аниматора Хаяо Миядзаки.",
+        "search_digest": "Концерт с саундтреками из анимационных фильмов Хаяо Миядзаки в исполнении вокалистки и инструментального ансамбля."
+      },
+      "checked_reason": "A conventional concert of film music in a public hall.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:5665",
+      "event_id": 5665,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Симфоническая пятница",
+        "date": "2026-07-31",
+        "event_type": "концерт",
+        "location_name": "Кафедральный собор",
+        "city": "Калининград",
+        "short_description": "Оркестр исполняет кантату Тайный путь композитора Угличина в рамках программы академической симфонической музыки для слушателей.",
+        "search_digest": "Программа музыкального вечера сфокусирована на исполнении крупной академической формы, центральным элементом которой станет кантата В. Угличина Тайный путь, требующая от оркестра особой точности в передаче эмоциональных нюансов и авторской драматургии."
+      },
+      "checked_reason": "A conventional symphonic Friday concert.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6725",
+      "event_id": 6725,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "🎤 «ДЕПЕШ МОД трибьют»",
+        "date": "2026-07-31",
+        "event_type": "концерт",
+        "location_name": "Бастион Холл",
+        "city": "Калининград",
+        "short_description": "Музыкальные коллективы исполняют культовые хиты группы Depeche Mode в рамках тематического концерта с последующим диджейским сетом.",
+        "search_digest": "Трибьют-вечер объединяет поклонников творчества Depeche Mode для прослушивания культовых хитов в живом исполнении групп New Version и Amonbeat, после чего программа продолжится танцевальным сетом в стилях синти-поп, рок и дарк-рейв."
+      },
+      "checked_reason": "A conventional Depeche Mode tribute concert.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6979",
+      "event_id": 6979,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Концерт Патриаршего мужского хора Московского Данилова монастыря «Любо, братцы, любо!»",
+        "date": "2026-07-31",
+        "event_type": "концерт",
+        "location_name": "Янтарь холл",
+        "city": "Светлогорск",
+        "short_description": "Патриарший мужской хор исполняет программу из духовных песнопений, народных песен и известных казачьих романсов акапелла.",
+        "search_digest": "Профессиональный коллектив под управлением Георгия Сафонова исполняет программу из духовных песнопений, народных песен и романсов, демонстрируя мастерство мужского хорового пения a’capella в сопровождении поэтических произведений."
+      },
+      "checked_reason": "A conventional choral concert in a public hall.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:7058",
+      "event_id": 7058,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "🎹 Концерт «Лето музыки»",
+        "date": "2026-07-31",
+        "event_type": "концерт",
+        "location_name": "Музей Мирового океана, наб. Петра Великого 1, Калининград",
+        "city": "Светлогорск",
+        "short_description": "Заключительный концерт летней школы для классических музыкантов с программой из арий и романсов композиторов.",
+        "search_digest": "Заключительный концерт летней школы для классических музыкантов с программой из арий и романсов русских и зарубежных композиторов."
+      },
+      "checked_reason": "A conventional advertised concert; the museum venue alone is insufficient.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6917",
+      "event_id": 6917,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "🎹 Концерт «Шедевры органной музыки»",
+        "date": "2026-08-01",
+        "event_type": "концерт",
+        "location_name": "Янтарь холл",
+        "city": "Светлогорск",
+        "short_description": "Органистка Хироко Иноуэ и симфонический оркестр исполняют классические произведения Баха и популярные мелодии музыкального театра.",
+        "search_digest": "Программа объединяет классическое наследие и знаковые мелодии музыкального театра в исполнении органистки Хироко Иноуэ и симфонического оркестра под управлением Игоря Шевернева, охватывая произведения от Иоганна Себастьяна Баха до Эндрю Ллойда Уэббера."
+      },
+      "checked_reason": "A conventional organ recital, without the explanatory organ-excursion mechanism.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:6936",
+      "event_id": 6936,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Концерт Дениса Боячука",
+        "date": "2026-08-01",
+        "event_type": "концерт",
+        "location_name": "Бар Бастион",
+        "city": "Калининград",
+        "short_description": "Денис Боячук исполнит новые авторские песни о поиске себя и романтике дальних странствий на концерте.",
+        "search_digest": "Концерт Дениса Боячука в баре Бастион"
+      },
+      "checked_reason": "A conventional solo concert in a bar.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    },
+    {
+      "case_id": "hard_negative:7011",
+      "event_id": 7011,
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "expected_eventness_eligible": true,
+      "facts": {
+        "title": "Сольный концерт Акмаля",
+        "date": "2026-08-02",
+        "event_type": "концерт",
+        "location_name": "Янтарь холл",
+        "city": "Светлогорск",
+        "short_description": "Популярный автор и исполнитель Акмаль представит слушателям программу из своих главных хитов и известных композиций.",
+        "search_digest": "Популярный автор-исполнитель и участник рейтинговых телевизионных проектов представит программу из своих главных хитов, включая композиции Вдоль дорог и Мир нам завидовал, которые регулярно звучат в эфирах ведущих музыкальных радиостанций."
+      },
+      "checked_reason": "A conventional touring solo concert.",
+      "source_review": {
+        "snapshot_row_checked": true,
+        "manual_future_taxonomy": false
+      },
+      "expected_publication_eligible_as_of": true,
+      "eligible": true,
+      "frozen_tier": "ordinary"
+    }
+  ],
+  "series_groups": [
+    {
+      "concept_id": "theatre_backstage",
+      "member_event_ids": [
+        5754,
+        5829,
+        5755,
+        5756,
+        5757,
+        5781
+      ],
+      "expected_max_visible_in_top_20": 1
+    },
+    {
+      "concept_id": "musical_lotto",
+      "member_event_ids": [
+        7141,
+        7144
+      ],
+      "expected_max_visible_in_top_20": 1
+    },
+    {
+      "concept_id": "organ_excursion",
+      "member_event_ids": [
+        7152,
+        7155,
+        7160
+      ],
+      "expected_max_visible_in_top_20": 1
+    },
+    {
+      "concept_id": "harry_potter_screening",
+      "member_event_ids": [
+        7031,
+        7038
+      ],
+      "expected_max_visible_in_top_20": 1
+    },
+    {
+      "concept_id": "breakfast_with_artist",
+      "member_event_ids": [
+        6805,
+        6806
+      ],
+      "expected_max_visible_in_top_20": 1
+    },
+    {
+      "concept_id": "architecture_film_cycle",
+      "member_event_ids": [
+        7022,
+        7023,
+        7025,
+        7053
+      ],
+      "expected_max_visible_in_top_20": 1
+    }
+  ],
+  "canary_evidence": "pending"
+}

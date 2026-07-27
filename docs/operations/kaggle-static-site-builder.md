@@ -13,6 +13,15 @@ already-existing production env flags.
 
 Kaggle is an accepted **batch executor** in this project because the repo already uses Kaggle for monitored parser/video/social jobs. For static pages it may build Astro HTML, related/discovery manifests, golden-facet manifests, share-card artifacts and offline evaluation reports.
 
+R15 unusual events reuse this executor, lease and immutable input dataset. The
+builder may produce one hash-bound shared BGE vector artifact, the unusual
+manifest/cache/last-good receipt and the daily service-share image in the
+coalesced run; it must not create a parallel Kaggle job or move embedding work
+to Fly/page views. Exact semantic and rollback rules live in
+[`docs/features/unusual-events/README.md`](../features/unusual-events/README.md).
+The real Kaggle CPU canary is still pending and must not be inferred from local
+fixture tests.
+
 Kaggle must not be treated as an uncontrolled production publisher. Production trust belongs to the release protocol, not to the notebook itself.
 
 It is acceptable for the Kaggle API actor to be a dedicated personal Kaggle user/account, but only as an execution/publisher identity inside this protocol: least-privileged credentials, immutable snapshot input, status ledger, staging-prefix upload, checked manifest, promotion gate and rollback. The personal account must not become the only place where production release state is known.

@@ -94,6 +94,15 @@ Audience извлекается LLM-first из первичного источн
 - составная страница публикуется/indexes только при достаточном числе exact
   событий и гарантированной свежести. Query-param варианты до этого canonical/noindex.
 
+For the R15 candidate, the Free collection has one stable visual identity at
+both scroll states. The expanded shelf shows the accepted large Free medallion
+on the right; the compact sticky shelf retains a smaller instance of that same
+identity rather than switching to a generic text chip. The medallion decorates
+already-proven admission data: it cannot make an `unknown` event free, change
+ordering, or replace the materialized collection predicate. `Бесплатно`
+remains a top-level fast action even when the menu also lists it inside
+`Подборки`.
+
 ### Calendar, Popular, Personal
 
 - Calendar может дать переходы `Бесплатно` и `С детьми` в discovery sheet или

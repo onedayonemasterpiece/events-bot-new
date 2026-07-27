@@ -30,6 +30,25 @@ SQLite-backed July–December 2026 festival directory. It owns the
 festival-specific source/status and flexible row-packing contract; the category
 view and production-root publication remain out of scope.
 
+## R15 home composition
+
+The R15 home candidate is one ordered composition, not a second personalization
+product:
+
+1. a concise hero that explains the service in human language;
+2. quick navigation to materialized discovery routes;
+3. a cold-start event feed capped at 30 cards;
+4. progressive client reranking only when the versioned same-origin local
+   profile contains compatible preference signals.
+
+Static HTML always contains the useful cold-start feed. Hydration may filter or
+rerank within the bounded contract but cannot blank first paint, duplicate
+events, introduce a page-view embedding/LLM call, or create a different
+indexable home. Backend/auth/storage failure keeps the static ordering. The
+home does not authorize production-root cutover; it follows the same immutable
+candidate and owner-acceptance gate as the
+[`unusual-events` R15 release](../unusual-events/README.md).
+
 ### Unified occurrence projection
 
 Интеграция из contract/donor `feature/related-events-compact-unified-20260721`

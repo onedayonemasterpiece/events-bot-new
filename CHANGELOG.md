@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added the R15 unusual-events implementation contract: `/neobychnoe/`,
+  15-family taxonomy, one hash-bound shared BGE vector boundary, concept-level
+  dedup/unread state, zero-provider static build, atomic cache/last-good
+  rollback and a checked-fact golden evaluation fixture; real Kaggle canary and
+  production-root cutover remain explicitly pending.
+- Added R15 static-site product contracts for horizontal `5:4` no-band mobile
+  rail crops, persistent Free collection identity, daily service-share
+  freshness, noindex calendar-first favorites, event-aware far-future calendar
+  navigation, bounded home composition and the `Подборки` menu.
 - Added direct official future-catalog parsers for Kaliningrad Theatre of
   Variety (former Dom Iskusstv) and Yantar Hall, including month/AJAX
   pagination, targeted `/parse estrada|yantarhall` runs and source-level
