@@ -361,7 +361,7 @@ test('complete recovered medallion inventory stays in the manifests and lab', as
   const organizerSlugs = new Set(organizerManifest.items.map((item) => item.slug));
   const festivalSlugs = new Set(festivalManifest.items.map((item) => item.slug));
 
-  assert.equal(organizerManifest.items.length, 27);
+  assert.equal(organizerManifest.items.length, 28);
   assert.equal(festivalManifest.items.length, 11);
   for (const slug of ['mumod', 'greza-khutor', 'yantar-hall', 'ruin-keepers']) {
     assert.ok(organizerSlugs.has(slug), `${slug} must remain in the organizer inventory`);
@@ -375,7 +375,7 @@ test('complete recovered medallion inventory stays in the manifests and lab', as
   }
 
   const built = await readBuilt('lab/medallions/index.html');
-  assert.match(built, /Организаторы и площадки — 27/u);
+  assert.match(built, /Организаторы и площадки — 28/u);
   assert.match(built, /Музей курортной моды/u);
   assert.match(built, /\/assets\/organizers\/mumod\.svg/u);
   assert.match(built, /Фестивали — 10/u);

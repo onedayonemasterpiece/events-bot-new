@@ -333,7 +333,7 @@ catalog. It recovered:
 - the deterministic `free-listing-medallion` sign from implementation commit
   `4d2c6169`.
 
-The resulting QA inventory is 27 organizer/venue/festival-brand entries in
+The resulting QA inventory is 28 organizer/venue/festival-brand entries in
 `organizerMedallions.json`, 10 festival identities plus one venue brand in
 `festivalMedallions.json`, and the standalone transport/source/program signs
 shown in `/lab/medallions/`. The accepted organizer/festival source snapshot is
@@ -341,6 +341,8 @@ traceable to `fa367ea372e3` on
 `origin/integration/static-site-medallions-release-20260712`. A full-catalog
 acceptance must compare manifest slugs, referenced runtime files and the lab
 DOM—not only check whichever items happen to be visible in one screenshot.
+The 28th organizer entry is the source-grounded `profitur` identity added with
+the structured `organizer_names` contract; it is not inferred from event prose.
 
 The production-backed 2026-07-23 usage audit is
 [static-medallion-usage-audit-2026-07-23](../../reports/static-medallion-usage-audit-2026-07-23.md).

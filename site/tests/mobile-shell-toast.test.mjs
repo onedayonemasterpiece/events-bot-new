@@ -19,7 +19,11 @@ test('EventLayout is the single mobile shell owner with canonical route mapping'
   assert.match(layout, /headerCurrent === 'today' \|\| headerCurrent === 'tomorrow'/u);
   assert.match(layout, /resolvedMobileTopMode === 'immersive' \? 'cta'/u);
   assert.match(search, /mobileSection="search"/u);
-  assert.match(collection, /mobileSection="search"/u);
+  assert.match(
+    collection,
+    /mobileSection=\{collection\.slug === 'besplatnye-sobytiya' \? 'home' : 'search'\}/u,
+    'the Free collection stays in the Afisha shell instead of masquerading as Search',
+  );
   assert.doesNotMatch(search, /MobileSearchBottomNav|MobileBottomNav/u);
   assert.doesNotMatch(collection, /MobileSearchBottomNav|MobileBottomNav/u);
   assert.match(drawer, /data-reference4-fullscreen/u);
