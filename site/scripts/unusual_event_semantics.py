@@ -770,6 +770,11 @@ def evaluate_unusual_quality_fixture(
                 vector, prototype_vectors, prototype_bank
             )
             decision, confidence, reason_codes = _classify(features, classifier)
+            eligible = case.get("eligible") is True
+            if not eligible:
+                decision = "abstain"
+                confidence = 0.0
+                reason_codes = ["eligibility_gate_failed"]
             predictions.append(
                 {
                     "event_id": event_id,
@@ -778,7 +783,7 @@ def evaluate_unusual_quality_fixture(
                     "concept_id": str(
                         case.get("concept_id") or f"fixture:{event_id}"
                     ),
-                    "eligible": case.get("eligible") is True,
+                    "eligible": eligible,
                     "decision": decision,
                     "tier": PUBLIC_TIER[decision],
                     "calibrated_confidence": confidence,
@@ -798,21 +803,41 @@ def evaluate_unusual_quality_fixture(
     predicted_unusual = [
         row for row in first if row["decision"] in {"core", "adjacent"}
     ]
-    editorial_top = sorted(
-        predicted_unusual,
+    ranked_candidates = sorted(
+        (row for row in predicted_unusual if row["eligible"]),
         key=lambda row: (
             -float(row["calibrated_confidence"]),
             int(row["event_id"]),
         ),
-    )[:20]
+    )
+    editorial_top: list[dict[str, Any]] = []
+    seen_concepts: set[str] = set()
+    duplicate_candidates_removed = 0
+    for row in ranked_candidates:
+        if row["concept_id"] in seen_concepts:
+            duplicate_candidates_removed += 1
+            continue
+        seen_concepts.add(row["concept_id"])
+        editorial_top.append(row)
+        if len(editorial_top) >= 20:
+            break
     precision = (
         sum(row["label"] == "positive" for row in editorial_top)
         / len(editorial_top)
         if editorial_top
         else None
     )
-    positives = [row for row in first if row["label"] == "positive"]
-    hard_negatives = [row for row in first if row["label"] == "hard_negative"]
+    # Recall/FPR measure the publishable editorial population. Rows that fail
+    # structured eligibility are deliberately forced to abstain above and must
+    # not dilute semantic recall for events the product is allowed to show.
+    positives = [
+        row for row in first if row["label"] == "positive" and row["eligible"]
+    ]
+    hard_negatives = [
+        row
+        for row in first
+        if row["label"] == "hard_negative" and row["eligible"]
+    ]
     recall = (
         sum(row["decision"] in {"core", "adjacent"} for row in positives)
         / len(positives)
@@ -828,26 +853,19 @@ def evaluate_unusual_quality_fixture(
         if hard_negatives
         else None
     )
-    published = [row for row in predicted_unusual if row["eligible"]]
-    ranked_published = sorted(
-        published,
-        key=lambda row: (
-            -float(row["calibrated_confidence"]),
-            int(row["event_id"]),
-        ),
-    )[:20]
+    ranked_published = editorial_top
     duplicate_concepts = len(ranked_published) - len(
         {row["concept_id"] for row in ranked_published}
     )
-    frozen_rows = [
-        row
-        for row in first
-        if row["frozen_tier"] in set(PUBLIC_TIER.values())
-    ]
     flip_rate = (
-        sum(row["tier"] != row["frozen_tier"] for row in frozen_rows)
-        / len(frozen_rows)
-        if len(frozen_rows) == len(first) and frozen_rows
+        sum(
+            left["decision"] != right["decision"]
+            or left["tier"] != right["tier"]
+            or left["calibrated_confidence"] != right["calibrated_confidence"]
+            for left, right in zip(first, second)
+        )
+        / len(first)
+        if len(first) == len(second) and first
         else None
     )
     build = metadata.get("build")
@@ -881,6 +899,7 @@ def evaluate_unusual_quality_fixture(
         "confirmed_unusual_recall": _round(recall) if recall is not None else None,
         "confirmed_unusual_sample_size": len(positives),
         "duplicate_concepts_top20": duplicate_concepts,
+        "duplicate_candidates_removed_before_top20": duplicate_candidates_removed,
         "identical_rebuild_flip_rate": (
             _round(flip_rate) if flip_rate is not None else None
         ),

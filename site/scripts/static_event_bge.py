@@ -199,7 +199,6 @@ def build_shared_bge_vector_artifact(
         and previous_metadata.get("document_version") == DOCUMENT_VERSION
         and previous_metadata.get("vector_normalization") == VECTOR_NORMALIZATION
         and previous_metadata.get("prototype_bank_sha256") == stable_hash(prototype_bank)
-        and previous_metadata.get("classifier_sha256") == stable_hash(classifier)
     )
     previous_events = (
         previous_artifact.get("event_vectors", {})

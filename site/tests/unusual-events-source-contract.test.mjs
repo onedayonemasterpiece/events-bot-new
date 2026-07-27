@@ -68,7 +68,7 @@ test('R08 uses one hash-bound BGE vector boundary and the exact 15-family bank',
     const kinds = new Set(prototypes.prototypes.filter((item) => item.family === family).map((item) => item.kind));
     assert.deepEqual(kinds, new Set(['positive', 'hard_negative']), family);
   }
-  assert.equal(classifier.calibration.approval_status, 'not_approved');
+  assert.equal(classifier.calibration.approval_status, 'runtime_gate_required');
   assert.equal(fixture.canary_evidence, 'pending');
 });
 

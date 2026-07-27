@@ -4134,7 +4134,6 @@ def _load_cached_bge_artifact(
             or receipt.get("document_version") != bge_module.DOCUMENT_VERSION
             or receipt.get("encoder_contract") != bge_module.ENCODER_CONTRACT
             or receipt.get("prototype_bank_sha256") != bge_module.stable_hash(prototype_bank)
-            or receipt.get("classifier_sha256") != bge_module.stable_hash(classifier)
         ):
             return None
         with np.load(npz_path, allow_pickle=False) as stored:
@@ -4168,7 +4167,11 @@ def _load_cached_bge_artifact(
         validation = bge_module.validate_shared_bge_vector_artifact(
             artifact,
             prototype_bank=prototype_bank,
-            expected_classifier_sha256=bge_module.stable_hash(classifier),
+            # The embedding cache is bound to the encoder/document/prototype
+            # contract. A classifier-only calibration change must reuse the
+            # same vectors; build_shared_bge_vector_artifact will bind the
+            # rebuilt receipt to the new head hash.
+            expected_classifier_sha256=None,
         )
         if not validation.get("valid"):
             return None

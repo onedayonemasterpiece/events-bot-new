@@ -15,6 +15,13 @@
   structured eligibility and conservative presentation dedup are fail-closed,
   last-good is content/freshness-bound, feed ordering applies 30-day/diversity
   rules, and the shipped noindex lab drives all ten red-dot Playwright cases.
+- Calibrated the deterministic R15 unusual-event head on the pinned real BGE-M3
+  artifact and corrected its publication-quality accounting: ineligible rows
+  abstain, recall uses the publishable frozen population, precision/diversity
+  use the concept-deduplicated feed, and identical-rebuild flip rate compares
+  repeated inference rather than editorial tier labels. Classifier-only updates
+  now reuse every compatible dense vector while rebinding a fresh classifier
+  and artifact hash.
 - Restored no-band mobile rail geometry for multi-image no-OCR events:
   landscape assets (including current Pianissimo event `5297`) use `5:4`
   cover, while safe portrait galleries use vertical `4:5`; OCR/document assets

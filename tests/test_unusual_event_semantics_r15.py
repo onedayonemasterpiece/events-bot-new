@@ -360,6 +360,33 @@ def test_shared_artifact_reencodes_only_a_changed_event():
     assert rebuilt["metadata"]["encoded_prototype_count"] == 0
 
 
+def test_shared_artifact_reuses_vectors_when_only_classifier_changes():
+    rows = [event(1, "First"), event(2, "Second")]
+    artifact, bank, classifier = _artifact(rows)
+    changed_classifier = {
+        **classifier,
+        "bias": float(classifier["bias"]) + 0.125,
+    }
+
+    def must_not_encode(*_args, **_kwargs):
+        raise AssertionError("classifier-only calibration must not encode vectors")
+
+    rebuilt = build_shared_bge_vector_artifact(
+        rows,
+        bank,
+        model_revision=MODEL_REVISION,
+        classifier=changed_classifier,
+        encoder=must_not_encode,
+        previous_artifact=artifact,
+    )
+    assert rebuilt["metadata"]["encoded_event_count"] == 0
+    assert rebuilt["metadata"]["reused_event_count"] == len(rows)
+    assert rebuilt["metadata"]["encoded_prototype_count"] == 0
+    assert rebuilt["metadata"]["reused_prototype_count"] == len(bank["prototypes"])
+    assert rebuilt["metadata"]["classifier_sha256"] != artifact["metadata"]["classifier_sha256"]
+    assert rebuilt["metadata"]["artifact_sha256"] != artifact["metadata"]["artifact_sha256"]
+
+
 def test_quality_fixture_is_hash_bound_and_real_canary_evidence_is_explicit():
     rows = [event(1, "Core")]
     artifact, bank, classifier = _artifact(rows)
@@ -396,3 +423,53 @@ def test_quality_fixture_is_hash_bound_and_real_canary_evidence_is_explicit():
     assert evaluation["identical_rebuild_flip_rate"] == 0.0
     assert evaluation["confirmed_unusual_recall"] == 1.0
     assert evaluation["hard_negative_false_positive_rate"] is None
+
+
+def test_quality_fixture_deduplicates_publication_and_abstains_ineligible_rows():
+    rows = [event(1, "Core one"), event(2, "Core two"), event(3, "Core three")]
+    artifact, bank, classifier = _artifact(rows)
+    artifact["metadata"]["build"]["evidence_kind"] = "real_bge_canary"
+    from static_event_bge import stable_hash
+
+    unhashed = dict(artifact["metadata"])
+    unhashed.pop("artifact_sha256")
+    artifact["metadata"]["artifact_sha256"] = stable_hash(
+        {
+            "metadata": unhashed,
+            "event_vectors": artifact["event_vectors"],
+            "prototype_vectors": artifact["prototype_vectors"],
+        }
+    )
+    fixture = {
+        "schema_version": "unusual-events-golden-v1",
+        "cases": [
+            {
+                "event_id": 1,
+                "label": "positive",
+                "concept_id": "gold.same",
+                "eligible": True,
+            },
+            {
+                "event_id": 2,
+                "label": "positive",
+                "concept_id": "gold.same",
+                "eligible": True,
+            },
+            {
+                "event_id": 3,
+                "label": "positive",
+                "concept_id": "gold.non-event",
+                "eligible": False,
+            },
+        ],
+    }
+    evaluation = evaluate_unusual_quality_fixture(fixture, artifact, bank, classifier)
+    by_id = {row["event_id"]: row for row in evaluation["predictions"]}
+    assert by_id[3]["decision"] == "abstain"
+    assert by_id[3]["reason_codes"] == ["eligibility_gate_failed"]
+    assert evaluation["ineligible_publication_count"] == 0
+    assert evaluation["duplicate_concepts_top20"] == 0
+    assert evaluation["duplicate_candidates_removed_before_top20"] == 1
+    assert evaluation["editorial_ranked_count"] == 1
+    assert evaluation["confirmed_unusual_sample_size"] == 2
+    assert evaluation["confirmed_unusual_recall"] == 1.0

@@ -81,6 +81,11 @@ The static pipeline has one BGE encoding boundary:
    that row; changing one event encodes only that event. The same resulting
    vector is consumed by public static related retrieval, unusual scoring,
    family evidence and presentation concept clustering/support.
+   A classifier-only calibration is also cache-compatible: the dense vectors
+   do not depend on the lightweight head. The rebuilt artifact reuses all rows,
+   binds the **new** classifier SHA in fresh metadata and recomputes its artifact
+   SHA. Runtime consumers still reject a vector receipt that was not rebound to
+   their current classifier.
 4. Consumers call `validate_shared_bge_vector_artifact()` and bind the model,
    revision, dimension, document version, normalization, prototype-bank hash,
    classifier hash and artifact hash. A mismatch means abstain/disable, never
@@ -128,10 +133,14 @@ It was copied from the read-only
 `artifacts/codex/unusual-events-20260727` snapshot and checked manual taxonomy.
 It includes all 15 families, ordinary hard negatives, explicit non-events and
 six repeated-series/concept groups. Historical positive rows test semantic
-recall separately from as-of-date publication eligibility. Every row freezes
-`eligible` and an editorial `frozen_tier` (`core_unusual`, `adjacent`,
-`ordinary`, or `abstain`) so a real encoded canary measures identical-input tier
-flips instead of silently leaving that metric undefined.
+coverage without becoming public candidates. Recall and false-positive rates
+are measured on the frozen **publishable** editorial population; structurally
+ineligible rows are forced to `abstain` and cannot dilute or improve those
+metrics. Every row freezes `eligible` and an editorial `frozen_tier`
+(`core_unusual`, `adjacent`, `ordinary`, or `abstain`) as review provenance.
+The identical-rebuild flip metric compares two deterministic inference passes
+over the same vectors; it does not compare a newly calibrated classifier to
+the editorial tier label.
 
 The hard gate is structured and fail-closed: active/canonical/public/searchable
 status, non-silent/non-postponed/non-merged lifecycle, attendable event kind,
@@ -147,7 +156,9 @@ Activation is fail-closed unless the hash-bound evaluation proves all of:
   into the denominator as if they were predictions);
 - hard-negative false-positive rate `<= 0.05`;
 - confirmed-positive recall `>= 0.80`;
-- no more than one row per concept in the top 20;
+- no more than one row per concept in the top 20; candidates are concept-
+  deduplicated before precision/diversity are measured, matching the public
+  presentation contract;
 - identical-input flip rate `< 0.02` and exact deterministic repeat output;
 - the classifier-version diversity threshold (currently five represented
   families);
@@ -156,6 +167,16 @@ Activation is fail-closed unless the hash-bound evaluation proves all of:
 
 A report without real encoded BGE output is shadow evidence only. The checked
 source fixture is not itself a successful canary.
+
+The current candidate head was calibrated against the pinned real BGE-M3
+artifact `a4c72f80…` (332 event vectors, 55 prototypes) and the frozen fixture
+`abacf30f…`. Rebinding those immutable vectors to the candidate head produces
+precision `0.944444`, publishable confirmed-positive recall `0.833333`,
+hard-negative FPR `0.05`, 12 top-feed families, zero published ineligible rows,
+zero post-dedup duplicate concepts and deterministic flip rate `0.0`. These are
+calibration measurements, not release evidence: each build must still recreate
+and pass the hash-bound runtime gate, and a successful status-ledger Kaggle
+canary remains mandatory.
 
 ## Manifest, cache and last-good contract
 
