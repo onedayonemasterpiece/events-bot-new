@@ -28,6 +28,63 @@ def test_unsupported_named_island_routes_to_llm_review() -> None:
     assert reason == "canonical_location_not_in_source"
 
 
+def test_supported_address_does_not_ground_unmentioned_venue_name() -> None:
+    """Regression for linked source sofit_models/145 / event 7124."""
+
+    candidate = seu.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/sofit_models/145",
+        source_text=(
+            "КАСТИНГ на показ мод\n"
+            "📍 Адрес: Советский проспект, 12 (8 этаж, студия 809)"
+        ),
+        title="КАСТИНГ на показ мод",
+        date="2026-07-26",
+        time="19:00",
+        location_name="ИЦАЭ (в КГТУ)",
+        location_address="Советский проспект, 12",
+        city="Калининград",
+    )
+
+    needed, reason = seu._candidate_needs_llm_location_grounding_review(candidate)
+
+    assert needed is True
+    assert reason == "canonical_location_name_not_in_source"
+
+
+def test_post_review_reference_cannot_undo_llm_repair(monkeypatch) -> None:
+    candidate = seu.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/sofit_models/145",
+        source_text="📍 Адрес: Советский проспект, 12 (8 этаж, студия 809)",
+        title="КАСТИНГ на показ мод",
+        date="2026-07-26",
+        time="19:00",
+        location_name="студия 809",
+        location_address="Советский проспект, 12",
+        city="Калининград",
+    )
+
+    monkeypatch.setattr(
+        seu,
+        "_canonicalize_location_fields",
+        lambda **_kwargs: (
+            "ИЦАЭ (в КГТУ)",
+            "Советский проспект, 12",
+            "Калининград",
+        ),
+    )
+
+    assert seu._canonicalize_location_after_grounding_review(
+        candidate,
+        review_result="llm_repair",
+    ) == (
+        "студия 809",
+        "Советский проспект, 12",
+        "Калининград",
+    )
+
+
 def test_festival_phrase_in_location_routes_to_llm_review_without_venue_label() -> None:
     candidate = seu.EventCandidate(
         source_type="vk",
