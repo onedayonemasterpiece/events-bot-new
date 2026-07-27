@@ -70,9 +70,10 @@ were reconciled serially; old labs were not merged wholesale.
 - PR CI on the main-updated head: `python-ci` and
   `static-browser-release-gate` passed.
 - The production artifact-leakage gate now distinguishes the actual bare
-  `data-amber-artifact` marker from the inert
-  `data-amber-artifact-research="off"` configuration attribute; focused
-  artifact tests cover the boundary.
+  `data-amber-artifact`/`data-artifact-collection` markers from the inert
+  `data-amber-artifact-research="off"` configuration and
+  `data-artifact-collection-unavailable` fallback; focused artifact tests cover
+  both boundaries.
 - `git diff --check`: passed.
 
 Non-committed evidence is under `artifacts/codex/r14-*`.
