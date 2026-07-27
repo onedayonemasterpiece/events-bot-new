@@ -55,7 +55,12 @@ export function resolveMobileListingRailMedia(event, selected) {
     && Boolean(asset.focal_point)
     && !PROTECTED_MEDIA_ROLES.has(asset.media_role || '')
   );
-  const loneVisual = explicitlyVisual && images.length === 1;
+  // A contradictory event-level OCR/unknown marker must never be overridden by
+  // a permissive asset record. The exact 5:4 donor is reserved for one image
+  // whose event and asset both say visual-only.
+  const loneVisual = explicitlyVisual
+    && event?.image_text_mode === 'visual_only'
+    && images.length === 1;
 
   if (loneVisual) {
     return {

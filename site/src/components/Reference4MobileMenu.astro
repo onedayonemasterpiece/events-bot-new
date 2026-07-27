@@ -46,9 +46,9 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
           <a class="reference4-menu__row" href={route('/podborki/besplatnye-sobytiya/')}>
             <span class="reference4-icon reference4-icon--free" aria-hidden="true">0&#x200A;₽</span><span>Бесплатно</span><i aria-hidden="true"></i>
           </a>
-          <a class="reference4-menu__row" href={searchHref('события для детей')}>
-            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('baby-thin.svg')}')`}></span></span><span>Детям</span><i aria-hidden="true"></i>
-          </a>
+          <button class="reference4-menu__row reference4-menu__row--collections" type="button" data-reference4-collections-open aria-expanded="false">
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('squares-four-thin.svg')}')`}></span></span><span>Подборки</span><i aria-hidden="true"></i>
+          </button>
           <a class="reference4-menu__row" href={route('/vystavki/')} aria-current={isCurrent('exhibitions') ? 'page' : undefined}>
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('palette-thin.svg')}')`}></span></span><span>Выставки</span><i aria-hidden="true"></i>
           </a>
@@ -66,6 +66,24 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
           </a>
           <a class="reference4-menu__row" href={route('/dlya-menya/')} aria-current={isCurrent('personal') ? 'page' : undefined}>
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('user-focus-thin.svg')}')`}></span></span><span>Для меня</span><i aria-hidden="true"></i>
+          </a>
+        </nav>
+
+        <nav class="reference4-menu__list-plane" aria-label="Подборки" data-reference4-collections aria-hidden="true">
+          <button class="reference4-menu__row reference4-menu__row--back" type="button" data-reference4-collections-back>
+            <span class="reference4-menu__back-icon" aria-hidden="true"></span><span>Назад к афише</span>
+          </button>
+          <a class="reference4-menu__row" href={searchHref('события для детей')}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('baby-thin.svg')}')`}></span></span><span>Детям</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href={route('/neobychnoe/')} aria-current={isCurrent('unusual') ? 'page' : undefined} data-unusual-nav-link>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('sparkle-thin.svg')}')`}></span></span><span>Необычное</span><span class="unusual-nav-dot" data-unusual-nav-dot hidden aria-hidden="true"></span>
+          </a>
+          <a class="reference4-menu__row" href={route('/podborki/besplatnye-sobytiya/')}>
+            <span class="reference4-icon reference4-icon--free" aria-hidden="true">0&#x200A;₽</span><span>Бесплатно</span><i aria-hidden="true"></i>
+          </a>
+          <a class="reference4-menu__row" href={route('/kluby-po-interesam/')} aria-current={isCurrent('clubs') ? 'page' : undefined}>
+            <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('chats-thin.svg')}')`}></span></span><span>Клубы по интересам</span><i aria-hidden="true"></i>
           </a>
         </nav>
 
@@ -101,7 +119,7 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
             <span class="reference4-menu__account-initial" data-static-auth-initial aria-hidden="true">?</span>
             <span data-static-auth-name>Аккаунт</span>
           </a>
-          <a href={`${route('/dlya-menya/')}#izbrannoe`} aria-current={isCurrent('favorites') ? 'page' : undefined}>
+          <a href={route('/izbrannoe/')} aria-current={isCurrent('favorites') ? 'page' : undefined}>
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('heart-thin.svg')}')`}></span></span><span>Избранное</span>
           </a>
         </div>
@@ -212,11 +230,13 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
     .reference4-menu__list { box-sizing:border-box; position:relative; height:416px; overflow:hidden; border:1px solid rgba(255,255,255,.56); border-radius:22px; background:linear-gradient(180deg,rgba(255,252,247,.48),rgba(255,252,247,.32)); box-shadow:0 13px 34px rgba(46,28,20,.14),inset 0 1px 0 rgba(255,255,255,.68); }
     .reference4-menu__list-plane { position:absolute; inset:0; display:block; opacity:0; visibility:hidden; transform:translate3d(24px,0,0); transition:opacity 180ms ease,transform 240ms cubic-bezier(.22,.82,.22,1),visibility 0s linear 240ms; }
     .reference4-menu__list-plane.is-active { opacity:1; visibility:visible; transform:translate3d(0,0,0); transition-delay:0s; }
-    .reference4-menu__list.is-service .reference4-menu__list-plane[data-reference4-main] { transform:translate3d(-24px,0,0); }
+    .reference4-menu__list.is-service .reference4-menu__list-plane[data-reference4-main],
+    .reference4-menu__list.is-collections .reference4-menu__list-plane[data-reference4-main] { transform:translate3d(-24px,0,0); }
     .reference4-menu__row { box-sizing:border-box; position:relative; width:100%; height:52px; display:grid; grid-template-columns:38px 1fr 18px; align-items:center; gap:9px; padding:0 16px; border:0; background:transparent; color:#261d18; text-decoration:none; text-align:left; font-family:inherit; font-size:19px; line-height:23px; font-weight:560; letter-spacing:-.015em; cursor:pointer; }
     .reference4-menu__row + .reference4-menu__row::before { content:""; position:absolute; left:63px; right:16px; top:0; height:1px; background:rgba(114,93,80,.18); }
     .reference4-menu__row[aria-current="page"] { background:rgba(255,236,225,.42); color:#8f351c; }
     .reference4-menu__row > i { width:9px; height:9px; border-top:1.25px solid currentColor; border-right:1.25px solid currentColor; transform:rotate(45deg); justify-self:end; }
+    .reference4-menu__row .unusual-nav-dot { justify-self:end; width:9px; height:9px; border-radius:50%; background:#c72f2f; box-shadow:0 0 0 3px rgba(199,47,47,.12); }
     .reference4-menu__row:focus-visible { outline:3px solid #98401f; outline-offset:-3px; }
     .reference4-menu__row--back { grid-template-columns:38px 1fr; padding-right:34px; font-weight:720; color:#793014; }
     .reference4-menu__back-icon { justify-self:center; width:14px; height:14px; border-left:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); }
@@ -281,6 +301,9 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
     const close = menu.querySelector('[data-reference4-close]');
     const list = menu.querySelector('[data-reference4-list]');
     const mainPlane = menu.querySelector('[data-reference4-main]');
+    const collectionsPlane = menu.querySelector('[data-reference4-collections]');
+    const collectionsOpen = menu.querySelector('[data-reference4-collections-open]');
+    const collectionsBack = menu.querySelector('[data-reference4-collections-back]');
     const servicePlane = menu.querySelector('[data-reference4-service]');
     const serviceOpen = menu.querySelector('[data-reference4-service-open]');
     const serviceBack = menu.querySelector('[data-reference4-service-back]');
@@ -304,20 +327,36 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
       if (!panel) return;
       panel.classList.toggle('is-scrollable', panel.scrollHeight > panel.clientHeight + 1);
     };
-    const showService = (show) => {
-      list?.classList.toggle('is-service', show);
-      mainPlane?.classList.toggle('is-active', !show);
-      servicePlane?.classList.toggle('is-active', show);
-      mainPlane?.setAttribute('aria-hidden', show ? 'true' : 'false');
-      servicePlane?.setAttribute('aria-hidden', show ? 'false' : 'true');
-      serviceOpen?.setAttribute('aria-expanded', show ? 'true' : 'false');
-      requestAnimationFrame(() => (show ? serviceBack : serviceOpen)?.focus({ preventScroll: true }));
+    const showPlane = (name) => {
+      const showCollections = name === 'collections';
+      const showService = name === 'service';
+      const showMain = !showCollections && !showService;
+      list?.classList.toggle('is-collections', showCollections);
+      list?.classList.toggle('is-service', showService);
+      mainPlane?.classList.toggle('is-active', showMain);
+      collectionsPlane?.classList.toggle('is-active', showCollections);
+      servicePlane?.classList.toggle('is-active', showService);
+      mainPlane?.setAttribute('aria-hidden', showMain ? 'false' : 'true');
+      collectionsPlane?.setAttribute('aria-hidden', showCollections ? 'false' : 'true');
+      servicePlane?.setAttribute('aria-hidden', showService ? 'false' : 'true');
+      collectionsOpen?.setAttribute('aria-expanded', showCollections ? 'true' : 'false');
+      serviceOpen?.setAttribute('aria-expanded', showService ? 'true' : 'false');
+      const focusTarget = showCollections ? collectionsBack : showService ? serviceBack : null;
+      if (focusTarget) requestAnimationFrame(() => focusTarget.focus({ preventScroll:true }));
     };
-    serviceOpen?.addEventListener('click', () => showService(true));
-    serviceBack?.addEventListener('click', () => showService(false));
+    collectionsOpen?.addEventListener('click', () => showPlane('collections'));
+    collectionsBack?.addEventListener('click', () => {
+      showPlane('main');
+      requestAnimationFrame(() => collectionsOpen?.focus({ preventScroll:true }));
+    });
+    serviceOpen?.addEventListener('click', () => showPlane('service'));
+    serviceBack?.addEventListener('click', () => {
+      showPlane('main');
+      requestAnimationFrame(() => serviceOpen?.focus({ preventScroll:true }));
+    });
     close?.addEventListener('click', () => {
       clearSettled();
-      showService(false);
+      showPlane('main');
       summary?.click();
       window.setTimeout(() => summary?.focus({ preventScroll: true }), reducedMotion() ? 0 : 360);
     });
@@ -336,7 +375,7 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
         });
       } else {
         clearSettled();
-        showService(false);
+        showPlane('main');
       }
     });
     new MutationObserver(() => {

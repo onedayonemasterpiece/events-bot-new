@@ -52,6 +52,7 @@ const { socialLinks } = Astro.props;
         <a href={withBase('/vyhodnye/')}>Выходные</a>
         <a href={withBase('/vystavki/')}>Выставки</a>
         <a href={withBase('/populyarnoe/')}>Популярное</a>
+        <a href={withBase('/neobychnoe/')} data-unusual-nav-link>Необычное <span class="site-footer-prototype__unusual-dot" data-unusual-nav-dot hidden aria-hidden="true"></span></a>
         <a href={withBase('/poisk/')}>Поиск</a>
         <a href={siteHomeHref()}>Все анонсы</a>
       </nav>
@@ -156,6 +157,8 @@ const { socialLinks } = Astro.props;
   .site-footer-prototype__column { display: grid; gap: .56rem; align-content: start; }
   .site-footer-prototype__column h3 { margin: 0 0 .45rem; color: #b9aaa0; font-size: .72rem; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; }
   .site-footer-prototype__column a { width: fit-content; color: #fff7ed; font-size: .9rem; font-weight: 650; line-height: 1.35; text-decoration: none; }
+  .site-footer-prototype__unusual-dot { display:inline-block; width:7px; height:7px; margin-left:5px; border-radius:50%; background:#f06355; box-shadow:0 0 0 3px rgba(240,99,85,.15); }
+  .site-footer-prototype__unusual-dot[hidden] { display:none; }
   .site-footer-prototype__column a:hover { color: #f5b18f; text-decoration: underline; text-underline-offset: .24em; }
   .site-footer-prototype__documents .site-footer-prototype__future-document { display: grid; gap: .15rem; color: #fff7ed; font-size: .9rem; font-weight: 650; line-height: 1.35; }
   .site-footer-prototype__documents small { color: #be9b88; font-size: .68rem; font-weight: 760; text-transform: uppercase; }

@@ -1,0 +1,22 @@
+{
+  "schema_version": "unusual-events-v1",
+  "build_id": "source-fallback-empty",
+  "generated_at": "1970-01-01T00:00:00.000Z",
+  "source_snapshot_id": "source-fallback-empty",
+  "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "taxonomy_version": "unusual-taxonomy-v1",
+  "policy_version": "unusual-policy-v1",
+  "embedding_model": "BAAI/bge-m3",
+  "revision": "unavailable",
+  "dim": 1024,
+  "doc_kind": "related_v1",
+  "document_version": "related_v1",
+  "prototype_bank_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "classifier_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "rollout_baseline_at": null,
+  "quality_gate": {
+    "status": "unavailable",
+    "metrics": {}
+  },
+  "items": []
+}

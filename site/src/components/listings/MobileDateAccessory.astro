@@ -1,5 +1,6 @@
 ---
-import { getAvailableWeekendRanges, getWeekendRange, withBase } from '../../lib/events';
+import { getAvailableWeekendRanges, getEvents, getWeekendRange, withBase } from '../../lib/events';
+import { buildEventDateAvailability } from '../../lib/eventDateAvailability';
 
 interface Props {
   today: string;
@@ -9,51 +10,76 @@ interface Props {
 }
 const { today, selectedDate, current, weekendEnd = '' } = Astro.props;
 const DAY = 86_400_000;
-const parseDate = (value: string) => new Date(`${value}T12:00:00+02:00`);
+const parseDate = (value: string) => new Date(`${value}T12:00:00Z`);
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const tomorrow = isoDate(new Date(parseDate(today).getTime() + DAY));
 const currentWeekendStart = getWeekendRange().start;
 const availableWeekendStarts = new Set(getAvailableWeekendRanges().map((range) => range.start));
-const dates = Array.from({ length: 42 }, (_, index) => {
-  const date = new Date(parseDate(today).getTime() + index * DAY);
-  const iso = isoDate(date);
+const availability = buildEventDateAvailability(getEvents(), today);
+const dates = availability.allDates.map((iso) => {
+  const date = parseDate(iso);
   const weekday = new Intl.DateTimeFormat('ru-RU', { weekday:'short', timeZone:'Europe/Kaliningrad' })
     .format(date).replace('.', '').toLocaleUpperCase('ru-RU');
   const day = date.getUTCDate();
   const month = new Intl.DateTimeFormat('ru-RU', { month:'short', timeZone:'Europe/Kaliningrad' })
     .format(date).replace('.', '').toLocaleUpperCase('ru-RU');
+  const monthLong = new Intl.DateTimeFormat('ru-RU', { month:'long', year:'numeric', timeZone:'Europe/Kaliningrad' })
+    .format(date);
+  const monthKey = iso.slice(0, 7);
   const isSaturday = date.getUTCDay() === 6;
   const isSunday = date.getUTCDay() === 0;
   const nextDate = new Date(date.getTime() + DAY);
-  const href: string | null = iso === today
-    ? '/segodnya/'
-    : iso === tomorrow
-      ? '/zavtra/'
-      : isSaturday && availableWeekendStarts.has(iso)
-        ? (iso === currentWeekendStart ? '/vyhodnye/' : `/vyhodnye/${iso}/`)
-        : `/date-${iso}/`;
+  const hasEvents = availability.availableDates.has(iso);
+  const weekendAvailable = isSaturday && availableWeekendStarts.has(iso);
+  const href: string | null = !hasEvents
+    ? null
+    : iso === today
+      ? '/segodnya/'
+      : iso === tomorrow
+        ? '/zavtra/'
+        : weekendAvailable
+          ? (iso === currentWeekendStart ? '/vyhodnye/' : `/vyhodnye/${iso}/`)
+          : `/date-${iso}/`;
   return {
     iso,
     weekday,
     day,
     month,
+    monthLong,
+    monthKey,
     href,
+    hasEvents,
     isSaturday,
     isSunday,
-    isWeekendRange: isSaturday,
-    rangeLabel: isSaturday ? `${day}–${nextDate.getUTCDate()}` : String(day),
-    selected: current === 'weekend'
-      ? iso === selectedDate
-      : iso === selectedDate,
+    isWeekendRange: weekendAvailable,
+    rangeLabel: weekendAvailable ? `${day}–${nextDate.getUTCDate()}` : String(day),
+    selected: iso === selectedDate,
   };
 });
+const monthGroups = [...new Set(dates.map((item) => item.monthKey))].map((monthKey) => {
+  const items = dates.filter((item) => item.monthKey === monthKey);
+  const firstWeekday = (parseDate(`${monthKey}-01`).getUTCDay() + 6) % 7;
+  return { monthKey, label: items[0]?.monthLong || monthKey, firstWeekday, items };
+});
+const selectedMonth = monthGroups.some((month) => month.monthKey === selectedDate.slice(0, 7))
+  ? selectedDate.slice(0, 7)
+  : monthGroups[0]?.monthKey;
 const selectedLabel = current === 'weekend' && weekendEnd
   ? `${selectedDate} — ${weekendEnd}`
   : selectedDate;
+const dateAria = (item: typeof dates[number]) => item.isWeekendRange
+  ? `Выходные, ${item.rangeLabel} ${item.month.toLocaleLowerCase('ru-RU')}`
+  : `${item.weekday}, ${item.day} ${item.month.toLocaleLowerCase('ru-RU')}`;
 ---
-<div class="date-accessory" data-mobile-date-accessory data-selected-date={selectedDate}>
+<div
+  class="date-accessory"
+  data-mobile-date-accessory
+  data-selected-date={selectedDate}
+  data-calendar-horizon={availability.horizonEnd}
+  data-calendar-furthest-event-date={availability.furthestEventDate}
+>
   <nav class="date-rail" aria-label="Выбор даты">
-    {dates.map((item, index) => (
+    {dates.map((item, index) => item.href ? (
       <a
         class:list={[
           'date-chip',
@@ -64,12 +90,21 @@ const selectedLabel = current === 'weekend' && weekendEnd
         href={withBase(item.href)}
         data-date={item.iso}
         aria-current={item.selected ? 'date' : undefined}
-        aria-label={item.isWeekendRange ? `Выходные, ${item.rangeLabel} ${item.month.toLocaleLowerCase('ru-RU')}` : `${item.weekday}, ${item.day} ${item.month.toLocaleLowerCase('ru-RU')}`}
+        aria-label={dateAria(item)}
       >
         <span>{item.isWeekendRange ? 'СБ+ВС' : item.weekday}</span>
         <strong>{item.rangeLabel}</strong>
         <small>{index === 0 || item.day === 1 ? item.month : ''}</small>
       </a>
+    ) : (
+      <span
+        class:list={['date-chip', 'date-chip--disabled', (item.isSaturday || item.isSunday) && 'date-chip--weekend']}
+        data-date={item.iso}
+        aria-disabled="true"
+        aria-label={`${dateAria(item)}. Событий нет`}
+      >
+        <span>{item.weekday}</span><strong>{item.day}</strong><small>{index === 0 || item.day === 1 ? item.month : ''}</small>
+      </span>
     ))}
   </nav>
   <button type="button" class="date-calendar-trigger" data-calendar-open aria-haspopup="dialog" aria-label="Открыть календарь">
@@ -79,14 +114,32 @@ const selectedLabel = current === 'weekend' && weekendEnd
 <div class="calendar-sheet" data-calendar-sheet hidden aria-hidden="true">
   <section class="calendar-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-calendar-title">
     <header>
-      <div><h2 id="mobile-calendar-title">Выбрать дату</h2><p>Ближайшие шесть недель · {selectedLabel}</p></div>
+      <div><h2 id="mobile-calendar-title">Выбрать дату</h2><p>{selectedLabel} · события до {availability.furthestEventDate}</p></div>
       <button type="button" data-calendar-close aria-label="Закрыть">×</button>
     </header>
-    <div class="calendar-grid">
-      {dates.map((item) => (
-        <a href={withBase(item.href)} data-calendar-date={item.iso} aria-current={item.selected ? 'date' : undefined}>
-          <span>{item.weekday}</span><b>{item.day}</b>
-        </a>
+    <div class="calendar-month-nav" aria-label="Месяцы календаря">
+      <button type="button" data-calendar-month-previous aria-label="Предыдущий месяц">←</button>
+      <strong data-calendar-month-label aria-live="polite"></strong>
+      <button type="button" data-calendar-month-next aria-label="Следующий месяц">→</button>
+    </div>
+    <div class="calendar-weekdays" aria-hidden="true"><span>ПН</span><span>ВТ</span><span>СР</span><span>ЧТ</span><span>ПТ</span><span>СБ</span><span>ВС</span></div>
+    <div class="calendar-months" data-calendar-months data-selected-month={selectedMonth}>
+      {monthGroups.map((month) => (
+        <section class="calendar-month" data-calendar-month={month.monthKey} data-calendar-month-label={month.label} hidden={month.monthKey !== selectedMonth}>
+          <h3 class="sr-only">{month.label}</h3>
+          <div class="calendar-grid">
+            {Array.from({ length:month.firstWeekday }, () => <span class="calendar-grid__blank" aria-hidden="true"></span>)}
+            {month.items.map((item) => item.href ? (
+              <a href={withBase(item.href)} data-calendar-date={item.iso} aria-current={item.selected ? 'date' : undefined} aria-label={dateAria(item)}>
+                <span>{item.weekday}</span><b>{item.day}</b>
+              </a>
+            ) : (
+              <span data-calendar-date={item.iso} aria-disabled="true" aria-label={`${dateAria(item)}. Событий нет`}>
+                <span>{item.weekday}</span><b>{item.day}</b>
+              </span>
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   </section>
@@ -100,6 +153,19 @@ const selectedLabel = current === 'weekend' && weekendEnd
     const trigger = accessory.querySelector('[data-calendar-open]');
     const close = sheet?.querySelector('[data-calendar-close]');
     const selected = accessory.querySelector('[aria-current="date"]');
+    const monthsRoot = sheet?.querySelector('[data-calendar-months]');
+    const months = [...(monthsRoot?.querySelectorAll('[data-calendar-month]') || [])];
+    const monthLabel = sheet?.querySelector('[data-calendar-month-label]');
+    const previous = sheet?.querySelector('[data-calendar-month-previous]');
+    const next = sheet?.querySelector('[data-calendar-month-next]');
+    let monthIndex = Math.max(0, months.findIndex((month) => month.dataset.calendarMonth === monthsRoot?.dataset.selectedMonth));
+    const showMonth = (index) => {
+      monthIndex = Math.max(0, Math.min(months.length - 1, index));
+      months.forEach((month, itemIndex) => { month.hidden = itemIndex !== monthIndex; });
+      if (monthLabel) monthLabel.textContent = months[monthIndex]?.dataset.calendarMonthLabel || '';
+      if (previous) previous.disabled = monthIndex === 0;
+      if (next) next.disabled = monthIndex >= months.length - 1;
+    };
     const centerSelected = () => selected?.scrollIntoView({ inline:'center', block:'nearest', behavior:'instant' });
     const closeSheet = () => {
       if (!sheet || sheet.hidden) return;
@@ -111,14 +177,17 @@ const selectedLabel = current === 'weekend' && weekendEnd
       if (!sheet) return;
       sheet.hidden = false;
       sheet.setAttribute('aria-hidden', 'false');
+      showMonth(monthIndex);
       requestAnimationFrame(() => {
         sheet.classList.add('is-open');
         sheet.querySelector('[data-calendar-close]')?.focus();
-        sheet.querySelector('[aria-current="date"]')?.scrollIntoView({ block:'center', behavior:'instant' });
       });
     };
+    showMonth(monthIndex);
     requestAnimationFrame(centerSelected);
     addEventListener('pageshow', centerSelected);
+    previous?.addEventListener('click', () => showMonth(monthIndex - 1));
+    next?.addEventListener('click', () => showMonth(monthIndex + 1));
     trigger?.addEventListener('click', openSheet);
     close?.addEventListener('click', closeSheet);
     sheet?.addEventListener('click', (event) => { if (event.target === sheet) closeSheet(); });

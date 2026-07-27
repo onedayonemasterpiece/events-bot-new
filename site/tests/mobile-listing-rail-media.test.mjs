@@ -49,6 +49,18 @@ test('every single classified crop-safe visual gets donor 140x112 cover, includi
   }
 });
 
+test('a contradictory event-level OCR or unknown marker blocks the lone 5:4 crop', () => {
+  for (const eventMode of ['ocr_text', 'unknown']) {
+    const image = asset();
+    const result = resolveMobileListingRailMedia(
+      { image_text_mode:eventMode, image_assets:[image] },
+      selected(image),
+    );
+    assert.equal(result.fit, 'contain');
+    assert.equal(result.reason, 'safe_visual_authored_geometry');
+  }
+});
+
 test('OCR, unknown semantics and document roles fail closed to authored contain geometry', () => {
   for (const image of [
     asset({ image_text_mode: 'ocr_text' }),

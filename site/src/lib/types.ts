@@ -314,3 +314,52 @@ export interface InterestClubsData {
   source: string;
   clubs: InterestClub[];
 }
+
+export type UnusualQualityGateStatus = 'approved' | 'shadow' | 'migration' | 'failed' | 'unavailable';
+
+export interface UnusualManifestQualityGate {
+  status: UnusualQualityGateStatus | string;
+  metrics: Record<string, number | string | boolean | null>;
+  rollout_baseline_at?: string | null;
+}
+
+export interface UnusualManifestItem {
+  event_id: number;
+  concept_id: string;
+  representative_event_id: number;
+  tier: string;
+  unusual_score: number;
+  confidence: number;
+  families: string[];
+  reason_codes: string[];
+  prototype_evidence: unknown[];
+  first_published_at: string | null;
+  notify_eligible: boolean;
+  content_hash: string;
+  date: string;
+  lifecycle: string;
+  path?: string | null;
+  event_snapshot?: PreviewEvent | null;
+}
+
+export interface UnusualEventsManifest {
+  schema_version: string;
+  build_id: string;
+  generated_at: string;
+  source_snapshot_id: string;
+  hash: string;
+  taxonomy_version: string;
+  policy_version: string;
+  embedding_model: string;
+  revision: string;
+  dim: number;
+  doc_kind: string;
+  document_version: string;
+  prototype_bank_hash: string;
+  classifier_hash: string;
+  rollout_baseline_at?: string | null;
+  notification_baseline_at?: string | null;
+  rollout_baseline?: string | null;
+  quality_gate: UnusualManifestQualityGate;
+  items: UnusualManifestItem[];
+}

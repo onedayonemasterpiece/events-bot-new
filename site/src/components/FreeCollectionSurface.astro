@@ -1,0 +1,106 @@
+---
+import EventCard from './EventCard.astro';
+import Breadcrumbs from './Breadcrumbs.astro';
+import type { PreviewEvent } from '../lib/types';
+import { siteHomeHref, withBase } from '../lib/events';
+
+interface Props {
+  title: string;
+  description: string;
+  criteria: string;
+  updatedDate: string;
+  referenceDate: string;
+  events: PreviewEvent[];
+}
+const { title, description, criteria, updatedDate, referenceDate, events } = Astro.props;
+---
+<main id="main" class="free-collection" data-free-collection-surface>
+  <div class="page-shell free-collection__shell">
+    <Breadcrumbs
+      parents={[
+        { label:'Афиша', href:siteHomeHref() },
+        { label:'Поиск', href:withBase('/poisk/') },
+      ]}
+      current={title}
+    />
+
+    <section class="free-collection__hero" aria-labelledby="free-collection-title" data-free-collection-hero>
+      <div class="free-collection__copy">
+        <p class="eyebrow">Готовая подборка</p>
+        <h1 id="free-collection-title">{title}</h1>
+        <p class="lead">{description}</p>
+        <p class="collection-criteria"><strong>Как собрана:</strong> {criteria}</p>
+        <p class="muted-note">Данные афиши обновлены {updatedDate}; подборка рассчитана на {referenceDate}. Это не личный сохранённый поиск.</p>
+      </div>
+      <span class="free-collection__medallion free-collection__medallion--hero" aria-label="Бесплатные события: ноль рублей" data-free-collection-medallion="large">
+        <img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" width="512" height="512" />
+      </span>
+    </section>
+
+    <div class="free-collection__shelf" data-free-collection-shelf>
+      <span class="free-collection__medallion free-collection__medallion--shelf" aria-hidden="true" data-free-collection-medallion="compact">
+        <img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" width="512" height="512" />
+      </span>
+      <div><strong>Бесплатно</strong><span>{events.length} событий с подтверждённым свободным входом</span></div>
+      <a href="#free-collection-results">К событиям</a>
+    </div>
+
+    <section id="free-collection-results" class="free-collection__results" aria-labelledby="free-collection-results-title">
+      <h2 id="free-collection-results-title">{events.length ? `${events.length} событий` : 'Подходящих событий пока нет'}</h2>
+      {events.length ? (
+        <div class="cards-grid" data-search-collection-results>
+          {events.map((event) => <EventCard event={event} mobileFlowMedia />)}
+        </div>
+      ) : (
+        <p class="free-collection__empty">Сейчас в актуальной выгрузке нет событий с подтверждённым бесплатным входом. Неизвестные условия не добавляются ради заполнения страницы.</p>
+      )}
+    </section>
+  </div>
+</main>
+
+<style>
+  .free-collection { --free-green:#2f7d32; padding: 0 0 4rem; }
+  .free-collection__shell { display:grid; gap:1rem; }
+  .free-collection__hero {
+    min-height:clamp(280px,34vw,430px); display:grid; grid-template-columns:minmax(0,1fr) clamp(180px,23vw,300px);
+    align-items:center; gap:clamp(1.5rem,4vw,4rem); padding:clamp(2rem,5vw,5rem);
+    border:1px solid rgba(47,125,50,.16); border-radius:32px;
+    background:radial-gradient(circle at 84% 42%,rgba(104,168,83,.18),transparent 28%),linear-gradient(135deg,#fffdf8,#f1f6e9);
+    box-shadow:0 18px 45px rgba(72,45,25,.08); overflow:hidden;
+  }
+  .free-collection__copy { min-width:0; }
+  .free-collection__copy h1 { max-width:12ch; margin:.15rem 0 1rem; font-size:clamp(2.8rem,6vw,5.8rem); line-height:.9; letter-spacing:-.06em; }
+  .free-collection__copy .lead { max-width:58ch; }
+  .free-collection__medallion { display:grid; place-items:center; flex:none; }
+  .free-collection__medallion img { width:100%; height:100%; object-fit:contain; }
+  .free-collection__medallion--hero { justify-self:end; width:clamp(180px,23vw,300px); height:clamp(180px,23vw,300px); filter:drop-shadow(0 22px 30px rgba(38,83,34,.18)); }
+  .free-collection__shelf {
+    position:sticky; z-index:48; top:57px; min-height:68px; display:grid; grid-template-columns:48px minmax(0,1fr) auto; align-items:center; gap:12px;
+    padding:8px 14px; border:1px solid rgba(47,125,50,.18); border-radius:18px; background:rgba(255,253,248,.96);
+    box-shadow:0 12px 28px rgba(51,39,29,.11); backdrop-filter:blur(14px);
+  }
+  .free-collection__medallion--shelf { width:48px; height:48px; }
+  .free-collection__shelf div { min-width:0; display:grid; gap:2px; }
+  .free-collection__shelf strong { font-size:1rem; line-height:1.1; }
+  .free-collection__shelf span { overflow:hidden; color:#6d6259; font-size:.78rem; line-height:1.2; text-overflow:ellipsis; white-space:nowrap; }
+  .free-collection__shelf a { min-height:44px; display:inline-flex; align-items:center; padding:0 14px; border-radius:999px; background:#2a211c; color:#fff; font-size:.82rem; font-weight:850; text-decoration:none; }
+  .free-collection__results { scroll-margin-top:142px; padding:clamp(1.5rem,4vw,3rem); border:1px solid rgba(121,48,20,.11); border-radius:26px; background:#fffdf8; }
+  .free-collection__results h2 { margin:0 0 1.25rem; font-size:clamp(1.5rem,3vw,2.4rem); }
+  .free-collection__empty { max-width:62ch; color:#6d6259; }
+  @media(max-width:759px) {
+    .free-collection { padding-bottom:calc(5rem + env(safe-area-inset-bottom)); }
+    .free-collection__shell { width:min(100% - 24px,1120px); }
+    .free-collection__hero { min-height:268px; grid-template-columns:minmax(0,1fr) 96px; gap:6px; padding:26px 18px 24px; border-radius:24px; }
+    .free-collection__copy h1 { font-size:clamp(2.15rem,9vw,3rem); letter-spacing:-.045em; overflow-wrap:normal; word-break:normal; hyphens:none; }
+    .free-collection__copy .lead { font-size:.95rem; }
+    .free-collection__copy .collection-criteria,.free-collection__copy .muted-note { font-size:.76rem; line-height:1.35; }
+    .free-collection__medallion--hero { width:96px; height:96px; align-self:start; margin-top:44px; }
+    .free-collection__shelf { top:64px; z-index:35; grid-template-columns:42px minmax(0,1fr) auto; min-height:60px; padding:7px 8px; border-radius:15px; }
+    .free-collection__medallion--shelf { width:42px; height:42px; }
+    .free-collection__shelf span { font-size:.68rem; }
+    .free-collection__shelf a { width:44px; padding:0; justify-content:center; font-size:0; }
+    .free-collection__shelf a::after { content:'↓'; font-size:20px; }
+    .free-collection__results { padding:20px 12px; border-radius:20px; }
+    .free-collection__results .cards-grid { grid-template-columns:minmax(0,1fr); }
+  }
+</style>
