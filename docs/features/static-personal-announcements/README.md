@@ -3,12 +3,19 @@
 > Status: release umbrella; full-scope public release is not ready.
 > Canonical readiness checklist: [2026-07-11 release audit](../../reports/static-personal-announcements-release-readiness-2026-07-11.md).
 > Current event-page platform/cutover slice: [static event-page release plan](../static-site-pages/release-plan.md).
+> **30.07.2026 decision:** this date is now a limited research release for a
+> focus group of at most 200 verified participants, not the first public
+> release. Its canonical product design, factual implementation audit and
+> implementation handoff are in the
+> [focus-group plan](../../backlog/features/static-site-focus-group/README.md).
 
 ## Purpose
 
 This is the navigation home for the public static-site release and its personalization capabilities. Detailed facts stay in their feature homes; this page prevents F1–F17 from becoming an unowned flat checklist.
 
-All F1–F17 are mandatory for the first public release/presentation. Canaries may be staged for risk control, but they do not reduce the final release scope.
+All F1–F17 remain mandatory for the eventual first public release/presentation.
+The 30.07 focus-group release has its own narrower gates and cannot be used to
+mark missing F1–F17 as complete.
 
 ## Capability ownership
 

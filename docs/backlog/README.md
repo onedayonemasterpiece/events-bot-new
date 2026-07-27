@@ -6,6 +6,9 @@
 
 ## TODO (проработано, но не реализовано)
 
+- Static-site focus group for 30.07.2026 (tester admission, feedback/NPS,
+  daily analysis, weekly review, personalization canary):
+  `docs/backlog/features/static-site-focus-group/README.md`
 - Movie showtimes (кино/сеансы): `docs/backlog/features/movie-showtimes/README.md`
 - Event scoring & filtering (скоринг/фильтрация): `docs/backlog/features/event-scoring/README.md`
 - Event static pages (собственный домен, SEO/GEO, Yandex S3): `docs/backlog/features/static-event-pages/README.md`

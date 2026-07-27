@@ -1,5 +1,14 @@
 # План production-релиза статических страниц событий
 
+> **Изменение launch strategy, 2026-07-27:** 30.07.2026 проводится закрытый
+> research release для фокус-группы до 200 подтверждённых участников, а не
+> публичное открытие сайта. Требования режима тестера, feedback/NPS, daily
+> analysis, weekly review, PWA, пасхалок, vertical-video canary и
+> персонализации находятся в
+> [каноническом focus-group плане](../../backlog/features/static-site-focus-group/README.md).
+> Он не отменяет перечисленные ниже public-root, lifecycle, Telegraph D0/D10,
+> freshness и rollback gates.
+>
 > **Срез:** 2026-07-27
 > **Решение:** `NO-GO` для переключения event pages на canonical root прямо сейчас.
 > **Scope:** production-контур статических страниц событий и переход event-detail

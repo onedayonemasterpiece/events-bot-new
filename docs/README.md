@@ -33,6 +33,8 @@
 - Static personal announcements release map: `docs/features/static-personal-announcements/README.md`
 - Static event-page production plan, 10-day Telegraph cutover and tests: `docs/features/static-site-pages/release-plan.md`, `docs/features/static-site-pages/test-scenarios.md`
 - Official static-site presentation gate and central UI-debt register: `docs/features/static-site-pages/presentation-release-checklist.md`
+- 30.07.2026 static-site focus-group design, implementation gap audit and
+  handoff prompt: `docs/backlog/features/static-site-focus-group/README.md`
 - Unified mobile header/bottom-nav/toast shell: `docs/features/static-site-pages/mobile-shell.md`
 - Selective desktop/mobile breadcrumb product contract: `docs/features/static-site-pages/breadcrumbs.md`
 - Free + children search/admission/audience contract: `docs/features/unsigned-personalization/audience-admission-discovery.md`

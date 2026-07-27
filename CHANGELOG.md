@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added a canonical 30.07.2026 static-site focus-group release design for up
+  to 200 verified participants, including phased admission and referral,
+  page-usefulness/NPS and event-correction feedback, bounded daily analysis,
+  weekly impact reviews, PWA/email motivation, personalization and
+  vertical-video canaries, Easter-egg prize safety, ecological Supabase
+  ownership, a current implementation audit and a ready implementation prompt.
 - Added compact PWA lifecycle analytics in the personalization Supabase
   project: confirmed installs, standalone sessions, daily active installations
   and exact D1/D7 cohort returns use one mutable installation-state row plus

@@ -1,5 +1,12 @@
 # Official site presentation release checklist
 
+> **30.07.2026 scope:** презентация становится ограниченным research release
+> для фокус-группы, а не публичным запуском. Отдельные P0 gates и недостающая
+> реализация tester mode перечислены в
+> [focus-group plan](../../backlog/features/static-site-focus-group/README.md).
+> Прохождение focus-group gates не закрывает public promotion/rollback и
+> Telegraph cutover ниже.
+>
 > Status: active release gate. This is the canonical checklist for the first official KenigEvents static-site presentation. Generic repository/deploy rules remain in [`release-governance.md`](../../operations/release-governance.md); Kaggle build/publish mechanics remain in [`kaggle-static-site-builder.md`](../../operations/kaggle-static-site-builder.md).
 
 Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or run artifact to every completed item. The release owner freezes one `origin/main` SHA and one full-catalog build ID before the presentation.
@@ -43,9 +50,11 @@ itself; presentation scenarios must be selected from the fresh frozen export.
 
 ## 1. Release candidate
 
-- [x] **Done for secret candidate** — R14 runtime commits and its frozen build
-  SHA are reachable from `origin/main`; later main commits are parser-only and
-  do not rewrite the immutable candidate.
+- [x] **Historical evidence only** — R14 runtime commits and its frozen build
+  SHA are reachable from `origin/main`. Later main commits also include
+  PWA/icon/compact-analytics and parser corrections; they do not rewrite the
+  already immutable archive, but they require a new frozen candidate before
+  focus-group use.
 - [x] **Done for secret candidate** — a full-catalog production export was made
   from the immutable presentation-day SQLite snapshot; fixtures were rejected.
 - [x] **Done for secret candidate** — the candidate result records repo SHA,

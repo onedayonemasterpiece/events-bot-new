@@ -19,6 +19,18 @@
 
 13. **Пасхалки — отдельный post-release campaign format, а не engagement North Star.** Они используют общий promo control plane, но требуют first-class egg subject/progress ledger вместо fake event ids. Первый пилот — конечная non-prize коллекция с добровольными подсказками/share, отдельным блоком в `Моё`, feedback/partner intake, admin kill switch и holdout по downstream event value; до product/legal/privacy/a11y/IP/anti-abuse acceptance production implementation запрещена.
 
+14. **30.07.2026 — ограниченный research release, а не публичный launch.**
+Первый цикл длится ориентировочно 30 дней и расширяется волнами
+`20–30 → 80 → 200` подтверждённых email-участников. Tester status выдаётся
+только через server-verified membership с атомарным cap; участник может
+передать ограниченное приглашение, но не сессию, аккаунт или прогресс. После
+`active_until` tester privileges автоматически прекращаются, а identity,
+обычные сохранения и отдельно данные consent пользователя остаются в обычном
+режиме. Research/weekly-review consent является явным условием active
+membership; его отзыв переводит участника в `alumni`, но не удаляет аккаунт.
+Он не означает recommendation или marketing consent. Каноника:
+[focus-group release design](../../backlog/features/static-site-focus-group/README.md).
+
 ## Consequences
 
 - Email-only users are authenticated identities, not a parallel anonymous-subscription account model.

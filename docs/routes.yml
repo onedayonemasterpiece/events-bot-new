@@ -72,6 +72,9 @@ sections:
   backlog:
     index: docs/backlog/README.md
     features:
+      static_site_focus_group: docs/backlog/features/static-site-focus-group/README.md
+      static_site_focus_group_audit: docs/backlog/features/static-site-focus-group/current-state-audit.md
+      static_site_focus_group_implementation_prompt: docs/backlog/features/static-site-focus-group/implementation-prompt.md
       cherryflash: docs/backlog/features/cherryflash/README.md
       cherryflash_design: docs/backlog/features/cherryflash/design-brief.md
       cherryflash_reference: docs/reference/09bc959616262101b9cd310629f08b84.jpg
@@ -185,6 +188,7 @@ features:
   static_personal_announcements:
     status: release_planning
     docs: docs/features/static-personal-announcements/README.md
+    focus_group_release: docs/backlog/features/static-site-focus-group/README.md
     global_product_decisions: docs/features/static-personal-announcements/global-product-decisions.md
     release_readiness: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md
     architecture: docs/architecture/personalization-data-ownership.md
@@ -316,6 +320,7 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    focus_group_release: docs/backlog/features/static-site-focus-group/README.md
     release_plan: docs/features/static-site-pages/release-plan.md
     presentation_release_checklist: docs/features/static-site-pages/presentation-release-checklist.md
     test_scenarios: docs/features/static-site-pages/test-scenarios.md
