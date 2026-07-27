@@ -1,10 +1,10 @@
 # INC-2026-07-27-pwa-presentation-install-missing Presentation QR opened a non-installable root
 
-Status: open
+Status: closed
 Severity: sev2
 Service: KenigEvents static-site PWA installation
 Opened: 2026-07-27
-Closed: —
+Closed: 2026-07-27
 Owners: static-site / release
 Related incidents: —
 Related docs: `docs/features/static-site-pages/mobile-shell.md`, `docs/features/static-site-pages/astro-preview.md`, `docs/operations/release-governance.md`
@@ -43,6 +43,14 @@ produce an Android PWA installation action.
   PWA installation did not start.
 - 2026-07-27 11:50 UTC — incident workflow opened; production source and
   release path were inspected.
+- 2026-07-27 12:08 UTC — PR `#138` merged the fix into `origin/main` after
+  `python-ci` and `static-browser-release-gate` passed.
+- 2026-07-27 12:12 UTC — the bounded root PWA object set was published to
+  Yandex Object Storage after backing up the prior root.
+- 2026-07-27 12:13 UTC — public HTTP/MIME/icon checks and live Android Chromium
+  presentation-flow smoke passed without console or request errors.
+- 2026-07-27 12:14 UTC — the cache-busted v2 QR was decoded locally and
+  delivered as an uncompressed Telegram document.
 
 ## Root Cause
 
@@ -105,6 +113,9 @@ produce an Android PWA installation action.
 - Kept the stable QR target unchanged.
 - Added honest in-page Chrome/manual-install guidance for the presentation
   query while preserving the browser-controlled confirmation step.
+- Sent a cache-busted replacement QR using
+  `https://kenigevents.ru/?install=presentation&v=2` so presentation devices do
+  not reuse the pre-fix five-minute root response.
 
 ## Corrective Actions
 
@@ -124,10 +135,33 @@ produce an Android PWA installation action.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed source SHA:
+  `edf7ca459be665baac2d20c947a27f04c0aa72e8`; reachable from `origin/main`
+  through merge `325d5b14dee8715772848ba66fe36f1df1c4fd4f` (PR `#138`).
+- deploy path: clean pushed hotfix worktree; bounded S3-compatible Object
+  Storage upload of `index.html`, `manifest.webmanifest`, both PWA icons,
+  `favicon.svg` and the root content-hashed CSS. Prior root backup:
+  `_static/hotfix-backups/20260727T120937Z-pwa-presentation/index.html`.
+- regression checks:
+  - `site/tests/pwa-install.test.mjs`: `5/5` passed;
+  - `site/scripts/static-release.behavior.test.mjs`: `10/10` passed;
+  - GitHub `python-ci`: passed;
+  - GitHub `static-browser-release-gate`: passed;
+  - clean-SHA Astro build: `431` pages;
+  - local Android Chromium smoke: waiting → native event → one-shot accepted;
+  - live Android Chromium smoke: manifest + fixed install card + accepted state,
+    no console/request errors.
+  - Chrome DevTools `Page.getAppManifest` resolved the live root manifest with
+    zero manifest errors; `Page.getInstallabilityErrors` returned an empty
+    installability-error set.
+- post-deploy verification:
+  - `/`: `200`, `text/html; charset=utf-8`;
+  - `/manifest.webmanifest`: `200`,
+    `application/manifest+json; charset=utf-8`, root `id/scope/start_url`;
+  - both PWA icon URLs: `200`, `image/png`, decoded as exact `192×192` and
+    `512×512`;
+  - replacement QR decoded to the exact v2 URL and was delivered to Telegram
+    message `719` as a document.
 
 ## Prevention
 
