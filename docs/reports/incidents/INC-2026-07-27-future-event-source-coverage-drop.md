@@ -1,11 +1,12 @@
 # INC-2026-07-27 Future-event source coverage drop
 
-Status: mitigating (reopened for additional official-source coverage)
+Status: resolved
 Severity: sev1
 Service: production event inventory / scheduled source parsing / official venue catalogs
 Opened: 2026-07-27
 Closed: 2026-07-27 11:33 UTC
 Reopened: 2026-07-27 11:40 UTC
+Reclosed: 2026-07-27 18:04 UTC
 Owners: events-bot maintainer / operations
 Related incidents: `INC-2026-07-08-prod-root-overlay-disk-full.md`, `INC-2026-07-13-runtime-logging-recurring-event-quality.md`, `INC-2026-07-10-future-event-semantic-audit.md`, `INC-2026-06-24-future-event-date-default-venue-regressions.md`
 Related docs: `docs/features/source-parsing/README.md`, `docs/features/source-parsing/sources/philharmonia/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -169,6 +170,42 @@ Raw evidence is retained outside git under
   catch-up path was narrowed: exact location/date/time/title identities now
   attach provenance and use deterministic reconciliation, while new or
   non-exact events remain LLM-first.
+- `2026-07-27 12:48`–`15:47 UTC`: compensating `ops_run=4702` processed all
+  `175` occurrences from the six expanded sources: Estrada `23`, Yantar Hall
+  `77`, Dramteatr `18`, Muzteatr `20`, Sobor `17`, Tretyakov `20`. It created
+  `75` events and updated `98`, but correctly finished `partial`: two
+  Tretyakov occurrences hit a transient SQLite writer lock and a concurrent
+  `event_media_pair_review.pair_input_hash` uniqueness race.
+- `2026-07-27 15:56`–`16:20 UTC`: after bounded writer retry and conflict-safe
+  media-review enqueue were deployed, targeted `ops_run=4709` reconciled all
+  `20` Tretyakov occurrences (`1` created, `19` updated, no errors).
+- `2026-07-27 16:28 UTC`: expanded reconciliation found that the cheap parser
+  refresh accepted a broad same-source URL/host match and that a later
+  city-noise/copy-post rescue could reintroduce an occurrence deliberately
+  excluded for an explicit same-parser time conflict. The in-flight validation
+  `ops_run=4711` was intentionally cancelled by the corrective deploy and
+  remained fail-closed rather than being accepted as evidence.
+- `2026-07-27 17:09 UTC`: Fly release `v1766` deployed the exact parser identity
+  and post-filter exclusion fixes. Targeted `ops_run=4717 status=success`
+  then restored both Muzteatr sessions on `2026-10-25`: `14:00` and `17:00`.
+- `2026-07-27 17:23`–`17:38 UTC`: targeted
+  `ops_run=4718 status=success` repaired the Tretyakov title/time occurrence,
+  but the current official `ticket_status=available` source left the old
+  canonical card in stale `postponed` lifecycle. This was treated as a final
+  reconciliation failure, not as closure.
+- `2026-07-27 17:47 UTC`: commit
+  `6569c4def9c8701672c3fbef672f12f52d581d76`, already reachable from
+  `origin/main`, was deployed from a clean worktree as Fly release `v1767`,
+  image `deployment-01KYJAY7EFCB7DG9FWZN6J70VW`.
+- `2026-07-27 17:48`–`18:02 UTC`: final authorized live UI validation
+  `ops_run=4720 status=success` processed the exact Tretyakov occurrence,
+  updated `1`, failed/skipped `0`, and reactivated event `5264`. The E2E
+  superadmin grant was restored immediately after command acceptance.
+- `2026-07-27 18:04 UTC`: exact active/canonical reconciliation passed for all
+  six expanded inventories: Estrada `23/23`, Yantar Hall `77/77`, Dramteatr
+  `18/18`, Muzteatr `20/20`, Sobor `17/17`, Tretyakov `20/20`. Health, SQLite,
+  disk, runtime mirror, live Telegram UI and the exact restored user row also
+  passed; the incident was reclosed.
 
 ## Root Cause
 
@@ -236,6 +273,28 @@ Raw evidence is retained outside git under
     the sequential notebook aborted before Sobor/Tretyakov. DOM reads now wait
     for the load state and retry five times with a bounded delay, while
     exhausting the retry remains fail-closed.
+16. The renamed Theatre of Variety had only the legacy URL-scoped
+    `dom_iskusstv` path for individual old projects, not a full current catalog
+    parser. Yantar Hall had a daily high-trust Telegram monitor, but no
+    independent official website catalog parser. Social feeds therefore could
+    not prove or deliver complete venue inventory.
+17. Smart Update allowed an explicit time from a canonical parser to repair an
+    event already backed by the same parser. When one performance/source URL
+    represented several sessions, the later session could overwrite or attach
+    to the earlier occurrence instead of creating a distinct event.
+18. The initial cheap parser-provenance path was also too broad: any existing
+    same-source URL/host match could bypass exact date/time/title identity.
+    Separately, the later city-noise/copy-post rescue did not preserve the
+    same-parser time-conflict exclusion and could undo the intended guard.
+19. The full catch-up exposed two independent persistence races under ordinary
+    production concurrency: transient SQLite writer locks and duplicate
+    concurrent insertion of the media-pair review idempotency key. Bounded
+    writer retry and SQLite `ON CONFLICT DO NOTHING` now keep those auxiliary
+    races from losing an otherwise valid official occurrence.
+20. A current official parser occurrence with tickets explicitly available
+    refreshed data but did not reactivate an exact canonical card left in
+    `cancelled` or `postponed`. Exact current official availability now
+    restores `lifecycle_status=active`.
 
 ## Contributing Factors
 
@@ -244,6 +303,11 @@ Raw evidence is retained outside git under
   the daytime compensating slot ran, but its partial source loss was hidden.
 - Telegram and VK importers continued operating, creating enough events to hide
   that official site parsers were incomplete.
+- Parser execution success was not equivalent to occurrence completeness:
+  same-source merges could silently reduce several official sessions to one
+  otherwise healthy-looking canonical card.
+- The Yantar Hall Telegram monitor confirmed freshness of public posts, not
+  completeness of the official long-horizon ticket catalog.
 - Наличие bounded runtime mirror помогло восстановить картину; при этом closure
   всё равно требует подтвердить hard budget, retention и свободное место по
   `INC-2026-07-13`.
@@ -318,13 +382,13 @@ Raw evidence is retained outside git under
 - [x] verify the expected bounded runtime mirror remains enabled, within its
   byte/retention budget and above its free-space floor;
 - [ ] add durable per-source freshness/coverage alerting.
-- [ ] add direct full-catalog parsers for the renamed Theatre of Variety and
+- [x] add direct full-catalog parsers for the renamed Theatre of Variety and
   Yantar Hall;
-- [ ] prevent same-parser explicit-time conflicts from collapsing distinct
+- [x] prevent same-parser explicit-time conflicts from collapsing distinct
   occurrences;
-- [ ] make the shared theatre notebook tolerate transient navigation at the
+- [x] make the shared theatre notebook tolerate transient navigation at the
   Playwright DOM-read boundary and rerun all four theatre sources;
-- [ ] deploy from `origin/main`, run targeted production catch-ups and reconcile
+- [x] deploy from `origin/main`, run targeted production catch-ups and reconcile
   Cathedral/Dram/Muz/Estrada/Yantar/Tretyakov official inventories.
 
 ## Follow-up Actions
@@ -385,6 +449,49 @@ Raw evidence is retained outside git under
 - raw reconciliation, E2E, health, release and log-window evidence is retained
   outside git under
   `artifacts/codex/INC-2026-07-27-future-event-inventory-drop/`.
+
+### Expanded-source reclosure
+
+- final deployed SHA:
+  `6569c4def9c8701672c3fbef672f12f52d581d76`, equal to
+  `origin/main` at deploy time; Fly `v1767`, image
+  `deployment-01KYJAY7EFCB7DG9FWZN6J70VW`, one passing machine check;
+- focused regression suite covering parser attachment, occurrence identity,
+  fail-closed/status and media conflict handling: `43 passed`;
+  the earlier expanded source suite passed `73` tests with one unrelated
+  date-sensitive replay fixture now in the past;
+- initial six-source compensating run:
+  `ops_run=4702 status=partial`, `175` processed, `75` created, `98` updated,
+  with the two persistence races accounted for and subsequently corrected;
+- corrective runs: `ops_run=4709 status=success`, Tretyakov `20/20`, no
+  failed/skipped/errors; `ops_run=4717 status=success`, both Muzteatr
+  `2026-10-25` sessions present; `ops_run=4718 status=success` exposed the
+  remaining stale lifecycle rather than being accepted as closure evidence;
+- final live E2E: exact bot `@events_love39_bot`, command message `33424`,
+  acknowledgement `33425`, terminal report `33429`;
+  `ops_run=4720 status=success`, Tretyakov `1` processed/updated,
+  `0` failed/skipped/errors and `fatal_error=null`. Event `5264` is now
+  `active`, `canonical`, `ticket_status=available`. The UI showed a bounded
+  Gemma empty-response warning and successful model fallback, but no parser or
+  persistence failure;
+- the exact temporary privilege row was restored:
+  `user_id=8336351413`, `username=The_day_of_kk`, `is_superadmin=0`,
+  `is_partner=0`, `organization/location/last_partner_reminder=null`,
+  `blocked=0`;
+- final official-vs-production active/canonical occurrence reconciliation:
+  Theatre of Variety `23/23`, Yantar Hall `77/77`, Dramteatr `18/18`,
+  Muzteatr `20/20`, Cathedral `17/17`, Tretyakov `20/20`; missing official
+  occurrences `0`, duplicate official date/time keys `0`;
+- production active canonical future inventory at the final snapshot was
+  `365`. The source catch-ups created `77` canonical event rows across their
+  initial and targeted runs; the total inventory delta also includes unrelated
+  concurrent imports and is therefore not attributed wholly to this repair;
+- post-run `/healthz`: `ok=true`, `ready=true`, `db=ok`, `issues=[]`;
+  `PRAGMA quick_check=ok`; `/data` free `644 MiB`, `/tmp` free `7507 MiB`,
+  tempfile probe `ok`. Runtime file logging remained enabled at
+  `/data/runtime_logs`; a corrected timestamp-aware scan of the exact final-run
+  window found no transaction, writer-lock, uniqueness, persistence,
+  event-processing or report-length errors.
 
 ## Prevention
 
