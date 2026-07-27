@@ -16,4 +16,7 @@ test('materialized Free collection owns a large right identity then a compact st
   assert.match(surface, /\.free-collection__shelf \{[\s\S]*?position:sticky;[\s\S]*?top:57px/u);
   assert.match(surface, /@media\(max-width:759px\)[\s\S]*?\.free-collection__shelf \{ top:64px/u);
   assert.match(surface, /events\.map\(\(event\) => <EventCard event=\{event\} mobileFlowMedia \/>\)/u);
+  assert.match(surface, /parents=\{\[\s*\{ label:'Афиша', href:siteHomeHref\(\) \},\s*\]\}/u);
+  assert.doesNotMatch(surface, /label:'Поиск'|\/poisk\//u, 'Free is a first-class collection, not a saved Search result');
+  assert.match(route, /mobileSection=\{collection\.slug === 'besplatnye-sobytiya' \? 'home' : 'search'\}/u);
 });

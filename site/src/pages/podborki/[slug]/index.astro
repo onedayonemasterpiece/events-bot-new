@@ -28,7 +28,14 @@ const title = `${collection.title} | ${SITE_NAME}`;
 const updatedDate = getPreviewBuild().current_date;
 const referenceDate = getMaterializedSearchCollectionReferenceDate();
 ---
-<EventLayout title={title} description={collection.description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="search" noindex>
+<EventLayout
+  title={title}
+  description={collection.description}
+  canonicalUrl={canonicalUrl}
+  structuredData={[]}
+  mobileSection={collection.slug === 'besplatnye-sobytiya' ? 'home' : 'search'}
+  noindex
+>
   {collection.slug === 'besplatnye-sobytiya' ? (
     <FreeCollectionSurface
       title={collection.title}

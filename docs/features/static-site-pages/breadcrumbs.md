@@ -13,6 +13,8 @@ Breadcrumbs are **selective hierarchy**, not permanent page chrome.
 - Show them on genuinely deep pages:
   - event detail;
   - a materialized Search collection;
+  - a first-class curated collection, using its real product parent rather
+    than pretending it is a Search result;
   - club detail;
   - an internal lab only when it needs a route back to the prototype hub.
 - Desktop (`>=1024px`) uses the full, deterministic hierarchy and ends with
@@ -37,6 +39,11 @@ hero.
 The rule intentionally removes decorative one-hop chains such as
 `Афиша / Поиск`: they duplicate the global navigation and cost roughly
 `56–87px` of vertical space in the current implementation.
+
+`Бесплатные события` is a first-class curated collection. Its only structural
+parent is `Афиша`; it must not render `Поиск` in breadcrumbs, use a Search back
+link or highlight Search in the mobile dock. Other genuinely query-derived
+materialized collections may keep Search as their parent.
 
 ## Event-detail hierarchy
 

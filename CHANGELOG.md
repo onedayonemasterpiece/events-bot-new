@@ -333,6 +333,9 @@
 
 ### Fixed
 
+- Removed the misleading Search parent and active Search dock state from the
+  first-class Free collection; its responsive hierarchy now returns directly
+  to `Афиша`.
 - Static event keyboard navigation now attaches the reserved calendar `K` hint
   synchronously before focus moves to an asynchronously rendered continuation
   card, preserving the single visible shortcut-owner invariant across rail
