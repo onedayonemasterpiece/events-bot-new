@@ -17,6 +17,14 @@
 | Freshness/outbox | Partial | Coalesced build/outbox реализованы, но presentation-day freshness и failure drill отсутствуют |
 | Telegraph dual-run/public resolver | Missing | D0/D10 outward switch и запрет create/recreate после cutover не доказаны |
 | UI/product acceptance | Partial | R14 локальные contract/build tests есть; frozen public desktop/mobile, real OAuth/Edge и owner sign-off ещё нужны |
+
+Текущий operational blocker: нормальный Fly → Kaggle запуск останавливается до
+старта kernel с `400 INVALID_ARGUMENT: Invalid token` при создании временного
+private input dataset. Для визуальной приёмки разрешён только документированный
+host fallback: тот же immutable snapshot, чистый main SHA, production exporter,
+fingerprint/result validation и публикация исключительно secret/noindex
+архива. Такой кандидат не закрывает Kaggle status-ledger, promotion/rollback
+или canonical-root gates.
 | Schedule freshness | Blocked | Актуальный rail+bus snapshot/manifest и failed-refresh drill не приложены |
 | Production root promotion/rollback | Missing | `_review` publication не меняет root/current/stable ICS; atomic promote/rollback не выполнены |
 

@@ -127,6 +127,8 @@ test('collection surface has finite hints, accessible detail and a truly disable
   assert.match(page, /artifactResearchEnabled \? <ArtifactCollection \/>/u);
   assert.match(rail, /data-artifact-detail-url/u);
   assert.match(rail, /location\.assign/u);
+  assert.match(productionCheck, /productionArtifactMarker = \/\\bdata-amber-artifact\(\?:\\s\|=\|>\)\//u);
+  assert.doesNotMatch(productionCheck, /productionWeekendSource\.includes\('data-amber-artifact'\)/u);
   assert.match(productionCheck, /artifact research leaked into production weekend listing/u);
   assert.match(productionCheck, /artifact collection leaked into production/u);
 });
