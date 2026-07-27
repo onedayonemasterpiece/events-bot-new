@@ -1,4 +1,5 @@
 ---
+import PwaInstallAction from '../components/PwaInstallAction.astro';
 import { withBase } from '../lib/events';
 import '../styles/design-system.css';
 
@@ -88,6 +89,7 @@ const manifestHref = withBase('/manifest.webmanifest');
     </style>
   </head>
   <body>
+    <PwaInstallAction />
     <main>
       <img class="mark" src={logoHref} width="64" height="64" alt="Полюбить Калининград Анонсы" decoding="async" />
       <p class="kicker">Полюбить Калининград</p>
@@ -95,6 +97,7 @@ const manifestHref = withBase('/manifest.webmanifest');
       <p class="lead">Афиша Калининграда без шума: концерты, выставки, лекции, спектакли и семейные события — всё, что стоит не пропустить.</p>
       <div class="actions">
         <a class="ke-button ke-button--primary" href={previewHref}>Открыть тестовую версию</a>
+        <a class="ke-button ke-button--secondary" href={withBase('/kluby-po-interesam/')}>Клубы по интересам</a>
         <a class="ke-button ke-button--secondary" href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
       </div>
       <footer>kenigevents.ru</footer>

@@ -11,23 +11,41 @@ export function isStandaloneDisplay(windowRef, navigatorRef) {
   );
 }
 
+export function isPresentationInstall(locationRef) {
+  return new URLSearchParams(String(locationRef?.search || '')).get('install') === 'presentation';
+}
+
 export function createPwaInstallController({
   windowRef,
   navigatorRef,
+  locationRef = windowRef?.location,
   root,
   button,
   status,
+  guidance,
 }) {
   if (!windowRef || !navigatorRef || !root || !button) return null;
 
   let installPrompt = null;
   let prompting = false;
+  const android = isAndroidPlatform(navigatorRef);
+  const standalone = isStandaloneDisplay(windowRef, navigatorRef);
+  const presentation = isPresentationInstall(locationRef);
+
+  if (presentation) root.dataset.pwaInstallPresentation = 'true';
 
   const hide = () => {
     root.hidden = true;
     button.hidden = true;
     button.disabled = false;
     root.dataset.pwaInstallReady = 'false';
+  };
+  const showPresentationWaiting = () => {
+    root.hidden = false;
+    button.hidden = true;
+    button.disabled = false;
+    root.dataset.pwaInstallReady = 'false';
+    if (guidance) guidance.hidden = false;
   };
   const reveal = () => {
     root.hidden = false;
@@ -42,10 +60,10 @@ export function createPwaInstallController({
   };
 
   const onBeforeInstallPrompt = (event) => {
-    if (!isAndroidPlatform(navigatorRef) || isStandaloneDisplay(windowRef, navigatorRef)) return;
+    if (!android || standalone) return;
     event.preventDefault();
     installPrompt = event;
-    if (status) status.textContent = 'Приложение можно установить.';
+    if (status) status.textContent = 'Установка готова. Нажмите кнопку ниже.';
     reveal();
   };
 
@@ -64,20 +82,52 @@ export function createPwaInstallController({
     root.dataset.pwaInstallReady = 'false';
 
     try {
-      await promptEvent.prompt();
+      const result = await promptEvent.prompt();
+      if (presentation) {
+        showPresentationWaiting();
+        if (status) {
+          status.textContent = result?.outcome === 'accepted'
+            ? 'Установка подтверждена.'
+            : 'Установка не завершена. Можно выбрать «Добавить на главный экран» в меню Chrome.';
+        }
+      }
+    } catch {
+      if (presentation) {
+        showPresentationWaiting();
+        if (status) status.textContent = 'Не удалось открыть системное окно. Используйте меню Chrome: «Добавить на главный экран».';
+      }
     } finally {
       prompting = false;
       button.disabled = false;
-      if (status) status.textContent = 'Системное окно установки закрыто.';
+      if (!presentation && status) status.textContent = 'Системное окно установки закрыто.';
     }
   };
 
   const onAppInstalled = () => {
     if (status) status.textContent = 'Приложение установлено.';
-    clear();
+    if (presentation) {
+      installPrompt = null;
+      prompting = false;
+      showPresentationWaiting();
+      if (guidance) guidance.hidden = true;
+    } else {
+      clear();
+    }
   };
 
-  hide();
+  if (presentation) {
+    showPresentationWaiting();
+    if (standalone) {
+      if (status) status.textContent = 'Приложение уже установлено.';
+      if (guidance) guidance.hidden = true;
+    } else if (!android) {
+      if (status) status.textContent = 'Для установки откройте эту ссылку на Android-телефоне в Chrome.';
+    } else if (status) {
+      status.textContent = 'Подготавливаем установку. Если кнопка не появилась, откройте страницу в Chrome.';
+    }
+  } else {
+    hide();
+  }
   windowRef.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
   windowRef.addEventListener('appinstalled', onAppInstalled);
   button.addEventListener('click', onClick);
@@ -106,9 +156,11 @@ export function hydratePwaInstallActions({
     createPwaInstallController({
       windowRef,
       navigatorRef,
+      locationRef:windowRef.location,
       root,
       button:root.querySelector('[data-pwa-install-button]'),
       status:root.querySelector('[data-pwa-install-status]'),
+      guidance:root.querySelector('[data-pwa-install-guidance]'),
     });
   });
 }

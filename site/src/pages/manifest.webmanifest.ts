@@ -3,6 +3,11 @@ import { siteHomeHref, withBase } from '../lib/events';
 
 export const GET: APIRoute = () => {
   const scope = withBase('/');
+  const configuredStartUrl = String(import.meta.env.PUBLIC_PWA_START_URL || '').trim();
+  const startUrl = configuredStartUrl || siteHomeHref();
+  if (!startUrl.startsWith('/') || startUrl.startsWith('//') || !startUrl.startsWith(scope)) {
+    throw new Error(`PUBLIC_PWA_START_URL must stay inside manifest scope ${scope}`);
+  }
   const manifest = {
     id:scope,
     name:'Полюбить Калининград — Анонсы',
@@ -10,7 +15,7 @@ export const GET: APIRoute = () => {
     description:'События Калининграда и области — с понятным маршрутом к следующему впечатлению.',
     lang:'ru',
     dir:'ltr',
-    start_url:siteHomeHref(),
+    start_url:startUrl,
     scope,
     display:'standalone',
     background_color:'#fbf7ef',
