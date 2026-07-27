@@ -21,7 +21,7 @@
 | pwa-membership | R13–R16 | `agent/focus-group/pwa-membership` | merged | `1d71dd1c` (`51af4b49` implementation) | cherry-picked as `32de33db` + `c198e9e1`; exact logo, focus manifest/start controller, optional identity and independent participation state |
 | egg-program | R17–R19 | `agent/focus-group/egg-program` | merged | `a718a2b1` (`a609528b` implementation) | cherry-picked as `f4955358` + `b7d5910d`; collection-first rank and 12-placement product contract |
 | egg-prototype | R20 | `agent/focus-group/egg-prototype` | merged | `8b345c09` (`8b94f2bc` implementation) | cherry-picked as `8f96dc86` + `a3b7af87`; collection UI and fail-closed `FG-E12` placement |
-| extension integration | R21 | this branch | integrated | pending final SHA | prize-copy reconciliation, canonical docs/changelog, PWA incident regression and final browser/build gates |
+| extension integration | R21 | this branch | integrated | `38074d03` | prize-copy reconciliation, canonical docs/changelog, PWA local incident regression subset and final browser/build gates |
 
 No worker changes were rejected, abandoned or left uncommitted. Read-only
 research lanes changed no files.
@@ -43,6 +43,9 @@ research lanes changed no files.
 - Added `/fokus-gruppa/kollektsiya/`, a collection-first reward model and a
   versioned 12-placement matrix. `FG-E12` exists only after the third current
   saved/calendar item and never moves to a shorter list.
+- Added the explicit non-prize research mission `Два экрана`: real phone and
+  desktop coverage use separate future receipts, while an honestly labelled
+  single-device equivalent protects accessibility and prize fairness.
 - Restored the root manifest/install/telemetry mounts required by
   `INC-2026-07-27-pwa-presentation-install-missing`.
 
@@ -55,7 +58,8 @@ research lanes changed no files.
 - Worker Playwright — mobile/desktop/no-JS/localStorage/feedback/icon checks
   passed; see lane RESULTS.
 - Initial `npm run build` — 435 pages built successfully in 1m 44s. Final
-  extension build — 436 pages built successfully in 1m 42s. The
+  extension build after review fixes — 436 pages built successfully in 1m 40s.
+  The
   pre-existing `listingPresentation.ts` JSON import-attributes warning remains
   non-fatal.
 - Final integration browser QA — passed on the built static output:
@@ -77,6 +81,8 @@ research lanes changed no files.
     participation;
   - `FG-E12` is absent at two items, inserted immediately after item three,
     persists once found and stays absent when the current list becomes short;
+  - the final collection page presents the three-step phone/desktop mission,
+    its non-prize boundary and the single-device alternative without overflow;
   - no console errors were observed.
 - Screenshots and the machine-readable extension browser result are in the
   ignored local directory
@@ -87,6 +93,11 @@ research lanes changed no files.
   hub is implemented, but the existing site routes are not physically
   relocated below the secret prefix; doing that belongs to the deliberately
   deferred production-build integration.
+- Extension checklist review initially found R19 Partial because the responsive
+  placement matrix alone did not operationalize real phone **and** desktop
+  coverage. Commit `38074d03` closes that finding with the separate `Два
+  экрана` mission and fair single-device equivalent. R13–R21 are now Done
+  within the explicit prototype/design boundary.
 
 ## Requirement closure
 
@@ -110,7 +121,7 @@ research lanes changed no files.
 | R16 | Done | independent program-period participation key, legacy migration and reset-isolation tests; PWA return flow uses it | cleared browser data is not recoverable until server membership exists |
 | R17 | Done | pending UI and docs consistently define one prize as exactly two theatre tickets | theatre, performances, dates and fulfilment remain rules/legal gates |
 | R18 | Done | collection coverage ranks first; bounded participation is capped at 40/7 and counts NPS response, likes, dislikes, text feedback, Search, saves and page breadth without sentiment advantage | reward-grade receipts/anti-abuse/leaderboard backend absent by scope |
-| R19 | Done | versioned 12-row placement matrix covers mobile, desktop, keyboard/screen-reader equivalents, prerequisites and fail-closed content states | actual site-wide production insertion remains a later implementation |
+| R19 | Done | versioned 12-row placement matrix covers mobile, desktop, keyboard/screen-reader equivalents, prerequisites and fail-closed states; a separate non-prize `Два экрана` mission requests one meaningful phone and desktop probe with an honestly labelled single-device equivalent | actual receipts, pairing and site-wide production insertion remain later implementation |
 | R20 | Done | collection prototype demonstrates locked/eligible/found/unavailable and idempotent `FG-E12` immediately after saved item three only | demo list is not wired to production saved events |
 | R21 | Done | docs/routes/changelog, targeted tests, incident regression and full build/browser QA on the integration branch | no production deploy was requested or performed |
 
@@ -120,7 +131,7 @@ research lanes changed no files.
   a regression contract because root/PWA surfaces changed).
 - Affected local surfaces: root HTML, global/focus manifests, install
   controllers and focus onboarding.
-- Passed checks:
+- Local/source regression subset passed:
   - `node --test tests/pwa-install.test.mjs` — 8/8;
   - `npm run test:static-release` — 10/10;
   - cleanable full Astro build — 436 pages;
@@ -130,4 +141,5 @@ research lanes changed no files.
   - focus mobile browser QA confirms manifest/start/return behavior.
 - Production HTTP headers, icon read-back, Object Storage upload and live
   installability were intentionally not run: this task creates no candidate and
-  performs no deploy. They remain mandatory if this branch is promoted later.
+  performs no deploy. Therefore the full incident contract is **not** claimed as
+  passed. These deploy-only gates remain mandatory if this branch is promoted.
