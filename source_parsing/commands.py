@@ -53,7 +53,7 @@ SOURCE_PARSING_GUARD_URLS = {
     "muzteatr": "https://muzteatr39.ru/action/cat/afisha/",
     "sobor": "https://sobor39.ru/events/concerts/night/",
     "tretyakov": "https://kaliningrad.tretyakovgallery.ru/events/",
-    "philharmonia": "https://filarmonia39.ru/?event",
+    "philharmonia": "https://filarmonia39.ru/afisha/",
     "qtickets": "https://kaliningrad.qtickets.events",
 }
 

@@ -96,6 +96,8 @@ Raw evidence is retained outside git under
 4. `run_source_parsing()` initialized the `ops_run` as `success` and only changed
    it on a fatal outer exception; source-specific `result.errors` did not affect
    the terminal status.
+5. The daytime change guard still fingerprinted the obsolete `/?event` URL
+   instead of `/afisha/`, so current catalog changes could be skipped.
 
 ## Contributing Factors
 
@@ -167,6 +169,7 @@ Raw evidence is retained outside git under
 
 - [x] isolate parallel Kaggle status run-config transactions;
 - [x] update Philharmonia listing/detail parser and production normalization;
+- [x] point the daytime source-change guard at the current `/afisha/` catalog;
 - [x] add DOM replay and three-run concurrency regressions;
 - [x] make source-specific parse errors visible in `ops_run.status`;
 - [ ] merge to `origin/main`, deploy and run production catch-up;
