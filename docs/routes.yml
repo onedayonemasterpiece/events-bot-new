@@ -64,6 +64,7 @@ sections:
   pipelines:
     source_parsing: docs/features/source-parsing/README.md
     theatres: docs/features/source-parsing/sources/theatres/README.md
+    philharmonia: docs/features/source-parsing/sources/philharmonia/README.md
     dom_iskusstv: docs/features/source-parsing/sources/dom-iskusstv/README.md
     pyramida: docs/features/source-parsing/sources/pyramida/README.md
     tretyakov_parser: docs/features/source-parsing/sources/tretyakov/README.md
@@ -109,6 +110,7 @@ sections:
     interest_clubs_catalog_audit_2026_07_17: docs/reports/interest-clubs-catalog-audit-2026-07-17.md
     incidents: docs/reports/incidents/README.md
     incident_template: docs/reports/incidents/TEMPLATE.md
+    incident_future_event_source_coverage_drop_2026_07_27: docs/reports/incidents/INC-2026-07-27-future-event-source-coverage-drop.md
     incident_icae_casting_wrong_venue_2026_07_27: docs/reports/incidents/INC-2026-07-27-icae-casting-wrong-venue.md
     incident_faberge_tg_public_writer_gap_2026_07_21: docs/reports/incidents/INC-2026-07-21-faberge-tg-public-writer-gap.md
     incident_tg_monitor_stale_s22_lease_2026_07_20: docs/reports/incidents/INC-2026-07-20-tg-monitor-stale-s22-lease.md

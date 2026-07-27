@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-27-future-event-source-coverage-drop.md`
+  - Scope: future inventory density, parallel source-parser Kaggle status writes,
+    current Philharmonia DOM/output, Qtickets freshness and truthful parse status.
+  - Must not regress: enabled sources cannot disappear behind a green `ops_run`;
+    all three parallel run-configs commit, official Philharmonia future cards
+    reach Smart Update with parser provenance, and a missed daily slot requires a
+    verified catch-up.
+
 - `INC-2026-07-27-icae-casting-wrong-venue.md`
   - Scope: source-grounded venue/address consistency across import, Smart
     Update, canonical event rows, static pages and managed social publications.
