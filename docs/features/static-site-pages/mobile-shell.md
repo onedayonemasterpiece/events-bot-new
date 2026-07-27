@@ -195,7 +195,13 @@ feedback сохранения, calendar state, consent, gallery counters, like a
 
 Manifest использует base-aware `id`, `scope`, `start_url`, `display=standalone`
 и PNG `192×192`/`512×512`; preview publisher отдельно сохраняет
-`application/manifest+json`. Поведение соответствует текущим контрактам
+`application/manifest+json`. Launcher-name намеренно короткий — `Анонсы` и в
+`name`, и в `short_name`: полный вариант рядом с Android-иконкой обрезается, а
+полный бренд `Полюбить Калининград / Анонсы` уже встроен в утверждённую
+кожаную иконку. Из `docs/reference/PWA-icon.png` локальный deterministic
+generator создаёт обычную и maskable-пару обоих размеров; versioned
+manifest-link принудительно обновляет ранее закешированную иконку.
+Поведение соответствует текущим контрактам
 [MDN `beforeinstallprompt`](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeinstallprompt_event),
 [MDN install prompt](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt)
 и [installability guide](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).

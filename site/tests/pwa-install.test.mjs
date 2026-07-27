@@ -10,6 +10,15 @@ import {
 } from '../src/lib/pwa-install-controller.js';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const readBytes = (path) => readFile(new URL(`../${path}`, import.meta.url));
+
+function pngDimensions(buffer) {
+  assert.deepEqual([...buffer.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  return {
+    width:buffer.readUInt32BE(16),
+    height:buffer.readUInt32BE(20),
+  };
+}
 
 class FakeTarget {
   constructor() {
@@ -167,17 +176,31 @@ test('site exposes a base-aware installable manifest and footer-owned controller
   assert.match(manifest, /start_url:startUrl/u);
   assert.match(manifest, /display:'standalone'/u);
   assert.match(manifest, /prefer_related_applications:false/u);
-  assert.match(manifest, /announcements-192\.png/u);
-  assert.match(manifest, /announcements-512\.png/u);
+  assert.match(manifest, /name:'Анонсы'/u);
+  assert.match(manifest, /short_name:'Анонсы'/u);
+  assert.match(manifest, /announcements-brand-192\.png/u);
+  assert.match(manifest, /announcements-brand-512\.png/u);
+  assert.match(manifest, /announcements-brand-maskable-192\.png/u);
+  assert.match(manifest, /announcements-brand-maskable-512\.png/u);
+  assert.match(manifest, /purpose:'maskable'/u);
   assert.match(action, /data-pwa-install-root/u);
   assert.match(action, /data-pwa-install-button hidden/u);
   assert.match(action, /pwa-install-action__button\[hidden\]/u);
   assert.match(action, /Установить приложение/u);
   assert.match(footer, /<PwaInstallAction \/>/u);
-  assert.match(layout, /rel="manifest" href=\{withBase\('\/manifest\.webmanifest'\)\}/u);
-  assert.match(home, /const manifestHref = withBase\('\/manifest\.webmanifest'\)/u);
+  assert.match(layout, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon/u);
+  assert.match(home, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon/u);
   assert.match(home, /rel="manifest" href=\{manifestHref\}/u);
   assert.match(home, /<PwaInstallAction \/>/u);
   assert.match(release, /'\.webmanifest': 'application\/manifest\+json; charset=utf-8'/u);
   assert.match(deploy, /manifest\.webmanifest[\s\S]*application\/manifest\+json; charset=utf-8/u);
+});
+
+test('brand and maskable launcher PNGs have the declared dimensions', async () => {
+  for (const size of [192, 512]) {
+    for (const variant of ['', '-maskable']) {
+      const icon = await readBytes(`public/assets/pwa/announcements-brand${variant}-${size}.png`);
+      assert.deepEqual(pngDimensions(icon), { width:size, height:size });
+    }
+  }
 });

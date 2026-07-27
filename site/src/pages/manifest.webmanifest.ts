@@ -10,9 +10,9 @@ export const GET: APIRoute = () => {
   }
   const manifest = {
     id:scope,
-    name:'Полюбить Калининград — Анонсы',
+    name:'Анонсы',
     short_name:'Анонсы',
-    description:'События Калининграда и области — с понятным маршрутом к следующему впечатлению.',
+    description:'Полюбить Калининград: события города и области — с понятным маршрутом к следующему впечатлению.',
     lang:'ru',
     dir:'ltr',
     start_url:startUrl,
@@ -23,16 +23,28 @@ export const GET: APIRoute = () => {
     prefer_related_applications:false,
     icons:[
       {
-        src:withBase('/assets/pwa/announcements-192.png'),
+        src:withBase('/assets/pwa/announcements-brand-192.png'),
         sizes:'192x192',
         type:'image/png',
         purpose:'any',
       },
       {
-        src:withBase('/assets/pwa/announcements-512.png'),
+        src:withBase('/assets/pwa/announcements-brand-512.png'),
         sizes:'512x512',
         type:'image/png',
         purpose:'any',
+      },
+      {
+        src:withBase('/assets/pwa/announcements-brand-maskable-192.png'),
+        sizes:'192x192',
+        type:'image/png',
+        purpose:'maskable',
+      },
+      {
+        src:withBase('/assets/pwa/announcements-brand-maskable-512.png'),
+        sizes:'512x512',
+        type:'image/png',
+        purpose:'maskable',
       },
     ],
   };
