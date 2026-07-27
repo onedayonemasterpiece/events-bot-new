@@ -10,8 +10,9 @@ import {
 } from './release-contract.mjs';
 import { assertAnonymousListDisabled, publicationObjects } from './deploy-secret-candidate-yc.mjs';
 
-test('verified event participants render after medallions on mobile and desktop with isolated person likes', () => {
+test('verified event participants render after medallions with cross-device Supabase person likes', () => {
   const component = readFileSync(new URL('../src/components/EventParticipants.astro', import.meta.url), 'utf8');
+  const personLikes = readFileSync(new URL('../src/lib/personLikes.ts', import.meta.url), 'utf8');
   const mobilePage = readFileSync(new URL('../src/pages/sobytiya/[slug].astro', import.meta.url), 'utf8');
   const desktopPage = readFileSync(new URL('../src/components/DesktopEventPage.astro', import.meta.url), 'utf8');
   const types = readFileSync(new URL('../src/lib/types.ts', import.meta.url), 'utf8');
@@ -21,12 +22,16 @@ test('verified event participants render after medallions on mobile and desktop 
   for (const marker of [
     'data-event-participants',
     'data-participant-like',
-    'kenigevents:participant-likes:v1',
     'data-participant-like-count',
     'aria-pressed="false"',
   ]) {
     assert.ok(component.includes(marker), `participant component misses ${marker}`);
   }
+  assert.match(component, /getStaticSiteAuth/u);
+  assert.match(component, /sessionStorage/u);
+  assert.doesNotMatch(component, /localStorage/u);
+  assert.match(personLikes, /get_person_like_snapshot_v1/u);
+  assert.match(personLikes, /set_person_like_v1/u);
   assert.doesNotMatch(component, /data-feedback-action="like"/u);
 
   const mobileMedallionsAt = mobilePage.indexOf('<EventTokenMedallions event={event}');

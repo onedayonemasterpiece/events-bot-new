@@ -16,6 +16,10 @@
   exact grounded evidence, role/presence/billing decisions, explicit headliner
   classification, KGD80 alias resolution, stale-roster cancellation and
   automatic static refresh when a relation changes.
+- Changed participant hearts from device-local demo state to cross-event,
+  cross-device Supabase person likes: authenticated idempotent writes, a public
+  aggregate snapshot RPC, RLS-closed compact state/counter tables, registry
+  allowlist sync and no append-only click log.
 - Added compact PWA lifecycle analytics in the personalization Supabase
   project: confirmed installs, standalone sessions, daily active installations
   and exact D1/D7 cohort returns use one mutable installation-state row plus

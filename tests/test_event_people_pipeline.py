@@ -85,6 +85,20 @@ def test_checked_in_kgd80_catalog_contains_every_public_portrait() -> None:
     }
 
 
+def test_every_catalog_person_is_seeded_as_a_global_like_subject() -> None:
+    payload = load_kgd80_catalog()
+    migration = (
+        ROOT
+        / "supabase/migrations/20260727191852_person_like_counter_v1.sql"
+    ).read_text(encoding="utf-8")
+    for person in payload["people"]:
+        assert f'"{person["artist_id"]}"' in migration
+    assert "personalization_person_like_state" in migration
+    assert "get_person_like_snapshot_v1" in migration
+    assert "set_person_like_v1" in migration
+    assert "is_anonymous" in migration
+
+
 def test_semantic_roster_requires_exact_grounded_quote_and_preserves_headliner() -> None:
     corpus = event().source_text
     decisions, complete = grounded_people_decisions(

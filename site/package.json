@@ -30,6 +30,7 @@
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
     "test:festival-timeline-layout": "node --experimental-strip-types --test scripts/festival-timeline-layout.behavior.test.mjs",
     "test:date-listing-order": "node --experimental-strip-types --test tests/date-listing-order.test.mjs",
+    "test:person-likes": "node --experimental-strip-types --test tests/person-likes.test.mjs",
     "test:browser-release-gate": "node --test scripts/browser-release-gate.behavior.test.mjs",
     "test:occurrences": "node --experimental-strip-types --test tests/event-occurrences.test.mjs",
     "astro": "astro"

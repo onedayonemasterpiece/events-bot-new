@@ -91,8 +91,9 @@ const publicAssetUrl = (value: string): string => /^https?:\/\//iu.test(value) ?
               data-participant-like
               data-participant-id={participant.id}
               data-participant-name={participant.name}
-              data-base-count={baseLikes}
+              data-server-count={baseLikes}
               aria-pressed="false"
+              aria-busy="false"
               aria-label={`Нравится: ${participant.name}. Сейчас ${baseLikes}`}
             >
               <Icon name="heart" />
@@ -106,59 +107,162 @@ const publicAssetUrl = (value: string): string => /^https?:\/\//iu.test(value) ?
 )}
 
 <script>
-  const STORAGE_KEY = 'kenigevents:participant-likes:v1';
+  import { getStaticSiteAuth } from '../lib/staticSiteAuth';
+  import {
+    getPersonLikeSnapshot,
+    publicPersonIds,
+    setPersonLike,
+  } from '../lib/personLikes';
 
-  const readLikedIds = (): Set<string> => {
-    try {
-      const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      return new Set(Array.isArray(value) ? value.map(String) : []);
-    } catch {
-      return new Set();
-    }
+  const PENDING_KEY = 'ke:pending-person-like:v1';
+  const PENDING_MAX_AGE_MS = 15 * 60 * 1000;
+  const inFlight = new Map<string, Promise<void>>();
+
+  const notify = (message: string, type: 'info' | 'success' | 'error' = 'info'): void => {
+    window.dispatchEvent(new CustomEvent('kenigevents:toast', {
+      detail: {
+        message,
+        type,
+        dedupeKey: `person-like:${type}:${message}`,
+      },
+    }));
   };
 
-  const writeLikedIds = (likedIds: Set<string>): void => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...likedIds].sort()));
-    } catch {
-      // The control remains usable for the current page when storage is denied.
-    }
-  };
-
-  const syncParticipantButtons = (participantId: string, liked: boolean): void => {
+  const syncParticipantButtons = (
+    participantId: string,
+    liked: boolean,
+    count: number,
+    busy = false,
+  ): void => {
     document.querySelectorAll<HTMLButtonElement>('[data-participant-like]').forEach((button) => {
       if (button.dataset.participantId !== participantId) return;
-      const baseCount = Math.max(0, Number(button.dataset.baseCount || 0));
-      const count = baseCount + (liked ? 1 : 0);
       const name = button.dataset.participantName || 'участник';
+      const safeCount = Math.max(0, Math.floor(Number(count) || 0));
+      button.dataset.serverCount = String(safeCount);
       button.setAttribute('aria-pressed', String(liked));
-      button.setAttribute('aria-label', `${liked ? 'Убрать отметку' : 'Нравится'}: ${name}. Сейчас ${count}`);
+      button.setAttribute('aria-busy', String(busy));
+      button.disabled = busy;
+      button.setAttribute('aria-label', `${liked ? 'Убрать отметку' : 'Нравится'}: ${name}. Сейчас ${safeCount}`);
       const countNode = button.querySelector<HTMLElement>('[data-participant-like-count]');
-      if (countNode) countNode.textContent = String(count);
+      if (countNode) countNode.textContent = String(safeCount);
     });
   };
 
-  const initParticipantLikes = (): void => {
-    const likedIds = readLikedIds();
-    document.querySelectorAll<HTMLButtonElement>('[data-participant-like]').forEach((button) => {
-      const participantId = button.dataset.participantId;
-      if (!participantId) return;
-      syncParticipantButtons(participantId, likedIds.has(participantId));
-      if (button.dataset.participantLikeBound === 'true') return;
-      button.dataset.participantLikeBound = 'true';
-      button.addEventListener('click', () => {
-        const current = readLikedIds();
-        const liked = !current.has(participantId);
-        if (liked) current.add(participantId);
-        else current.delete(participantId);
-        writeLikedIds(current);
-        syncParticipantButtons(participantId, liked);
+  const participantIds = (): string[] => publicPersonIds(
+    [...document.querySelectorAll<HTMLElement>('[data-participant-like]')]
+      .map((button) => button.dataset.participantId),
+  );
+
+  const pendingLike = (): { personId: string; createdAt: number } | null => {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(PENDING_KEY) || 'null');
+      const personId = publicPersonIds([value?.personId])[0];
+      const createdAt = Number(value?.createdAt) || 0;
+      if (!personId || Date.now() - createdAt > PENDING_MAX_AGE_MS) return null;
+      return { personId, createdAt };
+    } catch {
+      return null;
+    }
+  };
+
+  const runtime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
+  const supabaseUrl = runtime?.dataset.supabaseUrl || '';
+  const publishableKey = runtime?.dataset.supabaseKey || '';
+  const provider = runtime?.dataset.yandexProvider || 'custom:yandex';
+
+  if (runtime?.dataset.authEnabled === 'true' && supabaseUrl && publishableKey) {
+    const auth = getStaticSiteAuth({ supabaseUrl, publishableKey, provider });
+
+    const refresh = async (): Promise<void> => {
+      try {
+        const snapshots = await getPersonLikeSnapshot(auth.client, participantIds());
+        snapshots.forEach((item) => {
+          syncParticipantButtons(item.personId, item.liked, item.likesCount);
+        });
+      } catch {
+        // Build-time count remains a resilient baseline.
+      }
+    };
+
+    const persist = (participantId: string, liked: boolean): Promise<void> => {
+      const existing = inFlight.get(participantId);
+      if (existing) return existing;
+      const button = document.querySelector<HTMLButtonElement>(
+        `[data-participant-like][data-participant-id="${CSS.escape(participantId)}"]`,
+      );
+      const beforeLiked = button?.getAttribute('aria-pressed') === 'true';
+      const beforeCount = Math.max(0, Number(button?.dataset.serverCount || 0));
+      const optimisticCount = Math.max(0, beforeCount + (liked === beforeLiked ? 0 : liked ? 1 : -1));
+      syncParticipantButtons(participantId, liked, optimisticCount, true);
+      const request = setPersonLike(auth.client, participantId, liked)
+        .then((snapshot) => {
+          syncParticipantButtons(snapshot.personId, snapshot.liked, snapshot.likesCount);
+        })
+        .catch(() => {
+          syncParticipantButtons(participantId, beforeLiked, beforeCount);
+          notify('Не удалось сохранить лайк. Попробуйте ещё раз.', 'error');
+        })
+        .finally(() => {
+          inFlight.delete(participantId);
+        });
+      inFlight.set(participantId, request);
+      return request;
+    };
+
+    const bind = (): void => {
+      document.querySelectorAll<HTMLButtonElement>('[data-participant-like]').forEach((button) => {
+        const participantId = publicPersonIds([button.dataset.participantId])[0];
+        if (!participantId || button.dataset.participantLikeBound === 'true') return;
+        button.dataset.participantLikeBound = 'true';
+        button.addEventListener('click', async () => {
+          const session = await auth.getSession().catch(() => null);
+          if (!session?.user) {
+            try {
+              sessionStorage.setItem(PENDING_KEY, JSON.stringify({
+                personId: participantId,
+                createdAt: Date.now(),
+              }));
+            } catch {
+              // The login still works; only automatic replay is unavailable.
+            }
+            notify('Войдите через Яндекс — лайк сохранится на всех устройствах.');
+            await auth.signIn().catch(() => false);
+            return;
+          }
+          await persist(participantId, button.getAttribute('aria-pressed') !== 'true');
+        });
+      });
+    };
+
+    bind();
+    auth.subscribe((snapshot) => {
+      if (snapshot.status !== 'signed_in') return;
+      const pending = pendingLike();
+      if (!pending || !participantIds().includes(pending.personId)) {
+        refresh().catch(() => {});
+        return;
+      }
+      try {
+        sessionStorage.removeItem(PENDING_KEY);
+      } catch {
+        // The idempotent RPC makes a later replay harmless.
+      }
+      persist(pending.personId, true).then(() => {
+        notify('Лайк сохранён и будет виден на других устройствах.', 'success');
       });
     });
-  };
-
-  initParticipantLikes();
-  document.addEventListener('astro:page-load', initParticipantLikes);
+    auth.initialize().then(refresh).catch(refresh);
+    document.addEventListener('astro:page-load', () => {
+      bind();
+      refresh().catch(() => {});
+    });
+  } else {
+    document.querySelectorAll<HTMLButtonElement>('[data-participant-like]').forEach((button) => {
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+      button.title = 'Сквозные лайки временно недоступны';
+    });
+  }
 </script>
 
 <style>
@@ -323,6 +427,10 @@ const publicAssetUrl = (value: string): string => /^https?:\/\//iu.test(value) ?
     border-color:#bd4e20;
     background:#bd4e20;
     color:#fff;
+  }
+  .event-participants__like[aria-busy="true"] {
+    cursor:progress;
+    opacity:.72;
   }
   .event-participants__like:focus-visible {
     outline:3px solid rgba(181,77,34,.36);

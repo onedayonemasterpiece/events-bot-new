@@ -1,9 +1,9 @@
 # Участники событий и подписка на персон
 
-> **Status:** UI, SQLite-реестр KGD80, Smart Update extraction/identity binding
-> и статический export-контракт реализованы в
-> `feature/static-event-participants-20260727`. Общий серверный счётчик лайков
-> и fuzzy BGE resolution для неизвестных персон ещё не включены.
+> **Status:** UI, SQLite-реестр KGD80, Smart Update extraction/identity binding,
+> статический export-контракт и сквозные person likes в personalization
+> Supabase реализованы в `feature/static-event-participants-20260727`. Fuzzy
+> BGE resolution для неизвестных персон ещё не включён.
 >
 > **Surfaces:** mobile и desktop event detail.
 
@@ -101,20 +101,46 @@ Update: это дёшево и устраняет задержку для нов
 зарубежных персон. BGE может предложить identity candidate, но не имеет права
 сам подтвердить участие или headliner billing.
 
-## Лайки и персонализация
+## Сквозные лайки и персонализация
 
-В этой ветке сердце сохраняется на текущем устройстве в
-`kenigevents:participant-likes:v1`. Отображаемое значение — build-time
-`likes_count` плюс локальный выбор пользователя. Оно не выдаётся за глобальный
-счётчик.
+Локального счётчика больше нет. Сердце работает с personalization Supabase и
+привязано к стабильному `person_id`, а не к конкретному событию:
 
-Следующий backend-этап:
+- один лайк Татьяне Удовенко виден на любом событии с ней;
+- публичный `likes_count` общий для всех посетителей;
+- собственное состояние синхронизируется между устройствами после входа через
+  Яндекс;
+- запись идемпотентная: браузер отправляет желаемое состояние `liked=true|false`,
+  а не слепой toggle;
+- после первого paint все персоны страницы читаются одним bounded RPC
+  `get_person_like_snapshot_v1`; статическую страницу из-за каждого лайка
+  перестраивать не нужно;
+- UI обновляется оптимистично и сверяется с ответом сервера.
 
-1. анонимный/авторизованный `person_like` в Supabase;
-2. идемпотентный toggle и агрегат публичного count;
-3. выгрузка агрегата в статический participant DTO;
-4. использование `liked_person_ids` как positive ranking signal в персональной
-   ленте без жёсткого исключения остальных событий.
+Хранение экологичное:
+
+1. `personalization_person_like_state` — только текущая уникальная связь
+   `(user_id, person_id)`, без истории кликов;
+2. `personalization_person_like_counter` — один маленький агрегат на персону;
+3. `personalization_person_like_subject` — allowlist публичных registry IDs;
+4. raw append-only журнал не создаётся.
+
+Прямой доступ браузера к таблицам закрыт RLS и grants. Публичный RPC возвращает
+только агрегат и состояние текущего пользователя; write RPC доступен только
+роли `authenticated`; anonymous Auth identities дополнительно отклоняются,
+чтобы массовое создание временных аккаунтов не раздувало счётчик. При клике
+без сессии сохраняется лишь короткоживущий pending intent в `sessionStorage`,
+пользователь проходит Yandex login, после возврата выполняется тот же
+идемпотентный RPC.
+
+Новые registry IDs синхронизируются одной командой:
+
+```bash
+python scripts/sync_person_like_subjects_to_supabase.py
+```
+
+Следующий рекомендательный этап — использовать liked person IDs как positive
+ranking signal без жёсткого исключения остальных событий.
 
 ## KGD80
 
@@ -150,5 +176,4 @@ Noindex specimen `/lab/event-participants/` проверяет оба viewport, 
 - fuzzy/transliteration resolver и Kaggle CPU+BGE worker для персон вне exact
   KGD80 aliases;
 - автоматическая публичная верификация ранее неизвестной персоны;
-- серверный API и общий счётчик лайков;
 - отдельная подборка и мобильное вложенное меню `К нам едут`.

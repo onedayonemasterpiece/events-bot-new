@@ -36,6 +36,7 @@ This decision follows the implementation already present in `origin/main`: Supab
 | Profile merge/link audit | Supabase | De-identified audit projection in YDB |
 | Consent and consent evidence | Supabase | Aggregate consent metrics in YDB |
 | Favorites, event follows and calendar-save state | Supabase | Aggregate event/action metrics in YDB |
+| Person/celebrity likes and public count | Supabase compact current state + aggregate | Liked person IDs as a bounded ranking input; aggregate analytics in YDB |
 | Transactional/recommendation subscriptions | Supabase, with separate purposes | Aggregate subscription metrics in YDB |
 | Verified email, preferences and suppressions | Supabase | Keyed HMAC and aggregates only in YDB |
 | Recommendation issue/cards | Supabase | De-identified issue metrics in YDB |
@@ -61,7 +62,8 @@ The post-release VK privacy vault is a scoped exception: it stores only VK subje
 ### Views and actions
 
 1. Static HTML remains useful without Supabase/YDB.
-2. After consent, a same-origin endpoint validates actor, device credential, schema, payload and idempotency.
+2. After consent, a same-origin endpoint or narrowly granted authenticated
+   Supabase RPC validates actor, schema, payload and idempotency.
 3. Supabase transactionally updates bounded strong-action/current state and a profile revision.
 4. An asynchronous outbox projects de-identified analytics to YDB.
 5. YDB failure never blocks CTA/navigation or rolls back a user action.

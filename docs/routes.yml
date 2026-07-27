@@ -171,13 +171,15 @@ sections:
 
 features:
   event_people:
-    status: ui_registry_smart_update_implemented
+    status: ui_registry_smart_update_global_likes_implemented
     docs: docs/features/event-people/README.md
     entrypoints:
       - site/src/components/EventParticipants.astro
       - site/scripts/export-production-preview-data.py
       - event_people/service.py
       - scripts/sync_kgd80_people_catalog.py
+      - supabase/migrations/20260727191852_person_like_counter_v1.sql
+      - site/src/lib/personLikes.ts
 
   interest_clubs:
     status: implementation_rc
