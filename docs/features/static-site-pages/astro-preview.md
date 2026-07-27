@@ -915,12 +915,19 @@ therefore agree with the pages produced by `build:preview`: an already-ended
 Break Summer event is forbidden from Popular after its date, while it remains
 required when the same gate runs against an earlier eligible build clock.
 
-Generated-output canaries also respect the generated calendar window. When the
-historical `date-2026-07-24` route exists, the gate checks the full Pianissimo
-rail DOM. When a current build correctly omits that expired date page, the gate
-checks the immutable real event `5296` media classification, safe-crop flag,
-wide geometry and focal point instead of failing because an obsolete route is
-absent.
+Generated-output canaries also respect the generated calendar window. The
+executable no-band Pianissimo canary follows upcoming event `5297` on
+`date-2026-07-30`; it checks the full rail DOM, horizontal `140×112` cover,
+`visual_only`, safe-crop geometry and focal point. A past one-off event is not
+used as a required source row: production export is allowed to remove expired
+dates, so an obsolete July 24 occurrence cannot break a later valid candidate.
+
+The same lifecycle rule applies to transport specimens. Romanovo event `6710`
+is historical acceptance evidence, not a permanent catalog fixture.
+`check:preview` validates the preferred Северный-вокзал boarding UI on a
+currently eligible Romanovo event when one exists; the official route-119
+terminal times/provenance and focused transport tests remain mandatory even
+when no current public event uses that bus route.
 
 ## Immutable candidate recovery after publication
 

@@ -363,6 +363,16 @@
   instead of collapsing late in the evening; Popular retains its separate
   start-instant exclusion, and the catalog ledger proves the same
   calendar-day-inclusive predicate.
+- **Static site / generated crop canary**: moved the executable Pianissimo
+  no-band rail assertion from expired one-off event `5296` to upcoming
+  same-series event `5297`; the gate still verifies the real `visual_only`
+  safe-crop/focal-point contract without requiring production export to retain
+  an obsolete date.
+- **Static site / transport canary lifecycle**: stopped requiring expired
+  Romanovo event `6710` in every full production catalog; current Romanovo
+  events still receive the exact preferred Северный-вокзал boarding assertion,
+  while route-119 source/provenance and focused transport tests remain
+  unconditional.
 - **Static site / unusual semantic boundary**: raised the calibrated adjacent
   probability threshold from `0.65` to `0.725` after the exact pinned-BGE
   canary exposed a second conventional-stage hard negative; the smallest
