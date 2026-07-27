@@ -314,7 +314,9 @@
   `success`. Structured parser occurrences associated with a festival also no
   longer inherit the social whole-program `festival_post` skip; the guard
   remains outside the slotted `EventCandidate` declaration so later structured
-  fields such as `organizer_names` stay part of the runtime schema.
+  fields such as `organizer_names` stay part of the runtime schema. Completed
+  parse runs clear the fail-closed cancellation sentinel before writing
+  `details_json.fatal_error`.
 
 - Prevented source-grounded studio addresses from being rebound to unrelated
   canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);
