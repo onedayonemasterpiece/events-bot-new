@@ -29,7 +29,7 @@ lanes:
     expected_output: committed product spec and manual email templates
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: merged
   - id: focus-shell
     role: worker
     requirement_ids: [R03, R04, R05, R08, R10]
@@ -52,7 +52,7 @@ lanes:
     expected_output: committed buildable page prototype and durable icon attribution
     verification_scope: targeted
     effort: high
-    status: planned
+    status: merged
   - id: for-me
     role: worker
     requirement_ids: [R06, R07]
@@ -70,7 +70,7 @@ lanes:
     expected_output: committed interest controls and local explainable feed prototype
     verification_scope: targeted
     effort: high
-    status: planned
+    status: merged
   - id: integration
     role: merge_reviewer
     requirement_ids: [R11, R12]
@@ -84,4 +84,4 @@ lanes:
     expected_output: clean pushed integration branch with evidence
     verification_scope: full_local
     effort: maximum available
-    status: planned
+    status: merged

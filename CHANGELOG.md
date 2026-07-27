@@ -4,6 +4,22 @@
 
 ### Added
 
+- Added an isolated noindex focus-group product prototype: the ordinary Astro
+  root becomes a testing stub, fragment invites create only a bounded 72-hour
+  local preview hint, and a marker-gated hub demonstrates the current site
+  journey without claiming localStorage, an opaque route or mock email/Yandex
+  choice as authorization.
+- Added reusable focus-lab UI with a CC0 SVG Repo flask icon, Act Opus
+  thank-you/pending-prize presentation, distinct overall NPS, page usefulness,
+  improvement and event-fact feedback specimens, plus automatic/operator end
+  states that clear preview access without deleting ordinary personalization.
+- Reworked `/dlya-menya/` into an explainable local prototype with 16 category
+  cards, native `Чаще / Без предпочтения / Реже` controls, evidence-gated
+  interest meters, projected-topic-only matching, `Почему это`, static
+  fallback and a separate no-send eligibility/opt-in state for future
+  automatic personalized selections.
+- Added manual focus-system/update email templates and a per-recipient operator
+  checklist; no outbox, worker, cron, bulk send or live delivery is introduced.
 - Added compact PWA lifecycle analytics in the personalization Supabase
   project: confirmed installs, standalone sessions, daily active installations
   and exact D1/D7 cohort returns use one mutable installation-state row plus

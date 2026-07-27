@@ -1,0 +1,160 @@
+---
+import FocusGroupThankYou from '../../../components/FocusGroupThankYou.astro';
+import FocusLabBadge from '../../../components/FocusLabBadge.astro';
+import { withBase } from '../../../lib/events';
+import '../../../styles/design-system.css';
+
+const states = [
+  {
+    id: 'time_elapsed',
+    tab: 'Срок завершён',
+    eyebrow: 'Автоматическое завершение',
+    title: 'Исследовательский период завершён',
+    body: 'Срок программы истёк. Режим тестера, новые приглашения и исследовательские сообщения выключены.',
+  },
+  {
+    id: 'operator_closed',
+    tab: 'Команда завершила',
+    eyebrow: 'Решение оператора',
+    title: 'Программа завершена раньше',
+    body: 'Команда закрыла исследовательский период досрочно. Новые tester-действия больше не принимаются.',
+  },
+  {
+    id: 'operator_cancelled',
+    tab: 'Программа остановлена',
+    eyebrow: 'Остановка программы',
+    title: 'Этот исследовательский цикл остановлен',
+    body: 'Продолжение цикла отменено. Неопубликованные условия подарка не становятся обещанием или обязательством.',
+  },
+] as const;
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Завершение фокус-группы · продуктовый прототип</title>
+    <meta name="description" content="Макет автоматического и операторского завершения фокус-группы с сохранением обычной персонализации." />
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
+    <meta name="theme-color" content="#fff7e7" />
+  </head>
+  <body>
+    <main class="focus-end" data-focus-end data-root-href={withBase('/')}>
+      <nav class="focus-end__nav" aria-label="Навигация">
+        <a href={withBase('/fokus-gruppa/')}>← О программе</a>
+        <FocusLabBadge label="Лаборатория сайта" detail="Завершение · прототип" />
+      </nav>
+
+      <section class="focus-end__hero">
+        <div class="focus-end__tabs" aria-label="Причина завершения">
+          {states.map((state, index) => (
+            <button
+              type="button"
+              data-end-select={state.id}
+              aria-pressed={index === 0 ? 'true' : 'false'}
+            >
+              {state.tab}
+            </button>
+          ))}
+        </div>
+
+        {states.map((state, index) => (
+          <article data-end-state={state.id} hidden={index !== 0}>
+            <p class="focus-end__eyebrow">{state.eyebrow}</p>
+            <h1>{state.title}</h1>
+            <p class="focus-end__lead">{state.body}</p>
+          </article>
+        ))}
+
+        <dl class="focus-end__continuity">
+          <div><dt>Выключается</dt><dd>Tester feedback, NPS prompts, новые invites и focus updates</dd></div>
+          <div><dt>Остаётся</dt><dd>Обычный аккаунт, сохранённые события и отдельные consent</dd></div>
+          <div><dt>Не стирается</dt><dd>Локальный профиль «Для меня» в этом браузере</dd></div>
+        </dl>
+
+        <div class="focus-end__actions">
+          <a class="ke-button ke-button--primary ke-button--large" href={withBase('/segodnya/')}>Открыть обычную афишу</a>
+          <a class="ke-button ke-button--secondary ke-button--large" href={withBase('/dlya-menya/')}>Настроить «Для меня»</a>
+          <button class="ke-button ke-button--secondary" type="button" data-end-clear>Завершить preview в браузере</button>
+        </div>
+        <p class="focus-end__status" data-end-status role="status" aria-live="polite"></p>
+      </section>
+
+      <FocusGroupThankYou compact />
+
+      <aside class="focus-end__boundary">
+        <strong>Преемственность — отдельный контракт.</strong>
+        <span>
+          Эта кнопка очищает только временную focus-preview метку. Ключ локальной
+          персонализации намеренно не затрагивается. В production то же правило
+          должно применяться сервером к membership, а не через localStorage.
+        </span>
+      </aside>
+    </main>
+  </body>
+</html>
+
+<script>
+  import { clearFocusPreviewMarker } from '../../../lib/focus-group-prototype';
+
+  document.querySelectorAll<HTMLElement>('[data-focus-end]').forEach((root) => {
+    const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-end-select]'));
+    const states = Array.from(root.querySelectorAll<HTMLElement>('[data-end-state]'));
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        buttons.forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+        states.forEach((state) => {
+          state.hidden = state.dataset.endState !== button.dataset.endSelect;
+        });
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-end-clear]')?.addEventListener('click', () => {
+      try {
+        clearFocusPreviewMarker(window.localStorage);
+        const status = root.querySelector<HTMLElement>('[data-end-status]');
+        if (status) status.textContent = 'Preview-метка удалена. Локальные настройки «Для меня» сохранены.';
+      } catch {
+        const status = root.querySelector<HTMLElement>('[data-end-status]');
+        if (status) status.textContent = 'Браузер не дал изменить localStorage. Обычные страницы по-прежнему доступны.';
+      }
+    });
+  });
+</script>
+
+<style>
+  * { box-sizing: border-box; }
+  html { background: var(--ke-color-canvas); color: var(--ke-color-ink); font-family: var(--ke-font-sans); }
+  body { min-width: 320px; min-height: 100dvh; margin: 0; background: radial-gradient(circle at 90% 0, rgb(255 193 13 / 16%), transparent 30rem), var(--ke-color-canvas); }
+  .focus-end { width: min(1080px, calc(100% - 2rem)); margin: 0 auto; padding: 1rem 0 3rem; }
+  .focus-end__nav { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .focus-end__nav > a { min-height: 44px; display: inline-flex; align-items: center; color: var(--ke-color-brand-700); font-size: .84rem; font-weight: 850; text-decoration: none; }
+  .focus-end__hero { border: 1px solid var(--ke-color-line); border-radius: 2rem; padding: clamp(1.25rem, 5vw, 4rem); background: linear-gradient(145deg, #fff, #fff6e5); box-shadow: var(--ke-shadow-2); }
+  .focus-end__tabs { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: clamp(2rem, 6vw, 5rem); }
+  .focus-end__tabs button { min-height: 44px; border: 1px solid var(--ke-color-line); border-radius: 999px; padding: .6rem .85rem; background: #fff; color: var(--ke-color-copy); font: 800 .78rem/1.2 var(--ke-font-sans); cursor: pointer; }
+  .focus-end__tabs button[aria-pressed="true"] { border-color: var(--ke-color-brand-600); background: var(--ke-color-brand-50); color: var(--ke-color-brand-800); }
+  .focus-end__hero article[hidden] { display: none; }
+  .focus-end__eyebrow { margin: 0 0 .55rem; color: var(--ke-color-brand-700); font-size: .72rem; font-weight: 900; letter-spacing: .11em; text-transform: uppercase; }
+  .focus-end h1 { max-width: 13ch; margin: 0; font-size: clamp(3rem, 8vw, 7rem); line-height: .88; letter-spacing: -.065em; text-wrap: balance; }
+  .focus-end__lead { max-width: 66ch; margin: 1.2rem 0 0; color: var(--ke-color-muted); font-size: clamp(1rem, 2vw, 1.25rem); line-height: 1.58; }
+  .focus-end__continuity { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; margin: 2rem 0 0; }
+  .focus-end__continuity div { border-radius: 1rem; padding: 1rem; background: var(--ke-color-canvas); }
+  .focus-end__continuity dt { color: var(--ke-color-brand-700); font-size: .68rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+  .focus-end__continuity dd { margin: .35rem 0 0; color: var(--ke-color-copy); font-size: .84rem; line-height: 1.45; }
+  .focus-end__actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.25rem; }
+  .focus-end__status { min-height: 1.5em; margin: .7rem 0 0; color: var(--ke-color-success-700); font-size: .84rem; font-weight: 750; }
+  :global(.focus-thanks) { margin-top: 1rem; }
+  .focus-end__boundary { display: grid; gap: .3rem; margin-top: 1rem; border-radius: 1rem; padding: 1rem; background: var(--ke-color-info-50); color: var(--ke-color-info-700); line-height: 1.45; }
+  .focus-end__boundary span { font-size: .82rem; }
+  button:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 60%, transparent); outline-offset: 3px; }
+  @media (max-width: 720px) {
+    .focus-end { width: min(100% - 1rem, 1080px); padding-top: .5rem; }
+    .focus-end__nav { align-items: flex-start; }
+    .focus-end__continuity { grid-template-columns: 1fr; }
+    .focus-end__actions { flex-direction: column; }
+    .focus-end__actions .ke-button { width: 100%; }
+  }
+</style>

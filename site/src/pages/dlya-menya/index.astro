@@ -1,5 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
+import FocusGroupFeedback from '../../components/FocusGroupFeedback.astro';
+import FocusLabBadge from '../../components/FocusLabBadge.astro';
 import InterestProfile from '../../components/InterestProfile.astro';
 import { buildFocusRecommendations } from '../../lib/focus-personalization';
 import { absoluteUrl, getPopularEvents, SITE_NAME } from '../../lib/events';
@@ -13,6 +15,7 @@ const description = 'Локальный прототип персонализа�
   <main id="main" class="personal-page" data-personal-prototype>
     <div class="page-shell">
       <header class="personal-page__head">
+        <FocusLabBadge label="Лаборатория сайта" detail="Для меня · прототип" />
         <p class="eyebrow">Личная афиша · Prototype</p>
         <h1>Для меня — без чёрного ящика</h1>
         <p>Соберите вкусовой профиль своими руками. Здесь отдельно показаны ваш явный выбор, рассчитанный по реакциям индекс интереса и достаточность данных.</p>
@@ -23,9 +26,31 @@ const description = 'Локальный прототип персонализа�
         </div>
       </header>
       <InterestProfile recommendations={recommendations} />
+      <section class="personal-page__focus-tools" data-focus-personal-tools hidden>
+        <div class="personal-page__focus-tools-note">
+          <FocusLabBadge label="Инструменты участника" detail="Только после маршрута приглашения" />
+          <p>
+            Временная метка предпросмотра открывает макет обратной связи на этой
+            странице. Это UX-gate, а не подтверждение membership.
+          </p>
+        </div>
+        <FocusGroupFeedback pageFamily="for_me" pageLabel="страница «Для меня»" />
+      </section>
     </div>
   </main>
 </EventLayout>
+
+<script>
+  import { readFocusPreviewMarker } from '../../lib/focus-group-prototype';
+
+  document.querySelectorAll<HTMLElement>('[data-focus-personal-tools]').forEach((tools) => {
+    try {
+      tools.hidden = !readFocusPreviewMarker(window.localStorage);
+    } catch {
+      tools.hidden = true;
+    }
+  });
+</script>
 
 <style>
   .personal-page { padding: clamp(1rem, 3vw, 2.5rem) 0 4rem; }
@@ -56,6 +81,23 @@ const description = 'Локальный прототип персонализа�
   .personal-page__head > p:nth-of-type(2) { max-width: 62ch; font-size: clamp(1rem, 1.6vw, 1.22rem); line-height: 1.55; }
   .personal-page__principles { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.25rem; }
   .personal-page__principles span { padding: .45rem .7rem; border: 1px solid rgba(23, 43, 43, .18); border-radius: 999px; background: rgba(255, 255, 255, .72); color: #244846; font-size: .82rem; font-weight: 850; }
+  .personal-page__head :global(.focus-lab-badge) { position: relative; z-index: 1; margin-bottom: 1rem; }
+  .personal-page__focus-tools { display: grid; gap: .75rem; margin-top: 1rem; }
+  .personal-page__focus-tools[hidden] { display: none; }
+  .personal-page__focus-tools-note {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 1px solid rgba(55, 38, 27, .14);
+    border-radius: 1.25rem;
+    padding: .85rem 1rem;
+    background: #fffaf3;
+  }
+  .personal-page__focus-tools-note p { max-width: 62ch; margin: 0; color: #6d6259; font-size: .82rem; line-height: 1.45; }
+  @media (max-width: 700px) {
+    .personal-page__focus-tools-note { align-items: flex-start; flex-direction: column; }
+  }
   @media (prefers-reduced-motion: reduce) {
     .personal-page__head { scroll-behavior: auto; }
   }

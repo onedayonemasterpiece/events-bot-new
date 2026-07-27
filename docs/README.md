@@ -42,6 +42,8 @@
 - Service-share preview runbook: `docs/operations/service-sharing-preview.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
+  - Фокус-группа статического сайта: product/page prototype и production
+    boundary — `docs/backlog/features/static-site-focus-group/README.md`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)
 - Инструменты: `docs/tools/`
 

@@ -32,6 +32,7 @@
     "test:date-listing-order": "node --experimental-strip-types --test tests/date-listing-order.test.mjs",
     "test:browser-release-gate": "node --test scripts/browser-release-gate.behavior.test.mjs",
     "test:occurrences": "node --experimental-strip-types --test tests/event-occurrences.test.mjs",
+    "test:focus-group-product": "node --experimental-strip-types --test src/lib/focus-group-prototype.test.ts src/lib/focus-personalization.test.ts tests/focus-group-product-surface.test.mjs",
     "astro": "astro"
   },
   "dependencies": {

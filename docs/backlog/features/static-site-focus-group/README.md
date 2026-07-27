@@ -1,6 +1,8 @@
-# Фокус-группа статического сайта — релиз 30 июля 2026
+# Фокус-группа статического сайта — продуктовый прототип
 
-> **Статус:** product/release design; реализация режима тестера ещё не начата.
+> **Статус:** page/product prototype реализован в
+> `integration/static-site-focus-group-product-20260727`; production tester
+> backend, cohort и rollout не реализованы и не запущены.
 > **Целевой запуск:** 30.07.2026, рабочее время из текущего release context —
 > 18:00 `Europe/Kaliningrad` (`16:00Z`), с подтверждением при freeze.
 > **Аудитория:** не публичный релиз, а закрытый исследовательский cohort до 200
@@ -9,6 +11,32 @@
 > **Release truth:** `origin/main`; полная фактическая сверка —
 > [current-state-audit.md](current-state-audit.md).
 > **Implementation handoff:** [implementation-prompt.md](implementation-prompt.md).
+> **Продуктовая механика:** [product-prototype.md](product-prototype.md).
+> **Ручные письма:** [manual-email-templates.md](manual-email-templates.md).
+
+## 0. Что реализовано 27.07.2026
+
+В отдельной integration-ветке собран приёмочный UI-контур без production
+side effects:
+
+- `/` — noindex-заглушка о тестировании фокус-группой;
+- `/fokus-gruppa/` — программа и честная механика благодарности;
+- `/fokus-gruppa/priglashenie/` — fragment intake, немедленное удаление кода,
+  bounded localStorage preview marker и честный email/Яндекс auth-choice;
+- `/zakrytaya-afisha/` — marker-gated hub текущих статических страниц;
+- `/fokus-gruppa/zavershenie/` — automatic/operator end states и continuity;
+- `/dlya-menya/` — consented local personalization с tri-state категориями,
+  отдельным индексом интереса, объяснениями и no-send eligibility будущих
+  автоматических подборок;
+- reusable lab badge, NPS/page-usefulness/improvement/event-fact feedback
+  specimen и SVG Repo lab icon.
+
+Это **не закрытая production-сборка**. LocalStorage и opaque path не являются
+авторизацией; email/OAuth только показаны как интерфейс; feedback не
+отправляется; письма не автоматизированы; подарок не объявлен. Обычный
+`astro build` показывает prototype root, но `build-production.mjs` и
+`build-secret-candidate.mjs` по-прежнему владеют своими root transformations.
+Эта ветка намеренно не меняет их и не может считаться production root rollout.
 
 ## 1. Решение
 

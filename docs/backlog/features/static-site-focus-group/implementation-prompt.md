@@ -1,5 +1,11 @@
 # Prompt для отдельного окна: реализация focus-group release
 
+> **Scope update, 27.07.2026:** текущая integration-ветка реализует только
+> page/product prototype из
+> [product-prototype.md](product-prototype.md). Ниже сохранён исходный prompt
+> будущей production-реализации; его Supabase/Auth/email/deploy gates в этой
+> ветке намеренно не выполняются и не считаются закрытыми.
+
 Скопируй текст ниже в отдельное окно Codex.
 
 ---

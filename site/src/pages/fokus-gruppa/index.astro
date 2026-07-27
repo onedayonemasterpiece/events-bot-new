@@ -73,7 +73,10 @@ const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_previe
           <h2 id="prototype-title">Демонстрационный маршрут без настоящего входа</h2>
           <p>Ссылка ниже показывает fragment cleanup, временную метку, auth-choice и закрытый hub. Никаких production-записей или писем.</p>
         </div>
-        <a class="ke-button ke-button--primary ke-button--large" href={demoInviteHref}>Открыть макет приглашения</a>
+        <div class="focus-programme__cta-actions">
+          <a class="ke-button ke-button--primary ke-button--large" href={demoInviteHref}>Открыть макет приглашения</a>
+          <a class="ke-button ke-button--secondary" href={withBase('/fokus-gruppa/zavershenie/')}>Посмотреть завершение программы</a>
+        </div>
       </section>
 
       <aside class="focus-programme__boundary">
@@ -115,7 +118,7 @@ const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_previe
   :global(.focus-thanks) { margin-top: 1rem; }
   .focus-programme__cta { align-items: center; }
   .focus-programme__cta > div > p:last-child { margin: .75rem 0 0; color: var(--ke-color-muted); line-height: 1.5; }
-  .focus-programme__cta > .ke-button { justify-self: end; }
+  .focus-programme__cta-actions { display: grid; justify-items: end; gap: .55rem; }
   .focus-programme__boundary { display: grid; gap: .3rem; margin-top: 1rem; border-radius: 1rem; padding: 1rem; background: var(--ke-color-info-50); color: var(--ke-color-info-700); line-height: 1.45; }
   .focus-programme__boundary span { font-size: .84rem; }
   a:focus-visible { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 60%, transparent); outline-offset: 3px; }
@@ -127,6 +130,7 @@ const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_previe
     .focus-programme__signals,
     .focus-programme__cta { grid-template-columns: 1fr; }
     .focus-programme__signal-grid { grid-template-columns: 1fr; }
-    .focus-programme__cta > .ke-button { width: 100%; justify-self: stretch; }
+    .focus-programme__cta-actions { justify-items: stretch; }
+    .focus-programme__cta-actions .ke-button { width: 100%; }
   }
 </style>
