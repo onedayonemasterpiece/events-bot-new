@@ -1,0 +1,402 @@
+---
+import FocusEggCollectionCard from '../../../components/FocusEggCollectionCard.astro';
+import FocusEggSavedListDemo from '../../../components/FocusEggSavedListDemo.astro';
+import FocusLabBadge from '../../../components/FocusLabBadge.astro';
+import {
+  FOCUS_EGG_DEFINITIONS,
+  FOCUS_EGG_COLLECTION_VERSION,
+  FOCUS_EGG_RULES_VERSION,
+  capFocusParticipation,
+  getFocusEggCollectionProgress,
+  type FocusEggId,
+  type FocusEggState,
+} from '../../../lib/focus-easter-eggs';
+import { withBase } from '../../../lib/events';
+import '../../../styles/design-system.css';
+
+const prototypeStates: Record<FocusEggId, FocusEggState> = {
+  'FG-E01': 'found',
+  'FG-E02': 'eligible',
+  'FG-E03': 'locked',
+  'FG-E04': 'locked',
+  'FG-E05': 'eligible',
+  'FG-E06': 'unavailable',
+  'FG-E07': 'eligible',
+  'FG-E08': 'found',
+  'FG-E09': 'eligible',
+  'FG-E10': 'locked',
+  'FG-E11': 'locked',
+  'FG-E12': 'locked',
+};
+const collectionProgress = getFocusEggCollectionProgress(
+  FOCUS_EGG_DEFINITIONS.map(({ id }) => prototypeStates[id]),
+);
+const participationProgress = capFocusParticipation({ points: 18, categories: 4 });
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Коллекция пасхалок · фокус-группа</title>
+    <meta
+      name="description"
+      content="Мобильный продуктовый прототип коллекции пасхалок фокус-группы."
+    />
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
+    <meta name="theme-color" content="#fff7e7" />
+  </head>
+  <body>
+    <a class="focus-collection__skip" href="#main">К основному содержанию</a>
+    <main id="main" class="focus-collection" data-focus-collection>
+      <nav class="focus-collection__nav" aria-label="Навигация коллекции">
+        <a href={withBase('/zakrytaya-afisha/')} class="focus-collection__back">← В закрытую афишу</a>
+        <FocusLabBadge label="Лаборатория" detail="Коллекция · прототип" />
+      </nav>
+
+      <header class="focus-collection__hero">
+        <div>
+          <p class="focus-collection__eyebrow">Коллекция прежде всего</p>
+          <h1>Находите функции, а не случайные пиксели</h1>
+        </div>
+        <p>
+          Каждая пасхалка появляется после полезного действия: поиска, настройки
+          интересов, изучения события или календаря. Один и тот же объект доступен
+          с телефона, компьютера, клавиатуры и screen reader.
+        </p>
+      </header>
+
+      <section class="focus-collection__score" aria-labelledby="score-title">
+        <div class="focus-collection__score-title">
+          <p class="focus-collection__eyebrow">Демонстрация результата</p>
+          <h2 id="score-title">Три показателя — без вводящей в заблуждение суммы</h2>
+        </div>
+        <div class="focus-collection__metrics">
+          <article class="focus-collection__metric focus-collection__metric--primary">
+            <small>Основной результат</small>
+            <strong><span data-collection-found>{collectionProgress.found}</span> из <span data-collection-eligible>{collectionProgress.eligible}</span></strong>
+            <span>Коллекция доступных объектов</span>
+            <meter
+              data-collection-meter
+              min="0"
+              max={collectionProgress.eligible}
+              value={collectionProgress.found}
+            >
+              {collectionProgress.found} из {collectionProgress.eligible}
+            </meter>
+          </article>
+          <article class="focus-collection__metric">
+            <small>Дополнительный результат</small>
+            <strong>{participationProgress.points} из {participationProgress.maxPoints}</strong>
+            <span>Ограниченное участие</span>
+          </article>
+          <article class="focus-collection__metric">
+            <small>Широта проверки</small>
+            <strong>{participationProgress.categories} из {participationProgress.maxCategories}</strong>
+            <span>Разные способы участия</span>
+          </article>
+        </div>
+        <p class="focus-collection__score-note">
+          Это локальная иллюстрация формулы. Больше найденная доля коллекции
+          всегда важнее активности; лайки и дизлайки симметричны, а значение NPS
+          и тон текста не оцениваются.
+        </p>
+      </section>
+
+      <section class="focus-collection__rules" aria-labelledby="rules-title">
+        <span aria-hidden="true">!</span>
+        <div>
+          <h2 id="rules-title">Правила готовятся</h2>
+          <p>
+            Прототип показывает, как может считаться коллекция и
+            исследовательская активность. Сейчас действия на сайте не начисляют
+            конкурсные баллы и не создают право на два билета.
+          </p>
+          <p>
+            После утверждения условий будет один приз — <strong>два билета в театр</strong>.
+            Организатор, театр, сроки, спектакли, ограничения и порядок получения
+            будут опубликованы отдельно до начала.
+          </p>
+        </div>
+      </section>
+
+      <FocusEggSavedListDemo />
+
+      <section class="focus-collection__catalogue" aria-labelledby="catalogue-title">
+        <div class="focus-collection__section-head">
+          <div>
+            <p class="focus-collection__eyebrow">12 маршрутов</p>
+            <h2 id="catalogue-title">Состояния коллекции</h2>
+          </div>
+          <p>
+            «Закрыто» означает, что условие ещё не выполнено. «Недоступно» не
+            превращается в более лёгкую находку и исключается одинаково для всех
+            только по опубликованному решению.
+          </p>
+        </div>
+        <div class="focus-collection__grid">
+          {FOCUS_EGG_DEFINITIONS.map((egg) => (
+            <FocusEggCollectionCard egg={egg} state={prototypeStates[egg.id]} />
+          ))}
+        </div>
+      </section>
+
+      <aside class="focus-collection__device-note">
+        <strong>Другой экран — необязательная миссия.</strong>
+        <span>
+          Попробовать сайт и на телефоне, и на компьютере полезно исследованию,
+          но не даёт дополнительную пасхалку, баллы или преимущество при ничьей.
+        </span>
+      </aside>
+
+      <footer class="focus-collection__footer">
+        <span>На этом устройстве · не конкурсный результат</span>
+        <span>{FOCUS_EGG_COLLECTION_VERSION} · {FOCUS_EGG_RULES_VERSION}</span>
+      </footer>
+    </main>
+  </body>
+</html>
+
+<script>
+  import {
+    FOCUS_EGG_DEFINITIONS,
+    readFocusEggPrototypeState,
+  } from '../../../lib/focus-easter-eggs';
+
+  const stateLabels = {
+    locked: 'Закрыто',
+    eligible: 'Доступно',
+    found: 'Найдено',
+    unavailable: 'Недоступно',
+  } as const;
+
+  document.querySelectorAll<HTMLElement>('[data-focus-collection]').forEach((root) => {
+    const baseStates = new Map(
+      [...root.querySelectorAll<HTMLElement>('[data-egg-id]')].map((card) => [
+        card.dataset.eggId || '',
+        card.dataset.eggState || 'locked',
+      ]),
+    );
+
+    const renderLocalCollection = () => {
+      let foundEggIds: string[] = [];
+      try {
+        foundEggIds = readFocusEggPrototypeState(window.localStorage).foundEggIds;
+      } catch {
+        foundEggIds = [];
+      }
+
+      const foundIds = new Set(['FG-E01', 'FG-E08', ...foundEggIds]);
+      root.querySelectorAll<HTMLElement>('.focus-egg-card[data-egg-id]').forEach((card) => {
+        const eggId = card.dataset.eggId || '';
+        if (!foundIds.has(eggId)) return;
+        card.dataset.eggState = 'found';
+        const label = card.querySelector<HTMLElement>('[data-egg-state-label]');
+        if (label) label.textContent = stateLabels.found;
+      });
+
+      const eligible = FOCUS_EGG_DEFINITIONS.filter(({ id }) => baseStates.get(id) !== 'unavailable').length;
+      const found = FOCUS_EGG_DEFINITIONS.filter(({ id }) => (
+        baseStates.get(id) !== 'unavailable' && foundIds.has(id)
+      )).length;
+      const foundOutput = root.querySelector<HTMLElement>('[data-collection-found]');
+      const eligibleOutput = root.querySelector<HTMLElement>('[data-collection-eligible]');
+      const meter = root.querySelector<HTMLMeterElement>('[data-collection-meter]');
+      if (foundOutput) foundOutput.textContent = String(found);
+      if (eligibleOutput) eligibleOutput.textContent = String(eligible);
+      if (meter) {
+        meter.max = eligible;
+        meter.value = found;
+        meter.textContent = `${found} из ${eligible}`;
+      }
+    };
+
+    root.addEventListener('focus-egg-found', renderLocalCollection);
+    renderLocalCollection();
+  });
+</script>
+
+<style>
+  * { box-sizing: border-box; }
+  html { background: var(--ke-color-canvas); color: var(--ke-color-ink); font-family: var(--ke-font-sans); }
+  body {
+    min-width: 320px;
+    min-height: 100dvh;
+    margin: 0;
+    background:
+      radial-gradient(circle at 100% 0, rgb(255 193 13 / 16%), transparent 26rem),
+      var(--ke-color-canvas);
+  }
+  .focus-collection {
+    width: min(1120px, calc(100% - 1rem));
+    margin: 0 auto;
+    padding: .5rem 0 2.5rem;
+  }
+  .focus-collection__skip {
+    position: fixed;
+    z-index: 50;
+    top: .5rem;
+    left: .5rem;
+    transform: translateY(-150%);
+    border-radius: .5rem;
+    padding: .7rem 1rem;
+    background: #221a14;
+    color: #fff;
+    font-weight: 800;
+  }
+  .focus-collection__skip:focus { transform: none; }
+  .focus-collection__nav {
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+  }
+  .focus-collection__back {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--ke-color-brand-700);
+    font-size: .82rem;
+    font-weight: 850;
+    text-decoration: none;
+  }
+  .focus-collection__hero {
+    min-height: min(660px, calc(100dvh - 5rem));
+    display: grid;
+    align-content: end;
+    gap: 1.4rem;
+    border: 1px solid var(--ke-color-line);
+    border-radius: 1.5rem;
+    padding: clamp(1.25rem, 5vw, 3.5rem);
+    background: linear-gradient(155deg, #fff, #fff2c9);
+    box-shadow: var(--ke-shadow-2);
+  }
+  .focus-collection__eyebrow {
+    margin: 0 0 .5rem;
+    color: var(--ke-color-brand-700);
+    font-size: .68rem;
+    font-weight: 900;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+  .focus-collection__hero h1 {
+    max-width: 12ch;
+    margin: 0;
+    font-size: clamp(2.75rem, 13vw, 7rem);
+    line-height: .88;
+    letter-spacing: -.06em;
+    text-wrap: balance;
+  }
+  .focus-collection__hero > p {
+    max-width: 58ch;
+    margin: 0;
+    color: var(--ke-color-muted);
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+  .focus-collection__score,
+  .focus-collection__catalogue {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+    border: 1px solid var(--ke-color-line);
+    border-radius: 1.5rem;
+    padding: clamp(1rem, 3vw, 2rem);
+    background: var(--ke-color-surface-strong);
+  }
+  .focus-collection__score-title h2,
+  .focus-collection__section-head h2 {
+    margin: 0;
+    font-size: clamp(1.6rem, 6vw, 2.8rem);
+    line-height: 1;
+    letter-spacing: -.04em;
+  }
+  .focus-collection__metrics { display: grid; gap: .6rem; }
+  .focus-collection__metric {
+    display: grid;
+    gap: .25rem;
+    border-radius: 1rem;
+    padding: 1rem;
+    background: var(--ke-color-canvas);
+  }
+  .focus-collection__metric--primary { background: linear-gradient(135deg, #342516, #65430d); color: #fff; }
+  .focus-collection__metric small { color: inherit; opacity: .75; font-size: .67rem; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+  .focus-collection__metric strong { font-size: clamp(1.9rem, 8vw, 3.2rem); line-height: 1; letter-spacing: -.04em; }
+  .focus-collection__metric > span { color: inherit; opacity: .78; font-size: .78rem; }
+  .focus-collection__metric meter { width: 100%; height: .65rem; margin-top: .4rem; accent-color: #ffc928; }
+  .focus-collection__score-note {
+    margin: 0;
+    border-left: 4px solid var(--ke-color-brand-600);
+    padding-left: .8rem;
+    color: var(--ke-color-muted);
+    font-size: .82rem;
+    line-height: 1.5;
+  }
+  .focus-collection__rules {
+    display: grid;
+    grid-template-columns: 2.8rem 1fr;
+    gap: .8rem;
+    margin: 1rem 0;
+    border-radius: 1.25rem;
+    padding: 1rem;
+    background: var(--ke-color-warning-50);
+    color: var(--ke-color-warning-800);
+  }
+  .focus-collection__rules > span {
+    width: 2.8rem;
+    height: 2.8rem;
+    display: grid;
+    place-items: center;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    font-weight: 900;
+  }
+  .focus-collection__rules h2 { margin: 0 0 .35rem; font-size: 1.15rem; }
+  .focus-collection__rules p { margin: .25rem 0; font-size: .8rem; line-height: 1.5; }
+  .focus-collection__section-head { display: grid; gap: .75rem; }
+  .focus-collection__section-head > p { margin: 0; color: var(--ke-color-muted); line-height: 1.5; }
+  .focus-collection__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+  .focus-collection__device-note {
+    display: grid;
+    gap: .3rem;
+    margin-top: 1rem;
+    border-radius: 1rem;
+    padding: 1rem;
+    background: var(--ke-color-info-50);
+    color: var(--ke-color-info-700);
+    line-height: 1.45;
+  }
+  .focus-collection__device-note span { font-size: .82rem; }
+  .focus-collection__footer {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: 1rem .25rem 0;
+    color: var(--ke-color-muted);
+    font-size: .7rem;
+  }
+  a:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 60%, transparent);
+    outline-offset: 3px;
+  }
+  @media (min-width: 680px) {
+    .focus-collection { width: min(1120px, calc(100% - 2rem)); padding-top: 1rem; }
+    .focus-collection__hero { grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); align-items: end; }
+    .focus-collection__metrics { grid-template-columns: 1.3fr 1fr 1fr; }
+    .focus-collection__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .focus-collection__footer { flex-direction: row; justify-content: space-between; }
+  }
+  @media (min-width: 920px) {
+    .focus-collection__score-title,
+    .focus-collection__section-head { grid-template-columns: minmax(240px, .7fr) minmax(0, 1.3fr); align-items: end; }
+    .focus-collection__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; }
+  }
+</style>
