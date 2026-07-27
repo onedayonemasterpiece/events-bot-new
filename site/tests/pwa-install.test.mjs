@@ -178,18 +178,18 @@ test('site exposes a base-aware installable manifest and footer-owned controller
   assert.match(manifest, /prefer_related_applications:false/u);
   assert.match(manifest, /name:'Анонсы'/u);
   assert.match(manifest, /short_name:'Анонсы'/u);
-  assert.match(manifest, /announcements-brand-192\.png/u);
-  assert.match(manifest, /announcements-brand-512\.png/u);
-  assert.match(manifest, /announcements-brand-maskable-192\.png/u);
-  assert.match(manifest, /announcements-brand-maskable-512\.png/u);
+  assert.match(manifest, /announcements-brand-v2-192\.png/u);
+  assert.match(manifest, /announcements-brand-v2-512\.png/u);
+  assert.match(manifest, /announcements-brand-v2-maskable-192\.png/u);
+  assert.match(manifest, /announcements-brand-v2-maskable-512\.png/u);
   assert.match(manifest, /purpose:'maskable'/u);
   assert.match(action, /data-pwa-install-root/u);
   assert.match(action, /data-pwa-install-button hidden/u);
   assert.match(action, /pwa-install-action__button\[hidden\]/u);
   assert.match(action, /Установить приложение/u);
   assert.match(footer, /<PwaInstallAction \/>/u);
-  assert.match(layout, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon/u);
-  assert.match(home, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon/u);
+  assert.match(layout, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon-v2/u);
+  assert.match(home, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon-v2/u);
   assert.match(home, /rel="manifest" href=\{manifestHref\}/u);
   assert.match(home, /<PwaInstallAction \/>/u);
   assert.match(release, /'\.webmanifest': 'application\/manifest\+json; charset=utf-8'/u);
@@ -199,7 +199,7 @@ test('site exposes a base-aware installable manifest and footer-owned controller
 test('brand and maskable launcher PNGs have the declared dimensions', async () => {
   for (const size of [192, 512]) {
     for (const variant of ['', '-maskable']) {
-      const icon = await readBytes(`public/assets/pwa/announcements-brand${variant}-${size}.png`);
+      const icon = await readBytes(`public/assets/pwa/announcements-brand-v2${variant}-${size}.png`);
       assert.deepEqual(pngDimensions(icon), { width:size, height:size });
     }
   }
