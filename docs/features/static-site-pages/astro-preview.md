@@ -76,7 +76,11 @@ contract as a pre-gate rather than jumping directly to root-form output:
 
 Missing/failed preview evidence or preview-gate files leaking into the root
 archive is a release failure. The preview pre-gate is not a third artifact or
-publishable URL. The earlier `11d8c984` canary predated this sequence and is
+publishable URL. If its HTML points Astro runtime assets at the configured
+immutable CDN prefix, `check:preview` maps only the bounded `/_astro/…` suffix
+back to the local generated tree. It verifies the exact local CSS bytes without
+depending on an unpublished CDN prefix or assuming that the ephemeral and
+production build IDs are equal. The earlier `11d8c984` canary predated this sequence and is
 superseded; final exact-SHA run/result and candidate URL are
 **to be filled by integrator**. Until that rerun passes, `/neobychnoe/` remains
 candidate-only and no production-root promotion is implied.

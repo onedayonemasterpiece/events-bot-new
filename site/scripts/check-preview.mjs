@@ -6,6 +6,7 @@ import interestClubsData from '../src/data/interest-clubs.json' with { type: 'js
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
 import busData from '../src/data/busTransportSchedules.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
+import { localPreviewRuntimePath } from './preview-asset-path.mjs';
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
 const distDir = join(siteDir, 'dist');
@@ -83,8 +84,8 @@ for (const route of listingRoutes) {
   const html = readFileSync(join(root, route, 'index.html'), 'utf8');
   const stylesheetHrefs = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/gu)].map((match) => match[1]);
   const bundledCss = stylesheetHrefs
-    .map((href) => href.replace(/^https?:\/\/[^/]+/u, '').replace(`/${buildId}/`, ''))
-    .filter((href) => href.startsWith('_astro/'))
+    .map(localPreviewRuntimePath)
+    .filter(Boolean)
     .map((href) => readFileSync(join(root, href), 'utf8'))
     .join('\n');
   const normalizedCss = bundledCss.replace(/\s+/gu, '');

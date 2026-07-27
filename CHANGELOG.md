@@ -43,6 +43,10 @@
   `build:preview`/`check:preview` must pass as non-archived, non-published
   ephemeral evidence before production-root and secret-candidate
   build/check/browser gates.
+- Fixed that pre-gate for immutable Astro CDN configuration: local CSS
+  verification now resolves the bounded `/_astro/…` runtime suffix instead of
+  incorrectly requiring the ephemeral preview id to equal the production
+  artifact id.
 - Added R15 static-site product contracts for horizontal `5:4` no-band mobile
   rail crops, persistent Free collection identity, daily service-share
   freshness, noindex calendar-first favorites, event-aware far-future calendar
