@@ -1,9 +1,11 @@
 # Необычные события
 
-> **Status, 2026-07-27:** R15 implementation candidate. Semantic, builder and
-> Astro contracts are being integrated behind static/noindex release gates.
-> Production-root enablement and a real Kaggle CPU canary are **pending**; this
-> document does not claim that either has happened.
+> **Status, 2026-07-27:** R15 implementation candidate behind static/noindex
+> release gates. A Kaggle CPU canary was run for exact SHA `11d8c984`, but it is
+> now **superseded**: it predates the final semantic, rail, daily-scheduler and
+> preview-gate hardening and did not complete the required candidate/public
+> acceptance path. A final exact-SHA Kaggle rerun, immutable candidate URL and
+> production-root owner acceptance remain **pending**.
 
 `/neobychnoe/` is a static discovery feed for attendable events whose **way of
 participating, access, place, practice or combination of formats** is materially
@@ -142,12 +144,32 @@ The identical-rebuild flip metric compares two deterministic inference passes
 over the same vectors; it does not compare a newly calibrated classifier to
 the editorial tier label.
 
-The hard gate is structured and fail-closed: active/canonical/public/searchable
-status, non-silent/non-postponed/non-merged lifecycle, attendable event kind,
-future end date and a minimum canonical semantic-text payload are required
-before semantic publication. Keyword inference is not used to repair missing
-meaning. Prototype evidence always contains the nearest positive,
-hard-negative and neutral anchors so the published margins are auditable.
+The hard gate is structured and fail-closed. The exporter emits the explicit
+canonical eligibility record `canonical-event-semantic-v1`; the scorer requires
+all of these fields before semantic publication:
+
+- `record_kind=event` and `eventness_status=event`;
+- `lifecycle_status=active` and `identity_status=canonical`;
+- `merged_into_event_id` empty and `silent=false`;
+- `is_public=true` and `is_searchable=true`;
+- a future end date and minimum canonical semantic-text payload.
+
+Missing columns, an untrusted semantic record, a service/work-hours record,
+non-event, merge, silent/private/non-searchable state or elapsed occurrence
+abstains. Keyword inference is not used to repair absent structured meaning.
+Prototype evidence always contains the nearest positive, hard-negative and
+neutral anchors so the published margins are auditable.
+
+The scorer also measures distance to a deterministic **ordinary event corpus**
+inside the same shared BGE space. The corpus contains at most 128 structured-
+eligible rows provisionally classified ordinary, selected by base score and
+event ID. For each candidate the feature is
+`1 - max(cosine(candidate, ordinary_member))`; the current policy uses it in the
+logit and demotes core/adjacent decisions that are too close to ordinary
+events. No second encoding occurs. The manifest, evaluation and decision cache
+bind both the ordinary-corpus policy SHA and a member/text/vector-bound corpus
+SHA; an empty/missing corpus or mismatched receipt makes an otherwise eligible
+candidate abstain. Its receipt must also report `provider_calls=0`.
 
 Activation is fail-closed unless the hash-bound evaluation proves all of:
 
@@ -168,15 +190,16 @@ Activation is fail-closed unless the hash-bound evaluation proves all of:
 A report without real encoded BGE output is shadow evidence only. The checked
 source fixture is not itself a successful canary.
 
-The current candidate head was calibrated against the pinned real BGE-M3
+The pre-hardening candidate head was calibrated against the pinned real BGE-M3
 artifact `a4c72f80…` (332 event vectors, 55 prototypes) and the frozen fixture
 `abacf30f…`. Rebinding those immutable vectors to the candidate head produces
 precision `0.944444`, publishable confirmed-positive recall `0.833333`,
 hard-negative FPR `0.05`, 12 top-feed families, zero published ineligible rows,
-zero post-dedup duplicate concepts and deterministic flip rate `0.0`. These are
-calibration measurements, not release evidence: each build must still recreate
-and pass the hash-bound runtime gate, and a successful status-ledger Kaggle
-canary remains mandatory.
+zero post-dedup duplicate concepts and deterministic flip rate `0.0`. These
+measurements and the `11d8c984` canary are historical/superseded evidence: they
+predate the ordinary-corpus and explicit-eligibility contracts above. The final
+exact-SHA run must recreate every hash-bound metric; no number in this paragraph
+approves the hardened candidate.
 
 ## Manifest, cache and last-good contract
 
@@ -210,7 +233,14 @@ at most 512 recently observed concepts with their stable `concept_id`,
 policy/model/prototype/classifier versions and notification eligibility.
 Rebuilds preserve `first_published_at`; migration and first-baseline builds are
 silent. Only a genuinely new approved `core_unusual` concept after an
-established rollout baseline may receive `notify_eligible=true`.
+established rollout baseline may first receive `notify_eligible=true`. Once
+that bit is established for a still-core concept, ordinary non-migration
+rebuilds persist it in both manifest and concept cache. Browser-local seen
+state suppresses the dot for that browser without mutating the manifest/cache
+bit. A migration/backfill manifest always emits `notify_eligible=false`, but
+does not erase an already established durable bit from concept state; the
+following ordinary rebuild may restore it. Reordering, unrelated content
+changes and generated timestamps never reset it.
 
 Last-good is allowed only when its model/document/prototype/classifier and
 policy contracts match, it is no more than seven days old, and every retained
@@ -246,8 +276,9 @@ pretending persistence succeeded. Auth is not required and tokens/profile data
 are not stored in the marker.
 
 Migration/backfill builds set `notify_eligible=false` for every concept. A
-first historical import therefore cannot flood users with “new” state. Only a
-later accepted incremental manifest may introduce a notifying concept. Desktop,
+first historical import therefore cannot flood users with “new” state and
+cannot erase an existing concept's durable eligibility. Only a later accepted
+incremental manifest may introduce a genuinely new notifying concept. Desktop,
 mobile menu and footer/navigation consumers read the same state controller;
 parallel red-dot implementations are forbidden.
 
@@ -266,8 +297,9 @@ parallel red-dot implementations are forbidden.
   details live in [`mobile-shell.md`](../static-site-pages/mobile-shell.md).
 - Ordering is core before adjacent, nearer 30-day events before later events,
   and then deterministic score/date/id. One concept is shown once; a first pass
-  applies soft caps of 6 per family, 4 per venue and 8 per event type before a
-  deterministic fill, with an absolute maximum of 30 cards.
+  applies caps of 6 per family, 4 per venue and 8 per event type, with an
+  absolute maximum of 30 cards. Deferred rows do not refill the feed by
+  bypassing those caps; an honest underfilled feed is preferred.
 
 ## Rollout, Kaggle canary and rollback
 
@@ -281,16 +313,23 @@ Rollout is ordered and cannot be shortened by a green local fixture test:
    immutable SQLite snapshot. Evidence must include status-ledger heartbeat and
    terminal result, exact input dataset/snapshot identity, BGE/model/policy
    hashes, one shared encode pass, `provider_calls=0`, cache downloads,
-   evaluation metrics, generated manifest, `check:preview` and the dedicated
-   Playwright journey.
+   ordinary-corpus receipt, evaluation metrics and generated manifest. A
+   production-candidate run first executes the legacy `build:preview` plus
+   `check:preview` contract as an ephemeral non-published pre-gate, then the
+   production-root and secret-candidate builds/checks and their browser-release
+   gates.
 4. **Immutable noindex candidate:** check desktop/mobile feed, menu/red dot,
    dedup, empty/failure state and noindex containment with real generated data.
 5. **Owner acceptance:** only then may the normal production release protocol
    consider root enablement. R15 does not authorize root cutover by itself.
 
-As of 2026-07-27, steps 3–5 have no accepted evidence and remain **pending**.
-Do not turn local mocks, an empty consultant output or the read-only data audit
-into a canary claim.
+The `11d8c984` canary exercised real pinned BGE, produced zero-provider semantic
+artifacts and useful cache/hash evidence. It is **superseded**, not absent and
+not release acceptance: it predates the final contracts above, its dedicated
+candidate Playwright was coupled to lab routes omitted from the package, and its
+upload/public acceptance did not complete. The final exact-SHA run ID, immutable
+candidate URL and artifact hashes are **to be filled by integrator** after a
+new full run. Until then steps 3–5 remain pending.
 
 Rollback first disables new notification eligibility, then restores the exact
 compatible last-good manifest/cache receipt or disables the unusual route. It
@@ -306,16 +345,25 @@ and rollback continue to follow the atomic/static builder protocol.
 node --test site/tests/unusual-events-source-contract.test.mjs
 node --check site/tests/unusual-events.playwright.mjs
 
-# On an immutable generated candidate with Playwright installed:
+# Product acceptance against the immutable package; it never opens lab routes.
+UNUSUAL_EVENTS_PLAYWRIGHT_MODE=product \
 UNUSUAL_EVENTS_BASE_URL=https://… \
+  node site/tests/unusual-events.playwright.mjs
+
+# Separate local noindex red-dot matrix; never use the candidate as this base.
+UNUSUAL_EVENTS_PLAYWRIGHT_MODE=lab \
+UNUSUAL_EVENTS_LAB_BASE_URL=http://127.0.0.1:4321 \
   node site/tests/unusual-events.playwright.mjs
 ```
 
-The Playwright journey uses the shipped runtime at noindex lab fixtures under
-`/lab/unusual-unread/<scenario>/` to cover all ten red-dot states: rollout
-baseline, new core, adjacent, viewed, reload, same-series date, migration,
-manifest failure, exact accessible label and an operable overflow-free mobile
-drawer. These fixtures contain no provider code and are not release content.
+Product mode checks only packaged product routes and is the candidate release
+journey. The immutable candidate must not ship the noindex lab matrix;
+`/lab/unusual-unread/new-core/` is expected to return `404` there. Lab mode uses
+an independently served local Astro tree to cover all ten red-dot states:
+rollout baseline, new core, adjacent, viewed, reload, same-series date,
+migration, manifest failure, exact accessible label and an operable
+overflow-free mobile drawer. `all` mode is developer convenience only and still
+requires both independent base URLs.
 
 The live Kaggle canary additionally follows the evidence list above and the
 canonical [E2E scenario index](../../operations/e2e-scenarios.md).

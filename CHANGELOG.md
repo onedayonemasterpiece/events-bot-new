@@ -7,14 +7,17 @@
 - Added the R15 unusual-events implementation contract: `/neobychnoe/`,
   15-family taxonomy, one hash-bound shared BGE vector boundary, concept-level
   dedup/unread state, zero-provider static build, atomic cache/last-good
-  rollback and a checked-fact golden evaluation fixture; real Kaggle canary and
-  production-root cutover remain explicitly pending.
+  rollback and a checked-fact golden evaluation fixture; the `11d8c984` Kaggle
+  canary is superseded and final exact-SHA rerun/root cutover remain pending.
 - Hardened the R15 candidate after independent acceptance review: incremental
   BGE reuse now encodes only changed documents, score/concept cache schemas are
   consistent, manifests expose reader aliases and durable concept state,
-  structured eligibility and conservative presentation dedup are fail-closed,
-  last-good is content/freshness-bound, feed ordering applies 30-day/diversity
-  rules, and the shipped noindex lab drives all ten red-dot Playwright cases.
+  explicit canonical eligibility and ordinary-corpus distance/receipts are
+  fail-closed, notification eligibility survives ordinary rebuilds while
+  migration output stays silent, last-good is content/freshness-bound, and
+  deferred rows cannot bypass feed diversity caps. Candidate product
+  Playwright and the local noindex ten-state red-dot lab now use independent
+  modes and base URLs; lab pages are not shipped in the candidate.
 - Calibrated the deterministic R15 unusual-event head on the pinned real BGE-M3
   artifact and corrected its publication-quality accounting: ineligible rows
   abstain, recall uses the publishable frozen population, precision/diversity
@@ -22,17 +25,24 @@
   repeated inference rather than editorial tier labels. Classifier-only updates
   now reuse every compatible dense vector while rebinding a fresh classifier
   and artifact hash.
-- Restored no-band mobile rail geometry for multi-image no-OCR events:
-  landscape assets (including current Pianissimo event `5297`) use `5:4`
-  cover, while safe portrait galleries use vertical `4:5`; OCR/document assets
-  remain protected.
+- Restored one no-band mobile rail geometry for every crop-safe
+  `visual_only` event photo: portrait and landscape assets, including
+  multi-image galleries and Pianissimo event `5297`, use horizontal `140×112`
+  (`5:4`) cover; OCR/document/unknown/error or contradictory media remain
+  fail-closed to authored `contain`.
 - Fixed the current-month mobile calendar grid to align weekday columns from
   the first rendered date rather than the omitted first day of the month.
 - Fixed the Kaggle shared-BGE preflight to upgrade to the pinned,
   Transformers-5-compatible `FlagEmbedding==1.4.0`; the former 1.3.5 bootstrap
   failed on the current CPU image before BGE-M3 could load.
 - Fixed the Kaggle daily service-share handoff to import its renderer from the
-  extracted site payload rather than the notebook-only module path.
+  extracted site payload and guaranteed one local-day request through the sole
+  `00:00 Europe/Kaliningrad` calendar rollover, startup catch-up and atomic
+  coalesced outbox marker.
+- Added the production-candidate legacy preview pre-gate:
+  `build:preview`/`check:preview` must pass as non-archived, non-published
+  ephemeral evidence before production-root and secret-candidate
+  build/check/browser gates.
 - Added R15 static-site product contracts for horizontal `5:4` no-band mobile
   rail crops, persistent Free collection identity, daily service-share
   freshness, noindex calendar-first favorites, event-aware far-future calendar

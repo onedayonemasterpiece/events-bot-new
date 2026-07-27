@@ -60,9 +60,26 @@ daily service-share assets inside this same immutable snapshot/Kaggle handoff.
 It does not add a page-view scorer or another builder job. The shared BGE
 artifact, unusual cache/last-good receipt, `provider_calls=0`, migration
 notification suppression and real canary/rollback gates are canonical in
-[`unusual-events`](../unusual-events/README.md); until those gates have real
-evidence, `/neobychnoe/` remains candidate-only and no production-root
-promotion is implied.
+[`unusual-events`](../unusual-events/README.md).
+
+For `profile=production-candidate`, Kaggle must preserve the legacy preview
+contract as a pre-gate rather than jumping directly to root-form output:
+
+1. run `npm run build:preview` and `npm run check:preview` under an isolated
+   `preview-gate-<build>` ID;
+2. mark that output `archived=false`, `published=false`, then require the
+   production build to remove it;
+3. build/check the production-root form and run its Chromium browser-release
+   gate;
+4. build/check the immutable noindex secret candidate and run its separate
+   Chromium browser-release gate.
+
+Missing/failed preview evidence or preview-gate files leaking into the root
+archive is a release failure. The preview pre-gate is not a third artifact or
+publishable URL. The earlier `11d8c984` canary predated this sequence and is
+superseded; final exact-SHA run/result and candidate URL are
+**to be filled by integrator**. Until that rerun passes, `/neobychnoe/` remains
+candidate-only and no production-root promotion is implied.
 
 The 2026-07-23 correction candidate additionally keeps every reviewed surface
 inside one mutually linked prefix: the dynamic Exhibitions presentation,
@@ -629,7 +646,7 @@ The first public preview (`preview-20260627-event-pages-v1`) was superseded afte
 The feed-card A/B has been resolved for normal event pages: `split-actions` is now the baseline for all event detail discovery feeds. The old overlay variant remains documented only as a rejected/historical comparison in `event-card-ui-ab-2026-06-27.md`.
 
 - recommendation cards now have large image-led feed cards instead of text-only cards;
-- event hero keeps deterministic media modes (`poster-stage` for OCR/unknown, `photo-cover` for verified `visual_only`, `fallback-art` for no image), but now adds explicit composition variants (`poster-billboard`, `poster-attached-card`, `photo-cinematic-sheet`, `photo-parallax-sheet`, `compact-ticketing`); mobile hero visual breaks out to 100vw where appropriate, H1/CTA remain HTML in a decision sheet, OCR/unknown posters are not cropped, and visual-only images may use cover. Cards/listings keep the OCR-safe v15 rule: `visual_only` cover/crops inside a strict vertical 4:5 frame; `ocr_text|unknown` renders the actual image at natural aspect ratio with no crop, no fixed cover frame, no duplicate/backdrop underlay and no blur fill;
+- event hero keeps deterministic media modes (`poster-stage` for OCR/unknown, `photo-cover` for verified `visual_only`, `fallback-art` for no image), but now adds explicit composition variants (`poster-billboard`, `poster-attached-card`, `photo-cinematic-sheet`, `photo-parallax-sheet`, `compact-ticketing`); mobile hero visual breaks out to 100vw where appropriate, H1/CTA remain HTML in a decision sheet, OCR/unknown posters are not cropped, and visual-only images may use cover. Non-rail detail/recommendation cards keep the OCR-safe v15 rule: `visual_only` cover/crops inside a strict vertical 4:5 frame; `ocr_text|unknown` renders the actual image at natural aspect ratio with no crop, no fixed cover frame, no duplicate/backdrop underlay and no blur fill. R15 mobile listing rails instead use the horizontal fail-closed contract in [`image-framing.md`](image-framing.md);
 - duplicated facts/source/debug notes were removed from the first screen;
 - the long description is visible HTML, followed by a compact icon facts block; public source count/views and source links are hidden until auth exists, with a temporary notice that sources, mentions and extended statistics will be available to registered users;
 - native mobile share is attempted by one visible `Поделиться` button; duplicate Telegram/VK/WhatsApp share pills were removed, and fallback copies the URL when system share is unavailable.
@@ -650,7 +667,7 @@ After direct product review, `preview-20260628-event-pages-v43` rolls back the U
 - “Не интересно” is the explicit negative signal; the preview dims and demotes the card instead of inventing a visible anti-bubble block.
 - the bottom sticky CTA is hidden after the discovery feed enters the viewport.
 - same-origin event links have lightweight prefetch markers so static page transitions can warm the next HTML document.
-- media rendering consumes the same `image_text_mode` export but differs by surface: hero uses `poster-stage` for OCR/unknown and `photo-cover` for `visual_only`; cards/listings use `visual_only` cover in a vertical 4:5 frame and `ocr_text|unknown` natural aspect ratio, not `contain` inside a fixed card frame. Duplicate same-poster underlays, blurred fills, repeated edges and OCR crop are forbidden.
+- media rendering consumes the same `image_text_mode` export but differs by surface: hero uses `poster-stage` for OCR/unknown and `photo-cover` for `visual_only`; non-rail detail/recommendation cards use `visual_only` cover in a vertical 4:5 frame and `ocr_text|unknown` natural aspect ratio, not `contain` inside a fixed card frame. R15 mobile listing rails are the separate horizontal `5:4` rule in [`image-framing.md`](image-framing.md). Duplicate same-poster underlays, blurred fills, repeated edges and OCR crop are forbidden.
 - The share action uses a VK-like outlined repost/share arrow adapted from `@vkontakte/icons` `Icon24ShareOutline` (MIT), accessible `Поделиться` label and share count when count is positive. Zero like/share counts are not rendered as `0`. After a successful like the share action is highlighted instead of showing a floating bubble. Variant A keeps one overlay row with `Не интересно`, share and like; Variant B moves share/like under the card as transparent icon actions and may keep `В календарь` as an inside-card utility only for one-day events. The old explicit `Открыть` card button is removed because media/title links plus full-card JS navigation preserve crawlable SEO/GEO links while reducing UI noise.
 - Calendar remains available on the event detail page / primary transaction
   block for a valid date or range. In the feed it is absent from Variant A;
