@@ -14,10 +14,14 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
   Enter/IME submission, bounded Search rescue, complete Free routing, honest
   empty Jazz weekend, artifact persistence/detail, medallion fail-closed
   matching and OCR/multi-image rail rules.
-- [ ] **Partial** — immutable noindex candidate publication and public
-  desktop/mobile Playwright must be repeated on the final main-reachable SHA
-  with fresh DB-backed organizer fields; local/worker previews are historical
-  evidence only.
+- [x] **Done for visual review** — immutable noindex candidate
+  `production-secret-host-fallback-r2-20260727T142927-930012ec` was built from
+  main-reachable SHA `161c911f37a9ad52d8b97dd89390c41abeb41908` and immutable
+  snapshot `snapshot-20260727T110420-r14manual` (`280` eligible events,
+  `quick_check=ok`). The create-only publisher uploaded `1242` objects;
+  public Playwright passed `46/46` route × viewport checks with zero broken
+  loaded images, horizontal overflow or script errors. The bearer URL was
+  delivered only to review topic `548` in messages `725–726`.
 - [ ] **Partial** — the normal Kaggle handoff is blocked before kernel start by
   a provider `400 INVALID_ARGUMENT: Invalid token` while creating the
   short-lived private input dataset. A host-built immutable noindex candidate
@@ -31,14 +35,23 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
 
 The older checked rows below retain their dates and exact candidate names as
 historical regression evidence. They must not be read as acceptance of the
-current R14 candidate. Event `6710` is no longer a valid “upcoming demo” by
+current R14 candidate. The host fallback above is visual-review evidence, not
+Kaggle status-ledger or root-promotion evidence. Its root hash stayed
+`2684c7dd72a265d75b059f43837baecc19ce750f39d962317fc5afec99a75449`
+before and after candidate publication. Event `6710` is no longer a valid “upcoming demo” by
 itself; presentation scenarios must be selected from the fresh frozen export.
 
 ## 1. Release candidate
 
-- [ ] **Blocked** — presentation scope frozen and all candidate commits reachable from `origin/main`.
-- [ ] **Blocked** — clean full-catalog production export made on presentation day; fixture-only or hand-added canary data is not the production candidate.
-- [ ] **Blocked** — release manifest records repo SHA, event snapshot, schedule snapshot ID/hash/fetched time, asset prefix and rollback prefix.
+- [x] **Done for secret candidate** — R14 runtime commits and its frozen build
+  SHA are reachable from `origin/main`; later main commits are parser-only and
+  do not rewrite the immutable candidate.
+- [x] **Done for secret candidate** — a full-catalog production export was made
+  from the immutable presentation-day SQLite snapshot; fixtures were rejected.
+- [x] **Done for secret candidate** — the candidate result records repo SHA,
+  input fingerprint, build clock, snapshot id/hash/size, related revision,
+  manifest/tree hashes and immutable asset prefix. This does not provide a
+  production rollback prefix.
 - [ ] **Blocked** — promotion and rollback commands rehearsed against the same candidate; production canonical remains unchanged until approval.
 
 ### Desktop event-template regression gate
@@ -112,9 +125,17 @@ of being left only in review chats.
   the inert `data-amber-artifact-research="off"` configuration and
   `data-artifact-collection-unavailable` fallback; the secret candidate remains
   the only surface allowed to render the research mechanic.
-- [ ] **Blocked** — `npm run check:preview` passes against the frozen full catalog, including train/bus/ICS/unknown-end-cutoff/no-return regressions.
-- [ ] **Blocked** — public `200` and MIME checks pass for index, demo events, media, discovery JSON, event ICS and transport ICS.
-- [ ] **Blocked** — mobile/desktop Playwright screenshots and link checks attached to the release evidence.
+- [x] **Done for secret candidate** — production and secret generated-output
+  gates, both mandatory browser-release gates, occurrence tests (`14/14`),
+  artifact tests (`5/5`), PWA tests (`5/5`), static-release tests (`10/10`)
+  and Smart Update duplicate guards (`14/14`) passed. The generated artifact
+  test accepts the required robots directives as a set, so the stricter
+  candidate-wide `nosnippet` directive cannot create a false failure.
+- [x] **Done for secret candidate** — public `200`, noindex/no-referrer, manifest
+  MIME, loaded-image and link checks pass for the reviewed route matrix.
+- [x] **Done for secret candidate** — mobile/desktop public Playwright evidence
+  is attached under ignored `artifacts/codex/r14-public-qa/`; messages
+  `725–726` contain the complete reviewer route set.
 
 ## 6. Promotion and post-presentation smoke
 

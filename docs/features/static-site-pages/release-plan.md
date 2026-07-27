@@ -10,13 +10,13 @@
 
 | Gate | Статус | Текущий факт |
 |---|---|---|
-| Main-based source | Partial | R14 integration собрана от `origin/main`, но до финальной приёмки/merge не является release truth |
+| Main-based source | Done for secret candidate | R14 runtime merged; immutable candidate built from main-reachable `161c911f37a9ad52d8b97dd89390c41abeb41908` |
 | Production/secret build profiles | Done in code | Production и secret checks существуют; обязателен повтор на замороженном main SHA и свежем DB snapshot |
-| Immutable `_review/<token>/` publisher | Partial | Create-only candidate path и manifest evidence существуют; это не atomic root promotion |
+| Immutable `_review/<token>/` publisher | Done for visual review | Create-only candidate published: 1242 objects, public `46/46` route × viewport gate; это не atomic root promotion |
 | Stable URL/lifecycle registry | Missing | Persisted canonical identity, aliases, redirects/410 и cleanup apply ещё не закрыты |
 | Freshness/outbox | Partial | Coalesced build/outbox реализованы, но presentation-day freshness и failure drill отсутствуют |
 | Telegraph dual-run/public resolver | Missing | D0/D10 outward switch и запрет create/recreate после cutover не доказаны |
-| UI/product acceptance | Partial | R14 локальные contract/build tests есть; frozen public desktop/mobile, real OAuth/Edge и owner sign-off ещё нужны |
+| UI/product acceptance | Partial | Frozen public desktop/mobile passed; real OAuth/Edge owner-session smoke и product owner sign-off ещё нужны |
 
 Текущий operational blocker: нормальный Fly → Kaggle запуск останавливается до
 старта kernel с `400 INVALID_ARGUMENT: Invalid token` при создании временного
@@ -32,6 +32,37 @@ fingerprint/result validation и публикация исключительно
 noindex candidate** на свежем production snapshot. Публикация такого candidate
 не является релизом, D0 или переносом текущих страниц на canonical root.
 Исторические controlled runs ниже — regression evidence, а не текущий GO.
+
+### R14 immutable review evidence, 2026-07-27
+
+- build:
+  `production-secret-host-fallback-r2-20260727T142927-930012ec`;
+- main-reachable source SHA:
+  `161c911f37a9ad52d8b97dd89390c41abeb41908`;
+- snapshot:
+  `snapshot-20260727T110420-r14manual`,
+  SHA-256 `6331fe3178250594f3cc73cbf1bd525944baa54a4831252a0d23baaba7e41931`,
+  `292651008` bytes, `quick_check=ok`;
+- input fingerprint:
+  `e4ba87375514dc23b86e1d8cbdfa638ac63f3e229348882b31d8062dbb509bd6`;
+- result: `280` eligible/event pages, production and secret generated-output
+  gates green, both browser-release gates green;
+- secret manifest SHA-256:
+  `2929afe1fa15b300d11e8c3ef373d7850eb7a805f0cafb6b6a7f655c750fe349`,
+  `1242` create-only objects;
+- public acceptance: `46/46` desktop/mobile route checks, zero loaded broken
+  images, overflow or script errors; Search input/Enter hint, one global auth
+  runtime, Free collection, one artifact placement/five-slot collection,
+  clubs sticky header and real medallion specimens were verified;
+- root SHA-256 before/after publication:
+  `2684c7dd72a265d75b059f43837baecc19ce750f39d962317fc5afec99a75449`;
+- bearer URL is excluded from Git and was sent only to topic `548`, messages
+  `725–726`.
+
+This closes the secret visual-review lane only. Normal Fly → Kaggle remains
+blocked at private-dataset creation (`400 INVALID_ARGUMENT: Invalid token`);
+real owner-session Yandex OAuth/Edge Search, schedule freshness, root atomic
+promotion and rollback remain open.
 
 ## Где находится release truth
 
