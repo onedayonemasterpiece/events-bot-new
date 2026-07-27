@@ -145,6 +145,14 @@ Raw evidence is retained outside git under
     `festival_post` because it closes «Бахослужение» and was skipped. Official
     parser candidates are already structured occurrences, so the whole-program
     skip must remain limited to non-parser/social candidates.
+12. The first implementation of that guard was inserted before the final
+    slotted `EventCandidate` fields. Python accepted the following indented
+    declarations as local annotations in the helper, silently removing
+    `organizer_names`, `links_payload` and `age_semantic_decision` from the
+    dataclass. The next live create therefore failed with
+    `'EventCandidate' object has no attribute 'organizer_names'`; the helper was
+    moved below the complete schema and the existing organizer persistence
+    tests were added to the regression gate.
 
 ## Contributing Factors
 

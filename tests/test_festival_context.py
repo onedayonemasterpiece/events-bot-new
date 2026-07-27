@@ -78,11 +78,15 @@ def test_parser_occurrence_is_not_dropped_as_whole_festival_post() -> None:
 
     parser_candidate = EventCandidate(
         source_type="parser:philharmonia",
+        organizer_names=["Калининградская областная филармония"],
         **common,
     )
     social_candidate = EventCandidate(source_type="tg", **common)
 
     assert not _should_skip_festival_post_candidate(parser_candidate)
+    assert parser_candidate.organizer_names == [
+        "Калининградская областная филармония"
+    ]
     assert _should_skip_festival_post_candidate(social_candidate)
 
 

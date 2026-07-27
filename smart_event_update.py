@@ -588,6 +588,13 @@ class EventCandidate:
     creator_id: int | None = None
     trust_level: str | None = None
     metrics: dict[str, Any] | None = None
+    links_payload: Any | None = None
+    # Concrete-event organizers only. Values must come from quoted LLM evidence
+    # or an explicit curated source binding; the generic publisher name is not
+    # organizer evidence.
+    organizer_names: list[str] = field(default_factory=list)
+    # Ephemeral result piggybacked on an already-paid facts/create call.
+    age_semantic_decision: dict[str, Any] | None = None
 
 
 def _should_skip_festival_post_candidate(candidate: EventCandidate) -> bool:
@@ -602,13 +609,6 @@ def _should_skip_festival_post_candidate(candidate: EventCandidate) -> bool:
     context = (candidate.festival_context or "").strip().lower()
     source_type = (candidate.source_type or "").strip().lower()
     return context == "festival_post" and not source_type.startswith("parser:")
-    links_payload: Any | None = None
-    # Concrete-event organizers only. Values must come from quoted LLM evidence
-    # or an explicit curated source binding; the generic publisher name is not
-    # organizer evidence.
-    organizer_names: list[str] = field(default_factory=list)
-    # Ephemeral result piggybacked on an already-paid facts/create call.
-    age_semantic_decision: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
