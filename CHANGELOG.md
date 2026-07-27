@@ -291,6 +291,12 @@
 
 ### Fixed
 
+- **Static site / PWA launcher identity**: shortened both installed-app labels
+  to the readable `Анонсы`, replaced the generic launcher mark with the
+  operator-approved full `Полюбить Калининград / Анонсы` leather artwork,
+  added deterministic `any` and maskable `192×192`/`512×512` icon variants,
+  and versioned the manifest link so presentation installs do not reuse the
+  previous cached icon.
 - Recorded the checked R14 immutable secret-candidate evidence in the canonical
   presentation/release plan and made the generated artifact test validate the
   required robots directives as a set, preserving stricter candidate-wide
