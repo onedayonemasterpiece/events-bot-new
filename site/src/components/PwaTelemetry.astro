@@ -1,0 +1,22 @@
+---
+const endpoint = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const publishableKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+const enabled = Boolean(endpoint && publishableKey);
+---
+
+{enabled && (
+  <span
+    data-pwa-telemetry-config
+    data-pwa-telemetry-endpoint={endpoint}
+    data-pwa-telemetry-key={publishableKey}
+    hidden
+    aria-hidden="true"
+  ></span>
+)}
+
+{enabled && (
+  <script>
+    import { hydratePwaTelemetry } from '../lib/pwa-telemetry-controller.js';
+    hydratePwaTelemetry();
+  </script>
+)}

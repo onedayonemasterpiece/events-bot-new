@@ -1,6 +1,6 @@
 # Personalization Database Design
 
-> **Status:** full telemetry schema remains design/draft; public reaction counters applied 2026-06-27; authorized pgvector search tables/RPCs applied 2026-06-28; two-document `search_v3`/`related_v1` pgvector split applied 2026-06-30
+> **Status:** full personalization telemetry schema remains design/draft; public reaction counters applied 2026-06-27; authorized pgvector search tables/RPCs applied 2026-06-28; two-document `search_v3`/`related_v1` pgvector split applied 2026-06-30; compact PWA lifecycle aggregates applied 2026-07-27
 > **Target DB:** separate Supabase/Postgres personalization project (`PERSONALIZATION_*`)
 > **Do not store here:** canonical events, source facts, Telegram/VK/Telegraph state, Smart Update decisions or static rebuild queues.
 
@@ -41,6 +41,68 @@ Official references:
 - API keys: <https://supabase.com/docs/guides/getting-started/api-keys>
 - pgvector: <https://supabase.com/docs/guides/database/extensions/pgvector>
 - Database functions, function privileges and `security definer`/`search_path`: <https://supabase.com/docs/guides/database/functions>
+
+## Applied compact PWA lifecycle analytics
+
+PWA installation/use analytics is intentionally separate from the broader
+personalization event design. It does **not** create an append-only row for
+every opening:
+
+- `personalization.pwa_installation_state` — one mutable row per random
+  browser installation UUID. It keeps only confirmed-install date, first/last
+  standalone date, last session UUID, active-day count and D1/D7 idempotency
+  flags;
+- `personalization.pwa_daily_metric` — one row per Kaliningrad calendar day
+  with confirmed installs, standalone sessions, unique active installations,
+  first standalone launches and exact D1/D7 cohort returns;
+- `personalization.pwa_telemetry_maintenance` — one singleton row used to claim
+  the daily self-prune;
+- `public.record_pwa_lifecycle_v1(uuid, uuid, text)` — the only browser-facing
+  write surface. Raw tables have RLS enabled and no `anon`/`authenticated`
+  grants or policies.
+
+Storage/privacy boundaries:
+
+- no page-view/open event journal, fingerprint, contact id, URL, referrer,
+  user-agent or IP is persisted in application tables;
+- browser automation (`navigator.webdriver`) does not send metrics;
+- if durable browser storage is blocked, the client drops the datapoint instead
+  of generating a new undeduplicated id on every load;
+- installation state older than 180 inactive days is deleted opportunistically
+  once per day. Daily aggregates remain compact indefinitely (365 rows/year);
+- the public RPC accepts at most 1,000 previously unseen installation UUIDs per
+  day, limiting anonymous storage amplification;
+- a reinstall after retained browser storage is counted as the same browser
+  installation. Uninstall cannot be observed reliably by the web platform.
+
+Operator queries use the direct/backend connection, never the publishable
+browser key:
+
+```sql
+-- Daily product metrics and cohort retention.
+select
+  metric_date,
+  confirmed_installs,
+  standalone_sessions,
+  active_installations,
+  first_standalone_launches,
+  round(100.0 * cohort_d1_returns / nullif(confirmed_installs, 0), 1) as d1_percent,
+  round(100.0 * cohort_d7_returns / nullif(confirmed_installs, 0), 1) as d7_percent
+from personalization.pwa_daily_metric
+order by metric_date desc
+limit 31;
+
+-- Current observed active installation ids (not an uninstall counter).
+select
+  count(*) filter (where last_active_on >=
+    (now() at time zone 'Europe/Kaliningrad')::date - 6) as active_7d,
+  count(*) filter (where last_active_on >=
+    (now() at time zone 'Europe/Kaliningrad')::date - 29) as active_30d
+from personalization.pwa_installation_state;
+```
+
+The client/runtime contract is documented in
+`docs/features/static-site-pages/mobile-shell.md`.
 
 ## Data ownership boundary
 

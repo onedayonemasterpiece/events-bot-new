@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added compact PWA lifecycle analytics in the personalization Supabase
+  project: confirmed installs, standalone sessions, daily active installations
+  and exact D1/D7 cohort returns use one mutable installation-state row plus
+  one daily aggregate row, with no raw open-event history, a 180-day
+  self-pruning window and a hard daily new-id cap.
 - Added direct official future-catalog parsers for Kaliningrad Theatre of
   Variety (former Dom Iskusstv) and Yantar Hall, including month/AJAX
   pagination, targeted `/parse estrada|yantarhall` runs and source-level
