@@ -101,6 +101,38 @@ def test_kaggle_runner_stages_daily_share_renderer_with_site_payload():
     assert "staged_site / 'scripts' / service_share_renderer.name" in source
 
 
+def test_exporter_projects_hashable_structured_semantic_eligibility():
+    module = load_exporter()
+    canonical = module._structured_unusual_semantic_record(
+        {
+            "identity_status": "canonical",
+            "merged_into_event_id": None,
+            "silent": 0,
+            "lifecycle_status": "active",
+        }
+    )
+    assert canonical == {
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": None,
+        "silent": False,
+        "is_public": True,
+        "is_searchable": True,
+        "publication_status": "published",
+    }
+    incomplete = module._structured_unusual_semantic_record(
+        {
+            "identity_status": "canonical",
+            "lifecycle_status": "active",
+        }
+    )
+    assert incomplete["eventness_status"] == "untrusted"
+    assert incomplete["is_public"] is False
+    assert incomplete["is_searchable"] is False
+
+
 def install_fake_semantic_modules(monkeypatch):
     calls = {"encode": 0, "score": 0, "quality": 0}
     bank = {
@@ -393,7 +425,7 @@ def test_concept_state_silences_baseline_and_notifies_only_a_new_core_concept():
             },
         ],
     }
-    module._apply_unusual_concept_state(
+    second_states = module._apply_unusual_concept_state(
         second,
         previous_cache={
             "rollout_baseline_at": "2026-07-27T10:00:00Z",
@@ -408,6 +440,40 @@ def test_concept_state_silences_baseline_and_notifies_only_a_new_core_concept():
     assert by_concept["concept:one"]["notify_eligible"] is False
     assert by_concept["concept:two"]["notify_eligible"] is True
     assert by_concept["concept:adjacent"]["notify_eligible"] is False
+
+    unchanged = {
+        **{key: value for key, value in second.items() if key != "items"},
+        "items": [dict(by_concept["concept:two"])],
+    }
+    ordinary_states = module._apply_unusual_concept_state(
+        unchanged,
+        previous_cache={
+            "rollout_baseline_at": "2026-07-27T10:00:00Z",
+            "concepts": second_states,
+        },
+        generated_at="2026-07-29T10:00:00Z",
+        migration=False,
+        approved=True,
+    )
+    assert unchanged["items"][0]["notify_eligible"] is True
+    assert ordinary_states["concept:two"]["notify_eligible"] is True
+
+    migration_manifest = {
+        **{key: value for key, value in unchanged.items() if key != "items"},
+        "items": [dict(unchanged["items"][0])],
+    }
+    migration_states = module._apply_unusual_concept_state(
+        migration_manifest,
+        previous_cache={
+            "rollout_baseline_at": "2026-07-27T10:00:00Z",
+            "concepts": ordinary_states,
+        },
+        generated_at="2026-07-30T10:00:00Z",
+        migration=True,
+        approved=True,
+    )
+    assert migration_manifest["items"][0]["notify_eligible"] is False
+    assert migration_states["concept:two"]["notify_eligible"] is True
 
 
 def test_last_good_is_visible_only_while_current_content_and_contract_match(

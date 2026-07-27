@@ -1876,6 +1876,36 @@ def build_catalog_ledger(
     }
 
 
+def _structured_unusual_semantic_record(
+    row: sqlite3.Row | dict[str, Any],
+) -> dict[str, Any]:
+    """Project only canonical structured eligibility facts for semantic feeds."""
+
+    identity_status = clean_text(row_get(row, "identity_status")).lower()
+    merged_into_event_id = row_get(row, "merged_into_event_id")
+    silent_value = row_get(row, "silent") if row_has_key(row, "silent") else None
+    eligible = bool(
+        row_has_key(row, "identity_status")
+        and identity_status == "canonical"
+        and row_has_key(row, "merged_into_event_id")
+        and merged_into_event_id in {None, "", 0, "0"}
+        and row_has_key(row, "silent")
+        and silent_value in {False, 0}
+        and clean_text(row_get(row, "lifecycle_status")).lower() == "active"
+    )
+    return {
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event" if eligible else "untrusted",
+        "identity_status": identity_status or None,
+        "merged_into_event_id": merged_into_event_id,
+        "silent": bool(silent_value) if silent_value is not None else None,
+        "is_public": eligible,
+        "is_searchable": eligible,
+        "publication_status": "published" if eligible else "untrusted",
+    }
+
+
 def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) -> dict[str, Any]:
     event_id = int(row["id"])
     occurrence = structured_occurrence_projection(row)
@@ -1924,6 +1954,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     source_url = source_urls[0] if source_urls else None
     organizer_names = event_organizer_names(row_get(row, "organizer_names"))
     age_projection = event_age_projection(row)
+    structured_semantic_record = _structured_unusual_semantic_record(row)
     return {
         "id": event_id,
         "source_prod_id": event_id,
@@ -1934,6 +1965,11 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "organizer_names": organizer_names,
         "status_label": status,
         "lifecycle_status": clean_text(row["lifecycle_status"]) or "active",
+        # Hash-bound semantic consumers must re-check the actual structured
+        # Event/public-projection verdict instead of inferring eventness from
+        # title/description keywords. Old snapshots missing these columns
+        # export an explicit untrusted record and therefore fail closed.
+        **structured_semantic_record,
         "starts_at": starts_at,
         "start_date": start_date,
         "start_time": start_time,
@@ -4399,20 +4435,31 @@ def _apply_unusual_concept_state(
             prior.get("first_published_at") or generated_at
         )
         is_new = concept_id not in states
-        notify_eligible = bool(
+        newly_notify_eligible = bool(
             approved
             and not migration
             and has_established_baseline
             and is_new
             and item.get("tier") == "core_unusual"
         )
+        durable_notify_eligible = bool(
+            (
+                prior.get("notify_eligible") is True
+                or newly_notify_eligible
+            )
+            and item.get("tier") == "core_unusual"
+        )
+        # Migration/backfill output is always silent, but it must not erase a
+        # previously established concept-level eligibility bit. Browser-local
+        # seen state decides whether each user still sees the red dot.
+        notify_eligible = bool(durable_notify_eligible and not migration)
         item["first_published_at"] = first_published_at
         item["notify_eligible"] = notify_eligible
         states[concept_id] = {
             "first_published_at": first_published_at,
             "previous_tier": item.get("tier"),
             "previous_content_hash": item.get("content_hash"),
-            "notify_eligible": notify_eligible,
+            "notify_eligible": durable_notify_eligible,
             "representative_event_id": item.get("representative_event_id")
             or item.get("event_id"),
             "policy_version": manifest.get("policy_version"),
@@ -4788,6 +4835,20 @@ def build_shared_bge_and_unusual(
         "cache_state": cache_state,
         "event_count": len(events),
         "artifact_event_count": int(metadata.get("event_count") or 0),
+        "ordinary_corpus_sha256": (
+            (manifest.get("ordinary_corpus_receipt") or {}).get(
+                "corpus_sha256"
+            )
+            if isinstance(manifest.get("ordinary_corpus_receipt"), dict)
+            else None
+        ),
+        "ordinary_corpus_policy_sha256": (
+            (manifest.get("ordinary_corpus_receipt") or {}).get(
+                "policy_sha256"
+            )
+            if isinstance(manifest.get("ordinary_corpus_receipt"), dict)
+            else None
+        ),
         "item_count": len(manifest.get("items") or []),
         "migration": bool(
             (manifest.get("migration") or {}).get("enabled")

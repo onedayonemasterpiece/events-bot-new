@@ -38,6 +38,15 @@ def event(event_id: int, title: str, **overrides):
         "venue_name": "Площадка",
         "topics": [],
         "lifecycle_status": "active",
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": None,
+        "silent": False,
+        "is_public": True,
+        "is_searchable": True,
+        "publication_status": "published",
         "start_date": "2026-08-10",
         "end_date": "2026-08-10",
     }
@@ -171,6 +180,15 @@ def test_scorer_is_shadow_only_deduplicates_series_and_reuses_exact_cache():
     assert {
         row["prototype_kind"] for row in core["prototype_evidence"]
     } == {"positive", "hard_negative", "neutral"}
+    assert core["features"]["ordinary_corpus_distance"] == 1.0
+    assert core["ordinary_corpus_evidence"]["nearest_event_id"] == 3
+    receipt = first["metrics"]["ordinary_corpus_receipt"]
+    assert receipt["member_event_ids"] == [3]
+    assert receipt["provider_calls"] == 0
+    assert receipt["policy_sha256"]
+    assert receipt["corpus_sha256"]
+    assert receipt["members"][0]["text_hash"]
+    assert receipt["members"][0]["vector_sha256"]
     past = next(row for row in first["manifest"]["shadow_items"] if row["event_id"] == 4)
     assert past["decision"] == "abstain"
     assert "past" in past["eligibility_failures"]
@@ -254,6 +272,8 @@ def test_scorer_fails_closed_on_document_or_classifier_hash_mismatch():
         ({"publication_status": "postponed"}, "publication_unavailable"),
         ({"is_searchable": False}, "not_searchable"),
         ({"record_kind": "work_hours"}, "service_or_work_hours"),
+        ({"identity_status": None}, "identity_not_canonical"),
+        ({"publication_status": None}, "publication_not_confirmed"),
         ({"summary": "", "description_html": ""}, "insufficient_semantic_text"),
     ],
 )
@@ -329,6 +349,34 @@ def test_concept_identity_accepts_mutual_linked_ids_and_canonical_roots():
     assert by_id[13]["concept_id_source"] == "canonical_root_event_id"
 
 
+def test_diversity_deferred_rows_never_bypass_family_venue_or_type_caps():
+    rows = [
+        event(
+            event_id,
+            f"Core {event_id}",
+            venue_name="Одна площадка",
+            event_type="встреча",
+        )
+        for event_id in range(1, 11)
+    ]
+    rows.append(event(99, "Ordinary baseline", venue_name="Другая площадка"))
+    artifact, bank, classifier = _artifact(rows)
+    result = score_unusual_manifest(
+        rows,
+        artifact["event_vectors"],
+        artifact["prototype_vectors"],
+        artifact["metadata"],
+        build_metadata={"as_of_date": "2026-07-27"},
+        prototype_bank=bank,
+        classifier=classifier,
+    )
+    selected = result["manifest"]["candidate_items"]
+    assert len(selected) == 4
+    assert {row["family"] for row in selected} == {"open_dialogue"}
+    assert result["metrics"]["diversity_deferred_count"] == 6
+    assert result["metrics"]["diversity_caps"]["venue"] == 4
+
+
 def test_shared_artifact_reencodes_only_a_changed_event():
     rows = [event(1, "First"), event(2, "Second")]
     artifact, bank, classifier = _artifact(rows)
@@ -388,7 +436,7 @@ def test_shared_artifact_reuses_vectors_when_only_classifier_changes():
 
 
 def test_quality_fixture_is_hash_bound_and_real_canary_evidence_is_explicit():
-    rows = [event(1, "Core")]
+    rows = [event(1, "Core"), event(2, "Ordinary baseline")]
     artifact, bank, classifier = _artifact(rows)
     artifact["metadata"]["build"]["evidence_kind"] = "real_bge_canary"
     from static_event_bge import stable_hash
@@ -412,6 +460,14 @@ def test_quality_fixture_is_hash_bound_and_real_canary_evidence_is_explicit():
                 "eligible": True,
                 "expected_family": "open_dialogue",
                 "frozen_tier": "core_unusual",
+            },
+            {
+                "event_id": 2,
+                "label": "hard_negative",
+                "concept_id": None,
+                "eligible": True,
+                "expected_family": None,
+                "frozen_tier": "ordinary",
             }
         ],
     }
@@ -422,11 +478,18 @@ def test_quality_fixture_is_hash_bound_and_real_canary_evidence_is_explicit():
     assert evaluation["deterministic_repeat_exact"] is True
     assert evaluation["identical_rebuild_flip_rate"] == 0.0
     assert evaluation["confirmed_unusual_recall"] == 1.0
-    assert evaluation["hard_negative_false_positive_rate"] is None
+    assert evaluation["hard_negative_false_positive_rate"] == 0.0
+    assert evaluation["ordinary_corpus_policy_sha256"]
+    assert evaluation["ordinary_corpus_receipt"]["member_event_ids"] == [2]
 
 
 def test_quality_fixture_deduplicates_publication_and_abstains_ineligible_rows():
-    rows = [event(1, "Core one"), event(2, "Core two"), event(3, "Core three")]
+    rows = [
+        event(1, "Core one"),
+        event(2, "Core two"),
+        event(3, "Core three"),
+        event(4, "Ordinary baseline"),
+    ]
     artifact, bank, classifier = _artifact(rows)
     artifact["metadata"]["build"]["evidence_kind"] = "real_bge_canary"
     from static_event_bge import stable_hash
@@ -460,6 +523,13 @@ def test_quality_fixture_deduplicates_publication_and_abstains_ineligible_rows()
                 "label": "positive",
                 "concept_id": "gold.non-event",
                 "eligible": False,
+            },
+            {
+                "event_id": 4,
+                "label": "hard_negative",
+                "concept_id": None,
+                "eligible": True,
+                "frozen_tier": "ordinary",
             },
         ],
     }

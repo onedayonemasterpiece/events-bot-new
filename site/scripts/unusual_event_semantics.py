@@ -45,8 +45,8 @@ except ImportError:  # pragma: no cover - package-style imports in some runners
         stable_hash,
     )
 
-SCORER_SCHEMA_VERSION = "unusual-event-scorer-v1"
-POLICY_VERSION = "unusual-event-policy-v1"
+SCORER_SCHEMA_VERSION = "unusual-event-scorer-v2"
+POLICY_VERSION = "unusual-event-policy-v2-ordinary-corpus"
 MANIFEST_SCHEMA_VERSION = "unusual-event-manifest-v1"
 CACHE_SCHEMA_VERSION = "unusual-event-score-cache-v1"
 _HERE = Path(__file__).resolve().parent
@@ -76,6 +76,17 @@ PUBLIC_TIER = {
     "ordinary": "ordinary",
     "abstain": "abstain",
 }
+ORDINARY_CORPUS_POLICY = {
+    "schema_version": "unusual-ordinary-corpus-distance-v1",
+    "selection": "eligible_preliminary_ordinary_by_score_then_event_id",
+    "max_members": 128,
+    "feature": "one_minus_max_cosine_similarity",
+    "logit_center": 0.08,
+    "logit_weight": 2.0,
+    "core_min_distance": 0.015,
+    "adjacent_min_distance": 0.005,
+}
+ORDINARY_CORPUS_POLICY_SHA256 = stable_hash(ORDINARY_CORPUS_POLICY)
 
 
 def _load_object(path: Path) -> dict[str, Any]:
@@ -369,6 +380,12 @@ def _classify(
         float(weights[name]) * float(features[name])
         for name in classifier["feature_order"]
     )
+    ordinary_distance = features.get("ordinary_corpus_distance")
+    if ordinary_distance is not None:
+        logit += float(ORDINARY_CORPUS_POLICY["logit_weight"]) * (
+            float(ordinary_distance)
+            - float(ORDINARY_CORPUS_POLICY["logit_center"])
+        )
     probability = _sigmoid(logit)
     threshold = classifier["decision_thresholds"]
     phn = float(features["positive_hard_negative_margin"])
@@ -393,6 +410,19 @@ def _classify(
         decision = "ordinary"
     else:
         decision = "abstain"
+    if ordinary_distance is not None:
+        if (
+            decision == "core"
+            and float(ordinary_distance)
+            < float(ORDINARY_CORPUS_POLICY["core_min_distance"])
+        ):
+            decision = "adjacent"
+        if (
+            decision == "adjacent"
+            and float(ordinary_distance)
+            < float(ORDINARY_CORPUS_POLICY["adjacent_min_distance"])
+        ):
+            decision = "abstain"
     reasons = [f"semantic_{decision}"]
     if phn > 0:
         reasons.append("positive_over_hard_negative")
@@ -404,6 +434,13 @@ def _classify(
         reasons.append("neutral_not_cleared")
     if family_margin < float(threshold["family_min_margin"]):
         reasons.append("family_ambiguous")
+    if ordinary_distance is not None:
+        reasons.append(
+            "separated_from_ordinary_corpus"
+            if float(ordinary_distance)
+            >= float(ORDINARY_CORPUS_POLICY["core_min_distance"])
+            else "near_ordinary_corpus"
+        )
     return decision, _round(probability), reasons
 
 
@@ -412,18 +449,43 @@ def _eligibility(event: Mapping[str, Any], as_of: date) -> tuple[bool, list[str]
     title = str(event.get("title") or "").strip()
     if not title:
         failures.append("missing_title")
+    required_structured = {
+        "semantic_record_version",
+        "record_kind",
+        "eventness_status",
+        "lifecycle_status",
+        "identity_status",
+        "merged_into_event_id",
+        "silent",
+        "is_public",
+        "is_searchable",
+        "publication_status",
+    }
+    missing_structured = sorted(required_structured - set(event))
+    if missing_structured:
+        failures.append("structured_eligibility_incomplete")
+    if event.get("semantic_record_version") != "canonical-event-semantic-v1":
+        failures.append("semantic_record_untrusted")
+    if str(event.get("record_kind") or "").strip().lower() != "event":
+        failures.append("service_or_work_hours")
+    if str(event.get("eventness_status") or "").strip().lower() != "event":
+        failures.append("non_event")
     if str(event.get("lifecycle_status") or "").strip().lower() != "active":
         failures.append("lifecycle_not_active")
     identity = str(event.get("identity_status") or "").strip().lower()
-    if identity and identity != "canonical":
+    if identity != "canonical":
         failures.append("identity_not_canonical")
-    if event.get("is_public") is False:
+    if event.get("merged_into_event_id") not in {None, "", 0, "0"}:
+        failures.append("identity_merged")
+    if event.get("silent") is not False:
+        failures.append("publication_unavailable")
+    if event.get("is_public") is not True:
         failures.append("not_public")
-    if any(event.get(field) is False for field in (
-        "is_searchable", "searchable", "public_searchable"
-    )):
+    if event.get("is_searchable") is not True:
         failures.append("not_searchable")
     publication_status = str(event.get("publication_status") or "").strip().lower()
+    if publication_status != "published":
+        failures.append("publication_not_confirmed")
     if event.get("cancelled") is True or publication_status in {
         "cancelled", "canceled", "deleted", "silent", "postponed", "merged"
     }:
@@ -436,23 +498,6 @@ def _eligibility(event: Mapping[str, Any], as_of: date) -> tuple[bool, list[str]
         or event.get("merged_into_id")
     ):
         failures.append("publication_unavailable")
-    eventness = str(event.get("eventness_status") or "").strip().lower()
-    if eventness in {"non_event", "not_event", "rejected"} or event.get(
-        "is_event"
-    ) is False:
-        failures.append("non_event")
-    record_kind = str(
-        event.get("record_kind")
-        or event.get("content_kind")
-        or event.get("event_kind")
-        or ""
-    ).strip().lower()
-    if (
-        record_kind in {"service", "work_hours", "working_hours", "non_event"}
-        or event.get("is_service") is True
-        or event.get("is_work_hours") is True
-    ):
-        failures.append("service_or_work_hours")
     semantic_text = " ".join(
         str(event.get(field) or "").strip()
         for field in (
@@ -477,6 +522,95 @@ def _eligibility(event: Mapping[str, Any], as_of: date) -> tuple[bool, list[str]
             failures.append("past")
     failures = list(dict.fromkeys(failures))
     return not failures, failures
+
+
+def _ordinary_corpus_features(
+    preliminary: list[dict[str, Any]],
+    event_vectors: Mapping[str, Any],
+    *,
+    vector_metadata: Mapping[str, Any],
+) -> tuple[dict[int, dict[str, Any]], dict[str, Any]]:
+    """Calculate distance to a deterministic ordinary-event vector corpus.
+
+    Corpus members are current, structured-eligible rows which the frozen
+    prototype head classifies as ordinary before this feature is applied. The
+    vectors are read from the same shared BGE artifact; this function never
+    encodes text or calls a provider.
+    """
+
+    members = sorted(
+        (
+            row
+            for row in preliminary
+            if row["eligible"] and row["base_decision"] == "ordinary"
+        ),
+        key=lambda row: (float(row["base_score"]), int(row["event_id"])),
+    )[: int(ORDINARY_CORPUS_POLICY["max_members"])]
+    member_vectors: list[tuple[int, list[float], str]] = []
+    member_receipts: list[dict[str, Any]] = []
+    for row in members:
+        event_id = int(row["event_id"])
+        vector, text_hash = _vector_row(
+            event_vectors, str(event_id), expected_dim=EMBEDDING_DIM
+        )
+        vector_hash = stable_hash(vector)
+        member_vectors.append((event_id, vector, text_hash))
+        member_receipts.append(
+            {
+                "event_id": event_id,
+                "text_hash": text_hash,
+                "vector_sha256": vector_hash,
+            }
+        )
+    corpus_payload = {
+        "policy_sha256": ORDINARY_CORPUS_POLICY_SHA256,
+        "model_id": vector_metadata.get("model_id"),
+        "model_revision": vector_metadata.get("model_revision"),
+        "embedding_dim": vector_metadata.get("embedding_dim"),
+        "document_version": vector_metadata.get("document_version"),
+        "members": member_receipts,
+    }
+    corpus_hash = stable_hash(corpus_payload)
+    features: dict[int, dict[str, Any]] = {}
+    for row in preliminary:
+        event_id = int(row["event_id"])
+        vector, _ = _vector_row(
+            event_vectors, str(event_id), expected_dim=EMBEDDING_DIM
+        )
+        if not member_vectors:
+            features[event_id] = {
+                "distance": None,
+                "nearest_event_id": None,
+                "nearest_similarity": None,
+            }
+            continue
+        nearest_event_id, nearest_similarity = min(
+            (
+                (member_id, _dot(vector, member_vector))
+                for member_id, member_vector, _ in member_vectors
+            ),
+            key=lambda pair: (-pair[1], pair[0]),
+        )
+        features[event_id] = {
+            "distance": _round(max(0.0, min(2.0, 1.0 - nearest_similarity))),
+            "nearest_event_id": nearest_event_id,
+            "nearest_similarity": _round(nearest_similarity),
+        }
+    receipt = {
+        "schema_version": ORDINARY_CORPUS_POLICY["schema_version"],
+        "policy": ORDINARY_CORPUS_POLICY,
+        "policy_sha256": ORDINARY_CORPUS_POLICY_SHA256,
+        "model_id": vector_metadata.get("model_id"),
+        "model_revision": vector_metadata.get("model_revision"),
+        "embedding_dim": vector_metadata.get("embedding_dim"),
+        "document_version": vector_metadata.get("document_version"),
+        "member_count": len(member_receipts),
+        "member_event_ids": [row["event_id"] for row in member_receipts],
+        "members": member_receipts,
+        "corpus_sha256": corpus_hash,
+        "provider_calls": 0,
+    }
+    return features, receipt
 
 
 def _concept_ids(
@@ -746,7 +880,7 @@ def evaluate_unusual_quality_fixture(
             raise ValueError(f"prototype {prototype_id} text_hash mismatch")
 
     def run_once() -> list[dict[str, Any]]:
-        predictions: list[dict[str, Any]] = []
+        preliminary: list[dict[str, Any]] = []
         seen_ids: set[int] = set()
         for case in cases:
             if not isinstance(case, Mapping):
@@ -771,11 +905,7 @@ def evaluate_unusual_quality_fixture(
             )
             decision, confidence, reason_codes = _classify(features, classifier)
             eligible = case.get("eligible") is True
-            if not eligible:
-                decision = "abstain"
-                confidence = 0.0
-                reason_codes = ["eligibility_gate_failed"]
-            predictions.append(
+            preliminary.append(
                 {
                     "event_id": event_id,
                     "label": label,
@@ -784,20 +914,58 @@ def evaluate_unusual_quality_fixture(
                         case.get("concept_id") or f"fixture:{event_id}"
                     ),
                     "eligible": eligible,
+                    "base_decision": decision,
+                    "base_score": confidence,
+                    "features": features,
+                    "family": family,
+                    "family_scores": family_scores,
+                    "base_reason_codes": reason_codes,
+                    "prototype_evidence": evidence,
+                    "frozen_tier": case.get("frozen_tier"),
+                }
+            )
+        ordinary_features, _ = _ordinary_corpus_features(
+            preliminary,
+            event_vectors,
+            vector_metadata=metadata,
+        )
+        predictions: list[dict[str, Any]] = []
+        for row in preliminary:
+            distance_evidence = ordinary_features[int(row["event_id"])]
+            features = {
+                **dict(row["features"]),
+                "ordinary_corpus_distance": distance_evidence["distance"],
+            }
+            if not row["eligible"]:
+                decision = "abstain"
+                confidence = 0.0
+                reason_codes = ["eligibility_gate_failed"]
+            elif distance_evidence["distance"] is None:
+                decision = "abstain"
+                confidence = 0.0
+                reason_codes = ["ordinary_corpus_unavailable"]
+            else:
+                decision, confidence, reason_codes = _classify(features, classifier)
+            predictions.append(
+                {
+                    **row,
+                    "features": features,
                     "decision": decision,
                     "tier": PUBLIC_TIER[decision],
                     "calibrated_confidence": confidence,
-                    "family": family,
-                    "family_scores": family_scores,
                     "reason_codes": reason_codes,
-                    "prototype_evidence": evidence,
-                    "frozen_tier": case.get("frozen_tier"),
+                    "ordinary_corpus_evidence": distance_evidence,
                 }
             )
         return predictions
 
     first = run_once()
     second = run_once()
+    _, ordinary_corpus_receipt = _ordinary_corpus_features(
+        first,
+        event_vectors,
+        vector_metadata=metadata,
+    )
     deterministic = first == second
     editorial = [row for row in first if row["label"] != "non_event"]
     predicted_unusual = [
@@ -887,6 +1055,8 @@ def evaluate_unusual_quality_fixture(
         "model_revision": MODEL_REVISION,
         "embedding_dim": EMBEDDING_DIM,
         "document_version": DOCUMENT_VERSION,
+        "ordinary_corpus_policy_sha256": ORDINARY_CORPUS_POLICY_SHA256,
+        "ordinary_corpus_receipt": ordinary_corpus_receipt,
         "editorial_precision_at_20": _round(precision) if precision is not None else None,
         "editorial_sample_size": len(editorial),
         "editorial_ranked_count": len(editorial_top),
@@ -932,6 +1102,7 @@ def _quality_gate(
         "model_revision": MODEL_REVISION,
         "embedding_dim": EMBEDDING_DIM,
         "document_version": DOCUMENT_VERSION,
+        "ordinary_corpus_policy_sha256": ORDINARY_CORPUS_POLICY_SHA256,
     }
     checks: dict[str, bool] = {}
     reasons: list[str] = []
@@ -1100,6 +1271,40 @@ def score_unusual_manifest(
         )
     as_of = date.fromisoformat(str(build["as_of_date"]))
     concepts = _concept_ids(rows, event_vectors)
+    by_id = {int(row.get("id") or row.get("event_id")): row for row in rows}
+    preliminary: list[dict[str, Any]] = []
+    for event_id in sorted(by_id):
+        event = by_id[event_id]
+        vector, _ = _vector_row(
+            event_vectors, str(event_id), expected_dim=EMBEDDING_DIM
+        )
+        eligible, eligibility_failures = _eligibility(event, as_of)
+        features, family, family_scores, prototype_evidence = _semantic_features(
+            vector, prototype_vectors, bank
+        )
+        base_decision, base_score, base_reason_codes = _classify(features, head)
+        preliminary.append(
+            {
+                "event_id": event_id,
+                "eligible": eligible,
+                "eligibility_failures": eligibility_failures,
+                "features": features,
+                "family": family,
+                "family_scores": family_scores,
+                "prototype_evidence": prototype_evidence,
+                "base_decision": base_decision,
+                "base_score": base_score,
+                "base_reason_codes": base_reason_codes,
+            }
+        )
+    preliminary_by_id = {
+        int(row["event_id"]): row for row in preliminary
+    }
+    ordinary_features, ordinary_corpus_receipt = _ordinary_corpus_features(
+        preliminary,
+        event_vectors,
+        vector_metadata=vector_metadata,
+    )
     cache_contract = {
         "schema_version": CACHE_SCHEMA_VERSION,
         "scorer_schema_version": SCORER_SCHEMA_VERSION,
@@ -1112,6 +1317,8 @@ def score_unusual_manifest(
         "document_version": vector_metadata["document_version"],
         "prototype_bank_sha256": bank_hash,
         "classifier_sha256": classifier_hash,
+        "ordinary_corpus_policy_sha256": ORDINARY_CORPUS_POLICY_SHA256,
+        "ordinary_corpus_sha256": ordinary_corpus_receipt["corpus_sha256"],
         "as_of_date": as_of.isoformat(),
     }
     cache_valid = bool(
@@ -1123,7 +1330,6 @@ def score_unusual_manifest(
     new_records: dict[str, Any] = {}
     decisions: list[dict[str, Any]] = []
     cache_hits = 0
-    by_id = {int(row.get("id") or row.get("event_id")): row for row in rows}
     for event_id in sorted(by_id):
         event = by_id[event_id]
         vector, _ = _vector_row(
@@ -1138,30 +1344,28 @@ def score_unusual_manifest(
                     key: event.get(key)
                     for key in (
                         "lifecycle_status",
+                        "semantic_record_version",
                         "identity_status",
+                        "merged_into_event_id",
+                        "silent",
                         "is_public",
                         "is_searchable",
-                        "searchable",
-                        "public_searchable",
+                        "record_kind",
+                        "eventness_status",
                         "cancelled",
-                        "silent",
                         "is_silent",
                         "postponed",
                         "is_postponed",
                         "merged_into_id",
                         "publication_status",
-                        "eventness_status",
-                        "is_event",
-                        "record_kind",
-                        "content_kind",
-                        "event_kind",
-                        "is_service",
-                        "is_work_hours",
                         "start_date",
                         "end_date",
                     )
                 },
                 "concept_id": concept_id,
+                "ordinary_corpus_sha256": ordinary_corpus_receipt[
+                    "corpus_sha256"
+                ],
             }
         )
         cached = prior_records.get(str(event_id)) if cache_valid else None
@@ -1169,14 +1373,25 @@ def score_unusual_manifest(
             decision_row = dict(cached["decision"])
             cache_hits += 1
         else:
-            eligible, eligibility_failures = _eligibility(event, as_of)
-            features, family, family_scores, prototype_evidence = _semantic_features(
-                vector, prototype_vectors, bank
-            )
+            base = preliminary_by_id[event_id]
+            eligible = bool(base["eligible"])
+            eligibility_failures = list(base["eligibility_failures"])
+            distance_evidence = ordinary_features[event_id]
+            features = {
+                **dict(base["features"]),
+                "ordinary_corpus_distance": distance_evidence["distance"],
+            }
+            family = str(base["family"])
+            family_scores = dict(base["family_scores"])
+            prototype_evidence = list(base["prototype_evidence"])
             decision, probability, reason_codes = _classify(features, head)
             if not eligible:
                 decision = "abstain"
                 reason_codes = ["hard_eligibility_gate", *eligibility_failures]
+            elif distance_evidence["distance"] is None:
+                decision = "abstain"
+                probability = 0.0
+                reason_codes = ["ordinary_corpus_unavailable"]
             primary_prototype = next(
                 (
                     row
@@ -1235,6 +1450,13 @@ def score_unusual_manifest(
                 },
                 "features": features,
                 "prototype_evidence": prototype_evidence,
+                "ordinary_corpus_evidence": {
+                    **distance_evidence,
+                    "corpus_sha256": ordinary_corpus_receipt[
+                        "corpus_sha256"
+                    ],
+                    "policy_sha256": ORDINARY_CORPUS_POLICY_SHA256,
+                },
                 "policy_version": POLICY_VERSION,
                 "model_id": MODEL_ID,
                 "model_revision": MODEL_REVISION,
@@ -1245,6 +1467,9 @@ def score_unusual_manifest(
                 "classifier_version": head["schema_version"],
                 "classifier_kind": head["classifier_kind"],
                 "classifier_sha256": classifier_hash,
+                "ordinary_corpus_policy_sha256": (
+                    ORDINARY_CORPUS_POLICY_SHA256
+                ),
                 "input_hash": input_hash,
                 "content_hash": documents[event_id]["text_hash"],
                 "notify": False,
@@ -1313,8 +1538,6 @@ def score_unusual_manifest(
             type_counts[event_type] = type_counts.get(event_type, 0) + 1
         if len(selected) >= 30:
             break
-    if len(selected) < 30:
-        selected.extend(deferred[: 30 - len(selected)])
     quality = _quality_gate(
         build.get("quality_evaluation"),
         head,
@@ -1337,6 +1560,14 @@ def score_unusual_manifest(
         },
         "concept_candidates": len(selected),
         "concept_duplicates_removed": len(duplicate_rows),
+        "diversity_deferred_count": len(deferred),
+        "diversity_caps": {
+            "family": 6,
+            "venue": 4,
+            "event_type": 8,
+            "limit": 30,
+        },
+        "ordinary_corpus_receipt": ordinary_corpus_receipt,
         "candidate_family_diversity_top20": len(
             {str(row["family"]) for row in top20}
         ),
@@ -1366,6 +1597,7 @@ def score_unusual_manifest(
                 "artifact_sha256",
             )
         },
+        "ordinary_corpus_receipt": ordinary_corpus_receipt,
         "prototype_bank_sha256": bank_hash,
         "classifier_sha256": classifier_hash,
         "items": published,
