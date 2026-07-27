@@ -17,7 +17,7 @@
 | product-docs | R01, R02, R09 | `agent/focus-group/product-docs` | merged | `24bce1c1` | cherry-picked as `6b5aa5ba`; manual templates and lifecycle/product spec |
 | for-me | R06, R07 | `agent/focus-group/for-me` | merged | `dee371f7` (`98483fd5` implementation) | cherry-picked as `a16178c8` + `ab2a23a5`; build/Playwright evidence in lane RESULTS |
 | focus-shell | R03, R04, R05, R08, R10 | `agent/focus-group/focus-shell` | merged | `e0c840dd` (`c662d8ce` implementation) | cherry-picked as `59e1d2a1` + `d3894590`; unit/build/Playwright/icon evidence in lane RESULTS |
-| integration | R11, R12 | this branch | integrated | pending final SHA | lifecycle specimen, member-only `/dlya-menya/` feedback, contract tests, canonical docs and changelog |
+| integration | R11, R12 | this branch | integrated | `f7aea6ad` | lifecycle specimen, member-only `/dlya-menya/` feedback, contract tests, canonical docs and changelog |
 
 No worker changes were rejected, abandoned or left uncommitted. Read-only
 research lanes changed no files.
@@ -53,6 +53,11 @@ research lanes changed no files.
   - no browser console errors were observed.
 - Screenshots and the machine-readable browser result are in the ignored local
   directory `artifacts/codex/focus-group-product-20260727/`.
+- Independent checklist review: R01–R03 and R05–R12 accepted within the
+  explicit prototype boundary. R04 is Partial because the marker-gated secret
+  hub is implemented, but the existing site routes are not physically
+  relocated below the secret prefix; doing that belongs to the deliberately
+  deferred production-build integration.
 
 ## Requirement closure
 
@@ -61,7 +66,7 @@ research lanes changed no files.
 | R01 | Done | Act Opus logo and pending thank-you panel; one pair/two invitations; no feedback/share/invite multiplier | partner spelling/rights, rules and fulfilment need separate approval |
 | R02 | Done | `manual-email-templates.md` and one-recipient SOP | no mail is sent or automated |
 | R03 | Done | fragment intake strips token, stores bounded 72-hour hint, share specimen, marker-gated hub | server invite redemption/cap/revoke absent by scope |
-| R04 | Done | ordinary Astro root is a focus testing stub; secret hub noindex/no-referrer | production/secret builders intentionally unchanged |
+| R04 | Partial | ordinary Astro root is a focus testing stub; secret hub is noindex/no-referrer and marker-gated, but links onward to the existing route tree | relocating the whole static site beneath the secret prefix requires the deferred production/secret builder integration |
 | R05 | Done | overall NPS, page usefulness, improvement and typed event-fact issue specimens | no server persistence/sampling enforcement |
 | R06 | Done | separate auto-picks opt-in/off/eligibility UI after explicit/interpretable signals | no sender/scheduler/delivery |
 | R07 | Done | 16 category cards; native tri-state; inferred meter separate from evidence sufficiency; explainable local feed | not a cross-device/online ML profile |
