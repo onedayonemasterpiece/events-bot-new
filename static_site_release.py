@@ -363,6 +363,11 @@ def event_public_revision(event: Any) -> str:
 
 
 def _watermark_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    daily_share_refresh = (
+        payload.get("daily_share_refresh")
+        if isinstance(payload.get("daily_share_refresh"), Mapping)
+        else {}
+    )
     return {
         "latest_effect_at": payload.get("latest_effect_at"),
         "event_ids": payload.get("event_ids") or [],
@@ -371,6 +376,13 @@ def _watermark_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
         "reasons": payload.get("reasons") or [],
         "release_channel": payload.get("release_channel") or RELEASE_CHANNEL_SECRET,
         "force_rebuild": bool(payload.get("force_rebuild")),
+        "daily_share_refresh": {
+            "local_date": daily_share_refresh.get("local_date"),
+            "time_zone": daily_share_refresh.get("time_zone"),
+            "force_fingerprint": daily_share_refresh.get("force_fingerprint"),
+        }
+        if daily_share_refresh
+        else None,
     }
 
 
@@ -480,6 +492,25 @@ def merge_request_payload(current: Mapping[str, Any] | None, incoming: Mapping[s
             "expected_related_v1_hash": right_barrier.get("expected_related_v1_hash") or left_barrier.get("expected_related_v1_hash"),
         }
         merged["force_rebuild"] = bool(left.get("force_rebuild") or right.get("force_rebuild"))
+        left_daily = (
+            left.get("daily_share_refresh")
+            if isinstance(left.get("daily_share_refresh"), Mapping)
+            else None
+        )
+        right_daily = (
+            right.get("daily_share_refresh")
+            if isinstance(right.get("daily_share_refresh"), Mapping)
+            else None
+        )
+        if right_daily or left_daily:
+            # Every enabled build can cover the daily share. Preserve that
+            # durable calendar evidence across coalescing, while a newer
+            # request replaces the previous day's marker.
+            merged["daily_share_refresh"] = dict(right_daily or left_daily or {})
+        merged["daily_share_idempotent"] = bool(
+            left.get("daily_share_idempotent")
+            or right.get("daily_share_idempotent")
+        )
     merged.setdefault("schema_version", REQUEST_SCHEMA)
     merged["release_channel"] = RELEASE_CHANNEL_SECRET
     merged.setdefault("reasons", [])
@@ -488,6 +519,7 @@ def merge_request_payload(current: Mapping[str, Any] | None, incoming: Mapping[s
     merged.setdefault("correlation_ids", [])
     merged.setdefault("latest_effect_at", iso_utc())
     merged.setdefault("force_rebuild", False)
+    merged.setdefault("daily_share_idempotent", False)
     merged["target_watermark"] = request_watermark(merged)
     return merged
 
@@ -1748,6 +1780,23 @@ def validate_production_candidate_result(
     if candidate.get("token") != candidate_token or not re.fullmatch(SECRET_CANDIDATE_TOKEN_RE, candidate_token):
         raise StaticSitePermanentError("static_site_result_candidate_token_mismatch")
     checks = result.get("checks") if isinstance(result.get("checks"), Mapping) else {}
+    preview_contract = checks.get("preview_contract")
+    preview_contract_status = (
+        preview_contract.get("status")
+        if isinstance(preview_contract, Mapping)
+        else preview_contract
+    )
+    if preview_contract_status != "ok":
+        raise StaticSitePermanentError(
+            "static_site_result_preview_contract_incomplete"
+        )
+    if isinstance(preview_contract, Mapping) and (
+        preview_contract.get("archived") is not False
+        or preview_contract.get("published") is not False
+    ):
+        raise StaticSitePermanentError(
+            "static_site_result_preview_contract_release_leak"
+        )
     production_checks = (
         checks.get("production") if isinstance(checks.get("production"), Mapping) else {}
     )

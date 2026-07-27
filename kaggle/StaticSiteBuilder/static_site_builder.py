@@ -605,6 +605,45 @@ def apply_secret_candidate_research_env(env: dict[str, str], config: dict) -> No
         env['SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH'] = '1'
 
 
+def run_production_preview_contract_gate(
+    env: dict[str, str],
+    *,
+    build_id: str,
+) -> dict[str, object]:
+    """Run the legacy preview contract without making it a release artifact."""
+
+    clean_build = re.sub(r'[^A-Za-z0-9._-]+', '-', str(build_id)).strip('-._')
+    clean_build = clean_build[:96] or 'production-candidate'
+    preview_build_id = f'preview-gate-{clean_build}'
+    preview_env = dict(env)
+    preview_env.update({
+        'PREVIEW_BUILD_ID': preview_build_id,
+        'PUBLIC_PREVIEW_BUILD_ID': preview_build_id,
+        'SITE_BASE_PATH': f'/{preview_build_id}',
+    })
+    status_event(
+        'alive',
+        phase='check',
+        status='alive',
+        progress={
+            'phase': 'check',
+            'progress_percent': 36,
+            'progress_label': 'legacy preview contract gate',
+        },
+    )
+    run(['npm', 'run', 'build:preview'], cwd=SITE_DIR, env=preview_env)
+    run(['npm', 'run', 'check:preview'], cwd=SITE_DIR, env=preview_env)
+    preview_dist = SITE_DIR / 'dist' / preview_build_id
+    if not preview_dist.is_dir():
+        raise FileNotFoundError(f'preview contract output missing: {preview_dist}')
+    return {
+        'status': 'ok',
+        'build_id': preview_build_id,
+        'archived': False,
+        'published': False,
+    }
+
+
 def main() -> int:
     started = datetime.now(timezone.utc).isoformat()
     try:
@@ -690,9 +729,18 @@ def main() -> int:
             candidate_browser_evidence = browser_evidence_dir / 'secret-candidate'
             root_browser_evidence.mkdir(parents=True, exist_ok=True)
             candidate_browser_evidence.mkdir(parents=True, exist_ok=True)
+            preview_contract = run_production_preview_contract_gate(
+                env,
+                build_id=str(build_id),
+            )
             status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 42, 'progress_label': 'production root-form build'})
             run(['npm', 'run', 'build:production'], cwd=SITE_DIR, env=env)
             root_dist = SITE_DIR / 'dist'
+            preview_gate_path = root_dist / str(preview_contract['build_id'])
+            if preview_gate_path.exists():
+                raise RuntimeError(
+                    'production build did not clear ephemeral preview contract output'
+                )
             status_event('alive', phase='check', status='alive', progress={'phase': 'check', 'progress_percent': 57, 'progress_label': 'Chromium gate production root'})
             run([
                 'npm', 'run', 'check:browser-release', '--',
@@ -738,7 +786,11 @@ def main() -> int:
                 },
                 'candidate': {'token': token, 'token_sha256': candidate_manifest.get('token_sha256'), 'base_path': candidate_manifest.get('base_path')},
                 'counts': root_manifest.get('counts'),
-                'checks': {'production': root_manifest.get('checks'), 'secret_candidate': candidate_manifest.get('checks')},
+                'checks': {
+                    'preview_contract': preview_contract,
+                    'production': root_manifest.get('checks'),
+                    'secret_candidate': candidate_manifest.get('checks'),
+                },
                 'related_revision': root_manifest.get('versions', {}).get('related'),
                 'tree_sha256': {'production': root_manifest.get('tree_sha256'), 'secret_candidate': candidate_manifest.get('tree_sha256')},
                 'semantic': semantic_result,

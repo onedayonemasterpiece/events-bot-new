@@ -282,6 +282,7 @@ from static_site_release import (
     publish_secret_candidate_archive,
     prune_immutable_snapshots,
     prune_static_site_outputs,
+    request_watermark as static_site_request_watermark,
     resolve_current_secret_candidate,
     recoverable_static_site_build,
     finish_static_site_build_claim,
@@ -14400,6 +14401,29 @@ def _sqlite_parse_datetime(value: Any) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _static_site_daily_share_date(payload: Any) -> str | None:
+    if not isinstance(payload, Mapping):
+        return None
+    marker = payload.get("daily_share_refresh")
+    if not isinstance(marker, Mapping):
+        return None
+    value = str(marker.get("local_date") or "").strip()
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        return None
+
+
+def _static_site_row_has_daily_share_date(row: Any, local_date: str | None) -> bool:
+    if not local_date:
+        return False
+    try:
+        payload = json.loads(row["payload"] or "null")
+    except (TypeError, ValueError):
+        return False
+    return _static_site_daily_share_date(payload) == local_date
+
+
 async def _enqueue_static_site_build_atomic(
     db: Database,
     event_id: int,
@@ -14420,6 +14444,11 @@ async def _enqueue_static_site_build_atomic(
     immediate = bool(
         isinstance(payload, dict)
         and payload.get("trigger") in {"operator_request", "calendar_rollover", "startup_catchup"}
+    )
+    daily_share_date = (
+        _static_site_daily_share_date(payload)
+        if isinstance(payload, Mapping) and payload.get("daily_share_idempotent")
+        else None
     )
     connection = await aiosqlite.connect(db.path, timeout=30)
     connection.row_factory = aiosqlite.Row
@@ -14462,6 +14491,15 @@ async def _enqueue_static_site_build_atomic(
                         (_sqlite_datetime(now), _sqlite_datetime(now), int(running["id"])),
                     )
                     running = None
+        if daily_share_date and (
+            (running is not None and _static_site_row_has_daily_share_date(running, daily_share_date))
+            or (
+                pending is not None
+                and _static_site_row_has_daily_share_date(pending, daily_share_date)
+            )
+        ):
+            await connection.commit()
+            return "daily-already-requested"
         encoded_payload = json.dumps(payload, ensure_ascii=False) if payload is not None else None
         if running is not None:
             if pending is not None:
@@ -14520,6 +14558,9 @@ async def _enqueue_static_site_build_atomic(
         prior = await cursor.fetchone()
         await cursor.close()
         if prior is not None:
+            if _static_site_row_has_daily_share_date(prior, daily_share_date):
+                await connection.commit()
+                return "daily-already-requested"
             requeued_payload = encoded_payload
             state_cursor = await connection.execute(
                 """
@@ -15962,6 +16003,13 @@ async def enqueue_static_site_build_request(
     and failure semantics while the rollout remains secret-link-only.
     """
 
+    daily_share_trigger = trigger in {"calendar_rollover", "startup_catchup"}
+    if daily_share_trigger and not _env_flag("ENABLE_STATIC_SITE_KAGGLE_BUILDER"):
+        logging.info(
+            "static_site_daily_share: skipped because builder is disabled trigger=%s",
+            trigger,
+        )
+        return "disabled"
     ids: list[int] = []
     for value in event_ids:
         try:
@@ -15976,6 +16024,11 @@ async def enqueue_static_site_build_request(
         current_date=(os.getenv("STATIC_SITE_CURRENT_DATE") or "").strip() or None,
         current_datetime=(os.getenv("STATIC_SITE_CURRENT_DATETIME") or "").strip() or None,
     )
+    if daily_share_trigger:
+        # Both midnight and startup catch-up converge on one stable local-day
+        # identity. The outbox transaction uses this marker for durable,
+        # cross-process idempotency.
+        correlation_id = f"static-site-daily-share-{clock.effective_date}"
     payload = make_static_site_request_payload(
         reason=reason,
         event_ids=ids,
@@ -15993,6 +16046,20 @@ async def enqueue_static_site_build_request(
     )
     payload["effective_build_date"] = clock.effective_date
     payload["build_time_zone"] = clock.time_zone
+    if _env_flag("ENABLE_STATIC_SITE_KAGGLE_BUILDER"):
+        payload["daily_share_refresh"] = {
+            "schema_version": "static_site_daily_share_refresh_v1",
+            "local_date": clock.effective_date,
+            "time_zone": clock.time_zone,
+            # This marker is included in both the request watermark and the
+            # build fingerprint config. It forces a distinct next-day input
+            # identity without using the operator-only force_rebuild escape.
+            "force_fingerprint": (
+                f"service-share-daily:{clock.time_zone}:{clock.effective_date}"
+            ),
+        }
+        payload["daily_share_idempotent"] = daily_share_trigger
+        payload["target_watermark"] = static_site_request_watermark(payload)
     owner_event_id = ids[0] if ids else 0
     return await enqueue_job(
         db,
@@ -23347,6 +23414,11 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         "unusual_migration": _env_flag("STATIC_SITE_UNUSUAL_MIGRATION"),
         "unusual_cache_schema": "unusual-event-score-cache-v1",
         "service_share_renderer": "service_share_daily_pillow_1080x1350_v1",
+        "daily_share_force_fingerprint": (
+            (request_payload.get("daily_share_refresh") or {}).get("force_fingerprint")
+            if isinstance(request_payload.get("daily_share_refresh"), Mapping)
+            else None
+        ),
         "pgvector_embedding_model": (
             os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2"
         ).strip(),
