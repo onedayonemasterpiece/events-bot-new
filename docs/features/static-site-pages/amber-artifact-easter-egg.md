@@ -1,8 +1,11 @@
 # Amber artifact easter egg: mobile rail placement research
 
-> Status: noindex research prototype, **not a production gamification
-> contract**. Accepted Calendar/Popular rails remain the v23 donor.
-> Date: 2026-07-22.
+> Status: immutable noindex/secret-candidate research feature, **not a
+> production gamification contract**. Ordinary production/root remains
+> fail-closed because redistribution and derivative rights for the supplied
+> raster have not been documented. Accepted Calendar/Popular rails remain the
+> v23 donor.
+> Updated: 2026-07-27.
 
 ## Question
 
@@ -71,12 +74,50 @@ descriptive `aria-label`, keyboard focus and an `aria-live` found announcement.
 Motion is restricted to transform/opacity/filter and must not intercept a
 horizontal scroll gesture.
 
-## State and production boundary
+## State, collection and production boundary
 
-The prototype stores only a placement-scoped found bit in browser
-`localStorage` and emits `kenigevents:artifact-collected` with artifact id,
-placement and event id. It writes nothing to SQLite or Supabase. This keeps the
-two links independently testable and avoids inventing a persistence schema.
+The research feature stores one versioned collection record in browser
+`localStorage`:
+
+```text
+ke_artifact_collection_v1
+{
+  schemaVersion: 1,
+  collectionId: "kaliningrad_artifacts_v1",
+  artifacts: {
+    amber_cosmonaut: {
+      status: "found",
+      foundAt: <ISO time>,
+      eventId: <public event id>,
+      placement: "weekend.rail.tail.v1"
+    }
+  }
+}
+```
+
+The old placement bit `ke_amber_artifact_prototype_v1:tail=found` migrates once
+into this record so an accepted research find is not silently lost. A failed
+or disabled `localStorage` does not break the current interaction, but such a
+find cannot survive navigation or reload.
+
+The first transition to found emits `kenigevents:artifact-collected` with
+artifact id, collection id, semantic placement and public event id. Repeat
+activation does not emit a second collection event; it opens
+`/artefakty/#amber_cosmonaut`. There is no listener that sends this event to a
+backend, and the feature writes nothing to SQLite, Supabase or another server.
+It stores no account identifier, email, raw URL/referrer, rail coordinate or
+swipe path.
+
+In an explicitly enabled preview/secret candidate, `/artefakty/` is a noindex,
+local-only collection surface. It shows five finite slots: the found amber
+object becomes a keyboard-operable detail button, while unfilled slots remain
+non-interactive hints rather than fake rewards. The detail is a labelled native
+dialog with an explicit close action and focus return.
+`Поделиться артефактом · скоро` is visibly and natively disabled; the research
+build has no share side effect. The page explicitly warns that progress exists
+only in this browser and disappears when site data is cleared. Without the
+research gate, including ordinary production/root, the route renders only a
+neutral unavailable state and no collection UI or object reference.
 
 ### Direct noindex `/vyhodnye/` research trigger
 
@@ -89,30 +130,42 @@ PUBLIC_SITE_MODE=preview # or secret_candidate
 PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH=tail
 ```
 
-Open `/vyhodnye/` at a mobile width, find **«Теремок»** (event `6939`) in the
-**«Суббота, 25 июля»** shelf, and swipe that event rail all the way right. The
-`94×112` artifact is the sibling immediately after the large like. It wakes
+Open `/vyhodnye/` at a mobile width and swipe event rails all the way right.
+Exactly one eligible real event in the canonical current-weekend listing owns
+the `94×112` artifact as the sibling immediately after the large like. It wakes
 when at least `72%` is visible; tap it to set the local found state. With
 reduced motion it is fully static.
 
 The deployed research preview must retain its `noindex` boundary. The artifact
 is absent from ordinary preview builds without the flag and is hard-blocked in
-production even if the flag is accidentally present. If event `6939` is no
-longer in the current data snapshot, the build deterministically uses the first
-Saturday event (or the first weekend event) so the explicitly enabled research
-surface remains directly discoverable. The direct placement preserves the
-prototype's browser-only `localStorage` state and does not add a database write.
+production even if the flag is accidentally present. The production-form root
+artifact therefore remains unchanged while the separately generated
+`secret_candidate` may contain the explicitly enabled specimen.
+
+Assignment candidates are deduplicated positive event ids with non-empty
+titles whose `start_date` is the current weekend's Saturday or Sunday. The
+candidate list is sorted by event id and indexed by a deterministic hash of
+`amber_cosmonaut:assignment-v1` plus the immutable
+`PUBLIC_STATIC_RELEASE_ID` (or preview build id). Refresh and catalog ordering
+cannot reroll the target. The selector runs only in canonical
+`/vyhodnye/index.astro`; generated adjacent `/vyhodnye/<start>/` pages do not
+receive independent artifacts. If there are no eligible rows, the layer fails
+closed and renders none.
 
 Before production:
 
 1. confirm redistribution/derivative rights and provenance for the supplied
    raster source;
-2. define a sparse deterministic assignment so a refresh cannot farm an
-   unlimited number of artifacts;
+2. decide whether a production campaign needs device-specific or account-owned
+   assignment; the research build intentionally uses one immutable build target;
 3. design cross-device identity only if the reward has durable account value;
-4. aggregate analytics instead of storing rail coordinates or raw swipe paths;
+4. define privacy-reviewed aggregate analytics before adding any transport;
 5. test GPU cost and scroll continuity on a low-end Android device;
 6. re-run the rail physical-end like/negative-swipe regression gates.
+
+The three derived WebPs under `site/public/assets/gamification/` have no
+committed provenance or licence manifest as of 2026-07-27. Passing code,
+browser or secret-candidate review **does not** clear that production blocker.
 
 ## Exact v28 specimens
 
@@ -142,8 +195,31 @@ records the event ids/titles for QA and handoff.
 - Gemini 3.1 Pro (High) product/motion formation review selected A as the MVP
   leader and identified B's badge/like ambiguity as the critical risk. The v28
   review requires a persistent but low-amplitude game-motion cue until tap,
-  synchronised glow and an entirely static reduced-motion fallback. The only
-  remaining production gate is manual scroll/tap/FPS testing on low-end Android;
-  this does not block the isolated noindex research preview. Its final v28
-  implementation acceptance returned **PASS / GO** for Search progress,
-  artifact visual/motion and the reference-4 menu rollout.
+  synchronised glow and an entirely static reduced-motion fallback. Its final
+  v28 implementation acceptance returned **PASS / GO** for Search progress,
+  artifact visual/motion and the reference-4 menu rollout. That historical
+  prototype verdict did not grant raster redistribution rights and must not be
+  read as production approval.
+
+## R14 deterministic assignment and collection evidence
+
+Build: `preview-20260727-r14-artifacts-v2`, explicit research flag, immutable
+noindex preview:
+
+- `433` pages built; `check:preview` passed against `288` real events;
+- generated-output test proves exactly one artifact in canonical
+  `/vyhodnye/`, its selected id belongs to a rendered real event row, and every
+  generated `/vyhodnye/<start>/` page contains zero artifact controls;
+- browser test at `390×844` confirms tail order after the like, `94×112`
+  geometry, static reduced-motion state, one structured local collection
+  transition, persistence across reload, found-echo navigation, five collection
+  slots, labelled dialog, Escape/close focus behavior and the natively disabled
+  exact share label;
+- the same browser flow makes no mutation/API/Supabase/telemetry request;
+- legacy placement-bit migration is covered by unit and browser tests;
+- a production-mode dev probe with the flag deliberately present rendered zero
+  rail artifacts and only the neutral unavailable collection route.
+
+These checks permit an immutable noindex/secret-candidate review. Production
+remains blocked by the raster rights/provenance gate and low-end Android
+scroll/tap/FPS acceptance.
