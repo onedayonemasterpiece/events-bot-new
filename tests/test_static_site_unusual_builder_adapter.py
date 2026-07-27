@@ -38,6 +38,38 @@ def load_kaggle_builder():
     return module
 
 
+def test_unusual_metric_logs_keep_gate_values_but_drop_per_event_payloads():
+    module = load_exporter()
+    compact = module._compact_unusual_metrics_for_log(
+        {
+            "provider_calls": 0,
+            "ordinary_corpus_receipt": {
+                "corpus_sha256": "a" * 64,
+                "member_count": 1,
+                "members": [{"event_id": 1}],
+            },
+            "quality_gate": {
+                "approval_status": "approved",
+                "observed": {
+                    "editorial_precision_at_20": 0.9,
+                    "predictions": [{"event_id": 1}],
+                    "ordinary_corpus_receipt": {
+                        "corpus_sha256": "a" * 64,
+                        "members": [{"event_id": 1}],
+                    },
+                },
+            },
+        }
+    )
+    assert compact["provider_calls"] == 0
+    assert compact["ordinary_corpus_receipt"]["member_count"] == 1
+    assert "members" not in compact["ordinary_corpus_receipt"]
+    observed = compact["quality_gate"]["observed"]
+    assert observed["editorial_precision_at_20"] == 0.9
+    assert "predictions" not in observed
+    assert "members" not in observed["ordinary_corpus_receipt"]
+
+
 def test_kaggle_bge_preflight_repairs_transformers_incompatible_runtime(monkeypatch):
     builder = load_kaggle_builder()
     commands: list[list[str]] = []

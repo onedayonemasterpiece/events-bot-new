@@ -20,6 +20,8 @@ from static_event_bge import (  # noqa: E402
 )
 from unusual_event_semantics import (  # noqa: E402
     FAMILY_IDS,
+    ORDINARY_CORPUS_POLICY,
+    _classify,
     evaluate_unusual_quality_fixture,
     load_unusual_classifier,
     load_unusual_prototype_bank,
@@ -52,6 +54,32 @@ def event(event_id: int, title: str, **overrides):
     }
     row.update(overrides)
     return row
+
+
+def test_ordinary_corpus_distance_is_a_precision_guardrail_not_a_positive_boost():
+    classifier = load_unusual_classifier()
+    hard_negative_features = {
+        "top_positive": 0.461565,
+        "positive_support": 0.452531,
+        "positive_hard_negative_margin": -0.022208,
+        "positive_neutral_margin": 0.01074,
+        "family_margin": 0.0128,
+    }
+    base = _classify(hard_negative_features, classifier)
+    separated = _classify(
+        {
+            **hard_negative_features,
+            "ordinary_corpus_distance": 0.410662,
+        },
+        classifier,
+    )
+    assert ORDINARY_CORPUS_POLICY["feature_usage"] == (
+        "precision_guardrail_no_positive_boost"
+    )
+    assert ORDINARY_CORPUS_POLICY["logit_weight"] == 0.0
+    assert base[:2] == separated[:2]
+    assert base[0] == "abstain"
+    assert "separated_from_ordinary_corpus" in separated[2]
 
 
 def _unit(index: int) -> list[float]:

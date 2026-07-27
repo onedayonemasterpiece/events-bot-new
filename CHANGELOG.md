@@ -18,6 +18,10 @@
   deferred rows cannot bypass feed diversity caps. Candidate product
   Playwright and the local noindex ten-state red-dot lab now use independent
   modes and base URLs; lab pages are not shipped in the candidate.
+- Kept ordinary-corpus distance precision-first: it is a hash-bound proximity
+  demotion guardrail and cannot positively promote an abstaining hard negative;
+  compact builder logs retain exact gate metrics/hashes without per-event
+  prediction or corpus-member payloads.
 - Calibrated the deterministic R15 unusual-event head on the pinned real BGE-M3
   artifact and corrected its publication-quality accounting: ineligible rows
   abstain, recall uses the publishable frozen population, precision/diversity

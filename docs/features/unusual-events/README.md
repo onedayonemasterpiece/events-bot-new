@@ -165,8 +165,10 @@ inside the same shared BGE space. The corpus contains at most 128 structured-
 eligible rows provisionally classified ordinary, selected by base score and
 event ID. For each candidate the feature is
 `1 - max(cosine(candidate, ordinary_member))`; the current policy uses it in the
-logit and demotes core/adjacent decisions that are too close to ordinary
-events. No second encoding occurs. The manifest, evaluation and decision cache
+precision-first guardrail only: distance never positively boosts a candidate
+into an unusual tier, while proximity can demote core/adjacent decisions that
+are too close to ordinary events. This prevents ordinary-distance novelty from
+overriding hard-negative evidence. No second encoding occurs. The manifest, evaluation and decision cache
 bind both the ordinary-corpus policy SHA and a member/text/vector-bound corpus
 SHA; an empty/missing corpus or mismatched receipt makes an otherwise eligible
 candidate abstain. Its receipt must also report `provider_calls=0`.

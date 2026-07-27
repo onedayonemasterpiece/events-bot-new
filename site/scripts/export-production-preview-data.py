@@ -4128,6 +4128,37 @@ def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
+def _compact_unusual_metrics_for_log(metrics: Any) -> dict[str, Any]:
+    """Keep release metrics observable without logging per-event evidence."""
+
+    if not isinstance(metrics, dict):
+        return {}
+    compact = dict(metrics)
+    ordinary = compact.get("ordinary_corpus_receipt")
+    if isinstance(ordinary, dict):
+        compact["ordinary_corpus_receipt"] = {
+            key: value for key, value in ordinary.items() if key != "members"
+        }
+    gate = compact.get("quality_gate")
+    if isinstance(gate, dict):
+        compact_gate = dict(gate)
+        observed = compact_gate.get("observed")
+        if isinstance(observed, dict):
+            compact_observed = {
+                key: value for key, value in observed.items() if key != "predictions"
+            }
+            observed_ordinary = compact_observed.get("ordinary_corpus_receipt")
+            if isinstance(observed_ordinary, dict):
+                compact_observed["ordinary_corpus_receipt"] = {
+                    key: value
+                    for key, value in observed_ordinary.items()
+                    if key != "members"
+                }
+            compact_gate["observed"] = compact_observed
+        compact["quality_gate"] = compact_gate
+    return compact
+
+
 def _load_json_object(path: Path | None) -> dict[str, Any] | None:
     if not path or not path.is_file():
         return None
@@ -4654,7 +4685,10 @@ def build_shared_bge_and_unusual(
         )
         if not isinstance(scored, dict) or not isinstance(scored.get("manifest"), dict):
             raise RuntimeError("unusual scorer returned an invalid result")
-        log_stage("unusual_score_complete", **(scored.get("metrics") or {}))
+        log_stage(
+            "unusual_score_complete",
+            **_compact_unusual_metrics_for_log(scored.get("metrics")),
+        )
         manifest = _normalise_unusual_manifest(
             scored["manifest"],
             events=events,

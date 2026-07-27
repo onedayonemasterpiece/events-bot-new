@@ -81,8 +81,9 @@ ORDINARY_CORPUS_POLICY = {
     "selection": "eligible_preliminary_ordinary_by_score_then_event_id",
     "max_members": 128,
     "feature": "one_minus_max_cosine_similarity",
+    "feature_usage": "precision_guardrail_no_positive_boost",
     "logit_center": 0.08,
-    "logit_weight": 2.0,
+    "logit_weight": 0.0,
     "core_min_distance": 0.015,
     "adjacent_min_distance": 0.005,
 }
