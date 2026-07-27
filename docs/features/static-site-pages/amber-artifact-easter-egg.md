@@ -239,3 +239,25 @@ noindex preview:
 These checks permit an immutable noindex/secret-candidate review. Production
 remains blocked by the raster rights/provenance gate and low-end Android
 scroll/tap/FPS acceptance.
+
+## R15 concrete eight-slot collection evidence
+
+Build:
+[`preview-20260727-artifact-collection-v3`](https://kenigevents.ru/preview-20260727-artifact-collection-v3/artefakty/kollektsii/znaki-yantarnogo-kraya/),
+branch `feature/static-site-artifacts-registry-20260727`, merge SHA
+`08e4a228`:
+
+- `435` pages built; `check:preview` passed against `288` real events;
+- the concrete noindex route renders exactly one found worked amber specimen
+  and seven anonymous locked slots; locked slots disclose no planned image or
+  name;
+- the found card opens a labelled native dialog with factual source and email
+  feedback; mobile `390×844` and desktop `1280×900` have no horizontal
+  overflow;
+- runtime collection state and stable assignment now share the single
+  `artifactRuntime.mjs` module, including migration of both the earlier
+  underscore id and the accepted legacy placement bit;
+- `/artefakty/` remains the editorial registry/lab, while `/dlya-menya/` links
+  to this concrete progress surface;
+- the route demonstrates `1/8`; it does not claim a real account, live drawing
+  or production-ready ownership ledger.
