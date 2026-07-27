@@ -315,6 +315,9 @@
 - Retried parser Smart Update persistence on bounded transient SQLite writer
   locks, preventing an otherwise valid official occurrence from being lost
   when a background production task briefly owns the database writer.
+- Made event-media pair-review creation conflict-safe so concurrent review
+  scheduling cannot abort an otherwise valid parser Smart Update on the unique
+  pair idempotency key.
 - Fixed the shared theatre Kaggle notebook so transient Playwright navigation
   during `page.content()` is retried after `domcontentloaded` instead of aborting
   Muzteatr and preventing Sobor/Tretyakov outputs.

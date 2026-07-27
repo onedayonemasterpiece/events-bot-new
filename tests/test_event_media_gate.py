@@ -19,6 +19,7 @@ from event_media import (
     DUPLICATE,
     PENDING_REVIEW,
     DownloadedPoster,
+    _insert_pair_review_if_absent,
     get_event_gallery_urls,
     review_next_event_media_pair,
 )
@@ -69,6 +70,65 @@ def _event() -> Event:
         photo_urls=[],
         photo_count=0,
     )
+
+
+@pytest.mark.asyncio
+async def test_pair_review_insert_is_idempotent_on_unique_input_hash(tmp_path) -> None:
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = _event()
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        left = EventPoster(
+            event_id=event.id,
+            poster_hash="left",
+            supabase_url="https://static.example/left.webp",
+            review_status=APPROVED,
+        )
+        right = EventPoster(
+            event_id=event.id,
+            poster_hash="right",
+            supabase_url="https://static.example/right.webp",
+            review_status=PENDING_REVIEW,
+        )
+        session.add(left)
+        session.add(right)
+        await session.commit()
+        await session.refresh(left)
+        await session.refresh(right)
+
+        first = await _insert_pair_review_if_absent(
+            session,
+            event_id=event.id,
+            left_poster_id=left.id,
+            right_poster_id=right.id,
+            context_hash="context",
+            pair_input_hash="same-input",
+        )
+        second = await _insert_pair_review_if_absent(
+            session,
+            event_id=event.id,
+            left_poster_id=left.id,
+            right_poster_id=right.id,
+            context_hash="context",
+            pair_input_hash="same-input",
+        )
+        await session.commit()
+        rows = list(
+            (
+                await session.execute(
+                    select(EventMediaPairReview).where(
+                        EventMediaPairReview.pair_input_hash == "same-input"
+                    )
+                )
+            ).scalars().all()
+        )
+
+    assert first is True
+    assert second is False
+    assert len(rows) == 1
 
 
 def test_fingerprints_distinguish_raw_container_but_match_pixels() -> None:
