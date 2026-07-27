@@ -111,6 +111,42 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def atomic_copy_file(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f'.{target.name}.{os.getpid()}.tmp')
+    shutil.copy2(source, temporary)
+    with temporary.open('rb') as handle:
+        os.fsync(handle.fileno())
+    os.replace(temporary, target)
+
+
+def persist_semantic_outputs(
+    out_dir: Path, args: argparse.Namespace, result: dict[str, object]
+) -> None:
+    semantic = result.get('semantic')
+    semantic = semantic if isinstance(semantic, dict) else {}
+    outputs = (
+        ('static_event_bge_vectors.npz', args.bge_vector_cache, 'vector_cache_sha256'),
+        ('static_event_bge_vectors.receipt.json', args.bge_vector_receipt, 'vector_receipt_sha256'),
+        ('unusual_events_cache.json', args.unusual_cache, 'unusual_cache_sha256'),
+        ('unusual_events_last_good.json', args.unusual_last_good, 'last_good_sha256'),
+    )
+    for filename, target_value, hash_key in outputs:
+        if not target_value:
+            continue
+        source = out_dir / filename
+        expected_hash = str(semantic.get(hash_key) or '')
+        if not source.is_file():
+            if hash_key == 'last_good_sha256' and not expected_hash:
+                continue
+            raise RuntimeError(f'validated semantic cache output missing: {filename}')
+        if not re.fullmatch(r'[0-9a-f]{64}', expected_hash) or sha256_file(source) != expected_hash:
+            raise RuntimeError(f'semantic cache output hash mismatch: {filename}')
+        target = Path(target_value)
+        atomic_copy_file(source, target)
+        print(f'[static-site-kaggle] semantic cache persisted atomically: {target}', flush=True)
+
+
 def load_snapshot_contract(args: argparse.Namespace) -> dict[str, object]:
     if args.profile == 'preview':
         return {}
@@ -158,6 +194,30 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
             raise RuntimeError('Kaggle result input fingerprint mismatch')
         if result.get('build_clock') != args.build_clock:
             raise RuntimeError('Kaggle result build clock mismatch')
+        if args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False):
+            semantic = result.get('semantic')
+            if not isinstance(semantic, dict):
+                raise RuntimeError('Kaggle shared BGE/unusual result metadata missing')
+            if (
+                int(semantic.get('provider_calls', -1)) != 0
+                or int(semantic.get('event_count') or -1) <= 0
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('artifact_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('manifest_sha256') or ''))
+            ):
+                raise RuntimeError('Kaggle shared BGE/unusual result metadata mismatch')
+        service_share = result.get('service_share')
+        if (
+            not isinstance(service_share, dict)
+            or service_share.get('status') != 'ready'
+            or service_share.get('local_date') != args.build_clock.get('effective_date')
+            or int(service_share.get('width') or 0) != 1080
+            or int(service_share.get('height') or 0) != 1350
+            or not re.fullmatch(
+                r'[0-9a-f]{64}',
+                str(service_share.get('manifest_payload_hash') or ''),
+            )
+        ):
+            raise RuntimeError('Kaggle daily service-share result metadata mismatch')
         artifacts = result.get('artifacts')
         expected_artifact_kinds = {'production_root', 'secret_candidate', 'browser_evidence'}
         actual_artifact_kinds = {
@@ -225,6 +285,9 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
     sync_script = ROOT / 'scripts' / 'sync_event_search_vectors_to_supabase.py'
     if sync_script.exists():
         shutil.copy2(sync_script, staged_site / 'scripts' / 'sync_event_search_vectors_to_supabase.py')
+    unusual_fixture = ROOT / 'tests' / 'fixtures' / 'unusual_events_golden_v1.json'
+    if unusual_fixture.exists():
+        shutil.copy2(unusual_fixture, staged_site / 'scripts' / unusual_fixture.name)
     if args.db and not args.export_in_kaggle:
         exporter = staged_site / 'scripts' / 'export-production-preview-data.py'
         cmd = [
@@ -253,6 +316,12 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             '--site-origin', args.public_site_origin,
             '--base-path', args.build_id or '',
             '--ics-base-url', args.ics_base_url,
+            '--bge-vector-cache', str(Path(getattr(args, 'bge_vector_cache', ARTIFACT_ROOT / 'static_event_bge_vectors.npz')).resolve()),
+            '--bge-vector-receipt', str(Path(getattr(args, 'bge_vector_receipt', ARTIFACT_ROOT / 'static_event_bge_vectors.receipt.json')).resolve()),
+            '--bge-model-revision', getattr(args, 'bge_model_revision', '5617a9f61b028005a4858fdac845db406aefb181'),
+            '--bge-batch-size', str(getattr(args, 'bge_batch_size', 8)),
+            '--unusual-cache', str(Path(getattr(args, 'unusual_cache', ARTIFACT_ROOT / 'unusual_events_cache.json')).resolve()),
+            '--unusual-last-good', str(Path(getattr(args, 'unusual_last_good', ARTIFACT_ROOT / 'unusual_events_last_good.json')).resolve()),
         ])
         if args.profile != 'preview':
             cmd.extend([
@@ -267,6 +336,10 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             cmd.append('--sync-pgvector-vectors')
         if args.gemma_related_verify:
             cmd.append('--gemma-related-verify')
+        if getattr(args, 'unusual_enabled', False):
+            cmd.append('--unusual-enabled')
+        if getattr(args, 'unusual_migration', False):
+            cmd.append('--unusual-migration')
         cmd.extend([
             '--gemma-related-model', args.gemma_related_model,
             '--gemma-related-key-env', args.gemma_related_key_env,
@@ -601,6 +674,10 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'export_in_kaggle': bool(args.export_in_kaggle),
         'sqlite_db_filename': 'events.sqlite' if args.db and args.export_in_kaggle else None,
         'related_cache_filename': 'event_related_chain_cache.json',
+        'bge_vector_cache_filename': 'static_event_bge_vectors.npz',
+        'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
+        'unusual_cache_filename': 'unusual_events_cache.json',
+        'unusual_last_good_filename': 'unusual_events_last_good.json',
         'related_mode': args.related_mode,
         'related_corpus_revision': args.related_corpus_revision or None,
         'sync_pgvector_vectors': bool(args.sync_pgvector_vectors),
@@ -611,6 +688,10 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'gemma_related_model': args.gemma_related_model,
         'gemma_related_key_env': args.gemma_related_key_env,
         'gemma_related_max_anchors': args.gemma_related_max_anchors,
+        'bge_model_revision': getattr(args, 'bge_model_revision', '5617a9f61b028005a4858fdac845db406aefb181'),
+        'bge_batch_size': getattr(args, 'bge_batch_size', 8),
+        'unusual_enabled': bool(getattr(args, 'unusual_enabled', False)),
+        'unusual_migration': bool(getattr(args, 'unusual_migration', False)),
         'queued_at': datetime.now(timezone.utc).isoformat(),
         'payload_mode': 'dataset_source',
     }
@@ -621,6 +702,19 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
             shutil.copy2(Path(args.snapshot_manifest).resolve(), dataset_dir / 'snapshot-manifest.json')
     if args.related_cache and Path(args.related_cache).exists():
         shutil.copy2(Path(args.related_cache).resolve(), dataset_dir / 'event_related_chain_cache.json')
+    semantic_inputs = (
+        (
+            (getattr(args, 'bge_vector_cache', ''), 'static_event_bge_vectors.npz'),
+            (getattr(args, 'bge_vector_receipt', ''), 'static_event_bge_vectors.receipt.json'),
+            (getattr(args, 'unusual_cache', ''), 'unusual_events_cache.json'),
+            (getattr(args, 'unusual_last_good', ''), 'unusual_events_last_good.json'),
+        )
+        if args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False)
+        else ()
+    )
+    for source_value, filename in semantic_inputs:
+        if source_value and Path(source_value).is_file():
+            shutil.copy2(Path(source_value).resolve(), dataset_dir / filename)
     (dataset_dir / 'build_config.json').write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     # Deliberately avoid `.tar.gz` filename: Kaggle dataset ingestion auto-extracts
     # archives and may reject/disappear datasets containing Astro dynamic route
@@ -639,6 +733,11 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
             expected.append('snapshot-manifest.json')
     if args.related_cache and Path(args.related_cache).exists():
         expected.append('event_related_chain_cache.json')
+    expected.extend(
+        filename
+        for source_value, filename in semantic_inputs
+        if source_value and Path(source_value).is_file()
+    )
     wait_dataset_ready(client, dataset_ref, expected_files=expected)
     return build_id, dataset_ref
 
@@ -684,6 +783,11 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
     files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
     print(f'[static-site-kaggle] adopted and downloaded {len(files)} files to {out_dir}', flush=True)
     validated = validate_downloaded_result(out_dir, args)
+    if getattr(args, 'export_in_kaggle', False) and (
+        getattr(args, 'related_mode', 'sparse') == 'bge'
+        or getattr(args, 'unusual_enabled', False)
+    ):
+        persist_semantic_outputs(out_dir, args, validated)
     print(
         '[static-site-kaggle] adopted exact output '
         f"build_id={validated.get('build_id')} result_sha256={sha256_file(out_dir / 'static_site_build_result.json')}",
@@ -755,7 +859,7 @@ def main() -> int:
     )
     parser.add_argument('--export-in-kaggle', action='store_true', default=(os.getenv('STATIC_SITE_EXPORT_IN_KAGGLE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--related-cache', default=os.getenv('STATIC_SITE_RELATED_CACHE', str(ARTIFACT_ROOT / 'event_related_chain_cache.json')))
-    parser.add_argument('--related-mode', choices=['sparse', 'pgvector'], default=os.getenv('STATIC_SITE_RELATED_MODE', 'sparse'))
+    parser.add_argument('--related-mode', choices=['sparse', 'pgvector', 'bge'], default=os.getenv('STATIC_SITE_RELATED_MODE', 'sparse'))
     parser.add_argument('--related-corpus-revision', default=os.getenv('STATIC_SITE_RELATED_CORPUS_REVISION', ''))
     parser.add_argument('--sync-pgvector-vectors', action='store_true', default=(os.getenv('STATIC_SITE_SYNC_PGVECTOR_VECTORS', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--pgvector-embedding-model', default=os.getenv('STATIC_SITE_PGVECTOR_EMBEDDING_MODEL', 'gemini-embedding-2'))
@@ -765,6 +869,14 @@ def main() -> int:
     parser.add_argument('--gemma-related-model', default=os.getenv('STATIC_SITE_GEMMA_RELATED_MODEL', 'models/gemma-4-26b-a4b-it'))
     parser.add_argument('--gemma-related-key-env', default=os.getenv('STATIC_SITE_GEMMA_RELATED_KEY_ENV', 'GOOGLE_API_KEY4'))
     parser.add_argument('--gemma-related-max-anchors', type=int, default=int(os.getenv('STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS', '0') or '0'))
+    parser.add_argument('--bge-vector-cache', default=os.getenv('STATIC_SITE_BGE_VECTOR_CACHE', str(ARTIFACT_ROOT / 'static_event_bge_vectors.npz')))
+    parser.add_argument('--bge-vector-receipt', default=os.getenv('STATIC_SITE_BGE_VECTOR_RECEIPT', str(ARTIFACT_ROOT / 'static_event_bge_vectors.receipt.json')))
+    parser.add_argument('--bge-model-revision', default=os.getenv('STATIC_SITE_BGE_MODEL_REVISION', '5617a9f61b028005a4858fdac845db406aefb181'))
+    parser.add_argument('--bge-batch-size', type=int, default=int(os.getenv('STATIC_SITE_BGE_BATCH_SIZE', '8') or '8'))
+    parser.add_argument('--unusual-cache', default=os.getenv('STATIC_SITE_UNUSUAL_CACHE', str(ARTIFACT_ROOT / 'unusual_events_cache.json')))
+    parser.add_argument('--unusual-last-good', default=os.getenv('STATIC_SITE_UNUSUAL_LAST_GOOD', str(ARTIFACT_ROOT / 'unusual_events_last_good.json')))
+    parser.add_argument('--unusual-enabled', action='store_true', default=(os.getenv('STATIC_SITE_UNUSUAL_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
+    parser.add_argument('--unusual-migration', action='store_true', default=(os.getenv('STATIC_SITE_UNUSUAL_MIGRATION', '1').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--keep-secret-datasets', action='store_true', default=(os.getenv('STATIC_SITE_KEEP_SECRET_DATASETS', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--timeout-minutes', type=int, default=int(os.getenv('STATIC_SITE_KAGGLE_TIMEOUT_MINUTES', '45')))
     parser.add_argument('--poll-interval', type=int, default=int(os.getenv('STATIC_SITE_KAGGLE_POLL_INTERVAL', '30')))
@@ -786,6 +898,15 @@ def main() -> int:
     args.build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
     if not BUILD_ID_RE.fullmatch(args.build_id):
         raise SystemExit('--build-id must be one bounded preview-* or production-* identity')
+    if (args.related_mode == 'bge' or args.unusual_enabled) and not re.fullmatch(
+        r'[0-9a-f]{40}', args.bge_model_revision or ''
+    ):
+        raise SystemExit('shared BGE requires a pinned 40-character --bge-model-revision')
+    if args.related_mode != 'pgvector' and args.sync_pgvector_vectors:
+        raise SystemExit(
+            '--sync-pgvector-vectors is restricted to pgvector mode; '
+            'shared BGE builds keep provider_calls=0'
+        )
 
     if args.profile == 'production-candidate':
         if args.catalog_mode != 'full' or not args.export_in_kaggle:
@@ -887,8 +1008,10 @@ def main() -> int:
                             if args.export_in_kaggle and args.related_cache and cache_out.exists():
                                 cache_target = Path(args.related_cache)
                                 cache_target.parent.mkdir(parents=True, exist_ok=True)
-                                shutil.copy2(cache_out, cache_target)
-                                print(f"[static-site-kaggle] related cache persisted: {cache_target}", flush=True)
+                                atomic_copy_file(cache_out, cache_target)
+                                print(f"[static-site-kaggle] related cache persisted atomically: {cache_target}", flush=True)
+                            if args.export_in_kaggle and (args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False)):
+                                persist_semantic_outputs(out_dir, args, validated)
                         return 0
                     if raw in {'ERROR', 'FAILED', 'CANCELLED'}:
                         raise RuntimeError(f'Kaggle static-site builder failed: {status}')

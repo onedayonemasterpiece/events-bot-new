@@ -1710,6 +1710,33 @@ def validate_production_candidate_result(
             or result_clock.get("current_datetime") != build_clock.current_datetime
         ):
             raise StaticSitePermanentError("static_site_result_build_clock_mismatch")
+    semantic = result.get("semantic") if isinstance(result.get("semantic"), Mapping) else {}
+    if semantic and semantic.get("status") != "disabled":
+        if (
+            int(semantic.get("provider_calls", -1)) != 0
+            or int(semantic.get("event_count") or -1) <= 0
+            or not re.fullmatch(r"[0-9a-f]{64}", str(semantic.get("artifact_sha256") or ""))
+            or not re.fullmatch(r"[0-9a-f]{64}", str(semantic.get("manifest_sha256") or ""))
+        ):
+            raise StaticSitePermanentError("static_site_result_semantic_metadata_mismatch")
+    service_share = (
+        result.get("service_share")
+        if isinstance(result.get("service_share"), Mapping)
+        else {}
+    )
+    if service_share:
+        if (
+            service_share.get("status") != "ready"
+            or int(service_share.get("width") or 0) != 1080
+            or int(service_share.get("height") or 0) != 1350
+            or not re.fullmatch(
+                r"[0-9a-f]{64}",
+                str(service_share.get("manifest_payload_hash") or ""),
+            )
+        ):
+            raise StaticSitePermanentError("static_site_result_service_share_metadata_mismatch")
+        if build_clock is not None and service_share.get("local_date") != build_clock.effective_date:
+            raise StaticSitePermanentError("static_site_result_service_share_freshness_mismatch")
     result_snapshot = result.get("snapshot") if isinstance(result.get("snapshot"), Mapping) else {}
     if (
         result_snapshot.get("snapshot_id") != snapshot.snapshot_id

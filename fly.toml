@@ -210,16 +210,29 @@ app = "events-bot-new-wngqia"
   # and downloads a checked artifact; production-root promotion remains a
   # separate release gate.
   ENABLE_STATIC_SITE_KAGGLE_BUILDER = "1"
+  # Existing static_site_build coalesced calendar-rollover trigger; this also
+  # refreshes the service-share `current` pointer without Smart Update traffic.
+  STATIC_SITE_LOCAL_MIDNIGHT = "00:00"
   STATIC_SITE_ARTIFACT_ROOT = "/data/static_site_builder"
   STATIC_SITE_SCRATCH_DIR = "/data/static_site_builder/tmp"
   STATIC_SITE_STORAGE_WARN_FREE_MB = "1536"
   STATIC_SITE_STORAGE_CRITICAL_FREE_MB = "1024"
   STATIC_SITE_OUTPUT_KEEP_LATEST_TERMINAL = "0"
   STATIC_SITE_BUILDER_LIMIT = "5000"
+  # Production related remains on the accepted pgvector rail until the frozen
+  # real-BGE canary and owner gate approve a separate cutover.
   STATIC_SITE_RELATED_MODE = "pgvector"
   STATIC_SITE_REQUIRE_VECTOR_BARRIER = "1"
   STATIC_SITE_VECTOR_RECEIPT_PATH = "/data/event_vector_sync_receipt.json"
   STATIC_SITE_SYNC_PGVECTOR_VECTORS = "1"
+  STATIC_SITE_BGE_MODEL_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
+  STATIC_SITE_BGE_BATCH_SIZE = "8"
+  STATIC_SITE_BGE_VECTOR_CACHE = "/data/static_site_builder/static_event_bge_vectors.npz"
+  STATIC_SITE_BGE_VECTOR_RECEIPT = "/data/static_site_builder/static_event_bge_vectors.receipt.json"
+  STATIC_SITE_UNUSUAL_ENABLED = "0"
+  STATIC_SITE_UNUSUAL_MIGRATION = "1"
+  STATIC_SITE_UNUSUAL_CACHE = "/data/static_site_builder/unusual_events_cache.json"
+  STATIC_SITE_UNUSUAL_LAST_GOOD = "/data/static_site_builder/unusual_events_last_good.json"
   STATIC_SITE_PGVECTOR_EMBEDDING_MODEL = "gemini-embedding-2"
   STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV = "GOOGLE_API_KEY4"
   STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS = "1000"

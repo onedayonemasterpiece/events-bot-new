@@ -53,6 +53,15 @@ PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v2"
 PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
 PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20260720_graph_reciprocity"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
+BGE_RELATED_ALGORITHM = "event_bge_m3_related_chain_v1"
+BGE_RELATED_SCHEMA_VERSION = "event_bge_m3_related_chain_v1"
+BGE_RELATED_RETRIEVAL_METHOD = "local_bge_m3_dense_cosine_v1"
+BGE_RELATED_CACHE_SCHEMA_VERSION = "event_bge_m3_related_chain_v1_cache_20260727"
+BGE_MODEL_ID_DEFAULT = "BAAI/bge-m3"
+BGE_MODEL_REVISION_DEFAULT = "5617a9f61b028005a4858fdac845db406aefb181"
+BGE_DIMENSION_DEFAULT = 1024
+UNUSUAL_MANIFEST_SCHEMA_VERSION = "static_unusual_events_v1"
+UNUSUAL_CACHE_SCHEMA_VERSION = "static_unusual_events_cache_v1"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
 FORCE_VISUAL_IMAGE_MODE_IDS = {5370, 6322, 4512, 3730, 4913}
@@ -3071,7 +3080,7 @@ def save_related_cache(path: Path | None, payload: dict[str, Any], *, previous_e
         )
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_json(path, payload)
     return True
 
 
@@ -3662,6 +3671,96 @@ def maybe_apply_gemma_audit(
     return chains, meta
 
 
+def build_bge_related_chain(
+    events: list[dict[str, Any]],
+    shared_artifact: dict[str, Any],
+    *,
+    top_k: int = 40,
+) -> dict[str, list[dict[str, Any]]]:
+    """Build related chains from the exact in-memory matrix used by unusual.
+
+    The semantic module returns vectors keyed by event id.  Converting that one
+    object to a dense matrix does not invoke the encoder and deliberately
+    happens before either consumer serializes a cache.
+    """
+
+    import numpy as np
+
+    vector_rows = shared_artifact.get("event_vectors")
+    if not isinstance(vector_rows, dict):
+        raise RuntimeError("shared BGE artifact event_vectors missing")
+    event_by_id = {int(event["id"]): event for event in events}
+    event_ids = sorted(event_by_id)
+    missing = [event_id for event_id in event_ids if str(event_id) not in vector_rows]
+    if missing:
+        raise RuntimeError(f"shared BGE artifact partial event matrix: missing={missing[:8]}")
+    matrix = np.asarray(
+        [vector_rows[str(event_id)]["vector"] for event_id in event_ids],
+        dtype=np.float32,
+    )
+    metadata = shared_artifact.get("metadata") or {}
+    expected_dim = int(metadata.get("embedding_dim") or 0)
+    if (
+        matrix.ndim != 2
+        or matrix.shape[0] != len(event_ids)
+        or matrix.shape[1] != expected_dim
+        or not np.isfinite(matrix).all()
+    ):
+        raise RuntimeError("shared BGE artifact matrix dimension/value mismatch")
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    if np.any(norms <= 0):
+        raise RuntimeError("shared BGE artifact contains zero vectors")
+    matrix = matrix / norms
+    chains: dict[str, list[dict[str, Any]]] = {}
+    batch = 256
+    for offset in range(0, len(event_ids), batch):
+        similarities = matrix[offset : offset + batch] @ matrix.T
+        for local_index, event_id in enumerate(event_ids[offset : offset + batch]):
+            left = event_by_id[event_id]
+            scores = similarities[local_index]
+            candidate_indexes = np.argpartition(
+                -scores, min(len(scores) - 1, top_k * 3)
+            )[: min(len(scores), top_k * 3 + 1)]
+            ranked = sorted(
+                (
+                    (float(scores[index]), event_ids[int(index)])
+                    for index in candidate_indexes
+                    if event_ids[int(index)] != event_id
+                ),
+                key=lambda item: (-item[0], item[1]),
+            )
+            chain: list[dict[str, Any]] = []
+            for similarity, candidate_id in ranked:
+                right = event_by_id[candidate_id]
+                if not eligible_related_pair(left, right):
+                    continue
+                same_category = bool(category(left) and category(left) == category(right))
+                shared_facets = sorted(
+                    set(str(value) for value in (left.get("topics") or []))
+                    .intersection(str(value) for value in (right.get("topics") or []))
+                )
+                strong = similarity >= 0.72 or same_category or bool(shared_facets)
+                chain.append(
+                    {
+                        "event_id": candidate_id,
+                        "slot_type": "pure_related" if strong else "adjacent_discovery",
+                        "related_score": round(max(0.0, min(1.0, similarity)), 4),
+                        "vector_similarity": round(similarity, 4),
+                        "similarity_class": "same_domain" if strong else "adjacent_discovery",
+                        "reasons": [
+                            f"vector:{BGE_RELATED_RETRIEVAL_METHOD}",
+                            *(["same_category"] if same_category else []),
+                            *(f"facet:{value}" for value in shared_facets[:3]),
+                        ],
+                        "retrieval_sources": ["shared_static_event_bge"],
+                    }
+                )
+                if len(chain) >= top_k:
+                    break
+            chains[str(event_id)] = chain
+    return chains
+
+
 def build_related(
     events: list[dict[str, Any]],
     *,
@@ -3674,13 +3773,35 @@ def build_related(
     gemma_max_anchors: int = 0,
     embedding_model: str = "gemini-embedding-2",
     related_corpus_revision: str = "",
+    shared_bge_artifact: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    related_mode = "pgvector" if str(related_mode or "").strip().lower() == "pgvector" else "sparse"
-    algorithm = PGVECTOR_RELATED_ALGORITHM if related_mode == "pgvector" else SPARSE_RELATED_ALGORITHM
-    schema_version = PGVECTOR_RELATED_SCHEMA_VERSION if related_mode == "pgvector" else SPARSE_RELATED_SCHEMA_VERSION
-    retrieval_method = PGVECTOR_RELATED_RETRIEVAL_METHOD if related_mode == "pgvector" else SPARSE_RELATED_RETRIEVAL_METHOD
-    cache_schema_version = PGVECTOR_RELATED_CACHE_SCHEMA_VERSION if related_mode == "pgvector" else RELATED_CACHE_SCHEMA_VERSION
-    embedding_doc_version = os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") if related_mode == "pgvector" else "event_embedding_doc_v1"
+    requested_mode = str(related_mode or "").strip().lower()
+    related_mode = requested_mode if requested_mode in {"sparse", "pgvector", "bge"} else "sparse"
+    if related_mode == "pgvector":
+        algorithm = PGVECTOR_RELATED_ALGORITHM
+        schema_version = PGVECTOR_RELATED_SCHEMA_VERSION
+        retrieval_method = PGVECTOR_RELATED_RETRIEVAL_METHOD
+        cache_schema_version = PGVECTOR_RELATED_CACHE_SCHEMA_VERSION
+        embedding_doc_version = os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1")
+    elif related_mode == "bge":
+        algorithm = BGE_RELATED_ALGORITHM
+        schema_version = BGE_RELATED_SCHEMA_VERSION
+        retrieval_method = BGE_RELATED_RETRIEVAL_METHOD
+        cache_schema_version = BGE_RELATED_CACHE_SCHEMA_VERSION
+        embedding_doc_version = str(
+            ((shared_bge_artifact or {}).get("metadata") or {}).get("document_version")
+            or "related_v1"
+        )
+        embedding_model = str(
+            ((shared_bge_artifact or {}).get("metadata") or {}).get("model_id")
+            or embedding_model
+        )
+    else:
+        algorithm = SPARSE_RELATED_ALGORITHM
+        schema_version = SPARSE_RELATED_SCHEMA_VERSION
+        retrieval_method = SPARSE_RELATED_RETRIEVAL_METHOD
+        cache_schema_version = RELATED_CACHE_SCHEMA_VERSION
+        embedding_doc_version = "event_embedding_doc_v1"
     related_corpus_revision = str(related_corpus_revision or "").strip()
     generated_at = datetime.now(timezone.utc).isoformat()
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
@@ -3702,9 +3823,14 @@ def build_related(
     cache_valid = (
         cache.get("schema_version") == cache_schema_version
         and cache.get("algorithm") == algorithm
-        and (related_mode != "pgvector" or cache.get("embedding_model") == embedding_model)
-        and (related_mode != "pgvector" or cache.get("embedding_document_version") == embedding_doc_version)
+        and (related_mode == "sparse" or cache.get("embedding_model") == embedding_model)
+        and (related_mode == "sparse" or cache.get("embedding_document_version") == embedding_doc_version)
         and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
+        and (
+            related_mode != "bge"
+            or cache.get("shared_bge_artifact_sha256")
+            == str(((shared_bge_artifact or {}).get("metadata") or {}).get("artifact_sha256") or "")
+        )
         and cache.get("event_fingerprints") == fingerprints
         and cache.get("event_ids") == event_ids
         and isinstance(cache.get("chains"), dict)
@@ -3784,6 +3910,16 @@ def build_related(
                 embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
                 graph_meta_out=graph_meta,
             )
+        elif related_mode == "bge":
+            if not shared_bge_artifact:
+                raise RuntimeError("BGE related mode requires the shared in-memory vector artifact")
+            graph_meta = {
+                "policy": "shared_bge_dense_graph_v1",
+                "artifact_sha256": str(
+                    (shared_bge_artifact.get("metadata") or {}).get("artifact_sha256") or ""
+                ),
+            }
+            chains = build_bge_related_chain(events, shared_bge_artifact)
         else:
             chains = build_sparse_related_chain(events, cache_salt=salt)
         raw_chains_for_cache = copy.deepcopy(chains)
@@ -3812,9 +3948,14 @@ def build_related(
         "algorithm": algorithm,
         "retrieval_method": retrieval_method,
         "embedding_document_version": embedding_doc_version,
-        "embedding_model": embedding_model if related_mode == "pgvector" else None,
+        "embedding_model": embedding_model if related_mode in {"pgvector", "bge"} else None,
         "related_corpus_revision": related_corpus_revision if related_mode == "pgvector" else None,
-        "semantic_embeddings": related_mode == "pgvector",
+        "semantic_embeddings": related_mode in {"pgvector", "bge"},
+        "shared_bge_artifact_sha256": (
+            str(((shared_bge_artifact or {}).get("metadata") or {}).get("artifact_sha256") or "")
+            if related_mode == "bge"
+            else None
+        ),
         "event_ids": event_ids,
         "event_fingerprints": fingerprints,
         "chains": chains,
@@ -3882,10 +4023,28 @@ def build_related(
         "algorithm": algorithm,
         "fallback_algorithm": "prod_sqlite_static_related_v1",
         "retrieval_method": retrieval_method,
-        "semantic_embeddings": related_mode == "pgvector",
-        "embedding_model": embedding_model if related_mode == "pgvector" else None,
+        "semantic_embeddings": related_mode in {"pgvector", "bge"},
+        "embedding_model": embedding_model if related_mode in {"pgvector", "bge"} else None,
         "embedding_document_version": embedding_doc_version,
         "related_corpus_revision": related_corpus_revision if related_mode == "pgvector" else None,
+        "shared_bge": (
+            {
+                key: value
+                for key, value in ((shared_bge_artifact or {}).get("metadata") or {}).items()
+                if key
+                in {
+                    "encoder_contract",
+                    "model_id",
+                    "model_revision",
+                    "embedding_dim",
+                    "document_version",
+                    "artifact_sha256",
+                    "provider_calls",
+                }
+            }
+            if related_mode == "bge"
+            else None
+        ),
         "graph_reciprocity": graph_meta,
         "gemma_verification": gemma_meta,
         "strict_verified_related": bool(gemma_verify),
@@ -3924,6 +4083,583 @@ def normalize_linked_occurrences(events: list[dict[str, Any]]) -> None:
         )
 
 
+def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    os.replace(temporary, path)
+
+
+def _load_json_object(path: Path | None) -> dict[str, Any] | None:
+    if not path or not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log_stage("unusual_feed_disabled", reason="cache_json_invalid", path=str(path), error=str(exc)[:240])
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _load_cached_bge_artifact(
+    *,
+    npz_path: Path,
+    receipt_path: Path,
+    prototype_bank: dict[str, Any],
+    classifier: dict[str, Any],
+    events: list[dict[str, Any]],
+    bge_module: Any,
+    model_revision: str,
+) -> dict[str, Any] | None:
+    if not npz_path.is_file() or not receipt_path.is_file():
+        return None
+    try:
+        import numpy as np
+
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        documents = bge_module.build_related_v1_documents(events)
+        expected_keys = {
+            str(row["event_id"]): str(row["text_hash"]) for row in documents
+        }
+        if (
+            receipt.get("schema_version") != "static-event-bge-cache-receipt-v1"
+            or receipt.get("model_revision") != model_revision
+            or receipt.get("model_id") != bge_module.MODEL_ID
+            or int(receipt.get("embedding_dim") or 0) != int(bge_module.EMBEDDING_DIM)
+            or receipt.get("document_version") != bge_module.DOCUMENT_VERSION
+            or receipt.get("encoder_contract") != bge_module.ENCODER_CONTRACT
+            or receipt.get("event_text_hashes") != expected_keys
+            or receipt.get("prototype_bank_sha256") != bge_module.stable_hash(prototype_bank)
+            or receipt.get("classifier_sha256") != bge_module.stable_hash(classifier)
+        ):
+            return None
+        with np.load(npz_path, allow_pickle=False) as stored:
+            event_ids = [str(value) for value in stored["event_ids"].tolist()]
+            prototype_ids = [str(value) for value in stored["prototype_ids"].tolist()]
+            event_matrix = stored["event_vectors"]
+            prototype_matrix = stored["prototype_vectors"]
+        if event_matrix.shape != (len(event_ids), int(bge_module.EMBEDDING_DIM)):
+            return None
+        if prototype_matrix.shape != (len(prototype_ids), int(bge_module.EMBEDDING_DIM)):
+            return None
+        artifact = {
+            "schema_version": "static-event-bge-v1",
+            "metadata": dict(receipt.get("metadata") or {}),
+            "event_vectors": {
+                event_id: {
+                    "text_hash": expected_keys[event_id],
+                    "vector": [float(value) for value in event_matrix[index].tolist()],
+                }
+                for index, event_id in enumerate(event_ids)
+            },
+            "prototype_vectors": {
+                prototype_id: {
+                    "text_hash": str((receipt.get("prototype_text_hashes") or {})[prototype_id]),
+                    "vector": [float(value) for value in prototype_matrix[index].tolist()],
+                }
+                for index, prototype_id in enumerate(prototype_ids)
+            },
+        }
+        validation = bge_module.validate_shared_bge_vector_artifact(
+            artifact,
+            prototype_bank=prototype_bank,
+            expected_classifier_sha256=bge_module.stable_hash(classifier),
+        )
+        if not validation.get("valid"):
+            return None
+        return artifact
+    except Exception as exc:
+        log_stage("unusual_feed_disabled", reason="bge_cache_invalid", error=str(exc)[:300])
+        return None
+
+
+def _write_bge_cache(
+    *,
+    artifact: dict[str, Any],
+    npz_path: Path,
+    receipt_path: Path,
+) -> None:
+    import numpy as np
+
+    event_vectors = artifact["event_vectors"]
+    prototype_vectors = artifact["prototype_vectors"]
+    event_ids = sorted(event_vectors, key=int)
+    prototype_ids = sorted(prototype_vectors)
+    npz_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = npz_path.with_name(f".{npz_path.name}.{os.getpid()}.tmp")
+    with temporary.open("wb") as handle:
+        np.savez_compressed(
+            handle,
+            event_ids=np.asarray(event_ids, dtype=f"<U{max(1, max(map(len, event_ids), default=1))}"),
+            event_vectors=np.asarray(
+                [event_vectors[event_id]["vector"] for event_id in event_ids], dtype=np.float64
+            ),
+            prototype_ids=np.asarray(
+                prototype_ids,
+                dtype=f"<U{max(1, max(map(len, prototype_ids), default=1))}",
+            ),
+            prototype_vectors=np.asarray(
+                [prototype_vectors[prototype_id]["vector"] for prototype_id in prototype_ids],
+                dtype=np.float64,
+            ),
+        )
+    os.replace(temporary, npz_path)
+    metadata = dict(artifact.get("metadata") or {})
+    receipt = {
+        "schema_version": "static-event-bge-cache-receipt-v1",
+        "model_id": metadata.get("model_id"),
+        "model_revision": metadata.get("model_revision"),
+        "embedding_dim": metadata.get("embedding_dim"),
+        "document_version": metadata.get("document_version"),
+        "encoder_contract": metadata.get("encoder_contract"),
+        "prototype_bank_sha256": metadata.get("prototype_bank_sha256"),
+        "classifier_sha256": metadata.get("classifier_sha256"),
+        "artifact_sha256": metadata.get("artifact_sha256"),
+        "event_text_hashes": {
+            event_id: event_vectors[event_id]["text_hash"] for event_id in event_ids
+        },
+        "prototype_text_hashes": {
+            prototype_id: prototype_vectors[prototype_id]["text_hash"]
+            for prototype_id in prototype_ids
+        },
+        "metadata": metadata,
+        "npz_sha256": hashlib.sha256(npz_path.read_bytes()).hexdigest(),
+    }
+    _atomic_write_json(receipt_path, receipt)
+
+
+def _event_public_path(event: dict[str, Any]) -> str:
+    explicit = clean_text(event.get("path") or event.get("href"))
+    if explicit.startswith("/"):
+        return explicit
+    slug = clean_text(event.get("slug"))
+    return f"/sobytiya/{slug}/" if slug else f"/sobytiya/{int(event['id'])}/"
+
+
+def _normalise_unusual_manifest(
+    manifest: dict[str, Any],
+    *,
+    events: list[dict[str, Any]],
+    build_metadata: dict[str, Any],
+    vector_metadata: dict[str, Any],
+    prototype_bank: dict[str, Any],
+    classifier: dict[str, Any],
+    migration: bool,
+) -> dict[str, Any]:
+    by_id = {int(event["id"]): event for event in events}
+    quality_gate = manifest.get("quality_gate")
+    if not isinstance(quality_gate, dict):
+        quality_gate = {
+            "status": str(manifest.get("status") or "unavailable"),
+            "metrics": manifest.get("evaluation") or {},
+        }
+    else:
+        quality_gate = dict(quality_gate)
+        quality_gate.setdefault(
+            "status",
+            str(
+                quality_gate.get("approval_status")
+                or manifest.get("evaluation_approval_status")
+                or manifest.get("status")
+                or "unavailable"
+            ),
+        )
+        quality_gate.setdefault(
+            "metrics",
+            quality_gate.get("observed") or manifest.get("evaluation") or {},
+        )
+    output = {
+        **manifest,
+        "schema_version": UNUSUAL_MANIFEST_SCHEMA_VERSION,
+        "build_id": build_metadata.get("build_id"),
+        "generated_at": build_metadata.get("generated_at"),
+        "source_snapshot_id": build_metadata.get("source_snapshot_id"),
+        "source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
+        "input_fingerprint": build_metadata.get("input_fingerprint"),
+        "taxonomy_version": prototype_bank.get("taxonomy_version")
+        or prototype_bank.get("schema_version"),
+        "policy_version": classifier.get("policy_version")
+        or classifier.get("schema_version"),
+        "embedding_model": vector_metadata.get("model_id"),
+        "embedding_revision": vector_metadata.get("model_revision"),
+        "embedding_dim": vector_metadata.get("embedding_dim"),
+        "doc_kind": "related_v1",
+        "document_version": vector_metadata.get("document_version"),
+        "prototype_bank_hash": vector_metadata.get("prototype_bank_sha256"),
+        "classifier_hash": vector_metadata.get("classifier_sha256")
+        or hashlib.sha256(
+            json.dumps(classifier, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+        "quality_gate": quality_gate,
+        "provider_calls": 0,
+        "migration": {
+            "enabled": bool(migration),
+            "notify": False if migration else bool(
+                (manifest.get("migration") or {}).get("notify")
+                if isinstance(manifest.get("migration"), dict)
+                else False
+            ),
+        },
+    }
+    items: list[dict[str, Any]] = []
+    for raw in manifest.get("items") or []:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            event_id = int(raw.get("event_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        event = by_id.get(event_id)
+        if event is None:
+            continue
+        item = dict(raw)
+        if item.get("confidence") is None:
+            item["confidence"] = item.get("calibrated_confidence")
+        item["notify_eligible"] = bool(raw.get("notify_eligible")) and not migration
+        item["event_snapshot"] = event
+        item["path"] = _event_public_path(event)
+        item["date"] = event.get("start_date") or event.get("date")
+        item["lifecycle"] = event.get("lifecycle_status") or "active"
+        items.append(item)
+    output["items"] = items
+    output["shadow_items"] = list(manifest.get("shadow_items") or [])
+    return output
+
+
+def build_shared_bge_and_unusual(
+    events: list[dict[str, Any]],
+    *,
+    out_dir: Path,
+    build_metadata: dict[str, Any],
+    vector_cache_path: Path,
+    vector_receipt_path: Path,
+    unusual_cache_path: Path,
+    unusual_last_good_path: Path,
+    model_revision: str,
+    batch_size: int,
+    migration: bool,
+    quality_fixture_path: Path | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Narrow adapter over the L02 semantic API.
+
+    Expected L02 API:
+      static_event_bge.build_related_v1_documents
+      static_event_bge.build_shared_bge_vector_artifact
+      static_event_bge.validate_shared_bge_vector_artifact
+      unusual_event_semantics.load_unusual_prototype_bank
+      unusual_event_semantics.score_unusual_manifest
+    """
+
+    import static_event_bge as bge_module
+    import unusual_event_semantics as unusual_module
+
+    log_stage("unusual_prototype_load")
+    prototype_bank = unusual_module.load_unusual_prototype_bank()
+    classifier = unusual_module.load_unusual_classifier()
+    fixture_path = quality_fixture_path or SCRIPT_PATH.parent / "unusual_events_golden_v1.json"
+    quality_fixture = _load_json_object(fixture_path)
+    semantic_build_metadata = dict(build_metadata)
+    encoding_events = list(events)
+    public_ids = {int(event["id"]) for event in events}
+    if quality_fixture is not None:
+        # This adapter has no encoder injection path: cache misses invoke the
+        # pinned local BGE model, so the frozen fixture evaluation is a real
+        # CPU canary rather than a synthetic unit probe.
+        semantic_build_metadata["evidence_kind"] = "real_bge_canary"
+        for case in quality_fixture.get("cases") or []:
+            if not isinstance(case, dict):
+                continue
+            try:
+                event_id = int(case.get("event_id") or case.get("id") or 0)
+            except (TypeError, ValueError):
+                continue
+            if event_id <= 0 or event_id in public_ids:
+                continue
+            facts = case.get("facts") if isinstance(case.get("facts"), dict) else {}
+            encoding_events.append(
+                {
+                    "id": event_id,
+                    "title": facts.get("title") or case.get("title") or f"fixture {event_id}",
+                    "event_type": facts.get("event_type") or "",
+                    "summary": facts.get("short_description") or facts.get("summary") or "",
+                    "short_description": facts.get("short_description") or "",
+                    "search_digest": facts.get("search_digest") or "",
+                    "description": facts.get("description") or facts.get("short_description") or "",
+                    "description_html": facts.get("description_html") or "",
+                    "city": facts.get("city") or "",
+                    "venue_name": facts.get("location_name") or facts.get("venue_name") or "",
+                    "start_date": facts.get("date") or build_metadata.get("as_of_date"),
+                    "end_date": facts.get("end_date") or facts.get("date") or build_metadata.get("as_of_date"),
+                    "lifecycle_status": "active",
+                    "topics": facts.get("topics") or [],
+                }
+            )
+        semantic_build_metadata["publication_event_count"] = len(events)
+        semantic_build_metadata["quality_fixture_event_count"] = len(encoding_events) - len(events)
+    log_stage(
+        "unusual_vector_reuse_start",
+        event_count=len(events),
+        model_id=bge_module.MODEL_ID,
+        model_revision=model_revision,
+        provider_calls=0,
+    )
+    artifact = _load_cached_bge_artifact(
+        npz_path=vector_cache_path,
+        receipt_path=vector_receipt_path,
+        prototype_bank=prototype_bank,
+        classifier=classifier,
+        events=encoding_events,
+        bge_module=bge_module,
+        model_revision=model_revision,
+    )
+    if (
+        artifact is not None
+        and quality_fixture is not None
+        and not (
+            isinstance((artifact.get("metadata") or {}).get("build"), dict)
+            and (artifact.get("metadata") or {}).get("build", {}).get("evidence_kind")
+            == "real_bge_canary"
+        )
+    ):
+        artifact = None
+    cache_state = "hit"
+    if artifact is None:
+        cache_state = "miss_rebuilt"
+        artifact = bge_module.build_shared_bge_vector_artifact(
+            encoding_events,
+            prototype_bank,
+            model_revision=model_revision,
+            classifier=classifier,
+            batch_size=batch_size,
+            build_metadata=semantic_build_metadata,
+        )
+        validation = bge_module.validate_shared_bge_vector_artifact(
+            artifact,
+            prototype_bank=prototype_bank,
+            expected_classifier_sha256=bge_module.stable_hash(classifier),
+        )
+        if not validation.get("valid"):
+            raise RuntimeError(
+                "shared BGE artifact validation failed: "
+                + "; ".join(validation.get("errors") or [])
+            )
+        _write_bge_cache(
+            artifact=artifact,
+            npz_path=vector_cache_path,
+            receipt_path=vector_receipt_path,
+        )
+    metadata = artifact.get("metadata") or {}
+    if (
+        int(metadata.get("event_count") or -1) != len(encoding_events)
+        or int(metadata.get("provider_calls", -1)) != 0
+        or metadata.get("model_revision") != model_revision
+    ):
+        raise RuntimeError("shared BGE artifact is partial or has mismatched metadata")
+
+    previous_cache = _load_json_object(unusual_cache_path)
+    quality_evaluation = None
+    if quality_fixture is not None:
+        try:
+            quality_evaluation = unusual_module.evaluate_unusual_quality_fixture(
+                quality_fixture,
+                artifact,
+                prototype_bank,
+                classifier,
+            )
+        except Exception as exc:
+            log_stage(
+                "unusual_quality_gate",
+                status="fixture_evaluation_failed",
+                approved=False,
+                error=str(exc)[:300],
+            )
+    try:
+        scored = unusual_module.score_unusual_manifest(
+            events,
+            artifact["event_vectors"],
+            artifact["prototype_vectors"],
+            metadata,
+            previous_cache=previous_cache,
+            build_metadata={
+                **semantic_build_metadata,
+                "migration": bool(migration),
+                "quality_evaluation": quality_evaluation,
+            },
+            prototype_bank=prototype_bank,
+            classifier=classifier,
+        )
+        if not isinstance(scored, dict) or not isinstance(scored.get("manifest"), dict):
+            raise RuntimeError("unusual scorer returned an invalid result")
+        log_stage("unusual_score_complete", **(scored.get("metrics") or {}))
+        manifest = _normalise_unusual_manifest(
+            scored["manifest"],
+            events=events,
+            build_metadata=build_metadata,
+            vector_metadata=metadata,
+            prototype_bank=prototype_bank,
+            classifier=classifier,
+            migration=migration,
+        )
+        rollout_baseline_at = str(
+            (previous_cache or {}).get("rollout_baseline_at")
+            or build_metadata.get("generated_at")
+            or ""
+        )
+        manifest["rollout_baseline_at"] = rollout_baseline_at or None
+        gate_status = str((manifest.get("quality_gate") or {}).get("status") or "").lower()
+        approved = gate_status in {"approved", "pass", "passed", "ok"}
+        log_stage("unusual_quality_gate", status=gate_status, approved=approved)
+        log_stage(
+            "unusual_concept_dedup",
+            item_count=len(manifest.get("items") or []),
+            shadow_count=len(manifest.get("shadow_items") or []),
+        )
+        unusual_cache = scored.get("cache")
+        if not isinstance(unusual_cache, dict):
+            raise RuntimeError("unusual scorer cache missing")
+        unusual_cache.update(
+            {
+                "schema_version": UNUSUAL_CACHE_SCHEMA_VERSION,
+                "model_revision": metadata.get("model_revision"),
+                "prototype_bank_hash": metadata.get("prototype_bank_sha256"),
+                "input_fingerprint": build_metadata.get("input_fingerprint"),
+                "policy_version": manifest.get("policy_version"),
+                "source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
+                "migration": bool(migration),
+                "rollout_baseline_at": rollout_baseline_at or None,
+            }
+        )
+        _atomic_write_json(unusual_cache_path, unusual_cache)
+        log_stage("unusual_cache_written", path=str(unusual_cache_path))
+        if approved:
+            _atomic_write_json(unusual_last_good_path, manifest)
+        else:
+            # Keep complete shadow/decision evidence, but no public card or
+            # notification may escape an unapproved quality gate.
+            manifest["items"] = []
+            manifest["migration"] = {"enabled": True, "notify": False}
+            log_stage(
+                "unusual_feed_disabled",
+                reason=f"quality_gate_{gate_status or 'missing'}",
+            )
+    except Exception as exc:
+        last_good = _load_json_object(unusual_last_good_path)
+        compatible = bool(
+            last_good
+            and last_good.get("embedding_revision") == metadata.get("model_revision")
+            and last_good.get("prototype_bank_hash") == metadata.get("prototype_bank_sha256")
+            and last_good.get("classifier_hash")
+            == (
+                metadata.get("classifier_sha256")
+                or hashlib.sha256(
+                    json.dumps(classifier, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                ).hexdigest()
+            )
+            and last_good.get("policy_version")
+            == (classifier.get("policy_version") or classifier.get("schema_version"))
+        )
+        if compatible:
+            current = {int(event["id"]): event for event in events}
+            fallback_items: list[dict[str, Any]] = []
+            for raw in last_good.get("items") or []:
+                if not isinstance(raw, dict) or int(raw.get("event_id") or 0) not in current:
+                    continue
+                event = current[int(raw["event_id"])]
+                fallback_items.append(
+                    {
+                        **raw,
+                        "notify_eligible": False,
+                        "event_snapshot": event,
+                        "path": _event_public_path(event),
+                        "date": event.get("start_date") or event.get("date"),
+                        "lifecycle": event.get("lifecycle_status") or "active",
+                    }
+                )
+            manifest = {
+                **last_good,
+                "build_id": build_metadata.get("build_id"),
+                "generated_at": build_metadata.get("generated_at"),
+                "attempted_source_snapshot_id": build_metadata.get("source_snapshot_id"),
+                "attempted_source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
+                "quality_gate": {
+                    "status": "last_good_fallback",
+                    "reason": str(exc)[:300],
+                },
+                "provider_calls": 0,
+                "migration": {"enabled": True, "notify": False},
+                "items": fallback_items,
+            }
+            log_stage("unusual_feed_disabled", reason=str(exc)[:300], fallback="last_good")
+            log_stage("last_good_fallback", reason=str(exc)[:300], item_count=len(fallback_items))
+        else:
+            manifest = {
+                "schema_version": UNUSUAL_MANIFEST_SCHEMA_VERSION,
+                **build_metadata,
+                "taxonomy_version": prototype_bank.get("taxonomy_version")
+                or prototype_bank.get("schema_version"),
+                "policy_version": classifier.get("policy_version")
+                or classifier.get("schema_version"),
+                "embedding_model": metadata.get("model_id"),
+                "embedding_revision": metadata.get("model_revision"),
+                "embedding_dim": metadata.get("embedding_dim"),
+                "doc_kind": "related_v1",
+                "document_version": metadata.get("document_version"),
+                "prototype_bank_hash": metadata.get("prototype_bank_sha256"),
+                "classifier_hash": metadata.get("classifier_sha256")
+                or hashlib.sha256(
+                    json.dumps(classifier, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                ).hexdigest(),
+                "quality_gate": {"status": "disabled", "reason": str(exc)[:300]},
+                "provider_calls": 0,
+                "migration": {"enabled": True, "notify": False},
+                "rollout_baseline_at": build_metadata.get("generated_at"),
+                "items": [],
+                "shadow_items": [],
+            }
+            log_stage("unusual_feed_disabled", reason=str(exc)[:300])
+    manifest_path = out_dir / "unusual-events.json"
+    _atomic_write_json(manifest_path, manifest)
+    log_stage("unusual_manifest_written", path=str(manifest_path), item_count=len(manifest.get("items") or []))
+    return artifact, {
+        "status": str((manifest.get("quality_gate") or {}).get("status") or "unknown"),
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "artifact_sha256": metadata.get("artifact_sha256"),
+        "provider_calls": 0,
+        "cache_state": cache_state,
+        "event_count": len(events),
+        "artifact_event_count": int(metadata.get("event_count") or 0),
+        "item_count": len(manifest.get("items") or []),
+        "migration": bool(
+            (manifest.get("migration") or {}).get("enabled")
+            if isinstance(manifest.get("migration"), dict)
+            else manifest.get("migration")
+        ),
+        "input_fingerprint": build_metadata.get("input_fingerprint"),
+        "vector_cache_sha256": (
+            hashlib.sha256(vector_cache_path.read_bytes()).hexdigest()
+            if vector_cache_path.is_file()
+            else None
+        ),
+        "vector_receipt_sha256": (
+            hashlib.sha256(vector_receipt_path.read_bytes()).hexdigest()
+            if vector_receipt_path.is_file()
+            else None
+        ),
+        "unusual_cache_sha256": (
+            hashlib.sha256(unusual_cache_path.read_bytes()).hexdigest()
+            if unusual_cache_path.is_file()
+            else None
+        ),
+        "last_good_sha256": (
+            hashlib.sha256(unusual_last_good_path.read_bytes()).hexdigest()
+            if unusual_last_good_path.is_file()
+            else None
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
@@ -3936,7 +4672,7 @@ def main() -> int:
     parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize one-day events starting on/before this date before the normal future fill")
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
     parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
-    parser.add_argument("--related-mode", choices=["sparse", "pgvector"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
+    parser.add_argument("--related-mode", choices=["sparse", "pgvector", "bge"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
     parser.add_argument("--sync-pgvector-vectors", action="store_true", default=(os.getenv("STATIC_SITE_SYNC_PGVECTOR_VECTORS", "").strip().lower() in {"1", "true", "yes", "on"}), help="Upsert event search docs/embeddings before pgvector related build")
     parser.add_argument("--pgvector-embedding-model", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL", "gemini-embedding-2"))
     parser.add_argument("--pgvector-embedding-key-env", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV", "GOOGLE_API_KEY4"))
@@ -3951,10 +4687,51 @@ def main() -> int:
     parser.add_argument("--snapshot-id", default=os.getenv("STATIC_SITE_SNAPSHOT_ID", ""))
     parser.add_argument("--snapshot-sha256", default=os.getenv("STATIC_SITE_SNAPSHOT_SHA256", ""))
     parser.add_argument("--snapshot-size", type=int, default=int(os.getenv("STATIC_SITE_SNAPSHOT_SIZE", "0") or "0"))
+    parser.add_argument("--input-fingerprint", default=os.getenv("STATIC_SITE_INPUT_FINGERPRINT", ""))
     parser.add_argument("--gemma-related-verify", action="store_true", help="Run optional Gemma 4 26B audit for changed related chains")
     parser.add_argument("--gemma-related-model", default="models/gemma-4-26b-a4b-it")
     parser.add_argument("--gemma-related-key-env", default="GOOGLE_API_KEY4")
     parser.add_argument("--gemma-related-max-anchors", type=int, default=0, help="0 = no cap for enabled audit")
+    parser.add_argument(
+        "--bge-vector-cache",
+        default=os.getenv("STATIC_SITE_BGE_VECTOR_CACHE", ""),
+        help="Persistent shared BGE event/prototype NPZ cache.",
+    )
+    parser.add_argument(
+        "--bge-vector-receipt",
+        default=os.getenv("STATIC_SITE_BGE_VECTOR_RECEIPT", ""),
+        help="Hash-bound JSON receipt for --bge-vector-cache.",
+    )
+    parser.add_argument(
+        "--bge-model-revision",
+        default=os.getenv("STATIC_SITE_BGE_MODEL_REVISION", BGE_MODEL_REVISION_DEFAULT),
+    )
+    parser.add_argument(
+        "--bge-batch-size",
+        type=int,
+        default=int(os.getenv("STATIC_SITE_BGE_BATCH_SIZE", "8") or "8"),
+    )
+    parser.add_argument(
+        "--unusual-cache",
+        default=os.getenv("STATIC_SITE_UNUSUAL_CACHE", ""),
+    )
+    parser.add_argument(
+        "--unusual-last-good",
+        default=os.getenv("STATIC_SITE_UNUSUAL_LAST_GOOD", ""),
+    )
+    parser.add_argument(
+        "--unusual-enabled",
+        action="store_true",
+        default=os.getenv("STATIC_SITE_UNUSUAL_ENABLED", "0").strip().lower()
+        in {"1", "true", "yes", "on"},
+    )
+    parser.add_argument(
+        "--unusual-migration",
+        action="store_true",
+        default=os.getenv("STATIC_SITE_UNUSUAL_MIGRATION", "1").strip().lower()
+        in {"1", "true", "yes", "on"},
+        help="Suppress notification eligibility while adopting the first manifest.",
+    )
     parser.add_argument(
         "--skip-related",
         action="store_true",
@@ -4078,6 +4855,54 @@ def main() -> int:
         print("IDs:", ",".join(str(event["id"]) for event in events))
         print("Related: skipped")
         return 0
+    shared_bge_artifact: dict[str, Any] | None = None
+    semantic_result: dict[str, Any] = {
+        "status": "disabled",
+        "provider_calls": 0,
+    }
+    if args.related_mode == "bge" or args.unusual_enabled:
+        if not re.fullmatch(r"[0-9a-f]{40}", str(args.bge_model_revision or "")):
+            raise SystemExit("--bge-model-revision must be a pinned 40-character commit")
+        vector_cache = (
+            Path(args.bge_vector_cache)
+            if args.bge_vector_cache
+            else out_dir.parent / "static_event_bge_vectors.npz"
+        )
+        vector_receipt = (
+            Path(args.bge_vector_receipt)
+            if args.bge_vector_receipt
+            else out_dir.parent / "static_event_bge_vectors.receipt.json"
+        )
+        unusual_cache = (
+            Path(args.unusual_cache)
+            if args.unusual_cache
+            else out_dir.parent / "unusual_events_cache.json"
+        )
+        unusual_last_good = (
+            Path(args.unusual_last_good)
+            if args.unusual_last_good
+            else out_dir.parent / "unusual_events_last_good.json"
+        )
+        shared_bge_artifact, semantic_result = build_shared_bge_and_unusual(
+            events,
+            out_dir=out_dir,
+            build_metadata={
+                "build_id": args.build_id or args.base_path or "local-static-build",
+                "generated_at": generated_at,
+                "as_of_date": effective_date,
+                "source_snapshot_id": args.snapshot_id or None,
+                "source_snapshot_hash": args.snapshot_sha256 or None,
+                "input_fingerprint": args.input_fingerprint or None,
+            },
+            vector_cache_path=vector_cache,
+            vector_receipt_path=vector_receipt,
+            unusual_cache_path=unusual_cache,
+            unusual_last_good_path=unusual_last_good,
+            model_revision=args.bge_model_revision,
+            batch_size=max(1, int(args.bge_batch_size)),
+            migration=bool(args.unusual_migration),
+        )
+        _atomic_write_json(out_dir / "static-semantic-build-result.json", semantic_result)
     if args.related_mode == "pgvector" and args.sync_pgvector_vectors:
         sync_event_vectors_to_supabase(
             preview_events_json=preview_events_path,
@@ -4100,6 +4925,7 @@ def main() -> int:
         gemma_max_anchors=max(0, int(args.gemma_related_max_anchors or 0)),
         embedding_model=args.pgvector_embedding_model,
         related_corpus_revision=args.related_corpus_revision,
+        shared_bge_artifact=shared_bge_artifact,
     )
     if args.catalog_mode == "full" and args.related_mode == "pgvector":
         validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})
