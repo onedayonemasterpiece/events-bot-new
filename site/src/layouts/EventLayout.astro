@@ -4,6 +4,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import MobileBottomNav, { type MobileSection } from '../components/MobileBottomNav.astro';
 import MobileToastRegion from '../components/MobileToastRegion.astro';
+import PwaTelemetry from '../components/PwaTelemetry.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
 import StaticSiteAuthRuntime from '../components/auth/StaticSiteAuthRuntime.astro';
 import '../styles/design-system.css';
@@ -2474,6 +2475,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     </style>
   </head>
   <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+    <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">

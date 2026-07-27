@@ -229,6 +229,33 @@ MIME `application/manifest+json`, доступные PNG-иконки `192×192`
 наличие manifest-link и presentation controller в `/`, Android browser smoke и
 достижимость deployed SHA из `origin/main`.
 
+### Compact install/use statistics
+
+Root и общая `EventLayout`-оболочка монтируют один `PwaTelemetry` controller.
+Он не пишет обычные просмотры сайта. Сбор происходит только для двух PWA
+lifecycle-сигналов:
+
+- `appinstalled` → подтверждённая браузером установка;
+- загрузка в `display-mode: standalone` → фактический запуск установленного
+  приложения.
+
+Для дедупликации используется случайный installation UUID в `localStorage` и
+session UUID в `sessionStorage`. Один app-window отправляет не более одного
+`standalone_open`; `navigator.webdriver` и недоступное storage приводят к
+fail-closed без записи. Клиент передаёт только эти UUID и тип сигнала через
+`record_pwa_lifecycle_v1`; URL, referrer, fingerprint, контакты и история
+просмотров в payload не входят. Сбой телеметрии никогда не блокирует страницу
+или установку.
+
+Долгоживущего event-log нет: Supabase хранит одну изменяемую строку на
+installation UUID и одну агрегатную строку на день. Состояние само очищается
+после 180 дней неактивности; сервер ограничивает новые UUID числом 1 000 в
+день. Из агрегата доступны установки, standalone-сессии, daily active
+installations, первый реальный запуск и exact D1/D7 retention. Удаление PWA
+web-платформа надёжно не сообщает, поэтому метрики не называются числом
+«сейчас установлено». SQL-модель и операторские запросы канонически описаны в
+`docs/features/unsigned-personalization/database.md`.
+
 ## Rejected alternatives
 
 - отдельный hardcoded bottom nav только для Search;

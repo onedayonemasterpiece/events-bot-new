@@ -1,5 +1,6 @@
 ---
 import PwaInstallAction from '../components/PwaInstallAction.astro';
+import PwaTelemetry from '../components/PwaTelemetry.astro';
 import { withBase } from '../lib/events';
 import '../styles/design-system.css';
 
@@ -89,6 +90,7 @@ const manifestHref = `${withBase('/manifest.webmanifest')}?v=20260727-brand-icon
     </style>
   </head>
   <body>
+    <PwaTelemetry />
     <PwaInstallAction />
     <main>
       <img class="mark" src={logoHref} width="64" height="64" alt="Полюбить Калининград Анонсы" decoding="async" />
