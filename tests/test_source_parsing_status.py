@@ -3,6 +3,13 @@ from source_parsing.handlers import (
     SourceParsingStats,
     _source_parsing_terminal_status,
 )
+from source_parsing.commands import SOURCE_PARSING_GUARD_URLS
+
+
+def test_philharmonia_daytime_change_guard_watches_current_catalog():
+    assert SOURCE_PARSING_GUARD_URLS["philharmonia"] == (
+        "https://filarmonia39.ru/afisha/"
+    )
 
 
 def test_source_loss_cannot_finish_green():
