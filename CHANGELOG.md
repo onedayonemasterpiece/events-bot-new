@@ -316,7 +316,9 @@
   remains outside the slotted `EventCandidate` declaration so later structured
   fields such as `organizer_names` stay part of the runtime schema. Completed
   parse runs clear the fail-closed cancellation sentinel before writing
-  `details_json.fatal_error`.
+  `details_json.fatal_error`; manual and scheduled operator reports are chunked
+  below Telegram's message limit instead of turning a successful import into a
+  terminal `Bad Request: message is too long`.
 
 - Prevented source-grounded studio addresses from being rebound to unrelated
   canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);
