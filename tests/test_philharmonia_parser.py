@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from datetime import date
 from pathlib import Path
 
@@ -65,10 +66,45 @@ def test_current_detail_dom_enriches_description_price_and_ticket_url():
     assert event["ticket_url"] == "https://filarmonia39.ru/afisha/miyazaki/buy/"
 
 
-def test_kernel_notebook_uses_current_http_parser_without_stale_selectors():
-    source = (ROOT / "kaggle/ParsePhilharmonia/parse_philharmonia.ipynb").read_text(encoding="utf-8")
+def test_kernel_is_self_contained_current_http_parser():
+    metadata = json.loads(
+        (ROOT / "kaggle/ParsePhilharmonia/kernel-metadata.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    source = PARSER_PATH.read_text(encoding="utf-8")
 
-    assert "philharmonia_parser.py" in source
+    assert metadata["code_file"] == "philharmonia_parser.py"
+    assert metadata["kernel_type"] == "script"
     assert "fetch_philharmonia_events" in source
+    assert 'if __name__ == "__main__":' in source
+    assert "philharmonia_results.json" in source
     assert "afisha_list_item" not in source
     assert "?event&m=" not in source
+
+
+def test_parser_main_writes_validated_results_without_status_dataset(
+    tmp_path, monkeypatch
+):
+    parser = _load_parser()
+    expected = [{"title": "Органные миры", "normalized_date": "2026-08-01"}]
+    output = tmp_path / "philharmonia_results.json"
+
+    monkeypatch.setattr(parser, "OUTPUT_PATH", output)
+    monkeypatch.setattr(parser, "_load_status_client", lambda: None)
+    monkeypatch.setattr(parser, "fetch_philharmonia_events", lambda: expected)
+
+    parser.main()
+
+    assert json.loads(output.read_text(encoding="utf-8")) == expected
+
+
+def test_primary_parser_runners_do_not_depend_on_per_run_status_dataset():
+    for relative_path in (
+        "source_parsing/kaggle_runner.py",
+        "source_parsing/philharmonia.py",
+        "source_parsing/qtickets.py",
+    ):
+        source = (ROOT / relative_path).read_text(encoding="utf-8")
+        assert "create_kaggle_status_dataset" not in source, relative_path
+        assert "per-run status dataset disabled" in source, relative_path

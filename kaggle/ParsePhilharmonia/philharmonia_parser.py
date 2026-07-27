@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import date
+from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
@@ -16,6 +18,7 @@ logger = logging.getLogger("PhilharmoniaParser")
 BASE_URL = "https://filarmonia39.ru"
 LISTING_URL = f"{BASE_URL}/afisha/"
 REQUEST_TIMEOUT_SECONDS = 45
+OUTPUT_PATH = Path("/kaggle/working/philharmonia_results.json")
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -164,3 +167,65 @@ def fetch_philharmonia_events(
             event["title"],
         )
     return results
+
+
+def _load_status_client() -> Any | None:
+    """Load the optional callback client from an attached private status dataset."""
+
+    try:
+        from kaggle_status_client import load_status_client
+
+        return load_status_client(log=lambda message: logger.info(message))
+    except Exception as exc:
+        logger.warning("philharmonia: status client unavailable: %s", exc)
+        return None
+
+
+def main() -> None:
+    """Kaggle script entry point; keep the production parser self-contained."""
+
+    status_client = _load_status_client()
+    if status_client is not None and status_client.enabled:
+        status_client.event(
+            "kernel_started",
+            phase="parse",
+            status="running",
+            progress={"progress_percent": 10, "progress_label": "загрузка афиши"},
+        )
+    try:
+        events = fetch_philharmonia_events()
+        output_path = OUTPUT_PATH
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(events, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        logger.info("philharmonia: wrote %d events to %s", len(events), output_path)
+        if status_client is not None and status_client.enabled:
+            status_client.event(
+                "report_written",
+                phase="report",
+                status="done",
+                progress={
+                    "events_done": len(events),
+                    "events_total": len(events),
+                    "progress_percent": 100,
+                    "progress_label": f"события {len(events)}/{len(events)}",
+                },
+            )
+    except Exception as exc:
+        if status_client is not None and status_client.enabled:
+            status_client.event(
+                "kernel_failed",
+                phase="parse",
+                status="failed",
+                message=str(exc),
+            )
+        raise
+    finally:
+        if status_client is not None:
+            status_client.stop_alive()
+
+
+if __name__ == "__main__":
+    main()
