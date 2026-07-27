@@ -1,10 +1,10 @@
 # INC-2026-07-27 ICAE Casting Wrong Venue
 
-Status: open
+Status: closed
 Severity: sev1
 Service: canonical event data + static site + managed VK/Telegram event publications
 Opened: 2026-07-27
-Closed: —
+Closed: 2026-07-27 08:08 UTC
 Owners: events-bot event import / Smart Update / publication owner
 Related incidents: `INC-2026-06-24-future-event-date-default-venue-regressions`, `INC-2026-06-18-tg-location-prose-still-extracted`, `INC-2026-05-09-event-location-alias-free-dup-regressions`, `INC-2026-04-15-gate-location-and-linked-facts-drift`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/smart-event-update/README.md`, `docs/features/static-site-pages/README.md`, `docs/operations/incident-management.md`, `docs/operations/release-governance.md`
@@ -48,6 +48,24 @@ presented as the host and visitors could be sent to the wrong place.
 - 2026-07-27 UTC: cohort audit finds one older public false association,
   event `4454`; all ICAE rows with other dates use the real `Советский 1`
   address or need no change for this incident class.
+- 2026-07-27 07:54 UTC: prevention commit `96dd54e3` merged to `origin/main`
+  in PR `#119`; merge commit `c9a710c8`.
+- 2026-07-27 07:56 UTC: Fly release `v1751`, image
+  `deployment-01KYH93S03RWEWQ53FPXW3GFS2`, deployed from the clean prevention
+  worktree. Machine health checks passed.
+- 2026-07-27 07:59–08:01 UTC: production rows `7124` and `4454` and their
+  location fact ledger were repaired to `студия 809, Советский проспект, 12`
+  after narrow backup tables were created. Telegraph pages for both events,
+  the managed Telegram/VK post for `7124`, its Supabase ICS and Telegram
+  calendar document were updated in place.
+- 2026-07-27 08:06 UTC: a no-write replay on the deployed image used the exact
+  `meowafisha/8049` + `sofit_models/145` evidence. `Советский 12` no longer
+  matched the ICAE reference, the unsupported ICAE name routed to
+  `canonical_location_name_not_in_source`, and the semantic review returned a
+  source-grounded studio repair. The valid `Советский 1, 2 этаж` ICAE control
+  still matched.
+- 2026-07-27 08:07 UTC: final `/healthz` returned `ok=true`, `ready=true`,
+  `db=ok`, all scheduler/task checks `ok`, and no issues.
 
 ## Root Cause
 
@@ -122,9 +140,26 @@ presented as the host and visitors could be sent to the wrong place.
 
 ## Immediate Mitigation
 
-- Incident-scoped production/public repair is queued after the prevention SHA
-  is deployed. No row was mutated before the source chain and public post ids
-  were preserved.
+- Before mutation, production backups
+  `codex_backup_inc_20260727_icae_event` (2 rows) and
+  `codex_backup_inc_20260727_icae_event_source_fact` (38 rows) were created.
+- Repaired event `7124` and the older cohort hit `4454` to `студия 809`,
+  `Советский проспект, 12`, `Калининград`; corrected the three affected
+  location fact rows. Post-repair cohort queries return zero event or fact
+  rows containing the `ИЦАЭ` + `Советский 12` contradiction.
+- Repaired public projections:
+  - VK: `https://vk.com/wall-231920894_8045` (the stored `8033` URL was stale);
+  - Telegram Afisha: `https://t.me/c/3954607218/2768`;
+  - Telegram calendar: `https://t.me/kenigeventscalendar/7705`;
+  - Telegraph: `https://telegra.ph/KASTING-na-pokaz-mod-07-26`;
+  - older cohort Telegraph:
+    `https://telegra.ph/Kasting-v-modelnoe-agentstvo-SOFIT-05-01`;
+  - Supabase ICS:
+    `https://lnvfarbbofsnkedbfhlt.supabase.co/storage/v1/object/public/events-ics/event-7124-2026-07-26.ics`.
+- Authenticated Telegram/VK reads and public Telegraph/ICS reads confirmed
+  `студия 809, Советский проспект 12` and no `ИЦАЭ`/`КГТУ` marker. The event
+  was already past and therefore absent from the current static event catalog;
+  there was no live static page left to edit.
 
 ## Corrective Actions
 
@@ -142,21 +177,43 @@ presented as the host and visitors could be sent to the wrong place.
 
 ## Follow-up Actions
 
-- [ ] Repair the canonical event and all public surfaces after preserving a
-  narrow row-level backup.
-- [ ] Add a fail-closed venue-name/address contradiction guard without replacing
-  the LLM-first semantic venue decision.
-- [ ] Add replay and cohort audit coverage for venue inheritance/default drift.
+- [x] Repair the canonical events and all existing public surfaces after
+  preserving narrow row-level backups.
+- [x] Add a fail-closed venue-name grounding gate without replacing the
+  LLM-first semantic venue decision: a supported address cannot validate an
+  unmentioned venue name, and unavailable/uncertain review returns `invalid`.
+- [x] Add the exact incident replay, house-number negative/positive controls,
+  and a production cohort audit for venue inheritance/default drift.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- prevention SHA: `96dd54e3f0f2c775181079e109df42149e78dbce`;
+  reachable from `origin/main` merge `c9a710c877a598469a2c7e77dd496cc16c8a2bb9`
+  via `https://github.com/onedayonemasterpiece/events-bot-new/pull/119`.
+- deploy path: clean hotfix worktree, `flyctl deploy --remote-only`, Fly release
+  `v1751`, image `deployment-01KYH93S03RWEWQ53FPXW3GFS2`, machine
+  `2860d45f312248`.
+- regression checks:
+  - 72 targeted location-reference, location-grounding, Telegram candidate,
+    alias-overwrite and bastion tests passed;
+  - touched modules compiled and `git diff --check` passed;
+  - deployed exact-source no-write replay and the real ICAE positive control
+    passed;
+  - production cohort query found zero remaining `ИЦАЭ` + `Советский 12`
+    event/fact rows.
+- CI: `python-ci` passed. The unrelated `static-browser-release-gate` failed
+  on pre-existing recommendation-card geometry for event `6822`; this change
+  touched no static-site code and the incident-specific static/public checks
+  above passed.
+- post-deploy verification: `/healthz` ready with no issues; production DB,
+  VK, Telegram Afisha, Telegram calendar, both Telegraph pages and the ICS
+  projection all show the corrected location.
 
 ## Prevention
 
-Closure requires a source-grounded fix that rejects or escalates a canonical
-venue name when its known address contradicts an explicit event address. A
-one-off SQL correction does not satisfy this contract.
+The source-grounded prevention is now live. House-number matching is
+token-boundary safe, generic room words cannot name a known venue, an
+unmentioned venue name is escalated even when its address is supported, the
+semantic review fails closed, and a successful LLM repair cannot be silently
+overwritten by reference normalization. The SQL/public correction was applied
+only after these guards were merged and deployed.
