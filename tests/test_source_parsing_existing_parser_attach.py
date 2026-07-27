@@ -168,3 +168,50 @@ async def test_non_exact_parser_occurrence_reaches_smart_update(
     assert smart_update_calls == 1
     assert stats.new_added == 1
     assert stats.failed == 0
+
+
+@pytest.mark.asyncio
+async def test_current_official_available_occurrence_reactivates_stale_postponement(
+    tmp_path,
+):
+    db = Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        stored = Event(
+            title="Фестиваль Pianissimo: Моён Юн",
+            description="Legacy aggregate",
+            date="2026-08-06",
+            time="20:00",
+            location_name="Филиал Третьяковской галереи",
+            source_text="Historical source",
+            lifecycle_status="postponed",
+            ticket_status="available",
+        )
+        session.add(stored)
+        await session.commit()
+        await session.refresh(stored)
+        event_id = int(stored.id)
+
+    candidate = TheatreEvent(
+        title="ФЕСТИВАЛЬ PIANISSIMO: МОЁН ЮН (ЮЖНАЯ КОРЕЯ)",
+        date_raw="2026-08-06 20:00",
+        parsed_date="2026-08-06",
+        parsed_time="20:00",
+        ticket_status="available",
+        url="https://kaliningrad.tretyakovgallery.ru/tickets/#/buy/event/46315/2026-08-06/20:00:00",
+        location="Филиал Третьяковской галереи",
+        source_type="tretyakov",
+    )
+    changed = await handlers.reconcile_existing_event_lifecycle(
+        db,
+        event_id,
+        candidate,
+    )
+
+    async with db.get_session() as session:
+        refreshed = await session.get(Event, event_id)
+    await db.engine.dispose()
+
+    assert changed is True
+    assert refreshed is not None
+    assert refreshed.lifecycle_status == "active"

@@ -318,6 +318,8 @@
 - Made event-media pair-review creation conflict-safe so concurrent review
   scheduling cannot abort an otherwise valid parser Smart Update on the unique
   pair idempotency key.
+- Reactivated stale cancelled/postponed cards when a current official parser
+  occurrence explicitly reports tickets as available.
 - Fixed the shared theatre Kaggle notebook so transient Playwright navigation
   during `page.content()` is retried after `domcontentloaded` instead of aborting
   Muzteatr and preventing Sobor/Tretyakov outputs.

@@ -1083,6 +1083,41 @@ async def reconcile_existing_event_age(
         return changed
 
 
+async def reconcile_existing_event_lifecycle(
+    db: Database,
+    event_id: int,
+    theatre_event: TheatreEvent,
+) -> bool:
+    """Reactivate a stale cancellation when the current official catalog sells it.
+
+    Parser candidates are current structured occurrences.  An explicit
+    ``available`` ticket status from that source is newer evidence than a
+    historical social cancellation/postponement marker.
+    """
+
+    if str(theatre_event.ticket_status or "").strip().lower() != "available":
+        return False
+    async with db.get_session() as session:
+        existing = await session.get(Event, int(event_id))
+        if existing is None or existing.lifecycle_status not in {
+            "cancelled",
+            "postponed",
+        }:
+            return False
+        previous = existing.lifecycle_status
+        existing.lifecycle_status = "active"
+        session.add(existing)
+        await session.commit()
+        logger.info(
+            "source_parsing: reactivated official occurrence event_id=%d "
+            "previous_lifecycle=%s source=%s",
+            event_id,
+            previous,
+            theatre_event.source_type,
+        )
+        return True
+
+
 async def update_linked_events(
     db: Database,
     event_id: int,
@@ -2790,10 +2825,15 @@ async def process_source_events(
                 # age fact separately so this optimisation cannot leave stale
                 # canonical data behind.
                 age_changed = await reconcile_existing_event_age(db, existing_id, event)
-                if age_changed:
-                    # Treat the canonical age change as effectful even when the
-                    # ticket status itself is unchanged; the shared scheduler
-                    # will debounce any duplicate call made below.
+                lifecycle_changed = await reconcile_existing_event_lifecycle(
+                    db,
+                    existing_id,
+                    event,
+                )
+                if age_changed or lifecycle_changed:
+                    # Treat structured age/lifecycle reconciliation as
+                    # effectful even when the ticket status itself is unchanged;
+                    # the shared scheduler debounces any duplicate call below.
                     await schedule_existing_event_update(db, existing_id)
                 if needs_full_update:
                     # Update the placeholder event fully
@@ -3033,6 +3073,7 @@ async def process_source_events(
                     result_tag = f"{mode_prefix}_failed"
 
                 if new_id and outcome in {"added", "updated"}:
+                    await reconcile_existing_event_lifecycle(db, new_id, event)
                     # Delay between smart-update writes to reduce rebuild pressure.
                     await asyncio.sleep(EVENT_ADD_DELAY_SECONDS)
 
