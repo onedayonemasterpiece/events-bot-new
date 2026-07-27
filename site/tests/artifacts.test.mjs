@@ -131,6 +131,9 @@ test('collection surface has finite hints, accessible detail and a truly disable
   assert.doesNotMatch(productionCheck, /productionWeekendSource\.includes\('data-amber-artifact'\)/u);
   assert.match(productionCheck, /productionArtifactCollectionMarker = \/\\bdata-artifact-collection\(\?:\\s\|=\|>\)\//u);
   assert.doesNotMatch(productionCheck, /productionArtifactSource\.includes\('data-artifact-collection'\)/u);
+  assert.match(productionCheck, /productionArtifactUnavailableMarker = \/\\bdata-artifact-collection-unavailable\(\?:\\s\|=\|>\)\//u);
+  assert.doesNotMatch(productionCheck, /Коллекция пока недоступна/u);
+  assert.match(productionCheck, /file\.key === 'artefakty\/index\.html'/u);
   assert.match(productionCheck, /artifact research leaked into production weekend listing/u);
   assert.match(productionCheck, /artifact collection leaked into production/u);
 });

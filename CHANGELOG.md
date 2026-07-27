@@ -8,7 +8,9 @@
   rejects only the real bare `data-amber-artifact` and
   `data-artifact-collection` markers, without mistaking the inert
   `data-amber-artifact-research="off"` configuration or
-  `data-artifact-collection-unavailable` fallback for enabled research UI.
+  `data-artifact-collection-unavailable` fallback for enabled research UI; the
+  fallback assertion is semantic and no longer coupled to mutable Russian copy,
+  and the dormant collection route retains its intentional `noindex` policy.
 - Added an explicitly gated immutable-noindex artifact research flow: one
   deterministic real weekend-event placement, a five-slot device-local
   `/artefakty/` collection, accessible detail dialog and disabled
