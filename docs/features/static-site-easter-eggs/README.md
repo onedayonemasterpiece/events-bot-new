@@ -1,7 +1,8 @@
-# Пасхалки о Калининграде
+# Городские пасхалки и артефакты Калининграда
 
-> **Статус:** product discovery / отдельный post-release track; production-кода нет.
-> **Planning branch:** `feature/static-site-easter-eggs-product-analysis-20260721`.
+> **Статус:** public registry prototype / отдельный post-release track; collection
+> progress, placements, application form и draw backend отсутствуют.
+> **Planning branch:** `feature/static-site-artifacts-registry-20260727`.
 > **Предыдущий scaffold:** `feature/static-site-easter-eggs-design-20260721@24795bf4`;
 > ветка сохранена как исходный снимок, но новая проработка начата от актуального
 > `origin/main`, чтобы не переносить старую release-doc chain.
@@ -18,10 +19,11 @@
 промо-кампании**, который знакомит с Калининградом и приводит к полезному
 исследованию событий. Пасхалки не являются новой North Star и не должны
 оптимизироваться по кликам, времени на сайте или completion любой ценой. Первый
-пилот — одна небольшая культурная коллекция без материального приза, обязательного
-шаринга, streak, loot-box случайности и потери найденного прогресса. Перед кодом
-нужны owner acceptance, прототип, аналитический контракт, first-class модель
-пасхалки, privacy/a11y/IP gates и эксперимент с holdout.
+technical pilot остаётся без материального приза. Целевая первая публичная
+коллекция — фиксированные `8` артефактов, доступные одновременно; `60%`, то есть
+`5 из 8`, открывают **форму заявки** на розыгрыш билетов, но не автоматический
+entry или выигрыш. Перед prize release нужны owner acceptance, approved rules,
+durable ledger, privacy/a11y/IP/legal/anti-abuse gates и holdout.
 
 Полный критический разбор, автоматические правила и KPI:
 [product-analysis.md](product-analysis.md). Готовый запрос для независимого
@@ -48,9 +50,10 @@ holdout при non-inferior time-to-value и основных CTA.
 ## Предлагаемый MVP
 
 - одна коллекция на одну кампанию;
-- ориентир **5 объектов**: 3 простых, 1 средний, 1 сложный; точное число принимает
-  владелец после прототипа;
-- опубликованный campaign window и расписание открытия глав;
+- proposed first set: **8 объектов**, из них одна обучающая, пять обычных и две
+  сложные находки;
+- все 8 существуют одновременно в опубликованном `14d` collection window;
+- `60%` вычисляется как `ceil(N × 0.60)`: для первой коллекции это `5 из 8`;
 - первая находка доступна без логина и без email; после неё можно предложить вход
   только как способ сохранить прогресс между устройствами;
 - коллекция и правила доступны заранее; альбом прогресса открывается после первой
@@ -59,7 +62,10 @@ holdout при non-inferior time-to-value и основных CTA.
   только по автоматическому safety-контракту;
 - найденный предмет не сгорает; после кампании история остаётся в архиве;
 - fixed symbolic unlock: история, визуальный токен, связанная подборка/маршрут;
-- никаких материальных призов, случайных наград и влияния social share в MVP;
+- первый технический pilot остаётся non-prize; ticket drawing включается только
+  отдельным rules/application release;
+- threshold открывает явную подачу одной заявки; completion, скорость, share,
+  like, покупка или ticket click не повышают odds;
 - один небольшой treatment и явный holdout на полный цикл плюс минимум неделю
   после него.
 
@@ -140,6 +146,8 @@ Default MVP — `cohort`. Публичный share-card предлагает р�
 
 ## Коллекция и «Моё»
 
+- **коллекция** — versioned ограниченный набор, одновременно доступный одной
+  аудитории в одном published window;
 - mobile label остаётся `Моё`, desktop — `Мои события`;
 - коллекции образуют отдельный блок/фильтр и **не** смешиваются с хронологическим
   списком событий;
@@ -154,28 +162,27 @@ Default MVP — `cohort`. Публичный share-card предлагает р�
   или заявку;
 - публичный CDN HTML не содержит частный прогресс, email или profile identifiers.
 
-## Познавательная карточка и первый банк образов
+Полный контракт threshold/application/fairness:
+[collection-contract.md](collection-contract.md).
+
+## Познавательная карточка и единый реестр
 
 Каждая единица имеет имя, source-grounded короткую историю, provenance, доступное
 описание, визуальный токен масштаба медальона и один необязательный связанный
 маршрут к событию/подборке. Региональная связь не может быть декоративной
 догадкой.
 
-Сырой inventory из треда, ещё не утверждённый как assets/факты:
+Telegram thread до сообщения `707` дал `139` дедуплицированных candidate concepts.
+Они больше не копируются списками между документами:
 
-- памятник землякам-космонавтам, спутник, спутниковая тарелка, электрон/батарея;
-- янтарь после реального шторма;
-- актуальное животное Калининградского зоопарка;
-- Камень лжи, ОСК «Янтарь»/ключ закладных табличек;
-- горная сосна как аллюзия на Куршскую косу, перелётная птица/орнитологическая
-  станция, Виштынец, знаковые деревья/гинкго, маяки;
-- весло, байдарка, драккар, кузня, прусский кирпич, арфа, судовой колокол,
-  портовый кран, морской буй, якорь, велосипед;
-- лебедь, кот Мяу Гофмана, светлоёжик, хомлин, зеленоградский котик, кролик,
-  тракененская лошадка, ангел;
-- старинная пушка, паровоз, дирижабль, биплан;
-- колосок, крендель, клопс, шакотис, марципановый батончик, яйцо Фаберже,
-  барабанная собака.
+- public HTML: `/artefakty/`;
+- public JSON: `/data/artifacts.json`;
+- canonical source:
+  [`site/src/data/artifactRegistry.json`](../../../site/src/data/artifactRegistry.json);
+- schema/versioning:
+  [artifact-registry.md](artifact-registry.md);
+- source analysis:
+  [telegram-ideas-analysis-2026-07-27.md](telegram-ideas-analysis-2026-07-27.md).
 
 До production каждый candidate проходит `accept|merge|defer|reject` по фактам,
 источникам, trademark/IP, визуальным правам, безопасности, доступности и freshness.
@@ -199,12 +206,12 @@ Default MVP — `cohort`. Публичный share-card предлагает р�
 
 ### 2. Предложить свою пасхалку
 
-На странице всегда есть CTA **«Предложить пасхалку»**. Первый release может
+На странице всегда есть CTA **«Предложить городской артефакт»**. Первый release может
 использовать прозрачный fallback:
 
 ```text
 mailto:info@kenigevents.ru
-?subject=Предложение пасхалки
+?subject=Предложение городского артефакта
 ```
 
 Рядом показан сам адрес `info@kenigevents.ru` и короткий шаблон: объект/место,
@@ -242,7 +249,9 @@ Partner proposal не создаёт кампанию автоматически
 ## Promo contract
 
 Reuse ограничен control-plane семантикой. Нужны новые first-class сущности
-`egg_definition`, `egg_collection`, campaign binding и idempotent find/claim ledger.
+`collectible_definition`, `collectible_collection`, campaign binding и idempotent
+find/application ledger. Bare `artifact` внутри backend не используется, чтобы не
+путать domain object со static build artifacts.
 Не следует подставлять fake `event_id` в текущий `promo_exposure`.
 
 Предлагаемый activity surface: `site_easter_egg`. Версионированный config содержит:
@@ -262,6 +271,8 @@ exposure. Promo-показ не обучает organic preference model.
 ## Награды, social share и vector search
 
 - Completion может открыть **заявку**, но не обещает победу.
+- В первой proposed collection заявка доступна после `5 из 8`; сбор `8 из 8`,
+  скорость и отсутствие hints не создают дополнительного entry.
 - Любой материальный приз — отдельный release с утверждёнными organizer,
   eligibility, сроками, правилами выбора, числом призов, consent, audit,
   privacy/tax/legal и anti-fraud contracts.
@@ -294,20 +305,29 @@ Stage 13 остаётся post-release и не блокирует первую �
 
 ## Открытые owner decisions
 
-1. Публичное название механики и единицы коллекции.
-2. Первый набор, число элементов и duration.
+1. Copy-test hybrid naming: «городские пасхалки» для discovery, «артефакты» для
+   единиц, `/artefakty/` для реестра; текущий product default — принять.
+2. Owner acceptance состава `Знаки Калининграда`, `8/5` и окна `14d + 48h`.
 3. Exact MVP placements и default `communal|cohort` mode.
-4. Появляется ли отдельная `/pashalki/` или блок живёт только внутри `Моё` плюс
-   публичная страница правил/архива.
+4. Навигационный entry point к уже выбранной `/artefakty/`; private progress
+   продолжает жить отдельно в `Моё`.
 5. Retention/consent для обычного feedback и partner proposals.
 6. Кто владеет editorial/fact/IP/safety triage и SLA ответа партнёру.
 7. Exact experiment traffic, MDE и non-inferiority thresholds.
+8. Перед merge объединить public registry с отдельным noindex research-прототипом
+   интерактивной янтарной находки: один `/artefakty/` не должен молча вытеснить
+   другой. Рекомендуемая развязка — public registry как landing, личный progress
+   как отдельный дочерний route/блок в `Моё`.
 8. Остаётся ли prize/social-share полностью вне первого года механики.
 
 ## Связанные документы
 
 - [Критическая продуктовая аналитика](product-analysis.md)
 - [Экологичная аналитика, KPI и state/motion contract](measurement-and-state-contract.md)
+- [Единый реестр и public projection](artifact-registry.md)
+- [Collection/threshold/application contract](collection-contract.md)
+- [Telegram source analysis 2026-07-27](telegram-ideas-analysis-2026-07-27.md)
+- [Fresh external gate receipt 2026-07-27](external-gate-2026-07-27.md)
 - [Focused Gemini KPI/state prompt](gemini-kpi-state-followup-brief-2026-07-21.md)
 - [Gemini Pro KPI/state consultation и disposition](gemini-kpi-state-consultation-2026-07-21.md)
 - [Промпт для внешнего deep research](external-research-brief.md)

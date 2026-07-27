@@ -1,0 +1,618 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import {
+  ARTIFACT_DOMAIN_LABELS,
+  ARTIFACT_STATUS_LABELS,
+  getArtifactRegistry,
+  getArtifactsForCollection,
+} from '../../lib/artifacts';
+import { absoluteUrl, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
+
+const registry = getArtifactRegistry();
+const firstCollection = registry.collections[0];
+const firstCollectionArtifacts = getArtifactsForCollection(firstCollection.id);
+const domains = Object.entries(ARTIFACT_DOMAIN_LABELS)
+  .map(([id, label]) => ({
+    id,
+    label,
+    artifacts: registry.artifacts.filter((artifact) => artifact.story_domain === id),
+  }))
+  .filter((domain) => domain.artifacts.length > 0);
+const canonicalUrl = absoluteUrl('/artefakty/');
+const title = `${registry.public_title} | ${SITE_NAME}`;
+const description = `Единый реестр из ${registry.artifacts.length} идей городских артефактов и черновик первой коллекции «${firstCollection.public_name}».`;
+const itemList = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  name: 'Реестр артефактов Калининграда',
+  numberOfItems: registry.artifacts.length,
+  itemListElement: registry.artifacts.map((artifact, index) => ({
+    '@type': 'ListItem',
+    position: index + 1,
+    name: artifact.public_name,
+  })),
+};
+---
+
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[itemList]}>
+  <main id="main" class="artifacts-page" data-artifact-registry-page>
+    <div class="page-shell artifacts-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={siteHomeHref()}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Артефакты</span>
+      </nav>
+
+      <header class="artifacts-hero">
+        <div class="artifacts-hero__copy">
+          <p class="eyebrow">Городские пасхалки</p>
+          <h1>{registry.public_title}</h1>
+          <p class="artifacts-lead">
+            На страницах сайта прячутся <strong>пасхалки</strong>. После находки
+            они становятся <strong>артефактами</strong>, а ограниченный набор
+            артефактов образует <strong>коллекцию</strong>.
+          </p>
+          <div class="artifacts-hero__actions">
+            <a class="cta-button" href="#first-collection">Первая коллекция</a>
+            <a class="secondary-button" href="#full-registry">Все {registry.artifacts.length} идей</a>
+          </div>
+        </div>
+        <aside class="registry-state" aria-label="Статус реестра">
+          <span class="registry-state__label">Статус</span>
+          <strong>Формируем первую коллекцию</strong>
+          <p>Розыгрыш ещё не открыт. Названия, факты, изображения и правила проходят проверку.</p>
+        </aside>
+      </header>
+
+      <section id="first-collection" class="collection-panel" aria-labelledby="first-collection-title">
+        <div class="collection-panel__heading">
+          <div>
+            <p class="eyebrow">Черновик коллекции № 1</p>
+            <h2 id="first-collection-title">{firstCollection.public_name}</h2>
+            <p>{firstCollection.summary}</p>
+          </div>
+          <div class="unlock-number" aria-label={`${firstCollection.unlock.required_count} из ${firstCollection.unlock.total_count} артефактов`}>
+            <strong>{firstCollection.unlock.required_count}/{firstCollection.unlock.total_count}</strong>
+            <span>до заявки</span>
+          </div>
+        </div>
+
+        <div class="unlock-rule">
+          <div class="unlock-rule__meter" aria-hidden="true">
+            <span style={`width: ${firstCollection.unlock.threshold_percent}%`}></span>
+          </div>
+          <p>
+            Найдите не менее <strong>{firstCollection.unlock.threshold_percent}% коллекции</strong> —
+            для этого набора ровно <strong>{firstCollection.unlock.required_count} из {firstCollection.unlock.total_count}</strong>.
+            Это разблокирует форму заявки на розыгрыш билетов, но не означает
+            автоматическое участие или выигрыш.
+          </p>
+        </div>
+
+        <ol class="collection-grid" aria-label={`Состав коллекции «${firstCollection.public_name}»`}>
+          {firstCollectionArtifacts.map((artifact, index) => (
+            <li class={`collection-artifact collection-artifact--${artifact.planned_difficulty}`}>
+              <span class="artifact-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+              <div>
+                <h3>{artifact.public_name}</h3>
+                <p>{ARTIFACT_DOMAIN_LABELS[artifact.story_domain]}</p>
+              </div>
+              <span class="difficulty-label">
+                {artifact.planned_difficulty === 'onboarding'
+                  ? 'первая'
+                  : artifact.planned_difficulty === 'hard'
+                    ? 'сложная'
+                    : 'обычная'}
+              </span>
+            </li>
+          ))}
+        </ol>
+
+        <div class="collection-rules">
+          <h3>Контракт первой коллекции</h3>
+          <ul>
+            <li>Все {firstCollection.unlock.total_count} артефактов доступны одновременно в течение одного окна сбора.</li>
+            <li>Предварительное окно — {firstCollection.planned_window_days} дней, затем {firstCollection.application_grace_hours} часов только на подачу заявки.</li>
+            <li>Каждый артефакт считается один раз; находки сверх порога и скорость сбора не повышают шанс.</li>
+            <li>Публикация, лайк, покупка и переход к билетам не дают дополнительных заявок.</li>
+            <li>После достижения порога пользователь сам отправляет одну заявку и принимает опубликованные правила.</li>
+            <li>До запуска нужны отдельные правила розыгрыша, проверка призов, privacy, anti-abuse и доступности.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="full-registry" class="registry-panel" aria-labelledby="full-registry-title">
+        <div class="registry-panel__heading">
+          <div>
+            <p class="eyebrow">Единый список</p>
+            <h2 id="full-registry-title">Все идеи артефактов</h2>
+            <p>
+              Здесь собраны нормализованные идеи и их редакционный статус.
+              Публичный список не раскрывает активные места, подсказки,
+              внутренние источники или пользовательский прогресс.
+            </p>
+          </div>
+          <a class="registry-data-link" href={withBase('/data/artifacts.json')}>Открыть JSON</a>
+        </div>
+
+        <nav class="domain-nav" aria-label="Разделы реестра">
+          {domains.map((domain) => (
+            <a href={`#domain-${domain.id}`}>{domain.label}<span>{domain.artifacts.length}</span></a>
+          ))}
+        </nav>
+
+        <div class="domain-list">
+          {domains.map((domain) => (
+            <section id={`domain-${domain.id}`} class="domain-section" aria-labelledby={`domain-${domain.id}-title`}>
+              <header>
+                <h3 id={`domain-${domain.id}-title`}>{domain.label}</h3>
+                <span>{domain.artifacts.length}</span>
+              </header>
+              <ol class="artifact-list">
+                {domain.artifacts.map((artifact) => (
+                  <li id={`artifact-${artifact.slug}`} data-artifact-card>
+                    <div class="artifact-list__body">
+                      <a href={`#artifact-${artifact.slug}`}>{artifact.public_name}</a>
+                      <span class={`artifact-status artifact-status--${artifact.registry_status}`}>
+                        {ARTIFACT_STATUS_LABELS[artifact.registry_status]}
+                      </span>
+                    </div>
+                    {artifact.collection_ids.includes(firstCollection.id) && (
+                      <small>«{firstCollection.public_name}»</small>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))}
+        </div>
+      </section>
+
+      <section class="proposal-panel" aria-labelledby="proposal-title">
+        <p class="eyebrow">Дополнить реестр</p>
+        <h2 id="proposal-title">Предложить городской артефакт</h2>
+        <p>
+          Пришлите название, связь с Калининградской областью, проверяемый источник,
+          идею изображения и информацию о правах. Предложение проходит редакционную
+          проверку и не публикуется автоматически.
+        </p>
+        <a
+          class="cta-button"
+          href="mailto:info@kenigevents.ru?subject=Предложение%20городского%20артефакта"
+        >
+          Написать на info@kenigevents.ru
+        </a>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .artifacts-page {
+    padding: 0 0 clamp(3rem, 8vw, 6rem);
+  }
+  .artifacts-shell {
+    width: min(1120px, calc(100% - 28px));
+  }
+  .artifacts-hero {
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+    gap: clamp(1.25rem, 4vw, 3.5rem);
+    padding: clamp(1.35rem, 4vw, 3.5rem);
+    border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+    border-radius: var(--radius-xl);
+    background:
+      radial-gradient(circle at 88% 16%, rgba(213, 143, 46, 0.2), transparent 31%),
+      linear-gradient(145deg, #fffaf0, #f6ead7);
+    box-shadow: var(--shadow);
+  }
+  .artifacts-hero::before {
+    content: "";
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    right: -92px;
+    bottom: -128px;
+    border: 1px solid rgba(121, 48, 20, 0.16);
+    border-radius: 50%;
+  }
+  .artifacts-hero__copy,
+  .registry-state {
+    position: relative;
+    z-index: 1;
+  }
+  .artifacts-hero h1 {
+    max-width: 13ch;
+    margin: 0;
+    font-size: clamp(2.8rem, 6.4vw, 5.4rem);
+    line-height: 0.92;
+    letter-spacing: -0.065em;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .artifacts-lead {
+    max-width: 44rem;
+    margin: 1.25rem 0 0;
+    font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+    line-height: 1.5;
+  }
+  .artifacts-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-top: 1.5rem;
+  }
+  .artifacts-hero__actions .cta-button,
+  .artifacts-hero__actions .secondary-button {
+    min-height: 46px;
+    width: auto;
+  }
+  .registry-state {
+    align-self: end;
+    padding: 1.1rem;
+    border: 1px solid rgba(34, 26, 20, 0.12);
+    border-radius: 18px;
+    background: rgba(255, 253, 248, 0.74);
+  }
+  .registry-state__label {
+    display: block;
+    color: var(--primary-strong);
+    font-size: 0.75rem;
+    font-weight: 850;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+  .registry-state strong {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 1.1rem;
+  }
+  .registry-state p {
+    margin: 0.45rem 0 0;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .collection-panel,
+  .registry-panel,
+  .proposal-panel {
+    margin-top: clamp(1rem, 3vw, 1.5rem);
+    padding: clamp(1.15rem, 3vw, 2rem);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
+    background: var(--surface);
+  }
+  .collection-panel__heading,
+  .registry-panel__heading {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .collection-panel h2,
+  .registry-panel h2,
+  .proposal-panel h2 {
+    margin: 0;
+    font-size: clamp(1.65rem, 4vw, 2.65rem);
+    letter-spacing: -0.045em;
+    line-height: 1;
+  }
+  .collection-panel__heading p:not(.eyebrow),
+  .registry-panel__heading p,
+  .proposal-panel p {
+    max-width: 48rem;
+    margin: 0.75rem 0 0;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .unlock-number {
+    flex: 0 0 auto;
+    min-width: 116px;
+    padding: 0.85rem;
+    border-radius: 18px;
+    color: #fff;
+    background: var(--primary-strong);
+    text-align: center;
+  }
+  .unlock-number strong {
+    display: block;
+    font-size: 2rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .unlock-number span {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.75rem;
+  }
+  .unlock-rule {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    border-radius: 18px;
+    background: var(--accent-soft);
+  }
+  .unlock-rule__meter {
+    overflow: hidden;
+    height: 9px;
+    border-radius: 999px;
+    background: rgba(15, 118, 110, 0.18);
+  }
+  .unlock-rule__meter span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+  .unlock-rule p {
+    margin: 0.75rem 0 0;
+    line-height: 1.55;
+  }
+  .collection-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .collection-artifact {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fffdf8;
+  }
+  .artifact-number {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--line));
+    border-radius: 50%;
+    color: var(--primary-strong);
+    background: #fff7e7;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .collection-artifact h3 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.25;
+  }
+  .collection-artifact p {
+    margin: 0.2rem 0 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .difficulty-label {
+    padding: 0.28rem 0.48rem;
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--bg-soft);
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+  .collection-artifact--hard .difficulty-label {
+    color: #6b2a12;
+    background: #f4d9c8;
+  }
+  .collection-artifact--onboarding .difficulty-label {
+    color: #0b5f59;
+    background: var(--accent-soft);
+  }
+  .collection-rules {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-left: 4px solid var(--primary);
+    border-radius: 0 14px 14px 0;
+    background: var(--bg-soft);
+  }
+  .collection-rules h3 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+  .collection-rules ul {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0.7rem 0 0;
+    padding-left: 1.25rem;
+    line-height: 1.45;
+  }
+  .registry-data-link {
+    min-height: 44px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    color: var(--primary-strong);
+    font-weight: 750;
+  }
+  .domain-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1.15rem;
+  }
+  .domain-nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--text);
+    background: var(--surface-strong);
+    text-decoration: none;
+  }
+  .domain-nav a:hover,
+  .domain-nav a:focus-visible {
+    border-color: var(--primary);
+  }
+  .domain-nav span {
+    min-width: 1.5rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--bg-soft);
+    font-size: 0.72rem;
+    text-align: center;
+  }
+  .domain-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 0.8rem;
+    margin-top: 1rem;
+  }
+  .domain-section {
+    scroll-margin-top: 1rem;
+    padding: 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fffdf8;
+  }
+  .domain-section > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .domain-section h3 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  .domain-section > header span {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .artifact-list {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: artifacts;
+  }
+  .artifact-list li {
+    scroll-margin-top: 1rem;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+    counter-increment: artifacts;
+  }
+  .artifact-list li:last-child {
+    border-bottom: 0;
+  }
+  .artifact-list__body {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.7rem;
+  }
+  .artifact-list__body > a {
+    color: var(--text);
+    font-weight: 700;
+    line-height: 1.35;
+    text-decoration-color: transparent;
+  }
+  .artifact-list__body > a:hover,
+  .artifact-list__body > a:focus-visible {
+    color: var(--primary-strong);
+    text-decoration-color: currentColor;
+  }
+  .artifact-status {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+  .artifact-status--collection_draft {
+    color: #0b5f59;
+    font-weight: 800;
+  }
+  .artifact-status--needs_clarification {
+    color: #87510c;
+  }
+  .artifact-list small {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--accent);
+  }
+  .proposal-panel {
+    background: linear-gradient(135deg, #fffdf8, #f4e7d6);
+  }
+  .proposal-panel .cta-button {
+    width: auto;
+    min-height: 46px;
+    margin-top: 1rem;
+  }
+  @media (max-width: 820px) {
+    .artifacts-hero {
+      grid-template-columns: 1fr;
+    }
+    .registry-state {
+      max-width: 34rem;
+    }
+    .collection-grid,
+    .domain-list {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 620px) {
+    .artifacts-shell {
+      width: min(100% - 20px, 1120px);
+    }
+    .artifacts-hero,
+    .collection-panel,
+    .registry-panel,
+    .proposal-panel {
+      border-radius: 20px;
+    }
+    .artifacts-hero {
+      padding: 1.15rem;
+    }
+    .artifacts-hero h1 {
+      max-width: none;
+      font-size: clamp(2.65rem, 11.5vw, 3.25rem);
+      line-height: 0.96;
+      letter-spacing: -0.055em;
+    }
+    .artifacts-hero__actions,
+    .collection-panel__heading,
+    .registry-panel__heading {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .artifacts-hero__actions .cta-button,
+    .artifacts-hero__actions .secondary-button,
+    .proposal-panel .cta-button {
+      width: 100%;
+    }
+    .unlock-number {
+      min-width: 0;
+      width: 100%;
+    }
+    .collection-artifact {
+      grid-template-columns: 46px minmax(0, 1fr);
+    }
+    .artifact-number {
+      width: 44px;
+      height: 44px;
+    }
+    .difficulty-label {
+      grid-column: 2;
+      justify-self: start;
+    }
+    .artifact-list__body {
+      align-items: start;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+  }
+</style>

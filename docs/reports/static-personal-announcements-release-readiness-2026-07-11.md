@@ -282,7 +282,7 @@ Smart Update является владельцем семантического 
 - [ ] Remove root `noindex` only after all launch blockers are signed off.
 - [ ] Post-launch 72-hour hypercare, then 14-day review before declaring stable.
 
-### Stage 13 — Feature discovery «Пасхалки о Калининграде»
+### Stage 13 — Feature discovery «Городские пасхалки / артефакты»
 
 Stage number сохранён из planning thread. Это отдельный post-release track, не
 first-presentation GO blocker и не разрешение на production implementation.
@@ -294,6 +294,17 @@ first-presentation GO blocker и не разрешение на production imple
 
 - [ ] Owner принимает публичное название, first curated set, duration и exact
   `communal|cohort` placement mode.
+- [ ] `/artefakty/` и `/data/artifacts.json` рендерятся из одного versioned
+  public-safe registry; Telegram source refs, active/future placements, clues и
+  participant progress в public projection отсутствуют.
+- [ ] Public registry route согласован с отдельным noindex research-прототипом
+  интерактивной находки; при merge ни registry, ни progress/collection surface
+  не потеряны.
+- [ ] Owner принимает hybrid vocabulary: «пасхалка» — discovery, «артефакт» —
+  collectible, «коллекция» — одновременный ограниченный набор.
+- [ ] Первая reward-enabled collection фиксирует `8` одновременных артефактов,
+  threshold `60% = 5 из 8`, `14d` collecting и `48h` application grace; параметры
+  остаются draft до evidence/owner acceptance.
 - [ ] Утверждены source/provenance/IP/freshness/safety и accessible alternatives
   для каждого объекта.
 - [ ] Clickable mobile/desktop/keyboard/screen-reader/reduced-motion prototype
@@ -331,6 +342,10 @@ first-presentation GO blocker и не разрешение на production imple
 - [ ] MVP остаётся non-prize: без streak/loot box/fake scarcity, обязательного
   login/email/share и влияния share на шанс. Материальная награда — только
   отдельный legal/privacy/eligibility/audit/fraud release.
+- [ ] Reward release открывает только явную форму заявки; auto-entry, extra odds
+  за `8/8`, скорость, no-hint, share, like, purchase или ticket click запрещены.
+- [ ] QR-transfer не входит в первую prize collection; переносимое владение
+  требует отдельного non-prize ownership/anti-abuse contract.
 - [ ] Immutable candidate проходит performance/public-HTML/SEO/a11y/security
   evidence, независимый consultant rerun и owner acceptance exact branch/SHA.
 

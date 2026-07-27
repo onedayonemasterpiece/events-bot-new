@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import catalogData from '../src/data/production-catalog.json' with { type: 'json' };
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
+import artifactRegistryData from '../src/data/artifactRegistry.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import {
   CHECK_CONTRACT_VERSION, RELEASE_MANIFEST_SCHEMA, fileInventory, sha256, treeHash, validateCatalogLedger,
@@ -50,6 +51,8 @@ for (const path of [
   'vyhodnye/index.html',
   'vystavki/index.html',
   'festivali/index.html',
+  'artefakty/index.html',
+  'data/artifacts.json',
   'populyarnoe/index.html',
   'poisk/index.html',
   'dlya-menya/index.html',
@@ -77,6 +80,14 @@ if (
     !== sha256(readFileSync(join(siteDir, 'src/data/festival-timeline.json')))
   || manifest.versions?.festival_calendar?.rendered_count !== festivalTimelineData.festivals.length
 ) fail('festival timeline release receipt/hash mismatch');
+if (
+  artifactRegistryData.schema_version !== 'artifact_registry_v1'
+  || manifest.versions?.artifact_registry?.schema_version !== artifactRegistryData.schema_version
+  || manifest.versions?.artifact_registry?.registry_version !== artifactRegistryData.registry_version
+  || manifest.versions?.artifact_registry?.projection_sha256
+    !== sha256(readFileSync(join(siteDir, 'src/data/artifactRegistry.json')))
+  || manifest.versions?.artifact_registry?.rendered_count !== artifactRegistryData.artifacts.length
+) fail('artifact registry release receipt/hash mismatch');
 const festivalSlugs = festivalTimelineData.festivals.map((item) => item.slug);
 if (festivalSlugs.length !== new Set(festivalSlugs).size) fail('festival timeline contains duplicate slugs');
 for (const key of files.map((file) => file.key)) {
@@ -131,6 +142,7 @@ const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/gu)].map((match) => match
 if (new Set(locs).size !== locs.length || locs.some((url) => !url.startsWith(`${siteOrigin}/`) || /\/(?:__preview|lab|_review)(?:\/|$)/u.test(url))) fail('sitemap contains duplicate/off-origin/QA URLs');
 for (const event of eventsData.events) if (!locs.includes(`${siteOrigin}/sobytiya/${event.slug}/`)) fail(`event missing from sitemap ${event.id}`);
 if (!locs.includes(`${siteOrigin}/festivali/`)) fail('festival calendar missing from sitemap');
+if (!locs.includes(`${siteOrigin}/artefakty/`)) fail('artifact registry missing from sitemap');
 if (!locs.includes(`${siteOrigin}/partnerstvo/`)) fail('partnership page missing from sitemap');
 if (!Array.isArray(manifest.stable_ics) || manifest.stable_ics.length !== eventsData.events.length) fail('stable ICS manifest parity failed');
 for (const item of manifest.stable_ics) {

@@ -23,6 +23,11 @@ than simulated by client timers. The exact runtime/search contract lives in
 The isolated [amber-artifact placement research](amber-artifact-easter-egg.md)
 compares a true rail-tail easter egg with an after-medallion challenger without
 changing the accepted calendar renderer.
+The public `/artefakty/` registry renders the single curated
+`artifactRegistry.json` projection and a draft first collection; it contains no
+personal progress, prize application or active hidden placement coordinates.
+Collection behavior remains canonical in
+[`static-site-easter-eggs`](../static-site-easter-eggs/README.md).
 
 The [`festival calendar timeline`](festival-timeline.md) is now part of the
 checked production generator and extends the same shell with a Fly

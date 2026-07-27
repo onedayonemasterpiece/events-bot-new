@@ -1,0 +1,2378 @@
+{
+  "schema_version": "artifact_registry_v1",
+  "registry_version": "2026-07-27.1",
+  "updated_at": "2026-07-27",
+  "public_title": "Артефакты Калининграда",
+  "public_explainer": "Городские пасхалки, которые после находки становятся артефактами вашей коллекции.",
+  "source_scope": {
+    "kind": "private_telegram_product_thread",
+    "anchor_message_id": 484,
+    "retrieved_through_message_id": 707,
+    "content_policy": "Public projection excludes private message text, active placement coordinates and participant data."
+  },
+  "collections": [
+    {
+      "id": "signs-of-kaliningrad-001",
+      "slug": "znaki-kaliningrada",
+      "public_name": "Знаки Калининграда",
+      "summary": "Черновик первой ограниченной коллекции: море, природа, архитектура, вкус и космическая история области.",
+      "status": "draft",
+      "artifact_ids": [
+        "amber-after-storm",
+        "prussian-brick",
+        "ships-bell",
+        "migratory-bird-ring",
+        "satellite",
+        "baltiysk-lighthouse",
+        "marzipan-heart",
+        "queen-louise-bridge"
+      ],
+      "simultaneous_availability": true,
+      "planned_window_days": 14,
+      "application_grace_hours": 48,
+      "unlock": {
+        "threshold_percent": 60,
+        "required_count": 5,
+        "total_count": 8,
+        "effect": "drawing_application_available",
+        "automatic_entry": false,
+        "extra_finds_increase_odds": false,
+        "share_increases_odds": false
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "cosmonauts-memorial",
+      "slug": "cosmonauts-memorial",
+      "public_name": "Памятник землякам-космонавтам",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:485"
+      ]
+    },
+    {
+      "id": "amber-after-storm",
+      "slug": "amber-after-storm",
+      "public_name": "Янтарь после шторма",
+      "story_domain": "nature",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "onboarding",
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:486"
+      ]
+    },
+    {
+      "id": "zoo-trend-animal",
+      "slug": "zoo-trend-animal",
+      "public_name": "Животное Калининградского зоопарка",
+      "story_domain": "nature",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:487"
+      ]
+    },
+    {
+      "id": "stone-of-lies",
+      "slug": "stone-of-lies",
+      "public_name": "Камень лжи",
+      "story_domain": "place",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:488"
+      ]
+    },
+    {
+      "id": "mountain-pine",
+      "slug": "mountain-pine",
+      "public_name": "Горная сосна",
+      "story_domain": "nature",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:492"
+      ]
+    },
+    {
+      "id": "vishtynets",
+      "slug": "vishtynets",
+      "public_name": "Виштынец",
+      "story_domain": "place",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:498"
+      ]
+    },
+    {
+      "id": "ginkgo",
+      "slug": "ginkgo",
+      "public_name": "Гинкго",
+      "story_domain": "nature",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:499"
+      ]
+    },
+    {
+      "id": "regional-lighthouses",
+      "slug": "regional-lighthouses",
+      "public_name": "Маяки области",
+      "story_domain": "maritime",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:500"
+      ]
+    },
+    {
+      "id": "yantar-foundation-key",
+      "slug": "yantar-foundation-key",
+      "public_name": "Ключ закладных табличек ОСК «Янтарь»",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:506"
+      ]
+    },
+    {
+      "id": "oar",
+      "slug": "oar",
+      "public_name": "Весло",
+      "story_domain": "maritime",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "drakkar",
+      "slug": "drakkar",
+      "public_name": "Драккар",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "forge",
+      "slug": "forge",
+      "public_name": "Кузня",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "prussian-brick",
+      "slug": "prussian-brick",
+      "public_name": "Прусский кирпич",
+      "story_domain": "architecture",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "standard",
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "kayak",
+      "slug": "kayak",
+      "public_name": "Байдарка",
+      "story_domain": "maritime",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "harp",
+      "slug": "harp",
+      "public_name": "Арфа",
+      "story_domain": "culture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "ships-bell",
+      "slug": "ships-bell",
+      "public_name": "Судовой колокол",
+      "story_domain": "maritime",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "standard",
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "port-crane",
+      "slug": "port-crane",
+      "public_name": "Портовый кран",
+      "story_domain": "technology",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "bicycle",
+      "slug": "bicycle",
+      "public_name": "Велосипед",
+      "story_domain": "transport",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "migratory-bird-ring",
+      "slug": "migratory-bird-ring",
+      "public_name": "Кольцо перелётной птицы",
+      "story_domain": "nature",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "standard",
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "marine-buoy",
+      "slug": "marine-buoy",
+      "public_name": "Морской буй",
+      "story_domain": "maritime",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "swan",
+      "slug": "swan",
+      "public_name": "Лебедь",
+      "story_domain": "nature",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "myao-hoffmann-cat",
+      "slug": "myao-hoffmann-cat",
+      "public_name": "Кот Мяу Гофмана",
+      "story_domain": "character",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "svetloyezhik",
+      "slug": "svetloyezhik",
+      "public_name": "Светлоёжик",
+      "story_domain": "character",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "homlin",
+      "slug": "homlin",
+      "public_name": "Хомлин",
+      "story_domain": "character",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "gusev-angel",
+      "slug": "gusev-angel",
+      "public_name": "Ангел из Гусева",
+      "story_domain": "culture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "old-cannon",
+      "slug": "old-cannon",
+      "public_name": "Старинная пушка",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "locomotive",
+      "slug": "locomotive",
+      "public_name": "Паровоз",
+      "story_domain": "transport",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:507"
+      ]
+    },
+    {
+      "id": "airship",
+      "slug": "airship",
+      "public_name": "Дирижабль",
+      "story_domain": "technology",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:508"
+      ]
+    },
+    {
+      "id": "biplane",
+      "slug": "biplane",
+      "public_name": "Биплан",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:508"
+      ]
+    },
+    {
+      "id": "anchor",
+      "slug": "anchor",
+      "public_name": "Якорь",
+      "story_domain": "maritime",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:508"
+      ]
+    },
+    {
+      "id": "wheat-ear",
+      "slug": "wheat-ear",
+      "public_name": "Колосок",
+      "story_domain": "food",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:508"
+      ]
+    },
+    {
+      "id": "zelenogradsk-cat",
+      "slug": "zelenogradsk-cat",
+      "public_name": "Зеленоградский кот",
+      "story_domain": "character",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:509"
+      ]
+    },
+    {
+      "id": "fort-eleven-rabbit",
+      "slug": "fort-eleven-rabbit",
+      "public_name": "Кролик форта № 11",
+      "story_domain": "nature",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:509"
+      ]
+    },
+    {
+      "id": "trakehner-horse",
+      "slug": "trakehner-horse",
+      "public_name": "Тракененская лошадка",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:509"
+      ]
+    },
+    {
+      "id": "satellite",
+      "slug": "satellite",
+      "public_name": "Спутник",
+      "story_domain": "technology",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "hard",
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:510"
+      ]
+    },
+    {
+      "id": "satellite-dish",
+      "slug": "satellite-dish",
+      "public_name": "Спутниковая тарелка",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:510"
+      ]
+    },
+    {
+      "id": "pretzel",
+      "slug": "pretzel",
+      "public_name": "Крендель",
+      "story_domain": "food",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:510"
+      ]
+    },
+    {
+      "id": "klops",
+      "slug": "klops",
+      "public_name": "Клопс",
+      "story_domain": "food",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:510"
+      ]
+    },
+    {
+      "id": "sakotis",
+      "slug": "sakotis",
+      "public_name": "Шакотис",
+      "story_domain": "food",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:510"
+      ]
+    },
+    {
+      "id": "marzipan-bar",
+      "slug": "marzipan-bar",
+      "public_name": "Марципановый батончик",
+      "story_domain": "food",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:510"
+      ]
+    },
+    {
+      "id": "electron-battery",
+      "slug": "electron-battery",
+      "public_name": "Электрон и батарея",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:511"
+      ]
+    },
+    {
+      "id": "faberge-egg",
+      "slug": "faberge-egg",
+      "public_name": "Яйцо Фаберже",
+      "story_domain": "culture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:511"
+      ]
+    },
+    {
+      "id": "drummer-dog",
+      "slug": "drummer-dog",
+      "public_name": "Барабанная собака",
+      "story_domain": "character",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:511"
+      ]
+    },
+    {
+      "id": "mermaid-with-horn",
+      "slug": "mermaid-with-horn",
+      "public_name": "Русалка с горном",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:583"
+      ]
+    },
+    {
+      "id": "amber-electric-car",
+      "slug": "amber-electric-car",
+      "public_name": "Amber car",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:583"
+      ]
+    },
+    {
+      "id": "cooling-tower",
+      "slug": "cooling-tower",
+      "public_name": "Градирня",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:584"
+      ]
+    },
+    {
+      "id": "svetly-gres-2",
+      "slug": "svetly-gres-2",
+      "public_name": "Светловская ГРЭС-2",
+      "story_domain": "technology",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:584"
+      ]
+    },
+    {
+      "id": "famous-mosaic",
+      "slug": "famous-mosaic",
+      "public_name": "Знаменитая мозаика",
+      "story_domain": "culture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:584"
+      ]
+    },
+    {
+      "id": "water-tower",
+      "slug": "water-tower",
+      "public_name": "Водонапорная башня",
+      "story_domain": "architecture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:584"
+      ]
+    },
+    {
+      "id": "rail",
+      "slug": "rail",
+      "public_name": "Рельс",
+      "story_domain": "transport",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:584"
+      ]
+    },
+    {
+      "id": "gramophone",
+      "slug": "gramophone",
+      "public_name": "Патефон",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:584"
+      ]
+    },
+    {
+      "id": "herring",
+      "slug": "herring",
+      "public_name": "Селёдка",
+      "story_domain": "food",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "whale",
+      "slug": "whale",
+      "public_name": "Кит",
+      "story_domain": "nature",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "sturgeon",
+      "slug": "sturgeon",
+      "public_name": "Осётр",
+      "story_domain": "nature",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "kurenas",
+      "slug": "kurenas",
+      "public_name": "Куренас",
+      "story_domain": "maritime",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "curonian-pennant",
+      "slug": "curonian-pennant",
+      "public_name": "Куршский вымпел",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "half-timbered-house",
+      "slug": "half-timbered-house",
+      "public_name": "Фахверковый дом",
+      "story_domain": "architecture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "local-mineral-water",
+      "slug": "local-mineral-water",
+      "public_name": "Местная минеральная вода",
+      "story_domain": "food",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "planet-ocean-globe",
+      "slug": "planet-ocean-globe",
+      "public_name": "Шар «Планета Океан»",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "curonian-wooden-dragon",
+      "slug": "curonian-wooden-dragon",
+      "public_name": "Деревянный дракончик",
+      "story_domain": "architecture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "wwi-pyramid",
+      "slug": "wwi-pyramid",
+      "public_name": "Пирамида Первой мировой",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "fort",
+      "slug": "fort",
+      "public_name": "Форт",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "seaplane-hangar",
+      "slug": "seaplane-hangar",
+      "public_name": "Ангар гидросамолётов",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "sundial",
+      "slug": "sundial",
+      "public_name": "Солнечные часы",
+      "story_domain": "place",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "lastochka-es2g",
+      "slug": "lastochka-es2g",
+      "public_name": "«Ласточка» ЭС2Г",
+      "story_domain": "transport",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "double-deck-bridge",
+      "slug": "double-deck-bridge",
+      "public_name": "Двухъярусный мост",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "high-bridge",
+      "slug": "high-bridge",
+      "public_name": "Высокий мост",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "jubilee-bridge",
+      "slug": "jubilee-bridge",
+      "public_name": "Юбилейный мост",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "gas",
+      "slug": "gas",
+      "public_name": "Газ",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "powerline-mascot-supports",
+      "slug": "powerline-mascot-supports",
+      "public_name": "Опоры ЛЭП «Забивака» и «Якорь»",
+      "story_domain": "technology",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "rostec-arena",
+      "slug": "rostec-arena",
+      "public_name": "«Ростех Арена»",
+      "story_domain": "sport",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "titanic",
+      "slug": "titanic",
+      "public_name": "«Титаник»",
+      "story_domain": "place",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "mir-bathyscaphe",
+      "slug": "mir-bathyscaphe",
+      "public_name": "Батискаф «Мир»",
+      "story_domain": "technology",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "sperm-whale",
+      "slug": "sperm-whale",
+      "public_name": "Кашалот",
+      "story_domain": "nature",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "llama",
+      "slug": "llama",
+      "public_name": "Лама",
+      "story_domain": "nature",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "capybara",
+      "slug": "capybara",
+      "public_name": "Капибара",
+      "story_domain": "nature",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "giraffe",
+      "slug": "giraffe",
+      "public_name": "Жираф",
+      "story_domain": "nature",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "camel",
+      "slug": "camel",
+      "public_name": "Верблюд",
+      "story_domain": "nature",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "bear",
+      "slug": "bear",
+      "public_name": "Медведь",
+      "story_domain": "nature",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:592"
+      ]
+    },
+    {
+      "id": "yacht",
+      "slug": "yacht",
+      "public_name": "Яхта",
+      "story_domain": "maritime",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:596"
+      ]
+    },
+    {
+      "id": "ferry",
+      "slug": "ferry",
+      "public_name": "Паром",
+      "story_domain": "transport",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:596"
+      ]
+    },
+    {
+      "id": "lock-gate",
+      "slug": "lock-gate",
+      "public_name": "Шлюз",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:596"
+      ]
+    },
+    {
+      "id": "onion-pie",
+      "slug": "onion-pie",
+      "public_name": "Луковый пирог",
+      "story_domain": "food",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:596"
+      ]
+    },
+    {
+      "id": "kant",
+      "slug": "kant",
+      "public_name": "Кант",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "marzipan-heart",
+      "slug": "marzipan-heart",
+      "public_name": "Марципановое сердечко",
+      "story_domain": "food",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "standard",
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "seagull",
+      "slug": "seagull",
+      "public_name": "Чайка",
+      "story_domain": "nature",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "warship-zubr",
+      "slug": "warship-zubr",
+      "public_name": "Военный корабль «Зубр»",
+      "story_domain": "maritime",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "beach-cabin",
+      "slug": "beach-cabin",
+      "public_name": "Пляжная кабинка начала XX века",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "stroganina",
+      "slug": "stroganina",
+      "public_name": "Строганина",
+      "story_domain": "food",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "cathedral",
+      "slug": "cathedral",
+      "public_name": "Кафедральный собор",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "wrestling-bisons",
+      "slug": "wrestling-bisons",
+      "public_name": "Борющиеся зубры",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "queen-louise-bridge",
+      "slug": "queen-louise-bridge",
+      "public_name": "Мост королевы Луизы",
+      "story_domain": "architecture",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "hard",
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "rominten-elk",
+      "slug": "rominten-elk",
+      "public_name": "Лось из Роминтенской пущи",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "empress-elizabeth-monument",
+      "slug": "empress-elizabeth-monument",
+      "public_name": "Памятник Елизавете",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "baltiysk-lighthouse",
+      "slug": "baltiysk-lighthouse",
+      "public_name": "Маяк Балтийска",
+      "story_domain": "maritime",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "standard",
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "svetlogorsk-water-tower",
+      "slug": "svetlogorsk-water-tower",
+      "public_name": "Светлогорская водолечебница",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "murarium-tower",
+      "slug": "murarium-tower",
+      "public_name": "Башня «Мурариум»",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "sprats-monument",
+      "slug": "sprats-monument",
+      "public_name": "Памятник шпротам",
+      "story_domain": "culture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "tokarev-bridge",
+      "slug": "tokarev-bridge",
+      "public_name": "Токаревский мост",
+      "story_domain": "architecture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "eye-of-baltic",
+      "slug": "eye-of-baltic",
+      "public_name": "Колесо «Глаз Балтики»",
+      "story_domain": "place",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "house-of-soviets",
+      "slug": "house-of-soviets",
+      "public_name": "Дом Советов",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "hoffmann",
+      "slug": "hoffmann",
+      "public_name": "Гофман",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "leonov",
+      "slug": "leonov",
+      "public_name": "Леонов",
+      "story_domain": "culture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "teutonic-knight",
+      "slug": "teutonic-knight",
+      "public_name": "Тевтонский рыцарь",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "neringa",
+      "slug": "neringa",
+      "public_name": "Неринга",
+      "story_domain": "character",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "peter-the-first",
+      "slug": "peter-the-first",
+      "public_name": "Пётр I",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "fish-seller",
+      "slug": "fish-seller",
+      "public_name": "Торговка рыбой",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "striped-bather",
+      "slug": "striped-bather",
+      "public_name": "Купальщик начала XX века",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "queen-louise",
+      "slug": "queen-louise",
+      "public_name": "Королева Луиза",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "duke-albrecht",
+      "slug": "duke-albrecht",
+      "public_name": "Герцог Альбрехт",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "pawprint-brick",
+      "slug": "pawprint-brick",
+      "public_name": "Кирпич с отпечатком лапы",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:597"
+      ]
+    },
+    {
+      "id": "resort-hat",
+      "slug": "resort-hat",
+      "public_name": "Курортная шляпка",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "summer-resort-dress",
+      "slug": "summer-resort-dress",
+      "public_name": "Летнее курортное платье",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "krasnolesye-deer",
+      "slug": "krasnolesye-deer",
+      "public_name": "Олень с моста в Краснолесье",
+      "story_domain": "place",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "black-angus-bull",
+      "slug": "black-angus-bull",
+      "public_name": "Бычок Black Angus",
+      "story_domain": "nature",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "ruins",
+      "slug": "ruins",
+      "public_name": "Руины",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "tram-kt4d",
+      "slug": "tram-kt4d",
+      "public_name": "Трамвай KT4D",
+      "story_domain": "transport",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "tram-korsar",
+      "slug": "tram-korsar",
+      "public_name": "Трамвай «Корсар»",
+      "story_domain": "transport",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "old-port-elevator",
+      "slug": "old-port-elevator",
+      "public_name": "Старый портовый элеватор",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "kruzenshtern",
+      "slug": "kruzenshtern",
+      "public_name": "«Крузенштерн»",
+      "story_domain": "maritime",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "sedov",
+      "slug": "sedov",
+      "public_name": "Барк «Седов»",
+      "story_domain": "maritime",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "bolshoi-branch",
+      "slug": "bolshoi-branch",
+      "public_name": "Филиал Большого театра",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "rgisi-branch",
+      "slug": "rgisi-branch",
+      "public_name": "Филиал РГИСИ",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "tretyakov-branch",
+      "slug": "tretyakov-branch",
+      "public_name": "Филиал Третьяковской галереи",
+      "story_domain": "culture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "tretyakov-painting",
+      "slug": "tretyakov-painting",
+      "public_name": "Картина из Третьяковки",
+      "story_domain": "culture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity",
+        "rights",
+        "freshness"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "old-lantern",
+      "slug": "old-lantern",
+      "public_name": "Старый фонарь",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "new-synagogue",
+      "slug": "new-synagogue",
+      "public_name": "Новая синагога",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "amalienau-villa",
+      "slug": "amalienau-villa",
+      "public_name": "Вилла Амалиенау",
+      "story_domain": "architecture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "maraunenhof-villa",
+      "slug": "maraunenhof-villa",
+      "public_name": "Вилла Марауненхофа",
+      "story_domain": "architecture",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "philharmonic-building",
+      "slug": "philharmonic-building",
+      "public_name": "Здание филармонии",
+      "story_domain": "architecture",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "soviet-childrens-toy",
+      "slug": "soviet-childrens-toy",
+      "public_name": "Советская детская игрушка",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "settler-suitcase",
+      "slug": "settler-suitcase",
+      "public_name": "Чемодан переселенца",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "meteor-hydrofoil",
+      "slug": "meteor-hydrofoil",
+      "public_name": "«Метеор»",
+      "story_domain": "transport",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "baltic-fleet-ship",
+      "slug": "baltic-fleet-ship",
+      "public_name": "Корабль Балтийского флота",
+      "story_domain": "maritime",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:605"
+      ]
+    },
+    {
+      "id": "monkey-in-tram",
+      "slug": "monkey-in-tram",
+      "public_name": "Обезьяна в трамвае",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:668"
+      ]
+    },
+    {
+      "id": "elephant-overturned-car",
+      "slug": "elephant-overturned-car",
+      "public_name": "Слон, перевернувший машину",
+      "story_domain": "history",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights"
+      ],
+      "source_refs": [
+        "telegram:668"
+      ]
+    },
+    {
+      "id": "helicopter",
+      "slug": "helicopter",
+      "public_name": "Вертолёт",
+      "story_domain": "technology",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:668"
+      ]
+    },
+    {
+      "id": "fashion-model",
+      "slug": "fashion-model",
+      "public_name": "Калининградская модница",
+      "story_domain": "history",
+      "registry_status": "needs_clarification",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "identity"
+      ],
+      "source_refs": [
+        "telegram:668"
+      ]
+    },
+    {
+      "id": "world-cup-ball",
+      "slug": "world-cup-ball",
+      "public_name": "Мяч ЧМ-2018",
+      "story_domain": "sport",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
+      "review_flags": [
+        "fact_source",
+        "visual_rights",
+        "rights"
+      ],
+      "source_refs": [
+        "telegram:668"
+      ]
+    }
+  ]
+}

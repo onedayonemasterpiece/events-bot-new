@@ -4,6 +4,7 @@ import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
 import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
+import artifactRegistryData from '../src/data/artifactRegistry.json' with { type: 'json' };
 import busData from '../src/data/busTransportSchedules.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 
@@ -19,6 +20,8 @@ const required = [
   'vyhodnye/index.html',
   'vystavki/index.html',
   'festivali/index.html',
+  'artefakty/index.html',
+  'data/artifacts.json',
   'populyarnoe/index.html',
   'poisk/index.html',
   'partnerstvo/index.html',
@@ -64,6 +67,32 @@ for (const rel of required) {
 }
 if (festivalTimelineData.schema_version !== 'festival-timeline-static-v1') {
   throw new Error('Festival timeline projection schema is missing');
+}
+if (
+  artifactRegistryData.schema_version !== 'artifact_registry_v1'
+  || !Array.isArray(artifactRegistryData.artifacts)
+  || artifactRegistryData.artifacts.length < 100
+) {
+  throw new Error('Artifact registry projection is incomplete');
+}
+const artifactRegistryHtml = readFileSync(join(root, 'artefakty/index.html'), 'utf8');
+if (
+  !artifactRegistryHtml.includes('data-artifact-registry-page')
+  || !artifactRegistryHtml.includes('Артефакты Калининграда')
+  || !artifactRegistryHtml.includes('Знаки Калининграда')
+  || !artifactRegistryHtml.includes('5/8')
+) {
+  throw new Error('Artifact registry page misses the naming/collection contract');
+}
+const publicArtifactRegistry = JSON.parse(readFileSync(join(root, 'data/artifacts.json'), 'utf8'));
+if (
+  publicArtifactRegistry.schema_version !== 'artifact_public_registry_v1'
+  || publicArtifactRegistry.artifacts.length !== artifactRegistryData.artifacts.length
+  || JSON.stringify(publicArtifactRegistry).includes('source_refs')
+  || JSON.stringify(publicArtifactRegistry).includes('placement')
+  || JSON.stringify(publicArtifactRegistry).includes('participant')
+) {
+  throw new Error('Public artifact registry projection leaks or loses registry data');
 }
 const previewBuild = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
 const previewCurrentDate = String(previewBuild.currentDate || eventsData.build.current_date || '');
