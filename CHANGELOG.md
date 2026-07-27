@@ -4,10 +4,11 @@
 
 ### Added
 
-- Added a boundary-safe production artifact leakage gate: the ordinary root
-  now rejects only the real bare `data-amber-artifact` marker and no longer
-  mistakes the inert `data-amber-artifact-research="off"` configuration
-  attribute for an enabled easter egg.
+- Added boundary-safe production artifact leakage gates: the ordinary root now
+  rejects only the real bare `data-amber-artifact` and
+  `data-artifact-collection` markers, without mistaking the inert
+  `data-amber-artifact-research="off"` configuration or
+  `data-artifact-collection-unavailable` fallback for enabled research UI.
 - Added an explicitly gated immutable-noindex artifact research flow: one
   deterministic real weekend-event placement, a five-slot device-local
   `/artefakty/` collection, accessible detail dialog and disabled

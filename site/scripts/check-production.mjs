@@ -70,8 +70,9 @@ if (
   || productionWeekendSource.includes('kenigevents:artifact-collected')
 ) fail('artifact research leaked into production weekend listing');
 const productionArtifactSource = html('artefakty/index.html');
+const productionArtifactCollectionMarker = /\bdata-artifact-collection(?:\s|=|>)/u;
 if (
-  productionArtifactSource.includes('data-artifact-collection')
+  productionArtifactCollectionMarker.test(productionArtifactSource)
   || productionArtifactSource.includes('artifact-detail-title')
   || !productionArtifactSource.includes('Коллекция пока недоступна')
 ) fail('artifact collection leaked into production');
