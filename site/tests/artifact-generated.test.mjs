@@ -26,7 +26,8 @@ test('generated immutable research preview contains one real current-weekend art
 
 test('generated collection is noindex and retains local-only/detail/share contracts', async () => {
   const html = await readFile(path.join(root, 'artefakty/index.html'), 'utf8');
-  assert.match(html, /name="robots" content="noindex,nofollow,noarchive"/u);
+  const robots = /name="robots" content="([^"]+)"/u.exec(html)?.[1]?.split(',') || [];
+  assert.ok(['noindex', 'nofollow', 'noarchive'].every((directive) => robots.includes(directive)));
   assert.match(html, /data-artifact-collection/u);
   assert.equal((html.match(/data-artifact-slot=/gu) || []).length, 5);
   assert.match(html, /Только на этом устройстве/u);

@@ -291,6 +291,11 @@
 
 ### Fixed
 
+- Recorded the checked R14 immutable secret-candidate evidence in the canonical
+  presentation/release plan and made the generated artifact test validate the
+  required robots directives as a set, preserving stricter candidate-wide
+  `nosnippet` without a false regression.
+
 - Fixed the shared theatre Kaggle notebook so transient Playwright navigation
   during `page.content()` is retried after `domcontentloaded` instead of aborting
   Muzteatr and preventing Sobor/Tretyakov outputs.
