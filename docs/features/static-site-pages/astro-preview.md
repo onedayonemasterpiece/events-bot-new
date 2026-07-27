@@ -60,7 +60,12 @@ daily service-share assets inside this same immutable snapshot/Kaggle handoff.
 It does not add a page-view scorer or another builder job. The shared BGE
 artifact, unusual cache/last-good receipt, `provider_calls=0`, migration
 notification suppression and real canary/rollback gates are canonical in
-[`unusual-events`](../unusual-events/README.md).
+[`unusual-events`](../unusual-events/README.md). Final exact code SHA
+`123bcee460112ee9fe0b0a0176f51a07c92eed6a` passed build
+`production-r15-bge-final5-20260727t221000z` against the immutable
+`prod-20260727` snapshot (326 events). The secret candidate is available at
+<https://kenigevents.ru/_review/pp1wRctXBd6boYU1EcnBrod3z8MmKpD7SGEufK1t-xw/>;
+production root remains untouched.
 
 For `profile=production-candidate`, Kaggle must preserve the legacy preview
 contract as a pre-gate rather than jumping directly to root-form output:
@@ -80,10 +85,11 @@ publishable URL. If its HTML points Astro runtime assets at the configured
 immutable CDN prefix, `check:preview` maps only the bounded `/_astro/…` suffix
 back to the local generated tree. It verifies the exact local CSS bytes without
 depending on an unpublished CDN prefix or assuming that the ephemeral and
-production build IDs are equal. The earlier `11d8c984` canary predated this sequence and is
-superseded; final exact-SHA run/result and candidate URL are
-**to be filled by integrator**. Until that rerun passes, `/neobychnoe/` remains
-candidate-only and no production-root promotion is implied.
+production build IDs are equal. The earlier `11d8c984` canary predated this
+sequence and is superseded. The final exact run reported the preview pre-gate as
+`ok`, non-archived and non-published, then passed both generated browser gates.
+`/neobychnoe/` remains candidate-only and no production-root promotion is
+implied until the owner accepts the complete candidate.
 
 The production catalog is calendar-day inclusive: every otherwise-public event
 whose start date is the current Kaliningrad date remains in the static export

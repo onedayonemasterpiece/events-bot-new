@@ -1,11 +1,11 @@
 # Необычные события
 
-> **Status, 2026-07-27:** R15 implementation candidate behind static/noindex
-> release gates. A Kaggle CPU canary was run for exact SHA `11d8c984`, but it is
-> now **superseded**: it predates the final semantic, rail, daily-scheduler and
-> preview-gate hardening and did not complete the required candidate/public
-> acceptance path. A final exact-SHA Kaggle rerun, immutable candidate URL and
-> production-root owner acceptance remain **pending**.
+> **Status, 2026-07-27:** exact code SHA
+> `123bcee460112ee9fe0b0a0176f51a07c92eed6a` passed the full Kaggle
+> production-candidate pipeline and was published only as an immutable
+> noindex candidate. The public product matrix passed at desktop and mobile
+> widths; production root was not changed and still requires explicit owner
+> acceptance. The older `11d8c984` run remains superseded evidence.
 
 `/neobychnoe/` is a static discovery feed for attendable events whose **way of
 participating, access, place, practice or combination of formats** is materially
@@ -339,9 +339,31 @@ The `11d8c984` canary exercised real pinned BGE, produced zero-provider semantic
 artifacts and useful cache/hash evidence. It is **superseded**, not absent and
 not release acceptance: it predates the final contracts above, its dedicated
 candidate Playwright was coupled to lab routes omitted from the package, and its
-upload/public acceptance did not complete. The final exact-SHA run ID, immutable
-candidate URL and artifact hashes are **to be filled by integrator** after a
-new full run. Until then steps 3–5 remain pending.
+upload/public acceptance did not complete.
+
+The final exact run is
+`static-site-builder:r15-bge-final5-20260727T221000Z`, build
+`production-r15-bge-final5-20260727t221000z`, from snapshot `prod-20260727`
+(`043b9f845292f0b974864d232b9e309c616bfee035e11b35a40bd2b41cd68664`).
+It exported 326 current events and produced 1,439 pages / 1,697 files. The
+legacy preview pre-gate reported `status=ok`, `archived=false`,
+`published=false`; root-form and secret-candidate build/check/browser gates
+passed, with only the explicitly optional related-freshness check degraded.
+
+The hash-bound unusual result is `approved`, `provider_calls=0`,
+`cache_state=hit_reused`, with 30 published concepts. Observed editorial
+precision@20 is `1.0`, hard-negative FPR `0.0`, confirmed-positive recall
+`0.8`, duplicate concepts `0`, identical-rebuild flip rate `0.0`, family
+diversity `12`, and ineligible publications `0`. The public immutable candidate
+is:
+
+<https://kenigevents.ru/_review/pp1wRctXBd6boYU1EcnBrod3z8MmKpD7SGEufK1t-xw/>
+
+All 36 route/viewport checks returned `200`, the candidate-wide noindex policy,
+no horizontal overflow, no broken images and no page errors. Product-mode
+Playwright passed and the stripped lab canary returned `404`. This completes
+steps 3–4 only. Step 5 remains an explicit owner decision; none of this evidence
+authorizes production-root promotion.
 
 Rollback first disables new notification eligibility, then restores the exact
 compatible last-good manifest/cache receipt or disables the unusual route. It

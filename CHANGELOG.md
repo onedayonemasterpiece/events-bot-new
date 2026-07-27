@@ -7,8 +7,13 @@
 - Added the R15 unusual-events implementation contract: `/neobychnoe/`,
   15-family taxonomy, one hash-bound shared BGE vector boundary, concept-level
   dedup/unread state, zero-provider static build, atomic cache/last-good
-  rollback and a checked-fact golden evaluation fixture; the `11d8c984` Kaggle
-  canary is superseded and final exact-SHA rerun/root cutover remain pending.
+  rollback and a checked-fact golden evaluation fixture; exact SHA `123bcee4`
+  passed the final Kaggle candidate gates and an immutable noindex candidate
+  was published without changing production root.
+- Recorded final R15 release evidence: 326-event snapshot
+  `prod-20260727`, approved zero-provider BGE result with `1.0` editorial
+  precision / `0.0` hard-negative FPR / `0.8` recall, 36 green public
+  desktop/mobile route checks, product Playwright pass and packaged lab `404`.
 - Hardened the R15 candidate after independent acceptance review: incremental
   BGE reuse now encodes only changed documents, score/concept cache schemas are
   consistent, manifests expose reader aliases and durable concept state,

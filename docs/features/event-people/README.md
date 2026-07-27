@@ -1,8 +1,8 @@
 # Участники событий и подписка на персон
 
-> **Status:** UI и статический export-контракт реализованы в
-> `feature/static-event-participants-20260727`; production-реестр и общий
-> серверный счётчик лайков ещё не включены.
+> **Status:** UI и статический export-контракт из
+> `feature/static-event-participants-20260727` интегрированы в R15 candidate;
+> production-реестр и общий серверный счётчик лайков ещё не включены.
 >
 > **Surfaces:** mobile и desktop event detail.
 
@@ -103,6 +103,14 @@ production-onboarding должен загрузиться в Object Storage с p
 
 Noindex specimen `/lab/event-participants/` проверяет оба viewport, headliner,
 обычного спикера, initials fallback, публичный credit и состояние сердца.
+
+Интеграционная приёмка 2026-07-27 на `1440×900` и `390×844` подтвердила по три
+карточки, отсутствие битых изображений и horizontal overflow; локальный лайк
+сохранился после reload (`27 → 28`). Exact production snapshot
+`prod-20260727` содержит 326 экспортированных событий, но пока не содержит
+совместимых artist/appearance relations, поэтому все 326 событий корректно
+получили `participants=[]`. Это подтверждает fail-closed совместимость, но не
+является доказательством production-наполнения участниками.
 
 ## Не входит в эту ветку
 

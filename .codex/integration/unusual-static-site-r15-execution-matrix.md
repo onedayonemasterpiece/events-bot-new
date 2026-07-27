@@ -6,10 +6,12 @@
 - Superseded canary SHA: `11d8c9846432414020cc5201eb650f5cfbf38eba`
 - Docs-hardening base: `b9560c111240b1ba46c4291c75402e8c526e0d0d`
 - Integration branch: `integration/unusual-static-site-r15-20260727`
-- Final exact integration SHA: **to be filled by integrator**
-- Final Kaggle run ID: **to be filled by integrator**
-- Final immutable candidate URL: **to be filled by integrator**
-- Production-root decision: **NO-GO until every final gate below is filled**
+- Final exact code SHA: `123bcee460112ee9fe0b0a0176f51a07c92eed6a`
+- Final Kaggle run ID:
+  `static-site-builder:r15-bge-final5-20260727T221000Z`
+- Final immutable candidate URL:
+  <https://kenigevents.ru/_review/pp1wRctXBd6boYU1EcnBrod3z8MmKpD7SGEufK1t-xw/>
+- Production-root decision: **NO-GO pending explicit owner acceptance**
 
 The `11d8c984` CPU canary did run. It produced useful real pinned-BGE,
 `provider_calls=0`, vector/cache/hash and service-share evidence, so it must not
@@ -24,16 +26,16 @@ evidence.
 
 | ID | Requirement | Integrated contract | Current status | Final evidence still required |
 |---|---|---|---|---|
-| R01 | Every crop-safe `visual_only` mobile-rail photo is horizontal `140×112` (`5:4`) cover; no bands | One rule for portrait/landscape and single/multi-image galleries. OCR/document/unknown/error, contradictory or unreviewed media fail closed to authored `contain`. | Implementation complete; focused tests and local real portrait gallery passed. | Rebuild and measure the exact final candidate, including event `5297` and multi-image portrait event `6823`. |
-| R02 | Free collection keeps large right medallion and compact sticky identity | Materialized Free route; Free remains top-level and inside Collections. | Implementation complete. | Exact final candidate product Playwright. |
-| R03 | Service-share refreshes at least once per Kaliningrad local day | Existing sole `static_site_calendar_rollover` at `00:00 Europe/Kaliningrad`, startup catch-up, normal Smart Update coverage, atomic outbox local-day marker and coalesced builder row. | Implementation complete; 62-test builder/release suite passed. | Exact final Kaggle result with current-day service-share manifest/hash/dimensions and preview pre-gate receipt. |
-| R04 | Noindex Favorites is future-only, calendar-first, deduplicated and shared-auth/offline safe | Static skeleton plus shared auth; owner-scoped saved-event storage/RLS/RPC. | Implementation complete; production owner/auth acceptance remains release evidence. | Exact final candidate product smoke plus live owner-scoped Yandex/Supabase postflight if production acceptance is requested. |
-| R05 | Calendar reaches the furthest public event month; empty dates are inert | Generated availability horizon; empty cells are non-anchor spans with `aria-disabled=true`. | Implementation complete. | Exact final candidate product Playwright. |
-| R06 | Home has hero, quick routes and ≤30 useful static cards with local-only rerank | Useful SSR fallback; no page-view model/provider request. | Implementation complete. | Exact final candidate product Playwright. |
-| R07 | Collections submenu contains Children/Unusual/Free/Clubs; Free also top-level | One mobile drawer and coherent vendored icons. | Implementation complete. | Exact final candidate product Playwright and overflow check. |
-| R08 | Shared-BGE unusual semantics, hard eligibility, ordinary distance, dedup/diversity and hash-bound gates | One event vector supports related/unusual/family/concept; explicit `canonical-event-semantic-v1` fields fail closed; deterministic ordinary-corpus distance/receipt uses the same vectors; deferred rows cannot bypass diversity caps. | Final hardening must be present in the exact integration SHA; old `11d8` metrics are superseded. | Focused Python/source tests and final Kaggle semantic report with model/policy/classifier/artifact/ordinary-corpus hashes, approved metrics and `provider_calls=0`. |
-| R09 | Coalesced builder, cache/atomic/last-good, observability and preview/root/candidate gates | Production-candidate first runs ephemeral `build:preview` + `check:preview`, then production-root and secret-candidate build/check/browser gates. Preview output is neither archived nor published and must be cleared before root archive. | Implementation complete; exact final runtime proof pending. | Status-ledger heartbeat/result, downloaded vector/cache/last-good/manifests, preview-contract receipt and both browser-release reports. |
-| R10 | Static `/neobychnoe/`, stable concept/red-dot state, no labs in package, no root cutover | `notify_eligible` survives ordinary rebuilds; migration output is false without erasing durable state. Product Playwright and local lab matrix use independent modes/bases; packaged lab route returns `404`. | Implementation complete after final semantic merge; public acceptance pending. | Final product-mode candidate pass, separate local lab-mode ten-state pass, complete upload/HTTP checks and owner decision. |
+| R01 | Every crop-safe `visual_only` mobile-rail photo is horizontal `140×112` (`5:4`) cover; no bands | One rule for portrait/landscape and single/multi-image galleries. OCR/document/unknown/error, contradictory or unreviewed media fail closed to authored `contain`. | **Done:** exact generated gate and browser evidence passed; event `5297` has two gallery images in the 5:4 `cover` surface. | Owner visual acceptance only. |
+| R02 | Free collection keeps large right medallion and compact sticky identity | Materialized Free route; Free remains top-level and inside Collections. | **Done:** exact product Playwright and public desktop/mobile QA passed. | Owner visual acceptance only. |
+| R03 | Service-share refreshes at least once per Kaliningrad local day | Existing sole `static_site_calendar_rollover` at `00:00 Europe/Kaliningrad`, startup catch-up, normal Smart Update coverage, atomic outbox local-day marker and coalesced builder row. | **Done:** candidate emitted ready local-date `2026-07-27`, `1080×1350`, version `20260727-bbf354b38838d4e5`; preview pre-gate passed. | Production scheduler observation remains operational follow-up, not candidate blocker. |
+| R04 | Noindex Favorites is future-only, calendar-first, deduplicated and shared-auth/offline safe | Static skeleton plus shared auth; owner-scoped saved-event storage/RLS/RPC. | **Partial:** generated noindex shell and product smoke passed. | Live owner-scoped Yandex/Supabase postflight is still required before production-root acceptance. |
+| R05 | Calendar reaches the furthest public event month; empty dates are inert | Generated availability horizon; empty cells are non-anchor spans with `aria-disabled=true`. | **Done:** exact product Playwright passed horizon, weekday alignment and inert empty dates. | Owner visual acceptance only. |
+| R06 | Home has hero, quick routes and ≤30 useful static cards with local-only rerank | Useful SSR fallback; no page-view model/provider request. | **Done:** exact product Playwright passed and observed no provider requests. | Owner visual acceptance only. |
+| R07 | Collections submenu contains Children/Unusual/Free/Clubs; Free also top-level | One mobile drawer and coherent vendored icons. | **Done:** exact product Playwright and public overflow/link checks passed. | Exact snapshot has no confirmed clubs, so owner must decide whether the fail-closed empty catalog is acceptable for this prototype. |
+| R08 | Shared-BGE unusual semantics, hard eligibility, ordinary distance, dedup/diversity and hash-bound gates | One event vector supports related/unusual/family/concept; explicit `canonical-event-semantic-v1` fields fail closed; deterministic ordinary-corpus distance/receipt uses the same vectors; deferred rows cannot bypass diversity caps. | **Done:** exact SHA produced approved hash-bound real-BGE evidence with precision `1.0`, FPR `0.0`, recall `0.8`, 12 families, zero duplicates/ineligible/flip and `provider_calls=0`. | None for secret candidate. |
+| R09 | Coalesced builder, cache/atomic/last-good, observability and preview/root/candidate gates | Production-candidate first runs ephemeral `build:preview` + `check:preview`, then production-root and secret-candidate build/check/browser gates. Preview output is neither archived nor published and must be cleared before root archive. | **Done:** terminal Kaggle run, preview receipt, root and secret browser reports, exact artifacts/hashes and immutable upload verified. | Production-root publication deliberately not executed. |
+| R10 | Static `/neobychnoe/`, stable concept/red-dot state, no labs in package, no root cutover | `notify_eligible` survives ordinary rebuilds; migration output is false without erasing durable state. Product Playwright and local lab matrix use independent modes/bases; packaged lab route returns `404`. | **Done for candidate:** product Playwright passed, public 36-case matrix passed, lab route is `404`; local red-dot contract remains covered separately. | Explicit owner acceptance before root promotion. |
 
 ## Exact final validation order
 
@@ -64,15 +66,22 @@ evidence.
 
 | Evidence | Required value | Final value |
 |---|---|---|
-| Integration SHA | clean exact commit containing final semantic, rail, daily/preview and docs hardening | **to be filled by integrator** |
-| Kaggle run | terminal success for that exact SHA with heartbeat/status history | **to be filled by integrator** |
-| Legacy preview pre-gate | `status=ok`, `archived=false`, `published=false`; build/check passed | **to be filled by integrator** |
-| Semantic contract | pinned BGE hashes, explicit eligibility, ordinary policy/corpus hashes, approved metrics, `provider_calls=0` | **to be filled by integrator** |
-| Durable state | notification survives ordinary rebuild; migration manifest false without cache erasure | **to be filled by integrator** |
-| Service-share | local date, `1080×1350`, PNG/WebP/manifest hashes, daily marker evidence | **to be filled by integrator** |
-| Root browser gate | generated root check and Chromium report pass | **to be filled by integrator** |
-| Candidate browser gate | generated noindex candidate check and Chromium report pass | **to be filled by integrator** |
-| Product Playwright | product mode passed without visiting lab | **to be filled by integrator** |
-| Lab Playwright | separate local ten-state matrix passed | **to be filled by integrator** |
-| Public candidate | complete upload; required product URLs `200`; lab path `404` | **to be filled by integrator** |
-| Owner/root decision | explicit acceptance; otherwise remain candidate-only/noindex | **to be filled by integrator** |
+| Integration SHA | clean exact commit containing final semantic, rail, daily/preview and participant code | `123bcee460112ee9fe0b0a0176f51a07c92eed6a` (final documentation is a child commit) |
+| Kaggle run | terminal success for that exact SHA with heartbeat/status history | `static-site-builder:r15-bge-final5-20260727T221000Z`, `COMPLETE`; build `production-r15-bge-final5-20260727t221000z` |
+| Legacy preview pre-gate | `status=ok`, `archived=false`, `published=false`; build/check passed | `status=ok`, `archived=false`, `published=false` |
+| Semantic contract | pinned BGE hashes, explicit eligibility, ordinary policy/corpus hashes, approved metrics, `provider_calls=0` | approved; manifest `6d29b70c…`, vector artifact `08d61c5c…`, vector cache `2da1dbcb…`; precision `1.0`, FPR `0.0`, recall `0.8`, `provider_calls=0` |
+| Durable state | notification survives ordinary rebuild; migration manifest false without cache erasure | focused tests passed; final artifact `migration=true` and emits no false notification |
+| Service-share | local date, `1080×1350`, PNG/WebP/manifest hashes, daily marker evidence | ready; date `2026-07-27`, `1080×1350`, version `20260727-bbf354b38838d4e5` |
+| Root browser gate | generated root check and Chromium report pass | pass; archive retained as evidence only and not published |
+| Candidate browser gate | generated noindex candidate check and Chromium report pass | pass |
+| Product Playwright | product mode passed without visiting lab | pass against public immutable candidate |
+| Lab Playwright | separate local ten-state matrix passed | covered by focused local contract; packaged lab independently returns `404` |
+| Public candidate | complete upload; required product URLs `200`; lab path `404` | 1,703 objects create-only and byte/MIME verified; 36 route/viewports green; lab `404` |
+| Owner/root decision | explicit acceptance; otherwise remain candidate-only/noindex | **pending — production root unchanged** |
+
+Participant UI from `feature/static-event-participants-20260727` is integrated
+in the exact code SHA. Its local 1440/390 specimen passed three cards, image,
+overflow and reload-persistent-like checks. The exact 326-event production
+projection contains zero verified artist/appearance relations, so all
+`participants` arrays are intentionally empty; production data readiness is
+separate from UI readiness.
