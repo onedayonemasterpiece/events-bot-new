@@ -1,10 +1,29 @@
 # План production-релиза статических страниц событий
 
-> **Срез:** 2026-07-17
+> **Срез:** 2026-07-27
 > **Решение:** `NO-GO` для переключения event pages на canonical root прямо сейчас.
 > **Scope:** production-контур статических страниц событий и переход event-detail
 > с Telegraph. Полный релиз всех F1–F17 персональных анонсов остаётся отдельным
 > umbrella-gate в [Static personal announcements](../static-personal-announcements/README.md).
+
+## Текущий ledger, 2026-07-27
+
+| Gate | Статус | Текущий факт |
+|---|---|---|
+| Main-based source | Partial | R14 integration собрана от `origin/main`, но до финальной приёмки/merge не является release truth |
+| Production/secret build profiles | Done in code | Production и secret checks существуют; обязателен повтор на замороженном main SHA и свежем DB snapshot |
+| Immutable `_review/<token>/` publisher | Partial | Create-only candidate path и manifest evidence существуют; это не atomic root promotion |
+| Stable URL/lifecycle registry | Missing | Persisted canonical identity, aliases, redirects/410 и cleanup apply ещё не закрыты |
+| Freshness/outbox | Partial | Coalesced build/outbox реализованы, но presentation-day freshness и failure drill отсутствуют |
+| Telegraph dual-run/public resolver | Missing | D0/D10 outward switch и запрет create/recreate после cutover не доказаны |
+| UI/product acceptance | Partial | R14 локальные contract/build tests есть; frozen public desktop/mobile, real OAuth/Edge и owner sign-off ещё нужны |
+| Schedule freshness | Blocked | Актуальный rail+bus snapshot/manifest и failed-refresh drill не приложены |
+| Production root promotion/rollback | Missing | `_review` publication не меняет root/current/stable ICS; atomic promote/rollback не выполнены |
+
+Следовательно, разрешён следующий шаг — **только один новый immutable secret
+noindex candidate** на свежем production snapshot. Публикация такого candidate
+не является релизом, D0 или переносом текущих страниц на canonical root.
+Исторические controlled runs ниже — regression evidence, а не текущий GO.
 
 ## Где находится release truth
 
@@ -308,10 +327,12 @@ STATIC_SITE_CANARY_PERCENT=0..100
 [аудите 2026-07-11](../../reports/static-personal-announcements-release-readiness-2026-07-11.md);
 этот документ не ослабляет его gates.
 
-## Separate post-release Stage 13 — «Пасхалки о Калининграде»
+## Separate Stage 13 — «Пасхалки о Калининграде»
 
-После стабильного D10 эта механика прорабатывается в отдельном RC и не входит в
-current static-page GO. Она не меняет текущий Top-5. План: product research →
+Research-механика может проверяться до D10 только в явно включённом immutable
+noindex/secret candidate и не входит в current static-page GO. Обычный
+production/root обязан fail-closed. Production-включение возможно только после
+стабильного D10 и отдельного RC. Механика не меняет текущий Top-5. План: product research →
 owner decisions → clickable accessible prototype → first-class egg/progress and
 `site_easter_egg` promo-activity architecture → scheduler shadow/admin report →
 одна non-prize collection canary с holdout и automatic stop rules → ship/narrow/stop

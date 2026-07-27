@@ -79,7 +79,17 @@ Audience извлекается LLM-first из первичного источн
 
 ### Static landing pages
 
-- `/besplatno/` можно материализовать после проверки admission-предиката;
+- noindex release-candidate route `/podborki/besplatnye-sobytiya/` уже
+  материализуется из полного DB-export по проверенному совместимому
+  `ticket.is_free=true`; он сохраняет актуальные ongoing события по
+  `end_date`, схлопывает только explicit occurrence families и не имеет
+  искусственного лимита в 24 карточки;
+- пункт `Бесплатно` в mobile menu обязан вести на эту готовую подборку и никогда
+  не подставляет текст в Search. Пустой/неизвестный admission fail-closed;
+- эта реализация достаточна для noindex candidate и пользовательской приёмки,
+  но production-indexable `/besplatno/` разрешается только после регулярной
+  серверной `admission.value` проекции, freshness gate и проверки полного
+  состава. Совместимый `ticket.is_free` не подменяет целевой evidence contract;
 - `/detyam/` или `/semeynoe/` материализуется только после audience quality gate;
 - составная страница публикуется/indexes только при достаточном числе exact
   событий и гарантированной свежести. Query-param варианты до этого canonical/noindex.

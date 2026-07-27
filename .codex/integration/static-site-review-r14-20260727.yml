@@ -1,6 +1,6 @@
 mode: full_fanout_serial_integration
 repo: /home/dev/projects/events-bot-new
-base_ref: origin/main@c9a710c8
+base_ref: origin/main@c9a710c8 (subsequently merged through 366f7f58; final rebase pending)
 base_branch: main
 integration_branch: integration/static-site-review-r14-20260727
 global_constraints:
@@ -29,7 +29,7 @@ lanes:
     forbidden_files: [site/src/layouts/EventLayout.astro, CHANGELOG.md]
     expected_output: committed fixes/tests plus .codex/lanes/R14-MEDALLIONS/RESULTS.md
     verification_scope: targeted
-    status: spawned
+    status: merged_to_integration
   - id: R14-VISUAL
     role: worker
     effort: high
@@ -43,7 +43,7 @@ lanes:
     forbidden_files: [site/src/components/Reference4MobileMenu.astro, site/src/components/AuthorizedEventSearch.astro, CHANGELOG.md]
     expected_output: committed fixes/tests plus .codex/lanes/R14-VISUAL/RESULTS.md
     verification_scope: targeted
-    status: spawned
+    status: merged_to_integration
   - id: R14-SEARCH-AUTH
     role: worker
     effort: maximum_available_high
@@ -57,7 +57,7 @@ lanes:
     forbidden_files: [site/src/lib/eventMedallions.ts, CHANGELOG.md]
     expected_output: committed fixes/tests plus .codex/lanes/R14-SEARCH-AUTH/RESULTS.md
     verification_scope: full_local
-    status: spawned
+    status: merged_to_integration
   - id: R14-COLLECTIONS
     role: worker
     effort: high
@@ -71,7 +71,7 @@ lanes:
     forbidden_files: [site/src/components/AuthorizedEventSearch.astro, CHANGELOG.md]
     expected_output: committed fixes/tests plus .codex/lanes/R14-COLLECTIONS/RESULTS.md
     verification_scope: targeted
-    status: spawned
+    status: merged_to_integration
   - id: R14-ARTIFACTS
     role: worker
     effort: high
@@ -85,7 +85,7 @@ lanes:
     forbidden_files: [site/src/components/AuthorizedEventSearch.astro, site/src/lib/eventMedallions.ts, CHANGELOG.md]
     expected_output: committed fixes/tests plus .codex/lanes/R14-ARTIFACTS/RESULTS.md
     verification_scope: full_local
-    status: spawned
+    status: merged_to_integration
   - id: R14-DOCS-RELEASE
     role: planner
     effort: high
@@ -113,7 +113,7 @@ lanes:
     forbidden_files: []
     expected_output: clean integrated branch, .codex/integration/INTEGRATION_REPORT.md, pushed SHA, QA evidence, immutable noindex URL and Telegram receipt
     verification_scope: full_local
-    status: planned
+    status: in_progress
 requirements:
   R01: Telegram 693 — missing medallions for Yantar Hall, Teatr estrady/Dom iskusstv, and Profi-Tour.
   R02: Telegram 694/697 — Maria Stuart OCR hero is visibly cropped on mobile and must remain fully readable.

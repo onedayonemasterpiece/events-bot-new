@@ -4,6 +4,31 @@
 
 Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or run artifact to every completed item. The release owner freezes one `origin/main` SHA and one full-catalog build ID before the presentation.
 
+## Current R14 checkpoint — 2026-07-27
+
+- [x] **Done locally** — the unified source build compiles the shared
+  Calendar/Popular/Search/Personal/Clubs/event-detail shell, materialized Free
+  collection, deterministic noindex artifact collection, structured organizer
+  medallions, OCR-safe hero/rail media and branded `visual_only` sharing.
+- [x] **Done locally** — focused contract tests cover global PKCE ownership,
+  Enter/IME submission, bounded Search rescue, complete Free routing, honest
+  empty Jazz weekend, artifact persistence/detail, medallion fail-closed
+  matching and OCR/multi-image rail rules.
+- [ ] **Partial** — immutable noindex candidate publication and public
+  desktop/mobile Playwright must be repeated on the final main-reachable SHA
+  with fresh DB-backed organizer fields; local/worker previews are historical
+  evidence only.
+- [ ] **Blocked** — real Yandex OAuth return plus real Edge Search result on
+  that candidate, product/design owner sign-off, presentation-day schedule
+  freshness and rollback drill.
+- [ ] **Blocked** — canonical root promotion. A successful `_review/<token>/`
+  handoff does not satisfy this item.
+
+The older checked rows below retain their dates and exact candidate names as
+historical regression evidence. They must not be read as acceptance of the
+current R14 candidate. Event `6710` is no longer a valid “upcoming demo” by
+itself; presentation scenarios must be selected from the fresh frozen export.
+
 ## 1. Release candidate
 
 - [ ] **Blocked** — presentation scope frozen and all candidate commits reachable from `origin/main`.
