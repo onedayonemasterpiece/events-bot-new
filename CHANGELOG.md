@@ -312,7 +312,9 @@
   Philharmonia event before persistence. Parse runs now also start fail-closed,
   so cancellation during a rolling deploy cannot finalize an incomplete run as
   `success`. Structured parser occurrences associated with a festival also no
-  longer inherit the social whole-program `festival_post` skip.
+  longer inherit the social whole-program `festival_post` skip; the guard
+  remains outside the slotted `EventCandidate` declaration so later structured
+  fields such as `organizer_names` stay part of the runtime schema.
 
 - Prevented source-grounded studio addresses from being rebound to unrelated
   canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);
