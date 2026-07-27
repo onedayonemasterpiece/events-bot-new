@@ -1,9 +1,12 @@
 ---
 import FocusLabBadge from '../components/FocusLabBadge.astro';
+import PwaInstallAction from '../components/PwaInstallAction.astro';
+import PwaTelemetry from '../components/PwaTelemetry.astro';
 import { withBase } from '../lib/events';
 import '../styles/design-system.css';
 
 const logoHref = withBase('/favicon.svg');
+const manifestHref = `${withBase('/manifest.webmanifest')}?v=20260727-brand-icon-v2`;
 const programmeHref = withBase('/fokus-gruppa/');
 const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_preview_demo_20260727_abcdefghijklmnop');
 ---
@@ -21,6 +24,7 @@ const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_previe
       content="Стартовый экран продуктового прототипа фокус-группы сайта «Полюбить Калининград · Анонсы»."
     />
     <link rel="icon" href={logoHref} type="image/svg+xml" sizes="any" />
+    <link rel="manifest" href={manifestHref} />
     <meta name="theme-color" content="#fff7e7" />
   </head>
   <body>
@@ -91,11 +95,14 @@ const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_previe
         </span>
       </aside>
 
+      <PwaInstallAction />
+
       <footer class="focus-root__footer">
         <span>Вопросы о проекте</span>
         <a href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
       </footer>
     </main>
+    <PwaTelemetry />
   </body>
 </html>
 
