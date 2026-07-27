@@ -886,6 +886,199 @@ def probe_image_dimensions(url: str, timeout: float = 4.0) -> tuple[int | None, 
     return result
 
 
+PARTICIPANT_REQUIRED_TABLE_COLUMNS = {
+    "artist_registry_entity": {
+        "artist_id",
+        "entity_type",
+        "display_name",
+        "verification_status",
+        "photo_url",
+        "photo_rights_status",
+        "photo_rights_evidence_json",
+    },
+    "event_artist_appearance": {
+        "event_id",
+        "artist_id",
+        "role",
+        "status",
+        "physical_visit_status",
+        "participant_evidence_json",
+        "eligibility_status",
+        "cancelled_at",
+        "media_identity_status",
+    },
+}
+PARTICIPANT_PHOTO_ALLOWED_STATUSES = {
+    "event_artist_verified",
+    "press_kit_verified",
+    "cc_verified",
+    "informational_citation_reviewed",
+}
+PARTICIPANT_HEADLINER_ROLES = {"headliner", "keynote", "главный артист", "хедлайнер"}
+PARTICIPANT_ROLE_LABELS = {
+    "artist": "Артист",
+    "performer": "Артист",
+    "speaker": "Спикер",
+    "keynote": "Ключевой спикер",
+    "headliner": "Хедлайнер",
+    "host": "Ведущий",
+    "moderator": "Модератор",
+    "author": "Автор",
+}
+
+
+def sqlite_table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
+    exists = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    if not exists:
+        return set()
+    return {
+        str(row[1])
+        for row in con.execute(f'PRAGMA table_info("{table_name}")').fetchall()
+    }
+
+
+def participant_photo_metadata(row: sqlite3.Row) -> tuple[str | None, str | None, str | None]:
+    """Admit only a registry portrait with explicit identity and rights evidence."""
+
+    photo_url = clean_text(row_get(row, "photo_url"))
+    rights_status = clean_text(row_get(row, "photo_rights_status")).casefold()
+    identity_status = clean_text(row_get(row, "media_identity_status")).casefold()
+    if (
+        not photo_url
+        or not photo_url.startswith(("https://", "/"))
+        or rights_status not in PARTICIPANT_PHOTO_ALLOWED_STATUSES
+        or identity_status != "verified"
+    ):
+        return None, None, None
+    for evidence in read_json(row_get(row, "photo_rights_evidence_json"), []):
+        if not isinstance(evidence, dict):
+            continue
+        source_url = clean_text(
+            evidence.get("source_url")
+            or evidence.get("source_page_url")
+            or evidence.get("original_source_url")
+        )
+        credit_text = clean_text(
+            evidence.get("credit_text")
+            or evidence.get("author_or_rightsholder")
+        )
+        if source_url.startswith("https://") and credit_text:
+            return photo_url, credit_text, source_url
+    return None, None, None
+
+
+def event_participants_for_events(
+    con: sqlite3.Connection,
+    event_ids: list[int],
+) -> dict[int, list[dict[str, Any]]]:
+    """Project verified occurrence participants without making the site depend on the overlay.
+
+    The artist registry work is deployed independently from the static site.  Old
+    SQLite snapshots therefore remain valid and simply produce no participant
+    block.  Rows under review, cancelled appearances and unverified identities
+    always fail closed.
+    """
+
+    unique_event_ids = sorted({int(event_id) for event_id in event_ids})
+    empty = {event_id: [] for event_id in unique_event_ids}
+    if not unique_event_ids:
+        return empty
+    for table_name, required in PARTICIPANT_REQUIRED_TABLE_COLUMNS.items():
+        if not required.issubset(sqlite_table_columns(con, table_name)):
+            return empty
+    placeholders = ",".join("?" for _ in unique_event_ids)
+    rows = con.execute(
+        f"""
+        SELECT
+            appearance.event_id,
+            appearance.artist_id,
+            appearance.role,
+            appearance.participant_evidence_json,
+            appearance.media_identity_status,
+            artist.entity_type,
+            artist.display_name,
+            artist.photo_url,
+            artist.photo_rights_status,
+            artist.photo_rights_evidence_json
+        FROM event_artist_appearance AS appearance
+        JOIN artist_registry_entity AS artist
+          ON artist.artist_id = appearance.artist_id
+        WHERE appearance.event_id IN ({placeholders})
+          AND appearance.status = 'confirmed'
+          AND appearance.physical_visit_status = 'confirmed'
+          AND appearance.eligibility_status = 'eligible'
+          AND appearance.cancelled_at IS NULL
+          AND artist.verification_status = 'verified'
+        ORDER BY
+          appearance.event_id,
+          CASE WHEN lower(appearance.role) IN ('headliner', 'keynote') THEN 0 ELSE 1 END,
+          lower(artist.display_name),
+          artist.artist_id
+        """,
+        tuple(unique_event_ids),
+    ).fetchall()
+    participants_by_event = empty
+    seen: dict[int, set[str]] = {event_id: set() for event_id in unique_event_ids}
+    for row in rows:
+        event_id = int(row["event_id"])
+        participant_id = clean_text(row["artist_id"])
+        name = clean_text(row["display_name"])
+        evidence = [
+            item
+            for item in read_json(row["participant_evidence_json"], [])
+            if isinstance(item, dict)
+        ]
+        if (
+            not participant_id
+            or not name
+            or not evidence
+            or participant_id in seen[event_id]
+        ):
+            continue
+        seen[event_id].add(participant_id)
+        raw_role = clean_text(row["role"]) or "participant"
+        role_key = raw_role.casefold()
+        role = PARTICIPANT_ROLE_LABELS.get(role_key, raw_role[:1].upper() + raw_role[1:])
+        avatar_url, credit_text, credit_url = participant_photo_metadata(row)
+        evidence_url = next(
+            (
+                clean_text(item.get("source_url") or item.get("url"))
+                for item in evidence
+                if clean_text(item.get("source_url") or item.get("url")).startswith("https://")
+            ),
+            None,
+        )
+        entity_kind = clean_text(row["entity_type"]).casefold()
+        if entity_kind not in {"person", "group", "project"}:
+            entity_kind = "person"
+        participants_by_event[event_id].append(
+            {
+                "id": participant_id,
+                "name": name,
+                "role": role,
+                "entity_kind": entity_kind,
+                "is_headliner": role_key in PARTICIPANT_HEADLINER_ROLES,
+                "avatar_url": avatar_url,
+                "avatar_alt": f"{name} — {role}",
+                "likes_count": 0,
+                "profile_url": None,
+                "credit_text": credit_text,
+                "credit_url": credit_url,
+                "evidence_url": evidence_url,
+            }
+        )
+    return participants_by_event
+
+
+def event_participants(con: sqlite3.Connection, event_id: int) -> list[dict[str, Any]]:
+    """Single-event compatibility wrapper used by focused tests and tools."""
+
+    return event_participants_for_events(con, [event_id]).get(int(event_id), [])
+
+
 def image_area(asset: dict[str, Any]) -> int:
     try:
         width = int(asset.get("width") or 0)
@@ -1901,7 +2094,13 @@ def _structured_unusual_semantic_record(
     }
 
 
-def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) -> dict[str, Any]:
+def build_event(
+    con: sqlite3.Connection,
+    row: sqlite3.Row,
+    current_date: str,
+    *,
+    participants: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     event_id = int(row["id"])
     occurrence = structured_occurrence_projection(row)
     occurrence_conflict = bool(
@@ -1948,6 +2147,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
     source_url = source_urls[0] if source_urls else None
     organizer_names = event_organizer_names(row_get(row, "organizer_names"))
+    participants = event_participants(con, event_id) if participants is None else participants
     age_projection = event_age_projection(row)
     structured_semantic_record = _structured_unusual_semantic_record(row)
     return {
@@ -1958,6 +2158,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "event_type": event_type,
         "festival": clean_text(row["festival"]) or None,
         "organizer_names": organizer_names,
+        "participants": participants,
         "status_label": status,
         "lifecycle_status": clean_text(row["lifecycle_status"]) or "active",
         # Hash-bound semantic consumers must re-check the actual structured
@@ -5036,7 +5237,19 @@ def main() -> int:
         focus_date_from=args.focus_date_from,
         focus_date_to=args.focus_date_to,
     )
-    events = [build_event(con, row, effective_date) for row in rows]
+    participants_by_event = event_participants_for_events(
+        con,
+        [int(row["id"]) for row in rows],
+    )
+    events = [
+        build_event(
+            con,
+            row,
+            effective_date,
+            participants=participants_by_event.get(int(row["id"]), []),
+        )
+        for row in rows
+    ]
     normalize_linked_occurrences(events)
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -45,6 +45,7 @@ const required = [
   'lab/hero/review/5878-poster-attached-card/index.html',
   'lab/hero/review/6322-photo-parallax-sheet/index.html',
   'lab/occurrences/index.html',
+  'lab/event-participants/index.html',
   ...templateContract.lab_scenarios.map((scenario) => `lab/event-desktop/examples/${scenario}/index.html`),
   'lab/event-mobile/index.html',
   ...['control', 'open-prose', 'action-dock', 'open-prose-action-dock', 'accepted-v2', 'accepted-v3', 'accepted-v4', 'accepted-v5', 'accepted-v6', 'accepted-v7', 'accepted-v8'].flatMap((variant) =>

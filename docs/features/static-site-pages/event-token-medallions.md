@@ -134,8 +134,15 @@ Detail page order:
 Hero / visual decision block
 H1 + short meta / summary
 Token medallion row
+Participant cards (only with verified event-to-person relations)
 Primary CTA / Коротко facts / description
 ```
+
+People never enter the token medallion resolver. A participant is a named,
+likable entity with a role and optional portrait, so it renders in the separate
+`EventParticipants` block on mobile and desktop. Its canonical contract and
+fail-closed export rules are documented in
+[`../event-people/README.md`](../event-people/README.md).
 
 Generic search/related cards are not a medallion surface in P0. Date/Popular listings use only the bounded V15 exception above. Other cards get the separate metadata formatting fix:
 

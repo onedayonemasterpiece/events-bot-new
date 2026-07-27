@@ -58,7 +58,13 @@
 - Added the deployed owner-only Supabase `user_saved_event` schema, RLS
   policies, security-invoker saved-events view and authenticated idempotent RPC
   used by the noindex Favorites shell.
-
+- Added a separate verified-participant block under event medallions on mobile
+  and desktop detail pages, with role/headliner labels, provenance-gated
+  portraits, initials fallback and device-local person likes isolated from
+  event reactions.
+- Added a backward-compatible, fail-closed static participant projection from
+  the artist registry/appearance overlay plus KGD80 portrait canaries for
+  Татьяна Удовенко and Андрей Левченков.
 - Added compact PWA lifecycle analytics in the personalization Supabase
   project: confirmed installs, standalone sessions, daily active installations
   and exact D1/D7 cohort returns use one mutable installation-state row plus

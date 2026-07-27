@@ -15,6 +15,7 @@ sections:
     mobile_discovery_shell: docs/features/static-site-pages/mobile-shell.md
     audience_admission_discovery: docs/features/unsigned-personalization/audience-admission-discovery.md
     unusual_events: docs/features/unusual-events/README.md
+    event_people: docs/features/event-people/README.md
   operations:
     incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md
@@ -180,6 +181,12 @@ features:
       - site/scripts/static_event_bge.py
       - site/scripts/unusual_event_semantics.py
       - site/src/pages/neobychnoe/index.astro
+  event_people:
+    status: ui_implemented_backend_pending
+    docs: docs/features/event-people/README.md
+    entrypoints:
+      - site/src/components/EventParticipants.astro
+      - site/scripts/export-production-preview-data.py
 
   interest_clubs:
     status: implementation_rc

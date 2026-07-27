@@ -10,6 +10,43 @@ import {
 } from './release-contract.mjs';
 import { assertAnonymousListDisabled, publicationObjects } from './deploy-secret-candidate-yc.mjs';
 
+test('verified event participants render after medallions on mobile and desktop with isolated person likes', () => {
+  const component = readFileSync(new URL('../src/components/EventParticipants.astro', import.meta.url), 'utf8');
+  const mobilePage = readFileSync(new URL('../src/pages/sobytiya/[slug].astro', import.meta.url), 'utf8');
+  const desktopPage = readFileSync(new URL('../src/components/DesktopEventPage.astro', import.meta.url), 'utf8');
+  const types = readFileSync(new URL('../src/lib/types.ts', import.meta.url), 'utf8');
+
+  assert.match(types, /export interface PreviewParticipant/u);
+  assert.match(types, /participants\?: PreviewParticipant\[\]/u);
+  for (const marker of [
+    'data-event-participants',
+    'data-participant-like',
+    'kenigevents:participant-likes:v1',
+    'data-participant-like-count',
+    'aria-pressed="false"',
+  ]) {
+    assert.ok(component.includes(marker), `participant component misses ${marker}`);
+  }
+  assert.doesNotMatch(component, /data-feedback-action="like"/u);
+
+  const mobileMedallionsAt = mobilePage.indexOf('<EventTokenMedallions event={event}');
+  const mobileParticipantsAt = mobilePage.indexOf('<EventParticipants event={event} surface="mobile"');
+  const mobileDetailsAt = mobilePage.indexOf('mobile-event-production__details');
+  assert.ok(
+    mobileMedallionsAt >= 0
+      && mobileMedallionsAt < mobileParticipantsAt
+      && mobileParticipantsAt < mobileDetailsAt,
+    'mobile event detail must order medallions, participants, then description',
+  );
+
+  const desktopMedallionsAt = desktopPage.indexOf('<EventTokenMedallions event={event}');
+  const desktopParticipantsAt = desktopPage.indexOf('<EventParticipants event={event} surface="desktop"');
+  assert.ok(
+    desktopMedallionsAt >= 0 && desktopMedallionsAt < desktopParticipantsAt,
+    'desktop event detail must render participants under medallions',
+  );
+});
+
 test('ADD-BUILD-07 production/preview/candidate profiles use an explicit 256-bit review path', () => {
   const token = generateCandidateToken();
   assert.equal(token.length, 43);

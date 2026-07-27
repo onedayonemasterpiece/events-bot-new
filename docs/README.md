@@ -17,6 +17,7 @@
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
 - Event-media automatic gate: `docs/features/event-media/README.md`
 - Event age rating (declared/assessed, Smart Update, CPU BGE, backfill): `docs/features/event-age-rating/README.md`
+- Event participants/headliners UI and static projection: `docs/features/event-people/README.md`
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
