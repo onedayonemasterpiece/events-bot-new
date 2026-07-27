@@ -1,0 +1,437 @@
+---
+interface Props {
+  pageFamily?: string;
+  pageLabel?: string;
+  overallNpsDue?: boolean;
+  showEventIssue?: boolean;
+  eventId?: string;
+  eventLabel?: string;
+}
+
+const {
+  pageFamily = 'home',
+  pageLabel = 'эта страница',
+  overallNpsDue = false,
+  showEventIssue = false,
+  eventId,
+  eventLabel = 'событие из демонстрационного сценария',
+} = Astro.props;
+const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
+---
+
+<section
+  class="focus-feedback"
+  data-focus-feedback
+  data-default-kind={overallNpsDue ? 'overall' : 'surface'}
+  aria-labelledby={`${idPrefix}-title`}
+>
+  <div>
+    <p class="focus-feedback__eyebrow">Обратная связь · прототип</p>
+    <h2 id={`${idPrefix}-title`}>Разные вопросы — разные сигналы</h2>
+    <p>
+      Общий NPS задаётся раз в неделю или при выходе. Полезность относится только
+      к текущей странице. Улучшение доступно всегда, а ошибка в событии идёт
+      отдельным путём проверки фактов.
+    </p>
+  </div>
+  <div class="focus-feedback__launchers" aria-label="Виды обратной связи">
+    {overallNpsDue && (
+      <button class="ke-button ke-button--secondary" type="button" data-feedback-open="overall">
+        Общий NPS
+      </button>
+    )}
+    <button class="ke-button ke-button--secondary" type="button" data-feedback-open="surface">
+      Полезность страницы
+    </button>
+    <button class="ke-button ke-button--primary" type="button" data-feedback-open="improvement">
+      Предложить улучшение
+    </button>
+    {showEventIssue && (
+      <button class="ke-button ke-button--secondary" type="button" data-feedback-open="event_issue">
+        Ошибка в событии
+      </button>
+    )}
+  </div>
+
+  <p class="focus-feedback__boundary">
+    Здесь ответы только демонстрируют интерфейс и остаются в текущей вкладке:
+    отправки и записи в базу нет. В production элементы доступны лишь после
+    серверной проверки активного участника.
+  </p>
+
+  <dialog class="focus-feedback__dialog" data-feedback-dialog aria-labelledby={`${idPrefix}-dialog-title`}>
+    <div class="focus-feedback__sheet">
+      <header class="focus-feedback__header">
+        <div>
+          <p class="focus-feedback__eyebrow">Исследовательский вопрос</p>
+          <h2 id={`${idPrefix}-dialog-title`}>Что вы хотите оценить?</h2>
+        </div>
+        <button class="focus-feedback__close" type="button" data-feedback-close aria-label="Закрыть обратную связь">
+          <span aria-hidden="true">×</span>
+        </button>
+      </header>
+
+      <div class="focus-feedback__switcher" aria-label="Выберите вид ответа">
+        <button type="button" aria-pressed="false" data-feedback-kind="overall">Общий NPS</button>
+        <button type="button" aria-pressed="false" data-feedback-kind="surface">Полезность</button>
+        <button type="button" aria-pressed="false" data-feedback-kind="improvement">Улучшение</button>
+        {showEventIssue && (
+          <button type="button" aria-pressed="false" data-feedback-kind="event_issue">Ошибка события</button>
+        )}
+      </div>
+
+      <form class="focus-feedback__panel" data-feedback-panel="overall" data-feedback-form hidden>
+        <fieldset>
+          <legend>
+            Насколько вероятно, что вы порекомендуете «Полюбить Калининград · Анонсы» знакомым?
+          </legend>
+          <p class="focus-feedback__hint">Общий relationship NPS · раз в неделю или при выходе</p>
+          <div class="focus-feedback__scale">
+            {Array.from({ length: 11 }, (_, score) => (
+              <label>
+                <input type="radio" name={`${idPrefix}-overall-score`} value={score} required />
+                <span>{score}</span>
+              </label>
+            ))}
+          </div>
+          <div class="focus-feedback__ends" aria-hidden="true"><span>Совсем не вероятно</span><span>Очень вероятно</span></div>
+        </fieldset>
+        <button class="ke-button ke-button--primary" type="submit">Отметить в макете</button>
+      </form>
+
+      <form class="focus-feedback__panel" data-feedback-panel="surface" data-feedback-form hidden>
+        <fieldset>
+          <legend>Насколько {pageLabel} помогла выбрать или понять событие?</legend>
+          <p class="focus-feedback__hint">
+            Полезность page family <code>{pageFamily}</code> · это не общий NPS
+          </p>
+          <div class="focus-feedback__scale">
+            {Array.from({ length: 11 }, (_, score) => (
+              <label>
+                <input type="radio" name={`${idPrefix}-surface-score`} value={score} required />
+                <span>{score}</span>
+              </label>
+            ))}
+          </div>
+          <div class="focus-feedback__ends" aria-hidden="true"><span>Не помогла</span><span>Очень помогла</span></div>
+        </fieldset>
+        <button class="ke-button ke-button--primary" type="submit">Отметить в макете</button>
+      </form>
+
+      <form class="focus-feedback__panel" data-feedback-panel="improvement" data-feedback-form hidden>
+        <label class="focus-feedback__textarea">
+          <strong>Что стоит сделать понятнее или удобнее?</strong>
+          <span>До 2 000 символов. Оценка не обязательна.</span>
+          <textarea
+            name={`${idPrefix}-improvement`}
+            rows="7"
+            maxlength="2000"
+            required
+            data-feedback-text
+          ></textarea>
+        </label>
+        <div class="focus-feedback__form-footer">
+          <span data-feedback-count aria-live="polite">0 / 2 000</span>
+          <button class="ke-button ke-button--primary" type="submit">Отметить в макете</button>
+        </div>
+      </form>
+
+      {showEventIssue && (
+        <form class="focus-feedback__panel" data-feedback-panel="event_issue" data-feedback-form hidden>
+          <fieldset>
+            <legend>Что неверно в событии?</legend>
+            <p class="focus-feedback__hint">
+              {eventLabel}{eventId ? ` · event_id ${eventId}` : ' · без реального event_id в этом specimen'}
+            </p>
+            <div class="focus-feedback__issue-types">
+              {[
+                ['date', 'Дата'],
+                ['time', 'Время'],
+                ['place', 'Место'],
+                ['price', 'Цена'],
+                ['ticket', 'Билеты'],
+                ['status', 'Статус'],
+                ['media', 'Фото / видео'],
+                ['duplicate', 'Дубликат'],
+                ['other', 'Другое'],
+              ].map(([value, label]) => (
+                <label>
+                  <input type="radio" name={`${idPrefix}-event-issue-type`} value={value} required />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label class="focus-feedback__textarea">
+            <strong>Что именно нужно проверить? <small>(необязательно)</small></strong>
+            <span>До 2 000 символов. Не добавляйте личные данные.</span>
+            <textarea
+              name={`${idPrefix}-event-issue-body`}
+              rows="5"
+              maxlength="2000"
+              data-feedback-text
+            ></textarea>
+          </label>
+          <div class="focus-feedback__fact-boundary">
+            <strong>Сообщение не меняет событие автоматически.</strong>
+            Оператор сверяет категорию с каноническим event ID и серверным
+            снимком, затем отдельно принимает решение об исправлении.
+          </div>
+          <div class="focus-feedback__form-footer">
+            <span data-feedback-count aria-live="polite">0 / 2 000</span>
+            <button class="ke-button ke-button--primary" type="submit">Отметить в макете</button>
+          </div>
+        </form>
+      )}
+
+      <p class="focus-feedback__status" data-feedback-status aria-live="polite"></p>
+    </div>
+  </dialog>
+</section>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-focus-feedback]').forEach((root) => {
+    const dialog = root.querySelector<HTMLDialogElement>('[data-feedback-dialog]');
+    const closeButton = root.querySelector<HTMLButtonElement>('[data-feedback-close]');
+    const kindButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-feedback-kind]'));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-feedback-panel]'));
+    const launchers = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-feedback-open]'));
+    const status = root.querySelector<HTMLElement>('[data-feedback-status]');
+    if (!dialog || !closeButton || !status) return;
+
+    let lastLauncher: HTMLButtonElement | null = null;
+
+    const selectKind = (kind: string) => {
+      kindButtons.forEach((button) => {
+        button.setAttribute('aria-pressed', button.dataset.feedbackKind === kind ? 'true' : 'false');
+      });
+      panels.forEach((panel) => {
+        panel.hidden = panel.dataset.feedbackPanel !== kind;
+      });
+      status.textContent = '';
+    };
+
+    launchers.forEach((button) => {
+      button.addEventListener('click', () => {
+        lastLauncher = button;
+        selectKind(button.dataset.feedbackOpen || root.dataset.defaultKind || 'surface');
+        dialog.showModal();
+        kindButtons.find((candidate) => candidate.getAttribute('aria-pressed') === 'true')?.focus();
+      });
+    });
+
+    kindButtons.forEach((button) => {
+      button.addEventListener('click', () => selectKind(button.dataset.feedbackKind || 'surface'));
+    });
+
+    closeButton.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => lastLauncher?.focus());
+
+    root.querySelectorAll<HTMLFormElement>('[data-feedback-form]').forEach((form) => {
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        status.textContent = 'Ответ отмечен только в макете этой вкладки и никуда не отправлен.';
+      });
+    });
+
+    root.querySelectorAll<HTMLTextAreaElement>('[data-feedback-text]').forEach((textarea) => {
+      const form = textarea.closest('form');
+      const counter = form?.querySelector<HTMLElement>('[data-feedback-count]');
+      if (!counter) return;
+      textarea.addEventListener('input', () => {
+        counter.textContent = `${textarea.value.length.toLocaleString('ru-RU')} / 2 000`;
+      });
+    });
+  });
+</script>
+
+<style>
+  .focus-feedback {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem 2rem;
+    align-items: center;
+    border: 1px solid var(--ke-color-line, #e1d3c2);
+    border-radius: 1.5rem;
+    padding: clamp(1.15rem, 3vw, 2rem);
+    background: var(--ke-color-surface-strong, #fff);
+    box-shadow: var(--ke-shadow-1, 0 8px 22px rgb(72 45 25 / 8%));
+  }
+
+  .focus-feedback__eyebrow {
+    margin: 0 0 .35rem;
+    color: var(--ke-color-accent-700, #0f5d57);
+    font-size: .72rem;
+    font-weight: 900;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .focus-feedback h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 2rem); line-height: 1.08; }
+  .focus-feedback h2 + p { max-width: 65ch; margin: .7rem 0 0; color: var(--ke-color-muted, #6d6259); line-height: 1.55; }
+  .focus-feedback__launchers { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
+  .focus-feedback__boundary {
+    grid-column: 1 / -1;
+    margin: .1rem 0 0;
+    border-radius: .9rem;
+    padding: .75rem .9rem;
+    background: var(--ke-color-info-50, #e7f2f7);
+    color: var(--ke-color-info-700, #1f658d);
+    font-size: .8rem;
+    line-height: 1.45;
+  }
+
+  .focus-feedback__dialog {
+    width: min(720px, calc(100% - 1rem));
+    max-height: min(88dvh, 780px);
+    border: 0;
+    border-radius: 1.5rem;
+    padding: 0;
+    background: transparent;
+    color: var(--ke-color-copy, #44362d);
+    box-shadow: var(--ke-shadow-3, 0 24px 64px rgb(72 45 25 / 18%));
+  }
+
+  .focus-feedback__dialog::backdrop { background: rgb(34 26 20 / 58%); backdrop-filter: blur(3px); }
+  .focus-feedback__sheet { overflow: auto; max-height: inherit; padding: clamp(1rem, 3vw, 1.65rem); background: var(--ke-color-surface, #fffdf8); }
+  .focus-feedback__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .focus-feedback__header h2 { font-size: clamp(1.4rem, 4vw, 2.1rem); }
+  .focus-feedback__close {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
+    border: 1px solid var(--ke-color-line, #e1d3c2);
+    border-radius: 50%;
+    background: #fff;
+    color: var(--ke-color-ink, #221a14);
+    font: 400 1.8rem/1 var(--ke-font-sans, system-ui, sans-serif);
+    cursor: pointer;
+  }
+
+  .focus-feedback__close:focus-visible,
+  .focus-feedback__switcher button:focus-visible,
+  .focus-feedback__scale label:has(input:focus-visible) {
+    outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 60%, transparent);
+    outline-offset: 2px;
+  }
+
+  .focus-feedback__switcher {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+    gap: .35rem;
+    margin: 1.2rem 0;
+    border-radius: 1rem;
+    padding: .35rem;
+    background: var(--ke-color-canvas-soft, #f2e7d7);
+  }
+
+  .focus-feedback__switcher button {
+    min-height: 44px;
+    border: 0;
+    border-radius: .75rem;
+    padding: .6rem .7rem;
+    background: transparent;
+    color: var(--ke-color-copy, #44362d);
+    font: 800 .82rem/1.2 var(--ke-font-sans, system-ui, sans-serif);
+    cursor: pointer;
+  }
+
+  .focus-feedback__switcher button[aria-pressed="true"] {
+    background: #fff;
+    color: var(--ke-color-brand-800, #793014);
+    box-shadow: 0 4px 14px rgb(72 45 25 / 10%);
+  }
+
+  .focus-feedback__panel { display: grid; gap: 1rem; }
+  .focus-feedback__panel[hidden] { display: none; }
+  .focus-feedback__panel fieldset { min-width: 0; margin: 0; border: 0; padding: 0; }
+  .focus-feedback__panel legend { max-width: 46ch; padding: 0; color: var(--ke-color-ink, #221a14); font-size: clamp(1.05rem, 3vw, 1.35rem); font-weight: 850; line-height: 1.35; }
+  .focus-feedback__hint { margin: .5rem 0 0; color: var(--ke-color-muted, #6d6259); font-size: .8rem; line-height: 1.4; }
+  .focus-feedback__hint code { overflow-wrap: anywhere; }
+  .focus-feedback__scale { display: grid; grid-template-columns: repeat(11, minmax(42px, 1fr)); gap: .35rem; margin-top: 1rem; }
+  .focus-feedback__scale label { position: relative; min-width: 0; cursor: pointer; }
+  .focus-feedback__scale input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .focus-feedback__scale span {
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--ke-color-line, #e1d3c2);
+    border-radius: .7rem;
+    background: #fff;
+    color: var(--ke-color-copy, #44362d);
+    font-size: .88rem;
+    font-weight: 850;
+  }
+  .focus-feedback__scale input:checked + span { border-color: var(--ke-color-accent-600, #0f766e); background: #d7f0ec; color: #0f5d57; box-shadow: inset 0 0 0 1px #0f766e; }
+  .focus-feedback__issue-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin-top: 1rem; }
+  .focus-feedback__issue-types label { position: relative; min-width: 0; cursor: pointer; }
+  .focus-feedback__issue-types input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .focus-feedback__issue-types span {
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--ke-color-line, #e1d3c2);
+    border-radius: .75rem;
+    padding: .5rem;
+    background: #fff;
+    color: var(--ke-color-copy, #44362d);
+    font-size: .82rem;
+    font-weight: 800;
+    text-align: center;
+  }
+  .focus-feedback__issue-types label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 60%, transparent); outline-offset: 2px; border-radius: .75rem; }
+  .focus-feedback__issue-types input:checked + span { border-color: var(--ke-color-brand-600, #a54821); background: #f8e5d8; color: var(--ke-color-brand-900, #5f250f); box-shadow: inset 0 0 0 1px rgb(165 72 33 / 20%); }
+  .focus-feedback__ends { display: flex; justify-content: space-between; gap: 1rem; margin-top: .4rem; color: var(--ke-color-muted, #6d6259); font-size: .7rem; }
+  .focus-feedback__panel > .ke-button { justify-self: end; }
+  .focus-feedback__textarea { display: grid; gap: .45rem; }
+  .focus-feedback__textarea strong { color: var(--ke-color-ink, #221a14); font-size: 1.05rem; }
+  .focus-feedback__textarea strong small { color: var(--ke-color-muted, #6d6259); font-size: .78rem; font-weight: 650; }
+  .focus-feedback__textarea > span { color: var(--ke-color-muted, #6d6259); font-size: .8rem; }
+  .focus-feedback__textarea textarea {
+    width: 100%;
+    min-height: 150px;
+    resize: vertical;
+    border: 1px solid #cdbfad;
+    border-radius: 1rem;
+    padding: .85rem;
+    background: #fff;
+    color: var(--ke-color-ink, #221a14);
+    font: 1rem/1.5 var(--ke-font-sans, system-ui, sans-serif);
+  }
+  .focus-feedback__textarea textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 35%, transparent); border-color: var(--ke-color-focus, #0f766e); }
+  .focus-feedback__form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .focus-feedback__form-footer > span { color: var(--ke-color-muted, #6d6259); font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .focus-feedback__fact-boundary {
+    border-radius: .9rem;
+    padding: .8rem .9rem;
+    background: var(--ke-color-warning-50, #fff8db);
+    color: var(--ke-color-warning-800, #5a3b06);
+    font-size: .82rem;
+    line-height: 1.45;
+  }
+  .focus-feedback__status { min-height: 1.5em; margin: .9rem 0 0; color: var(--ke-color-success-700, #0f6c3d); font-size: .85rem; font-weight: 750; line-height: 1.4; }
+
+  @media (max-width: 800px) {
+    .focus-feedback { grid-template-columns: 1fr; }
+    .focus-feedback__launchers { justify-content: flex-start; }
+  }
+
+  @media (max-width: 640px) {
+    .focus-feedback__launchers .ke-button { width: 100%; }
+    .focus-feedback__dialog { width: 100%; max-height: 92dvh; margin: auto 0 0; border-radius: 1.35rem 1.35rem 0 0; }
+    .focus-feedback__switcher { grid-template-columns: 1fr; }
+    .focus-feedback__scale { grid-template-columns: repeat(6, minmax(42px, 1fr)); }
+    .focus-feedback__issue-types { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .focus-feedback__form-footer { align-items: stretch; flex-direction: column; }
+    .focus-feedback__form-footer .ke-button,
+    .focus-feedback__panel > .ke-button { width: 100%; justify-self: stretch; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .focus-feedback__dialog[open] { animation: focus-feedback-in 180ms ease-out; }
+    @keyframes focus-feedback-in {
+      from { opacity: 0; transform: translateY(12px) scale(.985); }
+      to { opacity: 1; transform: none; }
+    }
+  }
+</style>

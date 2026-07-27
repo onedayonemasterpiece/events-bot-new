@@ -1,0 +1,380 @@
+---
+import FocusLabBadge from './FocusLabBadge.astro';
+import FocusGroupThankYou from './FocusGroupThankYou.astro';
+import { withBase } from '../lib/events';
+
+const secretHref = withBase('/zakrytaya-afisha/');
+const programmeHref = withBase('/fokus-gruppa/');
+---
+
+<main
+  class="focus-intake"
+  data-focus-intake
+  data-secret-href={secretHref}
+  data-programme-href={programmeHref}
+>
+  <section class="focus-intake__card" data-intake-pending aria-live="polite">
+    <span class="focus-intake__spinner" aria-hidden="true"></span>
+    <h1>Проверяем ссылку</h1>
+    <p>Первым действием убираем fragment из адресной строки.</p>
+  </section>
+
+  <section class="focus-intake__card focus-intake__card--error" data-intake-error hidden>
+    <FocusLabBadge label="Лаборатория сайта" detail="Маршрут приглашения" />
+    <p class="focus-intake__eyebrow">Приглашение не принято</p>
+    <h1 data-intake-error-title>Нужна исходная ссылка</h1>
+    <p data-intake-error-message>
+      Откройте ссылку или QR повторно: код приглашения находится только во fragment.
+    </p>
+    <div class="focus-intake__actions">
+      <a class="ke-button ke-button--primary" href={programmeHref}>О программе</a>
+      <a class="ke-button ke-button--secondary" href={withBase('/')}>На стартовый экран</a>
+    </div>
+  </section>
+
+  <div class="focus-intake__journey" data-intake-journey hidden>
+    <section class="focus-intake__hero">
+      <FocusLabBadge label="Вы в лаборатории сайта" detail="Предварительный просмотр" size="hero" />
+      <p class="focus-intake__eyebrow">Шаг 1 из 2 · приглашение найдено</p>
+      <h1>Спасибо, что готовы проверить афишу вместе с нами</h1>
+      <p class="focus-intake__lead">
+        Код уже удалён из адресной строки и нигде не сохранён. В этом браузере
+        записана только временная метка просмотра на 72 часа.
+      </p>
+      <div class="focus-intake__safety">
+        <strong>Метка просмотра — не вход и не защита.</strong>
+        <span>
+          Она лишь помогает продолжить продуктовый макет. Активного участника
+          production обязан проверять сервером после подтверждения личности.
+        </span>
+      </div>
+    </section>
+
+    <section class="focus-intake__auth" aria-labelledby="focus-auth-title">
+      <div class="focus-intake__auth-copy">
+        <p class="focus-intake__eyebrow">Шаг 2 из 2 · способ подтверждения</p>
+        <h2 id="focus-auth-title">Как вы подтвердите себя в рабочей версии?</h2>
+        <p>
+          Email-код/magic link и Яндекс должны приводить к одной собственной
+          identity. Этот экран показывает выбор, но не отправляет письмо и не
+          запускает OAuth.
+        </p>
+      </div>
+
+      <label class="focus-intake__consent">
+        <input type="checkbox" data-focus-research-consent />
+        <span>
+          <strong>Я отдельно принимаю исследовательский обзор на срок программы.</strong>
+          Обычная рекламная или рекомендательная подписка не включается.
+        </span>
+      </label>
+
+      <div class="focus-intake__methods">
+        <form class="focus-intake__method" data-focus-email-form>
+          <span class="focus-intake__method-number" aria-hidden="true">01</span>
+          <h3>Подтвердить email</h3>
+          <p>В production сюда придёт одноразовый код или magic link.</p>
+          <label for="focus-email">
+            <span>Email</span>
+            <input
+              id="focus-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="name@example.ru"
+              required
+            />
+          </label>
+          <button class="ke-button ke-button--primary" type="submit">Показать следующий шаг</button>
+        </form>
+
+        <section class="focus-intake__method">
+          <span class="focus-intake__method-number" aria-hidden="true">02</span>
+          <h3>Продолжить с Яндексом</h3>
+          <p>В production используется существующий Yandex Auth contour; здесь провайдер не открывается.</p>
+          <button class="ke-button ke-button--secondary" type="button" data-focus-yandex>
+            Выбрать Яндекс
+          </button>
+        </section>
+      </div>
+
+      <p class="focus-intake__auth-status" data-focus-auth-status role="status"></p>
+      <div class="focus-intake__continue" data-focus-continue hidden>
+        <div>
+          <strong>Identity не подтверждена — это ожидаемо для макета.</strong>
+          <span>Можно перейти только в предварительную оболочку и проверить механику страниц.</span>
+        </div>
+        <a class="ke-button ke-button--primary ke-button--large" href={secretHref}>
+          Открыть закрытую афишу
+        </a>
+      </div>
+    </section>
+
+    <FocusGroupThankYou />
+  </div>
+</main>
+
+<script>
+  import {
+    inspectFocusInviteUrl,
+    readFocusPreviewMarker,
+    storeFocusPreviewMarker,
+  } from '../lib/focus-group-prototype';
+
+  document.querySelectorAll<HTMLElement>('[data-focus-intake]').forEach((root) => {
+    // Fragment inspection and removal must stay before every other client action.
+    const intake = inspectFocusInviteUrl(window.location.href);
+    window.history.replaceState(window.history.state, '', intake.cleanHref);
+
+    const pending = root.querySelector<HTMLElement>('[data-intake-pending]');
+    const error = root.querySelector<HTMLElement>('[data-intake-error]');
+    const errorTitle = root.querySelector<HTMLElement>('[data-intake-error-title]');
+    const errorMessage = root.querySelector<HTMLElement>('[data-intake-error-message]');
+    const journey = root.querySelector<HTMLElement>('[data-intake-journey]');
+    let focusStorage: Storage | null = null;
+    try {
+      focusStorage = window.localStorage;
+    } catch {
+      focusStorage = null;
+    }
+    const previousMarker = focusStorage ? readFocusPreviewMarker(focusStorage) : null;
+    const markerReady = intake.status === 'accepted'
+      ? Boolean(focusStorage && storeFocusPreviewMarker(focusStorage))
+      : Boolean(previousMarker);
+
+    if (pending) pending.hidden = true;
+
+    if (intake.status === 'accepted' && markerReady) {
+      if (journey) journey.hidden = false;
+    } else if (intake.status === 'missing' && previousMarker) {
+      if (journey) journey.hidden = false;
+      const eyebrow = journey?.querySelector<HTMLElement>('.focus-intake__eyebrow');
+      if (eyebrow) eyebrow.textContent = 'Возврат в прототип · метка ещё действует';
+    } else {
+      if (error) error.hidden = false;
+      if (intake.status === 'accepted' && !markerReady) {
+        if (errorTitle) errorTitle.textContent = 'Браузер не сохранил метку просмотра';
+        if (errorMessage) {
+          errorMessage.textContent = 'Локальное хранилище недоступно. Никакого статуса участника не создано; попробуйте обычное окно браузера или вернитесь к программе.';
+        }
+      } else if (intake.status === 'invalid') {
+        if (errorTitle) errorTitle.textContent = 'Ссылка повреждена или устарела';
+        if (errorMessage) {
+          errorMessage.textContent = 'Fragment уже удалён. Попросите отправителя создать новую ссылку; не вставляйте код в email-форму.';
+        }
+      }
+    }
+
+    const consent = root.querySelector<HTMLInputElement>('[data-focus-research-consent]');
+    const emailForm = root.querySelector<HTMLFormElement>('[data-focus-email-form]');
+    const yandexButton = root.querySelector<HTMLButtonElement>('[data-focus-yandex]');
+    const authStatus = root.querySelector<HTMLElement>('[data-focus-auth-status]');
+    const continueBlock = root.querySelector<HTMLElement>('[data-focus-continue]');
+
+    const selectPrototypeMethod = (method: 'email' | 'yandex') => {
+      if (!consent?.checked) {
+        consent?.focus();
+        if (authStatus) {
+          authStatus.textContent = 'Сначала примите отдельное условие исследовательского обзора. Чекбокс не отмечается автоматически.';
+        }
+        return;
+      }
+
+      if (authStatus) {
+        authStatus.textContent = method === 'email'
+          ? 'Макет не отправлял код и не сохранил введённый email. В production здесь требуется реальное подтверждение.'
+          : 'Макет не открывал Яндекс и не создавал сессию. В production здесь требуется реальный OAuth callback.';
+      }
+      if (continueBlock) continueBlock.hidden = false;
+      continueBlock?.querySelector<HTMLAnchorElement>('a')?.focus();
+    };
+
+    emailForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!emailForm.reportValidity()) return;
+      selectPrototypeMethod('email');
+    });
+
+    yandexButton?.addEventListener('click', () => selectPrototypeMethod('yandex'));
+  });
+</script>
+
+<style>
+  .focus-intake {
+    width: min(1120px, calc(100% - 2rem));
+    margin: 0 auto;
+    padding: clamp(1rem, 4vw, 3rem) 0 4rem;
+    color: var(--ke-color-copy, #44362d);
+    font-family: var(--ke-font-sans, system-ui, sans-serif);
+  }
+
+  .focus-intake__card,
+  .focus-intake__hero,
+  .focus-intake__auth {
+    border: 1px solid var(--ke-color-line, #e1d3c2);
+    border-radius: 1.75rem;
+    background: var(--ke-color-surface-strong, #fff);
+    box-shadow: var(--ke-shadow-2, 0 18px 45px rgb(72 45 25 / 12%));
+  }
+
+  .focus-intake__card {
+    min-height: min(520px, 68dvh);
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: .8rem;
+    padding: clamp(1.5rem, 5vw, 4rem);
+    text-align: center;
+  }
+
+  .focus-intake__card[hidden],
+  .focus-intake__journey[hidden] { display: none; }
+  .focus-intake__card h1 { margin: 0; font-size: clamp(2rem, 6vw, 4rem); }
+  .focus-intake__card p { max-width: 56ch; margin: 0; color: var(--ke-color-muted, #6d6259); line-height: 1.55; }
+  .focus-intake__spinner { width: 36px; height: 36px; border: 3px solid var(--ke-color-line, #e1d3c2); border-right-color: var(--ke-color-brand-600, #a54821); border-radius: 50%; animation: focus-spin 700ms linear infinite; }
+  .focus-intake__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .65rem; margin-top: .5rem; }
+  .focus-intake__journey { display: grid; gap: 1rem; }
+
+  .focus-intake__hero {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(1.4rem, 5vw, 4rem);
+    background:
+      radial-gradient(circle at 96% 2%, rgb(255 193 13 / 23%), transparent 33%),
+      linear-gradient(145deg, #fffdf8 0%, #fff7e7 100%);
+  }
+
+  .focus-intake__hero::after {
+    content: "";
+    position: absolute;
+    right: -5rem;
+    bottom: -8rem;
+    width: 18rem;
+    height: 18rem;
+    border: 1.5rem solid rgb(165 72 33 / 7%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .focus-intake__eyebrow {
+    margin: clamp(1.5rem, 4vw, 3rem) 0 .45rem;
+    color: var(--ke-color-brand-700, #98401f);
+    font-size: .75rem;
+    font-weight: 900;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .focus-intake__hero h1 {
+    max-width: 14ch;
+    margin: 0;
+    color: var(--ke-color-ink, #221a14);
+    font-size: clamp(2.35rem, 7vw, 5.5rem);
+    line-height: .94;
+    letter-spacing: -.055em;
+    text-wrap: balance;
+  }
+
+  .focus-intake__lead {
+    max-width: 62ch;
+    margin: 1.2rem 0 0;
+    color: var(--ke-color-muted, #6d6259);
+    font-size: clamp(1rem, 2vw, 1.25rem);
+    line-height: 1.55;
+  }
+
+  .focus-intake__safety {
+    max-width: 760px;
+    display: grid;
+    gap: .3rem;
+    margin-top: 1.4rem;
+    border-radius: 1rem;
+    padding: .9rem 1rem;
+    background: var(--ke-color-info-50, #e7f2f7);
+    color: var(--ke-color-info-700, #1f658d);
+    line-height: 1.45;
+  }
+
+  .focus-intake__auth { padding: clamp(1.25rem, 4vw, 3rem); }
+  .focus-intake__auth-copy { max-width: 720px; }
+  .focus-intake__auth-copy .focus-intake__eyebrow { margin-top: 0; }
+  .focus-intake__auth h2 { margin: 0; color: var(--ke-color-ink, #221a14); font-size: clamp(1.8rem, 5vw, 3.4rem); line-height: 1; letter-spacing: -.045em; }
+  .focus-intake__auth-copy > p:last-child { margin: .85rem 0 0; color: var(--ke-color-muted, #6d6259); line-height: 1.55; }
+
+  .focus-intake__consent {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .75rem;
+    align-items: start;
+    margin-top: 1.35rem;
+    border: 1px solid #b7ded9;
+    border-radius: 1rem;
+    padding: 1rem;
+    background: #e8f3f1;
+    color: #0f5d57;
+    cursor: pointer;
+  }
+
+  .focus-intake__consent input { width: 1.25rem; height: 1.25rem; margin: .1rem 0 0; accent-color: var(--ke-color-accent-600, #0f766e); }
+  .focus-intake__consent input:focus-visible { outline: 3px solid rgb(15 118 110 / 35%); outline-offset: 3px; }
+  .focus-intake__consent span { display: grid; gap: .25rem; line-height: 1.4; }
+  .focus-intake__consent span:not(strong) { font-size: .88rem; }
+  .focus-intake__methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+  .focus-intake__method {
+    min-width: 0;
+    display: grid;
+    gap: .65rem;
+    align-content: start;
+    border: 1px solid var(--ke-color-line, #e1d3c2);
+    border-radius: 1.25rem;
+    padding: 1.15rem;
+    background: #fffdf8;
+  }
+  .focus-intake__method-number { color: var(--ke-color-brand-600, #a54821); font-size: .72rem; font-weight: 900; letter-spacing: .12em; }
+  .focus-intake__method h3 { margin: 0; color: var(--ke-color-ink, #221a14); font-size: 1.25rem; }
+  .focus-intake__method p { min-height: 2.8em; margin: 0; color: var(--ke-color-muted, #6d6259); font-size: .86rem; line-height: 1.4; }
+  .focus-intake__method label { display: grid; gap: .4rem; }
+  .focus-intake__method label span { font-size: .8rem; font-weight: 850; }
+  .focus-intake__method input {
+    width: 100%;
+    min-height: 48px;
+    border: 1px solid #cdbfad;
+    border-radius: .85rem;
+    padding: .7rem .8rem;
+    background: #fff;
+    color: var(--ke-color-ink, #221a14);
+    font: 1rem/1.35 var(--ke-font-sans, system-ui, sans-serif);
+  }
+  .focus-intake__method input:focus-visible { outline: 3px solid rgb(15 118 110 / 25%); border-color: var(--ke-color-focus, #0f766e); }
+  .focus-intake__method .ke-button { justify-self: start; margin-top: auto; }
+  .focus-intake__auth-status { min-height: 2.6em; margin: .9rem 0 0; color: var(--ke-color-brand-800, #793014); font-size: .86rem; font-weight: 750; line-height: 1.45; }
+  .focus-intake__continue {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-radius: 1rem;
+    padding: 1rem;
+    background: var(--ke-color-success-50, #e6f6e9);
+    color: var(--ke-color-success-700, #0f6c3d);
+  }
+  .focus-intake__continue[hidden] { display: none; }
+  .focus-intake__continue > div { display: grid; gap: .2rem; }
+  .focus-intake__continue span { font-size: .82rem; line-height: 1.4; }
+  .focus-intake__continue .ke-button { flex: 0 0 auto; }
+
+  @keyframes focus-spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 720px) {
+    .focus-intake { width: min(100% - 1rem, 1120px); }
+    .focus-intake__methods { grid-template-columns: 1fr; }
+    .focus-intake__method p { min-height: auto; }
+    .focus-intake__method .ke-button { width: 100%; }
+    .focus-intake__continue { align-items: stretch; flex-direction: column; }
+    .focus-intake__continue .ke-button { width: 100%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .focus-intake__spinner { animation: none; }
+  }
+</style>

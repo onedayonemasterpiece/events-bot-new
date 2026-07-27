@@ -1,108 +1,146 @@
 ---
-import PwaInstallAction from '../components/PwaInstallAction.astro';
-import PwaTelemetry from '../components/PwaTelemetry.astro';
+import FocusLabBadge from '../components/FocusLabBadge.astro';
 import { withBase } from '../lib/events';
 import '../styles/design-system.css';
 
-const previewHref = import.meta.env.PUBLIC_ROOT_PREVIEW_HREF || withBase('/__preview/');
 const logoHref = withBase('/favicon.svg');
-const manifestHref = `${withBase('/manifest.webmanifest')}?v=20260727-brand-icon-v2`;
+const programmeHref = withBase('/fokus-gruppa/');
+const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_preview_demo_20260727_abcdefghijklmnop');
 ---
+
 <!doctype html>
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>Полюбить Калининград Анонсы</title>
-    <meta name="description" content="Афиша Калининграда без шума: события, концерты, выставки, лекции и семейные планы в одном месте." />
+    <meta name="referrer" content="no-referrer" />
+    <title>Фокус-группа · Полюбить Калининград Анонсы</title>
+    <meta
+      name="description"
+      content="Стартовый экран продуктового прототипа фокус-группы сайта «Полюбить Калининград · Анонсы»."
+    />
     <link rel="icon" href={logoHref} type="image/svg+xml" sizes="any" />
-    <link rel="manifest" href={manifestHref} />
-    <meta name="theme-color" content="#fff6ea" />
-    <style>
-      * { box-sizing: border-box; }
-      body {
-        margin:0;
-        min-height:100svh;
-        display:grid;
-        place-items:center;
-        background:linear-gradient(180deg, var(--ke-color-surface-strong) 0%, var(--ke-color-canvas) 100%);
-        color:var(--ke-color-ink);
-        font-family:var(--ke-font-sans);
-        text-rendering: optimizeLegibility;
-        -webkit-font-smoothing: antialiased;
-      }
-      main {
-        width:min(92vw, 640px);
-        padding:clamp(34px, 7vh, 72px) 24px;
-        text-align:center;
-        display:flex;
-        flex-direction:column;
-        align-items:center;
-      }
-      .mark {
-        display:block;
-        width:clamp(220px, 24vw, 300px);
-        height:auto;
-        margin:0 auto 34px;
-      }
-      .kicker {
-        margin:0 0 12px;
-        color:var(--ke-color-brand-600);
-        font-weight:850;
-        text-transform:uppercase;
-        letter-spacing:.105em;
-        font-size:13px;
-        line-height:1.2;
-      }
-      h1 {
-        margin:0;
-        color:var(--ke-color-ink);
-        font-size:clamp(44px, 7vw, 72px);
-        line-height:.94;
-        letter-spacing:-.06em;
-        font-weight:900;
-      }
-      .lead {
-        margin:24px auto 0;
-        max-width:580px;
-        color:var(--ke-color-muted);
-        font-size:clamp(18px, 2.1vw, 23px);
-        line-height:1.42;
-        text-wrap:balance;
-      }
-      .actions {
-        margin-top:36px;
-        display:flex;
-        flex-wrap:wrap;
-        gap:12px;
-        justify-content:center;
-        align-items:center;
-      }
-      a { color:inherit; }
-      .actions :global(.ke-button) { min-width:min(100%, 288px); min-height:50px; padding-inline:26px; }
-      footer { margin-top:36px; font-size:15px; color:var(--ke-color-muted); }
-      @media (max-width: 520px) {
-        .mark { width:min(64vw, 260px); margin-bottom:30px; }
-        .actions { width:100%; flex-direction:column; gap:12px; }
-        .actions :global(.ke-button) { width:min(100%, 288px); }
-      }
-    </style>
+    <meta name="theme-color" content="#fff7e7" />
   </head>
   <body>
-    <PwaTelemetry />
-    <PwaInstallAction />
-    <main>
-      <img class="mark" src={logoHref} width="64" height="64" alt="Полюбить Калининград Анонсы" decoding="async" />
-      <p class="kicker">Полюбить Калининград</p>
-      <h1>Анонсы</h1>
-      <p class="lead">Афиша Калининграда без шума: концерты, выставки, лекции, спектакли и семейные события — всё, что стоит не пропустить.</p>
-      <div class="actions">
-        <a class="ke-button ke-button--primary" href={previewHref}>Открыть тестовую версию</a>
-        <a class="ke-button ke-button--secondary" href={withBase('/kluby-po-interesam/')}>Клубы по интересам</a>
-        <a class="ke-button ke-button--secondary" href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
-      </div>
-      <footer>kenigevents.ru</footer>
+    <a class="skip-link" href="#main">К основному содержанию</a>
+    <main id="main" class="focus-root">
+      <section class="focus-root__hero">
+        <header class="focus-root__top">
+          <a class="focus-root__brand" href={withBase('/')} aria-label="Полюбить Калининград Анонсы">
+            <img src={logoHref} width="52" height="52" alt="" />
+            <span><strong>Полюбить Калининград</strong><small>Анонсы</small></span>
+          </a>
+          <FocusLabBadge label="Фокус-группа" detail="Продуктовый прототип" />
+        </header>
+
+        <div class="focus-root__copy">
+          <p class="focus-root__eyebrow">Закрытое тестирование · до 200 участников</p>
+          <h1>Помогите сделать выбор событий понятнее</h1>
+          <p class="focus-root__lead">
+            Проверяйте афишу в обычных сценариях, отмечайте полезность страниц и
+            предлагайте улучшения. Критические ответы так же ценны, как положительные.
+          </p>
+          <div class="focus-root__actions">
+            <a class="ke-button ke-button--primary ke-button--large" href={programmeHref}>
+              Узнать о программе
+            </a>
+            <a class="ke-button ke-button--secondary ke-button--large" href={demoInviteHref}>
+              Пройти сценарий приглашения
+            </a>
+          </div>
+          <p class="focus-root__demo-note">
+            Вторая кнопка открывает только демонстрационный маршрут. Она не
+            активирует участника, не подтверждает email и не даёт доступ.
+          </p>
+        </div>
+      </section>
+
+      <section class="focus-root__principles" aria-labelledby="principles-title">
+        <div>
+          <p class="focus-root__eyebrow">Как это устроено</p>
+          <h2 id="principles-title">Сначала ценность, затем подтверждение</h2>
+        </div>
+        <ol>
+          <li>
+            <span>01</span>
+            <strong>Приглашение</strong>
+            <p>QR или личная ссылка ведут на отдельный экран программы.</p>
+          </li>
+          <li>
+            <span>02</span>
+            <strong>Собственная identity</strong>
+            <p>Email-код / magic link или Яндекс. Пересланная ссылка не является входом.</p>
+          </li>
+          <li>
+            <span>03</span>
+            <strong>Честный feedback</strong>
+            <p>Общий NPS, полезность страницы и улучшения измеряются раздельно.</p>
+          </li>
+        </ol>
+      </section>
+
+      <aside class="focus-root__boundary" aria-label="Граница прототипа">
+        <strong>Это приёмочный продуктовый макет, не запущенная фокус-группа.</strong>
+        <span>
+          Здесь нет production membership, отправки email, OAuth-сессии,
+          Supabase-записи или защиты статических страниц. Обычная афиша не
+          публикуется и не переносится этим экраном.
+        </span>
+      </aside>
+
+      <footer class="focus-root__footer">
+        <span>Вопросы о проекте</span>
+        <a href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
+      </footer>
     </main>
   </body>
 </html>
+
+<style>
+  * { box-sizing: border-box; }
+  html { background: #f7efe4; color: var(--ke-color-ink); font-family: var(--ke-font-sans); }
+  body { min-width: 320px; min-height: 100dvh; margin: 0; background: radial-gradient(circle at 10% 0, rgb(255 193 13 / 16%), transparent 28rem), linear-gradient(180deg, #fffaf1 0%, #f7efe4 100%); }
+  .skip-link { position: fixed; z-index: 50; top: .5rem; left: .5rem; transform: translateY(-150%); border-radius: .5rem; padding: .7rem 1rem; background: #221a14; color: #fff; font-weight: 800; }
+  .skip-link:focus { transform: none; }
+  .focus-root { width: min(1180px, calc(100% - 2rem)); margin: 0 auto; padding: 1rem 0 2rem; }
+  .focus-root__hero { position: relative; overflow: hidden; min-height: min(760px, calc(100dvh - 2rem)); display: grid; grid-template-rows: auto 1fr; border: 1px solid rgb(34 26 20 / 12%); border-radius: clamp(1.25rem, 3vw, 2.25rem); padding: clamp(1rem, 4vw, 2.25rem); background: linear-gradient(145deg, rgb(255 255 255 / 97%), rgb(255 248 233 / 96%)); box-shadow: var(--ke-shadow-2); }
+  .focus-root__hero::before { content: ""; position: absolute; right: -10rem; top: 4rem; width: 34rem; height: 34rem; border: 5rem solid rgb(165 72 33 / 5%); border-radius: 50%; pointer-events: none; }
+  .focus-root__top { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .focus-root__brand { min-height: 52px; display: inline-flex; align-items: center; gap: .7rem; color: inherit; text-decoration: none; }
+  .focus-root__brand img { width: 48px; height: 48px; }
+  .focus-root__brand span { display: grid; line-height: 1.05; }
+  .focus-root__brand strong { font-size: .88rem; }
+  .focus-root__brand small { color: var(--ke-color-brand-700); font-size: .8rem; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+  .focus-root__copy { position: relative; z-index: 1; align-self: center; max-width: 850px; padding: clamp(3rem, 9vw, 8rem) 0 clamp(2rem, 5vw, 4rem); }
+  .focus-root__eyebrow { margin: 0 0 .8rem; color: var(--ke-color-brand-700); font-size: .75rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+  .focus-root h1 { max-width: 12ch; margin: 0; font-size: clamp(3.15rem, 9vw, 7.8rem); line-height: .86; letter-spacing: -.07em; text-wrap: balance; }
+  .focus-root__lead { max-width: 62ch; margin: 1.5rem 0 0; color: var(--ke-color-muted); font-size: clamp(1.05rem, 2.2vw, 1.38rem); line-height: 1.55; }
+  .focus-root__actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.7rem; }
+  .focus-root__demo-note { max-width: 66ch; margin: .75rem 0 0; color: var(--ke-color-muted); font-size: .78rem; line-height: 1.45; }
+  .focus-root__principles { display: grid; grid-template-columns: minmax(220px, .65fr) minmax(0, 1.35fr); gap: 2rem; margin-top: 1rem; border: 1px solid var(--ke-color-line); border-radius: 1.5rem; padding: clamp(1.2rem, 3vw, 2rem); background: var(--ke-color-surface-strong); }
+  .focus-root__principles h2 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.7rem); line-height: 1; letter-spacing: -.04em; }
+  .focus-root__principles ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; margin: 0; padding: 0; list-style: none; }
+  .focus-root__principles li { display: grid; gap: .35rem; align-content: start; border-radius: 1rem; padding: 1rem; background: var(--ke-color-canvas); }
+  .focus-root__principles li > span { color: var(--ke-color-brand-600); font-size: .7rem; font-weight: 900; letter-spacing: .1em; }
+  .focus-root__principles li strong { font-size: 1rem; }
+  .focus-root__principles li p { margin: 0; color: var(--ke-color-muted); font-size: .82rem; line-height: 1.45; }
+  .focus-root__boundary { display: grid; gap: .35rem; margin-top: 1rem; border-radius: 1.25rem; padding: 1rem 1.2rem; background: var(--ke-color-info-50); color: var(--ke-color-info-700); line-height: 1.5; }
+  .focus-root__boundary span { font-size: .86rem; }
+  .focus-root__footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.4rem .25rem 0; color: var(--ke-color-muted); font-size: .82rem; }
+  .focus-root__footer a { color: var(--ke-color-brand-700); font-weight: 850; }
+  a:focus-visible { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 60%, transparent); outline-offset: 3px; }
+
+  @media (max-width: 760px) {
+    .focus-root { width: min(100% - 1rem, 1180px); padding-top: .5rem; }
+    .focus-root__hero { min-height: calc(100dvh - 1rem); }
+    .focus-root__top { align-items: flex-start; }
+    .focus-root__brand span { display: none; }
+    .focus-root__copy { padding-top: clamp(4rem, 16vw, 7rem); }
+    .focus-root__actions { flex-direction: column; }
+    .focus-root__actions .ke-button { width: 100%; }
+    .focus-root__principles { grid-template-columns: 1fr; }
+    .focus-root__principles ol { grid-template-columns: 1fr; }
+  }
+</style>
