@@ -1,6 +1,6 @@
 mode: full_fanout_serial_integration
 repo: /home/dev/projects/events-bot-new
-base_ref: origin/main@c9a710c8 (subsequently merged through 366f7f58; final rebase pending)
+base_ref: origin/main@1a0b6616
 base_branch: main
 integration_branch: integration/static-site-review-r14-20260727
 global_constraints:
@@ -113,7 +113,7 @@ lanes:
     forbidden_files: []
     expected_output: clean integrated branch, .codex/integration/INTEGRATION_REPORT.md, pushed SHA, QA evidence, immutable noindex URL and Telegram receipt
     verification_scope: full_local
-    status: in_progress
+    status: validated_for_main_merge
 requirements:
   R01: Telegram 693 — missing medallions for Yantar Hall, Teatr estrady/Dom iskusstv, and Profi-Tour.
   R02: Telegram 694/697 — Maria Stuart OCR hero is visibly cropped on mobile and must remain fully readable.
