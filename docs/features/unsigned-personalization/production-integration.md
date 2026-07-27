@@ -377,3 +377,37 @@ The next PR is not another broad concept document. It must prove the thin runtim
 ## Explicit non-goals now
 
 Do not implement yet: server-side ranker, pgvector serving, CatBoost/LightGBM serving, two-tower, online embeddings, online LLM, personalized homepage, infinite feed, browser -> Supabase direct table writes, raw browser payload -> DB row RPC, raw impression firehose, server profile read by `anon_id`, or Smart Update influenced by telemetry.
+
+## R14 regular product readout contract, 2026-07-27
+
+The review thread requires one small recurring product report, not raw browser
+event dumps. It must answer:
+
+| Question | Compact accepted signal | Daily aggregate |
+|---|---|---|
+| Are pages fast? | sampled Web Vitals after consent (`LCP`, `INP`, `CLS`) plus release/build id and surface | p50/p75/p95 by surface and mobile/desktop |
+| Do people use date-page rails? | one `rail_exposed` per event row and one `rail_depth_reached` bucket (`25/50/75/100`) | exposed sessions, engaged sessions, max-depth distribution |
+| Do they swipe like/dislike? | committed `rail_like` / `rail_not_interested` only after the canonical action succeeds; consent-dialog cancel is not an action | users/sessions/actions and undo rate by surface |
+| Do they find artifacts? | `artifact_exposed` once after the assigned control is actually visible and `artifact_collected` once | exposed, collected, collection rate |
+| Do they inspect the collection? | `artifact_collection_view` once per visit with only found-count/total-count | viewers and found-count distribution |
+| Do they open artifact detail? | `artifact_detail_open` with artifact id, no story text/URL | opens and unique viewers |
+| Do they use the date calendar? | `date_calendar_open` and committed `date_calendar_select` with selected day | users/day, opens, selections and conversion |
+
+Privacy/volume constraints:
+
+- no signal is sent before the existing accepted consent; without consent the
+  feature remains fully functional and the event is dropped;
+- do not store raw swipe coordinates, scroll offsets, referrer, full URL,
+  free-form Search text, full UA or artifact story content;
+- exposure events are deduplicated in the browser/session and converted to one
+  bounded summary; CTA/navigation never waits for telemetry;
+- bots, previews and automated acceptance contexts are excluded or marked
+  non-training; immutable noindex artifact research may keep telemetry disabled;
+- the recurring report reads daily aggregates, not raw user-level rows, and
+  reports denominator-aware conversion (for example found/exposed, not only
+  number found).
+
+**Implementation status:** event names and aggregation contract are accepted
+documentation only. The production ingest/RLS/retention path and consented
+browser emitter have not been shipped; therefore no regular live-statistics
+claim may be made for the R14 review candidate.

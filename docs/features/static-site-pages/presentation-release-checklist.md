@@ -111,3 +111,15 @@ of being left only in review chats.
 - [ ] **Blocked** — approved candidate promoted from noindex prefix to production canonical.
 - [ ] **Blocked** — sitemap/robots/canonical/TLS/CDN cache checks pass after promotion.
 - [ ] **Blocked** — event detail, calendar, search, transport and rollback smoke completed; release SHA/build ID recorded.
+
+## 7. Product analytics after presentation
+
+- [ ] **Blocked** — consented compact telemetry ingest and daily aggregates are
+  deployed for Web Vitals, rail exposure/depth, committed like/dislike swipes,
+  artifact exposure/find/collection/detail and date-calendar open/select.
+- [ ] **Blocked** — the first recurring readout uses denominators and excludes
+  bots/acceptance traffic; raw coordinates, URLs, Search text and UA are not
+  retained.
+
+This gate does not block visual review of the noindex candidate, but it blocks
+claims that these behaviors are already measured regularly.
