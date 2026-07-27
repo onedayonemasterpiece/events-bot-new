@@ -78,6 +78,9 @@ production output boundary обязаны поднять
    `TheatreEvent.parsed_date`.
 8. parser-native концерт с `festival_context=festival_post` не отбрасывается:
    whole-program skip остаётся только для неструктурированных social sources.
+9. operator report для полного source reconciliation отправляется bounded
+   chunks, чтобы длинный список источников/фактов не превращал успешный import в
+   Telegram `message is too long`.
 
 ## Отложенные улучшения
 

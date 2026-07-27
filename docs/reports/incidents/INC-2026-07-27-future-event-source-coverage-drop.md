@@ -157,6 +157,11 @@ Raw evidence is retained outside git under
     `partial`, but remained in `details_json.fatal_error` after normal terminal
     evaluation. Completed runs now explicitly clear the sentinel; only
     cancellation retains it.
+14. The successful final 18/18 data catch-up produced a report longer than one
+    Telegram message. The unchunked Markdown send and equally unchunked
+    plain-text fallback both failed with `Bad Request: message is too long`, so
+    UI showed an error despite `ops_run=4694 status=success`. Manual and
+    scheduled reports now use the existing bounded line chunker.
 
 ## Contributing Factors
 

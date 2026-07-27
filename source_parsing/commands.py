@@ -194,6 +194,20 @@ def _chunk_lines(lines: list[str], max_len: int = MAX_TG_MESSAGE_LEN) -> list[st
     return chunks
 
 
+async def _send_markdown_chunks(bot: Bot, chat_id: int, text: str) -> None:
+    """Send a report within Telegram's message limit with plain-text fallback."""
+
+    for chunk in _chunk_lines(str(text or "").splitlines()):
+        try:
+            await bot.send_message(chat_id, chunk, parse_mode="Markdown")
+        except Exception as exc:
+            logger.warning(
+                "source_parsing: failed to send report chunk markdown: %s",
+                exc,
+            )
+            await bot.send_message(chat_id, chunk.replace("**", ""))
+
+
 async def handle_parse_check_callback(callback_query: types.CallbackQuery, bot: Bot) -> None:
     """Handle callback for diagnostic parse selection."""
     source_map = {
@@ -346,18 +360,7 @@ async def handle_parse_command(message: types.Message, db: Database, bot: Bot) -
                 bot_username = None
             report = await format_parsing_report(result, bot_username=bot_username, db=db)
             
-            try:
-                await bot.send_message(
-                    message.chat.id,
-                    report,
-                    parse_mode="Markdown",
-                )
-            except Exception as e:
-                logger.warning("source_parsing: failed to send report markdown: %s", e)
-                await bot.send_message(
-                    message.chat.id,
-                    report.replace("**", ""),
-                )
+            await _send_markdown_chunks(bot, message.chat.id, report)
 
             if getattr(result, "added_events", None):
                 lines = _format_added_events_lines(result.added_events)
@@ -457,14 +460,11 @@ async def source_parsing_scheduler(db: Database, bot: Bot, *, run_id: str | None
             except Exception:
                 bot_username = None
             report = await format_parsing_report(result, bot_username=bot_username, db=db)
-            try:
-                await bot.send_message(
-                    int(admin_chat_id),
-                    f"📊 Автоматический парсинг источников завершён\n\n{report}",
-                    parse_mode="Markdown",
-                )
-            except Exception as e:
-                logger.warning("source_parsing: failed to send report: %s", e)
+            await _send_markdown_chunks(
+                bot,
+                int(admin_chat_id),
+                f"📊 Автоматический парсинг источников завершён\n\n{report}",
+            )
         
         logger.info(
             "source_parsing_scheduler complete run_id=%s total=%d",
@@ -541,14 +541,11 @@ async def source_parsing_scheduler_if_changed(
             except Exception:
                 bot_username = None
             report = await format_parsing_report(result, bot_username=bot_username, db=db)
-            try:
-                await bot.send_message(
-                    int(admin_chat_id),
-                    f"📊 Автоматический парсинг источников завершён\n\n{report}",
-                    parse_mode="Markdown",
-                )
-            except Exception as e:
-                logger.warning("source_parsing: failed to send report: %s", e)
+            await _send_markdown_chunks(
+                bot,
+                int(admin_chat_id),
+                f"📊 Автоматический парсинг источников завершён\n\n{report}",
+            )
 
         logger.info(
             "source_parsing_scheduler_if_changed complete run_id=%s total=%d",
