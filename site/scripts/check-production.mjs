@@ -71,10 +71,11 @@ if (
 ) fail('artifact research leaked into production weekend listing');
 const productionArtifactSource = html('artefakty/index.html');
 const productionArtifactCollectionMarker = /\bdata-artifact-collection(?:\s|=|>)/u;
+const productionArtifactUnavailableMarker = /\bdata-artifact-collection-unavailable(?:\s|=|>)/u;
 if (
   productionArtifactCollectionMarker.test(productionArtifactSource)
   || productionArtifactSource.includes('artifact-detail-title')
-  || !productionArtifactSource.includes('Коллекция пока недоступна')
+  || !productionArtifactUnavailableMarker.test(productionArtifactSource)
 ) fail('artifact collection leaked into production');
 const freeCollectionSource = html('podborki/besplatnye-sobytiya/index.html');
 const freeCollectionResults = freeCollectionSource.slice(
@@ -151,6 +152,7 @@ const siteOrigin = manifest.site_origin;
 for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   const source = html(file.key);
   const intentionallyUnindexed = file.key === 'dlya-menya/index.html'
+    || file.key === 'artefakty/index.html'
     || /^podborki\/[^/]+\/index\.html$/u.test(file.key);
   if (intentionallyUnindexed) {
     if (!/<meta\s+name="robots"\s+content="noindex,nofollow,noarchive"/iu.test(source)) fail(`private/personal noindex policy missing from ${file.key}`);

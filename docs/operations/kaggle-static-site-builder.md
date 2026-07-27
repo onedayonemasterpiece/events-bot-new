@@ -443,4 +443,7 @@ The production leakage check matches the bare `data-amber-artifact` and
 `data-artifact-collection` DOM markers with attribute boundaries. The inert
 `data-amber-artifact-research="off"` configuration attribute and the
 `data-artifact-collection-unavailable` fallback are allowed and must not be
-treated as enabled research UI.
+treated as enabled research UI. The unavailable-state gate is tied to that DOM
+contract, not to mutable reader-facing Russian copy. `/artefakty/` remains
+intentionally `noindex` even while the ordinary production route renders only
+the unavailable fallback.
