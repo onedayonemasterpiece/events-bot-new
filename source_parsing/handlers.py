@@ -467,11 +467,11 @@ async def attach_parser_source_to_exact_existing(
 ) -> bool:
     """Attach canonical provenance without an LLM call for an exact identity.
 
-    ``find_existing_event`` has already established location/date/time identity.
-    This fast path is deliberately narrower still: normalized titles must be
-    equal.  It does not rewrite semantic text; it only records the official
-    source so the ordinary deterministic ticket/age/media reconciliation can
-    run.  Non-exact titles continue through Smart Update.
+    This fast path verifies date, explicit time and normalized title itself;
+    fuzzy ``find_existing_event`` matches are not sufficient.  It does not
+    rewrite semantic text; it only records the official source so the ordinary
+    deterministic ticket/age/media reconciliation can run.  Non-exact
+    occurrences continue through Smart Update.
     """
     source_url = str(event.url or "").strip()
     normalized_url = _normalize_source_url_for_match(source_url)
@@ -486,7 +486,22 @@ async def attach_parser_source_to_exact_existing(
 
     async with db.get_session() as session:
         stored = await session.get(Event, int(event_id))
-        if not stored or _normalize_title(stored.title or "") != normalized_candidate_title:
+        if not stored:
+            return False
+        stored_date = str(stored.date or "").strip()[:10]
+        candidate_date = str(event.parsed_date or "").strip()[:10]
+        stored_time = str(stored.time or "").strip()[:5]
+        candidate_time = str(event.parsed_time or "").strip()[:5]
+        if (
+            _normalize_title(stored.title or "") != normalized_candidate_title
+            or not candidate_date
+            or stored_date != candidate_date
+            or (
+                candidate_time
+                and candidate_time != "00:00"
+                and stored_time != candidate_time
+            )
+        ):
             return False
 
         rows = list(
@@ -2755,19 +2770,18 @@ async def process_source_events(
             
             parser_source_present = False
             if existing_id:
-                parser_source_present = await event_has_parser_source(
+                # Only an exact occurrence may use the cheap parser refresh.
+                # A broad source-type/host match is not enough: the same parser
+                # commonly publishes several sessions under one performance URL,
+                # and legacy aggregate cards may carry many occurrence URLs.
+                # Non-exact matches must reach Smart Update so its identity gate
+                # can create/split the canonical occurrence.
+                parser_source_present = await attach_parser_source_to_exact_existing(
                     db,
                     existing_id,
-                    event.source_type,
-                    event.url,
+                    source,
+                    event,
                 )
-                if not parser_source_present:
-                    parser_source_present = await attach_parser_source_to_exact_existing(
-                        db,
-                        existing_id,
-                        source,
-                        event,
-                    )
 
             if existing_id and parser_source_present:
                 event_id = existing_id
