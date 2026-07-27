@@ -227,3 +227,15 @@ test('real-data canaries retain Pianissimo/Teremok crop evidence and More vnutri
   assert.equal(moreManifest?.listingStatus, 'listing_ready');
   assert.equal(moreManifest?.listingBinding, 'festival');
 });
+
+test('packaged product smoke and local noindex red-dot matrix use separate Playwright bases', async () => {
+  const playwright = await read('tests/unusual-events.playwright.mjs');
+  assert.match(playwright, /UNUSUAL_EVENTS_PLAYWRIGHT_MODE \|\| 'product'/u);
+  assert.match(playwright, /const runProduct = mode === 'product' \|\| mode === 'all'/u);
+  assert.match(playwright, /const runLab = mode === 'lab' \|\| mode === 'all'/u);
+  assert.match(playwright, /UNUSUAL_EVENTS_BASE_URL is required in product\/all mode/u);
+  assert.match(playwright, /UNUSUAL_EVENTS_LAB_BASE_URL is required in lab\/all mode/u);
+  assert.match(playwright, /if \(runProduct\) \{[\s\S]*route\(productBase, '\/neobychnoe\/'\)/u);
+  assert.match(playwright, /if \(runLab\) \{[\s\S]*route\(labBase, `\/lab\/unusual-unread\/\$\{scenario\}\/`\)/u);
+  assert.doesNotMatch(playwright, /route\(productBase, `\/lab\/unusual-unread/u);
+});

@@ -1,27 +1,38 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
-const rawBase = process.env.UNUSUAL_EVENTS_BASE_URL;
-if (!rawBase) throw new Error('UNUSUAL_EVENTS_BASE_URL is required');
-const base = rawBase.replace(/\/+$/u, '');
+const mode = String(process.env.UNUSUAL_EVENTS_PLAYWRIGHT_MODE || 'product').trim().toLowerCase();
+if (!['product', 'lab', 'all'].includes(mode)) {
+  throw new Error('UNUSUAL_EVENTS_PLAYWRIGHT_MODE must be product, lab, or all');
+}
+const runProduct = mode === 'product' || mode === 'all';
+const runLab = mode === 'lab' || mode === 'all';
+const rawProductBase = process.env.UNUSUAL_EVENTS_BASE_URL;
+const rawLabBase = process.env.UNUSUAL_EVENTS_LAB_BASE_URL;
+if (runProduct && !rawProductBase) throw new Error('UNUSUAL_EVENTS_BASE_URL is required in product/all mode');
+if (runLab && !rawLabBase) throw new Error('UNUSUAL_EVENTS_LAB_BASE_URL is required in lab/all mode');
+const productBase = String(rawProductBase || '').replace(/\/+$/u, '');
+const labBase = String(rawLabBase || '').replace(/\/+$/u, '');
 const expectedApproved = process.env.UNUSUAL_EXPECT_APPROVED === '1';
-const route = (path) => {
+const route = (base, path) => {
   const clean = path.replace(/^\/+|\/+$/gu, '');
   return clean ? `${base}/${clean}/` : `${base}/`;
 };
 
 const browser = await chromium.launch({ headless: true });
 try {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
-  const page = await context.newPage();
   const providerRequests = [];
-  page.on('request', (request) => {
+  const observeProviderRequests = (page) => page.on('request', (request) => {
     if (/generativelanguage|googleapis.*embed|gemini|bge-m3|unusual.*(?:score|embed)/iu.test(request.url())) {
       providerRequests.push(`${request.method()} ${request.url()}`);
     }
   });
+  if (runProduct) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    observeProviderRequests(page);
 
-  await page.goto(route('/'), { waitUntil: 'domcontentloaded' });
+  await page.goto(route(productBase, '/'), { waitUntil: 'domcontentloaded' });
   assert.equal(await page.locator('[data-home-page]').count(), 1);
   assert.equal(await page.locator('[data-home-hero-talk]').count(), 1);
   assert.equal(await page.locator('[data-home-quick-nav]').count(), 1);
@@ -39,13 +50,13 @@ try {
   }
   assert.ok(await menu.locator('a[href$="/podborki/besplatnye-sobytiya/"]').count() >= 2);
 
-  await page.goto(route('/podborki/besplatnye-sobytiya/'), { waitUntil: 'domcontentloaded' });
+  await page.goto(route(productBase, '/podborki/besplatnye-sobytiya/'), { waitUntil: 'domcontentloaded' });
   assert.equal(await page.locator('[data-free-collection-medallion="large"]').count(), 1);
   assert.equal(await page.locator('[data-free-collection-medallion="compact"]').count(), 1);
   await page.locator('[data-free-collection-shelf]').scrollIntoViewIfNeeded();
   assert.equal(await page.locator('[data-free-collection-medallion="compact"]').isVisible(), true);
 
-  await page.goto(route('/date-2026-07-30/'), { waitUntil: 'domcontentloaded' });
+  await page.goto(route(productBase, '/date-2026-07-30/'), { waitUntil: 'domcontentloaded' });
   const pianissimo = page.locator('[data-event-id="5297"] [data-rail-media-reason="safe_visual_landscape_5x4"]').first();
   assert.equal(await pianissimo.count(), 1);
   const crop = await pianissimo.evaluate((node) => {
@@ -56,7 +67,7 @@ try {
   assert.ok(Math.abs(crop.ratio - 1.25) < 0.02, JSON.stringify(crop));
   assert.equal(crop.fit, 'cover');
 
-  await page.goto(route('/segodnya/'), { waitUntil: 'domcontentloaded' });
+  await page.goto(route(productBase, '/segodnya/'), { waitUntil: 'domcontentloaded' });
   const accessory = page.locator('[data-mobile-date-accessory]');
   assert.match(await accessory.getAttribute('data-calendar-horizon'), /^\d{4}-\d{2}-\d{2}$/u);
   assert.match(await accessory.getAttribute('data-calendar-furthest-event-date'), /^\d{4}-\d{2}-\d{2}$/u);
@@ -78,13 +89,13 @@ try {
   while (await nextMonth.isEnabled()) await nextMonth.click();
   assert.equal(await nextMonth.isDisabled(), true);
 
-  await page.goto(route('/izbrannoe/'), { waitUntil: 'domcontentloaded' });
+  await page.goto(route(productBase, '/izbrannoe/'), { waitUntil: 'domcontentloaded' });
   assert.equal(await page.locator('meta[name="robots"]').getAttribute('content').then((value) => /noindex/u.test(value || '')), true);
   assert.equal(await page.locator('[data-favorites-page] [data-favorites-surface]').count(), 1);
   const favoritesState = page.locator('[data-favorites-skeleton]:visible,[data-favorites-auth-required]:visible,[data-favorites-empty]:visible,[data-favorites-grid]:visible');
   assert.ok(await favoritesState.count() >= 1);
 
-  await page.goto(route('/neobychnoe/'), { waitUntil: 'domcontentloaded' });
+  await page.goto(route(productBase, '/neobychnoe/'), { waitUntil: 'domcontentloaded' });
   assert.equal(await page.locator('meta[name="robots"]').getAttribute('content').then((value) => /noindex/u.test(value || '')), true);
   const cards = page.locator('[data-unusual-card]');
   if (expectedApproved) {
@@ -104,13 +115,16 @@ try {
 
   assert.deepEqual(providerRequests, [], `ordinary views called providers: ${providerRequests.join(', ')}`);
   await context.close();
+  }
 
+  if (runLab) {
   // R10 red-dot matrix runs against the real shipped runtime in noindex lab
   // fixtures. Each scenario gets a clean anonymous localStorage baseline.
   const redDotContext = await browser.newContext({ viewport:{ width:390, height:844 }, reducedMotion:'reduce' });
   const redDotPage = await redDotContext.newPage();
+  observeProviderRequests(redDotPage);
   const openScenario = async (scenario, { clear = true } = {}) => {
-    await redDotPage.goto(route(`/lab/unusual-unread/${scenario}/`), { waitUntil:'domcontentloaded' });
+    await redDotPage.goto(route(labBase, `/lab/unusual-unread/${scenario}/`), { waitUntil:'domcontentloaded' });
     if (clear) {
       await redDotPage.evaluate(() => localStorage.clear());
       await redDotPage.reload({ waitUntil:'domcontentloaded' });
@@ -156,6 +170,7 @@ try {
   assert.ok(overflow <= 1, `unusual dot broke mobile drawer: overflow=${overflow}`);
   assert.deepEqual(providerRequests, [], `red-dot lab called providers: ${providerRequests.join(', ')}`);
   await redDotContext.close();
+  }
 } finally {
   await browser.close();
 }
