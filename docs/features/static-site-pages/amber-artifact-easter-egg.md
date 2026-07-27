@@ -142,6 +142,14 @@ production even if the flag is accidentally present. The production-form root
 artifact therefore remains unchanged while the separately generated
 `secret_candidate` may contain the explicitly enabled specimen.
 
+The production-candidate pipeline enables this review intentionally through
+`STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH=1`. That flag is fingerprinted
+and becomes `PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH=tail` inside the Kaggle
+candidate build. It is not a production/root feature flag:
+`PUBLIC_SITE_MODE=production` remains a second mandatory hard block, and the
+production generated-output gate requires both the weekend artifact control
+and the collection UI to be absent.
+
 Assignment candidates are deduplicated positive event ids with non-empty
 titles whose `start_date` is the current weekend's Saturday or Sunday. The
 candidate list is sorted by event id and indexed by a deterministic hash of

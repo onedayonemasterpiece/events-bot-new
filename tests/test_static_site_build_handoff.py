@@ -200,6 +200,8 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     monkeypatch.setenv("STATIC_SITE_ICS_BASE_URL", "https://static.kenigevents.ru/ics")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test")
+    monkeypatch.setenv("STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH", "1")
+    monkeypatch.setenv("STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH", "1")
 
     cmd = main._static_site_build_kaggle_command(
         db_path="/data/db.sqlite",
@@ -229,6 +231,8 @@ def test_static_site_build_kaggle_command_includes_pgvector_handoff(monkeypatch:
     assert _arg_after(cmd, "--public-personalization-supabase-url") == "https://example.supabase.co"
     assert _arg_after(cmd, "--public-personalization-supabase-publishable-key") == "sb_publishable_test"
     assert _arg_after(cmd, "--public-yandex-auth-provider") == "custom:yandex"
+    assert "--secret-candidate-artifact-research" in cmd
+    assert "--secret-candidate-require-authorized-search" in cmd
     assert "--export-in-kaggle" in cmd
     assert "--download-output" in cmd
 
@@ -303,6 +307,8 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
         public_personalization_supabase_url="",
         public_personalization_supabase_publishable_key="",
         public_yandex_auth_provider="custom:yandex",
+        secret_candidate_artifact_research=True,
+        secret_candidate_require_authorized_search=True,
         export_in_kaggle=False,
         db="",
         snapshot_manifest="",
@@ -323,6 +329,8 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
 
     config = json.loads((dataset / "build_config.json").read_text(encoding="utf-8"))
     assert config["related_corpus_revision"] == revision
+    assert config["secret_candidate_artifact_research"] is True
+    assert config["secret_candidate_require_authorized_search"] is True
 
     builder_path = (
         Path(__file__).resolve().parents[1]
@@ -334,6 +342,15 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
     assert spec and spec.loader
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)
+    candidate_env: dict[str, str] = {}
+    builder.apply_secret_candidate_research_env(candidate_env, config | {"profile": "production-candidate"})
+    assert candidate_env == {
+        "PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH": "tail",
+        "SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH": "1",
+    }
+    preview_env: dict[str, str] = {}
+    builder.apply_secret_candidate_research_env(preview_env, config | {"profile": "preview"})
+    assert preview_env == {}
     working = tmp_path / "working"
     site_dir = tmp_path / "site"
     (site_dir / "scripts").mkdir(parents=True)

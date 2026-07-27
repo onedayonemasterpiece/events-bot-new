@@ -596,6 +596,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'public_personalization_supabase_url': args.public_personalization_supabase_url or None,
         'public_personalization_supabase_publishable_key': args.public_personalization_supabase_publishable_key or None,
         'public_yandex_auth_provider': args.public_yandex_auth_provider or 'custom:yandex',
+        'secret_candidate_artifact_research': bool(args.secret_candidate_artifact_research),
+        'secret_candidate_require_authorized_search': bool(args.secret_candidate_require_authorized_search),
         'export_in_kaggle': bool(args.export_in_kaggle),
         'sqlite_db_filename': 'events.sqlite' if args.db and args.export_in_kaggle else None,
         'related_cache_filename': 'event_related_chain_cache.json',
@@ -738,6 +740,18 @@ def main() -> int:
         '--public-yandex-auth-provider',
         default=first_env('STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER', 'PUBLIC_YANDEX_AUTH_PROVIDER', default='custom:yandex'),
         help='Supabase Auth provider id for Yandex OAuth in AuthorizedEventSearch.',
+    )
+    parser.add_argument(
+        '--secret-candidate-artifact-research',
+        action='store_true',
+        default=(os.getenv('STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH', '').strip().lower() in {'1', 'true', 'yes', 'on'}),
+        help='Enable the gated amber-artifact research only in the immutable secret candidate.',
+    )
+    parser.add_argument(
+        '--secret-candidate-require-authorized-search',
+        action='store_true',
+        default=(os.getenv('STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH', '').strip().lower() in {'1', 'true', 'yes', 'on'}),
+        help='Fail the secret-candidate build when public Search/Auth configuration is absent.',
     )
     parser.add_argument('--export-in-kaggle', action='store_true', default=(os.getenv('STATIC_SITE_EXPORT_IN_KAGGLE', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--related-cache', default=os.getenv('STATIC_SITE_RELATED_CACHE', str(ARTIFACT_ROOT / 'event_related_chain_cache.json')))

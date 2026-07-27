@@ -219,6 +219,8 @@ flags are documented in `.env.example`; defaults stay off:
 ENABLE_STATIC_SITE_KAGGLE_BUILDER=0
 ENABLE_STATIC_SITE_SECRET_PUBLISH=0
 STATIC_SITE_REPO_SHA=<exact clean pushed SHA>
+STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH=0
+STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH=0
 ```
 
 The Kaggle production-candidate invocation must include
@@ -230,6 +232,14 @@ The Kaggle production-candidate invocation must include
 result. The trusted boundary rejects the result unless the complete production
 template matrix and candidate noindex/no-referrer/prefix/root-isolation checks
 are all `ok`. Local gates are:
+
+When the two secret-candidate review flags are explicitly enabled, Fly includes
+them in the immutable input fingerprint and forwards them through the runner
+config. Kaggle then sets `PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH=tail` and
+`SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH=1` only for the production-candidate
+process. The root-form production build still hard-disables the artifact by
+site mode and `check:production` verifies its generated absence; the candidate
+build fails if browser-safe Search/Auth configuration is missing.
 
 ```bash
 pytest -q tests/test_static_site_release.py \

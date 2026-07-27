@@ -284,6 +284,10 @@
   contract: classified OCR documents may cover only within the measured 20%
   budget, while unknown/classifier-error documents must remain whole and now
   carry an explicit generated crop-reason receipt.
+- Fixed the Fly → Kaggle production-candidate handoff so the explicitly gated
+  artifact research and mandatory public Search/Auth configuration survive the
+  immutable build fingerprint/config boundary; production/root still proves
+  that artifact UI is absent.
 - Fixed Search submission from the mobile search/Enter key with IME guards and
   added one bounded JSON rescue when the initial NDJSON request stalls before
   response headers.
