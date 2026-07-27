@@ -144,6 +144,12 @@ city-noise/copy-post rescue-проходы не имеют права верну
 shortlist: один performance/ticket URL не является доказательством одного
 сеанса.
 
+Если текущий официальный каталог снова публикует occurrence с явным
+`ticket_status=available`, parser reconciliation переводит stale
+`cancelled`/`postponed` lifecycle обратно в `active`. Это применяется только к
+структурированному актуальному parser occurrence; `unknown`/`sold_out` не
+реактивируют карточку.
+
 `ops_run.status` для `kind=parse` отражает потерю источника:
 
 - `success` — kernels и processing завершились без ошибок/failed items;
