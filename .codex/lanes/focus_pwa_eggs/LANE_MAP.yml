@@ -44,7 +44,7 @@ lanes:
     expected_output: committed mobile onboarding and focus PWA prototype with targeted tests
     verification_scope: targeted
     effort: high
-    status: spawned
+    status: merged
   - id: egg-program
     role: worker
     requirement_ids: [R17, R18, R19]
@@ -89,7 +89,7 @@ lanes:
     expected_output: committed placement-state prototype and tests
     verification_scope: targeted
     effort: high
-    status: spawned
+    status: merged
   - id: integration
     role: merge_reviewer
     requirement_ids: [R21]
@@ -103,4 +103,4 @@ lanes:
     expected_output: clean pushed branch with updated closure evidence
     verification_scope: full_local
     effort: maximum_available
-    status: planned
+    status: merged

@@ -208,11 +208,16 @@ UI copy для `operator_cancelled`:
 ### 4.4. Membership state
 
 ```text
-pending_verified_identity
-  ├─ verified + capacity available + terms accepted ─> active
+invite_accepted
+  ├─ terms accepted + continue without identity ─> active_local
+  ├─ email/Yandex verified + terms accepted ─> active_verified
   └─ invite expired / capacity closed ─> not_activated
-active
-  ├─ member leaves or research consent withdrawn ─> withdrawn
+active_local
+  ├─ later identity verification + idempotent progress merge ─> active_verified
+  ├─ member leaves ─> withdrawn
+  └─ active_until/program ends ─> alumni
+active_verified
+  ├─ member leaves ─> withdrawn
   ├─ active_until/program ends ─> alumni
   └─ operator removes under approved rule ─> removed
 withdrawn | alumni | removed
@@ -221,14 +226,32 @@ withdrawn | alumni | removed
 
 | Effective member state | Tester prompts/invites | Manual focus mail | Account/saves | Ordinary personalization |
 |---|---|---|---|---|
-| `active` | on, subject to sampling/cap | allowed after per-send check | preserved | available as prototype |
+| `active_local` | on, subject to sampling/cap | off: no verified recipient | device-local only | available as prototype |
+| `active_verified` | on, subject to sampling/cap | allowed after per-send check | preserved/recoverable under server contract | available as prototype |
 | `paused programme` | off | only approved service notice | preserved | available |
 | `alumni` | off | end confirmation only; no weekly mail | preserved | available |
 | `withdrawn` | off immediately | no weekly mail; exit confirmation only if permitted | preserved | available |
 | `removed` | off immediately | only approved service notice | preserved unless separate account process applies | available |
 
-Tester state is never inferred from logo exposure, an egg QR, local storage or
-editable user metadata.
+В production tester state нельзя выводить только из logo exposure, egg QR,
+localStorage или editable user metadata. Текущая ветка намеренно показывает
+local participation hint как UX-прототип: он открывает макет на этом устройстве,
+но не является server authorization или reward ledger.
+
+### 4.5. PWA return contract
+
+- focus manifest стартует через
+  `/fokus-gruppa/priglashenie/?launch=pwa`;
+- `active_local|active_verified` сразу перенаправляются в
+  `/zakrytaya-afisha/`;
+- при отсутствии/истечении participation hint остаётся onboarding с объяснением
+  восстановления, а не бесконечный redirect;
+- установка и запуск происходят только после действия пользователя;
+- Android получает real `beforeinstallprompt` или честный menu fallback,
+  iOS — инструкцию `Поделиться → На экран Домой`;
+- focus participation, персонализация и коллекция имеют разные storage keys.
+  `Сбросить персонализацию` удаляет только профиль `Для меня`; явный
+  `Выйти из прототипа` может удалить participation отдельно.
 
 ## 5. Персонализация и continuity после окончания
 

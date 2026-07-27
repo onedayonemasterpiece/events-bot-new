@@ -18,6 +18,10 @@
 | for-me | R06, R07 | `agent/focus-group/for-me` | merged | `dee371f7` (`98483fd5` implementation) | cherry-picked as `a16178c8` + `ab2a23a5`; build/Playwright evidence in lane RESULTS |
 | focus-shell | R03, R04, R05, R08, R10 | `agent/focus-group/focus-shell` | merged | `e0c840dd` (`c662d8ce` implementation) | cherry-picked as `59e1d2a1` + `d3894590`; unit/build/Playwright/icon evidence in lane RESULTS |
 | integration | R11, R12 | this branch | integrated | `f7aea6ad` | lifecycle specimen, member-only `/dlya-menya/` feedback, contract tests, canonical docs and changelog |
+| pwa-membership | R13–R16 | `agent/focus-group/pwa-membership` | merged | `1d71dd1c` (`51af4b49` implementation) | cherry-picked as `32de33db` + `c198e9e1`; exact logo, focus manifest/start controller, optional identity and independent participation state |
+| egg-program | R17–R19 | `agent/focus-group/egg-program` | merged | `a718a2b1` (`a609528b` implementation) | cherry-picked as `f4955358` + `b7d5910d`; collection-first rank and 12-placement product contract |
+| egg-prototype | R20 | `agent/focus-group/egg-prototype` | merged | `8b345c09` (`8b94f2bc` implementation) | cherry-picked as `8f96dc86` + `a3b7af87`; collection UI and fail-closed `FG-E12` placement |
+| extension integration | R21 | this branch | integrated | pending final SHA | prize-copy reconciliation, canonical docs/changelog, PWA incident regression and final browser/build gates |
 
 No worker changes were rejected, abandoned or left uncommitted. Read-only
 research lanes changed no files.
@@ -31,14 +35,27 @@ research lanes changed no files.
 - Added focus product unit/source-contract tests and a package script.
 - Reconciled actual route names in the product spec and updated canonical
   routing, static-site docs, backlog index and changelog.
+- Added a centred exact copy of `docs/reference/PWA-icon.png` to the mobile join
+  screen, a focus-specific manifest and state-aware PWA launch route.
+- Split participation, personalization and collection into independent local
+  state contracts. Email/Yandex identity intent is optional in the prototype;
+  an explicit no-confirmation path remains available.
+- Added `/fokus-gruppa/kollektsiya/`, a collection-first reward model and a
+  versioned 12-placement matrix. `FG-E12` exists only after the third current
+  saved/calendar item and never moves to a shorter list.
+- Restored the root manifest/install/telemetry mounts required by
+  `INC-2026-07-27-pwa-presentation-install-missing`.
 
 ## Verification
 
-- `npm run test:focus-group-product` — 12/12 passed.
+- `npm run test:focus-group-product` — 29/29 passed after the extension.
+- `node --test tests/pwa-install.test.mjs` — 8/8 passed.
+- `npm run test:static-release` — 10/10 passed.
 - Worker full builds — 431 and 434 pages passed.
 - Worker Playwright — mobile/desktop/no-JS/localStorage/feedback/icon checks
   passed; see lane RESULTS.
-- Final `npm run build` — 435 pages built successfully in 1m 44s. The
+- Initial `npm run build` — 435 pages built successfully in 1m 44s. Final
+  extension build — 436 pages built successfully in 1m 42s. The
   pre-existing `listingPresentation.ts` JSON import-attributes warning remains
   non-fatal.
 - Final integration browser QA — passed on the built static output:
@@ -51,8 +68,20 @@ research lanes changed no files.
   - ending browser preview removes only the preview hint and preserves the
     local personalization key;
   - no browser console errors were observed.
-- Screenshots and the machine-readable browser result are in the ignored local
-  directory `artifacts/codex/focus-group-product-20260727/`.
+- Extension mobile Chromium QA on the built static output:
+  - supplied focus logo is centred at 390px with no horizontal overflow;
+  - invite fragment is stripped and never stored;
+  - focus manifest/install guidance and the optional identity skip are visible;
+  - skip activates participation, PWA relaunch returns to the secret hub;
+  - `Удалить локальный профиль` removes personalization but preserves focus
+    participation;
+  - `FG-E12` is absent at two items, inserted immediately after item three,
+    persists once found and stays absent when the current list becomes short;
+  - no console errors were observed.
+- Screenshots and the machine-readable extension browser result are in the
+  ignored local directory
+  `artifacts/codex/focus-group-pwa-eggs-20260727/`; first-stage browser evidence
+  remains in `artifacts/codex/focus-group-product-20260727/`.
 - Independent checklist review: R01–R03 and R05–R12 accepted within the
   explicit prototype boundary. R04 is Partial because the marker-gated secret
   hub is implemented, but the existing site routes are not physically
@@ -63,15 +92,42 @@ research lanes changed no files.
 
 | ID | Status | Evidence | Remaining production boundary |
 |---|---|---|---|
-| R01 | Done | Act Opus logo and pending thank-you panel; one pair/two invitations; no feedback/share/invite multiplier | partner spelling/rights, rules and fulfilment need separate approval |
+| R01 | Superseded | Act Opus logo remains, but the original “any performance/equal draw” copy was replaced by the later owner decision R17–R19 | current prize contract is R17–R19 |
 | R02 | Done | `manual-email-templates.md` and one-recipient SOP | no mail is sent or automated |
-| R03 | Done | fragment intake strips token, stores bounded 72-hour hint, share specimen, marker-gated hub | server invite redemption/cap/revoke absent by scope |
+| R03 | Done | fragment intake strips token; the legacy 72-hour hint migrates to a separate program-period participation state; share specimen and marker-gated hub remain | server invite redemption/cap/revoke absent by scope |
 | R04 | Partial | ordinary Astro root is a focus testing stub; secret hub is noindex/no-referrer and marker-gated, but links onward to the existing route tree | relocating the whole static site beneath the secret prefix requires the deferred production/secret builder integration |
 | R05 | Done | overall NPS, page usefulness, improvement and typed event-fact issue specimens | no server persistence/sampling enforcement |
 | R06 | Done | separate auto-picks opt-in/off/eligibility UI after explicit/interpretable signals | no sender/scheduler/delivery |
 | R07 | Done | 16 category cards; native tri-state; inferred meter separate from evidence sufficiency; explainable local feed | not a cross-device/online ML profile |
-| R08 | Done | invite → lab badge/congratulation → email/Yandex choice → preview hub | choices do not send OTP or launch OAuth |
+| R08 | Done | invite → lab badge/congratulation → PWA offer → optional email/Yandex intent or explicit skip → preview hub | choices do not send OTP or launch OAuth |
 | R09 | Done | automatic/operator/cancelled end UI; preview access clears independently from personalization | no production command/cron |
 | R10 | Done | reusable lab badge with visually inspected CC0 SVG Repo 287837 icon | final merge window may restyle it without changing attribution |
 | R11 | Done | no live DB, deploy, production build or outbound message action | production rollout remains separate work |
 | R12 | Done | pages repeatedly distinguish marker/opaque path from auth and prototype from production | backend security gates remain mandatory for later implementation |
+| R13 | Done | exact supplied 1254×1254 artwork is centred above the mobile-first join flow; byte-equality test passes | final compression/derivatives may be added without changing the source artwork |
+| R14 | Done | focus manifest launches through state-aware onboarding and redirects active local participation to `/zakrytaya-afisha/`; Android/iOS fallbacks are honest | browsers control install and app launch; no code can force either |
+| R15 | Done | email/Yandex intent and `Продолжить … без подтверждения` are separate explicit paths | no real identity session by scope |
+| R16 | Done | independent program-period participation key, legacy migration and reset-isolation tests; PWA return flow uses it | cleared browser data is not recoverable until server membership exists |
+| R17 | Done | pending UI and docs consistently define one prize as exactly two theatre tickets | theatre, performances, dates and fulfilment remain rules/legal gates |
+| R18 | Done | collection coverage ranks first; bounded participation is capped at 40/7 and counts NPS response, likes, dislikes, text feedback, Search, saves and page breadth without sentiment advantage | reward-grade receipts/anti-abuse/leaderboard backend absent by scope |
+| R19 | Done | versioned 12-row placement matrix covers mobile, desktop, keyboard/screen-reader equivalents, prerequisites and fail-closed content states | actual site-wide production insertion remains a later implementation |
+| R20 | Done | collection prototype demonstrates locked/eligible/found/unavailable and idempotent `FG-E12` immediately after saved item three only | demo list is not wired to production saved events |
+| R21 | Done | docs/routes/changelog, targeted tests, incident regression and full build/browser QA on the integration branch | no production deploy was requested or performed |
+
+## Incident regression control
+
+- Incident: `INC-2026-07-27-pwa-presentation-install-missing` (closed; used as
+  a regression contract because root/PWA surfaces changed).
+- Affected local surfaces: root HTML, global/focus manifests, install
+  controllers and focus onboarding.
+- Passed checks:
+  - `node --test tests/pwa-install.test.mjs` — 8/8;
+  - `npm run test:static-release` — 10/10;
+  - cleanable full Astro build — 436 pages;
+  - worker synthetic Android one-shot `beforeinstallprompt` and mobile browser
+    smoke;
+  - root source-contract confirms manifest, install action and telemetry mounts;
+  - focus mobile browser QA confirms manifest/start/return behavior.
+- Production HTTP headers, icon read-back, Object Storage upload and live
+  installability were intentionally not run: this task creates no candidate and
+  performs no deploy. They remain mandatory if this branch is promoted later.

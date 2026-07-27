@@ -34,17 +34,19 @@ const sections = [
     <main id="main" class="focus-secret" data-focus-secret data-root-href={withBase('/')}>
       <section class="focus-secret__gate" data-secret-checking aria-live="polite">
         <span class="focus-secret__spinner" aria-hidden="true"></span>
-        <h1>Проверяем метку просмотра</h1>
+        <h1>Проверяем участие на устройстве</h1>
         <p>Это локальная UX-проверка, а не проверка авторизации.</p>
       </section>
 
       <section class="focus-secret__gate focus-secret__gate--locked" data-secret-locked hidden>
         <FocusLabBadge label="Лаборатория сайта" detail="Закрытый hub · прототип" />
         <p class="focus-secret__eyebrow">Нужен маршрут приглашения</p>
-        <h1>В этом браузере нет действующей метки просмотра</h1>
+        <h1>В этом браузере нет метки текущего периода</h1>
         <p>
-          Вернитесь на экран программы и откройте приглашение. Метка истекает
-          через 72 часа и не заменяет identity, сессию или server membership.
+          Снова откройте исходное приглашение. Локальная метка помогает
+          возвращаться в PWA весь период и не зависит от персонализации, но не
+          заменяет identity, сессию или server membership. После очистки данных
+          браузера восстановление потребует будущего подтверждённого аккаунта.
         </p>
         <div class="focus-secret__gate-actions">
           <a class="ke-button ke-button--primary" href={withBase('/fokus-gruppa/')}>О программе</a>
@@ -59,8 +61,8 @@ const sections = [
             <span><strong>Полюбить Калининград</strong><small>Закрытая афиша · hub</small></span>
           </a>
           <div class="focus-secret__header-actions">
-            <FocusLabBadge label="Участник лаборатории" detail="Предпросмотр, не подтверждён" />
-            <button class="focus-secret__leave" type="button" data-secret-clear>Завершить предпросмотр</button>
+            <FocusLabBadge label="Участник лаборатории" detail="Локальный прототип" />
+            <button class="focus-secret__leave" type="button" data-secret-clear>Выйти из прототипа</button>
           </div>
         </header>
 

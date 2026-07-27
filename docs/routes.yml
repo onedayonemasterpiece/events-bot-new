@@ -81,6 +81,7 @@ sections:
       static_site_focus_group_implementation_prompt: docs/backlog/features/static-site-focus-group/implementation-prompt.md
       static_site_focus_group_product_prototype: docs/backlog/features/static-site-focus-group/product-prototype.md
       static_site_focus_group_manual_emails: docs/backlog/features/static-site-focus-group/manual-email-templates.md
+      static_site_focus_group_easter_egg_program: docs/backlog/features/static-site-focus-group/easter-egg-program.md
       guide_excursions_architecture: docs/backlog/features/guide-excursions-monitoring/architecture.md
       guide_excursions_casebook: docs/backlog/features/guide-excursions-monitoring/casebook.md
       guide_excursions_digest_spec: docs/backlog/features/guide-excursions-monitoring/digest-spec.md

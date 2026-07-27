@@ -6,7 +6,7 @@
 > **Целевой запуск:** 30.07.2026, рабочее время из текущего release context —
 > 18:00 `Europe/Kaliningrad` (`16:00Z`), с подтверждением при freeze.
 > **Аудитория:** не публичный релиз, а закрытый исследовательский cohort до 200
-> подтверждённых участников.
+> активных участий; подтверждение email/Яндекс в прототипе необязательно.
 > **Период:** рекомендуемый первый цикл — 30 дней, до 30.08.2026.
 > **Release truth:** `origin/main`; полная фактическая сверка —
 > [current-state-audit.md](current-state-audit.md).
@@ -22,8 +22,11 @@ side effects:
 - `/` — noindex-заглушка о тестировании фокус-группой;
 - `/fokus-gruppa/` — программа и честная механика благодарности;
 - `/fokus-gruppa/priglashenie/` — fragment intake, немедленное удаление кода,
-  bounded localStorage preview marker и честный email/Яндекс auth-choice;
+  program-period participation marker, focus PWA install/start controller и
+  необязательный email/Яндекс identity-choice;
 - `/zakrytaya-afisha/` — marker-gated hub текущих статических страниц;
+- `/fokus-gruppa/kollektsiya/` — mobile-first коллекция пасхалок и демонстрация
+  условного появления `FG-E12` после третьего события в календаре;
 - `/fokus-gruppa/zavershenie/` — automatic/operator end states и continuity;
 - `/dlya-menya/` — consented local personalization с tri-state категориями,
   отдельным индексом интереса, объяснениями и no-send eligibility будущих
@@ -44,7 +47,8 @@ side effects:
 public-release checklist. Запускается отдельный **режим фокус-группы**:
 
 - ограниченный cohort с атомарным потолком `200`;
-- обязательная подтверждённая email-identity для статуса тестера;
+- участие можно начать без email/Яндекса; подтверждённая identity остаётся
+  необязательным upgrade для восстановления и связи между устройствами;
 - PWA как основной путь возвращения, но не обязательное условие участия;
 - явный feedback layer на всех ключевых page families;
 - отдельный быстрый путь исправления фактов события;
@@ -102,17 +106,25 @@ Presentation QR ведёт не прямо в сессию, а в seed invite fl
 ```text
 QR / invite URL
   -> показать программу и срок
-  -> запросить email
-  -> подтвердить email кодом ИЛИ magic link
   -> принять focus-group terms + purpose-specific weekly review
   -> атомарно занять место в cohort
   -> предложить установку PWA
+  -> предложить email-код / magic link ИЛИ Яндекс
+  -> разрешить явно продолжить без подтверждения
   -> короткая orientation mission
 ```
 
-До подтверждения email пользователь не получает durable tester membership.
-PWA installation может быть предложена сразу после активации, но browser
-confirmation нельзя обойти и отказ не лишает статуса тестера.
+Identity не является стеной перед продуктом. После явного продолжения
+неподтверждённый участник получает локальный статус на текущем устройстве и
+может пользоваться фокус-группой; PWA start-controller возвращает его сразу в
+закрытый hub. Сброс персонализации не трогает этот отдельный статус.
+
+Ограничение должно быть видно заранее: localStorage нельзя обещать как
+восстановимый аккаунт. Если пользователь очистит данные браузера или сменит
+устройство, только последующее подтверждение email/Яндекса и server membership
+смогут восстановить статус и синхронизировать прогресс. PWA installation
+browser-controlled: её нельзя вызвать или запустить без действия пользователя,
+а отказ от установки не лишает участия.
 
 ### Тестер делится режимом
 
@@ -123,7 +135,8 @@ confirmation нельзя обойти и отказ не лишает стат�
   через `history.replaceState`, чтобы не попадать в HTTP access log/referrer;
 - короткий срок и `max_uses`; обычный default — одна успешная активация;
 - inviter должен быть active tester;
-- invitee подтверждает собственный email и получает собственный `user_id`;
+- invitee получает собственный member/device id; при желании позже связывает
+  его со своей подтверждённой identity;
 - redeem транзакционно блокирует cohort row, проверяет global cap и расходует
   invite идемпотентно;
 - sharing не увеличивает шанс получить приз;
@@ -143,7 +156,7 @@ QR конкретной пасхалки не переносит tester status �
 - recommendation/marketing consent не создаётся автоматически;
 - участник становится обычным пользователем, а не удаляется.
 
-## 4. Почему участник оставляет и подтверждает email
+## 4. Зачем участник может подтвердить email или Яндекс
 
 Email запрашивается после объяснения ценности, а не как безымянная стена:
 
@@ -155,18 +168,22 @@ Email запрашивается после объяснения ценност�
 5. получить уведомление о результате prize programme, только если он будет
    отдельно юридически принят и пользователь подал заявку.
 
+Подтверждение необязательно для входа в исследовательские страницы, но до
+уведомления/получения материального приза победителю понадобится
+опубликованный способ подтвердить, что result ledger принадлежит именно ему.
+Это не должно менять уже набранный проверяемый результат.
+
 Нужны раздельные цели:
 
 - подтверждение email и focus-group identity;
 - согласие на еженедельную исследовательскую коммуникацию ровно на срок cohort;
 - обычные рекомендации/маркетинг — отдельный необязательный consent.
 
-Никаких prechecked boxes. Weekly research review является прозрачным условием
-участия именно в фокус-группе: отказ на onboarding не мешает пользоваться
-обычным сайтом, а последующий отзыв этого consent сразу переводит tester в
-`alumni` и прекращает tester mail/privileges. Это не должно затрагивать аккаунт
-и обычные сохранения. Обычная подписка не появляется из
-tester/PWA/calendar state.
+Никаких prechecked boxes. Отказ от email/Яндекса оставляет участие активным на
+текущем устройстве, но weekly email отсутствует и восстановление после очистки
+браузера не обещается. Отзыв research-mail consent прекращает именно письма и
+не должен автоматически удалять membership, PWA, сохранения или
+персонализацию. Обычная подписка не появляется из tester/PWA/calendar state.
 
 `tester@kenigevents.ru` — обязательный human support/Reply-To alias or mailbox
 для программы. До показа адреса должны быть подтверждены создание, MX/routing,
@@ -254,31 +271,19 @@ suppression и NotiSend transport можно использовать.
 
 ## 8. Пасхалки и два билета
 
-### Product verdict
+### Последнее owner decision
 
-Не связывать шанс выигрыша с положительностью, длиной или количеством feedback.
-Иначе NPS смещается, появляются формальные отзывы, а поздние/малодоступные
-участники оказываются в худших условиях.
+Один приз — **два билета в театр**. Победитель определяется
+лексикографически: сначала доля собранной доступной коллекции, затем bounded
+participation `0…40` и широта способов участия. NPS учитывается только как факт
+ответа; `0` и `10` равноправны. Like и dislike симметричны; sentiment, длина
+текста, повторы, скорость, покупки, share и invites преимущества не дают.
 
-Рекомендуемый 30.07 scope: **non-prize orientation canary**. Пасхалки помогают
-найти Search, Festivals, `Для меня`, сохранение и feedback; дают badge/status,
-но не являются GO blocker.
-
-Если owner сохраняет prize mechanic, минимально честный вариант:
-
-- один приз = **пара театральных билетов**, без двусмысленности;
-- уже проработанный threshold `5 из 8`, а не «найти всё»;
-- после threshold — отдельная explicit application;
-- feedback остаётся добровольным и не влияет на eligibility/odds;
-- одна равновесная заявка на одного verified tester;
-- hints, speed, 8/8, invites, social share, purchases и sentiment не повышают шанс;
-- accessible alternative, outage credit/extension и immutable eligible snapshot;
-- отдельные правила: organizer, сроки, возраст/территория, prize, selection,
-  alternate, получение, privacy, consent, audit и публикация результата.
-
-Компромисс «пасхалки + обязательно feedback» допустим только как отдельный
-biased checkpoint, где можно выбрать `всё понятно / нечего добавить`, нет
-минимальной длины или нужной оценки, а ответ исключается из unbiased NPS.
+Полная формула, tie/audit/anti-abuse/accessibility gates и versioned карта из 12
+responsive placements находятся в
+[easter-egg-program.md](easter-egg-program.md). До публикации правил интерфейс
+показывает `Правила готовятся`, localStorage остаётся только демонстрацией и
+никаких конкурсных баллов не начисляет.
 
 До юридической приёмки нельзя обещать розыгрыш. Российские требования к
 согласию на персональные данные, электронной рекламе и публичному конкурсу
@@ -412,7 +417,8 @@ leaderboards of tiny page cohorts.
   immutable focus candidate including post-R14 PWA/icon/analytics changes.
 - [ ] Rehearse candidate rollback/freshness and close live OAuth/Search on the
   exact frozen candidate; do not call old R14 candidate current.
-- [ ] Implement email OTP + magic link and verified-email tester admission.
+- [ ] Implement optional email OTP/magic link + Yandex identity upgrade,
+  anonymous continuation and idempotent anonymous→verified progress merge.
 - [ ] Implement program/membership/invite RPC, seed QR, referral, atomic cap 200,
   expiry/alumni/withdrawal and negative auth/concurrency tests.
 - [ ] Publish focus terms/privacy/retention and purpose-specific tester-mail

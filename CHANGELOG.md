@@ -5,10 +5,24 @@
 ### Added
 
 - Added an isolated noindex focus-group product prototype: the ordinary Astro
-  root becomes a testing stub, fragment invites create only a bounded 72-hour
-  local preview hint, and a marker-gated hub demonstrates the current site
-  journey without claiming localStorage, an opaque route or mock email/Yandex
-  choice as authorization.
+  root becomes a testing stub, fragment invites create a separate program-period
+  local participation hint, and a marker-gated hub demonstrates the current
+  site journey without claiming localStorage, an opaque route or mock
+  email/Yandex choice as authorization.
+- Added mobile-first focus onboarding with the supplied centred PWA artwork,
+  a focus manifest/start controller, browser-controlled Android/iOS install
+  guidance, optional email/Yandex identity intent and an explicit
+  continue-without-confirmation path. Focus participation is stored separately
+  from personalization, so resetting `Для меня` cannot remove it.
+- Added a noindex focus Easter-egg collection prototype and product contract:
+  collection coverage ranks first, capped research breadth ranks second, NPS
+  value/sentiment do not influence the result, and one pending prize means two
+  theatre tickets. The versioned placement matrix covers 12 functions,
+  including fail-closed `FG-E12` immediately after the third current
+  saved/calendar item.
+- Restored the root PWA manifest, install controller and telemetry mounts as a
+  regression guard for
+  `INC-2026-07-27-pwa-presentation-install-missing`.
 - Added reusable focus-lab UI with a CC0 SVG Repo flask icon, Act Opus
   thank-you/pending-prize presentation, distinct overall NPS, page usefulness,
   improvement and event-fact feedback specimens, plus automatic/operator end
