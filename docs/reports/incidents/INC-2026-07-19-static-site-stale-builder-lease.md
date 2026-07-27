@@ -238,3 +238,56 @@ write transaction is active at a time and `BEGIN IMMEDIATE` may return
 <https://www.sqlite.org/lang_transaction.html>. Python's connection timeout is
 only a wait limit before `OperationalError`, not a guarantee that a busy writer
 will clear: <https://docs.python.org/3/library/sqlite3.html#sqlite3.connect>.
+
+## R13 production-generation regression evidence — 2026-07-27
+
+The Festivals/unified-page production release exercised this incident contract
+again and exposed one adjacent unprotected write after immutable publication:
+all 1131 candidate objects had been uploaded and downloaded for verification,
+but `_patch_static_site_request_payload` exhausted one 30-second ORM busy
+timeout while a Smart Update transaction owned SQLite's writer. The Kaggle
+ledger was already `done`, `resource_release` preceded `report_written`, and
+the exact `static_site:builder` lease was released, so a second kernel was
+neither necessary nor permitted.
+
+Corrective release:
+
+- page-source SHA `f93fdd2c99339c7a935a4c6aa2627c827f73b5c9`,
+  reachable from `origin/main`;
+- host recovery SHA
+  `709eda27032122aca2f8d2b1e5464b2cc3289b58`, also reachable from
+  `origin/main`;
+- Fly image `deployment-01KYGC7D94F2272DFZG7C8DV9F`;
+- 68 focused tests passed across `test_static_site_release.py`,
+  `test_kaggle_status.py` and `test_static_site_build_handoff.py`;
+- receipt payload writes now retry SQLite lock contention in four fresh
+  sessions; an S3 precondition conflict is adopted only when the normal
+  manifest-bound download check confirms exact bytes and MIME. No overwrite,
+  root key or stable ICS key is expressible.
+
+Recovery evidence:
+
+- assertion-guarded backup:
+  `/data/incident_backups/R13-receipt-lock-rearm-20260726T2335Z.json`;
+- exact run
+  `static-site:production-secret-20260727T004208-0af7c1de:9c46537a7bb1`
+  was selected ahead of its accumulated follow-up, adopted without another
+  Kaggle build and committed as current at `2026-07-26T23:54:49Z`;
+- final receipt: 246 event pages, 894 generated pages, 1125 files and 1131
+  published objects; `root_mutation=false`,
+  `stable_ics_mutation=false`;
+- current review URL:
+  <https://kenigevents.ru/_review/qjjOTwpZHmmmBBv7lbHcSmluPCtWhXIa4mz1ZxYn9l4/>;
+- public Playwright checks passed 19 routes at `1440×900` and `390×844`,
+  including 21 Festivals cards, three club detail routes, Search editability,
+  Today chronology, no horizontal overflow and the event `6667` free token;
+- final operations state: no active static claim, exact lease `released`,
+  `PRAGMA quick_check=ok`, runtime mirror enabled/current and `/data` free space
+  approximately 1.85 GiB;
+- Telegram review-thread read-back: chat `-1004337049383`, reply `548`,
+  message `692`, 22 link entities.
+
+The public root remains unchanged. Closure still requires the owner's visual
+acceptance of the immutable review candidate; an ordinary debounced Smart
+Update follow-up may publish a newer candidate later but cannot mutate this
+review URL.
