@@ -487,60 +487,58 @@ async def create_kaggle_run_config(
         return None
     token = generate_callback_token()
     now = utc_now_iso()
-    async with db.raw_conn() as conn:
-        await _begin_immediate_with_retry(
-            conn,
-            run_id=run_id,
-            operation="create_run_config",
-        )
-        try:
-            await _expire_resource_leases(conn, now=now)
-            if not replace_existing:
-                cur = await conn.execute(
-                    "SELECT 1 FROM kaggle_run_ledger WHERE run_id=?",
-                    (run_id,),
-                )
-                if await cur.fetchone():
-                    await conn.commit()
-                    logger.info("kaggle_status: run already claimed run_id=%s", run_id)
-                    return None
-            await conn.execute(
-                """
-                INSERT INTO kaggle_run_ledger(
-                    run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
-                    status, phase, token_hash, progress_json, created_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, 'created', 'created', ?, '{}', ?, ?)
-                ON CONFLICT(run_id) DO UPDATE SET
-                    session_id=excluded.session_id,
-                    kind=excluded.kind,
-                    notebook=excluded.notebook,
-                    kernel_ref=COALESCE(excluded.kernel_ref, kaggle_run_ledger.kernel_ref),
-                    dataset_ref=COALESCE(excluded.dataset_ref, kaggle_run_ledger.dataset_ref),
-                    token_hash=excluded.token_hash,
-                    status='created',
-                    phase='created',
-                    progress_json='{}',
-                    updated_at=excluded.updated_at,
-                    terminal_at=NULL,
-                    error=NULL
-                """,
-                (
-                    run_id,
-                    session_id,
-                    kind,
-                    notebook,
-                    kernel_ref,
-                    dataset_ref,
-                    hash_token(token),
-                    now,
-                    now,
-                ),
+    # Parser orchestration intentionally starts several Kaggle kernels in
+    # parallel.  Database.raw_conn() is a shared cached connection, so concurrent
+    # BEGIN IMMEDIATE calls on it can fail with "cannot start a transaction
+    # within a transaction".  Give every run-config writer its own connection
+    # and let SQLite serialize the short writes.
+    async with _fresh_status_write_transaction(
+        db,
+        run_id=run_id,
+        operation="create_run_config",
+    ) as conn:
+        await _expire_resource_leases(conn, now=now)
+        if not replace_existing:
+            cur = await conn.execute(
+                "SELECT 1 FROM kaggle_run_ledger WHERE run_id=?",
+                (run_id,),
             )
-            await conn.commit()
-        except Exception:
-            await conn.rollback()
-            raise
+            if await cur.fetchone():
+                logger.info("kaggle_status: run already claimed run_id=%s", run_id)
+                return None
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
+                status, phase, token_hash, progress_json, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 'created', 'created', ?, '{}', ?, ?)
+            ON CONFLICT(run_id) DO UPDATE SET
+                session_id=excluded.session_id,
+                kind=excluded.kind,
+                notebook=excluded.notebook,
+                kernel_ref=COALESCE(excluded.kernel_ref, kaggle_run_ledger.kernel_ref),
+                dataset_ref=COALESCE(excluded.dataset_ref, kaggle_run_ledger.dataset_ref),
+                token_hash=excluded.token_hash,
+                status='created',
+                phase='created',
+                progress_json='{}',
+                updated_at=excluded.updated_at,
+                terminal_at=NULL,
+                error=NULL
+            """,
+            (
+                run_id,
+                session_id,
+                kind,
+                notebook,
+                kernel_ref,
+                dataset_ref,
+                hash_token(token),
+                now,
+                now,
+            ),
+        )
     return {
         "run_id": run_id,
         "session_id": session_id,
@@ -573,8 +571,13 @@ async def validate_run_token(db: Database, run_id: str, token: str) -> bool:
 
 
 @asynccontextmanager
-async def _fresh_status_write_transaction(db: Database, *, run_id: str):
-    """Isolate one callback from stale/failed shared SQLite transactions."""
+async def _fresh_status_write_transaction(
+    db: Database,
+    *,
+    run_id: str,
+    operation: str = "record_run_event",
+):
+    """Isolate one status-ledger write from shared SQLite transactions."""
 
     conn = await aiosqlite.connect(db.path, timeout=30)
     try:
@@ -582,7 +585,7 @@ async def _fresh_status_write_transaction(db: Database, *, run_id: str):
         await _begin_immediate_with_retry(
             conn,
             run_id=run_id,
-            operation="record_run_event",
+            operation=operation,
         )
         try:
             yield conn

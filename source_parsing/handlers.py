@@ -192,6 +192,22 @@ class UpdatedEventInfo:
     vk_post_url: str | None = None
 
 
+def _source_parsing_terminal_status(result: SourceParsingResult) -> str:
+    """Map source-level outcomes to a truthful terminal ops status."""
+
+    failed_items = sum(
+        int(stats.failed or 0)
+        for stats in (result.stats_by_source or {}).values()
+    )
+    if result.errors:
+        # A run that imported some sources but lost another one is partial,
+        # not green. If no source survived, expose the run as an error.
+        return "partial" if result.stats_by_source else "error"
+    if failed_items:
+        return "partial"
+    return "success"
+
+
 def _event_telegraph_url(event) -> str | None:
     url = getattr(event, "telegraph_url", None)
     if url:
@@ -2232,9 +2248,12 @@ async def run_source_parsing(
         )
         
         result.processing_duration = time.time() - start_time
+
+        ops_status = _source_parsing_terminal_status(result)
         
         logger.info(
-            "source_parsing: complete total=%d kernel=%.1fs processing=%.1fs",
+            "source_parsing: complete status=%s total=%d kernel=%.1fs processing=%.1fs",
+            ops_status,
             int(getattr(result, "total_events", 0) or 0),
             result.kernel_duration,
             result.processing_duration,
