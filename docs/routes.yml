@@ -271,6 +271,7 @@ features:
     status: public_registry_prototype_post_release
     docs: docs/features/static-site-easter-eggs/README.md
     artifact_registry_contract: docs/features/static-site-easter-eggs/artifact-registry.md
+    artifact_visual_generation: docs/features/static-site-easter-eggs/artifact-visual-generation.md
     collection_contract: docs/features/static-site-easter-eggs/collection-contract.md
     telegram_ideas_analysis: docs/features/static-site-easter-eggs/telegram-ideas-analysis-2026-07-27.md
     external_gate_receipt: docs/features/static-site-easter-eggs/external-gate-2026-07-27.md
@@ -280,12 +281,14 @@ features:
     measurement_and_state_contract: docs/features/static-site-easter-eggs/measurement-and-state-contract.md
     gemini_kpi_state_followup_brief: docs/features/static-site-easter-eggs/gemini-kpi-state-followup-brief-2026-07-21.md
     gemini_kpi_state_consultation: docs/features/static-site-easter-eggs/gemini-kpi-state-consultation-2026-07-21.md
+    gemini_collection_followup_blocker: docs/features/static-site-easter-eggs/gemini-collection-followup-blocker-2026-07-27.md
     related_promo_campaigns: docs/features/promo-campaigns/README.md
     related_my_events: docs/features/event-favorites-calendar/README.md
     public_page: site/src/pages/artefakty/index.astro
+    collection_page: site/src/pages/artefakty/kollektsii/znaki-yantarnogo-kraya/index.astro
     public_registry: site/src/data/artifactRegistry.json
     public_registry_api: site/src/pages/data/artifacts.json.ts
-    implementation: public_registry_only
+    implementation: public_registry_and_noindex_collection_prototype
 
   promo_campaigns:
     status: mvp

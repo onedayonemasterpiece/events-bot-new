@@ -1,11 +1,14 @@
 # Реестр артефактов
 
-> **Статус:** реализован public registry prototype; progress, placements,
-> application form и draw backend отсутствуют.
+> **Статус:** реализован редакторский registry prototype и отдельный noindex
+> prototype конкретной коллекции; production placements, application form и
+> draw backend отсутствуют.
 
 ## Публичные точки
 
 - HTML: `/artefakty/`
+- User collection prototype:
+  `/artefakty/kollektsii/znaki-yantarnogo-kraya/`
 - Public JSON: `/data/artifacts.json`
 - Source of truth:
   [`site/src/data/artifactRegistry.json`](../../../site/src/data/artifactRegistry.json)
@@ -15,6 +18,12 @@
 Публичный JSON намеренно не содержит Telegram source refs, review flags, active
 placement IDs/URLs, clues, participant identity или progress. Private
 operator inventory остаётся отдельной будущей surface.
+
+`/artefakty/` — редакторский реестр, а не личный альбом. Он может раскрывать
+состав только пока collection status=`draft`. После перехода в `collecting`
+точный active membership не должен публиковаться в реестре: пользовательская
+страница показывает только общее число slots, а для ненайденных slots — ни
+изображение, ни имя.
 
 ## Что считается записью
 
@@ -45,6 +54,8 @@ operator inventory остаётся отдельной будущей surface.
 
 - public name: **«Знаки Янтарного края»**;
 - `8` артефактов;
+- первый onboarding specimen — найденный и консолидированный
+  **«Янтарный космонавт»**;
 - все доступны одновременно;
 - planned window: `14d`;
 - application-only grace: `48h`;

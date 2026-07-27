@@ -1,7 +1,8 @@
 # Пасхалки интерфейса и артефакты Калининградской области
 
-> **Статус:** public registry prototype / отдельный post-release track; collection
-> progress, placements, application form и draw backend отсутствуют.
+> **Статус:** public registry + noindex concrete-collection prototype /
+> отдельный post-release track; production placements, application form и draw
+> backend отсутствуют.
 > **Planning branch:** `feature/static-site-artifacts-registry-20260727`.
 > **Предыдущий scaffold:** `feature/static-site-easter-eggs-design-20260721@24795bf4`;
 > ветка сохранена как исходный снимок, но новая проработка начата от актуального
@@ -180,9 +181,14 @@ Default MVP — `cohort`. Публичный share-card предлагает р�
 догадкой.
 
 Telegram thread до сообщения `707` дал `139` дедуплицированных candidate concepts.
+После консолидации отдельно найденного отработанного prototype
+**«Янтарный космонавт»** реестр содержит `140` записей: `139` thread-derived
+идей и один prototype-derived объект.
 Они больше не копируются списками между документами:
 
 - public HTML: `/artefakty/`;
+- concrete collection prototype:
+  `/artefakty/kollektsii/znaki-yantarnogo-kraya/`;
 - public JSON: `/data/artifacts.json`;
 - canonical source:
   [`site/src/data/artifactRegistry.json`](../../../site/src/data/artifactRegistry.json);
@@ -317,15 +323,13 @@ Stage 13 остаётся post-release и не блокирует первую �
    product default — принять.
 2. Owner acceptance состава `Знаки Янтарного края`, `8/5` и окна `14d + 48h`.
 3. Exact MVP placements и default `communal|cohort` mode.
-4. Навигационный entry point к уже выбранной `/artefakty/`; private progress
-   продолжает жить отдельно в `Моё`.
+4. `/artefakty/` остаётся редакторским реестром; пользовательская страница
+   конкретной коллекции живёт по
+   `/artefakty/kollektsii/znaki-yantarnogo-kraya/`, а компактный entry point —
+   первой строкой в `/dlya-menya/`.
 5. Retention/consent для обычного feedback и partner proposals.
 6. Кто владеет editorial/fact/IP/safety triage и SLA ответа партнёру.
 7. Exact experiment traffic, MDE и non-inferiority thresholds.
-8. Перед merge объединить public registry с отдельным noindex research-прототипом
-   интерактивной янтарной находки: один `/artefakty/` не должен молча вытеснить
-   другой. Рекомендуемая развязка — public registry как landing, личный progress
-   как отдельный дочерний route/блок в `Моё`.
 8. Остаётся ли prize/social-share полностью вне первого года механики.
 
 ## Связанные документы
@@ -333,11 +337,13 @@ Stage 13 остаётся post-release и не блокирует первую �
 - [Критическая продуктовая аналитика](product-analysis.md)
 - [Экологичная аналитика, KPI и state/motion contract](measurement-and-state-contract.md)
 - [Единый реестр и public projection](artifact-registry.md)
+- [Визуальный контракт и prompt новых артефактов](artifact-visual-generation.md)
 - [Collection/threshold/application contract](collection-contract.md)
 - [Telegram source analysis 2026-07-27](telegram-ideas-analysis-2026-07-27.md)
 - [Fresh external gate receipt 2026-07-27](external-gate-2026-07-27.md)
 - [Focused Gemini KPI/state prompt](gemini-kpi-state-followup-brief-2026-07-21.md)
 - [Gemini Pro KPI/state consultation и disposition](gemini-kpi-state-consultation-2026-07-21.md)
+- [Fresh Gemini collection follow-up blocker receipt](gemini-collection-followup-blocker-2026-07-27.md)
 - [Промпт для внешнего deep research](external-research-brief.md)
 - [Gemini Pro consultation и disposition](gemini-consultation-2026-07-21.md)
 - [Promo campaigns](../promo-campaigns/README.md)

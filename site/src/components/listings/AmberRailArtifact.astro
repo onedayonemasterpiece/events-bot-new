@@ -1,5 +1,6 @@
 ---
 import { withBase } from '../../lib/events';
+import { AMBER_ARTIFACT_PLACEMENT } from '../../lib/artifactProgress.mjs';
 
 interface Props {
   eventId: number;
@@ -8,6 +9,7 @@ interface Props {
 const { eventId, placement = 'tail' } = Astro.props;
 const asset = withBase('/assets/gamification/amber-cosmonaut');
 const maskAsset = withBase('/assets/gamification/amber-cosmonaut-3x.webp');
+const detailUrl = withBase('/artefakty/kollektsii/znaki-yantarnogo-kraya/#amber-cosmonaut');
 ---
 <button
   class="amber-artifact"
@@ -15,9 +17,11 @@ const maskAsset = withBase('/assets/gamification/amber-cosmonaut-3x.webp');
   type="button"
   data-amber-artifact
   data-artifact-placement={placement}
+  data-artifact-placement-id={AMBER_ARTIFACT_PLACEMENT}
   data-artifact-event-id={eventId}
+  data-artifact-detail-url={detailUrl}
   aria-pressed="false"
-  aria-label="Секретный артефакт «Янтарный космонавт». Нажмите, чтобы найти"
+  aria-label="Секретный артефакт. Нажмите, чтобы найти"
 >
   <span class="amber-artifact__rays" aria-hidden="true"></span>
   <span class="amber-artifact__visual" aria-hidden="true">
@@ -71,33 +75,49 @@ const maskAsset = withBase('/assets/gamification/amber-cosmonaut-3x.webp');
 </style>
 
 <script>
+  import {
+    AMBER_ARTIFACT_ID,
+    AMBER_ARTIFACT_PLACEMENT,
+    collectAmberArtifact,
+    hasAmberArtifact,
+    readArtifactCollection,
+  } from '../../lib/artifactProgress.mjs';
+
   document.querySelectorAll('[data-amber-artifact]').forEach((button) => {
     if (button.dataset.amberArtifactReady === 'true') return;
     button.dataset.amberArtifactReady = 'true';
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const live = button.querySelector('.amber-artifact__live');
-    const storageKey = `ke_amber_artifact_prototype_v1:${button.dataset.artifactPlacement || 'unknown'}`;
     const setCollected = (collected) => {
       button.classList.toggle('is-collected', collected);
       button.setAttribute('aria-pressed', String(collected));
       button.setAttribute('aria-label', collected
-        ? 'Артефакт «Янтарный космонавт» найден'
-        : 'Секретный артефакт «Янтарный космонавт». Нажмите, чтобы найти');
+        ? 'Артефакт «Янтарный космонавт» найден. Открыть историю'
+        : 'Секретный артефакт. Нажмите, чтобы найти');
     };
-    try { setCollected(localStorage.getItem(storageKey) === 'found'); } catch { setCollected(false); }
+    setCollected(hasAmberArtifact(readArtifactCollection()));
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (button.classList.contains('is-collected')) return;
+      if (button.classList.contains('is-collected')) {
+        location.assign(button.dataset.artifactDetailUrl || '/artefakty/kollektsii/znaki-yantarnogo-kraya/');
+        return;
+      }
       button.classList.add('is-collecting');
-      setCollected(true);
-      try { localStorage.setItem(storageKey, 'found'); } catch {}
+      const result = collectAmberArtifact({
+        eventId: Number(button.dataset.artifactEventId || 0),
+        placement: button.dataset.artifactPlacementId || AMBER_ARTIFACT_PLACEMENT,
+      });
+      setCollected(hasAmberArtifact(result.state));
       if (live) live.textContent = 'Найден артефакт «Янтарный космонавт»';
-      window.dispatchEvent(new CustomEvent('kenigevents:artifact-collected', { detail: {
-        artifactId: 'amber_cosmonaut',
-        placement: button.dataset.artifactPlacement || 'unknown',
-        eventId: button.dataset.artifactEventId || '',
-      }}));
+      if (result.collected) {
+        window.dispatchEvent(new CustomEvent('kenigevents:artifact-collected', { detail: {
+          artifactId: AMBER_ARTIFACT_ID,
+          collectionId: result.state.collectionId,
+          placement: button.dataset.artifactPlacementId || AMBER_ARTIFACT_PLACEMENT,
+          eventId: button.dataset.artifactEventId || '',
+        }}));
+      }
       setTimeout(() => button.classList.remove('is-collecting'), reduced ? 0 : 460);
     });
     if (reduced || !('IntersectionObserver' in window)) {

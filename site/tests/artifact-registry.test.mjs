@@ -33,6 +33,7 @@ test('Telegram idea registry is complete, stable and collection-linked', () => {
   assert.equal(collection.unlock.automatic_entry, false);
   assert.equal(collection.unlock.extra_finds_increase_odds, false);
   assert.equal(collection.unlock.share_increases_odds, false);
+  assert.equal(collection.artifact_ids[0], 'amber-cosmonaut');
   assert.ok(collection.artifact_ids.every((id) => ids.includes(id)));
   assert.equal(new Set(collection.artifact_ids).size, collection.artifact_ids.length);
   for (const artifact of registry.artifacts) {
@@ -52,6 +53,8 @@ test('public page uses hybrid naming and states the drawing boundary', () => {
   assert.match(page, /Публикация, лайк, покупка/u);
   assert.match(page, /Розыгрыш ещё не открыт/u);
   assert.match(page, /data-artifact-registry-page/u);
+  assert.match(page, /Редакторский реестр · Пасхалки интерфейса · не страница прогресса/u);
+  assert.match(page, /\/artefakty\/kollektsii\/znaki-yantarnogo-kraya\//u);
   assert.match(page, /href=\{withBase\('\/data\/artifacts\.json'\)\}/u);
   assert.doesNotMatch(page, /Telegram|message №|сообщения №/iu);
 });
@@ -82,6 +85,8 @@ test('personal prototype leads with a compact honest collection teaser', async (
   assert.match(personalPage, /slice\(0, 3\)/u);
   assert.match(personalPage, /Ещё <strong>\{artifactTeaserRemaining\}<\/strong> скрыто в интерфейсе/u);
   assert.match(personalPage, /Открыть коллекцию/u);
+  assert.match(personalPage, /\/artefakty\/kollektsii\/znaki-yantarnogo-kraya\//u);
+  assert.match(personalPage, /\/assets\/gamification\/amber-cosmonaut/u);
   assert.match(personalPage, /Сбор ещё не запущен/u);
   assert.match(personalPage, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/u);
   assert.ok(

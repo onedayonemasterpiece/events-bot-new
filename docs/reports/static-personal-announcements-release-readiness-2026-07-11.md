@@ -300,6 +300,10 @@ first-presentation GO blocker и не разрешение на production imple
 - [ ] Public registry route согласован с отдельным noindex research-прототипом
   интерактивной находки; при merge ни registry, ни progress/collection surface
   не потеряны.
+- [x] Маршруты прототипа разведены: `/artefakty/` — редакторский реестр,
+  `/artefakty/kollektsii/znaki-yantarnogo-kraya/` — конкретная коллекция с
+  примером `1/8`, семью анонимными locked slots и detail dialog найденного
+  «Янтарного космонавта». Это prototype evidence, не production GO.
 - [ ] Owner принимает hybrid vocabulary: «пасхалка» — discovery, «артефакт» —
   collectible, «коллекция» — одновременный ограниченный набор.
 - [ ] Первая reward-enabled collection фиксирует `8` одновременных артефактов,

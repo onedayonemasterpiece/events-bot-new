@@ -21,6 +21,7 @@ const required = [
   'vystavki/index.html',
   'festivali/index.html',
   'artefakty/index.html',
+  'artefakty/kollektsii/znaki-yantarnogo-kraya/index.html',
   'data/artifacts.json',
   'populyarnoe/index.html',
   'poisk/index.html',
@@ -84,6 +85,19 @@ if (
 ) {
   throw new Error('Artifact registry page misses the naming/collection contract');
 }
+const artifactCollectionHtml = readFileSync(
+  join(root, 'artefakty/kollektsii/znaki-yantarnogo-kraya/index.html'),
+  'utf8',
+);
+if (
+  !artifactCollectionHtml.includes('data-artifact-collection-page')
+  || !artifactCollectionHtml.includes('data-artifact-collection-progress')
+  || !artifactCollectionHtml.includes('Янтарный космонавт')
+  || !artifactCollectionHtml.includes('Найдено')
+  || (artifactCollectionHtml.match(/data-artifact-state="locked"/gu) || []).length !== 7
+) {
+  throw new Error('Concrete artifact collection page misses the 1-found/7-locked contract');
+}
 const publicArtifactRegistry = JSON.parse(readFileSync(join(root, 'data/artifacts.json'), 'utf8'));
 if (
   publicArtifactRegistry.schema_version !== 'artifact_public_registry_v1'
@@ -99,6 +113,8 @@ if (
   !personalArtifactTeaserHtml.includes('data-artifact-collection-teaser')
   || !personalArtifactTeaserHtml.includes('data-prototype-progress')
   || !personalArtifactTeaserHtml.includes('Знаки Янтарного края')
+  || !personalArtifactTeaserHtml.includes('/artefakty/kollektsii/znaki-yantarnogo-kraya/')
+  || !personalArtifactTeaserHtml.includes('amber-cosmonaut-1x.webp')
   || !/Ещё\s*<strong[^>]*>7<\/strong>\s*скрыто/gu.test(personalArtifactTeaserHtml)
   || (personalArtifactTeaserHtml.match(/class="personal-artifact(?: |")/gu) || []).length !== 3
 ) {

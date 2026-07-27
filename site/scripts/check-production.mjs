@@ -52,6 +52,7 @@ for (const path of [
   'vystavki/index.html',
   'festivali/index.html',
   'artefakty/index.html',
+  'artefakty/kollektsii/znaki-yantarnogo-kraya/index.html',
   'data/artifacts.json',
   'populyarnoe/index.html',
   'poisk/index.html',
@@ -120,6 +121,7 @@ const siteOrigin = manifest.site_origin;
 for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   const source = html(file.key);
   const intentionallyUnindexed = file.key === 'dlya-menya/index.html'
+    || file.key === 'artefakty/kollektsii/znaki-yantarnogo-kraya/index.html'
     || /^podborki\/[^/]+\/index\.html$/u.test(file.key);
   if (intentionallyUnindexed) {
     if (!/<meta\s+name="robots"\s+content="noindex,nofollow,noarchive"/iu.test(source)) fail(`private/personal noindex policy missing from ${file.key}`);

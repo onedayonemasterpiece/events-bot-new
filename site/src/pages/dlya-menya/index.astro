@@ -20,6 +20,7 @@ const artifactTeaserUntilApplication = Math.max(
   0,
   firstArtifactCollection.unlock.required_count - artifactTeaserFoundCount,
 );
+const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="personal" noindex>
   <main id="main" class="personal-page" data-personal-prototype>
@@ -44,7 +45,7 @@ const artifactTeaserUntilApplication = Math.max(
               Ещё <strong>{artifactTeaserRemaining}</strong> скрыто в интерфейсе.
             </p>
           </div>
-          <a href={withBase('/artefakty/#first-collection')}>Открыть коллекцию</a>
+          <a href={withBase('/artefakty/kollektsii/znaki-yantarnogo-kraya/')}>Открыть коллекцию</a>
         </div>
 
         <ol class="personal-artifacts__row" aria-label="Первые три слота коллекции">
@@ -53,9 +54,18 @@ const artifactTeaserUntilApplication = Math.max(
             return (
               <li class:list={['personal-artifact', { 'personal-artifact--locked': !isFound }]}>
                 <span class="personal-artifact__token" aria-hidden="true">
-                  {isFound ? String(index + 1).padStart(2, '0') : '?'}
+                  {isFound ? (
+                    <img
+                      src={`${amberAsset}-1x.webp`}
+                      srcset={`${amberAsset}-1x.webp 1x, ${amberAsset}-2x.webp 2x, ${amberAsset}-3x.webp 3x`}
+                      width="46"
+                      height="60"
+                      alt=""
+                      decoding="async"
+                    />
+                  ) : '?'}
                 </span>
-                <strong>{isFound ? artifact.public_name : 'Не открыт'}</strong>
+                <strong>{isFound ? artifact.public_name : 'Не найден'}</strong>
               </li>
             );
           })}
@@ -161,6 +171,18 @@ const artifactTeaserUntilApplication = Math.max(
     color: #863715;
     background: radial-gradient(circle at 36% 28%, #ffe29a, #c76f1e 72%, #7f2f13);
     font-weight: 950;
+  }
+  .personal-artifact__token img {
+    width: 46px;
+    height: 60px;
+    object-fit: contain;
+    filter: drop-shadow(0 5px 7px rgba(157, 78, 0, .22));
+  }
+  .personal-artifact:not(.personal-artifact--locked) .personal-artifact__token {
+    height: 66px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
   .personal-artifact strong {
     max-width: 14ch;

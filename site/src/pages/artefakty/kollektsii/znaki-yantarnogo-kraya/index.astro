@@ -1,0 +1,81 @@
+---
+import ArtifactCollectionProgress from '../../../../components/artifacts/ArtifactCollectionProgress.astro';
+import EventLayout from '../../../../layouts/EventLayout.astro';
+import { getArtifactRegistry } from '../../../../lib/artifacts';
+import { absoluteUrl, siteHomeHref, SITE_NAME, withBase } from '../../../../lib/events';
+
+const collection = getArtifactRegistry().collections.find((item) => item.slug === 'znaki-yantarnogo-kraya');
+if (!collection) throw new Error('Collection znaki-yantarnogo-kraya is missing');
+const canonicalUrl = absoluteUrl('/artefakty/kollektsii/znaki-yantarnogo-kraya/');
+const title = `${collection.public_name} — коллекция артефактов | ${SITE_NAME}`;
+const description = 'Прототип страницы конкретной коллекции: один найденный артефакт, семь скрытых и прогресс до заявки на розыгрыш.';
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} noindex>
+  <main id="main" class="collection-page" data-artifact-collection-page>
+    <div class="page-shell collection-shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={siteHomeHref()}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <a href={withBase('/artefakty/')}>Редакторский реестр</a>
+        <span aria-hidden="true">/</span>
+        <span>{collection.public_name}</span>
+      </nav>
+
+      <header class="collection-hero">
+        <div>
+          <p class="eyebrow">Коллекция № 1 · интерактивный прототип</p>
+          <h1>{collection.public_name}</h1>
+          <p class="collection-hero__lead">{collection.summary}</p>
+        </div>
+        <aside>
+          <strong>{collection.unlock.required_count}/{collection.unlock.total_count}</strong>
+          <span>нужно найти, чтобы открыть заявку</span>
+        </aside>
+      </header>
+
+      <div class="prototype-note">
+        <strong>Показан сценарий «найден 1 из 8».</strong>
+        Это не реальный аккаунт и не открытый розыгрыш. Страница нужна для проверки интерфейса:
+        первый артефакт уже раскрыт, остальные семь не показывают названий и изображений.
+      </div>
+
+      <ArtifactCollectionProgress collection={collection} demoFound />
+
+      <section class="collection-rules" aria-labelledby="collection-rules-title">
+        <div>
+          <p class="eyebrow">Автоматические правила</p>
+          <h2 id="collection-rules-title">Артефакт не убегает</h2>
+        </div>
+        <ul>
+          <li><strong>Закрепление.</strong> После назначения артефакт ждёт пользователя в том же интерфейсном месте до находки или до конца окна коллекции.</li>
+          <li><strong>После находки.</strong> Он остаётся на исходном месте в спокойном состоянии с отметкой «Найден»; повторное нажатие открывает историю.</li>
+          <li><strong>После срока.</strong> Место освобождается, а уже найденный артефакт остаётся в архиве коллекции.</li>
+          <li><strong>Без лайк-гейта.</strong> Лайк, публикация, покупка и скорость сбора не влияют на доступность и шанс в розыгрыше.</li>
+          <li><strong>Порог.</strong> {collection.unlock.required_count} находок открывают одну форму заявки; остальные находки не увеличивают вероятность выигрыша.</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .collection-page { padding: 0 0 clamp(3rem, 8vw, 6rem); }
+  .collection-shell { width: min(1120px, calc(100% - 28px)); }
+  .crumbs { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; margin: 1rem 0; color: #76645a; font-size: .82rem; }
+  .crumbs a { color: #8d3f1d; }
+  .collection-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, .3fr); gap: 1.5rem; align-items: end; padding: clamp(1.35rem, 4vw, 3.5rem); border: 1px solid rgba(125, 55, 28, .16); border-radius: 1.6rem; background: radial-gradient(circle at 90% 16%, rgba(226, 157, 54, .22), transparent 35%), linear-gradient(145deg, #fffaf0, #f4e3cb); }
+  .collection-hero h1 { max-width: 13ch; margin: .1rem 0 .6rem; font-size: clamp(3rem, 8vw, 6.5rem); line-height: .88; letter-spacing: -.06em; }
+  .collection-hero__lead { max-width: 66ch; margin: 0; font-size: clamp(1rem, 2vw, 1.25rem); line-height: 1.55; }
+  .collection-hero aside { display: grid; justify-items: end; text-align: right; }
+  .collection-hero aside strong { color: #943f1c; font-size: clamp(2.8rem, 7vw, 5.5rem); line-height: .9; }
+  .collection-hero aside span { max-width: 20ch; color: #6e5b50; font-size: .82rem; }
+  .prototype-note { margin-top: 1rem; padding: 1rem 1.1rem; border: 1px solid rgba(15, 118, 110, .2); border-radius: 1rem; background: #eef8f5; color: #315d57; line-height: 1.5; }
+  .collection-rules { display: grid; grid-template-columns: minmax(220px, .42fr) minmax(0, 1fr); gap: clamp(1.25rem, 5vw, 4rem); margin-top: 1rem; padding: clamp(1.25rem, 4vw, 2.5rem); border: 1px solid rgba(74, 48, 35, .13); border-radius: 1.4rem; background: #fffaf3; }
+  .collection-rules h2 { margin: .15rem 0 0; font-size: clamp(2rem, 5vw, 4rem); line-height: .95; letter-spacing: -.05em; }
+  .collection-rules ul { margin: 0; padding-left: 1.2rem; }
+  .collection-rules li { margin: 0 0 .75rem; line-height: 1.55; }
+  @media (max-width: 720px) {
+    .collection-hero, .collection-rules { grid-template-columns: 1fr; }
+    .collection-hero aside { justify-items: start; text-align: left; }
+  }
+</style>

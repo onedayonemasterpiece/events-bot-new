@@ -4,8 +4,19 @@
 
 ### Added
 
+- Added a noindex concrete collection prototype at
+  `/artefakty/kollektsii/znaki-yantarnogo-kraya/`: it shows the requested
+  `1 found / 7 anonymous locked` state, uses the real worked
+  `Янтарный космонавт` asset, opens an accessible detail dialog and states the
+  fixed-placement/found-echo/expiry/application rules. The `/dlya-menya/`
+  teaser now uses that asset and links to the concrete collection instead of
+  the editorial registry anchor.
+- Consolidated the source, geometry, alpha/layering, motion boundary,
+  provenance blockers and QA contract of the worked amber specimen into a
+  reusable source-image-to-artifact prompt for future image models.
 - Added the public `/artefakty/` registry and `/data/artifacts.json` projection
-  from one validated 139-entry Telegram-derived source, with hybrid public
+  from one validated 140-entry source (`139` Telegram-derived candidates plus
+  the separately worked amber prototype), with hybrid public
   naming (`пасхалка` discovery → `артефакт` collectible → `коллекция` set), a
   draft eight-item `Знаки Янтарного края` collection and an explicit `60% = 5/8`
   application unlock. The page exposes no active placement coordinates or

@@ -4,6 +4,14 @@
 > contract**. Accepted Calendar/Popular rails remain the v23 donor.
 > Date: 2026-07-22.
 
+> 2026-07-27: specimen найден и включён первым onboarding-объектом в prototype
+> коллекции «Знаки Янтарного края». Канонический source-to-series контракт и
+> prompt для новых изображений:
+> [artifact-visual-generation.md](../static-site-easter-eggs/artifact-visual-generation.md).
+> Историческая continuous motion ниже остаётся acceptance evidence noindex
+> прототипа; production default определяется более строгим
+> [measurement-and-state-contract.md](../static-site-easter-eggs/measurement-and-state-contract.md).
+
 ## Question
 
 The supplied `amber-cosmonavt (3).png` is tested as a rare collectible in the

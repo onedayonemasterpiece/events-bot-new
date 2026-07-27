@@ -1,6 +1,6 @@
 {
   "schema_version": "artifact_registry_v1",
-  "registry_version": "2026-07-27.2",
+  "registry_version": "2026-07-27.3",
   "updated_at": "2026-07-27",
   "public_title": "Артефакты Калининградской области",
   "public_explainer": "Пасхалки, спрятанные в неожиданных и иногда тайных местах интерфейса, после находки становятся артефактами вашей коллекции.",
@@ -18,7 +18,7 @@
       "summary": "Вводная коллекция о разных гранях Калининградской области: море, природа, архитектура, вкус и космическая история.",
       "status": "draft",
       "artifact_ids": [
-        "amber-after-storm",
+        "amber-cosmonaut",
         "prussian-brick",
         "ships-bell",
         "migratory-bird-ring",
@@ -43,6 +43,26 @@
   ],
   "artifacts": [
     {
+      "id": "amber-cosmonaut",
+      "slug": "amber-cosmonaut",
+      "public_name": "Янтарный космонавт",
+      "story_domain": "technology",
+      "registry_status": "collection_draft",
+      "collection_ids": [
+        "signs-of-kaliningrad-001"
+      ],
+      "planned_difficulty": "onboarding",
+      "review_flags": [
+        "visual_rights",
+        "source_provenance",
+        "low_end_android"
+      ],
+      "source_refs": [
+        "prototype:amber-artifact-easter-egg",
+        "museum:https://world-ocean.ru/kosmonavt-viktor-patsaev"
+      ]
+    },
+    {
       "id": "cosmonauts-memorial",
       "slug": "cosmonauts-memorial",
       "public_name": "Памятник землякам-космонавтам",
@@ -63,11 +83,9 @@
       "slug": "amber-after-storm",
       "public_name": "Янтарь после шторма",
       "story_domain": "nature",
-      "registry_status": "collection_draft",
-      "collection_ids": [
-        "signs-of-kaliningrad-001"
-      ],
-      "planned_difficulty": "onboarding",
+      "registry_status": "candidate",
+      "collection_ids": [],
+      "planned_difficulty": null,
       "review_flags": [
         "fact_source",
         "visual_rights"
