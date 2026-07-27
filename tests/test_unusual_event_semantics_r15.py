@@ -463,6 +463,26 @@ def test_shared_artifact_reuses_vectors_when_only_classifier_changes():
     assert rebuilt["metadata"]["artifact_sha256"] != artifact["metadata"]["artifact_sha256"]
 
 
+def test_adjacent_threshold_rejects_conventional_stage_boundary_regression():
+    classifier = load_unusual_classifier()
+    assert classifier["decision_thresholds"]["adjacent_probability"] == 0.725
+
+    decision, probability, _ = _classify(
+        {
+            "top_positive": 0.476466,
+            "positive_support": 0.464262,
+            "positive_hard_negative_margin": -0.006479,
+            "positive_neutral_margin": 0.010812,
+            "family_margin": 0.030903,
+            "ordinary_corpus_distance": 0.322958,
+        },
+        classifier,
+    )
+
+    assert probability == 0.721146
+    assert decision == "abstain"
+
+
 def test_quality_fixture_is_hash_bound_and_real_canary_evidence_is_explicit():
     rows = [event(1, "Core"), event(2, "Ordinary baseline")]
     artifact, bank, classifier = _artifact(rows)

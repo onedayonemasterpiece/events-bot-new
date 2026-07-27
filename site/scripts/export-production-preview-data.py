@@ -1611,15 +1611,13 @@ def event_active_where(
     columns: set[str] | None = None,
 ) -> str:
     available = columns
-    start_not_elapsed = f"date > '{current_date}'"
-    if current_time and (available is None or "time" in available):
-        start_not_elapsed = (
-            f"({start_not_elapsed} or (date = '{current_date}' and "
-            "(time is null or trim(time) = '' or substr(time, 1, 5) >= "
-            f"'{current_time}')))"
-        )
-    else:
-        start_not_elapsed = f"(date >= '{current_date}')"
+    # Keep the whole local calendar day in the shared public catalog.
+    # `/segodnya/` needs elapsed one-off events to render the accepted muted
+    # state; removing them here can collapse its mobile rail late in the day.
+    # Time-sensitive surfaces such as Popular apply their own start-instant
+    # eligibility after export. `current_time` remains for caller compatibility
+    # and ledger parity, but must not narrow the shared catalog.
+    start_not_elapsed = f"(date >= '{current_date}')"
     clauses = ["date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"]
     if available is None or "lifecycle_status" in available:
         clauses.append("coalesce(nullif(trim(lifecycle_status),''),'active') = 'active'")
@@ -1776,12 +1774,9 @@ def _candidate_catalog_rows(
 ) -> list[sqlite3.Row]:
     """Return date-relevant rows before public eligibility filtering."""
     columns = {str(row[1]) for row in con.execute("pragma table_info('event')")}
+    # Match `event_active_where`: include all events on the current local date,
+    # including already-started one-offs shown by Today as elapsed/muted.
     start_not_elapsed = f"date >= '{current_date}'"
-    if current_time and "time" in columns:
-        start_not_elapsed = (
-            f"(date > '{current_date}' or (date = '{current_date}' and "
-            f"(time is null or trim(time) = '' or substr(time, 1, 5) >= '{current_time}')))"
-        )
     if "end_date" in columns:
         date_clause = (
             f"({start_not_elapsed} or "
@@ -4920,7 +4915,14 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--catalog-mode", choices=["slice", "full"], default="slice")
     parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
-    parser.add_argument("--current-datetime", default=os.getenv("STATIC_SITE_CURRENT_DATETIME", ""), help="Optional local YYYY-MM-DDTHH:MM cutoff; same-day events that already started are excluded")
+    parser.add_argument(
+        "--current-datetime",
+        default=os.getenv("STATIC_SITE_CURRENT_DATETIME", ""),
+        help=(
+            "Optional local YYYY-MM-DDTHH:MM build clock; the shared catalog "
+            "retains the whole current day and time-sensitive surfaces filter later"
+        ),
+    )
     parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize one-day events starting on/after this date before the normal future fill")
     parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize one-day events starting on/before this date before the normal future fill")
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))

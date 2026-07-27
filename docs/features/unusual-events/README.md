@@ -203,6 +203,16 @@ predate the ordinary-corpus and explicit-eligibility contracts above. The final
 exact-SHA run must recreate every hash-bound metric; no number in this paragraph
 approves the hardened candidate.
 
+The hardened real-vector canary exposed one further boundary regression: an
+adjacent probability threshold of `0.65` admitted two conventional-stage hard
+negatives and produced FPR `0.10`. Recalibration on that exact pinned-BGE
+artifact (`60d370bb…`) selected the smallest separating threshold, `0.725`.
+The frozen result is precision `0.944444`, hard-negative FPR `0.05`, confirmed
+positive recall `0.80`, 12 top-feed families and zero duplicate or ineligible
+publications. This threshold change rebinds the classifier/artifact hashes and
+still requires the final exact-SHA runtime gate; it is not an event-id or
+keyword exception.
+
 ## Manifest, cache and last-good contract
 
 The builder writes `site/src/data/unusual-events.json` atomically. The public

@@ -85,6 +85,14 @@ superseded; final exact-SHA run/result and candidate URL are
 **to be filled by integrator**. Until that rerun passes, `/neobychnoe/` remains
 candidate-only and no production-root promotion is implied.
 
+The production catalog is calendar-day inclusive: every otherwise-public event
+whose start date is the current Kaliningrad date remains in the static export
+after its start time. This lets `/segodnya/` render elapsed events with the
+accepted muted state and keeps its mobile rail structurally present late in the
+day. Surfaces that must exclude already-started one-offs, especially Popular,
+apply their own start-instant eligibility after export. The catalog eligibility
+ledger uses the same inclusive predicate.
+
 The 2026-07-23 correction candidate additionally keeps every reviewed surface
 inside one mutually linked prefix: the dynamic Exhibitions presentation,
 optimized responsive personal-card feed, Search, current clubs, six-logo Partners,

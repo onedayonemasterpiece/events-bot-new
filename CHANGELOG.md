@@ -351,6 +351,19 @@
 
 ### Fixed
 
+- **Static site / late-day Today export**: kept otherwise-public same-day
+  one-off events in the full static catalog after their start time so
+  `/segodnya/` can render the accepted muted elapsed state and mobile rail
+  instead of collapsing late in the evening; Popular retains its separate
+  start-instant exclusion, and the catalog ledger proves the same
+  calendar-day-inclusive predicate.
+- **Static site / unusual semantic boundary**: raised the calibrated adjacent
+  probability threshold from `0.65` to `0.725` after the exact pinned-BGE
+  canary exposed a second conventional-stage hard negative; the smallest
+  separating threshold restores hard-negative FPR `0.05` while retaining the
+  required confirmed-positive recall `0.80`, without event-id or keyword
+  exceptions.
+
 - Removed the misleading Search parent and active Search dock state from the
   first-class Free collection; its responsive hierarchy now returns directly
   to `Афиша`.
