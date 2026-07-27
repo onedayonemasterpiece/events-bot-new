@@ -293,8 +293,9 @@
 - Fixed the future-event source coverage incident: parallel Theatres,
   Philharmonia and Qtickets Kaggle run-configs now use isolated SQLite
   transactions; the Philharmonia kernel parses the current `/afisha/` listing
-  and detail DOM; and a lost parser source finishes `ops_run` as `partial` or
-  `error` instead of false-green `success`.
+  and detail DOM; the daytime freshness guard watches that current catalog;
+  and a lost parser source finishes `ops_run` as `partial` or `error` instead
+  of false-green `success`.
 
 - Prevented source-grounded studio addresses from being rebound to unrelated
   canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);
