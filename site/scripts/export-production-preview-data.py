@@ -61,7 +61,7 @@ BGE_MODEL_ID_DEFAULT = "BAAI/bge-m3"
 BGE_MODEL_REVISION_DEFAULT = "5617a9f61b028005a4858fdac845db406aefb181"
 BGE_DIMENSION_DEFAULT = 1024
 UNUSUAL_MANIFEST_SCHEMA_VERSION = "static_unusual_events_v1"
-UNUSUAL_CACHE_SCHEMA_VERSION = "static_unusual_events_cache_v1"
+UNUSUAL_CACHE_SCHEMA_VERSION = "unusual-event-score-cache-v1"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
 FORCE_VISUAL_IMAGE_MODE_IDS = {5370, 6322, 4512, 3730, 4913}
@@ -4120,9 +4120,12 @@ def _load_cached_bge_artifact(
 
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
         documents = bge_module.build_related_v1_documents(events)
-        expected_keys = {
+        current_keys = {
             str(row["event_id"]): str(row["text_hash"]) for row in documents
         }
+        stored_keys = receipt.get("event_text_hashes")
+        if not isinstance(stored_keys, dict):
+            return None
         if (
             receipt.get("schema_version") != "static-event-bge-cache-receipt-v1"
             or receipt.get("model_revision") != model_revision
@@ -4130,7 +4133,6 @@ def _load_cached_bge_artifact(
             or int(receipt.get("embedding_dim") or 0) != int(bge_module.EMBEDDING_DIM)
             or receipt.get("document_version") != bge_module.DOCUMENT_VERSION
             or receipt.get("encoder_contract") != bge_module.ENCODER_CONTRACT
-            or receipt.get("event_text_hashes") != expected_keys
             or receipt.get("prototype_bank_sha256") != bge_module.stable_hash(prototype_bank)
             or receipt.get("classifier_sha256") != bge_module.stable_hash(classifier)
         ):
@@ -4149,10 +4151,11 @@ def _load_cached_bge_artifact(
             "metadata": dict(receipt.get("metadata") or {}),
             "event_vectors": {
                 event_id: {
-                    "text_hash": expected_keys[event_id],
+                    "text_hash": str(stored_keys[event_id]),
                     "vector": [float(value) for value in event_matrix[index].tolist()],
                 }
                 for index, event_id in enumerate(event_ids)
+                if event_id in stored_keys
             },
             "prototype_vectors": {
                 prototype_id: {
@@ -4169,6 +4172,7 @@ def _load_cached_bge_artifact(
         )
         if not validation.get("valid"):
             return None
+        artifact["_cache_current_text_hashes"] = current_keys
         return artifact
     except Exception as exc:
         log_stage("unusual_feed_disabled", reason="bge_cache_invalid", error=str(exc)[:300])
@@ -4277,6 +4281,10 @@ def _normalise_unusual_manifest(
         "generated_at": build_metadata.get("generated_at"),
         "source_snapshot_id": build_metadata.get("source_snapshot_id"),
         "source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
+        # Canonical reader aliases. Keep the verbose producer fields below for
+        # receipts/backward compatibility, but the Astro boundary consumes
+        # these short, stable names.
+        "hash": build_metadata.get("source_snapshot_hash"),
         "input_fingerprint": build_metadata.get("input_fingerprint"),
         "taxonomy_version": prototype_bank.get("taxonomy_version")
         or prototype_bank.get("schema_version"),
@@ -4285,6 +4293,8 @@ def _normalise_unusual_manifest(
         "embedding_model": vector_metadata.get("model_id"),
         "embedding_revision": vector_metadata.get("model_revision"),
         "embedding_dim": vector_metadata.get("embedding_dim"),
+        "revision": vector_metadata.get("model_revision"),
+        "dim": vector_metadata.get("embedding_dim"),
         "doc_kind": "related_v1",
         "document_version": vector_metadata.get("document_version"),
         "prototype_bank_hash": vector_metadata.get("prototype_bank_sha256"),
@@ -4317,7 +4327,23 @@ def _normalise_unusual_manifest(
         item = dict(raw)
         if item.get("confidence") is None:
             item["confidence"] = item.get("calibrated_confidence")
-        item["notify_eligible"] = bool(raw.get("notify_eligible")) and not migration
+        item["representative_event_id"] = int(
+            raw.get("representative_event_id") or event_id
+        )
+        raw_families = raw.get("families") or []
+        item["family_scores"] = raw.get("family_scores") or {
+            str(row.get("id")): row.get("score")
+            for row in raw_families
+            if isinstance(row, dict) and row.get("id")
+        }
+        item["families"] = [
+            str(row.get("id") if isinstance(row, dict) else row)
+            for row in raw_families
+            if str(row.get("id") if isinstance(row, dict) else row).strip()
+        ]
+        # Final notification eligibility is assigned by the durable concept
+        # state pass after the quality gate and rollout baseline are known.
+        item["notify_eligible"] = False
         item["event_snapshot"] = event
         item["path"] = _event_public_path(event)
         item["date"] = event.get("start_date") or event.get("date")
@@ -4326,6 +4352,80 @@ def _normalise_unusual_manifest(
     output["items"] = items
     output["shadow_items"] = list(manifest.get("shadow_items") or [])
     return output
+
+
+def _apply_unusual_concept_state(
+    manifest: dict[str, Any],
+    *,
+    previous_cache: dict[str, Any] | None,
+    generated_at: str,
+    migration: bool,
+    approved: bool,
+) -> dict[str, dict[str, Any]]:
+    """Bind public concepts to durable first-publication/notification state.
+
+    A first rollout is a silent baseline. Later builds may mark only genuinely
+    new, approved ``core_unusual`` concepts as notification candidates. A date
+    change or representative-event swap inside an existing concept never
+    creates a new notification.
+    """
+
+    previous = (
+        previous_cache.get("concepts")
+        if isinstance(previous_cache, dict)
+        and isinstance(previous_cache.get("concepts"), dict)
+        else {}
+    )
+    has_established_baseline = bool(
+        isinstance(previous_cache, dict)
+        and previous_cache.get("rollout_baseline_at")
+    )
+    states: dict[str, dict[str, Any]] = {
+        str(key): dict(value)
+        for key, value in previous.items()
+        if isinstance(value, dict)
+    }
+    for item in manifest.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        concept_id = str(item.get("concept_id") or "").strip()
+        if not concept_id:
+            continue
+        prior = states.get(concept_id) or {}
+        first_published_at = str(
+            prior.get("first_published_at") or generated_at
+        )
+        is_new = concept_id not in states
+        notify_eligible = bool(
+            approved
+            and not migration
+            and has_established_baseline
+            and is_new
+            and item.get("tier") == "core_unusual"
+        )
+        item["first_published_at"] = first_published_at
+        item["notify_eligible"] = notify_eligible
+        states[concept_id] = {
+            "first_published_at": first_published_at,
+            "previous_tier": item.get("tier"),
+            "previous_content_hash": item.get("content_hash"),
+            "notify_eligible": notify_eligible,
+            "representative_event_id": item.get("representative_event_id")
+            or item.get("event_id"),
+            "policy_version": manifest.get("policy_version"),
+            "model_revision": manifest.get("revision")
+            or manifest.get("embedding_revision"),
+            "prototype_bank_hash": manifest.get("prototype_bank_hash"),
+            "classifier_hash": manifest.get("classifier_hash"),
+            "last_seen_at": generated_at,
+        }
+    # Bound state without discarding currently published concepts.
+    ordered = sorted(
+        states.items(),
+        key=lambda pair: str(pair[1].get("last_seen_at") or pair[1].get("first_published_at") or ""),
+        reverse=True,
+    )
+    return dict(ordered[:512])
 
 
 def build_shared_bge_and_unusual(
@@ -4424,32 +4524,44 @@ def build_shared_bge_and_unusual(
         )
     ):
         artifact = None
-    cache_state = "hit"
-    if artifact is None:
-        cache_state = "miss_rebuilt"
-        artifact = bge_module.build_shared_bge_vector_artifact(
-            encoding_events,
-            prototype_bank,
-            model_revision=model_revision,
-            classifier=classifier,
-            batch_size=batch_size,
-            build_metadata=semantic_build_metadata,
+    previous_artifact = artifact
+    build_kwargs = {
+        "model_revision": model_revision,
+        "classifier": classifier,
+        "batch_size": batch_size,
+        "build_metadata": semantic_build_metadata,
+    }
+    if previous_artifact is not None:
+        build_kwargs["previous_artifact"] = previous_artifact
+    artifact = bge_module.build_shared_bge_vector_artifact(
+        encoding_events,
+        prototype_bank,
+        **build_kwargs,
+    )
+    encoded_event_count = int((artifact.get("metadata") or {}).get("encoded_event_count") or 0)
+    encoded_prototype_count = int((artifact.get("metadata") or {}).get("encoded_prototype_count") or 0)
+    cache_state = (
+        "hit_reused"
+        if previous_artifact is not None and encoded_event_count == 0 and encoded_prototype_count == 0
+        else "partial_rebuild"
+        if previous_artifact is not None
+        else "miss_rebuilt"
+    )
+    validation = bge_module.validate_shared_bge_vector_artifact(
+        artifact,
+        prototype_bank=prototype_bank,
+        expected_classifier_sha256=bge_module.stable_hash(classifier),
+    )
+    if not validation.get("valid"):
+        raise RuntimeError(
+            "shared BGE artifact validation failed: "
+            + "; ".join(validation.get("errors") or [])
         )
-        validation = bge_module.validate_shared_bge_vector_artifact(
-            artifact,
-            prototype_bank=prototype_bank,
-            expected_classifier_sha256=bge_module.stable_hash(classifier),
-        )
-        if not validation.get("valid"):
-            raise RuntimeError(
-                "shared BGE artifact validation failed: "
-                + "; ".join(validation.get("errors") or [])
-            )
-        _write_bge_cache(
-            artifact=artifact,
-            npz_path=vector_cache_path,
-            receipt_path=vector_receipt_path,
-        )
+    _write_bge_cache(
+        artifact=artifact,
+        npz_path=vector_cache_path,
+        receipt_path=vector_receipt_path,
+    )
     metadata = artifact.get("metadata") or {}
     if (
         int(metadata.get("event_count") or -1) != len(encoding_events)
@@ -4510,6 +4622,13 @@ def build_shared_bge_and_unusual(
         manifest["rollout_baseline_at"] = rollout_baseline_at or None
         gate_status = str((manifest.get("quality_gate") or {}).get("status") or "").lower()
         approved = gate_status in {"approved", "pass", "passed", "ok"}
+        concept_states = _apply_unusual_concept_state(
+            manifest,
+            previous_cache=previous_cache,
+            generated_at=str(build_metadata.get("generated_at") or ""),
+            migration=migration,
+            approved=approved,
+        )
         log_stage("unusual_quality_gate", status=gate_status, approved=approved)
         log_stage(
             "unusual_concept_dedup",
@@ -4529,6 +4648,7 @@ def build_shared_bge_and_unusual(
                 "source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
                 "migration": bool(migration),
                 "rollout_baseline_at": rollout_baseline_at or None,
+                "concepts": concept_states,
             }
         )
         _atomic_write_json(unusual_cache_path, unusual_cache)
@@ -4546,9 +4666,21 @@ def build_shared_bge_and_unusual(
             )
     except Exception as exc:
         last_good = _load_json_object(unusual_last_good_path)
+        generated_at = datetime.fromisoformat(
+            str(build_metadata.get("generated_at") or "").replace("Z", "+00:00")
+        )
+        last_good_generated_at = None
+        if last_good and last_good.get("generated_at"):
+            try:
+                last_good_generated_at = datetime.fromisoformat(
+                    str(last_good["generated_at"]).replace("Z", "+00:00")
+                )
+            except ValueError:
+                last_good_generated_at = None
         compatible = bool(
             last_good
-            and last_good.get("embedding_revision") == metadata.get("model_revision")
+            and (last_good.get("revision") or last_good.get("embedding_revision"))
+            == metadata.get("model_revision")
             and last_good.get("prototype_bank_hash") == metadata.get("prototype_bank_sha256")
             and last_good.get("classifier_hash")
             == (
@@ -4559,6 +4691,9 @@ def build_shared_bge_and_unusual(
             )
             and last_good.get("policy_version")
             == (classifier.get("policy_version") or classifier.get("schema_version"))
+            and last_good_generated_at is not None
+            and timedelta(0) <= generated_at - last_good_generated_at
+            and generated_at - last_good_generated_at <= timedelta(days=7)
         )
         if compatible:
             current = {int(event["id"]): event for event in events}
@@ -4567,6 +4702,22 @@ def build_shared_bge_and_unusual(
                 if not isinstance(raw, dict) or int(raw.get("event_id") or 0) not in current:
                     continue
                 event = current[int(raw["event_id"])]
+                try:
+                    current_content_hash = bge_module.build_related_v1_document(event)[
+                        "text_hash"
+                    ]
+                except Exception:
+                    continue
+                last_date = str(
+                    event.get("end_date") or event.get("start_date") or ""
+                )[:10]
+                if (
+                    raw.get("content_hash") != current_content_hash
+                    or str(event.get("lifecycle_status") or "").lower() != "active"
+                    or not last_date
+                    or last_date < str(build_metadata.get("as_of_date") or "")
+                ):
+                    continue
                 fallback_items.append(
                     {
                         **raw,
@@ -4583,8 +4734,12 @@ def build_shared_bge_and_unusual(
                 "generated_at": build_metadata.get("generated_at"),
                 "attempted_source_snapshot_id": build_metadata.get("source_snapshot_id"),
                 "attempted_source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
+                "delivery_status": "last_good_fallback",
+                "last_good_approved": True,
                 "quality_gate": {
-                    "status": "last_good_fallback",
+                    "status": "approved",
+                    "metrics": (last_good.get("quality_gate") or {}).get("metrics")
+                    or {},
                     "reason": str(exc)[:300],
                 },
                 "provider_calls": 0,

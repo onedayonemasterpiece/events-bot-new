@@ -9,6 +9,18 @@
   dedup/unread state, zero-provider static build, atomic cache/last-good
   rollback and a checked-fact golden evaluation fixture; real Kaggle canary and
   production-root cutover remain explicitly pending.
+- Hardened the R15 candidate after independent acceptance review: incremental
+  BGE reuse now encodes only changed documents, score/concept cache schemas are
+  consistent, manifests expose reader aliases and durable concept state,
+  structured eligibility and conservative presentation dedup are fail-closed,
+  last-good is content/freshness-bound, feed ordering applies 30-day/diversity
+  rules, and the shipped noindex lab drives all ten red-dot Playwright cases.
+- Restored no-band mobile rail geometry for multi-image no-OCR events:
+  landscape assets (including current Pianissimo event `5297`) use `5:4`
+  cover, while safe portrait galleries use vertical `4:5`; OCR/document assets
+  remain protected.
+- Fixed the current-month mobile calendar grid to align weekday columns from
+  the first rendered date rather than the omitted first day of the month.
 - Added R15 static-site product contracts for horizontal `5:4` no-band mobile
   rail crops, persistent Free collection identity, daily service-share
   freshness, noindex calendar-first favorites, event-aware far-future calendar

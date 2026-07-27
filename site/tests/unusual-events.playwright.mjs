@@ -37,7 +37,7 @@ try {
   for (const label of ['Детям', 'Необычное', 'Бесплатно', 'Клубы']) {
     assert.equal(await collectionPlane.getByRole('link', { name: new RegExp(label, 'u') }).count(), 1, label);
   }
-  assert.ok(await menu.locator('a').filter({ hasText: /^Бесплатно$/u }).count() >= 2);
+  assert.ok(await menu.locator('a[href$="/podborki/besplatnye-sobytiya/"]').count() >= 2);
 
   await page.goto(route('/podborki/besplatnye-sobytiya/'), { waitUntil: 'domcontentloaded' });
   assert.equal(await page.locator('[data-free-collection-medallion="large"]').count(), 1);
@@ -46,7 +46,7 @@ try {
   assert.equal(await page.locator('[data-free-collection-medallion="compact"]').isVisible(), true);
 
   await page.goto(route('/date-2026-07-30/'), { waitUntil: 'domcontentloaded' });
-  const pianissimo = page.locator('[data-event-id="5297"] [data-rail-media-reason="single_safe_visual_landscape_5x4"]').first();
+  const pianissimo = page.locator('[data-event-id="5297"] [data-rail-media-reason="safe_visual_landscape_5x4"]').first();
   assert.equal(await pianissimo.count(), 1);
   const crop = await pianissimo.evaluate((node) => {
     const image = node.querySelector('img');
@@ -61,10 +61,18 @@ try {
   assert.match(await accessory.getAttribute('data-calendar-horizon'), /^\d{4}-\d{2}-\d{2}$/u);
   assert.match(await accessory.getAttribute('data-calendar-furthest-event-date'), /^\d{4}-\d{2}-\d{2}$/u);
   await page.locator('[data-calendar-open]').click();
+  const visibleMonth = page.locator('[data-calendar-month]:not([hidden])');
+  const firstRenderedDate = await visibleMonth.locator('[data-calendar-date]').first().getAttribute('data-calendar-date');
+  const leadingBlanks = await visibleMonth.locator('.calendar-grid__blank').count();
+  const expectedLeadingBlanks = await page.evaluate((iso) => {
+    const weekday = new Date(`${iso}T12:00:00Z`).getUTCDay();
+    return (weekday + 6) % 7;
+  }, firstRenderedDate);
+  assert.equal(leadingBlanks, expectedLeadingBlanks, 'current month must align from its first rendered date');
   const disabledDate = page.locator('[data-calendar-date][aria-disabled="true"]').first();
   assert.ok(await disabledDate.count() > 0);
   const beforeDisabledClick = page.url();
-  await disabledDate.click({ force: true });
+  await disabledDate.evaluate((node) => node.click());
   assert.equal(page.url(), beforeDisabledClick);
   const nextMonth = page.locator('[data-calendar-month-next]');
   while (await nextMonth.isEnabled()) await nextMonth.click();
@@ -96,6 +104,58 @@ try {
 
   assert.deepEqual(providerRequests, [], `ordinary views called providers: ${providerRequests.join(', ')}`);
   await context.close();
+
+  // R10 red-dot matrix runs against the real shipped runtime in noindex lab
+  // fixtures. Each scenario gets a clean anonymous localStorage baseline.
+  const redDotContext = await browser.newContext({ viewport:{ width:390, height:844 }, reducedMotion:'reduce' });
+  const redDotPage = await redDotContext.newPage();
+  const openScenario = async (scenario, { clear = true } = {}) => {
+    await redDotPage.goto(route(`/lab/unusual-unread/${scenario}/`), { waitUntil:'domcontentloaded' });
+    if (clear) {
+      await redDotPage.evaluate(() => localStorage.clear());
+      await redDotPage.reload({ waitUntil:'domcontentloaded' });
+    }
+    return redDotPage.locator('[data-unusual-nav-dot]');
+  };
+
+  // 1 rollout baseline/backfill; 3 adjacent; 7 migration; 8 failed manifest.
+  for (const scenario of ['baseline', 'adjacent', 'migration', 'failure']) {
+    const dot = await openScenario(scenario);
+    assert.equal(await dot.evaluate((node) => !node.hidden), false, `${scenario} must not create unread`);
+  }
+
+  // 2 new approved core; 9 accessible non-colour-only label.
+  let dot = await openScenario('new-core');
+  assert.equal(await dot.evaluate((node) => !node.hidden), true);
+  assert.equal(
+    await redDotPage.locator('[data-unusual-nav-link]').getAttribute('aria-label'),
+    'Есть новые необычные события',
+  );
+
+  // 4 a genuinely viewed card clears; 5 reload keeps it cleared.
+  await redDotPage.evaluate(() => dispatchEvent(new CustomEvent(
+    'kenigevents:unusual-viewed',
+    { detail:{ conceptId:'concept:new-core' } },
+  )));
+  assert.equal(await dot.evaluate((node) => !node.hidden), false);
+  await redDotPage.reload({ waitUntil:'domcontentloaded' });
+  dot = redDotPage.locator('[data-unusual-nav-dot]');
+  assert.equal(await dot.evaluate((node) => !node.hidden), false);
+
+  // 6 another date of the same concept stays seen.
+  dot = await openScenario('same-series', { clear:false });
+  assert.equal(await dot.evaluate((node) => !node.hidden), false);
+
+  // 10 the mobile drawer remains operable and contains the visible indicator.
+  dot = await openScenario('new-core');
+  const drawer = redDotPage.locator('[data-mobile-discovery-menu]');
+  await drawer.locator('summary').click();
+  assert.equal(await drawer.getAttribute('open'), '');
+  assert.equal(await dot.isVisible(), true);
+  const overflow = await redDotPage.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  assert.ok(overflow <= 1, `unusual dot broke mobile drawer: overflow=${overflow}`);
+  assert.deepEqual(providerRequests, [], `red-dot lab called providers: ${providerRequests.join(', ')}`);
+  await redDotContext.close();
 } finally {
   await browser.close();
 }

@@ -58,7 +58,11 @@ const dates = availability.allDates.map((iso) => {
 });
 const monthGroups = [...new Set(dates.map((item) => item.monthKey))].map((monthKey) => {
   const items = dates.filter((item) => item.monthKey === monthKey);
-  const firstWeekday = (parseDate(`${monthKey}-01`).getUTCDay() + 6) % 7;
+  // The first (current) month intentionally starts at `today`, not at day 1.
+  // Align the grid from the first rendered date; otherwise the weekday headers
+  // and the selectable dates drift whenever earlier days are omitted.
+  const firstVisibleIso = items[0]?.iso || `${monthKey}-01`;
+  const firstWeekday = (parseDate(firstVisibleIso).getUTCDay() + 6) % 7;
   return { monthKey, label: items[0]?.monthLong || monthKey, firstWeekday, items };
 });
 const selectedMonth = monthGroups.some((month) => month.monthKey === selectedDate.slice(0, 7))

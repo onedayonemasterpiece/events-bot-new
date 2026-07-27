@@ -137,6 +137,10 @@ test('R09-R10 fail closed around provider calls, migration and concept unread id
   assert.match(unusualManifest, /concepts\.has\(item\.concept_id\)/u);
   assert.match(unusualManifest, /item\.notifyEligible/u);
   assert.match(unread, /ke_unusual_seen_v1/u);
+  assert.match(unread, /schema:storageKey/u);
+  assert.match(unread, /rolloutBaselineAt/u);
+  assert.match(unread, /rolloutBuild/u);
+  assert.match(unread, /Есть новые необычные события/u);
   assert.match(unread, /kenigevents:unusual-viewed/u);
   assert.match(menu, /data-unusual-nav-dot/u);
   assert.match(footer, /data-unusual-nav-dot/u);

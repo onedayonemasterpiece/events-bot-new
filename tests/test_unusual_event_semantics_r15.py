@@ -168,6 +168,9 @@ def test_scorer_is_shadow_only_deduplicates_series_and_reuses_exact_cache():
     assert core["input_hash"] and core["content_hash"]
     assert core["model_revision"] == MODEL_REVISION
     assert core["prototype_evidence"][0]["prototype_kind"] == "positive"
+    assert {
+        row["prototype_kind"] for row in core["prototype_evidence"]
+    } == {"positive", "hard_negative", "neutral"}
     past = next(row for row in first["manifest"]["shadow_items"] if row["event_id"] == 4)
     assert past["decision"] == "abstain"
     assert "past" in past["eligibility_failures"]
@@ -184,6 +187,33 @@ def test_scorer_is_shadow_only_deduplicates_series_and_reuses_exact_cache():
     )
     assert second["metrics"]["cache_hits"] == len(rows)
     assert second["manifest"]["shadow_items"] == first["manifest"]["shadow_items"]
+
+    # A new artifact receipt/build hash must not invalidate unchanged event
+    # decisions; per-event content/vector hashes are the cache boundary.
+    refreshed_metadata = dict(artifact["metadata"])
+    refreshed_metadata["build"] = {
+        **dict(refreshed_metadata.get("build") or {}),
+        "run_id": "new-artifact-receipt",
+    }
+    unhashed = dict(refreshed_metadata)
+    unhashed.pop("artifact_sha256")
+    from static_event_bge import stable_hash
+    refreshed_metadata["artifact_sha256"] = stable_hash({
+        "metadata": unhashed,
+        "event_vectors": artifact["event_vectors"],
+        "prototype_vectors": artifact["prototype_vectors"],
+    })
+    third = score_unusual_manifest(
+        rows,
+        artifact["event_vectors"],
+        artifact["prototype_vectors"],
+        refreshed_metadata,
+        first["cache"],
+        {"as_of_date": "2026-07-27", "run_id": "shadow-unit-3"},
+        prototype_bank=bank,
+        classifier=classifier,
+    )
+    assert third["metrics"]["cache_hits"] == len(rows)
 
 
 def test_scorer_fails_closed_on_document_or_classifier_hash_mismatch():
@@ -218,6 +248,32 @@ def test_scorer_fails_closed_on_document_or_classifier_hash_mismatch():
     assert "event 1 text_hash mismatch" in stale["metrics"]["boundary_errors"]
 
 
+@pytest.mark.parametrize(
+    ("overrides", "failure"),
+    [
+        ({"publication_status": "postponed"}, "publication_unavailable"),
+        ({"is_searchable": False}, "not_searchable"),
+        ({"record_kind": "work_hours"}, "service_or_work_hours"),
+        ({"summary": "", "description_html": ""}, "insufficient_semantic_text"),
+    ],
+)
+def test_structured_eligibility_gates_fail_closed(overrides, failure):
+    rows = [event(1, "Core", **overrides)]
+    artifact, bank, classifier = _artifact(rows)
+    result = score_unusual_manifest(
+        rows,
+        artifact["event_vectors"],
+        artifact["prototype_vectors"],
+        artifact["metadata"],
+        build_metadata={"as_of_date": "2026-07-27"},
+        prototype_bank=bank,
+        classifier=classifier,
+    )
+    row = result["manifest"]["shadow_items"][0]
+    assert row["decision"] == "abstain"
+    assert failure in row["eligibility_failures"]
+
+
 def test_concept_identity_requires_mutual_links_and_ignores_presentation_fields():
     rows = [
         event(1, "Unilateral A", other_date_ids=[2]),
@@ -246,7 +302,62 @@ def test_concept_identity_requires_mutual_links_and_ignores_presentation_fields(
     assert by_id[1]["concept_id"] != by_id[2]["concept_id"]
     assert by_id[1]["concept_id_source"] == "stable_semantic_identity"
     assert by_id[3]["concept_id"] == by_id[4]["concept_id"]
-    assert by_id[3]["concept_id"].startswith("concept:")
+    assert by_id[3]["concept_id"] == "presentation:3"
+    assert by_id[3]["concept_id_source"] == "bge_presentation_cluster"
+
+
+def test_concept_identity_accepts_mutual_linked_ids_and_canonical_roots():
+    rows = [
+        event(11, "Linked A", linked_event_ids=[12]),
+        event(12, "Linked B", linked_event_ids=[11]),
+        event(13, "Root A", canonical_root_event_id=9001),
+        event(14, "Root B", canonical_root_event_id=9001),
+    ]
+    artifact, bank, classifier = _artifact(rows)
+    result = score_unusual_manifest(
+        rows,
+        artifact["event_vectors"],
+        artifact["prototype_vectors"],
+        artifact["metadata"],
+        build_metadata={"as_of_date": "2026-07-27"},
+        prototype_bank=bank,
+        classifier=classifier,
+    )
+    by_id = {row["event_id"]: row for row in result["manifest"]["shadow_items"]}
+    assert by_id[11]["concept_id"] == by_id[12]["concept_id"] == "occurrence:11"
+    assert by_id[13]["concept_id"] == by_id[14]["concept_id"]
+    assert by_id[13]["concept_id_source"] == "canonical_root_event_id"
+
+
+def test_shared_artifact_reencodes_only_a_changed_event():
+    rows = [event(1, "First"), event(2, "Second")]
+    artifact, bank, classifier = _artifact(rows)
+    calls = []
+
+    prototype_texts = {row["text"] for row in bank["prototypes"]}
+
+    def incremental_encoder(texts, *, model_revision, batch_size):
+        calls.append(list(texts))
+        assert model_revision == MODEL_REVISION
+        return [
+            _unit(10 if text in prototype_texts else 11)
+            for text in texts
+        ]
+
+    changed = [dict(rows[0], summary="Changed semantic description"), rows[1]]
+    rebuilt = build_shared_bge_vector_artifact(
+        changed,
+        bank,
+        model_revision=MODEL_REVISION,
+        classifier=classifier,
+        encoder=incremental_encoder,
+        previous_artifact=artifact,
+    )
+    assert len(calls) == 1
+    assert len(calls[0]) == 1
+    assert rebuilt["metadata"]["encoded_event_count"] == 1
+    assert rebuilt["metadata"]["reused_event_count"] == 1
+    assert rebuilt["metadata"]["encoded_prototype_count"] == 0
 
 
 def test_quality_fixture_is_hash_bound_and_real_canary_evidence_is_explicit():

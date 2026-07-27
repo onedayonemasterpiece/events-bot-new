@@ -51,9 +51,15 @@ def install_fake_semantic_modules(monkeypatch):
         }
         for event in sorted(events, key=lambda row: int(row["id"]))
     ]
+    bge.build_related_v1_document = lambda event: {
+        "event_id": int(event["id"]),
+        "text_hash": hashlib.sha256(str(event["title"]).encode()).hexdigest(),
+    }
 
     def build(events, prototype_bank, *, model_revision, classifier, **kwargs):
-        calls["encode"] += 1
+        previous = kwargs.get("previous_artifact")
+        if previous is None:
+            calls["encode"] += 1
         event_vectors = {
             str(event["id"]): {
                 "text_hash": hashlib.sha256(str(event["title"]).encode()).hexdigest(),
@@ -78,6 +84,10 @@ def install_fake_semantic_modules(monkeypatch):
             "event_count": len(event_vectors),
             "prototype_count": len(prototype_vectors),
             "provider_calls": 0,
+            "encoded_event_count": len(event_vectors) if previous is None else 0,
+            "reused_event_count": 0 if previous is None else len(event_vectors),
+            "encoded_prototype_count": len(prototype_vectors) if previous is None else 0,
+            "reused_prototype_count": 0 if previous is None else len(prototype_vectors),
             "build": dict(kwargs.get("build_metadata") or {}),
         }
         metadata["artifact_sha256"] = canonical_hash(
@@ -228,11 +238,15 @@ def test_adapter_reuses_one_vector_artifact_and_migration_never_notifies(
     assert calls == {"encode": 1, "score": 2, "quality": 2}
     assert first_artifact["metadata"]["event_count"] == 2
     assert first_result["artifact_event_count"] == 2
-    assert first_artifact["metadata"]["artifact_sha256"] == second_artifact["metadata"]["artifact_sha256"]
+    assert first_artifact["event_vectors"] == second_artifact["event_vectors"]
+    assert first_artifact["prototype_vectors"] == second_artifact["prototype_vectors"]
     assert first_result["provider_calls"] == second_result["provider_calls"] == 0
-    assert second_result["cache_state"] == "hit"
+    assert second_result["cache_state"] == "hit_reused"
     manifest = json.loads((paths["out_dir"] / "unusual-events.json").read_text())
     assert manifest["source_snapshot_hash"] == "a" * 64
+    assert manifest["hash"] == "a" * 64
+    assert manifest["revision"] == "1" * 40
+    assert manifest["dim"] == 4
     assert manifest["doc_kind"] == "related_v1"
     assert manifest["migration"] == {"enabled": True, "notify": False}
     assert manifest["items"][0]["notify_eligible"] is False
@@ -249,3 +263,171 @@ def test_adapter_reuses_one_vector_artifact_and_migration_never_notifies(
         "unusual_cache_written",
     ):
         assert f'"stage": "{stage}"' in logs
+
+
+def test_concept_state_silences_baseline_and_notifies_only_a_new_core_concept():
+    module = load_exporter()
+    first = {
+        "policy_version": "policy-v1",
+        "revision": "revision-v1",
+        "prototype_bank_hash": "p" * 64,
+        "classifier_hash": "c" * 64,
+        "items": [
+            {
+                "event_id": 1,
+                "representative_event_id": 1,
+                "concept_id": "concept:one",
+                "tier": "core_unusual",
+                "content_hash": "1" * 64,
+            }
+        ],
+    }
+    states = module._apply_unusual_concept_state(
+        first,
+        previous_cache=None,
+        generated_at="2026-07-27T10:00:00Z",
+        migration=False,
+        approved=True,
+    )
+    assert first["items"][0]["notify_eligible"] is False
+    assert first["items"][0]["first_published_at"] == "2026-07-27T10:00:00Z"
+
+    second = {
+        **{key: value for key, value in first.items() if key != "items"},
+        "items": [
+            {
+                "event_id": 11,
+                "representative_event_id": 11,
+                "concept_id": "concept:one",
+                "tier": "core_unusual",
+                "content_hash": "2" * 64,
+            },
+            {
+                "event_id": 2,
+                "representative_event_id": 2,
+                "concept_id": "concept:two",
+                "tier": "core_unusual",
+                "content_hash": "3" * 64,
+            },
+            {
+                "event_id": 3,
+                "representative_event_id": 3,
+                "concept_id": "concept:adjacent",
+                "tier": "adjacent",
+                "content_hash": "4" * 64,
+            },
+        ],
+    }
+    module._apply_unusual_concept_state(
+        second,
+        previous_cache={
+            "rollout_baseline_at": "2026-07-27T10:00:00Z",
+            "concepts": states,
+        },
+        generated_at="2026-07-28T10:00:00Z",
+        migration=False,
+        approved=True,
+    )
+    by_concept = {row["concept_id"]: row for row in second["items"]}
+    assert by_concept["concept:one"]["first_published_at"] == "2026-07-27T10:00:00Z"
+    assert by_concept["concept:one"]["notify_eligible"] is False
+    assert by_concept["concept:two"]["notify_eligible"] is True
+    assert by_concept["concept:adjacent"]["notify_eligible"] is False
+
+
+def test_last_good_is_visible_only_while_current_content_and_contract_match(
+    tmp_path: Path, monkeypatch
+):
+    module = load_exporter()
+    install_fake_semantic_modules(monkeypatch)
+    bge = sys.modules["static_event_bge"]
+    unusual = sys.modules["unusual_event_semantics"]
+    unusual.score_unusual_manifest = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        RuntimeError("forced scorer failure")
+    )
+    event_row = {
+        "id": 7,
+        "title": "Иммерсивная прогулка",
+        "start_date": "2026-07-28",
+        "end_date": "2026-07-28",
+        "lifecycle_status": "active",
+        "slug": "immersivnaya-progulka",
+    }
+    content_hash = bge.build_related_v1_document(event_row)["text_hash"]
+    paths = {
+        "out_dir": tmp_path / "data",
+        "vector_cache_path": tmp_path / "vectors.npz",
+        "vector_receipt_path": tmp_path / "vectors.receipt.json",
+        "unusual_cache_path": tmp_path / "unusual-cache.json",
+        "unusual_last_good_path": tmp_path / "last-good.json",
+        "quality_fixture_path": tmp_path / "missing-quality-fixture.json",
+    }
+    paths["unusual_last_good_path"].write_text(json.dumps({
+        "schema_version": "static_unusual_events_v1",
+        "build_id": "last-good",
+        "generated_at": "2026-07-27T00:00:00Z",
+        "source_snapshot_id": "previous",
+        "source_snapshot_hash": "f" * 64,
+        "hash": "f" * 64,
+        "taxonomy_version": "unusual-taxonomy-v1",
+        "policy_version": "unusual-policy-v1",
+        "embedding_model": bge.MODEL_ID,
+        "embedding_revision": bge.MODEL_REVISION,
+        "revision": bge.MODEL_REVISION,
+        "embedding_dim": bge.EMBEDDING_DIM,
+        "dim": bge.EMBEDDING_DIM,
+        "doc_kind": "related_v1",
+        "document_version": bge.DOCUMENT_VERSION,
+        "prototype_bank_hash": canonical_hash(unusual.load_unusual_prototype_bank()),
+        "classifier_hash": canonical_hash(unusual.load_unusual_classifier()),
+        "quality_gate": {"status": "approved", "metrics": {"precision": 1.0}},
+        "items": [{
+            "event_id": 7,
+            "representative_event_id": 7,
+            "concept_id": "concept:test",
+            "tier": "core_unusual",
+            "unusual_score": .95,
+            "confidence": .9,
+            "families": ["format"],
+            "reason_codes": ["prototype:odd"],
+            "prototype_evidence": [],
+            "first_published_at": "2026-07-27T00:00:00Z",
+            "notify_eligible": False,
+            "content_hash": content_hash,
+            "date": "2026-07-28",
+            "lifecycle": "active",
+        }],
+    }), encoding="utf-8")
+    build = {
+        "build_id": "current",
+        "generated_at": "2026-07-28T00:00:00Z",
+        "as_of_date": "2026-07-27",
+        "source_snapshot_id": "current-snapshot",
+        "source_snapshot_hash": "a" * 64,
+        "input_fingerprint": "b" * 64,
+    }
+    module.build_shared_bge_and_unusual(
+        [event_row],
+        build_metadata=build,
+        model_revision=bge.MODEL_REVISION,
+        batch_size=8,
+        migration=False,
+        **paths,
+    )
+    fallback = json.loads((paths["out_dir"] / "unusual-events.json").read_text())
+    assert fallback["delivery_status"] == "last_good_fallback"
+    assert fallback["quality_gate"]["status"] == "approved"
+    assert len(fallback["items"]) == 1
+    assert fallback["items"][0]["notify_eligible"] is False
+
+    module.build_shared_bge_and_unusual(
+        [{**event_row, "title": "Changed canonical content"}],
+        build_metadata=build,
+        model_revision=bge.MODEL_REVISION,
+        batch_size=8,
+        migration=False,
+        **paths,
+    )
+    rejected = json.loads((paths["out_dir"] / "unusual-events.json").read_text())
+    assert rejected["delivery_status"] == "last_good_fallback"
+    assert rejected["items"] == []

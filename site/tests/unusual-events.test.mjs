@@ -34,6 +34,28 @@ test('approved unusual feed renders at most one card per concept and event throu
   assert.deepEqual(result.unreadCandidates.map((entry) => entry.conceptId), ['concept-one','concept-three']);
 });
 
+test('the reader accepts the builder compatibility aliases without weakening validation', () => {
+  const raw = manifest({
+    hash:undefined,
+    revision:undefined,
+    dim:undefined,
+    source_snapshot_hash:'snapshot-hash',
+    embedding_revision:'rev-1',
+    embedding_dim:1024,
+    delivery_status:'last_good_fallback',
+    items:[item(1,'concept-one',{
+      representative_event_id:undefined,
+      confidence:undefined,
+      calibrated_confidence:.88,
+      families:[{ id:'format', score:.9 }],
+    })],
+  });
+  const result = resolveUnusualFeed(raw, [event(1)], '2026-07-27');
+  assert.equal(result.approved, true);
+  assert.equal(result.status, 'last_good_fallback');
+  assert.deepEqual(result.items[0].families, ['format']);
+});
+
 test('shadow, migration, failure and missing rollout baseline never create cards or a red dot', () => {
   for (const status of ['shadow','migration','failed','unavailable']) {
     const result = resolveUnusualFeed(manifest({ quality_gate:{ status, metrics:{} } }), [event(1)], '2026-07-27');

@@ -23345,7 +23345,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         "bge_document_version": "event-related-doc-v1",
         "unusual_enabled": _env_flag("STATIC_SITE_UNUSUAL_ENABLED"),
         "unusual_migration": _env_flag("STATIC_SITE_UNUSUAL_MIGRATION"),
-        "unusual_cache_schema": "static_unusual_events_cache_v1",
+        "unusual_cache_schema": "unusual-event-score-cache-v1",
         "service_share_renderer": "service_share_daily_pillow_1080x1350_v1",
         "pgvector_embedding_model": (
             os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL") or "gemini-embedding-2"

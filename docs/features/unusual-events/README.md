@@ -75,10 +75,12 @@ The static pipeline has one BGE encoding boundary:
 2. `BAAI/bge-m3` is pinned to revision
    `5617a9f61b028005a4858fdac845db406aefb181` and emits normalized 1024-dimension
    dense vectors under `bge_m3_cpu_dense_fp32_l2_v1`.
-3. `build_shared_bge_vector_artifact()` encodes the stable event-document list
-   and unusual prototype list in one model session. The same event vector is
-   consumed by public static related retrieval, unusual scoring, family
-   evidence and presentation concept clustering/support.
+3. `build_shared_bge_vector_artifact()` compares exact document hashes with the
+   previous artifact, copies unchanged normalized rows and sends only changed
+   events/prototypes through one model session. Removing one event drops only
+   that row; changing one event encodes only that event. The same resulting
+   vector is consumed by public static related retrieval, unusual scoring,
+   family evidence and presentation concept clustering/support.
 4. Consumers call `validate_shared_bge_vector_artifact()` and bind the model,
    revision, dimension, document version, normalization, prototype-bank hash,
    classifier hash and artifact hash. A mismatch means abstain/disable, never
@@ -98,6 +100,12 @@ provider_calls = 0
 
 Any non-zero value, missing counter or evidence of a second encode boundary is a
 release failure.
+
+The decision cache deliberately does **not** key every event on the complete
+artifact SHA: that SHA changes when any row or build receipt changes. Its stable
+contract binds model/revision/dimension/document, prototype, classifier and
+as-of date, then validates a per-event content/vector/eligibility/concept hash.
+Thus an unchanged event retains its decision when an unrelated event changes.
 
 ## Scorer, evidence and activation gates
 
@@ -120,9 +128,18 @@ recall separately from as-of-date publication eligibility. Every row freezes
 `ordinary`, or `abstain`) so a real encoded canary measures identical-input tier
 flips instead of silently leaving that metric undefined.
 
+The hard gate is structured and fail-closed: active/canonical/public/searchable
+status, non-silent/non-postponed/non-merged lifecycle, attendable event kind,
+future end date and a minimum canonical semantic-text payload are required
+before semantic publication. Keyword inference is not used to repair missing
+meaning. Prototype evidence always contains the nearest positive,
+hard-negative and neutral anchors so the published margins are auditable.
+
 Activation is fail-closed unless the hash-bound evaluation proves all of:
 
-- precision@20 `>= 0.85`, or within `0.05` of the frozen `0.88` reference;
+- precision@20 of the **predicted unusual ranked feed** `>= 0.85`, or within
+  `0.05` of the frozen `0.88` reference (ordinary controls are not inserted
+  into the denominator as if they were predictions);
 - hard-negative false-positive rate `<= 0.05`;
 - confirmed-positive recall `>= 0.80`;
 - no more than one row per concept in the top 20;
@@ -160,9 +177,22 @@ runner persists downloaded cache/receipt files only after the exact Kaggle run
 has a complete validated result; a partial, mismatched or failed remote run
 cannot overwrite them.
 
-Last-good is allowed only when its snapshot/model/document/prototype/classifier
-and policy freshness are compatible with the requested build. Otherwise the
-feature emits an explicitly disabled/empty unusual manifest. It must never
+`unusual_events_cache.json` uses the scorer-owned
+`unusual-event-score-cache-v1` schema. In addition to per-event records it keeps
+at most 512 recently observed concepts with their stable `concept_id`,
+`first_published_at`, previous tier/content hash, representative event,
+policy/model/prototype/classifier versions and notification eligibility.
+Rebuilds preserve `first_published_at`; migration and first-baseline builds are
+silent. Only a genuinely new approved `core_unusual` concept after an
+established rollout baseline may receive `notify_eligible=true`.
+
+Last-good is allowed only when its model/document/prototype/classifier and
+policy contracts match, it is no more than seven days old, and every retained
+item still has an active/future event whose freshly rebuilt canonical document
+has the exact stored content hash. A fallback retains the original approved
+quality metrics, sets `delivery_status=last_good_fallback`, disables all
+notifications and replaces event snapshots only after those checks. Otherwise
+the feature emits an explicitly disabled/empty unusual manifest. It must never
 silently fall back to an unrelated snapshot or to the ordinary related list.
 All unusual/vector hashes participate in the static input fingerprint without
 feeding newly produced output back into an endless rebuild loop.
@@ -171,9 +201,12 @@ feeding newly produced output back into an endless rebuild loop.
 
 The navigation red dot means **a newly first-published, unseen unusual
 concept**, not “the site rebuilt” and not “a score changed”. Concept identity is
-derived deterministically from canonical concept/series/linked-occurrence
-signals plus presentation-only semantic clustering. It never merges canonical
-`Event` rows.
+derived deterministically in this order: curated concept, canonical root,
+canonical series, mutually explicit `other_date_ids`/`occurrence_member_ids`/
+`linked_event_ids`, conservative BGE presentation-only clustering, then a
+stable deterministic presentation hash. The BGE cluster requires matching
+venue/type, high title overlap and cosine `>=0.985`; it never writes to or merges
+canonical `Event` rows and cannot create a date-family elsewhere.
 
 The manifest carries stable concept identity, `first_published_at` and
 `notify_eligible`. Browser state stores the bounded acknowledged concept set
@@ -181,8 +214,9 @@ under the versioned same-origin key `ke_unusual_seen_v1`. A concept is
 acknowledged only after its card is materially viewed or the user activates the
 explicit “mark shown as seen” control; merely rebuilding or opening an empty
 feed is insufficient. Reordered rows, changed scores and extra dates in an
-already seen concept do not recreate the dot. Storage failure removes the dot
-rather than making it permanent; auth is not required and tokens/profile data
+already seen concept do not recreate the dot. A storage read failure hides the
+dot fail-closed; a failed acknowledgement write leaves it unread rather than
+pretending persistence succeeded. Auth is not required and tokens/profile data
 are not stored in the marker.
 
 Migration/backfill builds set `notify_eligible=false` for every concept. A
@@ -204,6 +238,10 @@ parallel red-dot implementations are forbidden.
 - The menu's `Подборки` submenu contains `Детям`, `Необычное`, `Бесплатно` and
   `Клубы`; `Бесплатно` also remains a top-level fast action. Canonical shell
   details live in [`mobile-shell.md`](../static-site-pages/mobile-shell.md).
+- Ordering is core before adjacent, nearer 30-day events before later events,
+  and then deterministic score/date/id. One concept is shown once; a first pass
+  applies soft caps of 6 per family, 4 per venue and 8 per event type before a
+  deterministic fill, with an absolute maximum of 30 cards.
 
 ## Rollout, Kaggle canary and rollback
 
@@ -246,6 +284,12 @@ node --check site/tests/unusual-events.playwright.mjs
 UNUSUAL_EVENTS_BASE_URL=https://… \
   node site/tests/unusual-events.playwright.mjs
 ```
+
+The Playwright journey uses the shipped runtime at noindex lab fixtures under
+`/lab/unusual-unread/<scenario>/` to cover all ten red-dot states: rollout
+baseline, new core, adjacent, viewed, reload, same-series date, migration,
+manifest failure, exact accessible label and an operable overflow-free mobile
+drawer. These fixtures contain no provider code and are not release content.
 
 The live Kaggle canary additionally follows the evidence list above and the
 canonical [E2E scenario index](../../operations/e2e-scenarios.md).

@@ -1,6 +1,8 @@
 ---
 import { getUnusualFeed } from '../lib/unusualEvents';
-const feed = getUnusualFeed();
+import type { UnusualFeed } from '../lib/unusualEvents';
+interface Props { feed?: UnusualFeed; }
+const { feed = getUnusualFeed() } = Astro.props;
 const candidates = feed.approved && feed.baselineAt ? feed.unreadCandidates : [];
 ---
 <script
@@ -8,7 +10,7 @@ const candidates = feed.approved && feed.baselineAt ? feed.unreadCandidates : []
   type="application/json"
   data-unusual-unread-manifest
   data-unusual-unread-enabled={candidates.length > 0 ? 'true' : 'false'}
-  set:html={JSON.stringify({ version:1, baselineAt:feed.baselineAt, candidates })}
+  set:html={JSON.stringify({ version:1, buildId:feed.buildId, baselineAt:feed.baselineAt, candidates })}
 ></script>
 
 <script is:inline>
@@ -34,7 +36,20 @@ const candidates = feed.approved && feed.baselineAt ? feed.unreadCandidates : []
         const seen = parsed?.version === 1 && Array.isArray(parsed.seen)
           ? parsed.seen.filter((item) => safeId.test(String(item?.id || '')) && Number.isFinite(Date.parse(item?.seenAt || '')) && now - Date.parse(item.seenAt) <= ttlMs).slice(-maxSeen)
           : [];
-        return { version:1, updatedAt:new Date(now).toISOString(), seen };
+        const rolloutBaselineAt = Number.isFinite(Date.parse(parsed?.rolloutBaselineAt || ''))
+          ? parsed.rolloutBaselineAt
+          : manifest?.baselineAt;
+        const rolloutBuild = typeof parsed?.rolloutBuild === 'string' && parsed.rolloutBuild
+          ? parsed.rolloutBuild
+          : manifest?.buildId;
+        return {
+          schema:storageKey,
+          version:1,
+          rolloutBaselineAt,
+          rolloutBuild,
+          updatedAt:new Date(now).toISOString(),
+          seen,
+        };
       } catch (_) {
         return null;
       }
@@ -55,7 +70,7 @@ const candidates = feed.approved && feed.baselineAt ? feed.unreadCandidates : []
       document.querySelectorAll('[data-unusual-nav-dot]').forEach((dot) => { dot.hidden = unread.length === 0; });
       document.querySelectorAll('[data-unusual-nav-link]').forEach((link) => {
         link.dataset.unusualUnreadCount = String(unread.length);
-        if (unread.length > 0) link.setAttribute('aria-label', `Необычное. Новых подборок: ${unread.length}`);
+        if (unread.length > 0) link.setAttribute('aria-label', 'Есть новые необычные события');
         else link.removeAttribute('aria-label');
       });
       document.querySelectorAll('[data-unusual-mark-seen]').forEach((button) => { button.hidden = unread.length === 0; });

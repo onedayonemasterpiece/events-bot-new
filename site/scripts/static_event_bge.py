@@ -167,8 +167,15 @@ def build_shared_bge_vector_artifact(
     encoder: Callable[..., Sequence[Sequence[float]]] | None = None,
     batch_size: int = 8,
     build_metadata: Mapping[str, Any] | None = None,
+    previous_artifact: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Encode related documents and prototypes once into a shared artifact."""
+    """Encode only changed related documents/prototypes into one artifact.
+
+    A compatible previous artifact is an input cache, not a second semantic
+    source. Rows whose text hash is unchanged are copied verbatim; all changed
+    rows are encoded together in one model call. Removed events disappear from
+    the new artifact.
+    """
 
     if model_revision != MODEL_REVISION:
         raise ValueError(
@@ -176,29 +183,77 @@ def build_shared_bge_vector_artifact(
         )
     documents = build_related_v1_documents(events)
     prototypes = _prototype_rows(prototype_bank)
-    texts = [row["text"] for row in documents] + [row["text"] for row in prototypes]
-    encode = encoder or _default_encoder
-    raw_vectors = encode(
-        texts, model_revision=model_revision, batch_size=max(1, int(batch_size))
+    previous_metadata = (
+        previous_artifact.get("metadata", {})
+        if isinstance(previous_artifact, Mapping)
+        else {}
     )
-    if len(raw_vectors) != len(texts):
-        raise ValueError("encoder result count does not match input count")
-    vectors = [_normalise(vector, expected_dim=EMBEDDING_DIM) for vector in raw_vectors]
-    event_vectors = {
-        str(row["event_id"]): {
-            "text_hash": row["text_hash"],
-            "vector": vectors[index],
-        }
-        for index, row in enumerate(documents)
-    }
-    offset = len(documents)
-    prototype_vectors = {
-        row["prototype_id"]: {
-            "text_hash": row["text_hash"],
-            "vector": vectors[offset + index],
-        }
-        for index, row in enumerate(prototypes)
-    }
+    previous_compatible = bool(
+        isinstance(previous_artifact, Mapping)
+        and previous_artifact.get("schema_version") == ARTIFACT_SCHEMA_VERSION
+        and isinstance(previous_metadata, Mapping)
+        and previous_metadata.get("encoder_contract") == ENCODER_CONTRACT
+        and previous_metadata.get("model_id") == MODEL_ID
+        and previous_metadata.get("model_revision") == MODEL_REVISION
+        and previous_metadata.get("embedding_dim") == EMBEDDING_DIM
+        and previous_metadata.get("document_version") == DOCUMENT_VERSION
+        and previous_metadata.get("vector_normalization") == VECTOR_NORMALIZATION
+        and previous_metadata.get("prototype_bank_sha256") == stable_hash(prototype_bank)
+        and previous_metadata.get("classifier_sha256") == stable_hash(classifier)
+    )
+    previous_events = (
+        previous_artifact.get("event_vectors", {})
+        if previous_compatible
+        else {}
+    )
+    previous_prototypes = (
+        previous_artifact.get("prototype_vectors", {})
+        if previous_compatible
+        else {}
+    )
+    reusable_events: dict[str, dict[str, Any]] = {}
+    reusable_prototypes: dict[str, dict[str, Any]] = {}
+    pending: list[tuple[str, str, str, str]] = []
+    for row in documents:
+        key = str(row["event_id"])
+        cached = previous_events.get(key) if isinstance(previous_events, Mapping) else None
+        if isinstance(cached, Mapping) and cached.get("text_hash") == row["text_hash"]:
+            reusable_events[key] = {
+                "text_hash": row["text_hash"],
+                "vector": _normalise(cached.get("vector", []), expected_dim=EMBEDDING_DIM),
+            }
+        else:
+            pending.append(("event", key, row["text"], row["text_hash"]))
+    for row in prototypes:
+        key = row["prototype_id"]
+        cached = previous_prototypes.get(key) if isinstance(previous_prototypes, Mapping) else None
+        if isinstance(cached, Mapping) and cached.get("text_hash") == row["text_hash"]:
+            reusable_prototypes[key] = {
+                "text_hash": row["text_hash"],
+                "vector": _normalise(cached.get("vector", []), expected_dim=EMBEDDING_DIM),
+            }
+        else:
+            pending.append(("prototype", key, row["text"], row["text_hash"]))
+
+    encoded_rows: list[list[float]] = []
+    if pending:
+        encode = encoder or _default_encoder
+        raw_vectors = encode(
+            [row[2] for row in pending],
+            model_revision=model_revision,
+            batch_size=max(1, int(batch_size)),
+        )
+        if len(raw_vectors) != len(pending):
+            raise ValueError("encoder result count does not match changed input count")
+        encoded_rows = [
+            _normalise(vector, expected_dim=EMBEDDING_DIM)
+            for vector in raw_vectors
+        ]
+    event_vectors = dict(reusable_events)
+    prototype_vectors = dict(reusable_prototypes)
+    for (kind, key, _text, text_hash), vector in zip(pending, encoded_rows):
+        target = event_vectors if kind == "event" else prototype_vectors
+        target[key] = {"text_hash": text_hash, "vector": vector}
     metadata = {
         "schema_version": ARTIFACT_SCHEMA_VERSION,
         "encoder_contract": ENCODER_CONTRACT,
@@ -213,6 +268,10 @@ def build_shared_bge_vector_artifact(
         "event_count": len(event_vectors),
         "prototype_count": len(prototype_vectors),
         "provider_calls": 0,
+        "encoded_event_count": sum(row[0] == "event" for row in pending),
+        "reused_event_count": len(reusable_events),
+        "encoded_prototype_count": sum(row[0] == "prototype" for row in pending),
+        "reused_prototype_count": len(reusable_prototypes),
         "build": dict(build_metadata or {}),
     }
     payload_hash = stable_hash(

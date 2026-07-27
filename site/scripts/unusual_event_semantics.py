@@ -341,9 +341,13 @@ def _semantic_features(
         "positive_neutral_margin": top_positive - top_neutral,
         "family_margin": family_score - second_family_score,
     }
+    # Retrieval evidence must always show the nearest positive,
+    # hard-negative and neutral anchors; a global top-6 can otherwise be
+    # monopolised by one kind and hide the actual decision margins.
     evidence = sorted(
-        scores, key=lambda row: (-row["score"], row["prototype_id"])
-    )[:6]
+        [*positives[:2], *hard_negatives[:2], *neutrals[:2]],
+        key=lambda row: (-row["score"], row["prototype_id"]),
+    )
     primary_family_positive = next(
         row for row in positives if row["family"] == family
     )
@@ -405,7 +409,8 @@ def _classify(
 
 def _eligibility(event: Mapping[str, Any], as_of: date) -> tuple[bool, list[str]]:
     failures: list[str] = []
-    if not str(event.get("title") or "").strip():
+    title = str(event.get("title") or "").strip()
+    if not title:
         failures.append("missing_title")
     if str(event.get("lifecycle_status") or "").strip().lower() != "active":
         failures.append("lifecycle_not_active")
@@ -414,15 +419,54 @@ def _eligibility(event: Mapping[str, Any], as_of: date) -> tuple[bool, list[str]
         failures.append("identity_not_canonical")
     if event.get("is_public") is False:
         failures.append("not_public")
-    if event.get("cancelled") is True or str(
-        event.get("publication_status") or ""
-    ).strip().lower() in {"cancelled", "canceled", "deleted"}:
-        failures.append("cancelled")
+    if any(event.get(field) is False for field in (
+        "is_searchable", "searchable", "public_searchable"
+    )):
+        failures.append("not_searchable")
+    publication_status = str(event.get("publication_status") or "").strip().lower()
+    if event.get("cancelled") is True or publication_status in {
+        "cancelled", "canceled", "deleted", "silent", "postponed", "merged"
+    }:
+        failures.append("publication_unavailable")
+    if (
+        event.get("silent") is True
+        or event.get("is_silent") is True
+        or event.get("postponed") is True
+        or event.get("is_postponed") is True
+        or event.get("merged_into_id")
+    ):
+        failures.append("publication_unavailable")
     eventness = str(event.get("eventness_status") or "").strip().lower()
     if eventness in {"non_event", "not_event", "rejected"} or event.get(
         "is_event"
     ) is False:
         failures.append("non_event")
+    record_kind = str(
+        event.get("record_kind")
+        or event.get("content_kind")
+        or event.get("event_kind")
+        or ""
+    ).strip().lower()
+    if (
+        record_kind in {"service", "work_hours", "working_hours", "non_event"}
+        or event.get("is_service") is True
+        or event.get("is_work_hours") is True
+    ):
+        failures.append("service_or_work_hours")
+    semantic_text = " ".join(
+        str(event.get(field) or "").strip()
+        for field in (
+            "summary",
+            "short_description",
+            "search_digest",
+            "description",
+            "description_html",
+        )
+    ).strip()
+    # Structured fail-closed minimum only: no keyword-based semantic rewrite.
+    # The actual meaning is still decided exclusively by the BGE classifier.
+    if len(semantic_text) < 16 or len(f"{title} {semantic_text}".strip()) < 32:
+        failures.append("insufficient_semantic_text")
     raw_date = str(event.get("end_date") or event.get("start_date") or "").strip()
     try:
         last_date = date.fromisoformat(raw_date[:10])
@@ -431,15 +475,22 @@ def _eligibility(event: Mapping[str, Any], as_of: date) -> tuple[bool, list[str]
     else:
         if last_date < as_of:
             failures.append("past")
+    failures = list(dict.fromkeys(failures))
     return not failures, failures
 
 
-def _concept_ids(events: list[dict[str, Any]]) -> dict[int, tuple[str, str]]:
+def _concept_ids(
+    events: list[dict[str, Any]],
+    event_vectors: Mapping[str, Any] | None = None,
+) -> dict[int, tuple[str, str]]:
     """Return stable concept ids using explicit identity only.
 
-    Hierarchy: curated concept -> explicit series -> exported occurrence family
-    -> reciprocal ``other_date_ids`` component -> canonical event id.  No title,
-    venue, text or keyword similarity is used for identity.
+    Hierarchy: curated concept -> canonical root -> explicit series -> exported
+    occurrence family -> reciprocal explicit-link component -> conservative
+    BGE presentation cluster -> stable presentation identity.
+
+    The semantic cluster is used only to deduplicate this presentation surface;
+    it never creates or mutates an occurrence family in canonical event data.
     """
 
     by_id = {int(row.get("id") or row.get("event_id")): row for row in events}
@@ -470,6 +521,13 @@ def _concept_ids(events: list[dict[str, Any]]) -> dict[int, tuple[str, str]]:
             if str(value).isdigit() and int(value) in by_id
             }
         )
+        explicit_ids.update(
+            {
+                int(value)
+                for value in (event.get("linked_event_ids") or [])
+                if str(value).isdigit() and int(value) in by_id
+            }
+        )
         explicit_ids.discard(event_id)
         links[event_id] = explicit_ids
     for event_id, others in links.items():
@@ -495,8 +553,14 @@ def _concept_ids(events: list[dict[str, Any]]) -> dict[int, tuple[str, str]]:
         }
         return f"concept:{stable_hash(identity)[:24]}"
     output: dict[int, tuple[str, str]] = {}
+    fallback_ids: list[int] = []
     for event_id, event in by_id.items():
         curated = str(event.get("canonical_concept_id") or "").strip()
+        root = str(
+            event.get("canonical_root_event_id")
+            or event.get("root_event_id")
+            or ""
+        ).strip()
         series = str(
             event.get("series_id")
             or event.get("event_series_id")
@@ -509,6 +573,11 @@ def _concept_ids(events: list[dict[str, Any]]) -> dict[int, tuple[str, str]]:
                 f"curated:{safe or stable_hash(curated)[:20]}",
                 "canonical_concept_id",
             )
+        elif root:
+            output[event_id] = (
+                f"root:{stable_hash(root)[:20]}",
+                "canonical_root_event_id",
+            )
         elif series:
             output[event_id] = (
                 f"series:{stable_hash(series)[:20]}",
@@ -519,8 +588,87 @@ def _concept_ids(events: list[dict[str, Any]]) -> dict[int, tuple[str, str]]:
         ):
             output[event_id] = (f"occurrence:{find(event_id)}", "explicit_occurrence")
         else:
+            fallback_ids.append(event_id)
+
+    # Conservative BGE-only presentation clustering for near-identical repeated
+    # entries that lack explicit identity. Exact stable identity still works
+    # when vectors are absent. Venue/type equality plus a very high cosine and
+    # title-token overlap prevents broad topic-level merging.
+    presentation_parent = {event_id: event_id for event_id in fallback_ids}
+
+    def presentation_find(value: int) -> int:
+        while presentation_parent[value] != value:
+            presentation_parent[value] = presentation_parent[presentation_parent[value]]
+            value = presentation_parent[value]
+        return value
+
+    def presentation_union(left: int, right: int) -> None:
+        left_root, right_root = presentation_find(left), presentation_find(right)
+        if left_root != right_root:
+            presentation_parent[max(left_root, right_root)] = min(left_root, right_root)
+
+    def words(value: Any) -> set[str]:
+        text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+        return set(re.findall(r"[\w]+", text, flags=re.UNICODE))
+
+    presentation_vectors: dict[int, list[float]] = {}
+
+    def presentation_vector(event_id: int) -> list[float] | None:
+        if not isinstance(event_vectors, Mapping):
+            return None
+        if event_id in presentation_vectors:
+            return presentation_vectors[event_id]
+        try:
+            vector, _ = _vector_row(
+                event_vectors, str(event_id), expected_dim=EMBEDDING_DIM
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
+        presentation_vectors[event_id] = vector
+        return vector
+
+    def cosine(left: int, right: int) -> float:
+        left_vector = presentation_vector(left)
+        right_vector = presentation_vector(right)
+        if left_vector is None or right_vector is None:
+            return -1.0
+        return sum(a * b for a, b in zip(left_vector, right_vector))
+
+    for index, left_id in enumerate(fallback_ids):
+        left = by_id[left_id]
+        left_words = words(left.get("title"))
+        for right_id in fallback_ids[index + 1:]:
+            right = by_id[right_id]
+            if (
+                str(left.get("event_type") or "").casefold()
+                != str(right.get("event_type") or "").casefold()
+                or str(left.get("venue_name") or left.get("location_name") or "").casefold()
+                != str(right.get("venue_name") or right.get("location_name") or "").casefold()
+            ):
+                continue
+            right_words = words(right.get("title"))
+            overlap = (
+                len(left_words & right_words) / len(left_words | right_words)
+                if left_words | right_words
+                else 0.0
+            )
+            if overlap >= 0.84 and cosine(left_id, right_id) >= 0.985:
+                presentation_union(left_id, right_id)
+
+    presentation_counts: dict[int, int] = {}
+    for event_id in fallback_ids:
+        root_id = presentation_find(event_id)
+        presentation_counts[root_id] = presentation_counts.get(root_id, 0) + 1
+    for event_id in fallback_ids:
+        root_id = presentation_find(event_id)
+        if presentation_counts[root_id] > 1:
             output[event_id] = (
-                semantic_identity(event),
+                f"presentation:{root_id}",
+                "bge_presentation_cluster",
+            )
+        else:
+            output[event_id] = (
+                semantic_identity(by_id[event_id]),
                 "stable_semantic_identity",
             )
     return output
@@ -646,14 +794,17 @@ def evaluate_unusual_quality_fixture(
     first = run_once()
     second = run_once()
     deterministic = first == second
-    editorial = sorted(
-        (row for row in first if row["label"] != "non_event"),
+    editorial = [row for row in first if row["label"] != "non_event"]
+    predicted_unusual = [
+        row for row in first if row["decision"] in {"core", "adjacent"}
+    ]
+    editorial_top = sorted(
+        predicted_unusual,
         key=lambda row: (
             -float(row["calibrated_confidence"]),
             int(row["event_id"]),
         ),
-    )
-    editorial_top = editorial[:20]
+    )[:20]
     precision = (
         sum(row["label"] == "positive" for row in editorial_top)
         / len(editorial_top)
@@ -662,9 +813,6 @@ def evaluate_unusual_quality_fixture(
     )
     positives = [row for row in first if row["label"] == "positive"]
     hard_negatives = [row for row in first if row["label"] == "hard_negative"]
-    predicted_unusual = [
-        row for row in first if row["decision"] in {"core", "adjacent"}
-    ]
     recall = (
         sum(row["decision"] in {"core", "adjacent"} for row in positives)
         / len(positives)
@@ -739,7 +887,7 @@ def evaluate_unusual_quality_fixture(
         "deterministic_repeat_exact": deterministic,
         "single_vector_contract": True,
         "ineligible_publication_count": sum(
-            row["label"] == "non_event" for row in published
+            not row["eligible"] for row in predicted_unusual
         ),
         "family_diversity_top20": len(
             {str(row["family"]) for row in ranked_published}
@@ -932,11 +1080,17 @@ def score_unusual_manifest(
             classifier_hash=classifier_hash,
         )
     as_of = date.fromisoformat(str(build["as_of_date"]))
-    concepts = _concept_ids(rows)
+    concepts = _concept_ids(rows, event_vectors)
     cache_contract = {
         "schema_version": CACHE_SCHEMA_VERSION,
         "scorer_schema_version": SCORER_SCHEMA_VERSION,
-        "artifact_sha256": vector_metadata["artifact_sha256"],
+        # The artifact hash changes when any event vector or build receipt
+        # changes. Per-event input hashes below are the incremental boundary;
+        # keeping the whole artifact hash here would invalidate every decision.
+        "model_id": vector_metadata["model_id"],
+        "model_revision": vector_metadata["model_revision"],
+        "embedding_dim": vector_metadata["embedding_dim"],
+        "document_version": vector_metadata["document_version"],
         "prototype_bank_sha256": bank_hash,
         "classifier_sha256": classifier_hash,
         "as_of_date": as_of.isoformat(),
@@ -967,10 +1121,23 @@ def score_unusual_manifest(
                         "lifecycle_status",
                         "identity_status",
                         "is_public",
+                        "is_searchable",
+                        "searchable",
+                        "public_searchable",
                         "cancelled",
+                        "silent",
+                        "is_silent",
+                        "postponed",
+                        "is_postponed",
+                        "merged_into_id",
                         "publication_status",
                         "eventness_status",
                         "is_event",
+                        "record_kind",
+                        "content_kind",
+                        "event_kind",
+                        "is_service",
+                        "is_work_hours",
                         "start_date",
                         "end_date",
                     )
@@ -1068,17 +1235,27 @@ def score_unusual_manifest(
             "decision": decision_row,
         }
         decisions.append(decision_row)
-    decisions.sort(
-        key=lambda row: (
-            DECISION_ORDER[row["decision"]],
+    horizon_30 = date.fromordinal(as_of.toordinal() + 30)
+
+    def rank_key(row: Mapping[str, Any]) -> tuple[Any, ...]:
+        start_raw = str(by_id[int(row["event_id"])].get("start_date") or "")
+        try:
+            start = date.fromisoformat(start_raw[:10])
+        except ValueError:
+            start = date.max
+        return (
+            DECISION_ORDER[str(row["decision"])],
+            0 if start <= horizon_30 else 1,
             -float(row["score"]),
-            str(by_id[row["event_id"]].get("start_date") or ""),
+            start_raw,
             int(row["event_id"]),
         )
-    )
+
+    decisions.sort(key=rank_key)
     selected: list[dict[str, Any]] = []
     duplicate_rows: list[dict[str, Any]] = []
     seen_concepts: set[str] = set()
+    candidates: list[dict[str, Any]] = []
     for row in decisions:
         if row["decision"] not in {"core", "adjacent"} or not row["eligible"]:
             continue
@@ -1092,7 +1269,33 @@ def score_unusual_manifest(
             )
             continue
         seen_concepts.add(row["concept_id"])
+        candidates.append(row)
+    family_counts: dict[str, int] = {}
+    venue_counts: dict[str, int] = {}
+    type_counts: dict[str, int] = {}
+    deferred: list[dict[str, Any]] = []
+    for row in candidates:
+        event = by_id[int(row["event_id"])]
+        family = str(row.get("family") or "")
+        venue = str(event.get("venue_id") or event.get("venue_name") or "").casefold()
+        event_type = str(event.get("event_type") or "").casefold()
+        if (
+            family_counts.get(family, 0) >= 6
+            or (venue and venue_counts.get(venue, 0) >= 4)
+            or (event_type and type_counts.get(event_type, 0) >= 8)
+        ):
+            deferred.append(row)
+            continue
         selected.append(row)
+        family_counts[family] = family_counts.get(family, 0) + 1
+        if venue:
+            venue_counts[venue] = venue_counts.get(venue, 0) + 1
+        if event_type:
+            type_counts[event_type] = type_counts.get(event_type, 0) + 1
+        if len(selected) >= 30:
+            break
+    if len(selected) < 30:
+        selected.extend(deferred[: 30 - len(selected)])
     quality = _quality_gate(
         build.get("quality_evaluation"),
         head,

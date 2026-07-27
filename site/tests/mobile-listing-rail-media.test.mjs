@@ -121,16 +121,19 @@ test('generic crop review cannot override an event-level OCR protection marker',
   assert.equal(result.reason, 'safe_visual_authored_geometry');
 });
 
-test('unreviewed multi-image visual remains fail-closed at authored geometry', () => {
-  const first = asset();
-  const second = asset({ src: 'https://static.kenigevents.ru/second.webp' });
+test('every safe visual-only asset in a multi-image gallery uses 5:4 cover without fields', () => {
+  const first = asset({ width:3072, height:1307 });
+  const second = asset({ src: 'https://static.kenigevents.ru/second.webp', width:3072, height:1307 });
   const result = resolveMobileListingRailMedia(
     { image_text_mode: 'visual_only', image_assets: [first, second] },
     selected(first),
   );
-  assert.equal(result.fit, 'contain');
-  assert.equal(result.width, 84);
-  assert.equal(result.reason, 'safe_visual_authored_geometry');
+  assert.deepEqual(result, {
+    fit: 'cover',
+    ratio: 5 / 4,
+    width: 140,
+    reason: 'safe_visual_landscape_5x4',
+  });
 });
 
 test('mobile rail returns a bounded real gallery in source order and protects every asset independently', () => {
@@ -166,11 +169,13 @@ test('mobile rail returns a bounded real gallery in source order and protects ev
     reviewedPhoto.src,
     overflow[0].src,
   ]);
-  assert.equal(items[0].fit, 'contain');
+  assert.equal(items[0].fit, 'cover');
+  assert.equal(items[0].ratio, 4 / 5);
+  assert.equal(items[0].reason, 'safe_visual_portrait_4x5');
   assert.equal(items[1].imageTextMode, 'ocr_text');
   assert.equal(items[1].fit, 'contain');
   assert.equal(items[2].fit, 'cover');
-  assert.equal(items[2].reason, 'reviewed_multi_visual_portrait_4x5');
+  assert.equal(items[2].reason, 'safe_visual_portrait_4x5');
 });
 
 test('mobile gallery deduplicates the selected asset and clamps an excessive requested limit', () => {

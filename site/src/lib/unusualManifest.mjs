@@ -33,13 +33,13 @@ function validManifestEnvelope(manifest) {
     && stringField(manifest.build_id)
     && validTimestamp(manifest.generated_at)
     && stringField(manifest.source_snapshot_id)
-    && stringField(manifest.hash)
+    && stringField(manifest.hash || manifest.source_snapshot_hash)
     && stringField(manifest.taxonomy_version)
     && stringField(manifest.policy_version)
     && stringField(manifest.embedding_model)
-    && stringField(manifest.revision)
-    && Number.isInteger(manifest.dim)
-    && manifest.dim > 0
+    && stringField(manifest.revision || manifest.embedding_revision)
+    && Number.isInteger(manifest.dim || manifest.embedding_dim)
+    && (manifest.dim || manifest.embedding_dim) > 0
     && stringField(manifest.doc_kind)
     && stringField(manifest.document_version)
     && stringField(manifest.prototype_bank_hash)
@@ -56,14 +56,14 @@ function validManifestItem(item) {
   return Number.isInteger(item.event_id)
     && item.event_id > 0
     && SAFE_ID.test(String(item.concept_id || ''))
-    && Number.isInteger(item.representative_event_id)
+    && Number.isInteger(item.representative_event_id || item.event_id)
     && stringField(item.tier)
     && Number.isFinite(item.unusual_score)
     && item.unusual_score >= 0
     && item.unusual_score <= 1
-    && Number.isFinite(item.confidence)
-    && item.confidence >= 0
-    && item.confidence <= 1
+    && Number.isFinite(item.confidence ?? item.calibrated_confidence)
+    && (item.confidence ?? item.calibrated_confidence) >= 0
+    && (item.confidence ?? item.calibrated_confidence) <= 1
     && Array.isArray(item.families)
     && Array.isArray(item.reason_codes)
     && Array.isArray(item.prototype_evidence)
@@ -111,8 +111,11 @@ export function resolveUnusualFeed(raw, catalog, today) {
       conceptId:item.concept_id,
       tier:item.tier,
       score:item.unusual_score,
-      confidence:item.confidence,
-      families:item.families.filter(stringField).slice(0, 8),
+      confidence:item.confidence ?? item.calibrated_confidence,
+      families:item.families
+        .map((family) => typeof family === 'object' ? family?.id : family)
+        .filter(stringField)
+        .slice(0, 8),
       reasonCodes:item.reason_codes.filter(stringField).slice(0, 12),
       firstPublishedAt:validTimestamp(item.first_published_at) ? item.first_published_at : null,
       notifyEligible:item.notify_eligible,
@@ -130,7 +133,7 @@ export function resolveUnusualFeed(raw, catalog, today) {
     .map((item) => ({ conceptId:item.conceptId, firstPublishedAt:item.firstPublishedAt })) : [];
   return {
     approved:true,
-    status:'approved',
+    status:raw.delivery_status || 'approved',
     buildId:raw.build_id,
     generatedAt:raw.generated_at,
     baselineAt,
