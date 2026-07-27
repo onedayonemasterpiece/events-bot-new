@@ -297,9 +297,12 @@
 - Fixed the future-event source coverage incident: parallel Theatres,
   Philharmonia and Qtickets Kaggle run-configs now use isolated SQLite
   transactions; the Philharmonia kernel parses the current `/afisha/` listing
-  and detail DOM; the daytime freshness guard watches that current catalog;
-  and a lost parser source finishes `ops_run` as `partial` or `error` instead
-  of false-green `success`.
+  and detail DOM as a self-contained Kaggle script; primary parser execution no
+  longer depends on a per-run Kaggle status-dataset/upload token; the daytime
+  freshness guard watches that current catalog; and a lost parser source
+  finishes `ops_run` as `partial` or `error` instead of false-green `success`.
+  The script is published under the new immutable-editor-compatible Kaggle slug
+  `zigomaro/parse-philharmonia-script`.
 
 - Prevented source-grounded studio addresses from being rebound to unrelated
   canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);

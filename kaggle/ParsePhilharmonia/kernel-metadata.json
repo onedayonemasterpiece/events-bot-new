@@ -1,14 +1,14 @@
 {
-    "id": "zigomaro/parse-philharmonia",
-    "title": "Parse Philharmonia",
-    "code_file": "parse_philharmonia.ipynb",
+    "id": "zigomaro/parse-philharmonia-script",
+    "title": "Parse Philharmonia Script",
+    "code_file": "philharmonia_parser.py",
     "language": "python",
-    "kernel_type": "notebook",
+    "kernel_type": "script",
     "is_private": true,
     "enable_gpu": false,
     "enable_internet": true,
     "dataset_sources": [],
     "competition_sources": [],
     "kernel_sources": [],
-    "slug": "parse-philharmonia"
+    "slug": "parse-philharmonia-script"
 }

@@ -5,7 +5,9 @@
 ## Источник и контракт
 
 - Официальная афиша: `https://filarmonia39.ru/afisha/`.
-- Kernel: `kaggle/ParsePhilharmonia/` (`zigomaro/parse-philharmonia`).
+- Kernel: self-contained script
+  `kaggle/ParsePhilharmonia/philharmonia_parser.py`
+  (`zigomaro/parse-philharmonia-script`).
 - Результат: `philharmonia_results.json`.
 - Production boundary: `source_parsing/philharmonia.py` → общий Smart Update.
 - Provenance: принятый результат обязан создать `event_source` с
@@ -27,6 +29,15 @@ Playwright. Он загружает текущий каталог и детал�
 Если каталог вернул ноль будущих событий или детальная страница не содержит
 описания, kernel должен завершиться ошибкой, а не публиковать пустой или
 обрезанный «успешный» результат.
+
+`kernel-metadata.json.code_file` обязан указывать прямо на parser script.
+Kaggle API отправляет в kernel только этот code file; notebook-loader,
+ссылающийся на соседний `.py`, не является self-contained и в remote runtime
+теряет parser module. Per-run status-dataset не является входом парсера:
+ошибка Kaggle Dataset API может отключить callback telemetry, но не сам импорт;
+terminal source status подтверждается host polling и `ops_run`.
+Script использует отдельный Kaggle slug: API не разрешает менять editor type
+у существующего notebook kernel `zigomaro/parse-philharmonia`.
 
 ## Нормализация
 
@@ -53,7 +64,10 @@ production output boundary обязаны поднять
 3. production processing создаёт/обновляет parser provenance;
 4. `ops_run` не `success`, если Philharmonia kernel/parse потерян;
 5. параллельный старт Theatres + Philharmonia + Qtickets не даёт
-   `cannot start a transaction within a transaction`.
+   `cannot start a transaction within a transaction`;
+6. `kernel-metadata.json` указывает на self-contained
+   `philharmonia_parser.py`, а primary parser runners не создают обязательный
+   per-run status-dataset.
 
 ## Отложенные улучшения
 
