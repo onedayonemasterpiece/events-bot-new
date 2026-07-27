@@ -7,7 +7,7 @@
 - Официальная афиша: `https://filarmonia39.ru/afisha/`.
 - Kernel: self-contained script
   `kaggle/ParsePhilharmonia/philharmonia_parser.py`
-  (`zigomaro/parse-philharmonia`).
+  (`zigomaro/parse-philharmonia-script`).
 - Результат: `philharmonia_results.json`.
 - Production boundary: `source_parsing/philharmonia.py` → общий Smart Update.
 - Provenance: принятый результат обязан создать `event_source` с
@@ -36,6 +36,8 @@ Kaggle API отправляет в kernel только этот code file; noteb
 теряет parser module. Per-run status-dataset не является входом парсера:
 ошибка Kaggle Dataset API может отключить callback telemetry, но не сам импорт;
 terminal source status подтверждается host polling и `ops_run`.
+Script использует отдельный Kaggle slug: API не разрешает менять editor type
+у существующего notebook kernel `zigomaro/parse-philharmonia`.
 
 ## Нормализация
 

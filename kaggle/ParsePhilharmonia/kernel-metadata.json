@@ -1,6 +1,6 @@
 {
-    "id": "zigomaro/parse-philharmonia",
-    "title": "Parse Philharmonia",
+    "id": "zigomaro/parse-philharmonia-script",
+    "title": "Parse Philharmonia Script",
     "code_file": "philharmonia_parser.py",
     "language": "python",
     "kernel_type": "script",
@@ -10,5 +10,5 @@
     "dataset_sources": [],
     "competition_sources": [],
     "kernel_sources": [],
-    "slug": "parse-philharmonia"
+    "slug": "parse-philharmonia-script"
 }

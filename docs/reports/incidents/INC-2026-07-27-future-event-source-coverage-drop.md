@@ -95,6 +95,12 @@ Raw evidence is retained outside git under
   that parser availability must not depend on the dataset control plane. The
   probe left `zigomaro/status-probe-1785142966` because the credential itself
   was denied `datasets.delete`.
+- `2026-07-27 09:13 UTC`: the second authorized UI catch-up passed the former
+  status-dataset gate. Qtickets was pushed and entered `RUNNING`; Philharmonia
+  reached `kernels_push`, which rejected changing the existing kernel from
+  notebook to script (`You cannot change the editor type of a kernel`). The
+  temporary superadmin grant was again restored exactly immediately after
+  command acceptance.
 
 ## Root Cause
 
@@ -120,6 +126,9 @@ Raw evidence is retained outside git under
    `philharmonia_parser.py` as a sibling file, but Kaggle `kernels_push` sends
    only `kernel-metadata.json.code_file`. A remote run therefore required a
    self-contained script rather than a notebook referencing an unshipped module.
+8. Kaggle kernel editor type is immutable for an existing slug, so converting
+   `zigomaro/parse-philharmonia` from notebook to script was rejected. The
+   self-contained script must be published under a new slug.
 
 ## Contributing Factors
 

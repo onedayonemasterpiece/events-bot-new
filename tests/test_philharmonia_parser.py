@@ -76,6 +76,7 @@ def test_kernel_is_self_contained_current_http_parser():
 
     assert metadata["code_file"] == "philharmonia_parser.py"
     assert metadata["kernel_type"] == "script"
+    assert metadata["id"] == "zigomaro/parse-philharmonia-script"
     assert "fetch_philharmonia_events" in source
     assert 'if __name__ == "__main__":' in source
     assert "philharmonia_results.json" in source
