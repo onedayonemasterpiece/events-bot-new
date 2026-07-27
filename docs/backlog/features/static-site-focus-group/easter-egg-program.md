@@ -181,10 +181,25 @@ hover, звук, точное наведение, QR и наличие двух 
 действие. Target не меньше применимого design-system minimum, focus order
 следует DOM, accessible name сообщает `Пасхалка: [имя]` и состояние `Найдено`.
 
-Цель исследования — проверить и телефон, и компьютер, поэтому UI может
-предлагать необязательную миссию `Попробовать на другом устройстве` и измерять
-её отдельно. Она не добавляет collection item, participation points или
-tie-break advantage: отсутствие компьютера/телефона не лишает шанса.
+Цель исследования — получить реальные пробы и на телефоне, и на компьютере.
+После первых трёх найденных объектов интерфейс выдаёт отдельную
+**исследовательскую миссию «Два экрана»**:
+
+1. участник открывает одноразовый handoff QR/link на первом устройстве;
+2. на телефоне выполняет один `meaningful_use` в mobile family;
+3. на компьютере выполняет один `meaningful_use` в desktop family;
+4. сервер создаёт два минимальных `device_family_observed` receipt и показывает
+   `Миссия выполнена`; raw User-Agent и fingerprint для этого не сохраняются.
+
+Mission receipt относится только к coverage исследования: он не добавляет
+collection item, participation points или tie-break advantage. Если второго
+устройства нет или оно недоступно, рядом всегда есть путь `У меня один экран`:
+участник выполняет guided responsive/accessibility review на своём устройстве.
+Такой результат хранится как `single_device_equivalent`, не выдаётся за реальную
+cross-device пробу и не ухудшает положение в prize ranking. Mission можно
+отложить, но UI повторно предлагает её в collection/hub до выполнения или
+выбора equivalent. Production pairing token одноразовый, короткоживущий,
+редактируется из URL сразу после redeem и не является membership credential.
 
 Accessible equivalent не обходит prerequisite. После выполнения того же
 действия/контентного условия на странице коллекции разблокируется спокойная
@@ -278,6 +293,8 @@ Acceptance rules не могут быть prechecked и не должны свя
 - [ ] Ни длина текста, ни sentiment, ни share/invite/purchase/spam не дают баллы.
 - [ ] Caps, receipts, snapshot, tie draw и invalidation объяснимы участнику.
 - [ ] Mobile/desktop/accessibility используют один `egg_id` без device advantage.
+- [ ] Миссия `Два экрана` собирает отдельные mobile/desktop research receipts,
+      имеет честный `single_device_equivalent` и не влияет на prize ranking.
 - [ ] Каждый anchor versioned, semantic, preflighted и fail closed.
 - [ ] `FG-E12` отсутствует до реально отрисованных трёх saved/calendar events.
 - [ ] Без legal/partner/privacy gate copy честно говорит `Правила готовятся`.

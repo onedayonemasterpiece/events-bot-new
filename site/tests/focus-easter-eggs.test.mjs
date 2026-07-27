@@ -80,6 +80,10 @@ test('collection surface keeps pending prize copy and a local-only boundary', as
   assert.match(page, /один приз — <strong>два билета в театр<\/strong>/u);
   assert.match(page, /не начисляют[\s\S]*не создают право/u);
   assert.match(page, /На этом устройстве · не конкурсный результат/u);
+  assert.match(page, /Проверьте сайт на двух экранах/u);
+  assert.match(page, /одно полезное действие на телефоне и одно на компьютере/u);
+  assert.match(page, /single-device equivalent/u);
+  assert.match(page, /не пасхалку и не[\s\S]*преимущество/u);
   assert.match(page, /40/u);
   assert.match(page, /7/u);
   assert.doesNotMatch(page, /Ваш конкурсный балл/u);

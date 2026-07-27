@@ -26,7 +26,9 @@ side effects:
   необязательный email/Яндекс identity-choice;
 - `/zakrytaya-afisha/` — marker-gated hub текущих статических страниц;
 - `/fokus-gruppa/kollektsiya/` — mobile-first коллекция пасхалок и демонстрация
-  условного появления `FG-E12` после третьего события в календаре;
+  условного появления `FG-E12` после третьего события в календаре, а также
+  отдельная non-prize миссия реальной проверки телефона и компьютера с честной
+  single-device alternative;
 - `/fokus-gruppa/zavershenie/` — automatic/operator end states и continuity;
 - `/dlya-menya/` — consented local personalization с tri-state категориями,
   отдельным индексом интереса, объяснениями и no-send eligibility будущих

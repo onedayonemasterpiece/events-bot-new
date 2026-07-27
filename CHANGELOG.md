@@ -19,7 +19,9 @@
   value/sentiment do not influence the result, and one pending prize means two
   theatre tickets. The versioned placement matrix covers 12 functions,
   including fail-closed `FG-E12` immediately after the third current
-  saved/calendar item.
+  saved/calendar item. A separate non-prize `Два экрана` mission requests real
+  phone and desktop research receipts while preserving a clearly labelled
+  single-device alternative.
 - Restored the root PWA manifest, install controller and telemetry mounts as a
   regression guard for
   `INC-2026-07-27-pwa-presentation-install-missing`.
