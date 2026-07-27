@@ -336,8 +336,10 @@
   includes the waiting, native-prompt, accepted and already-installed states.
 - Fixed canonical theatre parser occurrence matching so two explicit sessions
   from the same parser on one date are not collapsed into one event; this
-  restores recurring Dramteatr, Muzteatr and Tretyakov occurrences while still
-  allowing an official site to repair a social-only card's weak time.
+  restores recurring Dramteatr, Muzteatr and Tretyakov occurrences. The cheap
+  parser refresh now also requires exact date/time/title rather than accepting
+  any same-source URL/host, while an official site may still repair a
+  social-only card's weak time through Smart Update.
 - Reconciled the Chromium release gate with the fail-closed compact-card
   contract: classified OCR documents may cover only within the measured 20%
   budget, while unknown/classifier-error documents must remain whole and now
