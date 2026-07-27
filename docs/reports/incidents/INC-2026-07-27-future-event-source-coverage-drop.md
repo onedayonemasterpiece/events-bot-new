@@ -6,7 +6,7 @@ Service: production event inventory / scheduled source parsing / Philharmonia an
 Opened: 2026-07-27
 Closed: —
 Owners: events-bot maintainer / operations
-Related incidents: `INC-2026-07-08-prod-root-overlay-disk-full.md`, `INC-2026-07-10-future-event-semantic-audit.md`, `INC-2026-06-24-future-event-date-default-venue-regressions.md`
+Related incidents: `INC-2026-07-08-prod-root-overlay-disk-full.md`, `INC-2026-07-13-runtime-logging-recurring-event-quality.md`, `INC-2026-07-10-future-event-semantic-audit.md`, `INC-2026-06-24-future-event-date-default-venue-regressions.md`
 Related docs: `docs/features/source-parsing/README.md`, `docs/features/source-parsing/sources/philharmonia/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -42,9 +42,9 @@ parser provenance `philharmonia`, а все `18` будущих позиций �
   отдельных kernels, но итоговый status их не учитывал.
 - Не было source-level freshness/coverage gate, который сопоставляет официальную
   будущую афишу с parser provenance в production.
-- Runtime file mirror неожиданно был включён (`ENABLE_RUNTIME_FILE_LOGGING=1`),
-  несмотря на regression contract `INC-2026-07-08`; это config drift, но не
-  первопричина текущей потери событий.
+- Runtime file mirror был штатно включён (`ENABLE_RUNTIME_FILE_LOGGING=1`) по
+  более новому bounded-logging contract `INC-2026-07-13` и сохранил нужное
+  evidence; размеры и free-space floors требовали отдельной проверки.
 
 ## Inventory Evidence
 
@@ -104,8 +104,9 @@ Raw evidence is retained outside git under
   the daytime compensating slot ran, but its partial source loss was hidden.
 - Telegram and VK importers continued operating, creating enough events to hide
   that official site parsers were incomplete.
-- Runtime logging secret drift increased retained data on a known disk-pressure
-  surface; `/data` and `/tmp` still had free space at detection.
+- Наличие bounded runtime mirror помогло восстановить картину; при этом closure
+  всё равно требует подтвердить hard budget, retention и свободное место по
+  `INC-2026-07-13`.
 
 ## Automation Contract
 
@@ -142,8 +143,8 @@ Raw evidence is retained outside git under
   never `success`.
 - Verify `/healthz`, `PRAGMA quick_check`, `df` for `/`, `/tmp`, `/data`, and a
   `/tmp` write probe.
-- Restore `ENABLE_RUNTIME_FILE_LOGGING=0` unless temporary incident logging has an
-  explicit bounded budget.
+- Verify `ENABLE_RUNTIME_FILE_LOGGING=1` and the bounded production contract:
+  8 MiB/file, 64 MiB total, 48-hour ceiling and 256 MiB free-space floor.
 - Because scheduled slots were missed today, closure requires compensating
   catch-up and verification of today's restored data, not deploy alone.
 
@@ -169,7 +170,8 @@ Raw evidence is retained outside git under
 - [x] add DOM replay and three-run concurrency regressions;
 - [x] make source-specific parse errors visible in `ops_run.status`;
 - [ ] merge to `origin/main`, deploy and run production catch-up;
-- [ ] disable unexpected runtime file mirror after bounded incident evidence;
+- [ ] verify the expected bounded runtime mirror remains enabled, within its
+  byte/retention budget and above its free-space floor;
 - [ ] add durable per-source freshness/coverage alerting.
 
 ## Follow-up Actions
