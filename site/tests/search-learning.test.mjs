@@ -76,6 +76,11 @@ test('general free collection is complete, DB-export-backed and keeps ongoing ev
   assert.match(collectionPage, /getMaterializedSearchCollectionEvents\(collection\.slug\)/u);
 });
 
+test('mobile Free entry opens the materialized collection instead of Search', () => {
+  assert.match(mobileMenu, /route\('\/podborki\/besplatnye-sobytiya\/'\)/u);
+  assert.doesNotMatch(mobileMenu, /searchHref\('бесплатные события'\)/u);
+});
+
 test('empty Jazz weekend remains truthful and links only later real Jazz events', () => {
   assert.match(collections, /getMaterializedSearchCollectionDateRange/u);
   assert.match(collections, /event\.start_date > weekend\.end/u);

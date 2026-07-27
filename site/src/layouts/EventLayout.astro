@@ -5,6 +5,7 @@ import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import MobileBottomNav, { type MobileSection } from '../components/MobileBottomNav.astro';
 import MobileToastRegion from '../components/MobileToastRegion.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
+import StaticSiteAuthRuntime from '../components/auth/StaticSiteAuthRuntime.astro';
 import '../styles/design-system.css';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
@@ -2495,6 +2496,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       </div>
     </header>
     <MobileToastRegion />
+    <StaticSiteAuthRuntime />
     <slot />
     <!-- EventCard is the single DOM/interaction source for every client-added card. -->
     <template data-event-card-template="split-actions">
@@ -2509,12 +2511,14 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     <script>
       import { packRelatedCardRows, relatedCardMediaGeometry, relatedCardPrimaryImageAsset, resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
       import { selectEventContinuation } from '../lib/eventContinuation.mjs';
+      import { composeEventShareImage } from '../lib/eventShareImage.mjs';
       Object.assign(window, {
         KenigEventsPackRelatedCardRows: packRelatedCardRows,
         KenigEventsRelatedCardMediaGeometry: relatedCardMediaGeometry,
         KenigEventsResolveMobileEventCardMedia: resolveMobileEventCardMedia,
         KenigEventsRelatedCardPrimaryImageAsset: relatedCardPrimaryImageAsset,
         KenigEventsSelectEventContinuation: selectEventContinuation,
+        KenigEventsComposeEventShareImage: composeEventShareImage,
       });
     </script>
     <script is:inline>
@@ -4252,6 +4256,8 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             setRuntimeCardDataset(button, 'shareUrl', absoluteUrl);
             setRuntimeCardDataset(button, 'shareImage', imageUrl);
             setRuntimeCardDataset(button, 'shareImageType', shareImageType);
+            setRuntimeCardDataset(button, 'shareImageTextMode', data.image_text_mode || 'unknown');
+            setRuntimeCardDataset(button, 'shareBrandImage', `${CURRENT_BASE_PATH}/brand/announcements-wordmark-ui.svg`);
             setRuntimeCardDataset(button, 'shareFileName', `kenigevents-${data.id}`);
             setRuntimeCardDataset(button, 'shareDateTime', data.display_date_time);
             setRuntimeCardDataset(button, 'sharePlace', data.venue_name || data.city || '');
@@ -4882,7 +4888,20 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
               const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
               if (response.ok) {
                 const blob = await response.blob();
-                if (await shareBlobAsImage(button, blob)) return;
+                if (button.dataset.shareImageTextMode === 'visual_only' && window.KenigEventsComposeEventShareImage) {
+                  const composedBlob = await window.KenigEventsComposeEventShareImage({
+                    sourceBlob: blob,
+                    imageTextMode: button.dataset.shareImageTextMode,
+                    title: button.dataset.shareTitle || document.title,
+                    dateTime: button.dataset.shareDateTime || '',
+                    place: button.dataset.sharePlace || '',
+                    admission: button.dataset.shareAdmission || '',
+                    brandUrl: button.dataset.shareBrandImage || '',
+                  });
+                  if (composedBlob && await shareBlobAsImage(button, composedBlob)) return;
+                } else if (await shareBlobAsImage(button, blob)) {
+                  return;
+                }
               }
             }
             const generatedBlob = await createGeneratedShareImage(button);

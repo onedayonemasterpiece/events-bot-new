@@ -27,3 +27,15 @@ test('desktop share controls receive the semantics of their selected media', asy
   assert.equal((page.match(/<DesktopEventActionPanel /gu) || []).length, 3);
   assert.equal((page.match(/shareImageTextMode=\{selectedMediaMode\}/gu) || []).length, 3);
 });
+
+test('the global share runtime composes visual-only photos before native image share', async () => {
+  const layout = await read('src/layouts/EventLayout.astro');
+  assert.match(layout, /import \{ composeEventShareImage \} from '\.\.\/lib\/eventShareImage\.mjs'/u);
+  assert.match(layout, /KenigEventsComposeEventShareImage: composeEventShareImage/u);
+  assert.match(layout, /setRuntimeCardDataset\(button, 'shareImageTextMode'/u);
+  assert.match(layout, /setRuntimeCardDataset\(button, 'shareBrandImage'/u);
+  assert.match(
+    layout,
+    /shareImageTextMode === 'visual_only'[\s\S]*KenigEventsComposeEventShareImage\(\{[\s\S]*sourceBlob: blob[\s\S]*title:[\s\S]*dateTime:[\s\S]*place:[\s\S]*admission:/u,
+  );
+});

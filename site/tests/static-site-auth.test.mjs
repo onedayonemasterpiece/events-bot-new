@@ -8,6 +8,7 @@ const runtime = read('src/components/auth/StaticSiteAuthRuntime.astro');
 const search = read('src/components/AuthorizedEventSearch.astro');
 const menu = read('src/components/Reference4MobileMenu.astro');
 const personal = read('src/pages/dlya-menya/index.astro');
+const layout = read('src/layouts/EventLayout.astro');
 
 test('one shared static auth controller owns PKCE and never broadcasts tokens through DOM events', () => {
   assert.match(auth, /const CONTROLLER_KEY = '__KENIGEVENTS_STATIC_SITE_AUTH_V1__'/u);
@@ -34,6 +35,8 @@ test('global runtime binds menu and Personal auth views without routing login th
   assert.match(personal, /data-static-auth-logout/u);
   assert.match(personal, /data-static-auth-name/u);
   assert.doesNotMatch(personal, /Войти через поиск/u);
+  assert.match(layout, /import StaticSiteAuthRuntime from '\.\.\/components\/auth\/StaticSiteAuthRuntime\.astro'/u);
+  assert.equal((layout.match(/<StaticSiteAuthRuntime \/>/gu) || []).length, 1);
 });
 
 test('Search advertises the mobile search action and submits Enter through the native form path', () => {
