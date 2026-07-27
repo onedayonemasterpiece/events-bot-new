@@ -1,6 +1,6 @@
 # INC-2026-07-27 Future-event source coverage drop
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: production event inventory / scheduled source parsing / Philharmonia and Qtickets
 Opened: 2026-07-27
@@ -80,6 +80,11 @@ Raw evidence is retained outside git under
   Philharmonia DOM were audited.
 - `2026-07-27`: local deterministic three-kernel reproduction confirmed the
   shared-connection transaction race.
+- `2026-07-27 08:40 UTC`: corrected code from `origin/main` was deployed as
+  Fly release `v1753`; health, disk, scratch write and SQLite checks passed.
+- `2026-07-27 08:43 UTC`: production still had zero future Philharmonia rows.
+  The safe same-process catch-up remained pending: the approved E2E identity
+  was correctly non-admin, so no silent temporary privilege grant was made.
 
 ## Root Cause
 
@@ -172,8 +177,11 @@ Raw evidence is retained outside git under
 - [x] point the daytime source-change guard at the current `/afisha/` catalog;
 - [x] add DOM replay and three-run concurrency regressions;
 - [x] make source-specific parse errors visible in `ops_run.status`;
-- [ ] merge to `origin/main`, deploy and run production catch-up;
-- [ ] verify the expected bounded runtime mirror remains enabled, within its
+- [x] merge the fix to `origin/main` and deploy;
+- [ ] run and reconcile the production catch-up (manual UI run requires an
+  explicitly authorized temporary grant; otherwise verify the 14:15 local
+  compensating scheduled slot);
+- [x] verify the expected bounded runtime mirror remains enabled, within its
   byte/retention budget and above its free-space floor;
 - [ ] add durable per-source freshness/coverage alerting.
 
@@ -188,10 +196,22 @@ Raw evidence is retained outside git under
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending (`origin/main` → Fly)
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `b69fdaa6326b0d7cbe65e69d5cb26be37377c708`
+  (`origin/main`; includes fix commit `0306c264` and current-catalog guard
+  `122fdf7b`)
+- deploy path: clean detached `origin/main` worktree → `flyctl deploy
+  --remote-only` → Fly release `v1753`, image
+  `deployment-01KYHBPN2JM22KVETA0EXD9R4P`
+- regression checks: focused changed-surface suite `27 passed`; broader relevant
+  suite `59 passed` with one unrelated date-sensitive replay now treating its
+  `2026-07-24` event as past; live official HTTP/output boundary parsed `18/18`
+  future cards; JSON/compile/diff checks passed
+- post-deploy verification: `/healthz ok=true ready=true db=ok`; machine check
+  `1/1 passing`; `/data` free `1031 MiB`, `/tmp` free `7508 MiB`, tempfile probe
+  and `PRAGMA quick_check=ok`; runtime mirror `1`, `8 MiB/file`, `64 MiB total`,
+  `48h`, `256 MiB` floor, current total `26,058,201` bytes; deployed parser and
+  isolated run-config writer present. Catch-up/source reconciliation remains
+  open before closure.
 
 ## Prevention
 
