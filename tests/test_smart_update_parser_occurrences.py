@@ -82,13 +82,14 @@ async def test_smart_update_creates_second_official_session(tmp_path, monkeypatc
     try:
         async with db.get_session() as session:
             existing = Event(
-                title="Бродский. Обещание любви",
+                title="Спектакль «Бродский. Обещание любви»",
                 description="Вечерний сеанс.",
                 source_text="Официальная афиша: сеанс 17:00.",
                 date="2026-10-25",
                 time="17:00",
                 location_name="Музыкальный театр",
                 city="Калининград",
+                ticket_link="https://muzteatr39.ru/action/brodskiy",
             )
             session.add(existing)
             await session.flush()
@@ -117,12 +118,13 @@ async def test_smart_update_creates_second_official_session(tmp_path, monkeypatc
                 "Площадка: Музыкальный театр"
             ),
             raw_excerpt="Спектакль в 14:00.",
-            title="Бродский. Обещание любви",
+            title="Спектакль «Бродский. Обещание любви»",
             date="2026-10-25",
             time="14:00",
             location_name="Музыкальный театр",
             city="Калининград",
             trust_level="high",
+            ticket_link="https://muzteatr39.ru/action/brodskiy",
         )
         result = await smart_event_update(
             db,

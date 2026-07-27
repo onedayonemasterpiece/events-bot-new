@@ -139,6 +139,10 @@ Cheap refresh существующего parser event разрешён толь�
 несколько сеансов, а legacy festival aggregate — ссылки отдельных концертов.
 Fuzzy time/title matches всегда возвращаются в Smart Update identity gate для
 создания или разделения occurrence.
+После исключения same-parser explicit-time conflict последующие
+city-noise/copy-post rescue-проходы не имеют права вернуть исключённый event в
+shortlist: один performance/ticket URL не является доказательством одного
+сеанса.
 
 `ops_run.status` для `kind=parse` отражает потерю источника:
 

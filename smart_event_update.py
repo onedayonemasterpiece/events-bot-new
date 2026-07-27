@@ -15766,6 +15766,7 @@ async def _smart_event_update_impl(
     city_noise_rescued = False
     longrun_exhibition_match: Event | None = None
     citywide_festival_recalled_ids: set[int] = set()
+    excluded_occurrence_ids: set[int] = set()
     if (not anchor_forced) and (not shortlist):
         city_noise_match, city_noise_reason = await _match_existing_event_by_city_noise_rescue(
             db,
@@ -15816,19 +15817,20 @@ async def _smart_event_update_impl(
                     if ev in citywide_festival_recall and getattr(ev, "id", None):
                         citywide_festival_recalled_ids.add(int(getattr(ev, "id")))
 
-    if (not anchor_forced) and is_canonical_site and shortlist:
-        shortlist, excluded_occurrence_ids = (
+    if is_canonical_site and shortlist:
+        shortlist, excluded_occurrence_id_list = (
             await _filter_same_parser_source_occurrence_conflicts(
                 db,
                 candidate,
                 shortlist,
             )
         )
+        excluded_occurrence_ids = set(excluded_occurrence_id_list)
         if excluded_occurrence_ids:
             logger.info(
                 "smart_update.shortlist excluded_same_parser_time_conflicts=%s "
                 "source_type=%s source_url=%s date=%s time=%s",
-                excluded_occurrence_ids,
+                sorted(excluded_occurrence_ids),
                 candidate.source_type,
                 candidate.source_url,
                 candidate.date,
@@ -15872,7 +15874,11 @@ async def _smart_event_update_impl(
             candidate,
             is_canonical_site=is_canonical_site,
         )
-        if city_noise_match is not None:
+        if (
+            city_noise_match is not None
+            and int(getattr(city_noise_match, "id", 0) or 0)
+            not in excluded_occurrence_ids
+        ):
             shortlist = [city_noise_match]
             city_noise_rescued = True
             logger.info(

@@ -339,7 +339,9 @@
   restores recurring Dramteatr, Muzteatr and Tretyakov occurrences. The cheap
   parser refresh now also requires exact date/time/title rather than accepting
   any same-source URL/host, while an official site may still repair a
-  social-only card's weak time through Smart Update.
+  social-only card's weak time through Smart Update. Post-filter
+  city-noise/copy-post rescue can no longer reintroduce an occurrence rejected
+  for a same-parser explicit-time conflict.
 - Reconciled the Chromium release gate with the fail-closed compact-card
   contract: classified OCR documents may cover only within the measured 20%
   budget, while unknown/classifier-error documents must remain whole and now
