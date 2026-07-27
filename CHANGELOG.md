@@ -291,6 +291,10 @@
 
 ### Fixed
 
+- Fixed the shared theatre Kaggle notebook so transient Playwright navigation
+  during `page.content()` is retried after `domcontentloaded` instead of aborting
+  Muzteatr and preventing Sobor/Tretyakov outputs.
+
 - **Static site / presentation QR PWA install flow**: the production root now
   mounts the shared PWA install controller and treats
   `?install=presentation` as an explicit Android installation entry point.

@@ -156,6 +156,13 @@ Raw evidence is retained outside git under
   report was delivered in two bounded Telegram messages. Exact privilege
   restoration, source reconciliation, health, SQLite, disk and runtime-log
   checks passed; the incident was closed.
+- `2026-07-27 12:15 UTC`: Fly release `v1762` started the scheduled full
+  compensating run with the new Estrada/Yantar Hall catalogs. Both direct
+  catalogs returned their expected `23` and `77` occurrences, but the shared
+  theatre kernel failed after saving Dramteatr: Muzteatr redirected while
+  Playwright was reading the DOM and raised `Page.content: Unable to retrieve
+  content because the page is navigating`. The notebook log was downloaded
+  from the failed Kaggle run and the DOM boundary was changed to bounded retry.
 
 ## Root Cause
 
@@ -217,6 +224,12 @@ Raw evidence is retained outside git under
     plain-text fallback both failed with `Bad Request: message is too long`, so
     UI showed an error despite `ops_run=4694 status=success`. Manual and
     scheduled reports now use the existing bounded line chunker.
+15. The shared theatre notebook read every browser page through a one-shot
+    `page.content()`. A Muzteatr redirect could still be replacing the main
+    frame after `domcontentloaded`; Playwright correctly rejected the read and
+    the sequential notebook aborted before Sobor/Tretyakov. DOM reads now wait
+    for the load state and retry five times with a bounded delay, while
+    exhausting the retry remains fail-closed.
 
 ## Contributing Factors
 
@@ -303,6 +316,8 @@ Raw evidence is retained outside git under
   Yantar Hall;
 - [ ] prevent same-parser explicit-time conflicts from collapsing distinct
   occurrences;
+- [ ] make the shared theatre notebook tolerate transient navigation at the
+  Playwright DOM-read boundary and rerun all four theatre sources;
 - [ ] deploy from `origin/main`, run targeted production catch-ups and reconcile
   Cathedral/Dram/Muz/Estrada/Yantar/Tretyakov official inventories.
 
