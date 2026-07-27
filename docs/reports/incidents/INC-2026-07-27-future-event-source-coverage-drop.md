@@ -1,10 +1,10 @@
 # INC-2026-07-27 Future-event source coverage drop
 
-Status: monitoring
+Status: resolved
 Severity: sev1
 Service: production event inventory / scheduled source parsing / Philharmonia and Qtickets
 Opened: 2026-07-27
-Closed: —
+Closed: 2026-07-27 11:33 UTC
 Owners: events-bot maintainer / operations
 Related incidents: `INC-2026-07-08-prod-root-overlay-disk-full.md`, `INC-2026-07-13-runtime-logging-recurring-event-quality.md`, `INC-2026-07-10-future-event-semantic-audit.md`, `INC-2026-06-24-future-event-date-default-venue-regressions.md`
 Related docs: `docs/features/source-parsing/README.md`, `docs/features/source-parsing/sources/philharmonia/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -23,6 +23,14 @@ notebook: он использовал прежний URL/DOM и содержал
 переменным до добавления результата. В production не было ни одного события с
 parser provenance `philharmonia`, а все `18` будущих позиций официальной афиши
 на момент проверки отсутствовали.
+
+После исправлений, production catch-up и точной сверки в системе присутствуют
+все `18/18` будущих позиций официальной афиши с provenance
+`parser:philharmonia`. Общий future inventory вырос с `216` до `247`, а
+next-30 — с `145` до `170`. Низкая плотность на отдельных августовских днях
+сохранилась и после полного восстановления источников, поэтому остаток спада
+отнесён к фактической сезонности/разреженности опубликованных календарей, а не
+к продолжающейся потере филармонии.
 
 ## User / Business Impact
 
@@ -101,6 +109,24 @@ Raw evidence is retained outside git under
   notebook to script (`You cannot change the editor type of a kernel`). The
   temporary superadmin grant was again restored exactly immediately after
   command acceptance.
+- `2026-07-27 10:00`–`11:03 UTC`: full compensating catch-up
+  `ops_run=4683` completed `success`: Philharmonia `18` processed
+  (`17` created, `1` skipped) and Qtickets `31` processed (`2` created,
+  `29` updated), with zero source errors. The one Philharmonia skip exposed the
+  over-broad festival guard described below.
+- `2026-07-27 11:17`–`11:21 UTC`: targeted `ops_run=4694` completed the missing
+  occurrence (`1` created, `17` updated, zero errors); its data result was
+  successful, but the oversized Telegram report exposed the last UI-only
+  failure.
+- `2026-07-27 11:24 UTC`: final fixes from `origin/main` were deployed as Fly
+  release `v1761`, image
+  `deployment-01KYHN1WKZWBQG185KAT2SA4J5`.
+- `2026-07-27 11:25`–`11:31 UTC`: final authorized live UI validation
+  `/parse philharmonia` completed as `ops_run=4697 status=success`: all `18`
+  official cards updated, `0` failed/skipped/errors, and the long operator
+  report was delivered in two bounded Telegram messages. Exact privilege
+  restoration, source reconciliation, health, SQLite, disk and runtime-log
+  checks passed; the incident was closed.
 
 ## Root Cause
 
@@ -239,10 +265,8 @@ Raw evidence is retained outside git under
 - [x] merge the fix to `origin/main` and deploy;
 - [x] make primary parser launch independent of Kaggle status-dataset creation
   and package Philharmonia as a self-contained script;
-- [ ] run and reconcile the production catch-up (manual UI run requires an
-  explicitly authorized temporary grant; the first authorized run exposed the
-  Kaggle dataset control-plane blocker and restored the grant exactly; repeat
-  after deploying the follow-up fix);
+- [x] run and reconcile the production catch-up through the authorized live UI
+  flow, restoring the exact temporary user grant after command acceptance;
 - [x] verify the expected bounded runtime mirror remains enabled, within its
   byte/retention budget and above its free-space floor;
 - [ ] add durable per-source freshness/coverage alerting.
@@ -258,32 +282,58 @@ Raw evidence is retained outside git under
 
 ## Release And Closure Evidence
 
-- deployed SHA: `b69fdaa6326b0d7cbe65e69d5cb26be37377c708`
-  (`origin/main`; includes fix commit `0306c264` and current-catalog guard
-  `122fdf7b`)
+- deployed SHA: `5907a0020fce007d075e4477f97bbe492596fdd6`,
+  reachable from `origin/main`; delivery included PRs `#126`–`#133` for the
+  control-plane-independent parser launch, self-contained new Philharmonia
+  kernel slug, ISO date boundary, fail-closed run status, parser occurrence
+  handling, complete candidate schema, cleared terminal sentinel and chunked
+  operator reports.
 - deploy path: clean detached `origin/main` worktree → `flyctl deploy
-  --remote-only` → Fly release `v1753`, image
-  `deployment-01KYHBPN2JM22KVETA0EXD9R4P`
-- regression checks: focused changed-surface suite `27 passed`; broader relevant
-  suite `59 passed` with one unrelated date-sensitive replay now treating its
-  `2026-07-24` event as past; live official HTTP/output boundary parsed `18/18`
-  future cards; JSON/compile/diff checks passed
-- post-deploy verification: `/healthz ok=true ready=true db=ok`; machine check
-  `1/1 passing`; `/data` free `1031 MiB`, `/tmp` free `7508 MiB`, tempfile probe
-  and `PRAGMA quick_check=ok`; runtime mirror `1`, `8 MiB/file`, `64 MiB total`,
-  `48h`, `256 MiB` floor, current total `26,058,201` bytes; deployed parser and
-  isolated run-config writer present. Catch-up/source reconciliation remains
-  open before closure.
-- first authorized catch-up: exact bot `@events_love39_bot`, command message
-  `33229`, terminal report `33231`, `ops_run=4678 status=error`; both requested
-  sources were blocked before push by Kaggle `dataset_create_new Invalid token`.
-  The pre-grant user row was restored exactly (`is_superadmin=0`,
-  `is_partner=0`, `blocked=0`) and evidence is retained under the incident
-  artifact directory.
+  --remote-only` → Fly release `v1761`, image
+  `deployment-01KYHN1WKZWBQG185KAT2SA4J5`.
+- regression checks: final focused suite
+  `tests/test_source_parsing_commands.py`,
+  `tests/test_source_parsing_status.py`, `tests/test_festival_context.py`,
+  `tests/test_event_organizer_names.py` and
+  `tests/test_philharmonia_parser.py` — `24 passed`; earlier expanded relevant
+  suite — `70 passed` plus one unrelated date-sensitive replay whose fixture
+  date is now in the past. Compile, JSON and diff checks passed. A fresh live
+  official fetch returned exactly `18` future cards.
+- full production catch-up: `ops_run=4683 status=success`, total `49`;
+  Philharmonia processed `18` (`17` created) and Qtickets processed `31`
+  (`2` created, `29` updated), with zero source errors. Targeted completion
+  `ops_run=4694 status=success` created the one occurrence initially skipped by
+  the festival guard.
+- final live E2E: exact bot `@events_love39_bot`, command message `33291`,
+  acknowledgement `33292`, terminal/report messages `33295` and `33296`;
+  `ops_run=4697 status=success`, Philharmonia `18` processed, `0` created,
+  `18` updated, `0` failed/skipped/errors, `fatal_error=null`. The exact
+  pre-grant row was restored after command acceptance:
+  `user_id=8336351413`, `is_superadmin=0`, `is_partner=0`, `blocked=0`.
+- official reconciliation: `18/18` current Philharmonia URLs match active
+  production events and exact `event_source.source_type=parser:philharmonia`
+  provenance; unmatched URLs `0`. Future parser inventory is Philharmonia
+  `18` events / `18` URLs and Qtickets `33` events / `34` URLs.
+- restored inventory: active future `247` (`+31` from detection), next 7 days
+  `78` (`+7`), next 14 `123` (`+13`), next 30 `170` (`+25`). The remaining
+  sparse dates are 3 August `1`, 4 August `3`, and 6 August `3`; they remain
+  sparse after exact official-source reconciliation.
+- post-deploy verification: `/healthz ok=true ready=true db=ok issues=[]`;
+  `PRAGMA quick_check=ok`; `/data` free `1518 MiB`, `/tmp` free `7508 MiB` and
+  tempfile probe `ok`. Runtime mirror is enabled with the expected
+  `8 MiB/file`, `64 MiB total`, `48h`, `256 MiB` floor and remains within the
+  byte/free-space budget. A corrected timestamped scan of `1,407` runtime lines
+  for the final run plus its exact parse debug log found no transaction,
+  dataset-token, date-type, candidate-schema, persistence or report-length
+  errors.
+- raw reconciliation, E2E, health, release and log-window evidence is retained
+  outside git under
+  `artifacts/codex/INC-2026-07-27-future-event-inventory-drop/`.
 
 ## Prevention
 
 Regression tests now cover the actual source DOM and concurrent ledger writer
 shape. Terminal operational status is source-aware rather than outer-exception
-only. The remaining prevention gap is an automated source freshness/coverage
-alert, tracked above.
+only. Parser launches no longer depend on the failing status-dataset API, and
+operator reports are bounded for Telegram delivery. The remaining prevention
+gap is an automated source freshness/coverage alert, tracked above.
