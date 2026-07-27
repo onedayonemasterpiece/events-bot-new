@@ -9023,6 +9023,15 @@ async def init_db_and_scheduler(
     logging.info("Initializing database")
     await db.init()
     try:
+        from event_people import ensure_kgd80_registry
+
+        people_seed = await ensure_kgd80_registry(db)
+        logging.info("event_people: startup KGD80 seed=%s", people_seed)
+    except Exception:
+        # The registry is an additive projection and must not make the bot
+        # unavailable; Smart Update retries the idempotent seed on demand.
+        logging.exception("event_people: startup KGD80 seed failed")
+    try:
         from ops_run import cleanup_running_ops_runs_on_startup
         from vk_review import release_all_locks
 

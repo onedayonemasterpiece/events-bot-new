@@ -31,6 +31,11 @@ from event_age_rating import (
     declared_structured_decision,
     reconcile_age_decision,
 )
+from event_people import (
+    EVENT_PEOPLE_DECISION_SCHEMA,
+    grounded_people_decisions,
+    sync_event_people,
+)
 from location_reference import (
     find_known_venue_in_text,
     normalise_event_location_from_reference,
@@ -595,6 +600,9 @@ class EventCandidate:
     organizer_names: list[str] = field(default_factory=list)
     # Ephemeral result piggybacked on an already-paid facts/create call.
     age_semantic_decision: dict[str, Any] | None = None
+    # Evidence-bound people roster piggybacked on the same semantic call.
+    people_semantic_decisions: list[Any] = field(default_factory=list)
+    people_roster_complete: bool = False
 
 
 def _should_skip_festival_post_candidate(candidate: EventCandidate) -> bool:
@@ -2921,6 +2929,7 @@ def _g4_rich_facts_schema() -> dict[str, Any]:
             "logistics_facts": {"type": "array", "items": grounded_fact},
             "uncertain_or_drop": {"type": "array", "items": {"type": "string"}},
             "age_decision": AGE_DECISION_JSON_SCHEMA,
+            "event_people": EVENT_PEOPLE_DECISION_SCHEMA,
         },
         "required": [
             "public_core_facts",
@@ -2930,6 +2939,7 @@ def _g4_rich_facts_schema() -> dict[str, Any]:
             "organizer_names",
             "logistics_facts",
             "uncertain_or_drop",
+            "event_people",
         ],
         "additionalProperties": False,
     }
@@ -8822,6 +8832,16 @@ async def _llm_extract_candidate_facts(
             "- Если источник перечисляет варианты участия/условия участия, сохрани их явно.\n"
             "- Не выдумывай факты. Не добавляй generic praise.\n"
             "- Не используй хэштеги. Не включай CTA в public sections.\n"
+            "- event_people: верни каждого реально участвующего человека отдельно. "
+            "Не включай организатора без личного участия, автора/героя произведения, "
+            "актёра фильма в записи или человека, который только является темой события. "
+            "presence=in_person только при очном участии; remote — при прямом дистанционном "
+            "подключении; recorded/subject_only/unclear не являются участием. "
+            "billing=headliner только когда источник явно ставит человека главным именем, "
+            "ключевым спикером/исполнителем или единственным заявленным ведущим лицом; "
+            "не повышай обычного участника до хедлайнера по известности. evidence_quote "
+            "должна быть точной непрерывной цитатой с именем и ролью/участием. "
+            "roster_complete=true только если источник позволяет восстановить весь заявленный состав.\n"
             f"- {SMART_UPDATE_FACTS_PRESERVE_COMPACT_PROGRAM_LISTS_RULE}\n"
             f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE}\n\n"
             f"{AGE_DECISION_PROMPT_RULE}\n\n"
@@ -8834,8 +8854,9 @@ async def _llm_extract_candidate_facts(
             "properties": {
                 "facts": {"type": "array", "items": {"type": "string"}},
                 "age_decision": AGE_DECISION_JSON_SCHEMA,
+                "event_people": EVENT_PEOPLE_DECISION_SCHEMA,
             },
-            "required": ["facts"],
+            "required": ["facts", "event_people"],
             "additionalProperties": False,
         }
         prompt = (
@@ -8866,6 +8887,11 @@ async def _llm_extract_candidate_facts(
             "- НЕ выдумывай факты. Если чего-то нет в данных, не добавляй.\n"
             "- Если есть прямая речь и понятно, кто говорит (например режиссёр), оформи как факт:\n"
             "  `Цитата (Имя Фамилия): ...`.\n"
+            "- В event_people верни отдельный строгий roster людей, которые реально участвуют "
+            "в событии. Не включай автора/персонажа/человека из темы или записи. "
+            "headliner ставь только при явном главном billing, а не по известности. "
+            "Для каждого человека нужна точная evidence_quote с именем и участием; "
+            "roster_complete=true только при полном составе из источника.\n"
             "- Избегай дублирования: если мысль повторяется, оставь один факт.\n\n"
             f"{SMART_UPDATE_VISITOR_CONDITIONS_RULE}\n\n"
             f"{AGE_DECISION_PROMPT_RULE}\n\n"
@@ -8876,16 +8902,22 @@ async def _llm_extract_candidate_facts(
     if isinstance(data, dict):
         age_payload = data.get("age_decision")
         candidate.age_semantic_decision = age_payload if isinstance(age_payload, dict) else None
-        if SMART_UPDATE_G4_SPLIT_CREATE:
-            source_corpus = "\n\n".join(
-                str(value or "").strip()
-                for value in (
-                    payload.get("text"),
-                    payload.get("raw_excerpt"),
-                    *(payload.get("poster_texts") or []),
-                )
-                if str(value or "").strip()
+        source_corpus = "\n\n".join(
+            str(value or "").strip()
+            for value in (
+                payload.get("text"),
+                payload.get("raw_excerpt"),
+                *(payload.get("poster_texts") or []),
             )
+            if str(value or "").strip()
+        )
+        people, roster_complete = grounded_people_decisions(
+            data.get("event_people"),
+            source_corpus=source_corpus,
+        )
+        candidate.people_semantic_decisions = list(people)
+        candidate.people_roster_complete = roster_complete
+        if SMART_UPDATE_G4_SPLIT_CREATE:
             raw_facts = _flatten_g4_rich_facts_payload(
                 data,
                 source_corpus=source_corpus,
@@ -17327,6 +17359,8 @@ async def _smart_event_update_impl(
                 await _record_source_facts(session, new_event.id, candidate, initial_records)
             await session.commit()
 
+        people_result = await _persist_candidate_people(db, new_event.id, candidate)
+
         try:
             await _apply_holiday_festival_mapping(db, new_event.id)
         except Exception:
@@ -18833,7 +18867,15 @@ async def _smart_event_update_impl(
             session.add(event_db)
         await session.commit()
 
-    if (updated_fields or added_posters or (added_sources and not same_source)) and not skip_topic_reclassify:
+    people_result = await _persist_candidate_people(db, existing.id, candidate)
+    people_changed = bool(int(people_result.get("changed") or 0))
+
+    if (
+        updated_fields
+        or added_posters
+        or (added_sources and not same_source)
+        or people_changed
+    ) and not skip_topic_reclassify:
         await _classify_topics(db, existing.id)
 
     holiday_changed = False
@@ -18884,6 +18926,7 @@ async def _smart_event_update_impl(
         or added_posters
         or (added_sources and not same_source)
         or holiday_changed
+        or people_changed
     ):
         try:
             from main import schedule_event_update_tasks
@@ -18904,6 +18947,7 @@ async def _smart_event_update_impl(
         or added_posters
         or (added_sources and not same_source)
         or holiday_changed
+        or people_changed
     )
     if canonical_changed:
         try:
@@ -18923,7 +18967,13 @@ async def _smart_event_update_impl(
 
     status = (
         "merged"
-        if (updated_fields or added_posters or (added_sources and not same_source) or holiday_changed)
+        if (
+            updated_fields
+            or added_posters
+            or (added_sources and not same_source)
+            or holiday_changed
+            or people_changed
+        )
         else "skipped_nochange"
     )
     logger.info(
@@ -18942,7 +18992,7 @@ async def _smart_event_update_impl(
         status=status,
         event_id=existing.id,
         created=False,
-        merged=bool(updated_fields or holiday_changed),
+        merged=bool(updated_fields or holiday_changed or people_changed),
         added_posters=added_posters,
         added_sources=added_sources,
         added_facts=added_facts,
@@ -19552,6 +19602,48 @@ async def _sync_source_texts(session, event: Event) -> bool:
         )
         return True
     return False
+
+
+async def _persist_candidate_people(
+    db: Database,
+    event_id: int | None,
+    candidate: EventCandidate,
+) -> dict[str, Any]:
+    if not event_id:
+        return {"confirmed": 0, "review": 0, "cancelled": 0, "unmatched": []}
+    if not candidate.people_semantic_decisions and not candidate.people_roster_complete:
+        return {"confirmed": 0, "review": 0, "cancelled": 0, "unmatched": []}
+    try:
+        result = await sync_event_people(
+            db,
+            int(event_id),
+            candidate.people_semantic_decisions,
+            roster_complete=bool(candidate.people_roster_complete),
+            source_url=candidate.source_url,
+        )
+        logger.info(
+            "smart_update.people event_id=%s confirmed=%s review=%s cancelled=%s unmatched=%s",
+            event_id,
+            result.get("confirmed"),
+            result.get("review"),
+            result.get("cancelled"),
+            len(result.get("unmatched") or []),
+        )
+        return result
+    except Exception:
+        # Derived enrichment must not roll back the canonical event transaction.
+        logger.warning(
+            "smart_update: participant persistence failed event_id=%s",
+            event_id,
+            exc_info=True,
+        )
+        return {
+            "confirmed": 0,
+            "review": 0,
+            "cancelled": 0,
+            "unmatched": [],
+            "error": "persistence_failed",
+        }
 
 
 async def _classify_topics(db: Database, event_id: int | None) -> None:

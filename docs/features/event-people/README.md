@@ -1,8 +1,9 @@
 # Участники событий и подписка на персон
 
-> **Status:** UI и статический export-контракт реализованы в
-> `feature/static-event-participants-20260727`; production-реестр и общий
-> серверный счётчик лайков ещё не включены.
+> **Status:** UI, SQLite-реестр KGD80, Smart Update extraction/identity binding
+> и статический export-контракт реализованы в
+> `feature/static-event-participants-20260727`. Общий серверный счётчик лайков
+> и fuzzy BGE resolution для неизвестных персон ещё не включены.
 >
 > **Surfaces:** mobile и desktop event detail.
 
@@ -23,6 +24,30 @@
 На desktop карточки образуют адаптивную сетку. На mobile это короткая
 горизонтальная snap-лента под медальонами, до описания события. Кнопка лайка
 имеет отдельный namespace и не меняет лайк самого события.
+
+## Автоматический контур
+
+Новый анонс не требует ручного переноса участника:
+
+1. существующий semantic facts-pass Smart Update одновременно возвращает
+   строгий `event_people` roster;
+2. для каждой персоны он обязан указать точную цитату, роль, формат присутствия
+   и billing (`headliner | featured | participant | unknown`);
+3. валидатор принимает только дословно grounded quote и не «чинит» смысл
+   детерминированно;
+4. имя сопоставляется с alias-реестром KGD80;
+5. подтверждённая связь записывается в SQLite
+   `event_artist_appearance`, после чего обычная статическая сборка показывает
+   карточку.
+
+`headliner` не выводится из известности человека. Он появляется только при
+явном главном billing в semantic decision. Автор произведения, герой лекции,
+актёр в записи или организатор без личного участия не публикуются как
+участники.
+
+`roster_complete=true` позволяет идемпотентно снять ранее найденную связь, если
+обновлённый источник больше не содержит человека. Неполный источник не удаляет
+уже подтверждённый roster.
 
 ## Статический контракт
 
@@ -50,16 +75,17 @@ type PreviewParticipant = {
 
 - старый snapshot без этих таблиц остаётся валидным и получает `participants=[]`;
 - публикуются только `verified`-персоны с `confirmed` appearance,
-  `physical_visit_status=confirmed`, `eligibility_status=eligible`,
+  `physical_visit_status=confirmed|remote_confirmed`,
+  `eligibility_status=eligible`,
   непустым participant evidence и без отмены;
 - портрет допускается только при `media_identity_status=verified`, разрешённом
   rights status и конкретных `credit_text` + HTTPS source URL;
 - непринятый портрет заменяется инициалами, а не изображением из открытого
   интернета.
 
-Экспортер не извлекает имена regex-ами из описания. Смысловое извлечение и
-identity resolution остаются LLM-first/batch задачей; BGE подходит для поиска
-кандидатов, дублей и транслитераций, но не является доказательством участия.
+Экспортер не извлекает имена regex-ами из описания. Смысловое извлечение
+выполняется раньше, в Smart Update. Exact alias matching KGD80 — узкая
+identity-операция, а не semantic classifier.
 
 ## Хранение и синхронизация
 
@@ -69,9 +95,11 @@ identity resolution остаются LLM-first/batch задачей; BGE под�
 периодического CPU/BGE enrichment и run ledger. Публичные портреты должны жить
 в Object Storage/CDN, а не раздувать каждую JSON-проекцию.
 
-Batch matching может выполняться после Smart Update по расписанию. Smart Update
-сохраняет source evidence, а отдельный Kaggle CPU + BGE pass сопоставляет имена
-с реестром и пишет подтверждённую relation только после semantic/quality gate.
+Для полного KGD80 exact aliases достаточно синхронного CPU lookup внутри Smart
+Update: это дёшево и устраняет задержку для нового события. CPU+BGE остаётся
+асинхронным batch-расширением для транслитераций, опечаток и неизвестных
+зарубежных персон. BGE может предложить identity candidate, но не имеет права
+сам подтвердить участие или headliner billing.
 
 ## Лайки и персонализация
 
@@ -90,27 +118,37 @@ Batch matching может выполняться после Smart Update по р
 
 ## KGD80
 
-В репозитории сохранены два source-faithful portrait-canary из проекта
-`/home/dev/projects/kdg80/site/public/generated/speakers/`:
+В ветке находится полный текущий публичный каталог KGD80:
 
-- `/assets/participants/udovenko-tatyana.webp`;
-- `/assets/participants/levchenkov-andrey.webp`.
+- **38 персон** — весь текущий registration roster плюс публичные profile
+  identities — в `event_people/data/kgd80_people.json`;
+- **40 портретов** в `site/public/assets/participants/`, включая альтернативные;
+- полные имена, короткие варианты и обратный порядок имени/фамилии в aliases;
+- регалии, source URL, credit и project provenance.
 
-Они нужны для интеграционных/визуальных проверок Татьяны Удовенко и Андрея
-Левченкова. Полный KGD80 media catalog остаётся в исходном проекте и при
-production-onboarding должен загрузиться в Object Storage с provenance, а не
-копироваться целиком в bundle статического сайта.
+У 36 персон есть отдельные публичные KGD80-портреты. Для Владимира Чечко и
+Шахнозы Усмановой исходный проект содержит тематические изображения событий,
+но не отдельные портреты в speaker media manifest, поэтому их identities тоже
+загружаются, а UI безопасно показывает инициалы вместо неверной фотографии.
+
+`scripts/sync_kgd80_people_catalog.py` повторяемо пересобирает manifest и
+копирует все WebP из checkout KGD80. На старте приложения
+`ensure_kgd80_registry()` идемпотентно загружает manifest в SQLite; тот же seed
+повторяется перед Smart Update identity binding. Поэтому обновление KGD80 —
+один catalog sync, а не ручная операция на каждом новом событии.
+
+```bash
+python scripts/sync_kgd80_people_catalog.py --kgd80-root /path/to/kdg80
+python scripts/seed_event_people.py --db /path/to/db.sqlite
+```
 
 Noindex specimen `/lab/event-participants/` проверяет оба viewport, headliner,
 обычного спикера, initials fallback, публичный credit и состояние сердца.
 
 ## Не входит в эту ветку
 
-- миграция и production seed всего реестра персон;
-- автоматическое массовое извлечение из prose;
+- fuzzy/transliteration resolver и Kaggle CPU+BGE worker для персон вне exact
+  KGD80 aliases;
+- автоматическая публичная верификация ранее неизвестной персоны;
 - серверный API и общий счётчик лайков;
 - отдельная подборка и мобильное вложенное меню `К нам едут`.
-
-Эта граница позволяет безопасно склеить законченный UI с отдельной data/backend
-веткой, не протаскивая старую экспериментальную artist-arrivals реализацию в
-актуальный `main`.

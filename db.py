@@ -1195,6 +1195,83 @@ class Database:
                 "publication_kind TEXT NOT NULL DEFAULT 'external_event_source'",
             )
 
+            dbg("event_people")
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS artist_registry_entity(
+                    artist_id TEXT PRIMARY KEY,
+                    entity_type TEXT NOT NULL DEFAULT 'person',
+                    display_name TEXT NOT NULL,
+                    canonical_name TEXT NOT NULL,
+                    aliases_json JSON NOT NULL DEFAULT '[]',
+                    primary_domain TEXT,
+                    locality_status TEXT NOT NULL DEFAULT 'unknown',
+                    base_country_code TEXT,
+                    base_region_code TEXT,
+                    base_city TEXT,
+                    locality_basis TEXT,
+                    evidence_json JSON NOT NULL DEFAULT '[]',
+                    verification_status TEXT NOT NULL DEFAULT 'review',
+                    confidence REAL,
+                    photo_url TEXT,
+                    photo_rights_status TEXT NOT NULL DEFAULT 'none',
+                    photo_rights_evidence_json JSON NOT NULL DEFAULT '[]',
+                    seed_version TEXT,
+                    decision_version TEXT NOT NULL DEFAULT 'event-people-identity-v1',
+                    verified_at TIMESTAMP,
+                    valid_until TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_artist_registry_locality_valid "
+                "ON artist_registry_entity(locality_status, valid_until)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_artist_appearance(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id INTEGER NOT NULL,
+                    artist_id TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'participant',
+                    project_title TEXT NOT NULL,
+                    project_key TEXT NOT NULL,
+                    visit_cluster_key TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'review',
+                    identity_confidence REAL,
+                    physical_visit_status TEXT NOT NULL DEFAULT 'review',
+                    physical_visit_confidence REAL,
+                    participant_evidence_json JSON NOT NULL DEFAULT '[]',
+                    locality_evidence_ids_json JSON NOT NULL DEFAULT '[]',
+                    cancellation_evidence_json JSON NOT NULL DEFAULT '[]',
+                    visit_evidence_json JSON NOT NULL DEFAULT '[]',
+                    appearance_input_hash TEXT NOT NULL,
+                    source_revision TEXT NOT NULL,
+                    eligibility_status TEXT NOT NULL DEFAULT 'review',
+                    exclusion_reason TEXT,
+                    media_event_poster_id INTEGER,
+                    media_identity_status TEXT NOT NULL DEFAULT 'unverified',
+                    media_rights_status TEXT NOT NULL DEFAULT 'event_source',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    cancelled_at TIMESTAMP,
+                    UNIQUE(event_id, artist_id, project_key, role),
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(artist_id) REFERENCES artist_registry_entity(artist_id)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_artist_appearance_event "
+                "ON event_artist_appearance(event_id, eligibility_status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_artist_appearance_artist "
+                "ON event_artist_appearance(artist_id, project_key)"
+            )
+
             dbg("guide_profile")
             await conn.execute(
                 """

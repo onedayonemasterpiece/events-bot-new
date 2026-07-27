@@ -615,6 +615,116 @@ class PromoExposure(SQLModel, table=True):
     )
 
 
+class ArtistRegistryEntity(SQLModel, table=True):
+    """Canonical public-person registry used by event participant matching."""
+
+    __tablename__ = "artist_registry_entity"
+    __table_args__ = (
+        Index("ix_artist_registry_locality_valid", "locality_status", "valid_until"),
+        {"extend_existing": True},
+    )
+
+    artist_id: str = Field(primary_key=True)
+    entity_type: str = "person"
+    display_name: str
+    canonical_name: str
+    aliases_json: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    primary_domain: Optional[str] = None
+    locality_status: str = "unknown"
+    base_country_code: Optional[str] = None
+    base_region_code: Optional[str] = None
+    base_city: Optional[str] = None
+    locality_basis: Optional[str] = None
+    evidence_json: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    verification_status: str = "review"
+    confidence: Optional[float] = None
+    photo_url: Optional[str] = None
+    photo_rights_status: str = "none"
+    photo_rights_evidence_json: list[dict] = Field(
+        default_factory=list, sa_column=Column(JSON)
+    )
+    seed_version: Optional[str] = None
+    decision_version: str = "event-people-identity-v1"
+    verified_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    valid_until: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class EventArtistAppearance(SQLModel, table=True):
+    """Evidence-bound event-to-person relation; review rows never go public."""
+
+    __tablename__ = "event_artist_appearance"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_id",
+            "artist_id",
+            "project_key",
+            "role",
+            name="ux_event_artist_appearance_identity",
+        ),
+        Index(
+            "ix_event_artist_appearance_event",
+            "event_id",
+            "eligibility_status",
+        ),
+        Index(
+            "ix_event_artist_appearance_artist",
+            "artist_id",
+            "project_key",
+        ),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: int = Field(foreign_key="event.id")
+    artist_id: str = Field(foreign_key="artist_registry_entity.artist_id")
+    role: str = "participant"
+    project_title: str
+    project_key: str
+    visit_cluster_key: str
+    status: str = "review"
+    identity_confidence: Optional[float] = None
+    physical_visit_status: str = "review"
+    physical_visit_confidence: Optional[float] = None
+    participant_evidence_json: list[dict] = Field(
+        default_factory=list, sa_column=Column(JSON)
+    )
+    locality_evidence_ids_json: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON)
+    )
+    cancellation_evidence_json: list[dict] = Field(
+        default_factory=list, sa_column=Column(JSON)
+    )
+    visit_evidence_json: list[dict] = Field(
+        default_factory=list, sa_column=Column(JSON)
+    )
+    appearance_input_hash: str
+    source_revision: str
+    eligibility_status: str = "review"
+    exclusion_reason: Optional[str] = None
+    media_event_poster_id: Optional[int] = None
+    media_identity_status: str = "unverified"
+    media_rights_status: str = "event_source"
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    cancelled_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+
+
 class PromoVkRepostJob(SQLModel, table=True):
     __tablename__ = "promo_vk_repost_job"
     __table_args__ = (

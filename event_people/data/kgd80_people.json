@@ -1,0 +1,785 @@
+{
+  "schema_version": "kenigevents.kgd80_people.v1",
+  "source_project": "https://kgd80.ru/",
+  "source_revision": "1feacd2bca4f8226",
+  "people": [
+    {
+      "artist_id": "kgd80:aleksandr-nikolaevich-popadin",
+      "display_name": "Александр Николаевич Попадин",
+      "aliases": [
+        "Александр Николаевич Попадин",
+        "Александр Попадин",
+        "Попадин Александр"
+      ],
+      "primary_domain": "писатель, культуролог, краевед",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/popadin-aleksandr.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/popadin-aleksandr.webp",
+      "photo_files": [
+        "popadin-aleksandr.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-nostalgicheskiy-razgovor",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:aleksey-sokolov",
+      "display_name": "Алексей Соколов",
+      "aliases": [
+        "Алексей Соколов",
+        "Соколов Алексей"
+      ],
+      "primary_domain": "директор КРОУ \"Виштынецкий эколого-исторический музей",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/aleksey-sokolov.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/aleksey-sokolov.webp",
+      "photo_files": [
+        "aleksey-sokolov.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-vishtynetskaya-vozvyshennost-kak-osvaivali-s-1945-goda-sovremennost-i-perspektivy",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:anastasiya-skrebtsova",
+      "display_name": "Анастасия Скребцова",
+      "aliases": [
+        "Анастасия Скребцова",
+        "Скребцова Анастасия"
+      ],
+      "primary_domain": "экопросветитель, замдиректора нацпарка «Куршская коса»",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/skrebtsova-anastasiya.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/skrebtsova-anastasiya.webp",
+      "photo_files": [
+        "skrebtsova-anastasiya.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-istoriya-obrazovaniya-i-razvitiya-natsionalnogo-parka-kurshskaya-kosa",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:andrey-aleksandrovich-anisimov",
+      "display_name": "Андрей Александрович Анисимов",
+      "aliases": [
+        "Андрей Александрович Анисимов",
+        "Андрей Анисимов",
+        "Анисимов Андрей"
+      ],
+      "primary_domain": "главный архитектор Калининграда",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/anisimov-andrey.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/anisimov-andrey.webp",
+      "photo_files": [
+        "anisimov-andrey.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-kaliningrad-gorod-sad-ili-mikrorayon-dlya-prozhivaniya-u-morya",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:andrey-anatolevich-yartsev",
+      "display_name": "Андрей Анатольевич Ярцев",
+      "aliases": [
+        "Андрей Анатольевич Ярцев",
+        "Андрей Ярцев",
+        "Ярцев Андрей"
+      ],
+      "primary_domain": "историк, директор музея «Фридландские ворота», профессор БФУ",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/yartsev-andrey-2.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/yartsev-andrey-2.webp",
+      "photo_files": [
+        "yartsev-andrey-2.webp",
+        "yartsev-andrey-3.webp",
+        "yartsev-andrey.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-otkrytie-festivalya-80-istoriy-o-glavnom",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:andrey-boyko",
+      "display_name": "Андрей Бойко",
+      "aliases": [
+        "Андрей Бойко",
+        "Бойко Андрей"
+      ],
+      "primary_domain": "краевед, исследователь киноистории",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/boyko-andrey.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/boyko-andrey.webp",
+      "photo_files": [
+        "boyko-andrey.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-kak-govorit-o-sovetskom-kaliningrade-bez-nostalgicheskogo-tumana-i-bez-styda",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:andrey-viktorovich-levchenkov",
+      "display_name": "Андрей Викторович Левченков",
+      "aliases": [
+        "Андрей Викторович Левченков",
+        "Андрей Левченков",
+        "Левченков Андрей"
+      ],
+      "primary_domain": "географ, доцент БФУ, исследователь региона",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/levchenkov-andrey.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/levchenkov-andrey.webp",
+      "photo_files": [
+        "levchenkov-andrey.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-otkrytie-festivalya-80-istoriy-o-glavnom",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:artur-arturovich-sarnits",
+      "display_name": "Артур Артурович Сарниц",
+      "aliases": [
+        "Артур Артурович Сарниц",
+        "Артур Сарниц",
+        "Сарниц Артур"
+      ],
+      "primary_domain": "архитектор, предприниматель, хранитель наследия (Форт 11)",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/sarnits-artur.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/sarnits-artur.webp",
+      "photo_files": [
+        "sarnits-artur.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-kaliningrad-2125-kakim-mozhet-stat-gorod-cherez-sto-let",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:valeriya-yurevna-nadymova",
+      "display_name": "Валерия Юрьевна Надымова",
+      "aliases": [
+        "Валерия Надымова",
+        "Валерия Юрьевна Надымова",
+        "Надымова Валерия"
+      ],
+      "primary_domain": "директор музея «Старый люнет», биолог, краевед",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/nadymova-valeriya.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/nadymova-valeriya.webp",
+      "photo_files": [
+        "nadymova-valeriya.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-mirnaya-zhizn-samoy-zapadnoy-tochki-rossii-baltiyskoy-kosy",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:vladimir-andreevich-chechko",
+      "display_name": "Владимир Андреевич Чечко",
+      "aliases": [
+        "Владимир Андреевич Чечко",
+        "Владимир Чечко",
+        "Чечко Владимир"
+      ],
+      "primary_domain": "",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": null,
+      "photo_source_url": null,
+      "photo_files": [],
+      "profile_url": "https://kgd80.ru/#event-geografiya-issledovaniy-mirovogo-okeana-kaliningradskimi-okeanologami-v-sovetskoe-vremya",
+      "credit_text": null
+    },
+    {
+      "artist_id": "kgd80:vladimir-oleksin",
+      "display_name": "Владимир Олексин",
+      "aliases": [
+        "Владимир Олексин",
+        "Олексин Владимир"
+      ],
+      "primary_domain": "",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/oleksin-vladimir.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/oleksin-vladimir.webp",
+      "photo_files": [
+        "oleksin-vladimir.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-ot-konfrontatsii-k-sosuschestvovaniyu-kak-vystraivalis-otnosheniya-mezhdu-sovetskimi-pereselentsami-i-nemetskim-naseleniem-kenigsberga-kaliningrada-v-pervye-poslevoennye-gody",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:gennadiy-viktorovich-kretinin",
+      "display_name": "Геннадий Викторович Кретинин",
+      "aliases": [
+        "Геннадий Викторович Кретинин",
+        "Геннадий Кретинин",
+        "Кретинин Геннадий"
+      ],
+      "primary_domain": "профессор БФУ им. И. Канта",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/kretinin-gennadiy.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/kretinin-gennadiy.webp",
+      "photo_files": [
+        "kretinin-gennadiy.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#speakers",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:dmitriy-vladimirovich-mankevich",
+      "display_name": "Дмитрий Владимирович Манкевич",
+      "aliases": [
+        "Дмитрий Владимирович Манкевич",
+        "Дмитрий Манкевич",
+        "Манкевич Дмитрий"
+      ],
+      "primary_domain": "историк, исследователь исторической памяти, доцент БФУ",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/mankevich-dmitriy.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/mankevich-dmitriy.webp",
+      "photo_files": [
+        "mankevich-dmitriy.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-demografiya-pervogo-desyatiletiya-kaliningradskoy-oblasti",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:evgeniy-mosienko",
+      "display_name": "Евгений Мосиенко",
+      "aliases": [
+        "Евгений Мосиенко",
+        "Мосиенко Евгений"
+      ],
+      "primary_domain": "исследователь мозаик, куратор наследия, общественный деятель",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/mosienko-evgeniy.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/mosienko-evgeniy.webp",
+      "photo_files": [
+        "mosienko-evgeniy.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-sovetskoe-monumentalnoe-iskusstvo-na-territorii-kaliningradskoy-oblasti",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:evgeniya-nizhegorodtseva",
+      "display_name": "Евгения Нижегородцева",
+      "aliases": [
+        "Евгения Нижегородцева",
+        "Нижегородцева Евгения"
+      ],
+      "primary_domain": "аттестованный гид, экскурсовод",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/nizhegorodtseva-evgeniya.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/nizhegorodtseva-evgeniya.webp",
+      "photo_files": [
+        "nizhegorodtseva-evgeniya.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-kaliningradskiy-morskoy-torgovyy-port-yarkie-stranitsy-sovetskoy-istorii-i-sovremennost",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:ekaterina-mashinskaya",
+      "display_name": "Екатерина Машинская",
+      "aliases": [
+        "Екатерина Машинская",
+        "Машинская Екатерина"
+      ],
+      "primary_domain": "дипломированный гид, автор маршрутов",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/mashinskaya-ekaterina.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/mashinskaya-ekaterina.webp",
+      "photo_files": [
+        "mashinskaya-ekaterina.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-chelovek-zalozhivshiy-fundament-sovremennogo-kaliningrada-viktor-denisov-i-ego-epoha",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:ekaterina-mihaylovna-ilyushkina",
+      "display_name": "Екатерина Михайловна Илюшкина",
+      "aliases": [
+        "Екатерина Илюшкина",
+        "Екатерина Михайловна Илюшкина",
+        "Илюшкина Екатерина"
+      ],
+      "primary_domain": "Искусствовед, лектор, главный специалист филиала Третьяковской галереи в Калининграде",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/ilyushkina-ekaterina.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/ilyushkina-ekaterina.webp",
+      "photo_files": [
+        "ilyushkina-ekaterina.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-velikie-uchitelya-preemstvennost-hudozhestvennyh-pokoleniy",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:igor-selin",
+      "display_name": "Игорь Селин",
+      "aliases": [
+        "Игорь Селин",
+        "Селин Игорь"
+      ],
+      "primary_domain": "аттестованный гид, краевед",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/selin-igor-1.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/selin-igor-1.webp",
+      "photo_files": [
+        "selin-igor-1.webp",
+        "selin-igor-2.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-kaliningradskaya-oblast-glazami-turistov-togda-i-seychas",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:inga-dolotova",
+      "display_name": "Инга Долотова",
+      "aliases": [
+        "Долотова Инга",
+        "Инга Долотова"
+      ],
+      "primary_domain": "краевед, гид, серебряный волонтёр",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/dolotova-inga.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/dolotova-inga.webp",
+      "photo_files": [
+        "dolotova-inga.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-privychki-kaliningradtsev-ty-nastoyaschiy-kaliningradets-esli-kaliningradtsy-glazami-gostey",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:irina-sergeevna-litvinovich",
+      "display_name": "Ирина Сергеевна Литвинович",
+      "aliases": [
+        "Ирина Литвинович",
+        "Ирина Сергеевна Литвинович",
+        "Литвинович Ирина"
+      ],
+      "primary_domain": "директор туркомпании, турорганизатор, краевед",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/litvinovich-irina.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/litvinovich-irina.webp",
+      "photo_files": [
+        "litvinovich-irina.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-privychki-kaliningradtsev-ty-nastoyaschiy-kaliningradets-esli-kaliningradtsy-glazami-gostey",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:larisa-aleksandrovna-bystrova",
+      "display_name": "Лариса Александровна Быстрова",
+      "aliases": [
+        "Быстрова Лариса",
+        "Лариса Александровна Быстрова",
+        "Лариса Быстрова"
+      ],
+      "primary_domain": "директор музея «Колесо истории», краевед",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/bystrova-larisa.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/bystrova-larisa.webp",
+      "photo_files": [
+        "bystrova-larisa.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-istoriya-svetlogorska-v-semeynom-albome",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:leonid-efremov",
+      "display_name": "Леонид Ефремов",
+      "aliases": [
+        "Ефремов Леонид",
+        "Леонид Ефремов"
+      ],
+      "primary_domain": "археолог, историк, музейный исследователь, автор книги о Зеленоградске",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/efremov-leonid.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/efremov-leonid.webp",
+      "photo_files": [
+        "efremov-leonid.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-primorskiy-zelenogradskiy-rayon-kaliningradskoy-oblasti-v-sovetskoe-vremya-na-etape-stanovleniya",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:liliya-finkova",
+      "display_name": "Лилия Финькова",
+      "aliases": [
+        "Лилия Финькова",
+        "Финькова Лилия"
+      ],
+      "primary_domain": "специалист по экспозиционной и выставочной деятельности ОСК Янтарь",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/finkova-yuliya.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/finkova-yuliya.webp",
+      "photo_files": [
+        "finkova-yuliya.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-kaliningrad-korabelnyy-ot-pervyh-dney-k-vershinam-slavy-zavoda-yantar",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:mihail-zhorzhevich-tsedrik",
+      "display_name": "Михаил Жоржевич Цедрик",
+      "aliases": [
+        "Михаил Жоржевич Цедрик",
+        "Михаил Цедрик",
+        "Цедрик Михаил"
+      ],
+      "primary_domain": "специалист отдела экопросвещения и туризма национального парка «Куршская коса»",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/tsedrik-mihail.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/tsedrik-mihail.webp",
+      "photo_files": [
+        "tsedrik-mihail.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-pervye-na-kose",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:mihail-markovets",
+      "display_name": "Михаил Марковец",
+      "aliases": [
+        "Марковец Михаил",
+        "Михаил Марковец"
+      ],
+      "primary_domain": "орнитолог, учёный, популяризатор науки",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/markovets-mihail.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/markovets-mihail.webp",
+      "photo_files": [
+        "markovets-mihail.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-lyudi-kotoryh-unesli-ptitsy-biostantsiya-rybachiy-v-sovetskoe-vremya",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:natalya-kazakova",
+      "display_name": "Наталья Казакова",
+      "aliases": [
+        "Казакова Наталья",
+        "Наталья Казакова"
+      ],
+      "primary_domain": "руководитель промтуризма, эксперт профориентации, эксперт по развитию малых городов",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/kazakova-natalya.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/kazakova-natalya.webp",
+      "photo_files": [
+        "kazakova-natalya.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-istoriya-stanovleniya-i-razvitiya-malyh-gorodov-kaliningradskoy-oblasti-na-primere-p-zheleznodorozhnyy",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:natalya-konstantinovna-krimmel",
+      "display_name": "Наталья Константиновна Криммель",
+      "aliases": [
+        "Криммель Наталья",
+        "Наталья Константиновна Криммель",
+        "Наталья Криммель"
+      ],
+      "primary_domain": "сотрудник музея «Янтарныя палата» при Янтарном комбинате",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/krimmel-natalya.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/krimmel-natalya.webp",
+      "photo_files": [
+        "krimmel-natalya.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-vosstanovlenie-yantarnogo-karera-i-yantarnyy-kombinat-v-poslevoennye-gody",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:natalya-mihaylovna-sitnikova",
+      "display_name": "Наталья Михайловна Ситникова",
+      "aliases": [
+        "Наталья Михайловна Ситникова",
+        "Наталья Ситникова",
+        "Ситникова Наталья"
+      ],
+      "primary_domain": "директор Гусевского музея, краевед",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/sitnikova-natalya.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/sitnikova-natalya.webp",
+      "photo_files": [
+        "sitnikova-natalya.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-sovetskiy-gusev-vremya-sozidaniy",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:nikita-sergeevich-nikitin",
+      "display_name": "Никита Сергеевич Никитин",
+      "aliases": [
+        "Никита Никитин",
+        "Никита Сергеевич Никитин",
+        "Никитин Никита"
+      ],
+      "primary_domain": "музейщик, исследователь советского детства, руководитель Музея советского детства БФУ",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/nikitin-nikita.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/nikitin-nikita.webp",
+      "photo_files": [
+        "nikitin-nikita.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-priroda-chemodana",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:nikolay-perkusov",
+      "display_name": "Николай Перкусов",
+      "aliases": [
+        "Николай Перкусов",
+        "Перкусов Николай"
+      ],
+      "primary_domain": "культуролог, военный реконструктор",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/perkusov-nikolay.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/perkusov-nikolay.webp",
+      "photo_files": [
+        "perkusov-nikolay.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-chto-tait-v-sebe-glavnoe-pamyatnoe-mesto-kaliningrada-memorial-1200-gvardeytsev",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:olga-levkova",
+      "display_name": "Ольга Левкова",
+      "aliases": [
+        "Левкова Ольга",
+        "Ольга Левкова"
+      ],
+      "primary_domain": "биолог, методист, просветитель",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/levkova-olga.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/levkova-olga.webp",
+      "photo_files": [
+        "levkova-olga.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-zooparku-byt-zoopark-trofey-1945-goda-i-odin-iz-pervyh-ochagov-mirnoy-zhizni-v-kaliningrade",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:svetlana-gennadevna-sivkova",
+      "display_name": "Светлана Геннадьевна Сивкова",
+      "aliases": [
+        "Светлана Геннадьевна Сивкова",
+        "Светлана Сивкова",
+        "Сивкова Светлана"
+      ],
+      "primary_domain": "президент Музея Мирового океана",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/sivkova-svetlana.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/sivkova-svetlana.webp",
+      "photo_files": [
+        "sivkova-svetlana.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#speakers",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:svetlana-kolbaneva",
+      "display_name": "Светлана Колбанёва",
+      "aliases": [
+        "Колбанёва Светлана",
+        "Светлана Колбанёва"
+      ],
+      "primary_domain": "научный сотрудник ‑ историк Калининградского зоопарка",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/kolbaneva-svetlana-ispravleno.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/kolbaneva-svetlana-ispravleno.webp",
+      "photo_files": [
+        "kolbaneva-svetlana-ispravleno.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-pamyatniki-iskusstva-i-istorii-v-landshafte-kaliningradskogo-zooparka",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:svetlana-sokolova",
+      "display_name": "Светлана Соколова",
+      "aliases": [
+        "Светлана Соколова",
+        "Соколова Светлана"
+      ],
+      "primary_domain": "директор Калининградского зоопарка",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/sokolova-svetlana.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/sokolova-svetlana.webp",
+      "photo_files": [
+        "sokolova-svetlana.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-pravo-na-suschestvovanie-zooparki-v-sovremennom-mire-perspektivy-razvitiya-kaliningradskogo-zooparka",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:sergey-zhadobko",
+      "display_name": "Сергей Жадобко",
+      "aliases": [
+        "Жадобко Сергей",
+        "Сергей Жадобко"
+      ],
+      "primary_domain": "яхтсмен, капитан, спортивный организатор",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/zhadobko-sergey.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/zhadobko-sergey.webp",
+      "photo_files": [
+        "zhadobko-sergey.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-istoriya-parusnogo-sporta-v-kaliningradskoy-oblasti",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:tatyana-konyuhova",
+      "display_name": "Татьяна Конюхова",
+      "aliases": [
+        "Конюхова Татьяна",
+        "Татьяна Конюхова"
+      ],
+      "primary_domain": "",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/tatyana-konyuhova.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/tatyana-konyuhova.webp",
+      "photo_files": [
+        "tatyana-konyuhova.webp",
+        "tatyana-konyuhova-img-20260313-105601-177.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-ryba-na-kazhdom-stole-v-restorane-i-doma-prazdnichnyy-stol-po-kaliningradski",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:tatyana-udovenko",
+      "display_name": "Татьяна Удовенко",
+      "aliases": [
+        "Татьяна Удовенко",
+        "Удовенко Татьяна"
+      ],
+      "primary_domain": "эксперт по туризму, гид, филолог, руководитель туркомпании",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": "/assets/participants/udovenko-tatyana.webp",
+      "photo_source_url": "https://kgd80.ru/generated/speakers/udovenko-tatyana.webp",
+      "photo_files": [
+        "udovenko-tatyana.webp"
+      ],
+      "profile_url": "https://kgd80.ru/#event-kaliningradskaya-oblast-glazami-turistov-togda-i-seychas",
+      "credit_text": "80 историй о главном · kgd80.ru"
+    },
+    {
+      "artist_id": "kgd80:shahnoza-muhitdinovna-usmanova",
+      "display_name": "Шахноза Мухитдиновна Усманова",
+      "aliases": [
+        "Усманова Шахноза",
+        "Шахноза Мухитдиновна Усманова",
+        "Шахноза Усманова"
+      ],
+      "primary_domain": "",
+      "locality_status": "local_verified",
+      "base_country_code": "RU",
+      "base_region_code": "RU-KGD",
+      "base_city": "Калининград",
+      "photo_url": null,
+      "photo_source_url": null,
+      "photo_files": [],
+      "profile_url": "https://kgd80.ru/#event-zelenaya-pamyat-istoriya-botanicheskogo-sada-kaliningrada",
+      "credit_text": null
+    }
+  ]
+}

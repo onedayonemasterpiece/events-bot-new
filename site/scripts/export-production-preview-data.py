@@ -901,6 +901,7 @@ PARTICIPANT_REQUIRED_TABLE_COLUMNS = {
 }
 PARTICIPANT_PHOTO_ALLOWED_STATUSES = {
     "event_artist_verified",
+    "kgd80_project_verified",
     "press_kit_verified",
     "cc_verified",
     "informational_citation_reviewed",
@@ -914,6 +915,9 @@ PARTICIPANT_ROLE_LABELS = {
     "headliner": "Хедлайнер",
     "host": "Ведущий",
     "moderator": "Модератор",
+    "guide": "Гид",
+    "panelist": "Участник дискуссии",
+    "participant": "Участник",
     "author": "Автор",
 }
 
@@ -999,7 +1003,7 @@ def event_participants_for_events(
           ON artist.artist_id = appearance.artist_id
         WHERE appearance.event_id IN ({placeholders})
           AND appearance.status = 'confirmed'
-          AND appearance.physical_visit_status = 'confirmed'
+          AND appearance.physical_visit_status IN ('confirmed', 'remote_confirmed')
           AND appearance.eligibility_status = 'eligible'
           AND appearance.cancelled_at IS NULL
           AND artist.verification_status = 'verified'

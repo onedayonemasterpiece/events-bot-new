@@ -8,9 +8,14 @@
   and desktop detail pages, with role/headliner labels, provenance-gated
   portraits, initials fallback and device-local person likes isolated from
   event reactions.
-- Added a backward-compatible, fail-closed static participant projection from
-  the artist registry/appearance overlay plus KGD80 portrait canaries for
-  Татьяна Удовенко and Андрей Левченков.
+- Added a backward-compatible, fail-closed static participant projection,
+  complete current KGD80 registry (38 people and 40 portrait variants),
+  reproducible catalog/asset sync, startup SQLite seed and event-people
+  migration.
+- Added strict participant extraction to the existing Smart Update facts pass:
+  exact grounded evidence, role/presence/billing decisions, explicit headliner
+  classification, KGD80 alias resolution, stale-roster cancellation and
+  automatic static refresh when a relation changes.
 - Added compact PWA lifecycle analytics in the personalization Supabase
   project: confirmed installs, standalone sessions, daily active installations
   and exact D1/D7 cohort returns use one mutable installation-state row plus

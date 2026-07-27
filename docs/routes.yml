@@ -171,11 +171,13 @@ sections:
 
 features:
   event_people:
-    status: ui_implemented_backend_pending
+    status: ui_registry_smart_update_implemented
     docs: docs/features/event-people/README.md
     entrypoints:
       - site/src/components/EventParticipants.astro
       - site/scripts/export-production-preview-data.py
+      - event_people/service.py
+      - scripts/sync_kgd80_people_catalog.py
 
   interest_clubs:
     status: implementation_rc
