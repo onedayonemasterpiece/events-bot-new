@@ -287,6 +287,14 @@
 
 ### Fixed
 
+- **Static site / presentation QR PWA install flow**: the production root now
+  mounts the shared PWA install controller and treats
+  `?install=presentation` as an explicit Android installation entry point.
+  The page immediately explains Chrome/in-app-browser fallbacks, promotes the
+  real one-shot `beforeinstallprompt` to a fixed mobile install card, preserves
+  the existing preview and clubs links, and publishes the base-aware manifest
+  plus `192×192`/`512×512` icons at the production root. Regression coverage
+  includes the waiting, native-prompt, accepted and already-installed states.
 - Reconciled the Chromium release gate with the fail-closed compact-card
   contract: classified OCR documents may cover only within the measured 20%
   budget, while unknown/classifier-error documents must remain whole and now

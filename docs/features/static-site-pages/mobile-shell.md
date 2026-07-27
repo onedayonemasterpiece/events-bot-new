@@ -200,6 +200,27 @@ Manifest использует base-aware `id`, `scope`, `start_url`, `display=st
 [MDN install prompt](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt)
 и [installability guide](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).
 
+### Presentation QR install entry
+
+Ссылка `https://kenigevents.ru/?install=presentation` является стабильным
+presentation entry point. Она не обходит системное подтверждение установки, но
+на Android сразу показывает фиксированную install-card:
+
+- до получения `beforeinstallprompt` карточка объясняет, что страницу нужно
+  открыть в Chrome, и даёт резервный маршрут
+  `меню Chrome → Добавить на главный экран`;
+- после реального browser event появляется активная кнопка
+  `Установить приложение`, которая вызывает сохранённый event ровно один раз;
+- после принятия/отклонения системного окна остаётся честный статус, а
+  `appinstalled` показывает успешное завершение;
+- обычные страницы без `install=presentation` сохраняют progressive footer
+  contract и не показывают install UI до browser event.
+
+Production acceptance для этого URL требует `200` на `/manifest.webmanifest`,
+MIME `application/manifest+json`, доступные PNG-иконки `192×192` и `512×512`,
+наличие manifest-link и presentation controller в `/`, Android browser smoke и
+достижимость deployed SHA из `origin/main`.
+
 ## Rejected alternatives
 
 - отдельный hardcoded bottom nav только для Search;

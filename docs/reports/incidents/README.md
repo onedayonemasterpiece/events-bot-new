@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-27-pwa-presentation-install-missing.md`
+  - Scope: production root, web app manifest/icons, Android
+    `beforeinstallprompt`, `?install=presentation`, Object Storage root publish.
+  - Must not regress: the presentation QR target must publish an installable
+    root manifest and show an honest Android install/fallback card; root publish
+    cannot leave the PWA source change stranded only in an immutable preview.
+
 - `INC-2026-07-27-future-event-source-coverage-drop.md`
   - Scope: future inventory density, parallel source-parser Kaggle status writes,
     current Philharmonia DOM/output, Qtickets freshness and truthful parse status.

@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   createPwaInstallController,
   isAndroidPlatform,
+  isPresentationInstall,
   isStandaloneDisplay,
 } from '../src/lib/pwa-install-controller.js';
 
@@ -30,16 +31,19 @@ class FakeTarget {
 function fixture({
   navigatorRef = { userAgent:'Mozilla/5.0 (Linux; Android 15)' },
   standalone = false,
+  locationRef = { search:'' },
 } = {}) {
   const windowRef = new FakeTarget();
   windowRef.matchMedia = () => ({ matches:standalone });
+  windowRef.location = locationRef;
   const button = new FakeTarget();
   button.hidden = false;
   button.disabled = false;
   const root = { hidden:false, dataset:{} };
   const status = { textContent:'' };
-  const controller = createPwaInstallController({ windowRef, navigatorRef, root, button, status });
-  return { windowRef, navigatorRef, button, root, status, controller };
+  const guidance = { hidden:true };
+  const controller = createPwaInstallController({ windowRef, navigatorRef, locationRef, root, button, status, guidance });
+  return { windowRef, navigatorRef, button, root, status, guidance, controller };
 }
 
 function installEvent(prompt = async () => {}) {
@@ -60,6 +64,8 @@ test('platform helpers accept Android UAData/fallback and reject standalone disp
   assert.equal(isAndroidPlatform({ userAgentData:{ platform:'iOS' }, userAgent:'iPhone' }), false);
   assert.equal(isStandaloneDisplay({ matchMedia:() => ({ matches:true }) }, {}), true);
   assert.equal(isStandaloneDisplay({ matchMedia:() => ({ matches:false }) }, { standalone:true }), true);
+  assert.equal(isPresentationInstall({ search:'?install=presentation' }), true);
+  assert.equal(isPresentationInstall({ search:'?install=footer' }), false);
 });
 
 test('install CTA remains hidden until a real Android beforeinstallprompt event', () => {
@@ -116,6 +122,34 @@ test('one install event prompts once, hides before await, and a later event can 
   assert.equal(state.status.textContent, 'Приложение установлено.');
 });
 
+test('presentation QR flow explains the fallback immediately and upgrades to the native install button', async () => {
+  const state = fixture({ locationRef:{ search:'?install=presentation' } });
+  assert.equal(state.root.hidden, false);
+  assert.equal(state.button.hidden, true);
+  assert.equal(state.guidance.hidden, false);
+  assert.equal(state.root.dataset.pwaInstallPresentation, 'true');
+  assert.match(state.status.textContent, /Подготавливаем установку/u);
+
+  const event = installEvent(async () => ({ outcome:'accepted' }));
+  state.windowRef.dispatch('beforeinstallprompt', event);
+  assert.equal(event.prevented, true);
+  assert.equal(state.button.hidden, false);
+  assert.equal(state.root.dataset.pwaInstallReady, 'true');
+
+  state.button.dispatch('click', { preventDefault() {} });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(event.promptCalls, 1);
+  assert.equal(state.root.hidden, false);
+  assert.equal(state.button.hidden, true);
+  assert.match(state.status.textContent, /Установка подтверждена/u);
+
+  const installed = fixture({ standalone:true, locationRef:{ search:'?install=presentation' } });
+  assert.equal(installed.root.hidden, false);
+  assert.equal(installed.button.hidden, true);
+  assert.equal(installed.guidance.hidden, true);
+  assert.match(installed.status.textContent, /уже установлено/u);
+});
+
 test('site exposes a base-aware installable manifest and footer-owned controller', async () => {
   const [manifest, action, footer, layout, home, release, deploy] = await Promise.all([
     read('src/pages/manifest.webmanifest.ts'),
@@ -128,18 +162,22 @@ test('site exposes a base-aware installable manifest and footer-owned controller
   ]);
 
   assert.match(manifest, /const scope = withBase\('\/'\)/u);
-  assert.match(manifest, /start_url:siteHomeHref\(\)/u);
+  assert.match(manifest, /PUBLIC_PWA_START_URL/u);
+  assert.match(manifest, /const startUrl = configuredStartUrl \|\| siteHomeHref\(\)/u);
+  assert.match(manifest, /start_url:startUrl/u);
   assert.match(manifest, /display:'standalone'/u);
   assert.match(manifest, /prefer_related_applications:false/u);
   assert.match(manifest, /announcements-192\.png/u);
   assert.match(manifest, /announcements-512\.png/u);
   assert.match(action, /data-pwa-install-root/u);
   assert.match(action, /data-pwa-install-button hidden/u);
+  assert.match(action, /pwa-install-action__button\[hidden\]/u);
   assert.match(action, /Установить приложение/u);
   assert.match(footer, /<PwaInstallAction \/>/u);
   assert.match(layout, /rel="manifest" href=\{withBase\('\/manifest\.webmanifest'\)\}/u);
   assert.match(home, /const manifestHref = withBase\('\/manifest\.webmanifest'\)/u);
   assert.match(home, /rel="manifest" href=\{manifestHref\}/u);
+  assert.match(home, /<PwaInstallAction \/>/u);
   assert.match(release, /'\.webmanifest': 'application\/manifest\+json; charset=utf-8'/u);
   assert.match(deploy, /manifest\.webmanifest[\s\S]*application\/manifest\+json; charset=utf-8/u);
 });
