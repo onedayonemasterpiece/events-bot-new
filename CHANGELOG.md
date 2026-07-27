@@ -306,7 +306,10 @@
   freshness guard watches that current catalog; and a lost parser source
   finishes `ops_run` as `partial` or `error` instead of false-green `success`.
   The script is published under the new immutable-editor-compatible Kaggle slug
-  `zigomaro/parse-philharmonia-script`.
+  `zigomaro/parse-philharmonia-script`. Its production output boundary now
+  preserves validated `normalized_date` values as ISO strings instead of
+  leaking `datetime.date` objects into Smart Update and failing every new
+  Philharmonia event before persistence.
 
 - Prevented source-grounded studio addresses from being rebound to unrelated
   canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);

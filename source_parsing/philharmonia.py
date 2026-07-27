@@ -305,8 +305,14 @@ def parse_philharmonia_output(file_paths: list[str]) -> list[TheatreEvent]:
                 parsed_date = None
                 if normalized_date_str:
                     try:
-                        from datetime import datetime
-                        parsed_date = datetime.strptime(normalized_date_str, "%Y-%m-%d").date()
+                        from datetime import date
+
+                        # Validate the source value without changing the
+                        # TheatreEvent contract: Smart Update expects ISO text
+                        # and calls string methods on candidate.date.
+                        parsed_date = date.fromisoformat(
+                            normalized_date_str
+                        ).isoformat()
                     except ValueError:
                         pass
                 

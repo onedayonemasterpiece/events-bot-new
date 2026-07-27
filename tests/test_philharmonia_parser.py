@@ -5,6 +5,8 @@ import json
 from datetime import date
 from pathlib import Path
 
+from source_parsing.philharmonia import parse_philharmonia_output
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/replays/INC-2026-07-27-future-event-source-coverage-drop"
@@ -109,3 +111,28 @@ def test_primary_parser_runners_do_not_depend_on_per_run_status_dataset():
         source = (ROOT / relative_path).read_text(encoding="utf-8")
         assert "create_kaggle_status_dataset" not in source, relative_path
         assert "per-run status dataset disabled" in source, relative_path
+
+
+def test_production_output_keeps_normalized_date_as_iso_text(tmp_path):
+    output = tmp_path / "philharmonia_results.json"
+    output.write_text(
+        json.dumps(
+            [
+                {
+                    "title": "Органные миры",
+                    "url": "https://filarmonia39.ru/afisha/organnye-miry/",
+                    "date_text": "2 августа 2026",
+                    "normalized_date": "2026-08-02",
+                    "time": "18:00",
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    events = parse_philharmonia_output([str(output)])
+
+    assert len(events) == 1
+    assert events[0].parsed_date == "2026-08-02"
+    assert isinstance(events[0].parsed_date, str)

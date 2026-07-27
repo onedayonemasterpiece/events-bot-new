@@ -48,6 +48,9 @@ Script использует отдельный Kaggle slug: API не разре�
   передаются в `TheatreEvent` и далее в Smart Update.
 - Source URL — детальная страница события; отдельный buy URL используется
   парсером для определения доступности билетов.
+- `normalized_date` валидируется как ISO date, но production boundary сохраняет
+  его строкой `YYYY-MM-DD`: `TheatreEvent` и Smart Update не принимают
+  `datetime.date` в этом поле.
 
 ## Regression contract
 
@@ -68,6 +71,8 @@ production output boundary обязаны поднять
 6. `kernel-metadata.json` указывает на self-contained
    `philharmonia_parser.py`, а primary parser runners не создают обязательный
    per-run status-dataset.
+7. output-boundary replay проверяет не только значение даты, но и строковый тип
+   `TheatreEvent.parsed_date`.
 
 ## Отложенные улучшения
 
