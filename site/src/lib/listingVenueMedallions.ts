@@ -4,9 +4,9 @@ import { matchMedallionAlias } from './eventMedallions';
 import type { EventImageAsset, PreviewEvent } from './types';
 
 export interface ListingMedallionEvidence {
-  field: 'venue_name' | 'festival' | 'event_id';
+  field: 'venue_name' | 'festival' | 'organizer_name';
   value: string;
-  match: 'exact' | 'bounded' | 'curated_event';
+  match: 'exact' | 'bounded';
 }
 
 export interface ListingVenueMedallion {
@@ -33,7 +33,6 @@ interface ManifestMedallion {
   ariaLabel?: string;
   listingStatus?: 'listing_ready' | 'detail_only' | 'blocked_missing_binding';
   listingBinding?: 'venue' | 'festival' | 'organizer';
-  listingEventIds?: number[];
 }
 
 function namesFor(item: ManifestMedallion): string[] {
@@ -45,7 +44,7 @@ function namesFor(item: ManifestMedallion): string[] {
 /** Exact or bounded phrase match; deliberately no fuzzy prose matching. */
 function structuredEvidence(
   item: ManifestMedallion,
-  field: 'venue_name' | 'festival',
+  field: 'venue_name' | 'festival' | 'organizer_name',
   value: unknown,
 ): ListingMedallionEvidence | null {
   for (const candidate of namesFor(item)) {
@@ -73,8 +72,10 @@ function listingCandidates(event: PreviewEvent): ListingCandidate[] {
       ? structuredEvidence(item, 'venue_name', event.venue_name)
       : item.listingBinding === 'festival'
         ? structuredEvidence(item, 'festival', event.festival)
-        : item.listingBinding === 'organizer' && item.listingEventIds?.includes(event.id)
-          ? { field:'event_id' as const, value:String(event.id), match:'curated_event' as const }
+        : item.listingBinding === 'organizer'
+          ? (event.organizer_names || [])
+              .map((name) => structuredEvidence(item, 'organizer_name', name))
+              .find(Boolean) || null
           : null;
     if (evidence) matched.push({ item, evidence });
   }

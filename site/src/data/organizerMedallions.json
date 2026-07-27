@@ -444,7 +444,9 @@
       "retrievedAt": "2026-07-03",
       "assetFormat": "svg-embedded-source-svg",
       "category": "venue_brand",
-      "fallbackPngUrl": "/assets/organizers/yantar-hall.png"
+      "fallbackPngUrl": "/assets/organizers/yantar-hall.png",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "muzteatr39",
@@ -508,7 +510,9 @@
       "retrievedAt": "2026-07-03",
       "assetFormat": "svg-embedded-source-svg",
       "category": "venue_brand",
-      "fallbackPngUrl": "/assets/organizers/dom-iskusstv.png"
+      "fallbackPngUrl": "/assets/organizers/dom-iskusstv.png",
+      "listingStatus": "listing_ready",
+      "listingBinding": "venue"
     },
     {
       "slug": "city-jazz-club",
@@ -783,6 +787,38 @@
       "category": "venue_brand"
     },
     {
+      "slug": "profitur",
+      "name": "Профи-тур",
+      "shortName": "Профи-тур",
+      "aliases": [
+        "Профи-тур",
+        "ПУТЕШЕСТВИЯ «ПРОФИ-ТУР»",
+        "ПУТЕШЕСТВИЯ \"ПРОФИ-ТУР\"",
+        "profi_tur39",
+        "excursions_profitour"
+      ],
+      "sourcePage": "https://t.me/excursions_profitour",
+      "sourceUrl": "https://t.me/excursions_profitour public Telegram profile avatar",
+      "sourceFile": "r14-20260727/profitur.telegram-avatar-20260727.jpg",
+      "background": "#FFFFFF",
+      "ring": "#222222",
+      "logoCrop": "official-telegram-avatar-circular-mask",
+      "fitBox": [
+        320,
+        320
+      ],
+      "ariaLabel": "Организатор: Профи-тур",
+      "renderNote": "Runtime WebP/PNG получен локальным resize и круглой alpha-маской из публичного Telegram-аватара без перерисовки логотипа.",
+      "avatarUrl": "/assets/organizers/profitur.webp",
+      "fallbackPngUrl": "/assets/organizers/profitur.png",
+      "sourcePath": "site/src/assets/organizers/source/r14-20260727/profitur.telegram-avatar-20260727.jpg",
+      "retrievedAt": "2026-07-27",
+      "assetFormat": "webp-source-raster-official-social-avatar",
+      "category": "organizer",
+      "listingStatus": "listing_ready",
+      "listingBinding": "organizer"
+    },
+    {
       "slug": "ruin-keepers",
       "name": "Хранители руин",
       "shortName": "Хранители руин",
@@ -791,8 +827,7 @@
         "Ruin Keepers",
         "ruin_keepers",
         "ruin.keepers",
-        "ruin-keepers.ru",
-        "Железнодорожные ворота"
+        "ruin-keepers.ru"
       ],
       "sourcePage": "https://ruin-keepers.ru/",
       "sourceUrl": "https://static.tildacdn.one/tild6664-6533-4665-a166-356135616237/tild3638-3334-4965-a.png",
@@ -811,12 +846,9 @@
       "assetFormat": "webp-source-raster-official-png",
       "fallbackPngUrl": "/assets/organizers/ruin-keepers.png",
       "sourceFile": "recheck-20260704/ruin-keepers.official-logo.png",
-      "category": "venue_brand",
+      "category": "organizer",
       "listingStatus": "listing_ready",
-      "listingBinding": "organizer",
-      "listingEventIds": [
-        7018
-      ]
+      "listingBinding": "organizer"
     },
     {
       "slug": "greza-khutor",

@@ -26,6 +26,7 @@ const event = (overrides = {}) => ({
   venue_name:null,
   address:null,
   festival:null,
+  organizer_names:[],
   source_url:null,
   source_urls:[],
   ...overrides,
@@ -34,7 +35,7 @@ const event = (overrides = {}) => ({
 const slugs = (value) => resolveEventMedallions(value, eventPageCatalog).identities.map(({ item }) => item.slug);
 
 test('full manifests keep exact accepted inventory and reachable runtime/source assets', async () => {
-  assert.equal(organizers.length, 27);
+  assert.equal(organizers.length, 28);
   assert.equal(festivals.length, 11);
   assert.equal(festivals.filter((item) => item.category === 'festival').length, 10);
   assert.equal(festivals.filter((item) => item.category === 'venue_brand').length, 1);
@@ -73,6 +74,22 @@ test('current mumod, Dramatic Theatre, Kaup and historical Greza aliases resolve
   assert.deepEqual(slugs(event({ venue_name:'Драматический театр' })), ['dramteatr39']);
   assert.deepEqual(slugs(event({ venue_name:'Поселение викингов Кауп' })), ['kaup']);
   assert.deepEqual(slugs(event({ venue_name:'Грёза Хутор, пос. Тихомировка, Озёрск' })), ['greza-khutor']);
+});
+
+test('structured organizers resolve Profi-Tour and Ruin Keepers without venue inference', () => {
+  assert.deepEqual(slugs(event({
+    venue_name:'Судостроительный завод «Янтарь»',
+    organizer_names:['Профи-тур'],
+  })), ['profitur']);
+  assert.deepEqual(slugs(event({
+    venue_name:'Железнодорожные ворота',
+    festival:'Воротник',
+    organizer_names:['Хранители руин'],
+  })), ['ruin-keepers']);
+  assert.deepEqual(slugs(event({
+    venue_name:'Железнодорожные ворота',
+    organizer_names:[],
+  })), []);
 });
 
 test('MUMOD is the single Main medallion and leaves InlineSlot empty', () => {

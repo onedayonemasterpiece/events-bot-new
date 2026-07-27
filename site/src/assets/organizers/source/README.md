@@ -34,6 +34,7 @@ These files are official/source-faithful inputs for the first event-page organiz
 | `kaliningrad-art-museum` | Калининградский музей изобразительных искусств | https://www.kaliningradartmuseum.ru/ | homepage inline SVG `recheck-20260704/kaliningrad-art-museum.official-inline-logo.svg`; footer PNG still kept as source | `/assets/organizers/kaliningrad-art-museum.svg` (+ PNG/WebP QA fallback) | Фон — официальный бордовый `#871B30`; аббревиатура `ИЗО` удалена, под официальным знаком размещена крупная читаемая подпись `МУЗЕЙ ИСКУССТВ`. |
 | `brachert` | Дом-музей Германа Брахерта | https://hbrachert.ru/ | https://hbrachert.ru/bitrix/templates/brachert/images/logo-br.png | `/assets/organizers/brachert.webp` (`.png` fallback) | Официальный PNG-логотип hbrachert.ru отдаётся WebP-primary. |
 | `ruin-keepers` | Хранители руин | https://ruin-keepers.ru/ | official 1-bit PNG logo `recheck-20260704/ruin-keepers.official-logo.png` | `/assets/organizers/ruin-keepers.webp` (`.png` fallback) | Ручной filled-tower SVG отклонён как не похожий на знак; runtime WebP-first сохраняет официальный outline tower/heart и wordmark `Хранители руин` из 1-bit PNG. |
+| `profitur` | Профи-тур | https://t.me/excursions_profitour | public Telegram profile avatar `r14-20260727/profitur.telegram-avatar-20260727.jpg`, retrieved 2026-07-27 | `/assets/organizers/profitur.webp` (`.png` fallback) | Публичный source-faithful avatar с надписью «ПРОФИ-ТУР» сохранён без перерисовки; runtime — локальный resize 512×512 и круглая alpha-маска. |
 | `greza-khutor` | Грёза Хутор | https://vk.com/wall-231920894_5687 | `docs/reference/greza-khutor/987234 (4).png` | `/assets/organizers/greza-khutor.webp` / `/assets/organizers/greza-khutor.png` | Вариант 04 выбран по 4 явным голосам в VK; исходник скопирован без смыслового редизайна, локальные crop/resize, без AI. |
 
 No OpenAI image generation/editing was used. The medallions were produced by local SVG rendering/vectorization, source cropping/recomposition, embedded-source SVG where needed, and PNG fallback export. If no SVG source/vector-safe source exists, browser-facing runtime assets should be WebP-first, with PNG only as fallback/QA.
@@ -45,9 +46,12 @@ manifest item has an explicit `listingStatus` and `listingBinding`; only
 `listing_ready` items with an exact/bounded structured venue or festival match
 participate. The selected asset must still be `image_text_mode=visual_only`, at
 most one overlay is rendered, and runtime priority is venue before festival.
-`znanie-russia` stays `blocked_missing_binding` until the static event contract
-exports a structured organizer field; the duplicate `kgd80` identity remains
-`detail_only`. This listing behavior reuses the source-faithful assets introduced
+`znanie-russia` stays `blocked_missing_binding` until an event carries grounded
+organizer evidence for it; the duplicate `kgd80` identity remains `detail_only`.
+Organizer bindings consume `PreviewEvent.organizer_names`, which Smart Update
+persists from quoted event-local evidence or an explicit curated self-publisher
+binding. They never infer organizer identity from venue/title/description prose.
+This listing behavior reuses the source-faithful assets introduced
 by commits `00b9bfd6`, `4c249a8e`, `849aaeaa` and `fa367ea3`; no artwork was
 redrawn for V13.
 
