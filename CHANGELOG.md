@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added direct official future-catalog parsers for Kaliningrad Theatre of
+  Variety (former Dom Iskusstv) and Yantar Hall, including month/AJAX
+  pagination, targeted `/parse estrada|yantarhall` runs and source-level
+  fail-closed status reporting.
 - Added boundary-safe production artifact leakage gates: the ordinary root now
   rejects only the real bare `data-amber-artifact` and
   `data-artifact-collection` markers, without mistaking the inert
@@ -295,6 +299,10 @@
   the existing preview and clubs links, and publishes the base-aware manifest
   plus `192×192`/`512×512` icons at the production root. Regression coverage
   includes the waiting, native-prompt, accepted and already-installed states.
+- Fixed canonical theatre parser occurrence matching so two explicit sessions
+  from the same parser on one date are not collapsed into one event; this
+  restores recurring Dramteatr, Muzteatr and Tretyakov occurrences while still
+  allowing an official site to repair a social-only card's weak time.
 - Reconciled the Chromium release gate with the fail-closed compact-card
   contract: classified OCR documents may cover only within the measured 20%
   budget, while unknown/classifier-error documents must remain whole and now

@@ -273,6 +273,7 @@ def parse_theatre_json(json_data: str | list | dict, source_name: str = "") -> l
             description=item.get("description", "") or "",
             pushkin_card=bool(item.get("pushkin_card", False)),
             location=location,
+            location_address=item.get("location_address", "") or "",
             age_restriction=item.get("age_restriction", "") or "",
             scene=item.get("scene", "") or "",
             source_type=source_name,

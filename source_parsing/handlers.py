@@ -45,7 +45,10 @@ SOURCE_PARSING_OCR_TIMEOUT_SECONDS = int(os.getenv("SOURCE_PARSING_OCR_TIMEOUT_S
 SOURCE_PARSING_DIAG_TITLE = os.getenv("SOURCE_PARSING_DIAG_TITLE", "джотто").strip().lower()
 SOURCE_PARSING_DISABLE_OCR_SOURCES = {
     s.strip().lower()
-    for s in os.getenv("SOURCE_PARSING_DISABLE_OCR_SOURCES", "tretyakov").split(",")
+    for s in os.getenv(
+        "SOURCE_PARSING_DISABLE_OCR_SOURCES",
+        "tretyakov,yantarhall",
+    ).split(",")
     if s.strip()
 }
 
@@ -64,6 +67,12 @@ _SOURCE_HOST_HINTS: dict[str, tuple[str, ...]] = {
     "qtickets": ("qtickets.events",),
     "pyramida": ("pyramida.info",),
     "dom_iskusstv": ("xn--b1admiilxbaki.xn--p1ai", "домискусств.рф"),
+    "estrada": (
+        "domiskusstv.edinoepole.ru",
+        "театрэстрады39.рф",
+        "xn--39-6kcaud2faigcc4jwa.xn--p1ai",
+    ),
+    "yantarhall": ("янтарьхолл.рф", "xn--80awafglm0a6dza.xn--p1ai"),
 }
 
 
@@ -1716,8 +1725,9 @@ async def _process_parsing_files(
     only_sources: set[str] | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    direct_events_by_source: dict[str, list[TheatreEvent]] | None = None,
 ) -> None:
-    events_by_source: dict[str, list[TheatreEvent]] = {}
+    events_by_source: dict[str, list[TheatreEvent]] = dict(direct_events_by_source or {})
 
     def _normalize_source_name(raw_name: str) -> str:
         normalized = raw_name.strip().lower()
@@ -2158,21 +2168,45 @@ async def run_source_parsing(
     only_set: set[str] | None = None
     if only_sources:
         only_set = {_norm_source(s) for s in only_sources if _norm_source(s)}
+        aliases = {
+            "teatr_estrady": "estrada",
+            "dom_iskusstv": "estrada",
+            "yantar_hall": "yantarhall",
+        }
+        only_set = {aliases.get(source, source) for source in only_set}
         if not only_set:
             only_set = None
 
-    theatre_sources = {"dramteatr", "muzteatr", "sobor", "tretyakov"}
-    need_theatres = True if only_set is None else bool(only_set & (theatre_sources | {"theatres", "theatre", "theater"}))
+    kaggle_theatre_sources = {
+        "dramteatr",
+        "muzteatr",
+        "sobor",
+        "tretyakov",
+    }
+    theatre_group_aliases = {"theatres", "theatre", "theater"}
+    need_theatres = True if only_set is None else bool(
+        only_set & (kaggle_theatre_sources | theatre_group_aliases)
+    )
     need_phil = True if only_set is None else ("philharmonia" in only_set)
     need_qtickets = True if only_set is None else ("qtickets" in only_set)
+    need_estrada = True if only_set is None else bool(
+        only_set & {"estrada", "teatr_estrady", "dom_iskusstv", *theatre_group_aliases}
+    )
+    need_yantarhall = True if only_set is None else bool(
+        only_set & {"yantarhall", "yantar_hall", *theatre_group_aliases}
+    )
 
     try:
-        # 1. Run Kaggle kernels (Parallel). In targeted mode, skip unrelated kernels.
+        # 1. Run remote kernels and lightweight official HTTP catalogs in parallel.
+        # In targeted mode, skip unrelated sources.
         logger.info(
-            "source_parsing: starting kernels theatres=%s philharmonia=%s qtickets=%s only_sources=%s",
+            "source_parsing: starting sources theatres=%s philharmonia=%s qtickets=%s "
+            "estrada=%s yantarhall=%s only_sources=%s",
             int(bool(need_theatres)),
             int(bool(need_phil)),
             int(bool(need_qtickets)),
+            int(bool(need_estrada)),
+            int(bool(need_yantarhall)),
             sorted(only_set) if only_set else None,
         )
 
@@ -2185,6 +2219,16 @@ async def run_source_parsing(
             tasks["philharmonia"] = asyncio.create_task(run_philharmonia_kaggle_kernel(db=db))
         if need_qtickets:
             tasks["qtickets"] = asyncio.create_task(run_qtickets_kaggle_kernel(db=db))
+        if need_estrada or need_yantarhall:
+            from source_parsing.venue_catalogs import (
+                fetch_estrada_catalog,
+                fetch_yantarhall_catalog,
+            )
+
+            if need_estrada:
+                tasks["estrada"] = asyncio.create_task(fetch_estrada_catalog())
+            if need_yantarhall:
+                tasks["yantarhall"] = asyncio.create_task(fetch_yantarhall_catalog())
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         by_name = dict(zip(tasks.keys(), results))
@@ -2238,6 +2282,29 @@ async def run_source_parsing(
             else:
                 result.errors.append(f"Qtickets kernel failed: {status_q}")
 
+        direct_events_by_source: dict[str, list[TheatreEvent]] = {}
+        for source_name in ("estrada", "yantarhall"):
+            raw_catalog = by_name.get(source_name)
+            if isinstance(raw_catalog, Exception):
+                logger.error(
+                    "source_parsing: %s official catalog error: %s",
+                    source_name,
+                    raw_catalog,
+                )
+                result.errors.append(
+                    f"{source_name} official catalog error: {str(raw_catalog)}"
+                )
+                continue
+            if raw_catalog is None:
+                continue
+            parsed_catalog = parse_theatre_json(raw_catalog, source_name)
+            if not parsed_catalog:
+                result.errors.append(
+                    f"{source_name} official catalog returned zero parsed events"
+                )
+                continue
+            direct_events_by_source[source_name] = parsed_catalog
+
         await _process_parsing_files(
             db,
             bot,
@@ -2249,6 +2316,7 @@ async def run_source_parsing(
             only_sources=only_set,
             date_from=date_from,
             date_to=date_to,
+            direct_events_by_source=direct_events_by_source,
         )
         
         result.processing_duration = time.time() - start_time

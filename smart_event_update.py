@@ -13288,6 +13288,55 @@ def _has_explicit_time_conflict(candidate_time: str | None, event_time: str | No
     return bool(ct and et and ct != et)
 
 
+async def _filter_same_parser_source_occurrence_conflicts(
+    db: Database,
+    candidate: "EventCandidate",
+    events: Sequence[Event],
+) -> tuple[list[Event], list[int]]:
+    """Do not collapse two explicit sessions already known to one parser.
+
+    Canonical parsers are allowed to correct a wrong/empty time imported from a
+    social source.  Once an event already has provenance from the *same*
+    parser, however, another explicit time on the same date is a separate
+    occurrence unless proved otherwise.  This is common for theatre
+    performance pages whose one URL lists several sessions.
+    """
+
+    source_type = str(candidate.source_type or "").strip().lower()
+    if not source_type.startswith("parser:") or not events:
+        return list(events), []
+    candidate_time = _candidate_anchor_time(candidate, is_canonical_site=True)
+    if not candidate_time:
+        return list(events), []
+    conflicting_ids = {
+        int(event.id)
+        for event in events
+        if getattr(event, "id", None)
+        and _has_explicit_time_conflict(candidate_time, _event_anchor_time(event))
+    }
+    if not conflicting_ids:
+        return list(events), []
+
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(EventSource.event_id)
+                .where(
+                    EventSource.source_type == source_type,
+                    EventSource.event_id.in_(conflicting_ids),
+                )
+                .distinct()
+            )
+        ).all()
+    same_source_ids = {int(row[0]) for row in rows if row and row[0]}
+    if not same_source_ids:
+        return list(events), []
+    return (
+        [event for event in events if int(event.id or 0) not in same_source_ids],
+        sorted(same_source_ids),
+    )
+
+
 def _anchor_signature_for_duplicate_event(ev: Event) -> tuple[str, str, str, str]:
     """Return a compact signature to detect truly duplicated rows.
 
@@ -15766,6 +15815,25 @@ async def _smart_event_update_impl(
                     seen_ids.add(getattr(ev, "id", None))
                     if ev in citywide_festival_recall and getattr(ev, "id", None):
                         citywide_festival_recalled_ids.add(int(getattr(ev, "id")))
+
+    if (not anchor_forced) and is_canonical_site and shortlist:
+        shortlist, excluded_occurrence_ids = (
+            await _filter_same_parser_source_occurrence_conflicts(
+                db,
+                candidate,
+                shortlist,
+            )
+        )
+        if excluded_occurrence_ids:
+            logger.info(
+                "smart_update.shortlist excluded_same_parser_time_conflicts=%s "
+                "source_type=%s source_url=%s date=%s time=%s",
+                excluded_occurrence_ids,
+                candidate.source_type,
+                candidate.source_url,
+                candidate.date,
+                candidate.time,
+            )
 
     # Time is an anchor field, but for canonical site/parser imports we allow time corrections:
     # matching must work even if a Telegram-first event had a wrong/empty time.

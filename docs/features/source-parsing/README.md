@@ -10,7 +10,8 @@ gate; this surface must not assign `Event.photo_urls` directly. See
 ## Точки входа
 
 - Команда супер‑админа: `/parse` (и диагностический режим `/parse check`).
-  - Точечный запуск: `/parse <source>` (например `/parse dramteatr`, `/parse tretyakov`) чтобы не гонять все источники.
+  - Точечный запуск: `/parse <source>` (например `/parse dramteatr`,
+    `/parse estrada`, `/parse yantarhall`) чтобы не гонять все источники.
 - Автозапуск по расписанию: `ENABLE_SOURCE_PARSING=1` (см. `source_parsing/commands.py`).
 - Из VK review UI: кнопки “Извлечь …” для ссылок на поддерживаемые источники.
 
@@ -56,6 +57,11 @@ gate; this surface must not assign `Event.photo_urls` directly. See
 
 - если Telegram был импортирован первым, последующий `/parse` должен смержиться в тот же `event_id`;
 - при противоречиях в “якорных” полях (дата/время/место) побеждает факт из `/parse` (сайт), а не Telegram.
+- явные разные сеансы одного parser-источника на одну дату не склеиваются:
+  если существующая карточка уже имеет `parser:<source>` provenance и оба
+  времени заданы, несовпадающее время означает отдельную occurrence. Это не
+  мешает официальному parser-кандидату исправить пустое/ошибочное время у
+  карточки, которая до этого пришла только из VK/Telegram.
 
 ### Source-aware дедупликация в `/parse` (важно)
 
@@ -110,6 +116,12 @@ self-contained script: `kernel-metadata.json.code_file` указывает пр�
 `philharmonia_parser.py`, потому что Kaggle `kernels_push` загружает только
 `code_file`, а не произвольные соседние файлы каталога.
 
+Театр эстрады и Янтарь холл не используют Kaggle: их небольшие официальные
+каталоги читаются host-side HTTP-парсерами параллельно с kernels. Театр эстрады
+обходит все доступные месяцы билетного виджета; Янтарь холл следует bounded
+Bitrix AJAX pagination до terminal page. Нулевой результат или HTTP/DOM failure
+попадает в `result.errors` и не может завершить общий run ложнозелёным.
+
 `ops_run.status` для `kind=parse` отражает потерю источника:
 
 - `success` — kernels и processing завершились без ошибок/failed items;
@@ -127,7 +139,11 @@ self-contained script: `kernel-metadata.json.code_file` указывает пр�
 ## Документация по источникам
 
 - Театры (/parse): `docs/features/source-parsing/sources/theatres/README.md`
-- Дом искусств: `docs/features/source-parsing/sources/dom-iskusstv/README.md`
+- Театр эстрады (бывший Дом искусств):
+  `docs/features/source-parsing/sources/estrada/README.md`
+- Янтарь холл: `docs/features/source-parsing/sources/yantarhall/README.md`
+- Legacy URL-scoped спецпроекты Дом искусств:
+  `docs/features/source-parsing/sources/dom-iskusstv/README.md`
 - Pyramida: `docs/features/source-parsing/sources/pyramida/README.md`
 - Третьяковка: `docs/features/source-parsing/sources/tretyakov/README.md`
 - Филармония: `docs/features/source-parsing/sources/philharmonia/README.md`

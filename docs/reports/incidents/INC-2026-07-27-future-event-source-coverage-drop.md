@@ -1,10 +1,11 @@
 # INC-2026-07-27 Future-event source coverage drop
 
-Status: resolved
+Status: mitigating (reopened for additional official-source coverage)
 Severity: sev1
-Service: production event inventory / scheduled source parsing / Philharmonia and Qtickets
+Service: production event inventory / scheduled source parsing / official venue catalogs
 Opened: 2026-07-27
 Closed: 2026-07-27 11:33 UTC
+Reopened: 2026-07-27 11:40 UTC
 Owners: events-bot maintainer / operations
 Related incidents: `INC-2026-07-08-prod-root-overlay-disk-full.md`, `INC-2026-07-13-runtime-logging-recurring-event-quality.md`, `INC-2026-07-10-future-event-semantic-audit.md`, `INC-2026-06-24-future-event-date-default-venue-regressions.md`
 Related docs: `docs/features/source-parsing/README.md`, `docs/features/source-parsing/sources/philharmonia/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -31,6 +32,34 @@ next-30 — с `145` до `170`. Низкая плотность на отдел
 сохранилась и после полного восстановления источников, поэтому остаток спада
 отнесён к фактической сезонности/разреженности опубликованных календарей, а не
 к продолжающейся потере филармонии.
+
+После первого closure пользователь запросил расширенную проверку Собора,
+Калининградского театра эстрады, Янтарь холла и театров. Reconciliation с
+официальными каталогами показал вторую часть того же customer-visible coverage
+incident:
+
+- Собор: `17/17` официальных будущих occurrences совпали по date/time/title;
+- Драмтеатр: parser выполнился, но четыре экскурсии `14:30` были схлопнуты с
+  другими спектаклями `18:00` на тех же датах;
+- Музтеатр: из `20` официальных occurrences отсутствовал второй сеанс
+  «Бродский. Обещание любви» `2026-10-25 14:00`, схлопнутый с `17:00`;
+- Театр эстрады: legacy Дом искусств parser был только URL-scoped для старых
+  спецпроектов; полного каталога переименованного театра не существовало.
+  Полный обход future month links дал `23` official occurrences; в production
+  корректно совпали шесть, ещё одна карточка была вне текущего official
+  каталога, `17` отсутствовали;
+- Янтарь холл: `@yantarholl` действительно сканировался ежедневно, но Telegram
+  posts не покрывали официальный каталог. Отдельного website parser не было:
+  на официальном сайте опубликовано `77` future occurrences, из которых
+  `18` были представлены с корректным date/time, ещё шесть имели
+  пропущенные/ошибочные anchors, а `53` отсутствовали;
+- Третьяковка: parser исполнялся, но production provenance показал тот же
+  occurrence-collapse класс (несколько date/time ticket URLs на одном event).
+
+Root cause второй волны — отсутствие двух catalog sources и слишком широкое
+разрешение canonical parser менять время: при одной performance URL для
+нескольких сеансов Smart Update мог трактовать новый explicit time как
+коррекцию уже parser-backed карточки, а не отдельную occurrence.
 
 ## User / Business Impact
 
@@ -270,6 +299,12 @@ Raw evidence is retained outside git under
 - [x] verify the expected bounded runtime mirror remains enabled, within its
   byte/retention budget and above its free-space floor;
 - [ ] add durable per-source freshness/coverage alerting.
+- [ ] add direct full-catalog parsers for the renamed Theatre of Variety and
+  Yantar Hall;
+- [ ] prevent same-parser explicit-time conflicts from collapsing distinct
+  occurrences;
+- [ ] deploy from `origin/main`, run targeted production catch-ups and reconcile
+  Cathedral/Dram/Muz/Estrada/Yantar/Tretyakov official inventories.
 
 ## Follow-up Actions
 

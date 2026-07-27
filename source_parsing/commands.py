@@ -55,6 +55,8 @@ SOURCE_PARSING_GUARD_URLS = {
     "tretyakov": "https://kaliningrad.tretyakovgallery.ru/events/",
     "philharmonia": "https://filarmonia39.ru/afisha/",
     "qtickets": "https://kaliningrad.qtickets.events",
+    "estrada": "https://domiskusstv.edinoepole.ru/widget/events",
+    "yantarhall": "https://янтарьхолл.рф/",
 }
 
 
@@ -121,6 +123,8 @@ def _format_added_events_lines(added_events) -> list[str]:
         "tretyakov": "Третьяковка",
         "philharmonia": "Филармония",
         "qtickets": "Qtickets",
+        "estrada": "Театр эстрады",
+        "yantarhall": "Янтарь холл",
     }
     lines = [f"📌 **Добавленные события:** {len(added_events)}", ""]
     for item in added_events:
@@ -153,6 +157,8 @@ def _format_updated_events_lines(updated_events) -> list[str]:
         "tretyakov": "Третьяковка",
         "philharmonia": "Филармония",
         "qtickets": "Qtickets",
+        "estrada": "Театр эстрады",
+        "yantarhall": "Янтарь холл",
     }
     lines = [f"🔄 **Обновлённые события:** {len(updated_events)}", ""]
     for item in updated_events:
@@ -277,7 +283,8 @@ async def handle_parse_command(message: types.Message, db: Database, bot: Bot) -
             "- /parse — запустить парсинг всех источников\n"
             "- /parse <source> — запустить парсинг только для одного источника\n"
             "- /parse <source> --from YYYY-MM-DD --to YYYY-MM-DD — ограничить обработку датами (полезно для E2E)\n"
-            "Доступные источники: dramteatr, muzteatr, sobor, tretyakov, philharmonia, qtickets\n"
+            "Доступные источники: dramteatr, muzteatr, sobor, tretyakov, "
+            "philharmonia, qtickets, estrada, yantarhall\n"
             "- /parse check — диагностический режим (без сохранения в БД)",
         )
         return
@@ -331,7 +338,8 @@ async def handle_parse_command(message: types.Message, db: Database, bot: Bot) -
     else:
         await bot.send_message(
             message.chat.id,
-            "🔄 Запуск парсинга источников (Драмтеатр, Музтеатр, Кафедральный собор, Третьяковка)...",
+            "🔄 Запуск парсинга источников (театры, Собор, Третьяковка, "
+            "Театр эстрады, Янтарь холл, Филармония, Qtickets)...",
         )
 
     async with PARSE_LOCK:
@@ -405,10 +413,14 @@ async def handle_parse_command(message: types.Message, db: Database, bot: Bot) -
                         logger.warning("source_parsing: failed to send JSON %s: %s", json_path, e)
             
             # Warn if no JSON files were sent
-            if json_files_sent == 0 and result.total_events > 0:
+            if (
+                json_files_sent == 0
+                and result.total_events > 0
+                and not only_sources
+            ):
                 await bot.send_message(
                     message.chat.id,
-                    "⚠️ JSON файлы парсера недоступны (временные файлы удалены).",
+                    "ℹ️ JSON-файлы доступны только для удалённых Kaggle-источников.",
                 )
             
             # Send log file if available

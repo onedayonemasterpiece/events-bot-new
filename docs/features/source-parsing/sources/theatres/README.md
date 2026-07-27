@@ -2,7 +2,11 @@
 
 ## Обзор
 
-Команда `/parse` запускает парсинг событий из театров (Драмтеатр, Музтеатр, Кафедральный собор, Третьяковка) через Kaggle-ноутбук.
+Команда `/parse` запускает:
+
+- общий Kaggle parser для Драмтеатра, Музтеатра, Кафедрального собора и
+  Третьяковки;
+- host-side официальные HTTP-каталоги Театра эстрады и Янтарь холла.
 
 Также доступен диагностический режим: `/parse check` (запуск без сохранения в БД).
 
@@ -21,7 +25,10 @@ find_existing_event(location, date, time, title)
 3. **Проверка времени**:
    - Если в БД время `00:00` (placeholder) → **полное обновление** события
    - Если время совпадает → **обновление статуса билетов**
-   - Если время разное → событие НЕ совпадает
+   - Если время разное и карточка уже имеет provenance того же parser-источника
+     → это отдельный сеанс, событие НЕ совпадает
+   - Если parser provenance ещё нет (например карточка пришла только из
+     Telegram), сайт может исправить её ошибочное время через Smart Update
 
 ### Результаты обработки
 
@@ -30,7 +37,7 @@ find_existing_event(location, date, time, title)
 | ✅ Добавлено | Новое событие, создано в БД |
 | 🔄 Обновлено | Найдено существующее, обновлён статус билетов |
 | ❌ Ошибок | Не удалось обработать событие |
-| ⏭️ Пропущено | Событие уже существует через `upsert_event` |
+| ⏭️ Пропущено | Smart Update вернул реальный skip-статус |
 
 ## Источники данных
 
@@ -40,6 +47,8 @@ find_existing_event(location, date, time, title)
 | muzteatr | muzteatr.json | Музыкальный театр |
 | sobor | sobor.json | Кафедральный собор |
 | tretyakov | tretyakov.json | Третьяковская галерея |
+| estrada | официальный Edinoe Pole widget | Калининградский театр эстрады (Дом искусств) |
+| yantarhall | официальный Bitrix/AJAX catalog | Янтарь холл, Светлогорск |
 
 ## Что обновляется при совпадении
 
@@ -74,3 +83,5 @@ export LOG_LEVEL=DEBUG
 
 - Общий индекс фичи: `docs/features/source-parsing/README.md`
 - Pyramida: `docs/features/source-parsing/sources/pyramida/README.md`
+- Театр эстрады: `docs/features/source-parsing/sources/estrada/README.md`
+- Янтарь холл: `docs/features/source-parsing/sources/yantarhall/README.md`
