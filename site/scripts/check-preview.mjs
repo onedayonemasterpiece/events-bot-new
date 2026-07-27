@@ -78,8 +78,8 @@ if (
 const artifactRegistryHtml = readFileSync(join(root, 'artefakty/index.html'), 'utf8');
 if (
   !artifactRegistryHtml.includes('data-artifact-registry-page')
-  || !artifactRegistryHtml.includes('Артефакты Калининграда')
-  || !artifactRegistryHtml.includes('Знаки Калининграда')
+  || !artifactRegistryHtml.includes('Артефакты Калининградской области')
+  || !artifactRegistryHtml.includes('Знаки Янтарного края')
   || !artifactRegistryHtml.includes('5/8')
 ) {
   throw new Error('Artifact registry page misses the naming/collection contract');
@@ -93,6 +93,16 @@ if (
   || JSON.stringify(publicArtifactRegistry).includes('participant')
 ) {
   throw new Error('Public artifact registry projection leaks or loses registry data');
+}
+const personalArtifactTeaserHtml = readFileSync(join(root, 'dlya-menya/index.html'), 'utf8');
+if (
+  !personalArtifactTeaserHtml.includes('data-artifact-collection-teaser')
+  || !personalArtifactTeaserHtml.includes('data-prototype-progress')
+  || !personalArtifactTeaserHtml.includes('Знаки Янтарного края')
+  || !/Ещё\s*<strong[^>]*>7<\/strong>\s*скрыто/gu.test(personalArtifactTeaserHtml)
+  || (personalArtifactTeaserHtml.match(/class="personal-artifact(?: |")/gu) || []).length !== 3
+) {
+  throw new Error('Personal page misses the compact three-slot artifact collection teaser');
 }
 const previewBuild = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
 const previewCurrentDate = String(previewBuild.currentDate || eventsData.build.current_date || '');

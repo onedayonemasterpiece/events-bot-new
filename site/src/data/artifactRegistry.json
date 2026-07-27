@@ -1,9 +1,9 @@
 {
   "schema_version": "artifact_registry_v1",
-  "registry_version": "2026-07-27.1",
+  "registry_version": "2026-07-27.2",
   "updated_at": "2026-07-27",
-  "public_title": "Артефакты Калининграда",
-  "public_explainer": "Городские пасхалки, которые после находки становятся артефактами вашей коллекции.",
+  "public_title": "Артефакты Калининградской области",
+  "public_explainer": "Пасхалки, спрятанные в неожиданных и иногда тайных местах интерфейса, после находки становятся артефактами вашей коллекции.",
   "source_scope": {
     "kind": "private_telegram_product_thread",
     "anchor_message_id": 484,
@@ -13,9 +13,9 @@
   "collections": [
     {
       "id": "signs-of-kaliningrad-001",
-      "slug": "znaki-kaliningrada",
-      "public_name": "Знаки Калининграда",
-      "summary": "Черновик первой ограниченной коллекции: море, природа, архитектура, вкус и космическая история области.",
+      "slug": "znaki-yantarnogo-kraya",
+      "public_name": "Знаки Янтарного края",
+      "summary": "Вводная коллекция о разных гранях Калининградской области: море, природа, архитектура, вкус и космическая история.",
       "status": "draft",
       "artifact_ids": [
         "amber-after-storm",

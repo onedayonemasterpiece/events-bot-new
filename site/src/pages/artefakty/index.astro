@@ -20,11 +20,11 @@ const domains = Object.entries(ARTIFACT_DOMAIN_LABELS)
   .filter((domain) => domain.artifacts.length > 0);
 const canonicalUrl = absoluteUrl('/artefakty/');
 const title = `${registry.public_title} | ${SITE_NAME}`;
-const description = `Единый реестр из ${registry.artifacts.length} идей городских артефактов и черновик первой коллекции «${firstCollection.public_name}».`;
+const description = `Единый реестр из ${registry.artifacts.length} идей артефактов Калининградской области и черновик первой коллекции «${firstCollection.public_name}».`;
 const itemList = {
   '@context': 'https://schema.org',
   '@type': 'ItemList',
-  name: 'Реестр артефактов Калининграда',
+  name: 'Реестр артефактов Калининградской области',
   numberOfItems: registry.artifacts.length,
   itemListElement: registry.artifacts.map((artifact, index) => ({
     '@type': 'ListItem',
@@ -45,12 +45,12 @@ const itemList = {
 
       <header class="artifacts-hero">
         <div class="artifacts-hero__copy">
-          <p class="eyebrow">Городские пасхалки</p>
+          <p class="eyebrow">Пасхалки интерфейса</p>
           <h1>{registry.public_title}</h1>
           <p class="artifacts-lead">
-            На страницах сайта прячутся <strong>пасхалки</strong>. После находки
-            они становятся <strong>артефактами</strong>, а ограниченный набор
-            артефактов образует <strong>коллекцию</strong>.
+            В неожиданных и иногда тайных местах интерфейса прячутся <strong>пасхалки</strong>.
+            После находки они становятся <strong>артефактами Калининградской области</strong>,
+            а ограниченный набор артефактов образует <strong>коллекцию</strong>.
           </p>
           <div class="artifacts-hero__actions">
             <a class="cta-button" href="#first-collection">Первая коллекция</a>
@@ -170,7 +170,7 @@ const itemList = {
 
       <section class="proposal-panel" aria-labelledby="proposal-title">
         <p class="eyebrow">Дополнить реестр</p>
-        <h2 id="proposal-title">Предложить городской артефакт</h2>
+        <h2 id="proposal-title">Предложить артефакт региона</h2>
         <p>
           Пришлите название, связь с Калининградской областью, проверяемый источник,
           идею изображения и информацию о правах. Предложение проходит редакционную
@@ -178,7 +178,7 @@ const itemList = {
         </p>
         <a
           class="cta-button"
-          href="mailto:info@kenigevents.ru?subject=Предложение%20городского%20артефакта"
+          href="mailto:info@kenigevents.ru?subject=Предложение%20артефакта%20Калининградской%20области"
         >
           Написать на info@kenigevents.ru
         </a>

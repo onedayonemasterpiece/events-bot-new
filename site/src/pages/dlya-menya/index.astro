@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import OptimizedEventCardGrid from '../../components/OptimizedEventCardGrid.astro';
+import { getArtifactRegistry, getArtifactsForCollection } from '../../lib/artifacts';
 import { absoluteUrl, getPopularEvents, SITE_NAME, withBase } from '../../lib/events';
 
 // This is a review-only cold-start surface. The real profile remains local and
@@ -10,6 +11,15 @@ const events = getPopularEvents(18);
 const canonicalUrl = absoluteUrl('/dlya-menya/');
 const title = `Для меня — прототип | ${SITE_NAME}`;
 const description = 'Адаптивный прототип личной ленты: честный cold start на актуальных событиях и вход в сохранённые действия.';
+const artifactRegistry = getArtifactRegistry();
+const firstArtifactCollection = artifactRegistry.collections[0];
+const artifactTeaserItems = getArtifactsForCollection(firstArtifactCollection.id).slice(0, 3);
+const artifactTeaserFoundCount = 1;
+const artifactTeaserRemaining = firstArtifactCollection.unlock.total_count - artifactTeaserFoundCount;
+const artifactTeaserUntilApplication = Math.max(
+  0,
+  firstArtifactCollection.unlock.required_count - artifactTeaserFoundCount,
+);
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="personal" noindex>
   <main id="main" class="personal-page" data-personal-prototype>
@@ -17,12 +27,53 @@ const description = 'Адаптивный прототип личной лент
       <header class="personal-page__head">
         <p class="eyebrow">Личная лента · прототип</p>
         <h1>Для меня</h1>
+      </header>
+
+      <section
+        class="personal-artifacts"
+        aria-labelledby="personal-artifacts-title"
+        data-artifact-collection-teaser
+        data-prototype-progress
+      >
+        <div class="personal-artifacts__head">
+          <div>
+            <p class="eyebrow">Коллекция · пример состояния</p>
+            <h2 id="personal-artifacts-title">{firstArtifactCollection.public_name}</h2>
+            <p>
+              Открыт <strong>{artifactTeaserFoundCount} из {firstArtifactCollection.unlock.total_count}</strong>.
+              Ещё <strong>{artifactTeaserRemaining}</strong> скрыто в интерфейсе.
+            </p>
+          </div>
+          <a href={withBase('/artefakty/#first-collection')}>Открыть коллекцию</a>
+        </div>
+
+        <ol class="personal-artifacts__row" aria-label="Первые три слота коллекции">
+          {artifactTeaserItems.map((artifact, index) => {
+            const isFound = index < artifactTeaserFoundCount;
+            return (
+              <li class:list={['personal-artifact', { 'personal-artifact--locked': !isFound }]}>
+                <span class="personal-artifact__token" aria-hidden="true">
+                  {isFound ? String(index + 1).padStart(2, '0') : '?'}
+                </span>
+                <strong>{isFound ? artifact.public_name : 'Не открыт'}</strong>
+              </li>
+            );
+          })}
+        </ol>
+
+        <p class="personal-artifacts__note">
+          Сбор ещё не запущен — это пример будущего блока прогресса.
+          Для заявки понадобятся ещё {artifactTeaserUntilApplication} находки.
+        </p>
+      </section>
+
+      <section class="personal-page__intro" aria-label="Настройка личной ленты">
         <p>Пока у профиля недостаточно оценок, здесь показано компактное общее главное. После 2–3 лайков или отметок «Не интересно» порядок сможет учитывать ваши сигналы.</p>
         <div class="personal-page__actions" id="izbrannoe">
           <a href={withBase('/poisk/#poisk')}>Войти через поиск</a>
           <button type="button" data-reset-personalization>Сбросить локальные оценки</button>
         </div>
-      </header>
+      </section>
 
       <section class="personal-page__feed" aria-labelledby="personal-feed-title">
         <div>
@@ -48,14 +99,98 @@ const description = 'Адаптивный прототип личной лент
 <style>
   .personal-page { padding: clamp(1rem, 3vw, 2.5rem) 0 4rem; }
   .personal-page__head,
-  .personal-page__feed { padding: clamp(1.1rem, 3vw, 2.5rem); border: 1px solid rgba(55, 38, 27, .14); border-radius: 1.5rem; background: #fffaf3; }
+  .personal-page__intro,
+  .personal-page__feed,
+  .personal-artifacts { padding: clamp(1.1rem, 3vw, 2.5rem); border: 1px solid rgba(55, 38, 27, .14); border-radius: 1.5rem; background: #fffaf3; }
   .personal-page__head h1 { max-width: 12ch; margin: .15rem 0 .65rem; font-size: clamp(2.8rem, 7vw, 6.5rem); line-height: .9; letter-spacing: -.06em; }
-  .personal-page__head > p:last-of-type { max-width: 62ch; font-size: clamp(1rem, 1.6vw, 1.2rem); }
+  .personal-page__intro > p { max-width: 62ch; margin: 0; font-size: clamp(1rem, 1.6vw, 1.2rem); }
   .personal-page__actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.25rem; }
   .personal-page__actions :is(a, button) { display: inline-flex; align-items: center; min-height: 44px; padding: .65rem 1rem; border: 1px solid rgba(125, 55, 28, .25); border-radius: 999px; background: #fff; color: #753a22; font: inherit; font-weight: 800; text-decoration: none; cursor: pointer; }
-  .personal-page__feed { margin-top: 1rem; }
+  .personal-page__feed,
+  .personal-page__intro,
+  .personal-artifacts { margin-top: 1rem; }
   .personal-page__feed > div:first-child { max-width: 62ch; margin-bottom: 1rem; }
-  .personal-page__feed h2 { margin: .15rem 0 .45rem; font-size: clamp(1.8rem, 3vw, 3rem); }
+  .personal-page__feed h2,
+  .personal-artifacts h2 { margin: .15rem 0 .45rem; font-size: clamp(1.8rem, 3vw, 3rem); }
+  .personal-artifacts {
+    background: linear-gradient(135deg, #fffaf3, #f4e5d0);
+  }
+  .personal-artifacts__head {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .personal-artifacts__head p:not(.eyebrow) { margin: 0; color: #76645a; }
+  .personal-artifacts__head > a {
+    min-height: 44px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    color: #8d3f1d;
+    font-weight: 850;
+  }
+  .personal-artifacts__row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .65rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .personal-artifact {
+    min-width: 0;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: .55rem;
+    min-height: 128px;
+    padding: .75rem .45rem;
+    border: 1px solid rgba(125, 55, 28, .18);
+    border-radius: 1rem;
+    background: rgba(255, 253, 248, .86);
+    text-align: center;
+  }
+  .personal-artifact__token {
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(169, 78, 28, .38);
+    border-radius: 50%;
+    color: #863715;
+    background: radial-gradient(circle at 36% 28%, #ffe29a, #c76f1e 72%, #7f2f13);
+    font-weight: 950;
+  }
+  .personal-artifact strong {
+    max-width: 14ch;
+    font-size: .85rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .personal-artifact--locked {
+    border-style: dashed;
+    color: #76645a;
+    background: rgba(255, 255, 255, .48);
+  }
+  .personal-artifact--locked .personal-artifact__token {
+    border-color: rgba(75, 62, 54, .2);
+    color: #76645a;
+    background: rgba(75, 62, 54, .08);
+  }
+  .personal-artifacts__note {
+    margin: .8rem 0 0;
+    color: #76645a;
+    font-size: .86rem;
+  }
+  @media (max-width: 620px) {
+    .personal-artifacts__head { flex-direction: column; }
+    .personal-artifacts__head > a { width: 100%; }
+    .personal-artifacts__row { gap: .45rem; }
+    .personal-artifact { min-height: 112px; padding: .6rem .25rem; }
+    .personal-artifact__token { width: 46px; height: 46px; }
+    .personal-artifact strong { font-size: .72rem; }
+  }
   /* The same optimized row component owns desktop Event-detail and Personal
      crop/equal-height behavior. Mobile deliberately returns to one large card
      per row rather than forcing a three-column desktop packing solution. */

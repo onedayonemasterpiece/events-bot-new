@@ -43,8 +43,9 @@ test('Telegram idea registry is complete, stable and collection-linked', () => {
 });
 
 test('public page uses hybrid naming and states the drawing boundary', () => {
-  assert.match(page, /Городские пасхалки/u);
-  assert.match(page, /становятся <strong>артефактами<\/strong>/u);
+  assert.match(page, /Пасхалки интерфейса/u);
+  assert.match(page, /тайных местах интерфейса/u);
+  assert.match(page, /становятся <strong>артефактами Калининградской области<\/strong>/u);
   assert.match(page, /ограниченный набор[\s\S]*<strong>коллекцию<\/strong>/u);
   assert.match(page, /не означает[\s\S]*автоматическое участие или выигрыш/u);
   assert.match(page, /скорость сбора не повышают шанс/u);
@@ -72,4 +73,19 @@ test('artifact registry is a first-class public static route', () => {
   assert.match(page, /<main id="main"/u);
   assert.match(page, /aria-label="Хлебные крошки"/u);
   assert.match(page, /mailto:info@kenigevents\.ru/u);
+});
+
+test('personal prototype leads with a compact honest collection teaser', async () => {
+  const personalPage = await read('../src/pages/dlya-menya/index.astro');
+  assert.match(personalPage, /data-artifact-collection-teaser/u);
+  assert.match(personalPage, /data-prototype-progress/u);
+  assert.match(personalPage, /slice\(0, 3\)/u);
+  assert.match(personalPage, /Ещё <strong>\{artifactTeaserRemaining\}<\/strong> скрыто в интерфейсе/u);
+  assert.match(personalPage, /Открыть коллекцию/u);
+  assert.match(personalPage, /Сбор ещё не запущен/u);
+  assert.match(personalPage, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/u);
+  assert.ok(
+    personalPage.indexOf('data-artifact-collection-teaser')
+      < personalPage.indexOf('class="personal-page__intro"'),
+  );
 });

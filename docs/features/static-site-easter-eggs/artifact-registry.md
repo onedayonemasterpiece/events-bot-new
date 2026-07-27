@@ -43,7 +43,7 @@ operator inventory остаётся отдельной будущей surface.
 Канонический состав хранится только в JSON collection
 `signs-of-kaliningrad-001`:
 
-- public name: **«Знаки Калининграда»**;
+- public name: **«Знаки Янтарного края»**;
 - `8` артефактов;
 - все доступны одновременно;
 - planned window: `14d`;

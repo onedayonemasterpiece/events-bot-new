@@ -7,13 +7,19 @@
 - Added the public `/artefakty/` registry and `/data/artifacts.json` projection
   from one validated 139-entry Telegram-derived source, with hybrid public
   naming (`пасхалка` discovery → `артефакт` collectible → `коллекция` set), a
-  draft eight-item `Знаки Калининграда` collection and an explicit `60% = 5/8`
+  draft eight-item `Знаки Янтарного края` collection and an explicit `60% = 5/8`
   application unlock. The page exposes no active placement coordinates or
   participant progress, and no draw/application backend is enabled.
 - Added the collection/application fairness contract: all first-set artifacts
   are simultaneous, the threshold unlocks explicit application rather than
   auto-entry, and completion speed, extra finds, hints, likes, purchases and
   social sharing do not change draw weight.
+- Added a compact three-slot collection teaser as the first content row of the
+  noindex `/dlya-menya/` prototype. It distinguishes sample progress from live
+  state, shows how many artifacts remain hidden and links to the full collection.
+- Clarified the product vocabulary: the easter egg is hidden in the interface,
+  while the resulting artifact represents the whole Kaliningrad region rather
+  than only a city.
 
 - Added a dedicated, year-scoped `festival_calendar_item` SQLite model,
   runtime DDL/Alembic migration and dry-run-first idempotent 2026 backfill for

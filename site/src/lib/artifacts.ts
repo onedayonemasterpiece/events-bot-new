@@ -78,7 +78,7 @@ interface ArtifactRegistry {
 
 export const ARTIFACT_DOMAIN_LABELS: Record<ArtifactStoryDomain, string> = {
   architecture: 'Архитектура',
-  character: 'Городские персонажи',
+  character: 'Персонажи и легенды',
   culture: 'Культура',
   food: 'Гастрономия',
   history: 'История',
