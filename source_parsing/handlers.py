@@ -2060,8 +2060,12 @@ async def run_source_parsing(
             "date_to": date_to,
         },
     )
-    ops_status = "success"
-    ops_error: str | None = None
+    # Fail closed until every selected source finishes and the terminal status
+    # is derived from the completed result.  Cancellation (for example during
+    # a rolling deploy) is a BaseException and otherwise skips the Exception
+    # handler while still executing finally.
+    ops_status = "error"
+    ops_error: str | None = "run did not reach terminal status"
     log_handler: logging.Handler | None = None
 
     class _SourceParsingFilter(logging.Filter):

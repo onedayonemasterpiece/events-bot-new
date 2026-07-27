@@ -1,3 +1,9 @@
+import asyncio
+
+import pytest
+
+import source_parsing.handlers as handlers
+import source_parsing.philharmonia as philharmonia
 from source_parsing.handlers import (
     SourceParsingResult,
     SourceParsingStats,
@@ -52,3 +58,42 @@ def test_failed_items_are_partial_but_clean_sources_are_success():
         }
     )
     assert _source_parsing_terminal_status(clean) == "success"
+
+
+def test_cancelled_parse_finishes_ops_run_fail_closed(monkeypatch, tmp_path):
+    runner_started = asyncio.Event()
+    finished: dict[str, object] = {}
+
+    async def fake_start_ops_run(*_args, **_kwargs):
+        return 123
+
+    async def fake_finish_ops_run(*_args, **kwargs):
+        finished.update(kwargs)
+
+    async def slow_philharmonia_runner(*_args, **_kwargs):
+        runner_started.set()
+        await asyncio.sleep(3600)
+
+    monkeypatch.setenv("SOURCE_PARSING_DEBUG_DIR", str(tmp_path))
+    monkeypatch.setattr(handlers, "start_ops_run", fake_start_ops_run)
+    monkeypatch.setattr(handlers, "finish_ops_run", fake_finish_ops_run)
+    monkeypatch.setattr(
+        philharmonia,
+        "run_philharmonia_kaggle_kernel",
+        slow_philharmonia_runner,
+    )
+
+    async def scenario():
+        task = asyncio.create_task(
+            handlers.run_source_parsing(object(), only_sources=["philharmonia"])
+        )
+        await runner_started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(scenario())
+
+    assert finished["run_id"] == 123
+    assert finished["status"] == "error"
+    assert finished["details"]["fatal_error"] == "run did not reach terminal status"
