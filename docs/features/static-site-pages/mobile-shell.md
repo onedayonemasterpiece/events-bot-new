@@ -198,8 +198,10 @@ Manifest использует base-aware `id`, `scope`, `start_url`, `display=st
 `application/manifest+json`. Launcher-name намеренно короткий — `Анонсы` и в
 `name`, и в `short_name`: полный вариант рядом с Android-иконкой обрезается, а
 полный бренд `Полюбить Калининград / Анонсы` уже встроен в утверждённую
-кожаную иконку. Из `docs/reference/PWA-icon.png` локальный deterministic
-generator создаёт обычную и maskable-пару обоих размеров; versioned
+кожаную иконку. Из `docs/reference/PKA-PWA2.png` локальный deterministic
+generator создаёт обычную и maskable-пару обоих размеров. Maskable-версия
+уменьшает исходник до 82% на тёплом белом поле: прошивка и кожаная окантовка
+остаются внутри circle/squircle safe area Android; versioned
 manifest-link принудительно обновляет ранее закешированную иконку.
 Поведение соответствует текущим контрактам
 [MDN `beforeinstallprompt`](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeinstallprompt_event),

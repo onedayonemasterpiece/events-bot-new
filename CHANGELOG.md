@@ -291,6 +291,11 @@
 
 ### Fixed
 
+- **Static site / PWA launcher safe area**: replaced the launcher artwork with
+  the revised `PKA-PWA2` reference and added an 82% warm-white maskable safe
+  area, keeping the leather edge and stitched outline visible under Android
+  circle and squircle masks; versioned icon paths and the manifest link prevent
+  the prior edge-cropped immutable asset from being reused.
 - **Static site / PWA launcher identity**: shortened both installed-app labels
   to the readable `Анонсы`, replaced the generic launcher mark with the
   operator-approved full `Полюбить Калининград / Анонсы` leather artwork,
