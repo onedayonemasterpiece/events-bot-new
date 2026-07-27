@@ -294,6 +294,10 @@
 - Fixed the shared theatre Kaggle notebook so transient Playwright navigation
   during `page.content()` is retried after `domcontentloaded` instead of aborting
   Muzteatr and preventing Sobor/Tretyakov outputs.
+- Fixed initial official-catalog catch-up throughput: an existing event with
+  exact location/date/time/title anchors now receives parser provenance and
+  deterministic ticket/age/media reconciliation without a redundant LLM merge;
+  non-exact titles remain LLM-first through Smart Update.
 
 - **Static site / presentation QR PWA install flow**: the production root now
   mounts the shared PWA install controller and treats

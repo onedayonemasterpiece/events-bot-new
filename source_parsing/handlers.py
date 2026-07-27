@@ -25,6 +25,7 @@ from ops_run import finish_ops_run, start_ops_run
 from source_parsing.kaggle_runner import run_kaggle_kernel
 from source_parsing.parser import (
     TheatreEvent,
+    _normalize_title,
     parse_theatre_json,
     normalize_location_name,
     find_existing_event,
@@ -399,6 +400,74 @@ async def event_has_parser_source(
     if _host_matches_source(_extract_host(legacy_url), source_name):
         return True
     return False
+
+
+async def attach_parser_source_to_exact_existing(
+    db: Database,
+    event_id: int,
+    source_name: str,
+    event: TheatreEvent,
+) -> bool:
+    """Attach canonical provenance without an LLM call for an exact identity.
+
+    ``find_existing_event`` has already established location/date/time identity.
+    This fast path is deliberately narrower still: normalized titles must be
+    equal.  It does not rewrite semantic text; it only records the official
+    source so the ordinary deterministic ticket/age/media reconciliation can
+    run.  Non-exact titles continue through Smart Update.
+    """
+    source_url = str(event.url or "").strip()
+    normalized_url = _normalize_source_url_for_match(source_url)
+    normalized_candidate_title = _normalize_title(event.title or "")
+    if (
+        not event_id
+        or not source_url
+        or not normalized_url
+        or not normalized_candidate_title
+    ):
+        return False
+
+    async with db.get_session() as session:
+        stored = await session.get(Event, int(event_id))
+        if not stored or _normalize_title(stored.title or "") != normalized_candidate_title:
+            return False
+
+        rows = list(
+            (
+                await session.execute(
+                    select(EventSource).where(EventSource.event_id == int(event_id))
+                )
+            ).scalars()
+        )
+        existing = next(
+            (
+                row
+                for row in rows
+                if _normalize_source_url_for_match(row.source_url) == normalized_url
+            ),
+            None,
+        )
+        if existing is None:
+            session.add(
+                EventSource(
+                    event_id=int(event_id),
+                    source_type=f"parser:{str(source_name).strip().lower()}",
+                    source_url=source_url,
+                    source_text=(event.description or "").strip() or None,
+                    imported_at=datetime.now(timezone.utc),
+                    trust_level="high",
+                )
+            )
+        else:
+            existing.source_type = f"parser:{str(source_name).strip().lower()}"
+            if event.description and not existing.source_text:
+                existing.source_text = event.description.strip()
+            if not existing.trust_level:
+                existing.trust_level = "high"
+            existing.imported_at = datetime.now(timezone.utc)
+            session.add(existing)
+        await session.commit()
+    return True
 
 
 def unpack_add_event_result(
@@ -2636,6 +2705,13 @@ async def process_source_events(
                     event.source_type,
                     event.url,
                 )
+                if not parser_source_present:
+                    parser_source_present = await attach_parser_source_to_exact_existing(
+                        db,
+                        existing_id,
+                        source,
+                        event,
+                    )
 
             if existing_id and parser_source_present:
                 event_id = existing_id

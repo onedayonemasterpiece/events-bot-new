@@ -163,6 +163,12 @@ Raw evidence is retained outside git under
   Playwright was reading the DOM and raised `Page.content: Unable to retrieve
   content because the page is navigating`. The notebook log was downloaded
   from the failed Kaggle run and the DOM boundary was changed to bounded retry.
+- `2026-07-27 12:21 UTC`: the same run began the initial official-catalog
+  backfill. Exact pre-existing events without parser provenance unnecessarily
+  entered a full Smart Update merge and took roughly three minutes each. The
+  catch-up path was narrowed: exact location/date/time/title identities now
+  attach provenance and use deterministic reconciliation, while new or
+  non-exact events remain LLM-first.
 
 ## Root Cause
 
