@@ -311,7 +311,8 @@
   leaking `datetime.date` objects into Smart Update and failing every new
   Philharmonia event before persistence. Parse runs now also start fail-closed,
   so cancellation during a rolling deploy cannot finalize an incomplete run as
-  `success`.
+  `success`. Structured parser occurrences associated with a festival also no
+  longer inherit the social whole-program `festival_post` skip.
 
 - Prevented source-grounded studio addresses from being rebound to unrelated
   canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);

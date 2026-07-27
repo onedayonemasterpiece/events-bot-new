@@ -140,6 +140,11 @@ Raw evidence is retained outside git under
     not enter its ordinary `Exception` handler, the `finally` block recorded the
     interrupted run as green. Parse status must start fail-closed and become
     success/partial only after completed result evaluation.
+11. The corrected catch-up then exposed an over-broad festival guard:
+    the source-native individual concert «Аве Мария» was classified
+    `festival_post` because it closes «Бахослужение» and was skipped. Official
+    parser candidates are already structured occurrences, so the whole-program
+    skip must remain limited to non-parser/social candidates.
 
 ## Contributing Factors
 

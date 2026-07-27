@@ -51,6 +51,9 @@ Script использует отдельный Kaggle slug: API не разре�
 - `normalized_date` валидируется как ISO date, но production boundary сохраняет
   его строкой `YYYY-MM-DD`: `TheatreEvent` и Smart Update не принимают
   `datetime.date` в этом поле.
+- Каждый parser output уже является отдельным структурированным occurrence.
+  Упоминание/связь с фестивалем обогащает такое событие и не должно включать
+  social-source guard для целого `festival_post`.
 
 ## Regression contract
 
@@ -73,6 +76,8 @@ production output boundary обязаны поднять
    per-run status-dataset.
 7. output-boundary replay проверяет не только значение даты, но и строковый тип
    `TheatreEvent.parsed_date`.
+8. parser-native концерт с `festival_context=festival_post` не отбрасывается:
+   whole-program skip остаётся только для неструктурированных social sources.
 
 ## Отложенные улучшения
 
