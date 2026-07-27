@@ -1,0 +1,106 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/integration/static-site-focus-group-product-20260727
+base_branch: integration/static-site-focus-group-product-20260727
+integration_branch: integration/static-site-focus-group-product-20260727
+global_constraints:
+  - page and product prototype only; no production deployment or live backend
+  - do not edit the dirty primary checkout
+  - no OpenAI image generation
+  - local state must never be described as authorization
+  - PWA installation and launch remain browser-controlled
+  - reward participation breadth, never positive sentiment or NPS value
+verification_owner: integration
+stop_conditions:
+  - a live identity, database mutation, outbound message or deploy would be required
+  - browser-local state is being represented as durable server membership
+  - prize copy would be published as legally approved rules
+lanes:
+  - id: pwa-membership
+    role: worker
+    requirement_ids: [R13, R14, R15, R16]
+    target: mobile-first join/PWA/optional-identity and independent focus-state continuity
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/focus-group/pwa-membership
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-pwa-membership
+    writable_files:
+      - site/src/components/FocusPwa*.astro
+      - site/src/components/FocusGroupInviteIntake.astro
+      - site/src/lib/focus-pwa*.ts
+      - site/src/lib/focus-group-prototype.ts
+      - site/src/pages/fokus-gruppa/priglashenie/index.astro
+      - site/src/pages/fokus-gruppa/manifest.webmanifest.ts
+      - site/src/layouts/EventLayout.astro
+      - site/public/assets/pwa/focus-group-icon.png
+      - site/tests/focus-pwa*.test.mjs
+      - site/src/lib/focus-group-prototype.test.ts
+      - .codex/lanes/pwa-membership/RESULTS.md
+    forbidden_files:
+      - docs/
+      - CHANGELOG.md
+      - site/src/pages/fokus-gruppa/kollektsiya/
+      - site/src/components/FocusEgg*.astro
+    expected_output: committed mobile onboarding and focus PWA prototype with targeted tests
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: egg-program
+    role: worker
+    requirement_ids: [R17, R18, R19]
+    target: reward scoring and versioned site-wide placement product contract
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/focus-group/egg-program
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-egg-program
+    writable_files:
+      - docs/backlog/features/static-site-focus-group/easter-egg-program.md
+      - docs/backlog/features/static-site-focus-group/product-prototype.md
+      - docs/features/static-site-easter-eggs/README.md
+      - .codex/lanes/egg-program/RESULTS.md
+    forbidden_files:
+      - site/
+      - CHANGELOG.md
+      - docs/backlog/features/static-site-focus-group/README.md
+    expected_output: committed scoring, fairness and placement specification
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: egg-prototype
+    role: worker
+    requirement_ids: [R20]
+    target: collection and conditional-placement prototype based on the accepted program contract
+    depends_on: [egg-program]
+    execution_mode: serial_after_dependency
+    branch: agent/focus-group/egg-prototype
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-egg-prototype
+    writable_files:
+      - site/src/components/FocusEgg*.astro
+      - site/src/lib/focus-easter-eggs.ts
+      - site/src/pages/fokus-gruppa/kollektsiya/index.astro
+      - site/src/pages/zakrytaya-afisha/index.astro
+      - site/tests/focus-easter-eggs.test.mjs
+      - .codex/lanes/egg-prototype/RESULTS.md
+    forbidden_files:
+      - docs/
+      - CHANGELOG.md
+      - site/src/pages/fokus-gruppa/priglashenie/
+      - site/src/layouts/EventLayout.astro
+    expected_output: committed placement-state prototype and tests
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: integration
+    role: merge_reviewer
+    requirement_ids: [R21]
+    target: integrate lanes, reconcile shared docs, run incident/PWA/build/browser gates and push
+    depends_on: [pwa-membership, egg-program, egg-prototype]
+    execution_mode: serial_after_dependency
+    branch: integration/static-site-focus-group-product-20260727
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-group-product-20260727
+    writable_files: [all integration-only reconciliation files]
+    forbidden_files: []
+    expected_output: clean pushed branch with updated closure evidence
+    verification_scope: full_local
+    effort: maximum_available
+    status: planned
