@@ -101,6 +101,15 @@ run-config пишет status ledger через отдельное коротко
 теряет один или несколько источников с `cannot start a transaction within a
 transaction`.
 
+Основные parser kernels не зависят от создаваемого на каждый запуск Kaggle
+status-dataset. Kaggle Dataset API — только вспомогательный transport для
+callback telemetry; отказ `dataset_create_new`/upload token не должен блокировать
+сам сбор источника. Для Theatres, Philharmonia и Qtickets используется host-side
+kernel polling и `ops_run` report. Код Philharmonia kernel является
+self-contained script: `kernel-metadata.json.code_file` указывает прямо на
+`philharmonia_parser.py`, потому что Kaggle `kernels_push` загружает только
+`code_file`, а не произвольные соседние файлы каталога.
+
 `ops_run.status` для `kind=parse` отражает потерю источника:
 
 - `success` — kernels и processing завершились без ошибок/failed items;

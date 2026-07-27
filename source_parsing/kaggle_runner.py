@@ -21,7 +21,10 @@ from video_announce.kaggle_client import (
     await_kernel_dataset_sources,
 )
 from kaggle_registry import register_job, remove_job
-from kaggle_status import create_kaggle_run_config, create_kaggle_status_dataset, enrich_kaggle_status_from_ledger
+from kaggle_status import (
+    create_kaggle_run_config,
+    enrich_kaggle_status_from_ledger,
+)
 from db import Database
 
 logger = logging.getLogger(__name__)
@@ -116,19 +119,10 @@ async def run_kaggle_kernel(
             kernel_ref=kernel_ref,
             resource_leases=list(resource_leases or []),
         )
-        username = (os.getenv("KAGGLE_USERNAME") or "").strip()
-        if username and kaggle_run_config:
-            status_dataset = create_kaggle_status_dataset(
-                client,
-                username=username,
-                slug_prefix=f"status-{kernel_folder}",
-                run_id=run_token,
-                config=kaggle_run_config,
+        if kaggle_run_config:
+            logger.info(
+                "theatres_kaggle: using host polling; per-run status dataset disabled"
             )
-            if status_dataset:
-                dataset_sources_clean.append(status_dataset)
-        elif kaggle_run_config:
-            logger.warning("theatres_kaggle: KAGGLE_USERNAME missing; status dataset skipped")
 
     await _notify("prepare")
     

@@ -87,7 +87,6 @@ def test_real_notebook_kernels_are_status_instrumentable(tmp_path):
         "VideoAfisha",
         "KoenigsbergStories",
         "Preview3D",
-        "ParsePhilharmonia",
         "ParseTheatres",
     ):
         src = KERNELS_ROOT_PATH / folder_name
@@ -117,6 +116,7 @@ def test_real_script_kernels_are_status_aware():
     for relative_path in (
         "TelegramMonitor/telegram_monitor.py",
         "GuideExcursionsMonitor/guide_excursions_monitor.py",
+        "ParsePhilharmonia/philharmonia_parser.py",
         "ParseQtickets/parse_qtickets.py",
         "ParsePyramida/parse_pyramida.py",
         "ParseDomIskusstv/parse_dom_iskusstv.py",
