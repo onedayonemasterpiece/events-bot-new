@@ -129,6 +129,12 @@ Raw evidence is retained outside git under
 8. Kaggle kernel editor type is immutable for an existing slug, so converting
    `zigomaro/parse-philharmonia` from notebook to script was rejected. The
    self-contained script must be published under a new slug.
+9. The first successful script-kernel catch-up exposed a latent
+   production-boundary type mismatch: Philharmonia converted
+   `normalized_date` to `datetime.date`, while Smart Update requires ISO text
+   and calls `.split()` on the value. All 18 parsed items therefore reached
+   processing but failed before persistence with
+   `'datetime.date' object has no attribute 'split'`.
 
 ## Contributing Factors
 
