@@ -98,6 +98,7 @@ test('stream rescue and overall watchdog are bounded and cleanup remains epoch-o
   const invoke = extractFunction(search, 'invokeEventSearch');
   const run = extractFunction(search, 'runSearch');
 
+  assert.match(invoke, /error\?\.message !== 'search_fetch_headers_timeout'[\s\S]*?invokeEventSearchJson\([^;]+?'headers_stalled'/u);
   assert.match(invoke, /let jsonRescueAttempted = false/u);
   assert.match(invoke, /if \(jsonRescueAttempted\)[\s\S]*?jsonRescueAttempted = true/u);
   assert.match(invoke, /cancelSearchReader\(\)[\s\S]*?invokeEventSearchJson\([^;]+?'stream_stalled'/u);

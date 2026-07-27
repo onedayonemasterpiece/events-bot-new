@@ -46,8 +46,8 @@ test('configured Search accepts a draft before auth and resumes it after Yandex 
   assert.doesNotMatch(donor, /data-search-form hidden=\{enabled\}/u);
   assert.match(donor, /const searchDraftKey = 'ke_authorized_search_draft_v1'/u);
   assert.match(donor, /saveSearchDraft\(validation\.query, true\);\s*searchStartPending = false;\s*await beginYandexLogin\(\);/u);
-  assert.match(donor, /restoreSearchDraft\(\);\s*handleAuthCallback\(\)/u);
-  assert.match(donor, /if \(signedIn\) await runPendingSearchDraft\(\)/u);
+  assert.match(donor, /restoreSearchDraft\(\);\s*authController\.initialize\(\)/u);
+  assert.match(donor, /if \(signedIn\)[\s\S]*?runPendingSearchDraft\(\)\.catch/u);
   assert.match(donor, /removeJsonStorage\(searchDraftKey\);\s*if \(input\) input\.value = draft\.query;\s*await runSearch/u);
 });
 

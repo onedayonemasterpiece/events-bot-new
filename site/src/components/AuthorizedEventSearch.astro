@@ -43,7 +43,7 @@ const HeadingTag = headingLevel;
   <form class="authorized-search__form" data-search-form aria-disabled={!enabled ? 'true' : undefined}>
     <label class:list={[!standalone && 'sr-only', standalone && 'authorized-search__query-label']} for="authorized-event-search-input">Что хочется сделать?</label>
     {standalone ? (
-      <textarea id="authorized-event-search-input" rows="3" maxlength="180" data-search-input placeholder="Например: послушать хор или сходить с детьми бесплатно" autocomplete="off" readonly={!enabled}></textarea>
+      <textarea id="authorized-event-search-input" rows="3" maxlength="180" data-search-input placeholder="Например: послушать хор или сходить с детьми бесплатно" autocomplete="off" enterkeyhint="search" readonly={!enabled}></textarea>
     ) : (
       <input id="authorized-event-search-input" type="search" maxlength="180" data-search-input placeholder="Например: джаз на выходных" autocomplete="off" />
     )}
@@ -73,7 +73,7 @@ const HeadingTag = headingLevel;
 </section>
 
 <script>
-  import { createClient } from '@supabase/supabase-js';
+  import { getStaticSiteAuth } from '../lib/staticSiteAuth';
   import { resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
 
   const roots = Array.from(document.querySelectorAll('[data-authorized-search]'));
@@ -102,6 +102,7 @@ const HeadingTag = headingLevel;
     const more = root.querySelector('[data-search-more]');
     const moreDefaultLabel = more?.textContent || 'Показать ещё';
     let supabase = null;
+    let authController = null;
     let currentQuery = '';
     let offset = 0;
     let loading = false;
@@ -127,81 +128,10 @@ const HeadingTag = headingLevel;
     const searchStreamIdleTimeoutMs = timeoutValue('streamIdle', 10000);
     const searchOverallTimeoutMs = timeoutValue('overall', 45000);
     const authSessionTimeoutMs = 8000;
-    const authCallbackTimeoutMs = 20000;
     const maxQueryLength = 180;
 
-    const pkceCookiePrefix = 'ke_pkce_';
-    const authIntentKey = 'ke_yandex_auth_intent_v1';
     const searchDraftKey = 'ke_authorized_search_draft_v1';
     const searchDraftMaxAgeMs = 30 * 60 * 1000;
-
-    function isPkceCodeVerifierKey(key) {
-      return typeof key === 'string' && key.endsWith('-code-verifier');
-    }
-
-    function pkceCookieName(key) {
-      // Cookie names are deliberately short and path-wide: the OAuth return URL can
-      // be any static preview/listing path on kenigevents.ru.
-      return `${pkceCookiePrefix}${encodeURIComponent(key).replace(/%/g, '_')}`;
-    }
-
-    function setPkceCookie(key, value) {
-      if (!isPkceCodeVerifierKey(key)) return;
-      try {
-        document.cookie = `${pkceCookieName(key)}=${encodeURIComponent(value)}; Max-Age=900; Path=/; SameSite=Lax; Secure`;
-      } catch (_error) {
-        // Best-effort fallback only. localStorage remains the primary Supabase storage.
-      }
-    }
-
-    function getPkceCookie(key) {
-      if (!isPkceCodeVerifierKey(key)) return null;
-      const name = `${pkceCookieName(key)}=`;
-      const item = document.cookie.split('; ').find((part) => part.startsWith(name));
-      if (!item) return null;
-      try {
-        return decodeURIComponent(item.slice(name.length));
-      } catch (_error) {
-        return null;
-      }
-    }
-
-    function removePkceCookie(key) {
-      if (!isPkceCodeVerifierKey(key)) return;
-      try {
-        document.cookie = `${pkceCookieName(key)}=; Max-Age=0; Path=/; SameSite=Lax; Secure`;
-      } catch (_error) {
-        // Best-effort cleanup only.
-      }
-    }
-
-    const authStorage = {
-      getItem(key) {
-        try {
-          const value = window.localStorage.getItem(key);
-          if (value != null) return value;
-        } catch (_error) {
-          // Continue to cookie fallback for the short-lived PKCE verifier.
-        }
-        return getPkceCookie(key);
-      },
-      setItem(key, value) {
-        try {
-          window.localStorage.setItem(key, value);
-        } catch (_error) {
-          // Supabase will still keep the in-memory session for this page load.
-        }
-        setPkceCookie(key, value);
-      },
-      removeItem(key) {
-        try {
-          window.localStorage.removeItem(key);
-        } catch (_error) {
-          // Ignore storage cleanup failures.
-        }
-        removePkceCookie(key);
-      },
-    };
 
     function setStatus(message, kind = 'info') {
       if (!status) return;
@@ -274,19 +204,6 @@ const HeadingTag = headingLevel;
       }
     }
 
-    function markAuthIntent(state, extra = {}) {
-      writeJsonStorage(authIntentKey, {
-        state,
-        provider: root.dataset.yandexProvider || 'custom:yandex',
-        updated_at: new Date().toISOString(),
-        ...extra,
-      });
-    }
-
-    function clearAuthIntent() {
-      removeJsonStorage(authIntentKey);
-    }
-
     function saveSearchDraft(query, pending = false) {
       writeJsonStorage(searchDraftKey, {
         query: String(query || '').slice(0, maxQueryLength),
@@ -330,28 +247,6 @@ const HeadingTag = headingLevel;
       return true;
     }
 
-    function supabaseProjectRef() {
-      try {
-        return new URL(root.dataset.supabaseUrl).host.split('.', 1)[0];
-      } catch (_error) {
-        return '';
-      }
-    }
-
-    function hasStoredSupabaseSession() {
-      const ref = supabaseProjectRef();
-      if (!ref) return false;
-      try {
-        return Boolean(window.localStorage.getItem(`sb-${ref}-auth-token`));
-      } catch (_error) {
-        return false;
-      }
-    }
-
-    function hasLocalAuthSignal() {
-      return Boolean(readJsonStorage(authIntentKey)) || hasStoredSupabaseSession();
-    }
-
     function renderAuthState(session, options = {}) {
       const { preserveError = false, checking = false } = options;
       const signedIn = Boolean(session?.user);
@@ -373,9 +268,6 @@ const HeadingTag = headingLevel;
         const params = new URLSearchParams(window.location.search);
         const initialQuery = params.get('q');
         if (initialQuery && input && !input.value) input.value = initialQuery.slice(0, 160);
-        markAuthIntent('signed_in', { user_hint: displayUserName(session.user) });
-      } else if (checking) {
-        markAuthIntent('checking');
       } else if (!preserveError) {
         setStatus('Войдите через Яндекс, чтобы включить поиск.');
       }
@@ -1003,7 +895,7 @@ const HeadingTag = headingLevel;
 
     async function invokeEventSearchJson(endpoint, body, session, reason = 'json_fallback', options = {}) {
       const { epoch = searchEpoch, signal } = options;
-      const fallbackBody = reason === 'stream_stalled'
+      const fallbackBody = reason === 'stream_stalled' || reason === 'headers_stalled'
         ? { ...body, use_llm_verifier: false, stream_rescue: true }
         : body;
       const response = await fetchWithSearchHeadersTimeout(endpoint, {
@@ -1019,23 +911,32 @@ const HeadingTag = headingLevel;
       if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
-      setSearchProgress(100, reason === 'stream_stalled' ? 'Показал быстрые карточки' : 'Готово', { epoch, stage: 'result' });
-      return { data: payload, error: null, rescued: reason === 'stream_stalled' };
+      const rescued = reason === 'stream_stalled' || reason === 'headers_stalled';
+      setSearchProgress(100, rescued ? 'Показал быстрые карточки' : 'Готово', { epoch, stage: 'result' });
+      return { data: payload, error: null, rescued };
     }
 
     async function invokeEventSearch(body, session, options = {}) {
       const { epoch = searchEpoch, signal } = options;
       const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
-      const response = await fetchWithSearchHeadersTimeout(endpoint, {
-        method: 'POST',
-        headers: {
-          apikey: root.dataset.supabaseKey,
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/x-ndjson',
-        },
-        body: JSON.stringify(body),
-      }, { signal });
+      let response;
+      try {
+        response = await fetchWithSearchHeadersTimeout(endpoint, {
+          method: 'POST',
+          headers: {
+            apikey: root.dataset.supabaseKey,
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/x-ndjson',
+          },
+          body: JSON.stringify(body),
+        }, { signal });
+      } catch (error) {
+        if (error?.message !== 'search_fetch_headers_timeout' || signal?.aborted) throw error;
+        if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
+        setStatus('Связь с поиском замедлилась. Переключаюсь на обычный ответ…');
+        return invokeEventSearchJson(endpoint, body, session, 'headers_stalled', { epoch, signal });
+      }
       if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/x-ndjson')) {
@@ -1135,7 +1036,8 @@ const HeadingTag = headingLevel;
       searchStartPending = true;
       let sessionData;
       try {
-        ({ data: sessionData } = await supabase.auth.getSession());
+        const session = await authController?.getSession();
+        sessionData = { session };
       } catch (_error) {
         if (sessionCheckEpoch !== searchEpoch) return;
         searchStartPending = false;
@@ -1231,7 +1133,7 @@ const HeadingTag = headingLevel;
         if (error) {
           const statusCode = Number(error?.status || error?.context?.status || 0);
           if (statusCode === 401 || statusCode === 403 || error?.error === 'auth_required') {
-            await supabase.auth.signOut();
+            await authController.signOut();
             clearResults();
             await updateAuth();
           }
@@ -1286,108 +1188,12 @@ const HeadingTag = headingLevel;
       }
     }
 
-    function cleanAuthRedirectUrl() {
-      const url = new URL(window.location.href);
-      for (const key of ['code', 'error', 'error_code', 'error_description', 'state', 'sb']) url.searchParams.delete(key);
-      url.hash = '';
-      return url.toString();
-    }
-
-    function authCallbackParams() {
-      const merged = new URLSearchParams(window.location.search);
-      if (window.location.hash && window.location.hash.length > 1) {
-        const hashParams = new URLSearchParams(window.location.hash.slice(1));
-        for (const [key, value] of hashParams.entries()) {
-          if (!merged.has(key)) merged.set(key, value);
-        }
-      }
-      return merged;
-    }
-
-    function showAuthCallbackError() {
-      const params = authCallbackParams();
-      if (!params.has('error') && !params.has('error_code') && !params.has('error_description')) return false;
-      const errorCode = params.get('error_code') || params.get('error') || '';
-      cleanAuthCallbackHistory();
-      setStatus(errorCode ? `Вход через Яндекс не завершён: ${errorCode}. Попробуйте ещё раз.` : 'Вход через Яндекс не завершён. Попробуйте ещё раз.', 'error');
-      return true;
-    }
-
-    function cleanAuthCallbackHistory() {
-      const cleanUrl = cleanAuthRedirectUrl();
-      if (cleanUrl !== window.location.href) window.history.replaceState(window.history.state, '', cleanUrl);
-    }
-
-    async function handleAuthCallback() {
-      if (!supabase) return { attempted: false, signedIn: false };
-      const params = authCallbackParams();
-      const code = params.get('code');
-      if (!code) return { attempted: false, signedIn: false };
-      // A PKCE callback is a transient state on a fully static page. Protect the
-      // callback status from the initial onAuthStateChange(null) emission while
-      // the browser exchanges the one-time code with Supabase.
-      authCallbackHadError = true;
-      markAuthIntent('callback_started', { redirect_to: cleanAuthRedirectUrl() });
-      renderAuthState(null, { preserveError: true, checking: true });
-      setStatus('Завершаю вход через Яндекс…');
-      let exchangeResult;
-      try {
-        exchangeResult = await withTimeout(
-          supabase.auth.exchangeCodeForSession(code),
-          authCallbackTimeoutMs,
-          'auth_callback_timeout',
-        );
-      } catch (caughtError) {
-        exchangeResult = { data: null, error: caughtError };
-      }
-      const { data, error } = exchangeResult;
-      if (error) {
-        cleanAuthCallbackHistory();
-        const rawMessage = String(error.message || error.name || error);
-        const message = rawMessage === 'auth_callback_timeout'
-          ? 'Вход через Яндекс не завершён: браузер не получил ответ от Supabase. Перезагрузите страницу или нажмите «Войти через Яндекс» ещё раз.'
-          : /code verifier|flow state|auth code|invalid|pkce/i.test(rawMessage)
-            ? 'Вход через Яндекс не завершён: сессия входа устарела или открыта не в той вкладке. Нажмите «Войти через Яндекс» ещё раз с этой страницы.'
-            : 'Вход через Яндекс не завершён. Попробуйте ещё раз.';
-        const existingSignedIn = hasLocalAuthSignal() ? await updateAuth({ preserveError: true }) : false;
-        if (existingSignedIn) {
-          authCallbackHadError = false;
-          return { attempted: true, signedIn: true };
-        }
-        renderAuthState(null, { preserveError: true });
-        markAuthIntent('callback_failed', { reason: rawMessage.slice(0, 120) });
-        setStatus(message, 'error');
-        return { attempted: true, signedIn: false };
-      }
-      const session = data?.session || null;
-      if (session?.access_token && session?.refresh_token) {
-        // exchangeCodeForSession normally persists the session. setSession is an
-        // explicit belt-and-suspenders write for mobile static-page returns where
-        // the server-side OAuth session is created but UI state can remain anonymous.
-        await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
-      }
-      cleanAuthCallbackHistory();
-      const signedIn = await updateAuth({ session, preserveError: true });
-      if (!signedIn) {
-        markAuthIntent('callback_no_browser_session');
-        setStatus('Вход через Яндекс завершился на сервере, но браузер не сохранил сессию. Нажмите «Войти через Яндекс» ещё раз.', 'error');
-      } else {
-        authCallbackHadError = false;
-      }
-      return { attempted: true, signedIn };
-    }
-
     async function beginYandexLogin() {
-      const redirectTo = cleanAuthRedirectUrl();
-      markAuthIntent('login_started', { redirect_to: redirectTo });
+      if (!authController) return false;
       renderAuthState(null, { preserveError: true, checking: true });
       setStatus('Открываю вход через Яндекс…');
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: root.dataset.yandexProvider || 'custom:yandex',
-        options: { redirectTo },
-      });
-      if (error) {
-        markAuthIntent('login_start_failed', { reason: String(error.message || error).slice(0, 120) });
+      const started = await authController.signIn();
+      if (!started) {
         renderAuthState(null, { preserveError: true });
         setStatus('Не удалось открыть вход через Яндекс. Запрос сохранён — попробуйте войти ещё раз.', 'error');
         return false;
@@ -1396,9 +1202,12 @@ const HeadingTag = headingLevel;
     }
 
     if (enabled) {
-      supabase = createClient(root.dataset.supabaseUrl, root.dataset.supabaseKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce', storage: authStorage },
+      authController = getStaticSiteAuth({
+        supabaseUrl: root.dataset.supabaseUrl,
+        publishableKey: root.dataset.supabaseKey,
+        provider: root.dataset.yandexProvider || 'custom:yandex',
       });
+      supabase = authController.client;
       login?.addEventListener('click', async () => {
         const validation = validateSearchInput(input?.value || '');
         if (validation.ok) saveSearchDraft(validation.query, true);
@@ -1407,10 +1216,9 @@ const HeadingTag = headingLevel;
       });
       logout?.addEventListener('click', async () => {
         abortActiveSearch();
-        await supabase.auth.signOut();
+        await authController.signOut();
         clearResults();
         lastResultEventIds = [];
-        clearAuthIntent();
         authCallbackHadError = false;
         renderAuthState(null);
       });
@@ -1426,38 +1234,42 @@ const HeadingTag = headingLevel;
         event.preventDefault();
         await runSearch({ append: false });
       });
+      input?.addEventListener('keydown', (event) => {
+        if (
+          event.key !== 'Enter'
+          || event.isComposing
+          || event.keyCode === 229
+          || event.altKey
+          || event.ctrlKey
+          || event.metaKey
+        ) return;
+        event.preventDefault();
+        form?.requestSubmit();
+      });
       more?.addEventListener('click', async () => runSearch({ append: true }));
       window.addEventListener('pagehide', abortActiveSearch, { once: true });
-      supabase.auth.onAuthStateChange((_event, session) => {
-        // Supabase warns against awaiting Supabase calls inside this callback.
-        // Render from the callback payload and defer any follow-up RPCs.
-        window.setTimeout(() => {
-          const signedIn = renderAuthState(session, { preserveError: authCallbackHadError });
-          if (signedIn) {
-            authCallbackHadError = false;
+      authController.subscribe((snapshot) => {
+        authCallbackHadError = snapshot.status === 'error';
+        const signedIn = renderAuthState(
+          snapshot.user ? { user: snapshot.user } : null,
+          { preserveError: authCallbackHadError, checking: snapshot.status === 'checking' },
+        );
+        if (snapshot.status === 'error') setStatus(snapshot.message, 'error');
+        else if (snapshot.status === 'checking') setStatus(snapshot.message);
+        if (signedIn) {
+          authCallbackHadError = false;
+          window.setTimeout(() => {
             refreshQuota().catch(() => {});
-          }
-        }, 0);
+            runPendingSearchDraft().catch(() => {});
+          }, 0);
+        }
       });
-      if (hasLocalAuthSignal()) {
-        renderAuthState(null, { preserveError: true, checking: true });
-        setStatus('Проверяю сохранённый вход через Яндекс…');
-      }
       restoreSearchDraft();
-      handleAuthCallback()
-        .then((callback) => {
-          if (callback.signedIn) return true;
-          if (callback.attempted || hasLocalAuthSignal()) return updateAuth({ preserveError: authCallbackHadError });
-          renderAuthState(null);
-          return false;
-        })
-        .then(async (signedIn) => {
-          if (!signedIn && !authCallbackHadError) {
-            showAuthCallbackError();
-            return;
-          }
-          if (signedIn) await runPendingSearchDraft();
-        });
+      authController.initialize().catch(() => {
+        authCallbackHadError = true;
+        renderAuthState(null, { preserveError: true });
+        setStatus('Не удалось проверить сохранённый вход. Перезагрузите страницу или войдите ещё раз.', 'error');
+      });
     }
   }
 </script>

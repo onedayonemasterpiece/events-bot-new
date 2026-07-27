@@ -424,6 +424,7 @@ async def run_smoke(args: argparse.Namespace) -> int:
             await expect(page.locator("[data-search-logout]").first).to_be_hidden()
             await expect(page.locator("[data-search-form]").first).to_be_visible()
             await expect(page.locator("[data-search-input]").first).to_be_editable()
+            await expect(page.locator("[data-search-input]").first).to_have_attribute("enterkeyhint", "search")
             await expect(page.locator("[data-search-results]").first).to_be_hidden()
             await expect(page.locator("[data-search-more]").first).to_be_hidden()
             if await page.locator("[data-event-card]").count() != 0:
@@ -486,7 +487,9 @@ async def run_smoke(args: argparse.Namespace) -> int:
                 raise AssertionError(f"unsafe query must not call event-search: {calls}")
 
             await page.locator("[data-search-input]").first.fill("урбанистика в четверг вечером по регистрации")
-            await page.locator("[data-search-form]").first.evaluate("(form) => form.requestSubmit()")
+            await page.locator("[data-search-input]").first.press("Enter")
+            if "\n" in await page.locator("[data-search-input]").first.input_value():
+                raise AssertionError("Enter must submit Search instead of inserting a textarea newline")
             await expect(page.locator("[data-search-submit]").first).to_have_attribute("aria-busy", "true")
             await expect(page.locator("[data-search-skeletons]").first).to_be_visible()
             await expect(page.locator("[data-search-skeletons] .authorized-search__skeleton-media").first).to_be_visible()
