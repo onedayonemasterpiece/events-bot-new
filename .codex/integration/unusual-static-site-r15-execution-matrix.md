@@ -77,6 +77,8 @@ evidence.
 | Product Playwright | product mode passed without visiting lab | pass against public immutable candidate |
 | Lab Playwright | separate local ten-state matrix passed | covered by focused local contract; packaged lab independently returns `404` |
 | Public candidate | complete upload; required product URLs `200`; lab path `404` | 1,703 objects create-only and byte/MIME verified; 36 route/viewports green; lab `404` |
+| Telegram handoff | all owner-review links delivered to the requested UI-review thread | message `779`, chat `-1004337049383`, reply `548`, read-back verified |
+| External consultant | Gemini Pro-class acceptance through agy, or an explicitly labelled allowed fallback | **blocked:** `Gemini 3.1 Pro (High)` failed twice with `account is not eligible … not currently available in your location`; official Antigravity FAQ lists Netherlands as supported. `a-opus` hit the same Antigravity eligibility gate and Claude Code Opus was not logged in. No lower-class model was substituted. |
 | Owner/root decision | explicit acceptance; otherwise remain candidate-only/noindex | **pending — production root unchanged** |
 
 Participant UI from `feature/static-event-participants-20260727` is integrated
