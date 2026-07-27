@@ -1,0 +1,301 @@
+---
+import { withBase } from '../lib/events';
+
+const catalogSrc = withBase('/data/personal-feed.json');
+---
+
+<section
+  class="favorites-surface"
+  data-favorites-surface
+  data-catalog-src={catalogSrc}
+  aria-labelledby="favorites-title"
+>
+  <header class="favorites-surface__head">
+    <p class="eyebrow">Сохранённые планы</p>
+    <h1 id="favorites-title">Избранное</h1>
+    <p>Здесь остаются только будущие события: сначала добавленные в календарь, затем понравившиеся. Повторы одного события объединяются.</p>
+  </header>
+
+  <div class="favorites-surface__skeleton" data-favorites-skeleton aria-busy="true" aria-label="Загружаем избранное">
+    {Array.from({ length: 3 }, (_, index) => (
+      <div class="favorites-skeleton-card" aria-hidden="true" data-skeleton-card={index + 1}>
+        <span></span><i></i><i></i><i></i>
+      </div>
+    ))}
+  </div>
+
+  <section class="favorites-surface__auth" data-favorites-auth-required hidden aria-labelledby="favorites-auth-title">
+    <h2 id="favorites-auth-title">Войдите, чтобы открыть сохранённое на всех устройствах</h2>
+    <p>Без входа покажем доступные на этом устройстве отметки. Сайт и ссылки на события продолжают работать без Supabase.</p>
+    <button type="button" class="cta-button" data-static-auth-login data-static-auth-signed-out>Войти через Яндекс</button>
+  </section>
+
+  <p class="favorites-surface__status" data-favorites-status role="status" aria-live="polite" aria-atomic="true"></p>
+
+  <section class="favorites-surface__empty" data-favorites-empty hidden aria-labelledby="favorites-empty-title">
+    <h2 id="favorites-empty-title">Пока ничего не сохранено</h2>
+    <p>Добавьте событие в календарь или поставьте лайк — оно появится здесь, если дата ещё впереди.</p>
+    <a class="secondary-button" href={withBase('/segodnya/')}>Посмотреть события сегодня</a>
+  </section>
+
+  <div
+    class="favorites-surface__grid"
+    data-favorites-grid
+    data-feed-card-variant="split-actions"
+    aria-live="polite"
+    hidden
+  ></div>
+</section>
+
+<script>
+  import { getStaticSiteAuth } from '../lib/staticSiteAuth';
+  import { joinFutureSavedEvents, mergeSavedEventRefs, readLocalSavedEventInputs } from '../lib/favorites.mjs';
+  import { listDurableSavedEvents } from '../lib/savedEvents';
+
+  const roots = Array.from(document.querySelectorAll('[data-favorites-surface]'));
+
+  function publicAuthConfig() {
+    const runtime = document.querySelector('[data-static-site-auth-runtime]');
+    if (!(runtime instanceof HTMLElement) || runtime.dataset.authEnabled !== 'true') return null;
+    const supabaseUrl = runtime.dataset.supabaseUrl || '';
+    const publishableKey = runtime.dataset.supabaseKey || '';
+    if (!supabaseUrl || !publishableKey) return null;
+    return {
+      supabaseUrl,
+      publishableKey,
+      provider: runtime.dataset.yandexProvider || 'custom:yandex',
+    };
+  }
+
+  function waitForCardRenderer() {
+    if (typeof window.KenigEventsCreateEventCard === 'function') return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let attempts = 0;
+      const check = () => {
+        attempts += 1;
+        if (typeof window.KenigEventsCreateEventCard === 'function' || attempts >= 20) {
+          resolve(typeof window.KenigEventsCreateEventCard === 'function');
+          return;
+        }
+        window.requestAnimationFrame(check);
+      };
+      check();
+    });
+  }
+
+  for (const root of roots) {
+    if (!(root instanceof HTMLElement) || root.dataset.favoritesBound === 'true') continue;
+    root.dataset.favoritesBound = 'true';
+    const skeleton = root.querySelector('[data-favorites-skeleton]');
+    const authRequired = root.querySelector('[data-favorites-auth-required]');
+    const empty = root.querySelector('[data-favorites-empty]');
+    const grid = root.querySelector('[data-favorites-grid]');
+    const status = root.querySelector('[data-favorites-status]');
+    const source = root.dataset.catalogSrc || '';
+    const authConfig = publicAuthConfig();
+    const auth = authConfig ? getStaticSiteAuth(authConfig) : null;
+    let catalogPromise = null;
+    let latestSnapshot = null;
+    let renderEpoch = 0;
+
+    const loadCatalog = () => {
+      if (!catalogPromise) {
+        catalogPromise = fetch(source, {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        }).then((response) => {
+          if (!response.ok) throw new Error(`favorites_catalog_http_${response.status}`);
+          return response.json();
+        });
+      }
+      return catalogPromise;
+    };
+
+    const setStatus = (message, error = false) => {
+      if (!status) return;
+      status.textContent = message;
+      if (error) status.setAttribute('role', 'alert');
+      else status.setAttribute('role', 'status');
+    };
+
+    const render = async (snapshot) => {
+      latestSnapshot = snapshot;
+      const epoch = ++renderEpoch;
+      if (skeleton instanceof HTMLElement) skeleton.hidden = false;
+      if (authRequired instanceof HTMLElement) authRequired.hidden = true;
+      if (empty instanceof HTMLElement) empty.hidden = true;
+      if (grid instanceof HTMLElement) grid.hidden = true;
+      setStatus('');
+
+      if (snapshot?.status === 'checking') {
+        void loadCatalog().catch(() => {});
+        return;
+      }
+
+      let catalog;
+      try {
+        catalog = await loadCatalog();
+      } catch {
+        if (epoch !== renderEpoch) return;
+        if (skeleton instanceof HTMLElement) skeleton.hidden = true;
+        if (authRequired instanceof HTMLElement) authRequired.hidden = snapshot?.status === 'signed_in';
+        setStatus('Не удалось загрузить каталог. Проверьте соединение — сохранённые данные не изменены.', true);
+        return;
+      }
+
+      let remoteRows = [];
+      let remoteFailed = false;
+      if (snapshot?.status === 'signed_in' && auth) {
+        try {
+          remoteRows = await listDurableSavedEvents(auth.client);
+        } catch {
+          remoteFailed = true;
+        }
+      }
+      const rendererReady = await waitForCardRenderer();
+      if (epoch !== renderEpoch) return;
+      const local = readLocalSavedEventInputs(window.localStorage);
+      const refs = mergeSavedEventRefs({
+        remoteRows,
+        calendarIds: local.calendarIds,
+        likedEventIds: local.likedEventIds,
+      });
+      const joined = joinFutureSavedEvents(catalog, refs, String(catalog?.current_date || ''));
+
+      if (skeleton instanceof HTMLElement) skeleton.hidden = true;
+      if (authRequired instanceof HTMLElement) {
+        authRequired.hidden = snapshot?.status === 'signed_in' || snapshot?.status === 'checking';
+      }
+      if (!(grid instanceof HTMLElement)) return;
+      grid.replaceChildren();
+
+      if (!rendererReady) {
+        setStatus('Карточки временно недоступны. Перезагрузите страницу — сохранённые данные не изменены.', true);
+        return;
+      }
+      for (const [index, entry] of joined.entries()) {
+        const card = window.KenigEventsCreateEventCard?.(entry.item, 'split-actions');
+        if (!card) continue;
+        card.dataset.savedSource = entry.saved.source;
+        card.dataset.savedRank = String(index);
+        grid.appendChild(card);
+      }
+      const rendered = grid.querySelectorAll(':scope > [data-event-card]').length;
+      grid.hidden = rendered === 0;
+      if (empty instanceof HTMLElement) empty.hidden = rendered !== 0;
+      if (remoteFailed) {
+        setStatus('Облачное избранное временно недоступно. Показаны сохранения и лайки с этого устройства.', true);
+      } else if (snapshot?.status === 'signed_in') {
+        setStatus(rendered ? `Будущих сохранённых событий: ${rendered}.` : '');
+      } else if (rendered) {
+        setStatus('Показаны сохранения и лайки с этого устройства.');
+      }
+      await window.applyFeedbackState?.({ skipDiscoveryHydration: true });
+    };
+
+    if (auth) {
+      auth.subscribe((snapshot) => {
+        void render(snapshot);
+      });
+      void auth.initialize();
+    } else {
+      void render({ status: 'signed_out', user: null, message: '', callbackAttempted: false });
+    }
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'ke_calendar_saved_v1' || event.key === 'ke_personalization_profile') {
+        void render(latestSnapshot);
+      }
+    });
+    window.addEventListener('kenigevents:saved-event-state', () => {
+      void render(latestSnapshot);
+    });
+    window.addEventListener('kenigevents:saved-event-reconciliation-complete', () => {
+      void render(latestSnapshot);
+    });
+    document.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-feedback-action], [data-calendar-action]')) return;
+      window.setTimeout(() => { void render(latestSnapshot); }, 180);
+    });
+  }
+</script>
+
+<style>
+  .favorites-surface {
+    width: min(1180px, calc(100% - 2rem));
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 3.5rem) 0 5rem;
+  }
+  .favorites-surface__head {
+    max-width: 54rem;
+    margin-bottom: clamp(1.2rem, 3vw, 2rem);
+  }
+  .favorites-surface__head h1 {
+    margin: .08rem 0 .65rem;
+    font-size: clamp(3rem, 8vw, 7rem);
+    line-height: .86;
+    letter-spacing: -.075em;
+  }
+  .favorites-surface__head > p:last-child {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1rem, 1.8vw, 1.2rem);
+  }
+  .favorites-surface__skeleton,
+  .favorites-surface__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(.85rem, 1.6vw, 1.25rem);
+  }
+  .favorites-skeleton-card {
+    min-height: 31rem;
+    display: grid;
+    grid-template-rows: minmax(18rem, 1fr) auto auto auto;
+    gap: .7rem;
+    padding: .8rem;
+    border: 1px solid rgba(121,48,20,.11);
+    border-radius: 24px;
+    background: #fffaf3;
+    overflow: hidden;
+  }
+  .favorites-skeleton-card span,
+  .favorites-skeleton-card i {
+    display: block;
+    border-radius: 15px;
+    background: linear-gradient(100deg, #eadfce 20%, #fff8ee 42%, #eadfce 64%);
+    background-size: 240% 100%;
+    animation: favorites-skeleton 1.5s ease-in-out infinite;
+  }
+  .favorites-skeleton-card i { width: 88%; height: 1.05rem; }
+  .favorites-skeleton-card i:nth-of-type(2) { width: 64%; }
+  .favorites-skeleton-card i:nth-of-type(3) { width: 42%; height: 2.7rem; border-radius: 999px; }
+  @keyframes favorites-skeleton { to { background-position: -140% 0; } }
+  .favorites-surface__auth,
+  .favorites-surface__empty {
+    max-width: 46rem;
+    padding: clamp(1rem, 3vw, 2rem);
+    border: 1px solid rgba(121,48,20,.14);
+    border-radius: 24px;
+    background: #fffaf3;
+  }
+  .favorites-surface__auth h2,
+  .favorites-surface__empty h2 { margin: 0 0 .45rem; line-height: 1.05; }
+  .favorites-surface__auth p,
+  .favorites-surface__empty p { color: var(--muted); }
+  .favorites-surface__status { min-height: 1.5rem; color: var(--muted); font-weight: 730; }
+  @media (max-width: 960px) {
+    .favorites-surface__skeleton,
+    .favorites-surface__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 620px) {
+    .favorites-surface { width: min(100% - 1.4rem, 40rem); padding-top: .75rem; }
+    .favorites-surface__skeleton,
+    .favorites-surface__grid { grid-template-columns: minmax(0, 1fr); }
+    .favorites-skeleton-card { min-height: 28rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .favorites-skeleton-card span,
+    .favorites-skeleton-card i { animation: none; }
+  }
+</style>

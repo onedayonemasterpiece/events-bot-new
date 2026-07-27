@@ -12,4 +12,6 @@ interface ImportMeta {
 interface Window {
   KenigEventsNormalizeInternalEventUrl?: (value: string, options?: { absolute?: boolean }) => string;
   KenigEventsRenderEventCard?: (item: unknown, variant?: string) => string;
+  KenigEventsCreateEventCard?: (item: unknown, variant?: string) => HTMLElement | null;
+  applyFeedbackState?: (options?: { skipDiscoveryHydration?: boolean; anchorEventId?: string | number | null }) => Promise<void>;
 }

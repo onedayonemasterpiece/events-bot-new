@@ -1,0 +1,21 @@
+---
+import FavoritesSurface from '../../components/FavoritesSurface.astro';
+import EventLayout from '../../layouts/EventLayout.astro';
+import { absoluteUrl, SITE_NAME } from '../../lib/events';
+
+const title = `Избранное | ${SITE_NAME}`;
+const description = 'Личная noindex-страница будущих событий: добавленные в календарь и понравившиеся, без повторов.';
+---
+
+<EventLayout
+  title={title}
+  description={description}
+  canonicalUrl={absoluteUrl('/izbrannoe/')}
+  structuredData={[]}
+  mobileSection="personal"
+  noindex
+>
+  <main id="main" data-favorites-page>
+    <FavoritesSurface />
+  </main>
+</EventLayout>

@@ -1,0 +1,139 @@
+---
+import EventCard from './EventCard.astro';
+import type { PreviewEvent } from '../lib/types';
+import { eventCategory, eventTags } from '../lib/events';
+
+interface Props { events: PreviewEvent[]; }
+const { events } = Astro.props;
+---
+
+<section class="home-feed" data-home-cold-start-feed aria-labelledby="home-feed-title">
+  <header class="home-feed__head">
+    <div>
+      <p class="eyebrow">Общее главное</p>
+      <h2 id="home-feed-title">Можно начать отсюда</h2>
+    </div>
+    <p data-home-feed-status role="status" aria-live="polite">Разнообразная общая подборка — вход и внешние сервисы не нужны.</p>
+  </header>
+  <div class="home-feed__grid" data-home-feed-grid data-home-feed-limit="30">
+    {events.slice(0, 30).map((event, index) => (
+      <div
+        class="home-feed__item"
+        data-home-feed-item
+        data-event-id={event.id}
+        data-home-base-rank={index}
+        data-home-category={eventCategory(event)}
+        data-home-tags={JSON.stringify(eventTags(event))}
+      >
+        <EventCard event={event} variant="split-actions" mobileFlowMedia />
+      </div>
+    ))}
+  </div>
+</section>
+
+<script>
+  import { homeProfileSignalCount, rankHomeFeedItems } from '../lib/homeFeed.mjs';
+
+  const PROFILE_KEY = 'ke_personalization_profile';
+  const roots = Array.from(document.querySelectorAll('[data-home-cold-start-feed]'));
+
+  function readProfile() {
+    try { return JSON.parse(window.localStorage.getItem(PROFILE_KEY) || 'null'); }
+    catch { return null; }
+  }
+
+  for (const root of roots) {
+    if (!(root instanceof HTMLElement) || root.dataset.homeFeedBound === 'true') continue;
+    root.dataset.homeFeedBound = 'true';
+    const grid = root.querySelector('[data-home-feed-grid]');
+    const status = root.querySelector('[data-home-feed-status]');
+    if (!(grid instanceof HTMLElement)) continue;
+    const staticItems = Array.from(grid.querySelectorAll(':scope > [data-home-feed-item]'))
+      .filter((item) => item instanceof HTMLElement)
+      .map((item) => {
+        let tags = [];
+        try { tags = JSON.parse(item.dataset.homeTags || '[]'); } catch {}
+        return {
+          id: item.dataset.eventId || '',
+          baseRank: Number(item.dataset.homeBaseRank || 0),
+          category: item.dataset.homeCategory || '',
+          tags,
+          element: item,
+        };
+      });
+
+    const rerank = () => {
+      const profile = readProfile();
+      const ranked = rankHomeFeedItems(staticItems, profile);
+      const visible = new Set(ranked.map((item) => String(item.id)));
+      for (const item of staticItems) item.element.hidden = !visible.has(String(item.id));
+      for (const item of ranked) {
+        item.element.dataset.homeFeedRank = String(item.rank);
+        item.element.dataset.homeFeedScore = Number(item.score || 0).toFixed(3);
+        grid.appendChild(item.element);
+      }
+      const signals = homeProfileSignalCount(profile);
+      if (status) {
+        status.textContent = signals > 0
+          ? `Порядок уточнён по локальным оценкам: ${signals}. В ленте не больше 30 событий.`
+          : 'Разнообразная общая подборка — вход и внешние сервисы не нужны.';
+      }
+      root.dataset.homeFeedMode = signals > 0 ? 'local_rerank' : 'static_fallback';
+    };
+
+    rerank();
+    window.addEventListener('storage', (event) => {
+      if (event.key === PROFILE_KEY) rerank();
+    });
+    document.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-feedback-action]')) return;
+      window.setTimeout(rerank, 180);
+    });
+  }
+</script>
+
+<style>
+  .home-feed {
+    margin-top: 1rem;
+    padding: clamp(1rem, 3vw, 2rem);
+    border: 1px solid rgba(121,48,20,.13);
+    border-radius: clamp(24px, 4vw, 38px);
+    background: rgba(255,250,243,.84);
+  }
+  .home-feed__head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.1rem;
+  }
+  .home-feed__head h2 {
+    margin: .1rem 0 0;
+    font-size: clamp(2rem, 4vw, 4.2rem);
+    line-height: .92;
+    letter-spacing: -.06em;
+  }
+  .home-feed__head > p {
+    max-width: 32rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: .92rem;
+    font-weight: 720;
+    text-align: right;
+  }
+  .home-feed__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(.85rem, 1.6vw, 1.25rem);
+    align-items: stretch;
+  }
+  .home-feed__item { min-width: 0; }
+  .home-feed__item :global(.event-card) { height: 100%; }
+  @media (max-width: 960px) { .home-feed__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 620px) {
+    .home-feed { padding: .7rem; }
+    .home-feed__head { display: grid; align-items: start; padding: .35rem; }
+    .home-feed__head > p { text-align: left; }
+    .home-feed__grid { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

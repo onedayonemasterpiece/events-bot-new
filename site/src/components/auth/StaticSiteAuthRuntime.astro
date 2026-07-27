@@ -16,6 +16,7 @@ const enabled = Boolean(supabaseUrl && publishableKey);
 
 <script>
   import { getStaticSiteAuth, staticAuthDisplayName, staticAuthUserInitial } from '../../lib/staticSiteAuth';
+  import { installSavedEventRuntime } from '../../lib/savedEventRuntime';
 
   const runtime = document.querySelector('[data-static-site-auth-runtime]');
   if (runtime?.dataset.authEnabled === 'true' && runtime.dataset.supabaseUrl && runtime.dataset.supabaseKey) {
@@ -24,6 +25,7 @@ const enabled = Boolean(supabaseUrl && publishableKey);
       publishableKey: runtime.dataset.supabaseKey,
       provider: runtime.dataset.yandexProvider || 'custom:yandex',
     });
+    installSavedEventRuntime(auth);
 
     const render = (snapshot) => {
       const signedIn = snapshot.status === 'signed_in' && Boolean(snapshot.user);

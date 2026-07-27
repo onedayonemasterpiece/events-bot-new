@@ -1,0 +1,53 @@
+---
+import { withBase } from '../lib/events';
+
+const items = [
+  { label: 'Сегодня', href: '/segodnya/', note: 'События на день' },
+  { label: 'Завтра', href: '/zavtra/', note: 'Планы заранее' },
+  { label: 'Выходные', href: '/vyhodnye/', note: 'Суббота и воскресенье' },
+  { label: 'Бесплатно', href: '/podborki/besplatnye-sobytiya/', note: 'С честными условиями' },
+  { label: 'Выставки', href: '/vystavki/', note: 'Идущие и новые' },
+  { label: 'Необычное', href: '/neobychnoe/', note: 'Новый маршрут выбора' },
+];
+---
+
+<nav class="home-quick-nav" data-home-quick-nav aria-label="Быстрый выбор событий">
+  {items.map((item, index) => (
+    <a href={withBase(item.href)} data-home-quick-nav-item={index + 1}>
+      <strong>{item.label}</strong>
+      <span>{item.note}</span>
+    </a>
+  ))}
+</nav>
+
+<style>
+  .home-quick-nav {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: .7rem;
+    margin: 1rem 0;
+  }
+  .home-quick-nav a {
+    min-width: 0;
+    min-height: 92px;
+    display: grid;
+    align-content: center;
+    gap: .15rem;
+    padding: .85rem .9rem;
+    border: 1px solid rgba(121,48,20,.13);
+    border-radius: 20px;
+    background: #fffaf3;
+    color: var(--text);
+    text-decoration: none;
+    transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  }
+  .home-quick-nav a:hover { transform: translateY(-2px); border-color: rgba(121,48,20,.28); background: #fff; }
+  .home-quick-nav a:focus-visible { outline: 3px solid rgba(165,72,33,.25); outline-offset: 2px; }
+  .home-quick-nav strong { font-size: 1.02rem; line-height: 1.08; }
+  .home-quick-nav span { color: var(--muted); font-size: .75rem; font-weight: 680; line-height: 1.2; }
+  @media (max-width: 1020px) { .home-quick-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 560px) {
+    .home-quick-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+    .home-quick-nav a { min-height: 82px; padding: .72rem; }
+  }
+</style>
