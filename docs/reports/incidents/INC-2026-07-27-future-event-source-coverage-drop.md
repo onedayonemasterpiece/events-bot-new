@@ -135,6 +135,11 @@ Raw evidence is retained outside git under
    and calls `.split()` on the value. All 18 parsed items therefore reached
    processing but failed before persistence with
    `'datetime.date' object has no attribute 'split'`.
+10. A rolling deploy cancelled that incomplete catch-up. Because the parse run
+    initialized `ops_status=success` before doing work and `CancelledError` does
+    not enter its ordinary `Exception` handler, the `finally` block recorded the
+    interrupted run as green. Parse status must start fail-closed and become
+    success/partial only after completed result evaluation.
 
 ## Contributing Factors
 

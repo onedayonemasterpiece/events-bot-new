@@ -309,7 +309,9 @@
   `zigomaro/parse-philharmonia-script`. Its production output boundary now
   preserves validated `normalized_date` values as ISO strings instead of
   leaking `datetime.date` objects into Smart Update and failing every new
-  Philharmonia event before persistence.
+  Philharmonia event before persistence. Parse runs now also start fail-closed,
+  so cancellation during a rolling deploy cannot finalize an incomplete run as
+  `success`.
 
 - Prevented source-grounded studio addresses from being rebound to unrelated
   canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);
