@@ -44,7 +44,7 @@ lanes:
     expected_output: committed mobile onboarding and focus PWA prototype with targeted tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: spawned
   - id: egg-program
     role: worker
     requirement_ids: [R17, R18, R19]
@@ -65,7 +65,7 @@ lanes:
     expected_output: committed scoring, fairness and placement specification
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: spawned
   - id: egg-prototype
     role: worker
     requirement_ids: [R20]
