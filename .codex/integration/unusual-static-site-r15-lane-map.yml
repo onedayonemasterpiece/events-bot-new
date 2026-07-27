@@ -1,0 +1,53 @@
+schema_version: feature_fanout_lane_map_v1
+base:
+  ref: origin/main
+  sha: 551941bf9fc6ec3a647a0801fc704410cfc42761
+integration:
+  branch: integration/unusual-static-site-r15-20260727
+  worktree: /home/dev/.codex/worktrees/events-bot-new/unusual-r15-integration
+constraints:
+  - no edits in the legacy dirty checkout
+  - every writable lane uses a distinct branch and worktree
+  - no duplicated BGE encoding for unusual
+  - default unusual build provider_calls must equal 0
+  - no production-root cutover before owner acceptance
+  - root integrator owns shared-file conflicts and final validation
+lanes:
+  L01:
+    kind: read_only_mapper
+    owner: r15_bge_mapper
+    scope: [shared BGE and related pipeline, cache, StaticSiteBuilder execution path]
+  L01_UI:
+    kind: read_only_mapper
+    owner: r15_ui_mapper
+    scope: [R01-R07 and R10 source/donor/conflict map]
+  L02:
+    kind: writable_worker
+    branch: agent/unusual-r15/semantic
+    scope: [R08]
+    result: .codex/lanes/R15-L02-SEMANTIC/RESULTS.md
+  L03:
+    kind: writable_worker
+    branch: agent/unusual-r15/builder-share
+    scope: [R03, R09]
+    result: .codex/lanes/R15-L03-BUILDER/RESULTS.md
+  L04:
+    kind: writable_worker
+    branch: agent/unusual-r15/astro-surfaces
+    scope: [R01, R02, R05, R07, R10 Astro UI]
+    result: .codex/lanes/R15-L04-ASTRO/RESULTS.md
+  L05:
+    kind: writable_worker
+    branch: agent/unusual-r15/favorites-home
+    scope: [R04, R06]
+    result: .codex/lanes/R15-L05-FAVORITES-HOME/RESULTS.md
+  L06:
+    kind: writable_worker
+    branch: agent/unusual-r15/tests-docs
+    scope: [R08-R10 tests, canonical docs, routes, changelog, runbook]
+    result: .codex/lanes/R15-L06-TESTS-DOCS/RESULTS.md
+  L07:
+    kind: integrator_reviewer
+    owner: root_then_independent_checklist_reviewer
+    scope: [merge, conflict resolution, full tests, Kaggle CPU canary, preview QA, closure matrix]
+merge_order: [L02, L03, L04, L05, L06]
