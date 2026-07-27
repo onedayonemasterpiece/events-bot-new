@@ -13,6 +13,7 @@ import festival_queue
 from festival_queue import detect_festival_context
 from models import Festival, FestivalQueueItem
 from source_parsing.festival_parser import run_festival_parser_kernel
+from smart_event_update import EventCandidate, _should_skip_festival_post_candidate
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -61,6 +62,28 @@ def test_source_festival_program_without_single_event_still_goes_to_queue() -> N
     )
 
     assert decision.context == "festival_post"
+
+
+def test_parser_occurrence_is_not_dropped_as_whole_festival_post() -> None:
+    common = {
+        "source_url": "https://filarmonia39.ru/afisha/ave-mariya/",
+        "source_text": "«Аве Мария». Закрытие фестиваля «Бахослужение».",
+        "title": "Концерт «Аве Мария»",
+        "date": "2026-07-28",
+        "time": "19:00",
+        "festival": "Бахослужение",
+        "festival_context": "festival_post",
+        "location_name": "Филармония им. Светланова",
+    }
+
+    parser_candidate = EventCandidate(
+        source_type="parser:philharmonia",
+        **common,
+    )
+    social_candidate = EventCandidate(source_type="tg", **common)
+
+    assert not _should_skip_festival_post_candidate(parser_candidate)
+    assert _should_skip_festival_post_candidate(social_candidate)
 
 
 @pytest.mark.asyncio

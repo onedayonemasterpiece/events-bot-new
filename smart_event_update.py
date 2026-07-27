@@ -588,6 +588,20 @@ class EventCandidate:
     creator_id: int | None = None
     trust_level: str | None = None
     metrics: dict[str, Any] | None = None
+
+
+def _should_skip_festival_post_candidate(candidate: EventCandidate) -> bool:
+    """Skip whole-festival announcements, but not parser-native occurrences.
+
+    Official parser candidates are already individual, structured occurrences
+    with source-native date/time/location. A festival association such as
+    "закрытие фестиваля" must enrich that event rather than turn it back into a
+    whole-program post.
+    """
+
+    context = (candidate.festival_context or "").strip().lower()
+    source_type = (candidate.source_type or "").strip().lower()
+    return context == "festival_post" and not source_type.startswith("parser:")
     links_payload: Any | None = None
     # Concrete-event organizers only. Values must come from quoted LLM evidence
     # or an explicit curated source binding; the generic publisher name is not
@@ -15027,8 +15041,7 @@ async def _smart_event_update_impl(
             candidate.source_url,
         )
         return SmartUpdateResult(status="invalid", reason="empty_title_after_clean")
-    context_value = (candidate.festival_context or "").strip().lower()
-    if context_value == "festival_post":
+    if _should_skip_festival_post_candidate(candidate):
         logger.info(
             "smart_update.skip reason=festival_post source_type=%s source_url=%s festival=%s",
             candidate.source_type,
@@ -15542,7 +15555,7 @@ async def _smart_event_update_impl(
     # If the source is detected as a festival/program post, it must not create/update events.
     # Some upstream extractors (notably Telegram Monitoring) may not populate `festival_context`,
     # so we backfill it via deterministic detection above and enforce the policy here.
-    if (candidate.festival_context or "").strip().lower() == "festival_post":
+    if _should_skip_festival_post_candidate(candidate):
         logger.info(
             "smart_update.skip reason=festival_post_detected source_type=%s source_url=%s festival=%s",
             candidate.source_type,
