@@ -43,7 +43,7 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
 
       <div class="reference4-menu__list" data-reference4-list>
         <nav class="reference4-menu__list-plane is-active" aria-label="Разделы афиши" data-reference4-main>
-          <a class="reference4-menu__row" href={searchHref('бесплатные события')}>
+          <a class="reference4-menu__row" href={route('/podborki/besplatnye-sobytiya/')}>
             <span class="reference4-icon reference4-icon--free" aria-hidden="true">0&#x200A;₽</span><span>Бесплатно</span><i aria-hidden="true"></i>
           </a>
           <a class="reference4-menu__row" href={searchHref('события для детей')}>
@@ -96,11 +96,16 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
         data-nosnippet
       >
         <div class="reference4-menu__account-row">
-          <a href={`${route('/poisk/')}#poisk`}>Войти</a>
+          <button type="button" data-static-auth-login data-static-auth-signed-out>Войти</button>
+          <a href={route('/dlya-menya/')} data-static-auth-signed-in hidden aria-label="Открыть личную страницу">
+            <span class="reference4-menu__account-initial" data-static-auth-initial aria-hidden="true">?</span>
+            <span data-static-auth-name>Аккаунт</span>
+          </a>
           <a href={`${route('/dlya-menya/')}#izbrannoe`} aria-current={isCurrent('favorites') ? 'page' : undefined}>
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('heart-thin.svg')}')`}></span></span><span>Избранное</span>
           </a>
         </div>
+        <span class="sr-only" data-static-auth-status role="status" aria-live="polite" aria-atomic="true"></span>
         <button
           class="reference4-menu__share"
           type="button"
@@ -223,6 +228,8 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
     .reference4-menu__account-row > * { box-sizing:border-box; height:44px; min-width:0; display:flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(255,255,255,.48); border-radius:23px; background:rgba(255,253,249,.58); box-shadow:0 5px 15px rgba(64,40,28,.08),inset 0 1px rgba(255,255,255,.64); color:#2a211c; text-decoration:none; font-family:inherit; font-size:14px; line-height:17px; font-weight:720; }
     .reference4-menu__account-row > [aria-current="page"] { background:#3b2720; color:#fffaf2; }
     .reference4-menu__account-row .reference4-icon { width:20px; height:20px; flex-basis:20px; }
+    .reference4-menu__account-initial { display:grid; place-items:center; width:24px; height:24px; flex:0 0 24px; border-radius:50%; background:rgba(152,64,31,.12); color:#753a22; font-size:12px; font-weight:900; }
+    .reference4-menu__account-row [data-static-auth-name] { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .reference4-menu__share { box-sizing:border-box; width:100%; height:50px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; border:0; background:rgba(255,252,247,.58); color:#2a211c; font-family:inherit; font-size:16px; line-height:20px; font-weight:650; text-align:left; cursor:pointer; }
     .reference4-menu__share .reference4-icon { width:25px; height:25px; flex-basis:25px; }
     .reference4-menu__share:disabled { cursor:wait; opacity:.72; }

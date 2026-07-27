@@ -34,15 +34,16 @@ const july26RuinKeepersEvent = {
   city:'Озёрск',
   festival:null,
   description_html:'Команда «Хранителей руин» приглашает принять участие.',
+  organizer_names:['Хранители руин'],
 };
 
-test('event 7018 gets the accepted Ruin Keepers listing medallion from an exact curated binding', () => {
+test('event 7018 gets Ruin Keepers from a structured organizer binding', () => {
   const medallions = getListingIdentityMedallions(july26RuinKeepersEvent);
   assert.deepEqual(medallions.map(({ slug }) => slug), ['ruin-keepers']);
   assert.deepEqual(medallions[0].evidence, {
-    field:'event_id',
-    value:'7018',
-    match:'curated_event',
+    field:'organizer_name',
+    value:'Хранители руин',
+    match:'exact',
   });
   assert.equal(medallions[0].avatarUrl, '/assets/organizers/ruin-keepers.webp');
 });
@@ -51,6 +52,30 @@ test('Ruin Keepers prose and the unrelated Kruporushka venue do not widen listin
   const medallions = getListingIdentityMedallions({
     ...july26RuinKeepersEvent,
     id:7019,
+    organizer_names:[],
   });
   assert.deepEqual(medallions, []);
+});
+
+test('R14 exact current venue and organizer specimens resolve fail closed', () => {
+  const cases = [
+    [{ id:6667, venue_name:'Янтарь холл', festival:null, organizer_names:[] }, ['yantar-hall']],
+    [{ id:6484, venue_name:'Калининградский театр эстрады (Дом искусств)', festival:null, organizer_names:[] }, ['dom-iskusstv']],
+    [{ id:6882, venue_name:'Судостроительный завод «Янтарь»', festival:null, organizer_names:['Профи-тур'] }, ['profitur']],
+    [{ id:7044, venue_name:'Железнодорожные ворота', festival:'Воротник', organizer_names:['Хранители руин'] }, ['ruin-keepers']],
+    [{ id:6767, venue_name:'Железнодорожные ворота', festival:null, organizer_names:[] }, []],
+  ];
+  for (const [event, expected] of cases) {
+    assert.deepEqual(getListingIdentityMedallions(event).map(({ slug }) => slug), expected);
+  }
+});
+
+test('unknown and aggregator publishers do not become organizer identities', () => {
+  assert.deepEqual(getListingIdentityMedallions({
+    id:9991,
+    venue_name:'Железнодорожные ворота',
+    festival:null,
+    organizer_names:[],
+    source_url:'https://vk.com/wall-231920894_9991',
+  }), []);
 });

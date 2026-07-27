@@ -38,7 +38,7 @@ test('R03 prepublication gate maps only immutable CDN Astro runtime back to the 
   assert.equal(localReleaseAssetPath('not-a-url'), null);
 });
 
-test('R01 crop assertion maps treatments and product-gates visual cards to cover', () => {
+test('R01 crop assertion maps treatments, covers visuals and keeps unknown documents fail closed', () => {
   assert.equal(expectedObjectFitForTreatment('document-contain'), 'contain');
   assert.equal(expectedObjectFitForTreatment('document-safe-cover'), 'cover');
   assert.equal(expectedObjectFitForTreatment('visual-contain'), 'contain');
@@ -46,7 +46,10 @@ test('R01 crop assertion maps treatments and product-gates visual cards to cover
   const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
   assert.match(source, /item\.mediaKind === 'visual'[\s\S]*item\.treatment === 'visual-cover' && item\.objectFit === 'cover'/u);
   assert.match(source, /unusedFrameRatio[\s\S]*visual card .* leaves .* media frame unused/u);
-  assert.match(source, /item\.mediaKind === 'document'[\s\S]*item\.treatment === 'document-safe-cover' && item\.objectFit === 'cover'/u);
+  assert.match(source, /item\.treatment === 'document-safe-cover'[\s\S]*item\.objectFit === 'cover'/u);
+  assert.match(source, /item\.treatment === 'document-contain' && item\.objectFit === 'contain'/u);
+  assert.match(source, /semantic_error_fail_closed[\s\S]*unknown_media_fail_closed[\s\S]*document_dimensions_unknown/u);
+  assert.match(source, /contains without a fail-closed reason/u);
   assert.match(source, /recommendation row cards do not share one total height/u);
   assert.match(source, /incomplete before the final row/u);
   assert.match(source, /do not share row-local chrome height/u);
@@ -55,8 +58,13 @@ test('R01 crop assertion maps treatments and product-gates visual cards to cover
 
 test('R01 document acceptance is card-local and does not mistake a mixed row potential for applied crop', () => {
   const source = readFileSync(new URL('./check-browser-release-gate.mjs', import.meta.url), 'utf8');
+  const eventCard = readFileSync(new URL('../src/components/EventCard.astro', import.meta.url), 'utf8');
+  const eventLayout = readFileSync(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
   assert.match(source, /item\.coverCrop <= 0\.2001/gu);
   assert.doesNotMatch(source, /item\.coverCrop <= 0\.2001 && item\.rowWorstCrop <= 0\.2001/gu);
+  assert.match(source, /item\.coverCrop === 0[\s\S]*numeric crop claim/u);
+  assert.match(eventCard, /data-lab-crop-reason=\{desktopRelatedLayout \? cardCrop\.cropReason/u);
+  assert.match(eventLayout, /setRuntimeCardDataset\(card, 'labCropReason', relatedLayout\.cropReason\)/u);
 });
 
 const successfulReport = {

@@ -36,6 +36,7 @@ const primaryRoutes = [
   'vystavki/',
   'festivali/',
   'poisk/',
+  'podborki/besplatnye-sobytiya/',
   'podborki/dzhaz-na-vyhodnyh/',
   'podborki/besplatno-s-detmi/',
   'podborki/stendap-na-etoy-nedele/',

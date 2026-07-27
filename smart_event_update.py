@@ -589,6 +589,10 @@ class EventCandidate:
     trust_level: str | None = None
     metrics: dict[str, Any] | None = None
     links_payload: Any | None = None
+    # Concrete-event organizers only. Values must come from quoted LLM evidence
+    # or an explicit curated source binding; the generic publisher name is not
+    # organizer evidence.
+    organizer_names: list[str] = field(default_factory=list)
     # Ephemeral result piggybacked on an already-paid facts/create call.
     age_semantic_decision: dict[str, Any] | None = None
 
@@ -605,6 +609,55 @@ class SmartUpdateResult:
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
     queue_notes: list[str] = field(default_factory=list)
+
+
+def _bounded_organizer_names(*values: Any) -> list[str]:
+    """Union organizer identities without fuzzy/entity inference."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        candidates = value if isinstance(value, (list, tuple, set)) else [value]
+        for candidate in candidates:
+            name = re.sub(r"\s+", " ", str(candidate or "")).strip(" \t\r\n,.;:—–-")
+            if not name or len(name) > 120 or "://" in name:
+                continue
+            key = unicodedata.normalize("NFKC", name).casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(name)
+            if len(out) >= 8:
+                return out
+    return out
+
+
+def _grounded_organizer_names_from_payload(
+    data: Any,
+    *,
+    source_corpus: str,
+) -> list[str]:
+    """Accept only names carried by an exact quote from the event corpus."""
+    if not isinstance(data, dict):
+        return []
+    corpus_key = re.sub(
+        r"\s+",
+        " ",
+        unicodedata.normalize("NFKC", source_corpus or "").casefold(),
+    ).strip()
+    grounded: list[str] = []
+    for item in data.get("organizer_names") or []:
+        if not isinstance(item, dict):
+            continue
+        name = re.sub(r"\s+", " ", str(item.get("name") or "")).strip()
+        quote = re.sub(r"\s+", " ", str(item.get("evidence_quote") or "")).strip()
+        if not name or not quote:
+            continue
+        name_key = unicodedata.normalize("NFKC", name).casefold()
+        quote_key = unicodedata.normalize("NFKC", quote).casefold()
+        if quote_key not in corpus_key or name_key not in quote_key:
+            continue
+        grounded.append(name)
+    return _bounded_organizer_names(grounded)
 
 
 _DURATION_FORECAST_SCHEMA: dict[str, Any] = {
@@ -2828,6 +2881,21 @@ def _g4_rich_facts_schema() -> dict[str, Any]:
         "required": ["fact", "evidence_quote"],
         "additionalProperties": False,
     }
+    grounded_organizer = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "evidence_quote": {
+                "type": "string",
+                "description": (
+                    "Exact contiguous quote that explicitly identifies this "
+                    "organization as an organizer of the concrete event."
+                ),
+            },
+        },
+        "required": ["name", "evidence_quote"],
+        "additionalProperties": False,
+    }
     return {
         "type": "object",
         "properties": {
@@ -2835,6 +2903,7 @@ def _g4_rich_facts_schema() -> dict[str, Any]:
             "program_or_examples": {"type": "array", "items": grounded_fact},
             "context_methodology_facts": {"type": "array", "items": grounded_fact},
             "people_org_facts": {"type": "array", "items": grounded_fact},
+            "organizer_names": {"type": "array", "items": grounded_organizer},
             "logistics_facts": {"type": "array", "items": grounded_fact},
             "uncertain_or_drop": {"type": "array", "items": {"type": "string"}},
             "age_decision": AGE_DECISION_JSON_SCHEMA,
@@ -2844,6 +2913,7 @@ def _g4_rich_facts_schema() -> dict[str, Any]:
             "program_or_examples",
             "context_methodology_facts",
             "people_org_facts",
+            "organizer_names",
             "logistics_facts",
             "uncertain_or_drop",
         ],
@@ -8716,6 +8786,12 @@ async def _llm_extract_candidate_facts(
             "или `спикер представит позицию…`: имя и должность — критическая для лекций/дискуссий информация. "
             "Если в источнике есть выделенная секция `О спикере`/`Лектор:`/`Спикер:`/`Ведущий:`/`Автор:` — "
             "верни именованный факт обязательно (опускай только если ни имени, ни должности в этой секции нет).\n"
+            "- organizer_names: только названия организаций/сообществ, которые источник ПРЯМО называет "
+            "организатором именно этого события. Для каждого элемента верни {name, evidence_quote}; "
+            "name должен буквально входить "
+            "в evidence_quote. Площадка, партнёр, спонсор, участник, исполнитель, издатель поста или тематическое "
+            "сообщество не становятся организатором без прямой формулы об организации события. "
+            "Если организатор прямо не назван, верни пустой массив.\n"
             "- program_or_examples: ВСЕ списки, примеры, пункты программы, интересы, темы, произведения; длинные перечисления не сворачивай. "
             "Если в источнике есть выделенный bullet-блок под заголовком типа `О чём поговорим`/`Правда ли, что`/"
             "`Темы`/`Вопросы`/`В программе`/`Что обсудим`/`План встречи` — КАЖДЫЙ bullet под таким заголовком "
@@ -8799,6 +8875,13 @@ async def _llm_extract_candidate_facts(
             raw_facts = _flatten_g4_rich_facts_payload(
                 data,
                 source_corpus=source_corpus,
+            )
+            candidate.organizer_names = _bounded_organizer_names(
+                candidate.organizer_names,
+                _grounded_organizer_names_from_payload(
+                    data,
+                    source_corpus=source_corpus,
+                ),
             )
         else:
             raw_facts = list(data.get("facts") or [])
@@ -17068,6 +17151,7 @@ async def _smart_event_update_impl(
             silent=bool(force_silent_due_to_date_risk),
             source_text=clean_source_text or "",
             source_texts=[clean_source_text] if clean_source_text else [],
+            organizer_names=_bounded_organizer_names(candidate.organizer_names),
             source_post_url=candidate.source_url if _is_http_url(candidate.source_url) else None,
             source_chat_id=candidate.source_chat_id,
             source_message_id=candidate.source_message_id,
@@ -18334,6 +18418,14 @@ async def _smart_event_update_impl(
             event_db.festival = candidate.festival
             updated_fields = True
             updated_keys.append("festival")
+        merged_organizers = _bounded_organizer_names(
+            getattr(event_db, "organizer_names", None) or [],
+            candidate.organizer_names,
+        )
+        if merged_organizers != list(getattr(event_db, "organizer_names", None) or []):
+            event_db.organizer_names = merged_organizers
+            updated_fields = True
+            updated_keys.append("organizer_names")
         if event_db.event_type:
             normalized_existing = _normalize_event_type_value(
                 event_db.title, event_db.description, event_db.event_type

@@ -462,6 +462,22 @@ def apply_public_interest_clubs_env(env: dict[str, str]) -> None:
         env['PUBLIC_INTEREST_CLUBS_ENABLED'] = public_enabled
 
 
+def apply_secret_candidate_research_env(env: dict[str, str], config: dict) -> None:
+    """Bridge explicit review gates into the production-candidate build.
+
+    The production root-form build receives the same process environment, but
+    artifact rendering separately requires ``PUBLIC_SITE_MODE=secret_candidate``
+    and therefore remains hard-disabled in production output.
+    """
+
+    if config.get('profile') != 'production-candidate':
+        return
+    if config.get('secret_candidate_artifact_research'):
+        env['PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH'] = 'tail'
+    if config.get('secret_candidate_require_authorized_search'):
+        env['SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH'] = '1'
+
+
 def main() -> int:
     started = datetime.now(timezone.utc).isoformat()
     try:
@@ -492,6 +508,7 @@ def main() -> int:
         export_preview_data_if_configured(config)
         apply_public_authorized_search_env(env, config)
         apply_public_interest_clubs_env(env)
+        apply_secret_candidate_research_env(env, config)
         env = ensure_node22(env)
 
         status_event('preflight_ok', phase='preflight', status='done', progress={'phase': 'preflight', 'progress_percent': 15, 'progress_label': 'окружение готово'})

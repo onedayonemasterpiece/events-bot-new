@@ -1,0 +1,32 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import ArtifactCollection from '../../components/artifacts/ArtifactCollection.astro';
+import { absoluteUrl, SITE_MODE, SITE_NAME } from '../../lib/events';
+import { isAmberArtifactResearchEnabled } from '../../lib/artifacts.mjs';
+
+const title = `Артефакты Калининградской области | ${SITE_NAME}`;
+const description = 'Локальная коллекция найденных культурных артефактов и подсказок к будущим главам.';
+const artifactResearchEnabled = isAmberArtifactResearchEnabled(
+  SITE_MODE,
+  import.meta.env.PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH,
+);
+---
+<EventLayout
+  title={title}
+  description={description}
+  canonicalUrl={absoluteUrl('/artefakty/')}
+  structuredData={[]}
+  noindex
+>
+  <main id="main">
+    {artifactResearchEnabled ? <ArtifactCollection /> : (
+      <section class="artifact-unavailable" data-artifact-collection-unavailable data-nosnippet>
+        <p>Исследовательская коллекция недоступна в этой сборке.</p>
+      </section>
+    )}
+  </main>
+</EventLayout>
+
+<style>
+  .artifact-unavailable{width:min(760px,calc(100% - 24px));margin:0 auto;padding:80px 0;color:#76645a}
+</style>

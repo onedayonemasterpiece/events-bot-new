@@ -56,12 +56,52 @@ for (const path of [
   'kluby-po-interesam/index.html',
   'partners/index.html',
   'partnerstvo/index.html',
+  'podborki/besplatnye-sobytiya/index.html',
   'podborki/dzhaz-na-vyhodnyh/index.html',
   'podborki/besplatno-s-detmi/index.html',
   'podborki/stendap-na-etoy-nedele/index.html',
   'robots.txt',
   'sitemap.xml',
 ]) required(path);
+const productionWeekendSource = html('vyhodnye/index.html');
+if (
+  productionWeekendSource.includes('data-amber-artifact')
+  || productionWeekendSource.includes('kenigevents:artifact-collected')
+) fail('artifact research leaked into production weekend listing');
+const productionArtifactSource = html('artefakty/index.html');
+if (
+  productionArtifactSource.includes('data-artifact-collection')
+  || productionArtifactSource.includes('artifact-detail-title')
+  || !productionArtifactSource.includes('Коллекция пока недоступна')
+) fail('artifact collection leaked into production');
+const freeCollectionSource = html('podborki/besplatnye-sobytiya/index.html');
+const freeCollectionResults = freeCollectionSource.slice(
+  freeCollectionSource.indexOf('data-search-collection-results'),
+  freeCollectionSource.indexOf('</section>', freeCollectionSource.indexOf('data-search-collection-results')),
+);
+const freeCollectionIds = [...freeCollectionResults.matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
+const eventByIdForCollections = new Map(eventsData.events.map((event) => [Number(event.id), event]));
+if (!freeCollectionIds.length) fail('general free collection is unexpectedly empty');
+if (freeCollectionIds.some((id) => !eventByIdForCollections.get(id)?.ticket?.is_free)) fail('general free collection contains a non-free exported event');
+const ongoingFreeIds = new Set(eventsData.events
+  .filter((event) => event.ticket?.is_free && event.start_date < eventsData.build.current_date && event.end_date >= eventsData.build.current_date)
+  .map((event) => Number(event.id)));
+if (ongoingFreeIds.size && !freeCollectionIds.some((id) => ongoingFreeIds.has(id))) fail('general free collection lost all ongoing free events');
+const jazzCollectionSource = html('podborki/dzhaz-na-vyhodnyh/index.html');
+if (!jazzCollectionSource.includes('data-search-collection-results')) {
+  if (!jazzCollectionSource.includes('data-search-collection-empty-window')) fail('empty Jazz collection misses its explicit weekend explanation');
+  const referenceDate = jazzCollectionSource.match(/подборка рассчитана на (\d{4}-\d{2}-\d{2})/u)?.[1];
+  const reference = referenceDate ? new Date(`${referenceDate}T00:00:00Z`) : null;
+  if (!reference || !Number.isFinite(reference.getTime())) fail('Jazz collection reference date is not inspectable');
+  const day = reference.getUTCDay();
+  reference.setUTCDate(reference.getUTCDate() + (day === 6 ? 0 : day === 0 ? -1 : 6 - day) + 2);
+  const firstDayAfterWeekend = reference.toISOString().slice(0, 10);
+  const laterJazzExists = eventsData.events.some((event) => event.lifecycle_status === 'active'
+    && (event.end_date || event.start_date) >= referenceDate
+    && event.start_date >= firstDayAfterWeekend
+    && /джаз/iu.test(event.title));
+  if (laterJazzExists && !jazzCollectionSource.includes('data-search-collection-fallback')) fail('empty Jazz collection hides later exported Jazz events');
+}
 if (!files.some((file) => /^date-\d{4}-\d{2}-\d{2}\/index\.html$/u.test(file.key))) fail('generated date page family is missing');
 if (!files.some((file) => /^vyhodnye\/\d{4}-\d{2}-\d{2}\/index\.html$/u.test(file.key))) fail('generated weekend page family is missing');
 if (

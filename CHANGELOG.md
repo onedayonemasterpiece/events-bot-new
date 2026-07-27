@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added an explicitly gated immutable-noindex artifact research flow: one
+  deterministic real weekend-event placement, a five-slot device-local
+  `/artefakty/` collection, accessible detail dialog and disabled
+  `Поделиться артефактом · скоро`; ordinary production/root remains
+  fail-closed.
+- Added the complete DB-export-backed
+  `/podborki/besplatnye-sobytiya/` collection with ongoing-event and explicit
+  occurrence-family handling.
+- Added bounded structured `organizer_names` persistence and Smart Update
+  extraction plus exact source bindings for Профи-тур and Хранители руин.
+
 - Added a dedicated, year-scoped `festival_calendar_item` SQLite model,
   runtime DDL/Alembic migration and dry-run-first idempotent 2026 backfill for
   the accepted 21 future festival records without duplicating legacy
@@ -153,6 +164,15 @@
 
 ### Changed
 
+- Unified static-site Supabase/Yandex PKCE ownership across Search, Personal
+  and the mobile menu; the menu can initiate login and every surface reflects
+  the same origin-scoped session.
+- Mobile listing rails may render up to four real event images while applying
+  per-asset OCR/document crop protection, and Clubs now exposes the same
+  visible sticky section identity as other mobile discovery surfaces.
+- Native sharing of `visual_only` event photos now composes a branded
+  1080×1350 event image before Web Share; OCR/unknown assets remain unmodified.
+
 - Moved `/festivali/` from its hardcoded TypeScript review catalog to generated
   `sqlite-festival-calendar-v1` data while preserving the accepted R9 timeline,
   media ledger, truthful broad-date labels and row-packing behavior.
@@ -260,6 +280,24 @@
 
 ### Fixed
 
+- Reconciled the Chromium release gate with the fail-closed compact-card
+  contract: classified OCR documents may cover only within the measured 20%
+  budget, while unknown/classifier-error documents must remain whole and now
+  carry an explicit generated crop-reason receipt.
+- Fixed the Fly → Kaggle production-candidate handoff so the explicitly gated
+  artifact research and mandatory public Search/Auth configuration survive the
+  immutable build fingerprint/config boundary; production/root still proves
+  that artifact UI is absent.
+- Fixed Search submission from the mobile search/Enter key with IME guards and
+  added one bounded JSON rescue when the initial NDJSON request stalls before
+  response headers.
+- Fixed mobile OCR event heroes being cover-cropped, missing multi-image rail
+  media, and global auth state disappearing outside Search.
+- Fixed the mobile `Бесплатно` navigation entry so it opens the materialized
+  collection instead of a prefilled Search query, while keeping a truthful
+  Jazz-weekend empty state.
+- Fixed structured organizer/venue medallion reachability for Янтарь-холл, Дом
+  искусств, Профи-тур and Хранители руин without widening fail-closed aliases.
 - Fixed the future-event source coverage incident: parallel Theatres,
   Philharmonia and Qtickets Kaggle run-configs now use isolated SQLite
   transactions; the Philharmonia kernel parses the current `/afisha/` listing

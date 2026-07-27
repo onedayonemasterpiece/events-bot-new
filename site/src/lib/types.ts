@@ -106,6 +106,7 @@ export interface PreviewEvent {
   slug: string;
   event_type: string | null;
   festival: string | null;
+  organizer_names?: string[];
   status_label: string;
   lifecycle_status: string;
   starts_at: string | null;

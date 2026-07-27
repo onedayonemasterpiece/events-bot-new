@@ -68,6 +68,9 @@ test('catalog markup keeps shortcut hints focus-scoped and desktop columns count
   assert.match(page, /data-club-columns=\{Math\.min\(clubs\.length, 3\)\}/u);
   assert.match(page, /grid-template-columns:repeat\(var\(--club-columns\),minmax\(0,1fr\)\)/u);
   assert.match(page, /@media \(max-width: 760px\)[\s\S]*grid-template-columns:1fr/u);
+  assert.match(page, /data-club-mobile-shelf/u);
+  assert.match(page, /\.club-mobile-shelf \{[\s\S]*position:sticky;[\s\S]*top:var\(--ke-site-header-bar-height\);/u);
+  assert.match(page, /<strong>Клубы по интересам<\/strong>/u);
   assert.doesNotMatch(page, /class="crumbs"/u);
   assert.match(card, /\.club-card__keyboard-hint[\s\S]*visibility:hidden;[\s\S]*opacity:0;/u);
   assert.match(card, /\.club-card:focus-visible \.club-card__keyboard-hint,[\s\S]*visibility:visible; opacity:\.72;/u);

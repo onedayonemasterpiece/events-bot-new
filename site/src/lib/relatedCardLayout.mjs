@@ -159,9 +159,10 @@ function cropFraction(sourceRatio, targetRatio) {
 }
 
 /**
- * Final compact-card treatment. A card image always fills its shell: fields
- * are forbidden. OCR/document assets may use cover only inside the 20% crop
- * budget; packRelatedCardRows guarantees that target-ratio precondition.
+ * Final compact-card treatment. Classified visual media fills its shell.
+ * Classified OCR/document assets may use cover only inside the 20% crop
+ * budget; unclassified/error media remains whole because there is no positive
+ * crop evidence. packRelatedCardRows guarantees the bounded-cover precondition.
  */
 export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = relatedCardMediaGeometry(item)) {
   const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO);

@@ -30,6 +30,32 @@ Add a visually large row of **quick-read event medallions** on the **event detai
 
 The medallion row is informational and is not a replacement for the existing `Коротко` facts or CTA panel. Facts still need source-grounded text in the event body/quick facts; medallions are the fast visual layer. On listings they are deliberately quieter: recognition and trust cues that support the choice to open a card, not CTA or decoration.
 
+## Structured organizer identity
+
+Organizer medallions consume the bounded `event.organizer_names` contract rather
+than title, venue or description prose. Smart Update persists at most eight
+normalized names and unions new grounded identities without erasing earlier
+ones. A name may enter this field only from:
+
+- an LLM `organizer_names` item whose exact `evidence_quote` names the
+  organization as organizer of the concrete event; or
+- an explicit curated self-publisher binding in an intake path.
+
+The generic source/publisher name is never organizer evidence. Current explicit
+VK bindings are `12286984 → Профи-тур` and
+`190663987 → Хранители руин`; the managed aggregator group is deliberately not
+bound. Static export projects the stored list unchanged, and both detail and
+listing resolvers match only curated exact/bounded organizer aliases.
+
+This removes the former `listingEventIds` exception for event `7018` and the
+incorrect venue shortcut `Железнодорожные ворота → Хранители руин`. Consequently
+`Воротник` resolves the Ruin Keepers token from its organizer field, while an
+unrelated Экодвор at the same venue does not.
+
+`Янтарь холл` and `Калининградский театр эстрады (Дом искусств)` are
+`listing_ready` venue bindings: their already canonical structured venue names
+now enable the external listing rail without inspecting poster text.
+
 ## Scope clarification
 
 Current scope:

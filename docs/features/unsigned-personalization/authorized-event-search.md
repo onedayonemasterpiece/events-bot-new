@@ -1,6 +1,11 @@
 # Authorized event search with Supabase pgvector
 
-> Status: P0 infrastructure implemented. On 2026-06-29 the personalization Supabase project has `custom:yandex` configured and Edge Function `event-search` deployed. On 2026-07-01 the KEY5 capacity branch adds direct multi-key provider rotation, switches online LLM verification to **Gemini Lite first / Gemma 4 26B overflow**, and recalculates the effective Yandex-registered-user canary quota to `1000/day` search + `1000/day` verifier calls: embedding rotates across all five keys, Lite verification rotates across the shared non-guide pool, and only the guide fixed key stays reserve/failover. The current 2026-07-02 preview `preview-20260702t1536-merged-vector-medallions` keeps that backend contract, includes the vector-identity gate and medallion SVG branches, and verifies the public static build exposes only browser-safe Supabase/Yandex auth envs.
+> Status, 2026-07-27: backend P0 infrastructure is deployed; the static client
+> now has one origin-scoped Supabase/Yandex PKCE controller shared by Search,
+> Personal and the mobile menu. Enter/search-key submission and bounded
+> response-header/stream rescue are implemented. Production UX is still
+> conditional on a fresh immutable-candidate real Yandex round-trip and real
+> Edge-result browser acceptance; historical preview evidence is not that gate.
 
 ## Product contract
 
@@ -1176,3 +1181,35 @@ is shown and its local part supplies the deterministic initial. A one-letter
 provider username cannot mask a known email. Opaque provider imagery is not the
 only explanation of the session, and an image failure falls back to the same
 initial.
+
+## R14 global auth and header-stall recovery, 2026-07-27
+
+Auth ownership is no longer local to `AuthorizedEventSearch`. The browser
+singleton in `site/src/lib/staticSiteAuth.ts` owns the single Supabase client,
+PKCE callback exchange, origin-scoped saved session, sign-in and sign-out.
+`StaticSiteAuthRuntime.astro`, mounted exactly once by `EventLayout`, binds the
+same state to Search, `/dlya-menya/` and `Reference4MobileMenu`. Menu and
+Personal provide direct `custom:yandex` entry points and never route login
+through Search. Session tokens are not copied into markup, DOM events or
+page-specific stores.
+
+Search keeps the accepted standalone textarea, but an unmodified Enter is a
+search action: it calls native `form.requestSubmit()` and exposes
+`enterkeyhint="search"`. `Shift+Enter`, active IME composition and key code
+`229` do not submit.
+
+The existing bounded JSON rescue covers two distinct liveness failures:
+
+1. the NDJSON response is accepted but no chunk arrives within the stream-idle
+   deadline;
+2. the initial request never delivers response headers.
+
+Each failure cancels only its owning request epoch and may invoke one bounded
+JSON `stream_rescue` with `use_llm_verifier=false`. This is not an unbounded
+retry and cannot repaint a newer query. If rescue also fails, skeleton and
+progress clear and the form becomes editable again.
+
+Required release evidence remains: real mobile Yandex login → return to the
+same immutable candidate → menu, Personal and Search all show the same identity
+→ Enter submits → a real Edge result renders canonical cards. Mocked callback
+and network-stall tests are regression gates, not a substitute.

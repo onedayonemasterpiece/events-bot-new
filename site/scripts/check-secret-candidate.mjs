@@ -29,8 +29,36 @@ for (const route of [
   'kluby-po-interesam',
   'partners',
 ]) source(`${route}/index.html`);
-for (const slug of ['dzhaz-na-vyhodnyh', 'besplatno-s-detmi', 'stendap-na-etoy-nedele']) {
+for (const slug of ['besplatnye-sobytiya', 'dzhaz-na-vyhodnyh', 'besplatno-s-detmi', 'stendap-na-etoy-nedele']) {
   source(`podborki/${slug}/index.html`);
+}
+const freeCollectionHtml = source('podborki/besplatnye-sobytiya/index.html');
+const freeCollectionResults = freeCollectionHtml.slice(
+  freeCollectionHtml.indexOf('data-search-collection-results'),
+  freeCollectionHtml.indexOf('</section>', freeCollectionHtml.indexOf('data-search-collection-results')),
+);
+const freeCollectionIds = [...freeCollectionResults.matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
+const eventByIdForCollections = new Map(eventsData.events.map((event) => [Number(event.id), event]));
+if (!freeCollectionIds.length) fail('general free collection is unexpectedly empty');
+if (freeCollectionIds.some((id) => !eventByIdForCollections.get(id)?.ticket?.is_free)) fail('general free collection contains a non-free exported event');
+const ongoingFreeIds = new Set(eventsData.events
+  .filter((event) => event.ticket?.is_free && event.start_date < eventsData.build.current_date && event.end_date >= eventsData.build.current_date)
+  .map((event) => Number(event.id)));
+if (ongoingFreeIds.size && !freeCollectionIds.some((id) => ongoingFreeIds.has(id))) fail('general free collection lost all ongoing free events');
+const jazzCollectionHtml = source('podborki/dzhaz-na-vyhodnyh/index.html');
+if (!jazzCollectionHtml.includes('data-search-collection-results')) {
+  if (!jazzCollectionHtml.includes('data-search-collection-empty-window')) fail('empty Jazz collection misses its explicit weekend explanation');
+  const referenceDate = jazzCollectionHtml.match(/подборка рассчитана на (\d{4}-\d{2}-\d{2})/u)?.[1];
+  const reference = referenceDate ? new Date(`${referenceDate}T00:00:00Z`) : null;
+  if (!reference || !Number.isFinite(reference.getTime())) fail('Jazz collection reference date is not inspectable');
+  const day = reference.getUTCDay();
+  reference.setUTCDate(reference.getUTCDate() + (day === 6 ? 0 : day === 0 ? -1 : 6 - day) + 2);
+  const firstDayAfterWeekend = reference.toISOString().slice(0, 10);
+  const laterJazzExists = eventsData.events.some((event) => event.lifecycle_status === 'active'
+    && (event.end_date || event.start_date) >= referenceDate
+    && event.start_date >= firstDayAfterWeekend
+    && /джаз/iu.test(event.title));
+  if (laterJazzExists && !jazzCollectionHtml.includes('data-search-collection-fallback')) fail('empty Jazz collection hides later exported Jazz events');
 }
 if (
   festivalTimelineData.schema_version !== 'festival-timeline-static-v1'

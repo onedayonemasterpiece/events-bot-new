@@ -444,7 +444,7 @@ const descriptionHtml = (event.description_html || '')
                 </button>
               </div>
             )}
-            <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--side" family="editorial" />
+            <DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} className="desktop-prototype__action--side" family="editorial" />
             {ocrCompanion && ocrCompanionLayout === 'separate' && (
               <button
                 type="button"
@@ -529,7 +529,7 @@ const descriptionHtml = (event.description_html || '')
             <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} layout="desktop-slots" allowTopSlot={candidate === 'editorial' && mediaPolicy === 'non-ocr'} /></div>
           </div>
 
-          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--inline" family="split" />}
+          {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} className="desktop-prototype__action--inline" family="split" />}
 
           {usesLongFlow && (
             <div class="desktop-prototype__flow-body" data-continuous-event-body>
@@ -557,7 +557,7 @@ const descriptionHtml = (event.description_html || '')
           )}
         </div>
 
-        {!usesLongFlow && <DesktopEventActionPanel event={event} shareImage={preferredUrl} className="desktop-prototype__action--flow" family={candidate} />}
+        {!usesLongFlow && <DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} className="desktop-prototype__action--flow" family={candidate} />}
       </section>
     </div>
   </article>

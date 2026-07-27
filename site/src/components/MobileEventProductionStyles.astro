@@ -64,16 +64,17 @@
     }
     [data-mobile-event-production] .event-hero--poster-stage .event-hero__visual {
       transform: translateX(-50%) !important;
-      overflow: hidden;
+      overflow: visible;
       will-change: auto;
     }
     [data-mobile-event-production] .event-hero--poster-stage .event-hero__image {
-      margin-bottom: calc(-1 * var(--hero-poster-travel, 42px));
-      transform: translate3d(0, var(--hero-poster-parallax-y, 0px), 0);
-      will-change: transform;
+      margin-top: 0;
+      margin-bottom: 0;
+      transform: none;
+      will-change: auto;
     }
     [data-mobile-event-production][data-mobile-parallax-profile="photo-continuous-crop"] .event-hero--poster-stage .event-hero__image {
-      margin-top: calc(-1 * var(--hero-poster-travel, 42px));
+      margin-top: 0;
     }
     [data-mobile-event-production][data-mobile-review-variant="accepted-v8"] .event-hero__decision {
       border: 0;

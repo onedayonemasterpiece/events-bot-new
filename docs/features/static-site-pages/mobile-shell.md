@@ -4,11 +4,13 @@
 расхождение между календарным прототипом, Search и обычными Astro-страницами, не
 переписывая содержимое самих страниц.
 
-> **Implementation status, 2026-07-21.** Контракт ниже пока не означает, что в
-> Astro уже существует общий `MobileHeader`: календарь v23 генерирует header
-> отдельно, а Search использует drawer из `EventLayout`. Это и есть найденная
-> причина визуального расхождения. До production-конвергенции нельзя называть
-> совпадающие по смыслу, но разные DOM/CSS реализации «единым компонентом».
+> **Implementation status, 2026-07-27.** Общая Astro-оболочка реализована:
+> `EventLayout` ровно один раз монтирует `Reference4MobileMenu`,
+> `MobileBottomNav`, `MobileToastRegion` и общий `StaticSiteAuthRuntime`.
+> Calendar/Popular rails сохраняют принятый v23 behavioral donor, но больше не
+> имеют отдельной «уменьшенной desktop» шапки. Исторические split-preview base
+> URLs ниже остаются только исследовательским evidence; единый release build
+> использует свой `BASE_PATH`.
 
 ## Структура
 
@@ -82,10 +84,28 @@ PUBLIC_MOBILE_SEARCH_BASE_URL=https://kenigevents.ru/preview-20260721-mobile-sea
 - город — контекст выборки, а не глобальный top-level раздел. В календаре он
   входит в contextual slot; на Search/listings активные города показываются
   компактной контентной строкой/фильтром с явным сбросом;
-- auth остаётся инициируемым из Search и Personal. В header допустим компактный
-  avatar/account action после входа, но нельзя убирать Yandex CTA из Search до
-  появления равноценного понятного входа: иначе gate поиска становится
-  невидимым.
+- auth принадлежит одному origin-scoped Supabase PKCE controller, а не Search.
+  Search, Personal и mobile menu читают одну session и показывают одну и ту же
+  identity; вход через Yandex доступен как из Search, так и непосредственно из
+  menu/Personal. После входа menu показывает compact account/identity action;
+- `EventLayout` монтирует один `StaticSiteAuthRuntime`. В DOM/custom events
+  нельзя публиковать access/refresh tokens. OAuth callback очищается на любой
+  статической странице, а origin-scoped session сохраняется при переходах
+  между immutable review prefixes.
+
+## R14 shell/auth integration, 2026-07-27
+
+- `Reference4MobileMenu` ведёт `Бесплатно` на материализованную
+  `/podborki/besplatnye-sobytiya/`, а не заполняет Search;
+- `Для меня` и menu не имеют отдельных auth clients и не отправляют пользователя
+  «войти через поиск»;
+- обычный Enter в Search вызывает native `form.requestSubmit()`, IME/composition
+  не прерывается, а `enterkeyhint="search"` даёт мобильной клавиатуре правильное
+  действие;
+- Calendar/Popular/listing/event routes используют один mobile shell contract;
+  локальные header/drawer forks блокируют release;
+- полная browser-приёмка реального Yandex round-trip остаётся обязательной на
+  замороженном immutable candidate; mocked PKCE/Edge smoke не подменяет её.
 
 ## Toast placement and height budget
 
