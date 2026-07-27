@@ -85,6 +85,7 @@ test('club catalog keeps full desktop rows, scoped hotkeys, fallback and mobile 
     fillsRow: true,
     overflow: 0,
   });
+  assert.equal(await page.locator('[data-club-mobile-shelf]').isHidden(), true);
 
   const desktopMeetingBadge = page.locator('[data-club-future-badge="desktop"]:visible');
   assert.equal(await desktopMeetingBadge.count(), 1);
@@ -183,6 +184,7 @@ test('club catalog keeps full desktop rows, scoped hotkeys, fallback and mobile 
     const hint = document.querySelector('.club-card__keyboard-hint');
     const desktopBadge = document.querySelector('[data-club-future-badge="desktop"]');
     const mobileBadge = document.querySelector('[data-club-future-badge="mobile"]');
+    const shelf = document.querySelector('[data-club-mobile-shelf]');
     return {
       columns: getComputedStyle(list).gridTemplateColumns.split(' ').length,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -194,6 +196,8 @@ test('club catalog keeps full desktop rows, scoped hotkeys, fallback and mobile 
         mobileBadge.getBoundingClientRect().right <= document.documentElement.clientWidth + 1,
       cardsWithinViewport: [...document.querySelectorAll('[data-club-card]')]
         .every((card) => card.getBoundingClientRect().right <= document.documentElement.clientWidth + 1),
+      shelfVisible: getComputedStyle(shelf).display === 'flex',
+      shelfTitle: shelf.querySelector('strong')?.textContent,
     };
   });
   assert.deepEqual(mobile, {
@@ -205,6 +209,22 @@ test('club catalog keeps full desktop rows, scoped hotkeys, fallback and mobile 
     mobileBadgeInHead: true,
     mobileBadgeWithinViewport: true,
     cardsWithinViewport: true,
+    shelfVisible: true,
+    shelfTitle: 'Клубы по интересам',
   });
+  await page.evaluate(() => scrollTo(0, 900));
+  await page.waitForFunction(() => scrollY > 800);
+  const stickyShelf = await page.locator('[data-club-mobile-shelf]').evaluate((shelf) => {
+    const box = shelf.getBoundingClientRect();
+    return {
+      top:box.top,
+      height:box.height,
+      headerBottom:document.querySelector('.site-header').getBoundingClientRect().bottom,
+      overflow:document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  assert.ok(Math.abs(stickyShelf.top - stickyShelf.headerBottom) <= 1);
+  assert.ok(stickyShelf.height >= 44);
+  assert.equal(stickyShelf.overflow, 0);
   await page.close();
 });

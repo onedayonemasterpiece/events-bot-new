@@ -6,7 +6,7 @@ import AnnouncementsLockup from './brand/AnnouncementsLockup.astro';
 import EventFallbackArt from './EventFallbackArt.astro';
 import type { EventImageAsset, PreviewEvent } from '../lib/types';
 import type { OccurrencePresentation } from '../lib/eventOccurrences';
-import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isExternalHttpUrl, isEventDetailCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref } from '../lib/events';
+import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isExternalHttpUrl, isEventDetailCalendarEligible, isTelephoneUrl, isTicketSoldOut, siteHomeHref, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 import { isLowResolutionPortraitEventMedia, selectEventMediaByQuality } from '../lib/eventMediaQuality';
 import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
@@ -254,7 +254,7 @@ const showTicketCta = Boolean(ctaHref);
       {showTicketCta && <a class={calendarPrimary ? 'secondary-button' : 'cta-button'} href={ctaHref} target={ctaIsExternal ? '_blank' : undefined} rel={ctaIsExternal ? 'noopener noreferrer nofollow' : undefined}>{ctaIsTelephone && <Icon name="phone" />}<span>{ctaLabel}</span></a>}
       {soldOut && !showTicketCta && <span class="secondary-button cta-button--disabled" aria-disabled="true">{ctaLabel}</span>}
       {!calendarPrimary && canAddToCalendar && <CalendarLink event={event} className="secondary-button" />}
-      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={admissionLabel}>
+      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={canonicalUrl} data-share-image={primaryImageUrl || ''} data-share-image-type={shareImageType} data-share-image-text-mode={primaryImageTextMode} data-share-brand-image={withBase('/brand/announcements-wordmark-ui.svg')} data-share-file-name={shareFileName} data-share-date-time={dateTimeLabel} data-share-place={placeLabel} data-share-admission={admissionLabel}>
         <Icon name="share" />
         <span data-share-label>Поделиться</span>
         <span class="feedback-count" data-share-count>{shareCountLabel}</span>

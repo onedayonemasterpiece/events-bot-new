@@ -205,6 +205,8 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
         data-share-url={absolute}
         data-share-image={imageUrl || ''}
         data-share-image-type={shareImageType}
+        data-share-image-text-mode={imageTextMode}
+        data-share-brand-image={withBase('/brand/announcements-wordmark-ui.svg')}
         data-share-file-name={shareFileName}
         data-share-date-time={dateTimeLabel}
         data-share-place={event.venue_name || event.city || ''}
@@ -250,6 +252,8 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
           data-share-url={absolute}
           data-share-image={imageUrl || ''}
           data-share-image-type={shareImageType}
+          data-share-image-text-mode={imageTextMode}
+          data-share-brand-image={withBase('/brand/announcements-wordmark-ui.svg')}
           data-share-file-name={shareFileName}
           data-share-date-time={dateTimeLabel}
           data-share-place={event.venue_name || event.city || ''}

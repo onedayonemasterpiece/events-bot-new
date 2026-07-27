@@ -14,6 +14,22 @@ function sourceImages(event) {
   ));
 }
 
+function normalizedObjectPosition(value) {
+  const raw = String(value || '').trim();
+  return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : '';
+}
+
+function objectPositionForAsset(asset, fallback = '50% 50%') {
+  const recommended = normalizedObjectPosition(asset?.recommended_object_position);
+  if (recommended) return recommended;
+  const x = Number(asset?.focal_point?.x);
+  const y = Number(asset?.focal_point?.y);
+  if (Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+    return `${Math.round(x * 100)}% ${Math.round(y * 100)}%`;
+  }
+  return normalizedObjectPosition(fallback) || '50% 50%';
+}
+
 /**
  * Resolve only the physical treatment used by the accepted 112px mobile rail.
  *
@@ -76,4 +92,45 @@ export function resolveMobileListingRailMedia(event, selected) {
     width: Math.max(62, Math.min(199, Math.round(112 * ratio))),
     reason: explicitlyVisual ? 'safe_visual_authored_geometry' : 'protected_natural_geometry',
   };
+}
+
+/**
+ * Return a bounded, source-ordered set of real gallery cells for the mobile
+ * listing rail. The listing-selected asset remains first, while every later
+ * item is evaluated independently by the same OCR/document protection gate.
+ */
+export function resolveMobileListingRailMediaItems(event, selected, maxItems = 4) {
+  const limit = Math.max(1, Math.min(6, Number(maxItems) || 4));
+  const candidates = [];
+  const seen = new Set();
+  const add = (asset, fallbackSelected = null) => {
+    const src = String(asset?.src || fallbackSelected?.src || '').trim();
+    const key = String(asset?.asset_key || src).trim();
+    if (!src || !key || seen.has(key)) return;
+    seen.add(key);
+    const width = Number(asset?.width || fallbackSelected?.asset?.width || 0);
+    const height = Number(asset?.height || fallbackSelected?.asset?.height || 0);
+    const itemSelected = fallbackSelected || {
+      asset,
+      src,
+      ratio: width > 0 && height > 0 ? width / height : 1,
+      mode: 'natural',
+      adaptiveCrop: false,
+      objectPosition: objectPositionForAsset(asset),
+    };
+    const media = resolveMobileListingRailMedia(event, itemSelected);
+    candidates.push({
+      asset: asset || itemSelected.asset || null,
+      src,
+      width: width || null,
+      height: height || null,
+      imageTextMode: asset?.image_text_mode || event?.image_text_mode || 'unknown',
+      objectPosition: objectPositionForAsset(asset, itemSelected.objectPosition),
+      ...media,
+    });
+  };
+
+  if (selected?.src || selected?.asset?.src) add(selected.asset, selected);
+  for (const asset of sourceImages(event)) add(asset);
+  return candidates.slice(0, limit);
 }

@@ -4,7 +4,7 @@ import { displayDate, displayDateRange, eventAdmissionLabel, eventHref, getOccur
 import { eventImageUrl } from '../../lib/assets';
 import { occurrenceTime } from '../../lib/eventOccurrences';
 import { selectListingImage } from '../../lib/listingPresentation';
-import { resolveMobileListingRailMedia } from '../../lib/mobileListingRailMedia.mjs';
+import { resolveMobileListingRailMediaItems } from '../../lib/mobileListingRailMedia.mjs';
 import { getListingIdentityMedallions } from '../../lib/listingVenueMedallions';
 import Icon from '../Icon.astro';
 import AmberRailArtifact from './AmberRailArtifact.astro';
@@ -18,8 +18,7 @@ interface Props {
 
 const { event, occurrenceMode = 'per-date', priority = false, amberArtifactTail = false } = Astro.props;
 const image = selectListingImage(event, 1.25);
-const railMedia = resolveMobileListingRailMedia(event, image);
-const imageUrl = image.src?.startsWith('/') ? withBase(image.src) : eventImageUrl(image.src);
+const railMediaItems = resolveMobileListingRailMediaItems(event, image);
 const occurrence = occurrenceMode === 'per-family' ? getOccurrencePresentation(event) : null;
 const fullDateLine = displayDate(event);
 const compactRailDateRange = event.end_date && event.end_date !== event.start_date
@@ -35,10 +34,6 @@ const identities = getListingIdentityMedallions(event).slice(0, event.ticket?.is
 const admission = eventAdmissionLabel(event);
 const likesCount = event.likes_count || 0;
 const href = eventHref(event);
-const mediaFit = railMedia.fit;
-const mediaWidth = railMedia.width;
-const selectedImageTextMode = image.asset?.image_text_mode || event.image_text_mode || 'unknown';
-const style = `--media-width:${mediaWidth}px;--focus-x:${image.objectPosition.split(' ')[0] || '50%'};--focus-y:${image.objectPosition.split(' ')[1] || '50%'};--rail-media-fit:${mediaFit}`;
 const useDatePrimary = occurrenceMode === 'per-family' && Boolean(occurrence);
 const noExactTime = !timeLine;
 const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medallion.avatarUrl.endsWith('.webp')
@@ -56,9 +51,10 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
   data-event-end-at={event.end_at || undefined}
   data-listing-city={event.city || 'Калининградская область'}
   data-listing-event-type={event.event_type || 'other'}
-  data-mobile-rail-media-reason={railMedia.reason}
+  data-mobile-rail-gallery-count={railMediaItems.length}
+  data-mobile-rail-media-reason={railMediaItems[0]?.reason}
 >
-  <div class="rail-window" tabindex="0" aria-label={`${event.title}. ${scheduleAria}. Фото, описание и действия доступны горизонтальным листанием`}>
+  <div class="rail-window" tabindex="0" aria-label={`${event.title}. ${scheduleAria}. ${railMediaItems.length > 1 ? `${railMediaItems.length} фото, ` : 'Фото, '}описание и действия доступны горизонтальным листанием`}>
     <span class="dislike-underlay" aria-hidden="true"><span>Неинтересно</span></span>
     <span class="like-underlay" aria-hidden="true"><Icon name="heart" /></span>
     <span class="event-track">
@@ -88,25 +84,32 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
             <svg viewBox="0 0 48 23"><path d="M3 11.5H40M31 2.5L40 11.5L31 20.5"></path></svg>
           </span>
         </span>
-        {imageUrl ? (
-          <span
-            class:list={['event-media', 'is-loading', mediaFit === 'contain' && 'event-media--natural', selectedImageTextMode === 'ocr_text' && 'event-media--ocr']}
-            data-image-text-mode={selectedImageTextMode}
-            data-media-state="loading"
-            data-rail-media-reason={railMedia.reason}
-            style={style}
-          >
-            <img
-              src={imageUrl}
-              width={image.asset?.width || undefined}
-              height={image.asset?.height || undefined}
-              alt=""
-              loading={priority ? 'eager' : 'lazy'}
-              fetchpriority={priority ? 'high' : 'auto'}
-              decoding="async"
-            />
-          </span>
-        ) : null}
+        {railMediaItems.map((railMedia, mediaIndex) => {
+          const imageUrl = railMedia.src.startsWith('/') ? withBase(railMedia.src) : eventImageUrl(railMedia.src);
+          const [focusX = '50%', focusY = '50%'] = railMedia.objectPosition.split(/\s+/u);
+          const style = `--media-width:${railMedia.width}px;--focus-x:${focusX};--focus-y:${focusY};--rail-media-fit:${railMedia.fit}`;
+          return imageUrl ? (
+            <span
+              class:list={['event-media', 'is-loading', railMedia.fit === 'contain' && 'event-media--natural', railMedia.imageTextMode === 'ocr_text' && 'event-media--ocr']}
+              data-image-text-mode={railMedia.imageTextMode}
+              data-media-state="loading"
+              data-rail-media-reason={railMedia.reason}
+              data-rail-gallery-index={mediaIndex}
+              data-rail-gallery-count={railMediaItems.length}
+              style={style}
+            >
+              <img
+                src={imageUrl}
+                width={railMedia.asset?.width || undefined}
+                height={railMedia.asset?.height || undefined}
+                alt=""
+                loading={priority && mediaIndex === 0 ? 'eager' : 'lazy'}
+                fetchpriority={priority && mediaIndex === 0 ? 'high' : 'auto'}
+                decoding="async"
+              />
+            </span>
+          ) : null;
+        })}
         <span class="event-digest" aria-label="О событии">
           <span class="event-digest__body"><b>О событии</b><span>{event.summary || event.title}</span></span>
         </span>

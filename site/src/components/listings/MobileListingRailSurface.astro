@@ -583,7 +583,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
           && startMs <= now - 60 * 60 * 1000;
         const state = completed || elapsedListingDayWithoutEnd ? 'past' : startedEarlier ? 'started-earlier' : 'current';
         row.dataset.mobileRailTemporalState = state;
-        row.querySelector('.event-media')?.classList.toggle('is-temporally-muted', state !== 'current');
+        row.querySelectorAll('.event-media').forEach((media) => media.classList.toggle('is-temporally-muted', state !== 'current'));
       });
     };
     syncTodayTemporalMedia();
