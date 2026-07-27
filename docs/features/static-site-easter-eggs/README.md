@@ -19,7 +19,11 @@
 исследованию событий. Пасхалки не являются новой North Star и не должны
 оптимизироваться по кликам, времени на сайте или completion любой ценой. Первый
 пилот — одна небольшая культурная коллекция без материального приза, обязательного
-шаринга, streak, loot-box случайности и потери найденного прогресса. Перед кодом
+шаринга, streak, loot-box случайности и потери найденного прогресса. Отдельная
+фокус-группа имеет принятое owner exception — collection-first результат и один
+приз из двух билетов, но только после самостоятельных legal/privacy/anti-fraud
+gates; каноника исключения — [программа фокус-группы](../../backlog/features/static-site-focus-group/easter-egg-program.md).
+Перед кодом
 нужны owner acceptance, прототип, аналитический контракт, first-class модель
 пасхалки, privacy/a11y/IP gates и эксперимент с holdout.
 
@@ -59,7 +63,8 @@ holdout при non-inferior time-to-value и основных CTA.
   только по автоматическому safety-контракту;
 - найденный предмет не сгорает; после кампании история остаётся в архиве;
 - fixed symbolic unlock: история, визуальный токен, связанная подборка/маршрут;
-- никаких материальных призов, случайных наград и влияния social share в MVP;
+- никаких материальных призов, случайных наград и влияния social share в общем
+  MVP; focus-group exception не меняет этот default и живёт в отдельной версии;
 - один небольшой treatment и явный holdout на полный цикл плюс минимум неделю
   после него.
 
@@ -261,12 +266,19 @@ exposure. Promo-показ не обучает organic preference model.
 
 ## Награды, social share и vector search
 
-- Completion может открыть **заявку**, но не обещает победу.
+Общий Easter-egg MVP остаётся prize-free. Для фокус-группы владелец отдельно
+принял один возможный приз — **ровно два билета в театр** — и collection-first
+ранжирование с bounded participation. Это не активный конкурс: versioned score,
+responsive placement matrix, caps, tie-break, anti-abuse, accessibility и честный
+`Правила готовятся` определены только в
+[focus programme contract](../../backlog/features/static-site-focus-group/easter-egg-program.md).
+
 - Любой материальный приз — отдельный release с утверждёнными organizer,
   eligibility, сроками, правилами выбора, числом призов, consent, audit,
   privacy/tax/legal и anti-fraud contracts.
-- Social share доброволен. Без отдельной юридической и anti-abuse проверки он не
-  меняет вероятность выигрыша и не является скрытым условием.
+- Положительность, значение NPS, длина текста, share, invite, покупка и повторный
+  spam не дают advantage; низкий NPS, dislike и критический feedback равноправны.
+- Social share доброволен и не является скрытым условием.
 - Share-card не раскрывает имя/прогресс пользователя по умолчанию.
 - Frontend vector search по пасхалкам остаётся research-вопросом вне MVP, пока не
   доказаны русское качество, размер, mobile performance, cache/privacy/a11y и
@@ -302,7 +314,8 @@ Stage 13 остаётся post-release и не блокирует первую �
 5. Retention/consent для обычного feedback и partner proposals.
 6. Кто владеет editorial/fact/IP/safety triage и SLA ответа партнёру.
 7. Exact experiment traffic, MDE и non-inferiority thresholds.
-8. Остаётся ли prize/social-share полностью вне первого года механики.
+8. Для общего MVP prize/social-share остаются вне механики; фокус-группа —
+   отдельное owner exception со своими versioned gates и без share advantage.
 
 ## Связанные документы
 
@@ -316,5 +329,6 @@ Stage 13 остаётся post-release и не блокирует первую �
 - [Партнёрское промо](../promo-campaigns/partner-promo.md)
 - [Мои события](../event-favorites-calendar/README.md)
 - [Personalization data ownership](../../architecture/personalization-data-ownership.md)
+- [Focus-group score и placement contract](../../backlog/features/static-site-focus-group/easter-egg-program.md)
 - [Static-site design system](../static-site-pages/design-system/README.md)
 - [Release readiness / Stage 13](../../reports/static-personal-announcements-release-readiness-2026-07-11.md#stage-13--feature-discovery-пасхалки-о-калининграде)
