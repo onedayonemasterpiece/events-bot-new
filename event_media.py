@@ -14,6 +14,7 @@ from typing import Any, Iterable, Sequence
 from urllib.parse import quote, urlsplit, urlunsplit
 
 from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from media_dedup import (
     ImageFingerprints,
@@ -468,6 +469,32 @@ def _pair_input_hash(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+async def _insert_pair_review_if_absent(
+    session: Any,
+    *,
+    event_id: int,
+    left_poster_id: int,
+    right_poster_id: int,
+    context_hash: str,
+    pair_input_hash: str,
+) -> bool:
+    """Insert one review idempotently even if another writer wins the race."""
+
+    statement = (
+        sqlite_insert(EventMediaPairReview)
+        .values(
+            event_id=int(event_id),
+            left_poster_id=int(left_poster_id),
+            right_poster_id=int(right_poster_id),
+            context_hash=context_hash,
+            pair_input_hash=pair_input_hash,
+        )
+        .on_conflict_do_nothing(index_elements=["pair_input_hash"])
+    )
+    result = await session.execute(statement)
+    return bool(result.rowcount)
+
+
 async def enqueue_event_media_review_job(
     session: Any,
     event_id: int,
@@ -634,17 +661,18 @@ async def ensure_event_media_reviews(session: Any, event_id: int) -> int:
         if existing is not None:
             continue
         row_by_id = {int(left.id or 0): left, int(right.id or 0): right}
-        review = EventMediaPairReview(
+        pair_input_hash = _pair_input_hash(
+            int(event_id), row_by_id[left_id], row_by_id[right_id], context_hash
+        )
+        inserted = await _insert_pair_review_if_absent(
+            session,
             event_id=int(event_id),
             left_poster_id=left_id,
             right_poster_id=right_id,
             context_hash=context_hash,
-            pair_input_hash=_pair_input_hash(
-                int(event_id), row_by_id[left_id], row_by_id[right_id], context_hash
-            ),
+            pair_input_hash=pair_input_hash,
         )
-        session.add(review)
-        created += 1
+        created += int(inserted)
     if created:
         await enqueue_event_media_review_job(session, int(event_id))
     await sync_event_gallery_projection(session, int(event_id))

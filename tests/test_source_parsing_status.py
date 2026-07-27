@@ -7,6 +7,7 @@ import source_parsing.philharmonia as philharmonia
 from source_parsing.handlers import (
     SourceParsingResult,
     SourceParsingStats,
+    _smart_event_update_with_lock_retry,
     _source_parsing_terminal_status,
 )
 from source_parsing.commands import SOURCE_PARSING_GUARD_URLS
@@ -58,6 +59,52 @@ def test_failed_items_are_partial_but_clean_sources_are_success():
         }
     )
     assert _source_parsing_terminal_status(clean) == "success"
+
+
+def test_smart_update_retries_transient_sqlite_writer_lock():
+    calls = 0
+
+    async def flaky_update(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise RuntimeError("database is locked")
+        return "ok"
+
+    result = asyncio.run(
+        _smart_event_update_with_lock_retry(
+            object(),
+            object(),
+            flaky_update,
+            attempts=3,
+            base_delay_seconds=0,
+        )
+    )
+
+    assert result == "ok"
+    assert calls == 3
+
+
+def test_smart_update_does_not_retry_non_lock_failure():
+    calls = 0
+
+    async def broken_update(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("validation failed")
+
+    with pytest.raises(RuntimeError, match="validation failed"):
+        asyncio.run(
+            _smart_event_update_with_lock_retry(
+                object(),
+                object(),
+                broken_update,
+                attempts=3,
+                base_delay_seconds=0,
+            )
+        )
+
+    assert calls == 1
 
 
 def test_cancelled_parse_finishes_ops_run_fail_closed(monkeypatch, tmp_path):

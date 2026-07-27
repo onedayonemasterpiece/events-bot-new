@@ -4,6 +4,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import MobileBottomNav, { type MobileSection } from '../components/MobileBottomNav.astro';
 import MobileToastRegion from '../components/MobileToastRegion.astro';
+import PwaTelemetry from '../components/PwaTelemetry.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
 import StaticSiteAuthRuntime from '../components/auth/StaticSiteAuthRuntime.astro';
 import UnusualUnreadRuntime from '../components/UnusualUnreadRuntime.astro';
@@ -165,7 +166,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {ogImageHeight && <meta property="og:image:height" content={String(ogImageHeight)} />}
     <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
-    <link rel="manifest" href={`${withBase('/manifest.webmanifest')}?v=20260727-brand-icon`} />
+    <link rel="manifest" href={`${withBase('/manifest.webmanifest')}?v=20260727-brand-icon-v2`} />
     <meta name="theme-color" content="#f7efe3" />
     <meta name="format-detection" content="telephone=yes" />
     {structuredData.map((item) => (
@@ -2477,6 +2478,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     </style>
   </head>
   <body class={bodyClass} style={`--desktop-brand-tag-skin:url('${withBase('/assets/ui/desktop-head-leather-r5.webp')}')`} data-mobile-top-mode={resolvedMobileTopMode} data-mobile-section={mobileSection || 'none'} data-mobile-bottom-mode={resolvedMobileBottomMode} data-current-year={getCurrentDate().slice(0, 4)} data-site-base-path={BASE_PATH || '/'} data-site-origin={SITE_ORIGIN} data-personal-feed-supabase-url={personalizationSupabaseUrl || undefined} data-personal-feed-supabase-key={personalizationSupabaseKey || undefined} data-personal-feed-rpc-name={personalFeedRpcName}>
+    <PwaTelemetry />
     <a href="#main" class="skip-link">Перейти к событию</a>
     <header class="site-header">
       <div class="site-header__inner">

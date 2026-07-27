@@ -8,6 +8,7 @@ import {
   isPresentationInstall,
   isStandaloneDisplay,
 } from '../src/lib/pwa-install-controller.js';
+import { createPwaTelemetryController } from '../src/lib/pwa-telemetry-controller.js';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const readBytes = (path) => readFile(new URL(`../${path}`, import.meta.url));
@@ -64,6 +65,15 @@ function installEvent(prompt = async () => {}) {
       this.promptCalls += 1;
       return prompt();
     },
+  };
+}
+
+function storageFixture(initial = {}) {
+  const values = new Map(Object.entries(initial));
+  return {
+    getItem(key) { return values.get(key) || null; },
+    setItem(key, value) { values.set(key, String(value)); },
+    values,
   };
 }
 
@@ -178,19 +188,21 @@ test('site exposes a base-aware installable manifest and footer-owned controller
   assert.match(manifest, /prefer_related_applications:false/u);
   assert.match(manifest, /name:'Анонсы'/u);
   assert.match(manifest, /short_name:'Анонсы'/u);
-  assert.match(manifest, /announcements-brand-192\.png/u);
-  assert.match(manifest, /announcements-brand-512\.png/u);
-  assert.match(manifest, /announcements-brand-maskable-192\.png/u);
-  assert.match(manifest, /announcements-brand-maskable-512\.png/u);
+  assert.match(manifest, /announcements-brand-v2-192\.png/u);
+  assert.match(manifest, /announcements-brand-v2-512\.png/u);
+  assert.match(manifest, /announcements-brand-v2-maskable-192\.png/u);
+  assert.match(manifest, /announcements-brand-v2-maskable-512\.png/u);
   assert.match(manifest, /purpose:'maskable'/u);
   assert.match(action, /data-pwa-install-root/u);
   assert.match(action, /data-pwa-install-button hidden/u);
   assert.match(action, /pwa-install-action__button\[hidden\]/u);
   assert.match(action, /Установить приложение/u);
   assert.match(footer, /<PwaInstallAction \/>/u);
-  assert.match(layout, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon/u);
+  assert.match(layout, /<PwaTelemetry \/>/u);
+  assert.match(layout, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon-v2/u);
   assert.match(home, /<EventLayout\b/u);
   assert.doesNotMatch(home, /<PwaInstallAction \/>/u);
+  assert.doesNotMatch(home, /<PwaTelemetry \/>/u);
   assert.match(release, /'\.webmanifest': 'application\/manifest\+json; charset=utf-8'/u);
   assert.match(deploy, /manifest\.webmanifest[\s\S]*application\/manifest\+json; charset=utf-8/u);
 });
@@ -198,8 +210,110 @@ test('site exposes a base-aware installable manifest and footer-owned controller
 test('brand and maskable launcher PNGs have the declared dimensions', async () => {
   for (const size of [192, 512]) {
     for (const variant of ['', '-maskable']) {
-      const icon = await readBytes(`public/assets/pwa/announcements-brand${variant}-${size}.png`);
+      const icon = await readBytes(`public/assets/pwa/announcements-brand-v2${variant}-${size}.png`);
       assert.deepEqual(pngDimensions(icon), { width:size, height:size });
     }
   }
+});
+
+test('compact PWA telemetry records install and one standalone open per app window', async () => {
+  const windowRef = new FakeTarget();
+  windowRef.matchMedia = () => ({ matches:true });
+  const localStorageRef = storageFixture();
+  const sessionStorageRef = storageFixture();
+  const ids = [
+    '12345678-1234-4234-8234-123456789abc',
+    '87654321-4321-4321-8321-cba987654321',
+  ];
+  const requests = [];
+  const fetchRef = async (url, options) => {
+    requests.push({ url, options, body:JSON.parse(options.body) });
+    return { ok:true };
+  };
+  const controller = createPwaTelemetryController({
+    windowRef,
+    navigatorRef:{ userAgent:'Android' },
+    endpoint:'https://project.supabase.co/',
+    publishableKey:'sb_publishable_test',
+    fetchRef,
+    cryptoRef:{ randomUUID:() => ids.shift() },
+    localStorageRef,
+    sessionStorageRef,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.ok(controller);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, 'https://project.supabase.co/rest/v1/rpc/record_pwa_lifecycle_v1');
+  assert.equal(requests[0].body.p_event_kind, 'standalone_open');
+  assert.equal(requests[0].options.credentials, 'omit');
+  assert.equal(requests[0].options.referrerPolicy, 'no-referrer');
+
+  windowRef.dispatch('appinstalled');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].body.p_event_kind, 'install');
+
+  createPwaTelemetryController({
+    windowRef,
+    navigatorRef:{ userAgent:'Android' },
+    endpoint:'https://project.supabase.co',
+    publishableKey:'sb_publishable_test',
+    fetchRef,
+    cryptoRef:{ randomUUID:() => { throw new Error('must reuse ids'); } },
+    localStorageRef,
+    sessionStorageRef,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests.length, 2);
+});
+
+test('PWA telemetry skips browser tabs, automation, and non-deduplicable storage', async () => {
+  const fetches = [];
+  const fetchRef = async (...args) => {
+    fetches.push(args);
+    return { ok:true };
+  };
+  const standardWindow = new FakeTarget();
+  standardWindow.matchMedia = () => ({ matches:false });
+  createPwaTelemetryController({
+    windowRef:standardWindow,
+    navigatorRef:{ userAgent:'Android' },
+    endpoint:'https://project.supabase.co',
+    publishableKey:'public',
+    fetchRef,
+    cryptoRef:{ randomUUID:() => '12345678-1234-4234-8234-123456789abc' },
+    localStorageRef:storageFixture(),
+    sessionStorageRef:storageFixture(),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fetches.length, 0);
+
+  const automationWindow = new FakeTarget();
+  automationWindow.matchMedia = () => ({ matches:true });
+  const automation = createPwaTelemetryController({
+    windowRef:automationWindow,
+    navigatorRef:{ webdriver:true },
+    endpoint:'https://project.supabase.co',
+    publishableKey:'public',
+    fetchRef,
+  });
+  assert.equal(automation, null);
+
+  const brokenStorage = {
+    getItem() { throw new Error('blocked'); },
+    setItem() { throw new Error('blocked'); },
+  };
+  const blocked = createPwaTelemetryController({
+    windowRef:automationWindow,
+    navigatorRef:{ webdriver:false },
+    endpoint:'https://project.supabase.co',
+    publishableKey:'public',
+    fetchRef,
+    cryptoRef:{ randomUUID:() => '12345678-1234-4234-8234-123456789abc' },
+    localStorageRef:brokenStorage,
+    sessionStorageRef:brokenStorage,
+  });
+  assert.equal(blocked, null);
+  assert.equal(fetches.length, 0);
 });

@@ -29,6 +29,11 @@
   policies, security-invoker saved-events view and authenticated idempotent RPC
   used by the noindex Favorites shell.
 
+- Added compact PWA lifecycle analytics in the personalization Supabase
+  project: confirmed installs, standalone sessions, daily active installations
+  and exact D1/D7 cohort returns use one mutable installation-state row plus
+  one daily aggregate row, with no raw open-event history, a 180-day
+  self-pruning window and a hard daily new-id cap.
 - Added direct official future-catalog parsers for Kaliningrad Theatre of
   Variety (former Dom Iskusstv) and Yantar Hall, including month/AJAX
   pagination, targeted `/parse estrada|yantarhall` runs and source-level
@@ -323,6 +328,11 @@
 - Removed the expired fixed-date Teremok generated-output dependency from the
   preview gate while retaining current rail geometry/OCR fail-closed contracts
   and the source-backed Pianissimo crop regression.
+- **Static site / PWA launcher safe area**: replaced the launcher artwork with
+  the revised `PKA-PWA2` reference and added an 82% warm-white maskable safe
+  area, keeping the leather edge and stitched outline visible under Android
+  circle and squircle masks; versioned icon paths and the manifest link prevent
+  the prior edge-cropped immutable asset from being reused.
 - **Static site / PWA launcher identity**: shortened both installed-app labels
   to the readable `Анонсы`, replaced the generic launcher mark with the
   operator-approved full `Полюбить Калининград / Анонсы` leather artwork,
@@ -334,6 +344,12 @@
   required robots directives as a set, preserving stricter candidate-wide
   `nosnippet` without a false regression.
 
+- Retried parser Smart Update persistence on bounded transient SQLite writer
+  locks, preventing an otherwise valid official occurrence from being lost
+  when a background production task briefly owns the database writer.
+- Made event-media pair-review creation conflict-safe so concurrent review
+  scheduling cannot abort an otherwise valid parser Smart Update on the unique
+  pair idempotency key.
 - Fixed the shared theatre Kaggle notebook so transient Playwright navigation
   during `page.content()` is retried after `domcontentloaded` instead of aborting
   Muzteatr and preventing Sobor/Tretyakov outputs.

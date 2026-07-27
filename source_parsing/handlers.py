@@ -12,7 +12,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Any, Awaitable, Callable, Optional, Sequence
 from urllib.parse import urlparse, urljoin
 
 from aiogram import Bot
@@ -42,6 +42,14 @@ from telegram_sources import canonicalize_tg_url
 logger = logging.getLogger(__name__)
 
 PARSE_EVENT_TIMEOUT_SECONDS = int(os.getenv("SOURCE_PARSING_EVENT_TIMEOUT_SECONDS", "180"))
+SOURCE_PARSING_DB_LOCK_RETRY_ATTEMPTS = max(
+    1,
+    int(os.getenv("SOURCE_PARSING_DB_LOCK_RETRY_ATTEMPTS", "3")),
+)
+SOURCE_PARSING_DB_LOCK_RETRY_DELAY_SECONDS = max(
+    0.0,
+    float(os.getenv("SOURCE_PARSING_DB_LOCK_RETRY_DELAY_SECONDS", "2")),
+)
 SOURCE_PARSING_OCR_TIMEOUT_SECONDS = int(os.getenv("SOURCE_PARSING_OCR_TIMEOUT_SECONDS", "60"))
 SOURCE_PARSING_DIAG_TITLE = os.getenv("SOURCE_PARSING_DIAG_TITLE", "джотто").strip().lower()
 SOURCE_PARSING_DISABLE_OCR_SOURCES = {
@@ -75,6 +83,55 @@ _SOURCE_HOST_HINTS: dict[str, tuple[str, ...]] = {
     ),
     "yantarhall": ("янтарьхолл.рф", "xn--80awafglm0a6dza.xn--p1ai"),
 }
+
+
+def _is_sqlite_lock_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "database is locked" in message or "database table is locked" in message
+
+
+async def _smart_event_update_with_lock_retry(
+    db: Database,
+    candidate: Any,
+    update_func: Callable[..., Awaitable[Any]],
+    *,
+    attempts: int | None = None,
+    base_delay_seconds: float | None = None,
+) -> Any:
+    """Retry only transient SQLite writer contention at the parser persist boundary."""
+
+    max_attempts = max(
+        1,
+        SOURCE_PARSING_DB_LOCK_RETRY_ATTEMPTS if attempts is None else attempts,
+    )
+    base_delay = max(
+        0.0,
+        SOURCE_PARSING_DB_LOCK_RETRY_DELAY_SECONDS
+        if base_delay_seconds is None
+        else base_delay_seconds,
+    )
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await update_func(
+                db,
+                candidate,
+                check_source_url=False,
+                schedule_tasks=False,
+            )
+        except Exception as exc:
+            if not _is_sqlite_lock_error(exc) or attempt >= max_attempts:
+                raise
+            delay = base_delay * (2 ** (attempt - 1))
+            logger.warning(
+                "source_parsing: SQLite writer lock during smart update "
+                "attempt=%d/%d retry_in=%.1fs",
+                attempt,
+                max_attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+    raise AssertionError("unreachable")
 
 
 async def _fetch_og_image_for_dramteatr(page_url: str) -> str | None:
@@ -1327,11 +1384,10 @@ async def add_new_event_via_queue(
                 len(posters),
             )
 
-            update_result = await smart_event_update(
+            update_result = await _smart_event_update_with_lock_retry(
                 db,
                 candidate,
-                check_source_url=False,
-                schedule_tasks=False,
+                smart_event_update,
             )
             event_id = update_result.event_id
             was_added = bool(update_result.created)

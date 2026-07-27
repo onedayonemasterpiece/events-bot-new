@@ -122,6 +122,17 @@ self-contained script: `kernel-metadata.json.code_file` указывает пр�
 Bitrix AJAX pagination до terminal page. Нулевой результат или HTTP/DOM failure
 попадает в `result.errors` и не может завершить общий run ложнозелёным.
 
+Создание нового parser occurrence повторяет только вызов Smart Update при
+транзиентном SQLite `database is locked` / `database table is locked`:
+по умолчанию до трёх попыток с задержками `2s`, `4s`
+(`SOURCE_PARSING_DB_LOCK_RETRY_ATTEMPTS`,
+`SOURCE_PARSING_DB_LOCK_RETRY_DELAY_SECONDS`). Иные ошибки не повторяются
+вслепую. Это защищает длинный catch-up от краткого writer-lock фоновой задачи,
+не превращая validation/semantic failures в ложный успех.
+Внутреннее создание `event_media_pair_review` также использует idempotent
+`ON CONFLICT DO NOTHING`: параллельный media worker не должен срывать
+сохранение parser occurrence из-за гонки unique `pair_input_hash`.
+
 `ops_run.status` для `kind=parse` отражает потерю источника:
 
 - `success` — kernels и processing завершились без ошибок/failed items;
