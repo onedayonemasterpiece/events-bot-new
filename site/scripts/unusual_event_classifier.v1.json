@@ -1,0 +1,53 @@
+{
+  "schema_version": "unusual-event-classifier-v1",
+  "classifier_kind": "margin_logistic_head_v1",
+  "taxonomy_version": "unusual-event-taxonomy-v1",
+  "prototype_bank_schema_version": "unusual-event-prototype-bank-v1",
+  "feature_order": [
+    "top_positive",
+    "positive_support",
+    "positive_hard_negative_margin",
+    "positive_neutral_margin",
+    "family_margin"
+  ],
+  "bias": -4.1,
+  "weights": {
+    "top_positive": 3.8,
+    "positive_support": 1.25,
+    "positive_hard_negative_margin": 3.2,
+    "positive_neutral_margin": 2.8,
+    "family_margin": 1.1
+  },
+  "decision_thresholds": {
+    "core_probability": 0.78,
+    "adjacent_probability": 0.62,
+    "ordinary_probability": 0.38,
+    "core_min_positive_hard_negative_margin": 0.045,
+    "core_min_positive_neutral_margin": 0.025,
+    "adjacent_min_positive_hard_negative_margin": 0.01,
+    "adjacent_min_positive_neutral_margin": -0.01,
+    "family_min_margin": 0.008
+  },
+  "quality_gate": {
+    "editorial_precision_at_20_min": 0.85,
+    "frozen_reference_precision_at_20": 0.88,
+    "frozen_reference_max_drop": 0.05,
+    "hard_negative_fpr_max": 0.05,
+    "confirmed_unusual_recall_min": 0.8,
+    "duplicate_concepts_top20_max": 1,
+    "identical_rebuild_flip_rate_max_exclusive": 0.02,
+    "minimum_family_diversity_top20": 5,
+    "deterministic_repeat_exact_required": true,
+    "single_vector_contract_required": true,
+    "ineligible_publication_count_max": 0,
+    "minimum_editorial_sample": 20,
+    "minimum_hard_negative_sample": 20,
+    "minimum_confirmed_unusual_sample": 20
+  },
+  "calibration": {
+    "method": "platt_logistic_on_margin_features_v1",
+    "artifact_state": "shadow",
+    "approval_status": "not_approved",
+    "reason": "No frozen real-BGE canary metrics are attached to this repository artifact. Coefficients and thresholds are deterministic inference scaffolding only until a real canary is measured."
+  }
+}
