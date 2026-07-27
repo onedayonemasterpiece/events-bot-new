@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-27-icae-casting-wrong-venue.md`
+  - Scope: source-grounded venue/address consistency across import, Smart
+    Update, canonical event rows, static pages and managed social publications.
+  - Must not regress: an unrelated canonical venue such as ICAE must never be
+    attached to an explicit offsite address; contradictory name/address pairs
+    fail closed or receive LLM review before publication, and closure includes
+    repair of every already-published surface.
+
 - `INC-2026-07-21-faberge-tg-public-writer-gap.md`
   - Scope: grounded Telegram event public writer, exact organizer-source quote
     contract, bounded fallback/retry behavior and Faberge event `6991` repair.

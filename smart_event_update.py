@@ -5305,6 +5305,13 @@ def _candidate_needs_llm_location_grounding_review(
 
     name_supported = _source_supports_location_value(corpus, candidate.location_name)
     address_supported = _source_supports_location_value(corpus, candidate.location_address)
+    # A grounded address does not prove an independently supplied canonical
+    # venue name.  This matters for address-only reference binding and linked
+    # source enrichment: ``ИЦАЭ`` was not present in either casting source, but
+    # the supported string ``Советский проспект, 12`` previously let the
+    # unsupported name bypass semantic review (INC-2026-07-27).
+    if candidate.location_name and not name_supported and address_supported:
+        return True, "canonical_location_name_not_in_source"
     if not name_supported and not address_supported:
         return True, "canonical_location_not_in_source"
 
@@ -5318,6 +5325,52 @@ def _candidate_needs_llm_location_grounding_review(
         if current_key and current_key not in explicit_keys:
             return True, "more_specific_known_venue_in_source"
     return False, "source_grounded"
+
+
+def _canonicalize_location_after_grounding_review(
+    candidate: "EventCandidate",
+    *,
+    review_result: str,
+) -> tuple[str | None, str | None, str | None]:
+    """Apply references without undoing a source-grounded LLM repair."""
+
+    reviewed = (
+        candidate.location_name,
+        candidate.location_address,
+        candidate.city,
+    )
+    normalized = _canonicalize_location_fields(
+        location_name=candidate.location_name,
+        location_address=candidate.location_address,
+        city=candidate.city,
+        source_chat_username=candidate.source_chat_username,
+        source_url=candidate.source_url,
+    )
+    if review_result != "llm_repair":
+        return normalized
+
+    normalized_name = normalized[0]
+    if (
+        reviewed[0]
+        and normalized_name
+        and not _location_matches(reviewed[0], normalized_name)
+        and not _source_supports_location_value(
+            _candidate_location_grounding_corpus(candidate),
+            normalized_name,
+        )
+    ):
+        logger.warning(
+            "smart_update: kept LLM-repaired venue over ungrounded post-review reference "
+            "source_type=%s source_url=%s repaired=%r/%r reference=%r/%r",
+            candidate.source_type,
+            candidate.source_url,
+            reviewed[0],
+            reviewed[1],
+            normalized[0],
+            normalized[1],
+        )
+        return reviewed
+    return normalized
 
 
 async def _llm_review_candidate_location_grounding(
@@ -7154,7 +7207,13 @@ def _address_matches(
         return False
     if na == nb:
         return True
-    if na in nb or nb in na:
+    # Extra room/floor/building details are allowed, but house numbers must be
+    # complete tokens.  Raw substring comparison made ``Советский 1`` equal
+    # ``Советский 12`` and could recall/merge an unrelated ICAE event.
+    if (
+        re.search(rf"(^|\s){re.escape(na)}(\s|$)", nb)
+        or re.search(rf"(^|\s){re.escape(nb)}(\s|$)", na)
+    ):
         return True
     return False
 
@@ -14786,12 +14845,9 @@ async def _smart_event_update_impl(
             candidate.location_name,
             candidate.location_address,
             candidate.city,
-        ) = _canonicalize_location_fields(
-            location_name=candidate.location_name,
-            location_address=candidate.location_address,
-            city=candidate.city,
-            source_chat_username=candidate.source_chat_username,
-            source_url=candidate.source_url,
+        ) = _canonicalize_location_after_grounding_review(
+            candidate,
+            review_result=location_review_result,
         )
     if not candidate.date:
         logger.warning(

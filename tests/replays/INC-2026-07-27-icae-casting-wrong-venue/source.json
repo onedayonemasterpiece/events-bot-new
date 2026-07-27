@@ -1,0 +1,23 @@
+{
+  "incident": "INC-2026-07-27-icae-casting-wrong-venue",
+  "event_id": 7124,
+  "primary_source_url": "https://t.me/meowafisha/8049",
+  "linked_source_url": "https://t.me/sofit_models/145",
+  "source_text": "КАСТИНГ на показ мод\n📅 Даты: 19 июля и 26 июля\n🕖 Время: 19:00\n📍 Адрес: Советский проспект, 12 (8 этаж, студия 809)",
+  "reported_bad_candidate": {
+    "location_name": "ИЦАЭ (в КГТУ)",
+    "location_address": "Советский проспект, 12",
+    "city": "Калининград"
+  },
+  "expected": {
+    "location_name": "студия 809",
+    "location_address": "Советский проспект, 12",
+    "city": "Калининград"
+  },
+  "negative_control": {
+    "source_text": "Встреча в ИЦАЭ Калининграда\n📍 Советский 1, 2 этаж",
+    "location_name": "ИЦАЭ (в КГТУ)",
+    "location_address": "Советский 1",
+    "city": "Калининград"
+  }
+}

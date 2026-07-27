@@ -283,7 +283,14 @@ def match_known_venue_by_address(
         venue_key = normalize_address_key(venue.address, city=venue.city or city)
         if not venue_key:
             continue
-        if addr_key in venue_key or venue_key in addr_key:
+        # Keep useful suffix tolerance (room/floor/building details) without
+        # treating a house-number prefix as the same address.  Raw substring
+        # matching made ``Советский 1`` match ``Советский 12`` and attached
+        # ICAE to an unrelated casting at studio 809 (INC-2026-07-27).
+        if (
+            re.search(rf"(^|\s){re.escape(addr_key)}(\s|$)", venue_key)
+            or re.search(rf"(^|\s){re.escape(venue_key)}(\s|$)", addr_key)
+        ):
             fuzzy.append(venue)
     if len(fuzzy) == 1:
         return fuzzy[0]
@@ -362,6 +369,11 @@ def match_known_venue(value: str | None, *, city: str | None = None) -> KnownVen
         "офис",
         "зал",
         "сцена",
+        "студия",
+        "кабинет",
+        "этаж",
+        "корпус",
+        "помещение",
         "театр",
         "музей",
         "бар",

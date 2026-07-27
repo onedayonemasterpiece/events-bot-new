@@ -5,6 +5,7 @@ from location_reference import (
     canonicalize_known_place_name,
     find_known_venue_in_text,
     match_known_venue,
+    match_known_venue_by_address,
     normalise_event_location_from_reference,
 )
 
@@ -230,6 +231,59 @@ def test_inc_2026_05_09_location_aliases_resolve_to_canonical_venues() -> None:
     icae = match_known_venue("ИЦАЭ Калининграда", city="Калининград")
     assert icae is not None
     assert icae.name == "ИЦАЭ (в КГТУ)"
+
+
+def test_inc_2026_07_27_house_number_prefix_does_not_bind_icae() -> None:
+    """Советский 1 and Советский 12 are different attendee-facing addresses."""
+
+    assert (
+        match_known_venue_by_address(
+            "Советский проспект, 12",
+            city="Калининград",
+        )
+        is None
+    )
+    assert (
+        match_known_venue(
+            "Советский пр-т 12, 8 этаж, студия 809",
+            city="Калининград",
+        )
+        is None
+    )
+
+    payload = {
+        "location_name": "студия 809",
+        "location_address": "Советский проспект, 12",
+        "city": "Калининград",
+    }
+    normalise_event_location_from_reference(payload)
+    assert payload == {
+        "location_name": "студия 809",
+        "location_address": "Советский проспект, 12",
+        "city": "Калининград",
+    }
+    assert su._canonicalize_location_fields(**payload) == (
+        "студия 809",
+        "Советский проспект, 12",
+        "Калининград",
+    )
+
+
+def test_inc_2026_07_27_address_suffix_tolerance_keeps_valid_icae_control() -> None:
+    """The safety fix must retain a real known-address match with room detail."""
+
+    venue = match_known_venue_by_address(
+        "Советский 1, 2 этаж",
+        city="Калининград",
+    )
+    assert venue is not None
+    assert venue.name == "ИЦАЭ (в КГТУ)"
+    assert venue.address == "Советский 1"
+
+
+def test_inc_2026_07_27_smart_address_match_requires_full_house_number() -> None:
+    assert su._address_matches("Советский 1", "Советский 12") is False
+    assert su._address_matches("Советский 1", "Советский 1, 2 этаж") is True
 
 
 def test_russian_art_center_reference_resolves_oktyabrskaya_10() -> None:

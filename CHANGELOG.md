@@ -260,6 +260,13 @@
 
 ### Fixed
 
+- Prevented source-grounded studio addresses from being rebound to unrelated
+  canonical venues by house-number prefix (`Советский 1` vs `Советский 12`);
+  linked Telegram sources now route an address-supported but unmentioned venue
+  name through fail-closed LLM grounding review, duplicate recall uses the same
+  complete-house-number boundary, and post-review reference normalization can
+  no longer undo a source-grounded LLM venue repair.
+
 - Made the immutable secret-candidate handoff recoverable after a concurrent
   SQLite writer outlives one ORM busy timeout: receipt payload writes now retry
   in fresh bounded transactions, and an exact retry adopts only already-created
