@@ -65,7 +65,7 @@ lanes:
     expected_output: committed scoring, fairness and placement specification
     verification_scope: inspection_only
     effort: high
-    status: spawned
+    status: merged
   - id: egg-prototype
     role: worker
     requirement_ids: [R20]
@@ -89,7 +89,7 @@ lanes:
     expected_output: committed placement-state prototype and tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: spawned
   - id: integration
     role: merge_reviewer
     requirement_ids: [R21]
