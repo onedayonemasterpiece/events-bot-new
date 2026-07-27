@@ -13,6 +13,9 @@
   rail crops, persistent Free collection identity, daily service-share
   freshness, noindex calendar-first favorites, event-aware far-future calendar
   navigation, bounded home composition and the `Подборки` menu.
+- Added the deployed owner-only Supabase `user_saved_event` schema, RLS
+  policies, security-invoker saved-events view and authenticated idempotent RPC
+  used by the noindex Favorites shell.
 
 - Added direct official future-catalog parsers for Kaliningrad Theatre of
   Variety (former Dom Iskusstv) and Yantar Hall, including month/AJAX
