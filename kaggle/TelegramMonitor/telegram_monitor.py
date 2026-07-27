@@ -2463,6 +2463,24 @@ _SERVICE_HEADING_TITLE_RE = re.compile(
     r")\s*$",
     re.IGNORECASE | re.UNICODE,
 )
+_TITLE_REVIEW_STOPWORDS: frozenset[str] = frozenset(
+    {
+        'афиша',
+        'анонс',
+        'билеты',
+        'вход',
+        'город',
+        'калининград',
+        'концерт',
+        'место',
+        'начало',
+        'программа',
+        'регистрация',
+        'событие',
+        'стоимость',
+        'фестиваль',
+    }
+)
 _LOCATION_REVIEW_TIME_RANGE_RE = re.compile(
     r"^\s*\d{1,2}[.:]\d{2}\s*[-–—]\s*\d{1,2}[.:]\d{2}\b",
     re.IGNORECASE | re.UNICODE,
@@ -2639,6 +2657,51 @@ def _sanitize_extracted_events(events) -> list[dict]:
     return cleaned
 
 
+def _title_review_norm(value: str | None) -> str:
+    text = str(value or '').casefold().replace('ё', 'е')
+    text = re.sub(r'[^a-zа-я0-9]+', ' ', text, flags=re.IGNORECASE)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+def _title_grounded_for_review(title: str | None, evidence: str | None) -> bool:
+    """Return whether title wording is substantially present in one evidence lane."""
+    title_norm = _title_review_norm(title)
+    evidence_norm = _title_review_norm(evidence)
+    if not title_norm or not evidence_norm:
+        return False
+    if len(title_norm) >= 6 and title_norm in evidence_norm:
+        return True
+    title_tokens = {
+        token
+        for token in title_norm.split()
+        if len(token) >= 3 and token not in _TITLE_REVIEW_STOPWORDS
+    }
+    if not title_tokens:
+        return False
+    evidence_tokens = set(evidence_norm.split())
+    overlap = title_tokens & evidence_tokens
+    return len(overlap) >= 2 and len(overlap) / len(title_tokens) >= 0.6
+
+
+def _title_needs_caption_ocr_review(
+    title: str | None,
+    *,
+    message_text: str | None,
+    ocr_text: str | None,
+) -> bool:
+    """Detect an OCR-only title when the original caption has useful event text.
+
+    This is only a trigger for the LLM title-review stage. It never selects or
+    rewrites a title deterministically.
+    """
+    caption_norm = _title_review_norm(message_text)
+    if len(caption_norm) < 40:
+        return False
+    if _title_grounded_for_review(title, message_text):
+        return False
+    return _title_grounded_for_review(title, ocr_text)
+
+
 async def _repair_service_heading_titles(
     *,
     message_text: str,
@@ -2647,10 +2710,11 @@ async def _repair_service_heading_titles(
     source_context_line: str,
     events: list,
 ) -> list:
-    """Ask the LLM to repair title-only OCR service-heading regressions.
+    """Ask the LLM to repair caption/OCR title conflicts.
 
-    The deterministic part only detects the syntactic failure shape. The event
-    title choice remains LLM-owned and is reviewed against the original caption.
+    The deterministic part only detects a service-heading title or a title that
+    is supported by OCR but not by the original caption. The event
+    title choice remains LLM-owned and is reviewed against both evidence lanes.
     """
     if not events or not isinstance(events, list):
         return events
@@ -2659,14 +2723,22 @@ async def _repair_service_heading_titles(
         if not isinstance(ev, dict):
             continue
         title = str(ev.get('title') or '').strip()
-        if title and _SERVICE_HEADING_TITLE_RE.search(title):
+        if title and (
+            _SERVICE_HEADING_TITLE_RE.search(title)
+            or _title_needs_caption_ocr_review(
+                title,
+                message_text=message_text,
+                ocr_text=ocr_text,
+            )
+        ):
             suspect = True
             break
     if not suspect:
         return events
 
     prompt = (
-        'Review extracted Telegram events and choose replacement titles for suspicious poster-service-heading titles. '
+        'Review extracted Telegram events and choose replacement titles for suspicious poster-service-heading titles '
+        'or caption/OCR-conflict titles. '
         'Return strict JSON array with exactly one object per input event, same order. '
         'Return raw JSON only: the first character must be "[" and the last character must be "]"; '
         'do not wrap the array in markdown/code fences and do not append trailing ``` markers. '
@@ -2676,6 +2748,11 @@ async def _repair_service_heading_titles(
         '"РЕГИСТРАЦИЯ", price, age limit, or venue/address label is invalid if the message caption contains a named event. '
         'Section labels and digest headings like "неделя в театре", "афиша", "репертуар", or "анонс" are also invalid titles '
         'when a nearby line names a real attendee-facing event. '
+        'OCR can be noisy: if the extracted title exists only in OCR while the caption explicitly names the event, '
+        'prefer the attendee-facing event name from the caption. '
+        'For example, caption "31.07-02.08 | Калининград Сити Джаз" must keep '
+        '"Калининград Сити Джаз" even if OCR suggests an unrelated phrase. '
+        'If the caption does not name an event and OCR carries the only real attendee-facing title, keep the OCR title. '
         'In that case, output the named attendee-facing event from the caption as title. '
         'Example: caption "Второй Большой киноквиз!" and OCR "24 АПРЕЛЯ / НАЧАЛО В 19:00" '
         'must output title "Второй Большой киноквиз". '

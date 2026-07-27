@@ -2,6 +2,15 @@
 
 Ежедневный мониторинг публичных Telegram‑каналов/групп с автоматическим импортом событий в БД бота через Smart Event Update.
 
+## Caption/OCR title conflicts
+
+The extraction title-review stage is not limited to obvious service headings. If a
+title is grounded only in OCR while a substantial original caption does not support
+it, Telegram Monitoring asks the LLM title reviewer to reconcile the two evidence
+lanes. This is a review trigger only: deterministic code never chooses the semantic
+title. A generic caption may still keep a legitimate poster-only title. Regression:
+`INC-2026-07-27-city-jazz-title-ocr-conflict`.
+
 ## Что делает
 
 - По расписанию запускает Kaggle‑kernel `TelegramMonitor`.

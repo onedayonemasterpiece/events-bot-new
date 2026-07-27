@@ -18,6 +18,10 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-27-city-jazz-title-ocr-conflict.md`
+  - Scope: Telegram Monitoring caption/OCR title selection, Smart Update title mismatch guard, and event `7036` public repair.
+  - Must not regress: a noisy OCR-only phrase cannot replace an event explicitly named in the original caption; such conflicts receive LLM title review, while a legitimate poster-only title remains allowed when the caption does not name another event.
+
 - `INC-2026-07-27-pwa-presentation-install-missing.md`
   - Scope: production root, web app manifest/icons, Android
     `beforeinstallprompt`, `?install=presentation`, Object Storage root publish.

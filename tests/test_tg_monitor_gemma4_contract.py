@@ -500,6 +500,40 @@ def test_tg_monitor_title_review_stage_keeps_caption_event_title_over_ocr_headin
     assert "The event\n    title choice remains LLM-owned" in source
 
 
+def test_tg_monitor_title_review_detects_ocr_only_title_conflict() -> None:
+    source = Path("kaggle/TelegramMonitor/telegram_monitor.py").read_text(encoding="utf-8")
+    start = source.index("_TITLE_REVIEW_STOPWORDS:")
+    end = source.index("\n\nasync def _repair_service_heading_titles", start)
+    ns = {"re": re}
+    exec(source[start:end], ns)
+
+    needs_review = ns["_title_needs_caption_ocr_review"]
+    caption = (
+        "🎷31.07-02.08 | Калининград Сити Джаз\n"
+        "Главный летний фестиваль Калининграда. Публикуем подробную программу."
+    )
+    noisy_ocr = (
+        "КАЛИНИНГРАД СИТИ ДА БИСТРО ЯНТАРЬ\n"
+        "КАЛИНИНГРАД СИТИ ДЖАЗ '26 31.07-02.08 ЦЕНТРАЛЬНЫЙ ПАРК"
+    )
+
+    assert needs_review(
+        "КАЛИНИНГРАД СИТИ ДА БИСТРО ЯНТАРЬ",
+        message_text=caption,
+        ocr_text=noisy_ocr,
+    )
+    assert not needs_review(
+        "Калининград Сити Джаз",
+        message_text=caption,
+        ocr_text=noisy_ocr,
+    )
+    assert not needs_review(
+        "Название только на афише",
+        message_text="Скоро расскажем подробнее",
+        ocr_text="Название только на афише",
+    )
+
+
 def test_tg_monitor_extract_prompt_blocks_gemma4_known_leaks() -> None:
     """Regression guard against the leakage modes observed in run_id=48fa... artifacts.
 

@@ -14,6 +14,7 @@
 - `docs/features/smart-event-update/README.md` — единый Smart Update (match/merge, лог фактов, Telegraph)
 - `docs/features/event-media/README.md` — единый автоматический Smart Update gate для event images и approved public projection
 - `docs/features/event-age-rating/README.md` — declared/assessed возраст, provenance, Smart Update, CPU BGE и backfill
+- `docs/features/event-people/README.md` — анализ и целевая архитектура артистов/спикеров: реестр, KGD80, CPU+BGE matching, лайки и «К нам едут»
 - `docs/features/linked-events/README.md` — единый contract связанных событий: другие даты, strict similarity, broad discovery и персональная выдача; requirements, branch inventory и screenshots
 - `docs/features/vk-auto-queue/README.md` — авторазбор очереди VK постов
 - `docs/features/vk-publishing/README.md` — исходящие VK-публикации: событийные посты с медиагруппами и компактный daily

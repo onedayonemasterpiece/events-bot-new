@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added the canonical product and storage analysis for event artists, speakers
+  and headliners: KGD80 seed inventory, asynchronous Kaggle CPU+BGE resolver,
+  person likes/personalization and the nested «К нам едут» collection.
+
 - Added compact PWA lifecycle analytics in the personalization Supabase
   project: confirmed installs, standalone sessions, daily active installations
   and exact D1/D7 cohort returns use one mutable installation-state row plus
@@ -295,6 +299,8 @@
   explicit owner disposition rather than accepting its recommendations wholesale.
 
 ### Fixed
+
+- **Telegram Monitoring / caption–OCR title conflict:** added an LLM-first title-review trigger when an extracted title is supported only by OCR but not by a substantial original caption, preserving poster-only titles for generic captions; added the `INC-2026-07-27-city-jazz-title-ocr-conflict` replay for production event `7036`.
 
 - **Static site / PWA launcher safe area**: replaced the launcher artwork with
   the revised `PKA-PWA2` reference and added an 82% warm-white maskable safe

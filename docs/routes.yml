@@ -14,6 +14,7 @@ sections:
   product:
     mobile_discovery_shell: docs/features/static-site-pages/mobile-shell.md
     audience_admission_discovery: docs/features/unsigned-personalization/audience-admission-discovery.md
+    event_people: docs/features/event-people/README.md
   operations:
     incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md

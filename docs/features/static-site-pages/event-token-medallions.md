@@ -2,7 +2,7 @@
 
 > **Status:** curated organizer/venue/festival/source/Pushkin assets are rendered on event detail pages and projected into Telegram RichMessages. `DATE-LISTING TH-P1 · V15` has the approved compact rail/overlay exception; `/lab/exhibitions-personal/` has a separate lab-only seal exception. SVG is primary where source-faithful; raster-only items are WebP-first with PNG fallback/QA, and Telegram retains deterministic same-stem PNG fallbacks for SVG items.
 > **Surface:** прежде всего **страница конкретного события** (`/sobytiya/<slug>/`). Generic search/related cards are not medallion surfaces without separate approval.
-> **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md).
+> **Related docs:** [Event Page Product & Design Spec](event-page-product-design.md), [Listing personal feed](listing-personal-feed.md), [Anonymous Personalization](../unsigned-personalization/README.md), [Event people / headliners](../event-people/README.md).
 
 ## Free-admission token, 2026-07-23
 
@@ -29,6 +29,11 @@ Add a visually large row of **quick-read event medallions** on the **event detai
 - which properties matter for personalization and later filters without making personalization a first-paint dependency.
 
 The medallion row is informational and is not a replacement for the existing `Коротко` facts or CTA panel. Facts still need source-grounded text in the event body/quick facts; medallions are the fast visual layer. On listings they are deliberately quieter: recognition and trust cues that support the choice to open a card, not CTA or decoration.
+
+Participant/headliner avatars are a separate P1 people row rather than another
+organizer/festival identity token. Their canonical identity, likes,
+personalization and «К нам едут» rules are defined in
+[`event-people`](../event-people/README.md).
 
 ## Structured organizer identity
 
