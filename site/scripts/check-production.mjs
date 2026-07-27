@@ -64,8 +64,9 @@ for (const path of [
   'sitemap.xml',
 ]) required(path);
 const productionWeekendSource = html('vyhodnye/index.html');
+const productionArtifactMarker = /\bdata-amber-artifact(?:\s|=|>)/u;
 if (
-  productionWeekendSource.includes('data-amber-artifact')
+  productionArtifactMarker.test(productionWeekendSource)
   || productionWeekendSource.includes('kenigevents:artifact-collected')
 ) fail('artifact research leaked into production weekend listing');
 const productionArtifactSource = html('artefakty/index.html');

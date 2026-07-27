@@ -11,6 +11,13 @@ NO-GO**. The only permitted publication after merge is a fresh immutable
 `/_review/<256-bit-token>/` noindex candidate produced by the production
 candidate pipeline. This report does not treat a preview URL as a root release.
 
+Operational follow-up on 2026-07-27: the normal Kaggle handoff is blocked before
+kernel start by `400 INVALID_ARGUMENT: Invalid token` while creating its
+short-lived private input dataset. The documented trusted-host fallback may
+produce only an immutable secret/noindex review candidate from the same frozen
+snapshot and clean main SHA. It does not count as Kaggle status-ledger evidence,
+does not publish the root archive and does not change the NO-GO decision.
+
 The previous 2026-07-23 report is preserved at
 `static-unified-prototype-corrections-20260723-INTEGRATION_REPORT.md`.
 
@@ -62,6 +69,10 @@ were reconciled serially; old labs were not merged wholesale.
   branches without fallback bleed.
 - PR CI on the main-updated head: `python-ci` and
   `static-browser-release-gate` passed.
+- The production artifact-leakage gate now distinguishes the actual bare
+  `data-amber-artifact` marker from the inert
+  `data-amber-artifact-research="off"` configuration attribute; focused
+  artifact tests cover the boundary.
 - `git diff --check`: passed.
 
 Non-committed evidence is under `artifacts/codex/r14-*`.

@@ -18,6 +18,11 @@ Use `Done / Partial / Blocked` and attach a public URL, SHA, build manifest or r
   desktop/mobile Playwright must be repeated on the final main-reachable SHA
   with fresh DB-backed organizer fields; local/worker previews are historical
   evidence only.
+- [ ] **Partial** — the normal Kaggle handoff is blocked before kernel start by
+  a provider `400 INVALID_ARGUMENT: Invalid token` while creating the
+  short-lived private input dataset. A host-built immutable noindex candidate
+  may unblock visual review under the documented emergency boundary, but it
+  does not satisfy the Kaggle status-ledger or production-root gates.
 - [ ] **Blocked** — real Yandex OAuth return plus real Edge Search result on
   that candidate, product/design owner sign-off, presentation-day schedule
   freshness and rollback drill.
@@ -102,6 +107,10 @@ of being left only in review chats.
 ## 5. Build and public acceptance
 
 - [ ] **Blocked** — one real StaticSiteBuilder Kaggle CPU run completes with status-ledger heartbeats/report and `static_site:builder` lease.
+- [x] **Done in gate tests** — ordinary production rejects a real bare
+  `data-amber-artifact` marker while accepting the inert
+  `data-amber-artifact-research="off"` configuration attribute; the secret
+  candidate remains the only surface allowed to render the research mechanic.
 - [ ] **Blocked** — `npm run check:preview` passes against the frozen full catalog, including train/bus/ICS/unknown-end-cutoff/no-return regressions.
 - [ ] **Blocked** — public `200` and MIME checks pass for index, demo events, media, discovery JSON, event ICS and transport ICS.
 - [ ] **Blocked** — mobile/desktop Playwright screenshots and link checks attached to the release evidence.

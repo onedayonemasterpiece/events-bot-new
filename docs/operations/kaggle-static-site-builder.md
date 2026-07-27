@@ -419,3 +419,27 @@ A production/Fly run must pass `/data/db.sqlite` as status DB and `/internal/kag
 - resource acquire/release for `static_site:builder`.
 
 A local manual run without callback/status DB is useful build evidence, but it is not production status-ledger evidence.
+
+### Emergency host fallback boundary
+
+If the normal Fly → Kaggle handoff cannot create its short-lived private input
+dataset, an operator may build **only an immutable noindex secret candidate** on
+the trusted host from the same frozen snapshot and clean `origin/main` SHA. The
+host run must reuse the production exporter, vector revision, build profile,
+manifest/fingerprint validation and secret-prefix publisher. It may skip
+Kaggle-specific status callbacks and OS-package installation only when those
+host dependencies are already present.
+
+This fallback is review evidence, not a successful StaticSiteBuilder Kaggle run:
+
+- record the provider failure and the exact snapshot/repo SHA;
+- validate both build result and public noindex surface;
+- publish only the secret archive, never the root archive;
+- do not advance the production current pointer or close the Kaggle
+  status-ledger gate;
+- retain the ordinary root hash as rollback evidence.
+
+The production leakage check matches the bare
+`data-amber-artifact` DOM marker with an attribute boundary. The inert
+`data-amber-artifact-research="off"` configuration attribute is allowed and
+must not be treated as an enabled artifact placement.
