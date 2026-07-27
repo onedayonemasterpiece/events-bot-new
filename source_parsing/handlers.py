@@ -2254,6 +2254,7 @@ async def run_source_parsing(
         result.processing_duration = time.time() - start_time
 
         ops_status = _source_parsing_terminal_status(result)
+        ops_error = None
         
         logger.info(
             "source_parsing: complete status=%s total=%d kernel=%.1fs processing=%.1fs",

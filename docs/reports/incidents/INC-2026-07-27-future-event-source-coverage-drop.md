@@ -153,6 +153,10 @@ Raw evidence is retained outside git under
     `'EventCandidate' object has no attribute 'organizer_names'`; the helper was
     moved below the complete schema and the existing organizer persistence
     tests were added to the regression gate.
+13. The fail-closed status sentinel correctly made the next failed-item run
+    `partial`, but remained in `details_json.fatal_error` after normal terminal
+    evaluation. Completed runs now explicitly clear the sentinel; only
+    cancellation retains it.
 
 ## Contributing Factors
 

@@ -97,3 +97,26 @@ def test_cancelled_parse_finishes_ops_run_fail_closed(monkeypatch, tmp_path):
     assert finished["run_id"] == 123
     assert finished["status"] == "error"
     assert finished["details"]["fatal_error"] == "run did not reach terminal status"
+
+
+def test_completed_parse_clears_fail_closed_sentinel(monkeypatch, tmp_path):
+    finished: dict[str, object] = {}
+
+    async def fake_start_ops_run(*_args, **_kwargs):
+        return 124
+
+    async def fake_finish_ops_run(*_args, **kwargs):
+        finished.update(kwargs)
+
+    monkeypatch.setenv("SOURCE_PARSING_DEBUG_DIR", str(tmp_path))
+    monkeypatch.setattr(handlers, "start_ops_run", fake_start_ops_run)
+    monkeypatch.setattr(handlers, "finish_ops_run", fake_finish_ops_run)
+
+    result = asyncio.run(
+        handlers.run_source_parsing(object(), only_sources=["unknown_source"])
+    )
+
+    assert result.errors == []
+    assert finished["run_id"] == 124
+    assert finished["status"] == "success"
+    assert finished["details"]["fatal_error"] is None
