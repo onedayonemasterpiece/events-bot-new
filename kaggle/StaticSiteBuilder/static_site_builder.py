@@ -352,7 +352,12 @@ def ensure_python_deps_for_bge(config: dict) -> None:
         [
             sys.executable, '-m', 'pip', 'install', '--quiet',
             '--disable-pip-version-check',
-            'FlagEmbedding==1.3.5',
+            '--upgrade',
+            # 1.4.0 is the first release with the Transformers 5 compatibility
+            # required by the current Kaggle CPU image.  1.3.5 imports the
+            # removed ``is_torch_fx_available`` helper and fails before BGE-M3
+            # can load.
+            'FlagEmbedding==1.4.0',
             'huggingface-hub>=0.28,<2',
             'Pillow>=10,<13',
         ],

@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPORTER = ROOT / "site" / "scripts" / "export-production-preview-data.py"
+KAGGLE_BUILDER = ROOT / "kaggle" / "StaticSiteBuilder" / "static_site_builder.py"
 
 
 def canonical_hash(value) -> str:
@@ -24,6 +25,36 @@ def load_exporter():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def load_kaggle_builder():
+    spec = importlib.util.spec_from_file_location(
+        "static_unusual_kaggle_builder_test", KAGGLE_BUILDER
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_kaggle_bge_preflight_repairs_transformers_incompatible_runtime(monkeypatch):
+    builder = load_kaggle_builder()
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        builder.subprocess,
+        "run",
+        lambda *_args, **_kwargs: types.SimpleNamespace(returncode=1),
+    )
+    monkeypatch.setattr(builder, "run", lambda command, **_kwargs: commands.append(command))
+    monkeypatch.setattr(builder, "status_event", lambda *_args, **_kwargs: None)
+
+    builder.ensure_python_deps_for_bge(
+        {"related_mode": "bge", "unusual_enabled": True}
+    )
+
+    assert len(commands) == 1
+    assert "--upgrade" in commands[0]
+    assert "FlagEmbedding==1.4.0" in commands[0]
 
 
 def install_fake_semantic_modules(monkeypatch):

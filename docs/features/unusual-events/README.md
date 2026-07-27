@@ -86,6 +86,11 @@ The static pipeline has one BGE encoding boundary:
    classifier hash and artifact hash. A mismatch means abstain/disable, never
    an implicit recompute in a second scorer.
 
+The Kaggle CPU bootstrap pins `FlagEmbedding==1.4.0`, the
+Transformers-5-compatible runtime already used by the repository's BGE
+assessment pipeline. Its dependency probe upgrades an incompatible
+preinstalled package before loading the frozen BGE-M3 revision.
+
 Gemini `search_v3` may continue to serve authorized Search. Gemini
 `related_v1` pgvector may remain only as an explicitly selected
 rollback/comparison canary; it is not a concurrent production source for public

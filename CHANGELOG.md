@@ -21,6 +21,9 @@
   remain protected.
 - Fixed the current-month mobile calendar grid to align weekday columns from
   the first rendered date rather than the omitted first day of the month.
+- Fixed the Kaggle shared-BGE preflight to upgrade to the pinned,
+  Transformers-5-compatible `FlagEmbedding==1.4.0`; the former 1.3.5 bootstrap
+  failed on the current CPU image before BGE-M3 could load.
 - Added R15 static-site product contracts for horizontal `5:4` no-band mobile
   rail crops, persistent Free collection identity, daily service-share
   freshness, noindex calendar-first favorites, event-aware far-future calendar
