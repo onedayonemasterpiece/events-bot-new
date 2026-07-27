@@ -2,6 +2,7 @@
 import Icon from './Icon.astro';
 import OptimizedEventCardGrid from './OptimizedEventCardGrid.astro';
 import EventTokenMedallions from './EventTokenMedallions.astro';
+import EventParticipants from './EventParticipants.astro';
 import EventOccurrenceNav from './EventOccurrenceNav.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
 import EventFallbackArt from './EventFallbackArt.astro';
@@ -527,6 +528,7 @@ const descriptionHtml = (event.description_html || '')
             {candidate === 'editorial' && <p class="desktop-prototype__digest" data-event-digest>{event.summary}</p>}
             <p class="desktop-prototype__place"><Icon name="pin" /><span><strong>{event.venue_name || event.city || 'Место уточняется'}</strong><small>{addressLabel}</small></span></p>
             <div class="desktop-prototype__medallions"><EventTokenMedallions event={event} layout="desktop-slots" allowTopSlot={candidate === 'editorial' && mediaPolicy === 'non-ocr'} /></div>
+            <EventParticipants event={event} surface="desktop" />
           </div>
 
           {usesLongFlow && candidate !== 'editorial' && <DesktopEventActionPanel event={event} shareImage={preferredUrl} shareImageTextMode={selectedMediaMode} className="desktop-prototype__action--inline" family="split" />}

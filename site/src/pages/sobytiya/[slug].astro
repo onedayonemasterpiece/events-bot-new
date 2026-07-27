@@ -7,6 +7,7 @@ import EventTransportSchedule from '../../components/EventTransportSchedule.astr
 import EventBusTransportSchedule from '../../components/EventBusTransportSchedule.astro';
 import KaupTransportSchedule from '../../components/KaupTransportSchedule.astro';
 import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
+import EventParticipants from '../../components/EventParticipants.astro';
 import EventCard from '../../components/EventCard.astro';
 import Icon from '../../components/Icon.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
@@ -152,6 +153,7 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
 
       <div class="mobile-event-production__continuation">
         <div class="mobile-event-production__medallions"><EventTokenMedallions event={event} /></div>
+        <EventParticipants event={event} surface="mobile" />
 
         <section class="section-card section-card--quiet section-card--event-details mobile-event-production__details" style="margin-top: 1rem;">
           <div class="section-card__inner mobile-event-production__prose">

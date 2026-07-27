@@ -1,0 +1,382 @@
+---
+import Icon from './Icon.astro';
+import type { PreviewEvent, PreviewParticipant } from '../lib/types';
+import { withBase } from '../lib/events';
+
+interface Props {
+  event: PreviewEvent;
+  surface: 'mobile' | 'desktop';
+}
+
+const { event, surface } = Astro.props;
+const participants = (event.participants || [])
+  .filter((participant): participant is PreviewParticipant => Boolean(
+    participant
+    && String(participant.id || '').trim()
+    && String(participant.name || '').trim()
+    && String(participant.role || '').trim(),
+  ))
+  .sort((left, right) => (
+    Number(right.is_headliner) - Number(left.is_headliner)
+    || left.name.localeCompare(right.name, 'ru')
+  ));
+const headingId = `event-participants-${surface}-${event.id}`;
+
+const initials = (name: string): string => {
+  const words = name.trim().split(/\s+/u).filter(Boolean);
+  return (words.length > 1 ? `${words[0][0]}${words[1][0]}` : words[0]?.slice(0, 2) || 'У')
+    .toLocaleUpperCase('ru');
+};
+const publicAssetUrl = (value: string): string => /^https?:\/\//iu.test(value) ? value : withBase(value);
+---
+
+{participants.length > 0 && (
+  <section
+    class:list={['event-participants', `event-participants--${surface}`]}
+    aria-labelledby={headingId}
+    data-event-participants
+    data-event-participants-surface={surface}
+  >
+    <header class="event-participants__header">
+      <div>
+        <p class="event-participants__eyebrow">Люди события</p>
+        <h2 id={headingId}>Участники</h2>
+      </div>
+      <p>Отметьте тех, за кем хотите следить</p>
+    </header>
+
+    <ul class="event-participants__list" role="list">
+      {participants.map((participant) => {
+        const baseLikes = Math.max(0, Math.floor(Number(participant.likes_count) || 0));
+        const avatar = (
+          <span
+            class:list={['event-participants__avatar', !participant.avatar_url && 'event-participants__avatar--fallback']}
+            role={participant.avatar_url ? undefined : 'img'}
+            aria-label={participant.avatar_url ? undefined : participant.avatar_alt}
+          >
+            {participant.avatar_url
+              ? <img src={publicAssetUrl(participant.avatar_url)} alt={participant.avatar_alt} width="72" height="72" loading="lazy" decoding="async" />
+              : <span aria-hidden="true">{initials(participant.name)}</span>}
+          </span>
+        );
+        return (
+          <li
+            class:list={['event-participants__item', participant.is_headliner && 'event-participants__item--headliner']}
+            data-participant-card
+            data-participant-id={participant.id}
+          >
+            {participant.profile_url
+              ? <a class="event-participants__avatar-link" href={participant.profile_url} aria-label={`Открыть профиль: ${participant.name}`}>{avatar}</a>
+              : avatar}
+            <div class="event-participants__identity">
+              <div class="event-participants__name-line">
+                <strong>{participant.name}</strong>
+                {participant.is_headliner && <span class="event-participants__headliner">Хедлайнер</span>}
+              </div>
+              {!(participant.is_headliner && participant.role.toLocaleLowerCase('ru') === 'хедлайнер')
+                && <span>{participant.role}</span>}
+              {participant.credit_url && participant.credit_text && (
+                <a
+                  class="event-participants__credit"
+                  href={participant.credit_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={participant.credit_text}
+                >Источник фото</a>
+              )}
+            </div>
+            <button
+              type="button"
+              class="event-participants__like"
+              data-participant-like
+              data-participant-id={participant.id}
+              data-participant-name={participant.name}
+              data-base-count={baseLikes}
+              aria-pressed="false"
+              aria-label={`Нравится: ${participant.name}. Сейчас ${baseLikes}`}
+            >
+              <Icon name="heart" />
+              <span data-participant-like-count>{baseLikes}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+)}
+
+<script>
+  const STORAGE_KEY = 'kenigevents:participant-likes:v1';
+
+  const readLikedIds = (): Set<string> => {
+    try {
+      const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      return new Set(Array.isArray(value) ? value.map(String) : []);
+    } catch {
+      return new Set();
+    }
+  };
+
+  const writeLikedIds = (likedIds: Set<string>): void => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...likedIds].sort()));
+    } catch {
+      // The control remains usable for the current page when storage is denied.
+    }
+  };
+
+  const syncParticipantButtons = (participantId: string, liked: boolean): void => {
+    document.querySelectorAll<HTMLButtonElement>('[data-participant-like]').forEach((button) => {
+      if (button.dataset.participantId !== participantId) return;
+      const baseCount = Math.max(0, Number(button.dataset.baseCount || 0));
+      const count = baseCount + (liked ? 1 : 0);
+      const name = button.dataset.participantName || 'участник';
+      button.setAttribute('aria-pressed', String(liked));
+      button.setAttribute('aria-label', `${liked ? 'Убрать отметку' : 'Нравится'}: ${name}. Сейчас ${count}`);
+      const countNode = button.querySelector<HTMLElement>('[data-participant-like-count]');
+      if (countNode) countNode.textContent = String(count);
+    });
+  };
+
+  const initParticipantLikes = (): void => {
+    const likedIds = readLikedIds();
+    document.querySelectorAll<HTMLButtonElement>('[data-participant-like]').forEach((button) => {
+      const participantId = button.dataset.participantId;
+      if (!participantId) return;
+      syncParticipantButtons(participantId, likedIds.has(participantId));
+      if (button.dataset.participantLikeBound === 'true') return;
+      button.dataset.participantLikeBound = 'true';
+      button.addEventListener('click', () => {
+        const current = readLikedIds();
+        const liked = !current.has(participantId);
+        if (liked) current.add(participantId);
+        else current.delete(participantId);
+        writeLikedIds(current);
+        syncParticipantButtons(participantId, liked);
+      });
+    });
+  };
+
+  initParticipantLikes();
+  document.addEventListener('astro:page-load', initParticipantLikes);
+</script>
+
+<style>
+  .event-participants {
+    width:100%;
+    min-width:0;
+    box-sizing:border-box;
+    color:#2d211a;
+  }
+  .event-participants__header {
+    display:flex;
+    align-items:end;
+    justify-content:space-between;
+    gap:1rem;
+    margin-bottom:.72rem;
+  }
+  .event-participants__header h2 {
+    margin:0;
+    font-size:clamp(1.12rem,1.7vw,1.42rem);
+    line-height:1.05;
+    letter-spacing:-.025em;
+  }
+  .event-participants__header > p {
+    max-width:28ch;
+    margin:0;
+    color:#77695f;
+    font-size:.77rem;
+    line-height:1.3;
+    text-align:right;
+  }
+  .event-participants__eyebrow {
+    margin:0 0 .18rem;
+    color:#a64c28;
+    font-size:.66rem;
+    font-weight:900;
+    letter-spacing:.09em;
+    text-transform:uppercase;
+  }
+  .event-participants__list {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:.62rem;
+    margin:0;
+    padding:0;
+    list-style:none;
+  }
+  .event-participants__item {
+    position:relative;
+    display:grid;
+    grid-template-columns:64px minmax(0,1fr) auto;
+    align-items:center;
+    gap:.72rem;
+    min-width:0;
+    min-height:84px;
+    box-sizing:border-box;
+    padding:.62rem .68rem;
+    border:1px solid rgba(116,82,61,.17);
+    border-radius:18px;
+    background:rgba(255,251,245,.76);
+    box-shadow:0 8px 20px rgba(67,43,29,.055);
+  }
+  .event-participants__item--headliner {
+    border-color:rgba(181,77,34,.32);
+    background:linear-gradient(135deg,rgba(255,249,240,.96),rgba(250,225,199,.72));
+  }
+  .event-participants__avatar,
+  .event-participants__avatar-link {
+    display:grid;
+    width:64px;
+    height:64px;
+    place-items:center;
+    border-radius:50%;
+  }
+  .event-participants__avatar {
+    overflow:hidden;
+    box-sizing:border-box;
+    border:2px solid rgba(255,255,255,.94);
+    outline:1px solid rgba(112,73,50,.22);
+    background:#ead7c1;
+    color:#7b321b;
+    font-size:1.05rem;
+    font-weight:950;
+    letter-spacing:.04em;
+    box-shadow:0 7px 14px rgba(79,48,29,.12);
+  }
+  .event-participants__avatar img {
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+  .event-participants__avatar-link:focus-visible {
+    outline:3px solid #b54d22;
+    outline-offset:3px;
+  }
+  .event-participants__identity {
+    display:grid;
+    min-width:0;
+    gap:.18rem;
+  }
+  .event-participants__name-line {
+    display:flex;
+    align-items:center;
+    gap:.4rem;
+    min-width:0;
+  }
+  .event-participants__name-line strong {
+    min-width:0;
+    overflow-wrap:anywhere;
+    font-size:.91rem;
+    line-height:1.12;
+  }
+  .event-participants__identity > span {
+    color:#75665b;
+    font-size:.75rem;
+    line-height:1.2;
+  }
+  .event-participants__headliner {
+    flex:0 0 auto;
+    padding:.18rem .34rem;
+    border-radius:999px;
+    background:#b54d22;
+    color:#fffaf4;
+    font-size:.55rem;
+    font-weight:900;
+    letter-spacing:.055em;
+    line-height:1;
+    text-transform:uppercase;
+  }
+  .event-participants__credit {
+    width:max-content;
+    color:#8f5c43;
+    font-size:.62rem;
+    text-underline-offset:2px;
+  }
+  .event-participants__like {
+    display:inline-flex;
+    min-width:48px;
+    min-height:38px;
+    align-items:center;
+    justify-content:center;
+    gap:.28rem;
+    padding:.42rem .52rem;
+    border:1px solid rgba(143,75,48,.2);
+    border-radius:999px;
+    background:rgba(255,255,255,.72);
+    color:#9a4a37;
+    font:inherit;
+    font-size:.76rem;
+    font-weight:900;
+    font-variant-numeric:tabular-nums;
+    cursor:pointer;
+  }
+  .event-participants__like :global(.icon) {
+    width:17px;
+    height:17px;
+  }
+  .event-participants__like:hover {
+    border-color:rgba(181,77,34,.45);
+    background:#fff;
+  }
+  .event-participants__like[aria-pressed="true"] {
+    border-color:#bd4e20;
+    background:#bd4e20;
+    color:#fff;
+  }
+  .event-participants__like:focus-visible {
+    outline:3px solid rgba(181,77,34,.36);
+    outline-offset:2px;
+  }
+
+  @media (max-width:1023px) {
+    .event-participants--mobile {
+      margin-top:.85rem;
+    }
+    .event-participants__header {
+      align-items:start;
+      margin-bottom:.58rem;
+    }
+    .event-participants__header > p {
+      max-width:19ch;
+      font-size:.68rem;
+    }
+    .event-participants__list {
+      grid-auto-flow:column;
+      grid-auto-columns:min(84vw,290px);
+      grid-template-columns:none;
+      justify-content:start;
+      gap:.55rem;
+      margin-right:-.75rem;
+      padding-right:.75rem;
+      overflow-x:auto;
+      overscroll-behavior-inline:contain;
+      scroll-snap-type:x proximity;
+      scrollbar-width:none;
+    }
+    .event-participants__list::-webkit-scrollbar { display:none; }
+    .event-participants__item {
+      grid-template-columns:58px minmax(0,1fr) auto;
+      min-height:78px;
+      padding:.55rem .58rem;
+      border-radius:16px;
+      scroll-snap-align:start;
+    }
+    .event-participants__avatar,
+    .event-participants__avatar-link {
+      width:58px;
+      height:58px;
+    }
+    .event-participants__name-line {
+      display:grid;
+      justify-items:start;
+      gap:.24rem;
+    }
+  }
+
+  @media (min-width:1024px) {
+    .event-participants--desktop {
+      margin-top:1rem;
+    }
+  }
+</style>

@@ -14,6 +14,7 @@ sections:
   product:
     mobile_discovery_shell: docs/features/static-site-pages/mobile-shell.md
     audience_admission_discovery: docs/features/unsigned-personalization/audience-admission-discovery.md
+    event_people: docs/features/event-people/README.md
   operations:
     incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md
@@ -169,6 +170,13 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  event_people:
+    status: ui_implemented_backend_pending
+    docs: docs/features/event-people/README.md
+    entrypoints:
+      - site/src/components/EventParticipants.astro
+      - site/scripts/export-production-preview-data.py
+
   interest_clubs:
     status: implementation_rc
     docs: docs/features/interest-clubs/README.md

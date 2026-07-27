@@ -100,6 +100,22 @@ export type AgeRestrictionStatus =
   | 'unknown'
   | 'budget_deferred';
 
+export interface PreviewParticipant {
+  /** Stable registry id; also namespaces device-local preference state. */
+  id: string;
+  name: string;
+  role: string;
+  entity_kind: 'person' | 'group' | 'project';
+  is_headliner: boolean;
+  avatar_url: string | null;
+  avatar_alt: string;
+  likes_count: number;
+  profile_url?: string | null;
+  credit_text?: string | null;
+  credit_url?: string | null;
+  evidence_url?: string | null;
+}
+
 export interface PreviewEvent {
   id: number;
   title: string;
@@ -107,6 +123,8 @@ export interface PreviewEvent {
   event_type: string | null;
   festival: string | null;
   organizer_names?: string[];
+  /** Verified people/groups attached to this occurrence; absent means no safe public projection. */
+  participants?: PreviewParticipant[];
   status_label: string;
   lifecycle_status: string;
   starts_at: string | null;
