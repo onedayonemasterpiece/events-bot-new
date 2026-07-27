@@ -128,7 +128,9 @@ for (const file of files.filter((item) => item.key.endsWith('.html'))) {
 }
 const eventHtml = source(`sobytiya/${eventsData.events[0].slug}/index.html`);
 if (!eventHtml.includes(`${basePath}/_astro/`)) fail('candidate Astro assets are not self-contained under the bearer prefix');
-if (!source('index.html').includes('data-secret-candidate-root-listing')) fail('candidate root is not production-family listing');
+if (!source('index.html').includes('data-secret-candidate-root-home') || !source('index.html').includes('data-home-page')) {
+  fail('candidate root is not the dedicated home surface');
+}
 const robots = source('robots.txt');
 if (robots !== 'User-agent: *\nDisallow: /\n') fail('candidate robots artifact must remain disallow');
 const sitemap = source('sitemap.xml');

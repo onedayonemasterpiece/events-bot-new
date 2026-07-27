@@ -18,11 +18,15 @@ test('ADD-BUILD-07 production/preview/candidate profiles use an explicit 256-bit
   assert.throws(() => safeCandidateToken('timestamp-build-id'));
 });
 
-test('production and candidate root aliases preserve listing classes while adding release markers', () => {
+test('production and candidate packaging preserve the dedicated home while adding release markers', () => {
   const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
   const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
-  assert.match(production, /replaceRequired\(rootHtml, '<main id="main"', '<main id="main" data-production-root-listing'/u);
-  assert.match(candidate, /replace\('<main id="main"', '<main id="main" data-secret-candidate-root-listing'/u);
+  assert.match(production, /readFileSync\(join\(distDir, 'index\.html'\)/u);
+  assert.match(candidate, /readFileSync\(join\(distDir, 'index\.html'\)/u);
+  assert.match(production, /replaceRequired\(rootHtml, '<main id="main"', '<main id="main" data-production-root-home'/u);
+  assert.match(candidate, /replace\('<main id="main"', '<main id="main" data-secret-candidate-root-home'/u);
+  assert.doesNotMatch(production, /segodnya\/index\.html/u);
+  assert.doesNotMatch(candidate, /segodnya\/index\.html/u);
   assert.doesNotMatch(production, /'<main id="main">'/u);
   assert.doesNotMatch(candidate, /'<main id="main">'/u);
 });

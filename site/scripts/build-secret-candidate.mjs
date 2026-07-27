@@ -76,13 +76,14 @@ for (const { route, staged } of retainedLabStaging) {
   mkdirSync(dirname(join(distDir, route)), { recursive: true });
   renameSync(staged, join(distDir, route));
 }
-let rootHtml = readFileSync(join(distDir, 'segodnya/index.html'), 'utf8');
-const todayCanonical = `${siteOrigin}${basePath}/segodnya/`;
-const rootCanonical = `${siteOrigin}${basePath}/`;
-if (!rootHtml.includes(`<link rel="canonical" href="${todayCanonical}">`) || !rootHtml.includes(`<meta property="og:url" content="${todayCanonical}">`)) throw new Error('Cannot construct candidate root from today listing');
-rootHtml = rootHtml.replace(`<link rel="canonical" href="${todayCanonical}">`, `<link rel="canonical" href="${rootCanonical}">`);
-rootHtml = rootHtml.replace(`<meta property="og:url" content="${todayCanonical}">`, `<meta property="og:url" content="${rootCanonical}">`);
-rootHtml = rootHtml.replace('<main id="main"', '<main id="main" data-secret-candidate-root-listing');
+// Preserve the dedicated home surface; the candidate prefix is already
+// applied by Astro and must not be replaced with the Today listing.
+let rootHtml = readFileSync(join(distDir, 'index.html'), 'utf8');
+if (!rootHtml.includes(`<link rel="canonical" href="${siteOrigin}${basePath}/">`)
+  || !rootHtml.includes(`<meta property="og:url" content="${siteOrigin}${basePath}/">`)) {
+  throw new Error('Cannot package candidate root: home canonical metadata is missing');
+}
+rootHtml = rootHtml.replace('<main id="main"', '<main id="main" data-secret-candidate-root-home');
 writeFileSync(join(distDir, 'index.html'), rootHtml);
 const staged = join(siteDir, `.secret-candidate-dist-${process.pid}`);
 rmSync(staged, { recursive: true, force: true });

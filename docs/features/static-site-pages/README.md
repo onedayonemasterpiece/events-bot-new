@@ -45,7 +45,9 @@ Static HTML always contains the useful cold-start feed. Hydration may filter or
 rerank within the bounded contract but cannot blank first paint, duplicate
 events, introduce a page-view embedding/LLM call, or create a different
 indexable home. Backend/auth/storage failure keeps the static ordering. The
-home does not authorize production-root cutover; it follows the same immutable
+production and secret-candidate packagers preserve this dedicated `/` output;
+they must never overwrite it with the `/segodnya/` artifact. The home does not
+authorize production-root cutover; it follows the same immutable
 candidate and owner-acceptance gate as the
 [`unusual-events` R15 release](../unusual-events/README.md).
 

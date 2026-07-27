@@ -91,7 +91,9 @@ test('R01-R07 keep the cross-surface product contracts in canonical implementati
 
   assert.match(menu, /data-reference4-collections-open/u);
   assert.match(menu, /aria-label="Подборки"/u);
-  for (const label of ['Детям', 'Необычное', 'Бесплатно', 'Клубы']) assert.match(menu, new RegExp(`>${label}<`, 'u'));
+  for (const label of ['Детям', 'Необычное', 'Бесплатно', 'Клубы по интересам']) {
+    assert.match(menu, new RegExp(`>${label}<`, 'u'));
+  }
   assert.ok((menu.match(/>Бесплатно</gu) || []).length >= 2, 'Free remains top-level and in Collections');
 
   assert.match(favoritesPage, /\bnoindex\b/u);

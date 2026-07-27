@@ -70,11 +70,10 @@ if (astro.status !== 0) process.exit(astro.status || 1);
 
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });
 rmSync(join(distDir, 'lab'), { recursive: true, force: true });
-const todayPath = join(distDir, 'segodnya/index.html');
-let rootHtml = readFileSync(todayPath, 'utf8');
-rootHtml = replaceRequired(rootHtml, `<link rel="canonical" href="${siteOrigin}/segodnya/">`, `<link rel="canonical" href="${siteOrigin}/">`, 'today canonical');
-rootHtml = replaceRequired(rootHtml, `<meta property="og:url" content="${siteOrigin}/segodnya/">`, `<meta property="og:url" content="${siteOrigin}/">`, 'today og:url');
-rootHtml = replaceRequired(rootHtml, '<main id="main"', '<main id="main" data-production-root-listing', 'root marker');
+// The root is a first-class product surface (hero talk, quick navigation and a
+// finite cold-start feed). Never alias `/segodnya/` over it during packaging.
+let rootHtml = readFileSync(join(distDir, 'index.html'), 'utf8');
+rootHtml = replaceRequired(rootHtml, '<main id="main"', '<main id="main" data-production-root-home', 'root home marker');
 writeFileSync(join(distDir, 'index.html'), rootHtml);
 
 const eventsData = JSON.parse(readFileSync(eventsPath, 'utf8'));

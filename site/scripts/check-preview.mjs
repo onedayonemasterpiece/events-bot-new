@@ -152,16 +152,6 @@ if (existsSync(pianissimoRoutePath)) {
     throw new Error('Expired Pianissimo 5296 source crop regression');
   }
 }
-const teremokRail = mobileRailRow('vyhodnye', 6939);
-for (const marker of [
-  'data-mobile-rail-media-reason="reviewed_multi_visual_portrait_4x5"',
-  '--media-width:90px',
-  '--rail-media-fit:cover',
-  'data-image-text-mode="visual_only"',
-  '00450088000040066194318c30c61a8433adac94241ca7180611098703ce2949.webp',
-]) {
-  if (!teremokRail.includes(marker)) throw new Error(`Teremok 6939 rail crop regression: missing ${marker}`);
-}
 const moreRail = mobileRailRow('date-2026-08-08', 4211);
 if (!moreRail.includes('data-image-text-mode="ocr_text"') || !moreRail.includes('--rail-media-fit:contain')) {
   throw new Error('More vnutri 4211 OCR media must remain fail-closed');
@@ -169,7 +159,7 @@ if (!moreRail.includes('data-image-text-mode="ocr_text"') || !moreRail.includes(
 if (!moreRail.includes('/assets/festivals/more-vnutri.svg')) {
   throw new Error('More vnutri 4211 misses its structured external festival medallion');
 }
-for (const row of [pianissimoRail, teremokRail, moreRail].filter(Boolean)) {
+for (const row of [pianissimoRail, moreRail].filter(Boolean)) {
   if ((row.match(/icon--heart/gu) || []).length !== 3 || !row.includes('icon__heart-outline') || !row.includes('icon__heart-solid')) {
     throw new Error('Mobile rail must use the shared hollow/solid heart component for proof, underlay and action');
   }

@@ -152,6 +152,8 @@ const siteOrigin = manifest.site_origin;
 for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   const source = html(file.key);
   const intentionallyUnindexed = file.key === 'dlya-menya/index.html'
+    || file.key === 'izbrannoe/index.html'
+    || file.key === 'neobychnoe/index.html'
     || file.key === 'artefakty/index.html'
     || /^podborki\/[^/]+\/index\.html$/u.test(file.key);
   if (intentionallyUnindexed) {
@@ -167,7 +169,9 @@ for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   if (/storage\.yandexcloud\.net\/(?:kenigevents|kenigevents\.ru)/u.test(source)) fail(`raw Object Storage URL leaked into ${file.key}`);
   if (/(?:src|href)="https?:\/\/[^"]+\.(?:png|jpe?g|gif)(?:[?#"])/iu.test(source)) fail(`external runtime raster fallback leaked into ${file.key}`);
 }
-if (!html('index.html').includes('data-production-root-listing')) fail('root is not the today listing');
+if (!html('index.html').includes('data-production-root-home') || !html('index.html').includes('data-home-page')) {
+  fail('root is not the dedicated home surface');
+}
 const robots = readFileSync(join(root, 'robots.txt'), 'utf8');
 if (robots !== `User-agent: *\nAllow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`) fail('robots policy is not production indexable');
 const sitemap = readFileSync(join(root, 'sitemap.xml'), 'utf8');

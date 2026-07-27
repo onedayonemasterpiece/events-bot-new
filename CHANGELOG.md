@@ -13,6 +13,7 @@
   rail crops, persistent Free collection identity, daily service-share
   freshness, noindex calendar-first favorites, event-aware far-future calendar
   navigation, bounded home composition and the `Подборки` menu.
+
 - Added direct official future-catalog parsers for Kaliningrad Theatre of
   Variety (former Dom Iskusstv) and Yantar Hall, including month/AJAX
   pagination, targeted `/parse estrada|yantarhall` runs and source-level
@@ -300,6 +301,13 @@
 
 ### Fixed
 
+- Fixed production and secret-candidate packaging so the dedicated home
+  (`hero-talk`, quick navigation, bounded cold-start feed) is preserved at `/`
+  instead of being overwritten by the `Сегодня` listing; release checks now
+  assert the home marker and the `noindex` policy for Favorites and Unusual.
+- Removed the expired fixed-date Teremok generated-output dependency from the
+  preview gate while retaining current rail geometry/OCR fail-closed contracts
+  and the source-backed Pianissimo crop regression.
 - **Static site / PWA launcher identity**: shortened both installed-app labels
   to the readable `Анонсы`, replaced the generic launcher mark with the
   operator-approved full `Полюбить Калининград / Анонсы` leather artwork,
