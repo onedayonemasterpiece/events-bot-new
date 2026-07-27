@@ -120,6 +120,13 @@ so changing focus does not move neighbouring actions, and it survives the
 green `Добавлено` state. `aria-keyshortcuts="K"` remains on every eligible
 calendar control even while the decorative badge is hidden. Three mastered
 days still suppress the badge entirely.
+
+Continuation cards may be inserted asynchronously by the personal-feed
+renderer. A keyboard transition enhances its destination synchronously before
+moving focus instead of waiting for a later `MutationObserver` turn. Therefore
+the focused continuation card immediately owns the single visible `K` hint;
+the previous row never remains the visual shortcut owner.
+
 Likes remain red after consent replay. Successful copy operations use the
 existing short visual toast plus one polite hidden status without replacing
 icons/counts or moving focus.

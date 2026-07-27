@@ -333,6 +333,10 @@
 
 ### Fixed
 
+- Static event keyboard navigation now attaches the reserved calendar `K` hint
+  synchronously before focus moves to an asynchronously rendered continuation
+  card, preserving the single visible shortcut-owner invariant across rail
+  boundaries.
 - Fixed production and secret-candidate packaging so the dedicated home
   (`hero-talk`, quick navigation, bounded cold-start feed) is preserved at `/`
   instead of being overwritten by the `Сегодня` listing; release checks now
