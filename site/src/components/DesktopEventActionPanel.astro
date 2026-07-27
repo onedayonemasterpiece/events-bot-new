@@ -12,16 +12,18 @@ import {
   isExternalHttpUrl,
   isTelephoneUrl,
   isTicketSoldOut,
+  withBase,
 } from '../lib/events';
 
 interface Props {
   event: PreviewEvent;
   shareImage?: string;
+  shareImageTextMode?: PreviewEvent['image_text_mode'];
   className?: string;
   family?: 'split' | 'editorial';
 }
 
-const { event, shareImage = event.image_url || '', className = '', family = 'editorial' } = Astro.props;
+const { event, shareImage = event.image_url || '', shareImageTextMode = event.image_text_mode || 'unknown', className = '', family = 'editorial' } = Astro.props;
 const dateTimeLabel = getOccurrencePresentation(event).compactLabel;
 const placeLabel = [event.venue_name, event.city].filter(Boolean).join(' · ') || 'Место уточняется';
 const admissionLabel = event.ticket.is_free ? 'Бесплатно' : (event.ticket.price_label || 'Билеты');
@@ -105,6 +107,8 @@ const shareFileName = `kenigevents-${event.slug}`;
       data-share-url={canonicalUrl}
       data-share-image={shareImage}
       data-share-image-type={shareImageType}
+      data-share-image-text-mode={shareImageTextMode}
+      data-share-brand-image={withBase('/brand/announcements-wordmark-ui.svg')}
       data-share-file-name={shareFileName}
       data-share-date-time={dateTimeLabel}
       data-share-place={placeLabel}

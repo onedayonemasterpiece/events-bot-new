@@ -332,6 +332,7 @@ features:
     release_umbrella: docs/features/static-personal-announcements/README.md
     release_readiness: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md
     design_system: docs/features/static-site-pages/design-system/README.md
+    release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
     design_system_runtime:
       tokens: site/src/styles/design-system.css
       primitives: site/src/components/design-system/
@@ -339,8 +340,6 @@ features:
       check: site/scripts/check-design-system.mjs
     brand_lockups: docs/features/static-site-pages/design-system/brand-lockups.md
     favicon: docs/features/static-site-pages/design-system/favicon.md
-    release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
-    test_scenarios: docs/features/static-site-pages/test-scenarios.md
     legacy_requirements: docs/features/static-site-pages/requitements.md
     related_backlog: docs/backlog/features/static-event-pages/README.md
     related_personalization: docs/features/unsigned-personalization/README.md
@@ -357,7 +356,6 @@ features:
     festival_calendar_timeline: docs/features/static-site-pages/festival-timeline.md
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md
-    release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
     event_sharing: docs/features/static-site-pages/event-sharing.md
     service_sharing: docs/features/static-site-pages/service-sharing.md
     service_sharing_desktop_clipboard_research: docs/features/static-site-pages/service-sharing-desktop-clipboard-research.md

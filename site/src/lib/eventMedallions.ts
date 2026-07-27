@@ -2,7 +2,7 @@ import type { PreviewEvent } from './types';
 import type { EventTransportSuggestion } from './eventTransport';
 
 export type MedallionIdentityCategory = 'venue_brand' | 'festival_brand' | 'festival' | 'organizer';
-export type MedallionEvidenceField = 'venue_name' | 'venue_address' | 'festival' | 'source_url' | 'festival_policy';
+export type MedallionEvidenceField = 'venue_name' | 'venue_address' | 'festival' | 'organizer_name' | 'source_url' | 'festival_policy';
 
 export interface OrganizerMedallionDefinition {
   slug: string;
@@ -101,7 +101,7 @@ function aliasesFor(item: OrganizerMedallionDefinition): string[] {
 
 function firstAliasEvidence(
   item: OrganizerMedallionDefinition,
-  field: Extract<MedallionEvidenceField, 'venue_name' | 'venue_address' | 'festival'>,
+  field: Extract<MedallionEvidenceField, 'venue_name' | 'venue_address' | 'festival' | 'organizer_name'>,
   value: string | null | undefined,
 ): MedallionEvidence | null {
   for (const alias of aliasesFor(item)) {
@@ -157,6 +157,8 @@ function evidenceRank(evidence: MedallionEvidence): number {
   if (evidence.field === 'venue_address') return 36;
   if (evidence.field === 'festival' && evidence.match === 'exact') return 35;
   if (evidence.field === 'festival') return 30;
+  if (evidence.field === 'organizer_name' && evidence.match === 'exact') return 45;
+  if (evidence.field === 'organizer_name') return 42;
   if (evidence.field === 'source_url') return 20;
   return 10;
 }
@@ -197,7 +199,7 @@ export function classifyEventMedallionLayout(
 }
 
 export function resolveEventMedallions(
-  event: Pick<PreviewEvent, 'venue_name' | 'address' | 'festival' | 'source_url' | 'source_urls'>,
+  event: Pick<PreviewEvent, 'venue_name' | 'address' | 'festival' | 'organizer_names' | 'source_url' | 'source_urls'>,
   items: OrganizerMedallionDefinition[],
 ): EventMedallionResolution {
   const sourceUrls = Array.from(new Set([...(event.source_urls || []), event.source_url].filter(Boolean).map(String)));
@@ -217,7 +219,11 @@ export function resolveEventMedallions(
     } else if (category === 'festival_brand' || category === 'festival') {
       evidence = firstAliasEvidence(item, 'festival', event.festival) || sourceEvidence(item, sourceUrls);
     } else {
-      evidence = firstAliasEvidence(item, 'venue_name', event.venue_name) || sourceEvidence(item, sourceUrls);
+      for (const organizerName of event.organizer_names || []) {
+        evidence = firstAliasEvidence(item, 'organizer_name', organizerName);
+        if (evidence) break;
+      }
+      evidence = evidence || sourceEvidence(item, sourceUrls);
       if (!evidence && event.festival) {
         for (const alias of item.impliedByFestivalAliases || []) {
           const match = matchMedallionAlias(event.festival, alias);

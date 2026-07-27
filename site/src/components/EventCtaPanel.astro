@@ -3,7 +3,7 @@ import CalendarLink from './CalendarLink.astro';
 import EventOccurrenceLabel from './EventOccurrenceLabel.astro';
 import Icon from './Icon.astro';
 import type { PreviewEvent } from '../lib/types';
-import { eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isEventDetailCalendarEligible, isExternalHttpUrl, isTelephoneUrl, isTicketSoldOut } from '../lib/events';
+import { eventAbsoluteUrl, eventTicketActionLabel, eventAdmissionLabel, eventActionHref, getOccurrencePresentation, isEventDetailCalendarEligible, isExternalHttpUrl, isTelephoneUrl, isTicketSoldOut, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 interface Props { event: PreviewEvent }
 const { event } = Astro.props;
@@ -65,7 +65,7 @@ const sharesCount = event.shares_count || 0;
     </div>
     <div class="action-grid event-cta-panel__action-row" data-feedback-scope data-event-cta-action-row="calendar-share-like">
       {!calendarPrimary && <CalendarLink event={event} />}
-      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute} data-share-image={imageUrl || ''} data-share-image-type={shareImageType} data-share-file-name={shareFileName} data-share-date-time={dateLabel} data-share-place={event.venue_name || event.city || ''} data-share-admission={admissionLabel} aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}><Icon name="share" /> <strong data-share-count>{sharesCount}</strong></button>
+      <button type="button" class="secondary-button native-share-button" data-nosnippet data-native-share data-share-event-id={event.id} data-share-event-title={event.title} data-share-base-count={sharesCount} data-share-title={event.title} data-share-text={shareText} data-share-url={absolute} data-share-image={imageUrl || ''} data-share-image-type={shareImageType} data-share-image-text-mode={event.image_text_mode || 'unknown'} data-share-brand-image={withBase('/brand/announcements-wordmark-ui.svg')} data-share-file-name={shareFileName} data-share-date-time={dateLabel} data-share-place={event.venue_name || event.city || ''} data-share-admission={admissionLabel} aria-label={`Поделиться: ${event.title}. Сейчас ${sharesCount}`}><Icon name="share" /> <strong data-share-count>{sharesCount}</strong></button>
       <button type="button" class="secondary-button feedback-button--like" data-nosnippet data-feedback-action="like" data-event-id={event.id} data-event-title={event.title} data-base-count={likesCount} aria-pressed="false" aria-label={`Нравится: ${event.title}. Сейчас ${likesCount}`}><Icon name="heart" /> <strong data-feedback-count>{likesCount}</strong></button>
     </div>
     {telephone && <p class="muted-note">Телефон откроется стандартным звонком на мобильном устройстве.</p>}

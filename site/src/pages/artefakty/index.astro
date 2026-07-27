@@ -6,7 +6,7 @@ import {
   getArtifactRegistry,
   getArtifactsForCollection,
 } from '../../lib/artifacts';
-import { absoluteUrl, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, siteHomeHref, SITE_MODE, SITE_NAME, withBase } from '../../lib/events';
 
 const registry = getArtifactRegistry();
 const firstCollection = registry.collections[0];
@@ -32,10 +32,18 @@ const itemList = {
     name: artifact.public_name,
   })),
 };
+const artifactPagesEnabled = SITE_MODE !== 'production';
 ---
 
-<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[itemList]}>
-  <main id="main" class="artifacts-page" data-artifact-registry-page>
+<EventLayout
+  title={title}
+  description={description}
+  canonicalUrl={canonicalUrl}
+  structuredData={artifactPagesEnabled ? [itemList] : []}
+  noindex
+>
+  {artifactPagesEnabled ? (
+    <main id="main" class="artifacts-page" data-artifact-registry-page>
     <div class="page-shell artifacts-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
         <a href={siteHomeHref()}>Афиша</a>
@@ -185,12 +193,25 @@ const itemList = {
         </a>
       </section>
     </div>
-  </main>
+    </main>
+  ) : (
+    <main id="main">
+      <section class="artifact-unavailable" data-artifact-collection-unavailable data-nosnippet>
+        <p>Коллекция пока недоступна в этой сборке.</p>
+      </section>
+    </main>
+  )}
 </EventLayout>
 
 <style>
   .artifacts-page {
     padding: 0 0 clamp(3rem, 8vw, 6rem);
+  }
+  .artifact-unavailable {
+    width: min(760px, calc(100% - 24px));
+    margin: 0 auto;
+    padding: 80px 0;
+    color: #76645a;
   }
   .artifacts-shell {
     width: min(1120px, calc(100% - 28px));

@@ -1,7 +1,7 @@
 ---
 import type { ArtifactCollection } from '../../lib/artifacts';
 import { withBase } from '../../lib/events';
-import { AMBER_ARTIFACT_ID } from '../../lib/artifactProgress.mjs';
+import { AMBER_ARTIFACT_PUBLIC_ID } from '../../lib/artifactRuntime.mjs';
 
 interface Props {
   collection: ArtifactCollection;
@@ -65,7 +65,7 @@ const lockedSlotCount = slotCount - 1;
         type="button"
         data-artifact-open
         aria-haspopup="dialog"
-        aria-controls={`artifact-detail-${AMBER_ARTIFACT_ID}`}
+        aria-controls={`artifact-detail-${AMBER_ARTIFACT_PUBLIC_ID}`}
         hidden={!demoFound}
       >
         <img
@@ -102,7 +102,7 @@ const lockedSlotCount = slotCount - 1;
 
   <dialog
     class="artifact-detail"
-    id={`artifact-detail-${AMBER_ARTIFACT_ID}`}
+    id={`artifact-detail-${AMBER_ARTIFACT_PUBLIC_ID}`}
     aria-labelledby="artifact-detail-title"
     aria-describedby="artifact-detail-copy"
     data-artifact-dialog
@@ -206,7 +206,7 @@ const lockedSlotCount = slotCount - 1;
     ARTIFACT_COLLECTION_STORAGE_KEY,
     hasAmberArtifact,
     readArtifactCollection,
-  } from '../../lib/artifactProgress.mjs';
+  } from '../../lib/artifactRuntime.mjs';
 
   document.querySelectorAll('[data-artifact-collection-progress]').forEach((root) => {
     if (root.dataset.artifactCollectionReady === 'true') return;

@@ -42,6 +42,7 @@ function staticEvent(event) {
     venue_name:event.location_name,
     address:event.location_address,
     festival:event.festival,
+    organizer_names:event.organizer_names || [],
     source_url:event.source_post_url,
     source_urls:[event.source_post_url, event.source_vk_post_url].filter(Boolean),
   };
@@ -71,6 +72,7 @@ for raw in payload["events"]:
     )
     resolved = tg.resolve_event_graphic_medallions(event, limit=99)
     location = tg._event_text(event, ("location_name", "location_address", "city"))
+    organizers = tg._event_text(event, ("organizer_names",))
     identity = tg._event_text(
         event, ("tg_source_author", "source_post_url", "source_vk_post_url", "source_urls")
     )
@@ -83,6 +85,8 @@ for raw in payload["events"]:
         haystack = ""
         if reason == "location_alias":
             field, haystack = "location", location
+        elif reason == "organizer_field":
+            field, haystack = "organizer_names", organizers
         elif reason == "source_identity":
             field, haystack = "source_identity", identity
         elif reason == "festival_field":

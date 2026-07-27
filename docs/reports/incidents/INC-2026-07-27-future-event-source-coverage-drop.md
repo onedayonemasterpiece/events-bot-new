@@ -85,6 +85,22 @@ Raw evidence is retained outside git under
 - `2026-07-27 08:43 UTC`: production still had zero future Philharmonia rows.
   The safe same-process catch-up remained pending: the approved E2E identity
   was correctly non-admin, so no silent temporary privilege grant was made.
+- `2026-07-27 08:57 UTC`: after explicit authorization, the exact E2E user row
+  was snapshotted, temporarily granted superadmin, and restored immediately
+  after the live UI run. `ops_run=4678` correctly finished `error`, exposing a
+  second blocker: Kaggle rejected both per-run status-dataset creations with
+  `dataset_create_new ... Invalid token`; neither primary kernel was pushed.
+- `2026-07-27 09:02 UTC`: a same-credential Kaggle 2.2.4 probe could create a
+  small dataset, but private status/delete APIs returned `403`; this confirmed
+  that parser availability must not depend on the dataset control plane. The
+  probe left `zigomaro/status-probe-1785142966` because the credential itself
+  was denied `datasets.delete`.
+- `2026-07-27 09:13 UTC`: the second authorized UI catch-up passed the former
+  status-dataset gate. Qtickets was pushed and entered `RUNNING`; Philharmonia
+  reached `kernels_push`, which rejected changing the existing kernel from
+  notebook to script (`You cannot change the editor type of a kernel`). The
+  temporary superadmin grant was again restored exactly immediately after
+  command acceptance.
 
 ## Root Cause
 
@@ -103,6 +119,16 @@ Raw evidence is retained outside git under
    the terminal status.
 5. The daytime change guard still fingerprinted the obsolete `/?event` URL
    instead of `/afisha/`, so current catalog changes could be skipped.
+6. Parser startup treated a per-run private status-dataset as a mandatory input.
+   Kaggle rejected its upload token, so the primary source kernels were never
+   pushed even though callback telemetry is not required to parse events.
+7. The corrected Philharmonia notebook still loaded
+   `philharmonia_parser.py` as a sibling file, but Kaggle `kernels_push` sends
+   only `kernel-metadata.json.code_file`. A remote run therefore required a
+   self-contained script rather than a notebook referencing an unshipped module.
+8. Kaggle kernel editor type is immutable for an existing slug, so converting
+   `zigomaro/parse-philharmonia` from notebook to script was rejected. The
+   self-contained script must be published under a new slug.
 
 ## Contributing Factors
 
@@ -178,9 +204,12 @@ Raw evidence is retained outside git under
 - [x] add DOM replay and three-run concurrency regressions;
 - [x] make source-specific parse errors visible in `ops_run.status`;
 - [x] merge the fix to `origin/main` and deploy;
+- [x] make primary parser launch independent of Kaggle status-dataset creation
+  and package Philharmonia as a self-contained script;
 - [ ] run and reconcile the production catch-up (manual UI run requires an
-  explicitly authorized temporary grant; otherwise verify the 14:15 local
-  compensating scheduled slot);
+  explicitly authorized temporary grant; the first authorized run exposed the
+  Kaggle dataset control-plane blocker and restored the grant exactly; repeat
+  after deploying the follow-up fix);
 - [x] verify the expected bounded runtime mirror remains enabled, within its
   byte/retention budget and above its free-space floor;
 - [ ] add durable per-source freshness/coverage alerting.
@@ -212,6 +241,12 @@ Raw evidence is retained outside git under
   `48h`, `256 MiB` floor, current total `26,058,201` bytes; deployed parser and
   isolated run-config writer present. Catch-up/source reconciliation remains
   open before closure.
+- first authorized catch-up: exact bot `@events_love39_bot`, command message
+  `33229`, terminal report `33231`, `ops_run=4678 status=error`; both requested
+  sources were blocked before push by Kaggle `dataset_create_new Invalid token`.
+  The pre-grant user row was restored exactly (`is_superadmin=0`,
+  `is_partner=0`, `blocked=0`) and evidence is retained under the incident
+  artifact directory.
 
 ## Prevention
 

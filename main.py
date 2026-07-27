@@ -22625,6 +22625,10 @@ def _static_site_build_kaggle_command(
         cmd.append("--sync-pgvector-vectors")
     if _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"):
         cmd.append("--gemma-related-verify")
+    if _env_flag("STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH"):
+        cmd.append("--secret-candidate-artifact-research")
+    if _env_flag("STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH"):
+        cmd.append("--secret-candidate-require-authorized-search")
     if _env_flag("STATIC_SITE_KEEP_SECRET_DATASETS"):
         cmd.append("--keep-secret-datasets")
     return cmd
@@ -23338,6 +23342,12 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             "STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER",
             "PUBLIC_YANDEX_AUTH_PROVIDER",
             default="custom:yandex",
+        ),
+        "secret_candidate_artifact_research": _env_flag(
+            "STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH"
+        ),
+        "secret_candidate_require_authorized_search": _env_flag(
+            "STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH"
         ),
     }
     input_fingerprint, fingerprint_evidence = await asyncio.to_thread(

@@ -1,75 +1,92 @@
-# Static unified prototype corrections — integration report
+# Static-site review R14 — integration report
 
-Base: `5c2db86811c34355a1894748b87af73fdb5b19e3`
+Snapshot: 2026-07-27 UTC
 
-Integration branch: `integration/static-unified-prototype-corrections-20260723`
+Integration branch: `integration/static-site-review-r14-20260727`
 
-Verification owner: `/root`
+PR: <https://github.com/onedayonemasterpiece/events-bot-new/pull/125>
 
-## Lane reconciliation
+Release decision: **ready to merge into `origin/main`; production root remains
+NO-GO**. The only permitted publication after merge is a fresh immutable
+`/_review/<256-bit-token>/` noindex candidate produced by the production
+candidate pipeline. This report does not treat a preview URL as a root release.
 
-| Lane | Requirement IDs | Branch | Status | Head SHA | Merge/cherry-pick | Evidence |
-|---|---|---|---|---|---|---|
-| L01 | R01 | `agent/static-unified-corrections/exhibitions` | merged | `9ac1e227657cf5fdd12c22b4a8f021e1c3c1d212` | cherry-picked as `04b0dd70` | `.codex/lanes/L01/RESULTS.md`; 4 focused tests, 10 occurrence tests, 311-page worker build |
-| L02 | R03 | `agent/static-unified-corrections/search` | merged | `e002eb58dd50afed86c40f7254f9bd07a7266e94` | cherry-picked as `d6f4d4e8` | `.codex/lanes/L02/RESULTS.md`; 13 tests, 311-page worker build, desktop/mobile computed-style smoke |
-| L03 | R04, R05 | `agent/static-unified-corrections/clubs-partners` | merged | `6c8f6dd84a0a3c5ba153c250af26af7f979c1fbc` | cherry-picked as `61295c61` | `.codex/lanes/L03/RESULTS.md`; 4 Node + 3 Python tests, 314-page worker build |
-| L04 | R08 | `agent/static-unified-corrections/transport` | merged | `a1e22643f7f1976478505481d4ce2efbe130b2c1` | cherry-picked as `5cfdc4df` | `.codex/lanes/L04/RESULTS.md`; 5 Node + 4 Python tests, 311-page worker build |
-| L05 | R02, R07 | `agent/static-unified-corrections/cards-ocr` | merged | `6deb8dd63308b880a83f35e36b0ab0c3c51b7421` | cherry-picked as `cf5f8991` | `.codex/lanes/L05/RESULTS.md`; 22 Python + 37 Node tests, 311-page worker build |
-| L06 | R06 | integration branch | merged | `31245333b6b8be4a4ac80c72de36097c2f5d7a89` plus final corrections | serial integration | shared component/helper, route/SEO wiring, primary-source research and valid Gemini Pro review |
+The previous 2026-07-23 report is preserved at
+`static-unified-prototype-corrections-20260723-INTEGRATION_REPORT.md`.
 
-All worker worktrees were clean at handoff. No worker branch was merged
-wholesale; only the listed commits were cherry-picked.
+## Integrated lanes
 
-## Real-data source
+| Lane | Scope | Integration commit | Status |
+|---|---|---:|---|
+| R14-COLLECTIONS | complete DB-backed Free collection; truthful Jazz state | `19c7f5a0` | integrated |
+| R14-VISUAL | OCR-safe heroes/rails, real gallery media, Clubs title, share composer | `322d9d4e` | integrated |
+| R14-SEARCH-AUTH | Enter/IME/search recovery and one global Supabase/Yandex session | `21e37779` | integrated |
+| R14-MEDALLIONS | bounded organizer identity, explicit source mappings and assets | `632a208e` | integrated; production rows require schema/backfill |
+| R14-ARTIFACTS | one deterministic eligible event and five-slot local collection | `a379a931` | integrated; secret candidate only |
+| R14-INTEGRATION | shared shell/menu/auth wiring, release gates and documentation | `fe0b8e65`, `7d96b428` | validated |
 
-- Snapshot:
-  `artifacts/db/static-unified-corrections-clubs-partners-20260723.sqlite`
-- Snapshot SHA-256:
-  `f49c5e829d6c230a92b76f3dc4a937d18991b6659c60fa73b85d648cc7953175`
-- Size: `279195648` bytes
-- Export cutoff: `2026-07-23T09:00` Europe/Kaliningrad
-- Export: 288 eligible real events; current interest-club projection enabled.
-- Required specimens materialized: events `6686`, `6529`, `6990`.
+All worker commits are patch-equivalent in the integration branch. Shared files
+were reconciled serially; old labs were not merged wholesale.
 
-## Integrated verification
+## Requirement closure
 
-- Occurrence resolver/formatter suite: 10/10 passed.
-- `INC-2026-07-18-dramteatr-same-day-event-glue` identity replay/positive
-  control: 15/15 passed.
-- Focused integrated Node suite: 47/47 passed after the immutable preview build.
-- Preview build: 389 pages.
-- `check:preview`: passed (fresh full catalog has no expired control fixture).
-- `check:unified-prototype`: passed for 18 primary routes, 288 event pages and
-  369 compact related cards.
-- Local browser acceptance: 16/16 route/viewport checks passed at 1440×1000
-  and 390×844, including zero horizontal overflow, initial-hidden Search
-  skeleton, responsive breadcrumbs, shared personal-feed packing, protected
-  event 6686 media and same-day event 6529 returns.
-- Immutable preview deployment:
-  `https://kenigevents.ru/preview-20260723-unified-corrections-r1/__preview/`;
-  all eight reviewed routes returned HTTP 200 with `noindex`. The deployment
-  script wrote only the immutable preview prefix and did not modify the
-  production root or stable `/ics`.
-- Live browser acceptance: 16/16 route/viewport checks passed against the
-  public URL.
-- Final external acceptance: **PASS** from valid
-  `gemini-3.1-pro-low` (`Gemini 3.1 Pro (Low)` in provider log), with R01–R08
-  all PASS and no mandatory pre-review fixes. The only non-blocking
-  recommendation was to add exhibitions-specific card metrics to the browser
-  collector.
-- Browser screenshots/metrics and Gemini prompt, response and provider log are
-  recorded in task-local non-committed artifacts under
-  `artifacts/codex/static-unified-corrections-20260723/`.
+| ID | Result | Evidence / remaining boundary |
+|---|---|---|
+| TG691 | Done | Today remains one chronological stream with past-state styling regression tests. |
+| R01/R03 | Partial | Resolver, schema, Smart Update and exact Profi-Tour/Hraniteli/Yantar Hall/Dom Iskusstv mappings are integrated. Fly schema/backfill and generated candidate proof remain release operations. |
+| R02 | Done in code | Mobile OCR/unknown hero and rail media remain whole; classified visual media fills. Public Maria Stuart pixel acceptance remains part of candidate QA. |
+| R04 | Done | Up to four real source-ordered, deduplicated rail images; OCR protection is per asset. |
+| R05 | Done in code | Search Enter/requestSubmit, IME guard, `enterkeyhint=search`, bounded header and stream-idle rescue. Real Edge/public backend smoke remains candidate QA. |
+| R06 | Done in code | Exactly one `StaticSiteAuthRuntime` in `EventLayout`; Search, menu and Personal use the same browser singleton; menu login/logout is wired. A real Yandex OAuth round trip needs the owner's browser session. |
+| R07 | Done in code | Mobile Clubs shelf title is visible and sticky. Candidate geometry QA remains. |
+| R08 | Done | Exact Jazz weekend is checked honestly and later Jazz fallback is labelled; no fabricated events. |
+| R09 | Done in code | 1080×1350 share image carries KenigEvents brand, title, date/time, place and admission. Native Web Share remains device QA. |
+| R10/R11 | Done for research candidate | One build-seeded eligible real weekend event; five slots, found/empty/detail states, local persistence and disabled `Поделиться артефактом · скоро`. Production/root is explicitly absent. |
+| R12 | Done | All Free navigation opens `/podborki/besplatnye-sobytiya/`, never Search. |
+| R13/R14 | Done | Canonical docs, `docs/routes.yml`, CHANGELOG, presentation checklist and release plan agree on current behavior and NO-GO root status. |
+| TG708–715 | Partial | Consent/dedupe/bot-exclusion/denominator contracts are documented. No emitter, ingest, aggregate or reporting UI is claimed. |
+| R15 | Partial until publication | Clean main merge, Fly schema/backfill, production-candidate run, public desktop/mobile QA and Telegram receipt remain sequential release steps. |
 
-## Closure audit
+## Validation
 
-| ID | Requirement | Status | Evidence | Missing / risk |
-|---|---|---|---|---|
-| R01 | Exhibitions donor on review `/vystavki/` | Done | dynamic projection + generated donor markers | Root promotion intentionally not performed |
-| R02 | Large-card `/dlya-menya/` | Done | shared optimized three-card desktop rows + one-card mobile flow | Review-only route |
-| R03 | Search initial state/style | Done | initially hidden skeleton + shared control styling | Live auth/backend acceptance remains separate |
-| R04 | Current clubs | Done | three policy-current clubs; event 6990 internal link | Count may change on future snapshots by policy |
-| R05 | ICAE partner | Done | local official SVG + official center URL | Logo-use authorization required before root promotion |
-| R06 | Breadcrumb product contract | Done | selective deep-page component, JSON-LD, desktop/mobile rules | No invented category hierarchy |
-| R07 | Event 6686 poster protection | Done | exporter `unknown_document/error`; large hero `contain` | Semantic reclassification may later replace fail-closed state |
-| R08 | Event 6529 return shortlist | Done | labelled estimate; `18:56`, `19:43`; no next morning | Estimate is explicitly review-only and must be source-confirmed for production |
+- Focused integrated Node suites before the final gate: **103/103 passed**.
+- Organizer/Smart Update Python suites: **40/40 passed**; Telegram medallion
+  tests: **4/4 passed**.
+- Exact Astro preview build on current source: **434 pages**, passed.
+- Chromium release gate on the generated tree: all nine mandatory checks passed:
+  hero/gallery crop, related geometry and decoded media, canonical EventCard,
+  spatial and cold/pointer/Russian-layout keyboard paths, cross-document gallery,
+  footer shortcuts and festival calendar at `1440×900`/`390×844`.
+- Browser media receipt explicitly exercises `visual-cover`, bounded
+  `document-safe-cover` (`<=20%`) and evidence-free `document-contain` fail-closed
+  branches without fallback bleed.
+- PR CI on the main-updated head: `python-ci` and
+  `static-browser-release-gate` passed.
+- `git diff --check`: passed.
+
+Non-committed evidence is under `artifacts/codex/r14-*`.
+
+## External consultant boundary
+
+A fresh `a-gemini` request using the approved Gemini Pro lane and the allowed
+`a-opus` fallback both failed before model execution with the Antigravity
+eligibility response `not currently available in your location`. No Flash/Lite
+or other model was substituted, and this report does **not** claim Gemini/Opus
+acceptance. The internal high-effort checklist review is recorded separately and
+is not presented as an external consultant review.
+
+## Release handoff
+
+After this report reaches `origin/main`:
+
+1. deploy the exact clean main SHA to Fly so runtime DDL adds
+   `event.organizer_names`;
+2. idempotently backfill only source-grounded Profi-Tour/Hraniteli rows and keep
+   event `6767` negative;
+3. request one fresh full-catalog `production-candidate` build with immutable
+   snapshot, exact repo SHA and secret publishing enabled;
+4. run public desktop/mobile/browser acceptance against the bearer URL;
+5. send the complete mutually linked route inventory to the Telegram review
+   thread and record the receipt;
+6. do not promote root/current/stable ICS. Root remains NO-GO until the separate
+   atomic-promotion/lifecycle/rollback gates in `release-plan.md` close.

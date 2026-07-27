@@ -41,3 +41,19 @@ test('mobile event-detail medallions share one bounded identity scale without ch
   assert.match(medallions, /key: 'free-admission'[\s\S]*layoutRole:'secondary'/u);
   assert.match(medallions, /imageUrl: '\/assets\/badges\/free-listing-medallion\.svg'/u);
 });
+
+test('mobile OCR and unknown poster heroes stay fully readable without crop parallax', async () => {
+  const [styles, hero, route] = await Promise.all([
+    read('src/components/MobileEventProductionStyles.astro'),
+    read('src/components/EventHero.astro'),
+    read('src/pages/sobytiya/[slug].astro'),
+  ]);
+
+  assert.match(hero, /primaryImageTextMode === 'visual_only'[\s\S]*fit:'cover'[\s\S]*fit:'contain'/u);
+  assert.match(hero, /data-hero-image-text-mode=\{primaryImageTextMode\}/u);
+  assert.match(styles, /\.event-hero--poster-stage \.event-hero__visual \{[\s\S]*overflow: visible;/u);
+  assert.match(styles, /\.event-hero--poster-stage \.event-hero__image \{[\s\S]*margin-top: 0;[\s\S]*margin-bottom: 0;[\s\S]*transform: none;/u);
+  assert.match(styles, /\[data-mobile-parallax-profile="photo-continuous-crop"\] \.event-hero--poster-stage \.event-hero__image \{\s*margin-top: 0;/u);
+  assert.doesNotMatch(styles, /\.event-hero--poster-stage \.event-hero__image \{[\s\S]{0,180}var\(--hero-poster-parallax-y/u);
+  assert.match(route, /data-mobile-parallax-profile="photo-continuous-crop"/u);
+});

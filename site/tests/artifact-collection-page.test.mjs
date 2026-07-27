@@ -9,7 +9,7 @@ import {
   hasAmberArtifact,
   normalizeArtifactCollectionState,
   readArtifactCollection,
-} from '../src/lib/artifactProgress.mjs';
+} from '../src/lib/artifactRuntime.mjs';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
@@ -69,6 +69,6 @@ test('unfound accessible label does not reveal the artifact name', async () => {
   const rail = await read('../src/components/listings/AmberRailArtifact.astro');
   assert.match(rail, /aria-label="Секретный артефакт\. Нажмите, чтобы найти"/u);
   assert.match(rail, /Артефакт «Янтарный космонавт» найден\. Открыть историю/u);
-  assert.match(rail, /artifactProgress\.mjs/u);
+  assert.match(rail, /artifactRuntime\.mjs/u);
   assert.match(rail, /znaki-yantarnogo-kraya/u);
 });

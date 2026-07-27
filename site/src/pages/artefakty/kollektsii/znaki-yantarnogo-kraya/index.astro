@@ -2,16 +2,18 @@
 import ArtifactCollectionProgress from '../../../../components/artifacts/ArtifactCollectionProgress.astro';
 import EventLayout from '../../../../layouts/EventLayout.astro';
 import { getArtifactRegistry } from '../../../../lib/artifacts';
-import { absoluteUrl, siteHomeHref, SITE_NAME, withBase } from '../../../../lib/events';
+import { absoluteUrl, siteHomeHref, SITE_MODE, SITE_NAME, withBase } from '../../../../lib/events';
 
 const collection = getArtifactRegistry().collections.find((item) => item.slug === 'znaki-yantarnogo-kraya');
 if (!collection) throw new Error('Collection znaki-yantarnogo-kraya is missing');
 const canonicalUrl = absoluteUrl('/artefakty/kollektsii/znaki-yantarnogo-kraya/');
 const title = `${collection.public_name} — коллекция артефактов | ${SITE_NAME}`;
 const description = 'Прототип страницы конкретной коллекции: один найденный артефакт, семь скрытых и прогресс до заявки на розыгрыш.';
+const artifactPagesEnabled = SITE_MODE !== 'production';
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} noindex>
-  <main id="main" class="collection-page" data-artifact-collection-page>
+  {artifactPagesEnabled ? (
+    <main id="main" class="collection-page" data-artifact-collection-page>
     <div class="page-shell collection-shell">
       <nav class="crumbs" aria-label="Хлебные крошки">
         <a href={siteHomeHref()}>Афиша</a>
@@ -55,11 +57,19 @@ const description = 'Прототип страницы конкретной ко
         </ul>
       </section>
     </div>
-  </main>
+    </main>
+  ) : (
+    <main id="main">
+      <section class="artifact-unavailable" data-artifact-collection-unavailable data-nosnippet>
+        <p>Коллекция пока недоступна в этой сборке.</p>
+      </section>
+    </main>
+  )}
 </EventLayout>
 
 <style>
   .collection-page { padding: 0 0 clamp(3rem, 8vw, 6rem); }
+  .artifact-unavailable { width: min(760px, calc(100% - 24px)); margin: 0 auto; padding: 80px 0; color: #76645a; }
   .collection-shell { width: min(1120px, calc(100% - 28px)); }
   .crumbs { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; margin: 1rem 0; color: #76645a; font-size: .82rem; }
   .crumbs a { color: #8d3f1d; }

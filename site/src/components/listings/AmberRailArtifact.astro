@@ -1,6 +1,6 @@
 ---
 import { withBase } from '../../lib/events';
-import { AMBER_ARTIFACT_PLACEMENT } from '../../lib/artifactProgress.mjs';
+import { AMBER_ARTIFACT_PLACEMENT } from '../../lib/artifactRuntime.mjs';
 
 interface Props {
   eventId: number;
@@ -81,7 +81,7 @@ const detailUrl = withBase('/artefakty/kollektsii/znaki-yantarnogo-kraya/#amber-
     collectAmberArtifact,
     hasAmberArtifact,
     readArtifactCollection,
-  } from '../../lib/artifactProgress.mjs';
+  } from '../../lib/artifactRuntime.mjs';
 
   document.querySelectorAll('[data-amber-artifact]').forEach((button) => {
     if (button.dataset.amberArtifactReady === 'true') return;

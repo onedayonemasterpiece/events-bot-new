@@ -108,7 +108,11 @@ The browser/static renderer consumes metadata but does not run vision models.
 
 - golden corpus across posters, portraits, groups, architecture, text-heavy images and sparse photos;
 - no cut faces/heads; no OCR crop except the documented very-tall `<=20%` case;
-- zero image-frame bands and equal media/card heights within each compact row;
+- zero image-frame bands for classified visual media and for classified
+  documents admitted to bounded cover; an unclassified/error document is the
+  deliberate fail-closed exception and remains whole until media enrichment
+  supplies positive crop evidence. Card and media shells still keep equal
+  outer heights within each compact row;
 - every non-final compact row is full and only the final row may be incomplete;
 - no global fixed body/action reservation; row chrome follows real row content;
 - the globally selected grouping has the minimum normalized total page height;

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveMobileListingRailMedia } from '../src/lib/mobileListingRailMedia.mjs';
+import {
+  resolveMobileListingRailMedia,
+  resolveMobileListingRailMediaItems,
+} from '../src/lib/mobileListingRailMedia.mjs';
 
 function selected(asset, overrides = {}) {
   return {
@@ -116,4 +119,55 @@ test('unreviewed multi-image visual remains fail-closed at authored geometry', (
   assert.equal(result.fit, 'contain');
   assert.equal(result.width, 84);
   assert.equal(result.reason, 'safe_visual_authored_geometry');
+});
+
+test('mobile rail returns a bounded real gallery in source order and protects every asset independently', () => {
+  const first = asset({ src:'https://static.kenigevents.ru/first.webp', asset_key:'first' });
+  const poster = asset({
+    src:'https://static.kenigevents.ru/poster.webp',
+    asset_key:'poster',
+    width:1080,
+    height:1350,
+    image_text_mode:'ocr_text',
+    media_role:'event_identity_poster',
+    safe_crop:false,
+  });
+  const reviewedPhoto = asset({
+    src:'https://static.kenigevents.ru/reviewed.webp',
+    asset_key:'reviewed',
+    width:828,
+    height:1227,
+    listing_crop_evidence:'source-reviewed',
+    listing_no_ocr_review:true,
+  });
+  const overflow = [
+    asset({ src:'https://static.kenigevents.ru/four.webp', asset_key:'four' }),
+    asset({ src:'https://static.kenigevents.ru/five.webp', asset_key:'five' }),
+  ];
+  const event = { image_text_mode:'visual_only', image_assets:[first, poster, reviewedPhoto, ...overflow] };
+  const items = resolveMobileListingRailMediaItems(event, selected(first), 4);
+
+  assert.equal(items.length, 4);
+  assert.deepEqual(items.map((item) => item.src), [
+    first.src,
+    poster.src,
+    reviewedPhoto.src,
+    overflow[0].src,
+  ]);
+  assert.equal(items[0].fit, 'contain');
+  assert.equal(items[1].imageTextMode, 'ocr_text');
+  assert.equal(items[1].fit, 'contain');
+  assert.equal(items[2].fit, 'cover');
+  assert.equal(items[2].reason, 'reviewed_multi_visual_portrait_4x5');
+});
+
+test('mobile gallery deduplicates the selected asset and clamps an excessive requested limit', () => {
+  const images = Array.from({ length:8 }, (_unused, index) => asset({
+    src:`https://static.kenigevents.ru/${index}.webp`,
+    asset_key:`asset-${index}`,
+  }));
+  const event = { image_text_mode:'visual_only', image_assets:images };
+  const items = resolveMobileListingRailMediaItems(event, selected(images[0]), 99);
+  assert.equal(items.length, 6);
+  assert.equal(new Set(items.map((item) => item.src)).size, items.length);
 });

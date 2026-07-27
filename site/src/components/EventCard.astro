@@ -131,6 +131,7 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
   data-lab-row-index={desktopRelatedLayout ? String(desktopRelatedLayout.rowIndex) : undefined}
   data-lab-row-column={desktopRelatedLayout ? String(desktopRelatedLayout.rowColumn) : undefined}
   data-lab-media-treatment={desktopRelatedLayout ? cardCrop.mediaTreatment : undefined}
+  data-lab-crop-reason={desktopRelatedLayout ? cardCrop.cropReason : undefined}
   data-lab-cover-crop={desktopRelatedLayout ? fixedLayoutMetric(cardCrop.coverCrop, 4) : undefined}
   data-lab-potential-cover-crop={desktopRelatedLayout ? fixedLayoutMetric(cardCrop.potentialCoverCrop, 4) : undefined}
   data-lab-row-worst-crop={fixedLayoutMetric(desktopRelatedLayout?.rowWorstCrop, 4)}
@@ -205,6 +206,8 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
         data-share-url={absolute}
         data-share-image={imageUrl || ''}
         data-share-image-type={shareImageType}
+        data-share-image-text-mode={imageTextMode}
+        data-share-brand-image={withBase('/brand/announcements-wordmark-ui.svg')}
         data-share-file-name={shareFileName}
         data-share-date-time={dateTimeLabel}
         data-share-place={event.venue_name || event.city || ''}
@@ -250,6 +253,8 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
           data-share-url={absolute}
           data-share-image={imageUrl || ''}
           data-share-image-type={shareImageType}
+          data-share-image-text-mode={imageTextMode}
+          data-share-brand-image={withBase('/brand/announcements-wordmark-ui.svg')}
           data-share-file-name={shareFileName}
           data-share-date-time={dateTimeLabel}
           data-share-place={event.venue_name || event.city || ''}

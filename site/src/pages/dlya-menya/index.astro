@@ -80,9 +80,15 @@ const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
       <section class="personal-page__intro" aria-label="Настройка личной ленты">
         <p>Пока у профиля недостаточно оценок, здесь показано компактное общее главное. После 2–3 лайков или отметок «Не интересно» порядок сможет учитывать ваши сигналы.</p>
         <div class="personal-page__actions" id="izbrannoe">
-          <a href={withBase('/poisk/#poisk')}>Войти через поиск</a>
+          <button type="button" data-static-auth-login data-static-auth-signed-out>Войти через Яндекс</button>
+          <p class="personal-page__identity" data-static-auth-signed-in hidden>
+            <span class="personal-page__identity-initial" data-static-auth-initial aria-hidden="true">?</span>
+            <span>Вы вошли как <strong data-static-auth-name></strong></span>
+          </p>
+          <button type="button" data-static-auth-logout data-static-auth-signed-in hidden>Выйти из аккаунта</button>
           <button type="button" data-reset-personalization>Сбросить локальные оценки</button>
         </div>
+        <p class="personal-page__auth-status" data-static-auth-status role="status" aria-live="polite" aria-atomic="true"></p>
       </section>
 
       <section class="personal-page__feed" aria-labelledby="personal-feed-title">
@@ -116,6 +122,9 @@ const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
   .personal-page__intro > p { max-width: 62ch; margin: 0; font-size: clamp(1rem, 1.6vw, 1.2rem); }
   .personal-page__actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.25rem; }
   .personal-page__actions :is(a, button) { display: inline-flex; align-items: center; min-height: 44px; padding: .65rem 1rem; border: 1px solid rgba(125, 55, 28, .25); border-radius: 999px; background: #fff; color: #753a22; font: inherit; font-weight: 800; text-decoration: none; cursor: pointer; }
+  .personal-page__identity { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; margin: 0; padding: .5rem .8rem; border: 1px solid rgba(125, 55, 28, .18); border-radius: 999px; background: #fff; }
+  .personal-page__identity-initial { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: rgba(152, 64, 31, .12); color: #753a22; font-size: .82rem; font-weight: 900; }
+  .personal-page__auth-status { margin: .7rem 0 0; color: #6d6259; font-size: .92rem; }
   .personal-page__feed,
   .personal-page__intro,
   .personal-artifacts { margin-top: 1rem; }

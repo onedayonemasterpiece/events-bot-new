@@ -13,6 +13,10 @@ test('mobile discovery composition keeps accepted calendar v23 and current Searc
   assert.equal(mobileDiscoveryHref('/segodnya/', bases), 'https://kenigevents.ru/preview-20260721-mobile-calendar-v23/segodnya/');
   assert.equal(mobileDiscoveryHref('/dlya-menya/', bases), 'https://kenigevents.ru/preview-20260721-mobile-calendar-v23/dlya-menya/');
   assert.equal(mobileDiscoveryHref('/poisk/', bases), 'https://kenigevents.ru/preview-20260721-mobile-search-runtime-v24/poisk/');
+  assert.equal(
+    mobileDiscoveryHref('/podborki/besplatnye-sobytiya/', bases),
+    'https://kenigevents.ru/preview-20260721-mobile-search-runtime-v24/podborki/besplatnye-sobytiya/',
+  );
 });
 
 test('mobile drawer calendar routes share the same resolver while unrelated routes stay local', () => {

@@ -427,6 +427,10 @@ class Event(SQLModel, table=True):
     telegraph_path: Optional[str] = None
     source_text: str
     source_texts: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    # Source-grounded organizations responsible for this concrete event.
+    # A publisher is not an organizer without an explicit curated source
+    # binding or quoted event-local LLM evidence.
+    organizer_names: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     telegraph_url: Optional[str] = None
     ics_url: Optional[str] = None
     source_post_url: Optional[str] = None

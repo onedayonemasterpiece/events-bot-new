@@ -145,6 +145,7 @@ def resolve_event_graphic_medallions(
     catalog = list(graphic_medallion_catalog())
     by_slug = {str(item.get("slug") or ""): item for item in catalog}
     location = _event_text(event, ("location_name", "location_address", "city"))
+    organizers = _event_text(event, ("organizer_names",))
     identity = _event_text(
         event,
         ("tg_source_author", "source_post_url", "source_vk_post_url", "source_urls"),
@@ -169,14 +170,20 @@ def resolve_event_graphic_medallions(
         selected_slugs.add(slug)
         selected.append({**item, "slug": slug, "asset_path": str(asset), "reason": reason})
 
-    # Organizer/venue comes first.  Do not let prose mentions attach a venue.
+    # Organizer/venue comes first. Do not let prose mentions or venue names
+    # manufacture an organizer identity.
     for item in catalog:
         slug = str(item.get("slug") or "")
         if item.get("manifest_kind") != "organizer" or slug in _FESTIVAL_OR_PROGRAM_SLUGS:
             continue
         aliases = _aliases(item)
-        if any(_bounded_match(alias, location) for alias in aliases):
+        category = str(item.get("category") or "organizer")
+        if category == "venue_brand" and any(_bounded_match(alias, location) for alias in aliases):
             add(item, "location_alias")
+        elif category == "organizer" and any(
+            _bounded_match(alias, organizers) for alias in aliases
+        ):
+            add(item, "organizer_field")
         elif not (slug == "znanie-russia" and is_kgd80) and any(
             _bounded_match(alias, identity) for alias in aliases
         ):

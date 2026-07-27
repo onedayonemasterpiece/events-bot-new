@@ -49,6 +49,26 @@ The canonical component catalog is [the static-site design system](design-system
 - Hero families remain governed by `/lab/hero/`; the default used by real pages is also visible in the design-system catalog.
 - `Button`, `Badge`, `Field` and `StatePanel` are approved primitives. New visual variants require a registry/state/check update rather than local CSS.
 
+### R14 acceptance additions, 2026-07-27
+
+- all mobile static surfaces mount the same `EventLayout` shell and
+  `Reference4MobileMenu`; Calendar/Popular may retain rail-specific internals,
+  but cannot ship a second header/drawer;
+- Search, Personal and the menu reflect one origin-scoped auth session. Login
+  is available directly from the menu; tokens never enter DOM state;
+- `Бесплатно` opens the materialized Free collection, not Search;
+- mobile OCR/document/unknown media is fully readable and never cover-cropped;
+  crop-safe visual rail media may expose up to four real source assets;
+- `visual_only` native share composes event identity and KenigEvents branding;
+  OCR/unknown shares preserve the source image;
+- Clubs has a visible sticky mobile section identity;
+- the artifact and `/artefakty/` collection are allowed only in an explicitly
+  enabled immutable noindex/secret candidate. Production/root is fail-closed.
+
+Before sign-off, run the design-system gate and public browser matrix on the
+same frozen main SHA/build id as the candidate. Passing component/source tests
+without that generated-output and browser evidence is `Partial`, not `Done`.
+
 ## Branch rule
 
 `feature/event-page-ux-lab-v3-20260710` is not mergeable as a release branch because its history mixes F17, Smart Update incident fixes, medallions/assets and generated preview data. After F11/F17 integration decisions, manually port/reimplement only the chosen UX/onboarding changes on a fresh main-based branch. Generated preview manifests are build evidence, not feature source.

@@ -1,0 +1,73 @@
+---
+const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const publishableKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
+const provider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
+const enabled = Boolean(supabaseUrl && publishableKey);
+---
+
+<div
+  data-static-site-auth-runtime
+  data-auth-enabled={enabled ? 'true' : 'false'}
+  data-supabase-url={supabaseUrl || undefined}
+  data-supabase-key={publishableKey || undefined}
+  data-yandex-provider={provider}
+  hidden
+></div>
+
+<script>
+  import { getStaticSiteAuth, staticAuthDisplayName, staticAuthUserInitial } from '../../lib/staticSiteAuth';
+
+  const runtime = document.querySelector('[data-static-site-auth-runtime]');
+  if (runtime?.dataset.authEnabled === 'true' && runtime.dataset.supabaseUrl && runtime.dataset.supabaseKey) {
+    const auth = getStaticSiteAuth({
+      supabaseUrl: runtime.dataset.supabaseUrl,
+      publishableKey: runtime.dataset.supabaseKey,
+      provider: runtime.dataset.yandexProvider || 'custom:yandex',
+    });
+
+    const render = (snapshot) => {
+      const signedIn = snapshot.status === 'signed_in' && Boolean(snapshot.user);
+      const checking = snapshot.status === 'checking';
+      const name = signedIn ? staticAuthDisplayName(snapshot.user) : '';
+      document.querySelectorAll('[data-static-auth-signed-in]').forEach((node) => { node.hidden = !signedIn; });
+      document.querySelectorAll('[data-static-auth-signed-out]').forEach((node) => { node.hidden = signedIn || checking; });
+      document.querySelectorAll('[data-static-auth-login]').forEach((node) => {
+        node.hidden = signedIn || checking;
+        if (node instanceof HTMLButtonElement) node.disabled = checking;
+      });
+      document.querySelectorAll('[data-static-auth-logout]').forEach((node) => { node.hidden = !signedIn; });
+      document.querySelectorAll('[data-static-auth-name]').forEach((node) => { node.textContent = name; });
+      document.querySelectorAll('[data-static-auth-initial]').forEach((node) => {
+        node.textContent = signedIn ? staticAuthUserInitial(name) : '?';
+      });
+      document.querySelectorAll('[data-static-auth-status]').forEach((node) => {
+        node.textContent = snapshot.message;
+        if (snapshot.status === 'error') node.setAttribute('role', 'alert');
+        else node.removeAttribute('role');
+      });
+    };
+
+    document.querySelectorAll('[data-static-auth-login]').forEach((button) => {
+      if (!(button instanceof HTMLElement)) return;
+      if (button.dataset.staticAuthBound === 'true') return;
+      button.dataset.staticAuthBound = 'true';
+      button.addEventListener('click', () => { auth.signIn().catch(() => {}); });
+    });
+    document.querySelectorAll('[data-static-auth-logout]').forEach((button) => {
+      if (!(button instanceof HTMLElement)) return;
+      if (button.dataset.staticAuthBound === 'true') return;
+      button.dataset.staticAuthBound = 'true';
+      button.addEventListener('click', () => { auth.signOut().catch(() => {}); });
+    });
+    auth.subscribe(render);
+    auth.initialize().catch(() => {});
+  } else {
+    document.querySelectorAll('[data-static-auth-login]').forEach((button) => {
+      if (button instanceof HTMLButtonElement) button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+    });
+    document.querySelectorAll('[data-static-auth-status]').forEach((node) => {
+      node.textContent = 'Вход временно недоступен.';
+    });
+  }
+</script>

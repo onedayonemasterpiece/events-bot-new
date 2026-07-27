@@ -26,13 +26,16 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(row, /displayDateRange\(event\.start_date, event\.end_date\)\.replace\(\/\\s\+—\\s\+\/u, '–'\)/u);
   assert.match(row, /const scheduleAria = compactRailDateRange\s*\? \[fullDateLine, timeLine\]\.filter\(Boolean\)\.join\(', '\)/u);
   assert.match(row, /'event-date-line--range'/u);
-  assert.match(row, /resolveMobileListingRailMedia\(event, image\)/u);
+  assert.match(row, /resolveMobileListingRailMediaItems\(event, image\)/u);
+  assert.match(row, /railMediaItems\.map\(\(railMedia, mediaIndex\)/u);
+  assert.match(row, /data-rail-gallery-index=\{mediaIndex\}/u);
+  assert.match(row, /data-mobile-rail-gallery-count=\{railMediaItems\.length\}/u);
   assert.match(row, /import Icon from '\.\.\/Icon\.astro'/u);
   assert.equal((row.match(/<Icon name="heart" \/>/gu) || []).length, 3);
   assert.doesNotMatch(row, />♥</u);
   assert.match(row, /data-feedback-action="not_interested"/u);
   assert.match(row, /data-feedback-count/u);
-  assert.match(row, /data-image-text-mode=\{selectedImageTextMode\}/u);
+  assert.match(row, /data-image-text-mode=\{railMedia\.imageTextMode\}/u);
   assert.match(row, /data-media-state="loading"/u);
   assert.match(surface, /mobile-rail-media-skeleton/u);
   assert.match(surface, /if \(img\.complete\) decodeLoaded\(\)/u);
@@ -115,7 +118,7 @@ test('today mobile rail mutes only ended or one-hour-old main media and leaves d
   assert.match(surface, /const startedEarlier = !hasExplicitEnd[\s\S]*kaliningradDate === listingDate[\s\S]*startMs <= now - 60 \* 60 \* 1000/u);
   assert.match(surface, /const state = completed \|\| elapsedListingDayWithoutEnd \? 'past' : startedEarlier \? 'started-earlier' : 'current'/u);
   assert.match(surface, /syncTodayTemporalMedia\(\);\s*if \(surface\.dataset\.mobileV23Page === 'today'\) setInterval\(syncTodayTemporalMedia, 60_000\)/u);
-  assert.match(surface, /row\.querySelector\('\.event-media'\)\?\.classList\.toggle\('is-temporally-muted', state !== 'current'\)/u);
+  assert.match(surface, /row\.querySelectorAll\('\.event-media'\)\.forEach\(\(media\) => media\.classList\.toggle\('is-temporally-muted', state !== 'current'\)\)/u);
   assert.match(surface, /\.ke-mobile-listing-rails--v23 \.event-media\.is-loaded\.is-temporally-muted>img\{opacity:\.46;filter:grayscale\(\.72\) saturate\(\.32\)\}/u);
   assert.doesNotMatch(surface, /\.event-row\.is-temporally-muted|\.event-medallion[^}]*filter:/u);
 });
@@ -154,19 +157,28 @@ test('accepted sticky hierarchy and straight 48x23 arrow are literal contracts',
 });
 
 test('A-tail artifact is opt-in for noindex research and hard-blocked in production', async () => {
-  const [weekend, row, artifact] = await Promise.all([
+  const [weekend, currentWeekend, adjacentWeekend, row, artifact, artifactsLib] = await Promise.all([
     read('src/components/listings/WeekendListingSurface.astro'),
+    read('src/pages/vyhodnye/index.astro'),
+    read('src/pages/vyhodnye/[start].astro'),
     read('src/components/listings/MobileListingRailRow.astro'),
     read('src/components/listings/AmberRailArtifact.astro'),
+    read('src/lib/artifactRuntime.mjs'),
   ]);
-  assert.match(weekend, /!IS_PRODUCTION[\s\S]*PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH === 'tail'/u);
-  assert.match(weekend, /AMBER_ARTIFACT_EVENT_ID = 6939/u);
-  assert.match(weekend, /events\.find\(\(event\) => event\.start_date === start\)/u);
+  assert.match(currentWeekend, /isAmberArtifactResearchEnabled\(\s*SITE_MODE,\s*import\.meta\.env\.PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH/u);
+  assert.match(currentWeekend, /selectAmberArtifactEventId\(events/u);
+  assert.match(currentWeekend, /PUBLIC_STATIC_RELEASE_ID[\s\S]*\|\| PREVIEW_BUILD_ID/u);
+  assert.match(currentWeekend, /amberArtifactTailEventId=\{amberArtifactTailEventId\}/u);
+  assert.doesNotMatch(adjacentWeekend, /amberArtifactTailEventId/u);
+  assert.match(artifactsLib, /siteMode !== 'production' && flag === 'tail'/u);
+  assert.match(artifactsLib, /stableArtifactHash\(`\$\{AMBER_ARTIFACT_ID\}:assignment-v1:\$\{String\(seed\)\}`\) % candidates\.length/u);
+  assert.doesNotMatch(weekend, /6939|PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH|IS_PRODUCTION/u);
   assert.match(row, /<button[\s\S]*class="event-like-cta"[\s\S]*<\/button>\s*\{amberArtifactTail && <AmberRailArtifact/u);
   assert.match(artifact, /\.amber-artifact\{[^}]*flex:0 0 94px;width:94px;height:112px/u);
   assert.match(artifact, /\.amber-artifact__visual\{[^}]*width:74px;height:96px/u);
   assert.match(artifact, /entry\.intersectionRatio < \.72/u);
-  assert.match(artifact, /localStorage\.setItem\(storageKey, 'found'\)/u);
+  assert.match(artifact, /collectAmberArtifact/u);
+  assert.match(artifact, /location\.assign\(button\.dataset\.artifactDetailUrl/u);
   assert.doesNotMatch(artifact, /sqlite|supabase|fetch\(/iu);
 });
 

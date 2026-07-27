@@ -163,7 +163,9 @@ for (const width of [320, 390]) {
   const page = await context.newPage();
   await page.goto(`${baseUrl}/vyhodnye/`, { waitUntil: 'domcontentloaded' });
   assert.equal(await page.locator('[data-amber-artifact-research="tail"]').count(), 1);
-  const row = page.locator('[data-mobile-listing-row][data-event-id="6939"]');
+  const artifact = page.locator('[data-amber-artifact]');
+  assert.equal(await artifact.count(), 1);
+  const row = artifact.locator('xpath=ancestor::*[@data-mobile-listing-row]');
   const rail = row.locator('.rail-window');
   await rail.evaluate((node) => { node.scrollLeft = node.scrollWidth; });
   const order = await row.locator('.event-track').evaluate((node) =>
@@ -171,13 +173,14 @@ for (const width of [320, 390]) {
       .filter((child) => child.matches('.event-link,.event-like-cta,[data-amber-artifact]'))
       .map((child) => child.matches('.event-link') ? 'link' : child.matches('.event-like-cta') ? 'like' : 'artifact'));
   assert.deepEqual(order.slice(-2), ['like', 'artifact']);
-  const artifactBox = await row.locator('[data-amber-artifact]').boundingBox();
+  const artifactBox = await artifact.boundingBox();
   closeEnough(artifactBox.width, 94);
   closeEnough(artifactBox.height, 112);
-  await page.waitForFunction(() => document.querySelector('[data-event-id="6939"] [data-amber-artifact]')?.classList.contains('is-awake'));
-  await row.locator('[data-amber-artifact]').click();
-  assert.equal(await row.locator('[data-amber-artifact]').getAttribute('aria-pressed'), 'true');
-  assert.equal(await page.evaluate(() => localStorage.getItem('ke_amber_artifact_prototype_v1:tail')), 'found');
+  await page.waitForFunction(() => document.querySelector('[data-amber-artifact]')?.classList.contains('is-awake'));
+  await artifact.click();
+  assert.equal(await artifact.getAttribute('aria-pressed'), 'true');
+  const collection = await page.evaluate(() => JSON.parse(localStorage.getItem('ke_artifact_collection_v1') || 'null'));
+  assert.equal(collection?.artifacts?.amber_cosmonaut?.status, 'found');
   await context.close();
 }
 

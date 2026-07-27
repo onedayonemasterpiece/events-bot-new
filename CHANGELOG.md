@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added an explicitly gated immutable-noindex artifact research flow with one
+  deterministic real weekend-event placement. The earlier five-slot donor
+  surface is superseded by the concrete eight-slot child route, while
+  `/artefakty/` remains the editorial registry; both routes remain fail-closed
+  in ordinary production and share one backward-compatible local state module.
+- Added the complete DB-export-backed
+  `/podborki/besplatnye-sobytiya/` collection with ongoing-event and explicit
+  occurrence-family handling.
+- Added bounded structured `organizer_names` persistence and Smart Update
+  extraction plus exact source bindings for Профи-тур and Хранители руин.
 - Added a noindex concrete collection prototype at
   `/artefakty/kollektsii/znaki-yantarnogo-kraya/`: it shows the requested
   `1 found / 7 anonymous locked` state, uses the real worked

@@ -362,6 +362,21 @@ def row_get(row: sqlite3.Row, key: str, default: Any = None) -> Any:
         return default
 
 
+def event_organizer_names(value: Any) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for raw_name in read_json(value, []):
+        name = clean_text(raw_name)
+        key = name.casefold()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        names.append(name)
+        if len(names) >= 8:
+            break
+    return names
+
+
 def event_age_projection(row: sqlite3.Row) -> dict[str, Any]:
     """Project stored fields only; never infer an age from rendered prose."""
 
@@ -1898,6 +1913,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     slug_parts = [slugify(title), slugify(city or venue or "kaliningrad")]
     slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
     source_url = source_urls[0] if source_urls else None
+    organizer_names = event_organizer_names(row_get(row, "organizer_names"))
     age_projection = event_age_projection(row)
     return {
         "id": event_id,
@@ -1906,6 +1922,7 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "slug": slug,
         "event_type": event_type,
         "festival": clean_text(row["festival"]) or None,
+        "organizer_names": organizer_names,
         "status_label": status,
         "lifecycle_status": clean_text(row["lifecycle_status"]) or "active",
         "starts_at": starts_at,

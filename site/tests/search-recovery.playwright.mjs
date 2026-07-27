@@ -138,7 +138,9 @@ test('authenticated Search recovers from missing headers and stalled streams', {
           const body = JSON.parse(String(init.body || '{}'));
           const accept = new Headers(init.headers).get('accept') || '';
           window.__r11SearchCalls.push({ query: body.query, accept, body });
-          if (body.query === 'заголовки не пришли') return new Promise(() => {});
+          if (body.query === 'заголовки не пришли' && accept.includes('application/x-ndjson')) {
+            return new Promise(() => {});
+          }
           if (accept.includes('application/json')) {
             if (body.query === 'ответ тоже замер') {
               return Promise.resolve(new Response(new ReadableStream({ start() {} }), {
@@ -192,17 +194,37 @@ test('authenticated Search recovers from missing headers and stalled streams', {
 
       await input.fill('заголовки не пришли');
       await form.evaluate((node) => node.requestSubmit());
-      await page.waitForFunction(() => /нестабильной связи/u.test(document.querySelector('[data-search-status]')?.textContent || ''));
+      await page.waitForSelector('[data-search-results] [data-event-card][data-event-id="7003"]');
       assert.equal(await input.isEditable(), true);
       assert.equal(await button.isEnabled(), true);
       assert.equal(await button.getAttribute('aria-busy'), 'false');
       assert.equal(await skeletons.isHidden(), true);
-      assert.equal(await progress.isHidden(), true);
-      assert.equal(
-        await page.evaluate(() => window.__r11SearchCalls.filter((call) => call.query === 'заголовки не пришли').length),
-        1,
-      );
+      const headerRescueCalls = await page.evaluate(() => (
+        window.__r11SearchCalls.filter((call) => call.query === 'заголовки не пришли')
+      ));
+      assert.equal(headerRescueCalls.length, 2, 'a header timeout receives exactly one JSON rescue');
+      assert.match(headerRescueCalls[0].accept, /application\/x-ndjson/u);
+      assert.match(headerRescueCalls[1].accept, /application\/json/u);
+      assert.equal(headerRescueCalls[1].body.stream_rescue, true);
+      assert.equal(headerRescueCalls[1].body.use_llm_verifier, false);
 
+      assert.equal(await input.getAttribute('enterkeyhint'), 'search');
+      await input.fill('ввод через ime');
+      await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+      await page.waitForTimeout(30);
+      assert.equal(
+        await page.evaluate(() => window.__r11SearchCalls.filter((call) => call.query === 'ввод через ime').length),
+        0,
+        'IME composition Enter must not submit an incomplete query',
+      );
+      await input.fill('поиск энтером');
+      await input.press('Enter');
+      await page.waitForFunction(() => (
+        window.__r11SearchCalls.filter((call) => call.query === 'поиск энтером').length === 2
+      ));
+      assert.equal(await input.inputValue(), 'поиск энтером', 'Enter submits instead of inserting a newline');
+
+      const cancellationsBeforeIdleRescue = await page.evaluate(() => window.__r11StreamCancelCount);
       await input.fill('поток замер');
       await form.evaluate((node) => node.requestSubmit());
       await page.waitForSelector('[data-search-results] [data-event-card][data-event-id="7003"]');
@@ -217,7 +239,10 @@ test('authenticated Search recovers from missing headers and stalled streams', {
       assert.match(rescueCalls[1].accept, /application\/json/u);
       assert.equal(rescueCalls[1].body.stream_rescue, true);
       assert.equal(rescueCalls[1].body.use_llm_verifier, false);
-      assert.equal(await page.evaluate(() => window.__r11StreamCancelCount), 1);
+      assert.equal(
+        await page.evaluate(() => window.__r11StreamCancelCount),
+        cancellationsBeforeIdleRescue + 1,
+      );
 
       await input.fill('ответ тоже замер');
       await form.evaluate((node) => node.requestSubmit());

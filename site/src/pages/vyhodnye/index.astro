@@ -2,7 +2,8 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import WeekendListingSurface from '../../components/listings/WeekendListingSurface.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getAvailableWeekendRanges, getCurrentDate, getWeekendEvents, getWeekendRange, SITE_NAME } from '../../lib/events';
+import { absoluteUrl, getAvailableWeekendRanges, getCurrentDate, getWeekendEvents, getWeekendRange, PREVIEW_BUILD_ID, SITE_MODE, SITE_NAME } from '../../lib/events';
+import { isAmberArtifactResearchEnabled, selectAmberArtifactEventId } from '../../lib/artifactRuntime.mjs';
 
 const events = getWeekendEvents();
 const weekend = getWeekendRange();
@@ -10,6 +11,20 @@ const ranges = getAvailableWeekendRanges();
 const index = ranges.findIndex((range) => range.start === weekend.start);
 const previousRange = index > 0 ? ranges[index - 1] : null;
 const nextRange = index >= 0 && index < ranges.length - 1 ? ranges[index + 1] : null;
+const amberArtifactResearchEnabled = isAmberArtifactResearchEnabled(
+  SITE_MODE,
+  import.meta.env.PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH,
+);
+const amberArtifactAssignmentSeed =
+  import.meta.env.PUBLIC_STATIC_RELEASE_ID
+  || PREVIEW_BUILD_ID;
+const amberArtifactTailEventId = amberArtifactResearchEnabled
+  ? selectAmberArtifactEventId(events, {
+      seed: amberArtifactAssignmentSeed,
+      start: weekend.start,
+      end: weekend.end,
+    })
+  : null;
 const rangeLinks = ranges.slice(Math.max(0, index), Math.min(ranges.length, Math.max(0, index) + 6)).map((range) => ({
   href: range.start === weekend.start ? '/vyhodnye/' : `/vyhodnye/${range.start}/`,
   label: range.label,
@@ -28,6 +43,7 @@ const rangeLinks = ranges.slice(Math.max(0, index), Math.min(ranges.length, Math
       previous={previousRange ? { href: `/vyhodnye/${previousRange.start}/`, label: previousRange.label } : null}
       next={nextRange ? { href: `/vyhodnye/${nextRange.start}/`, label: nextRange.label } : null}
       ranges={rangeLinks}
+      amberArtifactTailEventId={amberArtifactTailEventId}
     />
     <div class="ke-listing-shell"><PersonalFeedSlot context="weekend" /></div>
   </main>

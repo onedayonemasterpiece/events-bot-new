@@ -50,6 +50,18 @@ VK_USE_PYMORPHY = os.getenv("VK_USE_PYMORPHY", "false").lower() == "true"
 # Sentinel used to flag posts awaiting poster OCR before keyword/date checks.
 OCR_PENDING_SENTINEL = "__ocr_pending__"
 
+# Explicit self-publisher bindings. This is deliberately not derived from the
+# generic vk_source.name: aggregators and venue/community publishers must not
+# silently become organizers of every event they post.
+_CURATED_VK_EVENT_ORGANIZERS: dict[int, tuple[str, ...]] = {
+    12286984: ("Профи-тур",),
+    190663987: ("Хранители руин",),
+}
+
+
+def _curated_vk_event_organizers(group_id: int | None) -> list[str]:
+    return list(_CURATED_VK_EVENT_ORGANIZERS.get(int(group_id or 0), ()))
+
 HISTORY_MATCHED_KEYWORD = "history"
 
 _VK_PARSE_PREFILTER_VISIT_HINT_RE = re.compile(
@@ -4080,6 +4092,7 @@ async def persist_event_and_pages(
         search_digest=draft.search_digest,
         raw_excerpt=draft.description or "",
         posters=posters,
+        organizer_names=_curated_vk_event_organizers(vk_source_chat_id),
     )
 
     update_result = await smart_event_update(

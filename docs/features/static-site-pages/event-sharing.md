@@ -4,7 +4,13 @@
 
 ## Current contract
 
-The event page attempts native Web Share with image file, text and canonical URL; falls back to a generated 1080×1350 canvas image; finally falls back to text/URL copy. Open Graph metadata supports link previews.
+The event page attempts native Web Share with image file, text and canonical
+URL. For a source-classified `visual_only` photo it first composes a 1080×1350
+PNG with the actual KenigEvents wordmark, event title, date/time, place and
+admission. OCR/document and unknown media are never cropped or repainted: they
+use the original image. If source fetch/composition/file sharing is unavailable,
+the existing generated text-first 1080×1350 fallback is used, then text/URL
+copy. Open Graph metadata supports link previews.
 
 ## Production requirement
 
@@ -25,3 +31,8 @@ Assets are keyed by event id plus content/media version, published before page p
 - no stale image after cancellation/reschedule;
 - provider/app fallback and latency/error metrics;
 - share failure never blocks ordinary navigation.
+
+The same `data-share-image-text-mode` and base-aware brand asset contract is
+required on authored event/detail/card controls and cards hydrated later by the
+Search/continuation runtime. A page-local share implementation or a raw
+`visual_only` photo without event identity blocks release.
