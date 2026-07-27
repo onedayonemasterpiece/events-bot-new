@@ -22,6 +22,14 @@ export type SearchLearningItem = MaterializedSearchCollection | SearchQueryExamp
 export const materializedSearchCollections: MaterializedSearchCollection[] = [
   {
     kind: 'materialized',
+    slug: 'besplatnye-sobytiya',
+    phrase: 'бесплатные события',
+    title: 'Бесплатные события',
+    description: 'Все актуальные события с подтверждённым бесплатным входом, включая продолжающиеся выставки.',
+    criteria: 'Событие активно, ещё не закончилось, а в выгрузке афиши вход подтверждён как бесплатный.',
+  },
+  {
+    kind: 'materialized',
     slug: 'dzhaz-na-vyhodnyh',
     phrase: 'джаз на ближайших выходных',
     title: 'Джаз на ближайших выходных',
@@ -82,6 +90,13 @@ function isPublicFutureEvent(event: PreviewEvent, currentDate: string): boolean 
   return event.lifecycle_status === 'active' && (event.end_date || event.start_date) >= currentDate;
 }
 
+export function getMaterializedSearchCollectionDateRange(
+  slug: string,
+): { start: string; end: string } | null {
+  if (slug !== 'dzhaz-na-vyhodnyh') return null;
+  return nearestWeekend(getMaterializedSearchCollectionReferenceDate());
+}
+
 export function getMaterializedSearchCollection(slug: string): MaterializedSearchCollection | undefined {
   return materializedSearchCollections.find((collection) => collection.slug === slug);
 }
@@ -96,6 +111,8 @@ export function getMaterializedSearchCollectionEvents(slug: string): PreviewEven
     matches = events.filter((event) => event.start_date >= weekend.start
       && event.start_date <= weekend.end
       && /джаз/iu.test(event.title));
+  } else if (slug === 'besplatnye-sobytiya') {
+    matches = events.filter((event) => event.ticket.is_free);
   } else if (slug === 'besplatno-s-detmi') {
     matches = events.filter((event) => event.ticket.is_free
       && event.topics.some((topic) => topic === 'FAMILY' || topic === 'KIDS_SCHOOL'));
@@ -106,5 +123,16 @@ export function getMaterializedSearchCollectionEvents(slug: string): PreviewEven
       && event.topics.includes('STANDUP'));
   }
 
-  return collapseOccurrenceCards(matches, 'per-family').slice(0, 24);
+  const collapsed = collapseOccurrenceCards(matches, 'per-family');
+  return slug === 'besplatnye-sobytiya' ? collapsed : collapsed.slice(0, 24);
+}
+
+export function getMaterializedSearchCollectionFallbackEvents(slug: string): PreviewEvent[] {
+  if (slug !== 'dzhaz-na-vyhodnyh') return [];
+  const currentDate = getMaterializedSearchCollectionReferenceDate();
+  const weekend = nearestWeekend(currentDate);
+  const matches = getEvents().filter((event) => isPublicFutureEvent(event, currentDate)
+    && event.start_date > weekend.end
+    && /джаз/iu.test(event.title));
+  return collapseOccurrenceCards(matches, 'per-family').slice(0, 3);
 }

@@ -4,11 +4,13 @@ import Breadcrumbs from '../../../components/Breadcrumbs.astro';
 import EventLayout from '../../../layouts/EventLayout.astro';
 import {
   getMaterializedSearchCollection,
+  getMaterializedSearchCollectionDateRange,
   getMaterializedSearchCollectionEvents,
+  getMaterializedSearchCollectionFallbackEvents,
   getMaterializedSearchCollectionReferenceDate,
   materializedSearchCollections,
 } from '../../../data/searchCollections';
-import { absoluteUrl, getPreviewBuild, siteHomeHref, SITE_NAME, withBase } from '../../../lib/events';
+import { absoluteUrl, displayDateValue, getPreviewBuild, siteHomeHref, SITE_NAME, withBase } from '../../../lib/events';
 
 export function getStaticPaths() {
   return materializedSearchCollections.map((collection) => ({ params: { slug: collection.slug } }));
@@ -18,6 +20,8 @@ const { slug } = Astro.params;
 const collection = getMaterializedSearchCollection(String(slug));
 if (!collection) throw new Error(`Unknown materialized Search collection: ${slug}`);
 const events = getMaterializedSearchCollectionEvents(collection.slug);
+const collectionDateRange = getMaterializedSearchCollectionDateRange(collection.slug);
+const fallbackEvents = events.length ? [] : getMaterializedSearchCollectionFallbackEvents(collection.slug);
 const canonicalUrl = absoluteUrl(`/podborki/${collection.slug}/`);
 const title = `${collection.title} | ${SITE_NAME}`;
 const updatedDate = getPreviewBuild().current_date;
@@ -52,10 +56,30 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
               {events.map((event) => <EventCard event={event} mobileFlowMedia />)}
             </div>
           ) : (
-            <p class="muted-note">Критерии оставлены без расширения: мы не добавляем похожие события только ради заполнения страницы.</p>
+            <>
+              {collectionDateRange && (
+                <p class="muted-note" data-search-collection-empty-window>
+                  На ближайшие выходные, {displayDateValue(collectionDateRange.start)} — {displayDateValue(collectionDateRange.end)}, событий с джазом в названии в актуальной выгрузке нет.
+                </p>
+              )}
+              <p class="muted-note">Критерии оставлены без расширения: мы не добавляем похожие события только ради заполнения страницы.</p>
+            </>
           )}
         </div>
       </section>
+
+      {fallbackEvents.length > 0 && (
+        <section class="section-card collection-results" aria-labelledby="collection-fallback-title" data-search-collection-fallback>
+          <div class="section-card__inner">
+            <p class="eyebrow">После этих выходных</p>
+            <h2 id="collection-fallback-title">Ближайшие события с джазом в названии</h2>
+            <p class="muted-note">Это не совпадения подборки выше, а следующие подтверждённые события из той же актуальной выгрузки.</p>
+            <div class="cards-grid">
+              {fallbackEvents.map((event) => <EventCard event={event} mobileFlowMedia />)}
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   </main>
 </EventLayout>

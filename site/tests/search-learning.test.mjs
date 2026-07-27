@@ -68,6 +68,24 @@ test('collection claims are explicit and derived from actual event fields', () =
   assert.doesNotMatch(collections, /similar|embedding|inference/iu);
 });
 
+test('general free collection is complete, DB-export-backed and keeps ongoing events', () => {
+  assert.match(collections, /slug: 'besplatnye-sobytiya'/u);
+  assert.match(collections, /slug === 'besplatnye-sobytiya'[\s\S]*event\.ticket\.is_free/u);
+  assert.match(collections, /\(event\.end_date \|\| event\.start_date\) >= currentDate/u);
+  assert.match(collections, /return slug === 'besplatnye-sobytiya' \? collapsed : collapsed\.slice\(0, 24\)/u);
+  assert.match(collectionPage, /getMaterializedSearchCollectionEvents\(collection\.slug\)/u);
+});
+
+test('empty Jazz weekend remains truthful and links only later real Jazz events', () => {
+  assert.match(collections, /getMaterializedSearchCollectionDateRange/u);
+  assert.match(collections, /event\.start_date > weekend\.end/u);
+  assert.match(collections, /\/джаз\/iu\.test\(event\.title\)/u);
+  assert.match(collectionPage, /data-search-collection-empty-window/u);
+  assert.match(collectionPage, /событий с джазом в названии в актуальной выгрузке нет/u);
+  assert.match(collectionPage, /data-search-collection-fallback/u);
+  assert.match(collectionPage, /Это не совпадения подборки выше/u);
+});
+
 test('search progress stays backend-owned while its visible surface is the submit button', () => {
   assert.match(donor, /data-search-form/u);
   assert.match(donor, /data-search-submit/u);
