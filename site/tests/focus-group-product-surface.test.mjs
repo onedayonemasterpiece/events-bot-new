@@ -20,8 +20,9 @@ test('invite intake and secret hub state the local marker boundary', async () =>
     read('../src/lib/focus-group-prototype.ts'),
   ]);
   assert.match(intake, /history\.replaceState/u);
-  assert.match(intake, /временная метка просмотра на 72 часа/u);
-  assert.match(intake, /не вход и не защита/u);
+  assert.match(intake, /метка текущего периода фокус-группы/u);
+  assert.match(intake, /не зависит[\s\S]*от настроек «Для меня»/u);
+  assert.match(intake, /не подтверждение личности и не защита/u);
   assert.match(secret, /UX-проверка, а не проверка авторизации/u);
   assert.match(secret, /readFocusPreviewMarker/u);
   assert.match(helper, /FOCUS_PREVIEW_MAX_BYTES = 384/u);
