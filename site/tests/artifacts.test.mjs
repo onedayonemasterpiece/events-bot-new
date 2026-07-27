@@ -109,10 +109,11 @@ test('legacy placement bit migrates without a server and storage failures keep c
 });
 
 test('collection surface has finite hints, accessible detail and a truly disabled coming-soon share', async () => {
-  const [component, page, rail] = await Promise.all([
+  const [component, page, rail, productionCheck] = await Promise.all([
     readFile(new URL('../src/components/artifacts/ArtifactCollection.astro', import.meta.url), 'utf8'),
     readFile(new URL('../src/pages/artefakty/index.astro', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/listings/AmberRailArtifact.astro', import.meta.url), 'utf8'),
+    readFile(new URL('../scripts/check-production.mjs', import.meta.url), 'utf8'),
   ]);
   assert.match(component, /ARTIFACT_COLLECTION_SLOTS\.map/u);
   assert.match(component, /Только на этом устройстве/u);
@@ -126,4 +127,6 @@ test('collection surface has finite hints, accessible detail and a truly disable
   assert.match(page, /artifactResearchEnabled \? <ArtifactCollection \/>/u);
   assert.match(rail, /data-artifact-detail-url/u);
   assert.match(rail, /location\.assign/u);
+  assert.match(productionCheck, /artifact research leaked into production weekend listing/u);
+  assert.match(productionCheck, /artifact collection leaked into production/u);
 });

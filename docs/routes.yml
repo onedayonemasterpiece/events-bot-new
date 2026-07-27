@@ -322,6 +322,7 @@ features:
     release_umbrella: docs/features/static-personal-announcements/README.md
     release_readiness: docs/reports/static-personal-announcements-release-readiness-2026-07-11.md
     design_system: docs/features/static-site-pages/design-system/README.md
+    release_ui_contract: docs/features/static-site-pages/release-ui-contract.md
     design_system_runtime:
       tokens: site/src/styles/design-system.css
       primitives: site/src/components/design-system/

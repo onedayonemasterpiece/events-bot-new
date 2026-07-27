@@ -4277,7 +4277,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           card.querySelectorAll('.event-card__feedback').forEach((group) => group.setAttribute('aria-label', `Оценить событие: ${data.title}`));
           card.querySelectorAll('.event-card__utility-row').forEach((group) => group.setAttribute('aria-label', `Дополнительные действия: ${data.title}`));
 
-          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowIndex', 'labRowColumn', 'labMediaTreatment', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop', 'labRowCost'];
+          const relatedKeys = ['labRelatedCard', 'labMediaKind', 'labMediaRatio', 'labRowMedia', 'labRowIndex', 'labRowColumn', 'labMediaTreatment', 'labCropReason', 'labCoverCrop', 'labPotentialCoverCrop', 'labRowWorstCrop', 'labRowCost'];
           for (const key of relatedKeys) delete card.dataset[key];
           delete card.dataset.cardMediaPresentation;
           delete card.dataset.cardMediaTreatment;
@@ -4292,6 +4292,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
             setRuntimeCardDataset(card, 'labRowIndex', relatedLayout.rowIndex);
             setRuntimeCardDataset(card, 'labRowColumn', relatedLayout.rowColumn);
             setRuntimeCardDataset(card, 'labMediaTreatment', relatedLayout.mediaTreatment);
+            setRuntimeCardDataset(card, 'labCropReason', relatedLayout.cropReason);
             setRuntimeCardDataset(card, 'labCoverCrop', Number(relatedLayout.coverCrop).toFixed(4));
             setRuntimeCardDataset(card, 'labPotentialCoverCrop', Number(relatedLayout.potentialCoverCrop).toFixed(4));
             setRuntimeCardDataset(card, 'labRowWorstCrop', Number(relatedLayout.rowWorstCrop).toFixed(4));

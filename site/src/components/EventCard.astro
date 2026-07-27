@@ -131,6 +131,7 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
   data-lab-row-index={desktopRelatedLayout ? String(desktopRelatedLayout.rowIndex) : undefined}
   data-lab-row-column={desktopRelatedLayout ? String(desktopRelatedLayout.rowColumn) : undefined}
   data-lab-media-treatment={desktopRelatedLayout ? cardCrop.mediaTreatment : undefined}
+  data-lab-crop-reason={desktopRelatedLayout ? cardCrop.cropReason : undefined}
   data-lab-cover-crop={desktopRelatedLayout ? fixedLayoutMetric(cardCrop.coverCrop, 4) : undefined}
   data-lab-potential-cover-crop={desktopRelatedLayout ? fixedLayoutMetric(cardCrop.potentialCoverCrop, 4) : undefined}
   data-lab-row-worst-crop={fixedLayoutMetric(desktopRelatedLayout?.rowWorstCrop, 4)}

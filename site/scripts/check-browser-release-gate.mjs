@@ -314,6 +314,7 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
       ? Math.max(bodyRect?.top || 0, ...Array.from(body.children).map((child) => child.getBoundingClientRect().bottom))
       : 0;
     const treatment = card.getAttribute('data-lab-media-treatment') || '';
+    const cropReason = card.getAttribute('data-lab-crop-reason') || '';
     const mediaKind = card.getAttribute('data-lab-media-kind') || '';
     const actualCrop = image?.naturalWidth > 0 && image?.naturalHeight > 0 && shellRect?.width > 0 && shellRect?.height > 0
       ? Math.max(0, 1 - Math.min((image.naturalWidth / image.naturalHeight) / (shellRect.width / shellRect.height), (shellRect.width / shellRect.height) / (image.naturalWidth / image.naturalHeight)))
@@ -323,7 +324,7 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     // `contain` leaves the ratio loss the owner saw as 22%/32% bands.
     const unusedFrameRatio = objectFit === 'contain' ? actualCrop : 0;
     return {
-      id: card.getAttribute('data-event-id'), row: card.getAttribute('data-lab-row-index'), treatment, mediaKind,
+      id: card.getAttribute('data-event-id'), row: card.getAttribute('data-lab-row-index'), treatment, cropReason, mediaKind,
       coverCrop: Number(card.getAttribute('data-lab-cover-crop') || 0), rowWorstCrop: Number(card.getAttribute('data-lab-row-worst-crop') || 0), actualCrop, unusedFrameRatio,
       card: { top: cardRect.top, left: cardRect.left, right: cardRect.right, bottom:cardRect.bottom, width: cardRect.width, height:cardRect.height },
       shell: shellRect ? { top: shellRect.top, left: shellRect.left, right: shellRect.right, width: shellRect.width, height: shellRect.height } : null,
@@ -363,9 +364,9 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
     }
     if (item.imageMissing) invariant(item.fallbackVisible, `card ${item.id} lost its fallback after image failure`);
     // The serialized treatment is the source-of-truth contract produced by
-    // resolveRelatedCardMediaTreatment(). Product acceptance additionally
-    // requires every preview to fill its canonical card. OCR/documents may
-    // crop only inside their explicit 20% budget.
+    // resolveRelatedCardMediaTreatment(). Classified OCR/documents may cover
+    // only inside their explicit 20% budget. Unknown/error media has no
+    // positive crop evidence and must instead remain whole, fail closed.
     const expectedFit = expectedObjectFitForTreatment(item.treatment);
     invariant(item.objectFit === expectedFit, `card ${item.id} crop mode ${item.objectFit} != ${expectedFit}`);
     if (item.mediaKind === 'visual') {
@@ -373,10 +374,19 @@ async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
       invariant(item.unusedFrameRatio <= 0.001, `visual card ${item.id} leaves ${(item.unusedFrameRatio * 100).toFixed(1)}% of its media frame unused`);
     }
     if (item.mediaKind === 'document') {
-      invariant(item.treatment === 'document-safe-cover' && item.objectFit === 'cover', `document card ${item.id} leaves fields as ${item.treatment}/${item.objectFit}`);
-      invariant(item.unusedFrameRatio <= 0.001, `document card ${item.id} leaves ${(item.unusedFrameRatio * 100).toFixed(1)}% of its media frame unused`);
-      invariant(item.coverCrop <= 0.2001, `card ${item.id} exceeds the 20% document crop contract: cover=${item.coverCrop}`);
-      invariant(item.actualCrop <= 0.205, `card ${item.id} visually crops ${item.actualCrop}`);
+      if (item.treatment === 'document-safe-cover') {
+        invariant(item.objectFit === 'cover', `bounded document card ${item.id} does not cover its frame`);
+        invariant(item.unusedFrameRatio <= 0.001, `bounded document card ${item.id} leaves ${(item.unusedFrameRatio * 100).toFixed(1)}% of its media frame unused`);
+        invariant(item.coverCrop <= 0.2001, `card ${item.id} exceeds the 20% document crop contract: cover=${item.coverCrop}`);
+        invariant(item.actualCrop <= 0.205, `card ${item.id} visually crops ${item.actualCrop}`);
+      } else {
+        invariant(item.treatment === 'document-contain' && item.objectFit === 'contain', `fail-closed document card ${item.id} has invalid ${item.treatment}/${item.objectFit}`);
+        invariant(
+          ['semantic_error_fail_closed', 'unknown_media_fail_closed', 'document_dimensions_unknown'].includes(item.cropReason),
+          `document card ${item.id} contains without a fail-closed reason: ${item.cropReason || '(missing)'}`,
+        );
+        invariant(item.coverCrop === 0, `fail-closed document card ${item.id} exposes a numeric crop claim`);
+      }
     }
   }
   const rows = new Map();

@@ -63,6 +63,17 @@ for (const path of [
   'robots.txt',
   'sitemap.xml',
 ]) required(path);
+const productionWeekendSource = html('vyhodnye/index.html');
+if (
+  productionWeekendSource.includes('data-amber-artifact')
+  || productionWeekendSource.includes('kenigevents:artifact-collected')
+) fail('artifact research leaked into production weekend listing');
+const productionArtifactSource = html('artefakty/index.html');
+if (
+  productionArtifactSource.includes('data-artifact-collection')
+  || productionArtifactSource.includes('artifact-detail-title')
+  || !productionArtifactSource.includes('Коллекция пока недоступна')
+) fail('artifact collection leaked into production');
 const freeCollectionSource = html('podborki/besplatnye-sobytiya/index.html');
 const freeCollectionResults = freeCollectionSource.slice(
   freeCollectionSource.indexOf('data-search-collection-results'),
