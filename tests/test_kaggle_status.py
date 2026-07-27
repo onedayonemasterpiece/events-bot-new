@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import importlib.util
 import sqlite3
@@ -168,6 +169,42 @@ async def test_run_config_can_atomically_reject_duplicate_slot(tmp_path, monkeyp
     )
     assert first is not None
     assert second is None
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_parallel_parser_run_configs_use_isolated_transactions(tmp_path, monkeypatch):
+    """Three parallel parser kernels must not share one SQLite transaction."""
+
+    monkeypatch.setenv(
+        "KAGGLE_STATUS_CALLBACK_URL",
+        "https://example.test/internal/kaggle/run-event",
+    )
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    configs = await asyncio.gather(
+        *(
+            create_kaggle_run_config(
+                db,
+                run_id=f"parser:Parse{source}:parallel",
+                session_id=None,
+                kind="parser_kernel",
+                notebook=f"Parse{source}",
+            )
+            for source in ("Theatres", "Philharmonia", "Qtickets")
+        )
+    )
+
+    assert all(config is not None for config in configs)
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT notebook FROM kaggle_run_ledger "
+            "WHERE run_id LIKE 'parser:Parse%:parallel' ORDER BY notebook"
+        )
+        notebooks = [row[0] for row in await cur.fetchall()]
+        await cur.close()
+    assert notebooks == ["ParsePhilharmonia", "ParseQtickets", "ParseTheatres"]
     await db.close()
 
 

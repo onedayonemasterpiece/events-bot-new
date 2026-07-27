@@ -1,44 +1,62 @@
-# Philharmonia Parser (Филармония)
+# Парсер Калининградской областной филармонии
 
-> **Linear Task:** [EVE-21](https://linear.app/events-bot-new/issue/EVE-21/parsing-sajta-filarmonii-deep-parsing-and-formatting)
-> **Status:** 🚧 Partially Implemented
-> **Implemented:** Basic List Parsing (Title, Date, Time)
-> **Not Implemented:** Deep Parsing (Detail Page), Program Formatting
+Статус: production, Kaggle-backed `/parse` source.
 
-## 1. Обзор
-Парсинг событий Калининградской областной филармонии.
-*   **Источник:** `teatr39.ru` (или актуальный сайт филармонии)
-*   **Метод:** Kaggle Notebook (Selenium/BeautifulSoup)
+## Источник и контракт
 
-## 2. Требования к Парсингу
+- Официальная афиша: `https://filarmonia39.ru/afisha/`.
+- Kernel: `kaggle/ParsePhilharmonia/` (`zigomaro/parse-philharmonia`).
+- Результат: `philharmonia_results.json`.
+- Production boundary: `source_parsing/philharmonia.py` → общий Smart Update.
+- Provenance: принятый результат обязан создать `event_source` с
+  `source_type=philharmonia` / parser provenance, даже если событие уже было
+  найдено через VK или Telegram.
 
-### 2.1. Basic Parsing (Implemented ✅)
-*   Сбор списка событий с главной страницы афиши.
-*   Извлечение базовых полей: Название, Дата, Время, Ссылка на билеты.
+Парсер не использует старые month URL `/?event&m=...` и не зависит от
+Playwright. Он загружает текущий каталог и детальные страницы обычным HTTP:
 
-### 2.2. Deep Parsing (Not Implemented / Bug ❌)
-> **Problem:** Текущая реализация (`parse_philharmonia.ipynb`) пытается перейти на детальную страницу, но часто не находит текст (селектор `div.mer_item_info_text` или `div.text`), и **молча откатывается** к короткому описанию из списка (`.mer_item_list_progr`).
-> **Result:** В событиях не хватает описания и программы, хотя код переходов вроде бы есть.
-> **Requirement:**
-1.  **Fix Selectors:** Актуализировать CSS-селекторы для детальной страницы.
-2.  **No Fallback:** Если детальный текст не найден, не использовать обрубок из списка, а сигнализировать об ошибке или искать по другим признакам.
-3.  **Ensure Usage:** Гарантировать, что используется именно `full_desc_text` с детальной страницы.
+- карточка: `article.entry[data-date-iso]`;
+- название/URL: `a.production_detail_link`;
+- дата: `data-date-iso`, время: `.session .hour`;
+- зал/возраст: `data-venue`, `data-age`;
+- изображение/Пушкинская карта: `.production_image`,
+  `.list_logo_pushkin_card`;
+- полное описание: `.production_description .text_container`;
+- цена/продажа: `.price_block .value`, live `.session_entry` и buy link.
 
-### 2.3. Program Formatting (Not Implemented ❌)
-> **Problem:** В коде извлекается все описание (`inner_text`) одним блоком. Список произведений ("В программе:") сливается в кашу.
-> **Requirement:**
-1.  **Detection:** Найти блок "В программе" внутри описания.
-2.  **Formatting:**
-    *   Преобразовать в чистый HTML список (`<ul><li>...</li></ul>`).
-    *   Выделить произведения в отдельные строки.
-3.  **Telegraph:** При генерации страницы этот список должен быть красиво оформлен.
+Если каталог вернул ноль будущих событий или детальная страница не содержит
+описания, kernel должен завершиться ошибкой, а не публиковать пустой или
+обрезанный «успешный» результат.
 
-### 2.4. Gallery Extraction (Not Implemented ❌)
-> **Current:** Берется только одна картинка (`img.mer_item_img`) со списка событий.
-> **Requirement:**
-1.  На детальной странице искать дополнительные изображения/галерею.
-2.  Сохранять их в массив `images`.
+## Нормализация
 
-## 3. Техническая реализация
-*   **Notebook:** `kaggle/ParsePhilharmonia`
-*   **Output:** `philharmonia.json`
+- Площадка: `Филармония им. Светланова`.
+- Адрес: `Хмельницкого 61а`.
+- Сцена сохраняется из `data-venue` (обычно `Концертный зал`).
+- `age_restriction`, `pushkin_card`, price bounds и source-native ticket status
+  передаются в `TheatreEvent` и далее в Smart Update.
+- Source URL — детальная страница события; отдельный buy URL используется
+  парсером для определения доступности билетов.
+
+## Regression contract
+
+Изменения DOM, Kaggle status bootstrap, параллельного запуска `/parse` или
+production output boundary обязаны поднять
+`INC-2026-07-27-future-event-source-coverage-drop.md`.
+
+Минимальные проверки:
+
+1. replay текущего listing/detail DOM из
+   `tests/replays/INC-2026-07-27-future-event-source-coverage-drop/`;
+2. live kernel возвращает ненулевой список и его count сверяется с официальной
+   будущей афишей на момент прогона;
+3. production processing создаёт/обновляет parser provenance;
+4. `ops_run` не `success`, если Philharmonia kernel/parse потерян;
+5. параллельный старт Theatres + Philharmonia + Qtickets не даёт
+   `cannot start a transaction within a transaction`.
+
+## Отложенные улучшения
+
+Семантическое форматирование раздела «В программе» и дополнительные изображения
+галереи остаются отдельными улучшениями. Они не должны блокировать импорт
+события при наличии полного source-grounded описания и основной афиши.

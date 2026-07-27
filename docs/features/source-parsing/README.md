@@ -93,6 +93,28 @@ Structured возраст Qtickets/Pyramida/Дом искусств/филарм
 
 Per-run debug logs в `/data/parse_debug/source_parsing_*.log` ограничены независимо от runtime mirror: `SOURCE_PARSING_DEBUG_RETENTION_DAYS=7` и `SOURCE_PARSING_DEBUG_MAX_TOTAL_MB=16`. Очистка удаляет только этот basename, не затрагивает `source_parsing_guard.json` и неизвестные operator files.
 
+### Контроль покрытия и честный статус запуска
+
+Theatres, Philharmonia и Qtickets запускаются параллельно, но каждый Kaggle
+run-config пишет status ledger через отдельное короткое SQLite-соединение. Нельзя
+начинать несколько `BEGIN IMMEDIATE` на общем cached `Database.raw_conn()`: это
+теряет один или несколько источников с `cannot start a transaction within a
+transaction`.
+
+`ops_run.status` для `kind=parse` отражает потерю источника:
+
+- `success` — kernels и processing завершились без ошибок/failed items;
+- `partial` — часть источников обработана, но есть kernel/parse ошибки или
+  failed items;
+- `error` — ошибки есть и ни один источник не дошёл до processing либо возникла
+  фатальная ошибка.
+
+Зелёный общий статус не заменяет source coverage. Для регулярной проверки нужно
+смотреть `details_json.sources`, `errors_count`, дату последнего parser provenance
+по каждому включённому источнику и ненулевое покрытие его официальной будущей
+афиши. Канонический regression contract:
+`docs/reports/incidents/INC-2026-07-27-future-event-source-coverage-drop.md`.
+
 ## Документация по источникам
 
 - Театры (/parse): `docs/features/source-parsing/sources/theatres/README.md`
