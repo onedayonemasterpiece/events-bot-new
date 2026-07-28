@@ -8,6 +8,8 @@ const catalogSrc = withBase('/data/personal-feed.json');
   class="favorites-surface"
   data-favorites-surface
   data-catalog-src={catalogSrc}
+  data-favorites-state="loading"
+  data-favorites-cloud-state="idle"
   aria-labelledby="favorites-title"
 >
   <header class="favorites-surface__head">
@@ -97,6 +99,7 @@ const catalogSrc = withBase('/data/personal-feed.json');
     let catalogPromise = null;
     let latestSnapshot = null;
     let renderEpoch = 0;
+    const hydrationStartedAt = window.performance.now();
 
     const loadCatalog = () => {
       if (!catalogPromise) {
@@ -118,61 +121,23 @@ const catalogSrc = withBase('/data/personal-feed.json');
       else status.setAttribute('role', 'status');
     };
 
-    const render = async (snapshot) => {
-      latestSnapshot = snapshot;
-      const epoch = ++renderEpoch;
-      if (skeleton instanceof HTMLElement) skeleton.hidden = false;
-      if (authRequired instanceof HTMLElement) authRequired.hidden = true;
-      if (empty instanceof HTMLElement) empty.hidden = true;
-      if (grid instanceof HTMLElement) grid.hidden = true;
-      setStatus('');
-
-      if (snapshot?.status === 'checking') {
-        void loadCatalog().catch(() => {});
-        return;
+    const setHydrationState = (state) => {
+      root.dataset.favoritesState = state;
+      if (skeleton instanceof HTMLElement) {
+        skeleton.hidden = state !== 'loading';
+        skeleton.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
       }
+    };
 
-      let catalog;
-      try {
-        catalog = await loadCatalog();
-      } catch {
-        if (epoch !== renderEpoch) return;
-        if (skeleton instanceof HTMLElement) skeleton.hidden = true;
-        if (authRequired instanceof HTMLElement) authRequired.hidden = snapshot?.status === 'signed_in';
-        setStatus('Не удалось загрузить каталог. Проверьте соединение — сохранённые данные не изменены.', true);
-        return;
-      }
-
-      let remoteRows = [];
-      let remoteFailed = false;
-      if (snapshot?.status === 'signed_in' && auth) {
-        try {
-          remoteRows = await listDurableSavedEvents(auth.client);
-        } catch {
-          remoteFailed = true;
-        }
-      }
-      const rendererReady = await waitForCardRenderer();
-      if (epoch !== renderEpoch) return;
-      const local = readLocalSavedEventInputs(window.localStorage);
+    const renderJoined = async ({ catalog, local, remoteRows = [], snapshot, remoteFailed = false, cloudSettled = false }) => {
+      if (!(grid instanceof HTMLElement)) return 0;
       const refs = mergeSavedEventRefs({
         remoteRows,
         calendarIds: local.calendarIds,
         likedEventIds: local.likedEventIds,
       });
       const joined = joinFutureSavedEvents(catalog, refs, String(catalog?.current_date || ''));
-
-      if (skeleton instanceof HTMLElement) skeleton.hidden = true;
-      if (authRequired instanceof HTMLElement) {
-        authRequired.hidden = snapshot?.status === 'signed_in' || snapshot?.status === 'checking';
-      }
-      if (!(grid instanceof HTMLElement)) return;
       grid.replaceChildren();
-
-      if (!rendererReady) {
-        setStatus('Карточки временно недоступны. Перезагрузите страницу — сохранённые данные не изменены.', true);
-        return;
-      }
       for (const [index, entry] of joined.entries()) {
         const card = window.KenigEventsCreateEventCard?.(entry.item, 'split-actions');
         if (!card) continue;
@@ -183,14 +148,84 @@ const catalogSrc = withBase('/data/personal-feed.json');
       const rendered = grid.querySelectorAll(':scope > [data-event-card]').length;
       grid.hidden = rendered === 0;
       if (empty instanceof HTMLElement) empty.hidden = rendered !== 0;
+      if (authRequired instanceof HTMLElement) {
+        authRequired.hidden = snapshot?.status === 'signed_in' || snapshot?.status === 'checking';
+      }
       if (remoteFailed) {
         setStatus('Облачное избранное временно недоступно. Показаны сохранения и лайки с этого устройства.', true);
-      } else if (snapshot?.status === 'signed_in') {
+      } else if (snapshot?.status === 'signed_in' && cloudSettled) {
         setStatus(rendered ? `Будущих сохранённых событий: ${rendered}.` : '');
       } else if (rendered) {
-        setStatus('Показаны сохранения и лайки с этого устройства.');
+        setStatus(snapshot?.status === 'checking'
+          ? 'Показаны сохранения и лайки с этого устройства. Проверяем облачное избранное…'
+          : 'Показаны сохранения и лайки с этого устройства.');
+      } else {
+        setStatus('');
       }
       await window.applyFeedbackState?.({ skipDiscoveryHydration: true });
+      return rendered;
+    };
+
+    const render = async (snapshot) => {
+      latestSnapshot = snapshot;
+      const epoch = ++renderEpoch;
+      const alreadyReady = root.dataset.favoritesState === 'ready';
+      if (!alreadyReady) {
+        setHydrationState('loading');
+        if (authRequired instanceof HTMLElement) authRequired.hidden = true;
+        if (empty instanceof HTMLElement) empty.hidden = true;
+        if (grid instanceof HTMLElement) grid.hidden = true;
+        setStatus('');
+      }
+
+      const local = readLocalSavedEventInputs(window.localStorage);
+      const remotePromise = snapshot?.status === 'signed_in' && auth
+        ? listDurableSavedEvents(auth.client)
+            .then((rows) => ({ rows, failed: false }))
+            .catch(() => ({ rows: [], failed: true }))
+        : null;
+      let catalog;
+      let rendererReady;
+      try {
+        [catalog, rendererReady] = await Promise.all([loadCatalog(), waitForCardRenderer()]);
+      } catch {
+        if (epoch !== renderEpoch) return;
+        setHydrationState('error');
+        if (authRequired instanceof HTMLElement) authRequired.hidden = snapshot?.status === 'signed_in';
+        setStatus('Не удалось загрузить каталог. Проверьте соединение — сохранённые данные не изменены.', true);
+        return;
+      }
+      if (epoch !== renderEpoch) return;
+      if (!rendererReady) {
+        setHydrationState('error');
+        setStatus('Карточки временно недоступны. Перезагрузите страницу — сохранённые данные не изменены.', true);
+        return;
+      }
+
+      await renderJoined({ catalog, local, snapshot });
+      if (epoch !== renderEpoch) return;
+      setHydrationState('ready');
+      if (!root.dataset.favoritesLocalReadyMs) {
+        root.dataset.favoritesLocalReadyMs = String(Math.round(window.performance.now() - hydrationStartedAt));
+      }
+
+      if (!remotePromise) {
+        root.dataset.favoritesCloudState = snapshot?.status === 'checking' ? 'checking' : 'idle';
+        return;
+      }
+      root.dataset.favoritesCloudState = 'loading';
+      const remote = await remotePromise;
+      if (epoch !== renderEpoch) return;
+      await renderJoined({
+        catalog,
+        local,
+        remoteRows: remote.rows,
+        snapshot,
+        remoteFailed: remote.failed,
+        cloudSettled: true,
+      });
+      if (epoch !== renderEpoch) return;
+      root.dataset.favoritesCloudState = remote.failed ? 'error' : 'ready';
     };
 
     if (auth) {

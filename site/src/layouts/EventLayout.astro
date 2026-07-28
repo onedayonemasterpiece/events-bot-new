@@ -4529,9 +4529,13 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (anchorEventId != null) {
             const anchorIndex = cards.findIndex((card) => asId(card.dataset.eventId) === asId(anchorEventId));
             if (anchorIndex >= 0) {
-              const frozen = cards.slice(0, anchorIndex + 1);
+              // Leave the clicked card and every card above it attached. Moving
+              // those nodes to the end and back makes browser scroll anchoring
+              // follow a temporarily displaced viewport anchor, which can jump
+              // a mobile user several screens upward after a paginated-card
+              // reaction. Only the not-yet-seen tail is eligible to rerank.
               const tail = sortCards(cards.slice(anchorIndex + 1));
-              [...frozen, ...tail].forEach((card) => feed.appendChild(card));
+              tail.forEach((card) => feed.appendChild(card));
               return;
             }
           }
