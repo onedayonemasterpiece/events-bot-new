@@ -2,11 +2,11 @@
 import EventLayout from '../layouts/EventLayout.astro';
 import DateListingSurface from '../components/listings/DateListingSurface.astro';
 import PersonalFeedSlot from '../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getCurrentDate, getDateEvents, getEvents, SITE_NAME } from '../lib/events';
-import { eventDateRouteDates } from '../lib/eventDateAvailability';
+import { absoluteUrl, getDateEvents, SITE_NAME } from '../lib/events';
+import { getStaticEventDateAvailability } from '../lib/staticEventDates';
 
 export function getStaticPaths() {
-  return eventDateRouteDates(getEvents(), getCurrentDate()).map((date) => ({
+  return [...getStaticEventDateAvailability().availableDates].sort().map((date) => ({
     params: { date },
     props: { date },
   }));

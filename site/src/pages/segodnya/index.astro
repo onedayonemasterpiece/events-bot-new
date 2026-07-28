@@ -2,16 +2,100 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import DateListingSurface from '../../components/listings/DateListingSurface.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getCurrentDate, getPreviewBuild, getTodayPrimaryEvents, SITE_NAME } from '../../lib/events';
+import { absoluteUrl, getCurrentDate, getPreviewBuild, getTodayPrimaryEvents, SITE_NAME, withBase } from '../../lib/events';
+import { getStaticEventDateManifest } from '../../lib/staticEventDates';
 
 const currentDate = getCurrentDate();
 const events = getTodayPrimaryEvents();
+const build = getPreviewBuild();
+const dateManifest = getStaticEventDateManifest();
+const embeddedManifest = JSON.stringify(dateManifest).replace(/</gu, '\\u003c');
 const dateLabel = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' })
   .format(new Date(`${currentDate}T12:00:00+02:00`));
 ---
 <EventLayout title={`События сегодня в Калининграде | ${SITE_NAME}`} description={`События сегодня, ${dateLabel}, сгруппированные по времени начала.`} canonicalUrl={absoluteUrl('/segodnya/')} structuredData={[]} headerCurrent="today">
   <main id="main" class="ke-listing-page">
-    <DateListingSurface kind="today" title="Сегодня" date={currentDate} dateLabel={dateLabel} events={events} generatedAt={getPreviewBuild().generated_at} />
+    <aside
+      class="today-review-notice"
+      data-today-review-guard
+      data-build-date={currentDate}
+      data-date-route-prefix={withBase('/date-')}
+      data-site-name={SITE_NAME}
+      hidden
+      role="status"
+    >
+      <strong data-today-review-title></strong>
+      <span data-today-review-copy></span>
+    </aside>
+    <script type="application/json" id="event-date-availability" set:html={embeddedManifest}></script>
+    <DateListingSurface kind="today" title="Сегодня" date={currentDate} dateLabel={dateLabel} events={events} generatedAt={build.generated_at} />
     <div class="ke-listing-shell"><PersonalFeedSlot context="today" /></div>
   </main>
 </EventLayout>
+
+<style>
+  .today-review-notice {
+    width:min(1180px, calc(100% - 32px));
+    margin:18px auto 0;
+    padding:14px 16px;
+    border:1px solid rgba(165,72,33,.22);
+    border-radius:14px;
+    background:#fff4df;
+    color:#5d2c19;
+  }
+  .today-review-notice strong,
+  .today-review-notice span { display:block; }
+  .today-review-notice span { margin-top:4px; font-size:.9rem; }
+  @media (max-width:720px) {
+    .today-review-notice {
+      width:auto;
+      margin:8px 12px 0;
+      padding:11px 12px;
+      font-size:.82rem;
+    }
+  }
+</style>
+
+<script>
+  import { kaliningradDate, resolveTodayReview } from '../../lib/eventDateAvailability';
+
+  const guard = document.querySelector('[data-today-review-guard]');
+  const manifestNode = document.getElementById('event-date-availability');
+  if (guard && manifestNode?.textContent) {
+    try {
+      const manifest = JSON.parse(manifestNode.textContent);
+      const runtimeDate = kaliningradDate();
+      const availableDates = manifest.dates
+        .filter((item) => item?.has_events)
+        .map((item) => String(item.date));
+      const resolution = resolveTodayReview(guard.dataset.buildDate || '', runtimeDate, availableDates);
+      guard.dataset.todayReviewState = resolution.state;
+      guard.dataset.runtimeDate = runtimeDate;
+      if (resolution.state === 'redirect' && resolution.redirectDate) {
+        const target = `${guard.dataset.dateRoutePrefix || '/date-'}${resolution.redirectDate}/`;
+        if (location.pathname !== target) location.replace(target);
+      } else if (resolution.state === 'stale') {
+        const buildDate = guard.dataset.buildDate || '';
+        const formatDate = (value) => new Intl.DateTimeFormat('ru-RU', {
+          day:'numeric',
+          month:'long',
+          year:'numeric',
+          timeZone:'Europe/Kaliningrad',
+        }).format(new Date(`${value}T12:00:00+02:00`));
+        const archivedTitle = `События ${formatDate(buildDate)}`;
+        guard.hidden = false;
+        const title = guard.querySelector('[data-today-review-title]');
+        const copy = guard.querySelector('[data-today-review-copy]');
+        if (title) title.textContent = 'Это сохранённая версия, а не события на сегодня';
+        if (copy) copy.textContent = `Страница собрана за ${formatDate(buildDate)}. Сегодня в Калининграде — ${formatDate(runtimeDate)}, но в этой сборке нет опубликованной страницы с событиями на эту дату.`;
+        document.querySelectorAll('.ke-listing-head h1, .page-head h1, .mobile-listing-sticky-title > strong')
+          .forEach((node) => { node.textContent = archivedTitle; });
+        document.querySelectorAll('a[aria-current="page"][href$="/segodnya/"]')
+          .forEach((node) => node.removeAttribute('aria-current'));
+        document.title = `${archivedTitle} в Калининграде | ${guard.dataset.siteName || 'Полюбить Калининград Анонсы'}`;
+      }
+    } catch (error) {
+      console.error('Today review-date guard failed', error);
+    }
+  }
+</script>

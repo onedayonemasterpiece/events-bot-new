@@ -103,7 +103,7 @@ for (const width of [320, 390]) {
 	  });
 	  closeEnough(dateGeometry.bottom, (width === 320 ? 700 : 844) - 64);
 	  closeEnough(dateGeometry.height, 56);
-	  assert.equal(dateGeometry.chipCount, 42);
+	  assert.ok(dateGeometry.chipCount > 42);
 	  if (dateGeometry.railScrollLeft === 0 && dateGeometry.selectedCenter < dateGeometry.railCenter) {
 	    // An immutable build can start on the selected weekend itself. In that
 	    // case scrollIntoView cannot create negative scroll just to center an
@@ -117,12 +117,25 @@ for (const width of [320, 390]) {
     const hrefs = [...new Set(links.map((link) => link.href))];
     return Promise.all(hrefs.map(async (href) => ({ href, status: (await fetch(href)).status })));
   });
-  assert.equal(await page.locator('[data-mobile-date-accessory] .date-rail a[href]').count(), 42);
+  const enabledRailDates = await page.locator('[data-mobile-date-accessory] .date-rail a[href]').count();
+  const disabledRailDates = await page.locator('[data-mobile-date-accessory] .date-rail [aria-disabled="true"]').count();
+  assert.ok(enabledRailDates > 0);
+  assert.ok(disabledRailDates > 0);
+  assert.equal(enabledRailDates + disabledRailDates, dateGeometry.chipCount);
   assert.deepEqual(dateHrefStatuses.filter(({ status }) => status !== 200), []);
-  assert.equal(await page.locator('[data-mobile-date-accessory] [aria-disabled="true"]').count(), 0);
   await page.locator('[data-calendar-open]').click();
   await page.locator('[data-calendar-sheet]:not([hidden]) .calendar-panel').waitFor();
-  assert.equal(await page.locator('[data-calendar-sheet] [data-calendar-date]').count(), 42);
+  assert.equal(await page.locator('[data-calendar-sheet] [data-calendar-date]').count(), dateGeometry.chipCount);
+  const monthCount = await page.locator('[data-calendar-month]').count();
+  assert.ok(monthCount > 1);
+  const beforeDisabledClick = page.url();
+  await page.locator('[data-calendar-month]:not([hidden]) [data-calendar-date][aria-disabled="true"]').first()
+    .evaluate((node) => node.click());
+  assert.equal(page.url(), beforeDisabledClick);
+  const monthLabel = page.locator('[data-calendar-month-label]');
+  const firstMonthLabel = await monthLabel.textContent();
+  await page.locator('[data-calendar-month-next]').click();
+  assert.notEqual(await monthLabel.textContent(), firstMonthLabel);
 
   await context.close();
 }

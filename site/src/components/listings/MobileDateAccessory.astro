@@ -1,6 +1,6 @@
 ---
-import { getAvailableWeekendRanges, getEvents, getWeekendRange, withBase } from '../../lib/events';
-import { buildEventDateAvailability } from '../../lib/eventDateAvailability';
+import { getAvailableWeekendRanges, getWeekendRange, withBase } from '../../lib/events';
+import { getStaticEventDateAvailability } from '../../lib/staticEventDates';
 
 interface Props {
   today: string;
@@ -15,7 +15,7 @@ const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const tomorrow = isoDate(new Date(parseDate(today).getTime() + DAY));
 const currentWeekendStart = getWeekendRange().start;
 const availableWeekendStarts = new Set(getAvailableWeekendRanges().map((range) => range.start));
-const availability = buildEventDateAvailability(getEvents(), today);
+const availability = getStaticEventDateAvailability();
 const dates = availability.allDates.map((iso) => {
   const date = parseDate(iso);
   const weekday = new Intl.DateTimeFormat('ru-RU', { weekday:'short', timeZone:'Europe/Kaliningrad' })
@@ -31,7 +31,8 @@ const dates = availability.allDates.map((iso) => {
   const nextDate = new Date(date.getTime() + DAY);
   const hasEvents = availability.availableDates.has(iso);
   const weekendAvailable = isSaturday && availableWeekendStarts.has(iso);
-  const href: string | null = !hasEvents
+  const destinationAvailable = hasEvents || weekendAvailable;
+  const href: string | null = !destinationAvailable
     ? null
     : iso === today
       ? '/segodnya/'

@@ -50,7 +50,7 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(weekend, /calendarToday=\{currentDate \|\| start\}/u);
   assert.match(popular, /collapseOccurrenceCards\(group\.events, 'per-family'\)/u);
   assert.match(popular, /<MobileListingRailSurface[\s\S]*occurrenceMode="per-family"/u);
-  assert.match(accessory, /buildEventDateAvailability\(getEvents\(\), today\)/u);
+  assert.match(accessory, /getStaticEventDateAvailability\(\)/u);
   assert.match(accessory, /class="date-rail"/u);
   assert.match(accessory, /class="date-calendar-trigger"/u);
   assert.match(accessory, /class="calendar-sheet"/u);
@@ -59,7 +59,7 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(accessory, /`\/date-\$\{iso\}\/`/u);
   assert.match(accessory, /aria-disabled="true"/u);
   assert.match(accessory, /item\.href \? \([\s\S]*?<a[\s\S]*?\) : \([\s\S]*?<span/u);
-  assert.match(await read('src/pages/date-[date].astro'), /eventDateRouteDates\(getEvents\(\), getCurrentDate\(\)\)/u);
+  assert.match(await read('src/pages/date-[date].astro'), /getStaticEventDateAvailability\(\)\.availableDates/u);
   assert.match(await read('src/pages/date-[date].astro'), /<DateListingSurface kind="date"/u);
 });
 
