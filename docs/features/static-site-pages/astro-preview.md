@@ -966,3 +966,11 @@ many-minute, already-verified publication from being repeated merely because
 one Smart Update transaction temporarily owned the single SQLite writer. The
 claim/current-candidate commit remains the authority; root aliases and stable
 ICS keys are still inexpressible from this publisher.
+
+Production and secret-candidate Free-collection gates inspect event ids only
+inside `<main data-free-collection-surface>`. `EventLayout` deliberately ships
+hidden canonical `EventCard` templates after the page slot for client-side
+hydration; those templates are not collection results and must not be
+misclassified as non-free cards merely because their current fixture is paid.
+The gate still validates every actual regular and exhibition card rendered by
+the collection.

@@ -101,6 +101,17 @@ test('production and secret-candidate profiles retain the production-ready partn
   assert.match(candidateCheck, /source\('partnerstvo\/index\.html'\)/u);
 });
 
+test('free-collection release gates ignore the shared hidden runtime-card templates', () => {
+  const productionCheck = readFileSync(new URL('./check-production.mjs', import.meta.url), 'utf8');
+  const candidateCheck = readFileSync(new URL('./check-secret-candidate.mjs', import.meta.url), 'utf8');
+  for (const source of [productionCheck, candidateCheck]) {
+    assert.match(source, /const freeCollectionSurface = freeCollection(?:Source|Html)\.match\(/u);
+    assert.match(source, /data-free-collection-surface/u);
+    assert.match(source, /\[\.\.\.freeCollectionSurface\.matchAll\(\/data-event-id=/u);
+    assert.doesNotMatch(source, /\[\.\.\.freeCollection(?:Source|Html)\.matchAll\(\/data-event-id=/u);
+  }
+});
+
 test('secret-candidate robots policy overrides page-local noindex without losing nosnippet', () => {
   const layout = readFileSync(new URL('../src/layouts/EventLayout.astro', import.meta.url), 'utf8');
   assert.match(layout, /const robots = IS_SECRET_CANDIDATE\s*\?\s*'noindex,nofollow,noarchive,nosnippet'/u);

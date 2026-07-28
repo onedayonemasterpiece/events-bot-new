@@ -414,6 +414,10 @@
 
 ### Fixed
 
+- Fixed production/candidate Free-collection validation to scope event ids to
+  the actual `data-free-collection-surface`; shared hidden runtime-card
+  templates remain available for client hydration but can no longer create a
+  false “non-free event” release failure.
 - Fixed date-list exhibition routing so a concrete non-exhibition primary
   `event_type` wins over a secondary `EXHIBITIONS` facet. Mixed programmes such
   as festival «Море внутри» remain on their start-date rail with the structured
