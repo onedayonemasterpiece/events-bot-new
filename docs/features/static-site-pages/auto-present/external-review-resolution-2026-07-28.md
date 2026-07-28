@@ -1,9 +1,30 @@
-# Resolution внешнего review автопрезентатора — 2026-07-28
+# Resolution внешних review автопрезентатора — 2026-07-28
 
 - **Входной вердикт:** `GO_TO_M0_COMPATIBILITY_SPIKE_ONLY / NO_GO_FOR_PUBLIC_DEMO`.
-- **Результат:** принят; канонический [README.md](README.md) усилен и остаётся в статусе `design`.
+- **Результат:** оба review приняты; канонический [README.md](README.md) усилен, M0 разрешён к реализации, target execution ещё не выполнен.
 
-## Disposition
+## Disposition второго review
+
+Второй критический review коммита `981aebd9` подтвердил
+`DESIGN_APPROVED_FOR_M0` и сохранил `NO_GO_FOR_M1_M2_M3` /
+`NO_GO_FOR_PUBLIC_DEMO`. Его четыре обязательных M0-уточнения применены:
+
+1. 20 запусков теперь означают 20 полных cold Node+browser cycles на кандидата:
+   10 fresh-profile и 10 persistent-profile;
+2. compatibility использует deterministic loopback HTTP fixture и считается
+   отдельно от последующих 5/5 live `/zavtra/` smoke;
+3. exact candidate manifests фиксируют Node/package lock/browser
+   revision/executable/path/hash и запрещают channel, download и machine cache;
+4. PASS требует строго 20/20 + 5/5, zero install/admin/system-browser/orphans и
+   полный evidence package с target-laptop system/run records.
+
+Подробные normative правила не дублируются здесь: они находятся в разделах
+`M0 candidate matrix`, `Exact candidate manifest`, `M0 test contract` и
+`Артефакты и evidence` канонического README. Ограничение review на недоступный
+GitHub web-cache не принято как доказательство файлов; локальный diff
+проверяется отдельно.
+
+## Disposition первого review
 
 | Review item | Статус | Resolution |
 |---|---|---|
@@ -34,4 +55,7 @@
 
 ## Следующее разрешённое действие
 
-Только реализация M0 compatibility spike и сохранение evidence. Phone control, relay и декоративный stage не начинаются до M0 PASS.
+Только реализация M0 compatibility spike и запуск на целевом Windows 10
+ноутбуке с сохранением evidence. Phone control, relay, iframe/decorative stage,
+recording и final portable release не начинаются до M0 PASS. Linux/CI
+validation не заменяет target execution.

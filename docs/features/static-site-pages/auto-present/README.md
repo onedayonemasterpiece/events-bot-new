@@ -1,6 +1,6 @@
 # Автопрезентатор static-сайта
 
-- **Статус:** `design`.
+- **Статус:** `m0_implementation`; фактический запуск на целевом ноутбуке ещё не выполнен.
 - **Implementation gate:** `m0_win10_compatibility`.
 - **Release verdict:** `GO_TO_M0_COMPATIBILITY_SPIKE_ONLY`; публичный показ — `NO-GO` до прохождения M0–M3.
 
@@ -10,7 +10,7 @@
 
 ## Решение в одном абзаце
 
-Сначала на целевой Windows 10 доказываем работоспособность точной portable-связки Node + Playwright + Playwright-managed browser. Затем строим локальную stage-страницу 1920×1080 с реальным review build в `iframe` 430×932, детерминированный `tomorrow-mobile`, локальный hard stop и запись. Только после 20 стабильных локальных прогонов добавляем небольшой динамический `aiohttp` relay с надёжным long-poll protocol и control page. Финальный публичный gate — тот же ZIP на том же ноутбуке, заранее просмотренный MP4 и полный rehearsal.
+Сначала на целевой Windows 10 доказываем работоспособность точной portable-связки Node + Playwright + Playwright-managed browser: для каждого кандидата отдельно нужны 20/20 полных холодных циклов на локальной loopback-fixture (10 fresh-profile + 10 persistent-profile) и затем 5/5 live smoke на `/zavtra/`. Только после M0 PASS можно строить локальную stage-страницу 1920×1080 с реальным review build в `iframe` 430×932, детерминированный `tomorrow-mobile`, локальный hard stop и запись. Relay, телефонный control UI и финальная portable-сборка относятся к следующим этапам. Публичный gate — тот же ZIP на том же ноутбуке, заранее просмотренный MP4 и полный rehearsal.
 
 ## Продуктовая граница
 
@@ -27,8 +27,13 @@
 7. останавливается с телефона или локальным `Esc` не позднее двух секунд;
 8. выполняется тем же action graph в `live` и `record` policy.
 
-### Не входит до прохождения M0–M3
+### Не входит в M0
 
+M0 — только compatibility experiment. До его подтверждённого PASS **запрещено начинать M1, M2 или M3**, в том числе писать:
+
+- iframe presentation stage, декоративный cursor/tap overlay и запись;
+- телефонный UI, relay API, long-poll и production authentication;
+- финальную portable-сборку и backup-video pipeline;
 - desktop-сцены;
 - typing, QR/image, инфографика и key hints;
 - несколько сценариев и универсальный DSL;
@@ -36,7 +41,7 @@
 - AI-планирование live-сценария;
 - визуальный редактор и multi-tenant service.
 
-После M3 эти scene types можно добавлять поверх уже доказанного runner. До M3 они только увеличивают риск.
+Разрешённый инвентарь M0 ограничен двумя hermetic candidate bundles, launcher/self-test, локальной fixture, одним настоящим click-сценарием, сбором system/run evidence, автоматическим cold-cycle runner, отдельным live smoke и сравнительным отчётом. После M3 расширения можно добавлять поверх уже доказанного runner.
 
 ## Traceability и решение «Сегодня» / «Завтра»
 
@@ -98,33 +103,71 @@ tests/playwright/presenter-site-contract.* stable site hooks and iframe contract
 
 Эти значения — вход spike, не выбранный production stack. Browser revision взят из `playwright-core` package metadata; M0 обязан повторно записать фактический executable/hash в артефакт. Если оба кандидата не проходят, следующая версия выбирается только после targeted research по официальным release/package records, а не случайным downgrade.
 
+### Exact candidate manifest
+
+Единственный machine-readable источник параметров кандидатов — `tools/autopresenter/m0/candidates/*.json`; README не дублирует изменяемые checksums. До сборки каждый manifest обязан содержать без placeholder:
+
+- `candidateId`, target `os: Windows 10` и `arch: x64`;
+- exact Node version, имя ZIP и SHA-256;
+- exact package `playwright` version и SHA-256 соответствующего `package-lock.json`;
+- browser product, revision/build, относительный путь executable и его SHA-256;
+- `headless: false`, exact launch arguments, `browserChannel: null`;
+- относительный `PLAYWRIGHT_BROWSERS_PATH` внутри candidate bundle;
+- два profile mode: `fresh` и `persistent`.
+
+Manifest и `package-lock.json` входят в candidate ZIP и в evidence. Несовпадение version/revision/path/hash, абсолютный executable path, пустой hash или browser channel делает candidate непригодным к запуску, а не включает fallback.
+
 ### M0 test contract
 
-На **целевой Windows 10 x64**, обычным пользователем, без admin rights и без установленных Node/Chrome/Playwright, для каждого кандидата:
+Зачёт выполняется **на целевом Windows 10 x64 ноутбуке**, под той же обычной учётной записью, которая будет использоваться на показе, без admin rights и без установленного Node/Chrome/Playwright. Локальный Linux/CI smoke может проверять код и схемы, но не может выдать M0 PASS.
 
-1. распаковать candidate ZIP;
-2. запустить portable `node.exe` и managed headed browser;
-3. открыть immutable review URL;
-4. проверить точный DOM marker;
-5. выполнить настоящий strict `locator.click()` и success assertion;
-6. сохранить screenshot и trace;
-7. штатно закрыть browser;
-8. повторить 20 раз из чистого initial state;
-9. выполнить `self-test.cmd` без доступа к target site;
-10. повторить запуск из путей:
+#### A. Compatibility: строго 20/20
+
+Для **каждого** кандидата выполняются 20 последовательных полных холодных циклов:
+
+- runs `001–010`: новый чистый profile directory для каждого цикла;
+- runs `011–020`: один persistent profile, переиспользуемый между циклами.
+
+Один цикл означает:
+
+1. старт нового portable `node.exe` process;
+2. старт нового headed browser process только из candidate portable-папки;
+3. создание fresh profile или открытие предусмотренного persistent profile;
+4. запуск временного HTTP-сервера только на `127.0.0.1` и открытие deterministic fixture;
+5. настоящий strict `locator.click()` по `[data-presenter-id="nav-tomorrow"]`;
+6. проверку `[data-presenter-id="tomorrow-ready"]`;
+7. закрытие BrowserContext;
+8. завершение browser process;
+9. завершение Node process;
+10. bounded-проверку отсутствия оставшихся дочерних процессов.
+
+Только после записанного результата и process-cleanup начинается следующий цикл. Двадцать `goto()`/`click()` в одном Node/browser не считаются 20 запусками.
+
+#### B. Live-site smoke: отдельно 5/5
+
+Только после compatibility 20/20 тот же candidate выполняет 5 отдельных холодных запусков на exact immutable `/zavtra/` URL с реальным strict locator и marker assertion. Live smoke имеет собственную метрику и run records: сетевой/production сбой не переписывает compatibility result, но кандидат не получает общий PASS без 5/5.
+
+`self-test.cmd` отдельно работает полностью offline на loopback fixture. Candidate также проверяется из путей:
+
    - `C:\Autopresenter\`;
    - `C:\Folder with spaces\Autopresenter\`;
    - `C:\Демонстрация\Автопрезентатор\`.
 
-M0 outputs:
+#### Fail-closed browser boundary
 
-- `m0-compatibility-report.json` с Windows build/user/архитектурой и 20 результатами;
-- `VERSIONS.json`;
-- candidate `package-lock.json`;
-- `RELEASE-MANIFEST.json` с commit и executable hashes;
-- screenshot/trace failures без секретов.
+M0 немедленно завершается FAIL, если managed browser отсутствует или обнаружена попытка:
 
-**M0 PASS:** одна точная связка проходит все проверки. Unsupported current Playwright может считаться только exact-machine evidence, а не общей поддержкой Windows 10. Перед публичным использованием предпочтителен прошедший compatibility candidate; иной выбор требует явного owner waiver и готового offline MP4.
+- использовать `channel`, системный Edge/Chrome или иной executable вне candidate;
+- обратиться к `%LOCALAPPDATA%\ms-playwright` или browser cache машины сборки;
+- скачать browser/runtime/package во время target run;
+- выполнить `npx playwright install` на целевом ноутбуке;
+- оставить после цикла candidate Node/browser child process.
+
+#### PASS/FAIL и выбор
+
+Кандидат получает PASS только при **20/20 compatibility + 5/5 live**, успешном offline self-test, валидных manifest/hash, настоящем `locator.click()`, zero-install/zero-admin, нулевых browser downloads/system-browser fallbacks и нулевых orphan processes. `19/20`, `4/5`, ручное удаление locked profile, единичный crash, запуск только из dev shell/от администратора или необходимость установить системный компонент — FAIL.
+
+Если прошли оба кандидата, выбирается более новый только при равной стабильности и без дополнительных системных требований. Если прошёл один — его exact versions/checksums замораживаются. Если не прошёл ни один — итог `PLAYWRIGHT_ON_TARGET_WIN10_NO_GO`, M1 не начинается. Даже успешный результат доказывает совместимость только с зафиксированными build/user/laptop, а не общую поддержку Windows 10.
 
 ## P0. Stage contract
 
@@ -339,9 +382,15 @@ Autopresenter-Win10-x64/
 
 ### M0 — Windows 10 compatibility
 
-Без телефона, relay и красивого stage: candidate ZIP, managed browser, real immutable page, strict click, self-test, 20 повторов.
+Без телефона, relay, iframe-stage, записи и финальных overlays:
 
-**Gate:** выбранная exact combo проходит M0 test contract на целевом Windows 10.
+- два exact candidate ZIP через границу Playwright 1.57;
+- 20 полных local-fixture cold cycles на кандидата: 10 fresh + 10 persistent;
+- после 20/20 — отдельные 5/5 cold live-site smoke;
+- strict click, offline self-test, path matrix, manifest/hash/process checks;
+- полный раздельный evidence package.
+
+**Gate:** выбранная exact combo проходит весь M0 test contract на целевом Windows 10 ноутбуке. Реализация M1–M3 не является допустимым способом «продолжить», если target execution отсутствует или завершился FAIL.
 
 ### M1 — Stage и deterministic scenario
 
@@ -383,7 +432,10 @@ Autopresenter-Win10-x64/
 ## Public-demo acceptance suite
 
 - [ ] Чистый Windows 10 x64, обычный пользователь, без installed Node/Chrome/Playwright.
-- [ ] Exact M0 combo и 20/20 compatibility runs.
+- [ ] Exact candidate manifests совпадают с package locks и executable hashes.
+- [ ] Exact M0 combo и 20/20 полных cold compatibility runs: 10 fresh + 10 persistent.
+- [ ] Отдельные 5/5 cold live-site smoke runs.
+- [ ] Ни одного browser download, system-browser fallback или orphan process.
 - [ ] Запуск из трёх path variants, включая пробелы и кириллицу.
 - [ ] Real `locator.click()` виден в trace; DOM `element.click()` отсутствует.
 - [ ] Site contract доказывает unique stable targets и exact dataset/date.
@@ -399,14 +451,38 @@ Autopresenter-Win10-x64/
 
 ## Артефакты и evidence
 
-Run logs/reports/traces/screenshots складываются в `artifacts/codex/autopresenter/<run-id>/` и не коммитятся. В Git входят только минимальные fixtures, contracts, manifests templates и итоговый текстовый compatibility/release summary без секретов.
+Run evidence складывается в `artifacts/codex/autopresenter/<m0-run-id>/` и не коммитится. Обязательная структура:
+
+```text
+M0-REPORT.md
+M0-REPORT.json
+VERSIONS.json
+RELEASE-MANIFEST.json
+SHA256SUMS.txt
+SYSTEM-INFO.json
+runs/
+  current-control/
+    compatibility/run-001.json ... run-020.json
+    live/run-001.json ... run-005.json
+  pre-cft-compat/
+    compatibility/run-001.json ... run-020.json
+    live/run-001.json ... run-005.json
+screenshots/
+traces-on-failure/
+logs/
+```
+
+Каждая run record фиксирует candidate/run/profile/target, timestamps и exit codes, relative browser executable, настоящий locator/action, success marker, download/system-browser flags, process-cleanup snapshot и итог. `SYSTEM-INFO.json` фиксирует Windows edition/build/winver, x64, laptop model, RAM, GPU/driver, display/resolution/scaling/devicePixelRatio, locale, account/admin mode, portable path и доступное без elevation состояние Defender/AppLocker/WDAC; секреты и персональные файлы не собираются. Лог обязателен для каждого запуска, screenshot — для контрольной выборки и каждой ошибки, trace и process snapshot — для каждой ошибки.
+
+В Git входят только минимальные fixtures, contracts, schema/manifests templates и итоговый обезличенный compatibility summary. `M0-REPORT` обязан явно разделять local compatibility и live-site smoke и не может ставить `pass`, пока нет полного target-laptop evidence package.
 
 ## Decision summary
 
 | Вопрос | Решение |
 |---|---|
-| Текущий статус | design; только M0 разрешён |
+| Текущий статус | M0 implementation; target execution pending; только M0 разрешён |
 | Windows 10 | unsupported current platform; exact compatibility spike обязателен |
+| M0 acceptance | каждый candidate: 20/20 local cold cycles (10 fresh + 10 persistent), затем 5/5 live |
 | Первый сценарий | `tomorrow-mobile`; `/zavtra/` — отдельный Astro route |
 | Stage | iframe 430×932 внутри 1920×1080; direct-page не public layout |
 | Transport | HTTP long-poll с versioned at-most-once protocol |

@@ -5,6 +5,17 @@
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
+## Autopresenter M0 compatibility gate
+
+The [Autopresenter](auto-present/README.md) is restricted to its Windows 10 x64
+M0 compatibility spike. Each exact hermetic candidate must complete 20/20 full
+cold Node+browser cycles against a deterministic loopback fixture (10 fresh
+profiles and 10 persistent-profile cycles), followed by a separate 5/5 live
+`/zavtra/` smoke. Exact manifests, zero browser fallback/download/orphans and a
+complete evidence package from the target laptop are mandatory. Linux/CI cannot
+grant M0 PASS; M1 stage, M2 relay/phone control, M3 release work and any public
+demo remain blocked.
+
 ## Focus-group product prototype (2026-07-27)
 
 The isolated focus-group branch adds page/product mechanics for a later UI

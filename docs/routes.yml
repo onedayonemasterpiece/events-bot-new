@@ -341,6 +341,12 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    autopresenter:
+      status: m0_target_execution_pending
+      docs: docs/features/static-site-pages/auto-present/README.md
+      review_resolution: docs/features/static-site-pages/auto-present/external-review-resolution-2026-07-28.md
+      operator_runbook: tools/autopresenter/m0/README.md
+      gate: target_win10_20_of_20_local_then_5_of_5_live
     release_plan: docs/features/static-site-pages/release-plan.md
     presentation_release_checklist: docs/features/static-site-pages/presentation-release-checklist.md
     test_scenarios: docs/features/static-site-pages/test-scenarios.md

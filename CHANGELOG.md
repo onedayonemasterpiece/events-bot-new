@@ -7,6 +7,10 @@
 
 ### Added
 
+- Added the Autopresenter M0 operator/evidence contract for two exact hermetic
+  Windows 10 x64 candidates: each must complete 20 full cold loopback-fixture
+  cycles (10 fresh + 10 persistent profiles) followed by a separate 5/5 live
+  `/zavtra/` smoke on the target laptop.
 - Designed a deliberately small static-site Autopresenter: one phone-controlled
   Playwright scenario over the real review UI, an existing-`aiohttp` relay,
   a portable Windows runner, deterministic mobile/desktop overlays and a shared
@@ -306,6 +310,10 @@
 
 ### Changed
 
+- Applied the second Autopresenter review: candidate manifests are exact and
+  hash-bound; browser channel/system/cache/download fallbacks and orphan
+  processes fail closed; `19/20` is FAIL; Linux/CI cannot claim M0 PASS; M1–M3
+  and public-demo work remain explicitly blocked pending target evidence.
 - Tightened the Autopresenter design after external review: public demo remains
   `NO-GO` until a Windows 10 compatibility spike, deterministic iframe stage,
   idempotent long-poll/confirmed hard-stop protocol and exact portable
