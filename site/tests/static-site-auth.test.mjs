@@ -59,7 +59,8 @@ test('focus identity supports real email OTP and Yandex linking through the shar
   assert.match(auth, /emailRedirectTo:\s*redirectTo/u);
   assert.match(auth, /async linkYandexIdentity/u);
   assert.match(auth, /this\.client\.auth\.linkIdentity/u);
-  assert.match(intake, /auth\.signInWithEmailOtp\(email, intake\.cleanHref\)/u);
+  assert.match(intake, /new URL\(intake\.cleanHref, window\.location\.origin\)\.href/u);
+  assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirectTo\)/u);
   assert.match(intake, /auth\.linkYandexIdentity\(\)/u);
   assert.match(intake, /введённый адрес локально не сохраняется/u);
   assert.match(invitation, /<StaticSiteAuthRuntime \/>/u);

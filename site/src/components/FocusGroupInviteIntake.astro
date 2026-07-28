@@ -258,7 +258,8 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
       }
       if (focusStorage) updateFocusParticipationIdentityChoice(focusStorage, 'email_intent');
       selectedChoice = 'email_intent';
-      const sent = await auth.signInWithEmailOtp(email, intake.cleanHref);
+      const emailRedirectTo = new URL(intake.cleanHref, window.location.origin).href;
+      const sent = await auth.signInWithEmailOtp(email, emailRedirectTo);
       if (identityStatus) {
         identityStatus.textContent = sent
           ? 'Письмо отправлено. Откройте одноразовую ссылку в этом браузере; введённый адрес локально не сохраняется.'

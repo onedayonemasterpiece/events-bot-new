@@ -1,8 +1,8 @@
 # Focus-group / unified static-site R15 integration report
 
-Date: 2026-07-28  
-Integration branch: `integration/static-site-focus-r15-live-e2e-20260728`  
-PR: `#144`  
+Date: 2026-07-28
+Integration branch: `integration/static-site-focus-r15-live-e2e-20260728`
+PR: `#144`
 Reviewed head: `45072818ffed271310ed3195a1d23cdf00752c38`
 
 ## Requirement status
@@ -12,6 +12,7 @@ Reviewed head: `45072818ffed271310ed3195a1d23cdf00752c38`
 | Focus invitation link and QR | Done | `/fokus-gruppa/` and the closed focus hub immediately produce an exact fragment invitation URL, deterministic local SVG QR, copy/share/open and SVG download. No third-party QR service. |
 | Logout and repeat enrolment | Done for the browser-local focus journey | Supabase logout ends only the account session. Explicit focus exit clears only focus participation, preserves personalization, and reopening an invitation enrols again. |
 | Real email OTP / Yandex controls | Done in UI/controller | Focus onboarding calls the shared Supabase `signInWithOtp()` / Yandex OAuth and identity-linking controller when public Auth configuration is present. |
+| Email callback URL contract | Done in UI/controller | The clean fragment-free invite path/query is resolved against `window.location.origin` before it is passed as Supabase `emailRedirectTo`; the real mailbox callback remains part of the blocked external E2E. |
 | Full real mailbox → OTP → callback → Yandex-link E2E | Blocked | `kenigevents.ru` MX is SpaceWeb. A dedicated SpaceWeb inbox, Supabase custom SMTP, a usable Supabase Management PAT and real interactive Yandex user consent are still required. Browser-local E2E must not be represented as this real external journey. |
 | Participant / celebrity block | Done | The event-detail participant surface and static export contract from the parallel donor are present; desktop grid/mobile rail, roles/headliner and local like persistence are covered by static release tests. |
 | Focus PWA / install route | Done locally | Focus manifest/start route and focus membership restoration passed product/PWA suites. Production-root PWA was not changed. |

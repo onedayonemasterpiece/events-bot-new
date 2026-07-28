@@ -20,6 +20,8 @@
   email uses a real one-time link, Yandex uses the existing custom provider,
   and an already signed-in user links Yandex to the same account; the local
   focus marker still remains explicitly separate from production membership.
+- Fixed focus email OTP requests to send Supabase an absolute same-origin clean
+  callback URL after the invitation fragment has been removed.
 - Fixed mobile continuation likes so reranking only the unfrozen tail preserves
   viewport position after `Показать ещё`, and made Favorites hydrate future
   browser-local items before the optional Supabase merge.
