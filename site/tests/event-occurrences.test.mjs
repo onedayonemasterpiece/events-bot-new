@@ -87,6 +87,7 @@ test('Popular eligibility rejects non-public lifecycle states', () => {
 test('Popular excludes a stale ordinary range but keeps an ongoing exhibition through end_date', () => {
   const reference = { currentDate: '2026-07-24', referenceIso: '2026-07-24T12:00:00+02:00' };
   const ordinaryPast = event(61, '2026-07-20', '10:00', [], {
+    title: 'Концерт в музее',
     event_type: 'концерт',
     end_date: '2026-07-31',
     end_at: '2026-07-20T18:00:00+02:00',

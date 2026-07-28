@@ -38,6 +38,15 @@
   event ends through a separate noindex archive projection, while excluding
   those rows from every current listing, Search, Popular, recommendation,
   personalization and active-catalog surface.
+- Fixed Popular temporal eligibility so elapsed ordinary ranges cannot survive
+  on a stale `end_date`, while semantically projected exhibitions remain
+  eligible through their final day; linked/repeated families are collapsed
+  before the finite limit and are never repeated as filler.
+- Added source-bound unusual-event hard-negative regressions for the ordinary
+  civic action `5376` and archival exhibition `4327`, using the shared semantic
+  document and existing prototype anchors without a title-keyword classifier;
+  the controlled probe remains explicitly non-production evidence pending a
+  fresh pinned-BGE canary.
 
 - Added the R15 unusual-events implementation contract: `/neobychnoe/`,
   15-family taxonomy, one hash-bound shared BGE vector boundary, concept-level

@@ -144,6 +144,18 @@ The identical-rebuild flip metric compares two deterministic inference passes
 over the same vectors; it does not compare a newly calibrated classifier to
 the editorial tier label.
 
+The supplemental source-bound fixture
+`tests/fixtures/unusual_events_semantic_regressions_v1.json` freezes two
+reported ordinary boundaries: event `5376` is a conventional
+civic/commemorative action, and event `4327` is a conventional archival
+exhibition. Scale, anniversary importance, historical originals and free
+access are not unusual mechanisms by themselves. The regression exercises the
+full shared `event-related-doc-v1` semantic document and existing positive,
+neutral and hard-negative anchors; it adds no title keyword rule. Its anchored
+encoder is deliberately labelled `non_production_probe`: it protects the
+editorial boundary locally but cannot replace a fresh pinned-BGE canary and
+recalibration before promotion.
+
 The hard gate is structured and fail-closed. The exporter emits the explicit
 canonical eligibility record `canonical-event-semantic-v1`; the scorer requires
 all of these fields before semantic publication:

@@ -67,8 +67,11 @@ type DateParts = { year: number; month: number; day: number };
 export function isExhibitionLikeEvent(
   event: Pick<PreviewEvent, 'title' | 'event_type' | 'topics'>,
 ): boolean {
-  const haystack = [event.event_type, event.title, ...(event.topics || [])].join(' ').toLowerCase();
-  return /выстав|экспозиц|музей|галере|арт[-\s]?простран|инсталляц|экзамен/u.test(haystack);
+  // Popular must consume the semantic projection produced upstream rather
+  // than reclassifying titles with a broad keyword regex at render time.
+  const eventType = String(event.event_type || '').trim().toLowerCase();
+  if (eventType === 'выставка' || eventType === 'экспозиция') return true;
+  return (event.topics || []).some((topic) => String(topic).trim().toUpperCase() === 'EXHIBITIONS');
 }
 
 function parseDate(value: string): DateParts | null {

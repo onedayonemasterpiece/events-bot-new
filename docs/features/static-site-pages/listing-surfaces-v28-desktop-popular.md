@@ -28,9 +28,11 @@ Both projections are calculated against the same explicit build reference:
 - cancelled, postponed, merged, duplicate, deleted and inactive events fail
   closed;
 - an elapsed one-off is removed and a future one-off remains eligible;
-- a multi-day event is evaluated by `end_date` first and remains eligible
-  through that calendar day, even when an opening-day `end_at` is already past.
-  This is required for exhibitions and other genuine date ranges.
+- only a semantically projected exhibition (`event_type=выставка|экспозиция`
+  or topic `EXHIBITIONS`) remains eligible through its `end_date`, even when
+  the opening-day `end_at` is already past. An ordinary event with a stale or
+  broad date range is excluded after its start day; the renderer never
+  reclassifies it from title keywords.
 
 Family identity is normalized title + event type + venue/city. A family is
 allocated once across all five shelves. Its highest-ranked upcoming occurrence
@@ -38,6 +40,9 @@ is the visible card; sibling occurrence IDs are folded into `other_date_ids`
 and the quiet lifecycle line says, for example,
 `24 июля · 19:00 · ещё 1 показ`. Engagement is not summed across occurrences,
 because source exports may already contain aggregated values.
+The final selector is finite: linked occurrences and exact repeated IDs are
+collapsed before the limit, and a short truthful inventory yields fewer cards
+instead of repeated filler.
 
 The static-site calendar rollover already requests a rebuild at midnight in
 `Europe/Kaliningrad`, with startup catch-up. The build-time cutoff is still
