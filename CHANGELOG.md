@@ -414,6 +414,10 @@
 
 ### Fixed
 
+- Fixed the root-form production proof for the dedicated focus-group routes:
+  their intentional page-local `no-referrer` policy is now accepted only for
+  `/fokus-gruppa/**` and `/zakrytaya-afisha/`, while the same marker on any
+  ordinary production page remains a fail-closed release error.
 - Fixed the production root-form release gate for the deliberately private
   focus-group route family: `/fokus-gruppa/**` and `/zakrytaya-afisha/` now
   retain `noindex,nofollow,noarchive` while ordinary production pages remain
