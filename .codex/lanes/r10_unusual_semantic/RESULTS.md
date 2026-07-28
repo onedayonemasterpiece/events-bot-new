@@ -94,4 +94,5 @@ All passed.
   Promoting these cases into the release gate requires a new pinned-BGE canary
   and honest recalibration/approval rather than editing the calibration hash by
   hand.
-- No provider call, production build, push or deployment was performed.
+- No provider call, production build or deployment was performed. The clean
+  lane branch was pushed for integration.
