@@ -879,6 +879,11 @@ Product contract:
   filters, and an empty intersection has an explicit reset action;
 - long-running exhibitions are excluded from primary date flows, while genuine
   short multi-day festivals starting on the chosen date are not discarded;
+  the upstream primary `event_type` is authoritative when present, so a
+  secondary `EXHIBITIONS` topic in a mixed festival/concert programme cannot
+  silently remove that event from its date rail. The exact exhibition topic is
+  used only as a fail-closed fallback when the primary type is absent; titles
+  are never reclassified by a render-time keyword rule;
 - media selection first prefers a classified wide identity poster (`1.85–2.10`)
   with adequate resolution. Square/wide classified event photos are preferred;
   a crop requires `safe_crop` and focal metadata. Near-wide photos may become
