@@ -414,6 +414,9 @@
 
 ### Fixed
 
+- Added the missing self-canonical metadata to every dedicated focus-group
+  page, preserving the ordinary production URL in root-form proof and the
+  immutable `/_review/<token>` URL inside a secret candidate.
 - Fixed the root-form production proof for the dedicated focus-group routes:
   their intentional page-local `no-referrer` policy is now accepted only for
   `/fokus-gruppa/**` and `/zakrytaya-afisha/`, while the same marker on any

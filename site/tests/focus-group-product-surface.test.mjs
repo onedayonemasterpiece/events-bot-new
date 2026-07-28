@@ -22,6 +22,7 @@ test('focus programme stays on dedicated noindex/noarchive routes without replac
   for (const source of [hub, invitation, collection, ending, secretHub]) {
     assert.match(source, /noindex,nofollow,noarchive/u);
     assert.match(source, /<meta name="referrer" content="no-referrer"/u);
+    assert.match(source, /<link rel="canonical" href=\{absoluteUrl\('/u);
   }
   assert.match(productionCheck, /const focusPrivateRoute = file\.key === 'zakrytaya-afisha\/index\.html'/u);
   assert.match(productionCheck, /!focusPrivateRoute/u);

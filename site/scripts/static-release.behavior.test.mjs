@@ -125,6 +125,24 @@ test('production root-form proof preserves the private focus route family as noi
   assert.match(productionCheck, /!focusPrivateRoute && \/<meta\\s\+name="referrer"\\s\+content="no-referrer"\/iu/u);
 });
 
+test('private focus routes keep self-canonical URLs in root and candidate builds', () => {
+  const routes = [
+    ['../src/pages/fokus-gruppa/index.astro', '/fokus-gruppa/'],
+    ['../src/pages/fokus-gruppa/priglashenie/index.astro', '/fokus-gruppa/priglashenie/'],
+    ['../src/pages/fokus-gruppa/kollektsiya/index.astro', '/fokus-gruppa/kollektsiya/'],
+    ['../src/pages/fokus-gruppa/zavershenie/index.astro', '/fokus-gruppa/zavershenie/'],
+    ['../src/pages/zakrytaya-afisha/index.astro', '/zakrytaya-afisha/'],
+  ];
+  for (const [path, canonicalPath] of routes) {
+    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+    assert.match(source, /import \{ absoluteUrl, withBase \}/u);
+    assert.ok(
+      source.includes(`<link rel="canonical" href={absoluteUrl('${canonicalPath}')} />`),
+      `${path} must self-canonicalize through the active build base`,
+    );
+  }
+});
+
 test('ADD-BUILD-09 catalog ledger rejects duplicate, missing, or unversioned eligibility evidence', () => {
   const base = {
     schema_version: 'static_event_catalog_ledger_v1', repo_sha: 'a'.repeat(40), run_id: 'static:run:123', build_id: 'production-test',
