@@ -383,8 +383,25 @@ class StaticSiteAuthController {
     return false;
   }
 
-  async signOut(): Promise<void> {
-    await this.client.auth.signOut();
+  async signOut(): Promise<boolean> {
+    await this.initialize();
+    const signedInUser = this.snapshot.user;
+    this.publish({
+      status: 'checking',
+      user: signedInUser,
+      message: 'Завершаю сессию аккаунта…',
+      callbackAttempted: false,
+    });
+    const { error } = await this.client.auth.signOut();
+    if (error) {
+      this.publish({
+        status: 'error',
+        user: signedInUser,
+        message: 'Не удалось выйти из аккаунта. Проверьте соединение и попробуйте ещё раз.',
+        callbackAttempted: false,
+      });
+      return false;
+    }
     clearAuthIntent();
     this.publish({
       status: 'signed_out',
@@ -392,6 +409,7 @@ class StaticSiteAuthController {
       message: 'Вы вышли из аккаунта.',
       callbackAttempted: false,
     });
+    return true;
   }
 }
 

@@ -3,6 +3,7 @@ import FocusLabBadge from '../../components/FocusLabBadge.astro';
 import FocusGroupFeedback from '../../components/FocusGroupFeedback.astro';
 import FocusGroupInviteShare from '../../components/FocusGroupInviteShare.astro';
 import FocusGroupThankYou from '../../components/FocusGroupThankYou.astro';
+import StaticSiteAuthRuntime from '../../components/auth/StaticSiteAuthRuntime.astro';
 import { withBase } from '../../lib/events';
 import '../../styles/design-system.css';
 
@@ -63,9 +64,36 @@ const sections = [
           </a>
           <div class="focus-secret__header-actions">
             <FocusLabBadge label="Участник лаборатории" detail="Локальный прототип" />
-            <button class="focus-secret__leave" type="button" data-secret-clear>Выйти из прототипа</button>
+            <button class="focus-secret__leave" type="button" data-secret-clear>Выйти из фокус-группы</button>
           </div>
         </header>
+
+        <section class="focus-secret__account" aria-labelledby="focus-account-title">
+          <div>
+            <p class="focus-secret__eyebrow">Независимые состояния</p>
+            <h2 id="focus-account-title">Аккаунт и участие — не одно и то же</h2>
+            <p>
+              Выход из аккаунта завершает Supabase-сессию, но сохраняет
+              30-дневное участие. Только кнопка «Выйти из фокус-группы»
+              удаляет локальную метку участия; настройки «Для меня» она не стирает.
+            </p>
+          </div>
+          <div class="focus-secret__account-actions">
+            <div data-static-auth-signed-out>
+              <span>Аккаунт не подключён.</span>
+              <button class="ke-button ke-button--primary" type="button" data-static-auth-login>
+                Войти через Яндекс
+              </button>
+            </div>
+            <div data-static-auth-signed-in hidden>
+              <span>Аккаунт: <strong data-static-auth-name>Аккаунт</strong></span>
+              <button class="ke-button ke-button--secondary" type="button" data-static-auth-logout hidden>
+                Выйти из аккаунта
+              </button>
+            </div>
+            <p data-static-auth-status role="status" aria-live="polite" aria-atomic="true"></p>
+          </div>
+        </section>
 
         <section class="focus-secret__hero">
           <div>
@@ -137,6 +165,7 @@ const sections = [
         </section>
       </noscript>
     </main>
+    <StaticSiteAuthRuntime />
   </body>
 </html>
 
@@ -195,6 +224,23 @@ const sections = [
   .focus-secret__brand small { color: var(--ke-color-brand-700); font-size: .72rem; font-weight: 800; }
   .focus-secret__header-actions { display: flex; align-items: center; gap: .65rem; }
   .focus-secret__leave { min-height: 44px; border: 0; padding: .5rem; background: transparent; color: var(--ke-color-muted); font: 800 .75rem/1.2 var(--ke-font-sans); text-decoration: underline; text-underline-offset: .2rem; cursor: pointer; }
+  .focus-secret__account {
+    display: grid;
+    grid-template-columns: minmax(240px, .8fr) minmax(0, 1.2fr);
+    gap: clamp(1rem, 4vw, 3rem);
+    align-items: center;
+    border: 1px solid var(--ke-color-line);
+    border-radius: 1.25rem;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    background: var(--ke-color-surface-strong);
+  }
+  .focus-secret__account h2 { margin: 0 0 .45rem; font-size: clamp(1.4rem, 3vw, 2rem); }
+  .focus-secret__account > div > p:last-child { margin: 0; color: var(--ke-color-muted); font-size: .86rem; line-height: 1.5; }
+  .focus-secret__account-actions { display: grid; gap: .5rem; }
+  .focus-secret__account-actions > div { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+  .focus-secret__account-actions > div[hidden] { display: none; }
+  .focus-secret__account-actions span { min-width: 0; overflow-wrap: anywhere; font-size: .86rem; line-height: 1.4; }
+  .focus-secret__account-actions > p { min-height: 1.4em; margin: 0; color: var(--ke-color-muted); font-size: .76rem; line-height: 1.4; }
   .focus-secret__hero { min-height: 560px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); gap: clamp(2rem, 6vw, 5rem); align-items: end; border: 1px solid var(--ke-color-line); border-radius: 2rem; padding: clamp(1.4rem, 5vw, 4rem); background: linear-gradient(145deg, #fff, #fff5df); box-shadow: var(--ke-shadow-2); }
   .focus-secret__eyebrow { margin: 0 0 .55rem; color: var(--ke-color-brand-700); font-size: .72rem; font-weight: 900; letter-spacing: .11em; text-transform: uppercase; }
   .focus-secret__hero h1 { max-width: 11ch; margin: 0; font-size: clamp(3.4rem, 9vw, 8rem); line-height: .84; letter-spacing: -.07em; text-wrap: balance; }
@@ -205,6 +251,7 @@ const sections = [
   .focus-secret__directory a { min-height: 145px; display: grid; grid-template-columns: auto 1fr auto; gap: .7rem; align-items: start; border: 1px solid var(--ke-color-line); border-radius: 1.25rem; padding: 1rem; background: var(--ke-color-surface-strong); color: inherit; text-decoration: none; box-shadow: var(--ke-shadow-1); transition: transform var(--ke-duration-fast), border-color var(--ke-duration-fast); }
   .focus-secret__directory a:hover { transform: translateY(-2px); border-color: var(--ke-color-brand-600); }
   .focus-secret__directory a:focus-visible,
+  .focus-secret__account button:focus-visible,
   .focus-secret__leave:focus-visible { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 60%, transparent); outline-offset: 3px; }
   .focus-secret__directory a > span:nth-child(2) { display: grid; gap: .35rem; }
   .focus-secret__directory strong { font-size: 1.1rem; }
@@ -224,12 +271,15 @@ const sections = [
     .focus-secret__header { align-items: flex-start; }
     .focus-secret__brand span { display: none; }
     .focus-secret__header-actions { align-items: flex-end; flex-direction: column; }
+    .focus-secret__account { grid-template-columns: 1fr; }
     .focus-secret__hero { grid-template-columns: 1fr; min-height: calc(100dvh - 6rem); align-content: end; }
     .focus-secret__directory { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .focus-secret__research-note { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 560px) {
+    .focus-secret__account-actions > div { align-items: stretch; flex-direction: column; }
+    .focus-secret__account-actions .ke-button { width: 100%; }
     .focus-secret__directory { grid-template-columns: 1fr; }
     .focus-secret__directory a { min-height: 116px; }
     .focus-secret__leave { max-width: 150px; }
