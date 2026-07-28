@@ -3,7 +3,8 @@
 - Lane ID: `evidence`
 - Requirement IDs: `R06`, `R09`
 - Base SHA: `981aebd9d9179b3985e5fc10055ea96251997ec3`
-- Implementation SHA: `ffa2daa4fffba2edfb14568fe1fa1a42738d7354`
+- Head SHA (tested implementation before this lane-report-only commit):
+  `ffa2daa4fffba2edfb14568fe1fa1a42738d7354`
 - Branch: `agent/autopresenter-m0/evidence`
 - Status: complete
 
