@@ -13,6 +13,10 @@ interface Props {
   events: PreviewEvent[];
 }
 const { title, description, criteria, updatedDate, referenceDate, events } = Astro.props;
+const isExhibition = (event: PreviewEvent) => (event.event_type || '').trim().toLocaleLowerCase('ru-RU') === 'выставка'
+  || event.topics.includes('EXHIBITIONS');
+const exhibitionEvents = events.filter(isExhibition);
+const regularEvents = events.filter((event) => !isExhibition(event));
 ---
 <main id="main" class="free-collection" data-free-collection-surface>
   <div class="page-shell free-collection__shell">
@@ -36,26 +40,58 @@ const { title, description, criteria, updatedDate, referenceDate, events } = Ast
       </span>
     </section>
 
-    <div class="free-collection__shelf" data-free-collection-shelf>
-      <span class="free-collection__medallion free-collection__medallion--shelf" aria-hidden="true" data-free-collection-medallion="compact">
+    <div class="free-collection__sticky-identity" data-free-collection-sticky-identity aria-hidden="true">
+      <span class="free-collection__medallion free-collection__medallion--compact" data-free-collection-medallion="compact">
         <img src={withBase('/assets/badges/free-listing-medallion.svg')} alt="" width="512" height="512" />
       </span>
-      <div><strong>Бесплатно</strong><span>{events.length} событий с подтверждённым свободным входом</span></div>
-      <a href="#free-collection-results">К событиям</a>
     </div>
 
-    <section id="free-collection-results" class="free-collection__results" aria-labelledby="free-collection-results-title">
-      <h2 id="free-collection-results-title">{events.length ? `${events.length} событий` : 'Подходящих событий пока нет'}</h2>
+    <section id="free-collection-results" class="free-collection__results" aria-labelledby="free-collection-results-title" data-free-collection-event-group="events">
+      <h2 id="free-collection-results-title">
+        {events.length
+          ? (regularEvents.length ? `${regularEvents.length} событий` : 'Событий вне выставок пока нет')
+          : 'Подходящих событий пока нет'}
+      </h2>
       {events.length ? (
-        <div class="cards-grid" data-search-collection-results>
-          {events.map((event) => <EventCard event={event} mobileFlowMedia />)}
-        </div>
+        regularEvents.length ? (
+          <div class="cards-grid" data-search-collection-results>
+            {regularEvents.map((event) => <EventCard event={event} mobileFlowMedia />)}
+          </div>
+        ) : (
+          <p class="free-collection__empty">Сейчас все актуальные варианты этой подборки — продолжающиеся выставки. Они собраны отдельно ниже.</p>
+        )
       ) : (
         <p class="free-collection__empty">Сейчас в актуальной выгрузке нет событий с подтверждённым бесплатным входом. Неизвестные условия не добавляются ради заполнения страницы.</p>
       )}
     </section>
+
+    {exhibitionEvents.length > 0 && (
+      <section class="free-collection__results free-collection__results--exhibitions" aria-labelledby="free-collection-exhibitions-title" data-free-collection-event-group="exhibitions">
+        <p class="eyebrow">Можно посетить в течение дня</p>
+        <h2 id="free-collection-exhibitions-title">Бесплатные выставки · {exhibitionEvents.length}</h2>
+        <p class="free-collection__group-note">Продолжающиеся выставки отделены от событий с конкретным временем, чтобы их было проще просматривать.</p>
+        <div class="cards-grid" data-search-collection-exhibitions>
+          {exhibitionEvents.map((event) => <EventCard event={event} mobileFlowMedia />)}
+        </div>
+      </section>
+    )}
   </div>
 </main>
+
+<script>
+  const root = document.querySelector('[data-free-collection-surface]');
+  const hero = root?.querySelector('[data-free-collection-hero]');
+  const stickyIdentity = root?.querySelector('[data-free-collection-sticky-identity]');
+  if (hero instanceof HTMLElement && stickyIdentity instanceof HTMLElement) {
+    const sync = () => {
+      const top = window.matchMedia('(max-width: 759px)').matches ? 64 : 57;
+      stickyIdentity.toggleAttribute('data-compact-visible', hero.getBoundingClientRect().bottom <= top + 16);
+    };
+    sync();
+    document.addEventListener('scroll', sync, { passive:true });
+    window.addEventListener('resize', sync, { passive:true });
+  }
+</script>
 
 <style>
   .free-collection { --free-green:#2f7d32; padding: 0 0 4rem; }
@@ -73,18 +109,21 @@ const { title, description, criteria, updatedDate, referenceDate, events } = Ast
   .free-collection__medallion { display:grid; place-items:center; flex:none; }
   .free-collection__medallion img { width:100%; height:100%; object-fit:contain; }
   .free-collection__medallion--hero { justify-self:end; width:clamp(180px,23vw,300px); height:clamp(180px,23vw,300px); filter:drop-shadow(0 22px 30px rgba(38,83,34,.18)); }
-  .free-collection__shelf {
-    position:sticky; z-index:48; top:57px; min-height:68px; display:grid; grid-template-columns:48px minmax(0,1fr) auto; align-items:center; gap:12px;
-    padding:8px 14px; border:1px solid rgba(47,125,50,.18); border-radius:18px; background:rgba(255,253,248,.96);
-    box-shadow:0 12px 28px rgba(51,39,29,.11); backdrop-filter:blur(14px);
+  .free-collection__sticky-identity {
+    position:sticky; z-index:48; top:57px; height:0; display:flex; justify-content:flex-end;
+    padding-right:clamp(8px,1.6vw,18px); pointer-events:none;
   }
-  .free-collection__medallion--shelf { width:48px; height:48px; }
-  .free-collection__shelf div { min-width:0; display:grid; gap:2px; }
-  .free-collection__shelf strong { font-size:1rem; line-height:1.1; }
-  .free-collection__shelf span { overflow:hidden; color:#6d6259; font-size:.78rem; line-height:1.2; text-overflow:ellipsis; white-space:nowrap; }
-  .free-collection__shelf a { min-height:44px; display:inline-flex; align-items:center; padding:0 14px; border-radius:999px; background:#2a211c; color:#fff; font-size:.82rem; font-weight:850; text-decoration:none; }
+  .free-collection__medallion--compact {
+    width:58px; height:58px; opacity:0; transform:translateY(-10px) scale(.82);
+    filter:drop-shadow(0 10px 17px rgba(38,83,34,.22));
+    transition:opacity .18s ease,transform .22s ease;
+  }
+  .free-collection__sticky-identity[data-compact-visible] .free-collection__medallion--compact { opacity:1; transform:none; }
   .free-collection__results { scroll-margin-top:142px; padding:clamp(1.5rem,4vw,3rem); border:1px solid rgba(121,48,20,.11); border-radius:26px; background:#fffdf8; }
   .free-collection__results h2 { margin:0 0 1.25rem; font-size:clamp(1.5rem,3vw,2.4rem); }
+  .free-collection__results--exhibitions { margin-top:.25rem; }
+  .free-collection__results--exhibitions .eyebrow { margin-bottom:.35rem; }
+  .free-collection__group-note { max-width:64ch; margin:-.65rem 0 1.25rem; color:#6d6259; }
   .free-collection__empty { max-width:62ch; color:#6d6259; }
   @media(max-width:759px) {
     .free-collection { padding-bottom:calc(5rem + env(safe-area-inset-bottom)); }
@@ -94,12 +133,12 @@ const { title, description, criteria, updatedDate, referenceDate, events } = Ast
     .free-collection__copy .lead { font-size:.95rem; }
     .free-collection__copy .collection-criteria,.free-collection__copy .muted-note { font-size:.76rem; line-height:1.35; }
     .free-collection__medallion--hero { width:96px; height:96px; align-self:start; margin-top:44px; }
-    .free-collection__shelf { top:64px; z-index:35; grid-template-columns:42px minmax(0,1fr) auto; min-height:60px; padding:7px 8px; border-radius:15px; }
-    .free-collection__medallion--shelf { width:42px; height:42px; }
-    .free-collection__shelf span { font-size:.68rem; }
-    .free-collection__shelf a { width:44px; padding:0; justify-content:center; font-size:0; }
-    .free-collection__shelf a::after { content:'↓'; font-size:20px; }
+    .free-collection__sticky-identity { top:64px; z-index:35; padding-right:6px; }
+    .free-collection__medallion--compact { width:50px; height:50px; }
     .free-collection__results { padding:20px 12px; border-radius:20px; }
     .free-collection__results .cards-grid { grid-template-columns:minmax(0,1fr); }
+  }
+  @media(prefers-reduced-motion:reduce) {
+    .free-collection__medallion--compact { transition:none; }
   }
 </style>

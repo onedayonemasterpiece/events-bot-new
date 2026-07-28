@@ -120,6 +120,14 @@ Reviewer получает candidate identity, proposed relation, normalized anch
 - gated index/detail UI: `site/src/pages/kluby-po-interesam/`;
 - release gates: `ENABLE_INTEREST_CLUB_PIPELINE`, `ENABLE_INTEREST_CLUB_STATIC_PROJECTION`, `PUBLIC_INTEREST_CLUBS_ENABLED`. Первые решения/связи по-прежнему fail-closed; в production static generation последние два флага включены явно, передаются в зашифрованный Kaggle runtime dataset и входят в input fingerprint. Поэтому approved DB-клубы не заменяются пустым состоянием при очередной сборке, а выключение любого флага остаётся явным rollback.
 
+Production and immutable-candidate build wrappers also default
+`PUBLIC_INTEREST_CLUBS_ENABLED` to `1` when the runner omitted it. This is a
+consumer-side no-degrade guard for the already reviewed static projection, not
+an approval bypass: the exporter still publishes only confirmed identities and
+all data freshness/boundary checks still run. Operators can roll back the UI
+only with the explicit value `0`; absence of an environment variable is not a
+valid reason to replace the three current confirmed cards with an empty page.
+
 Команда bootstrap без публичного approval:
 
 ```bash

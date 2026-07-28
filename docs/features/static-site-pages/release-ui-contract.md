@@ -57,6 +57,17 @@ The canonical component catalog is [the static-site design system](design-system
 - Search, Personal and the menu reflect one origin-scoped auth session. Login
   is available directly from the menu; tokens never enter DOM state;
 - `Бесплатно` opens the materialized Free collection, not Search;
+- the Free collection starts with the large `Бесплатно` medallion on the
+  right. After that hero has left the viewport, only a smaller medallion stays
+  pinned near the top on a transparent zero-height layer: it must not create an
+  opaque shelf or hide the cards scrolling below it;
+- timed/non-exhibition Free events are rendered first. Ongoing exhibitions
+  are a separate labelled group at the end, including the honest state where
+  the current collection contains exhibitions only;
+- a missing `PUBLIC_INTEREST_CLUBS_ENABLED` build-runner variable means the
+  checked confirmed-club projection remains enabled. Only the explicit value
+  `0` is the static UI rollback; an omitted variable must not silently publish
+  an empty Clubs catalogue;
 - mobile OCR/document/unknown media is fully readable and never cover-cropped;
   crop-safe visual rail media may expose up to four real source assets;
 - `visual_only` native share composes event identity and KenigEvents branding;

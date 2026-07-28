@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import catalogData from '../src/data/production-catalog.json' with { type: 'json' };
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
+import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import {
   CHECK_CONTRACT_VERSION, RELEASE_MANIFEST_SCHEMA, fileInventory, sha256, treeHash, validateCatalogLedger,
@@ -78,11 +79,7 @@ if (
   || !productionArtifactUnavailableMarker.test(productionArtifactSource)
 ) fail('artifact collection leaked into production');
 const freeCollectionSource = html('podborki/besplatnye-sobytiya/index.html');
-const freeCollectionResults = freeCollectionSource.slice(
-  freeCollectionSource.indexOf('data-search-collection-results'),
-  freeCollectionSource.indexOf('</section>', freeCollectionSource.indexOf('data-search-collection-results')),
-);
-const freeCollectionIds = [...freeCollectionResults.matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
+const freeCollectionIds = [...freeCollectionSource.matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
 const eventByIdForCollections = new Map(eventsData.events.map((event) => [Number(event.id), event]));
 if (!freeCollectionIds.length) fail('general free collection is unexpectedly empty');
 if (freeCollectionIds.some((id) => !eventByIdForCollections.get(id)?.ticket?.is_free)) fail('general free collection contains a non-free exported event');
@@ -90,6 +87,14 @@ const ongoingFreeIds = new Set(eventsData.events
   .filter((event) => event.ticket?.is_free && event.start_date < eventsData.build.current_date && event.end_date >= eventsData.build.current_date)
   .map((event) => Number(event.id)));
 if (ongoingFreeIds.size && !freeCollectionIds.some((id) => ongoingFreeIds.has(id))) fail('general free collection lost all ongoing free events');
+if (!freeCollectionSource.includes('data-free-collection-event-group="events"')) fail('general free collection misses the primary event group');
+const freeExhibitionIds = [...(freeCollectionSource.match(
+  /data-free-collection-event-group="exhibitions"[\s\S]*?<\/section>/u,
+)?.[0] || '').matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
+if (freeExhibitionIds.some((id) => {
+  const event = eventByIdForCollections.get(id);
+  return event?.event_type !== 'выставка' && !event?.topics?.includes('EXHIBITIONS');
+})) fail('free exhibition group contains a non-exhibition event');
 const jazzCollectionSource = html('podborki/dzhaz-na-vyhodnyh/index.html');
 if (!jazzCollectionSource.includes('data-search-collection-results')) {
   if (!jazzCollectionSource.includes('data-search-collection-empty-window')) fail('empty Jazz collection misses its explicit weekend explanation');
@@ -146,6 +151,10 @@ for (const event of eventsData.events) {
     if (!target) fail(`dangling linked occurrence ${event.id}->${linkedId}`);
     if (!(target.other_date_ids || []).map(Number).includes(Number(event.id))) fail(`asymmetric linked occurrence ${event.id}<->${linkedId}`);
   }
+}
+if (!Array.isArray(interestClubsData.clubs) || interestClubsData.clubs.length < 3) fail('confirmed club projection is unexpectedly empty');
+for (const club of interestClubsData.clubs) {
+  required(`kluby-po-interesam/${club.slug}/index.html`);
 }
 
 const siteOrigin = manifest.site_origin;

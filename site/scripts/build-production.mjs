@@ -62,6 +62,10 @@ const env = {
   PUBLIC_SITE_MODE: 'production', PUBLIC_SITE_ORIGIN: siteOrigin, PUBLIC_ICS_BASE_URL: icsBaseUrl, SITE_BASE_PATH: '/',
   PUBLIC_ASSET_BASE_URL: process.env.PUBLIC_ASSET_BASE_URL || 'https://static.kenigevents.ru',
   PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: 'off', PUBLIC_STATIC_RELEASE_ID: buildId,
+  // Confirmed club identities are part of the release snapshot. An absent
+  // runner variable must not silently replace them with an empty catalogue;
+  // operators can still use the explicit `0` rollback value.
+  PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
 };
 delete env.PUBLIC_PREVIEW_BUILD_ID;
 delete env.PUBLIC_ROOT_PREVIEW_HREF;

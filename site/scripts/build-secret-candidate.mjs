@@ -57,6 +57,9 @@ const env = {
   PUBLIC_ASTRO_ASSET_BASE_URL: '',
   PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: transportExperimentMode,
   PUBLIC_STATIC_RELEASE_ID: productionManifest.build_id,
+  // Mirror the checked production projection instead of degrading a review
+  // candidate to the empty-state merely because the shell omitted the flag.
+  PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
 };
 const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['build'], { cwd: siteDir, env, stdio: 'inherit', shell: process.platform === 'win32' });
 if (astro.status !== 0) process.exit(astro.status || 1);

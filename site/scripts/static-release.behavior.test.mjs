@@ -78,6 +78,17 @@ test('production and candidate builds forward only normalized browser-safe searc
   }
 });
 
+test('production and candidate builds keep confirmed clubs unless rollback is explicit', () => {
+  const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
+  const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
+  for (const source of [production, candidate]) {
+    assert.match(
+      source,
+      /PUBLIC_INTEREST_CLUBS_ENABLED:\s*process\.env\.PUBLIC_INTEREST_CLUBS_ENABLED\s*\|\|\s*'1'/u,
+    );
+  }
+});
+
 test('production and secret-candidate profiles retain the production-ready partnership route', () => {
   const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
   const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
