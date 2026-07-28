@@ -144,6 +144,65 @@ def test_add_build_07_full_catalog_mode_is_unbounded_and_fail_closed() -> None:
         raise AssertionError("limit=0 must not mean full catalog")
 
 
+def test_full_catalog_keeps_elapsed_same_day_events_for_today_muting() -> None:
+    exporter = _load_exporter_module()
+    con = _connect_with_public_gate_columns()
+    _insert_event(con, 1, date="2026-07-27", time="11:00")
+    _insert_event(con, 2, date="2026-07-27", time="19:00")
+    _insert_event(con, 3, date="2026-07-26", time="23:00")
+    _insert_event(con, 4, date="2026-07-28", time="09:00")
+
+    rows = exporter.fetch_rows(
+        con,
+        limit=None,
+        current_date="2026-07-27",
+        current_time="21:50",
+        include_ids=[],
+    )
+    ledger = exporter.build_catalog_ledger(
+        con,
+        rows,
+        current_date="2026-07-27",
+        current_time="21:50",
+        generated_at="2026-07-27T19:50:00+00:00",
+        repo_sha="a" * 40,
+        run_id="static-site:test:today-elapsed",
+        build_id="production-test-today-elapsed",
+        snapshot_id="snapshot-test-today-elapsed",
+        snapshot_sha256="b" * 64,
+        snapshot_size=123,
+    )
+
+    assert [row["id"] for row in rows] == [1, 2, 4]
+    assert [item["event_id"] for item in ledger["eligible"]] == [1, 2, 4]
+
+
+def test_recent_detail_archive_retains_links_without_reentering_public_catalog() -> None:
+    exporter = _load_exporter_module()
+    con = _connect_with_public_gate_columns()
+    _insert_event(con, 1, date="2026-07-26")
+    _insert_event(con, 2, date="2026-07-13")
+    _insert_event(con, 3, date="2026-07-27")
+    _insert_event(con, 4, date="2026-07-25", silent=1)
+    _insert_event(con, 5, date="2026-07-24", identity_status="alias")
+    _insert_event(con, 6, date="2026-07-01", end_date="2026-07-20")
+
+    current = exporter.fetch_rows(
+        con,
+        limit=None,
+        current_date="2026-07-28",
+        include_ids=[],
+    )
+    archived = exporter.fetch_recent_event_detail_archive_rows(
+        con,
+        current_date="2026-07-28",
+    )
+
+    assert current == []
+    assert [row["id"] for row in archived] == [3, 1, 6, 2]
+    assert exporter.EVENT_DETAIL_ARCHIVE_DAYS == 30
+
+
 def test_add_build_09_catalog_ledger_proves_eligible_and_excluded_parity() -> None:
     exporter = _load_exporter_module()
     con = _connect_with_public_gate_columns()

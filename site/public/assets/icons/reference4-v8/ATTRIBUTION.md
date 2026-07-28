@@ -7,6 +7,9 @@ individual downloads as CC0.
 | Use | Asset | Source |
 |---|---|---|
 | Children | `baby-thin.svg` | [Phosphor Thin collection on SVG Repo](https://www.svgrepo.com/collection/phosphor-thin-icons/); exact SVG taken from upstream `@phosphor-icons/core` 2.1.1 (MIT), because the SVG Repo item page was checkpointed |
+| Collections | `squares-four-thin.svg` | [Squares Four Thin #365765](https://www.svgrepo.com/svg/365765/squares-four-thin), CC0 |
+| Unusual | `sparkle-thin.svg` | [Sparkle Thin #365749](https://www.svgrepo.com/svg/365749/sparkle-thin), CC0 |
+| Clubs | `chats-thin.svg` | [Chats Thin #365240](https://www.svgrepo.com/svg/365240/chats-thin), CC0 |
 | Exhibitions | `palette-thin.svg` | [Palette Thin #365613](https://www.svgrepo.com/svg/365613/palette-thin) |
 | Festivals | `buildings-thin.svg` | [Buildings Thin #365181](https://www.svgrepo.com/svg/365181/buildings-thin) |
 | Popular | `popular-trend-up-thin.svg` | [Trend Up Thin #365841](https://www.svgrepo.com/svg/365841/trend-up-thin) |
@@ -33,3 +36,13 @@ misread as “rubles/cash prohibited”.
 - Whole-family fallbacks: [Lucide Line](https://www.svgrepo.com/collection/lucide-line-icons/)
   (more robust but heavier) and [Solar Linear](https://www.svgrepo.com/collection/solar-linear-icons/)
   (more decorative but less semantically complete for this menu).
+
+## R15 Collections curation
+
+A local contact sheet compared Folder Thin, Squares Four Thin, Sparkle Thin and
+Chats Thin at the same 96 px presentation before they were placed in the menu.
+`Squares Four` was selected over `Folder` because four equal tiles read as a
+curated set rather than file storage at small mobile size. `Sparkle` is distinct
+from the existing Popular trend mark, and `Chats` expresses people meeting and
+conversation without mixing icon families. All selected assets are unmodified
+Phosphor Thin SVG Repo glyphs; CSS only scales and colors them.

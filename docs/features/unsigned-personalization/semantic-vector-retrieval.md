@@ -11,6 +11,25 @@ The static site needs two different retrieval modes:
 
 The old `local_tfidf_sparse_v1` layer could rank “Музыка нашего города” near an urban-planning event because of the lexical token “город”. Semantic retrieval must use real embeddings and must prove on golden anchors that architectural/urban candidates outrank lexical false positives.
 
+## R15 shared static BGE boundary
+
+The unusual-events candidate introduces a separate, pinned BGE-M3 space for
+offline static consumers. It reuses the factual `related_v1` **document
+contract**, but does not mix BGE's 1024-dimension vectors with the
+768-dimension Gemini pgvector rows described below. One BGE encode boundary
+produces each event vector once for public static related retrieval, unusual
+prototype scoring, family evidence and presentation concept support; no
+consumer creates a second embedding pass. Ordinary views remain static and the
+required build counter is `provider_calls=0`.
+
+The complete taxonomy, hashes, activation metrics, cache/last-good behavior and
+rollout boundary are canonical in
+[`docs/features/unusual-events/README.md`](../unusual-events/README.md).
+Gemini `search_v3` authorized Search below remains valid and is not silently
+migrated by R15. Gemini `related_v1` may remain only as an explicitly selected
+rollback/comparison canary; it is not a concurrent production public-related
+source once the shared-BGE mode is enabled.
+
 ## Relevance contract for authorized search
 
 Authorized search is a two-stage semantic pipeline, not a deterministic keyword gate:

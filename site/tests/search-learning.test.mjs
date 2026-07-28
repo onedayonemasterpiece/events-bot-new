@@ -163,7 +163,11 @@ test('ranked search cards use the shared mobile media contract without desktop r
 
 test('mobile Search fixes donor shell without rewriting its core', () => {
   assert.match(searchPage, /<EventLayout[^>]*mobileSection="search"/u);
-  assert.match(collectionPage, /<EventLayout[^>]*mobileSection="search"/u);
+  assert.match(
+    collectionPage,
+    /mobileSection=\{collection\.slug === 'besplatnye-sobytiya' \? 'home' : 'search'\}/u,
+    'ordinary materialized collections retain Search while Free uses the Afisha shell',
+  );
   assert.match(bottomNav, /aria-current=\{item\.key === current \? 'page' : undefined\}/u);
   assert.match(eventLayout, /<MobileBottomNav current=\{mobileSection\} \/>/u);
   assert.doesNotMatch(bottomNav, /body:has\(/u);

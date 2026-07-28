@@ -13,6 +13,7 @@ const repoRoot = resolve(siteDir, '..');
 const distDir = join(siteDir, 'dist');
 const catalogPath = join(siteDir, 'src/data/production-catalog.json');
 const eventsPath = join(siteDir, 'src/data/preview-events.json');
+const eventArchivePath = join(siteDir, 'src/data/preview-event-archive.json');
 const relatedPath = join(siteDir, 'src/data/preview-related.json');
 const festivalTimelinePath = join(siteDir, 'src/data/festival-timeline.json');
 const templateContractPath = join(siteDir, 'src/data/eventTemplateContract.json');
@@ -62,6 +63,10 @@ const env = {
   PUBLIC_SITE_MODE: 'production', PUBLIC_SITE_ORIGIN: siteOrigin, PUBLIC_ICS_BASE_URL: icsBaseUrl, SITE_BASE_PATH: '/',
   PUBLIC_ASSET_BASE_URL: process.env.PUBLIC_ASSET_BASE_URL || 'https://static.kenigevents.ru',
   PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: 'off', PUBLIC_STATIC_RELEASE_ID: buildId,
+  // Confirmed club identities are part of the release snapshot. An absent
+  // runner variable must not silently replace them with an empty catalogue;
+  // operators can still use the explicit `0` rollback value.
+  PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
 };
 delete env.PUBLIC_PREVIEW_BUILD_ID;
 delete env.PUBLIC_ROOT_PREVIEW_HREF;
@@ -70,14 +75,14 @@ if (astro.status !== 0) process.exit(astro.status || 1);
 
 rmSync(join(distDir, '__preview'), { recursive: true, force: true });
 rmSync(join(distDir, 'lab'), { recursive: true, force: true });
-const todayPath = join(distDir, 'segodnya/index.html');
-let rootHtml = readFileSync(todayPath, 'utf8');
-rootHtml = replaceRequired(rootHtml, `<link rel="canonical" href="${siteOrigin}/segodnya/">`, `<link rel="canonical" href="${siteOrigin}/">`, 'today canonical');
-rootHtml = replaceRequired(rootHtml, `<meta property="og:url" content="${siteOrigin}/segodnya/">`, `<meta property="og:url" content="${siteOrigin}/">`, 'today og:url');
-rootHtml = replaceRequired(rootHtml, '<main id="main"', '<main id="main" data-production-root-listing', 'root marker');
+// The root is a first-class product surface (hero talk, quick navigation and a
+// finite cold-start feed). Never alias `/segodnya/` over it during packaging.
+let rootHtml = readFileSync(join(distDir, 'index.html'), 'utf8');
+rootHtml = replaceRequired(rootHtml, '<main id="main"', '<main id="main" data-production-root-home', 'root home marker');
 writeFileSync(join(distDir, 'index.html'), rootHtml);
 
 const eventsData = JSON.parse(readFileSync(eventsPath, 'utf8'));
+const eventArchiveData = JSON.parse(readFileSync(eventArchivePath, 'utf8'));
 const relatedData = JSON.parse(readFileSync(relatedPath, 'utf8'));
 const festivalTimelineData = JSON.parse(readFileSync(festivalTimelinePath, 'utf8'));
 const templateContract = JSON.parse(readFileSync(templateContractPath, 'utf8'));
@@ -94,10 +99,12 @@ writeFileSync(buildPath, `${JSON.stringify(buildMetadata, null, 2)}\n`);
 const files = fileInventory(distDir, { exclude: ['static-release-manifest.json'] });
 const counts = pageCounts(files, catalog.eligible_count);
 const idBySlug = new Map(eventsData.events.map((event) => [String(event.slug), Number(event.id)]));
+const archiveSlugs = new Set(eventArchiveData.events.map((event) => String(event.slug)));
 const stableIcs = files.flatMap((file) => {
   const match = /^sobytiya\/([^/]+)\/event\.ics$/u.exec(file.key);
   if (!match) return [];
   const eventId = idBySlug.get(match[1]);
+  if (!eventId && archiveSlugs.has(match[1])) return [];
   if (!eventId) throw new Error(`Cannot map stable ICS source ${file.key}`);
   return [{ event_id: eventId, source_key: file.key, target_key: `ics/${eventId}.ics`, sha256: file.sha256 }];
 });
@@ -116,6 +123,12 @@ const manifest = {
     template_source_sha: templateContract.accepted_source_sha,
     template_contract_schema: templateContract.schema_version,
     related: relatedData.schema_version || relatedData.algorithm || null,
+    event_detail_archive: {
+      source: eventArchiveData.build?.source || null,
+      retention_days: 30,
+      rendered_count: eventArchiveData.events.length,
+      projection_sha256: sha256(readFileSync(eventArchivePath)),
+    },
     festival_calendar: {
       schema_version: festivalTimelineData.schema_version,
       source: festivalTimelineData.source,

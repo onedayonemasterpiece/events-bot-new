@@ -322,6 +322,66 @@ def ensure_python_deps_for_gemma(config: dict) -> None:
     run(['python3', '-m', 'pip', 'install', '--quiet', *packages], cwd=WORKING, env=os.environ.copy())
 
 
+def ensure_python_deps_for_bge(config: dict) -> None:
+    if config.get('related_mode') != 'bge' and not config.get('unusual_enabled'):
+        return
+    probe = subprocess.run(
+        [
+            sys.executable, '-c',
+            'import numpy, PIL, huggingface_hub; from FlagEmbedding import BGEM3FlagModel',
+        ],
+        cwd=str(WORKING),
+        env=os.environ.copy(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    if probe.returncode == 0:
+        return
+    status_event(
+        'alive',
+        phase='semantic_preflight',
+        status='alive',
+        progress={
+            'phase': 'semantic_preflight',
+            'progress_percent': 10,
+            'progress_label': 'установка pinned CPU BGE-M3 runtime',
+        },
+    )
+    run(
+        [
+            sys.executable, '-m', 'pip', 'install', '--quiet',
+            '--disable-pip-version-check',
+            '--upgrade',
+            # 1.4.0 is the first release with the Transformers 5 compatibility
+            # required by the current Kaggle CPU image.  1.3.5 imports the
+            # removed ``is_torch_fx_available`` helper and fails before BGE-M3
+            # can load.
+            'FlagEmbedding==1.4.0',
+            'huggingface-hub>=0.28,<2',
+            'Pillow>=10,<13',
+        ],
+        cwd=WORKING,
+        env=os.environ.copy(),
+    )
+
+
+def ensure_python_deps_for_service_share() -> None:
+    probe = subprocess.run(
+        [sys.executable, '-c', 'from PIL import Image, ImageDraw, ImageFont'],
+        cwd=str(WORKING),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    if probe.returncode != 0:
+        run(
+            [sys.executable, '-m', 'pip', 'install', '--quiet', 'Pillow>=10,<13'],
+            cwd=WORKING,
+            env=os.environ.copy(),
+        )
+
+
 def export_preview_data_if_configured(config: dict) -> None:
     if not config.get('export_in_kaggle'):
         return
@@ -342,6 +402,20 @@ def export_preview_data_if_configured(config: dict) -> None:
     cache_path = WORKING / cache_filename
     if input_cache and not cache_path.exists():
         shutil.copy2(input_cache, cache_path)
+    cache_inputs = {
+        'bge_vector_cache_filename': 'static_event_bge_vectors.npz',
+        'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
+        'unusual_cache_filename': 'unusual_events_cache.json',
+        'unusual_last_good_filename': 'unusual_events_last_good.json',
+    }
+    semantic_paths: dict[str, Path] = {}
+    for config_key, default_name in cache_inputs.items():
+        filename = str(config.get(config_key) or default_name).strip()
+        input_path = find_input_file(filename)
+        working_path = WORKING / filename
+        if input_path and not working_path.exists():
+            shutil.copy2(input_path, working_path)
+        semantic_paths[config_key] = working_path
     key_env = (config.get('gemma_related_key_env') or 'GOOGLE_API_KEY4').strip()
     if config.get('gemma_related_verify') or config.get('related_mode') == 'pgvector' or config.get('sync_pgvector_vectors'):
         ensure_python_deps_for_gemma(config)
@@ -365,6 +439,12 @@ def export_preview_data_if_configured(config: dict) -> None:
         '--pgvector-embedding-model', str(config.get('pgvector_embedding_model') or 'gemini-embedding-2'),
         '--pgvector-embedding-key-env', str(config.get('pgvector_embedding_key_env') or 'GOOGLE_API_KEY4'),
         '--pgvector-max-provider-calls', str(config.get('pgvector_max_provider_calls') or 1000),
+        '--bge-vector-cache', str(semantic_paths['bge_vector_cache_filename']),
+        '--bge-vector-receipt', str(semantic_paths['bge_vector_receipt_filename']),
+        '--bge-model-revision', str(config.get('bge_model_revision') or ''),
+        '--bge-batch-size', str(config.get('bge_batch_size') or 8),
+        '--unusual-cache', str(semantic_paths['unusual_cache_filename']),
+        '--unusual-last-good', str(semantic_paths['unusual_last_good_filename']),
         '--site-origin', str(config.get('public_site_origin') or 'https://kenigevents.ru'),
         '--base-path', str(config.get('build_id') or ''),
         '--ics-base-url', str(config.get('ics_base_url') or ''),
@@ -380,6 +460,7 @@ def export_preview_data_if_configured(config: dict) -> None:
             '--snapshot-id', str(snapshot.get('snapshot_id') or ''),
             '--snapshot-sha256', str(snapshot.get('sha256') or ''),
             '--snapshot-size', str(snapshot.get('size') or 0),
+            '--input-fingerprint', str(config.get('input_fingerprint') or ''),
         ])
     cmd.extend(['--current-datetime', str(clock['current_datetime'])])
     if config.get('focus_date_from'):
@@ -388,10 +469,56 @@ def export_preview_data_if_configured(config: dict) -> None:
         cmd.extend(['--focus-date-to', str(config.get('focus_date_to'))])
     if config.get('sync_pgvector_vectors'):
         cmd.append('--sync-pgvector-vectors')
+    if config.get('unusual_enabled'):
+        cmd.append('--unusual-enabled')
+    if config.get('unusual_migration'):
+        cmd.append('--unusual-migration')
     if config.get('gemma_related_verify'):
         cmd.append('--gemma-related-verify')
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 18, 'progress_label': 'экспорт событий и related v2'})
     run(cmd, cwd=SITE_DIR, env=os.environ.copy())
+
+
+def render_daily_service_share(config: dict, build_clock: dict) -> dict:
+    scripts_dir = str(SITE_DIR / 'scripts')
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from service_share_card import build_daily_service_share
+
+    preview_path = SITE_DIR / 'src' / 'data' / 'preview-events.json'
+    payload = json.loads(preview_path.read_text(encoding='utf-8'))
+    events = payload.get('events') if isinstance(payload, dict) else None
+    if not isinstance(events, list):
+        raise RuntimeError('service share source snapshot has invalid event list')
+    snapshot = config.get('snapshot') if isinstance(config.get('snapshot'), dict) else {}
+    status_event(
+        'alive',
+        phase='service_share',
+        status='alive',
+        progress={
+            'phase': 'service_share',
+            'progress_percent': 22,
+            'progress_label': 'ежедневная карточка сервиса 1080×1350',
+        },
+    )
+    manifest = build_daily_service_share(
+        events=events,
+        public_root=SITE_DIR / 'public',
+        build_id=str(config.get('build_id') or ''),
+        measured_at=str(build_clock.get('current_datetime') or ''),
+        source_snapshot_id=str(snapshot.get('snapshot_id') or '') or None,
+        source_snapshot_hash=str(snapshot.get('sha256') or '') or None,
+        input_fingerprint=str(config.get('input_fingerprint') or '') or None,
+    )
+    return {
+        'status': 'ready',
+        'asset_version': manifest.get('asset_version'),
+        'manifest_payload_hash': manifest.get('manifest_payload_hash'),
+        'local_date': manifest.get('local_date'),
+        'fresh_until': manifest.get('fresh_until'),
+        'width': int((manifest.get('assets') or {}).get('png', {}).get('width') or 0),
+        'height': int((manifest.get('assets') or {}).get('png', {}).get('height') or 0),
+    }
 
 
 def ensure_node22(env: dict[str, str]) -> dict[str, str]:
@@ -440,12 +567,20 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
         or os.environ.get('PUBLIC_YANDEX_AUTH_PROVIDER', '').strip()
         or 'custom:yandex'
     )
+    search_transport = (
+        str(config.get('public_authorized_search_transport') or '').strip()
+        or os.environ.get('PUBLIC_AUTHORIZED_SEARCH_TRANSPORT', '').strip()
+        or 'json'
+    )
+    if search_transport not in {'json', 'ndjson'}:
+        raise RuntimeError('public_authorized_search_transport must be json or ndjson')
     if public_url:
         env['PUBLIC_PERSONALIZATION_SUPABASE_URL'] = public_url
     if public_key:
         env['PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'] = public_key
     if yandex_provider:
         env['PUBLIC_YANDEX_AUTH_PROVIDER'] = yandex_provider
+    env['PUBLIC_AUTHORIZED_SEARCH_TRANSPORT'] = search_transport
 
 
 def apply_public_interest_clubs_env(env: dict[str, str]) -> None:
@@ -478,6 +613,45 @@ def apply_secret_candidate_research_env(env: dict[str, str], config: dict) -> No
         env['SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH'] = '1'
 
 
+def run_production_preview_contract_gate(
+    env: dict[str, str],
+    *,
+    build_id: str,
+) -> dict[str, object]:
+    """Run the legacy preview contract without making it a release artifact."""
+
+    clean_build = re.sub(r'[^A-Za-z0-9._-]+', '-', str(build_id)).strip('-._')
+    clean_build = clean_build[:96] or 'production-candidate'
+    preview_build_id = f'preview-gate-{clean_build}'
+    preview_env = dict(env)
+    preview_env.update({
+        'PREVIEW_BUILD_ID': preview_build_id,
+        'PUBLIC_PREVIEW_BUILD_ID': preview_build_id,
+        'SITE_BASE_PATH': f'/{preview_build_id}',
+    })
+    status_event(
+        'alive',
+        phase='check',
+        status='alive',
+        progress={
+            'phase': 'check',
+            'progress_percent': 36,
+            'progress_label': 'legacy preview contract gate',
+        },
+    )
+    run(['npm', 'run', 'build:preview'], cwd=SITE_DIR, env=preview_env)
+    run(['npm', 'run', 'check:preview'], cwd=SITE_DIR, env=preview_env)
+    preview_dist = SITE_DIR / 'dist' / preview_build_id
+    if not preview_dist.is_dir():
+        raise FileNotFoundError(f'preview contract output missing: {preview_dist}')
+    return {
+        'status': 'ok',
+        'build_id': preview_build_id,
+        'archived': False,
+        'published': False,
+    }
+
+
 def main() -> int:
     started = datetime.now(timezone.utc).isoformat()
     try:
@@ -505,7 +679,24 @@ def main() -> int:
         if config.get('ics_base_url'):
             env['PUBLIC_ICS_BASE_URL'] = str(config['ics_base_url'])
         apply_public_authorized_search_env(env, config)
+        ensure_python_deps_for_service_share()
+        ensure_python_deps_for_bge(config)
         export_preview_data_if_configured(config)
+        service_share_result = render_daily_service_share(config, build_clock)
+        semantic_result_path = SITE_DIR / 'src' / 'data' / 'static-semantic-build-result.json'
+        if config.get('related_mode') == 'bge' or config.get('unusual_enabled'):
+            if not semantic_result_path.is_file():
+                raise RuntimeError('shared BGE/unusual semantic result is missing')
+            semantic_result = json.loads(semantic_result_path.read_text(encoding='utf-8'))
+            if (
+                int(semantic_result.get('provider_calls', -1)) != 0
+                or int(semantic_result.get('event_count') or -1) <= 0
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic_result.get('artifact_sha256') or ''))
+                or not re.fullmatch(r'[0-9a-f]{64}', str(semantic_result.get('manifest_sha256') or ''))
+            ):
+                raise RuntimeError('shared BGE/unusual semantic result is partial or mismatched')
+        else:
+            semantic_result = {'status': 'disabled', 'provider_calls': 0}
         apply_public_authorized_search_env(env, config)
         apply_public_interest_clubs_env(env)
         apply_secret_candidate_research_env(env, config)
@@ -546,9 +737,18 @@ def main() -> int:
             candidate_browser_evidence = browser_evidence_dir / 'secret-candidate'
             root_browser_evidence.mkdir(parents=True, exist_ok=True)
             candidate_browser_evidence.mkdir(parents=True, exist_ok=True)
+            preview_contract = run_production_preview_contract_gate(
+                env,
+                build_id=str(build_id),
+            )
             status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 42, 'progress_label': 'production root-form build'})
             run(['npm', 'run', 'build:production'], cwd=SITE_DIR, env=env)
             root_dist = SITE_DIR / 'dist'
+            preview_gate_path = root_dist / str(preview_contract['build_id'])
+            if preview_gate_path.exists():
+                raise RuntimeError(
+                    'production build did not clear ephemeral preview contract output'
+                )
             status_event('alive', phase='check', status='alive', progress={'phase': 'check', 'progress_percent': 57, 'progress_label': 'Chromium gate production root'})
             run([
                 'npm', 'run', 'check:browser-release', '--',
@@ -594,9 +794,15 @@ def main() -> int:
                 },
                 'candidate': {'token': token, 'token_sha256': candidate_manifest.get('token_sha256'), 'base_path': candidate_manifest.get('base_path')},
                 'counts': root_manifest.get('counts'),
-                'checks': {'production': root_manifest.get('checks'), 'secret_candidate': candidate_manifest.get('checks')},
+                'checks': {
+                    'preview_contract': preview_contract,
+                    'production': root_manifest.get('checks'),
+                    'secret_candidate': candidate_manifest.get('checks'),
+                },
                 'related_revision': root_manifest.get('versions', {}).get('related'),
                 'tree_sha256': {'production': root_manifest.get('tree_sha256'), 'secret_candidate': candidate_manifest.get('tree_sha256')},
+                'semantic': semantic_result,
+                'service_share': service_share_result,
             }
         else:
             status_event('alive', phase='build', status='alive', progress={'phase': 'build', 'progress_percent': 45, 'progress_label': 'Astro preview build'})
@@ -612,7 +818,12 @@ def main() -> int:
             artifacts.append({'kind': 'preview', 'filename': archive_path.name, 'sha256': sha256_file(archive_path), 'size': archive_path.stat().st_size})
             # Preserve the v1 preview handoff fields while the richer v2
             # artifact list is adopted by downstream consumers.
-            result_details = {'archive': archive_path.name, 'dist_root': str(dist_dir)}
+            result_details = {
+                'archive': archive_path.name,
+                'dist_root': str(dist_dir),
+                'semantic': semantic_result,
+                'service_share': service_share_result,
+            }
         status_event('alive', phase='archive', status='alive', progress={'phase': 'archive', 'progress_percent': 92, 'progress_label': 'артефакты проверены'})
         result = {
             'schema_version': 'static_site_build_result_v2',

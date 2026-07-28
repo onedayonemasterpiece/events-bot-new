@@ -100,6 +100,16 @@ test('router has reversible lifecycle and disarms lost-focus provenance on page 
   assert.match(router, /return \{ destroy, get active\(\)/u);
 });
 
+test('dynamic continuation destination owns its K hint before keyboard focus moves', async () => {
+  const router = await read('src/lib/keyboardEventNavigation.mjs');
+  assert.match(router, /const enhanceManagedCard = \(card\) => \{[\s\S]*calendar\.append\(keycap\);[\s\S]*\};\s*\n\s*const enhanceManagedCards/u);
+  assert.match(
+    router,
+    /const focusCard = \(card\) => \{[\s\S]*enhanceManagedCard\(card\);\s*\n\s*updateShortcutHintVisibility\(\);\s*\n\s*card\.focus\(\{ preventScroll: true \}\)/u,
+    'ArrowDown may focus a freshly injected continuation card before its MutationObserver runs',
+  );
+});
+
 test('browser regression wrapper is engine-configurable and asserts no autofocus', async () => {
   const gate = await read('scripts/check-keyboard-event-navigation-playwright.sh');
   assert.match(gate, /STATIC_SITE_PLAYWRIGHT_BROWSER:-chromium/u);

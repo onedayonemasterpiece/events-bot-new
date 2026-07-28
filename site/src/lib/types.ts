@@ -100,6 +100,22 @@ export type AgeRestrictionStatus =
   | 'unknown'
   | 'budget_deferred';
 
+export interface PreviewParticipant {
+  /** Stable registry id; also namespaces device-local preference state. */
+  id: string;
+  name: string;
+  role: string;
+  entity_kind: 'person' | 'group' | 'project';
+  is_headliner: boolean;
+  avatar_url: string | null;
+  avatar_alt: string;
+  likes_count: number;
+  profile_url?: string | null;
+  credit_text?: string | null;
+  credit_url?: string | null;
+  evidence_url?: string | null;
+}
+
 export interface PreviewEvent {
   id: number;
   title: string;
@@ -107,6 +123,8 @@ export interface PreviewEvent {
   event_type: string | null;
   festival: string | null;
   organizer_names?: string[];
+  /** Verified people/groups attached to this occurrence; absent means no safe public projection. */
+  participants?: PreviewParticipant[];
   status_label: string;
   lifecycle_status: string;
   starts_at: string | null;
@@ -313,4 +331,53 @@ export interface InterestClubsData {
   current_date: string;
   source: string;
   clubs: InterestClub[];
+}
+
+export type UnusualQualityGateStatus = 'approved' | 'shadow' | 'migration' | 'failed' | 'unavailable';
+
+export interface UnusualManifestQualityGate {
+  status: UnusualQualityGateStatus | string;
+  metrics: Record<string, number | string | boolean | null>;
+  rollout_baseline_at?: string | null;
+}
+
+export interface UnusualManifestItem {
+  event_id: number;
+  concept_id: string;
+  representative_event_id: number;
+  tier: string;
+  unusual_score: number;
+  confidence: number;
+  families: string[];
+  reason_codes: string[];
+  prototype_evidence: unknown[];
+  first_published_at: string | null;
+  notify_eligible: boolean;
+  content_hash: string;
+  date: string;
+  lifecycle: string;
+  path?: string | null;
+  event_snapshot?: PreviewEvent | null;
+}
+
+export interface UnusualEventsManifest {
+  schema_version: string;
+  build_id: string;
+  generated_at: string;
+  source_snapshot_id: string;
+  hash: string;
+  taxonomy_version: string;
+  policy_version: string;
+  embedding_model: string;
+  revision: string;
+  dim: number;
+  doc_kind: string;
+  document_version: string;
+  prototype_bank_hash: string;
+  classifier_hash: string;
+  rollout_baseline_at?: string | null;
+  notification_baseline_at?: string | null;
+  rollout_baseline?: string | null;
+  quality_gate: UnusualManifestQualityGate;
+  items: UnusualManifestItem[];
 }

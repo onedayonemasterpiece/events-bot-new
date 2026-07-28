@@ -17,6 +17,10 @@ const PUBLIC_SEARCH_KEYS = Object.freeze({
     'PUBLIC_YANDEX_AUTH_PROVIDER',
     'STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER',
   ],
+  PUBLIC_AUTHORIZED_SEARCH_TRANSPORT: [
+    'PUBLIC_AUTHORIZED_SEARCH_TRANSPORT',
+    'STATIC_SITE_PUBLIC_AUTHORIZED_SEARCH_TRANSPORT',
+  ],
 });
 
 function parseDotEnv(text) {
@@ -80,6 +84,12 @@ export function loadPreviewPublicConfig(siteDir, runtimeEnv = process.env) {
     if (value) values[publicName] = String(value).trim();
   }
   if (!values.PUBLIC_YANDEX_AUTH_PROVIDER) values.PUBLIC_YANDEX_AUTH_PROVIDER = 'custom:yandex';
+  if (
+    values.PUBLIC_AUTHORIZED_SEARCH_TRANSPORT
+    && !/^(?:json|ndjson)$/u.test(values.PUBLIC_AUTHORIZED_SEARCH_TRANSPORT)
+  ) {
+    throw new Error('PUBLIC_AUTHORIZED_SEARCH_TRANSPORT must be json or ndjson');
+  }
   const configured = Boolean(
     values.PUBLIC_PERSONALIZATION_SUPABASE_URL
     && values.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY,

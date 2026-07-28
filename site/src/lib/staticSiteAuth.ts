@@ -383,8 +383,88 @@ class StaticSiteAuthController {
     return false;
   }
 
-  async signOut(): Promise<void> {
-    await this.client.auth.signOut();
+  async signInWithEmailOtp(email: string, redirectTo = cleanStaticAuthUrl()): Promise<boolean> {
+    await this.initialize();
+    const normalizedEmail = String(email || '').trim().toLocaleLowerCase('en-US');
+    if (!normalizedEmail) return false;
+    writeAuthIntent('email_login_started', { redirect_to: redirectTo });
+    this.publish({
+      status: 'checking',
+      user: null,
+      message: 'Отправляю одноразовую ссылку на email…',
+      callbackAttempted: false,
+    });
+    const { error } = await this.client.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: redirectTo,
+        shouldCreateUser: true,
+      },
+    });
+    if (!error) {
+      this.publish({
+        status: 'signed_out',
+        user: null,
+        message: 'Письмо отправлено. Откройте одноразовую ссылку в этом браузере.',
+        callbackAttempted: false,
+      });
+      return true;
+    }
+    writeAuthIntent('email_login_failed', { reason: String(error.message || error).slice(0, 120) });
+    this.publish({
+      status: 'error',
+      user: null,
+      message: 'Не удалось отправить письмо. Проверьте адрес и попробуйте ещё раз.',
+      callbackAttempted: false,
+    });
+    return false;
+  }
+
+  async linkYandexIdentity(): Promise<boolean> {
+    const session = await this.getSession();
+    if (!session?.user) return this.signIn();
+    const redirectTo = cleanStaticAuthUrl();
+    writeAuthIntent('identity_link_started', { redirect_to: redirectTo });
+    this.publish({
+      status: 'checking',
+      user: session.user,
+      message: 'Открываю Яндекс для привязки к текущему аккаунту…',
+      callbackAttempted: false,
+    });
+    const { error } = await this.client.auth.linkIdentity({
+      provider: this.config.provider as any,
+      options: { redirectTo },
+    });
+    if (!error) return true;
+    writeAuthIntent('identity_link_failed', { reason: String(error.message || error).slice(0, 120) });
+    this.publish({
+      status: 'error',
+      user: session.user,
+      message: 'Не удалось привязать Яндекс к текущему аккаунту. Попробуйте ещё раз.',
+      callbackAttempted: false,
+    });
+    return false;
+  }
+
+  async signOut(): Promise<boolean> {
+    await this.initialize();
+    const signedInUser = this.snapshot.user;
+    this.publish({
+      status: 'checking',
+      user: signedInUser,
+      message: 'Завершаю сессию аккаунта…',
+      callbackAttempted: false,
+    });
+    const { error } = await this.client.auth.signOut();
+    if (error) {
+      this.publish({
+        status: 'error',
+        user: signedInUser,
+        message: 'Не удалось выйти из аккаунта. Проверьте соединение и попробуйте ещё раз.',
+        callbackAttempted: false,
+      });
+      return false;
+    }
     clearAuthIntent();
     this.publish({
       status: 'signed_out',
@@ -392,6 +472,7 @@ class StaticSiteAuthController {
       message: 'Вы вышли из аккаунта.',
       callbackAttempted: false,
     });
+    return true;
   }
 }
 

@@ -1,0 +1,87 @@
+mode: worktree_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: integration/static-site-focus-group-product-20260727
+global_constraints:
+  - no production deployment or live Supabase changes
+  - do not edit the dirty primary checkout
+  - no OpenAI image generation
+  - product prototype must label local/mock behavior honestly
+verification_owner: integration
+stop_conditions:
+  - production credentials or live mutations would be required
+  - opaque URL/localStorage is being represented as authorization
+lanes:
+  - id: product-docs
+    role: worker
+    requirement_ids: [R01, R02, R09]
+    target: product mechanics, manual communications, lifecycle and research rationale
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/focus-group/product-docs
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-product-docs
+    writable_files:
+      - docs/backlog/features/static-site-focus-group/product-prototype.md
+      - docs/backlog/features/static-site-focus-group/manual-email-templates.md
+      - .codex/lanes/product-docs/RESULTS.md
+    forbidden_files: [site/, CHANGELOG.md, docs/routes.yml]
+    expected_output: committed product spec and manual email templates
+    verification_scope: inspection_only
+    effort: high
+    status: merged
+  - id: focus-shell
+    role: worker
+    requirement_ids: [R03, R04, R05, R08, R10]
+    target: root stub, invite/onboarding/secret shell, feedback and shared lab badge
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/focus-group/focus-shell
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-shell
+    writable_files:
+      - site/src/components/FocusGroup*.astro
+      - site/src/components/FocusLabBadge.astro
+      - site/src/lib/focus-group*.ts
+      - site/src/pages/index.astro
+      - site/src/pages/fokus-gruppa/**
+      - site/src/pages/zakrytaya-afisha/**
+      - site/public/assets/icons/lab-*.svg
+      - site/public/assets/icons/lab-*.metadata.json
+      - .codex/lanes/focus-shell/RESULTS.md
+    forbidden_files: [site/src/pages/dlya-menya/, docs/, CHANGELOG.md]
+    expected_output: committed buildable page prototype and durable icon attribution
+    verification_scope: targeted
+    effort: high
+    status: merged
+  - id: for-me
+    role: worker
+    requirement_ids: [R06, R07]
+    target: explainable local personalization product prototype
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/focus-group/for-me
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-for-me
+    writable_files:
+      - site/src/components/Interest*.astro
+      - site/src/lib/focus-personalization.ts
+      - site/src/pages/dlya-menya/**
+      - .codex/lanes/for-me/RESULTS.md
+    forbidden_files: [site/src/pages/index.astro, site/src/pages/fokus-gruppa/, site/src/pages/zakrytaya-afisha/, docs/, CHANGELOG.md]
+    expected_output: committed interest controls and local explainable feed prototype
+    verification_scope: targeted
+    effort: high
+    status: merged
+  - id: integration
+    role: merge_reviewer
+    requirement_ids: [R11, R12]
+    target: merge, harmonize, tests, docs/routes/changelog and closure audit
+    depends_on: [product-docs, focus-shell, for-me]
+    execution_mode: serial_after_dependency
+    branch: integration/static-site-focus-group-product-20260727
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-group-product-20260727
+    writable_files: [all integration-only reconciliation files]
+    forbidden_files: []
+    expected_output: clean pushed integration branch with evidence
+    verification_scope: full_local
+    effort: maximum available
+    status: merged

@@ -759,11 +759,13 @@ otherwise a neutral inline SVG fallback. Logout is available only inside the
 account popover and the popover closes on outside click/Escape; this avoids an
 accidental logout tap while typing/searching on mobile.
 
-The browser currently calls `event-search` with `Accept: application/x-ndjson` and
-renders real vector cards from the streamed `vector_results` event before the
-terminal `result` event. Earlier v57 temporarily used `use_llm_verifier=false`
-as a production-safety rollback after live mobile evidence showed two different
-failure modes:
+The production browser calls `event-search` with `Accept: application/json`.
+NDJSON remains an explicit diagnostics opt-in; the normal mobile path must not
+wait for streamed response headers/chunks that Android Chrome or an in-app
+WebView may buffer. One bounded fast JSON retry is allowed only for a genuine
+transport failure (not for backend/business errors). Earlier v57 temporarily
+used `use_llm_verifier=false` as a production-safety rollback after live mobile
+evidence showed two different failure modes:
 
 1. at `2026-06-29T14:28Z` and `14:29Z` the backend wrote successful
    `event_search_requests` rows with `12` results in `<1s`, but Chrome/WebView
@@ -792,6 +794,15 @@ browser-stage indicator rather than a true backend-stage feed.
 The Edge Function still supports NDJSON when requested with
 `Accept: application/x-ndjson`; use that for controlled diagnostics only. The
 production mobile UX should not depend on streamed final payload delivery.
+
+The terminal JSON contract may contain zero exact `items` and non-empty
+`fallback_items`. Those discovery cards are rendered immediately under the
+honest fallback heading; they must not be buffered behind `has_more`, because
+that produced a blank page for real queries such as `Хор мальчиков`. If a later
+exact page succeeds, the client replaces/deduplicates the provisional fallback
+set rather than showing stale duplicates. The regression queries `Концерт
+итальянца` and `Хор мальчиков` are release smokes for visible cards and absence
+of a network alert.
 
 ## Edge Function response/log contract
 

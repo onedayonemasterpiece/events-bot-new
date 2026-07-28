@@ -378,23 +378,25 @@ export function initKeyboardEventNavigation(options = {}) {
       });
     };
 
+    const enhanceManagedCard = (card) => {
+      if (!(card instanceof win.HTMLElement)) return;
+      normalizeManagedCardLinks(card);
+      const calendar = card.querySelector('[data-calendar-action]:not([hidden])');
+      if (!(calendar instanceof win.HTMLElement)) return;
+      setManagedAttribute(calendar, 'aria-keyshortcuts', 'K');
+      setManagedAttribute(calendar, 'title', 'Добавить выбранное событие в календарь — клавиша K');
+      if (calendar.querySelector('[data-related-calendar-shortcut]')) return;
+      const keycap = doc.createElement('kbd');
+      keycap.className = 'related-calendar-shortcut';
+      keycap.dataset.relatedCalendarShortcut = '';
+      keycap.dataset.keyboardShortcutBadge = '';
+      keycap.dataset.shortcutAction = 'calendar_add';
+      keycap.setAttribute('aria-hidden', 'true');
+      keycap.textContent = 'K';
+      calendar.append(keycap);
+    };
     const enhanceManagedCards = () => {
-      cards().forEach((card) => {
-        normalizeManagedCardLinks(card);
-        const calendar = card.querySelector('[data-calendar-action]:not([hidden])');
-        if (!(calendar instanceof win.HTMLElement)) return;
-        setManagedAttribute(calendar, 'aria-keyshortcuts', 'K');
-        setManagedAttribute(calendar, 'title', 'Добавить выбранное событие в календарь — клавиша K');
-        if (calendar.querySelector('[data-related-calendar-shortcut]')) return;
-        const keycap = doc.createElement('kbd');
-        keycap.className = 'related-calendar-shortcut';
-        keycap.dataset.relatedCalendarShortcut = '';
-        keycap.dataset.keyboardShortcutBadge = '';
-        keycap.dataset.shortcutAction = 'calendar_add';
-        keycap.setAttribute('aria-hidden', 'true');
-        keycap.textContent = 'K';
-        calendar.append(keycap);
-      });
+      cards().forEach(enhanceManagedCard);
       updateShortcutHintVisibility();
     };
     enhanceManagedCards();
@@ -729,6 +731,12 @@ export function initKeyboardEventNavigation(options = {}) {
 
     const focusCard = (card) => {
       if (!(card instanceof win.HTMLElement)) return;
+      // Personal continuation cards are injected asynchronously. Mutation
+      // observers run after the current task, while ArrowDown can move focus
+      // during that same task. Enhance the destination synchronously so the
+      // newly focused owner exposes its one reserved K hint immediately.
+      enhanceManagedCard(card);
+      updateShortcutHintVisibility();
       card.focus({ preventScroll: true });
       captureLogicalOwner(card);
       card.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });

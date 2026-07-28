@@ -1,0 +1,41 @@
+---
+import UnusualUnreadRuntime from '../../../components/UnusualUnreadRuntime.astro';
+import type { UnusualFeed } from '../../../lib/unusualEvents';
+
+export function getStaticPaths() {
+  return ['baseline', 'new-core', 'adjacent', 'migration', 'failure', 'same-series']
+    .map((scenario) => ({ params:{ scenario } }));
+}
+const scenario = String(Astro.params.scenario || 'failure');
+const feed: UnusualFeed = {
+  approved:scenario !== 'failure',
+  status:scenario === 'failure' ? 'disabled' : 'approved',
+  buildId:`lab-${scenario}`,
+  generatedAt:'2026-07-28T01:00:00Z',
+  baselineAt:'2026-07-27T00:00:00Z',
+  items:[],
+  unreadCandidates:scenario === 'new-core' || scenario === 'same-series'
+    ? [{ conceptId:'concept:new-core', firstPublishedAt:'2026-07-28T00:00:00Z' }]
+    : [],
+};
+---
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Unusual unread runtime lab: {scenario}</title>
+  </head>
+  <body data-unusual-unread-lab={scenario}>
+    <details data-mobile-discovery-menu>
+      <summary>Меню</summary>
+      <a href="#" data-unusual-nav-link>
+        Необычное
+        <span data-unusual-nav-dot hidden aria-hidden="true">●</span>
+      </a>
+    </details>
+    <button type="button" data-unusual-mark-seen hidden>Отметить просмотренным</button>
+    <UnusualUnreadRuntime feed={feed} />
+  </body>
+</html>

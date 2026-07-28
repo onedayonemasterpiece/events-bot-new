@@ -1,0 +1,109 @@
+---
+import EventCard from './EventCard.astro';
+import type { UnusualFeed } from '../lib/unusualEvents';
+
+interface Props { feed: UnusualFeed; }
+const { feed } = Astro.props;
+const approvedItems = feed.approved ? feed.items : [];
+---
+<main id="main" class="unusual-page" data-unusual-page data-unusual-feed-status={feed.status}>
+  <div class="page-shell unusual-page__shell">
+    <header class="unusual-page__hero">
+      <p class="eyebrow">Редакционно-калиброванная подборка</p>
+      <h1>Необычное</h1>
+      <p>События с редким форматом, местом или сочетанием впечатлений — без повторов одного и того же замысла.</p>
+      {approvedItems.length > 0 && (
+        <button type="button" data-unusual-mark-seen hidden>Отметить показанное просмотренным</button>
+      )}
+    </header>
+
+    {feed.approved && approvedItems.length > 0 ? (
+      <section class="unusual-page__feed" aria-labelledby="unusual-feed-title" data-unusual-feed-ready="true" data-unusual-feed-build={feed.buildId}>
+        <div class="unusual-page__feed-head">
+          <h2 id="unusual-feed-title">{approvedItems.length} необычных событий</h2>
+          <span>Не больше одного события на замысел</span>
+        </div>
+        <div class="cards-grid" data-unusual-event-cards>
+          {approvedItems.map((item) => (
+            <div
+              class="unusual-page__card"
+              data-unusual-card
+              data-unusual-concept-id={item.conceptId}
+              data-unusual-tier={item.tier}
+              data-unusual-notify-eligible={item.notifyEligible ? 'true' : 'false'}
+            >
+              <EventCard event={item.event} mobileFlowMedia />
+            </div>
+          ))}
+        </div>
+      </section>
+    ) : (
+      <section class="unusual-page__empty" aria-labelledby="unusual-empty-title" data-unusual-feed-empty>
+        <h2 id="unusual-empty-title">Подборка пока готовится</h2>
+        <p>Показываем её только после проверки качества. При неполных данных, миграции или ошибке список остаётся пустым — обычные события сюда не подмешиваются.</p>
+      </section>
+    )}
+  </div>
+</main>
+
+<style>
+  .unusual-page { padding:0 0 5rem; }
+  .unusual-page__shell { display:grid; gap:1rem; }
+  .unusual-page__hero { min-height:330px; display:flex; flex-direction:column; justify-content:flex-end; align-items:flex-start; padding:clamp(2rem,6vw,5rem); border-radius:32px; background:radial-gradient(circle at 82% 24%,rgba(165,72,33,.22),transparent 24%),radial-gradient(circle at 72% 68%,rgba(15,118,110,.14),transparent 28%),linear-gradient(145deg,#fffaf2,#eee1d2); overflow:hidden; }
+  .unusual-page__hero h1 { margin:.1rem 0 .8rem; font-size:clamp(4rem,10vw,8.5rem); line-height:.78; letter-spacing:-.075em; }
+  .unusual-page__hero p:not(.eyebrow) { max-width:58ch; margin:.5rem 0 0; font-size:clamp(1rem,2vw,1.25rem); }
+  .unusual-page__hero button { min-height:44px; margin-top:1.25rem; padding:0 16px; border:1px solid rgba(121,48,20,.2); border-radius:999px; background:#fffdf8; color:#793014; font:800 .82rem/1 inherit; cursor:pointer; }
+  .unusual-page__feed,.unusual-page__empty { padding:clamp(1.5rem,4vw,3rem); border:1px solid rgba(121,48,20,.11); border-radius:28px; background:#fffdf8; }
+  .unusual-page__feed-head { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; }
+  .unusual-page__feed-head h2,.unusual-page__empty h2 { margin:0; font-size:clamp(1.6rem,3.5vw,2.8rem); line-height:1; }
+  .unusual-page__feed-head span { color:#6d6259; font-size:.82rem; }
+  .unusual-page__card { min-width:0; }
+  .unusual-page__card[data-unusual-card-viewed="true"] { --unusual-viewed:1; }
+  .unusual-page__empty p { max-width:62ch; color:#6d6259; }
+  @media(max-width:759px) {
+    .unusual-page { padding-bottom:calc(5rem + env(safe-area-inset-bottom)); }
+    .unusual-page__shell { width:min(100% - 24px,1120px); }
+    .unusual-page__hero { min-height:270px; padding:28px 18px 24px; border-radius:24px; }
+    .unusual-page__hero h1 { font-size:clamp(3rem,12vw,5.7rem); overflow-wrap:normal; word-break:normal; hyphens:none; }
+    .unusual-page__feed,.unusual-page__empty { padding:20px 12px; border-radius:20px; }
+    .unusual-page__feed-head { display:grid; gap:7px; }
+    .unusual-page__feed .cards-grid { grid-template-columns:minmax(0,1fr); }
+  }
+</style>
+
+<script>
+  const root = document.querySelector('[data-unusual-page]');
+  const feed = root?.querySelector('[data-unusual-feed-ready="true"]');
+  if (feed && feed.dataset.unusualViewBound !== 'true') {
+    feed.dataset.unusualViewBound = 'true';
+    const cards = [...feed.querySelectorAll('[data-unusual-card][data-unusual-concept-id]')];
+    const viewed = new Set();
+    const timers = new Map();
+    const commitViewed = (card) => {
+      const conceptId = card.dataset.unusualConceptId || '';
+      if (!conceptId || viewed.has(conceptId) || document.visibilityState !== 'visible') return;
+      const box = card.getBoundingClientRect();
+      const visibleHeight = Math.max(0, Math.min(box.bottom, innerHeight) - Math.max(box.top, 0));
+      if (visibleHeight < Math.min(box.height * .6, 240)) return;
+      viewed.add(conceptId);
+      card.dataset.unusualCardViewed = 'true';
+      dispatchEvent(new CustomEvent('kenigevents:unusual-viewed', { detail:{ conceptId } }));
+    };
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
+        const card = entry.target;
+        clearTimeout(timers.get(card));
+        timers.delete(card);
+        if (entry.isIntersecting && entry.intersectionRatio >= .6) {
+          timers.set(card, setTimeout(() => commitViewed(card), 900));
+        }
+      }), { threshold:[.6] });
+      cards.forEach((card) => observer.observe(card));
+    }
+    root.querySelector('[data-unusual-mark-seen]')?.addEventListener('click', () => {
+      const conceptIds = cards.map((card) => card.dataset.unusualConceptId).filter(Boolean);
+      dispatchEvent(new CustomEvent('kenigevents:unusual-mark-seen', { detail:{ conceptIds } }));
+      cards.forEach((card) => { card.dataset.unusualCardViewed = 'true'; });
+    });
+  }
+</script>

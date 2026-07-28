@@ -107,6 +107,34 @@ PUBLIC_MOBILE_SEARCH_BASE_URL=https://kenigevents.ru/preview-20260721-mobile-sea
 - полная browser-приёмка реального Yandex round-trip остаётся обязательной на
   замороженном immutable candidate; mocked PKCE/Edge smoke не подменяет её.
 
+## R15 Collections and event-aware calendar
+
+The mobile drawer replaces the former standalone `Детям` row with one
+`Подборки` submenu. Its materialized destinations are `Детям`, `Необычное`,
+`Бесплатно` and `Клубы`; `Бесплатно` also remains a top-level fast action. A
+submenu item is a normal crawlable link only when its route is materialized in
+the current build. Icons come from the locally vendored,
+provenance-recorded SVGRepo set and keep one coherent stroke family; emoji or
+unrelated icon families are not fallback assets.
+
+`Необычное` may show one red dot under the shared concept-state contract in
+[`unusual-events`](../unusual-events/README.md). The dot means an unseen newly
+published concept, not a rebuild, and every menu/footer consumer reads the same
+controller.
+
+Calendar navigation reads the generated availability inventory and continues
+through the furthest month containing a public event. Empty days use disabled
+semantics and cannot be committed by stray pointer/keyboard input. This is a
+navigation constraint only; it does not alter canonical event dates or create
+placeholder events.
+
+The inventory is also emitted as same-origin `/data/event-dates.json` and owns
+the generated `date-*` route set. A day is enabled only when at least one
+canonical occurrence starts on that date; long-running exhibitions/multi-day
+spans do not manufacture empty daily pages. The selected Sunday still keeps
+the visible weekend range. Generated-output checks require a one-to-one match
+between enabled inventory days and materialized non-empty date routes.
+
 ## Toast placement and height budget
 
 Shell публикует переменные:
@@ -1144,6 +1172,12 @@ clock on load and once per minute. A row is visually past after an explicit
 been behind the current time by at least one hour. Only the main event image is
 desaturated; identity/free medallions, text, controls and row order remain
 unchanged.
+
+`Сегодня` also compares the real `Europe/Kaliningrad` date with the static
+build date embedded in the page. If an honest route for the real day exists in
+the inventory, a stale saved tab redirects to it. If the frozen candidate has
+no such route, the page remains usable but relabels itself with its actual
+snapshot date instead of calling old data “Сегодня”.
 
 An immutable noindex preview may remain open after its projected
 `data-mobile-listing-date` has elapsed. In that case a no-`end_at` row must not

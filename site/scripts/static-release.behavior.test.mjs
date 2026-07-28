@@ -10,6 +10,43 @@ import {
 } from './release-contract.mjs';
 import { assertAnonymousListDisabled, publicationObjects } from './deploy-secret-candidate-yc.mjs';
 
+test('verified event participants render after medallions on mobile and desktop with isolated person likes', () => {
+  const component = readFileSync(new URL('../src/components/EventParticipants.astro', import.meta.url), 'utf8');
+  const mobilePage = readFileSync(new URL('../src/pages/sobytiya/[slug].astro', import.meta.url), 'utf8');
+  const desktopPage = readFileSync(new URL('../src/components/DesktopEventPage.astro', import.meta.url), 'utf8');
+  const types = readFileSync(new URL('../src/lib/types.ts', import.meta.url), 'utf8');
+
+  assert.match(types, /export interface PreviewParticipant/u);
+  assert.match(types, /participants\?: PreviewParticipant\[\]/u);
+  for (const marker of [
+    'data-event-participants',
+    'data-participant-like',
+    'kenigevents:participant-likes:v1',
+    'data-participant-like-count',
+    'aria-pressed="false"',
+  ]) {
+    assert.ok(component.includes(marker), `participant component misses ${marker}`);
+  }
+  assert.doesNotMatch(component, /data-feedback-action="like"/u);
+
+  const mobileMedallionsAt = mobilePage.indexOf('<EventTokenMedallions event={event}');
+  const mobileParticipantsAt = mobilePage.indexOf('<EventParticipants event={event} surface="mobile"');
+  const mobileDetailsAt = mobilePage.indexOf('mobile-event-production__details');
+  assert.ok(
+    mobileMedallionsAt >= 0
+      && mobileMedallionsAt < mobileParticipantsAt
+      && mobileParticipantsAt < mobileDetailsAt,
+    'mobile event detail must order medallions, participants, then description',
+  );
+
+  const desktopMedallionsAt = desktopPage.indexOf('<EventTokenMedallions event={event}');
+  const desktopParticipantsAt = desktopPage.indexOf('<EventParticipants event={event} surface="desktop"');
+  assert.ok(
+    desktopMedallionsAt >= 0 && desktopMedallionsAt < desktopParticipantsAt,
+    'desktop event detail must render participants under medallions',
+  );
+});
+
 test('ADD-BUILD-07 production/preview/candidate profiles use an explicit 256-bit review path', () => {
   const token = generateCandidateToken();
   assert.equal(token.length, 43);
@@ -18,11 +55,15 @@ test('ADD-BUILD-07 production/preview/candidate profiles use an explicit 256-bit
   assert.throws(() => safeCandidateToken('timestamp-build-id'));
 });
 
-test('production and candidate root aliases preserve listing classes while adding release markers', () => {
+test('production and candidate packaging preserve the dedicated home while adding release markers', () => {
   const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
   const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
-  assert.match(production, /replaceRequired\(rootHtml, '<main id="main"', '<main id="main" data-production-root-listing'/u);
-  assert.match(candidate, /replace\('<main id="main"', '<main id="main" data-secret-candidate-root-listing'/u);
+  assert.match(production, /readFileSync\(join\(distDir, 'index\.html'\)/u);
+  assert.match(candidate, /readFileSync\(join\(distDir, 'index\.html'\)/u);
+  assert.match(production, /replaceRequired\(rootHtml, '<main id="main"', '<main id="main" data-production-root-home'/u);
+  assert.match(candidate, /replace\('<main id="main"', '<main id="main" data-secret-candidate-root-home'/u);
+  assert.doesNotMatch(production, /segodnya\/index\.html/u);
+  assert.doesNotMatch(candidate, /segodnya\/index\.html/u);
   assert.doesNotMatch(production, /'<main id="main">'/u);
   assert.doesNotMatch(candidate, /'<main id="main">'/u);
 });
@@ -34,6 +75,17 @@ test('production and candidate builds forward only normalized browser-safe searc
     assert.match(source, /loadPreviewPublicConfig\(siteDir, process\.env\)/u);
     assert.match(source, /\.\.\.publicSearchConfig\.values/u);
     assert.doesNotMatch(source, /PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY:\s*''/u);
+  }
+});
+
+test('production and candidate builds keep confirmed clubs unless rollback is explicit', () => {
+  const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
+  const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');
+  for (const source of [production, candidate]) {
+    assert.match(
+      source,
+      /PUBLIC_INTEREST_CLUBS_ENABLED:\s*process\.env\.PUBLIC_INTEREST_CLUBS_ENABLED\s*\|\|\s*'1'/u,
+    );
   }
 });
 

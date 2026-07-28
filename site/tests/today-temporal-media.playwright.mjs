@@ -34,16 +34,17 @@ assert.deepEqual(
   'real 2026-07-26 temporal canaries changed',
 );
 
-async function openToday(width, isoTime) {
+async function openToday(width, isoTime, expectedListingDate = '2026-07-26') {
   const context = await browser.newContext({ viewport:{ width, height:width <= 720 ? 844 : 900 } });
   const page = await context.newPage();
   const runtimeErrors = [];
   page.on('pageerror', (error) => runtimeErrors.push(String(error)));
   await page.clock.install({ time:new Date(isoTime) });
   await page.goto(`${baseUrl}/segodnya/`, { waitUntil:'domcontentloaded' });
+  await page.waitForFunction((date) => document.querySelector('[data-mobile-listing-rails]')?.getAttribute('data-mobile-listing-date') === date, expectedListingDate);
   assert.equal(
     await page.locator('[data-mobile-listing-rails]').getAttribute('data-mobile-listing-date'),
-    '2026-07-26',
+    expectedListingDate,
     'serve with PUBLIC_STATIC_SITE_CURRENT_DATE=2026-07-26',
   );
   return { context, page, runtimeErrors };
@@ -126,18 +127,32 @@ async function visualState(row) {
 }
 
 {
-  // Regression for the published R11 preview: after midnight its immutable
-  // listing date was older than the real Kaliningrad date. The R11 equality
-  // guard left every no-end row vivid even though the entire listing day had
-  // elapsed.
-  const { context, page, runtimeErrors } = await openToday(390, '2026-07-26T22:30:00.000Z');
-  const priorDayRow = page.locator('[data-mobile-listing-row][data-event-id="7043"]');
-  assert.deepEqual(await visualState(priorDayRow), {
-    temporalState:'past',
-    rowFilter:'none',
-    mediaFilter:'grayscale(0.72) saturate(0.32)',
-    mediaOpacity:'0.46',
-  });
+  // At 00:30 Kaliningrad the immutable /segodnya/ review is yesterday.
+  // Because the generated manifest proves 27 July exists, it must replace the
+  // stale route with the honest date page instead of relabelling old rows as
+  // today's programme.
+  const { context, page, runtimeErrors } = await openToday(
+    390,
+    '2026-07-26T22:30:00.000Z',
+    '2026-07-27',
+  );
+  assert.match(page.url(), /\/date-2026-07-27\/$/u);
+  assert.notEqual(await page.locator('.page-head h1').textContent(), 'Сегодня');
+  assert.deepEqual(runtimeErrors, []);
+  await context.close();
+}
+
+{
+  // If the real Kaliningrad date has no generated event route, fail closed:
+  // keep the immutable page reachable but visibly identify its build date.
+  const { context, page, runtimeErrors } = await openToday(390, '2026-08-02T22:30:00.000Z');
+  const guard = page.locator('[data-today-review-guard]');
+  await guard.waitFor({ state:'visible' });
+  assert.equal(await guard.getAttribute('data-today-review-state'), 'stale');
+  assert.equal(await guard.getAttribute('data-runtime-date'), '2026-08-03');
+  assert.match(await guard.textContent(), /сохранённая версия/u);
+  assert.match(await page.locator('.page-head h1').textContent(), /26 июля 2026/u);
+  assert.match(page.url(), /\/segodnya\/$/u);
   assert.deepEqual(runtimeErrors, []);
   await context.close();
 }

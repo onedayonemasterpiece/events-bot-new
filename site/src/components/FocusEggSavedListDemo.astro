@@ -1,0 +1,212 @@
+---
+import FocusEggArtifact from './FocusEggArtifact.astro';
+
+const sampleEvents = [
+  ['event-amber-hall', 'Камерный концерт', 'Сегодня · 19:00'],
+  ['event-city-walk', 'Прогулка по Амалиенау', 'Суббота · 12:00'],
+  ['event-drama-stage', 'Спектакль на основной сцене', 'Воскресенье · 18:00'],
+  ['event-jazz-evening', 'Джазовый вечер', 'Пятница · 20:00'],
+] as const;
+---
+
+<section class="focus-egg-demo" data-focus-egg-demo data-visible-count="2" aria-labelledby="egg-demo-title">
+  <div class="focus-egg-demo__head">
+    <div>
+      <p class="focus-egg-demo__eyebrow">Интерактивный прототип FG-E12</p>
+      <h2 id="egg-demo-title">Пасхалка между сохранёнными событиями</h2>
+    </div>
+    <p>
+      Выберите размер текущего списка. Промо и skeleton не считаются:
+      артефакт существует только после третьего разного события.
+    </p>
+  </div>
+
+  <fieldset class="focus-egg-demo__controls">
+    <legend>Сколько событий сейчас отрисовано</legend>
+    {[2, 3, 4].map((count) => (
+      <label>
+        <input type="radio" name="saved-count" value={count} checked={count === 2} />
+        <span>{count} события</span>
+      </label>
+    ))}
+  </fieldset>
+
+  <p class="focus-egg-demo__status" data-egg-demo-status role="status">
+    Два события: пасхалки нет, и она не переносится после последней карточки.
+  </p>
+
+  <div class="focus-egg-demo__list" data-egg-demo-list aria-label="Демонстрация списка «Мои события»">
+    {sampleEvents.map(([id, title, when], index) => (
+      <>
+        <article class="focus-egg-demo__event" data-demo-event-id={id} data-demo-index={index + 1}>
+          <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+          <div><strong>{title}</strong><small>{when}</small></div>
+        </article>
+        {index === 2 && (
+          <div id="focus-egg-FG-E12" data-fg-e12-anchor hidden>
+            <FocusEggArtifact eggId="FG-E12" title="Третий план" state="eligible" />
+          </div>
+        )}
+      </>
+    ))}
+  </div>
+
+  <div class="focus-egg-demo__accessible" data-fg-e12-equivalent hidden>
+    <strong>Доступный эквивалент</strong>
+    <p>
+      После того же условия ссылка ведёт к тому же артефакту. Она работает с
+      клавиатурой и screen reader и не требует hover, жеста или второго устройства.
+    </p>
+    <a href="#focus-egg-FG-E12">Перейти к пасхалке после третьего события</a>
+  </div>
+</section>
+
+<script>
+  import {
+    getFgE12Placement,
+    markFocusEggFound,
+    readFocusEggPrototypeState,
+    storeFocusEggPrototypeState,
+  } from '../lib/focus-easter-eggs';
+
+  document.querySelectorAll<HTMLElement>('[data-focus-egg-demo]').forEach((root) => {
+    const events = [...root.querySelectorAll<HTMLElement>('[data-demo-event-id]')];
+    const anchor = root.querySelector<HTMLElement>('[data-fg-e12-anchor]');
+    const equivalent = root.querySelector<HTMLElement>('[data-fg-e12-equivalent]');
+    const status = root.querySelector<HTMLElement>('[data-egg-demo-status]');
+    let storage: Storage | null = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      storage = null;
+    }
+
+    const render = (visibleCount: number) => {
+      const visibleIds = events
+        .filter((event, index) => {
+          const visible = index < visibleCount;
+          event.hidden = !visible;
+          return visible;
+        })
+        .map((event) => event.dataset.demoEventId || '');
+      const prototypeState = storage ? readFocusEggPrototypeState(storage) : {
+        version: 1 as const,
+        collectionVersion: 'focus-eggs-v1' as const,
+        foundEggIds: [],
+      };
+      const placement = getFgE12Placement(visibleIds, prototypeState.foundEggIds);
+      root.dataset.visibleCount = String(visibleCount);
+      if (anchor) anchor.hidden = !placement;
+      if (equivalent) equivalent.hidden = !placement;
+      if (status) {
+        status.textContent = placement
+          ? `${visibleCount} события: FG-E12 стоит сразу после третьего элемента.`
+          : `${visibleCount} события: пасхалки нет, и она не переносится после последней карточки.`;
+      }
+      const artifact = anchor?.querySelector<HTMLElement>('[data-focus-egg-artifact]');
+      if (artifact && placement) {
+        artifact.dataset.eggState = placement.state;
+        artifact.querySelector<HTMLElement>('[data-focus-egg-find]')?.toggleAttribute(
+          'hidden',
+          placement.state === 'found',
+        );
+        artifact.querySelector<HTMLElement>('[data-focus-egg-found-label]')?.toggleAttribute(
+          'hidden',
+          placement.state !== 'found',
+        );
+        const stateLabel = artifact.querySelector<HTMLElement>('[data-focus-egg-state-label]');
+        if (stateLabel) stateLabel.textContent = placement.state === 'found' ? 'Найдено' : 'Можно найти';
+      }
+    };
+
+    root.querySelectorAll<HTMLInputElement>('input[name="saved-count"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        if (input.checked) render(Number(input.value));
+      });
+    });
+
+    anchor?.addEventListener('click', (event) => {
+      const button = (event.target as Element).closest<HTMLButtonElement>('[data-focus-egg-find]');
+      if (!button || !storage) return;
+      const state = markFocusEggFound(readFocusEggPrototypeState(storage), 'FG-E12');
+      storeFocusEggPrototypeState(storage, state);
+      button.hidden = true;
+      const artifact = button.closest<HTMLElement>('[data-focus-egg-artifact]');
+      if (artifact) {
+        artifact.dataset.eggState = 'found';
+        const stateLabel = artifact.querySelector<HTMLElement>('[data-focus-egg-state-label]');
+        const foundLabel = artifact.querySelector<HTMLElement>('[data-focus-egg-found-label]');
+        if (stateLabel) stateLabel.textContent = 'Найдено';
+        if (foundLabel) foundLabel.hidden = false;
+      }
+      if (status) status.textContent = 'FG-E12 добавлена в локальную коллекцию этого браузера.';
+      root.dispatchEvent(new CustomEvent('focus-egg-found', { bubbles: true, detail: { eggId: 'FG-E12' } }));
+    });
+
+    render(2);
+  });
+</script>
+
+<style>
+  .focus-egg-demo {
+    display: grid;
+    gap: 1rem;
+    border: 1px solid var(--ke-color-line);
+    border-radius: 1.5rem;
+    padding: clamp(1rem, 3vw, 2rem);
+    background: var(--ke-color-surface-strong);
+    box-shadow: var(--ke-shadow-1);
+  }
+  .focus-egg-demo__head { display: grid; gap: .75rem; }
+  .focus-egg-demo__eyebrow {
+    margin: 0 0 .4rem;
+    color: var(--ke-color-brand-700);
+    font-size: .68rem;
+    font-weight: 900;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+  .focus-egg-demo__head h2 { margin: 0; font-size: clamp(1.55rem, 5vw, 2.7rem); line-height: 1; letter-spacing: -.04em; }
+  .focus-egg-demo__head > p { margin: 0; color: var(--ke-color-muted); line-height: 1.5; }
+  .focus-egg-demo__controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: 0; border: 0; padding: 0; }
+  .focus-egg-demo__controls legend { grid-column: 1 / -1; margin-bottom: .35rem; color: var(--ke-color-muted); font-size: .74rem; font-weight: 850; }
+  .focus-egg-demo__controls label { position: relative; cursor: pointer; }
+  .focus-egg-demo__controls input { position: absolute; opacity: 0; pointer-events: none; }
+  .focus-egg-demo__controls span {
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--ke-color-line);
+    border-radius: .8rem;
+    background: var(--ke-color-canvas);
+    font-size: .78rem;
+    font-weight: 850;
+  }
+  .focus-egg-demo__controls input:checked + span { border-color: var(--ke-color-brand-600); background: var(--ke-color-brand-50); color: var(--ke-color-brand-800); }
+  .focus-egg-demo__controls input:focus-visible + span { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 65%, transparent); outline-offset: 3px; }
+  .focus-egg-demo__status { margin: 0; border-radius: .8rem; padding: .75rem; background: var(--ke-color-info-50); color: var(--ke-color-info-700); font-size: .8rem; line-height: 1.4; }
+  .focus-egg-demo__list { display: grid; gap: .55rem; }
+  .focus-egg-demo__event {
+    display: grid;
+    grid-template-columns: 2.3rem 1fr;
+    gap: .7rem;
+    align-items: center;
+    border: 1px solid var(--ke-color-line);
+    border-radius: .9rem;
+    padding: .8rem;
+    background: var(--ke-color-canvas);
+  }
+  .focus-egg-demo__event[hidden],
+  [data-fg-e12-anchor][hidden],
+  .focus-egg-demo__accessible[hidden] { display: none; }
+  .focus-egg-demo__event > span { color: var(--ke-color-brand-600); font-size: .68rem; font-weight: 900; }
+  .focus-egg-demo__event div { display: grid; gap: .2rem; }
+  .focus-egg-demo__event strong { font-size: .9rem; }
+  .focus-egg-demo__event small { color: var(--ke-color-muted); font-size: .75rem; }
+  .focus-egg-demo__accessible { border-left: 4px solid var(--ke-color-brand-600); padding: .2rem 0 .2rem .85rem; }
+  .focus-egg-demo__accessible p { margin: .25rem 0 .55rem; color: var(--ke-color-muted); font-size: .8rem; line-height: 1.45; }
+  .focus-egg-demo__accessible a { color: var(--ke-color-brand-700); font-size: .82rem; font-weight: 850; }
+  @media (min-width: 760px) {
+    .focus-egg-demo__head { grid-template-columns: minmax(0, .9fr) minmax(260px, .6fr); align-items: end; }
+  }
+</style>

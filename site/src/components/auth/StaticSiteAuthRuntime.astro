@@ -16,6 +16,7 @@ const enabled = Boolean(supabaseUrl && publishableKey);
 
 <script>
   import { getStaticSiteAuth, staticAuthDisplayName, staticAuthUserInitial } from '../../lib/staticSiteAuth';
+  import { installSavedEventRuntime } from '../../lib/savedEventRuntime';
 
   const runtime = document.querySelector('[data-static-site-auth-runtime]');
   if (runtime?.dataset.authEnabled === 'true' && runtime.dataset.supabaseUrl && runtime.dataset.supabaseKey) {
@@ -24,9 +25,10 @@ const enabled = Boolean(supabaseUrl && publishableKey);
       publishableKey: runtime.dataset.supabaseKey,
       provider: runtime.dataset.yandexProvider || 'custom:yandex',
     });
+    installSavedEventRuntime(auth);
 
     const render = (snapshot) => {
-      const signedIn = snapshot.status === 'signed_in' && Boolean(snapshot.user);
+      const signedIn = snapshot.status !== 'signed_out' && Boolean(snapshot.user);
       const checking = snapshot.status === 'checking';
       const name = signedIn ? staticAuthDisplayName(snapshot.user) : '';
       document.querySelectorAll('[data-static-auth-signed-in]').forEach((node) => { node.hidden = !signedIn; });
@@ -35,7 +37,10 @@ const enabled = Boolean(supabaseUrl && publishableKey);
         node.hidden = signedIn || checking;
         if (node instanceof HTMLButtonElement) node.disabled = checking;
       });
-      document.querySelectorAll('[data-static-auth-logout]').forEach((node) => { node.hidden = !signedIn; });
+      document.querySelectorAll('[data-static-auth-logout]').forEach((node) => {
+        node.hidden = !signedIn;
+        if (node instanceof HTMLButtonElement) node.disabled = checking;
+      });
       document.querySelectorAll('[data-static-auth-name]').forEach((node) => { node.textContent = name; });
       document.querySelectorAll('[data-static-auth-initial]').forEach((node) => {
         node.textContent = signedIn ? staticAuthUserInitial(name) : '?';
@@ -43,7 +48,7 @@ const enabled = Boolean(supabaseUrl && publishableKey);
       document.querySelectorAll('[data-static-auth-status]').forEach((node) => {
         node.textContent = snapshot.message;
         if (snapshot.status === 'error') node.setAttribute('role', 'alert');
-        else node.removeAttribute('role');
+        else node.setAttribute('role', 'status');
       });
     };
 

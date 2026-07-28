@@ -1,0 +1,19 @@
+{
+  "source": "SVG Repo",
+  "id": "287837",
+  "slug": "flask-laboratory",
+  "title": "Flask Laboratory",
+  "page_url": "https://www.svgrepo.com/svg/287837/flask-laboratory",
+  "raw_url": "https://www.svgrepo.com/show/287837/flask-laboratory.svg",
+  "license": "CC0 License",
+  "viewBox": "0 0 392.598 392.598",
+  "width": "800px",
+  "height": "800px",
+  "adapted": false,
+  "selected_for": "KenigEvents focus-group laboratory badge",
+  "compared_with": [
+    "SVG Repo 231513 Test Tubes Lab",
+    "SVG Repo 455759 Lab Test Tube"
+  ],
+  "curation_note": "Selected after visual comparison at 150px and 28px. The round silhouette, blue outline and amber liquid stay recognizable at badge size and match the warm KenigEvents palette better than the denser line candidates."
+}

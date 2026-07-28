@@ -4,6 +4,124 @@
 
 ### Added
 
+- Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
+- Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
+- Added a deterministic self-contained SVG QR and exact visible fragment link
+  for focus-group invitations, including local download and decode regression
+  coverage without a third-party QR service.
+- Made the focus programme page immediately render a usable invitation URL and
+  its exact downloadable QR (also retained in the closed hub), instead of
+  hiding enrolment behind a demo link or an extra create step.
+- Separated account logout from leaving the focus programme: logout ends only
+  the auth session, while the explicit programme exit clears only the
+  30-day participation marker; the shared mobile menu and focus/personal pages
+  expose the correct action for their current state.
+- Connected focus identity choices to the shared Supabase Auth controller:
+  email uses a real one-time link, Yandex uses the existing custom provider,
+  and an already signed-in user links Yandex to the same account; the local
+  focus marker still remains explicitly separate from production membership.
+- Fixed focus email OTP requests to send Supabase an absolute same-origin clean
+  callback URL after the invitation fragment has been removed.
+- Fixed mobile continuation likes so reranking only the unfrozen tail preserves
+  viewport position after `Показать ещё`, and made Favorites hydrate future
+  browser-local items before the optional Supabase merge.
+- Fixed authorized Search on mobile to use JSON by default with one bounded
+  transport-only retry, while keeping NDJSON opt-in for diagnostics; honest
+  fallback cards now render immediately for zero-exact queries instead of
+  leaving a blank result surface.
+- Fixed stale `Сегодня` tabs by comparing their embedded build date with the
+  Kaliningrad clock and redirecting/relabeling honestly, and made the shared
+  event-date inventory own both enabled calendar cells and non-empty generated
+  date routes without manufacturing pages for multi-day spans.
+- Fixed the materialized Free collection so its compact identity is a
+  transparent pinned medallion rather than an opaque shelf, and separated
+  ongoing exhibitions into a labelled final group after timed events.
+- Fixed production and immutable-candidate builds so an omitted Clubs UI flag
+  cannot silently replace the checked three-club projection with an empty
+  catalogue; explicit `0` remains the rollback.
+- Kept canonical public event detail links addressable for 30 days after an
+  event ends through a separate noindex archive projection, while excluding
+  those rows from every current listing, Search, Popular, recommendation,
+  personalization and active-catalog surface.
+- Fixed Popular temporal eligibility so elapsed ordinary ranges cannot survive
+  on a stale `end_date`, while semantically projected exhibitions remain
+  eligible through their final day; linked/repeated families are collapsed
+  before the finite limit and are never repeated as filler.
+- Added source-bound unusual-event hard-negative regressions for the ordinary
+  civic action `5376` and archival exhibition `4327`, using the shared semantic
+  document and existing prototype anchors without a title-keyword classifier;
+  the controlled probe remains explicitly non-production evidence pending a
+  fresh pinned-BGE canary.
+- Fixed the static browser release gate so visual arrow navigation may focus a
+  calendar-ineligible range card without inventing a `K` hint; eligible focused
+  cards still own exactly one visible hint and the scoped action.
+
+- Added the R15 unusual-events implementation contract: `/neobychnoe/`,
+  15-family taxonomy, one hash-bound shared BGE vector boundary, concept-level
+  dedup/unread state, zero-provider static build, atomic cache/last-good
+  rollback and a checked-fact golden evaluation fixture; exact SHA `123bcee4`
+  passed the final Kaggle candidate gates and an immutable noindex candidate
+  was published without changing production root.
+- Recorded final R15 release evidence: 326-event snapshot
+  `prod-20260727`, approved zero-provider BGE result with `1.0` editorial
+  precision / `0.0` hard-negative FPR / `0.8` recall, 36 green public
+  desktop/mobile route checks, product Playwright pass and packaged lab `404`.
+- Hardened the R15 candidate after independent acceptance review: incremental
+  BGE reuse now encodes only changed documents, score/concept cache schemas are
+  consistent, manifests expose reader aliases and durable concept state,
+  explicit canonical eligibility and ordinary-corpus distance/receipts are
+  fail-closed, notification eligibility survives ordinary rebuilds while
+  migration output stays silent, last-good is content/freshness-bound, and
+  deferred rows cannot bypass feed diversity caps. Candidate product
+  Playwright and the local noindex ten-state red-dot lab now use independent
+  modes and base URLs; lab pages are not shipped in the candidate.
+- Kept ordinary-corpus distance precision-first: it is a hash-bound proximity
+  demotion guardrail and cannot positively promote an abstaining hard negative;
+  compact builder logs retain exact gate metrics/hashes without per-event
+  prediction or corpus-member payloads.
+- Calibrated the deterministic R15 unusual-event head on the pinned real BGE-M3
+  artifact and corrected its publication-quality accounting: ineligible rows
+  abstain, recall uses the publishable frozen population, precision/diversity
+  use the concept-deduplicated feed, and identical-rebuild flip rate compares
+  repeated inference rather than editorial tier labels. Classifier-only updates
+  now reuse every compatible dense vector while rebinding a fresh classifier
+  and artifact hash.
+- Restored one no-band mobile rail geometry for every crop-safe
+  `visual_only` event photo: portrait and landscape assets, including
+  multi-image galleries and Pianissimo event `5297`, use horizontal `140×112`
+  (`5:4`) cover; OCR/document/unknown/error or contradictory media remain
+  fail-closed to authored `contain`.
+- Fixed the current-month mobile calendar grid to align weekday columns from
+  the first rendered date rather than the omitted first day of the month.
+- Fixed the Kaggle shared-BGE preflight to upgrade to the pinned,
+  Transformers-5-compatible `FlagEmbedding==1.4.0`; the former 1.3.5 bootstrap
+  failed on the current CPU image before BGE-M3 could load.
+- Fixed the Kaggle daily service-share handoff to import its renderer from the
+  extracted site payload and guaranteed one local-day request through the sole
+  `00:00 Europe/Kaliningrad` calendar rollover, startup catch-up and atomic
+  coalesced outbox marker.
+- Added the production-candidate legacy preview pre-gate:
+  `build:preview`/`check:preview` must pass as non-archived, non-published
+  ephemeral evidence before production-root and secret-candidate
+  build/check/browser gates.
+- Fixed that pre-gate for immutable Astro CDN configuration: local CSS
+  verification now resolves the bounded `/_astro/…` runtime suffix instead of
+  incorrectly requiring the ephemeral preview id to equal the production
+  artifact id.
+- Added R15 static-site product contracts for horizontal `5:4` no-band mobile
+  rail crops, persistent Free collection identity, daily service-share
+  freshness, noindex calendar-first favorites, event-aware far-future calendar
+  navigation, bounded home composition and the `Подборки` menu.
+- Added the deployed owner-only Supabase `user_saved_event` schema, RLS
+  policies, security-invoker saved-events view and authenticated idempotent RPC
+  used by the noindex Favorites shell.
+- Added a separate verified-participant block under event medallions on mobile
+  and desktop detail pages, with role/headliner labels, provenance-gated
+  portraits, initials fallback and device-local person likes isolated from
+  event reactions.
+- Added a backward-compatible, fail-closed static participant projection from
+  the artist registry/appearance overlay plus KGD80 portrait canaries for
+  Татьяна Удовенко and Андрей Левченков.
 - Added compact PWA lifecycle analytics in the personalization Supabase
   project: confirmed installs, standalone sessions, daily active installations
   and exact D1/D7 cohort returns use one mutable installation-state row plus
@@ -296,6 +414,43 @@
 
 ### Fixed
 
+- **Static site / late-day Today export**: kept otherwise-public same-day
+  one-off events in the full static catalog after their start time so
+  `/segodnya/` can render the accepted muted elapsed state and mobile rail
+  instead of collapsing late in the evening; Popular retains its separate
+  start-instant exclusion, and the catalog ledger proves the same
+  calendar-day-inclusive predicate.
+- **Static site / generated crop canary**: moved the executable Pianissimo
+  no-band rail assertion from expired one-off event `5296` to upcoming
+  same-series event `5297`; the gate still verifies the real `visual_only`
+  safe-crop/focal-point contract without requiring production export to retain
+  an obsolete date.
+- **Static site / transport canary lifecycle**: stopped requiring expired
+  Romanovo event `6710` in every full production catalog; current Romanovo
+  events still receive the exact preferred Северный-вокзал boarding assertion,
+  while route-119 source/provenance and focused transport tests remain
+  unconditional.
+- **Static site / unusual semantic boundary**: raised the calibrated adjacent
+  probability threshold from `0.65` to `0.725` after the exact pinned-BGE
+  canary exposed a second conventional-stage hard negative; the smallest
+  separating threshold restores hard-negative FPR `0.05` while retaining the
+  required confirmed-positive recall `0.80`, without event-id or keyword
+  exceptions.
+
+- Removed the misleading Search parent and active Search dock state from the
+  first-class Free collection; its responsive hierarchy now returns directly
+  to `Афиша`.
+- Static event keyboard navigation now attaches the reserved calendar `K` hint
+  synchronously before focus moves to an asynchronously rendered continuation
+  card, preserving the single visible shortcut-owner invariant across rail
+  boundaries.
+- Fixed production and secret-candidate packaging so the dedicated home
+  (`hero-talk`, quick navigation, bounded cold-start feed) is preserved at `/`
+  instead of being overwritten by the `Сегодня` listing; release checks now
+  assert the home marker and the `noindex` policy for Favorites and Unusual.
+- Removed the expired fixed-date Teremok generated-output dependency from the
+  preview gate while retaining current rail geometry/OCR fail-closed contracts
+  and the source-backed Pianissimo crop regression.
 - **Static site / PWA launcher safe area**: replaced the launcher artwork with
   the revised `PKA-PWA2` reference and added an 82% warm-white maskable safe
   area, keeping the leather edge and stitched outline visible under Android

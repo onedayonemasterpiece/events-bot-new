@@ -131,3 +131,25 @@ currently selected for event `6821` has an independent exact URL/SHA-256
 no-OCR review after the semantic classifier returned `error`; the reviewed
 source is treated as a photograph and fills the card, while every unreviewed
 `unknown/error` source remains fail-closed.
+
+## R15 mobile-rail crop contract
+
+On mobile listing rails, **every** event/asset-consistent, classified crop-safe
+`visual_only` photo uses one horizontal `140×112` (`5:4`) identity, regardless
+of source orientation, portrait/landscape shape, gallery size or position. The
+media box is `aspect-ratio: 5 / 4`, the image computes to `object-fit: cover`,
+and no letterbox/backdrop/repeated-edge band may remain. A portrait photo is not
+permission to reintroduce a vertical `4:5` rail variant.
+
+This rule is deliberately fail-closed. Event-level `ocr_text`/`unknown` state,
+an OCR/text/document asset, unknown/error semantics, contradictory event versus
+asset classification, or missing positive crop-safety evidence uses authored
+geometry with `contain` even if an upstream selector requested adaptive cover.
+Only the positively proven `visual_only` case gets the horizontal crop.
+
+Event `5297` (`Фестиваль Pianissimo: Игорь Сидоров`) is the frozen regression:
+its rail image must remain a single horizontal crop without bands at the mobile
+breakpoint. Browser acceptance measures the rendered media box and computed
+fit; a source-code declaration alone does not close the regression. The
+multi-image portrait regression is event `6823`: all three selected gallery
+cells must independently measure `140×112`, ratio `1.25`, and `cover`.

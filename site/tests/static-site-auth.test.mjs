@@ -30,6 +30,7 @@ test('global runtime binds menu and Personal auth views without routing login th
   assert.match(runtime, /auth\.signOut\(\)/u);
   assert.match(menu, /button type="button" data-static-auth-login/u);
   assert.match(menu, /data-static-auth-name/u);
+  assert.match(menu, /data-static-auth-logout/u);
   assert.doesNotMatch(menu, />Войти<\/a>/u);
   assert.match(personal, /data-static-auth-login/u);
   assert.match(personal, /data-static-auth-logout/u);
@@ -37,6 +38,44 @@ test('global runtime binds menu and Personal auth views without routing login th
   assert.doesNotMatch(personal, /Войти через поиск/u);
   assert.match(layout, /import StaticSiteAuthRuntime from '\.\.\/components\/auth\/StaticSiteAuthRuntime\.astro'/u);
   assert.equal((layout.match(/<StaticSiteAuthRuntime \/>/gu) || []).length, 1);
+});
+
+test('account logout is explicit and cannot clear focus participation or personalization', () => {
+  assert.match(auth, /const \{ error \} = await this\.client\.auth\.signOut\(\)/u);
+  assert.match(auth, /if \(error\)[\s\S]*Не удалось выйти из аккаунта/u);
+  assert.match(auth, /message: 'Вы вышли из аккаунта\.'/u);
+  assert.doesNotMatch(auth, /clearFocusParticipationMarker|FOCUS_PARTICIPATION_STORAGE_KEY/u);
+  assert.doesNotMatch(runtime, /clearFocusParticipationMarker|localStorage\.clear|sessionStorage\.clear/u);
+  assert.match(personal, /Выход завершает только[\s\S]*Supabase-сессию/u);
+  assert.match(personal, /30-дневное участие[\s\S]*остаются/u);
+});
+
+test('focus identity supports real email OTP and Yandex linking through the shared controller', () => {
+  const auth = readFileSync(new URL('../src/lib/staticSiteAuth.ts', import.meta.url), 'utf8');
+  const intake = readFileSync(new URL('../src/components/FocusGroupInviteIntake.astro', import.meta.url), 'utf8');
+  const invitation = readFileSync(new URL('../src/pages/fokus-gruppa/priglashenie/index.astro', import.meta.url), 'utf8');
+  assert.match(auth, /async signInWithEmailOtp/u);
+  assert.match(auth, /this\.client\.auth\.signInWithOtp/u);
+  assert.match(auth, /emailRedirectTo:\s*redirectTo/u);
+  assert.match(auth, /async linkYandexIdentity/u);
+  assert.match(auth, /this\.client\.auth\.linkIdentity/u);
+  assert.match(intake, /new URL\(intake\.cleanHref, window\.location\.origin\)\.href/u);
+  assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirectTo\)/u);
+  assert.match(intake, /auth\.linkYandexIdentity\(\)/u);
+  assert.match(intake, /введённый адрес локально не сохраняется/u);
+  assert.match(invitation, /<StaticSiteAuthRuntime \/>/u);
+  assert.doesNotMatch(intake, /Макет не отправлял код|провайдер не запускается/u);
+});
+
+test('bespoke focus hub exposes auth state while keeping leave-focus as the only membership action', () => {
+  const focusHub = read('src/pages/zakrytaya-afisha/index.astro');
+  assert.match(focusHub, /<StaticSiteAuthRuntime \/>/u);
+  assert.match(focusHub, /data-static-auth-login/u);
+  assert.match(focusHub, /data-static-auth-name/u);
+  assert.match(focusHub, /data-static-auth-logout/u);
+  assert.match(focusHub, /data-secret-clear>Выйти из фокус-группы/u);
+  assert.match(focusHub, /data-secret-clear[\s\S]*clearFocusParticipationMarker/u);
+  assert.doesNotMatch(focusHub, /data-static-auth-logout[^>]*data-secret-clear|data-secret-clear[^>]*data-static-auth-logout/u);
 });
 
 test('Search advertises the mobile search action and submits Enter through the native form path', () => {
@@ -48,8 +87,8 @@ test('Search advertises the mobile search action and submits Enter through the n
 });
 
 test('initial streaming header timeout receives one bounded JSON rescue', () => {
-  assert.match(search, /error\?\.message !== 'search_fetch_headers_timeout'/u);
+  assert.match(search, /!isRetryableSearchTransportError\(error\)/u);
   assert.match(search, /invokeEventSearchJson\(endpoint, body, session, 'headers_stalled'/u);
-  assert.match(search, /reason === 'stream_stalled' \|\| reason === 'headers_stalled'/u);
+  assert.match(search, /reason === 'stream_stalled' \|\| reason === 'headers_stalled' \|\| reason === 'json_retry'/u);
   assert.match(search, /use_llm_verifier: false, stream_rescue: true/u);
 });

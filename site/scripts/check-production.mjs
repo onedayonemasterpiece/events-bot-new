@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import eventArchiveData from '../src/data/preview-event-archive.json' with { type: 'json' };
 import catalogData from '../src/data/production-catalog.json' with { type: 'json' };
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
+import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import {
   CHECK_CONTRACT_VERSION, RELEASE_MANIFEST_SCHEMA, fileInventory, sha256, treeHash, validateCatalogLedger,
@@ -78,11 +80,7 @@ if (
   || !productionArtifactUnavailableMarker.test(productionArtifactSource)
 ) fail('artifact collection leaked into production');
 const freeCollectionSource = html('podborki/besplatnye-sobytiya/index.html');
-const freeCollectionResults = freeCollectionSource.slice(
-  freeCollectionSource.indexOf('data-search-collection-results'),
-  freeCollectionSource.indexOf('</section>', freeCollectionSource.indexOf('data-search-collection-results')),
-);
-const freeCollectionIds = [...freeCollectionResults.matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
+const freeCollectionIds = [...freeCollectionSource.matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
 const eventByIdForCollections = new Map(eventsData.events.map((event) => [Number(event.id), event]));
 if (!freeCollectionIds.length) fail('general free collection is unexpectedly empty');
 if (freeCollectionIds.some((id) => !eventByIdForCollections.get(id)?.ticket?.is_free)) fail('general free collection contains a non-free exported event');
@@ -90,6 +88,14 @@ const ongoingFreeIds = new Set(eventsData.events
   .filter((event) => event.ticket?.is_free && event.start_date < eventsData.build.current_date && event.end_date >= eventsData.build.current_date)
   .map((event) => Number(event.id)));
 if (ongoingFreeIds.size && !freeCollectionIds.some((id) => ongoingFreeIds.has(id))) fail('general free collection lost all ongoing free events');
+if (!freeCollectionSource.includes('data-free-collection-event-group="events"')) fail('general free collection misses the primary event group');
+const freeExhibitionIds = [...(freeCollectionSource.match(
+  /data-free-collection-event-group="exhibitions"[\s\S]*?<\/section>/u,
+)?.[0] || '').matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
+if (freeExhibitionIds.some((id) => {
+  const event = eventByIdForCollections.get(id);
+  return event?.event_type !== 'выставка' && !event?.topics?.includes('EXHIBITIONS');
+})) fail('free exhibition group contains a non-exhibition event');
 const jazzCollectionSource = html('podborki/dzhaz-na-vyhodnyh/index.html');
 if (!jazzCollectionSource.includes('data-search-collection-results')) {
   if (!jazzCollectionSource.includes('data-search-collection-empty-window')) fail('empty Jazz collection misses its explicit weekend explanation');
@@ -120,6 +126,13 @@ if (
     !== sha256(readFileSync(join(siteDir, 'src/data/festival-timeline.json')))
   || manifest.versions?.festival_calendar?.rendered_count !== festivalTimelineData.festivals.length
 ) fail('festival timeline release receipt/hash mismatch');
+if (
+  manifest.versions?.event_detail_archive?.source !== eventArchiveData.build?.source
+  || manifest.versions?.event_detail_archive?.retention_days !== 30
+  || manifest.versions?.event_detail_archive?.rendered_count !== eventArchiveData.events.length
+  || manifest.versions?.event_detail_archive?.projection_sha256
+    !== sha256(readFileSync(join(siteDir, 'src/data/preview-event-archive.json')))
+) fail('event detail archive release receipt/hash mismatch');
 const festivalSlugs = festivalTimelineData.festivals.map((item) => item.slug);
 if (festivalSlugs.length !== new Set(festivalSlugs).size) fail('festival timeline contains duplicate slugs');
 for (const key of files.map((file) => file.key)) {
@@ -147,13 +160,26 @@ for (const event of eventsData.events) {
     if (!(target.other_date_ids || []).map(Number).includes(Number(event.id))) fail(`asymmetric linked occurrence ${event.id}<->${linkedId}`);
   }
 }
+const archivedSlugs = new Set(eventArchiveData.events.map((event) => String(event.slug)));
+for (const event of eventArchiveData.events) {
+  if (eventById.has(Number(event.id))) fail(`active event duplicated in detail archive: ${event.id}`);
+  required(`sobytiya/${event.slug}/index.html`);
+  required(`sobytiya/${event.slug}/event.ics`);
+}
+if (!Array.isArray(interestClubsData.clubs) || interestClubsData.clubs.length < 3) fail('confirmed club projection is unexpectedly empty');
+for (const club of interestClubsData.clubs) {
+  required(`kluby-po-interesam/${club.slug}/index.html`);
+}
 
 const siteOrigin = manifest.site_origin;
 for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   const source = html(file.key);
   const intentionallyUnindexed = file.key === 'dlya-menya/index.html'
+    || file.key === 'izbrannoe/index.html'
+    || file.key === 'neobychnoe/index.html'
     || file.key === 'artefakty/index.html'
-    || /^podborki\/[^/]+\/index\.html$/u.test(file.key);
+    || /^podborki\/[^/]+\/index\.html$/u.test(file.key)
+    || archivedSlugs.has(/^sobytiya\/([^/]+)\/index\.html$/u.exec(file.key)?.[1] || '');
   if (intentionallyUnindexed) {
     if (!/<meta\s+name="robots"\s+content="noindex,nofollow,noarchive"/iu.test(source)) fail(`private/personal noindex policy missing from ${file.key}`);
   } else {
@@ -167,13 +193,16 @@ for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   if (/storage\.yandexcloud\.net\/(?:kenigevents|kenigevents\.ru)/u.test(source)) fail(`raw Object Storage URL leaked into ${file.key}`);
   if (/(?:src|href)="https?:\/\/[^"]+\.(?:png|jpe?g|gif)(?:[?#"])/iu.test(source)) fail(`external runtime raster fallback leaked into ${file.key}`);
 }
-if (!html('index.html').includes('data-production-root-listing')) fail('root is not the today listing');
+if (!html('index.html').includes('data-production-root-home') || !html('index.html').includes('data-home-page')) {
+  fail('root is not the dedicated home surface');
+}
 const robots = readFileSync(join(root, 'robots.txt'), 'utf8');
 if (robots !== `User-agent: *\nAllow: /\nSitemap: ${siteOrigin}/sitemap.xml\n`) fail('robots policy is not production indexable');
 const sitemap = readFileSync(join(root, 'sitemap.xml'), 'utf8');
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/gu)].map((match) => match[1]);
 if (new Set(locs).size !== locs.length || locs.some((url) => !url.startsWith(`${siteOrigin}/`) || /\/(?:__preview|lab|_review)(?:\/|$)/u.test(url))) fail('sitemap contains duplicate/off-origin/QA URLs');
 for (const event of eventsData.events) if (!locs.includes(`${siteOrigin}/sobytiya/${event.slug}/`)) fail(`event missing from sitemap ${event.id}`);
+for (const event of eventArchiveData.events) if (locs.includes(`${siteOrigin}/sobytiya/${event.slug}/`)) fail(`archived detail leaked into sitemap ${event.id}`);
 if (!locs.includes(`${siteOrigin}/festivali/`)) fail('festival calendar missing from sitemap');
 if (!locs.includes(`${siteOrigin}/partnerstvo/`)) fail('partnership page missing from sitemap');
 if (!Array.isArray(manifest.stable_ics) || manifest.stable_ics.length !== eventsData.events.length) fail('stable ICS manifest parity failed');

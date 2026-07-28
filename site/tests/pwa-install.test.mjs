@@ -200,10 +200,9 @@ test('site exposes a base-aware installable manifest and footer-owned controller
   assert.match(footer, /<PwaInstallAction \/>/u);
   assert.match(layout, /<PwaTelemetry \/>/u);
   assert.match(layout, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon-v2/u);
-  assert.match(home, /manifest\.webmanifest'\)\}\?v=20260727-brand-icon-v2/u);
-  assert.match(home, /rel="manifest" href=\{manifestHref\}/u);
-  assert.match(home, /<PwaTelemetry \/>/u);
-  assert.match(home, /<PwaInstallAction \/>/u);
+  assert.match(home, /<EventLayout\b/u);
+  assert.doesNotMatch(home, /<PwaInstallAction \/>/u);
+  assert.doesNotMatch(home, /<PwaTelemetry \/>/u);
   assert.match(release, /'\.webmanifest': 'application\/manifest\+json; charset=utf-8'/u);
   assert.match(deploy, /manifest\.webmanifest[\s\S]*application\/manifest\+json; charset=utf-8/u);
 });

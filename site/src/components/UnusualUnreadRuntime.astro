@@ -1,0 +1,109 @@
+---
+import { getUnusualFeed } from '../lib/unusualEvents';
+import type { UnusualFeed } from '../lib/unusualEvents';
+interface Props { feed?: UnusualFeed; }
+const { feed = getUnusualFeed() } = Astro.props;
+const candidates = feed.approved && feed.baselineAt ? feed.unreadCandidates : [];
+---
+<script
+  is:inline
+  type="application/json"
+  data-unusual-unread-manifest
+  data-unusual-unread-enabled={candidates.length > 0 ? 'true' : 'false'}
+  set:html={JSON.stringify({ version:1, buildId:feed.buildId, baselineAt:feed.baselineAt, candidates })}
+></script>
+
+<script is:inline>
+  const manifestNode = document.querySelector('[data-unusual-unread-manifest]');
+  if (manifestNode && manifestNode.dataset.unusualUnreadBound !== 'true') {
+    manifestNode.dataset.unusualUnreadBound = 'true';
+    const storageKey = 'ke_unusual_seen_v1';
+    const maxSeen = 256;
+    const ttlMs = 180 * 24 * 60 * 60 * 1000;
+    const safeId = /^[a-z0-9][a-z0-9._:-]{2,127}$/iu;
+    let manifest = null;
+    try { manifest = JSON.parse(manifestNode.textContent || 'null'); } catch (_) { manifest = null; }
+    const candidates = manifestNode.dataset.unusualUnreadEnabled === 'true'
+      && manifest?.version === 1
+      && Array.isArray(manifest.candidates)
+      ? manifest.candidates.filter((item) => safeId.test(String(item?.conceptId || '')) && Number.isFinite(Date.parse(item?.firstPublishedAt || ''))).slice(0, 120)
+      : [];
+
+    const readState = () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        const now = Date.now();
+        const seen = parsed?.version === 1 && Array.isArray(parsed.seen)
+          ? parsed.seen.filter((item) => safeId.test(String(item?.id || '')) && Number.isFinite(Date.parse(item?.seenAt || '')) && now - Date.parse(item.seenAt) <= ttlMs).slice(-maxSeen)
+          : [];
+        const rolloutBaselineAt = Number.isFinite(Date.parse(parsed?.rolloutBaselineAt || ''))
+          ? parsed.rolloutBaselineAt
+          : manifest?.baselineAt;
+        const rolloutBuild = typeof parsed?.rolloutBuild === 'string' && parsed.rolloutBuild
+          ? parsed.rolloutBuild
+          : manifest?.buildId;
+        return {
+          schema:storageKey,
+          version:1,
+          rolloutBaselineAt,
+          rolloutBuild,
+          updatedAt:new Date(now).toISOString(),
+          seen,
+        };
+      } catch (_) {
+        return null;
+      }
+    };
+    const writeState = (state) => {
+      if (!state) return false;
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+        return localStorage.getItem(storageKey) !== null;
+      } catch (_) {
+        return false;
+      }
+    };
+    const syncDots = () => {
+      const state = readState();
+      const seen = new Set((state?.seen || []).map((item) => item.id));
+      const unread = state ? candidates.filter((item) => !seen.has(item.conceptId)) : [];
+      document.querySelectorAll('[data-unusual-nav-dot]').forEach((dot) => { dot.hidden = unread.length === 0; });
+      document.querySelectorAll('[data-unusual-nav-link]').forEach((link) => {
+        link.dataset.unusualUnreadCount = String(unread.length);
+        if (unread.length > 0) link.setAttribute('aria-label', 'Есть новые необычные события');
+        else link.removeAttribute('aria-label');
+      });
+      document.querySelectorAll('[data-unusual-mark-seen]').forEach((button) => { button.hidden = unread.length === 0; });
+      return unread.length;
+    };
+    const markSeen = (conceptIds) => {
+      const ids = [...new Set(conceptIds.map(String).filter((id) => safeId.test(id)))];
+      if (!ids.length) return false;
+      const state = readState();
+      if (!state) return false;
+      const now = new Date().toISOString();
+      const byId = new Map(state.seen.map((item) => [item.id, item]));
+      ids.forEach((id) => byId.set(id, { id, seenAt:now }));
+      state.seen = [...byId.values()].slice(-maxSeen);
+      state.updatedAt = now;
+      if (!writeState(state)) return false;
+      syncDots();
+      return true;
+    };
+
+    addEventListener('kenigevents:unusual-viewed', (event) => {
+      const conceptId = event.detail?.conceptId;
+      if (typeof conceptId === 'string') markSeen([conceptId]);
+    });
+    addEventListener('kenigevents:unusual-mark-seen', (event) => {
+      const conceptIds = Array.isArray(event.detail?.conceptIds) ? event.detail.conceptIds : [];
+      markSeen(conceptIds);
+    });
+    addEventListener('storage', (event) => { if (event.key === storageKey) syncDots(); });
+    if (document.readyState === 'loading') {
+      addEventListener('DOMContentLoaded', syncDots, { once:true });
+    } else {
+      syncDots();
+    }
+  }
+</script>

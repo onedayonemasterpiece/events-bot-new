@@ -1,0 +1,122 @@
+---
+import { withBase } from '../lib/events';
+
+interface Props {
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+---
+
+<aside class:list={['focus-thanks', compact && 'focus-thanks--compact']} aria-labelledby="focus-thanks-title">
+  <div class="focus-thanks__partner">
+    <p class="focus-thanks__eyebrow">Партнёр благодарности</p>
+    <picture>
+      <source srcset={withBase('/assets/partners/act-opus.webp')} type="image/webp" />
+      <img
+        src={withBase('/assets/partners/act-opus.png')}
+        width="900"
+        height="230"
+        loading="lazy"
+        decoding="async"
+        alt="Акт Опус — партнёр благодарности"
+      />
+    </picture>
+  </div>
+  <div class="focus-thanks__copy">
+    <p class="focus-thanks__eyebrow">Спасибо за участие</p>
+    <h2 id="focus-thanks-title">Один приз — два билета в театр</h2>
+    <p>
+      В проектируемой механике основной результат — доля собранной коллекции
+      пасхалок. Затем учитывается ограниченная широта исследования: ответ NPS,
+      лайки и дизлайки, текстовая обратная связь, поиск и сохранения.
+    </p>
+    <p class="focus-thanks__notice">
+      <strong>Правила готовятся.</strong> Сейчас действия не начисляют
+      конкурсные баллы и не создают право на билеты. Значение NPS, позитивность,
+      длина текста и повторные действия не дают преимущества; критический ответ
+      и дизлайк учитываются наравне с положительными сигналами.
+    </p>
+  </div>
+</aside>
+
+<style>
+  .focus-thanks {
+    display: grid;
+    grid-template-columns: minmax(180px, .42fr) minmax(0, 1fr);
+    gap: clamp(1.25rem, 4vw, 3rem);
+    align-items: center;
+    border: 1px solid color-mix(in srgb, var(--ke-color-brand-600, #a54821) 24%, transparent);
+    border-radius: 1.6rem;
+    padding: clamp(1.15rem, 3vw, 2rem);
+    background:
+      radial-gradient(circle at 0 0, rgb(255 193 13 / 17%), transparent 42%),
+      var(--ke-color-surface-strong, #fff);
+    color: var(--ke-color-copy, #44362d);
+    box-shadow: var(--ke-shadow-1, 0 8px 22px rgb(72 45 25 / 8%));
+    font-family: var(--ke-font-sans, system-ui, sans-serif);
+  }
+
+  .focus-thanks__partner {
+    min-width: 0;
+    display: grid;
+    gap: .7rem;
+    justify-items: start;
+  }
+
+  .focus-thanks picture {
+    width: min(100%, 260px);
+    display: block;
+  }
+
+  .focus-thanks img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: contain;
+  }
+
+  .focus-thanks__eyebrow {
+    margin: 0;
+    color: var(--ke-color-brand-700, #98401f);
+    font-size: .72rem;
+    font-weight: 900;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .focus-thanks h2 {
+    margin: .35rem 0 .75rem;
+    color: var(--ke-color-ink, #221a14);
+    font-size: clamp(1.35rem, 3vw, 2.15rem);
+    line-height: 1.05;
+    letter-spacing: -.035em;
+  }
+
+  .focus-thanks p:not(.focus-thanks__eyebrow) {
+    max-width: 66ch;
+    margin: 0;
+    line-height: 1.58;
+  }
+
+  .focus-thanks__notice {
+    margin-top: .75rem !important;
+    border-left: 3px solid #ffc10d;
+    padding-left: .8rem;
+    color: var(--ke-color-muted, #6d6259);
+    font-size: .86rem;
+  }
+
+  .focus-thanks--compact {
+    grid-template-columns: 150px minmax(0, 1fr);
+  }
+
+  @media (max-width: 680px) {
+    .focus-thanks,
+    .focus-thanks--compact {
+      grid-template-columns: 1fr;
+    }
+
+    .focus-thanks picture { width: min(70vw, 230px); }
+  }
+</style>

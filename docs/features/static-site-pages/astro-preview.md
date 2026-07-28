@@ -55,6 +55,60 @@ now full-cover overlays in donor-density rows, the `390px` layout keeps two
 columns, and all media is hash-bound to festival/organiser/venue provenance
 without the regional anniversary aggregator.
 
+The R15 candidate additionally stages the static unusual-events manifest and
+daily service-share assets inside this same immutable snapshot/Kaggle handoff.
+It does not add a page-view scorer or another builder job. The shared BGE
+artifact, unusual cache/last-good receipt, `provider_calls=0`, migration
+notification suppression and real canary/rollback gates are canonical in
+[`unusual-events`](../unusual-events/README.md). Final exact code SHA
+`123bcee460112ee9fe0b0a0176f51a07c92eed6a` passed build
+`production-r15-bge-final5-20260727t221000z` against the immutable
+`prod-20260727` snapshot (326 events). The secret candidate is available at
+<https://kenigevents.ru/_review/pp1wRctXBd6boYU1EcnBrod3z8MmKpD7SGEufK1t-xw/>;
+production root remains untouched.
+
+For `profile=production-candidate`, Kaggle must preserve the legacy preview
+contract as a pre-gate rather than jumping directly to root-form output:
+
+1. run `npm run build:preview` and `npm run check:preview` under an isolated
+   `preview-gate-<build>` ID;
+2. mark that output `archived=false`, `published=false`, then require the
+   production build to remove it;
+3. build/check the production-root form and run its Chromium browser-release
+   gate;
+4. build/check the immutable noindex secret candidate and run its separate
+   Chromium browser-release gate.
+
+Missing/failed preview evidence or preview-gate files leaking into the root
+archive is a release failure. The preview pre-gate is not a third artifact or
+publishable URL. If its HTML points Astro runtime assets at the configured
+immutable CDN prefix, `check:preview` maps only the bounded `/_astro/…` suffix
+back to the local generated tree. It verifies the exact local CSS bytes without
+depending on an unpublished CDN prefix or assuming that the ephemeral and
+production build IDs are equal. The earlier `11d8c984` canary predated this
+sequence and is superseded. The final exact run reported the preview pre-gate as
+`ok`, non-archived and non-published, then passed both generated browser gates.
+`/neobychnoe/` remains candidate-only and no production-root promotion is
+implied until the owner accepts the complete candidate.
+
+The production catalog is calendar-day inclusive: every otherwise-public event
+whose start date is the current Kaliningrad date remains in the static export
+after its start time. This lets `/segodnya/` render elapsed events with the
+accepted muted state and keeps its mobile rail structurally present late in the
+day. Surfaces that must exclude already-started one-offs, especially Popular,
+apply their own start-instant eligibility after export. The catalog eligibility
+ledger uses the same inclusive predicate.
+
+Direct event links have a separate, bounded lifecycle. A full-catalog export
+writes recently elapsed canonical public events to
+`preview-event-archive.json` for **30 days**. That projection may generate only
+the event detail route and its ICS response; it is not imported by listings,
+Search, Popular, recommendations, personalization, the active catalog ledger
+or sitemap. Grace-period detail pages are `noindex,nofollow,noarchive`. This
+keeps a shared/reviewed event URL such as `6529` from turning into a next-day
+404 without reintroducing an elapsed event into discovery. Silent, aliased,
+non-active or public-gate-rejected rows remain excluded fail closed.
+
 The 2026-07-23 correction candidate additionally keeps every reviewed surface
 inside one mutually linked prefix: the dynamic Exhibitions presentation,
 optimized responsive personal-card feed, Search, current clubs, six-logo Partners,
@@ -620,7 +674,7 @@ The first public preview (`preview-20260627-event-pages-v1`) was superseded afte
 The feed-card A/B has been resolved for normal event pages: `split-actions` is now the baseline for all event detail discovery feeds. The old overlay variant remains documented only as a rejected/historical comparison in `event-card-ui-ab-2026-06-27.md`.
 
 - recommendation cards now have large image-led feed cards instead of text-only cards;
-- event hero keeps deterministic media modes (`poster-stage` for OCR/unknown, `photo-cover` for verified `visual_only`, `fallback-art` for no image), but now adds explicit composition variants (`poster-billboard`, `poster-attached-card`, `photo-cinematic-sheet`, `photo-parallax-sheet`, `compact-ticketing`); mobile hero visual breaks out to 100vw where appropriate, H1/CTA remain HTML in a decision sheet, OCR/unknown posters are not cropped, and visual-only images may use cover. Cards/listings keep the OCR-safe v15 rule: `visual_only` cover/crops inside a strict vertical 4:5 frame; `ocr_text|unknown` renders the actual image at natural aspect ratio with no crop, no fixed cover frame, no duplicate/backdrop underlay and no blur fill;
+- event hero keeps deterministic media modes (`poster-stage` for OCR/unknown, `photo-cover` for verified `visual_only`, `fallback-art` for no image), but now adds explicit composition variants (`poster-billboard`, `poster-attached-card`, `photo-cinematic-sheet`, `photo-parallax-sheet`, `compact-ticketing`); mobile hero visual breaks out to 100vw where appropriate, H1/CTA remain HTML in a decision sheet, OCR/unknown posters are not cropped, and visual-only images may use cover. Non-rail detail/recommendation cards keep the OCR-safe v15 rule: `visual_only` cover/crops inside a strict vertical 4:5 frame; `ocr_text|unknown` renders the actual image at natural aspect ratio with no crop, no fixed cover frame, no duplicate/backdrop underlay and no blur fill. R15 mobile listing rails instead use the horizontal fail-closed contract in [`image-framing.md`](image-framing.md);
 - duplicated facts/source/debug notes were removed from the first screen;
 - the long description is visible HTML, followed by a compact icon facts block; public source count/views and source links are hidden until auth exists, with a temporary notice that sources, mentions and extended statistics will be available to registered users;
 - native mobile share is attempted by one visible `Поделиться` button; duplicate Telegram/VK/WhatsApp share pills were removed, and fallback copies the URL when system share is unavailable.
@@ -641,7 +695,7 @@ After direct product review, `preview-20260628-event-pages-v43` rolls back the U
 - “Не интересно” is the explicit negative signal; the preview dims and demotes the card instead of inventing a visible anti-bubble block.
 - the bottom sticky CTA is hidden after the discovery feed enters the viewport.
 - same-origin event links have lightweight prefetch markers so static page transitions can warm the next HTML document.
-- media rendering consumes the same `image_text_mode` export but differs by surface: hero uses `poster-stage` for OCR/unknown and `photo-cover` for `visual_only`; cards/listings use `visual_only` cover in a vertical 4:5 frame and `ocr_text|unknown` natural aspect ratio, not `contain` inside a fixed card frame. Duplicate same-poster underlays, blurred fills, repeated edges and OCR crop are forbidden.
+- media rendering consumes the same `image_text_mode` export but differs by surface: hero uses `poster-stage` for OCR/unknown and `photo-cover` for `visual_only`; non-rail detail/recommendation cards use `visual_only` cover in a vertical 4:5 frame and `ocr_text|unknown` natural aspect ratio, not `contain` inside a fixed card frame. R15 mobile listing rails are the separate horizontal `5:4` rule in [`image-framing.md`](image-framing.md). Duplicate same-poster underlays, blurred fills, repeated edges and OCR crop are forbidden.
 - The share action uses a VK-like outlined repost/share arrow adapted from `@vkontakte/icons` `Icon24ShareOutline` (MIT), accessible `Поделиться` label and share count when count is positive. Zero like/share counts are not rendered as `0`. After a successful like the share action is highlighted instead of showing a floating bubble. Variant A keeps one overlay row with `Не интересно`, share and like; Variant B moves share/like under the card as transparent icon actions and may keep `В календарь` as an inside-card utility only for one-day events. The old explicit `Открыть` card button is removed because media/title links plus full-card JS navigation preserve crawlable SEO/GEO links while reducing UI noise.
 - Calendar remains available on the event detail page / primary transaction
   block for a valid date or range. In the feed it is absent from Variant A;
@@ -877,12 +931,19 @@ therefore agree with the pages produced by `build:preview`: an already-ended
 Break Summer event is forbidden from Popular after its date, while it remains
 required when the same gate runs against an earlier eligible build clock.
 
-Generated-output canaries also respect the generated calendar window. When the
-historical `date-2026-07-24` route exists, the gate checks the full Pianissimo
-rail DOM. When a current build correctly omits that expired date page, the gate
-checks the immutable real event `5296` media classification, safe-crop flag,
-wide geometry and focal point instead of failing because an obsolete route is
-absent.
+Generated-output canaries also respect the generated calendar window. The
+executable no-band Pianissimo canary follows upcoming event `5297` on
+`date-2026-07-30`; it checks the full rail DOM, horizontal `140×112` cover,
+`visual_only`, safe-crop geometry and focal point. A past one-off event is not
+used as a required source row: production export is allowed to remove expired
+dates, so an obsolete July 24 occurrence cannot break a later valid candidate.
+
+The same lifecycle rule applies to transport specimens. Romanovo event `6710`
+is historical acceptance evidence, not a permanent catalog fixture.
+`check:preview` validates the preferred Северный-вокзал boarding UI on a
+currently eligible Romanovo event when one exists; the official route-119
+terminal times/provenance and focused transport tests remain mandatory even
+when no current public event uses that bus route.
 
 ## Immutable candidate recovery after publication
 

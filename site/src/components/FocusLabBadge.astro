@@ -1,0 +1,97 @@
+---
+import { withBase } from '../lib/events';
+
+interface Props {
+  label?: string;
+  detail?: string;
+  size?: 'compact' | 'hero';
+}
+
+const {
+  label = 'Лаборатория сайта',
+  detail = 'Прототип',
+  size = 'compact',
+} = Astro.props;
+const iconHref = withBase('/assets/icons/lab-flask-287837.svg');
+---
+
+<span class:list={['focus-lab-badge', `focus-lab-badge--${size}`]}>
+  <span class="focus-lab-badge__icon" aria-hidden="true">
+    <img src={iconHref} width="32" height="32" alt="" />
+  </span>
+  <span class="focus-lab-badge__copy">
+    <strong>{label}</strong>
+    <small>{detail}</small>
+  </span>
+</span>
+
+<style>
+  .focus-lab-badge {
+    width: fit-content;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: .55rem;
+    border: 1px solid color-mix(in srgb, var(--ke-color-brand-600, #a54821) 25%, transparent);
+    border-radius: 999px;
+    padding: .35rem .7rem .35rem .4rem;
+    background: color-mix(in srgb, #ffc10d 13%, #fff);
+    color: var(--ke-color-ink, #221a14);
+    font-family: var(--ke-font-sans, system-ui, sans-serif);
+    box-shadow: 0 8px 22px rgb(72 45 25 / 8%);
+  }
+
+  .focus-lab-badge__icon {
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #fff;
+  }
+
+  .focus-lab-badge__icon img {
+    width: 1.55rem;
+    height: 1.55rem;
+    display: block;
+    object-fit: contain;
+  }
+
+  .focus-lab-badge__copy {
+    min-width: 0;
+    display: grid;
+    gap: .08rem;
+    line-height: 1.05;
+  }
+
+  .focus-lab-badge strong {
+    font-size: .76rem;
+    font-weight: 900;
+    letter-spacing: .025em;
+  }
+
+  .focus-lab-badge small {
+    color: var(--ke-color-muted, #6d6259);
+    font-size: .67rem;
+    font-weight: 750;
+  }
+
+  .focus-lab-badge--hero {
+    gap: .75rem;
+    padding: .48rem .9rem .48rem .5rem;
+  }
+
+  .focus-lab-badge--hero .focus-lab-badge__icon {
+    width: 2.65rem;
+    height: 2.65rem;
+  }
+
+  .focus-lab-badge--hero .focus-lab-badge__icon img {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .focus-lab-badge--hero strong { font-size: .9rem; }
+  .focus-lab-badge--hero small { font-size: .76rem; }
+</style>

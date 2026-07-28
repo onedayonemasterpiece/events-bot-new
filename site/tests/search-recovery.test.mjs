@@ -98,7 +98,7 @@ test('stream rescue and overall watchdog are bounded and cleanup remains epoch-o
   const invoke = extractFunction(search, 'invokeEventSearch');
   const run = extractFunction(search, 'runSearch');
 
-  assert.match(invoke, /error\?\.message !== 'search_fetch_headers_timeout'[\s\S]*?invokeEventSearchJson\([^;]+?'headers_stalled'/u);
+  assert.match(invoke, /!isRetryableSearchTransportError\(error\)[\s\S]*?invokeEventSearchJson\([^;]+?'headers_stalled'/u);
   assert.match(invoke, /let jsonRescueAttempted = false/u);
   assert.match(invoke, /if \(jsonRescueAttempted\)[\s\S]*?jsonRescueAttempted = true/u);
   assert.match(invoke, /cancelSearchReader\(\)[\s\S]*?invokeEventSearchJson\([^;]+?'stream_stalled'/u);
@@ -110,6 +110,29 @@ test('stream rescue and overall watchdog are bounded and cleanup remains epoch-o
     run,
     /finally \{[\s\S]*?clearTimeout\(overallWatchdogTimer\)[\s\S]*?setSkeletonLoading\(false\)[\s\S]*?setMoreLoading\(false\)[\s\S]*?setSearchLoading\(false\)/u,
   );
+});
+
+test('mobile-safe JSON is default, retries once without LLM after a transport failure, and keeps NDJSON opt-in', () => {
+  const invoke = extractFunction(search, 'invokeEventSearch');
+  const jsonInvoke = extractFunction(search, 'invokeEventSearchJson');
+
+  assert.match(search, /PUBLIC_AUTHORIZED_SEARCH_TRANSPORT === 'ndjson' \? 'ndjson' : 'json'/u);
+  assert.match(search, /data-search-transport=\{searchTransport\}/u);
+  assert.match(invoke, /root\.dataset\.searchTransport !== 'ndjson'/u);
+  assert.match(invoke, /invokeEventSearchJson\(endpoint, body, session, 'json_primary'/u);
+  assert.match(invoke, /isRetryableSearchTransportError\(error\)[\s\S]*?'json_retry'/u);
+  assert.match(jsonInvoke, /reason === 'json_retry'/u);
+  assert.match(jsonInvoke, /use_llm_verifier: false, stream_rescue: true/u);
+});
+
+test('zero exact matches render discovery cards immediately instead of a blank paginated heading', () => {
+  const render = extractFunction(search, 'renderSearchPayload');
+
+  assert.match(render, /data\?\.has_more && lastResultEventIds\.length === 0 && pendingFallbackItems\.length > 0/u);
+  assert.match(render, /Точных совпадений пока нет — показываем ближайшие варианты/u);
+  assert.match(render, /appendSectionHeading\('Подходящие варианты', 'discovery'\)/u);
+  assert.match(render, /insertCardHtml\(pendingFallbackItems, pageOffset, 'discovery', pageOffset\)/u);
+  assert.match(render, /append && items\.length > 0\) removeVisibleDiscoveryEndcap\(\)/u);
 });
 
 test('account avatar uses the first identity grapheme and exposes signed-in identity', () => {

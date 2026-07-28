@@ -17,6 +17,7 @@
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
 - Event-media automatic gate: `docs/features/event-media/README.md`
 - Event age rating (declared/assessed, Smart Update, CPU BGE, backfill): `docs/features/event-age-rating/README.md`
+- Event participants/headliners UI and static projection: `docs/features/event-people/README.md`
 - Read-only duplicate-image audit: `docs/operations/event-image-duplicate-audit.md`
 - Email delivery/deliverability: `docs/operations/email-delivery.md`
 - Kaggle static-site builder / publisher protocol: `docs/operations/kaggle-static-site-builder.md`
@@ -36,12 +37,16 @@
 - Unified mobile header/bottom-nav/toast shell: `docs/features/static-site-pages/mobile-shell.md`
 - Selective desktop/mobile breadcrumb product contract: `docs/features/static-site-pages/breadcrumbs.md`
 - Free + children search/admission/audience contract: `docs/features/unsigned-personalization/audience-admission-discovery.md`
+- Unusual-events static feed, shared BGE/scoring, concept notifications and
+  rollout gates: `docs/features/unusual-events/README.md`
 
 - Static-site service share: `docs/features/static-site-pages/service-sharing.md`
 - Static-site Easter eggs product discovery, analytics and external-research brief: `docs/features/static-site-easter-eggs/README.md`
 - Service-share preview runbook: `docs/operations/service-sharing-preview.md`
 - 3D previews (`/3di`): `docs/features/preview-3d/README.md`
 - Бэклог (не реализовано): `docs/backlog/`
+  - Фокус-группа статического сайта: product/page prototype и production
+    boundary — `docs/backlog/features/static-site-focus-group/README.md`
 - Отчёты и планы: `docs/reports/` (incident index: `docs/reports/incidents/README.md`, template: `docs/reports/incidents/TEMPLATE.md`)
 - Инструменты: `docs/tools/`
 

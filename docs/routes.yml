@@ -14,6 +14,8 @@ sections:
   product:
     mobile_discovery_shell: docs/features/static-site-pages/mobile-shell.md
     audience_admission_discovery: docs/features/unsigned-personalization/audience-admission-discovery.md
+    unusual_events: docs/features/unusual-events/README.md
+    event_people: docs/features/event-people/README.md
   operations:
     incident_management: docs/operations/incident-management.md
     commands: docs/operations/commands.md
@@ -76,6 +78,12 @@ sections:
       cherryflash_design: docs/backlog/features/cherryflash/design-brief.md
       cherryflash_reference: docs/reference/09bc959616262101b9cd310629f08b84.jpg
       event_static_pages: docs/backlog/features/static-event-pages/README.md
+      static_site_focus_group: docs/backlog/features/static-site-focus-group/README.md
+      static_site_focus_group_audit: docs/backlog/features/static-site-focus-group/current-state-audit.md
+      static_site_focus_group_implementation_prompt: docs/backlog/features/static-site-focus-group/implementation-prompt.md
+      static_site_focus_group_product_prototype: docs/backlog/features/static-site-focus-group/product-prototype.md
+      static_site_focus_group_manual_emails: docs/backlog/features/static-site-focus-group/manual-email-templates.md
+      static_site_focus_group_easter_egg_program: docs/backlog/features/static-site-focus-group/easter-egg-program.md
       guide_excursions_architecture: docs/backlog/features/guide-excursions-monitoring/architecture.md
       guide_excursions_casebook: docs/backlog/features/guide-excursions-monitoring/casebook.md
       guide_excursions_digest_spec: docs/backlog/features/guide-excursions-monitoring/digest-spec.md
@@ -169,6 +177,23 @@ sections:
     claude_code: docs/tools/claude-code.md
 
 features:
+  unusual_events:
+    status: implementation_candidate
+    docs: docs/features/unusual-events/README.md
+    semantic_retrieval: docs/features/unsigned-personalization/semantic-vector-retrieval.md
+    builder_runbook: docs/operations/kaggle-static-site-builder.md
+    e2e: docs/operations/e2e-scenarios.md
+    entrypoints:
+      - site/scripts/static_event_bge.py
+      - site/scripts/unusual_event_semantics.py
+      - site/src/pages/neobychnoe/index.astro
+  event_people:
+    status: ui_implemented_backend_pending
+    docs: docs/features/event-people/README.md
+    entrypoints:
+      - site/src/components/EventParticipants.astro
+      - site/scripts/export-production-preview-data.py
+
   interest_clubs:
     status: implementation_rc
     docs: docs/features/interest-clubs/README.md
@@ -333,6 +358,8 @@ features:
     legacy_requirements: docs/features/static-site-pages/requitements.md
     related_backlog: docs/backlog/features/static-event-pages/README.md
     related_personalization: docs/features/unsigned-personalization/README.md
+    focus_group_product_prototype: docs/backlog/features/static-site-focus-group/product-prototype.md
+    focus_group_manual_emails: docs/backlog/features/static-site-focus-group/manual-email-templates.md
     interface_references: docs/features/static-site-pages/interface-references.md
     event_page_product_design: docs/features/static-site-pages/event-page-product-design.md
     keyboard_event_navigation_prototype: docs/features/static-site-pages/keyboard-event-navigation-prototype.md

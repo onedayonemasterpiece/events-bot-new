@@ -2,15 +2,14 @@
 import EventLayout from '../layouts/EventLayout.astro';
 import DateListingSurface from '../components/listings/DateListingSurface.astro';
 import PersonalFeedSlot from '../components/PersonalFeedSlot.astro';
-import { absoluteUrl, getCurrentDate, getDateEvents, SITE_NAME } from '../lib/events';
+import { absoluteUrl, getDateEvents, SITE_NAME } from '../lib/events';
+import { getStaticEventDateAvailability } from '../lib/staticEventDates';
 
 export function getStaticPaths() {
-  const dayMs = 86_400_000;
-  const today = new Date(`${getCurrentDate()}T12:00:00+02:00`);
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(today.getTime() + index * dayMs).toISOString().slice(0, 10);
-    return { params: { date }, props: { date } };
-  });
+  return [...getStaticEventDateAvailability().availableDates].sort().map((date) => ({
+    params: { date },
+    props: { date },
+  }));
 }
 
 const { date } = Astro.props;

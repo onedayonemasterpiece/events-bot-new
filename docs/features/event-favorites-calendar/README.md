@@ -1,6 +1,9 @@
 # Event favorites and calendar
 
-> Status: **design with ICS preview already implemented**. Durable favorite state and cross-device behavior are missing.
+> Status: **R15 candidate implemented**. The owner-only Supabase saved-state
+> schema is deployed; the static noindex page, shared auth hydration and
+> calendar-first merge are implemented. Browser acceptance through a real
+> Yandex session remains a release gate.
 
 ## Product contract
 
@@ -36,6 +39,43 @@ Supabase/Postgres owns favorite/follow state with RLS by user identity. Local an
 - deleted/merged event redirect or migration policy;
 - export/delete/account purge;
 - offline/static fallback that never blocks event navigation.
+
+## R15 saved-events page and event-aware calendar
+
+The saved-events route is an authenticated **noindex** utility surface. It
+renders a stable static shell/skeleton first, then hydrates through the shared
+origin-scoped Supabase auth runtime; it does not expose tokens in DOM state and
+does not invent an anonymous server profile.
+
+Within the future set, order is calendar-first:
+
+1. events explicitly added through the calendar/save action;
+2. then liked/favorited events not already represented above.
+
+The same event/occurrence cannot appear twice merely because both actions were
+used. Within a source tier the current implementation prefers the latest
+recorded save action, then stable input order and an event-ID fallback; it does
+not pretend that this is chronological event ordering. Past, cancelled, merged
+or inaccessible rows follow the lifecycle policy above rather than being
+silently mixed into the future list. Empty, signed-out and
+backend-unavailable states remain honest and retain navigation.
+
+Durable storage is `public.user_saved_event`, introduced by
+`supabase/migrations/20260727141820_durable_saved_events_v1.sql`. It has one
+row per `auth.uid()` + event, separate `calendar_saved` and `favorite_saved`
+sources, four owner-only RLS policies, a `security_invoker` view
+`my_saved_events_v1`, and the authenticated RPC
+`set_saved_event_state_v1(bigint,text,boolean)`. The migration was applied to
+the personalization Supabase project on 2026-07-27 through the Management API
+migration endpoint. Read-only postflight verified Postgres 17, RLS enabled,
+four policies, the view/RPC present and zero pre-existing rows; the security
+advisor reported no finding tied to these objects.
+
+The date calendar itself is event-aware: navigation extends through the
+furthest month that contains a public event in the generated availability
+manifest. Dates without events are not ordinary active targets—pointer events
+and keyboard activation must not accidentally select them—while month
+navigation, focus order and an explicit return path remain available.
 
 ## Public aggregate semantics
 

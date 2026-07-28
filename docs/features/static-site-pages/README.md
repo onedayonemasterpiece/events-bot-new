@@ -5,6 +5,21 @@
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
+## Focus-group product prototype (2026-07-27)
+
+The isolated focus-group branch adds page/product mechanics for a later UI
+integration: a root testing stub, invite/auth-choice flow, bounded local preview
+marker, secret hub, participant feedback specimens, lifecycle end states and an
+explainable local `/dlya-menya/` editor. Canonical product decisions and the
+strict prototype/production boundary live in
+[`docs/backlog/features/static-site-focus-group/README.md`](../../backlog/features/static-site-focus-group/README.md).
+
+This does not promote a production root, provision a cohort, implement Auth or
+Supabase membership, send email, persist feedback, run a prize programme or
+deploy a focus candidate. Production and secret-candidate builders still own
+their root transformations; localStorage remains an explicit UX hint rather
+than authorization.
+
 Cross-surface naming, identity, lifecycle and acceptance for `Другие даты`,
 strict related, broad continuation and personal feed are canonical in
 [`docs/features/linked-events/README.md`](../linked-events/README.md). This
@@ -29,6 +44,27 @@ checked production generator and extends the same shell with a Fly
 SQLite-backed July–December 2026 festival directory. It owns the
 festival-specific source/status and flexible row-packing contract; the category
 view and production-root publication remain out of scope.
+
+## R15 home composition
+
+The R15 home candidate is one ordered composition, not a second personalization
+product:
+
+1. a concise hero that explains the service in human language;
+2. quick navigation to materialized discovery routes;
+3. a cold-start event feed capped at 30 cards;
+4. progressive client reranking only when the versioned same-origin local
+   profile contains compatible preference signals.
+
+Static HTML always contains the useful cold-start feed. Hydration may filter or
+rerank within the bounded contract but cannot blank first paint, duplicate
+events, introduce a page-view embedding/LLM call, or create a different
+indexable home. Backend/auth/storage failure keeps the static ordering. The
+production and secret-candidate packagers preserve this dedicated `/` output;
+they must never overwrite it with the `/segodnya/` artifact. The home does not
+authorize production-root cutover; it follows the same immutable
+candidate and owner-acceptance gate as the
+[`unusual-events` R15 release](../unusual-events/README.md).
 
 ### Unified occurrence projection
 

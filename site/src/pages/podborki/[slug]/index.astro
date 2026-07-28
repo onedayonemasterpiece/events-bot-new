@@ -1,6 +1,7 @@
 ---
 import EventCard from '../../../components/EventCard.astro';
 import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import FreeCollectionSurface from '../../../components/FreeCollectionSurface.astro';
 import EventLayout from '../../../layouts/EventLayout.astro';
 import {
   getMaterializedSearchCollection,
@@ -27,7 +28,24 @@ const title = `${collection.title} | ${SITE_NAME}`;
 const updatedDate = getPreviewBuild().current_date;
 const referenceDate = getMaterializedSearchCollectionReferenceDate();
 ---
-<EventLayout title={title} description={collection.description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="search" noindex>
+<EventLayout
+  title={title}
+  description={collection.description}
+  canonicalUrl={canonicalUrl}
+  structuredData={[]}
+  mobileSection={collection.slug === 'besplatnye-sobytiya' ? 'home' : 'search'}
+  noindex
+>
+  {collection.slug === 'besplatnye-sobytiya' ? (
+    <FreeCollectionSurface
+      title={collection.title}
+      description={collection.description}
+      criteria={collection.criteria}
+      updatedDate={updatedDate}
+      referenceDate={referenceDate}
+      events={events}
+    />
+  ) : (
   <main id="main">
     <div class="page-shell page-shell--search-collection">
       <Breadcrumbs
@@ -82,6 +100,7 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
       )}
     </div>
   </main>
+  )}
 </EventLayout>
 
 <style>

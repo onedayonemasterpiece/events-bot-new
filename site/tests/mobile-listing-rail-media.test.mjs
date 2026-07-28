@@ -49,6 +49,18 @@ test('every single classified crop-safe visual gets donor 140x112 cover, includi
   }
 });
 
+test('a contradictory event-level OCR or unknown marker blocks 5:4 even when the selector requested an adaptive crop', () => {
+  for (const eventMode of ['ocr_text', 'unknown']) {
+    const image = asset();
+    const result = resolveMobileListingRailMedia(
+      { image_text_mode:eventMode, image_assets:[image] },
+      selected(image, { mode:'visual-crop', adaptiveCrop:true }),
+    );
+    assert.equal(result.fit, 'contain');
+    assert.equal(result.reason, 'safe_visual_authored_geometry');
+  }
+});
+
 test('OCR, unknown semantics and document roles fail closed to authored contain geometry', () => {
   for (const image of [
     asset({ image_text_mode: 'ocr_text' }),
@@ -56,14 +68,14 @@ test('OCR, unknown semantics and document roles fail closed to authored contain 
     asset({ media_role: 'program_or_schedule' }),
   ]) {
     const event = { image_text_mode: image.image_text_mode, image_assets: [image] };
-    const result = resolveMobileListingRailMedia(event, selected(image));
+    const result = resolveMobileListingRailMedia(event, selected(image, { mode:'visual-crop', adaptiveCrop:true }));
     assert.equal(result.fit, 'contain');
     assert.equal(result.width, 84);
     assert.equal(result.reason, 'protected_natural_geometry');
   }
 });
 
-test('source-reviewed portrait selected from mixed inventory gets vertical 4:5 cover within 20% crop', () => {
+test('an event-level OCR marker keeps a source-reviewed portrait fail-closed', () => {
   const poster = asset({
     src: 'https://static.kenigevents.ru/poster.webp',
     width: 1080,
@@ -84,14 +96,8 @@ test('source-reviewed portrait selected from mixed inventory gets vertical 4:5 c
     { image_text_mode: 'ocr_text', image_assets: [poster, reviewedPhoto] },
     selected(reviewedPhoto),
   );
-  assert.deepEqual(result, {
-    fit: 'cover',
-    ratio: 4 / 5,
-    width: 90,
-    reason: 'reviewed_multi_visual_portrait_4x5',
-  });
-  const retainedArea = Math.min((828 / 1227) / (4 / 5), (4 / 5) / (828 / 1227));
-  assert.ok(retainedArea >= 0.8);
+  assert.equal(result.fit, 'contain');
+  assert.equal(result.reason, 'safe_visual_authored_geometry');
 });
 
 test('generic crop review cannot override an event-level OCR protection marker', () => {
@@ -109,16 +115,22 @@ test('generic crop review cannot override an event-level OCR protection marker',
   assert.equal(result.reason, 'safe_visual_authored_geometry');
 });
 
-test('unreviewed multi-image visual remains fail-closed at authored geometry', () => {
-  const first = asset();
-  const second = asset({ src: 'https://static.kenigevents.ru/second.webp' });
-  const result = resolveMobileListingRailMedia(
-    { image_text_mode: 'visual_only', image_assets: [first, second] },
-    selected(first),
+test('every safe visual-only asset in a multi-image gallery uses horizontal 5:4 cover without bands, including portraits', () => {
+  const landscape = asset({ width:3072, height:1307 });
+  const portrait = asset({ src:'https://static.kenigevents.ru/portrait.webp', width:828, height:1227 });
+  const event = { image_text_mode:'visual_only', image_assets:[landscape, portrait] };
+  for (const image of [landscape, portrait]) {
+    assert.deepEqual(resolveMobileListingRailMedia(event, selected(image)), {
+      fit:'cover',
+      ratio:5 / 4,
+      width:140,
+      reason:'safe_visual_landscape_5x4',
+    });
+  }
+  assert.deepEqual(
+    resolveMobileListingRailMediaItems(event, selected(landscape)).map((item) => [item.fit, item.ratio, item.width]),
+    [['cover', 5 / 4, 140], ['cover', 5 / 4, 140]],
   );
-  assert.equal(result.fit, 'contain');
-  assert.equal(result.width, 84);
-  assert.equal(result.reason, 'safe_visual_authored_geometry');
 });
 
 test('mobile rail returns a bounded real gallery in source order and protects every asset independently', () => {
@@ -154,11 +166,16 @@ test('mobile rail returns a bounded real gallery in source order and protects ev
     reviewedPhoto.src,
     overflow[0].src,
   ]);
-  assert.equal(items[0].fit, 'contain');
+  assert.equal(items[0].fit, 'cover');
+  assert.equal(items[0].ratio, 5 / 4);
+  assert.equal(items[0].width, 140);
+  assert.equal(items[0].reason, 'safe_visual_landscape_5x4');
   assert.equal(items[1].imageTextMode, 'ocr_text');
   assert.equal(items[1].fit, 'contain');
   assert.equal(items[2].fit, 'cover');
-  assert.equal(items[2].reason, 'reviewed_multi_visual_portrait_4x5');
+  assert.equal(items[2].ratio, 5 / 4);
+  assert.equal(items[2].width, 140);
+  assert.equal(items[2].reason, 'safe_visual_landscape_5x4');
 });
 
 test('mobile gallery deduplicates the selected asset and clamps an excessive requested limit', () => {

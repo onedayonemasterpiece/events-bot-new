@@ -1,0 +1,849 @@
+---
+import {
+  FOCUS_INTERESTS,
+  FOCUS_STORAGE_KEY,
+  type FocusRecommendation,
+} from '../lib/focus-personalization';
+import { eventHref, withBase } from '../lib/events';
+
+interface Props {
+  recommendations: FocusRecommendation[];
+}
+
+const { recommendations } = Astro.props;
+const groups = ['Музыка', 'Культура', 'Город и досуг'] as const;
+const clientInterests = FOCUS_INTERESTS.map(({ id, label, group }) => ({ id, label, group }));
+const clientRecommendations = recommendations.map(({ event, interestIds }) => ({
+  id: String(event.id),
+  interestIds,
+}));
+const staticRecommendations = recommendations.slice(0, 3);
+---
+
+<section class="focus-product" data-focus-product>
+  <div class="focus-product__notice" role="note">
+    <span class="focus-product__prototype">Prototype</span>
+    <p><strong>Работает только в этом браузере.</strong> Без аккаунта, сервера и скрытого профилирования.</p>
+  </div>
+
+  <section class="focus-consent" data-focus-consent aria-labelledby="focus-consent-title">
+    <div class="focus-consent__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10m-10 0h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M12 14v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <p class="focus-kicker">Сначала — ваше решение</p>
+      <h2 id="focus-consent-title">Разрешить локальный профиль?</h2>
+      <p>Прототип сохранит выбранные темы и реакции в <code>localStorage</code> этого устройства. Он ничего не отправляет в интернет и не использует онлайн‑ML.</p>
+      <ul>
+        <li>Вы видите и меняете каждый сигнал.</li>
+        <li>Явный выбор не смешивается с индексом интереса и достаточностью данных.</li>
+        <li>Профиль можно удалить одной кнопкой.</li>
+      </ul>
+      <label class="focus-consent__check">
+        <input type="checkbox" data-focus-consent-check />
+        <span>Понимаю: данные останутся только в этом браузере</span>
+      </label>
+      <button class="focus-button focus-button--primary" type="button" data-focus-consent-accept disabled>
+        Разрешить локальный профиль
+      </button>
+      <p class="focus-status" data-focus-consent-status role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <div class="focus-workspace" data-focus-workspace hidden>
+    <header class="focus-workspace__head">
+      <div>
+        <p class="focus-kicker">Ваши настройки</p>
+        <h2>Что вам действительно интересно?</h2>
+        <p>Для каждой темы выберите «Чаще», «Без предпочтения» или «Реже». Явный выбор главнее любых подсказок по реакциям.</p>
+      </div>
+      <button class="focus-button focus-button--quiet" type="button" data-focus-reset>Удалить локальный профиль</button>
+    </header>
+
+    <div class="focus-legend" aria-label="Как читать показатели">
+      <div>
+        <span class="focus-legend__swatch focus-legend__swatch--preference" aria-hidden="true"></span>
+        <p><strong>Ваш выбор</strong> — только явное «Чаще», «Без предпочтения» или «Реже». Проценты к нему не приписываются.</p>
+      </div>
+      <div>
+        <span class="focus-legend__swatch focus-legend__swatch--confidence" aria-hidden="true"></span>
+        <p><strong>Индекс интереса</strong> — отдельная шкала по явным реакциям на карточки. Отсутствие реакции не считается неприязнью.</p>
+      </div>
+    </div>
+
+    <div class="focus-groups">
+      {groups.map((group) => (
+        <section class="focus-group" aria-labelledby={`focus-group-${group.replaceAll(' ', '-')}`}>
+          <div class="focus-group__head">
+            <h3 id={`focus-group-${group.replaceAll(' ', '-')}`}>{group}</h3>
+            <p>{group === 'Музыка' ? 'От камерного зала до клубной сцены' : group === 'Культура' ? 'Форматы для внимания и разговора' : 'Планы для города, области и выходного дня'}</p>
+          </div>
+          <div class="focus-interest-grid">
+            {FOCUS_INTERESTS.filter((interest) => interest.group === group).map((interest) => (
+              <article class="focus-interest" data-focus-interest={interest.id}>
+                <div class="focus-interest__title">
+                  <h4>{interest.label}</h4>
+                </div>
+                <p>{interest.description}</p>
+                <fieldset class="focus-stance" data-focus-stance-group>
+                  <legend>Ваш выбор</legend>
+                  <label>
+                    <input type="radio" name={`interest-${interest.id}`} value="like" data-focus-stance-input />
+                    <span>Чаще</span>
+                  </label>
+                  <label>
+                    <input type="radio" name={`interest-${interest.id}`} value="neutral" data-focus-stance-input checked />
+                    <span>Без предпочтения</span>
+                  </label>
+                  <label>
+                    <input type="radio" name={`interest-${interest.id}`} value="not-for-me" data-focus-stance-input />
+                    <span>Реже</span>
+                  </label>
+                </fieldset>
+                <dl class="focus-meters">
+                  <div>
+                    <dt>Ваш выбор</dt>
+                    <dd><strong data-focus-preference-label>Без предпочтения</strong></dd>
+                  </div>
+                  <div>
+                    <dt>Индекс интереса</dt>
+                    <dd>
+                      <meter min="0" max="100" value="50" data-focus-index-meter aria-label={`${interest.label}: индекс интереса`} hidden></meter>
+                      <span data-focus-index-label>Пока недостаточно данных</span>
+                    </dd>
+                  </div>
+                </dl>
+                <details class="focus-interest__why">
+                  <summary>Почему так?</summary>
+                  <p data-focus-index-why>Пока нет реакций на карточки этой темы. Стартовое значение 50 нейтрально и не означает ни интереса, ни неприязни.</p>
+                </details>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    <section class="focus-map" aria-labelledby="focus-map-title">
+      <div class="focus-map__head">
+        <div>
+          <p class="focus-kicker">Понятная карта, не «облако»</p>
+          <h2 id="focus-map-title">Сигналы профиля</h2>
+          <p>Явный выбор показан словами. Непрерывная шкала относится только к вычисленному индексу, а достаточность данных — отдельной подписью.</p>
+        </div>
+        <p class="focus-map__summary" data-focus-summary>Пока нет выбранных тем.</p>
+      </div>
+      <div class="focus-map__rows" data-focus-map-rows role="list"></div>
+    </section>
+
+    <section class="focus-digest" aria-labelledby="focus-digest-title" data-focus-digest>
+      <div>
+        <p class="focus-kicker">Интерфейс / eligibility prototype</p>
+        <h2 id="focus-digest-title">Автоматические персональные подборки</h2>
+        <p>Это только макет управления допуском. Он ничего не отправляет, не создаёт рассылку и не связывается с сервером.</p>
+      </div>
+      <div class="focus-digest__panel">
+        <p class="focus-digest__state" data-focus-digest-state>Выключено</p>
+        <p data-focus-digest-eligibility>Для допуска нужны согласие, 3 явных сигнала темы (хотя бы один «Чаще») и 3 реакции на карточки.</p>
+        <ul aria-label="Сигналы допуска">
+          <li data-focus-digest-consent>Согласие: есть</li>
+          <li data-focus-digest-explicit>Явные сигналы «Чаще/Реже»: 0 из 3</li>
+          <li data-focus-digest-reactions>Реакции: 0 из 3</li>
+        </ul>
+        <button class="focus-button focus-button--primary" type="button" data-focus-digest-toggle disabled>
+          Включить интерфейс подборок
+        </button>
+        <p class="focus-status" data-focus-digest-status role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="focus-recommendations" aria-labelledby="focus-recommendations-title">
+      <div class="focus-recommendations__head">
+        <div>
+          <p class="focus-kicker">Объяснимый порядок</p>
+          <h2 id="focus-recommendations-title">Можно попробовать</h2>
+          <p>Это локальная сортировка ограниченного списка, а не предсказание вкуса. Реакции меняют только этот прототип.</p>
+        </div>
+        <button class="focus-button focus-button--quiet" type="button" data-focus-show-hidden hidden>Вернуть скрытые</button>
+      </div>
+      <div class="focus-recommendations__grid" data-focus-recommendations>
+        {recommendations.map(({ event, interestIds, fallbackReason }) => (
+          <article class="focus-rec" data-focus-rec={event.id} data-focus-rec-interests={interestIds.join(' ')}>
+            <div class="focus-rec__meta">
+              <span>{event.display_date}{event.display_time ? ` · ${event.display_time}` : ''}</span>
+              <span>{event.event_type || 'Событие'}</span>
+            </div>
+            <h3><a href={eventHref(event)}>{event.title}</a></h3>
+            <p class="focus-rec__place">{[event.city, event.venue_name].filter(Boolean).join(' · ') || 'Место уточняется'}</p>
+            <div class="focus-rec__tags" aria-label="Темы рекомендации">
+              {interestIds.map((id) => (
+                <span>{FOCUS_INTERESTS.find((interest) => interest.id === id)?.label || id}</span>
+              ))}
+            </div>
+            <details class="focus-why">
+              <summary>Почему это</summary>
+              <p data-focus-why>{fallbackReason}</p>
+            </details>
+            <fieldset class="focus-feedback">
+              <legend>Как вам эта рекомендация?</legend>
+              <button type="button" data-focus-rec-action="like" aria-pressed="false">Нравится</button>
+              <button type="button" data-focus-rec-action="neutral" aria-pressed="false">Нейтрально</button>
+              <button type="button" data-focus-rec-action="not-for-me" aria-pressed="false">Не для меня</button>
+            </fieldset>
+          </article>
+        ))}
+      </div>
+      <p class="focus-status" data-focus-action-status role="status" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <noscript>
+    <section class="focus-static" aria-labelledby="focus-static-title">
+      <p class="focus-kicker">Статический режим</p>
+      <h2 id="focus-static-title">Персонализация выключена</h2>
+      <p>Без JavaScript профиль не создаётся и данные не сохраняются. Вот несколько общих вариантов без заявления о персональном соответствии.</p>
+      <ul>
+        {staticRecommendations.map(({ event }) => (
+          <li>
+            <a href={eventHref(event)}>{event.title}</a>
+            <span>{event.display_date} · {[event.city, event.venue_name].filter(Boolean).join(' · ') || 'Место уточняется'}</span>
+          </li>
+        ))}
+      </ul>
+      <a class="focus-button focus-button--quiet" href={withBase('/populyarnoe/')}>Открыть общее популярное</a>
+    </section>
+  </noscript>
+</section>
+
+<script
+  define:vars={{
+    storageKey: FOCUS_STORAGE_KEY,
+    interests: clientInterests,
+    recommendationIndex: clientRecommendations,
+  }}
+>
+  const root = document.querySelector('[data-focus-product]');
+  if (!root) throw new Error('Focus personalization root is missing');
+
+  const emptyState = () => ({
+    version: 1,
+    consent: false,
+    interests: {},
+    reactions: {},
+    digestOptIn: false,
+    updatedAt: null,
+  });
+
+  let state = emptyState();
+  let storageAvailable = true;
+
+  const readState = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      if (parsed?.version === 1 && parsed?.consent === true) {
+        return {
+          ...emptyState(),
+          ...parsed,
+          interests: parsed.interests || {},
+          reactions: parsed.reactions || {},
+        };
+      }
+    } catch (_) {
+      storageAvailable = false;
+    }
+    return emptyState();
+  };
+
+  const persist = () => {
+    state.updatedAt = new Date().toISOString();
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch (_) {
+      storageAvailable = false;
+      const status = root.querySelector('[data-focus-action-status]');
+      if (status) status.textContent = 'Настройки работают до закрытия страницы: браузер запретил локальное сохранение.';
+    }
+  };
+
+  const interestById = new Map(interests.map((interest) => [interest.id, interest]));
+  const reactionWeight = { like: 1, neutral: 0, 'not-for-me': -1 };
+  const stanceWeight = { like: 1, neutral: 0, 'not-for-me': -1 };
+
+  const interestEvidence = (interestId) => {
+    const matching = recommendationIndex.filter((item) => item.interestIds.includes(interestId));
+    const reacted = matching.filter((item) => state.reactions[item.id]);
+    const score = reacted.reduce((sum, item) => sum + reactionWeight[state.reactions[item.id]], 0);
+    const index = reacted.length ? Math.round(50 + (score / reacted.length) * 50) : 50;
+    const sufficiency = reacted.length >= 4 ? 'много данных' : reacted.length >= 2 ? 'достаточно данных' : 'мало данных';
+    return { reacted: reacted.length, score, index, sufficiency };
+  };
+
+  const explicitScore = (interestId) => {
+    const entry = state.interests[interestId];
+    if (!entry?.selected) return 0;
+    return (stanceWeight[entry.stance || 'neutral'] || 0) * 100;
+  };
+
+  const recommendationScore = (item) => {
+    const explicit = item.interestIds.reduce((sum, id) => sum + explicitScore(id), 0);
+    const reaction = reactionWeight[state.reactions[item.id]] || 0;
+    return explicit - (reaction === -1 ? 1000 : 0) + (reaction === 1 ? 25 : 0);
+  };
+
+  const preferenceLabel = (stance, selected) => {
+    if (!selected || stance === 'neutral') return 'Без предпочтения';
+    return stance === 'like' ? 'Чаще' : 'Реже';
+  };
+
+  const renderInterest = (card) => {
+    const id = card.dataset.focusInterest;
+    const entry = state.interests[id] || { selected: false, stance: 'neutral' };
+    const evidence = interestEvidence(id);
+    card.querySelectorAll('[data-focus-stance-input]').forEach((input) => {
+      input.checked = input.value === (entry.stance || 'neutral');
+    });
+    card.querySelector('[data-focus-preference-label]').textContent = preferenceLabel(entry.stance, entry.selected);
+    const indexMeter = card.querySelector('[data-focus-index-meter]');
+    indexMeter.value = evidence.index;
+    indexMeter.hidden = evidence.reacted === 0;
+    card.querySelector('[data-focus-index-label]').textContent = evidence.reacted
+      ? `${evidence.index} из 100 · ${evidence.sufficiency}`
+      : 'Пока недостаточно данных';
+    card.querySelector('[data-focus-index-why]').textContent = evidence.reacted
+      ? `Индекс рассчитан по ${evidence.reacted} ${evidence.reacted === 1 ? 'явной реакции' : 'явным реакциям'} на карточки с этой темой. Отсутствие реакции не учитывается. Ваш выбор «${preferenceLabel(entry.stance, entry.selected)}» имеет приоритет.`
+      : 'Пока нет реакций на карточки этой темы. Стартовое значение 50 нейтрально и не означает ни интереса, ни неприязни.';
+    card.dataset.selected = String(Boolean(entry.selected));
+  };
+
+  const renderMap = () => {
+    const rows = root.querySelector('[data-focus-map-rows]');
+    rows.replaceChildren();
+    const chosen = interests
+      .map((interest) => ({
+        ...interest,
+        entry: state.interests[interest.id],
+        evidence: interestEvidence(interest.id),
+      }))
+      .filter((interest) => interest.entry?.selected || interest.evidence.reacted > 0)
+      .sort((left, right) => Number(Boolean(right.entry?.selected)) - Number(Boolean(left.entry?.selected)) || right.evidence.reacted - left.evidence.reacted);
+
+    root.querySelector('[data-focus-summary]').textContent = chosen.length
+      ? `${chosen.filter((item) => item.entry?.selected).length} тем выбрано явно · ${Object.keys(state.reactions).length} реакций на карточки`
+      : 'Пока нет выбранных тем или реакций.';
+
+    if (!chosen.length) {
+      const empty = document.createElement('p');
+      empty.className = 'focus-map__empty';
+      empty.textContent = 'Выберите тему выше или оцените рекомендацию — здесь появится объяснимая шкала.';
+      rows.append(empty);
+      return;
+    }
+
+    chosen.forEach((interest) => {
+      const row = document.createElement('article');
+      row.className = 'focus-map-row';
+      row.setAttribute('role', 'listitem');
+      const choice = preferenceLabel(interest.entry?.stance, interest.entry?.selected);
+      const indexMarkup = interest.evidence.reacted
+        ? `<span>Индекс интереса: ${interest.evidence.index} из 100</span>
+           <meter min="0" max="100" value="${interest.evidence.index}" aria-label="${interest.label}: индекс интереса ${interest.evidence.index} из 100"></meter>`
+        : '<span>Индекс интереса: пока недостаточно данных</span>';
+      row.innerHTML = `
+        <div class="focus-map-row__label">
+          <strong>${interest.label}</strong>
+          <span>Ваш выбор: ${choice}</span>
+        </div>
+        <div class="focus-map-row__index">
+          ${indexMarkup}
+        </div>
+        <div class="focus-map-row__evidence">
+          <strong>${interest.evidence.sufficiency}</strong>
+          <span>${interest.evidence.reacted} ${interest.evidence.reacted === 1 ? 'реакция' : 'реакций'}; отсутствие не считается сигналом</span>
+        </div>`;
+      rows.append(row);
+    });
+  };
+
+  const renderDigest = () => {
+    const explicitOverrides = interests.filter((interest) => {
+      const entry = state.interests[interest.id];
+      return entry?.selected && entry.stance !== 'neutral';
+    });
+    const explicitCount = explicitOverrides.length;
+    const hasPositive = explicitOverrides.some((interest) => state.interests[interest.id]?.stance === 'like');
+    const reactionCount = Object.keys(state.reactions).length;
+    const eligible = state.consent && explicitCount >= 3 && hasPositive && reactionCount >= 3;
+    const panel = root.querySelector('[data-focus-digest]');
+    const toggle = panel.querySelector('[data-focus-digest-toggle]');
+    panel.querySelector('[data-focus-digest-explicit]').textContent = `Явные сигналы «Чаще/Реже»: ${Math.min(explicitCount, 3)} из 3${hasPositive ? ' · «Чаще» есть' : ' · нужен хотя бы один «Чаще»'}`;
+    panel.querySelector('[data-focus-digest-reactions]').textContent = `Реакции: ${Math.min(reactionCount, 3)} из 3`;
+    panel.querySelector('[data-focus-digest-eligibility]').textContent = eligible
+      ? 'Сигналов достаточно для допуска интерфейса. Отправка всё равно не реализована.'
+      : `Пока не хватает: ${Math.max(0, 3 - explicitCount)} явных сигналов темы, ${hasPositive ? 0 : 1} сигнала «Чаще» и ${Math.max(0, 3 - reactionCount)} реакций.`;
+    panel.querySelector('[data-focus-digest-state]').textContent = state.digestOptIn
+      ? 'Запрос включён · отправка не реализована'
+      : 'Выключено';
+    toggle.disabled = !eligible && !state.digestOptIn;
+    toggle.textContent = state.digestOptIn ? 'Выключить и отписаться' : 'Включить интерфейс подборок';
+  };
+
+  const renderRecommendations = () => {
+    const grid = root.querySelector('[data-focus-recommendations]');
+    const cards = [...grid.querySelectorAll('[data-focus-rec]')];
+    cards.sort((left, right) => {
+      const leftItem = recommendationIndex.find((item) => item.id === left.dataset.focusRec);
+      const rightItem = recommendationIndex.find((item) => item.id === right.dataset.focusRec);
+      return recommendationScore(rightItem) - recommendationScore(leftItem);
+    }).forEach((card) => {
+      const id = card.dataset.focusRec;
+      const reaction = state.reactions[id] || null;
+      card.hidden = reaction === 'not-for-me';
+      card.dataset.reaction = reaction || '';
+      card.querySelectorAll('[data-focus-rec-action]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.focusRecAction === reaction));
+      });
+      const item = recommendationIndex.find((candidate) => candidate.id === id);
+      const selectedMatches = item.interestIds
+        .map((interestId) => interestById.get(interestId))
+        .filter((interest) => state.interests[interest.id]?.selected);
+      const why = card.querySelector('[data-focus-why]');
+      if (selectedMatches.length) {
+        why.textContent = `Совпало с вашим явным выбором: ${selectedMatches.map((interest) => interest.label).join(', ')}. Реакции влияют только на локальный порядок.`;
+      } else if (Object.keys(state.interests).length) {
+        why.textContent = 'Прямого совпадения с выбранными темами нет. Оставлено как вариант для исследования, а не как уверенное предсказание.';
+      }
+      grid.append(card);
+    });
+    const hiddenCount = cards.filter((card) => card.hidden).length;
+    const showHidden = root.querySelector('[data-focus-show-hidden]');
+    showHidden.hidden = hiddenCount === 0;
+    showHidden.textContent = `Вернуть скрытые (${hiddenCount})`;
+  };
+
+  const render = () => {
+    root.querySelectorAll('[data-focus-interest]').forEach(renderInterest);
+    renderMap();
+    renderDigest();
+    renderRecommendations();
+  };
+
+  const consent = root.querySelector('[data-focus-consent]');
+  const workspace = root.querySelector('[data-focus-workspace]');
+  const showWorkspace = () => {
+    consent.hidden = true;
+    workspace.hidden = false;
+    render();
+  };
+
+  state = readState();
+  if (state.consent) showWorkspace();
+
+  const consentCheck = root.querySelector('[data-focus-consent-check]');
+  const consentAccept = root.querySelector('[data-focus-consent-accept]');
+  consentCheck.addEventListener('change', () => {
+    consentAccept.disabled = !consentCheck.checked;
+  });
+  consentAccept.addEventListener('click', () => {
+    if (!consentCheck.checked) return;
+    state.consent = true;
+    persist();
+    showWorkspace();
+    root.querySelector('[data-focus-consent-status]').textContent = storageAvailable
+      ? 'Локальный профиль включён.'
+      : 'Профиль включён только до закрытия страницы: локальное хранилище недоступно.';
+    workspace.querySelector('h2')?.focus?.();
+  });
+
+  root.addEventListener('change', (event) => {
+    const card = event.target.closest('[data-focus-interest]');
+    if (!card) return;
+    const id = card.dataset.focusInterest;
+    if (!event.target.matches('[data-focus-stance-input]')) return;
+    state.interests[id] = { selected: true, stance: event.target.value };
+    persist();
+    render();
+  });
+
+  root.addEventListener('click', (event) => {
+    const reactionButton = event.target.closest('[data-focus-rec-action]');
+    if (reactionButton) {
+      const card = reactionButton.closest('[data-focus-rec]');
+      const id = card.dataset.focusRec;
+      const action = reactionButton.dataset.focusRecAction;
+      state.reactions[id] = state.reactions[id] === action ? null : action;
+      if (!state.reactions[id]) delete state.reactions[id];
+      persist();
+      render();
+      root.querySelector('[data-focus-action-status]').textContent = action === 'not-for-me'
+        ? 'Карточка скрыта. Её можно вернуть кнопкой над списком.'
+        : 'Реакция сохранена локально. Явные настройки интересов не изменены.';
+      return;
+    }
+
+    if (event.target.closest('[data-focus-digest-toggle]')) {
+      state.digestOptIn = !state.digestOptIn;
+      persist();
+      render();
+      root.querySelector('[data-focus-digest-status]').textContent = state.digestOptIn
+        ? 'Интерфейсный запрос сохранён локально. Никакая подборка не отправляется.'
+        : 'Автоматические подборки выключены; локальный профиль остаётся.';
+      return;
+    }
+
+    if (event.target.closest('[data-focus-show-hidden]')) {
+      Object.keys(state.reactions).forEach((id) => {
+        if (state.reactions[id] === 'not-for-me') delete state.reactions[id];
+      });
+      persist();
+      render();
+      root.querySelector('[data-focus-action-status]').textContent = 'Скрытые карточки возвращены.';
+      return;
+    }
+
+    if (event.target.closest('[data-focus-reset]')) {
+      try { localStorage.removeItem(storageKey); } catch (_) {}
+      state = emptyState();
+      workspace.hidden = true;
+      consent.hidden = false;
+      consentCheck.checked = false;
+      consentAccept.disabled = true;
+      root.querySelector('[data-focus-consent-status]').textContent = 'Локальный профиль удалён.';
+      consentAccept.focus();
+    }
+  });
+</script>
+
+<style>
+  .focus-product {
+    --focus-ink: #172b2b;
+    --focus-muted: #536564;
+    --focus-line: rgba(23, 43, 43, .16);
+    --focus-paper: #fffdf8;
+    --focus-mint: #d9eee7;
+    --focus-teal: #166a64;
+    --focus-coral: #c95f43;
+    --focus-gold: #e9b94d;
+    color: var(--focus-ink);
+  }
+  .focus-product :is(button, input, summary, a):focus-visible {
+    outline: 3px solid #146e68;
+    outline-offset: 3px;
+  }
+  .focus-product__notice {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: 1rem;
+    padding: .8rem 1rem;
+    border: 1px solid var(--focus-line);
+    border-radius: 1rem;
+    background: rgba(255, 253, 248, .78);
+  }
+  .focus-product__notice p { margin: 0; line-height: 1.45; }
+  .focus-product__prototype {
+    flex: 0 0 auto;
+    padding: .3rem .62rem;
+    border-radius: 999px;
+    background: var(--focus-ink);
+    color: #fff;
+    font-size: .76rem;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .focus-consent,
+  .focus-workspace,
+  .focus-static {
+    border: 1px solid var(--focus-line);
+    border-radius: clamp(1.25rem, 3vw, 2rem);
+    background: var(--focus-paper);
+    box-shadow: 0 20px 64px rgba(27, 49, 47, .09);
+  }
+  .focus-consent {
+    display: grid;
+    grid-template-columns: auto minmax(0, 42rem);
+    justify-content: center;
+    gap: 1.25rem;
+    padding: clamp(1.25rem, 5vw, 4rem);
+  }
+  .focus-consent[hidden],
+  .focus-workspace[hidden] { display: none; }
+  .focus-consent__icon {
+    display: grid;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 1rem;
+    background: var(--focus-mint);
+    color: var(--focus-teal);
+  }
+  .focus-consent__icon svg { width: 1.65rem; height: 1.65rem; }
+  .focus-kicker {
+    margin: 0 0 .35rem;
+    color: var(--focus-teal);
+    font-size: .78rem;
+    font-weight: 900;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+  .focus-consent h2,
+  .focus-workspace h2,
+  .focus-map h2,
+  .focus-recommendations h2,
+  .focus-static h2 {
+    margin: 0;
+    font-size: clamp(1.75rem, 4vw, 3rem);
+    line-height: 1.05;
+    letter-spacing: -.035em;
+    text-wrap: balance;
+  }
+  .focus-consent p,
+  .focus-workspace__head p,
+  .focus-map__head p,
+  .focus-recommendations__head p,
+  .focus-static p {
+    max-width: 65ch;
+    line-height: 1.6;
+  }
+  .focus-consent ul { padding-left: 1.25rem; color: var(--focus-muted); line-height: 1.65; }
+  .focus-consent code { padding: .1em .3em; border-radius: .3em; background: #edf3ef; font-size: .9em; }
+  .focus-consent__check {
+    display: flex;
+    align-items: flex-start;
+    gap: .7rem;
+    margin: 1.25rem 0;
+    font-weight: 750;
+    line-height: 1.45;
+    cursor: pointer;
+  }
+  .focus-consent__check input {
+    flex: 0 0 auto;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: .08rem;
+    accent-color: var(--focus-teal);
+  }
+  .focus-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: .7rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 850;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+  }
+  .focus-button--primary { background: var(--focus-teal); color: #fff; }
+  .focus-button--primary:hover { background: #0f554f; }
+  .focus-button:disabled { cursor: not-allowed; opacity: .45; }
+  .focus-button--quiet { border-color: var(--focus-line); background: #fff; color: var(--focus-ink); }
+  .focus-button--quiet:hover { border-color: var(--focus-teal); color: var(--focus-teal); }
+  .focus-status { min-height: 1.5em; margin: .65rem 0 0; color: var(--focus-muted); font-size: .9rem; }
+  .focus-workspace { overflow: hidden; }
+  .focus-workspace__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+    padding: clamp(1.25rem, 4vw, 3rem);
+    border-bottom: 1px solid var(--focus-line);
+    background: linear-gradient(135deg, #fbf3df, #eff7f3);
+  }
+  .focus-workspace__head > div { max-width: 48rem; }
+  .focus-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 1rem clamp(1.25rem, 4vw, 3rem);
+    border-bottom: 1px solid var(--focus-line);
+    background: #f8fbf9;
+  }
+  .focus-legend > div { display: grid; grid-template-columns: auto 1fr; align-items: start; gap: .65rem; }
+  .focus-legend p { margin: 0; color: var(--focus-muted); line-height: 1.45; }
+  .focus-legend__swatch { width: .8rem; height: .8rem; margin-top: .3rem; border-radius: 50%; }
+  .focus-legend__swatch--preference { background: var(--focus-teal); }
+  .focus-legend__swatch--confidence { background: var(--focus-gold); }
+  .focus-groups { padding: clamp(1.25rem, 4vw, 3rem); }
+  .focus-group + .focus-group { margin-top: 3rem; }
+  .focus-group__head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 24rem); align-items: end; gap: 1rem; margin-bottom: 1rem; }
+  .focus-group__head h3 { margin: 0; font-size: clamp(1.45rem, 3vw, 2rem); }
+  .focus-group__head p { margin: 0; color: var(--focus-muted); line-height: 1.45; }
+  .focus-interest-grid { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+  .focus-interest {
+    display: grid;
+    grid-template-columns: minmax(11rem, 1.1fr) minmax(18rem, 1.35fr) minmax(15rem, 1.1fr);
+    align-items: start;
+    gap: .25rem 1rem;
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid var(--focus-line);
+    border-radius: 1.25rem;
+    background: #fff;
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+  }
+  .focus-interest[data-selected="true"] { border-color: rgba(22, 106, 100, .58); box-shadow: 0 10px 28px rgba(22, 106, 100, .08); }
+  .focus-interest__title { grid-column: 1; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .focus-interest__title h4 { margin: 0; font-size: 1.05rem; font-weight: 850; }
+  .focus-interest > p { grid-column: 1; min-height: 2.8em; margin: .25rem 0 0; color: var(--focus-muted); line-height: 1.4; }
+  .focus-stance,
+  .focus-feedback {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .4rem;
+    margin: .75rem 0 0;
+    padding: 0;
+    border: 0;
+  }
+  .focus-stance legend,
+  .focus-feedback legend { grid-column: 1 / -1; margin-bottom: .25rem; color: var(--focus-muted); font-size: .78rem; font-weight: 800; }
+  .focus-stance label,
+  .focus-feedback button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: .45rem .35rem;
+    border: 1px solid var(--focus-line);
+    border-radius: .7rem;
+    background: #fff;
+    color: var(--focus-ink);
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .focus-stance { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; }
+  .focus-stance input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+  }
+  .focus-stance label:has(input:checked),
+  .focus-feedback button[aria-pressed="true"] { border-color: var(--focus-teal); background: var(--focus-mint); color: #0b4d48; }
+  .focus-stance label:has(input:focus-visible) { outline: 3px solid #146e68; outline-offset: 3px; }
+  .focus-meters { grid-column: 3; grid-row: 1 / span 2; display: grid; gap: .6rem; margin: 0; padding: 0; }
+  .focus-meters > div { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 1.4fr); align-items: center; gap: .75rem; }
+  .focus-meters dt { color: var(--focus-muted); font-size: .76rem; }
+  .focus-meters dd { display: grid; grid-template-columns: minmax(5rem, 1fr) auto; align-items: center; gap: .5rem; margin: 0; font-size: .72rem; font-weight: 800; }
+  .focus-meters meter { width: 100%; height: .65rem; accent-color: var(--focus-teal); }
+  .focus-meters [data-focus-index-meter] { accent-color: var(--focus-gold); }
+  .focus-interest__why { grid-column: 2 / -1; margin-top: .45rem; padding-top: .45rem; border-top: 1px solid var(--focus-line); }
+  .focus-interest__why summary { min-height: 44px; display: flex; align-items: center; color: var(--focus-teal); font-size: .82rem; font-weight: 850; cursor: pointer; }
+  .focus-interest__why p { min-height: 0; margin: 0; color: var(--focus-muted); font-size: .82rem; line-height: 1.45; }
+  .focus-map,
+  .focus-digest,
+  .focus-recommendations { padding: clamp(1.25rem, 4vw, 3rem); border-top: 1px solid var(--focus-line); }
+  .focus-map { background: #f2f7f4; }
+  .focus-map__head,
+  .focus-recommendations__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; margin-bottom: 1.5rem; }
+  .focus-map__head > div,
+  .focus-recommendations__head > div { max-width: 48rem; }
+  .focus-map__summary { flex: 0 0 min(18rem, 32%); margin: 0; padding: .75rem 1rem; border-radius: 1rem; background: #fff; color: var(--focus-muted); font-weight: 750; }
+  .focus-map__rows { display: grid; gap: .65rem; }
+  .focus-map__empty { margin: 0; padding: 1rem; border: 1px dashed var(--focus-line); border-radius: 1rem; color: var(--focus-muted); }
+  .focus-map-row {
+    display: grid;
+    grid-template-columns: minmax(10rem, 1.2fr) minmax(12rem, 2fr) minmax(12rem, 1fr);
+    align-items: center;
+    gap: 1rem;
+    padding: .8rem 1rem;
+    border-radius: 1rem;
+    background: #fff;
+  }
+  .focus-map-row__label { display: grid; }
+  .focus-map-row__label span,
+  .focus-map-row__evidence { color: var(--focus-muted); font-size: .78rem; }
+  .focus-map-row__index,
+  .focus-map-row__evidence { display: grid; gap: .3rem; }
+  .focus-map-row__index span { color: var(--focus-muted); font-size: .78rem; }
+  .focus-map-row__index meter { width: 100%; height: .65rem; accent-color: var(--focus-gold); }
+  .focus-map-row__evidence strong { color: var(--focus-ink); }
+  .focus-digest {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(18rem, .75fr);
+    gap: clamp(1.5rem, 4vw, 3rem);
+    background: #fff9eb;
+  }
+  .focus-digest h2 { margin: 0; font-size: clamp(1.6rem, 3vw, 2.5rem); line-height: 1.08; letter-spacing: -.03em; }
+  .focus-digest p { max-width: 62ch; line-height: 1.55; }
+  .focus-digest__panel { padding: 1rem; border: 1px solid var(--focus-line); border-radius: 1.2rem; background: #fff; }
+  .focus-digest__panel > p { margin: 0 0 .65rem; }
+  .focus-digest__state { color: var(--focus-teal); font-weight: 900; }
+  .focus-digest__panel ul { padding-left: 1.25rem; color: var(--focus-muted); line-height: 1.55; }
+  .focus-digest__panel .focus-button { width: 100%; }
+  .focus-recommendations__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+  .focus-rec {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid var(--focus-line);
+    border-radius: 1.25rem;
+    background: #fff;
+  }
+  .focus-rec[hidden] { display: none; }
+  .focus-rec__meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; color: var(--focus-muted); font-size: .76rem; font-weight: 750; }
+  .focus-rec h3 { margin: .7rem 0 .35rem; font-size: 1.22rem; line-height: 1.18; text-wrap: balance; }
+  .focus-rec h3 a { color: inherit; text-decoration-thickness: .08em; text-underline-offset: .15em; }
+  .focus-rec__place { margin: 0; color: var(--focus-muted); line-height: 1.4; }
+  .focus-rec__tags { display: flex; flex-wrap: wrap; gap: .35rem; margin: .8rem 0; }
+  .focus-rec__tags span { padding: .25rem .5rem; border-radius: 999px; background: #edf5f1; color: #245c58; font-size: .72rem; font-weight: 800; }
+  .focus-why { margin-top: auto; padding-top: .65rem; border-top: 1px solid var(--focus-line); }
+  .focus-why summary { min-height: 44px; display: flex; align-items: center; color: var(--focus-teal); font-weight: 850; cursor: pointer; }
+  .focus-why p { margin: 0 0 .75rem; color: var(--focus-muted); font-size: .88rem; line-height: 1.5; }
+  .focus-static { padding: clamp(1.25rem, 4vw, 3rem); }
+  .focus-static ul { display: grid; gap: .75rem; padding: 0; list-style: none; }
+  .focus-static li { display: grid; gap: .25rem; padding: .85rem; border: 1px solid var(--focus-line); border-radius: 1rem; }
+  .focus-static li a { color: var(--focus-ink); font-weight: 850; }
+  .focus-static li span { color: var(--focus-muted); }
+  @media (max-width: 960px) {
+    .focus-interest { grid-template-columns: minmax(11rem, .8fr) minmax(18rem, 1.2fr); }
+    .focus-meters { grid-column: 1 / -1; grid-row: auto; margin-top: .45rem; padding-top: .65rem; border-top: 1px solid var(--focus-line); }
+    .focus-interest__why { grid-column: 1 / -1; }
+    .focus-recommendations__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .focus-map-row { grid-template-columns: minmax(10rem, 1fr) minmax(12rem, 1.5fr); }
+    .focus-map-row__confidence { grid-column: 1 / -1; }
+  }
+  @media (max-width: 700px) {
+    .focus-product__notice,
+    .focus-consent,
+    .focus-workspace__head,
+    .focus-map__head,
+    .focus-recommendations__head { display: grid; }
+    .focus-consent { grid-template-columns: 1fr; }
+    .focus-legend,
+    .focus-recommendations__grid { grid-template-columns: 1fr; }
+    .focus-interest { display: block; }
+    .focus-interest > p { margin-bottom: 1rem; }
+    .focus-stance { margin-top: .75rem; }
+    .focus-meters { margin-top: 1rem; }
+    .focus-group__head { grid-template-columns: 1fr; }
+    .focus-workspace__head .focus-button,
+    .focus-recommendations__head .focus-button { width: 100%; }
+    .focus-map__summary { width: 100%; }
+    .focus-map-row { grid-template-columns: 1fr; gap: .55rem; }
+    .focus-map-row__evidence { grid-column: auto; }
+    .focus-digest { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 430px) {
+    .focus-product__notice { align-items: start; }
+    .focus-stance,
+    .focus-feedback { grid-template-columns: 1fr; }
+    .focus-meters > div { grid-template-columns: 1fr; gap: .3rem; }
+    .focus-meters dd { grid-template-columns: 1fr; }
+    .focus-meters dd span { font-size: .76rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .focus-button,
+    .focus-interest { transition: none; }
+  }
+</style>

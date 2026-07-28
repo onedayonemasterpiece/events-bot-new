@@ -1,0 +1,96 @@
+---
+import EventLayout from '../../layouts/EventLayout.astro';
+import EventParticipants from '../../components/EventParticipants.astro';
+import type { PreviewEvent } from '../../lib/types';
+import { absoluteUrl, SITE_NAME, withBase } from '../../lib/events';
+
+const title = `Участники события — UI QA | ${SITE_NAME}`;
+const description = 'Noindex visual QA specimen for the verified event participant block.';
+const canonicalUrl = absoluteUrl('/lab/event-participants/');
+const event = {
+  id: 6172,
+  participants: [
+    {
+      id: 'kgd80:udovenko-tatyana',
+      name: 'Татьяна Удовенко',
+      role: 'Хедлайнер',
+      entity_kind: 'person',
+      is_headliner: true,
+      avatar_url: '/assets/participants/udovenko-tatyana.webp',
+      avatar_alt: 'Татьяна Удовенко — хедлайнер',
+      likes_count: 27,
+      credit_text: 'Фотография проекта «80 историй о главном»',
+      credit_url: 'https://kgd80.ru/',
+      evidence_url: 'https://kgd80.ru/',
+    },
+    {
+      id: 'kgd80:levchenkov-andrey',
+      name: 'Андрей Левченков',
+      role: 'Спикер',
+      entity_kind: 'person',
+      is_headliner: false,
+      avatar_url: '/assets/participants/levchenkov-andrey.webp',
+      avatar_alt: 'Андрей Левченков — спикер',
+      likes_count: 12,
+      credit_text: 'Фотография проекта «80 историй о главном»',
+      credit_url: 'https://kgd80.ru/',
+      evidence_url: 'https://kgd80.ru/',
+    },
+    {
+      id: 'qa:initials',
+      name: 'Участник без публичного портрета',
+      role: 'Модератор',
+      entity_kind: 'person',
+      is_headliner: false,
+      avatar_url: null,
+      avatar_alt: 'Участник без публичного портрета — модератор',
+      likes_count: 0,
+    },
+  ],
+} as unknown as PreviewEvent;
+---
+
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main" class="participant-lab">
+    <div class="page-shell participant-lab__shell">
+      <nav class="crumbs" aria-label="Хлебные крошки">
+        <a href={withBase('/__preview/')}>Афиша</a>
+        <span aria-hidden="true">/</span>
+        <span>Участники — UI QA</span>
+      </nav>
+      <section class="participant-lab__intro">
+        <p>noindex · responsive specimen</p>
+        <h1>Участники под медальонами</h1>
+        <span>На узком viewport показывается mobile surface, на широком — desktop.</span>
+      </section>
+      <div class="participant-lab__medallion-placeholder" aria-label="Место строки медальонов">
+        <span></span><span></span><span></span>
+      </div>
+      <div class="participant-lab__mobile"><EventParticipants event={event} surface="mobile" /></div>
+      <div class="participant-lab__desktop"><EventParticipants event={event} surface="desktop" /></div>
+      <section class="participant-lab__description">
+        <h2>Описание</h2>
+        <p>Этот блок обозначает следующий контент страницы события и проверяет порядок в normal flow.</p>
+      </section>
+    </div>
+  </main>
+</EventLayout>
+
+<style>
+  .participant-lab { min-height:100vh; color:#2d211a; background:#f7eee2; }
+  .participant-lab__shell { max-width:1100px; padding-bottom:5rem; }
+  .participant-lab__intro { max-width:700px; padding:clamp(1.5rem,5vw,4rem) 0 1.2rem; }
+  .participant-lab__intro p { margin:0 0 .5rem; color:#a64c28; font-size:.72rem; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+  .participant-lab__intro h1 { margin:0; font-size:clamp(2rem,6vw,4.8rem); line-height:.95; letter-spacing:-.05em; }
+  .participant-lab__intro span { display:block; margin-top:1rem; color:#75665b; }
+  .participant-lab__medallion-placeholder { display:flex; gap:.55rem; margin-bottom:.2rem; }
+  .participant-lab__medallion-placeholder span { width:68px; height:68px; border-radius:50%; background:linear-gradient(135deg,#ead7c1,#f9efe2); box-shadow:inset 0 0 0 1px rgba(112,73,50,.15); }
+  .participant-lab__description { margin-top:1rem; padding:1.2rem; border-radius:18px; background:rgba(255,251,245,.72); }
+  .participant-lab__description h2 { margin-top:0; }
+  .participant-lab__desktop { display:none; }
+  @media (min-width:1024px) {
+    .participant-lab__mobile { display:none; }
+    .participant-lab__desktop { display:block; }
+    .participant-lab__medallion-placeholder span { width:92px; height:92px; }
+  }
+</style>

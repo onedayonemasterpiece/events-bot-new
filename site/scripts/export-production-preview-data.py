@@ -53,6 +53,15 @@ PGVECTOR_RELATED_SCHEMA_VERSION = "event_pgvector_related_chain_v2"
 PGVECTOR_RELATED_RETRIEVAL_METHOD = "supabase_pgvector_hnsw_cosine_v1"
 PGVECTOR_RELATED_CACHE_SCHEMA_VERSION = "event_pgvector_related_chain_v2_cache_20260720_graph_reciprocity"
 RELATED_CACHE_SCHEMA_VERSION = "event_sparse_related_chain_v1_cache_20260628b"
+BGE_RELATED_ALGORITHM = "event_bge_m3_related_chain_v1"
+BGE_RELATED_SCHEMA_VERSION = "event_bge_m3_related_chain_v1"
+BGE_RELATED_RETRIEVAL_METHOD = "local_bge_m3_dense_cosine_v1"
+BGE_RELATED_CACHE_SCHEMA_VERSION = "event_bge_m3_related_chain_v1_cache_20260727"
+BGE_MODEL_ID_DEFAULT = "BAAI/bge-m3"
+BGE_MODEL_REVISION_DEFAULT = "5617a9f61b028005a4858fdac845db406aefb181"
+BGE_DIMENSION_DEFAULT = 1024
+UNUSUAL_MANIFEST_SCHEMA_VERSION = "static_unusual_events_v1"
+UNUSUAL_CACHE_SCHEMA_VERSION = "unusual-event-score-cache-v1"
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
 FORCE_VISUAL_IMAGE_MODE_IDS = {5370, 6322, 4512, 3730, 4913}
@@ -877,6 +886,199 @@ def probe_image_dimensions(url: str, timeout: float = 4.0) -> tuple[int | None, 
     return result
 
 
+PARTICIPANT_REQUIRED_TABLE_COLUMNS = {
+    "artist_registry_entity": {
+        "artist_id",
+        "entity_type",
+        "display_name",
+        "verification_status",
+        "photo_url",
+        "photo_rights_status",
+        "photo_rights_evidence_json",
+    },
+    "event_artist_appearance": {
+        "event_id",
+        "artist_id",
+        "role",
+        "status",
+        "physical_visit_status",
+        "participant_evidence_json",
+        "eligibility_status",
+        "cancelled_at",
+        "media_identity_status",
+    },
+}
+PARTICIPANT_PHOTO_ALLOWED_STATUSES = {
+    "event_artist_verified",
+    "press_kit_verified",
+    "cc_verified",
+    "informational_citation_reviewed",
+}
+PARTICIPANT_HEADLINER_ROLES = {"headliner", "keynote", "главный артист", "хедлайнер"}
+PARTICIPANT_ROLE_LABELS = {
+    "artist": "Артист",
+    "performer": "Артист",
+    "speaker": "Спикер",
+    "keynote": "Ключевой спикер",
+    "headliner": "Хедлайнер",
+    "host": "Ведущий",
+    "moderator": "Модератор",
+    "author": "Автор",
+}
+
+
+def sqlite_table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
+    exists = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    if not exists:
+        return set()
+    return {
+        str(row[1])
+        for row in con.execute(f'PRAGMA table_info("{table_name}")').fetchall()
+    }
+
+
+def participant_photo_metadata(row: sqlite3.Row) -> tuple[str | None, str | None, str | None]:
+    """Admit only a registry portrait with explicit identity and rights evidence."""
+
+    photo_url = clean_text(row_get(row, "photo_url"))
+    rights_status = clean_text(row_get(row, "photo_rights_status")).casefold()
+    identity_status = clean_text(row_get(row, "media_identity_status")).casefold()
+    if (
+        not photo_url
+        or not photo_url.startswith(("https://", "/"))
+        or rights_status not in PARTICIPANT_PHOTO_ALLOWED_STATUSES
+        or identity_status != "verified"
+    ):
+        return None, None, None
+    for evidence in read_json(row_get(row, "photo_rights_evidence_json"), []):
+        if not isinstance(evidence, dict):
+            continue
+        source_url = clean_text(
+            evidence.get("source_url")
+            or evidence.get("source_page_url")
+            or evidence.get("original_source_url")
+        )
+        credit_text = clean_text(
+            evidence.get("credit_text")
+            or evidence.get("author_or_rightsholder")
+        )
+        if source_url.startswith("https://") and credit_text:
+            return photo_url, credit_text, source_url
+    return None, None, None
+
+
+def event_participants_for_events(
+    con: sqlite3.Connection,
+    event_ids: list[int],
+) -> dict[int, list[dict[str, Any]]]:
+    """Project verified occurrence participants without making the site depend on the overlay.
+
+    The artist registry work is deployed independently from the static site.  Old
+    SQLite snapshots therefore remain valid and simply produce no participant
+    block.  Rows under review, cancelled appearances and unverified identities
+    always fail closed.
+    """
+
+    unique_event_ids = sorted({int(event_id) for event_id in event_ids})
+    empty = {event_id: [] for event_id in unique_event_ids}
+    if not unique_event_ids:
+        return empty
+    for table_name, required in PARTICIPANT_REQUIRED_TABLE_COLUMNS.items():
+        if not required.issubset(sqlite_table_columns(con, table_name)):
+            return empty
+    placeholders = ",".join("?" for _ in unique_event_ids)
+    rows = con.execute(
+        f"""
+        SELECT
+            appearance.event_id,
+            appearance.artist_id,
+            appearance.role,
+            appearance.participant_evidence_json,
+            appearance.media_identity_status,
+            artist.entity_type,
+            artist.display_name,
+            artist.photo_url,
+            artist.photo_rights_status,
+            artist.photo_rights_evidence_json
+        FROM event_artist_appearance AS appearance
+        JOIN artist_registry_entity AS artist
+          ON artist.artist_id = appearance.artist_id
+        WHERE appearance.event_id IN ({placeholders})
+          AND appearance.status = 'confirmed'
+          AND appearance.physical_visit_status = 'confirmed'
+          AND appearance.eligibility_status = 'eligible'
+          AND appearance.cancelled_at IS NULL
+          AND artist.verification_status = 'verified'
+        ORDER BY
+          appearance.event_id,
+          CASE WHEN lower(appearance.role) IN ('headliner', 'keynote') THEN 0 ELSE 1 END,
+          lower(artist.display_name),
+          artist.artist_id
+        """,
+        tuple(unique_event_ids),
+    ).fetchall()
+    participants_by_event = empty
+    seen: dict[int, set[str]] = {event_id: set() for event_id in unique_event_ids}
+    for row in rows:
+        event_id = int(row["event_id"])
+        participant_id = clean_text(row["artist_id"])
+        name = clean_text(row["display_name"])
+        evidence = [
+            item
+            for item in read_json(row["participant_evidence_json"], [])
+            if isinstance(item, dict)
+        ]
+        if (
+            not participant_id
+            or not name
+            or not evidence
+            or participant_id in seen[event_id]
+        ):
+            continue
+        seen[event_id].add(participant_id)
+        raw_role = clean_text(row["role"]) or "participant"
+        role_key = raw_role.casefold()
+        role = PARTICIPANT_ROLE_LABELS.get(role_key, raw_role[:1].upper() + raw_role[1:])
+        avatar_url, credit_text, credit_url = participant_photo_metadata(row)
+        evidence_url = next(
+            (
+                clean_text(item.get("source_url") or item.get("url"))
+                for item in evidence
+                if clean_text(item.get("source_url") or item.get("url")).startswith("https://")
+            ),
+            None,
+        )
+        entity_kind = clean_text(row["entity_type"]).casefold()
+        if entity_kind not in {"person", "group", "project"}:
+            entity_kind = "person"
+        participants_by_event[event_id].append(
+            {
+                "id": participant_id,
+                "name": name,
+                "role": role,
+                "entity_kind": entity_kind,
+                "is_headliner": role_key in PARTICIPANT_HEADLINER_ROLES,
+                "avatar_url": avatar_url,
+                "avatar_alt": f"{name} — {role}",
+                "likes_count": 0,
+                "profile_url": None,
+                "credit_text": credit_text,
+                "credit_url": credit_url,
+                "evidence_url": evidence_url,
+            }
+        )
+    return participants_by_event
+
+
+def event_participants(con: sqlite3.Connection, event_id: int) -> list[dict[str, Any]]:
+    """Single-event compatibility wrapper used by focused tests and tools."""
+
+    return event_participants_for_events(con, [event_id]).get(int(event_id), [])
+
+
 def image_area(asset: dict[str, Any]) -> int:
     try:
         width = int(asset.get("width") or 0)
@@ -1602,15 +1804,13 @@ def event_active_where(
     columns: set[str] | None = None,
 ) -> str:
     available = columns
-    start_not_elapsed = f"date > '{current_date}'"
-    if current_time and (available is None or "time" in available):
-        start_not_elapsed = (
-            f"({start_not_elapsed} or (date = '{current_date}' and "
-            "(time is null or trim(time) = '' or substr(time, 1, 5) >= "
-            f"'{current_time}')))"
-        )
-    else:
-        start_not_elapsed = f"(date >= '{current_date}')"
+    # Keep the whole local calendar day in the shared public catalog.
+    # `/segodnya/` needs elapsed one-off events to render the accepted muted
+    # state; removing them here can collapse its mobile rail late in the day.
+    # Time-sensitive surfaces such as Popular apply their own start-instant
+    # eligibility after export. `current_time` remains for caller compatibility
+    # and ledger parity, but must not narrow the shared catalog.
+    start_not_elapsed = f"(date >= '{current_date}')"
     clauses = ["date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'"]
     if available is None or "lifecycle_status" in available:
         clauses.append("coalesce(nullif(trim(lifecycle_status),''),'active') = 'active'")
@@ -1756,6 +1956,55 @@ def fetch_rows(
     return ordered_rows[:limit]
 
 
+EVENT_DETAIL_ARCHIVE_DAYS = 30
+
+
+def fetch_recent_event_detail_archive_rows(
+    con: sqlite3.Connection,
+    current_date: str,
+    *,
+    retention_days: int = EVENT_DETAIL_ARCHIVE_DAYS,
+) -> list[sqlite3.Row]:
+    """Return recently elapsed public events for direct detail URLs only.
+
+    These rows are deliberately kept out of ``preview-events.json`` so they
+    cannot leak into current listings, Search, Popular, recommendations or
+    personalization. The small grace window prevents a shared/reviewed event
+    link from becoming a 404 the morning after its occurrence.
+    """
+    current_day = date.fromisoformat(current_date)
+    cutoff = (current_day - timedelta(days=max(1, retention_days))).isoformat()
+    rows: list[sqlite3.Row] = []
+    columns = {str(row[1]) for row in con.execute("pragma table_info('event')")}
+    end_expression = (
+        "coalesce(nullif(trim(end_date),''), date)"
+        if "end_date" in columns
+        else "date"
+    )
+    lifecycle_clause = (
+        "and coalesce(nullif(trim(lifecycle_status),''),'active') = 'active'"
+        if "lifecycle_status" in columns
+        else ""
+    )
+    silent_clause = "and coalesce(silent,0) = 0" if "silent" in columns else ""
+    query = f"""
+        select * from event
+        where date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+          and {end_expression} >= ?
+          and {end_expression} < ?
+          {lifecycle_clause}
+          {silent_clause}
+        order by {end_expression} desc, id asc
+    """
+    for row in con.execute(query, (cutoff, current_date)):
+        if public_projection_gate_reason(row):
+            continue
+        if title_looks_prompt_leak(row_get(row, "title")):
+            continue
+        rows.append(row)
+    return rows
+
+
 CATALOG_LEDGER_SCHEMA_VERSION = "static_event_catalog_ledger_v1"
 ELIGIBILITY_PREDICATE_VERSION = "static_event_public_projection_v2"
 
@@ -1767,12 +2016,9 @@ def _candidate_catalog_rows(
 ) -> list[sqlite3.Row]:
     """Return date-relevant rows before public eligibility filtering."""
     columns = {str(row[1]) for row in con.execute("pragma table_info('event')")}
+    # Match `event_active_where`: include all events on the current local date,
+    # including already-started one-offs shown by Today as elapsed/muted.
     start_not_elapsed = f"date >= '{current_date}'"
-    if current_time and "time" in columns:
-        start_not_elapsed = (
-            f"(date > '{current_date}' or (date = '{current_date}' and "
-            f"(time is null or trim(time) = '' or substr(time, 1, 5) >= '{current_time}')))"
-        )
     if "end_date" in columns:
         date_clause = (
             f"({start_not_elapsed} or "
@@ -1867,7 +2113,43 @@ def build_catalog_ledger(
     }
 
 
-def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) -> dict[str, Any]:
+def _structured_unusual_semantic_record(
+    row: sqlite3.Row | dict[str, Any],
+) -> dict[str, Any]:
+    """Project only canonical structured eligibility facts for semantic feeds."""
+
+    identity_status = clean_text(row_get(row, "identity_status")).lower()
+    merged_into_event_id = row_get(row, "merged_into_event_id")
+    silent_value = row_get(row, "silent") if row_has_key(row, "silent") else None
+    eligible = bool(
+        row_has_key(row, "identity_status")
+        and identity_status == "canonical"
+        and row_has_key(row, "merged_into_event_id")
+        and merged_into_event_id in {None, "", 0, "0"}
+        and row_has_key(row, "silent")
+        and silent_value in {False, 0}
+        and clean_text(row_get(row, "lifecycle_status")).lower() == "active"
+    )
+    return {
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event" if eligible else "untrusted",
+        "identity_status": identity_status or None,
+        "merged_into_event_id": merged_into_event_id,
+        "silent": bool(silent_value) if silent_value is not None else None,
+        "is_public": eligible,
+        "is_searchable": eligible,
+        "publication_status": "published" if eligible else "untrusted",
+    }
+
+
+def build_event(
+    con: sqlite3.Connection,
+    row: sqlite3.Row,
+    current_date: str,
+    *,
+    participants: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     event_id = int(row["id"])
     occurrence = structured_occurrence_projection(row)
     occurrence_conflict = bool(
@@ -1914,7 +2196,9 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
     slug = f"{'-'.join(part for part in slug_parts if part)}-{event_id}"
     source_url = source_urls[0] if source_urls else None
     organizer_names = event_organizer_names(row_get(row, "organizer_names"))
+    participants = event_participants(con, event_id) if participants is None else participants
     age_projection = event_age_projection(row)
+    structured_semantic_record = _structured_unusual_semantic_record(row)
     return {
         "id": event_id,
         "source_prod_id": event_id,
@@ -1923,8 +2207,14 @@ def build_event(con: sqlite3.Connection, row: sqlite3.Row, current_date: str) ->
         "event_type": event_type,
         "festival": clean_text(row["festival"]) or None,
         "organizer_names": organizer_names,
+        "participants": participants,
         "status_label": status,
         "lifecycle_status": clean_text(row["lifecycle_status"]) or "active",
+        # Hash-bound semantic consumers must re-check the actual structured
+        # Event/public-projection verdict instead of inferring eventness from
+        # title/description keywords. Old snapshots missing these columns
+        # export an explicit untrusted record and therefore fail closed.
+        **structured_semantic_record,
         "starts_at": starts_at,
         "start_date": start_date,
         "start_time": start_time,
@@ -3071,7 +3361,7 @@ def save_related_cache(path: Path | None, payload: dict[str, Any], *, previous_e
         )
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_json(path, payload)
     return True
 
 
@@ -3662,6 +3952,96 @@ def maybe_apply_gemma_audit(
     return chains, meta
 
 
+def build_bge_related_chain(
+    events: list[dict[str, Any]],
+    shared_artifact: dict[str, Any],
+    *,
+    top_k: int = 40,
+) -> dict[str, list[dict[str, Any]]]:
+    """Build related chains from the exact in-memory matrix used by unusual.
+
+    The semantic module returns vectors keyed by event id.  Converting that one
+    object to a dense matrix does not invoke the encoder and deliberately
+    happens before either consumer serializes a cache.
+    """
+
+    import numpy as np
+
+    vector_rows = shared_artifact.get("event_vectors")
+    if not isinstance(vector_rows, dict):
+        raise RuntimeError("shared BGE artifact event_vectors missing")
+    event_by_id = {int(event["id"]): event for event in events}
+    event_ids = sorted(event_by_id)
+    missing = [event_id for event_id in event_ids if str(event_id) not in vector_rows]
+    if missing:
+        raise RuntimeError(f"shared BGE artifact partial event matrix: missing={missing[:8]}")
+    matrix = np.asarray(
+        [vector_rows[str(event_id)]["vector"] for event_id in event_ids],
+        dtype=np.float32,
+    )
+    metadata = shared_artifact.get("metadata") or {}
+    expected_dim = int(metadata.get("embedding_dim") or 0)
+    if (
+        matrix.ndim != 2
+        or matrix.shape[0] != len(event_ids)
+        or matrix.shape[1] != expected_dim
+        or not np.isfinite(matrix).all()
+    ):
+        raise RuntimeError("shared BGE artifact matrix dimension/value mismatch")
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    if np.any(norms <= 0):
+        raise RuntimeError("shared BGE artifact contains zero vectors")
+    matrix = matrix / norms
+    chains: dict[str, list[dict[str, Any]]] = {}
+    batch = 256
+    for offset in range(0, len(event_ids), batch):
+        similarities = matrix[offset : offset + batch] @ matrix.T
+        for local_index, event_id in enumerate(event_ids[offset : offset + batch]):
+            left = event_by_id[event_id]
+            scores = similarities[local_index]
+            candidate_indexes = np.argpartition(
+                -scores, min(len(scores) - 1, top_k * 3)
+            )[: min(len(scores), top_k * 3 + 1)]
+            ranked = sorted(
+                (
+                    (float(scores[index]), event_ids[int(index)])
+                    for index in candidate_indexes
+                    if event_ids[int(index)] != event_id
+                ),
+                key=lambda item: (-item[0], item[1]),
+            )
+            chain: list[dict[str, Any]] = []
+            for similarity, candidate_id in ranked:
+                right = event_by_id[candidate_id]
+                if not eligible_related_pair(left, right):
+                    continue
+                same_category = bool(category(left) and category(left) == category(right))
+                shared_facets = sorted(
+                    set(str(value) for value in (left.get("topics") or []))
+                    .intersection(str(value) for value in (right.get("topics") or []))
+                )
+                strong = similarity >= 0.72 or same_category or bool(shared_facets)
+                chain.append(
+                    {
+                        "event_id": candidate_id,
+                        "slot_type": "pure_related" if strong else "adjacent_discovery",
+                        "related_score": round(max(0.0, min(1.0, similarity)), 4),
+                        "vector_similarity": round(similarity, 4),
+                        "similarity_class": "same_domain" if strong else "adjacent_discovery",
+                        "reasons": [
+                            f"vector:{BGE_RELATED_RETRIEVAL_METHOD}",
+                            *(["same_category"] if same_category else []),
+                            *(f"facet:{value}" for value in shared_facets[:3]),
+                        ],
+                        "retrieval_sources": ["shared_static_event_bge"],
+                    }
+                )
+                if len(chain) >= top_k:
+                    break
+            chains[str(event_id)] = chain
+    return chains
+
+
 def build_related(
     events: list[dict[str, Any]],
     *,
@@ -3674,13 +4054,35 @@ def build_related(
     gemma_max_anchors: int = 0,
     embedding_model: str = "gemini-embedding-2",
     related_corpus_revision: str = "",
+    shared_bge_artifact: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    related_mode = "pgvector" if str(related_mode or "").strip().lower() == "pgvector" else "sparse"
-    algorithm = PGVECTOR_RELATED_ALGORITHM if related_mode == "pgvector" else SPARSE_RELATED_ALGORITHM
-    schema_version = PGVECTOR_RELATED_SCHEMA_VERSION if related_mode == "pgvector" else SPARSE_RELATED_SCHEMA_VERSION
-    retrieval_method = PGVECTOR_RELATED_RETRIEVAL_METHOD if related_mode == "pgvector" else SPARSE_RELATED_RETRIEVAL_METHOD
-    cache_schema_version = PGVECTOR_RELATED_CACHE_SCHEMA_VERSION if related_mode == "pgvector" else RELATED_CACHE_SCHEMA_VERSION
-    embedding_doc_version = os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") if related_mode == "pgvector" else "event_embedding_doc_v1"
+    requested_mode = str(related_mode or "").strip().lower()
+    related_mode = requested_mode if requested_mode in {"sparse", "pgvector", "bge"} else "sparse"
+    if related_mode == "pgvector":
+        algorithm = PGVECTOR_RELATED_ALGORITHM
+        schema_version = PGVECTOR_RELATED_SCHEMA_VERSION
+        retrieval_method = PGVECTOR_RELATED_RETRIEVAL_METHOD
+        cache_schema_version = PGVECTOR_RELATED_CACHE_SCHEMA_VERSION
+        embedding_doc_version = os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1")
+    elif related_mode == "bge":
+        algorithm = BGE_RELATED_ALGORITHM
+        schema_version = BGE_RELATED_SCHEMA_VERSION
+        retrieval_method = BGE_RELATED_RETRIEVAL_METHOD
+        cache_schema_version = BGE_RELATED_CACHE_SCHEMA_VERSION
+        embedding_doc_version = str(
+            ((shared_bge_artifact or {}).get("metadata") or {}).get("document_version")
+            or "related_v1"
+        )
+        embedding_model = str(
+            ((shared_bge_artifact or {}).get("metadata") or {}).get("model_id")
+            or embedding_model
+        )
+    else:
+        algorithm = SPARSE_RELATED_ALGORITHM
+        schema_version = SPARSE_RELATED_SCHEMA_VERSION
+        retrieval_method = SPARSE_RELATED_RETRIEVAL_METHOD
+        cache_schema_version = RELATED_CACHE_SCHEMA_VERSION
+        embedding_doc_version = "event_embedding_doc_v1"
     related_corpus_revision = str(related_corpus_revision or "").strip()
     generated_at = datetime.now(timezone.utc).isoformat()
     fingerprints = {str(event["id"]): event_fingerprint(event) for event in events}
@@ -3702,9 +4104,14 @@ def build_related(
     cache_valid = (
         cache.get("schema_version") == cache_schema_version
         and cache.get("algorithm") == algorithm
-        and (related_mode != "pgvector" or cache.get("embedding_model") == embedding_model)
-        and (related_mode != "pgvector" or cache.get("embedding_document_version") == embedding_doc_version)
+        and (related_mode == "sparse" or cache.get("embedding_model") == embedding_model)
+        and (related_mode == "sparse" or cache.get("embedding_document_version") == embedding_doc_version)
         and (related_mode != "pgvector" or cache.get("related_corpus_revision") == related_corpus_revision)
+        and (
+            related_mode != "bge"
+            or cache.get("shared_bge_artifact_sha256")
+            == str(((shared_bge_artifact or {}).get("metadata") or {}).get("artifact_sha256") or "")
+        )
         and cache.get("event_fingerprints") == fingerprints
         and cache.get("event_ids") == event_ids
         and isinstance(cache.get("chains"), dict)
@@ -3784,6 +4191,16 @@ def build_related(
                 embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
                 graph_meta_out=graph_meta,
             )
+        elif related_mode == "bge":
+            if not shared_bge_artifact:
+                raise RuntimeError("BGE related mode requires the shared in-memory vector artifact")
+            graph_meta = {
+                "policy": "shared_bge_dense_graph_v1",
+                "artifact_sha256": str(
+                    (shared_bge_artifact.get("metadata") or {}).get("artifact_sha256") or ""
+                ),
+            }
+            chains = build_bge_related_chain(events, shared_bge_artifact)
         else:
             chains = build_sparse_related_chain(events, cache_salt=salt)
         raw_chains_for_cache = copy.deepcopy(chains)
@@ -3812,9 +4229,14 @@ def build_related(
         "algorithm": algorithm,
         "retrieval_method": retrieval_method,
         "embedding_document_version": embedding_doc_version,
-        "embedding_model": embedding_model if related_mode == "pgvector" else None,
+        "embedding_model": embedding_model if related_mode in {"pgvector", "bge"} else None,
         "related_corpus_revision": related_corpus_revision if related_mode == "pgvector" else None,
-        "semantic_embeddings": related_mode == "pgvector",
+        "semantic_embeddings": related_mode in {"pgvector", "bge"},
+        "shared_bge_artifact_sha256": (
+            str(((shared_bge_artifact or {}).get("metadata") or {}).get("artifact_sha256") or "")
+            if related_mode == "bge"
+            else None
+        ),
         "event_ids": event_ids,
         "event_fingerprints": fingerprints,
         "chains": chains,
@@ -3882,10 +4304,28 @@ def build_related(
         "algorithm": algorithm,
         "fallback_algorithm": "prod_sqlite_static_related_v1",
         "retrieval_method": retrieval_method,
-        "semantic_embeddings": related_mode == "pgvector",
-        "embedding_model": embedding_model if related_mode == "pgvector" else None,
+        "semantic_embeddings": related_mode in {"pgvector", "bge"},
+        "embedding_model": embedding_model if related_mode in {"pgvector", "bge"} else None,
         "embedding_document_version": embedding_doc_version,
         "related_corpus_revision": related_corpus_revision if related_mode == "pgvector" else None,
+        "shared_bge": (
+            {
+                key: value
+                for key, value in ((shared_bge_artifact or {}).get("metadata") or {}).items()
+                if key
+                in {
+                    "encoder_contract",
+                    "model_id",
+                    "model_revision",
+                    "embedding_dim",
+                    "document_version",
+                    "artifact_sha256",
+                    "provider_calls",
+                }
+            }
+            if related_mode == "bge"
+            else None
+        ),
         "graph_reciprocity": graph_meta,
         "gemma_verification": gemma_meta,
         "strict_verified_related": bool(gemma_verify),
@@ -3924,6 +4364,800 @@ def normalize_linked_occurrences(events: list[dict[str, Any]]) -> None:
         )
 
 
+def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    os.replace(temporary, path)
+
+
+def _compact_unusual_metrics_for_log(metrics: Any) -> dict[str, Any]:
+    """Keep release metrics observable without logging per-event evidence."""
+
+    if not isinstance(metrics, dict):
+        return {}
+    compact = dict(metrics)
+    ordinary = compact.get("ordinary_corpus_receipt")
+    if isinstance(ordinary, dict):
+        compact["ordinary_corpus_receipt"] = {
+            key: value for key, value in ordinary.items() if key != "members"
+        }
+    gate = compact.get("quality_gate")
+    if isinstance(gate, dict):
+        compact_gate = dict(gate)
+        observed = compact_gate.get("observed")
+        if isinstance(observed, dict):
+            compact_observed = {
+                key: value for key, value in observed.items() if key != "predictions"
+            }
+            observed_ordinary = compact_observed.get("ordinary_corpus_receipt")
+            if isinstance(observed_ordinary, dict):
+                compact_observed["ordinary_corpus_receipt"] = {
+                    key: value
+                    for key, value in observed_ordinary.items()
+                    if key != "members"
+                }
+            compact_gate["observed"] = compact_observed
+        compact["quality_gate"] = compact_gate
+    return compact
+
+
+def _load_json_object(path: Path | None) -> dict[str, Any] | None:
+    if not path or not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log_stage("unusual_feed_disabled", reason="cache_json_invalid", path=str(path), error=str(exc)[:240])
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _load_cached_bge_artifact(
+    *,
+    npz_path: Path,
+    receipt_path: Path,
+    prototype_bank: dict[str, Any],
+    classifier: dict[str, Any],
+    events: list[dict[str, Any]],
+    bge_module: Any,
+    model_revision: str,
+) -> dict[str, Any] | None:
+    if not npz_path.is_file() or not receipt_path.is_file():
+        return None
+    try:
+        import numpy as np
+
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        documents = bge_module.build_related_v1_documents(events)
+        current_keys = {
+            str(row["event_id"]): str(row["text_hash"]) for row in documents
+        }
+        stored_keys = receipt.get("event_text_hashes")
+        if not isinstance(stored_keys, dict):
+            return None
+        if (
+            receipt.get("schema_version") != "static-event-bge-cache-receipt-v1"
+            or receipt.get("model_revision") != model_revision
+            or receipt.get("model_id") != bge_module.MODEL_ID
+            or int(receipt.get("embedding_dim") or 0) != int(bge_module.EMBEDDING_DIM)
+            or receipt.get("document_version") != bge_module.DOCUMENT_VERSION
+            or receipt.get("encoder_contract") != bge_module.ENCODER_CONTRACT
+            or receipt.get("prototype_bank_sha256") != bge_module.stable_hash(prototype_bank)
+        ):
+            return None
+        with np.load(npz_path, allow_pickle=False) as stored:
+            event_ids = [str(value) for value in stored["event_ids"].tolist()]
+            prototype_ids = [str(value) for value in stored["prototype_ids"].tolist()]
+            event_matrix = stored["event_vectors"]
+            prototype_matrix = stored["prototype_vectors"]
+        if event_matrix.shape != (len(event_ids), int(bge_module.EMBEDDING_DIM)):
+            return None
+        if prototype_matrix.shape != (len(prototype_ids), int(bge_module.EMBEDDING_DIM)):
+            return None
+        artifact = {
+            "schema_version": "static-event-bge-v1",
+            "metadata": dict(receipt.get("metadata") or {}),
+            "event_vectors": {
+                event_id: {
+                    "text_hash": str(stored_keys[event_id]),
+                    "vector": [float(value) for value in event_matrix[index].tolist()],
+                }
+                for index, event_id in enumerate(event_ids)
+                if event_id in stored_keys
+            },
+            "prototype_vectors": {
+                prototype_id: {
+                    "text_hash": str((receipt.get("prototype_text_hashes") or {})[prototype_id]),
+                    "vector": [float(value) for value in prototype_matrix[index].tolist()],
+                }
+                for index, prototype_id in enumerate(prototype_ids)
+            },
+        }
+        validation = bge_module.validate_shared_bge_vector_artifact(
+            artifact,
+            prototype_bank=prototype_bank,
+            # The embedding cache is bound to the encoder/document/prototype
+            # contract. A classifier-only calibration change must reuse the
+            # same vectors; build_shared_bge_vector_artifact will bind the
+            # rebuilt receipt to the new head hash.
+            expected_classifier_sha256=None,
+        )
+        if not validation.get("valid"):
+            return None
+        artifact["_cache_current_text_hashes"] = current_keys
+        return artifact
+    except Exception as exc:
+        log_stage("unusual_feed_disabled", reason="bge_cache_invalid", error=str(exc)[:300])
+        return None
+
+
+def _write_bge_cache(
+    *,
+    artifact: dict[str, Any],
+    npz_path: Path,
+    receipt_path: Path,
+) -> None:
+    import numpy as np
+
+    event_vectors = artifact["event_vectors"]
+    prototype_vectors = artifact["prototype_vectors"]
+    event_ids = sorted(event_vectors, key=int)
+    prototype_ids = sorted(prototype_vectors)
+    npz_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = npz_path.with_name(f".{npz_path.name}.{os.getpid()}.tmp")
+    with temporary.open("wb") as handle:
+        np.savez_compressed(
+            handle,
+            event_ids=np.asarray(event_ids, dtype=f"<U{max(1, max(map(len, event_ids), default=1))}"),
+            event_vectors=np.asarray(
+                [event_vectors[event_id]["vector"] for event_id in event_ids], dtype=np.float64
+            ),
+            prototype_ids=np.asarray(
+                prototype_ids,
+                dtype=f"<U{max(1, max(map(len, prototype_ids), default=1))}",
+            ),
+            prototype_vectors=np.asarray(
+                [prototype_vectors[prototype_id]["vector"] for prototype_id in prototype_ids],
+                dtype=np.float64,
+            ),
+        )
+    os.replace(temporary, npz_path)
+    metadata = dict(artifact.get("metadata") or {})
+    receipt = {
+        "schema_version": "static-event-bge-cache-receipt-v1",
+        "model_id": metadata.get("model_id"),
+        "model_revision": metadata.get("model_revision"),
+        "embedding_dim": metadata.get("embedding_dim"),
+        "document_version": metadata.get("document_version"),
+        "encoder_contract": metadata.get("encoder_contract"),
+        "prototype_bank_sha256": metadata.get("prototype_bank_sha256"),
+        "classifier_sha256": metadata.get("classifier_sha256"),
+        "artifact_sha256": metadata.get("artifact_sha256"),
+        "event_text_hashes": {
+            event_id: event_vectors[event_id]["text_hash"] for event_id in event_ids
+        },
+        "prototype_text_hashes": {
+            prototype_id: prototype_vectors[prototype_id]["text_hash"]
+            for prototype_id in prototype_ids
+        },
+        "metadata": metadata,
+        "npz_sha256": hashlib.sha256(npz_path.read_bytes()).hexdigest(),
+    }
+    _atomic_write_json(receipt_path, receipt)
+
+
+def _event_public_path(event: dict[str, Any]) -> str:
+    explicit = clean_text(event.get("path") or event.get("href"))
+    if explicit.startswith("/"):
+        return explicit
+    slug = clean_text(event.get("slug"))
+    return f"/sobytiya/{slug}/" if slug else f"/sobytiya/{int(event['id'])}/"
+
+
+def _normalise_unusual_manifest(
+    manifest: dict[str, Any],
+    *,
+    events: list[dict[str, Any]],
+    build_metadata: dict[str, Any],
+    vector_metadata: dict[str, Any],
+    prototype_bank: dict[str, Any],
+    classifier: dict[str, Any],
+    migration: bool,
+) -> dict[str, Any]:
+    by_id = {int(event["id"]): event for event in events}
+    quality_gate = manifest.get("quality_gate")
+    if not isinstance(quality_gate, dict):
+        quality_gate = {
+            "status": str(manifest.get("status") or "unavailable"),
+            "metrics": manifest.get("evaluation") or {},
+        }
+    else:
+        quality_gate = dict(quality_gate)
+        quality_gate.setdefault(
+            "status",
+            str(
+                quality_gate.get("approval_status")
+                or manifest.get("evaluation_approval_status")
+                or manifest.get("status")
+                or "unavailable"
+            ),
+        )
+        quality_gate.setdefault(
+            "metrics",
+            quality_gate.get("observed") or manifest.get("evaluation") or {},
+        )
+    output = {
+        **manifest,
+        "schema_version": UNUSUAL_MANIFEST_SCHEMA_VERSION,
+        "build_id": build_metadata.get("build_id"),
+        "generated_at": build_metadata.get("generated_at"),
+        "source_snapshot_id": build_metadata.get("source_snapshot_id"),
+        "source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
+        # Canonical reader aliases. Keep the verbose producer fields below for
+        # receipts/backward compatibility, but the Astro boundary consumes
+        # these short, stable names.
+        "hash": build_metadata.get("source_snapshot_hash"),
+        "input_fingerprint": build_metadata.get("input_fingerprint"),
+        "taxonomy_version": prototype_bank.get("taxonomy_version")
+        or prototype_bank.get("schema_version"),
+        "policy_version": classifier.get("policy_version")
+        or classifier.get("schema_version"),
+        "embedding_model": vector_metadata.get("model_id"),
+        "embedding_revision": vector_metadata.get("model_revision"),
+        "embedding_dim": vector_metadata.get("embedding_dim"),
+        "revision": vector_metadata.get("model_revision"),
+        "dim": vector_metadata.get("embedding_dim"),
+        "doc_kind": "related_v1",
+        "document_version": vector_metadata.get("document_version"),
+        "prototype_bank_hash": vector_metadata.get("prototype_bank_sha256"),
+        "classifier_hash": vector_metadata.get("classifier_sha256")
+        or hashlib.sha256(
+            json.dumps(classifier, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+        "quality_gate": quality_gate,
+        "provider_calls": 0,
+        "migration": {
+            "enabled": bool(migration),
+            "notify": False if migration else bool(
+                (manifest.get("migration") or {}).get("notify")
+                if isinstance(manifest.get("migration"), dict)
+                else False
+            ),
+        },
+    }
+    items: list[dict[str, Any]] = []
+    for raw in manifest.get("items") or []:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            event_id = int(raw.get("event_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        event = by_id.get(event_id)
+        if event is None:
+            continue
+        item = dict(raw)
+        if item.get("confidence") is None:
+            item["confidence"] = item.get("calibrated_confidence")
+        item["representative_event_id"] = int(
+            raw.get("representative_event_id") or event_id
+        )
+        raw_families = raw.get("families") or []
+        item["family_scores"] = raw.get("family_scores") or {
+            str(row.get("id")): row.get("score")
+            for row in raw_families
+            if isinstance(row, dict) and row.get("id")
+        }
+        item["families"] = [
+            str(row.get("id") if isinstance(row, dict) else row)
+            for row in raw_families
+            if str(row.get("id") if isinstance(row, dict) else row).strip()
+        ]
+        # Final notification eligibility is assigned by the durable concept
+        # state pass after the quality gate and rollout baseline are known.
+        item["notify_eligible"] = False
+        item["event_snapshot"] = event
+        item["path"] = _event_public_path(event)
+        item["date"] = event.get("start_date") or event.get("date")
+        item["lifecycle"] = event.get("lifecycle_status") or "active"
+        items.append(item)
+    output["items"] = items
+    output["shadow_items"] = list(manifest.get("shadow_items") or [])
+    return output
+
+
+def _apply_unusual_concept_state(
+    manifest: dict[str, Any],
+    *,
+    previous_cache: dict[str, Any] | None,
+    generated_at: str,
+    migration: bool,
+    approved: bool,
+) -> dict[str, dict[str, Any]]:
+    """Bind public concepts to durable first-publication/notification state.
+
+    A first rollout is a silent baseline. Later builds may mark only genuinely
+    new, approved ``core_unusual`` concepts as notification candidates. A date
+    change or representative-event swap inside an existing concept never
+    creates a new notification.
+    """
+
+    previous = (
+        previous_cache.get("concepts")
+        if isinstance(previous_cache, dict)
+        and isinstance(previous_cache.get("concepts"), dict)
+        else {}
+    )
+    has_established_baseline = bool(
+        isinstance(previous_cache, dict)
+        and previous_cache.get("rollout_baseline_at")
+    )
+    states: dict[str, dict[str, Any]] = {
+        str(key): dict(value)
+        for key, value in previous.items()
+        if isinstance(value, dict)
+    }
+    for item in manifest.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        concept_id = str(item.get("concept_id") or "").strip()
+        if not concept_id:
+            continue
+        prior = states.get(concept_id) or {}
+        first_published_at = str(
+            prior.get("first_published_at") or generated_at
+        )
+        is_new = concept_id not in states
+        newly_notify_eligible = bool(
+            approved
+            and not migration
+            and has_established_baseline
+            and is_new
+            and item.get("tier") == "core_unusual"
+        )
+        durable_notify_eligible = bool(
+            (
+                prior.get("notify_eligible") is True
+                or newly_notify_eligible
+            )
+            and item.get("tier") == "core_unusual"
+        )
+        # Migration/backfill output is always silent, but it must not erase a
+        # previously established concept-level eligibility bit. Browser-local
+        # seen state decides whether each user still sees the red dot.
+        notify_eligible = bool(durable_notify_eligible and not migration)
+        item["first_published_at"] = first_published_at
+        item["notify_eligible"] = notify_eligible
+        states[concept_id] = {
+            "first_published_at": first_published_at,
+            "previous_tier": item.get("tier"),
+            "previous_content_hash": item.get("content_hash"),
+            "notify_eligible": durable_notify_eligible,
+            "representative_event_id": item.get("representative_event_id")
+            or item.get("event_id"),
+            "policy_version": manifest.get("policy_version"),
+            "model_revision": manifest.get("revision")
+            or manifest.get("embedding_revision"),
+            "prototype_bank_hash": manifest.get("prototype_bank_hash"),
+            "classifier_hash": manifest.get("classifier_hash"),
+            "last_seen_at": generated_at,
+        }
+    # Bound state without discarding currently published concepts.
+    ordered = sorted(
+        states.items(),
+        key=lambda pair: str(pair[1].get("last_seen_at") or pair[1].get("first_published_at") or ""),
+        reverse=True,
+    )
+    return dict(ordered[:512])
+
+
+def build_shared_bge_and_unusual(
+    events: list[dict[str, Any]],
+    *,
+    out_dir: Path,
+    build_metadata: dict[str, Any],
+    vector_cache_path: Path,
+    vector_receipt_path: Path,
+    unusual_cache_path: Path,
+    unusual_last_good_path: Path,
+    model_revision: str,
+    batch_size: int,
+    migration: bool,
+    quality_fixture_path: Path | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Narrow adapter over the L02 semantic API.
+
+    Expected L02 API:
+      static_event_bge.build_related_v1_documents
+      static_event_bge.build_shared_bge_vector_artifact
+      static_event_bge.validate_shared_bge_vector_artifact
+      unusual_event_semantics.load_unusual_prototype_bank
+      unusual_event_semantics.score_unusual_manifest
+    """
+
+    import static_event_bge as bge_module
+    import unusual_event_semantics as unusual_module
+
+    log_stage("unusual_prototype_load")
+    prototype_bank = unusual_module.load_unusual_prototype_bank()
+    classifier = unusual_module.load_unusual_classifier()
+    fixture_path = quality_fixture_path or SCRIPT_PATH.parent / "unusual_events_golden_v1.json"
+    quality_fixture = _load_json_object(fixture_path)
+    semantic_build_metadata = dict(build_metadata)
+    encoding_events = list(events)
+    public_ids = {int(event["id"]) for event in events}
+    if quality_fixture is not None:
+        # This adapter has no encoder injection path: cache misses invoke the
+        # pinned local BGE model, so the frozen fixture evaluation is a real
+        # CPU canary rather than a synthetic unit probe.
+        semantic_build_metadata["evidence_kind"] = "real_bge_canary"
+        for case in quality_fixture.get("cases") or []:
+            if not isinstance(case, dict):
+                continue
+            try:
+                event_id = int(case.get("event_id") or case.get("id") or 0)
+            except (TypeError, ValueError):
+                continue
+            if event_id <= 0 or event_id in public_ids:
+                continue
+            facts = case.get("facts") if isinstance(case.get("facts"), dict) else {}
+            encoding_events.append(
+                {
+                    "id": event_id,
+                    "title": facts.get("title") or case.get("title") or f"fixture {event_id}",
+                    "event_type": facts.get("event_type") or "",
+                    "summary": facts.get("short_description") or facts.get("summary") or "",
+                    "short_description": facts.get("short_description") or "",
+                    "search_digest": facts.get("search_digest") or "",
+                    "description": facts.get("description") or facts.get("short_description") or "",
+                    "description_html": facts.get("description_html") or "",
+                    "city": facts.get("city") or "",
+                    "venue_name": facts.get("location_name") or facts.get("venue_name") or "",
+                    "start_date": facts.get("date") or build_metadata.get("as_of_date"),
+                    "end_date": facts.get("end_date") or facts.get("date") or build_metadata.get("as_of_date"),
+                    "lifecycle_status": "active",
+                    "topics": facts.get("topics") or [],
+                }
+            )
+        semantic_build_metadata["publication_event_count"] = len(events)
+        semantic_build_metadata["quality_fixture_event_count"] = len(encoding_events) - len(events)
+    log_stage(
+        "unusual_vector_reuse_start",
+        event_count=len(events),
+        model_id=bge_module.MODEL_ID,
+        model_revision=model_revision,
+        provider_calls=0,
+    )
+    artifact = _load_cached_bge_artifact(
+        npz_path=vector_cache_path,
+        receipt_path=vector_receipt_path,
+        prototype_bank=prototype_bank,
+        classifier=classifier,
+        events=encoding_events,
+        bge_module=bge_module,
+        model_revision=model_revision,
+    )
+    if (
+        artifact is not None
+        and quality_fixture is not None
+        and not (
+            isinstance((artifact.get("metadata") or {}).get("build"), dict)
+            and (artifact.get("metadata") or {}).get("build", {}).get("evidence_kind")
+            == "real_bge_canary"
+        )
+    ):
+        artifact = None
+    previous_artifact = artifact
+    build_kwargs = {
+        "model_revision": model_revision,
+        "classifier": classifier,
+        "batch_size": batch_size,
+        "build_metadata": semantic_build_metadata,
+    }
+    if previous_artifact is not None:
+        build_kwargs["previous_artifact"] = previous_artifact
+    artifact = bge_module.build_shared_bge_vector_artifact(
+        encoding_events,
+        prototype_bank,
+        **build_kwargs,
+    )
+    encoded_event_count = int((artifact.get("metadata") or {}).get("encoded_event_count") or 0)
+    encoded_prototype_count = int((artifact.get("metadata") or {}).get("encoded_prototype_count") or 0)
+    cache_state = (
+        "hit_reused"
+        if previous_artifact is not None and encoded_event_count == 0 and encoded_prototype_count == 0
+        else "partial_rebuild"
+        if previous_artifact is not None
+        else "miss_rebuilt"
+    )
+    validation = bge_module.validate_shared_bge_vector_artifact(
+        artifact,
+        prototype_bank=prototype_bank,
+        expected_classifier_sha256=bge_module.stable_hash(classifier),
+    )
+    if not validation.get("valid"):
+        raise RuntimeError(
+            "shared BGE artifact validation failed: "
+            + "; ".join(validation.get("errors") or [])
+        )
+    _write_bge_cache(
+        artifact=artifact,
+        npz_path=vector_cache_path,
+        receipt_path=vector_receipt_path,
+    )
+    metadata = artifact.get("metadata") or {}
+    if (
+        int(metadata.get("event_count") or -1) != len(encoding_events)
+        or int(metadata.get("provider_calls", -1)) != 0
+        or metadata.get("model_revision") != model_revision
+    ):
+        raise RuntimeError("shared BGE artifact is partial or has mismatched metadata")
+
+    previous_cache = _load_json_object(unusual_cache_path)
+    quality_evaluation = None
+    if quality_fixture is not None:
+        try:
+            quality_evaluation = unusual_module.evaluate_unusual_quality_fixture(
+                quality_fixture,
+                artifact,
+                prototype_bank,
+                classifier,
+            )
+        except Exception as exc:
+            log_stage(
+                "unusual_quality_gate",
+                status="fixture_evaluation_failed",
+                approved=False,
+                error=str(exc)[:300],
+            )
+    try:
+        scored = unusual_module.score_unusual_manifest(
+            events,
+            artifact["event_vectors"],
+            artifact["prototype_vectors"],
+            metadata,
+            previous_cache=previous_cache,
+            build_metadata={
+                **semantic_build_metadata,
+                "migration": bool(migration),
+                "quality_evaluation": quality_evaluation,
+            },
+            prototype_bank=prototype_bank,
+            classifier=classifier,
+        )
+        if not isinstance(scored, dict) or not isinstance(scored.get("manifest"), dict):
+            raise RuntimeError("unusual scorer returned an invalid result")
+        log_stage(
+            "unusual_score_complete",
+            **_compact_unusual_metrics_for_log(scored.get("metrics")),
+        )
+        manifest = _normalise_unusual_manifest(
+            scored["manifest"],
+            events=events,
+            build_metadata=build_metadata,
+            vector_metadata=metadata,
+            prototype_bank=prototype_bank,
+            classifier=classifier,
+            migration=migration,
+        )
+        rollout_baseline_at = str(
+            (previous_cache or {}).get("rollout_baseline_at")
+            or build_metadata.get("generated_at")
+            or ""
+        )
+        manifest["rollout_baseline_at"] = rollout_baseline_at or None
+        gate_status = str((manifest.get("quality_gate") or {}).get("status") or "").lower()
+        approved = gate_status in {"approved", "pass", "passed", "ok"}
+        concept_states = _apply_unusual_concept_state(
+            manifest,
+            previous_cache=previous_cache,
+            generated_at=str(build_metadata.get("generated_at") or ""),
+            migration=migration,
+            approved=approved,
+        )
+        log_stage("unusual_quality_gate", status=gate_status, approved=approved)
+        log_stage(
+            "unusual_concept_dedup",
+            item_count=len(manifest.get("items") or []),
+            shadow_count=len(manifest.get("shadow_items") or []),
+        )
+        unusual_cache = scored.get("cache")
+        if not isinstance(unusual_cache, dict):
+            raise RuntimeError("unusual scorer cache missing")
+        unusual_cache.update(
+            {
+                "schema_version": UNUSUAL_CACHE_SCHEMA_VERSION,
+                "model_revision": metadata.get("model_revision"),
+                "prototype_bank_hash": metadata.get("prototype_bank_sha256"),
+                "input_fingerprint": build_metadata.get("input_fingerprint"),
+                "policy_version": manifest.get("policy_version"),
+                "source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
+                "migration": bool(migration),
+                "rollout_baseline_at": rollout_baseline_at or None,
+                "concepts": concept_states,
+            }
+        )
+        _atomic_write_json(unusual_cache_path, unusual_cache)
+        log_stage("unusual_cache_written", path=str(unusual_cache_path))
+        if approved:
+            _atomic_write_json(unusual_last_good_path, manifest)
+        else:
+            # Keep complete shadow/decision evidence, but no public card or
+            # notification may escape an unapproved quality gate.
+            manifest["items"] = []
+            manifest["migration"] = {"enabled": True, "notify": False}
+            log_stage(
+                "unusual_feed_disabled",
+                reason=f"quality_gate_{gate_status or 'missing'}",
+            )
+    except Exception as exc:
+        last_good = _load_json_object(unusual_last_good_path)
+        generated_at = datetime.fromisoformat(
+            str(build_metadata.get("generated_at") or "").replace("Z", "+00:00")
+        )
+        last_good_generated_at = None
+        if last_good and last_good.get("generated_at"):
+            try:
+                last_good_generated_at = datetime.fromisoformat(
+                    str(last_good["generated_at"]).replace("Z", "+00:00")
+                )
+            except ValueError:
+                last_good_generated_at = None
+        compatible = bool(
+            last_good
+            and (last_good.get("revision") or last_good.get("embedding_revision"))
+            == metadata.get("model_revision")
+            and last_good.get("prototype_bank_hash") == metadata.get("prototype_bank_sha256")
+            and last_good.get("classifier_hash")
+            == (
+                metadata.get("classifier_sha256")
+                or hashlib.sha256(
+                    json.dumps(classifier, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                ).hexdigest()
+            )
+            and last_good.get("policy_version")
+            == (classifier.get("policy_version") or classifier.get("schema_version"))
+            and last_good_generated_at is not None
+            and timedelta(0) <= generated_at - last_good_generated_at
+            and generated_at - last_good_generated_at <= timedelta(days=7)
+        )
+        if compatible:
+            current = {int(event["id"]): event for event in events}
+            fallback_items: list[dict[str, Any]] = []
+            for raw in last_good.get("items") or []:
+                if not isinstance(raw, dict) or int(raw.get("event_id") or 0) not in current:
+                    continue
+                event = current[int(raw["event_id"])]
+                try:
+                    current_content_hash = bge_module.build_related_v1_document(event)[
+                        "text_hash"
+                    ]
+                except Exception:
+                    continue
+                last_date = str(
+                    event.get("end_date") or event.get("start_date") or ""
+                )[:10]
+                if (
+                    raw.get("content_hash") != current_content_hash
+                    or str(event.get("lifecycle_status") or "").lower() != "active"
+                    or not last_date
+                    or last_date < str(build_metadata.get("as_of_date") or "")
+                ):
+                    continue
+                fallback_items.append(
+                    {
+                        **raw,
+                        "notify_eligible": False,
+                        "event_snapshot": event,
+                        "path": _event_public_path(event),
+                        "date": event.get("start_date") or event.get("date"),
+                        "lifecycle": event.get("lifecycle_status") or "active",
+                    }
+                )
+            manifest = {
+                **last_good,
+                "build_id": build_metadata.get("build_id"),
+                "generated_at": build_metadata.get("generated_at"),
+                "attempted_source_snapshot_id": build_metadata.get("source_snapshot_id"),
+                "attempted_source_snapshot_hash": build_metadata.get("source_snapshot_hash"),
+                "delivery_status": "last_good_fallback",
+                "last_good_approved": True,
+                "quality_gate": {
+                    "status": "approved",
+                    "metrics": (last_good.get("quality_gate") or {}).get("metrics")
+                    or {},
+                    "reason": str(exc)[:300],
+                },
+                "provider_calls": 0,
+                "migration": {"enabled": True, "notify": False},
+                "items": fallback_items,
+            }
+            log_stage("unusual_feed_disabled", reason=str(exc)[:300], fallback="last_good")
+            log_stage("last_good_fallback", reason=str(exc)[:300], item_count=len(fallback_items))
+        else:
+            manifest = {
+                "schema_version": UNUSUAL_MANIFEST_SCHEMA_VERSION,
+                **build_metadata,
+                "taxonomy_version": prototype_bank.get("taxonomy_version")
+                or prototype_bank.get("schema_version"),
+                "policy_version": classifier.get("policy_version")
+                or classifier.get("schema_version"),
+                "embedding_model": metadata.get("model_id"),
+                "embedding_revision": metadata.get("model_revision"),
+                "embedding_dim": metadata.get("embedding_dim"),
+                "doc_kind": "related_v1",
+                "document_version": metadata.get("document_version"),
+                "prototype_bank_hash": metadata.get("prototype_bank_sha256"),
+                "classifier_hash": metadata.get("classifier_sha256")
+                or hashlib.sha256(
+                    json.dumps(classifier, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                ).hexdigest(),
+                "quality_gate": {"status": "disabled", "reason": str(exc)[:300]},
+                "provider_calls": 0,
+                "migration": {"enabled": True, "notify": False},
+                "rollout_baseline_at": build_metadata.get("generated_at"),
+                "items": [],
+                "shadow_items": [],
+            }
+            log_stage("unusual_feed_disabled", reason=str(exc)[:300])
+    manifest_path = out_dir / "unusual-events.json"
+    _atomic_write_json(manifest_path, manifest)
+    log_stage("unusual_manifest_written", path=str(manifest_path), item_count=len(manifest.get("items") or []))
+    return artifact, {
+        "status": str((manifest.get("quality_gate") or {}).get("status") or "unknown"),
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "artifact_sha256": metadata.get("artifact_sha256"),
+        "provider_calls": 0,
+        "cache_state": cache_state,
+        "event_count": len(events),
+        "artifact_event_count": int(metadata.get("event_count") or 0),
+        "ordinary_corpus_sha256": (
+            (manifest.get("ordinary_corpus_receipt") or {}).get(
+                "corpus_sha256"
+            )
+            if isinstance(manifest.get("ordinary_corpus_receipt"), dict)
+            else None
+        ),
+        "ordinary_corpus_policy_sha256": (
+            (manifest.get("ordinary_corpus_receipt") or {}).get(
+                "policy_sha256"
+            )
+            if isinstance(manifest.get("ordinary_corpus_receipt"), dict)
+            else None
+        ),
+        "item_count": len(manifest.get("items") or []),
+        "migration": bool(
+            (manifest.get("migration") or {}).get("enabled")
+            if isinstance(manifest.get("migration"), dict)
+            else manifest.get("migration")
+        ),
+        "input_fingerprint": build_metadata.get("input_fingerprint"),
+        "vector_cache_sha256": (
+            hashlib.sha256(vector_cache_path.read_bytes()).hexdigest()
+            if vector_cache_path.is_file()
+            else None
+        ),
+        "vector_receipt_sha256": (
+            hashlib.sha256(vector_receipt_path.read_bytes()).hexdigest()
+            if vector_receipt_path.is_file()
+            else None
+        ),
+        "unusual_cache_sha256": (
+            hashlib.sha256(unusual_cache_path.read_bytes()).hexdigest()
+            if unusual_cache_path.is_file()
+            else None
+        ),
+        "last_good_sha256": (
+            hashlib.sha256(unusual_last_good_path.read_bytes()).hexdigest()
+            if unusual_last_good_path.is_file()
+            else None
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", required=True, help="Path to production SQLite snapshot")
@@ -3931,12 +5165,19 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--catalog-mode", choices=["slice", "full"], default="slice")
     parser.add_argument("--current-date", default=CURRENT_DATE_DEFAULT)
-    parser.add_argument("--current-datetime", default=os.getenv("STATIC_SITE_CURRENT_DATETIME", ""), help="Optional local YYYY-MM-DDTHH:MM cutoff; same-day events that already started are excluded")
+    parser.add_argument(
+        "--current-datetime",
+        default=os.getenv("STATIC_SITE_CURRENT_DATETIME", ""),
+        help=(
+            "Optional local YYYY-MM-DDTHH:MM build clock; the shared catalog "
+            "retains the whole current day and time-sensitive surfaces filter later"
+        ),
+    )
     parser.add_argument("--focus-date-from", default=os.getenv("STATIC_SITE_FOCUS_DATE_FROM", ""), help="Prioritize one-day events starting on/after this date before the normal future fill")
     parser.add_argument("--focus-date-to", default=os.getenv("STATIC_SITE_FOCUS_DATE_TO", ""), help="Prioritize one-day events starting on/before this date before the normal future fill")
     parser.add_argument("--include-ids", default=",".join(map(str, CONTROL_EVENT_IDS)))
     parser.add_argument("--related-cache", default="", help="Persistent JSON cache for event_sparse_related_chain_v1")
-    parser.add_argument("--related-mode", choices=["sparse", "pgvector"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
+    parser.add_argument("--related-mode", choices=["sparse", "pgvector", "bge"], default=os.getenv("STATIC_SITE_RELATED_MODE", "sparse"))
     parser.add_argument("--sync-pgvector-vectors", action="store_true", default=(os.getenv("STATIC_SITE_SYNC_PGVECTOR_VECTORS", "").strip().lower() in {"1", "true", "yes", "on"}), help="Upsert event search docs/embeddings before pgvector related build")
     parser.add_argument("--pgvector-embedding-model", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL", "gemini-embedding-2"))
     parser.add_argument("--pgvector-embedding-key-env", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV", "GOOGLE_API_KEY4"))
@@ -3951,10 +5192,51 @@ def main() -> int:
     parser.add_argument("--snapshot-id", default=os.getenv("STATIC_SITE_SNAPSHOT_ID", ""))
     parser.add_argument("--snapshot-sha256", default=os.getenv("STATIC_SITE_SNAPSHOT_SHA256", ""))
     parser.add_argument("--snapshot-size", type=int, default=int(os.getenv("STATIC_SITE_SNAPSHOT_SIZE", "0") or "0"))
+    parser.add_argument("--input-fingerprint", default=os.getenv("STATIC_SITE_INPUT_FINGERPRINT", ""))
     parser.add_argument("--gemma-related-verify", action="store_true", help="Run optional Gemma 4 26B audit for changed related chains")
     parser.add_argument("--gemma-related-model", default="models/gemma-4-26b-a4b-it")
     parser.add_argument("--gemma-related-key-env", default="GOOGLE_API_KEY4")
     parser.add_argument("--gemma-related-max-anchors", type=int, default=0, help="0 = no cap for enabled audit")
+    parser.add_argument(
+        "--bge-vector-cache",
+        default=os.getenv("STATIC_SITE_BGE_VECTOR_CACHE", ""),
+        help="Persistent shared BGE event/prototype NPZ cache.",
+    )
+    parser.add_argument(
+        "--bge-vector-receipt",
+        default=os.getenv("STATIC_SITE_BGE_VECTOR_RECEIPT", ""),
+        help="Hash-bound JSON receipt for --bge-vector-cache.",
+    )
+    parser.add_argument(
+        "--bge-model-revision",
+        default=os.getenv("STATIC_SITE_BGE_MODEL_REVISION", BGE_MODEL_REVISION_DEFAULT),
+    )
+    parser.add_argument(
+        "--bge-batch-size",
+        type=int,
+        default=int(os.getenv("STATIC_SITE_BGE_BATCH_SIZE", "8") or "8"),
+    )
+    parser.add_argument(
+        "--unusual-cache",
+        default=os.getenv("STATIC_SITE_UNUSUAL_CACHE", ""),
+    )
+    parser.add_argument(
+        "--unusual-last-good",
+        default=os.getenv("STATIC_SITE_UNUSUAL_LAST_GOOD", ""),
+    )
+    parser.add_argument(
+        "--unusual-enabled",
+        action="store_true",
+        default=os.getenv("STATIC_SITE_UNUSUAL_ENABLED", "0").strip().lower()
+        in {"1", "true", "yes", "on"},
+    )
+    parser.add_argument(
+        "--unusual-migration",
+        action="store_true",
+        default=os.getenv("STATIC_SITE_UNUSUAL_MIGRATION", "1").strip().lower()
+        in {"1", "true", "yes", "on"},
+        help="Suppress notification eligibility while adopting the first manifest.",
+    )
     parser.add_argument(
         "--skip-related",
         action="store_true",
@@ -4004,8 +5286,34 @@ def main() -> int:
         focus_date_from=args.focus_date_from,
         focus_date_to=args.focus_date_to,
     )
-    events = [build_event(con, row, effective_date) for row in rows]
+    archive_rows = (
+        fetch_recent_event_detail_archive_rows(con, effective_date)
+        if args.catalog_mode == "full"
+        else []
+    )
+    participants_by_event = event_participants_for_events(
+        con,
+        [int(row["id"]) for row in [*rows, *archive_rows]],
+    )
+    events = [
+        build_event(
+            con,
+            row,
+            effective_date,
+            participants=participants_by_event.get(int(row["id"]), []),
+        )
+        for row in rows
+    ]
     normalize_linked_occurrences(events)
+    archived_events = [
+        build_event(
+            con,
+            row,
+            effective_date,
+            participants=participants_by_event.get(int(row["id"]), []),
+        )
+        for row in archive_rows
+    ]
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -4034,6 +5342,23 @@ def main() -> int:
     }
     preview_events_path = out_dir / "preview-events.json"
     preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    event_detail_archive = {
+        "build": {
+            "generated_at": generated_at,
+            "source": "prod-sqlite-static-site-event-detail-archive-v1",
+            "current_date": effective_date,
+            "notes": [
+                f"{len(archived_events)} recently elapsed canonical event detail routes",
+                f"retention_days={EVENT_DETAIL_ARCHIVE_DAYS}",
+                "detail/ICS only; excluded from listings, Search, Popular and recommendations",
+            ],
+        },
+        "events": archived_events,
+    }
+    (out_dir / "preview-event-archive.json").write_text(
+        json.dumps(event_detail_archive, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     if args.catalog_mode == "full":
         ledger = build_catalog_ledger(
             con,
@@ -4078,6 +5403,54 @@ def main() -> int:
         print("IDs:", ",".join(str(event["id"]) for event in events))
         print("Related: skipped")
         return 0
+    shared_bge_artifact: dict[str, Any] | None = None
+    semantic_result: dict[str, Any] = {
+        "status": "disabled",
+        "provider_calls": 0,
+    }
+    if args.related_mode == "bge" or args.unusual_enabled:
+        if not re.fullmatch(r"[0-9a-f]{40}", str(args.bge_model_revision or "")):
+            raise SystemExit("--bge-model-revision must be a pinned 40-character commit")
+        vector_cache = (
+            Path(args.bge_vector_cache)
+            if args.bge_vector_cache
+            else out_dir.parent / "static_event_bge_vectors.npz"
+        )
+        vector_receipt = (
+            Path(args.bge_vector_receipt)
+            if args.bge_vector_receipt
+            else out_dir.parent / "static_event_bge_vectors.receipt.json"
+        )
+        unusual_cache = (
+            Path(args.unusual_cache)
+            if args.unusual_cache
+            else out_dir.parent / "unusual_events_cache.json"
+        )
+        unusual_last_good = (
+            Path(args.unusual_last_good)
+            if args.unusual_last_good
+            else out_dir.parent / "unusual_events_last_good.json"
+        )
+        shared_bge_artifact, semantic_result = build_shared_bge_and_unusual(
+            events,
+            out_dir=out_dir,
+            build_metadata={
+                "build_id": args.build_id or args.base_path or "local-static-build",
+                "generated_at": generated_at,
+                "as_of_date": effective_date,
+                "source_snapshot_id": args.snapshot_id or None,
+                "source_snapshot_hash": args.snapshot_sha256 or None,
+                "input_fingerprint": args.input_fingerprint or None,
+            },
+            vector_cache_path=vector_cache,
+            vector_receipt_path=vector_receipt,
+            unusual_cache_path=unusual_cache,
+            unusual_last_good_path=unusual_last_good,
+            model_revision=args.bge_model_revision,
+            batch_size=max(1, int(args.bge_batch_size)),
+            migration=bool(args.unusual_migration),
+        )
+        _atomic_write_json(out_dir / "static-semantic-build-result.json", semantic_result)
     if args.related_mode == "pgvector" and args.sync_pgvector_vectors:
         sync_event_vectors_to_supabase(
             preview_events_json=preview_events_path,
@@ -4100,6 +5473,7 @@ def main() -> int:
         gemma_max_anchors=max(0, int(args.gemma_related_max_anchors or 0)),
         embedding_model=args.pgvector_embedding_model,
         related_corpus_revision=args.related_corpus_revision,
+        shared_bge_artifact=shared_bge_artifact,
     )
     if args.catalog_mode == "full" and args.related_mode == "pgvector":
         validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})

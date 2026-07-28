@@ -1,0 +1,356 @@
+{
+  "schema_version": "unusual-event-prototype-bank-v1",
+  "taxonomy_version": "unusual-event-taxonomy-v1",
+  "language": "ru",
+  "document_version": "event-related-doc-v1",
+  "purpose": "semantic_prototype_retrieval",
+  "families": [
+    {"id": "open_dialogue", "label": "Открытый диалог"},
+    {"id": "participatory", "label": "Участие вместо наблюдения"},
+    {"id": "co_creation", "label": "Совместное создание"},
+    {"id": "behind_scenes", "label": "Закулисье"},
+    {"id": "restricted_access", "label": "Обычно закрытый доступ"},
+    {"id": "site_specific", "label": "Событие, созданное для места"},
+    {"id": "after_hours", "label": "Место после закрытия"},
+    {"id": "hybrid_format", "label": "Гибрид форматов"},
+    {"id": "living_history", "label": "Живая история"},
+    {"id": "field_science", "label": "Полевая наука"},
+    {"id": "rare_practice", "label": "Редкая практика"},
+    {"id": "gastro_experience", "label": "Гастрономический опыт"},
+    {"id": "sensory_wellbeing", "label": "Сенсорный опыт и благополучие"},
+    {"id": "community_exchange", "label": "Обмен внутри сообщества"},
+    {"id": "quirky_ritual", "label": "Неожиданный игровой ритуал"}
+  ],
+  "prototypes": [
+    {
+      "id": "positive.open_dialogue.artist_no_stage",
+      "family": "open_dialogue",
+      "kind": "positive",
+      "text": "Камерная встреча с артистом устроена как открытый разговор без дистанции между сценой и залом: зрители задают вопросы и вместе разбирают творческий процесс."
+    },
+    {
+      "id": "positive.open_dialogue.prepared_book_club",
+      "family": "open_dialogue",
+      "kind": "positive",
+      "text": "Участники заранее читают одну узкую книгу, а затем обсуждают её с модератором в небольшом клубе, сопоставляя личный опыт и идеи автора."
+    },
+    {
+      "id": "hard_negative.open_dialogue.ordinary_lecture",
+      "family": "open_dialogue",
+      "kind": "hard_negative",
+      "text": "Обычная публичная лекция: эксперт последовательно читает подготовленный доклад, после которого предусмотрено несколько коротких вопросов из зала."
+    },
+    {
+      "id": "positive.participatory.sound_jam",
+      "family": "participatory",
+      "kind": "positive",
+      "text": "Звуковой джем не делит людей на исполнителей и зрителей: каждый выбирает простой инструмент, входит в общую импровизацию и влияет на её развитие."
+    },
+    {
+      "id": "positive.participatory.city_quest",
+      "family": "participatory",
+      "kind": "positive",
+      "text": "Городская прогулка превращена в исследовательский квест: участники ищут скрытые детали, выполняют задания на маршруте и собирают собственную версию истории."
+    },
+    {
+      "id": "hard_negative.participatory.audience_vote",
+      "family": "participatory",
+      "kind": "hard_negative",
+      "text": "Зрители смотрят обычную сценическую программу и в финале только голосуют за понравившегося исполнителя; ход самого события от них не зависит."
+    },
+    {
+      "id": "positive.co_creation.giant_mosaic",
+      "family": "co_creation",
+      "kind": "positive",
+      "text": "Гости совместно собирают трёхметровую мозаику: каждый делает фрагмент, а к концу встречи отдельные части становятся одним публичным произведением."
+    },
+    {
+      "id": "positive.co_creation.collective_performance",
+      "family": "co_creation",
+      "kind": "positive",
+      "text": "Лаборатория завершается созданной всеми участниками постановкой: группа придумывает материал, распределяет роли, репетирует и показывает общий результат."
+    },
+    {
+      "id": "hard_negative.co_creation.parallel_workshop",
+      "family": "co_creation",
+      "kind": "hard_negative",
+      "text": "На стандартном мастер-классе каждый по образцу делает и уносит отдельную поделку; общего замысла и коллективного произведения не возникает."
+    },
+    {
+      "id": "positive.behind_scenes.theatre_workshops",
+      "family": "behind_scenes",
+      "kind": "positive",
+      "text": "Закулисная экскурсия ведёт в театральные цеха, на служебную сцену и к механизмам декораций, которые зритель не видит во время спектакля."
+    },
+    {
+      "id": "positive.behind_scenes.organ_mechanics",
+      "family": "behind_scenes",
+      "kind": "positive",
+      "text": "Музыкант не только играет, но показывает внутреннее устройство органа, объясняет работу регистров и даёт услышать механизм инструмента вблизи."
+    },
+    {
+      "id": "hard_negative.behind_scenes.foyer_tour",
+      "family": "behind_scenes",
+      "kind": "hard_negative",
+      "text": "Обзорная экскурсия проходит по открытым парадным залам и фойе театра, доступным обычному посетителю, без входа в сценические и технические помещения."
+    },
+    {
+      "id": "positive.restricted_access.working_shipyard",
+      "family": "restricted_access",
+      "kind": "positive",
+      "text": "Небольшую зарегистрированную группу проводят на действующее режимное судостроительное предприятие, куда нельзя попасть с обычным музейным билетом."
+    },
+    {
+      "id": "positive.restricted_access.closed_archive",
+      "family": "restricted_access",
+      "kind": "positive",
+      "text": "Хранитель открывает для посетителей закрытый фонд архива, показывает редкие оригиналы и объясняет, как они хранятся вне публичной экспозиции."
+    },
+    {
+      "id": "hard_negative.restricted_access.ticket_limit",
+      "family": "restricted_access",
+      "kind": "hard_negative",
+      "text": "Обычный концерт в публичном зале имеет ограниченное число билетов и пропускает зрителей по контролю на входе; специального доступа в закрытое место нет."
+    },
+    {
+      "id": "positive.site_specific.castle_story",
+      "family": "site_specific",
+      "kind": "positive",
+      "text": "Спектакль создан для конкретного замка: маршрут по залам, архитектура, местная легенда и происходящие вокруг зрителей сцены образуют единое произведение."
+    },
+    {
+      "id": "positive.site_specific.prom_marine",
+      "family": "site_specific",
+      "kind": "positive",
+      "text": "Театр, инсталляции и мастерская разворачиваются прямо на морском променаде; берег и движение воды необходимы для замысла и не заменяются обычной сценой."
+    },
+    {
+      "id": "hard_negative.site_specific.rented_hall",
+      "family": "site_specific",
+      "kind": "hard_negative",
+      "text": "Гастрольный спектакль показывают в арендованном концертном зале; постановка не связана с историей, архитектурой или особенностями этой площадки."
+    },
+    {
+      "id": "positive.after_hours.night_museum",
+      "family": "after_hours",
+      "kind": "positive",
+      "text": "После официального закрытия музей оставляет небольшую группу в полутёмных залах для ночного маршрута с хранителем и отдельной программой."
+    },
+    {
+      "id": "positive.after_hours.dawn_greenhouse",
+      "family": "after_hours",
+      "kind": "positive",
+      "text": "Ботаническая оранжерея открывается до рассвета только для этой встречи: участники наблюдают пробуждение растений до прихода дневных посетителей."
+    },
+    {
+      "id": "hard_negative.after_hours.evening_show",
+      "family": "after_hours",
+      "kind": "hard_negative",
+      "text": "Регулярный вечерний сеанс проходит в обычные часы работы кинотеатра; позднее время начала само по себе не даёт доступа к месту после закрытия."
+    },
+    {
+      "id": "positive.hybrid_format.art_orchestra_film",
+      "family": "hybrid_format",
+      "kind": "positive",
+      "text": "Один цельный вечер соединяет живопись, литературу, танец, кино и живой оркестр так, что части отвечают друг другу и создают общий сюжет."
+    },
+    {
+      "id": "positive.hybrid_format.talk_film_practice",
+      "family": "hybrid_format",
+      "kind": "positive",
+      "text": "Исследование физического театра объединяет короткую лекцию, показ фильма и практическую пластическую лабораторию для той же группы участников."
+    },
+    {
+      "id": "hard_negative.hybrid_format.festival_schedule",
+      "family": "hybrid_format",
+      "kind": "hard_negative",
+      "text": "В афише фестиваля перечислены независимые концерт, лекция и выставка в разные дни; посетитель покупает их отдельно, а общей драматургии нет."
+    },
+    {
+      "id": "positive.living_history.viking_settlement",
+      "family": "living_history",
+      "kind": "positive",
+      "text": "В реконструированном поселении эпохи викингов участники входят в исторические роли, осваивают ремёсла и проживают бытовые сцены вместе с реконструкторами."
+    },
+    {
+      "id": "positive.living_history.medieval_feast",
+      "family": "living_history",
+      "kind": "positive",
+      "text": "Ужин в замковой кухне сопровождается правилами средневековой трапезы, рассказами персонажей и рыцарским турниром, вовлекающим гостей в эпоху."
+    },
+    {
+      "id": "hard_negative.living_history.costume_lecture",
+      "family": "living_history",
+      "kind": "hard_negative",
+      "text": "Лектор в историческом костюме показывает слайды о Средневековье, пока аудитория остаётся обычными слушателями и не участвует в реконструкции быта."
+    },
+    {
+      "id": "positive.field_science.bird_ringing",
+      "family": "field_science",
+      "kind": "positive",
+      "text": "Орнитологи берут группу на полевую станцию: участники наблюдают безопасное кольцевание птиц, фиксируют измерения и обсуждают реальные данные миграции."
+    },
+    {
+      "id": "positive.field_science.coast_geology",
+      "family": "field_science",
+      "kind": "positive",
+      "text": "На береговом маршруте геолог учит читать слои обрыва, собирать допустимые образцы и заносить наблюдения в настоящий полевой дневник."
+    },
+    {
+      "id": "hard_negative.field_science.science_talk",
+      "family": "field_science",
+      "kind": "hard_negative",
+      "text": "Популярная лекция о птицах или геологии проходит в библиотеке по презентации; собственных наблюдений, измерений и выхода в поле нет."
+    },
+    {
+      "id": "positive.rare_practice.persian_instruments",
+      "family": "rare_practice",
+      "kind": "positive",
+      "text": "Мастер знакомит небольшую группу с редкими персидскими инструментами, показывает непривычные приёмы и даёт участникам осторожно попробовать извлечь звук."
+    },
+    {
+      "id": "positive.rare_practice.coloured_ink",
+      "family": "rare_practice",
+      "kind": "positive",
+      "text": "Практическая мастерская целиком посвящена редкой технике работы цветными чернилами, отличной от привычной акварели и стандартного рисования."
+    },
+    {
+      "id": "hard_negative.rare_practice.standard_craft",
+      "family": "rare_practice",
+      "kind": "hard_negative",
+      "text": "Регулярный вводный мастер-класс предлагает нарисовать типовой пейзаж акрилом по готовому образцу; техника широко представлена каждую неделю."
+    },
+    {
+      "id": "positive.gastro_experience.winemaker_dinner",
+      "family": "gastro_experience",
+      "kind": "positive",
+      "text": "Владелец винодельни ведёт камерный ужин, связывая каждую подачу с терруаром и производством; дегустация и рассказ образуют единый сценарий."
+    },
+    {
+      "id": "positive.gastro_experience.chef_collaboration",
+      "family": "gastro_experience",
+      "kind": "positive",
+      "text": "Два шефа впервые создают совместное меню для одного вечера, лично представляют блюда и показывают, как их разные подходы встречаются в каждой подаче."
+    },
+    {
+      "id": "hard_negative.gastro_experience.set_menu",
+      "family": "gastro_experience",
+      "kind": "hard_negative",
+      "text": "Ресторан предлагает обычный сезонный сет из нескольких блюд в часы работы; нет ведущего, образовательного сюжета или уникального события вокруг еды."
+    },
+    {
+      "id": "positive.sensory_wellbeing.sound_bath",
+      "family": "sensory_wellbeing",
+      "kind": "positive",
+      "text": "Камерная звуковая практика строится на внимательном слушании гонгов и вибраций в лежачем положении, с мягким сопровождением специалиста и рефлексией."
+    },
+    {
+      "id": "positive.sensory_wellbeing.blindfold_tasting",
+      "family": "sensory_wellbeing",
+      "kind": "positive",
+      "text": "Участники исследуют запах, текстуру и вкус с закрытыми глазами, сравнивают ощущения и обсуждают, как меняется восприятие без зрения."
+    },
+    {
+      "id": "hard_negative.sensory_wellbeing.spa_service",
+      "family": "sensory_wellbeing",
+      "kind": "hard_negative",
+      "text": "Салон продаёт стандартный индивидуальный массаж по постоянному прайс-листу; это обычная услуга без назначенной совместной программы события."
+    },
+    {
+      "id": "positive.community_exchange.eco_swap",
+      "family": "community_exchange",
+      "kind": "positive",
+      "text": "Двор становится площадкой обмена: соседи приносят рассаду и вещи, передают вторсырьё, помогают друг другу и дополняют программу мини-мастерскими."
+    },
+    {
+      "id": "positive.community_exchange.repair_cafe",
+      "family": "community_exchange",
+      "kind": "positive",
+      "text": "На ремонтной встрече жители приносят сломанные предметы, делятся инструментами и навыками, вместе чинят вещи вместо покупки готовой услуги."
+    },
+    {
+      "id": "hard_negative.community_exchange.market",
+      "family": "community_exchange",
+      "kind": "hard_negative",
+      "text": "Коммерческий маркет состоит из прилавков независимых продавцов: посетители покупают готовые товары, но не обмениваются вещами и навыками между собой."
+    },
+    {
+      "id": "positive.quirky_ritual.hay_day",
+      "family": "quirky_ritual",
+      "kind": "positive",
+      "text": "Сельский праздник превращает прыжки в сено, смешные состязания и общую фотосцену в игровой ритуал вокруг нарочито простого телесного опыта."
+    },
+    {
+      "id": "positive.quirky_ritual.crab_stick_day",
+      "family": "quirky_ritual",
+      "kind": "positive",
+      "text": "Одноразовый городской праздник посвящён неожиданному повседневному продукту: гости проходят шуточные церемонии, игры и тематические испытания."
+    },
+    {
+      "id": "hard_negative.quirky_ritual.theme_decoration",
+      "family": "quirky_ritual",
+      "kind": "hard_negative",
+      "text": "Обычная вечеринка использует забавное название и тематические украшения, но программа остаётся стандартной музыкой, ведущим и танцами."
+    },
+    {
+      "id": "neutral.classical_concert",
+      "family": null,
+      "kind": "neutral",
+      "text": "Концерт классической музыки в филармоническом зале: музыканты исполняют заявленную программу, зрители слушают произведения со своих мест."
+    },
+    {
+      "id": "neutral.repertory_theatre",
+      "family": null,
+      "kind": "neutral",
+      "text": "Репертуарный драматический спектакль идёт на основной сцене театра в обычной рассадке и не предполагает участия зрителей."
+    },
+    {
+      "id": "neutral.cinema_screening",
+      "family": null,
+      "kind": "neutral",
+      "text": "Кинопоказ одного фильма в стандартном кинозале с билетами по расписанию, без обсуждения, перформанса или дополнительной программы."
+    },
+    {
+      "id": "neutral.art_exhibition",
+      "family": null,
+      "kind": "neutral",
+      "text": "Посещение выставки живописи и графики в часы работы музея: зрители самостоятельно осматривают постоянную экспозицию."
+    },
+    {
+      "id": "neutral.standard_excursion",
+      "family": null,
+      "kind": "neutral",
+      "text": "Обзорная автобусная экскурсия знакомит с основными достопримечательностями города по регулярному туристическому маршруту."
+    },
+    {
+      "id": "neutral.children_workshop",
+      "family": null,
+      "kind": "neutral",
+      "text": "Детский мастер-класс по аппликации проходит по готовому образцу, а каждый участник делает собственную стандартную работу."
+    },
+    {
+      "id": "neutral.dance_party",
+      "family": null,
+      "kind": "neutral",
+      "text": "Танцевальная вечеринка с диджеем проходит в клубе по обычной программе без отдельного сюжета или практики."
+    },
+    {
+      "id": "neutral.author_presentation",
+      "family": null,
+      "kind": "neutral",
+      "text": "Автор презентует новую книгу, читает отрывок и подписывает экземпляры после короткой стандартной сессии вопросов."
+    },
+    {
+      "id": "neutral.weekly_quiz",
+      "family": null,
+      "kind": "neutral",
+      "text": "Регулярная командная викторина в баре проводится по знакомым правилам с вопросами, бланками ответов и итоговой таблицей."
+    },
+    {
+      "id": "neutral.service_offer",
+      "family": null,
+      "kind": "neutral",
+      "text": "Организация сообщает о повседневной услуге, доступной по записи в течение всего сезона, без конкретной даты совместного события."
+    }
+  ]
+}

@@ -172,11 +172,15 @@ PNG является настоящим проверенным PNG. Promise repr
 
 ### Источник данных и claims
 
-Новая версия создаётся не чаще и не реже одного принятого финального результата
-на календарный день `Europe/Kaliningrad`. Вход — тот же accepted catalog snapshot,
-из которого собирается static site. Eligible set содержит distinct canonical
-active current/future events; cancelled, postponed, inactive, `silent`, review-only,
-duplicates и отдельные occurrence-дубли исключаются.
+Гарантируется минимум один durable coalesced запрос на календарный день
+`Europe/Kaliningrad`, когда builder включён; accepted финальный результат
+появляется только после обычных build/check gates. Обычный Smart Update может
+легитимно дать дополнительный accepted build в тот же день, если изменились
+публичные входы; отдельный daily scheduler для этого не создаётся.
+Вход — тот же accepted catalog snapshot, из которого собирается static site.
+Eligible set содержит distinct canonical active current/future events;
+cancelled, postponed, inactive, `silent`, review-only, duplicates и отдельные
+occurrence-дубли исключаются.
 
 Manifest фиксирует формулу, `measured_at`, local date, catalog hash и:
 
@@ -218,6 +222,26 @@ Production-like render выполняется так:
    hash, family request/resolved family и seed;
 4. kernel публикует внутренние heartbeat/progress/status events и terminal report;
 5. scheduler не принимает opaque `FAILED/ERROR` без kernel log/status evidence.
+
+R15 routes the accepted final render through the existing coalesced
+StaticSiteBuilder snapshot/handoff rather than a browser or a second
+unmonitored scheduler. The sole daily trigger is the existing
+`static_site_calendar_rollover` cron at `00:00 Europe/Kaliningrad`, with
+`startup_catchup` using the same enqueue path after process restart. Both feed
+the normal StaticSiteBuilder outbox/single-flight flow; Smart Update requests
+remain allowed to satisfy the same local day without creating another job.
+
+Every enabled request carries
+`service-share-daily:<timezone>:<local-date>` in the durable request watermark
+and build fingerprint. The outbox transaction uses SQLite `BEGIN IMMEDIATE` to
+check/update this local-day evidence atomically: a same-day daily trigger
+returns `daily-already-requested`, while the next local date replaces the
+marker and requeues the one coalesced row without using operator
+`force_rebuild`. A disabled builder writes no daily row.
+
+The versioned PNG/WebP and current manifest advance atomically only after their
+dimensions, MIME and hashes validate. A failed render retains the previous
+verified asset, records stale age and cannot publish a partial replacement.
 
 Projection gates запрещают safe-zone intrusion, разрыв цепочки, слишком маленькие
 дальние кубы и hero без требуемого screen exit. Финальный master конвертируется

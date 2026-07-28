@@ -1,0 +1,179 @@
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+
+const mode = String(process.env.UNUSUAL_EVENTS_PLAYWRIGHT_MODE || 'product').trim().toLowerCase();
+if (!['product', 'lab', 'all'].includes(mode)) {
+  throw new Error('UNUSUAL_EVENTS_PLAYWRIGHT_MODE must be product, lab, or all');
+}
+const runProduct = mode === 'product' || mode === 'all';
+const runLab = mode === 'lab' || mode === 'all';
+const rawProductBase = process.env.UNUSUAL_EVENTS_BASE_URL;
+const rawLabBase = process.env.UNUSUAL_EVENTS_LAB_BASE_URL;
+if (runProduct && !rawProductBase) throw new Error('UNUSUAL_EVENTS_BASE_URL is required in product/all mode');
+if (runLab && !rawLabBase) throw new Error('UNUSUAL_EVENTS_LAB_BASE_URL is required in lab/all mode');
+const productBase = String(rawProductBase || '').replace(/\/+$/u, '');
+const labBase = String(rawLabBase || '').replace(/\/+$/u, '');
+const expectedApproved = process.env.UNUSUAL_EXPECT_APPROVED === '1';
+const route = (base, path) => {
+  const clean = path.replace(/^\/+|\/+$/gu, '');
+  return clean ? `${base}/${clean}/` : `${base}/`;
+};
+
+const browser = await chromium.launch({ headless: true });
+try {
+  const providerRequests = [];
+  const observeProviderRequests = (page) => page.on('request', (request) => {
+    if (/generativelanguage|googleapis.*embed|gemini|bge-m3|unusual.*(?:score|embed)/iu.test(request.url())) {
+      providerRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+  if (runProduct) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    observeProviderRequests(page);
+
+  await page.goto(route(productBase, '/'), { waitUntil: 'domcontentloaded' });
+  assert.equal(await page.locator('[data-home-page]').count(), 1);
+  assert.equal(await page.locator('[data-home-hero-talk]').count(), 1);
+  assert.equal(await page.locator('[data-home-quick-nav]').count(), 1);
+  const homeItems = page.locator('[data-home-feed-item]');
+  assert.ok(await homeItems.count() > 0);
+  assert.ok(await homeItems.count() <= 30);
+  assert.equal(await page.locator('[data-home-feed-grid]').getAttribute('data-home-feed-limit'), '30');
+
+  const menu = page.locator('[data-mobile-discovery-menu]');
+  await menu.locator('summary').click();
+  await menu.locator('[data-reference4-collections-open]').click();
+  const collectionPlane = menu.locator('[data-reference4-collections]');
+  for (const label of ['Детям', 'Необычное', 'Бесплатно', 'Клубы']) {
+    assert.equal(await collectionPlane.getByRole('link', { name: new RegExp(label, 'u') }).count(), 1, label);
+  }
+  assert.ok(await menu.locator('a[href$="/podborki/besplatnye-sobytiya/"]').count() >= 2);
+
+  await page.goto(route(productBase, '/podborki/besplatnye-sobytiya/'), { waitUntil: 'domcontentloaded' });
+  assert.equal(await page.locator('[data-free-collection-medallion="large"]').count(), 1);
+  assert.equal(await page.locator('[data-free-collection-medallion="compact"]').count(), 1);
+  const hero = page.locator('[data-free-collection-hero]');
+  await hero.evaluate((node) => window.scrollTo({ top: node.getBoundingClientRect().bottom + window.scrollY + 80 }));
+  await page.waitForFunction(() => document.querySelector('[data-free-collection-sticky-identity]')?.hasAttribute('data-compact-visible'));
+  assert.equal(await page.locator('[data-free-collection-medallion="compact"]').isVisible(), true);
+  assert.equal(await page.locator('[data-free-collection-event-group="exhibitions"]').count() <= 1, true);
+
+  await page.goto(route(productBase, '/date-2026-07-30/'), { waitUntil: 'domcontentloaded' });
+  const pianissimo = page.locator('[data-event-id="5297"] [data-rail-media-reason="safe_visual_landscape_5x4"]').first();
+  assert.equal(await pianissimo.count(), 1);
+  const crop = await pianissimo.evaluate((node) => {
+    const image = node.querySelector('img');
+    const box = node.getBoundingClientRect();
+    return { ratio: box.width / box.height, fit: image ? getComputedStyle(image).objectFit : '' };
+  });
+  assert.ok(Math.abs(crop.ratio - 1.25) < 0.02, JSON.stringify(crop));
+  assert.equal(crop.fit, 'cover');
+
+  await page.goto(route(productBase, '/segodnya/'), { waitUntil: 'domcontentloaded' });
+  const accessory = page.locator('[data-mobile-date-accessory]');
+  assert.match(await accessory.getAttribute('data-calendar-horizon'), /^\d{4}-\d{2}-\d{2}$/u);
+  assert.match(await accessory.getAttribute('data-calendar-furthest-event-date'), /^\d{4}-\d{2}-\d{2}$/u);
+  await page.locator('[data-calendar-open]').click();
+  const visibleMonth = page.locator('[data-calendar-month]:not([hidden])');
+  const firstRenderedDate = await visibleMonth.locator('[data-calendar-date]').first().getAttribute('data-calendar-date');
+  const leadingBlanks = await visibleMonth.locator('.calendar-grid__blank').count();
+  const expectedLeadingBlanks = await page.evaluate((iso) => {
+    const weekday = new Date(`${iso}T12:00:00Z`).getUTCDay();
+    return (weekday + 6) % 7;
+  }, firstRenderedDate);
+  assert.equal(leadingBlanks, expectedLeadingBlanks, 'current month must align from its first rendered date');
+  const disabledDate = page.locator('[data-calendar-date][aria-disabled="true"]').first();
+  assert.ok(await disabledDate.count() > 0);
+  const beforeDisabledClick = page.url();
+  await disabledDate.evaluate((node) => node.click());
+  assert.equal(page.url(), beforeDisabledClick);
+  const nextMonth = page.locator('[data-calendar-month-next]');
+  while (await nextMonth.isEnabled()) await nextMonth.click();
+  assert.equal(await nextMonth.isDisabled(), true);
+
+  await page.goto(route(productBase, '/izbrannoe/'), { waitUntil: 'domcontentloaded' });
+  assert.equal(await page.locator('meta[name="robots"]').getAttribute('content').then((value) => /noindex/u.test(value || '')), true);
+  assert.equal(await page.locator('[data-favorites-page] [data-favorites-surface]').count(), 1);
+  const favoritesState = page.locator('[data-favorites-skeleton]:visible,[data-favorites-auth-required]:visible,[data-favorites-empty]:visible,[data-favorites-grid]:visible');
+  assert.ok(await favoritesState.count() >= 1);
+
+  await page.goto(route(productBase, '/neobychnoe/'), { waitUntil: 'domcontentloaded' });
+  assert.equal(await page.locator('meta[name="robots"]').getAttribute('content').then((value) => /noindex/u.test(value || '')), true);
+  const cards = page.locator('[data-unusual-card]');
+  if (expectedApproved) {
+    assert.ok(await cards.count() > 0, 'approved canary must contain unusual concepts');
+    const concepts = await cards.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-unusual-concept-id')));
+    assert.equal(new Set(concepts).size, concepts.length);
+  } else if (await page.locator('[data-unusual-feed-empty]').count()) {
+    assert.equal(await cards.count(), 0, 'fail-closed empty state must not mix ordinary cards');
+  }
+  const markSeen = page.locator('[data-unusual-mark-seen]');
+  if (await markSeen.isVisible()) {
+    await markSeen.click();
+    assert.equal(await page.locator('[data-unusual-nav-dot]:visible').count(), 0);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('[data-unusual-nav-dot]:visible').count(), 0);
+  }
+
+  assert.deepEqual(providerRequests, [], `ordinary views called providers: ${providerRequests.join(', ')}`);
+  await context.close();
+  }
+
+  if (runLab) {
+  // R10 red-dot matrix runs against the real shipped runtime in noindex lab
+  // fixtures. Each scenario gets a clean anonymous localStorage baseline.
+  const redDotContext = await browser.newContext({ viewport:{ width:390, height:844 }, reducedMotion:'reduce' });
+  const redDotPage = await redDotContext.newPage();
+  observeProviderRequests(redDotPage);
+  const openScenario = async (scenario, { clear = true } = {}) => {
+    await redDotPage.goto(route(labBase, `/lab/unusual-unread/${scenario}/`), { waitUntil:'domcontentloaded' });
+    if (clear) {
+      await redDotPage.evaluate(() => localStorage.clear());
+      await redDotPage.reload({ waitUntil:'domcontentloaded' });
+    }
+    return redDotPage.locator('[data-unusual-nav-dot]');
+  };
+
+  // 1 rollout baseline/backfill; 3 adjacent; 7 migration; 8 failed manifest.
+  for (const scenario of ['baseline', 'adjacent', 'migration', 'failure']) {
+    const dot = await openScenario(scenario);
+    assert.equal(await dot.evaluate((node) => !node.hidden), false, `${scenario} must not create unread`);
+  }
+
+  // 2 new approved core; 9 accessible non-colour-only label.
+  let dot = await openScenario('new-core');
+  assert.equal(await dot.evaluate((node) => !node.hidden), true);
+  assert.equal(
+    await redDotPage.locator('[data-unusual-nav-link]').getAttribute('aria-label'),
+    'Есть новые необычные события',
+  );
+
+  // 4 a genuinely viewed card clears; 5 reload keeps it cleared.
+  await redDotPage.evaluate(() => dispatchEvent(new CustomEvent(
+    'kenigevents:unusual-viewed',
+    { detail:{ conceptId:'concept:new-core' } },
+  )));
+  assert.equal(await dot.evaluate((node) => !node.hidden), false);
+  await redDotPage.reload({ waitUntil:'domcontentloaded' });
+  dot = redDotPage.locator('[data-unusual-nav-dot]');
+  assert.equal(await dot.evaluate((node) => !node.hidden), false);
+
+  // 6 another date of the same concept stays seen.
+  dot = await openScenario('same-series', { clear:false });
+  assert.equal(await dot.evaluate((node) => !node.hidden), false);
+
+  // 10 the mobile drawer remains operable and contains the visible indicator.
+  dot = await openScenario('new-core');
+  const drawer = redDotPage.locator('[data-mobile-discovery-menu]');
+  await drawer.locator('summary').click();
+  assert.equal(await drawer.getAttribute('open'), '');
+  assert.equal(await dot.isVisible(), true);
+  const overflow = await redDotPage.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  assert.ok(overflow <= 1, `unusual dot broke mobile drawer: overflow=${overflow}`);
+  assert.deepEqual(providerRequests, [], `red-dot lab called providers: ${providerRequests.join(', ')}`);
+  await redDotContext.close();
+  }
+} finally {
+  await browser.close();
+}

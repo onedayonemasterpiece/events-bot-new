@@ -57,6 +57,9 @@ const env = {
   PUBLIC_ASTRO_ASSET_BASE_URL: '',
   PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: transportExperimentMode,
   PUBLIC_STATIC_RELEASE_ID: productionManifest.build_id,
+  // Mirror the checked production projection instead of degrading a review
+  // candidate to the empty-state merely because the shell omitted the flag.
+  PUBLIC_INTEREST_CLUBS_ENABLED: process.env.PUBLIC_INTEREST_CLUBS_ENABLED || '1',
 };
 const astro = spawnSync(process.platform === 'win32' ? 'astro.cmd' : 'astro', ['build'], { cwd: siteDir, env, stdio: 'inherit', shell: process.platform === 'win32' });
 if (astro.status !== 0) process.exit(astro.status || 1);
@@ -76,13 +79,14 @@ for (const { route, staged } of retainedLabStaging) {
   mkdirSync(dirname(join(distDir, route)), { recursive: true });
   renameSync(staged, join(distDir, route));
 }
-let rootHtml = readFileSync(join(distDir, 'segodnya/index.html'), 'utf8');
-const todayCanonical = `${siteOrigin}${basePath}/segodnya/`;
-const rootCanonical = `${siteOrigin}${basePath}/`;
-if (!rootHtml.includes(`<link rel="canonical" href="${todayCanonical}">`) || !rootHtml.includes(`<meta property="og:url" content="${todayCanonical}">`)) throw new Error('Cannot construct candidate root from today listing');
-rootHtml = rootHtml.replace(`<link rel="canonical" href="${todayCanonical}">`, `<link rel="canonical" href="${rootCanonical}">`);
-rootHtml = rootHtml.replace(`<meta property="og:url" content="${todayCanonical}">`, `<meta property="og:url" content="${rootCanonical}">`);
-rootHtml = rootHtml.replace('<main id="main"', '<main id="main" data-secret-candidate-root-listing');
+// Preserve the dedicated home surface; the candidate prefix is already
+// applied by Astro and must not be replaced with the Today listing.
+let rootHtml = readFileSync(join(distDir, 'index.html'), 'utf8');
+if (!rootHtml.includes(`<link rel="canonical" href="${siteOrigin}${basePath}/">`)
+  || !rootHtml.includes(`<meta property="og:url" content="${siteOrigin}${basePath}/">`)) {
+  throw new Error('Cannot package candidate root: home canonical metadata is missing');
+}
+rootHtml = rootHtml.replace('<main id="main"', '<main id="main" data-secret-candidate-root-home');
 writeFileSync(join(distDir, 'index.html'), rootHtml);
 const staged = join(siteDir, `.secret-candidate-dist-${process.pid}`);
 rmSync(staged, { recursive: true, force: true });

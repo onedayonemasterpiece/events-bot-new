@@ -815,6 +815,12 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
         },
         "candidate": {"token": token},
         "checks": {
+            "preview_contract": {
+                "status": "ok",
+                "build_id": "preview-gate-production-checks",
+                "archived": False,
+                "published": False,
+            },
             "production": {
                 "astro_build": "ok",
                 "template_matrix": "ok",
@@ -852,8 +858,39 @@ def test_production_candidate_result_requires_exact_template_and_noindex_checks(
         build_clock=clock,
     )
     assert validated["checks"]["production"]["template_matrix"] == "ok"
+    assert validated["checks"]["preview_contract"]["status"] == "ok"
     assert candidate_archive.name == "secret-candidate.tar.gz"
 
+    result["checks"]["preview_contract"]["status"] = "pending"
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    with pytest.raises(StaticSitePermanentError, match="preview_contract"):
+        validate_production_candidate_result(
+            result_path,
+            output_dir=output,
+            build_id="production-checks",
+            run_id="static-site:checks",
+            repo_sha="a" * 40,
+            snapshot=metadata,
+            candidate_token=token,
+            input_fingerprint="f" * 64,
+            build_clock=clock,
+        )
+    result["checks"]["preview_contract"]["status"] = "ok"
+    result["checks"]["preview_contract"]["archived"] = True
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    with pytest.raises(StaticSitePermanentError, match="release_leak"):
+        validate_production_candidate_result(
+            result_path,
+            output_dir=output,
+            build_id="production-checks",
+            run_id="static-site:checks",
+            repo_sha="a" * 40,
+            snapshot=metadata,
+            candidate_token=token,
+            input_fingerprint="f" * 64,
+            build_clock=clock,
+        )
+    result["checks"]["preview_contract"]["archived"] = False
     result["checks"]["production"]["template_matrix"] = "pending"
     result_path.write_text(json.dumps(result), encoding="utf-8")
     with pytest.raises(StaticSitePermanentError, match="template_matrix"):

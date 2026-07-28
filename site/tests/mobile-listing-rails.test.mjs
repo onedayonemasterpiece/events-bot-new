@@ -50,15 +50,16 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(weekend, /calendarToday=\{currentDate \|\| start\}/u);
   assert.match(popular, /collapseOccurrenceCards\(group\.events, 'per-family'\)/u);
   assert.match(popular, /<MobileListingRailSurface[\s\S]*occurrenceMode="per-family"/u);
-  assert.match(accessory, /Array\.from\(\{ length: 42 \}/u);
+  assert.match(accessory, /getStaticEventDateAvailability\(\)/u);
   assert.match(accessory, /class="date-rail"/u);
   assert.match(accessory, /class="date-calendar-trigger"/u);
   assert.match(accessory, /class="calendar-sheet"/u);
   assert.match(accessory, /class="calendar-grid"/u);
   assert.match(accessory, /getAvailableWeekendRanges\(\)/u);
   assert.match(accessory, /`\/date-\$\{iso\}\/`/u);
-  assert.doesNotMatch(accessory, /aria-disabled="true"/u);
-  assert.match(await read('src/pages/date-[date].astro'), /Array\.from\(\{ length: 42 \}/u);
+  assert.match(accessory, /aria-disabled="true"/u);
+  assert.match(accessory, /item\.href \? \([\s\S]*?<a[\s\S]*?\) : \([\s\S]*?<span/u);
+  assert.match(await read('src/pages/date-[date].astro'), /getStaticEventDateAvailability\(\)\.availableDates/u);
   assert.match(await read('src/pages/date-[date].astro'), /<DateListingSurface kind="date"/u);
 });
 
@@ -225,4 +226,16 @@ test('real-data canaries retain Pianissimo/Teremok crop evidence and More vnutri
   const moreManifest = festivals.items.find((item) => item.slug === 'more-vnutri');
   assert.equal(moreManifest?.listingStatus, 'listing_ready');
   assert.equal(moreManifest?.listingBinding, 'festival');
+});
+
+test('packaged product smoke and local noindex red-dot matrix use separate Playwright bases', async () => {
+  const playwright = await read('tests/unusual-events.playwright.mjs');
+  assert.match(playwright, /UNUSUAL_EVENTS_PLAYWRIGHT_MODE \|\| 'product'/u);
+  assert.match(playwright, /const runProduct = mode === 'product' \|\| mode === 'all'/u);
+  assert.match(playwright, /const runLab = mode === 'lab' \|\| mode === 'all'/u);
+  assert.match(playwright, /UNUSUAL_EVENTS_BASE_URL is required in product\/all mode/u);
+  assert.match(playwright, /UNUSUAL_EVENTS_LAB_BASE_URL is required in lab\/all mode/u);
+  assert.match(playwright, /if \(runProduct\) \{[\s\S]*route\(productBase, '\/neobychnoe\/'\)/u);
+  assert.match(playwright, /if \(runLab\) \{[\s\S]*route\(labBase, `\/lab\/unusual-unread\/\$\{scenario\}\/`\)/u);
+  assert.doesNotMatch(playwright, /route\(productBase, `\/lab\/unusual-unread/u);
 });

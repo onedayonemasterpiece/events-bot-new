@@ -1,11 +1,14 @@
 import previewData from '../data/preview-events.json';
+import archivedEventData from '../data/preview-event-archive.json';
 import relatedData from '../data/preview-related.json';
 import { eventImageUrl } from './assets';
 import {
   collapseOccurrenceCards,
   formatOccurrencePresentation,
+  isExhibitionLikeEvent,
   isPopularEligible,
   resolveOccurrenceFamily,
+  selectPopularEventFamilies,
   type OccurrenceFamily,
   type OccurrencePresentation,
   type PopularEligibilityReference,
@@ -20,7 +23,7 @@ import type {
   RelatedManifestCandidate,
 } from './types';
 
-export { isPopularEligible };
+export { isExhibitionLikeEvent, isPopularEligible };
 
 export const SITE_NAME = 'Полюбить Калининград Анонсы';
 export const SITE_ORIGIN = (import.meta.env.PUBLIC_SITE_ORIGIN || 'https://kenigevents.ru').replace(/\/+$/u, '');
@@ -40,6 +43,8 @@ export const ICS_BASE_URL = (
 ).replace(/\/+$/u, '');
 
 const data = previewData as PreviewData;
+const archivedDetails = archivedEventData as PreviewData;
+const archivedDetailIds = new Set(archivedDetails.events.map((event) => event.id));
 const related = relatedData as RelatedData;
 const previewCurrentDateOverride = String(import.meta.env.PUBLIC_STATIC_SITE_CURRENT_DATE || '').trim();
 const previewGeneratedAtOverride = String(import.meta.env.PUBLIC_STATIC_SITE_REFERENCE_ISO || '').trim();
@@ -69,6 +74,22 @@ export function getEvents(): PreviewEvent[] {
     const bv = b.starts_at || b.start_date;
     return av.localeCompare(bv) || a.id - b.id;
   });
+}
+
+/** Recently elapsed canonical events remain addressable as detail pages only. */
+export function getEventDetailEvents(): PreviewEvent[] {
+  const byId = new Map<number, PreviewEvent>();
+  for (const event of [...data.events, ...archivedDetails.events]) byId.set(event.id, event);
+  return [...byId.values()].sort((a, b) => {
+    const av = a.starts_at || a.start_date;
+    const bv = b.starts_at || b.start_date;
+    return av.localeCompare(bv) || a.id - b.id;
+  });
+}
+
+/** True only for the bounded direct-link grace pool, never for active listings. */
+export function isArchivedEventDetail(event: PreviewEvent): boolean {
+  return archivedDetailIds.has(event.id) && !data.events.some((current) => current.id === event.id);
 }
 
 export function getCurrentDate(): string {
@@ -179,11 +200,11 @@ export function displayUpdatedAtKaliningrad(value: string | null | undefined): s
 
 
 export function getEventBySlug(slug: string): PreviewEvent | undefined {
-  return data.events.find((event) => event.slug === slug);
+  return getEventDetailEvents().find((event) => event.slug === slug);
 }
 
 export function getEventById(id: number): PreviewEvent | undefined {
-  return data.events.find((event) => event.id === id);
+  return getEventDetailEvents().find((event) => event.id === id);
 }
 
 export function withBase(path: string): string {
@@ -726,7 +747,7 @@ export function getPopularEvents(
     .filter((item) => item.score > 0 || (item.event.likes_count || 0) > 0 || (item.event.source_views_count || 0) > 0)
     .sort((left, right) => right.score - left.score || (left.event.starts_at || left.event.start_date).localeCompare(right.event.starts_at || right.event.start_date) || left.event.id - right.event.id)
     .map((item) => item.event);
-  return collapseOccurrenceCards(ranked, 'per-family').slice(0, Math.max(0, limit));
+  return selectPopularEventFamilies(ranked, limit);
 }
 
 /** @deprecated Use the shared isPopularEligible contract. */
@@ -743,13 +764,13 @@ export function getPopularDesktopEvents(
   reference: Partial<PopularEligibilityReference> = {},
 ): PreviewEvent[] {
   const eligibilityReference = popularEligibilityReference(reference);
-  return getEvents()
+  const ranked = getEvents()
     .filter((event) => isPopularEligible(event, eligibilityReference))
     .map((event) => ({ event, score: eventPopularityScore(event) }))
     .filter((item) => item.score > 0 || (item.event.likes_count || 0) > 0 || (item.event.source_views_count || 0) > 0)
     .sort((left, right) => right.score - left.score || (left.event.starts_at || left.event.start_date).localeCompare(right.event.starts_at || right.event.start_date) || left.event.id - right.event.id)
-    .slice(0, Math.max(0, limit))
     .map((item) => item.event);
+  return selectPopularEventFamilies(ranked, limit);
 }
 
 function repeatCountLabel(count: number): string {
@@ -794,11 +815,6 @@ export function isContinuingListingEvent(event: Pick<PreviewEvent, 'title' | 'ev
   if (!isMultiDayEvent(event)) return false;
   const haystack = [event.event_type, event.title, ...(event.topics || [])].join(' ').toLowerCase();
   return /выстав|экспозиц|музей|галере|фестив|ярмарк|маркет|лагер/u.test(haystack);
-}
-
-export function isExhibitionLikeEvent(event: Pick<PreviewEvent, 'title' | 'event_type' | 'topics'>): boolean {
-  const haystack = [event.event_type, event.title, ...(event.topics || [])].join(' ').toLowerCase();
-  return /выстав|экспозиц|музей|галере|арт[-\s]?простран|инсталляц|экзамен/u.test(haystack);
 }
 
 export function isLongRunningListingEvent(event: Pick<PreviewEvent, 'title' | 'event_type' | 'topics' | 'start_date' | 'end_date'>): boolean {

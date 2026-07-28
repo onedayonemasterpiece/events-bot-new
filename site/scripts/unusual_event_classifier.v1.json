@@ -1,0 +1,67 @@
+{
+  "schema_version": "unusual-event-classifier-v1",
+  "classifier_kind": "margin_logistic_head_v1",
+  "taxonomy_version": "unusual-event-taxonomy-v1",
+  "prototype_bank_schema_version": "unusual-event-prototype-bank-v1",
+  "feature_order": [
+    "top_positive",
+    "positive_support",
+    "positive_hard_negative_margin",
+    "positive_neutral_margin",
+    "family_margin"
+  ],
+  "bias": -16.01025519520712,
+  "weights": {
+    "top_positive": 3.65973637,
+    "positive_support": 30.6182624,
+    "positive_hard_negative_margin": -18.16563108,
+    "positive_neutral_margin": 47.43194489,
+    "family_margin": 12.01316874
+  },
+  "decision_thresholds": {
+    "core_probability": 0.82,
+    "adjacent_probability": 0.725,
+    "ordinary_probability": 0.38,
+    "core_min_positive_hard_negative_margin": 0.04,
+    "core_min_positive_neutral_margin": 0.025,
+    "adjacent_min_positive_hard_negative_margin": -0.07,
+    "adjacent_min_positive_neutral_margin": -0.05,
+    "family_min_margin": 0.002
+  },
+  "quality_gate": {
+    "editorial_precision_at_20_min": 0.85,
+    "frozen_reference_precision_at_20": 0.88,
+    "frozen_reference_max_drop": 0.05,
+    "hard_negative_fpr_max": 0.05,
+    "confirmed_unusual_recall_min": 0.8,
+    "duplicate_concepts_top20_max": 1,
+    "identical_rebuild_flip_rate_max_exclusive": 0.02,
+    "minimum_family_diversity_top20": 5,
+    "deterministic_repeat_exact_required": true,
+    "single_vector_contract_required": true,
+    "ineligible_publication_count_max": 0,
+    "minimum_editorial_sample": 20,
+    "minimum_hard_negative_sample": 20,
+    "minimum_confirmed_unusual_sample": 20
+  },
+  "calibration": {
+    "method": "frozen_production_threshold_recalibration_v2",
+    "artifact_state": "candidate",
+    "approval_status": "runtime_gate_required",
+    "source_model": "BAAI/bge-m3",
+    "source_model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "source_vector_artifact_sha256": "60d370bb5e43db79eeb10b1775202ee0fbc907deba5454daa171cfe698af6bd5",
+    "source_fixture_sha256": "abacf30fef00f91c6a5f6a2e5264d47892871809b665bf56c8f2f62231f161d0",
+    "source_event_count": 332,
+    "observed_publishable_metrics": {
+      "editorial_precision_at_20": 0.944444,
+      "hard_negative_false_positive_rate": 0.05,
+      "confirmed_unusual_recall": 0.8,
+      "duplicate_concepts_top20": 0,
+      "identical_rebuild_flip_rate": 0.0,
+      "family_diversity_top20": 12,
+      "ineligible_publication_count": 0
+    },
+    "reason": "The deterministic head is recalibrated on the frozen production fixture and the exact pinned-BGE canary vectors after the former 0.65 adjacent threshold admitted a second conventional-stage hard negative. The smallest separating threshold, 0.725, restores the frozen FPR ceiling while retaining the minimum confirmed-positive recall. Publication remains fail-closed until the current build's hash-bound runtime quality gate approves."
+  }
+}

@@ -7,6 +7,7 @@ import {
   formatOccurrencePresentation,
   isPopularEligible,
   resolveOccurrenceFamily,
+  selectPopularEventFamilies,
 } from '../src/lib/eventOccurrences.ts';
 
 function event(id, date, time, linked = [], extra = {}) {
@@ -83,39 +84,49 @@ test('Popular eligibility rejects non-public lifecycle states', () => {
   }
 });
 
-test('Popular eligibility keeps ranges through end_date before considering end_at', () => {
+test('Popular excludes a stale ordinary range but keeps an ongoing exhibition through end_date', () => {
   const reference = { currentDate: '2026-07-24', referenceIso: '2026-07-24T12:00:00+02:00' };
-  const continuing = event(61, '2026-07-20', '10:00', [], {
-    end_date: '2026-07-24',
+  const ordinaryPast = event(61, '2026-07-20', '10:00', [], {
+    title: 'Концерт в музее',
+    event_type: 'концерт',
+    end_date: '2026-07-31',
     end_at: '2026-07-20T18:00:00+02:00',
     starts_at: '2026-07-20T10:00:00+02:00',
     timezone: 'Europe/Kaliningrad',
   });
-  const ended = event(62, '2026-07-20', '10:00', [], {
+  const ongoingExhibition = event(62, '2026-07-20', '10:00', [], {
+    title: 'Выставка живописи',
+    event_type: 'выставка',
+    end_date: '2026-07-31',
+    end_at: '2026-07-20T18:00:00+02:00',
+    starts_at: '2026-07-20T10:00:00+02:00',
+    timezone: 'Europe/Kaliningrad',
+  });
+  const endedExhibition = event(63, '2026-07-20', '10:00', [], {
+    event_type: 'выставка',
     end_date: '2026-07-23',
-    end_at: '2026-07-20T18:00:00+02:00',
-    starts_at: '2026-07-20T10:00:00+02:00',
     timezone: 'Europe/Kaliningrad',
   });
-  assert.equal(isPopularEligible(continuing, reference), true);
-  assert.equal(isPopularEligible(ended, reference), false);
+  assert.equal(isPopularEligible(ordinaryPast, reference), false);
+  assert.equal(isPopularEligible(ongoingExhibition, reference), true);
+  assert.equal(isPopularEligible(endedExhibition, reference), false);
 });
 
 test('Popular eligibility accepts future one-offs and gates same-day events by start instant', () => {
   const reference = { currentDate: '2026-07-24', referenceIso: '2026-07-24T12:00:30+02:00' };
-  const future = event(63, '2026-07-25', '09:00', [], {
+  const future = event(64, '2026-07-25', '09:00', [], {
     starts_at: '2026-07-24T08:00:00+02:00',
     timezone: 'Europe/Kaliningrad',
   });
-  const elapsed = event(64, '2026-07-24', '11:59', [], {
+  const elapsed = event(65, '2026-07-24', '11:59', [], {
     starts_at: '2026-07-24T11:59:00+02:00',
     timezone: 'Europe/Kaliningrad',
   });
-  const upcoming = event(65, '2026-07-24', '12:01', [], {
+  const upcoming = event(66, '2026-07-24', '12:01', [], {
     starts_at: null,
     timezone: 'Europe/Kaliningrad',
   });
-  const unknownTime = event(66, '2026-07-24', null, [], {
+  const unknownTime = event(67, '2026-07-24', null, [], {
     starts_at: null,
     timezone: 'Europe/Kaliningrad',
   });
@@ -192,6 +203,14 @@ test('card collapse policy is per-date for temporal lists and per-family for ent
   assert.deepEqual(collapseOccurrenceCards(input, 'per-family').map((item) => item.id), [40]);
 });
 
+test('Popular family selection never repeats cards as filler when distinct inventory is short', () => {
+  const first = event(43, '2026-11-02', '17:00', [44]);
+  const repeat = event(44, '2026-11-09', '17:00', [43]);
+  const distinct = event(45, '2026-11-12', '19:00');
+  const selected = selectPopularEventFamilies([first, repeat, distinct, distinct], 5);
+  assert.deepEqual(selected.map((item) => item.id), [43, 45]);
+});
+
 test('production surfaces and live search producer wire per-date, per-family and selector policies explicitly', async () => {
   const [eventsSource, searchSource, edgeSearchSource, edgeFamilySource, vectorSyncSource, layoutSource, detailSource, listItemSource] = await Promise.all([
     readFile(new URL('../src/lib/events.ts', import.meta.url), 'utf8'),
@@ -204,8 +223,8 @@ test('production surfaces and live search producer wire per-date, per-family and
     readFile(new URL('../src/components/EventListItem.astro', import.meta.url), 'utf8'),
   ]);
   assert.match(eventsSource, /collapseLinkedSessionEvents[\s\S]*collapseOccurrenceCards\(events, 'per-date'\)/u);
-  assert.match(eventsSource, /getPopularEvents[\s\S]*?filter\(\(event\) => isPopularEligible\(event, eligibilityReference\)\)[\s\S]*?collapseOccurrenceCards\(ranked, 'per-family'\)/u);
-  assert.match(eventsSource, /getPopularDesktopEvents[\s\S]*?filter\(\(event\) => isPopularEligible\(event, eligibilityReference\)\)/u);
+  assert.match(eventsSource, /getPopularEvents[\s\S]*?filter\(\(event\) => isPopularEligible\(event, eligibilityReference\)\)[\s\S]*?selectPopularEventFamilies\(ranked, limit\)/u);
+  assert.match(eventsSource, /getPopularDesktopEvents[\s\S]*?filter\(\(event\) => isPopularEligible\(event, eligibilityReference\)\)[\s\S]*?selectPopularEventFamilies\(ranked, limit\)/u);
   assert.match(eventsSource, /getStaticRelatedCandidates[\s\S]*collapseOccurrenceCards\([\s\S]*'per-family'/u);
   assert.match(searchSource, /collapseSearchOccurrenceFamilies\(rawItems, seenFamilies\)/u);
   assert.match(edgeSearchSource, /paginateOccurrenceFamilies\(\s*rankedCandidates,/u);

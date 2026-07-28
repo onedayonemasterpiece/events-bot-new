@@ -7,12 +7,13 @@ import MobileToastRegion from '../components/MobileToastRegion.astro';
 import PwaTelemetry from '../components/PwaTelemetry.astro';
 import Reference4MobileMenu from '../components/Reference4MobileMenu.astro';
 import StaticSiteAuthRuntime from '../components/auth/StaticSiteAuthRuntime.astro';
+import UnusualUnreadRuntime from '../components/UnusualUnreadRuntime.astro';
 import '../styles/design-system.css';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
 import type { PreviewEvent } from '../lib/types';
 
-export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'festivals' | 'popular' | 'clubs';
+export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'festivals' | 'popular' | 'unusual' | 'clubs';
 export type MobileTopMode = 'standard' | 'contextual' | 'immersive';
 export type MobileBottomMode = 'nav' | 'cta' | 'none';
 
@@ -136,6 +137,7 @@ const HEADER_NAVIGATION = [
   { key: 'exhibitions', label: 'Выставки', href: '/vystavki/' },
   { key: 'festivals', label: 'Фестивали', href: '/festivali/' },
   { key: 'popular', label: 'Популярное', href: '/populyarnoe/' },
+  { key: 'unusual', label: 'Необычное', href: '/neobychnoe/' },
   { key: 'clubs', label: 'Клубы', href: '/kluby-po-interesam/' },
 ] as const;
 const visibleHeaderNavigation = HEADER_NAVIGATION.filter((item) => item.key !== 'clubs' || INTEREST_CLUBS_PUBLIC_ENABLED);
@@ -317,6 +319,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       .site-nav a:hover { color: var(--text); background: #f5eadc; }
       .site-nav a[aria-current="page"] { color: var(--primary-strong); font-weight: 760; }
       .site-nav a[aria-current="page"]::after { opacity: 1; transform: scaleX(1); }
+      .site-nav .unusual-nav-dot { position:absolute; top:6px; right:5px; width:7px; height:7px; border-radius:50%; background:#c72f2f; box-shadow:0 0 0 3px rgba(199,47,47,.11); }
       .site-header__badge {
         min-width: 1.25rem;
         min-height: 1.25rem;
@@ -2485,8 +2488,9 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         <Reference4MobileMenu current={drawerCurrent} discoveryBases={mobileDiscoveryBases} badge={headerBadge} />
         <nav class="site-nav" aria-label="Основная навигация">
           {visibleHeaderNavigation.map((item) => (
-            <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined}>
+            <a href={withBase(item.href)} aria-current={item.key === headerCurrent ? 'page' : undefined} data-unusual-nav-link={item.key === 'unusual' ? '' : undefined}>
               {item.label}
+              {item.key === 'unusual' && <span class="unusual-nav-dot" data-unusual-nav-dot hidden aria-hidden="true"></span>}
               {headerBadge?.key === item.key && (
                 <span class="site-header__badge" data-header-badge={item.key} aria-live="polite">
                   <span data-header-badge-count>{headerBadge.text}</span>
@@ -2499,6 +2503,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     </header>
     <MobileToastRegion />
     <StaticSiteAuthRuntime />
+    <UnusualUnreadRuntime />
     <slot />
     <!-- EventCard is the single DOM/interaction source for every client-added card. -->
     <template data-event-card-template="split-actions">
@@ -4524,9 +4529,13 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
           if (anchorEventId != null) {
             const anchorIndex = cards.findIndex((card) => asId(card.dataset.eventId) === asId(anchorEventId));
             if (anchorIndex >= 0) {
-              const frozen = cards.slice(0, anchorIndex + 1);
+              // Leave the clicked card and every card above it attached. Moving
+              // those nodes to the end and back makes browser scroll anchoring
+              // follow a temporarily displaced viewport anchor, which can jump
+              // a mobile user several screens upward after a paginated-card
+              // reaction. Only the not-yet-seen tail is eligible to rerank.
               const tail = sortCards(cards.slice(anchorIndex + 1));
-              [...frozen, ...tail].forEach((card) => feed.appendChild(card));
+              tail.forEach((card) => feed.appendChild(card));
               return;
             }
           }
