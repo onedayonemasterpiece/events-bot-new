@@ -1,0 +1,12 @@
+{
+  "name": "autopresenter-m0-pre-cft-compat",
+  "version": "0.0.0-m0",
+  "private": true,
+  "description": "Exact pre-1.57 M0 Windows 10 compatibility candidate; not a production stack selection.",
+  "engines": {
+    "node": "22.12.0"
+  },
+  "dependencies": {
+    "playwright": "1.54.2"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "pre-cft-compat",
+  "role": "compatibility candidate before the Playwright 1.57 headed-browser boundary",
+  "target": {
+    "os": "windows",
+    "osCompatibilityGate": "Windows 10 x64 exact-machine evidence required",
+    "architecture": "x64"
+  },
+  "node": {
+    "version": "22.12.0",
+    "distribution": "win-x64",
+    "archiveFile": "node-v22.12.0-win-x64.zip",
+    "downloadUrl": "https://nodejs.org/download/release/v22.12.0/node-v22.12.0-win-x64.zip",
+    "sha256": "2b8f2256382f97ad51e29ff71f702961af466c4616393f767455501e6aece9b8"
+  },
+  "playwright": {
+    "version": "1.54.2",
+    "package": {
+      "name": "playwright",
+      "integrity": "sha512-Hu/BMoA1NAdRUuulyvQC0pEqZ4vQbGfn8f7wPXcnqQmM+zct9UliKxsIkLNmz/ku7LElUNqmaiv1TG/aL5ACsw=="
+    },
+    "corePackage": {
+      "name": "playwright-core",
+      "version": "1.54.2",
+      "integrity": "sha512-n5r4HFbMmWsB4twG7tJLDN9gmBUeSPcsBZiWSE4DnYz9mJMAFqr2ID7+eGC9kpEnxExJ1epttwR59LEWCk8mtA=="
+    },
+    "boundary": {
+      "playwright157OrNewer": false,
+      "headedDistribution": "Playwright Chromium"
+    }
+  },
+  "managedBrowser": {
+    "name": "chromium",
+    "revision": "1181",
+    "version": "139.0.7258.5",
+    "registryDirectory": "chromium-1181",
+    "executableRelativePath": "browsers/chromium-1181/chrome-win/chrome.exe"
+  },
+  "runtimePolicy": {
+    "playwrightBrowsersPath": "browsers",
+    "browserSource": "packaged-playwright-managed",
+    "downloadAllowedAtBuild": true,
+    "downloadAllowedAtRuntime": false,
+    "allowGlobalBrowserCache": false,
+    "allowSystemBrowser": false,
+    "allowBrowserChannel": false,
+    "allowNpmOrNpxAtRuntime": false,
+    "requiresAdministrator": false,
+    "changesExecutionPolicy": false
+  }
+}

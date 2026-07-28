@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "current-control",
+  "role": "current repository control at or after the Playwright 1.57 browser boundary",
+  "target": {
+    "os": "windows",
+    "osCompatibilityGate": "Windows 10 x64 exact-machine evidence required",
+    "architecture": "x64"
+  },
+  "node": {
+    "version": "22.12.0",
+    "distribution": "win-x64",
+    "archiveFile": "node-v22.12.0-win-x64.zip",
+    "downloadUrl": "https://nodejs.org/download/release/v22.12.0/node-v22.12.0-win-x64.zip",
+    "sha256": "2b8f2256382f97ad51e29ff71f702961af466c4616393f767455501e6aece9b8"
+  },
+  "playwright": {
+    "version": "1.61.1",
+    "package": {
+      "name": "playwright",
+      "integrity": "sha512-DWnY5o3YbLWK4GovuAVwpqL+1VwGNdUGrRr++8j8PtQQzvAVZUIMjKQ90fY689sEJZJBbZVw1rXaOKSTitkzPQ=="
+    },
+    "corePackage": {
+      "name": "playwright-core",
+      "version": "1.61.1",
+      "integrity": "sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg=="
+    },
+    "boundary": {
+      "playwright157OrNewer": true,
+      "headedDistribution": "Chrome for Testing"
+    }
+  },
+  "managedBrowser": {
+    "name": "chromium",
+    "revision": "1228",
+    "version": "149.0.7827.55",
+    "registryDirectory": "chromium-1228",
+    "executableRelativePath": "browsers/chromium-1228/chrome-win64/chrome.exe"
+  },
+  "runtimePolicy": {
+    "playwrightBrowsersPath": "browsers",
+    "browserSource": "packaged-playwright-managed",
+    "downloadAllowedAtBuild": true,
+    "downloadAllowedAtRuntime": false,
+    "allowGlobalBrowserCache": false,
+    "allowSystemBrowser": false,
+    "allowBrowserChannel": false,
+    "allowNpmOrNpxAtRuntime": false,
+    "requiresAdministrator": false,
+    "changesExecutionPolicy": false
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "autopresenter-m0-current-control",
+  "version": "0.0.0-m0",
+  "private": true,
+  "description": "Exact M0 Windows 10 compatibility candidate; not a production stack selection.",
+  "engines": {
+    "node": "22.12.0"
+  },
+  "dependencies": {
+    "playwright": "1.61.1"
+  }
+}
