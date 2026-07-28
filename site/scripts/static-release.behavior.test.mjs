@@ -117,6 +117,13 @@ test('secret-candidate robots policy overrides page-local noindex without losing
   assert.match(layout, /const robots = IS_SECRET_CANDIDATE\s*\?\s*'noindex,nofollow,noarchive,nosnippet'/u);
 });
 
+test('production root-form proof preserves the private focus route family as noindex/noarchive', () => {
+  const productionCheck = readFileSync(new URL('./check-production.mjs', import.meta.url), 'utf8');
+  assert.match(productionCheck, /file\.key === 'zakrytaya-afisha\/index\.html'/u);
+  assert.match(productionCheck, /\^fokus-gruppa/u);
+  assert.match(productionCheck, /noindex,nofollow,noarchive/u);
+});
+
 test('ADD-BUILD-09 catalog ledger rejects duplicate, missing, or unversioned eligibility evidence', () => {
   const base = {
     schema_version: 'static_event_catalog_ledger_v1', repo_sha: 'a'.repeat(40), run_id: 'static:run:123', build_id: 'production-test',

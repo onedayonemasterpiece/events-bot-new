@@ -182,6 +182,8 @@ for (const file of files.filter((item) => item.key.endsWith('.html'))) {
     || file.key === 'izbrannoe/index.html'
     || file.key === 'neobychnoe/index.html'
     || file.key === 'artefakty/index.html'
+    || file.key === 'zakrytaya-afisha/index.html'
+    || /^fokus-gruppa(?:\/|$)/u.test(file.key)
     || /^podborki\/[^/]+\/index\.html$/u.test(file.key)
     || archivedSlugs.has(/^sobytiya\/([^/]+)\/index\.html$/u.exec(file.key)?.[1] || '');
   if (intentionallyUnindexed) {

@@ -50,7 +50,10 @@ side effects:
 mailbox browser test; это не выдаётся за готовый cohort backend. Feedback не
 отправляется; подарок не объявлен. Обычный
 `astro build` сохраняет публичную R15 главную, а focus mechanics доступны
-только на выделенных `noindex` routes. `build-production.mjs` и
+только на выделенных `noindex,nofollow,noarchive` routes. Root-form production
+checker считает `/fokus-gruppa/**` и `/zakrytaya-afisha/` явным семейством
+приватных страниц и не требует от них `index,follow`; для всех обычных страниц
+индексируемый контракт остаётся fail-closed. `build-production.mjs` и
 `build-secret-candidate.mjs` по-прежнему владеют своими root transformations;
 наличие focus routes не считается production root rollout.
 
