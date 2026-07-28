@@ -50,6 +50,22 @@ test('account logout is explicit and cannot clear focus participation or persona
   assert.match(personal, /30-дневное участие[\s\S]*остаются/u);
 });
 
+test('focus identity supports real email OTP and Yandex linking through the shared controller', () => {
+  const auth = readFileSync(new URL('../src/lib/staticSiteAuth.ts', import.meta.url), 'utf8');
+  const intake = readFileSync(new URL('../src/components/FocusGroupInviteIntake.astro', import.meta.url), 'utf8');
+  const invitation = readFileSync(new URL('../src/pages/fokus-gruppa/priglashenie/index.astro', import.meta.url), 'utf8');
+  assert.match(auth, /async signInWithEmailOtp/u);
+  assert.match(auth, /this\.client\.auth\.signInWithOtp/u);
+  assert.match(auth, /emailRedirectTo:\s*redirectTo/u);
+  assert.match(auth, /async linkYandexIdentity/u);
+  assert.match(auth, /this\.client\.auth\.linkIdentity/u);
+  assert.match(intake, /auth\.signInWithEmailOtp\(email, intake\.cleanHref\)/u);
+  assert.match(intake, /auth\.linkYandexIdentity\(\)/u);
+  assert.match(intake, /введённый адрес локально не сохраняется/u);
+  assert.match(invitation, /<StaticSiteAuthRuntime \/>/u);
+  assert.doesNotMatch(intake, /Макет не отправлял код|провайдер не запускается/u);
+});
+
 test('bespoke focus hub exposes auth state while keeping leave-focus as the only membership action', () => {
   const focusHub = read('src/pages/zakrytaya-afisha/index.astro');
   assert.match(focusHub, /<StaticSiteAuthRuntime \/>/u);

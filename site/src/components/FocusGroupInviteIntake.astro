@@ -71,10 +71,9 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
         <p class="focus-intake__eyebrow">Шаг 3 из 3 · необязательное подтверждение</p>
         <h2 id="focus-identity-title">Как вы захотите подтвердить себя?</h2>
         <p>
-          Email-код/magic link и Яндекс должны приводить к одной собственной
-          identity. Этот макет только показывает выбор: письмо не отправляется,
-          Яндекс не открывается, сессия не создаётся. Можно отказаться и
-          продолжить без подтверждения.
+          Email magic link и Яндекс используют общий аккаунт KenigEvents.
+          Если вход сервиса временно недоступен, можно отказаться от
+          подтверждения и продолжить участие на этом устройстве.
         </p>
       </div>
 
@@ -89,8 +88,8 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
       <div class="focus-intake__methods">
         <form class="focus-intake__method" data-focus-email-form>
           <span class="focus-intake__method-number" aria-hidden="true">01</span>
-          <h3>Выбрать подтверждение по email</h3>
-          <p>В рабочей версии сюда придёт одноразовый код или magic link.</p>
+          <h3>Подтвердить по email</h3>
+          <p>Отправим одноразовую ссылку. Адрес не сохраняется в локальной метке участия.</p>
           <label for="focus-email">
             <span>Email</span>
             <input
@@ -102,13 +101,13 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
               required
             />
           </label>
-          <button class="ke-button ke-button--primary" type="submit">Показать следующий шаг</button>
+          <button class="ke-button ke-button--primary" type="submit">Получить ссылку</button>
         </form>
 
         <section class="focus-intake__method">
           <span class="focus-intake__method-number" aria-hidden="true">02</span>
-          <h3>Выбрать подтверждение через Яндекс</h3>
-          <p>В рабочей версии откроется Яндекс; в этом макете провайдер не запускается.</p>
+          <h3>Подтвердить через Яндекс</h3>
+          <p>Откроется официальный экран Яндекса; пароль KenigEvents не получает.</p>
           <button class="ke-button ke-button--secondary" type="button" data-focus-yandex>
             Выбрать Яндекс
           </button>
@@ -136,6 +135,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
 </main>
 
 <script>
+  import { getStaticSiteAuth } from '../lib/staticSiteAuth';
   import {
     activateFocusParticipation,
     inspectFocusInviteUrl,
@@ -214,6 +214,16 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
     const enterButton = root.querySelector<HTMLButtonElement>('[data-focus-enter]');
     const continueTitle = root.querySelector<HTMLElement>('[data-focus-continue-title]');
     const continueCopy = root.querySelector<HTMLElement>('[data-focus-continue-copy]');
+    const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
+    const auth = authRuntime?.dataset.authEnabled === 'true'
+      && authRuntime.dataset.supabaseUrl
+      && authRuntime.dataset.supabaseKey
+      ? getStaticSiteAuth({
+          supabaseUrl: authRuntime.dataset.supabaseUrl,
+          publishableKey: authRuntime.dataset.supabaseKey,
+          provider: authRuntime.dataset.yandexProvider || 'custom:yandex',
+        })
+      : null;
     let selectedChoice: Exclude<FocusIdentityChoice, 'undecided'> = participation?.identityChoice === 'undecided'
       || !participation
       ? 'skipped'
@@ -236,24 +246,39 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
       enterButton?.focus();
     };
 
-    const selectPrototypeMethod = (method: 'email' | 'yandex') => {
-      if (!requireConsent()) return;
-
-      if (identityStatus) {
-        identityStatus.textContent = method === 'email'
-          ? 'Макет не отправлял код и не сохранил введённый email. В production здесь требуется реальное подтверждение.'
-          : 'Макет не открывал Яндекс и не создавал сессию. В рабочей версии потребуется реальный callback провайдера.';
-      }
-      revealContinue(method === 'email' ? 'email_intent' : 'yandex_intent');
-    };
-
-    emailForm?.addEventListener('submit', (event) => {
+    emailForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!emailForm.reportValidity()) return;
-      selectPrototypeMethod('email');
+      if (!requireConsent()) return;
+      const emailInput = emailForm.elements.namedItem('email');
+      const email = emailInput instanceof HTMLInputElement ? emailInput.value : '';
+      if (!auth) {
+        if (identityStatus) identityStatus.textContent = 'Вход временно недоступен. Можно продолжить без подтверждения.';
+        return;
+      }
+      if (focusStorage) updateFocusParticipationIdentityChoice(focusStorage, 'email_intent');
+      selectedChoice = 'email_intent';
+      const sent = await auth.signInWithEmailOtp(email, intake.cleanHref);
+      if (identityStatus) {
+        identityStatus.textContent = sent
+          ? 'Письмо отправлено. Откройте одноразовую ссылку в этом браузере; введённый адрес локально не сохраняется.'
+          : 'Не удалось отправить письмо. Проверьте адрес или продолжите без подтверждения.';
+      }
     });
 
-    yandexButton?.addEventListener('click', () => selectPrototypeMethod('yandex'));
+    yandexButton?.addEventListener('click', async () => {
+      if (!requireConsent()) return;
+      if (!auth) {
+        if (identityStatus) identityStatus.textContent = 'Вход через Яндекс временно недоступен. Можно продолжить без подтверждения.';
+        return;
+      }
+      if (focusStorage) updateFocusParticipationIdentityChoice(focusStorage, 'yandex_intent');
+      selectedChoice = 'yandex_intent';
+      const started = await auth.linkYandexIdentity();
+      if (!started && identityStatus) {
+        identityStatus.textContent = 'Не удалось открыть Яндекс. Попробуйте ещё раз или продолжите без подтверждения.';
+      }
+    });
 
     skipButton?.addEventListener('click', () => {
       if (!requireConsent()) return;
@@ -274,6 +299,25 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
         continueCopy.textContent = 'Сброс персонализации «Для меня» не удаляет эту отдельную метку.';
       }
       if (continueBlock) continueBlock.hidden = false;
+    }
+
+    if (auth) {
+      auth.subscribe((snapshot) => {
+        if (snapshot.status === 'signed_in') {
+          if (identityStatus) identityStatus.textContent = snapshot.message;
+          if (continueTitle) continueTitle.textContent = 'Личность подтверждена.';
+          if (continueCopy) {
+            continueCopy.textContent = 'Выход из аккаунта не удаляет отдельную 30-дневную метку участия.';
+          }
+          const choice = selectedChoice === 'yandex_intent' ? 'yandex_intent' : 'email_intent';
+          revealContinue(choice);
+        } else if (snapshot.status === 'error' && identityStatus) {
+          identityStatus.textContent = snapshot.message;
+        }
+      });
+      auth.initialize().catch(() => {
+        if (identityStatus) identityStatus.textContent = 'Не удалось проверить вход. Можно продолжить без подтверждения.';
+      });
     }
 
     enterButton?.addEventListener('click', () => {

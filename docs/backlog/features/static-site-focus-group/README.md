@@ -41,8 +41,13 @@ side effects:
   specimen и SVG Repo lab icon.
 
 Это **не закрытая production-сборка**. LocalStorage и opaque path не являются
-авторизацией; email/OAuth только показаны как интерфейс; feedback не
-отправляется; письма не автоматизированы; подарок не объявлен. Обычный
+авторизацией; focus membership/feedback остаются локальными. Экран вступления
+уже вызывает общий Supabase Auth controller: email использует
+`signInWithOtp()` с одноразовой ссылкой, Яндекс — общий `custom:yandex` flow,
+а для уже вошедшего пользователя `linkIdentity()`. Однако реальная email
+доставка не является принятой до custom SMTP, отдельного E2E inbox и полного
+mailbox browser test; это не выдаётся за готовый cohort backend. Feedback не
+отправляется; подарок не объявлен. Обычный
 `astro build` сохраняет публичную R15 главную, а focus mechanics доступны
 только на выделенных `noindex` routes. `build-production.mjs` и
 `build-secret-candidate.mjs` по-прежнему владеют своими root transformations;
@@ -155,6 +160,13 @@ browser-controlled: её нельзя вызвать или запустить �
 Именно этот контракт является release gate против «случайного разлогина».
 Текущая page/product ветка демонстрирует тот же 30-дневный lifecycle локально,
 но не выдаёт localStorage за готовую production-авторизацию.
+
+Email и Яндекс используют один origin-scoped auth controller. Одноразовая
+email-ссылка возвращается на очищенный текущий focus route; введённый адрес не
+попадает в participation payload/localStorage. Если пользователь сначала
+подтвердил email, Яндекс связывается через `linkIdentity()` с текущим
+`auth.uid()`, а не создаёт второй продуктовый профиль. Этот кодовый контракт не
+заменяет обязательный E2E через custom SMTP и dedicated inbox.
 
 ### Тестер делится режимом
 

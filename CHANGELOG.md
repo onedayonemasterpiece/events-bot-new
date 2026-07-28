@@ -13,6 +13,10 @@
   the auth session, while the explicit programme exit clears only the
   30-day participation marker; the shared mobile menu and focus/personal pages
   expose the correct action for their current state.
+- Connected focus identity choices to the shared Supabase Auth controller:
+  email uses a real one-time link, Yandex uses the existing custom provider,
+  and an already signed-in user links Yandex to the same account; the local
+  focus marker still remains explicitly separate from production membership.
 - Fixed mobile continuation likes so reranking only the unfrozen tail preserves
   viewport position after `Показать ещё`, and made Favorites hydrate future
   browser-local items before the optional Supabase merge.
