@@ -7,6 +7,13 @@
 
 ### Added
 
+- Added the visible Autopresenter M1 + M2-lite development slice without
+  changing M0: a headed 1920×1080 Astro stage with the real site in a 430×932
+  iframe, stable `tomorrow-mobile` hooks, real Playwright hover/click with
+  cursor/ripple feedback, one-process `aiohttp` long-poll relay, Run/Stop/Reset
+  phone control, local emergency keys, one-command launcher and reviewed
+  1920×1080 PNG/MP4 smoke evidence. Windows 10 M3/public-demo gates remain
+  blocked by empirical M0.
 - Added the Autopresenter M0 operator/evidence contract for two exact hermetic
   Windows 10 x64 candidates: each must complete 20 full cold loopback-fixture
   cycles (10 fresh + 10 persistent profiles) followed by a separate 5/5 live

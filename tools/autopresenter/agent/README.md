@@ -12,7 +12,8 @@ NODE_PATH="$(npm root -g)" npm start
 Defaults are the values above. The loader accepts either a project-local Playwright
 package or the centrally installed package. Set `AUTOPRESENTER_HEADLESS=1` only for
 CI diagnostics; the supported prototype mode is headed. Optional
-`AUTOPRESENTER_ARTIFACT_DIR` enables 1920x1080 WebM capture and a completion PNG.
+`AUTOPRESENTER_ARTIFACT_DIR` enables 1920x1080 WebM capture and a pre-click PNG
+with the decorative cursor and ripple visible.
 
 Stage shortcuts are handled without the control UI: `Space` or `Right Arrow` runs,
 `Esc` stops, and `R` resets. The stage owns `F` fullscreen behavior.

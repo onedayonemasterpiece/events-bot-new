@@ -1,0 +1,229 @@
+mode:
+  discovery: read_only_parallel
+  implementation: worktree_worker
+  integration: serial_integrator
+  acceptance: reviewer
+repo: onedayonemasterpiece/events-bot-new
+base_ref: 5f7e0f3bbfe57b2ceb139268e1903ce57effd780
+base_branch: feature/autopresenter-design
+integration_branch: integration/autopresenter-prototype
+global_constraints:
+  - Do not edit or rewrite tools/autopresenter/m0.
+  - Implement exactly one scenario named tomorrow-mobile.
+  - Browser interaction must use Playwright locator.hover() and locator.click(); DOM element.click() is forbidden.
+  - No generic DSL, Electron, portable packaging, database, Socket.IO, multi-room, second scenario, desktop, typing, QR, infographic, or admin suite.
+  - M3 and public-demo status remain blocked pending empirical M0 on target Windows 10.
+verification_owner: root integrator, followed by independent closure reviewer
+stop_conditions:
+  - Any required write to tools/autopresenter/m0.
+  - A worker needs a shared file outside its declared ownership.
+  - Two consecutive similar external-tool failures require official-document research before another attempt.
+requirements:
+  - id: R01
+    requirement: Headed Playwright presentation stage at 1920x1080 with a real same-origin mobile site iframe at 430x932.
+    area: Astro stage
+    likely_files:
+      - site/src/pages/internal/presenter-stage/index.astro
+    dependencies: []
+    conflict_risk: low
+    lane: stage_hooks
+    parallelizable: true
+    done_when: Stage exposes a ready marker, noindex metadata, exact canvas and phone viewport contracts.
+  - id: R02
+    requirement: Add stable data-presenter-id hooks for nav-tomorrow and tomorrow-page-ready.
+    area: Static site
+    likely_files:
+      - site/src/components/HomeQuickNav.astro
+      - site/src/pages/zavtra/index.astro
+    dependencies: []
+    conflict_risk: low
+    lane: stage_hooks
+    parallelizable: true
+    done_when: The visible tomorrow home navigation and destination main expose the exact attributes.
+  - id: R03
+    requirement: Implement the only tomorrow-mobile sequence with boundingBox, decorative cursor, real hover, ripple, real click, ready-marker wait, and completed state.
+    area: Playwright agent
+    likely_files:
+      - tools/autopresenter/agent
+    dependencies:
+      - R01
+      - R02
+      - R05
+    conflict_risk: medium
+    lane: agent_scenario
+    parallelizable: true
+    done_when: Source and smoke evidence prove locator.hover() and locator.click(), with no DOM element.click().
+  - id: R04
+    requirement: Provide Run Tomorrow, Stop, Reset controls and disconnected/idle/running/stopping/completed/error statuses.
+    area: Relay control UI
+    likely_files:
+      - tools/autopresenter/relay/static/control
+    dependencies:
+      - R05
+    conflict_risk: low
+    lane: relay_control
+    parallelizable: true
+    done_when: One responsive control page sends all three commands and renders the declared states.
+  - id: R05
+    requirement: One aiohttp relay, one session and agent, HTTP long-poll, run/stop/reset, command ID, sequence, TTL, idempotency, no DB or Socket.IO.
+    area: Relay protocol
+    likely_files:
+      - tools/autopresenter/relay
+    dependencies: []
+    conflict_risk: medium
+    lane: relay_control
+    parallelizable: true
+    done_when: Relay tests cover ordered delivery, TTL, idempotency, and agent status confirmation.
+  - id: R06
+    requirement: Keep polling during a scenario; cooperative stop followed by hard stop and agent-confirmed stopped; Reset restores a clean idle stage.
+    area: Agent runtime
+    likely_files:
+      - tools/autopresenter/agent
+    dependencies:
+      - R03
+      - R05
+    conflict_risk: medium
+    lane: agent_scenario
+    parallelizable: true
+    done_when: Smoke test stops an active run and reset yields agent-confirmed idle without duplicate execution.
+  - id: R07
+    requirement: Local Space/Right Arrow run, Esc stop, R reset, F fullscreen fallback.
+    area: Stage and agent keyboard bridge
+    likely_files:
+      - site/src/pages/internal/presenter-stage/index.astro
+      - tools/autopresenter/agent
+    dependencies:
+      - R01
+      - R03
+    conflict_risk: medium
+    lane: agent_scenario
+    parallelizable: false
+    done_when: Agent injects a same-command keyboard bridge; stage owns the F fullscreen affordance.
+  - id: R08
+    requirement: Preserve all explicit scope cuts and do not change M0.
+    area: Integration boundary
+    likely_files:
+      - tools/autopresenter/prototype/README.md
+      - docs/features/static-site-pages/auto-present/README.md
+    dependencies:
+      - R01
+      - R03
+      - R05
+    conflict_risk: low
+    lane: integration_delivery
+    parallelizable: false
+    done_when: Scope audit and diff show one scenario and zero M0 modifications.
+  - id: R09
+    requirement: Deliver exact one-command launch, control URL, 1920x1080 screenshot, short MP4, smoke result, and created-file tree.
+    area: Integration and evidence
+    likely_files:
+      - tools/autopresenter/prototype
+    dependencies:
+      - R01
+      - R03
+      - R04
+      - R05
+      - R06
+    conflict_risk: medium
+    lane: integration_delivery
+    parallelizable: false
+    done_when: A clean launch drives the full control-to-stage scenario and produces committed bounded visual evidence.
+  - id: R10
+    requirement: Supported dev OS is accepted for the slice; final Win10 portable release remains blocked.
+    area: Documentation and release state
+    likely_files:
+      - docs/features/static-site-pages/auto-present/README.md
+      - CHANGELOG.md
+    dependencies:
+      - R09
+    conflict_risk: low
+    lane: integration_delivery
+    parallelizable: false
+    done_when: Canonical docs and changelog state the dev-only success and retained release blocker.
+lanes:
+  - id: stage_hooks
+    role: worker
+    effort: high
+    requirement_ids: [R01, R02]
+    target: Same-origin Astro stage and stable public-site hooks.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/autopresenter-prototype/stage
+    worktree: /home/dev/projects/events-bot-new-autopresenter-prototype-stage
+    writable_files:
+      - site/src/pages/internal/presenter-stage/index.astro
+      - site/src/components/HomeQuickNav.astro
+      - site/src/pages/zavtra/index.astro
+      - .codex/lanes/stage_hooks/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/m0
+      - tools/autopresenter/agent
+      - tools/autopresenter/relay
+      - docs
+      - CHANGELOG.md
+    expected_output: One committed stage/hooks change and lane results.
+    verification_scope: targeted
+    status: merged
+  - id: relay_control
+    role: worker
+    effort: high
+    requirement_ids: [R04, R05]
+    target: Minimal aiohttp long-poll relay and phone control UI.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/autopresenter-prototype/relay
+    worktree: /home/dev/projects/events-bot-new-autopresenter-prototype-relay
+    writable_files:
+      - tools/autopresenter/relay
+      - .codex/lanes/relay_control/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/m0
+      - tools/autopresenter/agent
+      - site
+      - docs
+      - CHANGELOG.md
+    expected_output: One committed relay/control change with protocol tests and lane results.
+    verification_scope: targeted
+    status: merged
+  - id: agent_scenario
+    role: worker
+    effort: high
+    requirement_ids: [R03, R06, R07]
+    target: One Playwright agent/runtime and tomorrow-mobile scenario.
+    depends_on: [stage_hooks, relay_control]
+    execution_mode: read_only_until_dependency
+    branch: agent/autopresenter-prototype/agent
+    worktree: /home/dev/projects/events-bot-new-autopresenter-prototype-agent
+    writable_files:
+      - tools/autopresenter/agent
+      - .codex/lanes/agent_scenario/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/m0
+      - tools/autopresenter/relay
+      - site
+      - docs
+      - CHANGELOG.md
+    expected_output: One committed agent/scenario change with unit checks and lane results.
+    verification_scope: targeted
+    status: merged
+  - id: integration_delivery
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R08, R09, R10]
+    target: Merge lanes, wire one-command startup, record evidence, document and publish.
+    depends_on: [stage_hooks, relay_control, agent_scenario]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-prototype
+    worktree: /home/dev/projects/events-bot-new-autopresenter-prototype-integration
+    writable_files:
+      - tools/autopresenter/prototype
+      - tools/autopresenter/README.md
+      - docs/features/static-site-pages/auto-present/README.md
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .codex/integration
+    forbidden_files:
+      - tools/autopresenter/m0
+    expected_output: Integrated clean commit, exact launch/control handoff, visual artifacts, smoke report, and integration report.
+    verification_scope: full_local
+    status: completed

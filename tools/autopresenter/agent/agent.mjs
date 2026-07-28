@@ -23,6 +23,7 @@ const config = Object.freeze({
     "http://127.0.0.1:4321/internal/presenter-stage/",
   agentId: process.env.AUTOPRESENTER_AGENT_ID || `prototype-${process.pid}`,
   headless: process.env.AUTOPRESENTER_HEADLESS === "1",
+  fullscreen: process.env.AUTOPRESENTER_FULLSCREEN !== "0",
   artifactDir: process.env.AUTOPRESENTER_ARTIFACT_DIR || "",
   pollWaitMs: numberFromEnv("AUTOPRESENTER_POLL_WAIT_MS", 20_000, 100, 25_000),
   commandTtlGraceMs: numberFromEnv("AUTOPRESENTER_TTL_GRACE_MS", 250, 0, 5_000),
@@ -99,6 +100,7 @@ class PrototypeAgent {
     this.runController = null;
     this.ackCache = new Map();
     this.shuttingDown = false;
+    this.shutdownPromise = null;
     this.heartbeatTimer = null;
     this.pollAbort = null;
     this.contextGeneration = 0;
@@ -109,7 +111,14 @@ class PrototypeAgent {
 
     this.browser = await this.chromium.launch({
       headless: config.headless,
-      args: ["--force-device-scale-factor=1"],
+      args: [
+        "--force-device-scale-factor=1",
+        "--kiosk",
+        "--window-position=0,0",
+        "--window-size=1920,1080",
+        "--disable-features=Translate,TranslateUI",
+        "--lang=ru-RU",
+      ],
     });
     await this.createContextAndStage();
     await this.setAgentState("idle", "stage ready");
@@ -194,6 +203,15 @@ class PrototypeAgent {
     await page.goto(config.stageUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.locator(STAGE_READY_SELECTOR).waitFor({ state: "visible", timeout: 30_000 });
     await page.locator(FRAME_SELECTOR).waitFor({ state: "visible", timeout: 30_000 });
+    if (!config.headless && config.fullscreen) {
+      const isFullscreen = await page.evaluate(() => Boolean(document.fullscreenElement));
+      if (!isFullscreen) {
+        await page.keyboard.press("f");
+        await page
+          .waitForFunction(() => Boolean(document.fullscreenElement), undefined, { timeout: 2_000 })
+          .catch(() => log("browser denied automatic fullscreen; use local F"));
+      }
+    }
   }
 
   async pollLoop() {
@@ -347,6 +365,9 @@ class PrototypeAgent {
   async runTomorrowMobile(signal) {
     assertNotAborted(signal);
     await this.openStage();
+    // openStage navigates the shell, so mirror the already-accepted run state
+    // again on the newly loaded visual status surface.
+    await this.setAgentState("running", SCENARIO);
     assertNotAborted(signal);
 
     const frame = this.page.frameLocator(FRAME_SELECTOR);
@@ -510,21 +531,27 @@ class PrototypeAgent {
     return response.json();
   }
 
-  async shutdown(signalName = "shutdown") {
-    if (this.shuttingDown) return;
+  shutdown(signalName = "shutdown") {
+    if (this.shutdownPromise) return this.shutdownPromise;
     this.shuttingDown = true;
-    log("shutting down", { signal: signalName });
-    clearInterval(this.heartbeatTimer);
-    this.pollAbort?.abort();
-    this.runController?.abort();
-    if (this.activeRun) {
-      await Promise.race([
-        this.activeRun.catch(() => {}),
-        abortableDelay(config.hardStopMs).catch(() => {}),
-      ]);
-    }
-    await this.context?.close().catch(() => {});
-    await this.browser?.close().catch(() => {});
+    this.shutdownPromise = (async () => {
+      log("shutting down", { signal: signalName });
+      clearInterval(this.heartbeatTimer);
+      this.pollAbort?.abort();
+      this.runController?.abort();
+      if (this.activeRun) {
+        await Promise.race([
+          this.activeRun.catch(() => {}),
+          abortableDelay(config.hardStopMs).catch(() => {}),
+        ]);
+      }
+      // Playwright guarantees the video only after BrowserContext.close()
+      // resolves. All shutdown callers share this promise so main() cannot
+      // race process exit against the signal handler's recorder flush.
+      await this.context?.close().catch(() => {});
+      await this.browser?.close().catch(() => {});
+    })();
+    return this.shutdownPromise;
   }
 }
 

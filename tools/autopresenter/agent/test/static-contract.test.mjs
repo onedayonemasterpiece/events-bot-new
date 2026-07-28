@@ -53,4 +53,6 @@ test("visual evidence is fixed at 1920x1080", () => {
   assert.match(source, /deviceScaleFactor: 1/);
   assert.match(source, /tomorrow-mobile-1920x1080\.png/);
   assert.match(source, /recordVideo/);
+  assert.match(source, /this\.shutdownPromise/);
+  assert.match(source, /await this\.context\?\.close/);
 });

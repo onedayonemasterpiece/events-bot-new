@@ -1,8 +1,11 @@
 # Автопрезентатор static-сайта
 
-- **Статус:** `m0_implementation`; фактический запуск на целевом ноутбуке ещё не выполнен.
-- **Implementation gate:** `m0_win10_compatibility`.
-- **Release verdict:** `GO_TO_M0_COMPATIBILITY_SPIKE_ONLY`; публичный показ — `NO-GO` до прохождения M0–M3.
+- **Статус:** `m0_implementation_accepted + m1_m2_lite_dev_prototype`;
+  фактический M0-прогон на целевом ноутбуке ещё не выполнен.
+- **Implementation gate:** M0 empirical и visible prototype идут параллельными
+  непересекающимися треками.
+- **Release verdict:** локальная разработка и product preview — `GO`;
+  portable M3 и публичный показ — `NO-GO` до target Windows 10 evidence и rehearsal.
 
 Автопрезентатор — отдельный Playwright-инструмент, который показывает настоящий интерфейс KenigEvents в сценической композиции. Ведущий запускает и останавливает заранее известный сценарий с телефона; Windows-агент выполняет реальные browser actions и заранее умеет воспроизвести проверенное резервное видео.
 
@@ -10,38 +13,60 @@
 
 ## Решение в одном абзаце
 
-Сначала на целевой Windows 10 доказываем работоспособность точной portable-связки Node + Playwright + Playwright-managed browser: для каждого кандидата отдельно нужны 20/20 полных холодных циклов на локальной loopback-fixture (10 fresh-profile + 10 persistent-profile) и затем 5/5 live smoke на `/zavtra/`. Только после M0 PASS можно строить локальную stage-страницу 1920×1080 с реальным review build в `iframe` 430×932, детерминированный `tomorrow-mobile`, локальный hard stop и запись. Relay, телефонный control UI и финальная portable-сборка относятся к следующим этапам. Публичный gate — тот же ZIP на том же ноутбуке, заранее просмотренный MP4 и полный rehearsal.
+M0 продолжает отдельно доказывать exact portable-связку на целевой Windows 10:
+для каждого кандидата нужны 20/20 холодных loopback-циклов и 5/5 live smoke.
+Параллельно доступен узкий dev vertical slice: headed stage 1920×1080,
+реальный same-origin сайт в `iframe` 430×932, один `tomorrow-mobile`,
+настоящий `locator.click()` и минимальный `aiohttp`-пульт Run/Stop/Reset.
+Этот прототип ускоряет product learning, но не является M0 evidence,
+portable release или разрешением публичного показа.
 
 ## Продуктовая граница
 
-### Первый полезный результат
+### Первый видимый vertical slice
 
 Один сценарий `tomorrow-mobile`:
 
-1. открывает immutable review build на отдельном Astro route `/zavtra/`;
-2. подтверждает page/date/dataset markers;
-3. показывает реальный мобильный listing в рамке телефона;
-4. прокручивает listing и rail вправо/влево;
-5. открывает заранее выбранное событие настоящим `locator.click()`;
-6. возвращается, выбирает зафиксированную субботу и делает 1–2 действия;
-7. останавливается с телефона или локальным `Esc` не позднее двух секунд;
-8. выполняется тем же action graph в `live` и `record` policy.
+1. открывает служебный noindex stage с настоящей главной страницей в iframe;
+2. находит видимый `[data-presenter-id="nav-tomorrow"]`;
+3. прокручивает target в видимую область и получает `boundingBox`;
+4. плавно ведёт декоративный cursor, выполняет настоящий `locator.hover()`;
+5. показывает ripple и выполняет настоящий `locator.click()`;
+6. ждёт `/zavtra/` и `[data-presenter-id="tomorrow-page-ready"]`;
+7. подтверждает `completed` телефону; Stop и Reset обрабатываются параллельным polling.
 
-### Не входит в M0
+### Два непересекающихся трека
 
-M0 — только compatibility experiment. До его подтверждённого PASS **запрещено начинать M1, M2 или M3**, в том числе писать:
+M0 остаётся только compatibility experiment и не переписывается ради прототипа.
+Visible prototype работает только с stage, agent, relay, control UI и одним
+сценарием. Он может разрабатываться и демонстрироваться владельцу продукта на
+поддерживаемой dev-ОС до M0 PASS.
 
-- iframe presentation stage, декоративный cursor/tap overlay и запись;
-- телефонный UI, relay API, long-poll и production authentication;
+До M0 PASS по-прежнему запрещены:
+
 - финальную portable-сборку и backup-video pipeline;
 - desktop-сцены;
 - typing, QR/image, инфографика и key hints;
 - несколько сценариев и универсальный DSL;
-- `.exe`, Electron, React, Socket.IO, Redis, отдельная очередь/БД;
+- `.exe`, Electron, Socket.IO, Redis, отдельная очередь/БД;
 - AI-планирование live-сценария;
 - визуальный редактор и multi-tenant service.
 
 Разрешённый инвентарь M0 ограничен двумя hermetic candidate bundles, launcher/self-test, локальной fixture, одним настоящим click-сценарием, сбором system/run evidence, автоматическим cold-cycle runner, отдельным live smoke и сравнительным отчётом. После M3 расширения можно добавлять поверх уже доказанного runner.
+
+### Запуск dev vertical slice
+
+Из корня репозитория:
+
+```bash
+./tools/autopresenter/prototype/start-dev.sh
+```
+
+Пульт: `http://127.0.0.1:8787/control/`. Первый запуск выполняет только
+необходимый lockfile bootstrap. Интегрированный smoke, screenshot, 27-секундный
+MP4 и SHA-256 лежат в
+[`tools/autopresenter/prototype/evidence/`](../../../../tools/autopresenter/prototype/evidence/SMOKE.md).
+Это dev evidence на поддерживаемой Linux-среде, а не M0 PASS.
 
 ## Traceability и решение «Сегодня» / «Завтра»
 
@@ -175,7 +200,7 @@ M0 немедленно завершается FAIL, если managed browser о
 
 Кандидат получает PASS только при **20/20 compatibility + 5/5 live**, успешном offline self-test, валидных manifest/hash, настоящем `locator.click()`, zero-install/zero-admin, нулевых browser downloads/system-browser fallbacks и нулевых orphan processes. `19/20`, `4/5`, ручное удаление locked profile, единичный crash, запуск только из dev shell/от администратора или необходимость установить системный компонент — FAIL.
 
-Если прошли оба кандидата, выбирается более новый только при равной стабильности и без дополнительных системных требований. Если прошёл один — его exact versions/checksums замораживаются. Если не прошёл ни один — итог `PLAYWRIGHT_ON_TARGET_WIN10_NO_GO`, M1 не начинается. Даже успешный результат доказывает совместимость только с зафиксированными build/user/laptop, а не общую поддержку Windows 10.
+Если прошли оба кандидата, выбирается более новый только при равной стабильности и без дополнительных системных требований. Если прошёл один — его exact versions/checksums замораживаются. Если не прошёл ни один — итог `PLAYWRIGHT_ON_TARGET_WIN10_NO_GO`: M3 portable release и public demo не начинаются, а dev-прототип остаётся только product-learning артефактом. Даже успешный результат доказывает совместимость только с зафиксированными build/user/laptop, а не общую поддержку Windows 10.
 
 ## P0. Stage contract
 
@@ -225,13 +250,15 @@ empty_state_allowed: false
 
 Exact dates/IDs заполняются для конкретного показа и входят в scenario hash. Нельзя во время live run выбирать «первую интересную карточку».
 
-До M1 сайт получает нейтральные presentation hooks:
+Текущий M1-lite slice добавляет нейтральные presentation hooks:
 
-- `data-presenter-id="page-tomorrow"` — ровно один page root;
-- `data-presenter-build-id` и `data-presenter-listing-date`;
-- существующий `data-event-id="<id>"` для exact card;
-- существующий `data-calendar-date="YYYY-MM-DD"` для exact Saturday;
-- stable rail/gallery hook с уникальным container contract.
+- `data-presenter-id="nav-tomorrow"` — видимая quick-nav ссылка на главной;
+- `data-presenter-id="tomorrow-page-ready"` — ровно один destination root;
+- `data-presenter-id="presenter-stage"` и `data-presenter-stage-ready="true"`;
+- `data-presenter-id="mobile-site-frame"` — ровно один iframe 430×932.
+
+Build/date/event/Saturday/rail контракты остаются расширением полного M1 после
+односценарного vertical slice и не симулируются заранее.
 
 `tests/playwright/presenter-site-contract.spec.ts` проверяет uniqueness, iframe loading, route, dataset markers и success targets. `getByText(...).first()` запрещён. Multiple matches — preflight error.
 
@@ -398,7 +425,7 @@ Autopresenter-Win10-x64/
 - strict click, offline self-test, path matrix, manifest/hash/process checks;
 - полный раздельный evidence package.
 
-**Gate:** выбранная exact combo проходит весь M0 test contract на целевом Windows 10 ноутбуке. Реализация M1–M3 не является допустимым способом «продолжить», если target execution отсутствует или завершился FAIL.
+**Gate:** выбранная exact combo проходит весь M0 test contract на целевом Windows 10 ноутбуке. Dev M1+M2-lite может идти параллельно, но не заменяет target evidence и не разблокирует M3/public demo.
 
 ### M1 — Stage и deterministic scenario
 
@@ -488,7 +515,7 @@ path-matrix/<candidate>/
 
 | Вопрос | Решение |
 |---|---|
-| Текущий статус | M0 implementation; target execution pending; только M0 разрешён |
+| Текущий статус | M0 implementation accepted, target execution pending; M1+M2-lite dev prototype разрешён параллельно |
 | Windows 10 | unsupported current platform; exact compatibility spike обязателен |
 | M0 acceptance | каждый candidate: 20/20 local cold cycles (10 fresh + 10 persistent), затем 5/5 live |
 | Первый сценарий | `tomorrow-mobile`; `/zavtra/` — отдельный Astro route |

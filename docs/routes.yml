@@ -342,12 +342,14 @@ features:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
     autopresenter:
-      status: m0_target_execution_pending
+      status: m0_target_execution_pending_m1_m2_lite_dev_ready
       docs: docs/features/static-site-pages/auto-present/README.md
       review_resolution: docs/features/static-site-pages/auto-present/external-review-resolution-2026-07-28.md
-      operator_runbook: tools/autopresenter/m0/README.md
-      gate: target_win10_20_of_20_local_then_5_of_5_live
-      implementation_gate: m0_win10_compatibility
+      operator_runbook: tools/autopresenter/README.md
+      prototype_runbook: tools/autopresenter/prototype/README.md
+      m0_runbook: tools/autopresenter/m0/README.md
+      release_gate: target_win10_20_of_20_local_then_5_of_5_live
+      implementation_gate: parallel_m0_empirical_and_m1_m2_lite_dev
       source_requirements: docs/features/static-site-pages/auto-present/requirements.md
       references:
         superseded_poc_prompt: docs/features/static-site-pages/auto-present/playwright_autopresenter_prompt.md
