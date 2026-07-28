@@ -10,7 +10,7 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'nume
   .format(new Date(`${tomorrowDate}T12:00:00+02:00`));
 ---
 <EventLayout title={`События завтра в Калининграде | ${SITE_NAME}`} description={`События на завтра, ${dateLabel}, сгруппированные по времени начала.`} canonicalUrl={absoluteUrl('/zavtra/')} structuredData={[]} headerCurrent="tomorrow">
-  <main id="main" class="ke-listing-page">
+  <main id="main" class="ke-listing-page" data-presenter-id="tomorrow-page-ready">
     <DateListingSurface kind="tomorrow" title="Завтра" date={tomorrowDate} dateLabel={dateLabel} events={events} />
     <div class="ke-listing-shell"><PersonalFeedSlot context="tomorrow" /></div>
   </main>

@@ -13,7 +13,11 @@ const items = [
 
 <nav class="home-quick-nav" data-home-quick-nav aria-label="Быстрый выбор событий">
   {items.map((item, index) => (
-    <a href={withBase(item.href)} data-home-quick-nav-item={index + 1}>
+    <a
+      href={withBase(item.href)}
+      data-home-quick-nav-item={index + 1}
+      data-presenter-id={item.href === '/zavtra/' ? 'nav-tomorrow' : undefined}
+    >
       <strong>{item.label}</strong>
       <span>{item.note}</span>
     </a>
