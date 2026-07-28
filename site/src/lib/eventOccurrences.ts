@@ -71,6 +71,11 @@ export function isExhibitionLikeEvent(
   // than reclassifying titles with a broad keyword regex at render time.
   const eventType = String(event.event_type || '').trim().toLowerCase();
   if (eventType === 'выставка' || eventType === 'экспозиция') return true;
+  // A concrete non-exhibition primary type is authoritative. Mixed programmes
+  // may legitimately carry EXHIBITIONS as a secondary topic (for example a
+  // festival that also contains an exhibition); hiding the whole event from
+  // its start-date rail would turn that secondary facet into a primary kind.
+  if (eventType) return false;
   return (event.topics || []).some((topic) => String(topic).trim().toUpperCase() === 'EXHIBITIONS');
 }
 

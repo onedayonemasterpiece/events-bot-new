@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   collapseOccurrenceCards,
   formatOccurrencePresentation,
+  isExhibitionLikeEvent,
   isPopularEligible,
   resolveOccurrenceFamily,
   selectPopularEventFamilies,
@@ -110,6 +111,21 @@ test('Popular excludes a stale ordinary range but keeps an ongoing exhibition th
   assert.equal(isPopularEligible(ordinaryPast, reference), false);
   assert.equal(isPopularEligible(ongoingExhibition, reference), true);
   assert.equal(isPopularEligible(endedExhibition, reference), false);
+});
+
+test('secondary EXHIBITIONS topic does not hide a typed festival from date rails', () => {
+  const mixedFestival = event(4211, '2026-08-08', '12:00', [], {
+    title: 'VII фестиваль современного искусства «Море внутри»',
+    event_type: 'фестиваль',
+    end_date: '2026-08-09',
+    topics: ['THEATRE_MODERN', 'EXHIBITIONS', 'FAMILY'],
+  });
+  const untypedExhibition = event(7001, '2026-08-08', '12:00', [], {
+    event_type: '',
+    topics: ['EXHIBITIONS'],
+  });
+  assert.equal(isExhibitionLikeEvent(mixedFestival), false);
+  assert.equal(isExhibitionLikeEvent(untypedExhibition), true);
 });
 
 test('Popular eligibility accepts future one-offs and gates same-day events by start instant', () => {

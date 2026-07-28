@@ -414,6 +414,11 @@
 
 ### Fixed
 
+- Fixed date-list exhibition routing so a concrete non-exhibition primary
+  `event_type` wins over a secondary `EXHIBITIONS` facet. Mixed programmes such
+  as festival «Море внутри» remain on their start-date rail with the structured
+  festival medallion, while explicit or otherwise-untyped exhibitions keep the
+  separate exhibition lifecycle.
 - **Static site / late-day Today export**: kept otherwise-public same-day
   one-off events in the full static catalog after their start time so
   `/segodnya/` can render the accepted muted elapsed state and mobile rail
