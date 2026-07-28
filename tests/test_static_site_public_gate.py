@@ -177,6 +177,32 @@ def test_full_catalog_keeps_elapsed_same_day_events_for_today_muting() -> None:
     assert [item["event_id"] for item in ledger["eligible"]] == [1, 2, 4]
 
 
+def test_recent_detail_archive_retains_links_without_reentering_public_catalog() -> None:
+    exporter = _load_exporter_module()
+    con = _connect_with_public_gate_columns()
+    _insert_event(con, 1, date="2026-07-26")
+    _insert_event(con, 2, date="2026-07-13")
+    _insert_event(con, 3, date="2026-07-27")
+    _insert_event(con, 4, date="2026-07-25", silent=1)
+    _insert_event(con, 5, date="2026-07-24", identity_status="alias")
+    _insert_event(con, 6, date="2026-07-01", end_date="2026-07-20")
+
+    current = exporter.fetch_rows(
+        con,
+        limit=None,
+        current_date="2026-07-28",
+        include_ids=[],
+    )
+    archived = exporter.fetch_recent_event_detail_archive_rows(
+        con,
+        current_date="2026-07-28",
+    )
+
+    assert current == []
+    assert [row["id"] for row in archived] == [3, 1, 6, 2]
+    assert exporter.EVENT_DETAIL_ARCHIVE_DAYS == 30
+
+
 def test_add_build_09_catalog_ledger_proves_eligible_and_excluded_parity() -> None:
     exporter = _load_exporter_module()
     con = _connect_with_public_gate_columns()

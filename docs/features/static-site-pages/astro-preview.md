@@ -99,6 +99,16 @@ day. Surfaces that must exclude already-started one-offs, especially Popular,
 apply their own start-instant eligibility after export. The catalog eligibility
 ledger uses the same inclusive predicate.
 
+Direct event links have a separate, bounded lifecycle. A full-catalog export
+writes recently elapsed canonical public events to
+`preview-event-archive.json` for **30 days**. That projection may generate only
+the event detail route and its ICS response; it is not imported by listings,
+Search, Popular, recommendations, personalization, the active catalog ledger
+or sitemap. Grace-period detail pages are `noindex,nofollow,noarchive`. This
+keeps a shared/reviewed event URL such as `6529` from turning into a next-day
+404 without reintroducing an elapsed event into discovery. Silent, aliased,
+non-active or public-gate-rejected rows remain excluded fail closed.
+
 The 2026-07-23 correction candidate additionally keeps every reviewed surface
 inside one mutually linked prefix: the dynamic Exhibitions presentation,
 optimized responsive personal-card feed, Search, current clubs, six-logo Partners,

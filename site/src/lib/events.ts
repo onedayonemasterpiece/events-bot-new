@@ -1,4 +1,5 @@
 import previewData from '../data/preview-events.json';
+import archivedEventData from '../data/preview-event-archive.json';
 import relatedData from '../data/preview-related.json';
 import { eventImageUrl } from './assets';
 import {
@@ -40,6 +41,8 @@ export const ICS_BASE_URL = (
 ).replace(/\/+$/u, '');
 
 const data = previewData as PreviewData;
+const archivedDetails = archivedEventData as PreviewData;
+const archivedDetailIds = new Set(archivedDetails.events.map((event) => event.id));
 const related = relatedData as RelatedData;
 const previewCurrentDateOverride = String(import.meta.env.PUBLIC_STATIC_SITE_CURRENT_DATE || '').trim();
 const previewGeneratedAtOverride = String(import.meta.env.PUBLIC_STATIC_SITE_REFERENCE_ISO || '').trim();
@@ -69,6 +72,22 @@ export function getEvents(): PreviewEvent[] {
     const bv = b.starts_at || b.start_date;
     return av.localeCompare(bv) || a.id - b.id;
   });
+}
+
+/** Recently elapsed canonical events remain addressable as detail pages only. */
+export function getEventDetailEvents(): PreviewEvent[] {
+  const byId = new Map<number, PreviewEvent>();
+  for (const event of [...data.events, ...archivedDetails.events]) byId.set(event.id, event);
+  return [...byId.values()].sort((a, b) => {
+    const av = a.starts_at || a.start_date;
+    const bv = b.starts_at || b.start_date;
+    return av.localeCompare(bv) || a.id - b.id;
+  });
+}
+
+/** True only for the bounded direct-link grace pool, never for active listings. */
+export function isArchivedEventDetail(event: PreviewEvent): boolean {
+  return archivedDetailIds.has(event.id) && !data.events.some((current) => current.id === event.id);
 }
 
 export function getCurrentDate(): string {
@@ -179,11 +198,11 @@ export function displayUpdatedAtKaliningrad(value: string | null | undefined): s
 
 
 export function getEventBySlug(slug: string): PreviewEvent | undefined {
-  return data.events.find((event) => event.slug === slug);
+  return getEventDetailEvents().find((event) => event.slug === slug);
 }
 
 export function getEventById(id: number): PreviewEvent | undefined {
-  return data.events.find((event) => event.id === id);
+  return getEventDetailEvents().find((event) => event.id === id);
 }
 
 export function withBase(path: string): string {

@@ -1,0 +1,11 @@
+{
+  "build": {
+    "generated_at": "2026-07-23T06:55:06.777309+00:00",
+    "source": "prod-sqlite-static-site-event-detail-archive-v1",
+    "current_date": "2026-07-23",
+    "notes": [
+      "recently elapsed detail routes only; never a listing/search source"
+    ]
+  },
+  "events": []
+}

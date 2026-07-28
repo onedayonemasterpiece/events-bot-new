@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import eventArchiveData from '../src/data/preview-event-archive.json' with { type: 'json' };
 import catalogData from '../src/data/production-catalog.json' with { type: 'json' };
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
 import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
@@ -125,6 +126,13 @@ if (
     !== sha256(readFileSync(join(siteDir, 'src/data/festival-timeline.json')))
   || manifest.versions?.festival_calendar?.rendered_count !== festivalTimelineData.festivals.length
 ) fail('festival timeline release receipt/hash mismatch');
+if (
+  manifest.versions?.event_detail_archive?.source !== eventArchiveData.build?.source
+  || manifest.versions?.event_detail_archive?.retention_days !== 30
+  || manifest.versions?.event_detail_archive?.rendered_count !== eventArchiveData.events.length
+  || manifest.versions?.event_detail_archive?.projection_sha256
+    !== sha256(readFileSync(join(siteDir, 'src/data/preview-event-archive.json')))
+) fail('event detail archive release receipt/hash mismatch');
 const festivalSlugs = festivalTimelineData.festivals.map((item) => item.slug);
 if (festivalSlugs.length !== new Set(festivalSlugs).size) fail('festival timeline contains duplicate slugs');
 for (const key of files.map((file) => file.key)) {
@@ -152,6 +160,12 @@ for (const event of eventsData.events) {
     if (!(target.other_date_ids || []).map(Number).includes(Number(event.id))) fail(`asymmetric linked occurrence ${event.id}<->${linkedId}`);
   }
 }
+const archivedSlugs = new Set(eventArchiveData.events.map((event) => String(event.slug)));
+for (const event of eventArchiveData.events) {
+  if (eventById.has(Number(event.id))) fail(`active event duplicated in detail archive: ${event.id}`);
+  required(`sobytiya/${event.slug}/index.html`);
+  required(`sobytiya/${event.slug}/event.ics`);
+}
 if (!Array.isArray(interestClubsData.clubs) || interestClubsData.clubs.length < 3) fail('confirmed club projection is unexpectedly empty');
 for (const club of interestClubsData.clubs) {
   required(`kluby-po-interesam/${club.slug}/index.html`);
@@ -164,7 +178,8 @@ for (const file of files.filter((item) => item.key.endsWith('.html'))) {
     || file.key === 'izbrannoe/index.html'
     || file.key === 'neobychnoe/index.html'
     || file.key === 'artefakty/index.html'
-    || /^podborki\/[^/]+\/index\.html$/u.test(file.key);
+    || /^podborki\/[^/]+\/index\.html$/u.test(file.key)
+    || archivedSlugs.has(/^sobytiya\/([^/]+)\/index\.html$/u.exec(file.key)?.[1] || '');
   if (intentionallyUnindexed) {
     if (!/<meta\s+name="robots"\s+content="noindex,nofollow,noarchive"/iu.test(source)) fail(`private/personal noindex policy missing from ${file.key}`);
   } else {
@@ -187,6 +202,7 @@ const sitemap = readFileSync(join(root, 'sitemap.xml'), 'utf8');
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/gu)].map((match) => match[1]);
 if (new Set(locs).size !== locs.length || locs.some((url) => !url.startsWith(`${siteOrigin}/`) || /\/(?:__preview|lab|_review)(?:\/|$)/u.test(url))) fail('sitemap contains duplicate/off-origin/QA URLs');
 for (const event of eventsData.events) if (!locs.includes(`${siteOrigin}/sobytiya/${event.slug}/`)) fail(`event missing from sitemap ${event.id}`);
+for (const event of eventArchiveData.events) if (locs.includes(`${siteOrigin}/sobytiya/${event.slug}/`)) fail(`archived detail leaked into sitemap ${event.id}`);
 if (!locs.includes(`${siteOrigin}/festivali/`)) fail('festival calendar missing from sitemap');
 if (!locs.includes(`${siteOrigin}/partnerstvo/`)) fail('partnership page missing from sitemap');
 if (!Array.isArray(manifest.stable_ics) || manifest.stable_ics.length !== eventsData.events.length) fail('stable ICS manifest parity failed');

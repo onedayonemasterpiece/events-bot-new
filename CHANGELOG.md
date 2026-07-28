@@ -34,6 +34,10 @@
 - Fixed production and immutable-candidate builds so an omitted Clubs UI flag
   cannot silently replace the checked three-club projection with an empty
   catalogue; explicit `0` remains the rollback.
+- Kept canonical public event detail links addressable for 30 days after an
+  event ends through a separate noindex archive projection, while excluding
+  those rows from every current listing, Search, Popular, recommendation,
+  personalization and active-catalog surface.
 
 - Added the R15 unusual-events implementation contract: `/neobychnoe/`,
   15-family taxonomy, one hash-bound shared BGE vector boundary, concept-level

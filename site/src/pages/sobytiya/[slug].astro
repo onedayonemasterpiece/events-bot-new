@@ -19,7 +19,7 @@ import desktopThumbnailOverridesData from '../../data/desktop-event-thumbnail-ov
 import type { EventImageDerivative, PreviewEvent } from '../../lib/types';
 import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentation';
 import { desktopEventWithExplicitEnd } from '../../lib/desktopEventTransport';
-import { IS_PRODUCTION_FAMILY, PREVIEW_BUILD_ID, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isEventDetailCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
+import { IS_PRODUCTION_FAMILY, PREVIEW_BUILD_ID, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEventDetailEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isArchivedEventDetail, isEventDetailCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
 type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
@@ -32,13 +32,14 @@ const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
 const feedCardVariant: FeedCardVariant = 'split-actions';
 
 export function getStaticPaths() {
-  return getEvents().map((event) => ({ params: { slug: event.slug } }));
+  return getEventDetailEvents().map((event) => ({ params: { slug: event.slug } }));
 }
 
 const event = getEventBySlug(Astro.params.slug ?? '');
 if (!event) {
   return Astro.redirect(siteHomeHref());
 }
+const archivedDetail = isArchivedEventDetail(event);
 const discoveryFeed = getPreloadedDiscoveryEvents(event, 10);
 const desktopDiscoveryFeed = getPreloadedDiscoveryEvents(event, 30);
 const discoveryAlgorithmId = eventDetailRelatedAlgorithmId();
@@ -104,7 +105,7 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
   || String(import.meta.env.PUBLIC_KEYBOARD_EVENT_NAVIGATION_FORCE || '') === '1')
   && String(import.meta.env.PUBLIC_KEYBOARD_EVENT_NAVIGATION_ENABLED || '1') !== '0';
 ---
-<EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive">
+<EventLayout title={title} description={event.meta_description} canonicalUrl={canonicalUrl} ogImage={ogImage} ogImageType={ogImageType} ogImageWidth={ogImageAsset?.width || null} ogImageHeight={ogImageAsset?.height || null} structuredData={structuredData} heroChrome="immersive" noindex={archivedDetail}>
   <MobileEventProductionStyles />
   <div id="main">
   <DesktopEventPage

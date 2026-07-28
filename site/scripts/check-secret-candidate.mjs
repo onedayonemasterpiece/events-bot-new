@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import eventArchiveData from '../src/data/preview-event-archive.json' with { type: 'json' };
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
 import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
@@ -118,6 +119,10 @@ for (const event of eventsData.events) {
   if (!eventHtml.includes(`data-event-template-contract="${templateContract.contract_id}"`)) fail(`event ${event.id} misses accepted template contract marker`);
   if (!eventHtml.includes(`data-event-template-source="${templateContract.accepted_source_sha}"`)) fail(`event ${event.id} misses accepted template source marker`);
   if (!/data-desktop-family="(?:editorial|split)"/u.test(eventHtml)) fail(`event ${event.id} bypasses the accepted desktop family router`);
+}
+for (const event of eventArchiveData.events) {
+  source(`sobytiya/${event.slug}/index.html`);
+  source(`sobytiya/${event.slug}/event.ics`);
 }
 if (!Array.isArray(interestClubsData.clubs) || interestClubsData.clubs.length < 3) fail('confirmed club projection is unexpectedly empty');
 for (const club of interestClubsData.clubs) {

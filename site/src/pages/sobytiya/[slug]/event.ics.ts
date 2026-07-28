@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro';
 import { buildIcs, eventIcsDownloadFilename } from '../../../lib/ics';
-import { getEventBySlug, getEvents } from '../../../lib/events';
+import { getEventBySlug, getEventDetailEvents } from '../../../lib/events';
 
 export function getStaticPaths() {
-  return getEvents().map((event) => ({ params: { slug: event.slug } }));
+  return getEventDetailEvents().map((event) => ({ params: { slug: event.slug } }));
 }
 
 export const GET: APIRoute = ({ params }) => {

@@ -13,6 +13,7 @@ const repoRoot = resolve(siteDir, '..');
 const distDir = join(siteDir, 'dist');
 const catalogPath = join(siteDir, 'src/data/production-catalog.json');
 const eventsPath = join(siteDir, 'src/data/preview-events.json');
+const eventArchivePath = join(siteDir, 'src/data/preview-event-archive.json');
 const relatedPath = join(siteDir, 'src/data/preview-related.json');
 const festivalTimelinePath = join(siteDir, 'src/data/festival-timeline.json');
 const templateContractPath = join(siteDir, 'src/data/eventTemplateContract.json');
@@ -81,6 +82,7 @@ rootHtml = replaceRequired(rootHtml, '<main id="main"', '<main id="main" data-pr
 writeFileSync(join(distDir, 'index.html'), rootHtml);
 
 const eventsData = JSON.parse(readFileSync(eventsPath, 'utf8'));
+const eventArchiveData = JSON.parse(readFileSync(eventArchivePath, 'utf8'));
 const relatedData = JSON.parse(readFileSync(relatedPath, 'utf8'));
 const festivalTimelineData = JSON.parse(readFileSync(festivalTimelinePath, 'utf8'));
 const templateContract = JSON.parse(readFileSync(templateContractPath, 'utf8'));
@@ -97,10 +99,12 @@ writeFileSync(buildPath, `${JSON.stringify(buildMetadata, null, 2)}\n`);
 const files = fileInventory(distDir, { exclude: ['static-release-manifest.json'] });
 const counts = pageCounts(files, catalog.eligible_count);
 const idBySlug = new Map(eventsData.events.map((event) => [String(event.slug), Number(event.id)]));
+const archiveSlugs = new Set(eventArchiveData.events.map((event) => String(event.slug)));
 const stableIcs = files.flatMap((file) => {
   const match = /^sobytiya\/([^/]+)\/event\.ics$/u.exec(file.key);
   if (!match) return [];
   const eventId = idBySlug.get(match[1]);
+  if (!eventId && archiveSlugs.has(match[1])) return [];
   if (!eventId) throw new Error(`Cannot map stable ICS source ${file.key}`);
   return [{ event_id: eventId, source_key: file.key, target_key: `ics/${eventId}.ics`, sha256: file.sha256 }];
 });
@@ -119,6 +123,12 @@ const manifest = {
     template_source_sha: templateContract.accepted_source_sha,
     template_contract_schema: templateContract.schema_version,
     related: relatedData.schema_version || relatedData.algorithm || null,
+    event_detail_archive: {
+      source: eventArchiveData.build?.source || null,
+      retention_days: 30,
+      rendered_count: eventArchiveData.events.length,
+      projection_sha256: sha256(readFileSync(eventArchivePath)),
+    },
     festival_calendar: {
       schema_version: festivalTimelineData.schema_version,
       source: festivalTimelineData.source,

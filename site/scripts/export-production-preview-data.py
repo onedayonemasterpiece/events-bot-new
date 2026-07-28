@@ -1956,6 +1956,55 @@ def fetch_rows(
     return ordered_rows[:limit]
 
 
+EVENT_DETAIL_ARCHIVE_DAYS = 30
+
+
+def fetch_recent_event_detail_archive_rows(
+    con: sqlite3.Connection,
+    current_date: str,
+    *,
+    retention_days: int = EVENT_DETAIL_ARCHIVE_DAYS,
+) -> list[sqlite3.Row]:
+    """Return recently elapsed public events for direct detail URLs only.
+
+    These rows are deliberately kept out of ``preview-events.json`` so they
+    cannot leak into current listings, Search, Popular, recommendations or
+    personalization. The small grace window prevents a shared/reviewed event
+    link from becoming a 404 the morning after its occurrence.
+    """
+    current_day = date.fromisoformat(current_date)
+    cutoff = (current_day - timedelta(days=max(1, retention_days))).isoformat()
+    rows: list[sqlite3.Row] = []
+    columns = {str(row[1]) for row in con.execute("pragma table_info('event')")}
+    end_expression = (
+        "coalesce(nullif(trim(end_date),''), date)"
+        if "end_date" in columns
+        else "date"
+    )
+    lifecycle_clause = (
+        "and coalesce(nullif(trim(lifecycle_status),''),'active') = 'active'"
+        if "lifecycle_status" in columns
+        else ""
+    )
+    silent_clause = "and coalesce(silent,0) = 0" if "silent" in columns else ""
+    query = f"""
+        select * from event
+        where date glob '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+          and {end_expression} >= ?
+          and {end_expression} < ?
+          {lifecycle_clause}
+          {silent_clause}
+        order by {end_expression} desc, id asc
+    """
+    for row in con.execute(query, (cutoff, current_date)):
+        if public_projection_gate_reason(row):
+            continue
+        if title_looks_prompt_leak(row_get(row, "title")):
+            continue
+        rows.append(row)
+    return rows
+
+
 CATALOG_LEDGER_SCHEMA_VERSION = "static_event_catalog_ledger_v1"
 ELIGIBILITY_PREDICATE_VERSION = "static_event_public_projection_v2"
 
@@ -5237,9 +5286,14 @@ def main() -> int:
         focus_date_from=args.focus_date_from,
         focus_date_to=args.focus_date_to,
     )
+    archive_rows = (
+        fetch_recent_event_detail_archive_rows(con, effective_date)
+        if args.catalog_mode == "full"
+        else []
+    )
     participants_by_event = event_participants_for_events(
         con,
-        [int(row["id"]) for row in rows],
+        [int(row["id"]) for row in [*rows, *archive_rows]],
     )
     events = [
         build_event(
@@ -5251,6 +5305,15 @@ def main() -> int:
         for row in rows
     ]
     normalize_linked_occurrences(events)
+    archived_events = [
+        build_event(
+            con,
+            row,
+            effective_date,
+            participants=participants_by_event.get(int(row["id"]), []),
+        )
+        for row in archive_rows
+    ]
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -5279,6 +5342,23 @@ def main() -> int:
     }
     preview_events_path = out_dir / "preview-events.json"
     preview_events_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    event_detail_archive = {
+        "build": {
+            "generated_at": generated_at,
+            "source": "prod-sqlite-static-site-event-detail-archive-v1",
+            "current_date": effective_date,
+            "notes": [
+                f"{len(archived_events)} recently elapsed canonical event detail routes",
+                f"retention_days={EVENT_DETAIL_ARCHIVE_DAYS}",
+                "detail/ICS only; excluded from listings, Search, Popular and recommendations",
+            ],
+        },
+        "events": archived_events,
+    }
+    (out_dir / "preview-event-archive.json").write_text(
+        json.dumps(event_detail_archive, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     if args.catalog_mode == "full":
         ledger = build_catalog_ledger(
             con,
