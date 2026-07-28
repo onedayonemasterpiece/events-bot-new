@@ -83,3 +83,12 @@ render/
 site/node_modules/
 site/dist/
 site/.astro/
+
+# Autopresenter M0 generated candidates/evidence (source manifests stay tracked)
+tools/autopresenter/**/node_modules/
+tools/autopresenter/release-m0/
+tools/autopresenter/**/.candidate-build/
+tools/autopresenter/**/browsers/
+tools/autopresenter/**/runtime/
+tools/autopresenter/**/*.zip
+tools/autopresenter/**/*.trace.zip

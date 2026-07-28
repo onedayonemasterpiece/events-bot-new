@@ -65,6 +65,7 @@ $candidateManifestPath = Join-Path $candidateRoot 'candidate.json'
 $candidatePackagePath = Join-Path $candidateRoot 'package.json'
 $candidateLockPath = Join-Path $candidateRoot 'package-lock.json'
 $runtimeSourcePath = Join-Path $m0Root 'src'
+$fixtureSourcePath = Join-Path $m0Root 'fixture'
 $templateRoot = Join-Path $m0Root 'release-m0\templates'
 
 foreach ($requiredPath in @(
@@ -72,8 +73,11 @@ foreach ($requiredPath in @(
     $candidatePackagePath,
     $candidateLockPath,
     $runtimeSourcePath,
+    $fixtureSourcePath,
     (Join-Path $runtimeSourcePath 'run-suite.js'),
     (Join-Path $runtimeSourcePath 'self-test.js'),
+    (Join-Path $fixtureSourcePath 'index.html'),
+    (Join-Path $fixtureSourcePath 'zavtra\index.html'),
     (Join-Path $templateRoot 'start.cmd.in'),
     (Join-Path $templateRoot 'self-test.cmd.in')
 )) {
@@ -198,6 +202,7 @@ if (-not (Test-Path -LiteralPath $buildNodePath) -or -not (Test-Path -LiteralPat
 Copy-Item -LiteralPath $buildNodePath -Destination (Join-Path $releaseRuntimeRoot 'node.exe')
 
 Copy-Item -LiteralPath $runtimeSourcePath -Destination (Join-Path $releaseAppRoot 'src') -Recurse
+Copy-Item -LiteralPath $fixtureSourcePath -Destination (Join-Path $releaseAppRoot 'fixture') -Recurse
 Copy-Item -LiteralPath $candidatePackagePath -Destination (Join-Path $releaseAppRoot 'package.json')
 Copy-Item -LiteralPath $candidateLockPath -Destination (Join-Path $releaseAppRoot 'package-lock.json')
 Copy-Item -LiteralPath $candidateManifestPath -Destination (Join-Path $releaseRoot 'CANDIDATE.json')

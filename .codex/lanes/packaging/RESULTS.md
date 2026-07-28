@@ -24,7 +24,7 @@ committed
 
 ## Head SHA
 
-Implementation commit: `d1adf4d5e014523436bf80e2c4e511bf9e014674`
+Implementation commit: `d1adf4d56a5794f1c8fb37a96d1686c490b9ef03`
 
 The separate commit containing this results record is intentionally not
 self-referenced; use `git rev-parse agent/autopresenter-m0/packaging` after

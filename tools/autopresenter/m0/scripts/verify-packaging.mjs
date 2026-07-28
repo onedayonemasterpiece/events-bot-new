@@ -151,6 +151,10 @@ assert.match(selfTestTemplate, /--logs-dir "logs"/);
 
 const builder = await readFile(join(scriptRoot, "build-candidate.ps1"), "utf8");
 assert.match(builder, /\$env:PLAYWRIGHT_BROWSERS_PATH = \$releaseBrowsersRoot/);
+assert.match(
+  builder,
+  /Copy-Item -LiteralPath \$fixtureSourcePath -Destination \(Join-Path \$releaseAppRoot 'fixture'\) -Recurse/,
+);
 assert.match(builder, /playwright-core\\cli\.js/);
 assert.match(builder, /install chromium --no-shell/);
 assert.match(builder, /PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = '1'/);
