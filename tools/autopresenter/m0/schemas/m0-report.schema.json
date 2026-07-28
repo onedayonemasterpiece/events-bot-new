@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/autopresenter/m0/m0-report.schema.json",
+  "title": "Autopresenter M0 compatibility report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "targetMachineOnly",
+    "system",
+    "evidenceInventory",
+    "candidates",
+    "verdict"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "targetMachineOnly": { "const": true },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productName", "build", "architecture", "standardUser"],
+      "properties": {
+        "productName": { "type": "string" },
+        "build": { "type": "string" },
+        "architecture": { "type": "string" },
+        "standardUser": { "type": "boolean" }
+      }
+    },
+    "evidenceInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "requiredFiles", "candidateRecordCount", "runRecordCount"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "requiredFiles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "SYSTEM-INFO.json",
+            "VERSIONS.json",
+            "RELEASE-MANIFEST.json",
+            "SHA256SUMS.txt",
+            "M0-REPORT.json",
+            "M0-REPORT.md"
+          ],
+          "properties": {
+            "SYSTEM-INFO.json": { "type": "boolean" },
+            "VERSIONS.json": { "type": "boolean" },
+            "RELEASE-MANIFEST.json": { "type": "boolean" },
+            "SHA256SUMS.txt": { "type": "boolean" },
+            "M0-REPORT.json": { "type": "boolean" },
+            "M0-REPORT.md": { "type": "boolean" }
+          }
+        },
+        "candidateRecordCount": { "type": "integer", "minimum": 0 },
+        "runRecordCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/candidateResult" }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "code", "selectedCandidateId", "reason"],
+      "properties": {
+        "status": { "enum": ["PASS", "FAIL"] },
+        "code": { "enum": ["M0_COMPATIBILITY_PASS", "PLAYWRIGHT_ON_TARGET_WIN10_NO_GO"] },
+        "selectedCandidateId": { "type": ["string", "null"] },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "suiteResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed", "passed", "fresh", "persistent"],
+      "properties": {
+        "expected": { "type": "integer", "minimum": 1 },
+        "observed": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "fresh": { "type": "integer", "minimum": 0 },
+        "persistent": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "candidateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "playwrightVersion",
+        "status",
+        "localCold",
+        "liveSmoke",
+        "selfTestPassed",
+        "prohibitedRequirementsAbsent",
+        "orphanFree",
+        "stabilitySignalCount",
+        "reasons"
+      ],
+      "properties": {
+        "candidateId": { "type": "string" },
+        "playwrightVersion": { "type": "string" },
+        "status": { "enum": ["PASS", "FAIL"] },
+        "localCold": { "$ref": "#/$defs/suiteResult" },
+        "liveSmoke": { "$ref": "#/$defs/suiteResult" },
+        "selfTestPassed": { "type": "boolean" },
+        "prohibitedRequirementsAbsent": { "type": "boolean" },
+        "orphanFree": { "type": "boolean" },
+        "stabilitySignalCount": { "type": "integer", "minimum": 0 },
+        "reasons": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    }
+  }
+}

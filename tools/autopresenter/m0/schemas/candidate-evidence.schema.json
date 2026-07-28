@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/autopresenter/m0/candidate-evidence.schema.json",
+  "title": "Autopresenter M0 candidate evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "stack",
+    "release",
+    "requirements",
+    "extraRequirements",
+    "stabilitySignals",
+    "selfTest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "candidateId": { "$ref": "#/$defs/candidateId" },
+    "stack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeVersion",
+        "nodeArchitecture",
+        "playwrightVersion",
+        "browserName",
+        "browserVersion",
+        "browserRevision",
+        "browserExecutableSha256"
+      ],
+      "properties": {
+        "nodeVersion": { "$ref": "#/$defs/semver" },
+        "nodeArchitecture": { "const": "x64" },
+        "playwrightVersion": { "$ref": "#/$defs/semver" },
+        "browserName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "browserVersion": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "browserRevision": { "type": "string", "pattern": "^[0-9]+$" },
+        "browserExecutableSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zipFile", "zipSha256", "packageLockFile", "packageLockSha256"],
+      "properties": {
+        "zipFile": { "$ref": "#/$defs/relativePath" },
+        "zipSha256": { "$ref": "#/$defs/sha256" },
+        "packageLockFile": { "$ref": "#/$defs/relativePath" },
+        "packageLockSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "administrator",
+        "installedNode",
+        "installedBrowser",
+        "installStep",
+        "downloadAtRuntime",
+        "systemBrowser"
+      ],
+      "properties": {
+        "administrator": { "type": "boolean" },
+        "installedNode": { "type": "boolean" },
+        "installedBrowser": { "type": "boolean" },
+        "installStep": { "type": "boolean" },
+        "downloadAtRuntime": { "type": "boolean" },
+        "systemBrowser": { "type": "boolean" }
+      }
+    },
+    "extraRequirements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 },
+      "uniqueItems": true
+    },
+    "stabilitySignals": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 },
+      "uniqueItems": true
+    },
+    "selfTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passed",
+        "offline",
+        "targetSiteAccessed",
+        "localFixtureClick",
+        "probeFilesCreatedAndDeleted",
+        "nodeExitCode",
+        "browserStarted",
+        "browserClosed",
+        "usedSystemBrowser",
+        "browserDownloadAttempted",
+        "adminRequired",
+        "installRequired",
+        "orphanProcesses"
+      ],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "offline": { "type": "boolean" },
+        "targetSiteAccessed": { "type": "boolean" },
+        "localFixtureClick": { "type": "boolean" },
+        "probeFilesCreatedAndDeleted": { "type": "boolean" },
+        "nodeExitCode": { "type": "integer" },
+        "browserStarted": { "type": "boolean" },
+        "browserClosed": { "type": "boolean" },
+        "usedSystemBrowser": { "type": "boolean" },
+        "browserDownloadAttempted": { "type": "boolean" },
+        "adminRequired": { "type": "boolean" },
+        "installRequired": { "type": "boolean" },
+        "orphanProcesses": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "uniqueItems": true
+        },
+        "error": { "type": ["string", "null"], "maxLength": 2000 }
+      }
+    }
+  },
+  "$defs": {
+    "candidateId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^v?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+    }
+  }
+}

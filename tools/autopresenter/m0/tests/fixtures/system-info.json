@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "collectedAt": "2026-07-28T10:00:00.000Z",
+  "os": {
+    "productName": "Windows 10",
+    "version": "22H2",
+    "build": "19045.6093",
+    "architecture": "x64"
+  },
+  "user": {
+    "standardUser": true,
+    "administrator": false
+  },
+  "baseline": {
+    "installedNode": false,
+    "installedChrome": false,
+    "installedPlaywright": false
+  },
+  "pathVariants": [
+    {
+      "kind": "plain",
+      "path": "C:\\Autopresenter\\",
+      "passed": true
+    },
+    {
+      "kind": "spaces",
+      "path": "C:\\Folder with spaces\\Autopresenter\\",
+      "passed": true
+    },
+    {
+      "kind": "unicode",
+      "path": "C:\\Демонстрация\\Автопрезентатор\\",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "candidateId": "pre-cft-compat",
+  "stack": {
+    "nodeVersion": "22.12.0",
+    "nodeArchitecture": "x64",
+    "playwrightVersion": "1.54.2",
+    "browserName": "playwright-managed-browser",
+    "browserVersion": "139.0.7258.5",
+    "browserRevision": "1181",
+    "browserExecutableSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "release": {
+    "zipFile": "releases/pre-cft-compat.zip",
+    "zipSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "packageLockFile": "candidates/pre-cft-compat/package-lock.json",
+    "packageLockSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "requirements": {
+    "administrator": false,
+    "installedNode": false,
+    "installedBrowser": false,
+    "installStep": false,
+    "downloadAtRuntime": false,
+    "systemBrowser": false
+  },
+  "extraRequirements": [],
+  "stabilitySignals": [],
+  "selfTest": {
+    "passed": true,
+    "offline": true,
+    "targetSiteAccessed": false,
+    "localFixtureClick": true,
+    "probeFilesCreatedAndDeleted": true,
+    "nodeExitCode": 0,
+    "browserStarted": true,
+    "browserClosed": true,
+    "usedSystemBrowser": false,
+    "browserDownloadAttempted": false,
+    "adminRequired": false,
+    "installRequired": false,
+    "orphanProcesses": [],
+    "error": null
+  }
+}

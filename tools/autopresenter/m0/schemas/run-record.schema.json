@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenigevents.ru/schemas/autopresenter/m0/run-record.schema.json",
+  "title": "Autopresenter M0 per-run evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "candidateId",
+    "run",
+    "startedAt",
+    "finishedAt",
+    "coldStart",
+    "profileMode",
+    "nodeProcessFresh",
+    "browserProcessFresh",
+    "nodeExitCode",
+    "browserStarted",
+    "browserExecutable",
+    "usedSystemBrowser",
+    "browserDownloadAttempted",
+    "adminRequired",
+    "installRequired",
+    "target",
+    "locator",
+    "action",
+    "successMarkerVisible",
+    "liveRouteSuccess",
+    "liveContentSuccess",
+    "orphanProcesses",
+    "error"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "candidateId": { "$ref": "#/$defs/candidateId" },
+    "run": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "coldStart": { "type": "boolean" },
+    "profileMode": { "enum": ["fresh", "persistent"] },
+    "nodeProcessFresh": { "type": "boolean" },
+    "browserProcessFresh": { "type": "boolean" },
+    "nodeExitCode": { "type": "integer" },
+    "browserStarted": { "type": "boolean" },
+    "browserExecutable": { "$ref": "#/$defs/relativePath" },
+    "usedSystemBrowser": { "type": "boolean" },
+    "browserDownloadAttempted": { "type": "boolean" },
+    "adminRequired": { "type": "boolean" },
+    "installRequired": { "type": "boolean" },
+    "target": { "enum": ["local-fixture", "live-site"] },
+    "locator": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "action": { "const": "locator.click" },
+    "successMarkerVisible": { "type": "boolean" },
+    "liveRouteSuccess": { "type": ["boolean", "null"] },
+    "liveContentSuccess": { "type": ["boolean", "null"] },
+    "orphanProcesses": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 },
+      "uniqueItems": true
+    },
+    "screenshot": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+    "trace": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+    "error": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["message"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+            "code": { "type": ["string", "integer", "null"] }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "target": { "const": "local-fixture" } } },
+      "then": {
+        "properties": {
+          "run": { "maximum": 20 },
+          "liveRouteSuccess": { "type": "null" },
+          "liveContentSuccess": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "target": { "const": "live-site" } } },
+      "then": {
+        "properties": {
+          "run": { "maximum": 5 },
+          "liveRouteSuccess": { "type": "boolean" },
+          "liveContentSuccess": { "type": "boolean" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "candidateId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+    }
+  }
+}
