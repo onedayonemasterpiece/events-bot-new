@@ -4,7 +4,7 @@ import FocusGroupFeedback from '../../components/FocusGroupFeedback.astro';
 import FocusGroupInviteShare from '../../components/FocusGroupInviteShare.astro';
 import FocusGroupThankYou from '../../components/FocusGroupThankYou.astro';
 import StaticSiteAuthRuntime from '../../components/auth/StaticSiteAuthRuntime.astro';
-import { absoluteUrl, withBase } from '../../lib/events';
+import { absoluteUrl, IS_SECRET_CANDIDATE, withBase } from '../../lib/events';
 import '../../styles/design-system.css';
 
 const sections = [
@@ -16,6 +16,10 @@ const sections = [
   ['/festivali/', 'Фестивали', 'Открыть календарь больших программ'],
   ['/fokus-gruppa/kollektsiya/', 'Коллекция', 'Проверить пасхалки и условие третьего события'],
 ] as const;
+const robots = IS_SECRET_CANDIDATE
+  ? 'noindex,nofollow,noarchive,nosnippet'
+  : 'noindex,nofollow,noarchive';
+
 ---
 
 <!doctype html>
@@ -23,7 +27,7 @@ const sections = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="robots" content={robots} />
     <meta name="referrer" content="no-referrer" />
     <link rel="canonical" href={absoluteUrl('/zakrytaya-afisha/')} />
     <title>Закрытая афиша · продуктовый прототип</title>

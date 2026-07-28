@@ -543,3 +543,5 @@ Feature-specific kill switches disable the broken experiment without taking down
 static event pages. At cohort close, preserve only consent/audit/suppression and
 bounded aggregates for accepted retention; delete/anonymize raw research text on
 schedule.
+
+- Secret-candidate packaging keeps the private focus routes noindex/noarchive and adds `nosnippet`; root-form production keeps the same routes private without changing the public candidate policy.
