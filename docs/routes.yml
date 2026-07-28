@@ -372,9 +372,12 @@ features:
     astro_preview: docs/features/static-site-pages/astro-preview.md
     autopresenter:
       status: design
+      implementation_gate: m0_win10_compatibility
       docs: docs/features/static-site-pages/auto-present/README.md
       source_requirements: docs/features/static-site-pages/auto-present/requirements.md
-      legacy_poc_prompt: docs/features/static-site-pages/auto-present/playwright_autopresenter_prompt.md
+      external_review_resolution: docs/features/static-site-pages/auto-present/external-review-resolution-2026-07-28.md
+      references:
+        superseded_poc_prompt: docs/features/static-site-pages/auto-present/playwright_autopresenter_prompt.md
     festival_calendar_timeline: docs/features/static-site-pages/festival-timeline.md
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md

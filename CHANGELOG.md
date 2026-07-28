@@ -306,6 +306,11 @@
 
 ### Changed
 
+- Tightened the Autopresenter design after external review: public demo remains
+  `NO-GO` until a Windows 10 compatibility spike, deterministic iframe stage,
+  idempotent long-poll/confirmed hard-stop protocol and exact portable
+  ZIP/backup-video rehearsal gates pass; the previous PoC prompt is now
+  machine-marked superseded.
 - Unified static-site Supabase/Yandex PKCE ownership across Search, Personal
   and the mobile menu; the menu can initiate login and every surface reflects
   the same origin-scoped session.

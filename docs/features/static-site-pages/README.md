@@ -176,7 +176,8 @@ Object Storage website не умеет reader-atomic переключать це
 описан в [auto-present/README.md](auto-present/README.md): phone control,
 тонкий Playwright-agent для Windows, mobile/desktop stage overlays и общий
 live/record fallback. Он не входит в static build/runtime и не подменяет UI
-сайта.
+сайта. Текущий gate — только M0 compatibility spike на целевой Windows 10;
+публичный показ остаётся `NO-GO` до stage, protocol и exact-release gates M1–M3.
 
 Принятый промежуточный release mode — один immutable noindex candidate под
 `/_review/<256-bit-token>/`. Он собирается из того же snapshot/repo SHA, что и

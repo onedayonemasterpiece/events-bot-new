@@ -1,7 +1,13 @@
+---
+status: superseded
+canonical_document: ./README.md
+purpose: historical-comparison-only
+must_not_be_implemented_directly: true
+---
+
+> Этот ранний PoC-промпт сохранён только для traceability. Он не является источником требований или implementation plan. Нормативный документ: [README.md](README.md).
+
 # Промпт для кодового агента: portable-автопрезентатор на Playwright
-
-> **Архивный входной материал, не implementation plan.** Этот ранний PoC-промпт полезен для проверки полноты требований, но содержит избыточный для MVP scope (отдельный Node relay, Socket.IO, Docker/nginx, универсальная portable-сборка с первого шага). Актуальное прагматичное решение и порядок реализации: [README.md](README.md).
-
 
 ## Роль и ожидаемый результат
 
