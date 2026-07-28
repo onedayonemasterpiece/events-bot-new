@@ -196,6 +196,7 @@ test('share surface uses one exact URL for display, open, share and local QR gen
   assert.match(source, /openLink\.href = exactInviteUrl/u);
   assert.match(source, /openLink\.textContent = exactInviteUrl/u);
   assert.match(source, /download="priglashenie-fokus-gruppa\.svg"/u);
-  assert.match(source, /не имеет\s+серверных expiry\/max-use\/revoke/u);
-  assert.match(source, /В production ссылку должен выпускать сервер/u);
+  assert.match(source, /createButton\.click\(\)/u);
+  assert.match(source, /пока не имеет серверных max-use\/revoke/u);
+  assert.match(source, /серверная membership остаётся обязательным следующим\s+gate/u);
 });

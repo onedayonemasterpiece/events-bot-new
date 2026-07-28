@@ -9,6 +9,9 @@
 - Added a deterministic self-contained SVG QR and exact visible fragment link
   for focus-group invitations, including local download and decode regression
   coverage without a third-party QR service.
+- Made the focus programme page immediately render a usable invitation URL and
+  its exact downloadable QR (also retained in the closed hub), instead of
+  hiding enrolment behind a demo link or an extra create step.
 - Separated account logout from leaving the focus programme: logout ends only
   the auth session, while the explicit programme exit clears only the
   30-day participation marker; the shared mobile menu and focus/personal pages

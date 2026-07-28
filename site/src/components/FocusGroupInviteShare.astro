@@ -4,19 +4,20 @@ import { withBase } from '../lib/events';
 const invitePath = withBase('/fokus-gruppa/priglashenie/');
 ---
 
-<section class="focus-share" data-focus-share data-invite-path={invitePath} aria-labelledby="focus-share-title">
+<section id="focus-invite-share" class="focus-share" data-focus-share data-invite-path={invitePath} aria-labelledby="focus-share-title">
   <div>
-    <p class="focus-share__eyebrow">Пригласить в прототип</p>
-    <h2 id="focus-share-title">Передаётся ссылка, не аккаунт</h2>
+    <p class="focus-share__eyebrow">Пригласить в фокус-группу</p>
+    <h2 id="focus-share-title">Одна ссылка — тот же адрес в QR</h2>
     <p>
-      Здесь можно проверить механику ссылки и QR-пути. Входящий fragment будет
-      удалён из адресной строки, а в браузере останется только короткая метка просмотра.
+      Ссылка и QR открывают один и тот же экран вступления. Код во fragment
+      удалится из адресной строки до остальных действий, а участие останется в
+      этом браузере на 30 дней.
     </p>
   </div>
 
   <div class="focus-share__actions">
     <button class="ke-button ke-button--secondary" type="button" data-focus-share-create>
-      Создать демонстрационную ссылку
+      Создать новую ссылку и QR
     </button>
     <div class="focus-share__result" data-focus-share-result hidden>
       <label for="focus-share-url">Ссылка для проверки</label>
@@ -53,9 +54,11 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
   </div>
 
   <p class="focus-share__boundary">
-    <strong>Важно:</strong> это локальная демонстрация интерфейса. Такая ссылка
-    не подтверждает личность, не переносит статус участника и не имеет
-    серверных expiry/max-use/revoke. В production ссылку должен выпускать сервер.
+    <strong>Граница текущего запуска:</strong> ссылка открывает рабочий
+    browser-local сценарий фокус-группы, но сама не подтверждает личность и
+    пока не имеет серверных max-use/revoke. Email или Яндекс подтверждают
+    аккаунт отдельно; серверная membership остаётся обязательным следующим
+    gate перед публичным набором.
   </p>
 </section>
 
@@ -121,9 +124,9 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
         qrContainer.innerHTML = qrSvg;
         qrDownload.href = qrObjectUrl;
         result.hidden = false;
-        createButton.textContent = 'Создать новую демонстрационную ссылку';
+        createButton.textContent = 'Создать другую ссылку и QR';
         nativeButton.hidden = typeof navigator.share !== 'function';
-        setStatus('Ссылка и QR созданы только в этой вкладке и нигде не сохранены.');
+        setStatus('Ссылка и QR готовы. Код нигде не отправлялся и не сохранялся сайтом.');
       } catch {
         setStatus('Браузер не смог создать ссылку и QR. Ничего не было сохранено.');
       }
@@ -151,11 +154,15 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
       if (!input.value) return;
       try {
         await navigator.clipboard.writeText(input.value);
-        setStatus('Ссылка скопирована. Она демонстрационная и не является доступом или входом.');
+        setStatus('Ссылка скопирована. Она открывает вступление, но не заменяет подтверждение аккаунта.');
       } catch {
         selectFallback();
       }
     });
+
+    // The owner/programme page must immediately provide a usable invitation
+    // and QR instead of hiding the primary task behind an extra click.
+    createButton.click();
   });
 </script>
 

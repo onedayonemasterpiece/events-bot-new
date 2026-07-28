@@ -1,10 +1,10 @@
 ---
 import FocusLabBadge from '../../components/FocusLabBadge.astro';
 import FocusGroupThankYou from '../../components/FocusGroupThankYou.astro';
+import FocusGroupInviteShare from '../../components/FocusGroupInviteShare.astro';
 import { withBase } from '../../lib/events';
 import '../../styles/design-system.css';
 
-const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_group_demo_20260727_abcdefghijklmnop');
 ---
 
 <!doctype html>
@@ -67,21 +67,23 @@ const demoInviteHref = withBase('/fokus-gruppa/priglashenie/#invite=focus_group_
 
       <FocusGroupThankYou />
 
+      <FocusGroupInviteShare />
+
       <section class="focus-programme__cta" aria-labelledby="prototype-title">
         <div>
           <p class="focus-programme__eyebrow">Попробовать механику</p>
-          <h2 id="prototype-title">Демонстрационный маршрут без настоящего входа</h2>
-          <p>Ссылка ниже показывает fragment cleanup, временную метку, auth-choice и закрытый hub. Никаких production-записей или писем.</p>
+          <h2 id="prototype-title">Проверить повторный вход и завершение</h2>
+          <p>Ссылка и QR выше ведут в сценарий вступления. После него можно выйти из аккаунта, не удаляя участие, и повторить вход.</p>
         </div>
         <div class="focus-programme__cta-actions">
-          <a class="ke-button ke-button--primary ke-button--large" href={demoInviteHref}>Открыть макет приглашения</a>
+          <a class="ke-button ke-button--primary ke-button--large" href="#focus-invite-share">Ссылка и QR для приглашения</a>
           <a class="ke-button ke-button--secondary" href={withBase('/fokus-gruppa/zavershenie/')}>Посмотреть завершение программы</a>
         </div>
       </section>
 
       <aside class="focus-programme__boundary">
-        <strong>Прототип не запускает программу.</strong>
-        <span>Capacity, expiry, отзыв согласия, email verification и active membership в рабочей версии обязаны проверяться сервером.</span>
+        <strong>Текущий candidate запускает browser-local участие.</strong>
+        <span>Capacity, отзыв согласия и active membership ещё обязаны стать серверными до публичного набора; email/Yandex используют реальный Auth только при наличии public-конфигурации сборки.</span>
       </aside>
     </main>
   </body>
