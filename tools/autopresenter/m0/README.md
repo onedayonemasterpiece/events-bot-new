@@ -6,8 +6,9 @@ target Windows 10 x64 laptop.
 
 The canonical product and acceptance contract is
 [`docs/features/static-site-pages/auto-present/README.md`](../../../docs/features/static-site-pages/auto-present/README.md).
-Candidate manifests under `candidates/` are the only machine-readable source
-for exact versions, revisions, paths and hashes.
+Candidate manifests under `candidates/` are the build specifications. The
+built bundle's `VERSIONS.json` is the machine-readable source for the exact
+portable Node and browser executable hashes measured after packaging.
 
 ## Scope gate
 
@@ -33,12 +34,14 @@ Do not begin another milestone automatically after a successful result.
 
 ## Candidate integrity
 
-Every `candidates/*.json` manifest must resolve, without placeholders, the exact:
+Every `candidates/*/candidate.json` build specification resolves, without
+version placeholders, the exact:
 
 - Windows 10/x64 target;
 - Node version, ZIP filename and SHA-256;
 - `playwright` version and `package-lock.json` SHA-256;
-- browser product, revision/build, relative executable and SHA-256;
+- browser product, revision/build and relative executable; its executable
+  SHA-256 is computed from the packaged file and frozen in `VERSIONS.json`;
 - headed launch arguments, `browserChannel: null`,
   bundle-local `PLAYWRIGHT_BROWSERS_PATH`;
 - supported profile modes (`fresh`, `persistent`).
@@ -49,15 +52,46 @@ build-machine cache, `npx playwright install`, or any runtime download.
 
 ## Target run
 
+### Build on Windows x64
+
+From a clean repository checkout:
+
+```powershell
+.\tools\autopresenter\m0\scripts\build-all-candidates.ps1
+```
+
+This is the only download/install phase. It produces two separate ZIPs and
+checksum sidecars under `release-m0/out/`. Do not run npm, npx, an installer or
+browser download on the target laptop.
+
 M0 is not complete on Linux, CI or a substitute Windows machine. Copy the
 prebuilt candidate folders to the **target laptop** and run them as the same
 non-admin Windows account intended for the presentation. No Node, browser,
 package, Visual C++ runtime or other system component may be installed during
 acceptance.
 
-Run `self-test.cmd` offline first. Then execute the M0 launcher from each path
-required by the canonical contract, including a path with spaces and a
-Cyrillic path.
+For each extracted candidate, double-click `self-test.cmd` offline and then
+`path-matrix.cmd`. The latter automatically copies the package to plain,
+space-containing and Cyrillic sibling paths, runs the same self-test in every
+copy, retains the three signed JSON results and removes the temporary copies.
+Run `system-info.cmd` separately inside **each candidate** under the same show
+account. It records a one-way machine+account fingerprint; raw MachineGuid/SID
+are never written. `start.cmd` refuses runs without that candidate-local
+system record. Before every suite, and again before evidence preparation, the
+portable runtime independently re-queries the current MachineGuid, user SID and
+Windows build; copied/stale Windows 10 evidence cannot credit another
+machine/account or Windows 11 host.
+
+Double-click `start.cmd` and enter the immutable review URL and two exact
+selectors when prompted, or pass them as arguments:
+
+```bat
+start.cmd "https://HOST/_review/BUILD/zavtra/" "[data-mobile-listing-row][data-event-id=\"ID\"] .event-link" "EXACT_POST_CLICK_SELECTOR"
+```
+
+The post-click selector must be absent before the click and unique after
+navigation. The runner rejects headless mode and does not start live smoke
+unless local compatibility is exactly 20/20.
 
 For each candidate the runner must perform, in order:
 
@@ -111,11 +145,12 @@ VERSIONS.json
 RELEASE-MANIFEST.json
 SHA256SUMS.txt
 SYSTEM-INFO.json
-runs/<candidate>/compatibility/run-001.json ... run-020.json
-runs/<candidate>/live/run-001.json ... run-005.json
-screenshots/
-traces-on-failure/
-logs/
+candidates/<candidate>.json
+sources/<candidate>/{CANDIDATE,VERSIONS,RELEASE-MANIFEST}.json
+runs/<candidate>/compatibility/run-001/{run,runtime-result}.json
+runs/<candidate>/compatibility/run-001/{worker.log,screenshot.png,trace.zip}
+runs/<candidate>/live/run-001/ ... run-005/
+path-matrix/<candidate>/*.json
 ```
 
 Each run record includes target/profile, timestamps and exit codes, relative
@@ -127,3 +162,29 @@ Generated evidence belongs under `artifacts/codex/autopresenter/<m0-run-id>/`
 and is not committed. The report must say `targetExecutionPending`/non-pass
 until the complete evidence package is produced on the target laptop. A green
 Linux/CI run is implementation evidence only and never a Windows M0 PASS.
+
+### Assemble and finalize evidence
+
+After each candidate run, pass its original ZIP and the same common evidence
+directory:
+
+```bat
+prepare-evidence.cmd "X:\build\current-control-Autopresenter-Win10-x64.zip" "X:\evidence\m0-run"
+prepare-evidence.cmd "X:\build\pre-cft-compat-Autopresenter-Win10-x64.zip" "X:\evidence\m0-run"
+```
+
+After both candidates and `SYSTEM-INFO.json` are present, run from either
+package:
+
+```bat
+finalize-evidence.cmd "X:\evidence\m0-run"
+```
+
+The preparer verifies the packaged checksums, derives candidate evidence from
+`CANDIDATE.json`, `VERSIONS.json`, self-test and actual run records, and copies
+logs/screenshots/traces/process snapshots. The finalizer writes a combined
+manifest and SHA-256 inventory before the strict aggregator. The aggregator
+cross-checks exact candidate IDs/stacks/hashes, suite cleanup, each candidate's
+path matrix, every run fingerprint and every referenced artifact. It also
+requires both candidate fingerprints to match, so runs from another
+laptop/account cannot be combined. Hand-authored `{}` manifests cannot pass.

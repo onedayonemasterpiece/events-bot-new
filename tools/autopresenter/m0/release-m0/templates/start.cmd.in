@@ -23,19 +23,29 @@ if not exist "%AP_ROOT%app\src\run-suite.js" (
   >&2 echo ERROR: packaged M0 runner is absent: "%AP_ROOT%app\src\run-suite.js"
   exit /b 4
 )
-if "%~3"=="" (
-  >&2 echo Usage: start.cmd LIVE_ZAVTRA_URL EXACT_CLICK_SELECTOR EXACT_SUCCESS_SELECTOR [EXACT_MARKER_SELECTOR]
-  exit /b 64
+if not exist "%AP_ROOT%evidence\SYSTEM-INFO.json" (
+  >&2 echo ERROR: run path-matrix.cmd and system-info.cmd before start.cmd.
+  exit /b 5
 )
+set "AP_LIVE_URL=%~1"
+set "AP_CLICK_SELECTOR=%~2"
+set "AP_SUCCESS_SELECTOR=%~3"
+set "AP_MARKER_SELECTOR=%~4"
+if not defined AP_LIVE_URL set /p "AP_LIVE_URL=Immutable HTTPS /_review/BUILD/zavtra/ URL: "
+if not defined AP_CLICK_SELECTOR set /p "AP_CLICK_SELECTOR=Exact unique click selector: "
+if not defined AP_SUCCESS_SELECTOR set /p "AP_SUCCESS_SELECTOR=Exact unique post-click selector: "
+if not defined AP_LIVE_URL exit /b 64
+if not defined AP_CLICK_SELECTOR exit /b 64
+if not defined AP_SUCCESS_SELECTOR exit /b 64
 if not exist "%AP_ROOT%data" mkdir "%AP_ROOT%data"
 if errorlevel 1 exit /b %ERRORLEVEL%
 if not exist "%AP_ROOT%logs" mkdir "%AP_ROOT%logs"
 if errorlevel 1 exit /b %ERRORLEVEL%
 
-if "%~4"=="" goto run_without_marker
-"%AP_NODE%" "%AP_ROOT%app\src\run-suite.js" --portable-root "%AP_ROOT%" --candidate-id "%AP_CANDIDATE_ID%" --browser-executable "%AP_BROWSER_REL%" --portable-browsers-root "browsers" --output-dir "logs\m0" --profile-root "data\m0-profiles" --live-url "%~1" --live-click-selector "%~2" --live-success-selector "%~3" --live-marker-selector "%~4" --headed
+if not defined AP_MARKER_SELECTOR goto run_without_marker
+"%AP_NODE%" "%AP_ROOT%app\src\run-suite.js" --portable-root "%AP_ROOT%" --candidate-id "%AP_CANDIDATE_ID%" --browser-executable "%AP_BROWSER_REL%" --portable-browsers-root "browsers" --output-dir "logs\m0" --profile-root "data\m0-profiles" --system-info "evidence\SYSTEM-INFO.json" --live-url "%AP_LIVE_URL%" --live-click-selector "%AP_CLICK_SELECTOR%" --live-success-selector "%AP_SUCCESS_SELECTOR%" --live-marker-selector "%AP_MARKER_SELECTOR%" --headed
 exit /b %ERRORLEVEL%
 
 :run_without_marker
-"%AP_NODE%" "%AP_ROOT%app\src\run-suite.js" --portable-root "%AP_ROOT%" --candidate-id "%AP_CANDIDATE_ID%" --browser-executable "%AP_BROWSER_REL%" --portable-browsers-root "browsers" --output-dir "logs\m0" --profile-root "data\m0-profiles" --live-url "%~1" --live-click-selector "%~2" --live-success-selector "%~3" --headed
+"%AP_NODE%" "%AP_ROOT%app\src\run-suite.js" --portable-root "%AP_ROOT%" --candidate-id "%AP_CANDIDATE_ID%" --browser-executable "%AP_BROWSER_REL%" --portable-browsers-root "browsers" --output-dir "logs\m0" --profile-root "data\m0-profiles" --system-info "evidence\SYSTEM-INFO.json" --live-url "%AP_LIVE_URL%" --live-click-selector "%AP_CLICK_SELECTOR%" --live-success-selector "%AP_SUCCESS_SELECTOR%" --headed
 exit /b %ERRORLEVEL%

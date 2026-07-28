@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const {
   validateCandidateEvidence,
   validateReport,
@@ -58,6 +59,7 @@ function selfTestPassed(candidate) {
 
 function runPassed(run) {
   return run.coldStart === true
+    && run.headed === true
     && run.nodeProcessFresh === true
     && run.browserProcessFresh === true
     && run.nodeExitCode === 0
@@ -92,6 +94,10 @@ function hasExactRunNumbers(runs, expected) {
 
 function systemGateIssues(systemInfo) {
   const issues = [];
+  const build = Number(String(systemInfo.os.build).split('.')[0]);
+  if (!Number.isInteger(build) || build < 10240 || build >= 22000) {
+    issues.push(`target OS build is not Windows 10: ${systemInfo.os.build}`);
+  }
   if (!systemInfo.user.standardUser || systemInfo.user.administrator) {
     issues.push('target execution was not recorded for a non-administrator standard user');
   }
@@ -100,6 +106,9 @@ function systemGateIssues(systemInfo) {
   }
   const failedPaths = systemInfo.pathVariants.filter((entry) => !entry.passed).map((entry) => entry.kind);
   if (failedPaths.length > 0) issues.push(`path matrix failed: ${failedPaths.join(', ')}`);
+  if (systemInfo.display.devicePixelRatio === null) {
+    issues.push('browser devicePixelRatio was not measured on the target display');
+  }
   return issues;
 }
 
@@ -112,6 +121,26 @@ function evaluateCandidate(candidate, allRuns, systemInfo, inventoryComplete) {
   const reasons = [];
 
   if (!inventoryComplete) reasons.push('required evidence inventory is incomplete');
+  if (
+    candidate.machineAccountFingerprint !==
+    systemInfo.provenance.machineAccountFingerprint
+  ) {
+    reasons.push('candidate runs were not recorded on the target machine/account');
+  }
+  if (
+    runs.some(
+      (run) =>
+        run.machineAccountFingerprint !== candidate.machineAccountFingerprint,
+    )
+  ) {
+    reasons.push('one or more run records came from another machine/account');
+  }
+  if (!candidate.suiteChecksPassed) {
+    reasons.push('runtime suite cleanup or exact suite-level gate failed');
+  }
+  if (!candidate.pathMatrixPassed) {
+    reasons.push('candidate path matrix did not pass plain, spaces, and Unicode paths');
+  }
   reasons.push(...systemGateIssues(systemInfo));
   if (!hasExactRunNumbers(localRuns, 20)) {
     reasons.push(`local cold cycle set must be exactly runs 1..20; observed ${localRuns.length}`);
@@ -263,7 +292,155 @@ function readJson(filePath) {
   return value;
 }
 
-function listJsonFiles(directory) {
+function sha256File(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function verifyEvidenceIntegrity(evidenceDirectory, candidates, runs, systemInfo) {
+  let artifactsComplete = true;
+  const expectedIds = ['current-control', 'pre-cft-compat'];
+  const ids = candidates.map((candidate) => candidate.candidateId).sort();
+  if (JSON.stringify(ids) !== JSON.stringify(expectedIds)) {
+    throw new Error(`Evidence must contain exact candidates: ${expectedIds.join(', ')}`);
+  }
+  const versions = readJson(path.join(evidenceDirectory, 'VERSIONS.json'));
+  const manifest = readJson(path.join(evidenceDirectory, 'RELEASE-MANIFEST.json'));
+  if (
+    versions.schemaVersion !== 1 ||
+    JSON.stringify(Object.keys(versions.candidates || {}).sort()) !== JSON.stringify(expectedIds)
+  ) {
+    throw new Error('VERSIONS.json does not contain the two exact candidate bundles');
+  }
+  if (
+    manifest.schemaVersion !== 1 ||
+    manifest.targetMachineOnly !== true ||
+    JSON.stringify([...(manifest.candidateIds || [])].sort()) !== JSON.stringify(expectedIds)
+  ) {
+    throw new Error('RELEASE-MANIFEST.json is not target-bound to the exact candidates');
+  }
+  const manifestFiles = new Map((manifest.files || []).map((entry) => [entry.path, entry]));
+  for (const [relative, entry] of manifestFiles) {
+    const file = path.resolve(evidenceDirectory, ...relative.split('/'));
+    if (!file.startsWith(`${path.resolve(evidenceDirectory)}${path.sep}`)) {
+      throw new Error(`Manifest path escaped evidence root: ${relative}`);
+    }
+    if (
+      !fs.existsSync(file) ||
+      fs.statSync(file).size !== entry.sizeBytes ||
+      sha256File(file) !== entry.sha256
+    ) {
+      throw new Error(`Manifest file mismatch: ${relative}`);
+    }
+  }
+  const checksums = fs.readFileSync(path.join(evidenceDirectory, 'SHA256SUMS.txt'), 'utf8')
+    .trim().split(/\r?\n/).map((line) => /^([a-f0-9]{64})  (.+)$/.exec(line));
+  if (checksums.some((match) => !match)) throw new Error('SHA256SUMS.txt has an invalid line');
+  for (const match of checksums) {
+    const file = path.resolve(evidenceDirectory, ...match[2].split('/'));
+    if (!fs.existsSync(file) || sha256File(file) !== match[1]) {
+      throw new Error(`Evidence checksum mismatch: ${match[2]}`);
+    }
+  }
+  for (const candidate of candidates) {
+    const version = versions.candidates[candidate.candidateId];
+    const sourceRoot = path.join(evidenceDirectory, 'sources', candidate.candidateId);
+    const sourceCandidate = readJson(path.join(sourceRoot, 'CANDIDATE.json'));
+    const sourceVersions = readJson(path.join(sourceRoot, 'VERSIONS.json'));
+    const sourceSystem = readJson(path.join(sourceRoot, 'SYSTEM-INFO.json'));
+    const sourceSuite = readJson(path.join(sourceRoot, 'M0-RUNTIME-SUITE.json'));
+    const sourceSelfTest = readJson(path.join(sourceRoot, 'SELF-TEST.json'));
+    const zipSidecar = fs.readFileSync(path.join(sourceRoot, 'ZIP.sha256'), 'utf8').trim();
+    const sourceSuitePassed = Boolean(
+      sourceSuite.candidateId === candidate.candidateId &&
+      sourceSuite.runtimeChecksPassed &&
+      sourceSuite.suites?.localCompatibility?.metTarget &&
+      sourceSuite.suites?.liveSmoke?.metTarget &&
+      sourceSuite.processCleanup?.passed,
+    );
+    const sourcePathMatrixPassed =
+      sourceSystem.pathVariants?.length === 3 &&
+      sourceSystem.pathVariants.every((entry) => entry.passed);
+    if (
+      sourceCandidate.id !== candidate.candidateId ||
+      sourceVersions.candidateId !== candidate.candidateId ||
+      sourceSystem.provenance?.sourceCandidateId !== candidate.candidateId ||
+      sourceSystem.provenance?.machineAccountFingerprint !==
+        candidate.machineAccountFingerprint ||
+      candidate.suiteChecksPassed !== sourceSuitePassed ||
+      candidate.pathMatrixPassed !== sourcePathMatrixPassed ||
+      JSON.stringify(candidate.selfTest) !==
+        JSON.stringify(sourceSelfTest.selfTest) ||
+      JSON.stringify(sourceVersions) !== JSON.stringify(version) ||
+      candidate.stack.nodeVersion !== version.node.version ||
+      candidate.stack.playwrightVersion !== version.playwright.version ||
+      candidate.stack.browserRevision !== version.browser.revision ||
+      candidate.stack.browserExecutableSha256 !== version.browser.executableSha256 ||
+      candidate.release.packageLockSha256 !== version.packageLock.sha256 ||
+      sha256File(path.join(evidenceDirectory, candidate.release.packageLockFile)) !== version.packageLock.sha256 ||
+      zipSidecar !== `${candidate.release.zipSha256}  ${candidate.release.zipFile}`
+    ) {
+      throw new Error(`Candidate evidence is not bound to source bundle: ${candidate.candidateId}`);
+    }
+  }
+  for (const run of runs) {
+    const candidate = candidates.find((entry) => entry.candidateId === run.candidateId);
+    if (
+      !candidate ||
+      run.machineAccountFingerprint !== candidate.machineAccountFingerprint ||
+      run.machineAccountFingerprint !== systemInfo.provenance.machineAccountFingerprint
+    ) {
+      throw new Error(
+        `Run provenance mismatch: ${run.candidateId} ${run.target} ${run.run}`,
+      );
+    }
+    for (const field of ['log', 'screenshot', 'trace']) {
+      if (!run[field]) {
+        artifactsComplete = false;
+        continue;
+      }
+      const file = path.join(evidenceDirectory, ...run[field].split('/'));
+      if (!fs.existsSync(file) || !manifestFiles.has(run[field])) {
+        artifactsComplete = false;
+      }
+    }
+    if (run.log) {
+      const runtimeResult = path.join(
+        path.dirname(path.join(evidenceDirectory, ...run.log.split('/'))),
+        'runtime-result.json',
+      );
+      if (!fs.existsSync(runtimeResult)) {
+        artifactsComplete = false;
+      }
+    }
+  }
+  for (const variant of systemInfo.pathVariants) {
+    const file = path.join(evidenceDirectory, ...variant.selfTest.split('/'));
+    if (
+      !fs.existsSync(file) ||
+      sha256File(file) !== variant.selfTestSha256 ||
+      !manifestFiles.has(variant.selfTest)
+    ) {
+      artifactsComplete = false;
+    }
+  }
+  return { artifactsComplete };
+}
+
+function listRunRecordFiles(directory) {
+  if (!fs.existsSync(directory)) return [];
+  const found = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...listRunRecordFiles(entryPath));
+    } else if (entry.isFile() && entry.name === 'run.json') {
+      found.push(entryPath);
+    }
+  }
+  return found.sort();
+}
+
+function listCandidateFiles(directory) {
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory)
     .filter((name) => name.toLowerCase().endsWith('.json'))
@@ -281,20 +458,24 @@ function readEvidenceDirectory(evidenceDirectory) {
           && fs.statSync(path.join(evidenceDirectory, name)).isFile(),
     ]),
   );
-  const candidateFiles = listJsonFiles(path.join(evidenceDirectory, 'candidates'));
-  const runFiles = listJsonFiles(path.join(evidenceDirectory, 'runs'));
+  const candidateFiles = listCandidateFiles(path.join(evidenceDirectory, 'candidates'));
+  const runFiles = listRunRecordFiles(path.join(evidenceDirectory, 'runs'));
   const sourceComplete = SOURCE_EVIDENCE_FILES.every((name) => requiredFiles[name]);
+  const candidates = candidateFiles.map(readJson);
+  const runs = runFiles.map(readJson);
+  const systemInfo = readJson(path.join(evidenceDirectory, 'SYSTEM-INFO.json'));
+  const integrity = verifyEvidenceIntegrity(evidenceDirectory, candidates, runs, systemInfo);
   const inventory = {
-    complete: sourceComplete && candidateFiles.length === 2,
+    complete: sourceComplete && candidateFiles.length === 2 && integrity.artifactsComplete,
     requiredFiles,
   };
   if (!requiredFiles['SYSTEM-INFO.json']) {
     throw new Error('Missing required evidence file: SYSTEM-INFO.json');
   }
   return {
-    systemInfo: readJson(path.join(evidenceDirectory, 'SYSTEM-INFO.json')),
-    candidates: candidateFiles.map(readJson),
-    runs: runFiles.map(readJson),
+    systemInfo,
+    candidates,
+    runs,
     inventory,
   };
 }

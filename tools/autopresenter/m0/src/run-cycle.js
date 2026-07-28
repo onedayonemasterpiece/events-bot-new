@@ -27,11 +27,13 @@ function initialRunRecord(config) {
     schemaVersion: 1,
     kind: "autopresenter-m0-cycle",
     candidateId: config.candidateId,
+    machineAccountFingerprint: config.machineAccountFingerprint,
     run: config.run,
     cycleId: config.cycleId,
     startedAt: new Date().toISOString(),
     finishedAt: null,
     coldStart: true,
+    headed: Boolean(config.headed),
     profileMode: config.profileMode,
     nodeProcessFresh: Boolean(config.nodeProcessFresh),
     browserProcessFresh: false,
@@ -58,6 +60,7 @@ function initialRunRecord(config) {
       strictClickPerformed: false,
       successCount: null,
       aboutBlankObserved: false,
+      devicePixelRatio: null,
       profileStateExpected: config.profileStateExpected,
       profileStateObserved: null,
       profileStateMatches: false,
@@ -180,6 +183,9 @@ async function runCycle(config, playwright) {
     traceStarted = true;
     page = context.pages()[0] || (await context.newPage());
     record.assertions.aboutBlankObserved = page.url() === "about:blank";
+    record.assertions.devicePixelRatio = await page.evaluate(
+      () => window.devicePixelRatio,
+    );
     if (!record.assertions.aboutBlankObserved) {
       throw new ContractError(
         "ABOUT_BLANK_PRECONDITION_FAILED",
@@ -232,14 +238,28 @@ async function runCycle(config, playwright) {
       clickTarget,
       "click selector",
     );
+    const success = page.locator(config.successSelector);
+    const successBeforeClick = await success.count();
+    if (successBeforeClick !== 0) {
+      throw new ContractError(
+        "SUCCESS_MARKER_PREEXISTED",
+        `success selector must be absent before click; observed ${successBeforeClick}`,
+      );
+    }
+    const urlBeforeClick = page.url();
     await clickTarget.click({ timeout: 10000 });
     record.assertions.strictClickPerformed = true;
 
-    const success = page.locator(config.successSelector);
     record.assertions.successCount = await exactVisible(
       success,
       "success selector",
     );
+    if (page.url() === urlBeforeClick) {
+      throw new ContractError(
+        "CLICK_NAVIGATION_NOT_OBSERVED",
+        "the credited locator.click() did not change the page URL",
+      );
+    }
     record.successMarkerVisible = true;
     await page.screenshot({ path: config.screenshotPath, fullPage: false });
     screenshotSaved = true;

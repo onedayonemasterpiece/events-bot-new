@@ -3,6 +3,9 @@
 const CANDIDATE_KEYS = [
   'schemaVersion',
   'candidateId',
+  'machineAccountFingerprint',
+  'suiteChecksPassed',
+  'pathMatrixPassed',
   'stack',
   'release',
   'requirements',
@@ -14,10 +17,12 @@ const CANDIDATE_KEYS = [
 const RUN_KEYS = [
   'schemaVersion',
   'candidateId',
+  'machineAccountFingerprint',
   'run',
   'startedAt',
   'finishedAt',
   'coldStart',
+  'headed',
   'profileMode',
   'nodeProcessFresh',
   'browserProcessFresh',
@@ -37,6 +42,7 @@ const RUN_KEYS = [
   'orphanProcesses',
   'screenshot',
   'trace',
+  'log',
   'error',
 ];
 
@@ -142,6 +148,12 @@ function validateRunRecord(value, label = 'run record') {
 
   if (value.schemaVersion !== 1) errors.push('$.schemaVersion must equal 1');
   checkString(value.candidateId, '$.candidateId', errors, /^[a-z0-9][a-z0-9._-]{0,63}$/);
+  checkString(
+    value.machineAccountFingerprint,
+    '$.machineAccountFingerprint',
+    errors,
+    /^[a-f0-9]{64}$/,
+  );
   checkInteger(value.run, '$.run', errors, 1, value.target === 'live-site' ? 5 : 20);
   checkTimestamp(value.startedAt, '$.startedAt', errors);
   checkTimestamp(value.finishedAt, '$.finishedAt', errors);
@@ -150,6 +162,7 @@ function validateRunRecord(value, label = 'run record') {
     errors.push('$.finishedAt must not precede $.startedAt');
   }
   checkBoolean(value.coldStart, '$.coldStart', errors);
+  checkBoolean(value.headed, '$.headed', errors);
   checkEnum(value.profileMode, ['fresh', 'persistent'], '$.profileMode', errors);
   checkBoolean(value.nodeProcessFresh, '$.nodeProcessFresh', errors);
   checkBoolean(value.browserProcessFresh, '$.browserProcessFresh', errors);
@@ -171,7 +184,7 @@ function validateRunRecord(value, label = 'run record') {
     errors.push('local-fixture runs must set liveRouteSuccess and liveContentSuccess to null');
   }
   checkStringArray(value.orphanProcesses, '$.orphanProcesses', errors);
-  for (const field of ['screenshot', 'trace']) {
+  for (const field of ['screenshot', 'trace', 'log']) {
     if (value[field] !== undefined && value[field] !== null) {
       checkRelativePath(value[field], `$.${field}`, errors);
     }
@@ -195,6 +208,14 @@ function validateCandidateEvidence(value, label = 'candidate evidence') {
   if (!checkExactKeys(value, CANDIDATE_KEYS, CANDIDATE_KEYS, '$', errors)) finish(label, errors);
   if (value.schemaVersion !== 1) errors.push('$.schemaVersion must equal 1');
   checkString(value.candidateId, '$.candidateId', errors, /^[a-z0-9][a-z0-9._-]{0,63}$/);
+  checkString(
+    value.machineAccountFingerprint,
+    '$.machineAccountFingerprint',
+    errors,
+    /^[a-f0-9]{64}$/,
+  );
+  checkBoolean(value.suiteChecksPassed, '$.suiteChecksPassed', errors);
+  checkBoolean(value.pathMatrixPassed, '$.pathMatrixPassed', errors);
 
   const stackKeys = [
     'nodeVersion', 'nodeArchitecture', 'playwrightVersion', 'browserName',
@@ -255,27 +276,94 @@ function validateCandidateEvidence(value, label = 'candidate evidence') {
 
 function validateSystemInfo(value, label = 'system info') {
   const errors = [];
-  const rootKeys = ['schemaVersion', 'collectedAt', 'os', 'user', 'baseline', 'pathVariants'];
+  const rootKeys = [
+    'schemaVersion', 'collectedAt', 'provenance', 'os', 'hardware', 'display', 'locale',
+    'user', 'launch', 'baseline', 'security', 'pathVariants',
+  ];
   if (!checkExactKeys(value, rootKeys, rootKeys, '$', errors)) finish(label, errors);
   if (value.schemaVersion !== 1) errors.push('$.schemaVersion must equal 1');
   checkTimestamp(value.collectedAt, '$.collectedAt', errors);
+  const provenanceKeys = ['machineAccountFingerprint', 'sourceCandidateId'];
+  if (checkExactKeys(value.provenance, provenanceKeys, provenanceKeys, '$.provenance', errors)) {
+    checkString(
+      value.provenance.machineAccountFingerprint,
+      '$.provenance.machineAccountFingerprint',
+      errors,
+      /^[a-f0-9]{64}$/,
+    );
+    checkString(
+      value.provenance.sourceCandidateId,
+      '$.provenance.sourceCandidateId',
+      errors,
+      /^[a-z0-9][a-z0-9._-]{0,63}$/,
+    );
+  }
 
-  const osKeys = ['productName', 'version', 'build', 'architecture'];
+  const osKeys = ['productName', 'version', 'build', 'winver', 'architecture'];
   if (checkExactKeys(value.os, osKeys, osKeys, '$.os', errors)) {
     if (value.os.productName !== 'Windows 10') errors.push('$.os.productName must equal Windows 10');
     checkString(value.os.version, '$.os.version', errors);
     checkString(value.os.build, '$.os.build', errors, /^\d+(?:\.\d+)*$/);
+    checkString(value.os.winver, '$.os.winver', errors);
     if (value.os.architecture !== 'x64') errors.push('$.os.architecture must equal x64');
   }
 
-  const userKeys = ['standardUser', 'administrator'];
+  const hardwareKeys = ['manufacturer', 'model', 'ramBytes', 'gpu'];
+  if (checkExactKeys(value.hardware, hardwareKeys, hardwareKeys, '$.hardware', errors)) {
+    checkString(value.hardware.manufacturer, '$.hardware.manufacturer', errors);
+    checkString(value.hardware.model, '$.hardware.model', errors);
+    checkInteger(value.hardware.ramBytes, '$.hardware.ramBytes', errors, 1073741824);
+    if (!Array.isArray(value.hardware.gpu) || value.hardware.gpu.length < 1) {
+      errors.push('$.hardware.gpu must contain at least one device');
+    } else {
+      value.hardware.gpu.forEach((gpu, index) => {
+        const gpuPath = `$.hardware.gpu[${index}]`;
+        if (checkExactKeys(gpu, ['name', 'driverVersion'], ['name', 'driverVersion'], gpuPath, errors)) {
+          checkString(gpu.name, `${gpuPath}.name`, errors);
+          checkString(gpu.driverVersion, `${gpuPath}.driverVersion`, errors);
+        }
+      });
+    }
+  }
+  const displayKeys = ['width', 'height', 'scalingPercent', 'devicePixelRatio'];
+  if (checkExactKeys(value.display, displayKeys, displayKeys, '$.display', errors)) {
+    checkInteger(value.display.width, '$.display.width', errors, 320);
+    checkInteger(value.display.height, '$.display.height', errors, 240);
+    if (typeof value.display.scalingPercent !== 'number') errors.push('$.display.scalingPercent must be numeric');
+    if (
+      value.display.devicePixelRatio !== null &&
+      (typeof value.display.devicePixelRatio !== 'number' || value.display.devicePixelRatio <= 0)
+    ) {
+      errors.push('$.display.devicePixelRatio must be positive or null when the browser did not launch');
+    }
+  }
+  const localeKeys = ['language', 'locale', 'timezone'];
+  if (checkExactKeys(value.locale, localeKeys, localeKeys, '$.locale', errors)) {
+    localeKeys.forEach((key) => checkString(value.locale[key], `$.locale.${key}`, errors));
+  }
+  const userKeys = ['standardUser', 'administrator', 'accountType'];
   if (checkExactKeys(value.user, userKeys, userKeys, '$.user', errors)) {
     checkBoolean(value.user.standardUser, '$.user.standardUser', errors);
     checkBoolean(value.user.administrator, '$.user.administrator', errors);
+    checkEnum(value.user.accountType, ['standard', 'administrator'], '$.user.accountType', errors);
+  }
+  if (checkExactKeys(value.launch, ['portablePath'], ['portablePath'], '$.launch', errors)) {
+    checkString(value.launch.portablePath, '$.launch.portablePath', errors);
   }
   const baselineKeys = ['installedNode', 'installedChrome', 'installedPlaywright'];
   if (checkExactKeys(value.baseline, baselineKeys, baselineKeys, '$.baseline', errors)) {
     for (const key of baselineKeys) checkBoolean(value.baseline[key], `$.baseline.${key}`, errors);
+  }
+  const securityKeys = ['defender', 'appLocker', 'wdac', 'collectedWithoutElevation'];
+  if (checkExactKeys(value.security, securityKeys, securityKeys, '$.security', errors)) {
+    for (const key of ['defender', 'appLocker', 'wdac']) {
+      checkEnum(value.security[key], ['enabled', 'disabled', 'unknown'], `$.security.${key}`, errors);
+    }
+    checkBoolean(
+      value.security.collectedWithoutElevation,
+      '$.security.collectedWithoutElevation',
+      errors,
+    );
   }
   if (!Array.isArray(value.pathVariants) || value.pathVariants.length < 3) {
     errors.push('$.pathVariants must contain at least three entries');
@@ -283,10 +371,13 @@ function validateSystemInfo(value, label = 'system info') {
     const kinds = [];
     value.pathVariants.forEach((entry, index) => {
       const path = `$.pathVariants[${index}]`;
-      if (checkExactKeys(entry, ['kind', 'path', 'passed'], ['kind', 'path', 'passed'], path, errors)) {
+      const entryKeys = ['kind', 'path', 'passed', 'selfTest', 'selfTestSha256'];
+      if (checkExactKeys(entry, entryKeys, entryKeys, path, errors)) {
         checkEnum(entry.kind, ['plain', 'spaces', 'unicode'], `${path}.kind`, errors);
         checkString(entry.path, `${path}.path`, errors);
         checkBoolean(entry.passed, `${path}.passed`, errors);
+        checkRelativePath(entry.selfTest, `${path}.selfTest`, errors);
+        checkString(entry.selfTestSha256, `${path}.selfTestSha256`, errors, /^[a-f0-9]{64}$/);
         kinds.push(entry.kind);
       }
     });

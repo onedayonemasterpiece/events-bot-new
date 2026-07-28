@@ -1,6 +1,9 @@
 {
   "schemaVersion": 1,
   "candidateId": "pre-cft-compat",
+  "machineAccountFingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "suiteChecksPassed": true,
+  "pathMatrixPassed": true,
   "stack": {
     "nodeVersion": "22.12.0",
     "nodeArchitecture": "x64",

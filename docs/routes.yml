@@ -347,6 +347,10 @@ features:
       review_resolution: docs/features/static-site-pages/auto-present/external-review-resolution-2026-07-28.md
       operator_runbook: tools/autopresenter/m0/README.md
       gate: target_win10_20_of_20_local_then_5_of_5_live
+      implementation_gate: m0_win10_compatibility
+      source_requirements: docs/features/static-site-pages/auto-present/requirements.md
+      references:
+        superseded_poc_prompt: docs/features/static-site-pages/auto-present/playwright_autopresenter_prompt.md
     release_plan: docs/features/static-site-pages/release-plan.md
     presentation_release_checklist: docs/features/static-site-pages/presentation-release-checklist.md
     test_scenarios: docs/features/static-site-pages/test-scenarios.md
@@ -376,14 +380,6 @@ features:
     event_page_consultant_review_application_2026_06_27: docs/features/static-site-pages/consultant-review-application-matrix-2026-06-27.md
     event_page_merged_skeleton: docs/features/static-site-pages/event-page-merged-skeleton.md
     astro_preview: docs/features/static-site-pages/astro-preview.md
-    autopresenter:
-      status: design
-      implementation_gate: m0_win10_compatibility
-      docs: docs/features/static-site-pages/auto-present/README.md
-      source_requirements: docs/features/static-site-pages/auto-present/requirements.md
-      external_review_resolution: docs/features/static-site-pages/auto-present/external-review-resolution-2026-07-28.md
-      references:
-        superseded_poc_prompt: docs/features/static-site-pages/auto-present/playwright_autopresenter_prompt.md
     festival_calendar_timeline: docs/features/static-site-pages/festival-timeline.md
     cdn_asset_delivery: docs/features/static-site-pages/cdn-asset-delivery.md
     reaction_counters: docs/features/static-site-pages/reaction-counters.md

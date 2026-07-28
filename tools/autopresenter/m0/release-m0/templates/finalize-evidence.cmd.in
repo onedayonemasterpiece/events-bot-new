@@ -1,0 +1,10 @@
+@echo off
+setlocal DisableDelayedExpansion
+set "AP_ROOT=%~dp0"
+set "AP_NODE=%AP_ROOT%runtime\node.exe"
+if "%~1"=="" (
+  >&2 echo Usage: finalize-evidence.cmd EVIDENCE_DIRECTORY
+  exit /b 64
+)
+"%AP_NODE%" "%AP_ROOT%app\reporting\finalize-evidence.js" "%~1"
+exit /b %ERRORLEVEL%

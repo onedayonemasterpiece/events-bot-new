@@ -105,17 +105,25 @@ tests/playwright/presenter-site-contract.* stable site hooks and iframe contract
 
 ### Exact candidate manifest
 
-Единственный machine-readable источник параметров кандидатов — `tools/autopresenter/m0/candidates/*.json`; README не дублирует изменяемые checksums. До сборки каждый manifest обязан содержать без placeholder:
+Build-spec кандидатов хранится в
+`tools/autopresenter/m0/candidates/*/candidate.json`; README не дублирует
+изменяемые checksums. После сборки единственным источником фактических
+executable hashes становится bundle-local `VERSIONS.json`. До сборки каждый
+manifest обязан содержать без version placeholder:
 
 - `candidateId`, target `os: Windows 10` и `arch: x64`;
 - exact Node version, имя ZIP и SHA-256;
 - exact package `playwright` version и SHA-256 соответствующего `package-lock.json`;
-- browser product, revision/build, относительный путь executable и его SHA-256;
+- browser product, revision/build, относительный путь executable и правило
+  обязательного вычисления его SHA-256 из packaged file в `VERSIONS.json`;
 - `headless: false`, exact launch arguments, `browserChannel: null`;
 - относительный `PLAYWRIGHT_BROWSERS_PATH` внутри candidate bundle;
 - два profile mode: `fresh` и `persistent`.
 
-Manifest и `package-lock.json` входят в candidate ZIP и в evidence. Несовпадение version/revision/path/hash, абсолютный executable path, пустой hash или browser channel делает candidate непригодным к запуску, а не включает fallback.
+Manifest, built `VERSIONS.json` и `package-lock.json` входят в candidate ZIP и
+evidence. Несовпадение version/revision/path/hash, абсолютный executable path,
+пустой built hash или browser channel делает candidate непригодным к запуску,
+а не включает fallback.
 
 ### M0 test contract
 
@@ -462,14 +470,14 @@ SHA256SUMS.txt
 SYSTEM-INFO.json
 runs/
   current-control/
-    compatibility/run-001.json ... run-020.json
-    live/run-001.json ... run-005.json
+    compatibility/run-001/{run,runtime-result}.json ... run-020/
+    live/run-001/{run,runtime-result}.json ... run-005/
   pre-cft-compat/
-    compatibility/run-001.json ... run-020.json
-    live/run-001.json ... run-005.json
-screenshots/
-traces-on-failure/
-logs/
+    compatibility/run-001/{run,runtime-result}.json ... run-020/
+    live/run-001/{run,runtime-result}.json ... run-005/
+candidates/<candidate>.json
+sources/<candidate>/
+path-matrix/<candidate>/
 ```
 
 Каждая run record фиксирует candidate/run/profile/target, timestamps и exit codes, relative browser executable, настоящий locator/action, success marker, download/system-browser flags, process-cleanup snapshot и итог. `SYSTEM-INFO.json` фиксирует Windows edition/build/winver, x64, laptop model, RAM, GPU/driver, display/resolution/scaling/devicePixelRatio, locale, account/admin mode, portable path и доступное без elevation состояние Defender/AppLocker/WDAC; секреты и персональные файлы не собираются. Лог обязателен для каждого запуска, screenshot — для контрольной выборки и каждой ошибки, trace и process snapshot — для каждой ошибки.

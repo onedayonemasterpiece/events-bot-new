@@ -1,0 +1,29 @@
+@echo off
+setlocal DisableDelayedExpansion
+
+set "AP_ROOT=%~dp0"
+set "AP_NODE=%AP_ROOT%runtime\node.exe"
+set "PLAYWRIGHT_BROWSERS_PATH=%AP_ROOT%browsers"
+set "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"
+set "PLAYWRIGHT_SKIP_BROWSER_GC=1"
+
+if not exist "%AP_NODE%" (
+  >&2 echo ERROR: packaged portable Node is absent: "%AP_NODE%"
+  exit /b 2
+)
+if not exist "%AP_ROOT%logs\path-matrix.json" (
+  >&2 echo ERROR: run path-matrix.cmd successfully first.
+  exit /b 4
+)
+set "AP_EXTERNAL_EVIDENCE=%~1"
+set "AP_EVIDENCE=%AP_ROOT%evidence"
+if not exist "%AP_EVIDENCE%" mkdir "%AP_EVIDENCE%"
+if errorlevel 1 exit /b %ERRORLEVEL%
+
+"%AP_NODE%" "%AP_ROOT%app\reporting\collect-system-info.js" --portable-root "%AP_ROOT%" --path-matrix "%AP_ROOT%logs\path-matrix.json" --self-test "%AP_ROOT%logs\self-test.json" --output "%AP_EVIDENCE%\SYSTEM-INFO.json"
+if errorlevel 1 exit /b %ERRORLEVEL%
+if defined AP_EXTERNAL_EVIDENCE (
+  if not exist "%AP_EXTERNAL_EVIDENCE%" mkdir "%AP_EXTERNAL_EVIDENCE%"
+  copy /y "%AP_EVIDENCE%\SYSTEM-INFO.json" "%AP_EXTERNAL_EVIDENCE%\SYSTEM-INFO.json" >nul
+)
+exit /b %ERRORLEVEL%

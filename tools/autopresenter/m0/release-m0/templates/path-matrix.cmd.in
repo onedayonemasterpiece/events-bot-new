@@ -1,0 +1,22 @@
+@echo off
+setlocal DisableDelayedExpansion
+
+set "AP_ROOT=%~dp0"
+set "AP_NODE=%AP_ROOT%runtime\node.exe"
+set "PLAYWRIGHT_BROWSERS_PATH=%AP_ROOT%browsers"
+set "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"
+set "PLAYWRIGHT_SKIP_BROWSER_GC=1"
+
+if not exist "%AP_NODE%" (
+  >&2 echo ERROR: packaged portable Node is absent: "%AP_NODE%"
+  exit /b 2
+)
+if not exist "%AP_ROOT%app\reporting\run-path-matrix.js" (
+  >&2 echo ERROR: packaged path-matrix runner is absent.
+  exit /b 4
+)
+if not exist "%AP_ROOT%logs" mkdir "%AP_ROOT%logs"
+if errorlevel 1 exit /b %ERRORLEVEL%
+
+"%AP_NODE%" "%AP_ROOT%app\reporting\run-path-matrix.js" --portable-root "%AP_ROOT%" --output "%AP_ROOT%logs\path-matrix.json"
+exit /b %ERRORLEVEL%

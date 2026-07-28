@@ -7,10 +7,12 @@
   "required": [
     "schemaVersion",
     "candidateId",
+    "machineAccountFingerprint",
     "run",
     "startedAt",
     "finishedAt",
     "coldStart",
+    "headed",
     "profileMode",
     "nodeProcessFresh",
     "browserProcessFresh",
@@ -28,15 +30,18 @@
     "liveRouteSuccess",
     "liveContentSuccess",
     "orphanProcesses",
+    "log",
     "error"
   ],
   "properties": {
     "schemaVersion": { "const": 1 },
     "candidateId": { "$ref": "#/$defs/candidateId" },
+    "machineAccountFingerprint": { "$ref": "#/$defs/sha256" },
     "run": { "type": "integer", "minimum": 1, "maximum": 20 },
     "startedAt": { "type": "string", "format": "date-time" },
     "finishedAt": { "type": "string", "format": "date-time" },
     "coldStart": { "type": "boolean" },
+    "headed": { "const": true },
     "profileMode": { "enum": ["fresh", "persistent"] },
     "nodeProcessFresh": { "type": "boolean" },
     "browserProcessFresh": { "type": "boolean" },
@@ -60,6 +65,7 @@
     },
     "screenshot": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
     "trace": { "oneOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }] },
+    "log": { "$ref": "#/$defs/relativePath" },
     "error": {
       "oneOf": [
         { "type": "null" },
@@ -108,6 +114,7 @@
       "minLength": 1,
       "maxLength": 500,
       "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
-    }
+    },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   }
 }

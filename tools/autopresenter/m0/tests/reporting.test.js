@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
@@ -28,8 +29,14 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function hash(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
 function candidates() {
   const compat = fixture('candidate-base.json');
+  compat.release.packageLockFile = 'sources/pre-cft-compat/package-lock.json';
+  compat.release.packageLockSha256 = hash('lock:pre-cft-compat');
   const current = clone(compat);
   current.candidateId = 'current-control';
   current.stack.playwrightVersion = '1.61.1';
@@ -38,8 +45,8 @@ function candidates() {
   current.stack.browserExecutableSha256 = 'd'.repeat(64);
   current.release.zipFile = 'releases/current-control.zip';
   current.release.zipSha256 = 'e'.repeat(64);
-  current.release.packageLockFile = 'candidates/current-control/package-lock.json';
-  current.release.packageLockSha256 = 'f'.repeat(64);
+  current.release.packageLockFile = 'sources/current-control/package-lock.json';
+  current.release.packageLockSha256 = hash('lock:current-control');
   return [compat, current];
 }
 
@@ -93,6 +100,14 @@ function writeEvidenceTree(evidence) {
   fs.mkdirSync(path.join(root, 'candidates'));
   fs.mkdirSync(path.join(root, 'runs'));
   fs.writeFileSync(path.join(root, 'SYSTEM-INFO.json'), JSON.stringify(evidence.systemInfo));
+  for (const variant of evidence.systemInfo.pathVariants) {
+    const file = path.join(root, ...variant.selfTest.split('/'));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const payload = variant.kind;
+    fs.writeFileSync(file, payload);
+    variant.selfTestSha256 = hash(payload);
+  }
+  fs.writeFileSync(path.join(root, 'SYSTEM-INFO.json'), JSON.stringify(evidence.systemInfo));
   fs.writeFileSync(path.join(root, 'VERSIONS.json'), '{}\n');
   fs.writeFileSync(path.join(root, 'RELEASE-MANIFEST.json'), '{}\n');
   fs.writeFileSync(path.join(root, 'SHA256SUMS.txt'), 'fixture\n');
@@ -101,17 +116,93 @@ function writeEvidenceTree(evidence) {
       path.join(root, 'candidates', `${candidate.candidateId}.json`),
       JSON.stringify(candidate),
     );
+    const sourceRoot = path.join(root, 'sources', candidate.candidateId);
+    fs.mkdirSync(sourceRoot, { recursive: true });
+    const versions = {
+      schemaVersion: 1,
+      candidateId: candidate.candidateId,
+      node: { version: candidate.stack.nodeVersion },
+      playwright: { version: candidate.stack.playwrightVersion },
+      browser: {
+        revision: candidate.stack.browserRevision,
+        executableSha256: candidate.stack.browserExecutableSha256,
+      },
+      packageLock: { sha256: candidate.release.packageLockSha256 },
+    };
+    fs.writeFileSync(path.join(sourceRoot, 'VERSIONS.json'), JSON.stringify(versions));
+    fs.writeFileSync(path.join(sourceRoot, 'CANDIDATE.json'), JSON.stringify({ id: candidate.candidateId }));
+    const sourceSystem = clone(evidence.systemInfo);
+    sourceSystem.provenance.sourceCandidateId = candidate.candidateId;
+    fs.writeFileSync(path.join(sourceRoot, 'SYSTEM-INFO.json'), JSON.stringify(sourceSystem));
+    fs.writeFileSync(path.join(sourceRoot, 'M0-RUNTIME-SUITE.json'), JSON.stringify({
+      candidateId: candidate.candidateId,
+      runtimeChecksPassed: candidate.suiteChecksPassed,
+      suites: {
+        localCompatibility: { metTarget: candidate.suiteChecksPassed },
+        liveSmoke: { metTarget: candidate.suiteChecksPassed },
+      },
+      processCleanup: { passed: candidate.suiteChecksPassed },
+    }));
+    fs.writeFileSync(
+      path.join(sourceRoot, 'SELF-TEST.json'),
+      JSON.stringify({ selfTest: candidate.selfTest }),
+    );
+    fs.writeFileSync(path.join(sourceRoot, 'package-lock.json'), `lock:${candidate.candidateId}`);
+    fs.writeFileSync(
+      path.join(sourceRoot, 'ZIP.sha256'),
+      `${candidate.release.zipSha256}  ${candidate.release.zipFile}\n`,
+    );
+    fs.writeFileSync(path.join(sourceRoot, 'RELEASE-MANIFEST.json'), '{}');
+    fs.writeFileSync(path.join(sourceRoot, 'SHA256SUMS.txt'), 'fixture');
   });
   evidence.runs.forEach((record) => {
+    const suite = record.target === 'local-fixture' ? 'compatibility' : 'live';
+    const runDirectory = path.join(
+      root,
+      'runs',
+      record.candidateId,
+      suite,
+      `run-${String(record.run).padStart(3, '0')}`,
+    );
+    fs.mkdirSync(runDirectory, { recursive: true });
+    const prefix = path.relative(root, runDirectory).split(path.sep).join('/');
+    record.log = `${prefix}/worker.log`;
+    record.screenshot = `${prefix}/screenshot.png`;
+    record.trace = `${prefix}/trace.zip`;
+    for (const name of ['worker.log', 'screenshot.png', 'trace.zip', 'runtime-result.json']) {
+      fs.writeFileSync(path.join(runDirectory, name), `${record.candidateId}:${record.target}:${record.run}:${name}`);
+    }
     fs.writeFileSync(
-      path.join(
-        root,
-        'runs',
-        `${record.candidateId}-${record.target}-${String(record.run).padStart(2, '0')}.json`,
-      ),
+      path.join(runDirectory, 'run.json'),
       JSON.stringify(record),
     );
   });
+  const versions = Object.fromEntries(evidence.candidates.map((candidate) => [
+    candidate.candidateId,
+    JSON.parse(fs.readFileSync(path.join(root, 'sources', candidate.candidateId, 'VERSIONS.json'))),
+  ]));
+  fs.writeFileSync(path.join(root, 'VERSIONS.json'), JSON.stringify({ schemaVersion: 1, candidates: versions }));
+  const excluded = new Set(['M0-REPORT.json', 'M0-REPORT.md', 'RELEASE-MANIFEST.json', 'SHA256SUMS.txt']);
+  const walk = (directory) => fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const value = path.join(directory, entry.name);
+    return entry.isDirectory() ? walk(value) : [value];
+  });
+  const files = walk(root).filter((file) => !excluded.has(path.basename(file))).map((file) => ({
+    path: path.relative(root, file).split(path.sep).join('/'),
+    sha256: hash(fs.readFileSync(file)),
+    sizeBytes: fs.statSync(file).size,
+  }));
+  fs.writeFileSync(path.join(root, 'RELEASE-MANIFEST.json'), JSON.stringify({
+    schemaVersion: 1,
+    targetMachineOnly: true,
+    candidateIds: ['current-control', 'pre-cft-compat'],
+    files,
+  }));
+  const manifestHash = hash(fs.readFileSync(path.join(root, 'RELEASE-MANIFEST.json')));
+  fs.writeFileSync(
+    path.join(root, 'SHA256SUMS.txt'),
+    `${files.map((file) => `${file.sha256}  ${file.path}`).join('\n')}\n${manifestHash}  RELEASE-MANIFEST.json\n`,
+  );
   return root;
 }
 
@@ -204,6 +295,38 @@ test('admin, install, download, system browser, self-test, and orphan evidence f
   }
 });
 
+test('suite, path matrix, and target machine/account provenance fail closed', () => {
+  for (const mutation of [
+    (candidate) => { candidate.suiteChecksPassed = false; },
+    (candidate) => { candidate.pathMatrixPassed = false; },
+    (candidate) => { candidate.machineAccountFingerprint = 'a'.repeat(64); },
+  ]) {
+    const evidence = completeEvidence();
+    mutation(evidence.candidates[0]);
+    const report = aggregateEvidence(evidence);
+    assert.equal(report.candidates[0].status, 'FAIL');
+  }
+});
+
+test('directory aggregation rejects a run copied from another machine/account', () => {
+  const evidence = completeEvidence();
+  const root = writeEvidenceTree(evidence);
+  try {
+    const run = path.join(
+      root, 'runs', 'pre-cft-compat', 'compatibility', 'run-001', 'run.json',
+    );
+    const record = JSON.parse(fs.readFileSync(run, 'utf8'));
+    record.machineAccountFingerprint = 'a'.repeat(64);
+    fs.writeFileSync(run, JSON.stringify(record));
+    assert.throws(
+      () => aggregateEvidenceDirectory(root, { generatedAt: GENERATED_AT }),
+      /Manifest file mismatch|Run provenance mismatch/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('both pass but different stability selects the more stable candidate, not the newer one', () => {
   const evidence = completeEvidence();
   evidence.candidates[1].stabilitySignals.push('one non-fatal headed launch delay');
@@ -242,15 +365,15 @@ test('directory aggregation requires full inventory and writes JSON and Markdown
   }
 });
 
-test('missing required release evidence makes every candidate fail', () => {
+test('missing required release evidence fails closed before report generation', () => {
   const evidence = completeEvidence();
   const root = writeEvidenceTree(evidence);
   try {
     fs.unlinkSync(path.join(root, 'SHA256SUMS.txt'));
-    const report = aggregateEvidenceDirectory(root, { generatedAt: GENERATED_AT });
-    assert.equal(report.verdict.code, 'PLAYWRIGHT_ON_TARGET_WIN10_NO_GO');
-    assert.equal(report.evidenceInventory.complete, false);
-    assert.ok(report.candidates.every((candidate) => candidate.status === 'FAIL'));
+    assert.throws(
+      () => aggregateEvidenceDirectory(root, { generatedAt: GENERATED_AT }),
+      /SHA256SUMS/,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

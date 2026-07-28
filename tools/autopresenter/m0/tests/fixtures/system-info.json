@@ -1,36 +1,76 @@
 {
   "schemaVersion": 1,
   "collectedAt": "2026-07-28T10:00:00.000Z",
+  "provenance": {
+    "machineAccountFingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "sourceCandidateId": "pre-cft-compat"
+  },
   "os": {
     "productName": "Windows 10",
     "version": "22H2",
     "build": "19045.6093",
+    "winver": "22H2",
     "architecture": "x64"
+  },
+  "hardware": {
+    "manufacturer": "Fixture manufacturer",
+    "model": "Fixture laptop",
+    "ramBytes": 17179869184,
+    "gpu": [
+      { "name": "Fixture GPU", "driverVersion": "31.0.0.1" }
+    ]
+  },
+  "display": {
+    "width": 1920,
+    "height": 1080,
+    "scalingPercent": 125,
+    "devicePixelRatio": 1.25
+  },
+  "locale": {
+    "language": "ru-RU",
+    "locale": "ru-RU",
+    "timezone": "Russian Standard Time"
   },
   "user": {
     "standardUser": true,
-    "administrator": false
+    "administrator": false,
+    "accountType": "standard"
+  },
+  "launch": {
+    "portablePath": "C:\\Autopresenter\\"
   },
   "baseline": {
     "installedNode": false,
     "installedChrome": false,
     "installedPlaywright": false
   },
+  "security": {
+    "defender": "enabled",
+    "appLocker": "unknown",
+    "wdac": "unknown",
+    "collectedWithoutElevation": true
+  },
   "pathVariants": [
     {
       "kind": "plain",
       "path": "C:\\Autopresenter\\",
-      "passed": true
+      "passed": true,
+      "selfTest": "logs/path-matrix/plain-self-test.json",
+      "selfTestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     {
       "kind": "spaces",
       "path": "C:\\Folder with spaces\\Autopresenter\\",
-      "passed": true
+      "passed": true,
+      "selfTest": "logs/path-matrix/spaces-self-test.json",
+      "selfTestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     },
     {
       "kind": "unicode",
       "path": "C:\\Демонстрация\\Автопрезентатор\\",
-      "passed": true
+      "passed": true,
+      "selfTest": "logs/path-matrix/unicode-self-test.json",
+      "selfTestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
     }
   ]
 }

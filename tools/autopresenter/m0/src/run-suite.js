@@ -9,6 +9,11 @@ const { parseSuiteOptions, resolveOptionalModulePath } = require("./cli-options"
 const { errorRecord, ContractError } = require("./errors");
 const { startFixtureServer } = require("./fixture-server");
 const { ensureDirectory, readJson, writeJsonAtomic } = require("./json-file");
+const { validateSystemInfo } = require("../reporting/validate");
+const {
+  assertTargetMachineProvenance,
+  queryMachineProvenance,
+} = require("./machine-provenance");
 const {
   difference,
   isProcessAlive,
@@ -21,10 +26,12 @@ const {
   isPathInside,
   loadPlaywrightCore,
   resolveManagedBrowser,
+  resolvePortablePath,
   resolvePortableRoot,
   sha256File,
   toPortableRelative,
   validatePortableLayout,
+  verifyExactCandidate,
 } = require("./portable-contract");
 const {
   LIVE_RUNS,
@@ -42,6 +49,7 @@ Required:
   --portable-browsers-root <release browsers/>
   --output-dir <path beneath release logs/>
   --profile-root <path beneath release data/>
+  --system-info <bundle-local target SYSTEM-INFO.json>
 
 Modes:
   --mode all|local|live          default: all
@@ -102,10 +110,12 @@ function projectEvidenceRecord(internal, nodeExitCode) {
   return {
     schemaVersion: 1,
     candidateId: internal.candidateId,
+    machineAccountFingerprint: internal.machineAccountFingerprint,
     run: internal.run,
     startedAt: internal.startedAt,
     finishedAt: internal.finishedAt,
     coldStart: true,
+    headed: Boolean(internal.headed),
     profileMode: internal.profileMode,
     nodeProcessFresh: Boolean(internal.nodeProcessFresh),
     browserProcessFresh: Boolean(internal.browserProcessFresh),
@@ -127,6 +137,7 @@ function projectEvidenceRecord(internal, nodeExitCode) {
     orphanProcesses: [...new Set(orphanProcesses)],
     screenshot: internal.screenshot || null,
     trace: internal.trace || null,
+    log: internal.log,
     error: projectedError,
   };
 }
@@ -134,10 +145,12 @@ function projectEvidenceRecord(internal, nodeExitCode) {
 function failedInternalRecord(config, error) {
   return {
     candidateId: config.candidateId,
+    machineAccountFingerprint: config.machineAccountFingerprint,
     run: config.run,
     startedAt: new Date().toISOString(),
     finishedAt: new Date().toISOString(),
     profileMode: config.profileMode,
+    headed: Boolean(config.headed),
     nodeProcessFresh: config.nodeProcessFresh,
     browserProcessFresh: false,
     browserStarted: false,
@@ -214,11 +227,13 @@ async function executeCycle({
   const evidenceResultPath = path.join(runDirectory, "run.json");
   const screenshotPath = path.join(runDirectory, "screenshot.png");
   const tracePath = path.join(runDirectory, "trace.zip");
+  const logPath = path.join(runDirectory, "worker.log");
   const config = {
     ...target,
     browserExecutableRelative: browser.executableRelative,
     browserExecutableValue: common.browserExecutableValue,
     candidateId: common.candidateId,
+    machineAccountFingerprint: common.machineAccountFingerprint,
     cycleId: planItem.cycleId,
     headed: common.headed,
     nodeProcessFresh: true,
@@ -261,6 +276,20 @@ async function executeCycle({
       timeoutMs: planItem.target === "live-site" ? 90000 : 60000,
     });
   }
+  fs.writeFileSync(
+    logPath,
+    [
+      `exitCode=${worker.exitCode}`,
+      `signal=${worker.signal || ""}`,
+      `timedOut=${worker.timedOut}`,
+      "--- stdout ---",
+      worker.stdout || "",
+      "--- stderr ---",
+      worker.stderr || "",
+      "",
+    ].join(os.EOL),
+    "utf8",
+  );
 
   let internal;
   try {
@@ -312,6 +341,7 @@ async function executeCycle({
   }
   internal._outerOrphans = outerOrphans;
   internal._browserRoot = browser.portableBrowsersRoot;
+  internal.log = toPortableRelative(common.outputDirectory, logPath);
   const evidence = projectEvidenceRecord(internal, worker.exitCode);
   writeJsonAtomic(evidenceResultPath, evidence);
   return {
@@ -336,6 +366,7 @@ function suiteMetrics(results, target, expected) {
   const successful = selected.filter(
     (item) =>
       item.evidence.nodeExitCode === 0 &&
+      item.evidence.headed === true &&
       item.evidence.browserStarted &&
       item.evidence.browserProcessFresh &&
       item.evidence.successMarkerVisible &&
@@ -351,6 +382,10 @@ function suiteMetrics(results, target, expected) {
     metTarget: selected.length === expected && successful === expected,
     runFiles: selected.map((item) => item.paths.evidence),
   };
+}
+
+function mayStartLiveSmoke(results) {
+  return suiteMetrics(results, "local-fixture", 20).metTarget;
 }
 
 async function main() {
@@ -378,6 +413,30 @@ async function main() {
     portableBrowsersRootValue: options.portableBrowsersRootValue,
     portableRoot,
   });
+  verifyExactCandidate({
+    appRoot,
+    browserExecutable: browser.executablePath,
+    candidateId: options.candidateId,
+    portableRoot,
+  });
+  const systemInfoPath = resolvePortablePath(
+    portableRoot,
+    options.systemInfoValue,
+    "target system info",
+  );
+  const systemInfo = readJson(systemInfoPath);
+  validateSystemInfo(systemInfo);
+  if (systemInfo.provenance.sourceCandidateId !== options.candidateId) {
+    throw new ContractError(
+      "SYSTEM_INFO_CANDIDATE_MISMATCH",
+      "SYSTEM-INFO.json was not collected from this exact candidate",
+    );
+  }
+  assertTargetMachineProvenance(
+    systemInfo.provenance.machineAccountFingerprint,
+    systemInfo.os.build,
+    queryMachineProvenance(),
+  );
   const logsRoot = ensurePortableDirectory(portableRoot, "logs", "logs root");
   const dataRoot = ensurePortableDirectory(portableRoot, "data", "data root");
   const outputDirectory = ensurePortableDirectory(
@@ -422,6 +481,8 @@ async function main() {
     browserExecutableValue: options.browserExecutableValue,
     candidateId: options.candidateId,
     headed: options.headed,
+    machineAccountFingerprint:
+      systemInfo.provenance.machineAccountFingerprint,
     outputDirectory,
     playwrightModulePath,
     portableBrowsersRootValue: options.portableBrowsersRootValue,
@@ -436,6 +497,13 @@ async function main() {
       fixture = await startFixtureServer(fixtureRoot);
     }
     for (const item of plan) {
+      if (
+        options.mode === "all" &&
+        item.target === "live-site" &&
+        !mayStartLiveSmoke(results)
+      ) {
+        break;
+      }
       const isPersistent = item.profileMode === "persistent";
       const profileDirectory = isPersistent
         ? path.join(sessionProfileRoot, "local-persistent")
@@ -503,7 +571,12 @@ async function main() {
   const liveSmoke =
     options.mode === "local"
       ? { status: "not-run", expected: LIVE_RUNS, metTarget: null }
-      : suiteMetrics(results, "live-site", LIVE_RUNS);
+      : options.mode === "all" && !mayStartLiveSmoke(results)
+        ? {
+            ...suiteMetrics(results, "live-site", LIVE_RUNS),
+            status: "blocked-by-local-compatibility",
+          }
+        : suiteMetrics(results, "live-site", LIVE_RUNS);
   const runtimeChecksPassed =
     suiteOrphans.length === 0 &&
     !afterSuite.probeErrors.length &&
@@ -578,6 +651,7 @@ if (require.main === module) {
 
 module.exports = {
   compactOrphans,
+  mayStartLiveSmoke,
   projectEvidenceRecord,
   suiteMetrics,
 };

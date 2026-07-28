@@ -21,6 +21,7 @@ const {
   toPortableRelative,
   validatePortableLayout,
   verifyVersionsManifest,
+  verifyExactCandidate,
 } = require("./portable-contract");
 const { runCycle } = require("./run-cycle");
 
@@ -105,6 +106,7 @@ async function main() {
   let fixture;
   let manifest;
   let browser;
+  let devicePixelRatio;
   const platform = windows10X64Evidence();
   checks.push({
     id: "target-windows-10-x64",
@@ -143,6 +145,12 @@ async function main() {
       "VERSIONS.json",
     );
     manifest = readJson(versionsPath);
+    verifyExactCandidate({
+      appRoot,
+      browserExecutable: browser.executablePath,
+      candidateId: manifest.candidateId,
+      portableRoot,
+    });
     const hashes = verifyVersionsManifest({
       browserExecutable: browser.executablePath,
       manifest,
@@ -228,6 +236,7 @@ async function main() {
       },
       loaded.playwright,
     );
+    devicePixelRatio = cycle.assertions.devicePixelRatio;
     fs.rmSync(profileDirectory, { force: true, recursive: true });
     checks.push({
       id: "managed-headed-browser-about-blank",
@@ -314,6 +323,8 @@ async function main() {
       adminRequired: false,
     },
     platform,
+    devicePixelRatio,
+    portablePath: portableRoot,
     browser: browser
       ? {
           executable: browser.executableRelative,

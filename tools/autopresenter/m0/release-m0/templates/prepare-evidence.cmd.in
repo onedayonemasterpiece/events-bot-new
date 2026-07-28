@@ -1,0 +1,10 @@
+@echo off
+setlocal DisableDelayedExpansion
+set "AP_ROOT=%~dp0"
+set "AP_NODE=%AP_ROOT%runtime\node.exe"
+if "%~2"=="" (
+  >&2 echo Usage: prepare-evidence.cmd CANDIDATE_ZIP EVIDENCE_DIRECTORY
+  exit /b 64
+)
+"%AP_NODE%" "%AP_ROOT%app\reporting\prepare-candidate-evidence.js" --portable-root "%AP_ROOT%" --zip "%~1" --evidence-root "%~2"
+exit /b %ERRORLEVEL%

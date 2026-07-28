@@ -66,6 +66,8 @@ $candidatePackagePath = Join-Path $candidateRoot 'package.json'
 $candidateLockPath = Join-Path $candidateRoot 'package-lock.json'
 $runtimeSourcePath = Join-Path $m0Root 'src'
 $fixtureSourcePath = Join-Path $m0Root 'fixture'
+$reportingSourcePath = Join-Path $m0Root 'reporting'
+$schemasSourcePath = Join-Path $m0Root 'schemas'
 $templateRoot = Join-Path $m0Root 'release-m0\templates'
 
 foreach ($requiredPath in @(
@@ -74,12 +76,18 @@ foreach ($requiredPath in @(
     $candidateLockPath,
     $runtimeSourcePath,
     $fixtureSourcePath,
+    $reportingSourcePath,
+    $schemasSourcePath,
     (Join-Path $runtimeSourcePath 'run-suite.js'),
     (Join-Path $runtimeSourcePath 'self-test.js'),
     (Join-Path $fixtureSourcePath 'index.html'),
     (Join-Path $fixtureSourcePath 'zavtra\index.html'),
     (Join-Path $templateRoot 'start.cmd.in'),
-    (Join-Path $templateRoot 'self-test.cmd.in')
+    (Join-Path $templateRoot 'self-test.cmd.in'),
+    (Join-Path $templateRoot 'path-matrix.cmd.in'),
+    (Join-Path $templateRoot 'system-info.cmd.in'),
+    (Join-Path $templateRoot 'prepare-evidence.cmd.in'),
+    (Join-Path $templateRoot 'finalize-evidence.cmd.in')
 )) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Required source is absent: $requiredPath"
@@ -145,6 +153,19 @@ if ($candidate.runtimePolicy.playwrightBrowsersPath -ne 'browsers' -or
     $candidate.runtimePolicy.changesExecutionPolicy -ne $false) {
     throw 'Candidate runtime policy is not hermetic and fail-closed.'
 }
+if ($candidate.playwright.packageLockSha256 -ne (Get-Sha256 -Path $candidateLockPath) -or
+    $candidate.managedBrowser.executableSha256.resolution -ne 'computed-from-packaged-executable-at-build' -or
+    $candidate.managedBrowser.executableSha256.recordedIn -ne 'VERSIONS.json' -or
+    $candidate.launch.headless -ne $false -or
+    $null -ne $candidate.launch.browserChannel -or
+    @($candidate.launch.arguments).Count -ne 0 -or
+    @($candidate.launch.profileModes).Count -ne 2 -or
+    $candidate.launch.profileModes[0] -ne 'fresh' -or
+    $candidate.launch.profileModes[1] -ne 'persistent' -or
+    $candidate.launch.viewport.width -ne 430 -or
+    $candidate.launch.viewport.height -ne 932) {
+    throw 'Candidate manifest does not exactly lock the package, headed launch, profile, and viewport contract.'
+}
 
 $candidateOutputRoot = Join-Path $OutputRoot $CandidateId
 if (Test-Path -LiteralPath $candidateOutputRoot) {
@@ -203,6 +224,8 @@ Copy-Item -LiteralPath $buildNodePath -Destination (Join-Path $releaseRuntimeRoo
 
 Copy-Item -LiteralPath $runtimeSourcePath -Destination (Join-Path $releaseAppRoot 'src') -Recurse
 Copy-Item -LiteralPath $fixtureSourcePath -Destination (Join-Path $releaseAppRoot 'fixture') -Recurse
+Copy-Item -LiteralPath $reportingSourcePath -Destination (Join-Path $releaseAppRoot 'reporting') -Recurse
+Copy-Item -LiteralPath $schemasSourcePath -Destination (Join-Path $releaseAppRoot 'schemas') -Recurse
 Copy-Item -LiteralPath $candidatePackagePath -Destination (Join-Path $releaseAppRoot 'package.json')
 Copy-Item -LiteralPath $candidateLockPath -Destination (Join-Path $releaseAppRoot 'package-lock.json')
 Copy-Item -LiteralPath $candidateManifestPath -Destination (Join-Path $releaseRoot 'CANDIDATE.json')
@@ -274,6 +297,10 @@ if (-not $resolvedBrowserExecutable.StartsWith($resolvedRegistryRoot, [System.St
 $browserExecutableForCmd = $browserExecutableRelative
 $startTemplate = Get-Content -LiteralPath (Join-Path $templateRoot 'start.cmd.in') -Raw
 $selfTestTemplate = Get-Content -LiteralPath (Join-Path $templateRoot 'self-test.cmd.in') -Raw
+$pathMatrixTemplate = Get-Content -LiteralPath (Join-Path $templateRoot 'path-matrix.cmd.in') -Raw
+$systemInfoTemplate = Get-Content -LiteralPath (Join-Path $templateRoot 'system-info.cmd.in') -Raw
+$prepareEvidenceTemplate = Get-Content -LiteralPath (Join-Path $templateRoot 'prepare-evidence.cmd.in') -Raw
+$finalizeEvidenceTemplate = Get-Content -LiteralPath (Join-Path $templateRoot 'finalize-evidence.cmd.in') -Raw
 foreach ($template in @($startTemplate, $selfTestTemplate)) {
     if ($template -notmatch 'PLAYWRIGHT_BROWSERS_PATH' -or
         $template -notmatch 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1' -or
@@ -285,6 +312,10 @@ $startCmd = $startTemplate.Replace('@@CANDIDATE_ID@@', $CandidateId).Replace('@@
 $selfTestCmd = $selfTestTemplate.Replace('@@BROWSER_EXECUTABLE_WINDOWS@@', $browserExecutableForCmd)
 Write-Utf8NoBom -Path (Join-Path $releaseRoot 'start.cmd') -Content $startCmd
 Write-Utf8NoBom -Path (Join-Path $releaseRoot 'self-test.cmd') -Content $selfTestCmd
+Write-Utf8NoBom -Path (Join-Path $releaseRoot 'path-matrix.cmd') -Content $pathMatrixTemplate
+Write-Utf8NoBom -Path (Join-Path $releaseRoot 'system-info.cmd') -Content $systemInfoTemplate
+Write-Utf8NoBom -Path (Join-Path $releaseRoot 'prepare-evidence.cmd') -Content $prepareEvidenceTemplate
+Write-Utf8NoBom -Path (Join-Path $releaseRoot 'finalize-evidence.cmd') -Content $finalizeEvidenceTemplate
 
 $portableNodePath = Join-Path $releaseRuntimeRoot 'node.exe'
 $packageLockPath = Join-Path $releaseAppRoot 'package-lock.json'

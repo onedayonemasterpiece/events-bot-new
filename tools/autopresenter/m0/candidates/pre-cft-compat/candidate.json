@@ -16,6 +16,7 @@
   },
   "playwright": {
     "version": "1.54.2",
+    "packageLockSha256": "3e634bec58e9290ea40ee61975259d501bf458f56f4a549ead18adf20cc90c93",
     "package": {
       "name": "playwright",
       "integrity": "sha512-Hu/BMoA1NAdRUuulyvQC0pEqZ4vQbGfn8f7wPXcnqQmM+zct9UliKxsIkLNmz/ku7LElUNqmaiv1TG/aL5ACsw=="
@@ -35,7 +36,18 @@
     "revision": "1181",
     "version": "139.0.7258.5",
     "registryDirectory": "chromium-1181",
-    "executableRelativePath": "browsers/chromium-1181/chrome-win/chrome.exe"
+    "executableRelativePath": "browsers/chromium-1181/chrome-win/chrome.exe",
+    "executableSha256": {
+      "resolution": "computed-from-packaged-executable-at-build",
+      "recordedIn": "VERSIONS.json"
+    }
+  },
+  "launch": {
+    "headless": false,
+    "browserChannel": null,
+    "arguments": [],
+    "profileModes": ["fresh", "persistent"],
+    "viewport": { "width": 430, "height": 932 }
   },
   "runtimePolicy": {
     "playwrightBrowsersPath": "browsers",

@@ -7,6 +7,9 @@
   "required": [
     "schemaVersion",
     "candidateId",
+    "machineAccountFingerprint",
+    "suiteChecksPassed",
+    "pathMatrixPassed",
     "stack",
     "release",
     "requirements",
@@ -17,6 +20,9 @@
   "properties": {
     "schemaVersion": { "const": 1 },
     "candidateId": { "$ref": "#/$defs/candidateId" },
+    "machineAccountFingerprint": { "$ref": "#/$defs/sha256" },
+    "suiteChecksPassed": { "type": "boolean" },
+    "pathMatrixPassed": { "type": "boolean" },
     "stack": {
       "type": "object",
       "additionalProperties": false,

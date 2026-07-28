@@ -1,10 +1,12 @@
 {
   "schemaVersion": 1,
   "candidateId": "pre-cft-compat",
+  "machineAccountFingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "run": 1,
   "startedAt": "2026-07-28T11:00:00.000Z",
   "finishedAt": "2026-07-28T11:00:03.000Z",
   "coldStart": true,
+  "headed": true,
   "profileMode": "fresh",
   "nodeProcessFresh": true,
   "browserProcessFresh": true,
@@ -24,5 +26,6 @@
   "orphanProcesses": [],
   "screenshot": "runs/pre-cft-compat/live-01.png",
   "trace": "runs/pre-cft-compat/live-01.zip",
+  "log": "runs/pre-cft-compat/live-01.log",
   "error": null
 }

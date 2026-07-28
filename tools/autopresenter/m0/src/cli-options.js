@@ -41,13 +41,13 @@ function requireText(options, key, flag) {
 }
 
 function validateHeadMode(options) {
-  if (options.headed && options.headless) {
+  if (options.headless) {
     throw new ContractError(
-      "HEAD_MODE_CONFLICT",
-      "--headed and --headless are mutually exclusive",
+      "HEADED_REQUIRED",
+      "M0 credits only headed browser runs; --headless is forbidden",
     );
   }
-  return !options.headless;
+  return true;
 }
 
 function validateLiveUrl(value) {
@@ -94,6 +94,7 @@ function parseSuiteOptions(argv) {
     "candidate-id": { type: "string", key: "candidateId" },
     "output-dir": { type: "string", key: "outputDirectoryValue" },
     "profile-root": { type: "string", key: "profileRootValue" },
+    "system-info": { type: "string", key: "systemInfoValue" },
     mode: { type: "string" },
     "live-url": { type: "string", key: "liveUrl" },
     "live-marker-selector": { type: "string", key: "liveMarkerSelector" },
@@ -129,6 +130,11 @@ function parseSuiteOptions(argv) {
     options,
     "profileRootValue",
     "--profile-root",
+  );
+  options.systemInfoValue = requireText(
+    options,
+    "systemInfoValue",
+    "--system-info",
   );
   options.mode ||= "all";
   if (!["all", "local", "live"].includes(options.mode)) {

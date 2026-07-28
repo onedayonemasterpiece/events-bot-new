@@ -284,6 +284,84 @@ function verifyVersionsManifest({
   return actual;
 }
 
+function verifyExactCandidate({
+  appRoot,
+  browserExecutable,
+  candidateId,
+  portableRoot,
+}) {
+  const candidate = JSON.parse(
+    fs.readFileSync(realFile(path.join(portableRoot, "CANDIDATE.json"), "CANDIDATE_MANIFEST_MISSING"), "utf8"),
+  );
+  const versions = JSON.parse(
+    fs.readFileSync(realFile(path.join(portableRoot, "VERSIONS.json"), "VERSIONS_MANIFEST_MISSING"), "utf8"),
+  );
+  const packageLock = realFile(
+    path.join(appRoot, "package-lock.json"),
+    "PACKAGE_LOCK_MISSING",
+  );
+  const corePackage = JSON.parse(
+    fs.readFileSync(
+      realFile(
+        path.join(appRoot, "node_modules", "playwright-core", "package.json"),
+        "PLAYWRIGHT_CORE_MISSING",
+      ),
+      "utf8",
+    ),
+  );
+  const errors = [];
+  if (candidate.id !== candidateId || versions.candidateId !== candidateId) {
+    errors.push("candidate identity");
+  }
+  if (candidate.target?.architecture !== "x64" || process.arch !== "x64") {
+    errors.push("target architecture");
+  }
+  if (`v${candidate.node?.version}` !== process.version) errors.push("Node version");
+  if (
+    versions.node?.executableRelativePath !==
+      toPortableRelative(portableRoot, process.execPath) ||
+    versions.node?.executableSha256 !== sha256File(process.execPath)
+  ) {
+    errors.push("portable Node path/hash");
+  }
+  if (
+    candidate.playwright?.version !== corePackage.version ||
+    versions.playwright?.coreVersion !== corePackage.version
+  ) {
+    errors.push("Playwright version");
+  }
+  if (
+    candidate.playwright?.packageLockSha256 !== sha256File(packageLock) ||
+    versions.packageLock?.sha256 !== sha256File(packageLock)
+  ) {
+    errors.push("package-lock hash");
+  }
+  const relativeBrowser = toPortableRelative(portableRoot, browserExecutable);
+  const browserHash = sha256File(browserExecutable);
+  if (
+    candidate.managedBrowser?.executableRelativePath !== relativeBrowser ||
+    versions.browser?.executableRelativePath !== relativeBrowser ||
+    versions.browser?.executableSha256 !== browserHash
+  ) {
+    errors.push("managed browser path/hash");
+  }
+  if (
+    candidate.launch?.headless !== false ||
+    candidate.launch?.browserChannel !== null ||
+    candidate.launch?.arguments?.length !== 0 ||
+    candidate.launch?.profileModes?.join(",") !== "fresh,persistent"
+  ) {
+    errors.push("headed launch/profile policy");
+  }
+  if (errors.length) {
+    throw new ContractError(
+      "EXACT_CANDIDATE_MISMATCH",
+      `Packaged candidate contract mismatch: ${errors.join(", ")}`,
+    );
+  }
+  return { candidate, versions };
+}
+
 module.exports = {
   ensurePortableDirectory,
   isPathInside,
@@ -296,4 +374,5 @@ module.exports = {
   toPortableRelative,
   validatePortableLayout,
   verifyVersionsManifest,
+  verifyExactCandidate,
 };

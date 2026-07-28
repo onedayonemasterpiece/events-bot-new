@@ -23,6 +23,12 @@ Base: `981aebd9`; integration branch: `integration/autopresenter-m0`.
 
 `R03 → R01/R07/R08`; `R01/R02/R05 → R06/R09`; `R06/R09 → R12`; M1 is blocked until R09 returns PASS on the target Windows 10 laptop.
 
+## Integration outcome
+
+R01–R12 are implemented and locally validated. The empirical acceptance result
+is intentionally not complete: both Windows packages must still be built and
+run on the exact target laptop. See `autopresenter-m0-report.md`.
+
 ## Lane map
 
 ```yaml

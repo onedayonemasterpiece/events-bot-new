@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
@@ -36,6 +37,10 @@ async function json(path) {
   return JSON.parse(await readFile(path, "utf8"));
 }
 
+async function sha256(path) {
+  return createHash("sha256").update(await readFile(path)).digest("hex");
+}
+
 const candidateIds = (
   await readdir(candidatesRoot, { withFileTypes: true })
 )
@@ -59,6 +64,10 @@ for (const candidateId of candidateIds) {
   assert.equal(manifest.node.distribution, "win-x64");
   assert.equal(manifest.node.sha256, expectedNodeArchiveSha256);
   assert.equal(manifest.playwright.version, wanted.playwright);
+  assert.equal(
+    manifest.playwright.packageLockSha256,
+    await sha256(join(candidateRoot, "package-lock.json")),
+  );
   assert.equal(manifest.playwright.corePackage.version, wanted.playwright);
   assert.equal(
     manifest.playwright.boundary.playwright157OrNewer,
@@ -71,6 +80,17 @@ for (const candidateId of candidateIds) {
     manifest.managedBrowser.executableRelativePath,
     wanted.executable,
   );
+  assert.deepEqual(manifest.managedBrowser.executableSha256, {
+    resolution: "computed-from-packaged-executable-at-build",
+    recordedIn: "VERSIONS.json",
+  });
+  assert.deepEqual(manifest.launch, {
+    headless: false,
+    browserChannel: null,
+    arguments: [],
+    profileModes: ["fresh", "persistent"],
+    viewport: { width: 430, height: 932 },
+  });
 
   assert.equal(manifest.runtimePolicy.playwrightBrowsersPath, "browsers");
   assert.equal(manifest.runtimePolicy.browserSource, "packaged-playwright-managed");
@@ -128,6 +148,16 @@ for (const templateName of ["start.cmd.in", "self-test.cmd.in"]) {
   assert.doesNotMatch(template, /powershell|executionpolicy|runas/i);
 }
 
+const pathMatrixTemplate = await readFile(
+  join(releaseRoot, "templates", "path-matrix.cmd.in"),
+  "utf8",
+);
+assert.match(pathMatrixTemplate, /set "AP_ROOT=%~dp0"/);
+assert.match(pathMatrixTemplate, /set "PLAYWRIGHT_BROWSERS_PATH=%AP_ROOT%browsers"/);
+assert.match(pathMatrixTemplate, /set "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"/);
+assert.match(pathMatrixTemplate, /app\\reporting\\run-path-matrix\.js/);
+assert.doesNotMatch(pathMatrixTemplate, /\b(?:npm|npx)\b/i);
+
 const startTemplate = await readFile(
   join(releaseRoot, "templates", "start.cmd.in"),
   "utf8",
@@ -136,9 +166,11 @@ assert.match(startTemplate, /app\\src\\run-suite\.js/);
 assert.match(startTemplate, /--candidate-id "%AP_CANDIDATE_ID%"/);
 assert.match(startTemplate, /--output-dir "logs\\m0"/);
 assert.match(startTemplate, /--profile-root "data\\m0-profiles"/);
-assert.match(startTemplate, /--live-url "%~1"/);
-assert.match(startTemplate, /--live-click-selector "%~2"/);
-assert.match(startTemplate, /--live-success-selector "%~3"/);
+assert.match(startTemplate, /--system-info "evidence\\SYSTEM-INFO\.json"/);
+assert.match(startTemplate, /set \/p "AP_LIVE_URL=/);
+assert.match(startTemplate, /--live-url "%AP_LIVE_URL%"/);
+assert.match(startTemplate, /--live-click-selector "%AP_CLICK_SELECTOR%"/);
+assert.match(startTemplate, /--live-success-selector "%AP_SUCCESS_SELECTOR%"/);
 
 const selfTestTemplate = await readFile(
   join(releaseRoot, "templates", "self-test.cmd.in"),
@@ -154,6 +186,10 @@ assert.match(builder, /\$env:PLAYWRIGHT_BROWSERS_PATH = \$releaseBrowsersRoot/);
 assert.match(
   builder,
   /Copy-Item -LiteralPath \$fixtureSourcePath -Destination \(Join-Path \$releaseAppRoot 'fixture'\) -Recurse/,
+);
+assert.match(
+  builder,
+  /Copy-Item -LiteralPath \$reportingSourcePath -Destination \(Join-Path \$releaseAppRoot 'reporting'\) -Recurse/,
 );
 assert.match(builder, /playwright-core\\cli\.js/);
 assert.match(builder, /install chromium --no-shell/);
@@ -173,8 +209,12 @@ const releaseFiles = releaseEntries
   .sort();
 assert.deepEqual(releaseFiles, [
   ".gitignore",
+  "templates/finalize-evidence.cmd.in",
+  "templates/path-matrix.cmd.in",
+  "templates/prepare-evidence.cmd.in",
   "templates/self-test.cmd.in",
   "templates/start.cmd.in",
+  "templates/system-info.cmd.in",
 ]);
 
 console.log(

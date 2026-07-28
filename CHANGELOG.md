@@ -11,6 +11,10 @@
   Windows 10 x64 candidates: each must complete 20 full cold loopback-fixture
   cycles (10 fresh + 10 persistent profiles) followed by a separate 5/5 live
   `/zavtra/` smoke on the target laptop.
+- Implemented the M0-only Windows compatibility harness: two pinned portable
+  candidate builders, headed cold-cycle runner, offline/path/system probes,
+  strict per-run artifacts, checksum-bound evidence assembly and fail-closed
+  comparison report. Target Windows 10 execution is still pending.
 - Designed a deliberately small static-site Autopresenter: one phone-controlled
   Playwright scenario over the real review UI, an existing-`aiohttp` relay,
   a portable Windows runner, deterministic mobile/desktop overlays and a shared
