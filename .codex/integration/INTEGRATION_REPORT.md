@@ -30,8 +30,9 @@ research lanes changed no files.
 
 - Added `/fokus-gruppa/zavershenie/` for automatic/operator end-state
   comparison and explicit personalization continuity.
-- Exposed reusable focus feedback on `/dlya-menya/` only when the bounded
-  preview marker exists; normal static/personalization fallback remains usable.
+- Exposed reusable focus feedback on `/dlya-menya/` only when the independent
+  30-day participation marker is active; normal static/personalization fallback
+  remains usable.
 - Added focus product unit/source-contract tests and a package script.
 - Reconciled actual route names in the product spec and updated canonical
   routing, static-site docs, backlog index and changelog.
@@ -51,32 +52,35 @@ research lanes changed no files.
 
 ## Verification
 
-- `npm run test:focus-group-product` — 29/29 passed after the extension.
+- `npm run test:focus-group-product` — 28/28 passed after removal of the
+  obsolete short-lived marker compatibility tests.
 - `node --test tests/pwa-install.test.mjs` — 8/8 passed.
 - `npm run test:static-release` — 10/10 passed.
 - Worker full builds — 431 and 434 pages passed.
 - Worker Playwright — mobile/desktop/no-JS/localStorage/feedback/icon checks
   passed; see lane RESULTS.
 - Initial `npm run build` — 435 pages built successfully in 1m 44s. Final
-  extension build after review fixes — 436 pages built successfully in 1m 40s.
+  continuity-corrected build — 436 pages built successfully in 1m 45s.
   The
   pre-existing `listingPresentation.ts` JSON import-attributes warning remains
   non-fatal.
 - Final integration browser QA — passed on the built static output:
   - 390px root and 1440px participant surfaces have no horizontal overflow;
   - an invite fragment is stripped from the URL, its bearer value is not
-    retained, and only the bounded preview hint is stored;
+    retained, and only the separate participation marker is stored;
   - participant tools on `/dlya-menya/` are hidden in a fresh context and shown
-    after the preview hint;
+    after participation activation;
   - all three lifecycle variants switch correctly;
-  - ending browser preview removes only the preview hint and preserves the
-    local personalization key;
+  - ending participation on the device removes only the participation marker
+    and preserves the local personalization key;
   - no browser console errors were observed.
 - Extension mobile Chromium QA on the built static output:
   - supplied focus logo is centred at 390px with no horizontal overflow;
   - invite fragment is stripped and never stored;
   - focus manifest/install guidance and the optional identity skip are visible;
   - skip activates participation, PWA relaunch returns to the secret hub;
+  - activation stores one exact 30-day window and there is no second
+    short-lived access marker;
   - `Удалить локальный профиль` removes personalization but preserves focus
     participation;
   - `FG-E12` is absent at two items, inserted immediately after item three,
@@ -105,20 +109,20 @@ research lanes changed no files.
 |---|---|---|---|
 | R01 | Superseded | Act Opus logo remains, but the original “any performance/equal draw” copy was replaced by the later owner decision R17–R19 | current prize contract is R17–R19 |
 | R02 | Done | `manual-email-templates.md` and one-recipient SOP | no mail is sent or automated |
-| R03 | Done | fragment intake strips token; the legacy 72-hour hint migrates to a separate program-period participation state; share specimen and marker-gated hub remain | server invite redemption/cap/revoke absent by scope |
+| R03 | Done | fragment intake strips the token and creates one independent 30-day participation state; there is no short-lived preview access layer | server invite redemption/cap/revoke absent by scope |
 | R04 | Partial | ordinary Astro root is a focus testing stub; secret hub is noindex/no-referrer and marker-gated, but links onward to the existing route tree | relocating the whole static site beneath the secret prefix requires the deferred production/secret builder integration |
 | R05 | Done | overall NPS, page usefulness, improvement and typed event-fact issue specimens | no server persistence/sampling enforcement |
 | R06 | Done | separate auto-picks opt-in/off/eligibility UI after explicit/interpretable signals | no sender/scheduler/delivery |
 | R07 | Done | 16 category cards; native tri-state; inferred meter separate from evidence sufficiency; explainable local feed | not a cross-device/online ML profile |
-| R08 | Done | invite → lab badge/congratulation → PWA offer → optional email/Yandex intent or explicit skip → preview hub | choices do not send OTP or launch OAuth |
-| R09 | Done | automatic/operator/cancelled end UI; preview access clears independently from personalization | no production command/cron |
+| R08 | Done | invite → lab badge/congratulation → PWA offer → optional email/Yandex intent or explicit skip → 30-day participant hub | choices do not send OTP or launch OAuth |
+| R09 | Done | automatic/operator/cancelled end UI; participation clears independently from personalization | no production command/cron |
 | R10 | Done | reusable lab badge with visually inspected CC0 SVG Repo 287837 icon | final merge window may restyle it without changing attribution |
 | R11 | Done | no live DB, deploy, production build or outbound message action | production rollout remains separate work |
 | R12 | Done | pages repeatedly distinguish marker/opaque path from auth and prototype from production | backend security gates remain mandatory for later implementation |
 | R13 | Done | exact supplied 1254×1254 artwork is centred above the mobile-first join flow; byte-equality test passes | final compression/derivatives may be added without changing the source artwork |
 | R14 | Done | focus manifest launches through state-aware onboarding and redirects active local participation to `/zakrytaya-afisha/`; Android/iOS fallbacks are honest | browsers control install and app launch; no code can force either |
 | R15 | Done | email/Yandex intent and `Продолжить … без подтверждения` are separate explicit paths | no real identity session by scope |
-| R16 | Done | independent program-period participation key, legacy migration and reset-isolation tests; PWA return flow uses it | cleared browser data is not recoverable until server membership exists |
+| R16 | Done | independent participation key, exact 30-day activation window and reset-isolation tests; PWA return flow uses the same state | cleared browser data is not recoverable until server membership exists |
 | R17 | Done | pending UI and docs consistently define one prize as exactly two theatre tickets | theatre, performances, dates and fulfilment remain rules/legal gates |
 | R18 | Done | collection coverage ranks first; bounded participation is capped at 40/7 and counts NPS response, likes, dislikes, text feedback, Search, saves and page breadth without sentiment advantage | reward-grade receipts/anti-abuse/leaderboard backend absent by scope |
 | R19 | Done | versioned 12-row placement matrix covers mobile, desktop, keyboard/screen-reader equivalents, prerequisites and fail-closed states; a separate non-prize `Два экрана` mission requests one meaningful phone and desktop probe with an honestly labelled single-device equivalent | actual receipts, pairing and site-wide production insertion remain later implementation |

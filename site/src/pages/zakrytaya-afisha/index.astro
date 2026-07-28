@@ -43,10 +43,11 @@ const sections = [
         <p class="focus-secret__eyebrow">Нужен маршрут приглашения</p>
         <h1>В этом браузере нет метки текущего периода</h1>
         <p>
-          Снова откройте исходное приглашение. Локальная метка помогает
-          возвращаться в PWA весь период и не зависит от персонализации, но не
-          заменяет identity, сессию или server membership. После очистки данных
-          браузера восстановление потребует будущего подтверждённого аккаунта.
+          После вступления локальная метка даёт 30 дней возврата в PWA и не
+          зависит от персонализации. Если её нет, снова откройте исходное
+          приглашение. Метка не заменяет identity, сессию или server membership;
+          после очистки данных браузера восстановление потребует будущего
+          подтверждённого аккаунта.
         </p>
         <div class="focus-secret__gate-actions">
           <a class="ke-button ke-button--primary" href={withBase('/fokus-gruppa/')}>О программе</a>
@@ -141,8 +142,8 @@ const sections = [
 
 <script>
   import {
-    clearFocusPreviewMarker,
-    readFocusPreviewMarker,
+    clearFocusParticipationMarker,
+    readFocusParticipationMarker,
   } from '../../lib/focus-group-prototype';
 
   document.querySelectorAll<HTMLElement>('[data-focus-secret]').forEach((root) => {
@@ -155,17 +156,17 @@ const sections = [
     } catch {
       focusStorage = null;
     }
-    const marker = focusStorage ? readFocusPreviewMarker(focusStorage) : null;
+    const marker = focusStorage ? readFocusParticipationMarker(focusStorage) : null;
 
     if (checking) checking.hidden = true;
-    if (marker) {
+    if (marker?.status === 'active') {
       if (hub) hub.hidden = false;
     } else if (locked) {
       locked.hidden = false;
     }
 
     root.querySelector<HTMLButtonElement>('[data-secret-clear]')?.addEventListener('click', () => {
-      if (focusStorage) clearFocusPreviewMarker(focusStorage);
+      if (focusStorage) clearFocusParticipationMarker(focusStorage);
       window.location.assign(root.dataset.rootHref || '/');
     });
   });

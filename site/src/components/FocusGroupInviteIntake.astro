@@ -46,13 +46,13 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
 
   <div class="focus-intake__journey" data-intake-journey hidden>
     <section class="focus-intake__hero">
-      <FocusLabBadge label="Вы в лаборатории сайта" detail="Предварительный просмотр" size="hero" />
+      <FocusLabBadge label="Вы в лаборатории сайта" detail="Участие на 30 дней" size="hero" />
       <p class="focus-intake__eyebrow">Шаг 1 из 3 · приглашение найдено</p>
       <h1>Спасибо, что готовы проверить афишу вместе с нами</h1>
       <p class="focus-intake__lead">
         Код уже удалён из адресной строки и нигде не сохранён. В этом браузере
-        записана отдельная метка текущего периода фокус-группы — она не зависит
-        от настроек «Для меня».
+        записана отдельная метка участия на полные 30 дней — она не зависит от
+        настроек «Для меня» и не требует повторного открытия приглашения.
       </p>
       <div class="focus-intake__safety">
         <strong>Локальная метка — не подтверждение личности и не защита.</strong>
@@ -123,7 +123,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
       <div class="focus-intake__continue" data-focus-continue hidden>
         <div>
           <strong data-focus-continue-title>Способ отмечен, но identity не подтверждена.</strong>
-          <span data-focus-continue-copy>Можно продолжить в предварительную оболочку и вернуться к подтверждению позже.</span>
+          <span data-focus-continue-copy>Можно продолжить в закрытую афишу и вернуться к подтверждению позже.</span>
         </div>
         <button class="ke-button ke-button--primary ke-button--large" type="button" data-focus-enter>
           Открыть закрытую афишу
@@ -262,7 +262,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
       }
       if (continueTitle) continueTitle.textContent = 'Вы продолжаете без подтверждения личности.';
       if (continueCopy) {
-        continueCopy.textContent = 'Локальная метка сохранит вход на этом устройстве в течение периода программы.';
+        continueCopy.textContent = 'Локальная метка сохранит вход на этом устройстве на 30 дней с момента вступления.';
       }
       revealContinue('skipped');
     });

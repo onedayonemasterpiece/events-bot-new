@@ -20,12 +20,13 @@ test('invite intake and secret hub state the local marker boundary', async () =>
     read('../src/lib/focus-group-prototype.ts'),
   ]);
   assert.match(intake, /history\.replaceState/u);
-  assert.match(intake, /метка текущего периода фокус-группы/u);
-  assert.match(intake, /не зависит[\s\S]*от настроек «Для меня»/u);
+  assert.match(intake, /метка участия на полные 30 дней/u);
+  assert.match(intake, /не зависит от\s+настроек «Для меня»/u);
   assert.match(intake, /не подтверждение личности и не защита/u);
   assert.match(secret, /UX-проверка, а не проверка авторизации/u);
-  assert.match(secret, /readFocusPreviewMarker/u);
-  assert.match(helper, /FOCUS_PREVIEW_MAX_BYTES = 384/u);
+  assert.match(secret, /readFocusParticipationMarker/u);
+  assert.match(helper, /FOCUS_PARTICIPATION_DURATION_MS = 30 \* 24/u);
+  assert.doesNotMatch(helper, /FOCUS_PREVIEW/u);
   assert.doesNotMatch(helper, /token:/u);
 });
 
@@ -42,15 +43,15 @@ test('for-me uses tri-state native radios and separates inferred index', async (
   assert.match(component, /Пока недостаточно данных/u);
   assert.doesNotMatch(component, /type="range"/u);
   assert.match(page, /data-focus-personal-tools/u);
-  assert.match(page, /readFocusPreviewMarker/u);
+  assert.match(page, /readFocusParticipationMarker/u);
 });
 
-test('end-state page clears preview access but preserves personalization continuity', async () => {
+test('end-state page clears participation but preserves personalization continuity', async () => {
   const source = await read('../src/pages/fokus-gruppa/zavershenie/index.astro');
   assert.match(source, /time_elapsed/u);
   assert.match(source, /operator_closed/u);
   assert.match(source, /operator_cancelled/u);
-  assert.match(source, /clearFocusPreviewMarker/u);
+  assert.match(source, /clearFocusParticipationMarker/u);
   assert.match(source, /Локальный профиль «Для меня»/u);
   assert.doesNotMatch(source, /removeItem\([^)]*focus-personalization/u);
 });

@@ -30,7 +30,7 @@ const description = 'Локальный прототип персонализа�
         <div class="personal-page__focus-tools-note">
           <FocusLabBadge label="Инструменты участника" detail="Только после маршрута приглашения" />
           <p>
-            Временная метка предпросмотра открывает макет обратной связи на этой
+            Активная 30-дневная метка участия открывает обратную связь на этой
             странице. Это UX-gate, а не подтверждение membership.
           </p>
         </div>
@@ -41,11 +41,11 @@ const description = 'Локальный прототип персонализа�
 </EventLayout>
 
 <script>
-  import { readFocusPreviewMarker } from '../../lib/focus-group-prototype';
+  import { readFocusParticipationMarker } from '../../lib/focus-group-prototype';
 
   document.querySelectorAll<HTMLElement>('[data-focus-personal-tools]').forEach((tools) => {
     try {
-      tools.hidden = !readFocusPreviewMarker(window.localStorage);
+      tools.hidden = readFocusParticipationMarker(window.localStorage)?.status !== 'active';
     } catch {
       tools.hidden = true;
     }

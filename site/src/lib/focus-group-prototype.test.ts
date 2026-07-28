@@ -2,22 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  FOCUS_PARTICIPATION_DURATION_MS,
   FOCUS_PARTICIPATION_MAX_BYTES,
-  FOCUS_PARTICIPATION_SAFETY_TTL_MS,
   FOCUS_PARTICIPATION_STORAGE_KEY,
-  FOCUS_PREVIEW_MAX_BYTES,
-  FOCUS_PREVIEW_STORAGE_KEY,
-  FOCUS_PREVIEW_TTL_MS,
   activateFocusParticipation,
-  createFocusPreviewMarker,
   inspectFocusInviteUrl,
   parseFocusParticipationMarker,
-  parseFocusPreviewMarker,
   readFocusParticipationMarker,
-  readFocusPreviewMarker,
-  serializeFocusPreviewMarker,
   storeFocusParticipationMarker,
-  storeFocusPreviewMarker,
   updateFocusParticipationIdentityChoice,
   type FocusStorage,
 } from './focus-group-prototype.ts';
@@ -60,37 +52,25 @@ test('missing and malformed fragments fail closed and still provide a clean URL'
   );
 });
 
-test('preview marker is small, contains no invite and expires after 72 hours', () => {
-  const now = Date.UTC(2026, 6, 27, 20, 0, 0);
-  const marker = createFocusPreviewMarker(now);
-  const serialized = serializeFocusPreviewMarker(marker);
-
-  assert.ok(new TextEncoder().encode(serialized).byteLength <= FOCUS_PREVIEW_MAX_BYTES);
-  assert.equal(serialized.includes('invite='), false);
-  assert.deepEqual(parseFocusPreviewMarker(serialized, now + FOCUS_PREVIEW_TTL_MS - 1), marker);
-  assert.equal(parseFocusPreviewMarker(serialized, now + FOCUS_PREVIEW_TTL_MS), null);
-});
-
-test('storage helper removes invalid state and preserves only a valid bounded marker', () => {
+test('storage helper removes invalid state and preserves only a valid participation marker', () => {
   const storage = new MemoryStorage();
   const now = Date.UTC(2026, 6, 27, 20, 0, 0);
 
-  storage.setItem(FOCUS_PREVIEW_STORAGE_KEY, '{"version":99}');
-  assert.equal(readFocusPreviewMarker(storage, now), null);
-  assert.equal(storage.getItem(FOCUS_PREVIEW_STORAGE_KEY), null);
+  storage.setItem(FOCUS_PARTICIPATION_STORAGE_KEY, '{"version":99}');
+  assert.equal(readFocusParticipationMarker(storage, now), null);
+  assert.equal(storage.getItem(FOCUS_PARTICIPATION_STORAGE_KEY), null);
 
-  assert.equal(storeFocusPreviewMarker(storage, now), true);
-  assert.ok(readFocusPreviewMarker(storage, now + 1));
+  assert.ok(storeFocusParticipationMarker(storage, now));
+  assert.ok(readFocusParticipationMarker(storage, now + 1));
 });
 
-test('programme participation stays pending until an explicit choice and then survives the research period', () => {
+test('programme participation starts a full 30-day access window on activation', () => {
   const storage = new MemoryStorage();
   const now = Date.UTC(2026, 6, 27, 20, 0, 0);
   const pending = storeFocusParticipationMarker(storage, now);
 
   assert.equal(pending?.status, 'joining');
   assert.equal(pending?.identityChoice, 'undecided');
-  assert.equal(readFocusPreviewMarker(storage, now + 1), null);
   assert.ok(
     new TextEncoder().encode(storage.getItem(FOCUS_PARTICIPATION_STORAGE_KEY) || '').byteLength
       <= FOCUS_PARTICIPATION_MAX_BYTES,
@@ -101,10 +81,28 @@ test('programme participation stays pending until an explicit choice and then su
   const active = activateFocusParticipation(storage, 'email_intent', now + 20);
   assert.equal(active?.status, 'active');
   assert.equal(active?.joinedAt, now + 20);
-  assert.ok(readFocusPreviewMarker(storage, now + FOCUS_PREVIEW_TTL_MS + 1));
-  assert.ok(readFocusParticipationMarker(storage, now + FOCUS_PARTICIPATION_SAFETY_TTL_MS - 1));
+  assert.equal(active?.expiresAt, now + 20 + FOCUS_PARTICIPATION_DURATION_MS);
+  const relaunched = activateFocusParticipation(
+    storage,
+    'email_intent',
+    now + 24 * 60 * 60 * 1000,
+  );
   assert.equal(
-    readFocusParticipationMarker(storage, now + FOCUS_PARTICIPATION_SAFETY_TTL_MS),
+    relaunched?.expiresAt,
+    active?.expiresAt,
+    'ordinary PWA relaunch must neither shorten nor silently slide the window',
+  );
+  assert.ok(
+    readFocusParticipationMarker(
+      storage,
+      now + 20 + FOCUS_PARTICIPATION_DURATION_MS - 1,
+    ),
+  );
+  assert.equal(
+    readFocusParticipationMarker(
+      storage,
+      now + 20 + FOCUS_PARTICIPATION_DURATION_MS,
+    ),
     null,
   );
 });
@@ -125,15 +123,15 @@ test('personalization reset cannot remove the independent focus participation ma
   assert.equal(raw?.includes('@'), false);
 });
 
-test('legacy 72-hour preview hint migrates once to programme participation without retaining bearer data', () => {
+test('participation payload never retains invite, email or identity credentials', () => {
   const storage = new MemoryStorage();
   const now = Date.UTC(2026, 6, 27, 20, 0, 0);
-  storeFocusPreviewMarker(storage, now);
+  storeFocusParticipationMarker(storage, now);
+  activateFocusParticipation(storage, 'skipped', now + 1);
 
-  const migrated = readFocusParticipationMarker(storage, now + 1);
-
-  assert.equal(migrated?.source, 'legacy_preview');
-  assert.equal(migrated?.status, 'active');
-  assert.equal(storage.getItem(FOCUS_PREVIEW_STORAGE_KEY), null);
-  assert.ok(parseFocusParticipationMarker(storage.getItem(FOCUS_PARTICIPATION_STORAGE_KEY), now + 2));
+  const raw = storage.getItem(FOCUS_PARTICIPATION_STORAGE_KEY) || '';
+  assert.ok(parseFocusParticipationMarker(raw, now + 2));
+  assert.equal(raw.includes('invite='), false);
+  assert.equal(raw.includes('@'), false);
+  assert.equal(raw.includes('token'), false);
 });

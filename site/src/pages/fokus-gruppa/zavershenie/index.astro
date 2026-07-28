@@ -78,7 +78,7 @@ const states = [
         <div class="focus-end__actions">
           <a class="ke-button ke-button--primary ke-button--large" href={withBase('/segodnya/')}>Открыть обычную афишу</a>
           <a class="ke-button ke-button--secondary ke-button--large" href={withBase('/dlya-menya/')}>Настроить «Для меня»</a>
-          <button class="ke-button ke-button--secondary" type="button" data-end-clear>Завершить preview в браузере</button>
+          <button class="ke-button ke-button--secondary" type="button" data-end-clear>Завершить участие на этом устройстве</button>
         </div>
         <p class="focus-end__status" data-end-status role="status" aria-live="polite"></p>
       </section>
@@ -88,9 +88,10 @@ const states = [
       <aside class="focus-end__boundary">
         <strong>Преемственность — отдельный контракт.</strong>
         <span>
-          Эта кнопка очищает только временную focus-preview метку. Ключ локальной
-          персонализации намеренно не затрагивается. В production то же правило
-          должно применяться сервером к membership, а не через localStorage.
+          Эта кнопка очищает только отдельную метку участия текущей программы.
+          Ключ локальной персонализации намеренно не затрагивается. В production
+          то же правило должно применяться сервером к membership, а не только
+          через localStorage.
         </span>
       </aside>
     </main>
@@ -98,7 +99,7 @@ const states = [
 </html>
 
 <script>
-  import { clearFocusPreviewMarker } from '../../../lib/focus-group-prototype';
+  import { clearFocusParticipationMarker } from '../../../lib/focus-group-prototype';
 
   document.querySelectorAll<HTMLElement>('[data-focus-end]').forEach((root) => {
     const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-end-select]'));
@@ -114,9 +115,9 @@ const states = [
 
     root.querySelector<HTMLButtonElement>('[data-end-clear]')?.addEventListener('click', () => {
       try {
-        clearFocusPreviewMarker(window.localStorage);
+        clearFocusParticipationMarker(window.localStorage);
         const status = root.querySelector<HTMLElement>('[data-end-status]');
-        if (status) status.textContent = 'Preview-метка удалена. Локальные настройки «Для меня» сохранены.';
+        if (status) status.textContent = 'Участие на этом устройстве завершено. Локальные настройки «Для меня» сохранены.';
       } catch {
         const status = root.querySelector<HTMLElement>('[data-end-status]');
         if (status) status.textContent = 'Браузер не дал изменить localStorage. Обычные страницы по-прежнему доступны.';
