@@ -119,6 +119,7 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
             <span class="reference4-menu__account-initial" data-static-auth-initial aria-hidden="true">?</span>
             <span data-static-auth-name>Аккаунт</span>
           </a>
+          <button type="button" data-static-auth-logout hidden>Выйти</button>
           <a href={route('/izbrannoe/')} aria-current={isCurrent('favorites') ? 'page' : undefined}>
             <span class="reference4-icon" aria-hidden="true"><span style={`--reference4-icon:url('${icon('heart-thin.svg')}')`}></span></span><span>Избранное</span>
           </a>
@@ -244,8 +245,8 @@ const serviceShareManifest = withBase('/service-share/current/manifest.json');
     .reference4-icon > span { position:absolute; inset:0; display:block; background:currentColor; -webkit-mask:var(--reference4-icon) center/contain no-repeat; mask:var(--reference4-icon) center/contain no-repeat; }
     .reference4-icon--free { box-sizing:border-box; width:30px; height:30px; border:1px solid currentColor; border-radius:50%; display:flex; align-items:center; justify-content:center; padding-top:.5px; font-size:14px; line-height:1; font-weight:400; letter-spacing:-.02em; white-space:nowrap; opacity:.78; }
     .reference4-menu__utility { box-sizing:border-box; overflow:hidden; margin-top:12px; border:1px solid rgba(255,255,255,.56); border-radius:22px; background:rgba(255,252,247,.18); box-shadow:0 12px 30px rgba(46,28,20,.13),inset 0 1px 0 rgba(255,255,255,.62); }
-    .reference4-menu__account-row { box-sizing:border-box; height:56px; display:grid; grid-template-columns:.8fr 1.2fr; align-items:center; padding:6px 9px; border-bottom:1px solid rgba(114,93,80,.18); gap:8px; background:rgba(48,31,23,.075); }
-    .reference4-menu__account-row > * { box-sizing:border-box; height:44px; min-width:0; display:flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(255,255,255,.48); border-radius:23px; background:rgba(255,253,249,.58); box-shadow:0 5px 15px rgba(64,40,28,.08),inset 0 1px rgba(255,255,255,.64); color:#2a211c; text-decoration:none; font-family:inherit; font-size:14px; line-height:17px; font-weight:720; }
+    .reference4-menu__account-row { box-sizing:border-box; height:56px; display:flex; align-items:center; padding:6px 9px; border-bottom:1px solid rgba(114,93,80,.18); gap:8px; background:rgba(48,31,23,.075); }
+    .reference4-menu__account-row > * { box-sizing:border-box; height:44px; min-width:0; flex:1 1 0; display:flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(255,255,255,.48); border-radius:23px; background:rgba(255,253,249,.58); box-shadow:0 5px 15px rgba(64,40,28,.08),inset 0 1px rgba(255,255,255,.64); color:#2a211c; text-decoration:none; font-family:inherit; font-size:14px; line-height:17px; font-weight:720; }
     .reference4-menu__account-row > [aria-current="page"] { background:#3b2720; color:#fffaf2; }
     .reference4-menu__account-row .reference4-icon { width:20px; height:20px; flex-basis:20px; }
     .reference4-menu__account-initial { display:grid; place-items:center; width:24px; height:24px; flex:0 0 24px; border-radius:50%; background:rgba(152,64,31,.12); color:#753a22; font-size:12px; font-weight:900; }

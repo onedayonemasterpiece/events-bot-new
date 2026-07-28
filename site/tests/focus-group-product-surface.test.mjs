@@ -56,6 +56,19 @@ test('end-state page clears participation but preserves personalization continui
   assert.doesNotMatch(source, /removeItem\([^)]*focus-personalization/u);
 });
 
+test('account logout and explicit programme exit stay separate on focus surfaces', async () => {
+  const [personal, hub, runtime] = await Promise.all([
+    read('../src/pages/dlya-menya/index.astro'),
+    read('../src/pages/zakrytaya-afisha/index.astro'),
+    read('../src/components/auth/StaticSiteAuthRuntime.astro'),
+  ]);
+  assert.match(personal, /data-static-auth-logout/u);
+  assert.match(personal, /30-дневное участие/u);
+  assert.match(hub, /data-secret-clear>Выйти из фокус-группы/u);
+  assert.match(hub, /clearFocusParticipationMarker\(focusStorage\)/u);
+  assert.doesNotMatch(runtime, /clearFocusParticipationMarker|kenigevents:focus-participation/u);
+});
+
 test('feedback keeps overall NPS, usefulness, improvement and fact issue separate', async () => {
   const source = await read('../src/components/FocusGroupFeedback.astro');
   assert.match(source, /Общий relationship NPS/u);

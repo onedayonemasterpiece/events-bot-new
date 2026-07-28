@@ -6,6 +6,7 @@ import {
   FOCUS_PARTICIPATION_MAX_BYTES,
   FOCUS_PARTICIPATION_STORAGE_KEY,
   activateFocusParticipation,
+  clearFocusParticipationMarker,
   inspectFocusInviteUrl,
   parseFocusParticipationMarker,
   readFocusParticipationMarker,
@@ -121,6 +122,23 @@ test('personalization reset cannot remove the independent focus participation ma
   const raw = storage.getItem(FOCUS_PARTICIPATION_STORAGE_KEY);
   assert.equal(raw?.includes('invite='), false);
   assert.equal(raw?.includes('@'), false);
+});
+
+test('explicit focus exit removes only participation and preserves personalization', () => {
+  const storage = new MemoryStorage();
+  const now = Date.UTC(2026, 6, 27, 20, 0, 0);
+  const personalizationKey = 'kenigevents.focus-personalization.prototype.v1';
+  storage.setItem(personalizationKey, '{"consented":true,"interests":["theatre"]}');
+  storeFocusParticipationMarker(storage, now);
+  activateFocusParticipation(storage, 'skipped', now + 1);
+
+  clearFocusParticipationMarker(storage);
+
+  assert.equal(storage.getItem(FOCUS_PARTICIPATION_STORAGE_KEY), null);
+  assert.equal(
+    storage.getItem(personalizationKey),
+    '{"consented":true,"interests":["theatre"]}',
+  );
 });
 
 test('participation payload never retains invite, email or identity credentials', () => {

@@ -25,6 +25,34 @@ const description = 'Локальный прототип персонализа�
           <span>Можно удалить</span>
         </div>
       </header>
+      <section class="personal-page__account" aria-labelledby="personal-account-title">
+        <div>
+          <p class="eyebrow">Аккаунт · отдельно от настроек</p>
+          <h2 id="personal-account-title">Вход через Яндекс</h2>
+          <p>
+            Аккаунт нужен для подтверждённых функций. Выход завершает только
+            Supabase-сессию: профиль «Для меня» и 30-дневное участие
+            фокус-группы остаются в этом браузере.
+          </p>
+        </div>
+        <div class="personal-page__account-actions">
+          <div data-static-auth-signed-out>
+            <span>Вы не вошли в аккаунт.</span>
+            <button class="ke-button ke-button--primary" type="button" data-static-auth-login>
+              Войти через Яндекс
+            </button>
+          </div>
+          <div data-static-auth-signed-in hidden>
+            <span>
+              Вы вошли как <strong data-static-auth-name>Аккаунт</strong>
+            </span>
+            <button class="ke-button ke-button--secondary" type="button" data-static-auth-logout hidden>
+              Выйти из аккаунта
+            </button>
+          </div>
+          <p data-static-auth-status role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
+      </section>
       <InterestProfile recommendations={recommendations} />
       <section class="personal-page__focus-tools" data-focus-personal-tools hidden>
         <div class="personal-page__focus-tools-note">
@@ -82,6 +110,24 @@ const description = 'Локальный прототип персонализа�
   .personal-page__principles { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.25rem; }
   .personal-page__principles span { padding: .45rem .7rem; border: 1px solid rgba(23, 43, 43, .18); border-radius: 999px; background: rgba(255, 255, 255, .72); color: #244846; font-size: .82rem; font-weight: 850; }
   .personal-page__head :global(.focus-lab-badge) { position: relative; z-index: 1; margin-bottom: 1rem; }
+  .personal-page__account {
+    display: grid;
+    grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr);
+    gap: clamp(1rem, 4vw, 3rem);
+    align-items: center;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(55, 38, 27, .14);
+    border-radius: 1.25rem;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    background: #fffaf3;
+  }
+  .personal-page__account h2 { margin: .15rem 0 .45rem; font-size: clamp(1.45rem, 3vw, 2rem); }
+  .personal-page__account > div > p:last-child { margin: 0; color: #6d6259; font-size: .86rem; line-height: 1.5; }
+  .personal-page__account-actions { display: grid; gap: .55rem; }
+  .personal-page__account-actions > div { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+  .personal-page__account-actions > div[hidden] { display: none; }
+  .personal-page__account-actions span { min-width: 0; overflow-wrap: anywhere; font-size: .88rem; line-height: 1.4; }
+  .personal-page__account-actions > p { min-height: 1.4em; margin: 0; color: #6d6259; font-size: .78rem; line-height: 1.4; }
   .personal-page__focus-tools { display: grid; gap: .75rem; margin-top: 1rem; }
   .personal-page__focus-tools[hidden] { display: none; }
   .personal-page__focus-tools-note {
@@ -96,6 +142,9 @@ const description = 'Локальный прототип персонализа�
   }
   .personal-page__focus-tools-note p { max-width: 62ch; margin: 0; color: #6d6259; font-size: .82rem; line-height: 1.45; }
   @media (max-width: 700px) {
+    .personal-page__account { grid-template-columns: 1fr; }
+    .personal-page__account-actions > div { align-items: stretch; flex-direction: column; }
+    .personal-page__account-actions .ke-button { width: 100%; }
     .personal-page__focus-tools-note { align-items: flex-start; flex-direction: column; }
   }
   @media (prefers-reduced-motion: reduce) {
