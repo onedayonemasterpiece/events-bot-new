@@ -578,8 +578,15 @@ async function assertSpatialCardKeyboard(page, origin, route) {
   await card(lastRelated.id).focus();
   await page.keyboard.press('ArrowDown');
   invariant(await activeId() === nearestContinuation.id, 'ArrowDown did not bridge to the visually nearest continuation card');
-  invariant(await visibleHints() === 1 && await continuationCard(nearestContinuation.id).locator('[data-related-calendar-shortcut]:visible').count() === 1,
-    'continuation focus does not own the single visible K hint');
+  const continuationOwnsCalendar = await continuationCard(nearestContinuation.id).locator('[data-calendar-action]:not([hidden])').count() === 1;
+  const expectedContinuationHints = continuationOwnsCalendar ? 1 : 0;
+  invariant(
+    await visibleHints() === expectedContinuationHints
+      && await continuationCard(nearestContinuation.id).locator('[data-related-calendar-shortcut]:visible').count() === expectedContinuationHints,
+    continuationOwnsCalendar
+      ? 'calendar-eligible continuation focus does not own the single visible K hint'
+      : 'calendar-ineligible continuation focus exposes a misleading K hint',
+  );
   await page.keyboard.press('ArrowUp');
   invariant(await activeId() === lastRelated.id, 'ArrowUp did not bridge back to the final related row');
 

@@ -726,3 +726,12 @@ or poster copy. Footer service ownership is evaluated first; editable fields,
 dialogs, composition, modifiers and repeat remain fail-closed. Regression
 acceptance now includes natural BODY `KeyC`/`KeyP` with Cyrillic logical keys,
 not only a pre-focused action surface.
+
+## 2026-07-28 release-gate correction: unavailable calendar action
+
+The spatial keyboard gate now follows the same product contract as the page:
+focus may move to any visually nearest continuation card, but the `K` hint is
+rendered only when that exact card has an available calendar action. A
+multi-day/range card that is deliberately calendar-ineligible must expose zero
+`K` hints rather than a misleading shortcut. Calendar-eligible cards still own
+exactly one visible hint, and `KeyK` remains scoped to the focused card.

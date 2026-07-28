@@ -50,6 +50,9 @@
   document and existing prototype anchors without a title-keyword classifier;
   the controlled probe remains explicitly non-production evidence pending a
   fresh pinned-BGE canary.
+- Fixed the static browser release gate so visual arrow navigation may focus a
+  calendar-ineligible range card without inventing a `K` hint; eligible focused
+  cards still own exactly one visible hint and the scoped action.
 
 - Added the R15 unusual-events implementation contract: `/neobychnoe/`,
   15-family taxonomy, one hash-bound shared BGE vector boundary, concept-level

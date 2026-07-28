@@ -219,7 +219,8 @@ green calendar,
 related→continuation hydration and reverse bridge, unified continuation
 Enter/L/K/S/Escape/Home/End, slot replacement and feedback-rerank owner
 restoration, CSS-reordered visual Left/Right/Up/Down including a ragged final
-row, zero K badges before focus/hover and exactly one on the focused card,
+row, zero K badges before focus/hover and exactly one on a focused card whose
+calendar action is available (zero on a calendar-ineligible range card),
 focused-card KeyK ownership, canonical links, daily dedupe,
 adaptive mastery/lapse, no Web Share, noindex and horizontal overflow.
 

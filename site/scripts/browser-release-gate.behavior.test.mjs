@@ -114,6 +114,7 @@ test('R01/R02 release gate blocks fallback bleed and tests cold/mixed keyboard o
   assert.match(source, /ArrowRight did not follow the visual row/gu);
   assert.match(source, /ArrowDown did not choose the nearest card in the ragged final row/gu);
   assert.match(source, /hovered card exposes a K hint without focus/gu);
+  assert.match(source, /calendar-ineligible continuation focus exposes a misleading K hint/gu);
   assert.match(source, /KeyK acted on a card other than the visually focused owner/gu);
 });
 
