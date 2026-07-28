@@ -80,7 +80,11 @@ if (
   || !productionArtifactUnavailableMarker.test(productionArtifactSource)
 ) fail('artifact collection leaked into production');
 const freeCollectionSource = html('podborki/besplatnye-sobytiya/index.html');
-const freeCollectionIds = [...freeCollectionSource.matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
+const freeCollectionSurface = freeCollectionSource.match(
+  /<main\b[^>]*data-free-collection-surface[^>]*>[\s\S]*?<\/main>/u,
+)?.[0] || '';
+if (!freeCollectionSurface) fail('general free collection surface is missing');
+const freeCollectionIds = [...freeCollectionSurface.matchAll(/data-event-id="(\d+)"/gu)].map((match) => Number(match[1]));
 const eventByIdForCollections = new Map(eventsData.events.map((event) => [Number(event.id), event]));
 if (!freeCollectionIds.length) fail('general free collection is unexpectedly empty');
 if (freeCollectionIds.some((id) => !eventByIdForCollections.get(id)?.ticket?.is_free)) fail('general free collection contains a non-free exported event');
