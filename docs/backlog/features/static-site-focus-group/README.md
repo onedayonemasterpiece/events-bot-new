@@ -53,7 +53,10 @@ mailbox browser test; это не выдаётся за готовый cohort ba
 только на выделенных `noindex,nofollow,noarchive` routes. Root-form production
 checker считает `/fokus-gruppa/**` и `/zakrytaya-afisha/` явным семейством
 приватных страниц и не требует от них `index,follow`; для всех обычных страниц
-индексируемый контракт остаётся fail-closed. `build-production.mjs` и
+индексируемый контракт остаётся fail-closed. Эти же выделенные приватные
+маршруты сохраняют page-local `no-referrer`: production checker разрешает его
+только этому семейству и по-прежнему отклоняет случайную утечку candidate
+privacy policy на обычные страницы. `build-production.mjs` и
 `build-secret-candidate.mjs` по-прежнему владеют своими root transformations;
 наличие focus routes не считается production root rollout.
 

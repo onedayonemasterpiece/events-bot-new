@@ -178,12 +178,13 @@ for (const club of interestClubsData.clubs) {
 const siteOrigin = manifest.site_origin;
 for (const file of files.filter((item) => item.key.endsWith('.html'))) {
   const source = html(file.key);
+  const focusPrivateRoute = file.key === 'zakrytaya-afisha/index.html'
+    || /^fokus-gruppa(?:\/|$)/u.test(file.key);
   const intentionallyUnindexed = file.key === 'dlya-menya/index.html'
     || file.key === 'izbrannoe/index.html'
     || file.key === 'neobychnoe/index.html'
     || file.key === 'artefakty/index.html'
-    || file.key === 'zakrytaya-afisha/index.html'
-    || /^fokus-gruppa(?:\/|$)/u.test(file.key)
+    || focusPrivateRoute
     || /^podborki\/[^/]+\/index\.html$/u.test(file.key)
     || archivedSlugs.has(/^sobytiya\/([^/]+)\/index\.html$/u.exec(file.key)?.[1] || '');
   if (intentionallyUnindexed) {
@@ -192,7 +193,7 @@ for (const file of files.filter((item) => item.key.endsWith('.html'))) {
     if (/<meta\s+name="robots"\s+content="[^"]*\bnoindex\b[^"]*"/iu.test(source)) fail(`noindex leaked into ${file.key}`);
     if (!/<meta\s+name="robots"\s+content="index,follow"/iu.test(source)) fail(`index,follow missing from ${file.key}`);
   }
-  if (/<meta\s+name="referrer"\s+content="no-referrer"/iu.test(source)) fail(`secret-candidate policy leaked into ${file.key}`);
+  if (!focusPrivateRoute && /<meta\s+name="referrer"\s+content="no-referrer"/iu.test(source)) fail(`secret-candidate policy leaked into ${file.key}`);
   if (source.includes('/__preview/') || source.includes('/_review/') || source.includes('Preview · noindex')) fail(`preview/candidate reference leaked into ${file.key}`);
   const canonical = file.key === 'index.html' ? `${siteOrigin}/` : (file.key.endsWith('/index.html') ? `${siteOrigin}/${file.key.slice(0, -'index.html'.length)}` : null);
   if (canonical && !source.includes(`<link rel="canonical" href="${canonical}">`)) fail(`canonical mismatch ${file.key}`);
