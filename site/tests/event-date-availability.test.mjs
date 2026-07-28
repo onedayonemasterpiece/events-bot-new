@@ -41,6 +41,7 @@ test('calendar UI emits no anchor for empty dates and route generation uses the 
   assert.match(accessory, /item\.href \? \([\s\S]*?<a[\s\S]*?\) : \([\s\S]*?<span[\s\S]*?aria-disabled="true"/u);
   assert.match(accessory, /data-calendar-month-next/u);
   assert.match(accessory, /data-calendar-horizon=\{availability\.horizonEnd\}/u);
+  assert.match(accessory, /selectedDate < availability\.today[\s\S]*\[selectedDate, \.\.\.availability\.allDates\]/u);
   assert.doesNotMatch(accessory, /Array\.from\(\{ length: 42 \}/u);
   assert.match(route, /getStaticEventDateAvailability\(\)\.availableDates/u);
   assert.match(endpoint, /getStaticEventDateManifest\(\)/u);

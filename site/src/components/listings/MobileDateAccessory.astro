@@ -16,7 +16,13 @@ const tomorrow = isoDate(new Date(parseDate(today).getTime() + DAY));
 const currentWeekendStart = getWeekendRange().start;
 const availableWeekendStarts = new Set(getAvailableWeekendRanges().map((range) => range.start));
 const availability = getStaticEventDateAvailability();
-const dates = availability.allDates.map((iso) => {
+// On Sunday the current weekend starts one day before the build reference.
+// Keep that selected Saturday in the rail/sheet instead of producing a
+// calendar with no aria-current date.
+const calendarDates = selectedDate < availability.today
+  ? [selectedDate, ...availability.allDates]
+  : availability.allDates;
+const dates = calendarDates.map((iso) => {
   const date = parseDate(iso);
   const weekday = new Intl.DateTimeFormat('ru-RU', { weekday:'short', timeZone:'Europe/Kaliningrad' })
     .format(date).replace('.', '').toLocaleUpperCase('ru-RU');
