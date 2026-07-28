@@ -414,6 +414,11 @@
 
 ### Fixed
 
+- Fixed the production root-form release gate for the deliberately private
+  focus-group route family: `/fokus-gruppa/**` and `/zakrytaya-afisha/` now
+  retain `noindex,nofollow,noarchive` while ordinary production pages remain
+  strictly `index,follow`, so an immutable candidate is not blocked by its own
+  privacy contract.
 - Fixed production/candidate Free-collection validation to scope event ids to
   the actual `data-free-collection-surface`; shared hidden runtime-card
   templates remain available for client hydration but can no longer create a

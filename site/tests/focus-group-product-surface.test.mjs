@@ -4,19 +4,26 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('focus programme stays on dedicated noindex routes without replacing the public home', async () => {
-  const [root, hub, invitation] = await Promise.all([
+test('focus programme stays on dedicated noindex/noarchive routes without replacing the public home', async () => {
+  const [root, hub, invitation, collection, ending, secretHub, productionCheck] = await Promise.all([
     read('../src/pages/index.astro'),
     read('../src/pages/fokus-gruppa/index.astro'),
     read('../src/pages/fokus-gruppa/priglashenie/index.astro'),
+    read('../src/pages/fokus-gruppa/kollektsiya/index.astro'),
+    read('../src/pages/fokus-gruppa/zavershenie/index.astro'),
+    read('../src/pages/zakrytaya-afisha/index.astro'),
+    read('../scripts/check-production.mjs'),
   ]);
   assert.match(root, /HomeHeroTalk/u);
   assert.match(root, /HomeQuickNav/u);
   assert.match(root, /HomeColdStartFeed/u);
   assert.doesNotMatch(root, /Фокус-группа/u);
   assert.match(hub, /Фокус-группа/u);
-  assert.match(hub, /noindex,nofollow/u);
-  assert.match(invitation, /noindex,nofollow/u);
+  for (const source of [hub, invitation, collection, ending, secretHub]) {
+    assert.match(source, /noindex,nofollow,noarchive/u);
+  }
+  assert.match(productionCheck, /file\.key === 'zakrytaya-afisha\/index\.html'/u);
+  assert.match(productionCheck, /\^fokus-gruppa/u);
   assert.match(invitation, /FocusGroupInviteIntake/u);
 });
 
