@@ -1,0 +1,15 @@
+{
+  "name": "@kenigevents/autopresenter-m0-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Hermetic M0 Playwright compatibility runner for the KenigEvents autopresenter",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "engines": {
+    "node": "22.12.0"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.js",
+    "check": "node --check src/run-suite.js && node --check src/cycle-worker.js && node --check src/self-test.js"
+  }
+}
