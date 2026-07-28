@@ -21,6 +21,23 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
     <div class="focus-share__result" data-focus-share-result hidden>
       <label for="focus-share-url">Ссылка для проверки</label>
       <input id="focus-share-url" type="text" readonly data-focus-share-url />
+      <a class="focus-share__url" data-focus-share-open href="#">
+        Открыть приглашение
+      </a>
+      <div class="focus-share__qr">
+        <div class="focus-share__qr-image" data-focus-share-qr aria-live="polite"></div>
+        <div class="focus-share__qr-copy">
+          <strong>QR ведёт по этой же ссылке</strong>
+          <span>Код строится прямо в браузере и не отправляется во внешний сервис.</span>
+          <a
+            class="ke-button ke-button--secondary"
+            data-focus-share-qr-download
+            download="priglashenie-fokus-gruppa.svg"
+          >
+            Скачать QR в SVG
+          </a>
+        </div>
+      </div>
       <div class="focus-share__buttons">
         <button class="ke-button ke-button--primary" type="button" data-focus-share-native>
           Поделиться
@@ -43,6 +60,8 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
 </section>
 
 <script>
+  import { createFocusInviteQrSvg } from '../lib/focus-invite-qr';
+
   const roots = document.querySelectorAll<HTMLElement>('[data-focus-share]');
 
   const makeToken = () => {
@@ -59,8 +78,23 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
     const copyButton = root.querySelector<HTMLButtonElement>('[data-focus-share-copy]');
     const result = root.querySelector<HTMLElement>('[data-focus-share-result]');
     const input = root.querySelector<HTMLInputElement>('[data-focus-share-url]');
+    const openLink = root.querySelector<HTMLAnchorElement>('[data-focus-share-open]');
+    const qrContainer = root.querySelector<HTMLElement>('[data-focus-share-qr]');
+    const qrDownload = root.querySelector<HTMLAnchorElement>('[data-focus-share-qr-download]');
     const status = root.querySelector<HTMLElement>('[data-focus-share-status]');
-    if (!createButton || !nativeButton || !copyButton || !result || !input || !status) return;
+    if (
+      !createButton
+      || !nativeButton
+      || !copyButton
+      || !result
+      || !input
+      || !openLink
+      || !qrContainer
+      || !qrDownload
+      || !status
+    ) return;
+
+    let qrObjectUrl: string | null = null;
 
     const setStatus = (message: string) => {
       status.textContent = message;
@@ -76,13 +110,22 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
       try {
         const inviteUrl = new URL(root.dataset.invitePath || '/fokus-gruppa/priglashenie/', window.location.origin);
         inviteUrl.hash = `invite=${makeToken()}`;
-        input.value = inviteUrl.toString();
+        const exactInviteUrl = inviteUrl.toString();
+        const qrSvg = createFocusInviteQrSvg(exactInviteUrl);
+        if (qrObjectUrl) URL.revokeObjectURL(qrObjectUrl);
+        qrObjectUrl = URL.createObjectURL(new Blob([qrSvg], { type: 'image/svg+xml' }));
+
+        input.value = exactInviteUrl;
+        openLink.href = exactInviteUrl;
+        openLink.textContent = exactInviteUrl;
+        qrContainer.innerHTML = qrSvg;
+        qrDownload.href = qrObjectUrl;
         result.hidden = false;
         createButton.textContent = 'Создать новую демонстрационную ссылку';
         nativeButton.hidden = typeof navigator.share !== 'function';
-        setStatus('Ссылка создана только в этой вкладке и нигде не сохранена.');
+        setStatus('Ссылка и QR созданы только в этой вкладке и нигде не сохранены.');
       } catch {
-        setStatus('Браузер не смог создать ссылку. Ничего не было сохранено.');
+        setStatus('Браузер не смог создать ссылку и QR. Ничего не было сохранено.');
       }
     });
 
@@ -145,6 +188,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
   .focus-share__result[hidden] { display: none; }
   .focus-share__result label { font-size: .78rem; font-weight: 850; }
   .focus-share__result input {
+    box-sizing: border-box;
     width: 100%;
     min-height: 46px;
     border: 1px solid #cdbfad;
@@ -158,6 +202,45 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
     outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 55%, transparent);
     outline-offset: 2px;
   }
+  .focus-share__url {
+    overflow-wrap: anywhere;
+    color: var(--ke-color-brand-700, #98401f);
+    font: 700 .74rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .focus-share__url:focus-visible,
+  .focus-share__qr-copy a:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 55%, transparent);
+    outline-offset: 3px;
+  }
+  .focus-share__qr {
+    display: grid;
+    grid-template-columns: minmax(148px, 180px) minmax(0, 1fr);
+    gap: .8rem;
+    align-items: center;
+    border: 1px solid var(--ke-color-line, #e1d3c2);
+    border-radius: 1rem;
+    padding: .75rem;
+    background: #fffdf8;
+  }
+  .focus-share__qr-image {
+    overflow: hidden;
+    aspect-ratio: 1;
+    border-radius: .65rem;
+    background: #fff;
+  }
+  .focus-share__qr-image :global(svg) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .focus-share__qr-copy { display: grid; gap: .45rem; align-content: center; }
+  .focus-share__qr-copy strong { font-size: .86rem; }
+  .focus-share__qr-copy span {
+    color: var(--ke-color-muted, #6d6259);
+    font-size: .74rem;
+    line-height: 1.42;
+  }
+  .focus-share__qr-copy .ke-button { justify-self: start; }
   .focus-share__buttons { display: flex; flex-wrap: wrap; gap: .55rem; }
   .focus-share__status { min-height: 2.5em; margin: 0; color: var(--ke-color-muted, #6d6259); font-size: .78rem; line-height: 1.35; }
   .focus-share__boundary {
@@ -174,6 +257,13 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
   @media (max-width: 720px) {
     .focus-share { grid-template-columns: 1fr; }
     .focus-share__actions > .ke-button { width: 100%; }
+    .focus-share__qr { grid-template-columns: minmax(132px, 42%) minmax(0, 1fr); }
     .focus-share__buttons .ke-button { flex: 1 1 140px; }
+  }
+
+  @media (max-width: 440px) {
+    .focus-share__qr { grid-template-columns: 1fr; }
+    .focus-share__qr-image { width: min(100%, 240px); justify-self: center; }
+    .focus-share__qr-copy .ke-button { box-sizing: border-box; width: 100%; }
   }
 </style>
