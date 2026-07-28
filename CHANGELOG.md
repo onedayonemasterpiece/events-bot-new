@@ -7,6 +7,11 @@
 
 ### Added
 
+- Designed a deliberately small static-site Autopresenter: one phone-controlled
+  Playwright scenario over the real review UI, an existing-`aiohttp` relay,
+  a portable Windows runner, deterministic mobile/desktop overlays and a shared
+  live/record fallback, with explicit MVP cuts, acceptance gates and an
+  external-review brief.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link

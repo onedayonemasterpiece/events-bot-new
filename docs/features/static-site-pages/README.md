@@ -172,6 +172,12 @@ output и полный eligible catalog, но это ещё не event-page prod
 Object Storage website не умеет reader-atomic переключать целое дерево через
 `current.json`, поэтому root promotion отсутствует и остаётся `NO-GO`.
 
+Отдельный docs-first инструмент для живого показа этого реального интерфейса
+описан в [auto-present/README.md](auto-present/README.md): phone control,
+тонкий Playwright-agent для Windows, mobile/desktop stage overlays и общий
+live/record fallback. Он не входит в static build/runtime и не подменяет UI
+сайта.
+
 Принятый промежуточный release mode — один immutable noindex candidate под
 `/_review/<256-bit-token>/`. Он собирается из того же snapshot/repo SHA, что и
 checked root-form artifact, загружается create-only и никогда не меняет `/`,
