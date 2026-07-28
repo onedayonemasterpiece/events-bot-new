@@ -4,13 +4,20 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('root is a noindex focus testing stub without the old preview CTA', async () => {
-  const source = await read('../src/pages/index.astro');
-  assert.match(source, /Фокус-группа/u);
-  assert.match(source, /noindex,nofollow/u);
-  assert.match(source, /не авторизует пользователя/u);
-  assert.doesNotMatch(source, /PUBLIC_ROOT_PREVIEW_HREF/u);
-  assert.doesNotMatch(source, /Открыть тестовую версию/u);
+test('focus programme stays on dedicated noindex routes without replacing the public home', async () => {
+  const [root, hub, invitation] = await Promise.all([
+    read('../src/pages/index.astro'),
+    read('../src/pages/fokus-gruppa/index.astro'),
+    read('../src/pages/fokus-gruppa/priglashenie/index.astro'),
+  ]);
+  assert.match(root, /HomeHeroTalk/u);
+  assert.match(root, /HomeQuickNav/u);
+  assert.match(root, /HomeColdStartFeed/u);
+  assert.doesNotMatch(root, /Фокус-группа/u);
+  assert.match(hub, /Фокус-группа/u);
+  assert.match(hub, /noindex,nofollow/u);
+  assert.match(invitation, /noindex,nofollow/u);
+  assert.match(invitation, /FocusGroupInviteIntake/u);
 });
 
 test('invite intake and secret hub state the local marker boundary', async () => {

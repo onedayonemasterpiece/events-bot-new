@@ -1,8 +1,9 @@
 # Фокус-группа статического сайта — продуктовый прототип
 
-> **Статус:** page/product prototype реализован в
-> `integration/static-site-focus-group-product-20260727`; production tester
-> backend, cohort и rollout не реализованы и не запущены.
+> **Статус:** page/product prototype из
+> `integration/static-site-focus-group-product-20260727` интегрируется с R15
+> public candidate в `integration/static-site-focus-r15-live-e2e-20260728`;
+> production tester backend, cohort и rollout ещё не реализованы и не запущены.
 > **Целевой запуск:** 30.07.2026, рабочее время из текущего release context —
 > 18:00 `Europe/Kaliningrad` (`16:00Z`), с подтверждением при freeze.
 > **Аудитория:** не публичный релиз, а закрытый исследовательский cohort до 200
@@ -19,11 +20,14 @@
 В отдельной integration-ветке собран приёмочный UI-контур без production
 side effects:
 
-- `/` — noindex-заглушка о тестировании фокус-группой;
+- `/` остаётся обычной продуктовой главной R15 и не подменяется программой;
 - `/fokus-gruppa/` — программа и честная механика благодарности;
 - `/fokus-gruppa/priglashenie/` — fragment intake, немедленное удаление кода,
   отдельная 30-дневная participation marker с отсчётом от вступления, focus PWA
-  install/start controller и необязательный email/Яндекс identity-choice;
+  install/start controller и необязательный email/Яндекс identity-choice.
+  Отдельный экран передачи приглашения показывает один точный fragment URL,
+  даёт открыть/скопировать его и строит детерминированный локальный SVG QR без
+  внешнего генератора; тот же SVG можно скачать для презентации;
 - `/zakrytaya-afisha/` — marker-gated hub текущих статических страниц;
 - `/fokus-gruppa/kollektsiya/` — mobile-first коллекция пасхалок и демонстрация
   условного появления `FG-E12` после третьего события в календаре, а также
@@ -39,9 +43,10 @@ side effects:
 Это **не закрытая production-сборка**. LocalStorage и opaque path не являются
 авторизацией; email/OAuth только показаны как интерфейс; feedback не
 отправляется; письма не автоматизированы; подарок не объявлен. Обычный
-`astro build` показывает prototype root, но `build-production.mjs` и
-`build-secret-candidate.mjs` по-прежнему владеют своими root transformations.
-Эта ветка намеренно не меняет их и не может считаться production root rollout.
+`astro build` сохраняет публичную R15 главную, а focus mechanics доступны
+только на выделенных `noindex` routes. `build-production.mjs` и
+`build-secret-candidate.mjs` по-прежнему владеют своими root transformations;
+наличие focus routes не считается production root rollout.
 
 ## 1. Решение
 
@@ -180,6 +185,16 @@ QR конкретной пасхалки не переносит tester status �
   consent остаются;
 - recommendation/marketing consent не создаётся автоматически;
 - участник становится обычным пользователем, а не удаляется.
+
+### Выход из аккаунта и выход из программы
+
+Это два разных действия. `Выйти` завершает только текущую Supabase Auth
+session; 30-дневная focus participation marker и обычная персонализация не
+удаляются. Отдельная кнопка `Выйти из фокус-группы` удаляет только участие и
+сохраняет профиль `Для меня`. Глобальное мобильное меню, `/dlya-menya/` и
+закрытый hub показывают account/logout состояние через общий auth runtime,
+чтобы owner мог повторно пройти сценарий приглашения без очистки всех данных
+браузера.
 
 ## 4. Зачем участник может подтвердить email или Яндекс
 

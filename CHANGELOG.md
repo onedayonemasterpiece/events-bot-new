@@ -6,6 +6,16 @@
 
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
+- Added a deterministic self-contained SVG QR and exact visible fragment link
+  for focus-group invitations, including local download and decode regression
+  coverage without a third-party QR service.
+- Separated account logout from leaving the focus programme: logout ends only
+  the auth session, while the explicit programme exit clears only the
+  30-day participation marker; the shared mobile menu and focus/personal pages
+  expose the correct action for their current state.
+- Fixed mobile continuation likes so reranking only the unfrozen tail preserves
+  viewport position after `Показать ещё`, and made Favorites hydrate future
+  browser-local items before the optional Supabase merge.
 - Fixed the materialized Free collection so its compact identity is a
   transparent pinned medallion rather than an opaque shelf, and separated
   ongoing exhibitions into a labelled final group after timed events.
