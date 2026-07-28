@@ -16,6 +16,10 @@
 - Fixed mobile continuation likes so reranking only the unfrozen tail preserves
   viewport position after `Показать ещё`, and made Favorites hydrate future
   browser-local items before the optional Supabase merge.
+- Fixed authorized Search on mobile to use JSON by default with one bounded
+  transport-only retry, while keeping NDJSON opt-in for diagnostics; honest
+  fallback cards now render immediately for zero-exact queries instead of
+  leaving a blank result surface.
 - Fixed the materialized Free collection so its compact identity is a
   transparent pinned medallion rather than an opaque shelf, and separated
   ongoing exhibitions into a labelled final group after timed events.
