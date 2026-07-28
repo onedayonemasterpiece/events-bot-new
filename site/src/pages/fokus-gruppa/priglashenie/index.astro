@@ -1,7 +1,7 @@
 ---
 import FocusGroupInviteIntake from '../../../components/FocusGroupInviteIntake.astro';
 import StaticSiteAuthRuntime from '../../../components/auth/StaticSiteAuthRuntime.astro';
-import { withBase } from '../../../lib/events';
+import { absoluteUrl, withBase } from '../../../lib/events';
 import '../../../styles/design-system.css';
 ---
 
@@ -12,6 +12,7 @@ import '../../../styles/design-system.css';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href={absoluteUrl('/fokus-gruppa/priglashenie/')} />
     <title>Приглашение в фокус-группу · Полюбить Калининград Анонсы</title>
     <meta name="description" content="Специальный экран продуктового прототипа приглашения в фокус-группу." />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />

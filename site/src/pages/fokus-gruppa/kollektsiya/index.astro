@@ -11,7 +11,7 @@ import {
   type FocusEggId,
   type FocusEggState,
 } from '../../../lib/focus-easter-eggs';
-import { withBase } from '../../../lib/events';
+import { absoluteUrl, withBase } from '../../../lib/events';
 import '../../../styles/design-system.css';
 
 const prototypeStates: Record<FocusEggId, FocusEggState> = {
@@ -41,6 +41,7 @@ const participationProgress = capFocusParticipation({ points: 18, categories: 4 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href={absoluteUrl('/fokus-gruppa/kollektsiya/')} />
     <title>Коллекция пасхалок · фокус-группа</title>
     <meta
       name="description"

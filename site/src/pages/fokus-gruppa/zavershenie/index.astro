@@ -1,7 +1,7 @@
 ---
 import FocusGroupThankYou from '../../../components/FocusGroupThankYou.astro';
 import FocusLabBadge from '../../../components/FocusLabBadge.astro';
-import { withBase } from '../../../lib/events';
+import { absoluteUrl, withBase } from '../../../lib/events';
 import '../../../styles/design-system.css';
 
 const states = [
@@ -36,6 +36,7 @@ const states = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <meta name="referrer" content="no-referrer" />
+    <link rel="canonical" href={absoluteUrl('/fokus-gruppa/zavershenie/')} />
     <title>Завершение фокус-группы · продуктовый прототип</title>
     <meta name="description" content="Макет автоматического и операторского завершения фокус-группы с сохранением обычной персонализации." />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />

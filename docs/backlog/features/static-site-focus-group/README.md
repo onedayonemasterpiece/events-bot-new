@@ -56,7 +56,10 @@ checker считает `/fokus-gruppa/**` и `/zakrytaya-afisha/` явным с�
 индексируемый контракт остаётся fail-closed. Эти же выделенные приватные
 маршруты сохраняют page-local `no-referrer`: production checker разрешает его
 только этому семейству и по-прежнему отклоняет случайную утечку candidate
-privacy policy на обычные страницы. `build-production.mjs` и
+privacy policy на обычные страницы. Каждая focus-страница также имеет
+self-canonical URL через общий `absoluteUrl()`: в root-form proof это обычный
+production URL, а в immutable candidate — тот же маршрут под текущим
+`/_review/<token>` prefix. `build-production.mjs` и
 `build-secret-candidate.mjs` по-прежнему владеют своими root transformations;
 наличие focus routes не считается production root rollout.
 
