@@ -1,0 +1,119 @@
+{
+  "schema_version": "unusual-events-semantic-regressions-v1",
+  "as_of_date": "2026-07-28",
+  "purpose": "Supplemental hard-negative cases for semantic/prompt regression tests. This fixture is not classifier calibration or real-BGE canary evidence.",
+  "source": {
+    "file": "site/src/data/preview-events.json",
+    "base_sha": "64dd872d795f6859179f80ca42c387da7b811504",
+    "fact_policy": "The semantic input fields are frozen from the checked-in R15 production preview. Any source drift requires explicit editorial re-adjudication."
+  },
+  "cases": [
+    {
+      "case_id": "hard_negative:5376",
+      "event_id": 5376,
+      "regression_class": "ordinary_civic_commemorative_action",
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "eligible": true,
+      "frozen_tier": "ordinary",
+      "expected_unusual_publication": false,
+      "confusable_families": [
+        "hybrid_format",
+        "community_exchange",
+        "living_history"
+      ],
+      "semantic_boundary": {
+        "ordinary_reason": "A public youth action dedicated to regional and organisational anniversaries is an ordinary civic/commemorative programme unless the event description establishes a distinct audience experience mechanism.",
+        "insufficient_signals": [
+          "large scale",
+          "anniversary subject",
+          "civic importance",
+          "several conventional programme formats"
+        ],
+        "required_unusual_mechanism": "The source must explicitly describe a format such as co-creation, restricted access, site-dependent participation or enacted living history; theme and importance alone are insufficient."
+      },
+      "prompt_anchor": "hard_negative.hybrid_format.festival_schedule",
+      "event_input": {
+        "id": 5376,
+        "title": "Акция «Регион, возрождённый всей страной»",
+        "event_type": "встреча",
+        "summary": "Масштабное молодёжное событие, посвящённое юбилеям Калининградской области и молодёжного движения Русского географического общества.",
+        "description_html": "<p>Масштабное молодёжное событие, посвящённое юбилеям Калининградской области и молодёжного движения Русского географического общества.</p>",
+        "city": "Калининград",
+        "venue_name": "Музей Мирового океана",
+        "topics": [
+          "KRAEVEDENIE_KALININGRAD_OBLAST",
+          "LECTURES",
+          "MASTERCLASS",
+          "FAMILY"
+        ],
+        "lifecycle_status": "active",
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": null,
+        "silent": false,
+        "is_public": true,
+        "is_searchable": true,
+        "publication_status": "published",
+        "start_date": "2026-08-18",
+        "end_date": null,
+        "display_date": "2026-08-18",
+        "display_time": "14:00–18:00"
+      }
+    },
+    {
+      "case_id": "hard_negative:4327",
+      "event_id": 4327,
+      "regression_class": "ordinary_exhibition",
+      "label": "hard_negative",
+      "expected_family": null,
+      "concept_id": null,
+      "eligible": true,
+      "frozen_tier": "ordinary",
+      "expected_unusual_publication": false,
+      "confusable_families": [
+        "restricted_access",
+        "behind_scenes",
+        "living_history"
+      ],
+      "semantic_boundary": {
+        "ordinary_reason": "A conventional archival exhibition of documents and photographs remains ordinary even when its historical subject and original materials are notable.",
+        "insufficient_signals": [
+          "historical subject",
+          "archival documents",
+          "original photographs",
+          "free museum access"
+        ],
+        "required_unusual_mechanism": "The source must explicitly offer closed-fund access, behind-the-scenes handling, enacted history or another participatory mechanism; normal exhibition viewing is insufficient."
+      },
+      "prompt_anchor": "neutral.art_exhibition",
+      "event_input": {
+        "id": 4327,
+        "title": "Отдыха не знали, Из руин подняли",
+        "event_type": "выставка",
+        "summary": "Выставка демонстрирует архивные документы и фотографии, повествующие об истории заселения и развития региона из прошлого.",
+        "description_html": "<p>В экспозиции представлены документы и фотографии из фондов Государственного архива. Выставка рассказывает об истории первого переселения в регион и о том, как он проходил. 🗺</p>\n<h3>Исторические документы и фотографии</h3>\n<p>Особое внимание уделено первому переселению в регион. В экспозиции можно увидеть подлинные свидетельства эпохи, запечатлённые в документах и фотографиях.</p>\n<h3>Доступность</h3>\n<p>Посещение выставки свободно для всех желающих. Формат: архивное исследование, документальная выставка.</p>",
+        "city": "Калининград",
+        "venue_name": "Государственный архив Калининградской области",
+        "topics": [],
+        "lifecycle_status": "active",
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": null,
+        "silent": false,
+        "is_public": true,
+        "is_searchable": true,
+        "publication_status": "published",
+        "start_date": "2026-04-10",
+        "end_date": "2026-10-10",
+        "display_date": "2026-04-10",
+        "display_time": null
+      }
+    }
+  ]
+}
