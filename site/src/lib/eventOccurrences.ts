@@ -64,6 +64,13 @@ const INELIGIBLE_POPULAR_LIFECYCLES = new Set(['cancelled', 'postponed', 'duplic
 
 type DateParts = { year: number; month: number; day: number };
 
+export function isExhibitionLikeEvent(
+  event: Pick<PreviewEvent, 'title' | 'event_type' | 'topics'>,
+): boolean {
+  const haystack = [event.event_type, event.title, ...(event.topics || [])].join(' ').toLowerCase();
+  return /выстав|экспозиц|музей|галере|арт[-\s]?простран|инсталляц|экзамен/u.test(haystack);
+}
+
 function parseDate(value: string): DateParts | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(String(value || ''));
   if (!match) return null;
@@ -130,7 +137,15 @@ function localReferenceParts(reference: Date, timezone: string): {
 export function isPopularEligible(
   event: Pick<
     PreviewEvent,
-    'lifecycle_status' | 'start_date' | 'end_date' | 'starts_at' | 'start_time' | 'timezone'
+    | 'lifecycle_status'
+    | 'title'
+    | 'event_type'
+    | 'topics'
+    | 'start_date'
+    | 'end_date'
+    | 'starts_at'
+    | 'start_time'
+    | 'timezone'
   >,
   reference: PopularEligibilityReference,
 ): boolean {
@@ -140,13 +155,19 @@ export function isPopularEligible(
   const currentDate = String(reference.currentDate || '');
   if (!parseDate(event.start_date) || !parseDate(currentDate)) return false;
 
-  if (event.end_date && event.end_date !== event.start_date) {
+  const hasDateRange = Boolean(event.end_date && event.end_date !== event.start_date);
+  if (hasDateRange) {
     if (!parseDate(event.end_date) || event.end_date < event.start_date) return false;
-    return event.end_date >= currentDate;
+    if (event.end_date < currentDate) return false;
   }
 
   if (event.start_date > currentDate) return true;
-  if (event.start_date < currentDate) return false;
+  if (event.start_date < currentDate) {
+    // An exhibition is continuously visitable through its advertised final
+    // date. A past ordinary event carrying a broad/stale end_date is not.
+    return hasDateRange && isExhibitionLikeEvent(event);
+  }
+  if (hasDateRange) return true;
 
   const referenceTime = Date.parse(reference.referenceIso || '');
   if (!Number.isFinite(referenceTime)) return false;
@@ -387,4 +408,13 @@ export function collapseOccurrenceCards(events: PreviewEvent[], mode: Occurrence
     seen.add(key);
     return true;
   });
+}
+
+/**
+ * Popular is a finite ranked selection, not a fixed-size carousel. Collapse
+ * linked occurrences and exact repeated ids once, then return fewer cards
+ * when there are fewer distinct families instead of repeating filler cards.
+ */
+export function selectPopularEventFamilies(events: PreviewEvent[], limit: number): PreviewEvent[] {
+  return collapseOccurrenceCards(events, 'per-family').slice(0, Math.max(0, limit));
 }
