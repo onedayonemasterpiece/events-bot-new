@@ -24,6 +24,10 @@
   transport-only retry, while keeping NDJSON opt-in for diagnostics; honest
   fallback cards now render immediately for zero-exact queries instead of
   leaving a blank result surface.
+- Fixed stale `Сегодня` tabs by comparing their embedded build date with the
+  Kaliningrad clock and redirecting/relabeling honestly, and made the shared
+  event-date inventory own both enabled calendar cells and non-empty generated
+  date routes without manufacturing pages for multi-day spans.
 - Fixed the materialized Free collection so its compact identity is a
   transparent pinned medallion rather than an opaque shelf, and separated
   ongoing exhibitions into a labelled final group after timed events.

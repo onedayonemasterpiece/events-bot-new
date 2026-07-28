@@ -128,6 +128,13 @@ semantics and cannot be committed by stray pointer/keyboard input. This is a
 navigation constraint only; it does not alter canonical event dates or create
 placeholder events.
 
+The inventory is also emitted as same-origin `/data/event-dates.json` and owns
+the generated `date-*` route set. A day is enabled only when at least one
+canonical occurrence starts on that date; long-running exhibitions/multi-day
+spans do not manufacture empty daily pages. The selected Sunday still keeps
+the visible weekend range. Generated-output checks require a one-to-one match
+between enabled inventory days and materialized non-empty date routes.
+
 ## Toast placement and height budget
 
 Shell публикует переменные:
@@ -1165,6 +1172,12 @@ clock on load and once per minute. A row is visually past after an explicit
 been behind the current time by at least one hour. Only the main event image is
 desaturated; identity/free medallions, text, controls and row order remain
 unchanged.
+
+`Сегодня` also compares the real `Europe/Kaliningrad` date with the static
+build date embedded in the page. If an honest route for the real day exists in
+the inventory, a stale saved tab redirects to it. If the frozen candidate has
+no such route, the page remains usable but relabels itself with its actual
+snapshot date instead of calling old data “Сегодня”.
 
 An immutable noindex preview may remain open after its projected
 `data-mobile-listing-date` has elapsed. In that case a no-`end_at` row must not
