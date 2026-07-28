@@ -1,0 +1,32 @@
+---
+import FocusGroupInviteIntake from '../../../components/FocusGroupInviteIntake.astro';
+import { withBase } from '../../../lib/events';
+import '../../../styles/design-system.css';
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Приглашение в фокус-группу · Полюбить Калининград Анонсы</title>
+    <meta name="description" content="Специальный экран продуктового прототипа приглашения в фокус-группу." />
+    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
+    <link rel="manifest" href={`${withBase('/fokus-gruppa/manifest.webmanifest')}?v=20260727-focus-v1`} />
+    <link rel="apple-touch-icon" href={withBase('/assets/pwa/focus-group-icon.png')} />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Анонсы Lab" />
+    <meta name="theme-color" content="#fff7e7" />
+  </head>
+  <body>
+    <FocusGroupInviteIntake />
+  </body>
+</html>
+
+<style>
+  * { box-sizing: border-box; }
+  html { background: var(--ke-color-canvas); color: var(--ke-color-ink); font-family: var(--ke-font-sans); }
+  body { min-width: 320px; min-height: 100dvh; margin: 0; background: radial-gradient(circle at 5% 0, rgb(255 193 13 / 15%), transparent 28rem), var(--ke-color-canvas); }
+</style>

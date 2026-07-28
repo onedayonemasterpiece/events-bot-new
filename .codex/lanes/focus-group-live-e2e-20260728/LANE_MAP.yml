@@ -1,0 +1,72 @@
+initiative: focus-group-live-e2e-20260728
+base: origin/integration/unusual-static-site-r15-20260727
+integration_branch: integration/static-site-focus-r15-live-e2e-20260728
+lanes:
+  telegram_inventory:
+    mode: read_only
+    requirements: [R04]
+    ownership: Telegram topic 548 inventory and evidence only
+    output: .codex/lanes/focus-group-live-e2e-20260728/telegram-inventory.md
+    dependencies: []
+  focus_contract_map:
+    mode: read_only
+    requirements: [R01, R02, R05]
+    ownership: enrollment, membership, auth, PWA, release and incident code-path map only
+    output: .codex/lanes/focus-group-live-e2e-20260728/focus-contract-map.md
+    dependencies: []
+  yandex_mail_map:
+    mode: read_only
+    requirements: [R03]
+    ownership: existing Yandex 360/domain/mail/auth infrastructure and official provisioning path only
+    output: .codex/lanes/focus-group-live-e2e-20260728/yandex-mail-map.md
+    dependencies: []
+  enrollment_qr:
+    mode: writable
+    requirements: [R01]
+    ownership: focus invite/onboarding share-link and deterministic QR assets/tests/docs
+    branch: agent/focus-group/enrollment-qr-20260728
+    dependencies: [focus_contract_map]
+  logout_membership:
+    mode: writable
+    requirements: [R02]
+    ownership: focus auth/logout/session/membership UI and regression tests/docs
+    branch: agent/focus-group/logout-membership-20260728
+    dependencies: [focus_contract_map]
+  mobile_state:
+    mode: writable
+    requirements: [R06]
+    ownership: paginated listing reaction scroll stability and favorites hydration/performance only
+    branch: agent/focus-group/mobile-state-20260728
+    dependencies: [telegram_inventory]
+  calendar_today:
+    mode: writable
+    requirements: [R07]
+    ownership: today resolution and mobile calendar event-date availability only
+    branch: agent/focus-group/calendar-today-20260728
+    dependencies: [telegram_inventory]
+  search_runtime:
+    mode: writable
+    requirements: [R08]
+    ownership: authorized/static search runtime recovery, query UI and search tests only
+    branch: agent/focus-group/search-runtime-20260728
+    dependencies: [telegram_inventory]
+  collections_content:
+    mode: writable_serial
+    requirements: [R09, R10, R11, R12]
+    ownership: free collection structure/sticky UI, data-semantic corrections, club export and missing generated route
+    branch: integration/static-site-focus-r15-live-e2e-20260728
+    dependencies: [telegram_inventory]
+  integration_e2e:
+    mode: writable_serial
+    requirements: [R03, R04, R05]
+    ownership: backend/auth integration, merge reconciliation, deployment, live E2E, canonical docs and CHANGELOG
+    branch: integration/static-site-focus-r15-live-e2e-20260728
+    dependencies: [telegram_inventory, focus_contract_map, yandex_mail_map, enrollment_qr, logout_membership]
+integration_order:
+  - enrollment_qr
+  - logout_membership
+  - mobile_state
+  - calendar_today
+  - search_runtime
+  - collections_content
+  - integration_e2e

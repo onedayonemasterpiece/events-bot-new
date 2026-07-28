@@ -1,0 +1,81 @@
+---
+import type {
+  FocusEggDefinition,
+  FocusEggState,
+} from '../lib/focus-easter-eggs';
+
+interface Props {
+  egg: FocusEggDefinition;
+  state: FocusEggState;
+}
+
+const { egg, state } = Astro.props;
+const stateLabels: Record<FocusEggState, string> = {
+  locked: 'Закрыто',
+  eligible: 'Доступно',
+  found: 'Найдено',
+  unavailable: 'Недоступно',
+};
+---
+
+<article class="focus-egg-card" data-egg-id={egg.id} data-egg-state={state}>
+  <header>
+    <span class="focus-egg-card__id">{egg.id}</span>
+    <span class="focus-egg-card__state" data-egg-state-label>{stateLabels[state]}</span>
+  </header>
+  <div class="focus-egg-card__mark" aria-hidden="true">
+    {state === 'found' ? '✦' : state === 'eligible' ? '◇' : state === 'unavailable' ? '—' : '?'}
+  </div>
+  <div>
+    <small>{egg.family}</small>
+    <h3>{egg.title}</h3>
+    <p>{egg.hint}</p>
+  </div>
+</article>
+
+<style>
+  .focus-egg-card {
+    min-height: 196px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: .75rem;
+    border: 1px solid var(--ke-color-line);
+    border-radius: 1.25rem;
+    padding: 1rem;
+    background: var(--ke-color-surface-strong);
+    box-shadow: var(--ke-shadow-1);
+  }
+  .focus-egg-card[data-egg-state='found'] {
+    border-color: #7bb083;
+    background: linear-gradient(145deg, #fff, #effbe8);
+  }
+  .focus-egg-card[data-egg-state='eligible'] {
+    border-color: #d4b66a;
+    background: linear-gradient(145deg, #fff, #fff5d7);
+  }
+  .focus-egg-card[data-egg-state='unavailable'] { opacity: .7; }
+  .focus-egg-card header { display: flex; justify-content: space-between; gap: .5rem; }
+  .focus-egg-card__id,
+  .focus-egg-card__state,
+  .focus-egg-card small {
+    color: var(--ke-color-muted);
+    font-size: .66rem;
+    font-weight: 900;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+  .focus-egg-card__state { color: var(--ke-color-brand-700); }
+  .focus-egg-card__mark {
+    width: 3.25rem;
+    height: 3.25rem;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ke-color-canvas);
+    color: var(--ke-color-brand-700);
+    font-size: 1.5rem;
+    font-weight: 900;
+  }
+  .focus-egg-card h3 { margin: .25rem 0 .3rem; font-size: 1.05rem; line-height: 1.15; }
+  .focus-egg-card p { margin: 0; color: var(--ke-color-muted); font-size: .8rem; line-height: 1.45; }
+</style>

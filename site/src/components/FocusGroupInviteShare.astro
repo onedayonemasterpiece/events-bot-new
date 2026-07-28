@@ -1,0 +1,179 @@
+---
+import { withBase } from '../lib/events';
+
+const invitePath = withBase('/fokus-gruppa/priglashenie/');
+---
+
+<section class="focus-share" data-focus-share data-invite-path={invitePath} aria-labelledby="focus-share-title">
+  <div>
+    <p class="focus-share__eyebrow">Пригласить в прототип</p>
+    <h2 id="focus-share-title">Передаётся ссылка, не аккаунт</h2>
+    <p>
+      Здесь можно проверить механику ссылки и QR-пути. Входящий fragment будет
+      удалён из адресной строки, а в браузере останется только короткая метка просмотра.
+    </p>
+  </div>
+
+  <div class="focus-share__actions">
+    <button class="ke-button ke-button--secondary" type="button" data-focus-share-create>
+      Создать демонстрационную ссылку
+    </button>
+    <div class="focus-share__result" data-focus-share-result hidden>
+      <label for="focus-share-url">Ссылка для проверки</label>
+      <input id="focus-share-url" type="text" readonly data-focus-share-url />
+      <div class="focus-share__buttons">
+        <button class="ke-button ke-button--primary" type="button" data-focus-share-native>
+          Поделиться
+        </button>
+        <button class="ke-button ke-button--secondary" type="button" data-focus-share-copy>
+          Копировать
+        </button>
+      </div>
+    </div>
+    <p class="focus-share__status" data-focus-share-status aria-live="polite">
+      Ссылка ещё не создана.
+    </p>
+  </div>
+
+  <p class="focus-share__boundary">
+    <strong>Важно:</strong> это локальная демонстрация интерфейса. Такая ссылка
+    не подтверждает личность, не переносит статус участника и не имеет
+    серверных expiry/max-use/revoke. В production ссылку должен выпускать сервер.
+  </p>
+</section>
+
+<script>
+  const roots = document.querySelectorAll<HTMLElement>('[data-focus-share]');
+
+  const makeToken = () => {
+    const bytes = new Uint8Array(32);
+    window.crypto.getRandomValues(bytes);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return window.btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  };
+
+  roots.forEach((root) => {
+    const createButton = root.querySelector<HTMLButtonElement>('[data-focus-share-create]');
+    const nativeButton = root.querySelector<HTMLButtonElement>('[data-focus-share-native]');
+    const copyButton = root.querySelector<HTMLButtonElement>('[data-focus-share-copy]');
+    const result = root.querySelector<HTMLElement>('[data-focus-share-result]');
+    const input = root.querySelector<HTMLInputElement>('[data-focus-share-url]');
+    const status = root.querySelector<HTMLElement>('[data-focus-share-status]');
+    if (!createButton || !nativeButton || !copyButton || !result || !input || !status) return;
+
+    const setStatus = (message: string) => {
+      status.textContent = message;
+    };
+
+    const selectFallback = () => {
+      input.focus();
+      input.select();
+      setStatus('Автокопирование недоступно. Ссылка выделена — скопируйте её вручную.');
+    };
+
+    createButton.addEventListener('click', () => {
+      try {
+        const inviteUrl = new URL(root.dataset.invitePath || '/fokus-gruppa/priglashenie/', window.location.origin);
+        inviteUrl.hash = `invite=${makeToken()}`;
+        input.value = inviteUrl.toString();
+        result.hidden = false;
+        createButton.textContent = 'Создать новую демонстрационную ссылку';
+        nativeButton.hidden = typeof navigator.share !== 'function';
+        setStatus('Ссылка создана только в этой вкладке и нигде не сохранена.');
+      } catch {
+        setStatus('Браузер не смог создать ссылку. Ничего не было сохранено.');
+      }
+    });
+
+    nativeButton.addEventListener('click', async () => {
+      if (!input.value || typeof navigator.share !== 'function') return;
+      try {
+        await navigator.share({
+          title: 'Фокус-группа «Полюбить Калининград · Анонсы»',
+          text: 'Приглашение проверить продуктовый прототип.',
+          url: input.value,
+        });
+        setStatus('Системное меню «Поделиться» закрыто. Ссылка не хранится сайтом.');
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          setStatus('Отправка отменена.');
+        } else {
+          setStatus('Не удалось открыть системное меню. Можно скопировать ссылку.');
+        }
+      }
+    });
+
+    copyButton.addEventListener('click', async () => {
+      if (!input.value) return;
+      try {
+        await navigator.clipboard.writeText(input.value);
+        setStatus('Ссылка скопирована. Она демонстрационная и не является доступом или входом.');
+      } catch {
+        selectFallback();
+      }
+    });
+  });
+</script>
+
+<style>
+  .focus-share {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+    gap: 1rem 2rem;
+    border: 1px solid var(--ke-color-line, #e1d3c2);
+    border-radius: 1.5rem;
+    padding: clamp(1.15rem, 3vw, 2rem);
+    background: var(--ke-color-surface-strong, #fff);
+    box-shadow: var(--ke-shadow-1, 0 8px 22px rgb(72 45 25 / 8%));
+  }
+
+  .focus-share__eyebrow {
+    margin: 0 0 .35rem;
+    color: var(--ke-color-brand-700, #98401f);
+    font-size: .72rem;
+    font-weight: 900;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+
+  .focus-share h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 2rem); line-height: 1.08; }
+  .focus-share h2 + p { margin: .75rem 0 0; color: var(--ke-color-muted, #6d6259); line-height: 1.55; }
+  .focus-share__actions { min-width: 0; display: grid; gap: .7rem; align-content: start; }
+  .focus-share__actions > .ke-button { justify-self: start; }
+  .focus-share__result { min-width: 0; display: grid; gap: .5rem; }
+  .focus-share__result[hidden] { display: none; }
+  .focus-share__result label { font-size: .78rem; font-weight: 850; }
+  .focus-share__result input {
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid #cdbfad;
+    border-radius: .8rem;
+    padding: .65rem .75rem;
+    background: #fffdf8;
+    color: #44362d;
+    font: .78rem/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .focus-share__result input:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 55%, transparent);
+    outline-offset: 2px;
+  }
+  .focus-share__buttons { display: flex; flex-wrap: wrap; gap: .55rem; }
+  .focus-share__status { min-height: 2.5em; margin: 0; color: var(--ke-color-muted, #6d6259); font-size: .78rem; line-height: 1.35; }
+  .focus-share__boundary {
+    grid-column: 1 / -1;
+    margin: .25rem 0 0;
+    border-radius: 1rem;
+    padding: .85rem 1rem;
+    background: var(--ke-color-warning-50, #fff8db);
+    color: var(--ke-color-warning-800, #5a3b06);
+    font-size: .82rem;
+    line-height: 1.48;
+  }
+
+  @media (max-width: 720px) {
+    .focus-share { grid-template-columns: 1fr; }
+    .focus-share__actions > .ke-button { width: 100%; }
+    .focus-share__buttons .ke-button { flex: 1 1 140px; }
+  }
+</style>

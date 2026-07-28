@@ -1,71 +1,104 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
-import OptimizedEventCardGrid from '../../components/OptimizedEventCardGrid.astro';
+import FocusGroupFeedback from '../../components/FocusGroupFeedback.astro';
+import FocusLabBadge from '../../components/FocusLabBadge.astro';
+import InterestProfile from '../../components/InterestProfile.astro';
+import { buildFocusRecommendations } from '../../lib/focus-personalization';
 import { absoluteUrl, getPopularEvents, SITE_NAME } from '../../lib/events';
 
-// This is a review-only cold-start surface. The real profile remains local and
-// consented; without enough reactions we show a finite diverse fallback rather
-// than pretending that the cards were personally ranked.
-const events = getPopularEvents(18);
+const recommendations = buildFocusRecommendations(getPopularEvents(9));
 const canonicalUrl = absoluteUrl('/dlya-menya/');
 const title = `Для меня — прототип | ${SITE_NAME}`;
-const description = 'Адаптивный прототип личной ленты: честный cold start на актуальных событиях и вход в сохранённые действия.';
+const description = 'Локальный прототип персонализации: явные интересы, понятные сигналы и объяснимые рекомендации без отправки данных.';
 ---
 <EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]} mobileSection="personal" noindex>
   <main id="main" class="personal-page" data-personal-prototype>
     <div class="page-shell">
       <header class="personal-page__head">
-        <p class="eyebrow">Личная лента · прототип</p>
-        <h1>Для меня</h1>
-        <p>Пока у профиля недостаточно оценок, здесь показано компактное общее главное. После 2–3 лайков или отметок «Не интересно» порядок сможет учитывать ваши сигналы.</p>
-        <div class="personal-page__actions" id="izbrannoe">
-          <button type="button" data-static-auth-login data-static-auth-signed-out>Войти через Яндекс</button>
-          <p class="personal-page__identity" data-static-auth-signed-in hidden>
-            <span class="personal-page__identity-initial" data-static-auth-initial aria-hidden="true">?</span>
-            <span>Вы вошли как <strong data-static-auth-name></strong></span>
-          </p>
-          <button type="button" data-static-auth-logout data-static-auth-signed-in hidden>Выйти из аккаунта</button>
-          <button type="button" data-reset-personalization>Сбросить локальные оценки</button>
+        <FocusLabBadge label="Лаборатория сайта" detail="Для меня · прототип" />
+        <p class="eyebrow">Личная афиша · Prototype</p>
+        <h1>Для меня — без чёрного ящика</h1>
+        <p>Соберите вкусовой профиль своими руками. Здесь отдельно показаны ваш явный выбор, рассчитанный по реакциям индекс интереса и достаточность данных.</p>
+        <div class="personal-page__principles" aria-label="Принципы прототипа">
+          <span>Локально</span>
+          <span>Объяснимо</span>
+          <span>Можно удалить</span>
         </div>
-        <p class="personal-page__auth-status" data-static-auth-status role="status" aria-live="polite" aria-atomic="true"></p>
       </header>
-
-      <section class="personal-page__feed" aria-labelledby="personal-feed-title">
-        <div>
-          <p class="eyebrow">Cold start</p>
-          <h2 id="personal-feed-title">С чего можно начать</h2>
-          <p>Одна карточка на взаимно связанную семью дат; совпадения по названию, площадке или типу сами по себе не склеиваются.</p>
+      <InterestProfile recommendations={recommendations} />
+      <section class="personal-page__focus-tools" data-focus-personal-tools hidden>
+        <div class="personal-page__focus-tools-note">
+          <FocusLabBadge label="Инструменты участника" detail="Только после маршрута приглашения" />
+          <p>
+            Активная 30-дневная метка участия открывает обратную связь на этой
+            странице. Это UX-gate, а не подтверждение membership.
+          </p>
         </div>
-        <OptimizedEventCardGrid
-          events={events}
-          limit={18}
-          rowSize={3}
-          responsiveMobile
-          personalFeed
-          className="personal-page__feed-list"
-          surface="personal_cold_start"
-          algorithmId="personal-cold-start-optimized-v1"
-        />
+        <FocusGroupFeedback pageFamily="for_me" pageLabel="страница «Для меня»" />
       </section>
     </div>
   </main>
 </EventLayout>
 
+<script>
+  import { readFocusParticipationMarker } from '../../lib/focus-group-prototype';
+
+  document.querySelectorAll<HTMLElement>('[data-focus-personal-tools]').forEach((tools) => {
+    try {
+      tools.hidden = readFocusParticipationMarker(window.localStorage)?.status !== 'active';
+    } catch {
+      tools.hidden = true;
+    }
+  });
+</script>
+
 <style>
   .personal-page { padding: clamp(1rem, 3vw, 2.5rem) 0 4rem; }
-  .personal-page__head,
-  .personal-page__feed { padding: clamp(1.1rem, 3vw, 2.5rem); border: 1px solid rgba(55, 38, 27, .14); border-radius: 1.5rem; background: #fffaf3; }
-  .personal-page__head h1 { max-width: 12ch; margin: .15rem 0 .65rem; font-size: clamp(2.8rem, 7vw, 6.5rem); line-height: .9; letter-spacing: -.06em; }
-  .personal-page__head > p:last-of-type { max-width: 62ch; font-size: clamp(1rem, 1.6vw, 1.2rem); }
-  .personal-page__actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.25rem; }
-  .personal-page__actions :is(a, button) { display: inline-flex; align-items: center; min-height: 44px; padding: .65rem 1rem; border: 1px solid rgba(125, 55, 28, .25); border-radius: 999px; background: #fff; color: #753a22; font: inherit; font-weight: 800; text-decoration: none; cursor: pointer; }
-  .personal-page__identity { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; margin: 0; padding: .5rem .8rem; border: 1px solid rgba(125, 55, 28, .18); border-radius: 999px; background: #fff; }
-  .personal-page__identity-initial { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: rgba(152, 64, 31, .12); color: #753a22; font-size: .82rem; font-weight: 900; }
-  .personal-page__auth-status { margin: .7rem 0 0; color: #6d6259; font-size: .92rem; }
-  .personal-page__feed { margin-top: 1rem; }
-  .personal-page__feed > div:first-child { max-width: 62ch; margin-bottom: 1rem; }
-  .personal-page__feed h2 { margin: .15rem 0 .45rem; font-size: clamp(1.8rem, 3vw, 3rem); }
-  /* The same optimized row component owns desktop Event-detail and Personal
-     crop/equal-height behavior. Mobile deliberately returns to one large card
-     per row rather than forcing a three-column desktop packing solution. */
+  .personal-page__head {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    padding: clamp(1.4rem, 5vw, 4rem);
+    border: 1px solid rgba(55, 38, 27, .14);
+    border-radius: clamp(1.25rem, 3vw, 2rem);
+    background:
+      radial-gradient(circle at 82% 12%, rgba(55, 139, 129, .22), transparent 28%),
+      radial-gradient(circle at 96% 90%, rgba(233, 185, 77, .28), transparent 30%),
+      #fffaf3;
+  }
+  .personal-page__head::after {
+    content: "";
+    position: absolute;
+    inset: auto -5rem -8rem auto;
+    width: 18rem;
+    height: 18rem;
+    border: 1px solid rgba(23, 43, 43, .15);
+    border-radius: 50%;
+    box-shadow: 0 0 0 2.5rem rgba(23, 43, 43, .035), 0 0 0 5rem rgba(23, 43, 43, .025);
+    pointer-events: none;
+  }
+  .personal-page__head h1 { max-width: 13ch; margin: .15rem 0 .8rem; font-size: clamp(2.55rem, 7vw, 6rem); line-height: .93; letter-spacing: -.06em; text-wrap: balance; }
+  .personal-page__head > p:nth-of-type(2) { max-width: 62ch; font-size: clamp(1rem, 1.6vw, 1.22rem); line-height: 1.55; }
+  .personal-page__principles { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.25rem; }
+  .personal-page__principles span { padding: .45rem .7rem; border: 1px solid rgba(23, 43, 43, .18); border-radius: 999px; background: rgba(255, 255, 255, .72); color: #244846; font-size: .82rem; font-weight: 850; }
+  .personal-page__head :global(.focus-lab-badge) { position: relative; z-index: 1; margin-bottom: 1rem; }
+  .personal-page__focus-tools { display: grid; gap: .75rem; margin-top: 1rem; }
+  .personal-page__focus-tools[hidden] { display: none; }
+  .personal-page__focus-tools-note {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 1px solid rgba(55, 38, 27, .14);
+    border-radius: 1.25rem;
+    padding: .85rem 1rem;
+    background: #fffaf3;
+  }
+  .personal-page__focus-tools-note p { max-width: 62ch; margin: 0; color: #6d6259; font-size: .82rem; line-height: 1.45; }
+  @media (max-width: 700px) {
+    .personal-page__focus-tools-note { align-items: flex-start; flex-direction: column; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .personal-page__head { scroll-behavior: auto; }
+  }
 </style>
