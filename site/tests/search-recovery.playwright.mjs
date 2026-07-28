@@ -12,6 +12,7 @@ const buildDir = process.env.SEARCH_RECOVERY_BUILD_DIR
 const hasBuild = existsSync(join(buildDir, 'poisk', 'index.html'));
 const builtSearchHtml = hasBuild ? readFileSync(join(buildDir, 'poisk', 'index.html'), 'utf8') : '';
 const builtSupabaseUrl = builtSearchHtml.match(/\bdata-supabase-url="([^"]+)"/u)?.[1] || 'https://example.supabase.co';
+const builtBasePath = builtSearchHtml.match(/\bsrc="(\/[^"]*?)\/_astro\//u)?.[1] || '';
 const builtProjectRef = new URL(builtSupabaseUrl).hostname.split('.', 1)[0] || 'example';
 const builtCodeVerifierKey = `sb-${builtProjectRef}-auth-token-code-verifier`;
 const types = new Map([
@@ -24,7 +25,11 @@ const types = new Map([
 ]);
 
 function localFile(root, requestPath) {
-  const relative = decodeURIComponent(requestPath.split('?', 1)[0]).replace(/^\/+/u, '');
+  let pathname = decodeURIComponent(requestPath.split('?', 1)[0]);
+  if (builtBasePath && pathname.startsWith(`${builtBasePath}/`)) {
+    pathname = pathname.slice(builtBasePath.length);
+  }
+  const relative = pathname.replace(/^\/+/u, '');
   const candidate = normalize(join(root, relative));
   if (candidate !== root && !candidate.startsWith(`${root}${sep}`)) return null;
   return candidate.endsWith(sep) || !extname(candidate) ? join(candidate, 'index.html') : candidate;
@@ -138,7 +143,10 @@ test('authenticated Search recovers from missing headers and stalled streams', {
           const body = JSON.parse(String(init.body || '{}'));
           const accept = new Headers(init.headers).get('accept') || '';
           window.__r11SearchCalls.push({ query: body.query, accept, body });
-          if (body.query === 'заголовки не пришли' && accept.includes('application/x-ndjson')) {
+          if (
+            body.query === 'заголовки не пришли'
+            && window.__r11SearchCalls.filter((call) => call.query === body.query).length === 1
+          ) {
             return new Promise(() => {});
           }
           if (accept.includes('application/json')) {
@@ -202,8 +210,8 @@ test('authenticated Search recovers from missing headers and stalled streams', {
       const headerRescueCalls = await page.evaluate(() => (
         window.__r11SearchCalls.filter((call) => call.query === 'заголовки не пришли')
       ));
-      assert.equal(headerRescueCalls.length, 2, 'a header timeout receives exactly one JSON rescue');
-      assert.match(headerRescueCalls[0].accept, /application\/x-ndjson/u);
+      assert.equal(headerRescueCalls.length, 2, 'a JSON header timeout receives exactly one fast JSON retry');
+      assert.match(headerRescueCalls[0].accept, /application\/json/u);
       assert.match(headerRescueCalls[1].accept, /application\/json/u);
       assert.equal(headerRescueCalls[1].body.stream_rescue, true);
       assert.equal(headerRescueCalls[1].body.use_llm_verifier, false);
@@ -220,10 +228,13 @@ test('authenticated Search recovers from missing headers and stalled streams', {
       await input.fill('поиск энтером');
       await input.press('Enter');
       await page.waitForFunction(() => (
-        window.__r11SearchCalls.filter((call) => call.query === 'поиск энтером').length === 2
+        window.__r11SearchCalls.filter((call) => call.query === 'поиск энтером').length === 1
       ));
       assert.equal(await input.inputValue(), 'поиск энтером', 'Enter submits instead of inserting a newline');
 
+      await page.locator('[data-authorized-search]').evaluate((node) => {
+        node.dataset.searchTransport = 'ndjson';
+      });
       const cancellationsBeforeIdleRescue = await page.evaluate(() => window.__r11StreamCancelCount);
       await input.fill('поток замер');
       await form.evaluate((node) => node.requestSubmit());
@@ -243,6 +254,9 @@ test('authenticated Search recovers from missing headers and stalled streams', {
         await page.evaluate(() => window.__r11StreamCancelCount),
         cancellationsBeforeIdleRescue + 1,
       );
+      await page.locator('[data-authorized-search]').evaluate((node) => {
+        node.dataset.searchTransport = 'json';
+      });
 
       await input.fill('ответ тоже замер');
       await form.evaluate((node) => node.requestSubmit());
@@ -256,7 +270,7 @@ test('authenticated Search recovers from missing headers and stalled streams', {
       await input.fill('полный сбой');
       await form.evaluate((node) => node.requestSubmit());
       await page.waitForFunction(() => (
-        window.__r11SearchCalls.filter((call) => call.query === 'полный сбой').length === 2
+        window.__r11SearchCalls.filter((call) => call.query === 'полный сбой').length === 1
         && document.querySelector('[data-search-status]')?.getAttribute('role') === 'alert'
         && document.querySelector('[data-search-submit]')?.getAttribute('aria-busy') === 'false'
       ));
@@ -267,8 +281,8 @@ test('authenticated Search recovers from missing headers and stalled streams', {
       assert.equal(await progress.isHidden(), true);
       assert.equal(
         await page.evaluate(() => window.__r11SearchCalls.filter((call) => call.query === 'полный сбой').length),
-        2,
-        'full failure still attempts at most one rescue',
+        1,
+        'an HTTP provider failure is surfaced without a redundant transport retry',
       );
     } finally {
       await browser.close();

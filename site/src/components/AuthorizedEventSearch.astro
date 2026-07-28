@@ -8,10 +8,11 @@ const { compact = false, standalone = false, headingLevel = 'h2' } = Astro.props
 const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
 const supabaseKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 const yandexProvider = import.meta.env.PUBLIC_YANDEX_AUTH_PROVIDER || 'custom:yandex';
+const searchTransport = import.meta.env.PUBLIC_AUTHORIZED_SEARCH_TRANSPORT === 'ndjson' ? 'ndjson' : 'json';
 const enabled = Boolean(supabaseUrl && supabaseKey);
 const HeadingTag = headingLevel;
 ---
-<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
+<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-transport={searchTransport} data-supabase-url={supabaseUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
   <div class="authorized-search__head">
     <div class="authorized-search__copy">
       <p class="eyebrow">Умный поиск</p>
@@ -572,13 +573,20 @@ const HeadingTag = headingLevel;
       results.appendChild(heading);
     }
 
-    function appendEmptyExactState() {
+    function appendEmptyExactState(message = 'По вашему запросу ничего не найдено') {
       if (!results || results.querySelector('[data-search-empty-exact]')) return;
       const note = document.createElement('p');
       note.className = 'authorized-search__empty';
       note.dataset.searchEmptyExact = 'true';
-      note.textContent = 'По вашему запросу ничего не найдено';
+      note.textContent = message;
       results.appendChild(note);
+    }
+
+    function removeVisibleDiscoveryEndcap() {
+      if (!results || !fallbackStarted) return;
+      results.querySelectorAll('[data-search-section="discovery"], [data-search-phase="discovery"]').forEach((node) => node.remove());
+      results.querySelector('[data-search-empty-exact]')?.remove();
+      fallbackStarted = false;
     }
 
     function candidateEventId(item) {
@@ -794,6 +802,7 @@ const HeadingTag = headingLevel;
       }
       setResultContext(data);
 
+      if (append && items.length > 0) removeVisibleDiscoveryEndcap();
       if (!append && results.children.length === 0) appendSectionHeading('Результаты поиска', 'exact');
       insertCardHtml(items, pageOffset, 'final', pageOffset);
       lastResultEventIds.push(...items.map(candidateEventId).filter((id) => id != null));
@@ -807,17 +816,31 @@ const HeadingTag = headingLevel;
         }
       }
 
+      // A strict verifier can legitimately return no exact first-page matches
+      // while also returning useful discovery cards and another vector window.
+      // Do not leave that state as an empty heading plus a pagination button.
+      if (data?.has_more && lastResultEventIds.length === 0 && pendingFallbackItems.length > 0 && !fallbackStarted) {
+        appendEmptyExactState('Точных совпадений пока нет — показываем ближайшие варианты.');
+        appendSectionHeading('Подходящие варианты', 'discovery');
+        fallbackStarted = true;
+        insertCardHtml(pendingFallbackItems, pageOffset, 'discovery', pageOffset);
+      }
+
       // Exact results own pagination. Discovery and feedback are an endcap and
       // cannot appear while another exact page is still available.
       if (!data?.has_more) {
-        if (lastResultEventIds.length === 0) appendEmptyExactState();
+        if (lastResultEventIds.length === 0) {
+          appendEmptyExactState(pendingFallbackItems.length > 0
+            ? 'Точных совпадений не нашлось — показываем ближайшие варианты.'
+            : 'По вашему запросу ничего не найдено');
+        }
         appendFeedbackPrompt(currentQuery || input?.value || '');
         const exactIds = new Set(lastResultEventIds);
         const discoveryItems = pendingFallbackItems.filter((item) => !exactIds.has(candidateEventId(item)));
-        if (discoveryItems.length) {
+        if (discoveryItems.length && !fallbackStarted) {
           appendSectionHeading('Ещё можно посмотреть', 'discovery');
           fallbackStarted = true;
-          insertCardHtml(discoveryItems, pageOffset + items.length, 'final', pageOffset);
+          insertCardHtml(discoveryItems, pageOffset + items.length, 'discovery', pageOffset);
         }
       }
       results.hidden = !results.children.length;
@@ -895,7 +918,8 @@ const HeadingTag = headingLevel;
 
     async function invokeEventSearchJson(endpoint, body, session, reason = 'json_fallback', options = {}) {
       const { epoch = searchEpoch, signal } = options;
-      const fallbackBody = reason === 'stream_stalled' || reason === 'headers_stalled'
+      const rescued = reason === 'stream_stalled' || reason === 'headers_stalled' || reason === 'json_retry';
+      const fallbackBody = rescued
         ? { ...body, use_llm_verifier: false, stream_rescue: true }
         : body;
       const response = await fetchWithSearchHeadersTimeout(endpoint, {
@@ -911,14 +935,29 @@ const HeadingTag = headingLevel;
       if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
-      const rescued = reason === 'stream_stalled' || reason === 'headers_stalled';
       setSearchProgress(100, rescued ? 'Показал быстрые карточки' : 'Готово', { epoch, stage: 'result' });
       return { data: payload, error: null, rescued };
+    }
+
+    function isRetryableSearchTransportError(error) {
+      return error?.message === 'search_fetch_headers_timeout'
+        || error?.name === 'TypeError'
+        || /failed to fetch|networkerror|load failed/iu.test(String(error?.message || ''));
     }
 
     async function invokeEventSearch(body, session, options = {}) {
       const { epoch = searchEpoch, signal } = options;
       const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
+      if (root.dataset.searchTransport !== 'ndjson') {
+        try {
+          return await invokeEventSearchJson(endpoint, body, session, 'json_primary', { epoch, signal });
+        } catch (error) {
+          if (!isRetryableSearchTransportError(error) || signal?.aborted) throw error;
+          if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
+          setStatus('Сервер поиска не ответил. Повторяю запрос в быстром режиме…');
+          return invokeEventSearchJson(endpoint, body, session, 'json_retry', { epoch, signal });
+        }
+      }
       let response;
       try {
         response = await fetchWithSearchHeadersTimeout(endpoint, {
@@ -932,7 +971,7 @@ const HeadingTag = headingLevel;
           body: JSON.stringify(body),
         }, { signal });
       } catch (error) {
-        if (error?.message !== 'search_fetch_headers_timeout' || signal?.aborted) throw error;
+        if (!isRetryableSearchTransportError(error) || signal?.aborted) throw error;
         if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
         setStatus('Связь с поиском замедлилась. Переключаюсь на обычный ответ…');
         return invokeEventSearchJson(endpoint, body, session, 'headers_stalled', { epoch, signal });
@@ -1159,7 +1198,13 @@ const HeadingTag = headingLevel;
         if (quota && quota.hour_remaining != null) setStatus(`Осталось поисков: ${quota.hour_remaining} в этом часу. Окно обновится ${quota.hour_reset_at ? new Date(quota.hour_reset_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : 'через час'}.`);
         else if (quota && quota.day_remaining != null) setStatus(`Осталось поисков: ${quota.day_remaining} сегодня.`);
         else await refreshQuota();
-        if (items.length === 0 && fallbackItems.length === 0) setStatus('Ничего не нашлось. Попробуйте описать запрос иначе.');
+        if (items.length === 0 && fallbackItems.length === 0) {
+          setStatus(data?.has_more
+            ? 'На этой странице точных совпадений нет. Можно посмотреть следующую страницу.'
+            : 'Ничего не нашлось. Попробуйте описать запрос иначе.');
+        } else if (items.length === 0 && fallbackItems.length > 0) {
+          setStatus('Точных совпадений пока нет. Показываю ближайшие варианты.');
+        }
         if (results && results.children.length) setSkeletonLoading(false);
         if (window.applyFeedbackState) window.applyFeedbackState({ skipDiscoveryHydration: true });
       } catch (error) {
@@ -1168,8 +1213,8 @@ const HeadingTag = headingLevel;
           setStatus('Поиск занял слишком много времени. Поле уже снова доступно — попробуйте ещё раз.', 'error');
         } else if (controller.signal.aborted || error?.name === 'AbortError') {
           return;
-        } else if (error?.message === 'search_fetch_headers_timeout') {
-          setStatus('Поиск не открылся из-за нестабильной связи. Поле уже снова доступно — попробуйте ещё раз.', 'error');
+        } else if (isRetryableSearchTransportError(error)) {
+          setStatus('Не удалось связаться с сервером поиска. Поле уже снова доступно — попробуйте ещё раз.', 'error');
         } else if (vectorRendered && results?.children.length) {
           setStatus('Показал быстрые результаты по смыслу. Финальный ответ не пришёл, но найденные карточки остаются на экране.', 'info');
         } else {

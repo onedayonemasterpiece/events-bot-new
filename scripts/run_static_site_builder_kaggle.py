@@ -675,6 +675,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'public_personalization_supabase_url': args.public_personalization_supabase_url or None,
         'public_personalization_supabase_publishable_key': args.public_personalization_supabase_publishable_key or None,
         'public_yandex_auth_provider': args.public_yandex_auth_provider or 'custom:yandex',
+        'public_authorized_search_transport': getattr(args, 'public_authorized_search_transport', '') or 'json',
         'secret_candidate_artifact_research': bool(args.secret_candidate_artifact_research),
         'secret_candidate_require_authorized_search': bool(args.secret_candidate_require_authorized_search),
         'export_in_kaggle': bool(args.export_in_kaggle),
@@ -850,6 +851,16 @@ def main() -> int:
         '--public-yandex-auth-provider',
         default=first_env('STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER', 'PUBLIC_YANDEX_AUTH_PROVIDER', default='custom:yandex'),
         help='Supabase Auth provider id for Yandex OAuth in AuthorizedEventSearch.',
+    )
+    parser.add_argument(
+        '--public-authorized-search-transport',
+        choices=['json', 'ndjson'],
+        default=first_env(
+            'STATIC_SITE_PUBLIC_AUTHORIZED_SEARCH_TRANSPORT',
+            'PUBLIC_AUTHORIZED_SEARCH_TRANSPORT',
+            default='json',
+        ),
+        help='Browser transport for AuthorizedEventSearch; JSON is the mobile-safe default.',
     )
     parser.add_argument(
         '--secret-candidate-artifact-research',

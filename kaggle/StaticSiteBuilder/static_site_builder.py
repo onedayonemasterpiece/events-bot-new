@@ -567,12 +567,20 @@ def apply_public_authorized_search_env(env: dict[str, str], config: dict) -> Non
         or os.environ.get('PUBLIC_YANDEX_AUTH_PROVIDER', '').strip()
         or 'custom:yandex'
     )
+    search_transport = (
+        str(config.get('public_authorized_search_transport') or '').strip()
+        or os.environ.get('PUBLIC_AUTHORIZED_SEARCH_TRANSPORT', '').strip()
+        or 'json'
+    )
+    if search_transport not in {'json', 'ndjson'}:
+        raise RuntimeError('public_authorized_search_transport must be json or ndjson')
     if public_url:
         env['PUBLIC_PERSONALIZATION_SUPABASE_URL'] = public_url
     if public_key:
         env['PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'] = public_key
     if yandex_provider:
         env['PUBLIC_YANDEX_AUTH_PROVIDER'] = yandex_provider
+    env['PUBLIC_AUTHORIZED_SEARCH_TRANSPORT'] = search_transport
 
 
 def apply_public_interest_clubs_env(env: dict[str, str]) -> None:

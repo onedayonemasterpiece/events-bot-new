@@ -70,8 +70,8 @@ test('Search advertises the mobile search action and submits Enter through the n
 });
 
 test('initial streaming header timeout receives one bounded JSON rescue', () => {
-  assert.match(search, /error\?\.message !== 'search_fetch_headers_timeout'/u);
+  assert.match(search, /!isRetryableSearchTransportError\(error\)/u);
   assert.match(search, /invokeEventSearchJson\(endpoint, body, session, 'headers_stalled'/u);
-  assert.match(search, /reason === 'stream_stalled' \|\| reason === 'headers_stalled'/u);
+  assert.match(search, /reason === 'stream_stalled' \|\| reason === 'headers_stalled' \|\| reason === 'json_retry'/u);
   assert.match(search, /use_llm_verifier: false, stream_rescue: true/u);
 });
