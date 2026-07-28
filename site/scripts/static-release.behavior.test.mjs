@@ -117,6 +117,22 @@ test('secret-candidate robots policy overrides page-local noindex without losing
   assert.match(layout, /const robots = IS_SECRET_CANDIDATE\s*\?\s*'noindex,nofollow,noarchive,nosnippet'/u);
 });
 
+test('private focus routes add nosnippet only in secret-candidate mode', () => {
+  const routes = [
+    '../src/pages/fokus-gruppa/index.astro',
+    '../src/pages/fokus-gruppa/priglashenie/index.astro',
+    '../src/pages/fokus-gruppa/kollektsiya/index.astro',
+    '../src/pages/fokus-gruppa/zavershenie/index.astro',
+    '../src/pages/zakrytaya-afisha/index.astro',
+  ];
+  for (const path of routes) {
+    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+    assert.match(source, /IS_SECRET_CANDIDATE/u);
+    assert.match(source, /noindex,nofollow,noarchive,nosnippet/u);
+    assert.match(source, /<meta name="robots" content=\{robots\}/u);
+  }
+});
+
 test('production root-form proof preserves the private focus route family as noindex/noarchive/no-referrer', () => {
   const productionCheck = readFileSync(new URL('./check-production.mjs', import.meta.url), 'utf8');
   assert.match(productionCheck, /const focusPrivateRoute = file\.key === 'zakrytaya-afisha\/index\.html'/u);
@@ -135,7 +151,7 @@ test('private focus routes keep self-canonical URLs in root and candidate builds
   ];
   for (const [path, canonicalPath] of routes) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8');
-    assert.match(source, /import \{ absoluteUrl, withBase \}/u);
+    assert.match(source, /import \{[^}]*absoluteUrl[^}]*withBase[^}]*\}/u);
     assert.ok(
       source.includes(`<link rel="canonical" href={absoluteUrl('${canonicalPath}')} />`),
       `${path} must self-canonicalize through the active build base`,

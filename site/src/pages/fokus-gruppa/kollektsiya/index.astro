@@ -11,7 +11,7 @@ import {
   type FocusEggId,
   type FocusEggState,
 } from '../../../lib/focus-easter-eggs';
-import { absoluteUrl, withBase } from '../../../lib/events';
+import { absoluteUrl, IS_SECRET_CANDIDATE, withBase } from '../../../lib/events';
 import '../../../styles/design-system.css';
 
 const prototypeStates: Record<FocusEggId, FocusEggState> = {
@@ -32,6 +32,10 @@ const collectionProgress = getFocusEggCollectionProgress(
   FOCUS_EGG_DEFINITIONS.map(({ id }) => prototypeStates[id]),
 );
 const participationProgress = capFocusParticipation({ points: 18, categories: 4 });
+const robots = IS_SECRET_CANDIDATE
+  ? 'noindex,nofollow,noarchive,nosnippet'
+  : 'noindex,nofollow,noarchive';
+
 ---
 
 <!doctype html>
@@ -39,7 +43,7 @@ const participationProgress = capFocusParticipation({ points: 18, categories: 4 
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="robots" content={robots} />
     <meta name="referrer" content="no-referrer" />
     <link rel="canonical" href={absoluteUrl('/fokus-gruppa/kollektsiya/')} />
     <title>Коллекция пасхалок · фокус-группа</title>
