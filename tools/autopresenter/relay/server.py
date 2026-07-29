@@ -20,9 +20,12 @@ import zipfile
 
 from aiohttp import web
 
-ALLOWED_ACTIONS = frozenset({"run", "stop", "reset"})
+ALLOWED_ACTIONS = frozenset({"run", "stop", "reset", "shutdown"})
+ALLOWED_SCENARIOS = frozenset(
+    {"tomorrow-mobile", "tomorrow-rail-like", "weekend-amber-artifact"}
+)
 ALLOWED_STATUSES = frozenset(
-    {"idle", "running", "stopping", "completed", "error"}
+    {"idle", "running", "stopping", "completed", "error", "closed"}
 )
 MAX_LONG_POLL_MS = 25_000
 CONTROL_DIR = Path(__file__).with_name("control")
@@ -66,6 +69,7 @@ class Command:
     id: str
     sequence: int
     action: str
+    scenario: str | None
     issued_epoch: float
     expires_epoch: float
     acknowledgments: list[dict[str, Any]] = field(default_factory=list)
@@ -75,6 +79,7 @@ class Command:
             "id": self.id,
             "sequence": self.sequence,
             "action": self.action,
+            "scenario": self.scenario,
             "issued_at": utc_iso(self.issued_epoch),
             "expires_at": utc_iso(self.expires_epoch),
             "ttl_ms": max(0, round((self.expires_epoch - time.time()) * 1000)),
@@ -106,10 +111,19 @@ class Relay:
 
     def public_state(self) -> dict[str, Any]:
         connected = self._agent_connected()
+        terminally_closed = self._presentation_status == "closed"
         current = self._by_id.get(self._current_command_id or "")
         return {
-            "status": self._presentation_status if connected else "disconnected",
-            "detail": self._detail if connected else "Presenter agent is not connected",
+            "status": (
+                self._presentation_status
+                if connected or terminally_closed
+                else "disconnected"
+            ),
+            "detail": (
+                self._detail
+                if connected or terminally_closed
+                else "Presenter agent is not connected"
+            ),
             "agent": {
                 "connected": connected,
                 "id": self._agent_id,
@@ -123,9 +137,30 @@ class Relay:
             "last_sequence": self._next_sequence - 1,
         }
 
-    async def issue(self, action: str, requested_id: str | None) -> Command:
+    async def issue(
+        self, action: str, requested_id: str | None, scenario: Any = None
+    ) -> Command:
         if action not in ALLOWED_ACTIONS:
-            raise ApiError(400, "invalid_action", "action must be run, stop, or reset")
+            raise ApiError(
+                400,
+                "invalid_action",
+                "action must be run, stop, reset, or shutdown",
+            )
+        normalized_scenario: str | None = None
+        if action == "run":
+            normalized_scenario = str(scenario or "tomorrow-mobile").strip()
+            if normalized_scenario not in ALLOWED_SCENARIOS:
+                raise ApiError(
+                    400,
+                    "invalid_scenario",
+                    "scenario must be tomorrow-mobile, tomorrow-rail-like, or weekend-amber-artifact",
+                )
+        elif scenario not in (None, ""):
+            raise ApiError(
+                400,
+                "unexpected_scenario",
+                "scenario is only accepted for run commands",
+            )
         command_id = requested_id or str(uuid4())
         if not isinstance(command_id, str) or not command_id.strip() or len(command_id) > 128:
             raise ApiError(400, "invalid_command_id", "command_id must be a non-empty string up to 128 characters")
@@ -134,8 +169,15 @@ class Relay:
         async with self._condition:
             existing = self._by_id.get(command_id)
             if existing is not None:
-                if existing.action != action:
-                    raise ApiError(409, "idempotency_conflict", "command_id was already used for another action")
+                if (
+                    existing.action != action
+                    or existing.scenario != normalized_scenario
+                ):
+                    raise ApiError(
+                        409,
+                        "idempotency_conflict",
+                        "command_id was already used for another command",
+                    )
                 return existing
 
             now = time.time()
@@ -143,6 +185,7 @@ class Relay:
                 id=command_id,
                 sequence=self._next_sequence,
                 action=action,
+                scenario=normalized_scenario,
                 issued_epoch=now,
                 expires_epoch=now + self.command_ttl_ms / 1000,
             )
@@ -152,10 +195,14 @@ class Relay:
             self._current_command_id = command.id
             if action == "run":
                 self._presentation_status = "running"
-                self._detail = "Scenario tomorrow-mobile queued"
-            elif action == "stop":
+                self._detail = f"Scenario {normalized_scenario} queued"
+            elif action in {"stop", "shutdown"}:
                 self._presentation_status = "stopping"
-                self._detail = "Stop requested"
+                self._detail = (
+                    "Presentation shutdown requested"
+                    if action == "shutdown"
+                    else "Stop requested"
+                )
             else:
                 self._presentation_status = "idle"
                 self._detail = "Reset requested"
@@ -339,7 +386,9 @@ async def get_state(request: web.Request) -> web.Response:
 
 async def post_command(request: web.Request) -> web.Response:
     body = await json_body(request)
-    command = await relay_for(request).issue(body.get("action"), body.get("command_id"))
+    command = await relay_for(request).issue(
+        body.get("action"), body.get("command_id"), body.get("scenario")
+    )
     return web.json_response(
         {"command": command.public(), "state": relay_for(request).public_state()},
         status=202,
@@ -497,6 +546,7 @@ def windows_test_archive(request: web.Request) -> bytes:
         FIRST_TEST_DIR / "README-FIRST-TEST.txt": "README-FIRST-TEST.txt",
         AGENT_DIR / "agent.mjs": "agent/agent.mjs",
         AGENT_DIR / "abort-utils.mjs": "agent/abort-utils.mjs",
+        AGENT_DIR / "pacing.mjs": "agent/pacing.mjs",
         AGENT_DIR / "scenario-contract.mjs": "agent/scenario-contract.mjs",
         AGENT_DIR / "package.json": "agent/package.json",
         AGENT_DIR / "package-lock.json": "agent/package-lock.json",

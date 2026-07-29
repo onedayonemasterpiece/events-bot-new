@@ -11,6 +11,8 @@ try {
         "test-config.json",
         "agent\agent.mjs",
         "agent\abort-utils.mjs",
+        "agent\pacing.mjs",
+        "agent\scenario-contract.mjs",
         "agent\package.json",
         "agent\package-lock.json"
     )

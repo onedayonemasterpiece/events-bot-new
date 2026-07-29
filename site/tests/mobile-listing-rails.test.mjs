@@ -92,6 +92,24 @@ test('accepted donor edge gestures and hollow-to-filled system heart states are 
   assert.match(surface, /const reduced = matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches/u);
 });
 
+test('personalization consent remains tappable above the fixed mobile navigation', async () => {
+  const [layout, bottomNav] = await Promise.all([
+    read('src/layouts/EventLayout.astro'),
+    read('src/components/MobileBottomNav.astro'),
+  ]);
+  const consentZ = Number(
+    layout.match(/\.personalization-consent \{[^}]*z-index:\s*(\d+)/u)?.[1],
+  );
+  const navigationZ = Number(
+    bottomNav.match(/\.mobile-bottom-nav \{[\s\S]*?z-index:\s*(\d+)/u)?.[1],
+  );
+  assert.ok(Number.isFinite(consentZ) && Number.isFinite(navigationZ));
+  assert.ok(
+    consentZ > navigationZ,
+    `consent z-index ${consentZ} must stay above mobile navigation ${navigationZ}`,
+  );
+});
+
 test('negative swipe consent is device-local, fail-closed and granted only after the canonical action commits', async () => {
   const surface = await read('src/components/listings/MobileListingRailSurface.astro');
   assert.match(surface, /const negativeSwipeConsentKey = 'ke_rail_negative_swipe_consent_v1'/u);

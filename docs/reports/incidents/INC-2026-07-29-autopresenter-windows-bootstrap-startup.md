@@ -53,6 +53,13 @@ visibility and therefore missed the defect.
   event rail and detail description with zero bytes on agent stderr; separate
   Reset/Run/Stop lifecycle passed. Incident returned to monitoring for the
   target-Windows retry.
+- 2026-07-29 10:20 UTC — owner confirmed the corrected target-Windows run
+  works and no longer crashes. Reuse of the already populated cache by a later
+  compatible ZIP remains a separate empirical closure check.
+- 2026-07-29 12:00 UTC — the next owner-test candidate added three explicit
+  scenes, slower pacing, a PWA control and terminal shutdown without changing
+  the pinned Windows dependency/cache contract; full local regression and a
+  refreshed public exact-HEAD test were started.
 
 ## Root Cause
 
@@ -106,6 +113,8 @@ visibility and therefore missed the defect.
 - agent and relay suites pass;
 - refreshed ZIP contains the corrected bootstrap and dependency-aware agent;
 - public exact-HEAD Run → Completed and Reset/Run/Stop lifecycle pass;
+- all three fixed owner-test scenarios complete through their real UI state,
+  and confirmed Shutdown closes the browser/agent while preserving `closed`;
 - `tools/autopresenter/m0/**` remains unchanged;
 - owner Windows smoke starts a freshly extracted ZIP without the reported
   method error, then confirms a later compatible ZIP reuses cached Node,
@@ -142,8 +151,10 @@ visibility and therefore missed the defect.
 
 ## Follow-up Actions
 
-- [ ] Owner: run the newly published ZIP on the target Windows laptop and
-  return the successful first-start/cache-reuse evidence.
+- [x] Owner: confirm the corrected ZIP starts and completes on the target
+  Windows laptop without the reported crash.
+- [ ] Owner: confirm that a later compatible ZIP reuses cached Node,
+  dependencies and browser without downloading them again.
 - [ ] Release owner: merge the delivered source into `origin/main`; incident
   closure is blocked until the deployed fix is reachable from main.
 
@@ -164,8 +175,8 @@ visibility and therefore missed the defect.
   completed through the event rail on event `5296`, agent stderr remained
   empty, and the separate stop lifecycle ended at
   `idle / agent confirmed stopped`
-- remaining closure blockers: target-Windows successful start/cache reuse
-  evidence and reachability from `origin/main`
+- remaining closure blockers: target-Windows cache-reuse evidence and
+  reachability from `origin/main`
 
 ## Prevention
 

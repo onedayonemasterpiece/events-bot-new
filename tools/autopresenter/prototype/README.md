@@ -1,8 +1,17 @@
 # Visible Autopresenter prototype
 
 This is the deliberately small M1 + M2-lite development slice. It runs exactly
-one scenario, `tomorrow-mobile`, and does not modify or replace the M0
-compatibility harness.
+three fixed scenarios and does not modify or replace the M0 compatibility
+harness:
+
+- `tomorrow-mobile` — opens Tomorrow, reveals a rail description and event
+  detail;
+- `tomorrow-rail-like` — reveals a concrete event and continues the real rail
+  gesture until its native like state is stored;
+- `weekend-amber-artifact` — follows the mobile menu to Weekend and collects
+  the existing amber artifact.
+
+There is intentionally no generic scene DSL or editor.
 
 ## Run
 
@@ -18,11 +27,10 @@ Open the printed control URL:
 http://127.0.0.1:8787/control/
 ```
 
-Press **Запустить «Завтра»**. A headed fullscreen stage opens the real site in
-an enlarged mobile frame. The scenario shows a tap circle (never a mouse
-cursor), opens `/zavtra/`, horizontally reveals one concrete event's
-**О событии** digest, opens its detail page, and dwells on the real description
-before reporting completion.
+Choose one of the three scenario buttons. A headed fullscreen stage opens the
+real site in an enlarged mobile frame. Every scenario shows tap circles and
+swipe trails (never a mouse cursor), uses visible natural scrolling and waits
+for the interface to settle before the next action.
 
 The first run installs the lockfile-pinned Node dependencies, the pinned
 Playwright-managed browser and a small local Python environment if `aiohttp` is
@@ -31,7 +39,8 @@ not already available. Later launches reuse them. Set
 
 ### Controls
 
-- phone/web control: Run, Stop, Reset;
+- phone/web control: three Run buttons, Stop, Reset and confirmed
+  **Закрыть презентацию**;
 - local stage: `Space` or `Right Arrow` Run, `Esc` Stop, `R` Reset, `F` fullscreen;
 - `Ctrl+C` in the launcher stops site, relay, agent and browser.
 
@@ -51,8 +60,15 @@ DEMONSTRATOR: https://kenigevents-autopresenter.fly.dev/demonstrator/#token=<sec
 
 Open `DEMONSTRATOR` on the Windows x64 laptop, download and extract the ZIP,
 then double-click `START-DEMONSTRATOR.cmd`. Open `PHONE` on a phone over mobile
-Internet and press **Запустить «Завтра»**. The laptop needs only outbound HTTPS;
-the phone and laptop do not share a LAN.
+Internet and choose a scenario. The control can be installed as the PWA
+**«Пульт презентации»** (short name **«Пульт»**). Its access survives an
+installed-app relaunch on the same origin and can be removed explicitly with
+**«Сбросить доступ на этом устройстве»**. The laptop needs only outbound
+HTTPS; the phone and laptop do not share a LAN.
+
+After testing, **«Закрыть презентацию»** asks for confirmation, closes the
+fullscreen browser and terminates the Windows agent. A new test then requires
+starting `START-DEMONSTRATOR.cmd` again.
 
 The first successful start downloads portable Node.js, lockfile-pinned
 dependencies and the pinned Playwright-managed browser into the persistent

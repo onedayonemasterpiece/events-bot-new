@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Fixed Autopresenter owner-test readiness so horizontally offscreen lazy media
+  does not block a mobile scene, and raised the existing personalization
+  consent above the fixed mobile navigation so its real visible confirmation
+  is not intercepted.
 - Fixed the Windows Autopresenter first-test startup failure caused by
   non-public `Add-Type` console methods. Console-mode setup is now best-effort,
   while versioned Node, npm dependencies and Playwright browser binaries live
@@ -24,6 +28,14 @@
 
 ### Added
 
+- Added the installable Autopresenter control PWA «Пульт презентации»
+  (`short_name: Пульт`) with device-scoped relaunch authorization, explicit
+  access reset, three fixed scenario selectors, and the confirmed
+  «Закрыть презентацию» command that terminates the browser and Windows agent.
+- Added two explicit Autopresenter owner-test scenes alongside
+  `tomorrow-mobile`: a real event-rail pull-to-like flow with persisted UI
+  verification and a mobile-menu Weekend flow that finds, collects and opens
+  the existing amber artifact. No generic scenario DSL was introduced.
 - Added the Autopresenter owner first-test Internet path: a separate
   single-instance HTTPS relay with distinct control/agent bearer tokens,
   fragment-keyed phone and Windows download pages, an immutable hosted stage,
@@ -37,6 +49,12 @@
   phone control, local emergency keys, one-command launcher and reviewed
   1920×1080 PNG/MP4 smoke evidence. Windows 10 M3/public-demo gates remain
   blocked by empirical M0.
+
+### Changed
+
+- Slowed Autopresenter scene pacing with bounded readiness/settle waits,
+  visible human-like wheel and drag trajectories, and deliberate dwell so the
+  real mobile interface finishes loading and scrolling before the next action.
 - Added the Autopresenter M0 operator/evidence contract for two exact hermetic
   Windows 10 x64 candidates: each must complete 20 full cold loopback-fixture
   cycles (10 fresh + 10 persistent profiles) followed by a separate 5/5 live

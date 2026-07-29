@@ -15,7 +15,7 @@ from aiohttp.test_utils import TestClient, TestServer
 RELAY_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RELAY_DIR))
 
-from server import create_app  # noqa: E402
+from server import RELAY_KEY, create_app  # noqa: E402
 
 
 class RelayApiTests(unittest.IsolatedAsyncioTestCase):
@@ -37,10 +37,13 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         self.assertIn("<title>Пульт презентации</title>", text)
         self.assertIn('rel="manifest" href="/control/manifest.webmanifest"', text)
-        self.assertIn("Запустить «Завтра»", text)
+        self.assertIn('data-scenario="tomorrow-mobile"', text)
+        self.assertIn('data-scenario="tomorrow-rail-like"', text)
+        self.assertIn('data-scenario="weekend-amber-artifact"', text)
         self.assertIn(">Стоп<", text)
         self.assertIn(">Сброс<", text)
-        self.assertNotIn("Выключить", text)
+        self.assertIn(">Закрыть презентацию<", text)
+        self.assertIn("window.confirm(", text)
         self.assertIn("Сбросить доступ на этом устройстве", text)
 
         response, payload = await self.json("GET", "/api/state")
@@ -61,6 +64,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second_response.status, 202)
         self.assertEqual(first["command"]["sequence"], 1)
         self.assertEqual(second["command"]["sequence"], 1)
+        self.assertEqual(first["command"]["scenario"], "tomorrow-mobile")
         self.assertEqual(first["state"]["status"], "running")
 
         response, payload = await self.json(
@@ -68,6 +72,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response.status, 200)
         self.assertEqual(payload["command"]["action"], "run")
+        self.assertEqual(payload["command"]["scenario"], "tomorrow-mobile")
 
         response, payload = await self.json(
             "POST",
@@ -105,6 +110,79 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response.status, 409)
         self.assertEqual(payload["error"], "sequence_mismatch")
+
+    async def test_explicit_scenario_allowlist_and_shutdown_terminal_state(self):
+        await self.json(
+            "POST",
+            "/api/state/agent",
+            json={"agent_id": "agent-one", "status": "idle"},
+        )
+        response, payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={
+                "action": "run",
+                "scenario": "tomorrow-rail-like",
+                "command_id": "rail-like",
+            },
+        )
+        self.assertEqual(response.status, 202)
+        self.assertEqual(payload["command"]["scenario"], "tomorrow-rail-like")
+
+        response, payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={
+                "action": "run",
+                "scenario": "made-up",
+                "command_id": "invalid-scenario",
+            },
+        )
+        self.assertEqual(response.status, 400)
+        self.assertEqual(payload["error"], "invalid_scenario")
+
+        response, payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={
+                "action": "shutdown",
+                "scenario": "tomorrow-mobile",
+                "command_id": "bad-shutdown",
+            },
+        )
+        self.assertEqual(response.status, 400)
+        self.assertEqual(payload["error"], "unexpected_scenario")
+
+        response, payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={"action": "shutdown", "command_id": "close-all"},
+        )
+        self.assertEqual(response.status, 202)
+        self.assertEqual(payload["command"]["action"], "shutdown")
+        self.assertIsNone(payload["command"]["scenario"])
+        self.assertEqual(payload["state"]["status"], "stopping")
+
+        response, payload = await self.json(
+            "POST",
+            "/api/commands/close-all/ack",
+            json={
+                "agent_id": "agent-one",
+                "sequence": 2,
+                "status": "closed",
+                "detail": "presentation closed; browser and agent stopped",
+            },
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["state"]["status"], "closed")
+
+        relay = self.client.server.app[RELAY_KEY]
+        relay._agent_last_seen_monotonic = 0
+        response, payload = await self.json("GET", "/api/state")
+        self.assertEqual(response.status, 200)
+        self.assertFalse(payload["state"]["agent"]["connected"])
+        self.assertEqual(payload["state"]["status"], "closed")
+        self.assertIn("browser and agent stopped", payload["state"]["detail"])
 
     async def test_expired_command_is_not_delivered(self):
         await self.json("POST", "/api/commands", json={"action": "reset", "command_id": "short"})
@@ -204,6 +282,7 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("SELF-TEST.cmd", names)
             self.assertIn("agent/agent.mjs", names)
             self.assertIn("agent/abort-utils.mjs", names)
+            self.assertIn("agent/pacing.mjs", names)
             self.assertIn("agent/scenario-contract.mjs", names)
             self.assertTrue(
                 all(info.date_time == (2025, 1, 1, 0, 0, 0) for info in archive.infolist())
@@ -218,6 +297,14 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(
                 '"KenigEvents\\Autopresenter\\cache-v1"',
                 bootstrap,
+            )
+            self.assertIn(
+                'Require-File (Join-Path $AgentDir "pacing.mjs")',
+                bootstrap,
+            )
+            self.assertIn(
+                '"agent\\pacing.mjs"',
+                archive.read("self-test.ps1").decode("utf-8"),
             )
             config = json.loads(archive.read("test-config.json"))
         self.assertEqual(config["relay_url"], "https://presenter.example")

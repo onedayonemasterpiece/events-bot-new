@@ -1,6 +1,6 @@
 # Автопрезентатор static-сайта
 
-- **Статус:** `m0_implementation_accepted + internet_first_test_candidate`;
+- **Статус:** `m0_implementation_accepted + three_scene_owner_test_candidate`;
   фактический M0-прогон на целевом ноутбуке ещё не выполнен.
 - **Implementation gate:** M0 empirical и visible prototype идут параллельными
   непересекающимися треками.
@@ -15,10 +15,10 @@
 
 M0 продолжает отдельно доказывать exact portable-связку на целевой Windows 10:
 для каждого кандидата нужны 20/20 холодных loopback-циклов и 5/5 live smoke.
-Параллельно доступен узкий dev vertical slice: fullscreen stage 1920×1080,
-реальный same-origin сайт в увеличенном mobile iframe, один
-`tomorrow-mobile`, настоящие Playwright click/drag и минимальный
-`aiohttp`-пульт Run/Stop/Reset.
+Параллельно доступен узкий owner-test vertical slice: fullscreen stage
+1920×1080, реальный same-origin сайт в увеличенном mobile iframe, три
+фиксированных сценария, настоящие Playwright click/drag/wheel и минимальный
+`aiohttp`-пульт Run/Stop/Reset/Shutdown.
 Этот прототип ускоряет product learning, но не является M0 evidence,
 portable release или разрешением публичного показа.
 
@@ -28,6 +28,10 @@ portable release или разрешением публичного показа
 `kenigevents-autopresenter.fly.dev`, а не loopback/LAN-пульт:
 
 - телефон открывает защищённый `/control/#token=...`;
+- control является устанавливаемым PWA «Пульт презентации» (`short_name`:
+  «Пульт»); разрешение сохраняется только в origin-scoped storage этого
+  устройства, переживает перезапуск установленного PWA и может быть явно
+  удалено кнопкой «Сбросить доступ на этом устройстве»;
 - Windows-агент только исходящими HTTPS long-poll/status запросами подключается
   к тому же relay;
 - control token и agent token различаются; fragment телефона не попадает в
@@ -36,6 +40,11 @@ portable release или разрешением публичного показа
   `START-DEMONSTRATOR.cmd`;
 - сцена и review-сборка сайта обслуживаются тем же immutable test deployment,
   поэтому phone и laptop не обязаны находиться в одной сети.
+
+Service worker кэширует только публичный control shell. Token, API-ответы,
+страницы demonstrator/download и диагностические данные не попадают в PWA
+cache. Кнопка «Закрыть презентацию» требует подтверждения, закрывает browser,
+завершает Windows-агент и оставляет на пульте устойчивый статус `closed`.
 
 Первый успешный Windows-запуск выполняет полностью автоматический online
 bootstrap зафиксированных Node/npm и Playwright-managed browser без admin
@@ -59,9 +68,9 @@ native output работают в UTF-8. Для headed owner test устанав
 
 ## Продуктовая граница
 
-### Первый видимый vertical slice
+### Три фиксированных owner-test сценария
 
-Один сценарий `tomorrow-mobile`:
+`tomorrow-mobile`:
 
 1. открывает служебный noindex stage с настоящей главной страницей в iframe;
 2. находит видимый `[data-presenter-id="nav-tomorrow"]`;
@@ -71,8 +80,28 @@ native output работают в UTF-8. Для headed owner test устанав
    листает её к блоку «О событии» и показывает swipe trail;
 6. удерживает описание в кадре, открывает detail выбранного события и
    прокручивает к настоящему полному описанию;
-7. только после description dwell подтверждает `completed` телефону; Stop и
-   Reset обрабатываются параллельным polling.
+7. только после description dwell подтверждает `completed` телефону.
+
+`tomorrow-rail-like`:
+
+1. тем же видимым путём открывает «Завтра» и ждёт реальной готовности страницы;
+2. естественной вертикальной прокруткой подводит нужную карточку в кадр;
+3. горизонтальным rail-жестом показывает событие, затем продолжает движение
+   влево до штатного pull-to-like;
+4. подтверждает результат только по настоящему UI-состоянию лайка и его
+   сохранению после reload.
+
+`weekend-amber-artifact`:
+
+1. открывает mobile-меню и настоящим переходом выбирает «Выходные»;
+2. ждёт загрузки `/vyhodnye/` и детерминированного amber-artifact marker;
+3. естественно прокручивает страницу, собирает «Янтарного космонавта» и
+   проверяет настоящее persisted/ARIA-состояние;
+4. повторным настоящим действием открывает карточку артефакта.
+
+Между действиями сценарии используют bounded readiness/settle checkpoints,
+видимые wheel/drag-траектории и dwell, а не мгновенный прыжок к найденному
+компоненту. Stop и Reset обрабатываются параллельным polling.
 
 Mobile-контракт скрывает системный cursor и показывает только tap/swipe
 affordances. Отдельный desktop-контракт, когда появится desktop-сценарий,
@@ -81,16 +110,16 @@ affordances. Отдельный desktop-контракт, когда появи�
 ### Два непересекающихся трека
 
 M0 остаётся только compatibility experiment и не переписывается ради прототипа.
-Visible prototype работает только с stage, agent, relay, control UI и одним
-сценарием. Он может разрабатываться и демонстрироваться владельцу продукта на
-поддерживаемой dev-ОС до M0 PASS.
+Visible prototype работает только с stage, agent, relay, control PWA и тремя
+явными сценариями. Он может разрабатываться и демонстрироваться владельцу
+продукта на поддерживаемой dev-ОС до M0 PASS.
 
 До M0 PASS по-прежнему запрещены:
 
 - финальную portable-сборку и backup-video pipeline;
 - desktop-сцены;
 - typing, QR/image, инфографика и key hints;
-- несколько сценариев и универсальный DSL;
+- универсальный DSL, произвольные пользовательские сцены и редактор сценариев;
 - `.exe`, Electron, Socket.IO, Redis, отдельная очередь/БД;
 - AI-планирование live-сценария;
 - визуальный редактор и multi-tenant service.

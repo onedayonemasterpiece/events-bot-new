@@ -27,6 +27,10 @@
 - The integrator owns the small relay protocol bridge that carries one of the
   three explicit scenario IDs from the PWA to the agent; this remains a fixed
   allowlist and is not a scenario DSL.
+- Local live E2E found the existing personalization consent below the fixed
+  mobile navigation (`z-index: 30` versus `40`). The integrator owns the narrow
+  source/test correction because a real visible consent tap is part of R03;
+  no feedback state is forced by the presenter.
 
 ## Lane status
 
@@ -36,5 +40,26 @@
 | like_discovery | support R03 | completed | read-only | native edge pull-to-like and durable acceptance mapped |
 | pacing_discovery | support R02 | completed | read-only | readiness, natural scroll and bounded timing contract mapped |
 | pwa_control | R01 | completed | `fa80be39` | 12 relay/PWA tests and 2 behavioral relaunch tests passed |
-| scenario_engine | R02–R04 | in progress | pending | worker active after discovery |
-| integration_release | R05 | planned | pending | pending |
+| scenario_engine | R02–R04 | completed | `55eccd11` (`5c5dc2d6` implementation) | 17 agent tests, real local runs for all three scenarios, persisted like/artifact assertions |
+| integration_release | R05 | in progress | integration worktree | confirmed shutdown reached durable `closed` and the agent exited 0; public exact-HEAD release pending |
+
+## Local integration evidence
+
+- Full immutable Astro preview built **465 pages** with
+  `PUBLIC_SITE_MODE=preview`,
+  `PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH=tail`, and
+  `PUBLIC_PREVIEW_BUILD_ID=autopresenter-54`.
+- `tomorrow-mobile` completed on real event `5296` through rail digest and full
+  description.
+- `tomorrow-rail-like` changed the native persisted like count from 4 to 5 and
+  retained it after reload.
+- `weekend-amber-artifact` collected deterministic event `6591`, retained the
+  storage/ARIA state after reload, and opened exactly one detail dialog.
+- Confirmed Shutdown produced durable relay state `closed`, closed the browser,
+  and the agent process exited with code 0 after `remote-command`.
+- Regression suites: agent 17/17, relay 13/13, PWA relaunch 2/2, targeted site
+  contracts 16/16; syntax, `git diff --check`, and unchanged
+  `tools/autopresenter/m0/**` checks passed.
+- Bounded evidence is stored under
+  `artifacts/codex/autopresenter-pwa-three-scenes/` and is intentionally not
+  committed.

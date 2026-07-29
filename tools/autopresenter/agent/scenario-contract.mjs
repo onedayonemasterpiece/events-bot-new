@@ -27,7 +27,7 @@ export const TOMORROW_RAIL_LIKE_CONTRACT = Object.freeze({
 export const WEEKEND_AMBER_ARTIFACT_CONTRACT = Object.freeze({
   id: "weekend-amber-artifact",
   surface: "mobile",
-  snapshotEventId: 7014,
+  snapshotEventId: 6591,
   completion: "artifact-collected-and-detail-dialog-visible-after-reload",
 });
 

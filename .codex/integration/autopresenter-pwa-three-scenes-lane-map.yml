@@ -110,7 +110,7 @@ lanes:
     expected_output: committed three-scenario agent with natural scroll/settle contracts and targeted tests
     verification_scope: full_local
     effort: high
-    status: in_progress
+    status: completed
   - id: integration_release
     role: merge_reviewer
     requirement_ids: [R05]
@@ -121,6 +121,8 @@ lanes:
     worktree: /home/dev/projects/events-bot-new-autopresenter-pwa-scenes
     writable_files:
       - tools/autopresenter/**
+      - site/src/layouts/EventLayout.astro
+      - site/tests/mobile-listing-rails.test.mjs
       - docs/features/static-site-pages/auto-present/README.md
       - docs/reports/incidents/INC-2026-07-29-autopresenter-windows-bootstrap-startup.md
       - CHANGELOG.md
@@ -130,4 +132,4 @@ lanes:
     expected_output: deployed five-requirement owner-test update with exact-HEAD evidence
     verification_scope: full_local
     effort: high
-    status: planned
+    status: in_progress

@@ -68,6 +68,7 @@
     #status[data-status="running"]::before { background: #8e9cff; box-shadow: 0 0 0 4px rgba(142,156,255,.14); animation: pulse 1.2s infinite; }
     #status[data-status="stopping"]::before { background: #ffc65e; }
     #status[data-status="error"]::before { background: #ff6d81; }
+    #status[data-status="closed"]::before { background: #77829f; box-shadow: none; }
     #detail { min-height: 42px; margin: 14px 0 18px; color: #c6cfea; font-size: .9rem; line-height: 1.45; }
     .controls { display: grid; gap: 10px; }
     button {
@@ -95,7 +96,40 @@
       box-shadow: 0 10px 28px rgba(92, 228, 196, .15);
     }
     .primary:hover { border-color: transparent; background: linear-gradient(135deg, #d4d9ff, #83f6da); }
+    .scenario {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+    }
+    .scenario span:first-child {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 9px;
+      background: rgba(9, 15, 31, .2);
+      font-size: .76rem;
+    }
+    .scenario small {
+      display: block;
+      margin-top: 3px;
+      opacity: .66;
+      font-size: .72rem;
+      font-weight: 560;
+    }
     .secondary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .danger {
+      margin-top: 8px;
+      border-color: rgba(255, 109, 129, .42);
+      color: #ffb6c1;
+      background: rgba(255, 75, 103, .08);
+    }
+    .danger:hover {
+      border-color: rgba(255, 132, 150, .8);
+      background: rgba(255, 75, 103, .15);
+    }
     .meta { margin: 14px 2px 0; color: #7381a9; font-size: .72rem; text-align: center; }
     .download-link {
       display: block;
@@ -128,7 +162,7 @@
   <main>
     <p class="eyebrow">Kenig Events · Live control</p>
     <h1>Пульт<br>презентации</h1>
-    <p class="lede">Один сценарий. Один настоящий клик. Без лишней магии.</p>
+    <p class="lede">Три коротких сценария. Настоящие тапы и жесты. Без лишней магии.</p>
     <section class="panel" aria-labelledby="control-title">
       <div class="state-row">
         <span class="state-label" id="control-title">Статус агента</span>
@@ -136,11 +170,23 @@
       </div>
       <p id="detail">Подключаемся к relay…</p>
       <div class="controls">
-        <button class="primary" type="button" data-action="run">Запустить «Завтра»</button>
+        <button class="primary scenario" type="button" data-action="run" data-scenario="tomorrow-mobile">
+          <span>01</span>
+          <span>Событие завтра<small>от списка к полному описанию</small></span>
+        </button>
+        <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-rail-like">
+          <span>02</span>
+          <span>Лайк через rail<small>дотянуть событие влево и лайкнуть</small></span>
+        </button>
+        <button class="scenario" type="button" data-action="run" data-scenario="weekend-amber-artifact">
+          <span>03</span>
+          <span>Найти артефакт<small>меню, выходные и Янтарный космонавт</small></span>
+        </button>
         <div class="secondary-row">
           <button type="button" data-action="stop">Стоп</button>
           <button type="button" data-action="reset">Сброс</button>
         </div>
+        <button class="danger" type="button" data-action="shutdown">Закрыть презентацию</button>
       </div>
       <a class="download-link" id="demonstrator-link" href="/demonstrator/">Скачать демонстратор для Windows</a>
       <button class="access-reset" id="forget-access" type="button">Сбросить доступ на этом устройстве</button>
@@ -165,6 +211,7 @@
       stopping: 'Останавливается',
       completed: 'Завершено',
       error: 'Ошибка',
+      closed: 'Закрыто',
     };
     const fragment = new URLSearchParams(location.hash.slice(1));
     const fragmentToken = fragment.get('token');
@@ -211,15 +258,23 @@
       }
     }
 
-    async function issue(action) {
+    async function issue(action, scenario = '') {
       if (posting) return;
+      if (
+        action === 'shutdown'
+        && !window.confirm('Закрыть презентацию полностью? Браузер и программа на ноутбуке завершат работу.')
+      ) {
+        return;
+      }
       posting = true;
       buttons.forEach(button => button.disabled = true);
       try {
+        const command = {action, command_id: crypto.randomUUID()};
+        if (action === 'run') command.scenario = scenario;
         const response = await fetch('/api/commands', {
           method: 'POST',
           headers: authHeaders({'Content-Type': 'application/json'}),
-          body: JSON.stringify({action, command_id: crypto.randomUUID()})
+          body: JSON.stringify(command)
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.message || `HTTP ${response.status}`);
@@ -232,7 +287,9 @@
       }
     }
 
-    buttons.forEach(button => button.addEventListener('click', () => issue(button.dataset.action)));
+    buttons.forEach(button => button.addEventListener('click', () => {
+      issue(button.dataset.action, button.dataset.scenario || '');
+    }));
     forgetAccessButton.addEventListener('click', () => {
       accessStorage.forget(sessionStorage, localStorage, reportStorageError);
       location.replace('/control/');

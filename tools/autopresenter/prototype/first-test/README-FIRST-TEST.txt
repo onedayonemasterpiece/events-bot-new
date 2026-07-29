@@ -7,7 +7,9 @@ WHAT TO CLICK
 2. Double-click START-DEMONSTRATOR.cmd.
 3. Wait until the full-screen presentation window opens.
 4. On the phone, open the separate PHONE link over mobile Internet.
-5. Press "Запустить «Завтра»".
+5. Choose one of the three scenarios on the phone.
+6. When finished, press "Закрыть презентацию" and confirm. The browser,
+   presenter agent and this launcher window will close.
 
 The first successful start downloads pinned Node dependencies and a
 Playwright-managed browser into the persistent Windows user cache:

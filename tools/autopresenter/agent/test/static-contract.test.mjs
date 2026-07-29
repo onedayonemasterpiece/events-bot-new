@@ -32,7 +32,7 @@ test("declares exactly three explicit mobile scenario IDs and the fallback", () 
   });
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventId, 5296);
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventTitle, "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»");
-  assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 7014);
+  assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 6591);
   assert.match(source, /resolveScenarioId\(command\.scenario\)/u);
   assert.match(source, /if \(scenarioId === TOMORROW_MOBILE_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === TOMORROW_RAIL_LIKE_CONTRACT\.id\)/u);
@@ -101,6 +101,8 @@ test("readiness waits for document, fonts, optional mobile ready marker, and vis
   assert.match(source, /pendingImages/u);
   assert.match(source, /pendingVideos/u);
   assert.match(source, /pendingMediaStates/u);
+  assert.match(source, /rect\.right > 0/u);
+  assert.match(source, /rect\.left < innerWidth/u);
 });
 
 test("tomorrow-mobile naturally reveals a concrete detail description", () => {
@@ -181,4 +183,18 @@ test("relay, lifecycle, fullscreen, and evidence contracts remain intact", () =>
   assert.match(source, /Browser\.setWindowBounds/u);
   assert.match(source, /windowState: "fullscreen"/u);
   assert.match(source, /this\.shutdownPromise/u);
+});
+
+test("remote shutdown acknowledges a durable closed state before browser exit", () => {
+  assert.match(source, /\["run", "stop", "reset", "shutdown"\]/u);
+  assert.match(source, /async handleShutdown\(command, remote\)/u);
+  assert.match(source, /if \(command\.action === "shutdown"\) \{[\s\S]*await dispatchPromise/u);
+  assert.match(source, /this\.shuttingDown = true/u);
+  assert.match(source, /await this\.confirmStopped\(\)/u);
+  assert.match(
+    source,
+    /await this\.setAgentState\("closed", "presentation closed; browser and agent stopped"\)/u,
+  );
+  assert.match(source, /await this\.ack\([\s\S]*?"closed"[\s\S]*?browser and agent stopped/u);
+  assert.match(source, /await this\.shutdown\("remote-command"\)/u);
 });

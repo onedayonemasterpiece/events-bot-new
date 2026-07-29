@@ -118,6 +118,9 @@ try {
     }
     Require-File $ConfigPath "Test configuration"
     Require-File (Join-Path $AgentDir "agent.mjs") "Presenter agent"
+    Require-File (Join-Path $AgentDir "abort-utils.mjs") "Presenter abort utilities"
+    Require-File (Join-Path $AgentDir "pacing.mjs") "Presenter pacing contract"
+    Require-File (Join-Path $AgentDir "scenario-contract.mjs") "Presenter scenario contract"
     Require-File (Join-Path $AgentDir "package.json") "Pinned dependency manifest"
     Require-File (Join-Path $AgentDir "package-lock.json") "Pinned dependency lock"
     $Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
@@ -213,8 +216,8 @@ try {
 
     Write-Step "READY. Opening the 1920x1080 demonstrator..."
     Write-Host ""
-    Write-Host "Use the PHONE link and press Run." -ForegroundColor Green
-    Write-Host "Close this window to stop the demonstrator." -ForegroundColor DarkGray
+    Write-Host "Use the PHONE link and choose a scenario." -ForegroundColor Green
+    Write-Host "Use 'Close presentation' on the phone to finish everything." -ForegroundColor DarkGray
     Write-Host ""
     $PreviousErrorActionPreference = $ErrorActionPreference
     try {

@@ -409,9 +409,16 @@ class PrototypeAgent {
         if (!command) continue;
 
         this.afterSequence = Math.max(this.afterSequence, Number(command.sequence) || 0);
-        void this.dispatch(command, { remote: true }).catch((error) =>
-          log("command dispatch failed", { id: command.id, error: errorText(error) }),
-        );
+        const dispatchPromise = this.dispatch(command, { remote: true });
+        if (command.action === "shutdown") {
+          // The terminal command must publish and acknowledge `closed` before
+          // start() can leave the polling loop and enter its finalizer.
+          await dispatchPromise;
+        } else {
+          void dispatchPromise.catch((error) =>
+            log("command dispatch failed", { id: command.id, error: errorText(error) }),
+          );
+        }
       } catch (error) {
         if (this.shuttingDown) break;
         log("poll failed; retrying", errorText(error));
@@ -423,7 +430,7 @@ class PrototypeAgent {
   }
 
   async dispatch(command, { remote }) {
-    if (!command || !["run", "stop", "reset"].includes(command.action)) return;
+    if (!command || !["run", "stop", "reset", "shutdown"].includes(command.action)) return;
 
     if (remote && this.ackCache.has(command.id)) {
       const previous = this.ackCache.get(command.id);
@@ -451,6 +458,10 @@ class PrototypeAgent {
     }
     if (command.action === "stop") {
       await this.handleStop(command, remote);
+      return;
+    }
+    if (command.action === "shutdown") {
+      await this.handleShutdown(command, remote);
       return;
     }
     await this.handleReset(command, remote);
@@ -488,11 +499,18 @@ class PrototypeAgent {
       })
       .catch(async (error) => {
         const timedOut = error?.name === "TimeoutError" || this.runController?.signal.reason?.name === "TimeoutError";
+        const failure = timedOut ? this.runController?.signal.reason : error;
         if (!timedOut && (error?.name === "AbortError" || this.runController?.signal.aborted)) {
           log("scenario cooperatively stopped", { commandId: command.id, scenario: scenarioId });
           return;
         }
-        const detail = `${scenarioId}: ${errorText(timedOut ? this.runController?.signal.reason : error)}`;
+        log("scenario failed", {
+          commandId: command.id,
+          scenario: scenarioId,
+          error: errorText(failure),
+          stack: failure?.stack,
+        });
+        const detail = `${scenarioId}: ${errorText(failure)}`;
         await this.setAgentState("error", detail);
         if (remote) await this.ack(command, "error", detail);
       })
@@ -525,6 +543,25 @@ class PrototypeAgent {
     await this.confirmStopped();
     await this.setAgentState("idle", "agent confirmed stopped");
     if (remote) await this.ack(command, "idle", "agent confirmed stopped");
+  }
+
+  async handleShutdown(command, remote) {
+    // Mark shutdown before the first await so the long-poll loop cannot open
+    // another request while the final state/ack is being delivered.
+    this.shuttingDown = true;
+    this.pollAbort?.abort();
+    await this.setAgentState("stopping", "closing presentation");
+    if (remote) await this.ack(command, "stopping", "closing presentation");
+    await this.confirmStopped();
+    await this.setAgentState("closed", "presentation closed; browser and agent stopped");
+    if (remote) {
+      await this.ack(
+        command,
+        "closed",
+        "presentation closed; browser and agent stopped",
+      );
+    }
+    await this.shutdown("remote-command");
   }
 
   async handleReset(command, remote) {
@@ -678,6 +715,7 @@ class PrototypeAgent {
     );
     await this.assertEventNotPreLiked(frame, row, contract.eventId);
     await this.naturalVerticalScroll(frame, row, signal);
+    log("like scenario target framed", { eventId: contract.eventId });
 
     const rail = row.locator(MOBILE_EVENT_RAIL_SELECTOR);
     const like = row.locator('[data-feedback-action="like"]');
@@ -690,16 +728,29 @@ class PrototypeAgent {
       atEnd.maxScroll > 0 && atEnd.maxScroll - atEnd.scrollLeft <= 1,
       `event ${contract.eventId} rail did not settle at maxScroll: ${JSON.stringify(atEnd)}`,
     );
+    log("like scenario rail reached edge", { eventId: contract.eventId, ...atEnd });
 
     await this.pullLikeEdgeAndAssertArmed(frame, rail, signal);
+    log("like scenario edge pull released", { eventId: contract.eventId });
     const consent = frame.locator("[data-personalization-consent].is-visible");
     const consentAccept = consent.locator("[data-personalization-consent-accept]");
-    if (await this.waitForEitherPressedOrConsent(like, consent, signal)) {
+    const consentRequired = await this.waitForEitherPressedOrConsent(
+      like,
+      consent,
+      signal,
+    );
+    log("like scenario post-gesture branch", {
+      eventId: contract.eventId,
+      consentRequired,
+    });
+    if (consentRequired) {
       await raceWithAbort(consentAccept.waitFor({ state: "visible", timeout: 2_000 }), signal);
       await this.tapMobileLocator(frame, consentAccept, signal);
+      log("like scenario consent accepted", { eventId: contract.eventId });
     }
 
     await this.waitForLikeState(row, like, true, signal);
+    log("like scenario UI state pressed", { eventId: contract.eventId });
     const afterCount = await this.waitForStableLikeCount(like, beforeCount + 1, signal);
     assertCondition(
       afterCount === beforeCount + 1,
@@ -871,6 +922,8 @@ class PrototypeAgent {
             rect.height > 0 &&
             rect.bottom > 0 &&
             rect.top < innerHeight &&
+            rect.right > 0 &&
+            rect.left < innerWidth &&
             style.display !== "none" &&
             style.visibility !== "hidden"
           );
