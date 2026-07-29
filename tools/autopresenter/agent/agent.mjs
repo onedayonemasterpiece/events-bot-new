@@ -84,6 +84,19 @@ function abortableDelay(milliseconds, signal) {
 
 function loadPlaywright() {
   const localRequire = createRequire(import.meta.url);
+  const sharedDependencyRoot = process.env.AUTOPRESENTER_DEPENDENCY_ROOT || "";
+  if (sharedDependencyRoot) {
+    try {
+      const sharedRequire = createRequire(
+        path.join(sharedDependencyRoot, "__autopresenter_loader__.cjs"),
+      );
+      return sharedRequire("playwright");
+    } catch (sharedError) {
+      log("shared Playwright cache is unavailable; trying local fallback", {
+        error: errorText(sharedError),
+      });
+    }
+  }
   try {
     return localRequire("playwright");
   } catch (localError) {

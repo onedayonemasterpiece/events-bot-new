@@ -37,10 +37,11 @@ portable release:
 - agent polling/status uses a different bearer token;
 - `/demonstrator/` creates a scoped Windows x64 ZIP with one
   `START-DEMONSTRATOR.cmd`;
-- the bootstrap is non-interactive and temporarily disables QuickEdit for its
-  own console, while the browser is forced into fullscreen;
+- the bootstrap is non-interactive, treats per-console QuickEdit setup as
+  best-effort, and forces the browser into fullscreen;
 - the clean stage centers a larger phone; mobile actions use tap/swipe
   affordances, while the separate desktop contract visualizes pressed keys;
-- the first test downloads pinned Node dependencies and the
-  Playwright-managed browser into the extracted directory. It is not hermetic
-  M0/M3 evidence.
+- the first successful test stores versioned Node, lockfile-keyed dependencies
+  and the Playwright-managed browser under
+  `%LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1`; compatible later debug
+  ZIPs reuse them. It is not hermetic M0/M3 evidence.

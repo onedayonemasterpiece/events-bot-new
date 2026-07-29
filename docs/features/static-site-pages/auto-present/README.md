@@ -37,13 +37,17 @@ portable release или разрешением публичного показа
 - сцена и review-сборка сайта обслуживаются тем же immutable test deployment,
   поэтому phone и laptop не обязаны находиться в одной сети.
 
-Первый Windows-запуск выполняет полностью автоматический online bootstrap
-зафиксированных Node/npm и Playwright-managed browser в распакованную папку
-без admin rights. Launcher временно отключает QuickEdit только для своего
-console input, использует non-interactive installer flags и после установки
-сам открывает fullscreen stage. Нажатие Enter не входит в happy path. Это
-пригодно для первого owner test, но не подменяет M0: финальный hermetic ZIP
-без runtime downloads и публичный показ остаются заблокированы.
+Первый успешный Windows-запуск выполняет полностью автоматический online
+bootstrap зафиксированных Node/npm и Playwright-managed browser без admin
+rights. Версионный общий кэш хранится в
+`%LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1`: последующие совместимые
+debug ZIP переиспользуют Node, lockfile-keyed `node_modules` и browser binary,
+а новая dependency lock получает отдельный cache entry. Launcher временно и
+best-effort отключает QuickEdit только для своего console input, использует
+non-interactive installer flags и после bootstrap сам открывает fullscreen
+stage. Нажатие Enter не входит в happy path. Это пригодно для первого owner
+test, но не подменяет M0: финальный hermetic ZIP без runtime downloads и
+публичный показ остаются заблокированы.
 
 ## Продуктовая граница
 

@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- Fixed the Windows Autopresenter first-test startup failure caused by
+  non-public `Add-Type` console methods. Console-mode setup is now best-effort,
+  while versioned Node, npm dependencies and Playwright browser binaries live
+  in `%LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1` and are reused by
+  compatible later debug ZIPs instead of being installed per extraction.
 - Autopresenter first test now disables Windows Console QuickEdit for the
   current launch so installation cannot pause in “Select” mode, runs the
   bootstrap non-interactively, forces the headed browser window to fullscreen,

@@ -54,12 +54,15 @@ then double-click `START-DEMONSTRATOR.cmd`. Open `PHONE` on a phone over mobile
 Internet and press **Запустить «Завтра»**. The laptop needs only outbound HTTPS;
 the phone and laptop do not share a LAN.
 
-The first start downloads portable Node.js, lockfile-pinned dependencies and
-the pinned Playwright-managed browser into the extracted folder. It disables
-QuickEdit for that console window and is non-interactive: no Enter confirmation
-is part of the happy path, and the fullscreen stage opens automatically. This
-is an online first-test bootstrap, not the final hermetic M3 package and not M0
-compatibility evidence.
+The first successful start downloads portable Node.js, lockfile-pinned
+dependencies and the pinned Playwright-managed browser into the persistent
+Windows user cache
+`%LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1`. Compatible later debug
+ZIPs reuse that cache instead of reinstalling the same stack. It changes
+QuickEdit only for that console window when the console API is available and
+is non-interactive: no Enter confirmation is part of the happy path, and the
+fullscreen stage opens automatically. This is an online first-test bootstrap,
+not the final hermetic M3 package and not M0 compatibility evidence.
 
 ## Evidence
 

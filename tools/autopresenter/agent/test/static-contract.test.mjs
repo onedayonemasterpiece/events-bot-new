@@ -116,6 +116,12 @@ test("uses real Playwright locator actions and never DOM activation", () => {
   assert.doesNotMatch(source, /element\.click|node\.click|\.evaluate\([^)]*=>[^;]*\.click/s);
 });
 
+test("loads Playwright from the explicit persistent dependency cache", () => {
+  assert.match(source, /AUTOPRESENTER_DEPENDENCY_ROOT/);
+  assert.match(source, /sharedRequire\("playwright"\)/);
+  assert.match(source, /shared Playwright cache is unavailable/);
+});
+
 test("poll, idempotent ack, TTL and bounded hard stop contracts are explicit", () => {
   assert.match(source, /\/api\/commands\/next/);
   assert.match(source, /after_seq/);

@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-29-autopresenter-windows-bootstrap-startup.md`
+  - Scope: Autopresenter Windows owner-test bootstrap, console-mode P/Invoke,
+    persistent Node/npm/Playwright cache and dynamic first-test ZIP.
+  - Must not regress: console helpers must remain publicly invokable and
+    best-effort; compatible debug ZIPs must reuse
+    `%LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1`; closure requires a
+    target-Windows successful start plus cache-reuse evidence.
+
 - `INC-2026-07-27-pwa-presentation-install-missing.md`
   - Scope: production root, web app manifest/icons, Android
     `beforeinstallprompt`, `?install=presentation`, Object Storage root publish.

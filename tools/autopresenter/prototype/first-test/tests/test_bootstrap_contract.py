@@ -13,6 +13,10 @@ class BootstrapContractTest(unittest.TestCase):
     def test_quick_edit_is_disabled_only_for_the_current_console_and_restored(self):
         script = self.bootstrap
         self.assertIn('GetStdHandle($StdInputHandle)', script)
+        self.assertIn("public static extern IntPtr GetStdHandle", script)
+        self.assertIn("public static extern bool GetConsoleMode", script)
+        self.assertIn("public static extern bool SetConsoleMode", script)
+        self.assertNotIn("internal static extern", script)
         self.assertIn("$EnableQuickEditMode = [uint32]0x0040", script)
         self.assertIn("$EnableExtendedFlags = [uint32]0x0080", script)
         self.assertIn("$AutomaticMode = $AutomaticMode - $EnableQuickEditMode", script)
@@ -23,6 +27,7 @@ class BootstrapContractTest(unittest.TestCase):
             script.index("$ConsoleModeState = Disable-ConsoleQuickEdit"),
             script.index("& $NodeExe $NpmCli ci"),
         )
+        self.assertIn("startup will continue", script)
 
     def test_installers_are_non_interactive_and_agent_still_auto_launches(self):
         script = self.bootstrap
@@ -42,6 +47,20 @@ class BootstrapContractTest(unittest.TestCase):
             self.assertLess(script.index(setting), npm)
         self.assertLess(npm, playwright)
         self.assertLess(playwright, agent)
+
+    def test_versioned_dependencies_and_browser_are_reused_from_local_app_data(self):
+        script = self.bootstrap
+        self.assertIn('[Environment]::GetFolderPath("LocalApplicationData")', script)
+        self.assertIn('"KenigEvents\\Autopresenter\\cache-v1"', script)
+        self.assertIn('$NodeRoot = Join-Path $CacheRoot "node"', script)
+        self.assertIn("$NodeHome = Join-Path $NodeRoot $NodeVersion", script)
+        self.assertIn('$DependencyKey = $LockHash.Substring(0, 20)', script)
+        self.assertIn('$DependencyMarker = Join-Path $DependencyHome ".autopresenter-ready"', script)
+        self.assertIn('$Env:AUTOPRESENTER_DEPENDENCY_ROOT = $DependencyHome', script)
+        self.assertIn('$Env:PLAYWRIGHT_BROWSERS_PATH = $PlaywrightBrowsers', script)
+        self.assertIn('Write-Step "Reusing pinned presenter dependencies from the shared cache."', script)
+        self.assertIn('Write-Step "Reusing the Playwright-managed browser from the shared cache."', script)
+        self.assertNotIn('$Runtime = Join-Path $Root "runtime"', script)
 
     def test_first_test_not_m3_and_failure_diagnostics_remain(self):
         self_test = (FIRST_TEST_DIR / "self-test.ps1").read_text(encoding="utf-8")

@@ -202,6 +202,17 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(
                 all(info.date_time == (2025, 1, 1, 0, 0, 0) for info in archive.infolist())
             )
+            bootstrap = archive.read("bootstrap.ps1").decode("utf-8")
+            self.assertIn("public static extern IntPtr GetStdHandle", bootstrap)
+            self.assertNotIn("internal static extern", bootstrap)
+            self.assertIn(
+                '[Environment]::GetFolderPath("LocalApplicationData")',
+                bootstrap,
+            )
+            self.assertIn(
+                '"KenigEvents\\Autopresenter\\cache-v1"',
+                bootstrap,
+            )
             config = json.loads(archive.read("test-config.json"))
         self.assertEqual(config["relay_url"], "https://presenter.example")
         self.assertEqual(

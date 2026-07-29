@@ -9,12 +9,19 @@ WHAT TO CLICK
 4. On the phone, open the separate PHONE link over mobile Internet.
 5. Press "Запустить «Завтра»".
 
-The first start downloads pinned Node dependencies and a Playwright-managed
-browser into this folder and then opens the demonstrator automatically. No
-keyboard confirmation, administrator rights, Python, system Node or system
-Chrome are required. The computer needs outbound HTTPS access. This launch
-temporarily disables QuickEdit only in its current console window so an
-accidental click cannot pause a download; no permanent console setting changes.
+The first successful start downloads pinned Node dependencies and a
+Playwright-managed browser into the persistent Windows user cache:
+
+  %LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1
+
+Later debug ZIP versions reuse compatible cached Node, dependencies and browser;
+they are not installed again for every extracted version or launch. A changed
+dependency lock gets its own cache entry. The demonstrator then opens
+automatically. No keyboard confirmation, administrator rights, Python, system
+Node or system Chrome are required. The computer needs outbound HTTPS access.
+This launch temporarily disables QuickEdit only in its current console window
+so an accidental click cannot pause a download; if that console API is
+unavailable, startup continues without changing a permanent console setting.
 
 If startup fails, run SELF-TEST.cmd and send the logs folder to the developer.
 

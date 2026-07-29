@@ -2,21 +2,28 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Runtime = Join-Path $Root "runtime"
-$NodeHome = Join-Path $Runtime "node"
-$NodeExe = Join-Path $NodeHome "node.exe"
 $AgentDir = Join-Path $Root "agent"
 $ConfigPath = Join-Path $Root "test-config.json"
 $LogsDir = Join-Path $Root "logs"
 $LogPath = Join-Path $LogsDir "latest.log"
 $NodeVersion = "22.12.0"
+$LocalAppData = [Environment]::GetFolderPath("LocalApplicationData")
+if ([string]::IsNullOrWhiteSpace($LocalAppData)) {
+    throw "Windows LocalApplicationData is unavailable."
+}
+$CacheRoot = Join-Path $LocalAppData "KenigEvents\Autopresenter\cache-v1"
+$NodeRoot = Join-Path $CacheRoot "node"
+$NodeHome = Join-Path $NodeRoot $NodeVersion
+$NodeExe = Join-Path $NodeHome "node.exe"
+$NpmCache = Join-Path $CacheRoot "npm"
+$PlaywrightBrowsers = Join-Path $CacheRoot "playwright-browsers"
 $NodeArchive = "node-v$NodeVersion-win-x64.zip"
 $NodeUrl = "https://nodejs.org/dist/v$NodeVersion/$NodeArchive"
 $NodeSha256 = "2b8f2256382f97ad51e29ff71f702961af466c4616393f767455501e6aece9b8"
 $ConsoleModeState = $null
 $ExitCode = 1
 
-New-Item -ItemType Directory -Force -Path $Runtime, $LogsDir | Out-Null
+New-Item -ItemType Directory -Force -Path $CacheRoot, $NodeRoot, $NpmCache, $PlaywrightBrowsers, $LogsDir | Out-Null
 
 function Write-Step([string]$Message) {
     $Line = "[{0}] {1}" -f (Get-Date -Format "HH:mm:ss"), $Message
@@ -39,15 +46,15 @@ using System.Runtime.InteropServices;
 public static class FirstTestConsoleMode
 {
     [DllImport("kernel32.dll", SetLastError = true)]
-    internal static extern IntPtr GetStdHandle(int nStdHandle);
+    public static extern IntPtr GetStdHandle(int nStdHandle);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+    public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+    public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
 }
 "@ | Out-Null
     }
@@ -97,28 +104,39 @@ try {
     if (-not [Environment]::Is64BitOperatingSystem) {
         throw "Windows x64 is required."
     }
-    $ConsoleModeState = Disable-ConsoleQuickEdit
-    Write-Step "Automatic console mode enabled for this launch."
+    try {
+        $ConsoleModeState = Disable-ConsoleQuickEdit
+        Write-Step "Automatic console mode enabled for this launch."
+    }
+    catch {
+        Write-Step ("WARNING: Could not change QuickEdit for this console; startup will continue. {0}" -f $_.Exception.Message)
+        $ConsoleModeState = $null
+    }
     Require-File $ConfigPath "Test configuration"
     Require-File (Join-Path $AgentDir "agent.mjs") "Presenter agent"
+    Require-File (Join-Path $AgentDir "package.json") "Pinned dependency manifest"
     Require-File (Join-Path $AgentDir "package-lock.json") "Pinned dependency lock"
     $Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+    Write-Step "Persistent shared cache: $CacheRoot"
 
     if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) {
         Write-Step "Downloading portable Node.js $NodeVersion..."
-        $Download = Join-Path $Runtime $NodeArchive
+        $Download = Join-Path $CacheRoot $NodeArchive
         Invoke-WebRequest -UseBasicParsing -Uri $NodeUrl -OutFile $Download
         $ActualSha = (Get-FileHash -LiteralPath $Download -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($ActualSha -ne $NodeSha256) {
             throw "Portable Node.js checksum mismatch."
         }
-        $ExtractRoot = Join-Path $Runtime "node-extract"
+        $ExtractRoot = Join-Path $CacheRoot "node-extract"
         Remove-Item -LiteralPath $ExtractRoot -Recurse -Force -ErrorAction SilentlyContinue
         Expand-Archive -LiteralPath $Download -DestinationPath $ExtractRoot -Force
         Remove-Item -LiteralPath $NodeHome -Recurse -Force -ErrorAction SilentlyContinue
         Move-Item -LiteralPath (Join-Path $ExtractRoot "node-v$NodeVersion-win-x64") -Destination $NodeHome
         Remove-Item -LiteralPath $ExtractRoot -Recurse -Force
         Remove-Item -LiteralPath $Download -Force
+    }
+    else {
+        Write-Step "Reusing portable Node.js $NodeVersion from the shared cache."
     }
 
     $NpmCli = Join-Path $NodeHome "node_modules\npm\bin\npm-cli.js"
@@ -129,17 +147,59 @@ try {
     $Env:NPM_CONFIG_PROGRESS = "false"
     $Env:NPM_CONFIG_UPDATE_NOTIFIER = "false"
     $Env:NPM_CONFIG_YES = "true"
-    Write-Step "Checking pinned presenter dependencies..."
-    & $NodeExe $NpmCli ci --prefix $AgentDir --no-audit --no-fund
-    if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE." }
+    $LockHash = (Get-FileHash -LiteralPath (Join-Path $AgentDir "package-lock.json") -Algorithm SHA256).Hash.ToLowerInvariant()
+    $DependencyKey = $LockHash.Substring(0, 20)
+    $DependencyHome = Join-Path $CacheRoot "dependencies\$DependencyKey"
+    $DependencyMarker = Join-Path $DependencyHome ".autopresenter-ready"
+    $CachedPlaywright = Join-Path $DependencyHome "node_modules\playwright\package.json"
+    $DependencyReady = (
+        (Test-Path -LiteralPath $DependencyMarker -PathType Leaf) -and
+        (Test-Path -LiteralPath $CachedPlaywright -PathType Leaf) -and
+        ((Get-Content -LiteralPath $DependencyMarker -Raw).Trim() -eq $LockHash)
+    )
+    if (-not $DependencyReady) {
+        Write-Step "Installing pinned presenter dependencies into the shared cache..."
+        Remove-Item -LiteralPath $DependencyHome -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path $DependencyHome | Out-Null
+        Copy-Item -LiteralPath (Join-Path $AgentDir "package.json") -Destination $DependencyHome
+        Copy-Item -LiteralPath (Join-Path $AgentDir "package-lock.json") -Destination $DependencyHome
+        & $NodeExe $NpmCli ci --prefix $DependencyHome --cache $NpmCache --no-audit --no-fund
+        if ($LASTEXITCODE -ne 0) { throw "npm ci failed with exit code $LASTEXITCODE." }
+        Set-Content -LiteralPath $DependencyMarker -Value $LockHash -Encoding ASCII
+    }
+    else {
+        Write-Step "Reusing pinned presenter dependencies from the shared cache."
+    }
 
-    $Env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $Runtime "playwright-browsers"
+    $Env:AUTOPRESENTER_DEPENDENCY_ROOT = $DependencyHome
+    $Env:PLAYWRIGHT_BROWSERS_PATH = $PlaywrightBrowsers
     $Env:PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT = "120000"
-    $PlaywrightCli = Join-Path $AgentDir "node_modules\playwright\cli.js"
+    $PlaywrightCli = Join-Path $DependencyHome "node_modules\playwright\cli.js"
     Require-File $PlaywrightCli "Playwright CLI"
-    Write-Step "Checking the pinned Playwright-managed browser..."
-    & $NodeExe $PlaywrightCli install chromium
-    if ($LASTEXITCODE -ne 0) { throw "Playwright browser install failed with exit code $LASTEXITCODE." }
+    $BrowsersJsonPath = Join-Path $DependencyHome "node_modules\playwright-core\browsers.json"
+    Require-File $BrowsersJsonPath "Playwright browser registry"
+    $BrowsersJson = Get-Content -LiteralPath $BrowsersJsonPath -Raw | ConvertFrom-Json
+    $ChromiumRevision = [string](($BrowsersJson.browsers | Where-Object { $_.name -eq "chromium" } | Select-Object -First 1).revision)
+    if ([string]::IsNullOrWhiteSpace($ChromiumRevision)) {
+        throw "Pinned Chromium revision is missing from Playwright browser registry."
+    }
+    $BrowserMarker = Join-Path $PlaywrightBrowsers ("ready-" + $DependencyKey)
+    $PinnedBrowserHome = Join-Path $PlaywrightBrowsers ("chromium-" + $ChromiumRevision)
+    $CachedBrowserExe = Get-ChildItem -LiteralPath $PinnedBrowserHome -Filter "chrome.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    $BrowserReady = (
+        (Test-Path -LiteralPath $BrowserMarker -PathType Leaf) -and
+        ($null -ne $CachedBrowserExe) -and
+        ((Get-Content -LiteralPath $BrowserMarker -Raw).Trim() -eq $LockHash)
+    )
+    if (-not $BrowserReady) {
+        Write-Step "Installing the pinned Playwright-managed browser into the shared cache..."
+        & $NodeExe $PlaywrightCli install chromium
+        if ($LASTEXITCODE -ne 0) { throw "Playwright browser install failed with exit code $LASTEXITCODE." }
+        Set-Content -LiteralPath $BrowserMarker -Value $LockHash -Encoding ASCII
+    }
+    else {
+        Write-Step "Reusing the Playwright-managed browser from the shared cache."
+    }
 
     $Env:AUTOPRESENTER_RELAY_URL = [string]$Config.relay_url
     $Env:AUTOPRESENTER_STAGE_URL = [string]$Config.stage_url
