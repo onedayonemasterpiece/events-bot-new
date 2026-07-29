@@ -1,6 +1,6 @@
 # INC-2026-07-29 Autopresenter Windows bootstrap startup failure
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: Autopresenter owner-only Internet first test
 Opened: 2026-07-29
@@ -37,6 +37,11 @@ visibility and therefore missed the defect.
 - 2026-07-29 09:28 UTC — owner reported immediate Windows startup failure.
 - 2026-07-29 09:34 UTC — root cause localized to non-public P/Invoke methods;
   corrective implementation started.
+- 2026-07-29 09:39 UTC — corrected ZIP deployed; public health and package
+  inspection passed.
+- 2026-07-29 09:40 UTC — exact-source public Run → Completed and
+  Reset/Run/Stop lifecycle passed; incident moved to monitoring pending the
+  target-Windows retry.
 
 ## Root Cause
 
@@ -113,10 +118,20 @@ visibility and therefore missed the defect.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
+- deployed SHA: `c1810fa33a930718106ca55a7f0b138b1f8054e8`
 - deploy path: manual Fly deploy from clean Autopresenter integration worktree
-- regression checks: pending
-- post-deploy verification: pending
+- Fly image:
+  `kenigevents-autopresenter:deployment-01KYPKTH8CZBE7NCV6DB9F0K60`
+- refreshed ZIP SHA-256:
+  `e5365c71f3b295585f6d0812231b07576fb0096d588aa1e8271c1dbeb652c322`
+- regression checks: bootstrap 4/4, agent 12/12, relay 8/8; syntax checks and
+  `git diff --check` passed; no `tools/autopresenter/m0/**` diff
+- post-deploy verification: Fly machine `2879209fd9e998` version 6 is started
+  with 1/1 checks; downloaded ZIP contains public P/Invoke methods, shared-cache
+  bootstrap and shared dependency loader; public E2E completed on event `5296`
+  and the separate stop lifecycle ended at `idle / agent confirmed stopped`
+- remaining closure blockers: target-Windows successful start/cache reuse
+  evidence and reachability from `origin/main`
 
 ## Prevention
 
