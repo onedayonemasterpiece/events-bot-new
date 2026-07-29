@@ -101,7 +101,10 @@ test('service presentation uses the requested focus preview and explicit input-d
   assert.match(source, /data-presenter-scene-id="service-medallions-mobile"/u);
   assert.match(source, /data-presenter-scene-id="service-future-celebrity"/u);
   assert.match(source, /service-search-live/u);
-  assert.match(source, /class="wordmark-motion" src=\{announcementsWordmarkUrl\}/u);
+  assert.match(source, /class="wordmark-plain"[\s\S]*>Анонсы</u);
+  assert.match(source, /class="wordmark-vector" src=\{announcementsWordmarkUrl\}/u);
+  assert.match(source, /class="wordmark-o-glyph"/u);
+  assert.match(source, /transform: scaleX\(3\.25\)/u);
   assert.match(source, /otkrytie-festivalya-bahosluzhenie[\s\S]*-6153\//u);
   assert.match(source, /for \(const grapheme of Array\.from\('Максим, самое время для шутки'\)\)/u);
   assert.match(source, /data-focus-phase="meaning"/u);

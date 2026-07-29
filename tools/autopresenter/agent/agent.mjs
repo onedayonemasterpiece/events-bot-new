@@ -859,7 +859,7 @@ class PrototypeAgent {
         signal,
       );
     }
-    await abortableDelay(900, signal);
+    await abortableDelay(scenarioId === "service-wordmark" ? 3_600 : 900, signal);
     await this.captureScenario(scenarioId);
     return {
       summary: lecture

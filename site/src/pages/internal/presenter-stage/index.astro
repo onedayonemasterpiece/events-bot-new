@@ -198,7 +198,13 @@ const serviceTextScenes = [
 
       <section class="service-scene service-wordmark presentation-scene theme--light" data-presenter-scene-id="service-wordmark" hidden>
         <p class="service-eyebrow">01 · Полюбить Калининград</p>
-        <img class="wordmark-motion" src={announcementsWordmarkUrl} alt="Анонсы" />
+        <div class="wordmark-motion" role="img" aria-label="Анонсы">
+          <span class="wordmark-plain" aria-hidden="true">Анонсы</span>
+          <img class="wordmark-vector" src={announcementsWordmarkUrl} alt="" aria-hidden="true" />
+          <svg class="wordmark-o-layer" viewBox="0 0 7819 1514" aria-hidden="true">
+            <path class="wordmark-o-glyph" fill="currentColor" fill-rule="evenodd" d="M3371 410C3971 410 4171 540 4171 962C4171 1384 3971 1514 3371 1514C2771 1514 2571 1384 2571 962C2571 540 2771 410 3371 410ZM3371 600C2981 600 2831 700 2831 962C2831 1224 2981 1324 3371 1324C3761 1324 3911 1224 3911 962C3911 700 3761 600 3371 600Z" />
+          </svg>
+        </div>
       </section>
 
       <section class="service-scene service-needs presentation-scene theme--dark" data-presenter-scene-id="service-needs" hidden>
@@ -778,8 +784,20 @@ const serviceTextScenes = [
   .service-scene.is-entering h2, .service-scene.is-entering .service-support { animation: service-copy-in 700ms cubic-bezier(.22,.8,.22,1) both; }
   @keyframes service-copy-in { from { opacity: 0; transform: translateY(32px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
   .service-wordmark { align-items: center; text-align: center; }
-  .wordmark-motion { display: block; width: min(1240px,78vw); height: auto; transform-origin: center; animation: wordmark-enter 1.8s cubic-bezier(.22,.8,.22,1) both; }
-  @keyframes wordmark-enter { 0% { opacity: 0; transform: scale(.82); filter: blur(14px); } 58% { opacity: 1; transform: scale(1.035); filter: blur(0); } 100% { opacity: 1; transform: scale(1); filter: none; } }
+  .wordmark-motion { position: relative; width: min(1240px,78vw); aspect-ratio: 7819 / 1514; }
+  .wordmark-plain, .wordmark-vector, .wordmark-o-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wordmark-plain { display: grid; place-items: center; font: 900 clamp(150px,15vw,292px)/1 Inter,sans-serif; letter-spacing: -.09em; animation: wordmark-plain 3.4s ease-in-out both; }
+  .wordmark-vector { object-fit: contain; opacity: 0; animation: wordmark-vector 3.4s ease-in-out both; }
+  .wordmark-o-layer { overflow: visible; color: #17121a; }
+  .wordmark-o-glyph { transform-box: fill-box; transform-origin: center; animation: wordmark-o-stretch 3.4s cubic-bezier(.65,0,.22,1) both; }
+  @keyframes wordmark-plain { 0%,18% { opacity: 1; transform: scale(1); } 26%,100% { opacity: 0; transform: scale(.96); } }
+  @keyframes wordmark-vector { 0%,20% { opacity: 0; } 28%,100% { opacity: 1; } }
+  @keyframes wordmark-o-stretch {
+    0%,20% { opacity: 0; color: #17121a; transform: scaleX(1); }
+    28% { opacity: 1; color: #ff7657; transform: scaleX(1); }
+    60% { opacity: 1; color: #ff7657; transform: scaleX(3.25); }
+    100% { opacity: 1; color: #17121a; transform: scaleX(1); }
+  }
   .need-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; margin-top: clamp(50px,7vh,90px); }
   .need-row > div { min-height: 190px; display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 22px; padding: 30px; border: 1px solid rgba(255,255,255,.18); border-radius: 28px; background: rgba(255,255,255,.06); font-size: clamp(22px,1.6vw,31px); font-weight: 800; }
   .need-row strong { color: #ff7657; font: 900 50px/1 ui-monospace,monospace; }

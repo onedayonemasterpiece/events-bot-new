@@ -3,8 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
-- Closed the Autopresenter service-scene acceptance gaps: the exact branded
-  «Анонсы» vector now enters cleanly, the joke types before its seven-second
+- Closed the Autopresenter service-scene acceptance gaps: a plain «Анонсы»
+  now morphs into the exact vector while its branded «о» over-stretches and
+  settles, the joke types before its seven-second
   pause, the desktop medallion example shows a horizontal hero plus top and
   inline medallions through natural scrolling, and the focus-group invite is
   considered ready only after the fragment is accepted into participation state.
