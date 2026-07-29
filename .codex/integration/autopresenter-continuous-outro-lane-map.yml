@@ -1,0 +1,133 @@
+mode: worktree_workers_then_serial_integrator
+repo: events-bot-new
+base_ref: 88b08e4034a55903e14b012f93f487cc1f593162
+base_branch: feature/autopresenter-design
+integration_branch: integration/autopresenter-continuous-outro
+global_constraints:
+  - keep one browser/presentation environment alive across scenario switches
+  - only explicit Close presentation may terminate browser and Windows agent
+  - support long mixed scenes without building a generic editor or queue platform
+  - reuse the existing Fly app and existing Yandex Object Storage/CDN resources
+  - use strong fullscreen presentation typography; no explanatory side-panel UI
+  - preserve FIRST_TEST_NOT_M3 and public-demo NO-GO
+  - prioritize fast owner iteration over abstraction and perfectionism
+verification_owner: root integrator plus final checklist reviewer
+stop_conditions:
+  - Telegram screenshot cannot be read with approved E2E human session
+  - source QR asset is missing or unreadable
+  - existing Yandex bucket/CDN target cannot be identified safely
+  - live exact-source scenario switch or outro cannot complete
+lanes:
+  - id: telegram_error_discovery
+    role: planner
+    requirement_ids: [R01]
+    target: read the new screenshot in Telegram thread 803 and report exact failure context
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**"]
+    expected_output: redacted error diagnosis and likely owning files
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: runtime_discovery
+    role: planner
+    requirement_ids: [R02, R03]
+    target: map why scenario switching closes/recreates presentation windows and define the smallest persistent-session change
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**"]
+    expected_output: lifecycle map and bounded implementation brief
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: media_discovery
+    role: planner
+    requirement_ids: [R04]
+    target: identify QR asset and existing Yandex bucket/CDN publication path without creating resources
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**"]
+    expected_output: asset metadata, bucket/key/CDN URL and safe upload commands
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: persistent_runtime
+    role: worker
+    requirement_ids: [R02, R03]
+    target: keep one browser environment alive across explicit scenarios and allow long mixed presentation scenes
+    depends_on: [telegram_error_discovery, runtime_discovery]
+    execution_mode: serial_after_dependency
+    branch: agent/autopresenter-continuous-outro/persistent-runtime
+    worktree: /home/dev/projects/events-bot-new-autopresenter-persistent-runtime
+    writable_files:
+      - tools/autopresenter/agent/**
+      - tools/autopresenter/relay/server.py
+      - tools/autopresenter/relay/control/**
+      - tools/autopresenter/relay/tests/**
+      - tools/autopresenter/prototype/first-test/**
+      - .codex/lanes/persistent_runtime/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/m0/**
+      - docs/**
+      - CHANGELOG.md
+      - site/**
+    expected_output: committed persistent-session runtime and targeted regression tests
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: outro_scene
+    role: worker
+    requirement_ids: [R05, R06]
+    target: add a strong fullscreen animated QR outro scene using the CDN asset and update the control selector
+    depends_on: [media_discovery]
+    execution_mode: serial_after_dependency
+    branch: agent/autopresenter-continuous-outro/outro-scene
+    worktree: /home/dev/projects/events-bot-new-autopresenter-outro-scene
+    writable_files:
+      - tools/autopresenter/relay/stage/**
+      - tools/autopresenter/relay/tests/test_stage.py
+      - tools/autopresenter/agent/outro-contract.mjs
+      - tools/autopresenter/agent/test/outro-contract.test.mjs
+      - .codex/lanes/outro_scene/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/agent/agent.mjs
+      - tools/autopresenter/agent/scenario-contract.mjs
+      - tools/autopresenter/relay/control/**
+      - tools/autopresenter/relay/server.py
+      - tools/autopresenter/m0/**
+      - docs/**
+      - CHANGELOG.md
+      - site/**
+    expected_output: committed outro stage surface/contract and targeted tests
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: integration_release
+    role: merge_reviewer
+    requirement_ids: [R01, R04]
+    target: apply diagnosed fix, upload QR to existing Yandex CDN, bridge outro scenario, document, deploy and live-test
+    depends_on: [persistent_runtime, outro_scene]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-continuous-outro
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files:
+      - tools/autopresenter/**
+      - docs/features/static-site-pages/auto-present/**
+      - docs/reports/incidents/**
+      - CHANGELOG.md
+      - .codex/integration/**
+    forbidden_files:
+      - tools/autopresenter/m0/**
+    expected_output: fast deployed owner-test update with Telegram handoff
+    verification_scope: full_local
+    effort: high
+    status: planned
