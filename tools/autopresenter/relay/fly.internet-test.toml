@@ -4,7 +4,7 @@ kill_signal = "SIGTERM"
 kill_timeout = "10s"
 
 [build]
-  dockerfile = "tools/autopresenter/relay/Dockerfile.internet-test"
+  dockerfile = "Dockerfile.internet-test"
 
 [env]
   PORT = "8080"
