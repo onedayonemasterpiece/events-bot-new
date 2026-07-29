@@ -6,18 +6,26 @@ import {
   INTRO_MUSIC_ASSET,
   INTRO_SCENE_ID,
   LECTURE_ASSETS,
-  LECTURE_SCENE_ID,
-  LECTURE_SLIDE_INTERVAL_MS,
+  LECTURE_SCENE_IDS,
+  SCENE_ACCEPTANCE_CONTRACT,
+  SERVICE_SCENE_IDS,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
 } from "../presentation-contract.mjs";
 
 test("presentation scenes remain explicit and the intro defaults to fifty minutes", () => {
   assert.equal(INTRO_SCENE_ID, "intro-loop");
-  assert.equal(LECTURE_SCENE_ID, "lecture-deck");
+  assert.deepEqual(
+    LECTURE_SCENE_IDS,
+    ["lecture-01", "lecture-02", "lecture-03", "lecture-04", "lecture-05", "lecture-06", "lecture-07"],
+  );
   assert.equal(WEEKEND_DESKTOP_SCENE_ID, "weekend-desktop");
   assert.equal(INTRO_LOOP_RUNTIME_MS, 50 * 60 * 1_000);
-  assert.equal(LECTURE_SLIDE_INTERVAL_MS, 8_500);
+  assert.ok(SERVICE_SCENE_IDS.includes("service-search-live"));
+  assert.deepEqual(
+    SCENE_ACCEPTANCE_CONTRACT.frozen,
+    ["tomorrow-mobile", "tomorrow-rail-like", "weekend-amber-artifact", "outro-qr"],
+  );
 });
 
 test("intro and lecture media use immutable content-addressed Yandex CDN URLs", () => {

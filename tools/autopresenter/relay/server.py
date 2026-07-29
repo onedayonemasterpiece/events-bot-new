@@ -24,10 +24,30 @@ ALLOWED_ACTIONS = frozenset({"run", "stop", "reset", "shutdown"})
 ALLOWED_SCENARIOS = frozenset(
     {
         "intro-loop",
-        "lecture-deck",
+        "lecture-01",
+        "lecture-02",
+        "lecture-03",
+        "lecture-04",
+        "lecture-05",
+        "lecture-06",
+        "lecture-07",
         "tomorrow-mobile",
         "tomorrow-rail-like",
         "weekend-amber-artifact",
+        "service-wordmark",
+        "service-needs",
+        "service-medallions",
+        "service-medallions-desktop",
+        "service-medallions-mobile",
+        "service-joke",
+        "service-search-concept",
+        "service-search-live",
+        "service-disruption",
+        "service-taste",
+        "service-feedback",
+        "service-focus-group",
+        "service-nps",
+        "service-future-celebrity",
         "weekend-desktop",
         "outro-qr",
     }
@@ -78,6 +98,7 @@ class Command:
     sequence: int
     action: str
     scenario: str | None
+    options: dict[str, str]
     issued_epoch: float
     expires_epoch: float
     acknowledgments: list[dict[str, Any]] = field(default_factory=list)
@@ -88,6 +109,7 @@ class Command:
             "sequence": self.sequence,
             "action": self.action,
             "scenario": self.scenario,
+            "options": self.options,
             "issued_at": utc_iso(self.issued_epoch),
             "expires_at": utc_iso(self.expires_epoch),
             "ttl_ms": max(0, round((self.expires_epoch - time.time()) * 1000)),
@@ -146,7 +168,11 @@ class Relay:
         }
 
     async def issue(
-        self, action: str, requested_id: str | None, scenario: Any = None
+        self,
+        action: str,
+        requested_id: str | None,
+        scenario: Any = None,
+        options: Any = None,
     ) -> Command:
         if action not in ALLOWED_ACTIONS:
             raise ApiError(
@@ -155,21 +181,38 @@ class Relay:
                 "action must be run, stop, reset, or shutdown",
             )
         normalized_scenario: str | None = None
+        normalized_options: dict[str, str] = {}
         if action == "run":
             normalized_scenario = str(scenario or "tomorrow-mobile").strip()
             if normalized_scenario not in ALLOWED_SCENARIOS:
                 raise ApiError(
                     400,
                     "invalid_scenario",
-                    "scenario must be intro-loop, lecture-deck, tomorrow-mobile, "
-                    "tomorrow-rail-like, weekend-amber-artifact, weekend-desktop, "
-                    "or outro-qr",
+                    "unsupported explicit presenter scenario",
                 )
-        elif scenario not in (None, ""):
+            if options not in (None, ""):
+                if not isinstance(options, dict):
+                    raise ApiError(400, "invalid_options", "options must be an object")
+                if normalized_scenario == "service-search-live":
+                    query = str(options.get("query") or "").strip()
+                    if not 2 <= len(query) <= 180:
+                        raise ApiError(400, "invalid_query", "query must be 2..180 characters")
+                    normalized_options["query"] = query
+                elif normalized_scenario == "intro-loop":
+                    start_at = str(options.get("start_at") or "").strip()
+                    if start_at:
+                        try:
+                            datetime.fromisoformat(start_at.replace("Z", "+00:00"))
+                        except ValueError:
+                            raise ApiError(400, "invalid_start_at", "start_at must be ISO-8601")
+                        normalized_options["start_at"] = start_at
+                elif options:
+                    raise ApiError(400, "unexpected_options", "this scenario accepts no options")
+        elif scenario not in (None, "") or options not in (None, "", {}):
             raise ApiError(
                 400,
                 "unexpected_scenario",
-                "scenario is only accepted for run commands",
+                "scenario/options are only accepted for run commands",
             )
         command_id = requested_id or str(uuid4())
         if not isinstance(command_id, str) or not command_id.strip() or len(command_id) > 128:
@@ -182,6 +225,7 @@ class Relay:
                 if (
                     existing.action != action
                     or existing.scenario != normalized_scenario
+                    or existing.options != normalized_options
                 ):
                     raise ApiError(
                         409,
@@ -196,6 +240,7 @@ class Relay:
                 sequence=self._next_sequence,
                 action=action,
                 scenario=normalized_scenario,
+                options=normalized_options,
                 issued_epoch=now,
                 expires_epoch=now + self.command_ttl_ms / 1000,
             )
@@ -397,7 +442,10 @@ async def get_state(request: web.Request) -> web.Response:
 async def post_command(request: web.Request) -> web.Response:
     body = await json_body(request)
     command = await relay_for(request).issue(
-        body.get("action"), body.get("command_id"), body.get("scenario")
+        body.get("action"),
+        body.get("command_id"),
+        body.get("scenario"),
+        body.get("options"),
     )
     return web.json_response(
         {"command": command.public(), "state": relay_for(request).public_state()},

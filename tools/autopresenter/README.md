@@ -24,10 +24,10 @@ tools/autopresenter/
         └── tomorrow-mobile.mp4
 ```
 
-The visible slice runs exactly seven explicit scenes: `intro-loop`,
-`lecture-deck`, `tomorrow-mobile`, `tomorrow-rail-like`,
-`weekend-amber-artifact`, the full-FHD `weekend-desktop`, and the fullscreen
-`outro-qr`.
+The visible slice runs only explicit scenes: `intro-loop`, seven independently
+held `lecture-01`…`lecture-07` frames, the service-presentation frames,
+`tomorrow-mobile`, `tomorrow-rail-like`, `weekend-amber-artifact`, the
+meaning-first full-FHD `weekend-desktop`, and fullscreen `outro-qr`.
 They share one browser/context/page/window until terminal Shutdown. It
 deliberately has no generic scenario DSL. Start at
 [`prototype/README.md`](prototype/README.md).
@@ -48,7 +48,7 @@ portable release:
 - the bootstrap is non-interactive, treats per-console QuickEdit setup as
   best-effort, and forces the browser into fullscreen;
 - the stage supports a larger mobile phone, strong fullscreen intro/lecture/
-  outro typography, and a caption-free FHD Weekend desktop page; mobile
+  service/outro typography, and a two-phase FHD Weekend desktop page; mobile
   actions use tap/swipe affordances;
 - scenario pacing uses visible natural scroll/drag motion, readiness checks and
   bounded dwell instead of instant component jumps;

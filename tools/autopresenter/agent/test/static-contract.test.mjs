@@ -9,7 +9,8 @@ import {
   TOMORROW_RAIL_LIKE_CONTRACT,
   WEEKEND_AMBER_ARTIFACT_CONTRACT,
   INTRO_LOOP_CONTRACT,
-  LECTURE_DECK_CONTRACT,
+  LECTURE_SCENE_CONTRACTS,
+  SERVICE_SCENE_CONTRACTS,
   WEEKEND_DESKTOP_CONTRACT,
   OUTRO_QR_CONTRACT,
   LONG_SCENE_TIMEOUT_CEILING_MS,
@@ -23,15 +24,11 @@ import { PACING } from "../pacing.mjs";
 const source = await readFile(new URL("../agent.mjs", import.meta.url), "utf8");
 
 test("declares the accepted journeys plus explicit intro, lecture, desktop and outro scenes", () => {
-  assert.deepEqual(SCENARIO_IDS, [
-    "intro-loop",
-    "lecture-deck",
-    "tomorrow-mobile",
-    "tomorrow-rail-like",
-    "weekend-amber-artifact",
-    "weekend-desktop",
-    "outro-qr",
-  ]);
+  for (const id of [
+    "intro-loop", "lecture-01", "lecture-07", "tomorrow-mobile",
+    "tomorrow-rail-like", "weekend-amber-artifact", "service-search-live",
+    "service-focus-group", "weekend-desktop", "outro-qr",
+  ]) assert.ok(SCENARIO_IDS.includes(id), `${id} is allowlisted`);
   assert.equal(DEFAULT_SCENARIO_ID, "tomorrow-mobile");
   assert.equal(resolveScenarioId(undefined), "tomorrow-mobile");
   assert.equal(resolveScenarioId("tomorrow-rail-like"), "tomorrow-rail-like");
@@ -44,8 +41,10 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventId, 5296);
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventTitle, "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»");
   assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 6591);
-  assert.equal(INTRO_LOOP_CONTRACT.completion, "fifty-minute-logical-randomized-two-line-typing-loop");
-  assert.equal(LECTURE_DECK_CONTRACT.completion, "seven-source-backed-lecture-frames-presented-in-order");
+  assert.equal(INTRO_LOOP_CONTRACT.completion, "fifty-minute-logical-randomized-two-line-hero-talk-loop");
+  assert.equal(LECTURE_SCENE_CONTRACTS.length, 7);
+  assert.ok(LECTURE_SCENE_CONTRACTS.every(({ completion }) => completion === "held-until-another-explicit-command"));
+  assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-search-live"));
   assert.equal(WEEKEND_DESKTOP_CONTRACT.surface, "desktop");
   assert.deepEqual(OUTRO_QR_CONTRACT, {
     id: "outro-qr",
@@ -57,23 +56,16 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
   assert.match(source, /if \(scenarioId === TOMORROW_RAIL_LIKE_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === WEEKEND_AMBER_ARTIFACT_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === INTRO_LOOP_CONTRACT\.id\)/u);
-  assert.match(source, /if \(scenarioId === LECTURE_DECK_CONTRACT\.id\)/u);
+  assert.match(source, /isStaticPresentationScenario\(scenarioId\)/u);
+  assert.match(source, /scenarioId === "service-search-live"/u);
   assert.match(source, /if \(scenarioId === WEEKEND_DESKTOP_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === OUTRO_QR_CONTRACT\.id\)/u);
 });
 
 test("scenario timeout policy is explicit and can admit a future one-hour scene", () => {
-  assert.deepEqual(SCENARIO_TIMEOUT_POLICY, {
-    "intro-loop": 3_600_000,
-    "lecture-deck": 180_000,
-    "tomorrow-mobile": 120_000,
-    "tomorrow-rail-like": 120_000,
-    "weekend-amber-artifact": 120_000,
-    "weekend-desktop": 120_000,
-    "outro-qr": 30_000,
-  });
+  assert.equal(Object.keys(SCENARIO_TIMEOUT_POLICY).length, SCENARIO_IDS.length);
   assert.equal(resolveScenarioTimeoutMs("intro-loop"), 3_600_000);
-  assert.equal(resolveScenarioTimeoutMs("lecture-deck"), 180_000);
+  assert.equal(resolveScenarioTimeoutMs("lecture-01"), 30_000);
   assert.equal(resolveScenarioTimeoutMs("tomorrow-mobile"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("tomorrow-rail-like"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("weekend-amber-artifact"), 120_000);
@@ -240,14 +232,13 @@ test("relay, lifecycle, fullscreen, and evidence contracts remain intact", () =>
   assert.match(source, /this\.shutdownPromise/u);
 });
 
-test("intro, lecture and desktop scenes use pinned stage assets and real FHD scrolling", () => {
-  assert.match(source, /async runIntroLoop\(signal\)/u);
+test("intro, held lecture and desktop scenes use pinned assets and real FHD scrolling", () => {
+  assert.match(source, /async runIntroLoop\(signal, options = \{\}\)/u);
   assert.match(source, /config\.introRuntimeMs/u);
   assert.match(source, /INTRO_MUSIC_ASSET\.url/u);
   assert.match(source, /ZNANIE_LOGO_ASSET\.url/u);
-  assert.match(source, /async runLectureDeck\(signal\)/u);
-  assert.match(source, /LECTURE_ASSETS\.length/u);
-  assert.match(source, /data-lecture-state/u);
+  assert.match(source, /async runHeldPresentationScene\(scenarioId, signal\)/u);
+  assert.match(source, /LECTURE_SCENES\.find/u);
   assert.match(source, /async runWeekendDesktop\(signal\)/u);
   assert.match(source, /setInteractionMode\("desktop-passive"\)/u);
   assert.match(source, /WEEKEND_DESKTOP_ROOT_SELECTOR/u);
@@ -269,7 +260,8 @@ test("normal scenarios reuse the sole page and clear embedded state without clos
   assert.doesNotMatch(prepare, /freshContext|createContextAndStage|context.*close/u);
   assert.doesNotMatch(source, /freshContext/u);
   assert.doesNotMatch(source, /oldContext/u);
-  assert.match(source, /localStorage\.clear\(\)/u);
+  assert.match(source, /kenigevents:focus-participation:v1/u);
+  assert.doesNotMatch(source, /localStorage\.clear\(\)/u);
   assert.match(source, /sessionStorage\.clear\(\)/u);
   assert.match(source, /await this\.reloadEmbeddedFrame\(signal\)/u);
   assert.equal(source.match(/this\.context\?\.close\(\)/gu)?.length, 1);

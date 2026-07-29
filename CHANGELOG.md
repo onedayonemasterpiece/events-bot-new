@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Stabilized the Autopresenter PWA status/detail shelf, preserved focus-group
+  participation during presenter-owned resets, and replaced the intro's
+  per-grapheme imitation with the original Hero Talk semantic-fragment reveal,
+  active-fragment cursor and shorter rhythm.
 - Fixed Autopresenter scene switching so sequential Run, Stop, and Reset reuse
   one headed browser/context/page/window instead of visibly closing and
   recreating it. Replaced the global 30-second scenario abort with explicit
@@ -32,6 +36,15 @@
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
+
+- Added the explicit 30 July service-presentation scenes: kinetic «Анонсы»
+  wordmark, user needs, medallion explanation with real focus-preview desktop
+  and mobile examples, seven-second joke beat, Smart Search concept and
+  PWA-entered live query, failure/taste/feedback/focus/NPS frames, and the
+  Tatyana Udovenko future-capability frame.
+- Added an always-visible elapsed/countdown timer to «Пульт презентации», an
+  intro start-time input, bounded per-scene command options, and a versioned
+  accepted-scene freeze contract for targeted draft verification.
 
 - Added three explicit Autopresenter owner-test scenes from the 30 July
   programme: a 50-minute interruptible typographic intro with music, a seven-
@@ -65,6 +78,12 @@
   blocked by empirical M0.
 
 ### Changed
+
+- Split the former autoplay lecture deck into seven separately controlled,
+  indefinitely held scenes with varied light/dark compositions, uncropped
+  horizontal media, captions, and a transparent contrast-aware «Знание» mark.
+  Weekend desktop now shows a full-screen meaning frame before the live FHD
+  site, while new live scenes use the supplied focus-group preview URL.
 
 - Expanded «Пульт презентации» to seven explicit scenarios while preserving
   the single browser/context/page/window lifecycle; the persistent Windows

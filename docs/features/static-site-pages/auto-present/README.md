@@ -69,81 +69,30 @@ native output работают в UTF-8. Для headed owner test устанав
 
 ## Продуктовая граница
 
-### Семь фиксированных owner-test сцен
+### Явные owner-test сцены и быстрые итерации
 
-`intro-loop`:
+Актуальный продуктовый список и точные формулировки живут в
+[`scenario-30072026-technical.md`](scenario-30072026-technical.md). Intro, семь
+отдельно удерживаемых лекционных кадров, сервисные тезисы, medallion/search
+live-вставки, принятые mobile journeys, двухфазный Weekend desktop и QR-outro
+остаются явными scene IDs. Универсального DSL и редактора нет.
 
-1. показывает 50-минутный прерываемый цикл коротких типографических мыслей;
-2. использует четыре логичных маршрута фраз, знак «Знание» и тихую музыку из
-   immutable Yandex CDN;
-3. следующий Run/Stop немедленно снимает таймеры и останавливает аудио.
+Согласованные сцены замораживаются в `SCENE_ACCEPTANCE_CONTRACT`. Черновая
+итерация проверяет только новые и адресно переоткрытые сцены; полный regression
+выполняется один раз перед финальным handoff. Сейчас без адресного замечания не
+меняются `tomorrow-mobile`, `tomorrow-rail-like`, `weekend-amber-artifact` и
+`outro-qr`.
 
-`lecture-deck`:
+PWA содержит отдельные кнопки для каждой лекционной и сервисной сцены,
+sticky elapsed/countdown timer, стабильный status shelf, время начала intro и
+поле Smart Search. Статический кадр остаётся видимым до следующего Run; browser,
+BrowserContext, page и окно не пересоздаются. Stop/Reset нетерминальны, только
+Shutdown закрывает среду.
 
-1. показывает семь явных слайдов из предоставленных Telegram-изображений;
-2. держит на каждом кадре одну крупную мысль и знак «Знание»;
-3. мягко меняет кадры каждые 8,5 секунды без пересоздания окна.
-
-`tomorrow-mobile`:
-
-1. открывает служебный noindex stage с настоящей главной страницей в iframe;
-2. находит видимый `[data-presenter-id="nav-tomorrow"]`;
-3. показывает mobile tap-circle и выполняет настоящий `locator.click()`;
-4. ждёт `/zavtra/` и `[data-presenter-id="tomorrow-page-ready"]`;
-5. детерминированно выбирает конкретную event rail, настоящим Playwright drag
-   листает её к блоку «О событии» и показывает swipe trail;
-6. удерживает описание в кадре, открывает detail выбранного события и
-   прокручивает к настоящему полному описанию;
-7. только после description dwell подтверждает `completed` телефону.
-
-`tomorrow-rail-like`:
-
-1. тем же видимым путём открывает «Завтра» и ждёт реальной готовности страницы;
-2. естественной вертикальной прокруткой подводит нужную карточку в кадр;
-3. горизонтальным rail-жестом показывает событие, затем продолжает движение
-   влево до штатного pull-to-like;
-4. подтверждает результат только по настоящему UI-состоянию лайка и его
-   сохранению после reload.
-
-`weekend-amber-artifact`:
-
-1. открывает mobile-меню и настоящим переходом выбирает «Выходные»;
-2. ждёт загрузки `/vyhodnye/` и детерминированного amber-artifact marker;
-3. естественно прокручивает страницу, собирает «Янтарного космонавта» и
-   проверяет настоящее persisted/ARIA-состояние;
-4. повторным настоящим действием открывает карточку артефакта.
-
-`weekend-desktop`:
-
-1. без боковых подписей загружает настоящую `/vyhodnye/` во весь FHD stage;
-2. ждёт desktop-ready marker и естественным wheel-жестом прокручивает страницу
-   до footer;
-3. не вводит универсальный desktop renderer и остаётся узким owner-test путём.
-
-`outro-qr`:
-
-1. в том же browser/context/page переключает stage с live-сайта на отдельную
-   полноэкранную композицию;
-2. показывает короткую мысль «Как вам?» сильной типографикой и без служебного
-   dashboard-интерфейса;
-3. ждёт фактическую загрузку QR из immutable Yandex CDN URL и оставляет кадр
-   видимым до следующего Run, Stop/Reset или terminal Shutdown.
-
-Browser, BrowserContext, stage page и видимое окно создаются один раз на всю
-presentation session. Следующий Run кооперативно останавливает текущую сцену и
-переключает содержимое того же окна; Stop и Reset нетерминальны. Только
-«Закрыть презентацию»/Shutdown закрывает browser и Windows agent. У каждой
-явной сцены собственный timeout: live-site сценарии 120 секунд, lecture 180 секунд, intro 60 минут, готовое
-QR-аутро 30 секунд; policy допускает будущую явную часовую сцену без
-универсального DSL или редактора.
-
-Между действиями сценарии используют bounded readiness/settle checkpoints,
-видимые wheel/drag-траектории и dwell, а не мгновенный прыжок к найденному
-компоненту. Stop и Reset обрабатываются параллельным polling.
-
-Mobile-контракт скрывает системный cursor и показывает только tap/swipe
-affordances. Отдельный desktop-контракт для интерактивных desktop-сценариев
-показывает нажатые клавиши и текст реакции интерфейса.
+Новые live-вставки используют предоставленную focus-preview сборку; точная
+invitation-ссылка зафиксирована в presentation contract. Принятые journeys с
+presenter hooks остаются на hooked review build, потому что focus-preview этих
+hooks не содержит.
 
 ### Два непересекающихся трека
 
@@ -193,9 +142,9 @@ MP4 и SHA-256 лежат в
 | Интернет, не локальная сеть | отдельный Fly HTTPS relay; телефон и агент делают только исходящие запросы |
 | Mobile/desktop реального сайта | mobile плюс один явный owner-test desktop `/vyhodnye/`; универсальный desktop — после M3 |
 | Tap/pointer и human-like motion | deterministic overlay + настоящие Playwright actions |
-| Сценарии в файлах | семь явных action path; schema только после нескольких проверенных итераций |
+| Сценарии в файлах | явные scene IDs; schema только после нескольких проверенных итераций |
 | «Завтра», event rail, суббота | immutable presentation dataset + exact scenario contract |
-| Typing/произвольные media/stats/captions/keys | post-M3 extensions; фиксированные intro/lecture/QR — узкие owner-test исключения |
+| Typing/media/stats/captions/keys | только явные сцены сценария 30.07; универсальный редактор — post-M3 |
 | Тонкий Windows-клиент | hermetic ZIP, portable Node, managed browser, `start.cmd` |
 | Локальная отладка | Linux smoke полезен, но не заменяет M0 на Windows 10 |
 | Резервная запись | заранее созданный и просмотренный MP4 из того же commit/scenario |

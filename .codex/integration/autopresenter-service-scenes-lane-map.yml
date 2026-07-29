@@ -42,6 +42,16 @@ requirements:
     text: Extend explicit runtime/PWA/Windows contracts for the new service presentation while preserving single-window lifecycle.
   - id: R12
     text: Optimize verification: targeted new-scope tests during iteration, immutable accepted-scene freeze checks, then one final full build/E2E before handoff.
+  - id: R13
+    text: Stabilize the PWA status/detail geometry during polling.
+  - id: R14
+    text: Split lecture into seven separately controlled held scenes.
+  - id: R15
+    text: Add sticky elapsed/countdown timing and periodic intro countdown copy.
+  - id: R16
+    text: Vary lecture layouts/themes and make the Znanie mark transparent and contrast-aware.
+  - id: R17
+    text: Preserve space for meaning and make desktop live demonstrations meaning-first and two-phase.
 lanes:
   - id: DISC-TG
     role: planner
@@ -56,7 +66,7 @@ lanes:
     expected_output: Numbered requirement consolidation with Telegram message IDs and classification.
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: DISC-HERO
     role: planner
     requirement_ids: [R03, R04]
@@ -70,10 +80,10 @@ lanes:
     expected_output: Minimum behavior diff and safe URL integration recommendation.
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: INT
     role: merge_reviewer
-    requirement_ids: [R02, R05, R06, R07, R08, R09, R10, R11, R12]
+    requirement_ids: [R02, R05, R06, R07, R08, R09, R10, R11, R12, R13, R14, R15, R16, R17]
     support_requirement_ids: [R01, R03, R04]
     target: Consolidate requirements, implement explicit presentation scenes, integrate, test, deploy, package and hand off.
     depends_on: [DISC-TG, DISC-HERO]
@@ -94,4 +104,4 @@ lanes:
     expected_output: Clean committed branch, public feature branch update, existing Fly app deploy, fresh Windows ZIP, Telegram handoff, integration report.
     verification_scope: targeted_then_full_final
     effort: high
-    status: planned
+    status: in_progress

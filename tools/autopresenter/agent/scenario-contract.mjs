@@ -1,7 +1,9 @@
 import { OUTRO_SCENE_ID } from "./outro-contract.mjs";
 import {
   INTRO_SCENE_ID,
-  LECTURE_SCENE_ID,
+  LECTURE_SCENE_IDS,
+  SERVICE_SCENE_IDS,
+  STATIC_PRESENTATION_SCENE_IDS,
   WEEKEND_DESKTOP_SCENE_ID,
 } from "./presentation-contract.mjs";
 
@@ -17,119 +19,43 @@ export const INTERACTION_VISUAL_CONTRACTS = Object.freeze({
   }),
 });
 
-export const TOMORROW_MOBILE_CONTRACT = Object.freeze({
-  id: "tomorrow-mobile",
-  surface: "mobile",
-  completion: "concrete-event-detail-description-visible-after-horizontal-rail-gesture",
-});
-
-export const TOMORROW_RAIL_LIKE_CONTRACT = Object.freeze({
-  id: "tomorrow-rail-like",
-  surface: "mobile",
-  eventId: 5296,
-  eventTitle: "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»",
-  completion: "gesture-like-persisted-after-reload",
-});
-
-export const WEEKEND_AMBER_ARTIFACT_CONTRACT = Object.freeze({
-  id: "weekend-amber-artifact",
-  surface: "mobile",
-  snapshotEventId: 6591,
-  completion: "artifact-collected-and-detail-dialog-visible-after-reload",
-});
-
-export const OUTRO_QR_CONTRACT = Object.freeze({
-  id: OUTRO_SCENE_ID,
-  surface: "stage",
-  completion: "fullscreen-survey-qr-loaded-and-visible",
-});
-
-export const INTRO_LOOP_CONTRACT = Object.freeze({
-  id: INTRO_SCENE_ID,
-  surface: "stage",
-  completion: "fifty-minute-logical-randomized-two-line-typing-loop",
-});
-
-export const LECTURE_DECK_CONTRACT = Object.freeze({
-  id: LECTURE_SCENE_ID,
-  surface: "stage",
-  completion: "seven-source-backed-lecture-frames-presented-in-order",
-});
-
-export const WEEKEND_DESKTOP_CONTRACT = Object.freeze({
-  id: WEEKEND_DESKTOP_SCENE_ID,
-  surface: "desktop",
-  completion: "live-weekend-page-loaded-at-fhd-and-naturally-scrolled-down",
-});
+export const TOMORROW_MOBILE_CONTRACT = Object.freeze({ id: "tomorrow-mobile", surface: "mobile", completion: "concrete-event-detail-description-visible-after-horizontal-rail-gesture" });
+export const TOMORROW_RAIL_LIKE_CONTRACT = Object.freeze({ id: "tomorrow-rail-like", surface: "mobile", eventId: 5296, eventTitle: "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»", completion: "gesture-like-persisted-after-reload" });
+export const WEEKEND_AMBER_ARTIFACT_CONTRACT = Object.freeze({ id: "weekend-amber-artifact", surface: "mobile", snapshotEventId: 6591, completion: "artifact-collected-and-detail-dialog-visible-after-reload" });
+export const OUTRO_QR_CONTRACT = Object.freeze({ id: OUTRO_SCENE_ID, surface: "stage", completion: "fullscreen-survey-qr-loaded-and-visible" });
+export const INTRO_LOOP_CONTRACT = Object.freeze({ id: INTRO_SCENE_ID, surface: "stage", completion: "fifty-minute-logical-randomized-two-line-hero-talk-loop" });
+export const WEEKEND_DESKTOP_CONTRACT = Object.freeze({ id: WEEKEND_DESKTOP_SCENE_ID, surface: "desktop", completion: "meaning-first-then-live-weekend-page-at-fhd-and-natural-scroll" });
+export const LECTURE_SCENE_CONTRACTS = Object.freeze(LECTURE_SCENE_IDS.map((id) => Object.freeze({ id, surface: "stage", completion: "held-until-another-explicit-command" })));
+export const SERVICE_SCENE_CONTRACTS = Object.freeze(SERVICE_SCENE_IDS.map((id) => Object.freeze({ id, surface: id.endsWith("-mobile") || id.endsWith("-live") ? "mobile" : id.endsWith("-desktop") ? "desktop" : "stage", completion: "explicit-scene-visible-and-held" })));
 
 export const DEFAULT_SCENARIO_ID = TOMORROW_MOBILE_CONTRACT.id;
 export const SCENARIO_IDS = Object.freeze([
   INTRO_LOOP_CONTRACT.id,
-  LECTURE_DECK_CONTRACT.id,
+  ...LECTURE_SCENE_IDS,
   TOMORROW_MOBILE_CONTRACT.id,
   TOMORROW_RAIL_LIKE_CONTRACT.id,
   WEEKEND_AMBER_ARTIFACT_CONTRACT.id,
+  ...SERVICE_SCENE_IDS,
   WEEKEND_DESKTOP_CONTRACT.id,
   OUTRO_QR_CONTRACT.id,
 ]);
 export const LONG_SCENE_TIMEOUT_CEILING_MS = 60 * 60 * 1_000;
-export const SCENARIO_TIMEOUT_POLICY = Object.freeze({
-  [INTRO_LOOP_CONTRACT.id]: LONG_SCENE_TIMEOUT_CEILING_MS,
-  [LECTURE_DECK_CONTRACT.id]: 180_000,
-  [TOMORROW_MOBILE_CONTRACT.id]: 120_000,
-  [TOMORROW_RAIL_LIKE_CONTRACT.id]: 120_000,
-  [WEEKEND_AMBER_ARTIFACT_CONTRACT.id]: 120_000,
-  [WEEKEND_DESKTOP_CONTRACT.id]: 120_000,
-  [OUTRO_QR_CONTRACT.id]: 30_000,
-});
+export const SCENARIO_TIMEOUT_POLICY = Object.freeze(Object.fromEntries(SCENARIO_IDS.map((id) => [id, id === INTRO_LOOP_CONTRACT.id ? LONG_SCENE_TIMEOUT_CEILING_MS : [TOMORROW_MOBILE_CONTRACT.id, TOMORROW_RAIL_LIKE_CONTRACT.id, WEEKEND_AMBER_ARTIFACT_CONTRACT.id, WEEKEND_DESKTOP_CONTRACT.id, "service-search-live", "service-medallions-desktop", "service-medallions-mobile"].includes(id) ? 120_000 : 30_000])));
 
+export function isStaticPresentationScenario(id) { return STATIC_PRESENTATION_SCENE_IDS.includes(id); }
 export function resolveScenarioId(value) {
   const requested = String(value || "").trim();
   if (!requested) return DEFAULT_SCENARIO_ID;
   if (SCENARIO_IDS.includes(requested)) return requested;
-  throw new Error(
-    `unsupported scenario "${requested}"; expected one of ${SCENARIO_IDS.join(", ")}`,
-  );
+  throw new Error(`unsupported scenario "${requested}"; expected one of ${SCENARIO_IDS.join(", ")}`);
 }
-
-export function resolveScenarioTimeoutMs(
-  scenarioId,
-  policy = SCENARIO_TIMEOUT_POLICY,
-) {
+export function resolveScenarioTimeoutMs(scenarioId, policy = SCENARIO_TIMEOUT_POLICY) {
   const timeoutMs = policy?.[scenarioId];
-  if (
-    !Number.isSafeInteger(timeoutMs) ||
-    timeoutMs <= 0 ||
-    timeoutMs > LONG_SCENE_TIMEOUT_CEILING_MS
-  ) {
-    throw new Error(
-      `scenario "${scenarioId}" needs an explicit timeout between 1ms and ` +
-        `${LONG_SCENE_TIMEOUT_CEILING_MS}ms`,
-    );
-  }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > LONG_SCENE_TIMEOUT_CEILING_MS) throw new Error(`scenario "${scenarioId}" needs an explicit timeout between 1ms and ${LONG_SCENE_TIMEOUT_CEILING_MS}ms`);
   return timeoutMs;
 }
-
 export function selectDeterministicMobileEvent(candidates) {
-  const eligible = candidates
-    .map((candidate) => ({
-      eventId: String(candidate.eventId || "").trim(),
-      title: String(candidate.title || "").trim(),
-      galleryCount: Number(candidate.galleryCount),
-    }))
-    .filter(
-      (candidate) =>
-        /^\d+$/.test(candidate.eventId) &&
-        candidate.title &&
-        Number.isFinite(candidate.galleryCount) &&
-        candidate.galleryCount >= 0,
-    );
-
-  eligible.sort(
-    (left, right) =>
-      left.galleryCount - right.galleryCount ||
-      Number(left.eventId) - Number(right.eventId) ||
-      left.title.localeCompare(right.title, "ru"),
-  );
+  const eligible = candidates.map((candidate) => ({ eventId: String(candidate.eventId || "").trim(), title: String(candidate.title || "").trim(), galleryCount: Number(candidate.galleryCount) })).filter((candidate) => /^\d+$/.test(candidate.eventId) && candidate.title && Number.isFinite(candidate.galleryCount) && candidate.galleryCount >= 0);
+  eligible.sort((left, right) => left.galleryCount - right.galleryCount || Number(left.eventId) - Number(right.eventId) || left.title.localeCompare(right.title, "ru"));
   return eligible[0] || null;
 }

@@ -14,9 +14,9 @@ import {
   TOMORROW_RAIL_LIKE_CONTRACT,
   WEEKEND_AMBER_ARTIFACT_CONTRACT,
   INTRO_LOOP_CONTRACT,
-  LECTURE_DECK_CONTRACT,
   WEEKEND_DESKTOP_CONTRACT,
   OUTRO_QR_CONTRACT,
+  isStaticPresentationScenario,
   resolveScenarioId,
   resolveScenarioTimeoutMs,
   selectDeterministicMobileEvent,
@@ -25,9 +25,8 @@ import {
   INTRO_LOOP_RUNTIME_MS,
   INTRO_MUSIC_ASSET,
   INTRO_SCENE_ID,
-  LECTURE_ASSETS,
-  LECTURE_SCENE_ID,
-  LECTURE_SLIDE_INTERVAL_MS,
+  FOCUS_PREVIEW_BASE_URL,
+  LECTURE_SCENES,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
 } from "./presentation-contract.mjs";
@@ -50,9 +49,6 @@ const INTRO_SCENE_SELECTOR =
   '[data-presenter-id="intro-scene"][data-presenter-scene-id="intro-loop"]';
 const INTRO_LOGO_SELECTOR = `${INTRO_SCENE_SELECTOR} .brand-plate--intro img`;
 const INTRO_AUDIO_SELECTOR = '[data-presenter-id="intro-music"]';
-const LECTURE_SCENE_SELECTOR =
-  '[data-presenter-id="lecture-scene"][data-presenter-scene-id="lecture-deck"]';
-const LECTURE_SLIDE_SELECTOR = `${LECTURE_SCENE_SELECTOR} [data-lecture-slide]`;
 const DESKTOP_FRAME_SELECTOR =
   '#presenter-desktop-frame[data-presenter-id="desktop-site-frame"]';
 const WEEKEND_DESKTOP_ROOT_SELECTOR = '[data-date-listing="weekend"]';
@@ -96,12 +92,6 @@ const config = Object.freeze({
     INTRO_LOOP_RUNTIME_MS,
     5_000,
     INTRO_LOOP_RUNTIME_MS,
-  ),
-  lectureSlideMs: numberFromEnv(
-    "AUTOPRESENTER_LECTURE_SLIDE_MS",
-    LECTURE_SLIDE_INTERVAL_MS,
-    800,
-    20_000,
   ),
 });
 
@@ -551,7 +541,7 @@ class PrototypeAgent {
       controller.abort(error);
     }, timeoutMs);
 
-    const runPromise = this.runScenario(scenarioId, controller.signal)
+    const runPromise = this.runScenario(scenarioId, controller.signal, command)
       .then(async (evidence) => {
         const detail = `${scenarioId}: ${evidence.summary}`;
         await this.setAgentState("completed", detail);
@@ -587,7 +577,7 @@ class PrototypeAgent {
     this.activeRun = runPromise;
   }
 
-  async runScenario(scenarioId, signal) {
+  async runScenario(scenarioId, signal, command = {}) {
     if (scenarioId === TOMORROW_MOBILE_CONTRACT.id) {
       return this.runTomorrowMobile(signal);
     }
@@ -598,10 +588,19 @@ class PrototypeAgent {
       return this.runWeekendAmberArtifact(signal);
     }
     if (scenarioId === INTRO_LOOP_CONTRACT.id) {
-      return this.runIntroLoop(signal);
+      return this.runIntroLoop(signal, command.options);
     }
-    if (scenarioId === LECTURE_DECK_CONTRACT.id) {
-      return this.runLectureDeck(signal);
+    if (isStaticPresentationScenario(scenarioId)) {
+      return this.runHeldPresentationScene(scenarioId, signal);
+    }
+    if (scenarioId === "service-medallions-desktop") {
+      return this.runFocusMedallionScene(scenarioId, signal, "desktop");
+    }
+    if (scenarioId === "service-medallions-mobile") {
+      return this.runFocusMedallionScene(scenarioId, signal, "mobile");
+    }
+    if (scenarioId === "service-search-live") {
+      return this.runFocusSearch(signal, command.options?.query);
     }
     if (scenarioId === WEEKEND_DESKTOP_CONTRACT.id) {
       return this.runWeekendDesktop(signal);
@@ -695,8 +694,17 @@ class PrototypeAgent {
   async resetEmbeddedState(frame, signal) {
     await raceWithAbort(
       frame.locator("body").evaluate(() => {
-        localStorage.clear();
+        const focusParticipation = localStorage.getItem("kenigevents:focus-participation:v1");
+        const presenterOwnedKeys = [
+          "ke_artifact_collection_v1",
+          "ke_personalization_profile",
+          "ke_event_feedback_log_v1",
+        ];
+        presenterOwnedKeys.forEach((key) => localStorage.removeItem(key));
         sessionStorage.clear();
+        if (focusParticipation !== null) {
+          localStorage.setItem("kenigevents:focus-participation:v1", focusParticipation);
+        }
       }),
       signal,
     );
@@ -784,11 +792,13 @@ class PrototypeAgent {
     );
   }
 
-  async runIntroLoop(signal) {
+  async runIntroLoop(signal, options = {}) {
     const startedAt = Date.now();
     await this.setInteractionMode("stage");
     await this.setAgentState("running", INTRO_LOOP_CONTRACT.id);
-    await this.showPresenterScene(INTRO_SCENE_ID, signal);
+    await this.showPresenterScene(INTRO_SCENE_ID, signal, {
+      startAt: typeof options?.start_at === "string" ? options.start_at : "",
+    });
     const scene = this.page.locator(INTRO_SCENE_SELECTOR);
     await raceWithAbort(scene.waitFor({ state: "visible", timeout: 10_000 }), signal);
     await this.assertStageAssetLoaded(INTRO_LOGO_SELECTOR, ZNANIE_LOGO_ASSET.url, signal);
@@ -812,51 +822,116 @@ class PrototypeAgent {
     };
   }
 
-  async runLectureDeck(signal) {
+  async runHeldPresentationScene(scenarioId, signal) {
     const startedAt = Date.now();
     await this.setInteractionMode("stage");
-    await this.setAgentState("running", LECTURE_DECK_CONTRACT.id);
-    await this.showPresenterScene(LECTURE_SCENE_ID, signal, {
-      slideIntervalMs: config.lectureSlideMs,
-    });
-    const scene = this.page.locator(LECTURE_SCENE_SELECTOR);
+    await this.setAgentState("running", scenarioId);
+    await this.showPresenterScene(scenarioId, signal);
+    const selector = `[data-presenter-scene-id="${scenarioId}"]`;
+    const scene = this.page.locator(selector);
     await raceWithAbort(scene.waitFor({ state: "visible", timeout: 10_000 }), signal);
-    const slides = this.page.locator(LECTURE_SLIDE_SELECTOR);
-    assertCondition(
-      (await slides.count()) === LECTURE_ASSETS.length,
-      `lecture slide count differs from pinned asset count ${LECTURE_ASSETS.length}`,
-    );
-    for (let index = 0; index < LECTURE_ASSETS.length; index += 1) {
+    const lecture = LECTURE_SCENES.find(({ id }) => id === scenarioId);
+    if (lecture) {
       await this.assertStageAssetLoaded(
-        `${LECTURE_SLIDE_SELECTOR}[data-lecture-index="${index}"] .lecture-visual img`,
-        LECTURE_ASSETS[index].url,
+        `${selector} .lecture-visual img`,
+        lecture.url,
+        signal,
+      );
+      await this.assertStageAssetLoaded(
+        `${selector} .brand-plate--lecture img`,
+        ZNANIE_LOGO_ASSET.url,
         signal,
       );
     }
-    await this.assertStageAssetLoaded(
-      `${LECTURE_SLIDE_SELECTOR}[data-lecture-index="0"] .brand-plate--lecture img`,
-      ZNANIE_LOGO_ASSET.url,
-      signal,
-    );
+    await abortableDelay(900, signal);
+    await this.captureScenario(scenarioId);
+    return {
+      summary: lecture
+        ? `source-backed lecture frame ${scenarioId} is visible and held until the next command`
+        : `presentation frame ${scenarioId} is visible and held until the next command`,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async focusFrame(frameSelector, signal) {
+    const iframe = this.page.locator(frameSelector);
+    await raceWithAbort(iframe.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    const handle = await iframe.elementHandle();
+    const frame = await handle?.contentFrame();
+    assertCondition(frame, `focus frame ${frameSelector} did not attach`);
     await raceWithAbort(
-      this.page.waitForFunction(
-        (selector) =>
-          document.querySelector(selector)?.getAttribute("data-lecture-state") === "complete",
-        LECTURE_SCENE_SELECTOR,
-        { timeout: config.lectureSlideMs * LECTURE_ASSETS.length + 15_000 },
+      frame.waitForURL(
+        (url) => url.href.startsWith(FOCUS_PREVIEW_BASE_URL),
+        { waitUntil: "domcontentloaded", timeout: 30_000 },
       ),
       signal,
     );
     assertCondition(
-      (await scene.getAttribute("data-lecture-active-index")) ===
-        String(LECTURE_ASSETS.length - 1),
-      "lecture deck did not finish on the seventh source-backed frame",
+      frame.url().startsWith(FOCUS_PREVIEW_BASE_URL),
+      `focus frame opened unexpected URL ${frame.url()}`,
     );
-    await this.captureScenario(LECTURE_DECK_CONTRACT.id);
+    return frame;
+  }
+
+  async resetFocusFrame(frameSelector, signal) {
+    const iframe = this.page.locator(frameSelector);
+    await raceWithAbort(
+      iframe.evaluate((node) => {
+        if (!(node instanceof HTMLIFrameElement)) {
+          throw new Error("focus frame is not an iframe");
+        }
+        const target = node.dataset.src || "";
+        if (!target) throw new Error("focus frame has no pinned data-src");
+        node.src = target;
+      }),
+      signal,
+    );
+  }
+
+  async runFocusMedallionScene(scenarioId, signal, mode) {
+    const startedAt = Date.now();
+    await this.setInteractionMode(mode === "mobile" ? "mobile" : "desktop-passive");
+    await this.showPresenterScene(scenarioId, signal);
+    const frameSelector =
+      mode === "mobile"
+        ? '[data-presenter-id="medallion-mobile-frame"]'
+        : '[data-presenter-id="medallion-desktop-frame"]';
+    await this.resetFocusFrame(frameSelector, signal);
+    const frame = await this.focusFrame(frameSelector, signal);
+    const medallions = frame.locator("[data-medallion-layout]:visible").first();
+    await raceWithAbort(medallions.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await medallions.scrollIntoViewIfNeeded();
+    await abortableDelay(1_400, signal);
+    await this.captureScenario(scenarioId);
     return {
-      summary:
-        `${LECTURE_ASSETS.length} lecture frames completed in source order; ` +
-        "every CDN image and the Znanie logo loaded",
+      summary: `real focus-preview event page shows medallions in ${mode} composition`,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runFocusSearch(signal, rawQuery) {
+    const startedAt = Date.now();
+    const query = String(rawQuery || "").trim().slice(0, 180);
+    assertCondition(query.length >= 2, "smart-search scene needs a query from the PWA");
+    await this.setInteractionMode("mobile");
+    await this.showPresenterScene("service-search-live", signal, { query });
+    await this.resetFocusFrame('[data-presenter-id="focus-search-frame"]', signal);
+    const frame = await this.focusFrame('[data-presenter-id="focus-search-frame"]', signal);
+    const input = frame.locator("[data-search-input]");
+    await raceWithAbort(input.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await input.scrollIntoViewIfNeeded();
+    await input.fill("");
+    await input.pressSequentially(query, { delay: 86 });
+    const submit = frame.locator("[data-search-submit]");
+    const signedIn = await frame.locator("[data-search-logout]").isVisible().catch(() => false);
+    const enabled = signedIn && (await submit.isEnabled().catch(() => false));
+    if (enabled) await submit.click();
+    await abortableDelay(2_000, signal);
+    await this.captureScenario("service-search-live");
+    return {
+      summary: enabled
+        ? `query "${query}" was typed and submitted on the focus-preview search page`
+        : `query "${query}" was typed visibly; site sign-in gate left unchanged`,
       durationMs: Date.now() - startedAt,
     };
   }
@@ -867,6 +942,7 @@ class PrototypeAgent {
     await this.setInteractionMode("desktop-passive");
     await this.setAgentState("running", WEEKEND_DESKTOP_CONTRACT.id);
     await this.showPresenterScene(WEEKEND_DESKTOP_SCENE_ID, signal);
+    await abortableDelay(4_500, signal);
     const iframe = this.page.locator(DESKTOP_FRAME_SELECTOR);
     await raceWithAbort(iframe.waitFor({ state: "visible", timeout: 10_000 }), signal);
     await raceWithAbort(

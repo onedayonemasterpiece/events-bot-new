@@ -38,14 +38,17 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("<title>Пульт презентации</title>", text)
         self.assertIn('rel="manifest" href="/control/manifest.webmanifest"', text)
         self.assertIn('data-scenario="intro-loop"', text)
-        self.assertIn('data-scenario="lecture-deck"', text)
+        for index in range(1, 8):
+            self.assertIn(f'data-scenario="lecture-{index:02d}"', text)
         self.assertIn('data-scenario="tomorrow-mobile"', text)
         self.assertIn('data-scenario="tomorrow-rail-like"', text)
         self.assertIn('data-scenario="weekend-amber-artifact"', text)
         self.assertIn('data-scenario="weekend-desktop"', text)
         self.assertIn('data-scenario="outro-qr"', text)
-        self.assertIn("50 минут: фразы", text)
-        self.assertIn("живой сайт в FHD", text)
+        self.assertIn("Hero Talk, музыка", text)
+        self.assertIn("Смысл, затем FHD", text)
+        self.assertIn('id="presentation-timer"', text)
+        self.assertIn('id="smart-search-query"', text)
         self.assertNotIn('class="primary scenario"', text)
         self.assertIn("state.current_command?.action === 'run'", text)
         self.assertIn("button.classList.toggle('primary', selected)", text)
@@ -151,7 +154,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 202)
         self.assertEqual(payload["command"]["scenario"], "outro-qr")
 
-        for scenario in ("intro-loop", "lecture-deck", "weekend-desktop"):
+        for scenario in ("intro-loop", "lecture-01", "weekend-desktop"):
             response, payload = await self.json(
                 "POST",
                 "/api/commands",
@@ -218,6 +221,31 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(payload["state"]["agent"]["connected"])
         self.assertEqual(payload["state"]["status"], "closed")
         self.assertIn("browser and agent stopped", payload["state"]["detail"])
+
+    async def test_bounded_scene_options_are_delivered_and_idempotent(self):
+        body = {
+            "action": "run",
+            "scenario": "service-search-live",
+            "command_id": "search-one",
+            "options": {"query": "тихий вечер с живой музыкой"},
+        }
+        first_response, first = await self.json("POST", "/api/commands", json=body)
+        second_response, second = await self.json("POST", "/api/commands", json=body)
+        self.assertEqual(first_response.status, 202)
+        self.assertEqual(second_response.status, 202)
+        self.assertEqual(first["command"]["sequence"], second["command"]["sequence"])
+        self.assertEqual(first["command"]["options"], body["options"])
+
+        response, payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={
+                **body,
+                "options": {"query": "другой запрос"},
+            },
+        )
+        self.assertEqual(response.status, 409)
+        self.assertEqual(payload["error"], "idempotency_conflict")
 
     async def test_expired_command_is_not_delivered(self):
         await self.json("POST", "/api/commands", json={"action": "reset", "command_id": "short"})

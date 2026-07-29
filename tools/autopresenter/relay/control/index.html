@@ -69,8 +69,31 @@
     #status[data-status="stopping"]::before { background: #ffc65e; }
     #status[data-status="error"]::before { background: #ff6d81; }
     #status[data-status="closed"]::before { background: #77829f; box-shadow: none; }
-    #detail { min-height: 42px; margin: 14px 0 18px; color: #c6cfea; font-size: .9rem; line-height: 1.45; }
+    #detail { height: 62px; margin: 14px 0 18px; overflow: hidden; color: #c6cfea; font-size: .9rem; line-height: 1.45; }
     .controls { display: grid; gap: 10px; }
+    .timer-shelf {
+      position: sticky;
+      z-index: 20;
+      top: max(8px, env(safe-area-inset-top));
+      min-height: 92px;
+      margin: 0 0 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(164,180,230,.25);
+      border-radius: 20px;
+      background: rgba(9,15,31,.94);
+      box-shadow: 0 16px 44px rgba(0,0,0,.32);
+      backdrop-filter: blur(18px);
+    }
+    .timer-shelf > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+    #timer-mode { color: #95a6d7; font-size: .78rem; font-weight: 700; }
+    #presentation-timer { font: 850 1.6rem/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: -.04em; }
+    #timer-note { display: block; min-height: 1.2em; margin-top: 10px; color: #7381a9; }
+    .scene-group { border: 1px solid rgba(164,180,230,.16); border-radius: 17px; background: rgba(255,255,255,.025); overflow: clip; }
+    .scene-group summary { display: flex; min-height: 50px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 15px; color: #cbd5f3; font-weight: 760; cursor: pointer; }
+    .scene-group summary span { display: grid; min-width: 27px; height: 27px; place-items: center; border-radius: 9px; color: #95a6d7; background: rgba(255,255,255,.07); font-size: .72rem; }
+    .scene-list { display: grid; gap: 9px; padding: 0 9px 9px; }
+    .scene-input { display: grid; gap: 7px; padding: 6px 5px 12px; color: #95a6d7; font-size: .78rem; font-weight: 650; }
+    .scene-input input, .scene-input textarea { width: 100%; border: 1px solid rgba(183,195,235,.25); border-radius: 12px; padding: 11px 12px; color: #f8faff; background: rgba(5,10,24,.72); font: inherit; resize: vertical; }
     button {
       appearance: none;
       width: 100%;
@@ -155,7 +178,7 @@
     }
     .access-reset:hover { border: 0; color: #c5cffa; background: transparent; }
     @keyframes pulse { 50% { transform: scale(.72); opacity: .6; } }
-    @media (min-height: 900px) { body { place-items: center; } }
+    @media (min-height: 900px) { body { place-items: start center; } }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   </style>
 </head>
@@ -164,6 +187,7 @@
     <p class="eyebrow">Kenig Events · Live control</p>
     <h1>Пульт<br>презентации</h1>
     <p class="lede">Сцены меняются в одном окне. Настоящие жесты и сильные полноэкранные кадры.</p>
+    <section class="timer-shelf" aria-label="Таймер презентации"><div><span id="timer-mode">Время презентации</span><output id="presentation-timer">00:00:00</output></div><small id="timer-note">Запустится с первой сцены</small></section>
     <section class="panel" aria-labelledby="control-title">
       <div class="state-row">
         <span class="state-label" id="control-title">Статус агента</span>
@@ -171,34 +195,55 @@
       </div>
       <p id="detail">Подключаемся к relay…</p>
       <div class="controls">
-        <button class="scenario" type="button" data-action="run" data-scenario="intro-loop" aria-pressed="false">
-          <span>01</span>
-          <span>Интро<small>50 минут: фразы, «Знание» и музыка</small></span>
-        </button>
-        <button class="scenario" type="button" data-action="run" data-scenario="lecture-deck" aria-pressed="false">
-          <span>02</span>
-          <span>Лекция<small>7 экранов о пользовательском опыте</small></span>
-        </button>
-        <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-mobile" aria-pressed="false">
-          <span>03</span>
-          <span>Событие завтра<small>от списка к полному описанию</small></span>
-        </button>
-        <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-rail-like" aria-pressed="false">
-          <span>04</span>
-          <span>Лайк через rail<small>дотянуть событие влево и лайкнуть</small></span>
-        </button>
-        <button class="scenario" type="button" data-action="run" data-scenario="weekend-amber-artifact" aria-pressed="false">
-          <span>05</span>
-          <span>Найти артефакт<small>меню, выходные и Янтарный космонавт</small></span>
-        </button>
-        <button class="scenario" type="button" data-action="run" data-scenario="weekend-desktop" aria-pressed="false">
-          <span>06</span>
-          <span>Выходные · desktop<small>живой сайт в FHD и прокрутка вниз</small></span>
-        </button>
-        <button class="scenario" type="button" data-action="run" data-scenario="outro-qr" aria-pressed="false">
-          <span>07</span>
-          <span>Аутро с QR<small>полноэкранный опрос после мероприятия</small></span>
-        </button>
+        <details class="scene-group" open>
+          <summary>До начала<span>1</span></summary>
+          <div class="scene-list">
+            <button class="scenario" type="button" data-action="run" data-scenario="intro-loop" aria-pressed="false"><span>01</span><span>Интро<small>Hero Talk, музыка и обратный отсчёт</small></span></button>
+            <label class="scene-input">Начало события <input id="intro-start-time" type="time" step="60"></label>
+          </div>
+        </details>
+        <details class="scene-group" >
+          <summary>Лекция · каждый экран отдельно<span>7</span></summary>
+          <div class="scene-list">
+            <button class="scenario" type="button" data-action="run" data-scenario="lecture-01" aria-pressed="false"><span>02.1</span><span>UI ≠ UX<small>Интерфейс видят, опыт проживают</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="lecture-02" aria-pressed="false"><span>02.2</span><span>Проверка действием<small>Удобство проверяется действием</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="lecture-03" aria-pressed="false"><span>02.3</span><span>Телефон в руке<small>Зоны доступности большого пальца</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="lecture-04" aria-pressed="false"><span>02.4</span><span>Цена сложности<small>Когда всё важно — ничего не понятно</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="lecture-05" aria-pressed="false"><span>02.5</span><span>Критические системы<small>Удобство как безопасность</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="lecture-06" aria-pressed="false"><span>02.6</span><span>Видеть главное<small>Хорошая система помогает</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="lecture-07" aria-pressed="false"><span>02.7</span><span>Большая работа<small>Понять → спроектировать → проверить</small></span></button>
+          </div>
+        </details>
+        <details class="scene-group" >
+          <summary>Презентация сервиса<span>15</span></summary>
+          <div class="scene-list">
+            <button class="scenario" type="button" data-action="run" data-scenario="service-wordmark" aria-pressed="false"><span>03.1</span><span>Логотип «Анонсы»<small>Кинетический стрейч буквы «о»</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-needs" aria-pressed="false"><span>03.2</span><span>Что нужно человеку<small>Найти, поделиться, не забыть</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="weekend-amber-artifact" aria-pressed="false"><span>03.3</span><span>Найти артефакт<small>Живой мобильный сценарий</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-medallions" aria-pressed="false"><span>03.4</span><span>Что такое медальоны<small>Ключевой смысл одним взглядом</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-medallions-desktop" aria-pressed="false"><span>03.5</span><span>Медальоны · desktop<small>Реальная страница события</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-medallions-mobile" aria-pressed="false"><span>03.6</span><span>Медальоны · mobile<small>Реальная страница на телефоне</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-joke" aria-pressed="false"><span>03.7</span><span>Максим, время шутки<small>Пауза 7 секунд</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-search-concept" aria-pressed="false"><span>03.8</span><span>Умный поиск<small>Поиск по смыслу</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-search-live" aria-pressed="false" data-needs-query="true"><span>03.9</span><span>Умный поиск · live<small>Введите запрос ниже</small></span></button>
+            <label class="scene-input">Запрос для умного поиска <textarea id="smart-search-query" maxlength="180" rows="3" placeholder="Например: тихий вечер с живой музыкой"></textarea></label>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-disruption" aria-pressed="false"><span>03.10</span><span>Не по плану<small>Сильный полноэкранный переход</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-taste" aria-pressed="false"><span>03.11</span><span>Не только свой вкус<small>Сервис делают не для себя</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-feedback" aria-pressed="false"><span>03.12</span><span>Слушать аудиторию<small>Обратная связь — часть интерфейса</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-focus-group" aria-pressed="false"><span>03.13</span><span>Фокус-группа<small>Версия сайта для фокус-группы</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-nps" aria-pressed="false"><span>03.14</span><span>NPS страницы<small>Готовность рекомендовать</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-future-celebrity" aria-pressed="false"><span>03.15</span><span>Скоро: люди<small>Татьяна Удовенко и лайк</small></span></button>
+          </div>
+        </details>
+        <details class="scene-group" >
+          <summary>Живые демонстрации и финал<span>4</span></summary>
+          <div class="scene-list">
+            <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-mobile" aria-pressed="false"><span>04.1</span><span>Событие завтра<small>Rail → описание события</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-rail-like" aria-pressed="false"><span>04.2</span><span>Лайк через rail<small>Дотянуть влево и лайкнуть</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="weekend-desktop" aria-pressed="false"><span>04.3</span><span>Выходные · desktop<small>Смысл, затем FHD и прокрутка</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="outro-qr" aria-pressed="false"><span>05</span><span>Аутро с QR<small>Полноэкранный опрос</small></span></button>
+          </div>
+        </details>
         <div class="secondary-row">
           <button type="button" data-action="stop">Стоп</button>
           <button type="button" data-action="reset">Сброс</button>
@@ -217,9 +262,16 @@
     const metaNode = document.querySelector('#meta');
     const demonstratorLink = document.querySelector('#demonstrator-link');
     const forgetAccessButton = document.querySelector('#forget-access');
+    const timerModeNode = document.querySelector('#timer-mode');
+    const timerNode = document.querySelector('#presentation-timer');
+    const timerNoteNode = document.querySelector('#timer-note');
+    const introStartInput = document.querySelector('#intro-start-time');
+    const searchQueryInput = document.querySelector('#smart-search-query');
     const buttons = [...document.querySelectorAll('button[data-action]')];
     const scenarioButtons = buttons.filter(button => button.dataset.action === 'run');
     let posting = false;
+    let selectedScenario = '';
+    const presentationStartedKey = 'autopresenter:presentation-start:v1';
     const accessStorage = window.AutopresenterControlAuth;
     const reportStorageError = (message, error) => console.warn(message, error);
     const statusLabels = {
@@ -256,7 +308,7 @@
       metaNode.textContent = agent.connected
         ? `${agent.id} · sequence ${state.last_sequence}`
         : `agent offline · sequence ${state.last_sequence}`;
-      const selectedScenario = state.current_command?.action === 'run'
+      selectedScenario = state.current_command?.action === 'run'
         ? state.current_command.scenario
         : '';
       scenarioButtons.forEach(button => {
@@ -264,6 +316,40 @@
         button.classList.toggle('primary', selected);
         button.setAttribute('aria-pressed', String(selected));
       });
+      updateTimer();
+    }
+
+    function hhmmss(totalSeconds) {
+      const seconds = Math.max(0, Math.floor(totalSeconds));
+      const hours = String(Math.floor(seconds / 3600)).padStart(2, '0');
+      const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+      return `${hours}:${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+    }
+
+    function introStartDate() {
+      const value = introStartInput.value;
+      if (!value) return null;
+      const [hours, minutes] = value.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, 0, 0);
+      if (date.getTime() < Date.now() - 12 * 60 * 60 * 1000) date.setDate(date.getDate() + 1);
+      return date;
+    }
+
+    function updateTimer() {
+      const start = introStartDate();
+      if (selectedScenario === 'intro-loop' && start) {
+        timerModeNode.textContent = 'До начала';
+        timerNode.textContent = hhmmss((start.getTime() - Date.now()) / 1000);
+        timerNoteNode.textContent = `Начало в ${introStartInput.value}`;
+        return;
+      }
+      const startedAt = Number(localStorage.getItem(presentationStartedKey));
+      timerModeNode.textContent = 'Время презентации';
+      timerNode.textContent = Number.isFinite(startedAt) && startedAt > 0
+        ? hhmmss((Date.now() - startedAt) / 1000)
+        : '00:00:00';
+      timerNoteNode.textContent = startedAt ? 'Считается от первой запущенной сцены' : 'Запустится с первой сцены';
     }
 
     async function readState() {
@@ -296,7 +382,23 @@
       buttons.forEach(button => button.disabled = true);
       try {
         const command = {action, command_id: crypto.randomUUID()};
-        if (action === 'run') command.scenario = scenario;
+        if (action === 'run') {
+          command.scenario = scenario;
+          command.options = {};
+          if (!localStorage.getItem(presentationStartedKey)) {
+            localStorage.setItem(presentationStartedKey, String(Date.now()));
+          }
+          if (scenario === 'intro-loop') {
+            const start = introStartDate();
+            if (start) command.options.start_at = start.toISOString();
+          }
+          if (scenario === 'service-search-live') {
+            const query = searchQueryInput.value.trim();
+            if (query.length < 2) throw new Error('Введите запрос для умного поиска.');
+            command.options.query = query;
+          }
+          if (!Object.keys(command.options).length) delete command.options;
+        }
         const response = await fetch('/api/commands', {
           method: 'POST',
           headers: authHeaders({'Content-Type': 'application/json'}),
@@ -314,14 +416,17 @@
     }
 
     buttons.forEach(button => button.addEventListener('click', () => {
+      if (button.dataset.action === 'reset') localStorage.removeItem(presentationStartedKey);
       issue(button.dataset.action, button.dataset.scenario || '');
     }));
+    introStartInput.addEventListener('input', updateTimer);
     forgetAccessButton.addEventListener('click', () => {
       accessStorage.forget(sessionStorage, localStorage, reportStorageError);
       location.replace('/control/');
     });
     readState();
     setInterval(readState, 800);
+    setInterval(updateTimer, 1000);
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/control/service-worker.js', {

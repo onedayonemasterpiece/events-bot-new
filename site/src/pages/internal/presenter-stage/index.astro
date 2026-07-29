@@ -3,9 +3,16 @@ import { withBase } from '../../../lib/events';
 
 const homeUrl = withBase('/');
 const weekendUrl = withBase('/vyhodnye/');
+const focusPreviewBase = 'https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256';
+const focusInvitationUrl = `${focusPreviewBase}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
+const focusSearchUrl = `${focusPreviewBase}/poisk/`;
+const focusMedallionUrl = `${focusPreviewBase}/sobytiya/kofeynaya-geometriya-kaliningrad-6989/`;
 const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/qr-survey-nikiforov-916b6fee58256c4f2111887bf70c502070a55e45a667650dfccdb1495016ccd9.png';
 const znanieLogoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg';
 const introMusicUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3';
+const announcementsWordmarkUrl = '/brand/announcements-wordmark-ui.svg';
+const shareIconUrl = '/assets/icons/reference4/share-nodes.svg';
+const celebrityAvatarUrl = '/assets/participants/udovenko-tatyana.webp';
 const lectureSlides = [
   {
     messageId: 821,
@@ -14,6 +21,9 @@ const lectureSlides = [
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-821-2f3c1b7d9a1c7094c77da009867c25a62cb233110185ab7a1a020b61356bdc26.webp',
     alt: 'Сравнение пользовательского интерфейса и опыта на примере игрушки над детской кроваткой',
     fit: 'contain',
+    theme: 'dark',
+    layout: 'split',
+    caption: 'Красивый объект ещё не гарантирует хороший опыт.',
   },
   {
     messageId: 822,
@@ -22,6 +32,9 @@ const lectureSlides = [
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-822-d85cadfd1dd4aad0c0e8f5fb68482624a1a4d617585fae9737fd430fac9513d1.webp',
     alt: 'Сравнение двух бутылок кетчупа и опыта их использования',
     fit: 'contain',
+    theme: 'light',
+    layout: 'horizontal',
+    caption: 'Проверять удобство нужно не взглядом, а действием.',
   },
   {
     messageId: 823,
@@ -30,6 +43,9 @@ const lectureSlides = [
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-823-61de6c5363792bc2fb5e50d6182c90f926fa7021c12d9bd80f96dff5b9d62bdc.webp',
     alt: 'Зоны доступности интерфейса смартфона для большого пальца',
     fit: 'contain',
+    theme: 'dark',
+    layout: 'poster',
+    caption: 'Телефон держат одной рукой. Интерфейс должен это помнить.',
   },
   {
     messageId: 824,
@@ -38,6 +54,9 @@ const lectureSlides = [
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-824-19c1f686d1b04f0b99463d24a16625827f0ff3e45bccbffb7c6e3b9d8f5d561b.webp',
     alt: 'Иллюстрация перегруженного пульта управления и растерянного оператора',
     fit: 'wide',
+    theme: 'light',
+    layout: 'horizontal',
+    caption: 'Перегрузка интерфейса превращает простое решение в риск.',
   },
   {
     messageId: 825,
@@ -46,6 +65,9 @@ const lectureSlides = [
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-825-1734e48aa4ef2b20c19c975c76d91b507fe98999d49655bf71749e0b8fd9f43b.webp',
     alt: 'Обложка книги Вопросы эргономики в ядерной энергетике',
     fit: 'portrait',
+    theme: 'dark',
+    layout: 'portrait',
+    caption: 'Эргономика — часть безопасности критических систем.',
   },
   {
     messageId: 826,
@@ -54,6 +76,9 @@ const lectureSlides = [
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-826-252137528a929f8165c441b6fccdc853169fd4c4a249c0870f3b9b26a15ecadb.webp',
     alt: 'Организованный большой зал управления с операторами и обзорными экранами',
     fit: 'contain',
+    theme: 'light',
+    layout: 'cinema',
+    caption: 'Хорошая система помогает быстро увидеть отклонение.',
   },
   {
     messageId: 830,
@@ -62,7 +87,16 @@ const lectureSlides = [
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-830-cdcb0a381189715a8cebf90122000b7ddad74350390df87fd881fed658eff582.webp',
     alt: 'Цикл пользовательского проектирования от анализа к дизайну и тестированию',
     fit: 'contain',
+    theme: 'dark',
+    layout: 'split',
+    caption: 'Удобство рождается из наблюдения, проектирования и проверки.',
   },
+];
+const serviceTextScenes = [
+  { id: 'service-disruption', eyebrow: '07 · Честный момент', title: 'И тут презентация\nпошла не по плану…', theme: 'dark' },
+  { id: 'service-taste', eyebrow: '08 · Не только свой вкус', title: 'Удобство нельзя\nсделать для себя.', support: 'Сервисом будут пользоваться другие люди.', theme: 'light' },
+  { id: 'service-feedback', eyebrow: '09 · Слушать аудиторию', title: 'Обратная связь —\nчасть интерфейса.', support: 'Не приложение для людей. Приложение вместе с людьми.', theme: 'dark' },
+  { id: 'service-nps', eyebrow: '11 · Простая проверка', title: 'Посоветовали бы\nэту страницу?', support: 'NPS помогает измерять не красоту, а готовность рекомендовать.', theme: 'light' },
 ];
 ---
 <!doctype html>
@@ -120,13 +154,13 @@ const lectureSlides = [
         hidden
       >
         <div class="presentation-orbit" aria-hidden="true"></div>
-        <div class="brand-plate brand-plate--intro">
+        <div class="brand-plate brand-plate--intro brand-logo--on-dark">
           <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
         </div>
         <p class="intro-kicker">80 историй о главном · Калининград</p>
-        <h1 class="intro-thought" data-presenter-id="intro-thought" aria-live="polite">
-          <span data-intro-line="one"></span>
-          <span class="intro-line-two"><b data-intro-line="two"></b><i class="typing-cursor" aria-hidden="true"></i></span>
+        <h1 class="intro-thought" data-presenter-id="intro-thought" aria-live="off">
+          <span data-intro-line="one" aria-hidden="true"></span>
+          <span data-intro-line="two" aria-hidden="true"></span>
         </h1>
         <p class="intro-footnote">До начала можно знакомиться и общаться</p>
         <audio
@@ -137,25 +171,18 @@ const lectureSlides = [
         ></audio>
       </section>
 
-      <section
-        class="lecture-scene presentation-scene"
-        data-presenter-id="lecture-scene"
-        data-presenter-scene-id="lecture-deck"
-        data-lecture-state="idle"
-        data-lecture-active-index="0"
-        aria-label="Лекционная последовательность"
-        hidden
-      >
-        {lectureSlides.map((slide, index) => (
-          <article
-            class={`lecture-slide lecture-slide--${slide.fit}`}
-            data-lecture-slide
-            data-lecture-index={index}
-            data-source-message-id={slide.messageId}
-            hidden={index !== 0}
-          >
+      {lectureSlides.map((slide, index) => (
+        <section
+          class={`lecture-slide presentation-scene lecture-slide--${slide.fit} lecture-layout--${slide.layout} theme--${slide.theme}`}
+          data-presenter-id="lecture-scene"
+          data-presenter-scene-id={`lecture-${String(index + 1).padStart(2, '0')}`}
+          data-lecture-index={index}
+          data-source-message-id={slide.messageId}
+          aria-label={`Лекционный экран ${index + 1}`}
+          hidden
+        >
             <div class="lecture-copy">
-              <div class="brand-plate brand-plate--lecture">
+              <div class={`brand-plate brand-plate--lecture brand-logo--on-${slide.theme}`}>
                 <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
               </div>
               <p class="lecture-chapter">{slide.chapter}</p>
@@ -164,9 +191,97 @@ const lectureSlides = [
             </div>
             <figure class="lecture-visual">
               <img src={slide.image} alt={slide.alt} loading="eager" decoding="async" />
+              <figcaption>{slide.caption}</figcaption>
             </figure>
-          </article>
-        ))}
+        </section>
+      ))}
+
+      <section class="service-scene service-wordmark presentation-scene theme--light" data-presenter-scene-id="service-wordmark" hidden>
+        <p class="service-eyebrow">01 · Полюбить Калининград</p>
+        <div class="wordmark-motion" aria-label="Анонсы">
+          <span>Ан</span><span class="wordmark-o">о</span><span>нсы</span>
+        </div>
+        <img class="wordmark-reference" src={announcementsWordmarkUrl} alt="Итоговый логотип Анонсы" />
+      </section>
+
+      <section class="service-scene service-needs presentation-scene theme--dark" data-presenter-scene-id="service-needs" hidden>
+        <p class="service-eyebrow">02 · Что нужно человеку</p>
+        <h2>Найти. Поделиться.<br />Не забыть.</h2>
+        <div class="need-row">
+          <div><strong>01</strong><span>Быстро найти<br />то, что нравится</span></div>
+          <div><img src={shareIconUrl} alt="" /><span>Позвать<br />друзей</span></div>
+          <div>
+            <svg viewBox="0 0 64 64" role="img" aria-label="Календарь"><rect x="8" y="13" width="48" height="43" rx="10"/><path d="M8 27h48M21 8v12M43 8v12"/><circle cx="32" cy="41" r="5"/></svg>
+            <span>Добавить<br />в календарь</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="service-scene presentation-scene theme--light" data-presenter-scene-id="service-medallions" hidden>
+        <p class="service-eyebrow">04 · Смысл одним взглядом</p>
+        <h2>Медальон отвечает<br />раньше текста.</h2>
+        <div class="medallion-demo" aria-label="Примеры медальонов">
+          <span>Бесплатно</span><span>Третьяковка</span><span>Для всей семьи</span>
+        </div>
+        <p class="service-support">Где? Для кого? На каких условиях? Ключевой факт виден сразу.</p>
+      </section>
+
+      <section class="focus-live-scene desktop-medallion-scene presentation-scene theme--light" data-presenter-scene-id="service-medallions-desktop" hidden>
+        <aside class="live-meaning light"><p>Реальная страница</p><h2>Сначала —<br />главное.</h2><span>Медальоны находятся рядом с событием, а не прячутся в описании.</span></aside>
+        <iframe data-presenter-id="medallion-desktop-frame" data-src={focusMedallionUrl} title="Реальная страница события с медальонами" width="1360" height="1080"></iframe>
+      </section>
+
+      <section class="focus-live-scene mobile-medallion-scene presentation-scene theme--dark" data-presenter-scene-id="service-medallions-mobile" hidden>
+        <aside class="live-meaning"><p>Тот же смысл</p><h2>Теперь —<br />в ладони.</h2><span>Телефон сдвигается, чтобы оставить место мысли.</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="medallion-mobile-frame" data-src={focusMedallionUrl} title="Мобильная страница события с медальонами" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="service-scene service-joke presentation-scene theme--dark" data-presenter-scene-id="service-joke" data-joke-state="idle" hidden>
+        <p class="service-eyebrow">05 · Нужна пауза</p>
+        <h2 data-joke-line="one"></h2>
+        <p data-joke-line="two"></p>
+      </section>
+
+      <section class="service-scene presentation-scene theme--light" data-presenter-scene-id="service-search-concept" hidden>
+        <p class="service-eyebrow">06 · Умный поиск</p>
+        <h2>Не совпадение слов.<br />Совпадение смыслов.</h2>
+        <div class="search-example"><span>«хочу тихий вечер с музыкой»</span><i>→</i><strong>камерный концерт</strong></div>
+      </section>
+
+      <section class="focus-live-scene search-live-scene presentation-scene theme--light" data-presenter-scene-id="service-search-live" hidden>
+        <aside class="live-meaning light"><p>Живой поиск</p><h2 data-search-meaning>Скажите,<br />чего хочется.</h2><span>Запрос приходит с пульта и печатается на телефоне.</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="focus-search-frame" data-src={focusSearchUrl} title="Умный поиск фокус-версии сайта" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      {serviceTextScenes.map((scene) => (
+        <section class={`service-scene presentation-scene theme--${scene.theme}`} data-presenter-scene-id={scene.id} hidden>
+          <p class="service-eyebrow">{scene.eyebrow}</p>
+          <h2>{scene.title.split('\n').map((line) => <span>{line}</span>)}</h2>
+          {scene.support && <p class="service-support">{scene.support}</p>}
+        </section>
+      ))}
+
+      <section class="focus-live-scene invitation-scene presentation-scene theme--dark" data-presenter-scene-id="service-focus-group" hidden>
+        <aside class="live-meaning"><p>10 · Фокус-группа</p><h2>Удобство<br />делают вместе.</h2><span>Показываем именно версию сайта для фокус-группы.</span></aside>
+        <iframe data-presenter-id="focus-invitation-frame" data-src={focusInvitationUrl} title="Приглашение в фокус-группу" width="1120" height="1080"></iframe>
+      </section>
+
+      <section class="service-scene celebrity-scene presentation-scene theme--dark" data-presenter-scene-id="service-future-celebrity" hidden>
+        <p class="service-eyebrow">12 · Скоро</p>
+        <h2>Люди, за которыми<br />хочется следить.</h2>
+        <div class="celebrity">
+          <img src={celebrityAvatarUrl} alt="Татьяна Удовенко" />
+          <div><strong>Татьяна Удовенко</strong><span>актриса · режиссёр</span></div>
+          <button type="button" aria-label="Нравится Татьяна Удовенко"><b>♥</b><span>128</span></button>
+        </div>
       </section>
 
       <section
@@ -176,6 +291,11 @@ const lectureSlides = [
         aria-label="Десктопная страница событий на выходные"
         hidden
       >
+        <div class="desktop-meaning" data-presenter-id="desktop-meaning">
+          <p>Выходные · FHD</p>
+          <h2>Весь город.<br />На одном экране.</h2>
+          <span>Сначала мысль. Затем — живой сайт без подписи рядом.</span>
+        </div>
         <iframe
           id="presenter-desktop-frame"
           data-presenter-id="desktop-site-frame"
@@ -227,7 +347,6 @@ const lectureSlides = [
         const status = document.querySelector('[data-presenter-id="stage-status"]');
         const stateCard = document.querySelector('[data-presenter-id="stage-status-card"]');
         const introScene = document.querySelector('[data-presenter-scene-id="intro-loop"]');
-        const lectureScene = document.querySelector('[data-presenter-scene-id="lecture-deck"]');
         const outroScene = document.querySelector('[data-presenter-scene-id="outro-qr"]');
         const introLineOne = document.querySelector('[data-intro-line="one"]');
         const introLineTwo = document.querySelector('[data-intro-line="two"]');
@@ -243,7 +362,6 @@ const lectureSlides = [
           !(desktopFrame instanceof HTMLIFrameElement) ||
           !(status instanceof HTMLElement) ||
           !(introScene instanceof HTMLElement) ||
-          !(lectureScene instanceof HTMLElement) ||
           !(outroScene instanceof HTMLElement) ||
           !(introLineOne instanceof HTMLElement) ||
           !(introLineTwo instanceof HTMLElement) ||
@@ -261,9 +379,9 @@ const lectureSlides = [
         const introPhrases = {
           welcome: ['Добро пожаловать!', 'Скоро начинаем.'],
           topic: ['Почему одни сервисы удобны,', 'а другие — нет?'],
-          networking: ['Знакомьтесь друг с другом.', 'Сегодня здесь особенные гости.'],
-          heat: ['Сегодня жарко.', 'Спасибо, что вы с нами.'],
-          format: ['Сначала — короткая лекция.', 'Потом вы — фокус-группа «Анонсов».'],
+          networking: ['Пока знакомьтесь друг с другом.', 'Сегодня здесь много уважаемых гостей.'],
+          heat: ['Сегодня жаркий день.', 'Рады, что вы пришли на презентацию.'],
+          format: ['Лекция — и презентация сервиса анонсов.', 'Сегодня вы — наша фокус-группа.'],
         };
         const introRoutes = [
           ['welcome', 'heat', 'networking', 'topic', 'format'],
@@ -314,36 +432,33 @@ const lectureSlides = [
             try { introMusic.currentTime = 0; } catch {}
           }
           introScene.dataset.introState = 'stopped';
-          lectureScene.dataset.lectureState = 'stopped';
+          document.querySelector('[data-joke-state]')?.setAttribute('data-joke-state', 'stopped');
         };
 
-        const randomTypingDelay = (grapheme) => {
-          if (/\s/u.test(grapheme)) return 25 + Math.random() * 20;
-          if (/[.!?]/u.test(grapheme)) return 220 + Math.random() * 35;
-          if (/[,;:]/u.test(grapheme)) return 130 + Math.random() * 30;
-          return 52 + Math.random() * 26;
+        const splitSemanticChunks = (value) => {
+          const words = value.trim().split(/\s+/u);
+          const midpoint = Math.ceil(words.length / 2);
+          return [words.slice(0, midpoint).join(' '), words.slice(midpoint).join(' ')].filter(Boolean);
         };
 
-        const graphemes = (value) => {
-          if (typeof Intl.Segmenter === 'function') {
-            return [...new Intl.Segmenter('ru', { granularity: 'grapheme' }).segment(value)]
-              .map((part) => part.segment);
-          }
-          return Array.from(value);
-        };
-
-        const typeLine = async (node, value, token) => {
-          node.textContent = '';
-          if (reduceMotion.matches) {
-            node.textContent = value;
-            return token === generation;
-          }
-          for (const grapheme of graphemes(value)) {
+        const revealHeroTalk = async (lineOne, lineTwo, token) => {
+          introLineOne.replaceChildren();
+          introLineTwo.replaceChildren();
+          const chunks = [
+            ...splitSemanticChunks(lineOne).map((text) => [introLineOne, text]),
+            ...splitSemanticChunks(lineTwo).map((text) => [introLineTwo, text]),
+          ];
+          for (const [node, text] of chunks) {
             if (token !== generation) return false;
-            node.textContent += grapheme;
-            if (!await pause(randomTypingDelay(grapheme), token)) return false;
+            const fragment = document.createElement('span');
+            fragment.className = 'hero-fragment is-active';
+            fragment.textContent = `${text} `;
+            node.append(fragment);
+            if (!reduceMotion.matches && !await pause(280, token)) return false;
+            fragment.classList.remove('is-active');
+            fragment.classList.add('is-complete');
           }
-          return true;
+          return token === generation;
         };
 
         const pickRoute = () => {
@@ -375,55 +490,52 @@ const lectureSlides = [
           }, 50);
         };
 
-        const startIntro = async () => {
+        const countdownPhrase = (startAt) => {
+          const timestamp = Date.parse(startAt || '');
+          if (!Number.isFinite(timestamp)) return null;
+          const minutes = Math.max(0, Math.ceil((timestamp - Date.now()) / 60000));
+          return ['Начнём через', `${minutes} ${minutes === 1 ? 'минуту' : minutes > 1 && minutes < 5 ? 'минуты' : 'минут'}.`];
+        };
+
+        const startIntro = async (options = {}) => {
           const token = generation;
           introScene.dataset.introState = 'running';
           introScene.dataset.introAudio = 'starting';
           void startMusic(token);
           while (token === generation) {
-            for (const phraseId of pickRoute()) {
+            const route = pickRoute();
+            if (countdownPhrase(options.startAt)) route.splice(1, 0, 'countdown');
+            for (const phraseId of route) {
               if (token !== generation) return;
-              const phrase = introPhrases[phraseId];
+              const phrase = phraseId === 'countdown' ? countdownPhrase(options.startAt) : introPhrases[phraseId];
+              if (!phrase) continue;
               introScene.dataset.introPhrase = phraseId;
               introScene.classList.remove('is-clearing');
-              if (!await typeLine(introLineOne, phrase[0], token)) return;
-              if (!await pause(260, token)) return;
-              if (!await typeLine(introLineTwo, phrase[1], token)) return;
-              if (!await pause(7500, token)) return;
+              if (!await revealHeroTalk(phrase[0], phrase[1], token)) return;
+              if (!await pause(5200, token)) return;
               introScene.classList.add('is-clearing');
-              if (!await pause(650, token)) return;
-              introLineOne.textContent = '';
-              introLineTwo.textContent = '';
+              if (!await pause(420, token)) return;
+              introLineOne.replaceChildren();
+              introLineTwo.replaceChildren();
               introScene.classList.remove('is-clearing');
-              if (!await pause(3500 + Math.random() * 2000, token)) return;
+              if (!await pause(900 + Math.random() * 450, token)) return;
             }
-            if (!await pause(8000, token)) return;
+            if (!await pause(1400, token)) return;
           }
         };
 
-        const showLectureSlide = (index) => {
-          const slides = [...lectureScene.querySelectorAll('[data-lecture-slide]')];
-          slides.forEach((slide, slideIndex) => {
-            if (!(slide instanceof HTMLElement)) return;
-            slide.hidden = slideIndex !== index;
-            slide.classList.remove('is-entering');
-            if (slideIndex === index) requestAnimationFrame(() => requestAnimationFrame(() => slide.classList.add('is-entering')));
-          });
-          lectureScene.dataset.lectureActiveIndex = String(index);
-        };
-
-        const startLecture = async (requestedInterval) => {
+        const startJoke = async () => {
           const token = generation;
-          const slides = [...lectureScene.querySelectorAll('[data-lecture-slide]')];
-          const interval = Math.max(800, Math.min(20000, Number(requestedInterval) || 8500));
-          lectureScene.dataset.lectureState = 'running';
-          lectureScene.dataset.lectureIntervalMs = String(interval);
-          for (let index = 0; index < slides.length; index += 1) {
-            if (token !== generation) return;
-            showLectureSlide(index);
-            if (!await pause(interval, token)) return;
-          }
-          if (token === generation) lectureScene.dataset.lectureState = 'complete';
+          const scene = document.querySelector('[data-presenter-scene-id="service-joke"]');
+          const first = scene?.querySelector('[data-joke-line="one"]');
+          const second = scene?.querySelector('[data-joke-line="two"]');
+          if (!(scene instanceof HTMLElement) || !(first instanceof HTMLElement) || !(second instanceof HTMLElement)) return;
+          scene.dataset.jokeState = 'typing';
+          first.textContent = 'Максим, самое время для шутки';
+          second.textContent = '';
+          if (!await pause(7000, token)) return;
+          second.textContent = 'нет, я сама шутить не умею…';
+          scene.dataset.jokeState = 'complete';
         };
 
         const showScene = (sceneId, options = {}) => {
@@ -432,15 +544,37 @@ const lectureSlides = [
           const token = generation;
           stage.dataset.presenterScene = sceneId;
           scenes.forEach((scene, id) => { scene.hidden = id !== sceneId; });
+          const activeScene = scenes.get(sceneId);
+          activeScene?.classList.remove('is-entering');
+          requestAnimationFrame(() => requestAnimationFrame(() => activeScene?.classList.add('is-entering')));
+          activeScene?.querySelectorAll('iframe[data-src]').forEach((frame) => {
+            if (
+              frame instanceof HTMLIFrameElement
+              && (!frame.hasAttribute('src') || frame.getAttribute('src') === '')
+            ) frame.src = frame.dataset.src || '';
+          });
           outroScene.classList.remove('is-entering');
           if (sceneId === 'outro-qr') {
             requestAnimationFrame(() => requestAnimationFrame(() => outroScene.classList.add('is-entering')));
           }
-          if (sceneId === 'intro-loop') void startIntro(token);
-          if (sceneId === 'lecture-deck') void startLecture(options.slideIntervalMs, token);
-          if (sceneId === 'weekend-desktop' && !desktopFrame.src) {
+          if (sceneId === 'intro-loop') void startIntro(options);
+          if (sceneId === 'service-joke') void startJoke();
+          if (sceneId === 'service-search-live') {
+            const meaning = activeScene?.querySelector('[data-search-meaning]');
+            if (meaning && options.query) meaning.textContent = `«${options.query}»`;
+          }
+          if (
+            sceneId === 'weekend-desktop'
+            && (!desktopFrame.hasAttribute('src') || desktopFrame.getAttribute('src') === '')
+          ) {
             desktopFrame.dataset.presenterFrameReady = 'false';
             desktopFrame.src = desktopFrame.dataset.src || '';
+          }
+          if (sceneId === 'weekend-desktop') {
+            activeScene?.setAttribute('data-desktop-phase', 'meaning');
+            window.setTimeout(() => {
+              if (generation === token) activeScene?.setAttribute('data-desktop-phase', 'site');
+            }, 4200);
           }
         };
 
@@ -576,8 +710,9 @@ const lectureSlides = [
   .intro-thought { position: absolute; top: 50%; left: clamp(76px, 7vw, 140px); width: calc(100% - clamp(152px, 14vw, 280px)); margin: 0; transform: translateY(-48%); color: #fffaf3; font-size: clamp(54px, 4.35vw, 86px); font-weight: 920; line-height: .98; letter-spacing: -.06em; text-wrap: balance; }
   .intro-thought > span { display: block; min-height: 1.04em; white-space: nowrap; }
   .intro-thought > span:last-of-type { color: #ff9b80; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 650; letter-spacing: -.045em; }
-  .intro-line-two b { font: inherit; letter-spacing: inherit; }
-  .typing-cursor { display: inline-block; width: .085em; height: .76em; margin-left: .11em; vertical-align: -.03em; background: var(--stage-accent); animation: cursor-blink .92s step-end infinite; }
+  .hero-fragment { display: inline-block; opacity: 0; transform: translateY(.28em); filter: blur(6px); transition: opacity 320ms cubic-bezier(.22,.8,.22,1), transform 320ms cubic-bezier(.22,.8,.22,1), filter 320ms cubic-bezier(.22,.8,.22,1); }
+  .hero-fragment.is-active, .hero-fragment.is-complete { opacity: 1; transform: none; filter: none; }
+  .hero-fragment.is-active::after { display: inline-block; width: .085em; height: .76em; margin-left: .11em; vertical-align: -.03em; background: var(--stage-accent); content: ""; animation: cursor-blink .92s step-end infinite; }
   .intro-scene.is-clearing .intro-thought { opacity: 0; transform: translateY(-48%) scale(.985); transition: opacity 650ms ease-in, transform 650ms ease-in; }
   .intro-footnote { position: absolute; left: clamp(76px, 7vw, 140px); bottom: clamp(56px, 6vh, 76px); margin: 0; color: rgba(247,241,232,.58); font: 500 clamp(18px, 1.35vw, 26px)/1.3 Georgia, "Times New Roman", serif; }
   @keyframes cursor-blink { 50% { opacity: 0; } }
@@ -600,8 +735,82 @@ const lectureSlides = [
   @keyframes lecture-copy-enter { from { opacity: 0; transform: translate3d(-2.2vw,0,0); } to { opacity: 1; transform: none; } }
   @keyframes lecture-image-enter { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
 
+  .brand-plate--intro, .brand-plate--lecture { border-radius: 0; padding: 0; background: transparent; box-shadow: none; }
+  .brand-logo--on-dark img { filter: grayscale(1) brightness(0) invert(1); }
+  .brand-logo--on-light img { filter: grayscale(1) brightness(.16); }
+  .lecture-slide.theme--light { color: #17121a; background: radial-gradient(circle at 82% 18%, rgba(105,86,223,.14), transparent 30%), #f5efe6; }
+  .lecture-slide.theme--light::after { border-color: rgba(255,118,87,.22); }
+  .lecture-slide.theme--light .lecture-copy h2 { color: #17121a; }
+  .lecture-slide.theme--light .lecture-counter { color: rgba(23,18,26,.45); }
+  .lecture-slide.theme--light .lecture-visual { border-color: rgba(23,18,26,.15); box-shadow: 0 35px 70px rgba(67,48,43,.18); }
+  .lecture-visual { grid-template-rows: minmax(0,1fr) auto; }
+  .lecture-visual figcaption { width: 100%; padding: 16px 22px; color: #332b2a; background: #fffaf3; font: 650 clamp(15px,1vw,20px)/1.3 Georgia,serif; }
+  .lecture-layout--horizontal { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr); gap: 26px; }
+  .lecture-layout--horizontal .lecture-copy { display: grid; grid-template-columns: auto 1fr auto; align-items: end; gap: 28px; }
+  .lecture-layout--horizontal .brand-plate--lecture { width: 250px; margin: 0; grid-row: 1 / span 2; }
+  .lecture-layout--horizontal .lecture-chapter { margin: 0 0 8px; }
+  .lecture-layout--horizontal .lecture-copy h2 { max-width: none; font-size: clamp(42px,3.2vw,62px); }
+  .lecture-layout--horizontal .lecture-counter { margin: 0; align-self: center; }
+  .lecture-layout--horizontal .lecture-visual img, .lecture-slide--wide .lecture-visual img { object-fit: contain; }
+  .lecture-layout--cinema { grid-template-columns: 1fr; grid-template-rows: minmax(0,1fr) auto; }
+  .lecture-layout--cinema .lecture-visual { grid-row: 1; }
+  .lecture-layout--cinema .lecture-copy { grid-row: 2; display: grid; grid-template-columns: 230px 1fr auto; align-items: center; gap: 30px; }
+  .lecture-layout--cinema .brand-plate--lecture { margin: 0; }
+  .lecture-layout--cinema .lecture-chapter { display: none; }
+  .lecture-layout--cinema .lecture-copy h2 { max-width: none; font-size: clamp(40px,3vw,58px); }
+  .lecture-layout--cinema .lecture-counter { margin: 0; }
+
+  .service-scene { display: flex; flex-direction: column; justify-content: center; padding: clamp(70px,8vh,110px) clamp(82px,8vw,160px); }
+  .theme--dark { color: #fffaf3; background: radial-gradient(circle at 86% 16%, rgba(255,118,87,.18), transparent 26%), radial-gradient(circle at 12% 82%, rgba(105,86,223,.18), transparent 28%), #0c0d12; }
+  .theme--light { color: #17121a; background: radial-gradient(circle at 88% 18%, rgba(255,118,87,.2), transparent 30%), radial-gradient(circle at 8% 90%, rgba(105,86,223,.11), transparent 34%), #f5efe6; }
+  .service-eyebrow { margin: 0 0 clamp(26px,4vh,54px); color: #ff7657; font: 850 clamp(17px,1.2vw,23px)/1 ui-monospace,monospace; letter-spacing: .15em; text-transform: uppercase; }
+  .service-scene h2 { max-width: 14ch; margin: 0; font-size: clamp(78px,7.8vw,150px); font-weight: 940; line-height: .84; letter-spacing: -.075em; text-wrap: balance; }
+  .service-scene h2 > span { display: block; }
+  .service-support { max-width: 36ch; margin: clamp(38px,5vh,66px) 0 0; color: color-mix(in srgb,currentColor 68%,transparent); font: 500 clamp(23px,2vw,38px)/1.25 Georgia,serif; }
+  .service-scene.is-entering h2, .service-scene.is-entering .service-support { animation: service-copy-in 700ms cubic-bezier(.22,.8,.22,1) both; }
+  @keyframes service-copy-in { from { opacity: 0; transform: translateY(32px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+  .service-wordmark { align-items: center; text-align: center; }
+  .wordmark-motion { display: flex; align-items: center; font: 950 clamp(160px,18vw,350px)/.72 Inter,sans-serif; letter-spacing: -.12em; }
+  .wordmark-o { display: inline-block; color: #ff7657; transform-origin: center; animation: wordmark-stretch 2.8s cubic-bezier(.65,0,.22,1) both; }
+  .wordmark-reference { width: min(500px,38vw); margin-top: 55px; opacity: .42; }
+  @keyframes wordmark-stretch { 0% { transform: scaleX(1); } 46% { transform: scaleX(3.8); } 100% { transform: scaleX(1.7); } }
+  .need-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; margin-top: clamp(50px,7vh,90px); }
+  .need-row > div { min-height: 190px; display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 22px; padding: 30px; border: 1px solid rgba(255,255,255,.18); border-radius: 28px; background: rgba(255,255,255,.06); font-size: clamp(22px,1.6vw,31px); font-weight: 800; }
+  .need-row strong { color: #ff7657; font: 900 50px/1 ui-monospace,monospace; }
+  .need-row img, .need-row svg { width: 66px; height: 66px; animation: icon-pop 700ms cubic-bezier(.22,.8,.22,1) 450ms both; }
+  .need-row img { filter: invert(1); }
+  .need-row svg { fill: none; stroke: #ff9b80; stroke-width: 4; stroke-linecap: round; }
+  @keyframes icon-pop { from { opacity: 0; transform: scale(.4) rotate(-14deg); } to { opacity: 1; transform: none; } }
+  .medallion-demo { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 60px; }
+  .medallion-demo span { display: inline-flex; min-height: 84px; align-items: center; padding: 0 30px; border-radius: 999px; color: #fff; background: #8a321e; box-shadow: inset 0 0 0 2px rgba(255,255,255,.2), 0 14px 30px rgba(88,39,26,.18); font-size: clamp(22px,1.6vw,31px); font-weight: 850; }
+  .service-joke [data-joke-line="two"] { min-height: 1.25em; margin: 52px 0 0; color: #ff9b80; font: italic 650 clamp(42px,4vw,76px)/1 Georgia,serif; animation: service-copy-in 500ms ease-out both; }
+  .search-example { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 34px; margin-top: 72px; padding: 34px 42px; border-radius: 28px; background: rgba(255,255,255,.65); box-shadow: 0 24px 60px rgba(50,32,31,.12); font-size: clamp(22px,1.7vw,34px); }
+  .search-example i { color: #ff7657; font-size: 2em; }
+  .focus-live-scene { display: grid; grid-template-columns: minmax(460px,.7fr) minmax(0,1.3fr); align-items: center; gap: clamp(45px,5vw,95px); padding: 0 clamp(54px,5vw,96px); }
+  .live-meaning { position: relative; z-index: 2; }
+  .live-meaning p { margin: 0 0 30px; color: #ff7657; font: 850 20px/1 ui-monospace,monospace; letter-spacing: .14em; text-transform: uppercase; }
+  .live-meaning h2 { margin: 0 0 38px; font-size: clamp(70px,6vw,116px); line-height: .84; letter-spacing: -.07em; }
+  .live-meaning > span { display: block; max-width: 27ch; color: rgba(255,255,255,.68); font: 500 clamp(22px,1.7vw,32px)/1.3 Georgia,serif; }
+  .live-meaning.light > span { color: rgba(23,18,26,.68); }
+  .focus-live-scene > iframe { width: 100%; height: 100vh; border: 0; background: #fff; box-shadow: -25px 0 65px rgba(0,0,0,.16); }
+  .focus-phone { justify-self: center; width: min(560px,calc((100vh - 30px)*.4771)); height: calc(100vh - 30px); }
+  .invitation-scene { grid-template-columns: .78fr 1.22fr; }
+  .celebrity { display: grid; grid-template-columns: 160px 1fr auto; align-items: center; gap: 34px; max-width: 1050px; margin-top: 70px; padding: 28px 34px; border: 1px solid rgba(255,255,255,.16); border-radius: 34px; background: rgba(255,255,255,.07); }
+  .celebrity > img { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; }
+  .celebrity > div { display: grid; gap: 8px; }
+  .celebrity strong { font-size: 38px; }
+  .celebrity span { color: rgba(255,255,255,.62); font-size: 23px; }
+  .celebrity button { display: flex; align-items: center; gap: 12px; border: 0; color: #fff; background: transparent; font-size: 26px; }
+  .celebrity button b { display: grid; width: 78px; height: 78px; place-items: center; border-radius: 50%; color: #ff7657; background: #fff; font-size: 43px; animation: heart-pop 1.2s cubic-bezier(.22,.8,.22,1) 600ms both; }
+  @keyframes heart-pop { 0% { opacity: 0; transform: scale(.2); } 65% { transform: scale(1.15); } 100% { opacity: 1; transform: none; } }
+
   .desktop-scene { position: absolute; inset: 0; z-index: 12; background: #fff; }
   .desktop-scene iframe { width: 100%; height: 100%; display: block; border: 0; background: #fffaf4; }
+  .desktop-meaning { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center; padding: 110px 150px; color: #17121a; background: radial-gradient(circle at 84% 14%,rgba(255,118,87,.24),transparent 30%),#f5efe6; transition: opacity 650ms ease, visibility 650ms; }
+  .desktop-meaning p { color: #ff7657; font: 850 22px/1 ui-monospace,monospace; letter-spacing: .15em; text-transform: uppercase; }
+  .desktop-meaning h2 { margin: 30px 0 50px; font-size: clamp(100px,10vw,190px); line-height: .8; letter-spacing: -.08em; }
+  .desktop-meaning span { font: 500 32px/1.3 Georgia,serif; }
+  .desktop-scene[data-desktop-phase="site"] .desktop-meaning { opacity: 0; visibility: hidden; }
 
   .outro-scene { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: clamp(48px, 7vw, 148px); padding: max(64px, env(safe-area-inset-top)) max(72px, 6vw) max(64px, env(safe-area-inset-bottom)); background: radial-gradient(circle at 84% 49%, rgba(255, 118, 87, .24), transparent 25%), radial-gradient(circle at 12% 8%, rgba(105, 86, 223, .12), transparent 32%), linear-gradient(118deg, #121217 0%, #08090d 58%, #111014 100%); }
   .outro-scene::before { position: absolute; z-index: -1; width: min(38vw, 730px); aspect-ratio: 1; right: max(-16vw, -310px); bottom: max(-27vw, -520px); border: clamp(42px, 5vw, 94px) solid var(--stage-accent); border-radius: 50%; content: ""; opacity: .92; }
@@ -621,7 +830,7 @@ const lectureSlides = [
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
-    .typing-cursor { display: none; }
+    .hero-fragment.is-active::after { display: none; }
   }
   @media (max-width: 900px) {
     .intro-thought > span { white-space: normal; }
