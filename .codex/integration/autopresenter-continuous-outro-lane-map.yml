@@ -31,7 +31,7 @@ lanes:
     expected_output: redacted error diagnosis and likely owning files
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: runtime_discovery
     role: planner
     requirement_ids: []
@@ -45,7 +45,7 @@ lanes:
     expected_output: lifecycle map and bounded implementation brief
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: media_discovery
     role: planner
     requirement_ids: []
@@ -59,7 +59,7 @@ lanes:
     expected_output: asset metadata, bucket/key/CDN URL and safe upload commands
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: persistent_runtime
     role: worker
     requirement_ids: [R02, R03]
@@ -83,7 +83,7 @@ lanes:
     expected_output: committed persistent-session runtime and targeted regression tests
     verification_scope: full_local
     effort: high
-    status: planned
+    status: committed
   - id: outro_scene
     role: worker
     requirement_ids: [R05, R06]
@@ -109,7 +109,7 @@ lanes:
     expected_output: committed outro stage surface/contract and targeted tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: committed
   - id: integration_release
     role: merge_reviewer
     requirement_ids: [R01, R04]
@@ -129,4 +129,4 @@ lanes:
     expected_output: fast deployed owner-test update with Telegram handoff
     verification_scope: full_local
     effort: high
-    status: planned
+    status: in_progress

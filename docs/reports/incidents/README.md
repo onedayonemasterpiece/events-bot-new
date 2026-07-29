@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-29-autopresenter-scenario-window-recreation.md`
+  - Scope: Autopresenter persistent browser/context/page lifecycle, sequential
+    Run switching and whole-scenario timeout.
+  - Must not regress: обычная смена сцены, Stop и Reset не закрывают
+    presentation window; только Shutdown является terminal; real rail-like
+    проходит без ложного общего 30-секундного abort.
+
 - `INC-2026-07-29-autopresenter-windows-bootstrap-startup.md`
   - Scope: Autopresenter Windows owner-test bootstrap, console-mode P/Invoke,
     persistent Node/npm/Playwright cache and dynamic first-test ZIP.
