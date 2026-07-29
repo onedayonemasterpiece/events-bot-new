@@ -28,7 +28,7 @@ lanes:
     expected_output: deployment and auth recommendation
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: discovery-windows-test
     role: planner
     requirement_ids: [R04]
@@ -42,7 +42,7 @@ lanes:
     expected_output: bundle contents and bootstrap constraints
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: integration-implementation
     role: worker
     requirement_ids: [R01, R02, R03, R04, R05, R06]
@@ -65,7 +65,7 @@ lanes:
     expected_output: public phone URL, downloadable demonstrator link, test evidence
     verification_scope: full_local_and_live
     effort: high
-    status: planned
+    status: completed
   - id: closure-review
     role: reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06]
@@ -79,4 +79,4 @@ lanes:
     expected_output: accept or must-fix list
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed
