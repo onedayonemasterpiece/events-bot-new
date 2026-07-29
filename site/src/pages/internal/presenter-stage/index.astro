@@ -19,51 +19,7 @@ const homeUrl = withBase('/');
       data-presenter-stage-ready="true"
       aria-label="Сцена автопрезентатора"
     >
-      <section class="narrative" aria-labelledby="stage-title">
-        <div class="brand-lockup">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" role="img">
-              <path d="M7 8.5h18v15H7z" />
-              <path d="M11 5v7M21 5v7M7 13h18" />
-              <path d="m12 18 2.2 2.2L20 15" />
-            </svg>
-          </span>
-          <span>Кёнигсберг · События</span>
-        </div>
-
-        <p class="eyebrow">Сценарий 01 · mobile</p>
-        <h1 id="stage-title">Что происходит<br />в городе <em>завтра?</em></h1>
-        <p class="lede">
-          Живой сайт в мобильном окне. Курсор сам находит нужный раздел,
-          наводится и выполняет настоящий клик.
-        </p>
-
-        <div class="run-state" data-presenter-id="stage-status-card">
-          <span class="state-dot" aria-hidden="true"></span>
-          <div>
-            <span class="state-label">Статус показа</span>
-            <strong
-              data-presenter-id="stage-status"
-              data-status="idle"
-              role="status"
-              aria-live="polite"
-            >Готов к запуску</strong>
-          </div>
-        </div>
-
-        <ol class="story-steps" aria-label="Этапы сценария">
-          <li data-presenter-step="find"><span>01</span><strong>Найти</strong><small>раздел «Завтра»</small></li>
-          <li data-presenter-step="focus"><span>02</span><strong>Навести</strong><small>показать действие</small></li>
-          <li data-presenter-step="open"><span>03</span><strong>Открыть</strong><small>реальным кликом</small></li>
-        </ol>
-
-        <div class="shortcuts" aria-label="Локальные клавиши управления">
-          <span><kbd>Space</kbd> запуск</span>
-          <span><kbd>Esc</kbd> стоп</span>
-          <span><kbd>R</kbd> сброс</span>
-          <span><kbd>F</kbd> полный экран</span>
-        </div>
-      </section>
+      <p class="stage-caption" aria-hidden="true">Завтра — в одном движении.</p>
 
       <section class="device-area" aria-label="Мобильный сайт">
         <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -79,18 +35,26 @@ const homeUrl = withBase('/');
             data-presenter-frame-ready="false"
             src={homeUrl}
             title="Мобильная версия сайта Кёнигсберг · События"
-            width="430"
-            height="932"
+            width="476"
+            height="1024"
           ></iframe>
           <div class="phone-home" aria-hidden="true"></div>
         </div>
-        <div class="live-pill" aria-hidden="true"><span></span> LIVE SITE</div>
       </section>
 
-      <footer>
-        <span>Автопрезентатор · рабочий прототип</span>
-        <span>1920 × 1080</span>
-      </footer>
+      <div class="presenter-signals" data-presenter-id="stage-status-card">
+        <strong
+          data-presenter-id="stage-status"
+          data-status="idle"
+          role="status"
+          aria-live="polite"
+        >Готов к запуску</strong>
+        <ol aria-label="Этапы сценария">
+          <li data-presenter-step="find">Найти раздел «Завтра»</li>
+          <li data-presenter-step="focus">Показать действие</li>
+          <li data-presenter-step="open">Открыть реальным кликом</li>
+        </ol>
+      </div>
     </main>
 
     <script is:inline>
@@ -165,43 +129,34 @@ const homeUrl = withBase('/');
     font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: #080a0f;
     --stage-ink: #f7f1e8;
-    --stage-muted: #aaa7a1;
     --stage-accent: #ff7657;
-    --stage-accent-warm: #ffb664;
-    --stage-panel: rgba(22, 23, 29, .78);
   }
 
   * { box-sizing: border-box; }
 
   html,
   body {
-    width: 100%;
+    width: 100vw;
+    height: 100vh;
     min-width: 320px;
-    min-height: 100%;
     margin: 0;
     overflow: hidden;
     background: #080a0f;
   }
 
-  body { display: grid; place-items: center; }
-
   .stage {
     position: relative;
-    width: 1920px;
-    height: 1080px;
-    flex: none;
+    width: 100vw;
+    height: 100vh;
     overflow: hidden;
     display: grid;
-    grid-template-columns: 1fr 690px;
-    align-items: center;
-    padding: 58px 112px 54px;
+    place-items: center;
     color: var(--stage-ink);
     background:
-      radial-gradient(circle at 77% 48%, rgba(255, 118, 87, .14), transparent 29%),
-      radial-gradient(circle at 8% 98%, rgba(132, 91, 255, .11), transparent 30%),
-      linear-gradient(125deg, #101116 0%, #090b10 56%, #101117 100%);
+      radial-gradient(circle at 50% 44%, rgba(255, 118, 87, .16), transparent 27%),
+      radial-gradient(circle at 50% 82%, rgba(105, 86, 223, .11), transparent 29%),
+      linear-gradient(135deg, #101116 0%, #080a0f 52%, #101117 100%);
     isolation: isolate;
-    transform-origin: center;
   }
 
   .stage::before {
@@ -214,154 +169,33 @@ const homeUrl = withBase('/');
       linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
     background-size: 64px 64px;
-    mask-image: linear-gradient(90deg, #000, transparent 72%);
+    mask-image: radial-gradient(circle at center, #000, transparent 67%);
   }
 
-  .narrative {
-    align-self: center;
-    max-width: 820px;
-    padding: 0 0 14px;
-  }
-
-  .brand-lockup {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-    margin-bottom: 71px;
-    color: #e8e0d6;
-    font-size: 16px;
-    font-weight: 720;
-    letter-spacing: .03em;
-  }
-
-  .brand-mark {
-    width: 38px;
-    height: 38px;
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(255,255,255,.16);
-    border-radius: 12px;
-    background: rgba(255,255,255,.07);
-  }
-
-  .brand-mark svg {
-    width: 23px;
-    fill: none;
-    stroke: var(--stage-accent);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .eyebrow {
-    margin: 0 0 17px;
-    color: var(--stage-accent-warm);
-    font: 700 14px/1.2 ui-monospace, "SFMono-Regular", Consolas, monospace;
-    letter-spacing: .15em;
-    text-transform: uppercase;
-  }
-
-  h1 {
-    max-width: 820px;
+  .stage-caption {
+    position: absolute;
+    top: clamp(24px, 5vh, 54px);
+    left: clamp(24px, 4vw, 76px);
+    max-width: 280px;
     margin: 0;
-    font-size: 82px;
-    line-height: .99;
-    letter-spacing: -.055em;
-    font-weight: 710;
+    color: rgba(247, 241, 232, .68);
+    font: 500 clamp(15px, 1.05vw, 20px)/1.35 Georgia, "Times New Roman", serif;
+    letter-spacing: .015em;
   }
 
-  h1 em {
-    color: var(--stage-accent);
-    font-family: Georgia, "Times New Roman", serif;
-    font-weight: 500;
-  }
-
-  .lede {
-    max-width: 630px;
-    margin: 30px 0 0;
-    color: var(--stage-muted);
-    font-size: 20px;
-    line-height: 1.55;
-  }
-
-  .run-state {
-    width: fit-content;
-    min-width: 294px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-top: 35px;
-    padding: 14px 18px 14px 15px;
-    border: 1px solid rgba(255,255,255,.11);
-    border-radius: 16px;
-    background: var(--stage-panel);
-    box-shadow: 0 18px 60px rgba(0,0,0,.22);
-  }
-
-  .state-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #78da9b;
-    box-shadow: 0 0 0 5px rgba(120, 218, 155, .11), 0 0 22px rgba(120, 218, 155, .38);
-  }
-
-  .run-state[data-status="running"] .state-dot { background: var(--stage-accent-warm); animation: status-pulse 1.4s ease-in-out infinite; }
-  .run-state[data-status="stopping"] .state-dot { background: #f4c46c; }
-  .run-state[data-status="completed"] .state-dot { background: #78da9b; }
-  .run-state[data-status="disconnected"] .state-dot,
-  .run-state[data-status="error"] .state-dot { background: #ff6f6f; box-shadow: 0 0 0 5px rgba(255,111,111,.11); }
-
-  .run-state > div { display: grid; gap: 2px; }
-  .state-label { color: #8d8c92; font-size: 11px; font-weight: 760; letter-spacing: .11em; text-transform: uppercase; }
-  [data-presenter-id="stage-status"] { font-size: 16px; line-height: 1.35; }
-
-  .story-steps {
-    display: flex;
-    gap: 11px;
-    margin: 37px 0 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .story-steps li {
-    min-width: 178px;
-    display: grid;
-    grid-template-columns: 30px 1fr;
-    column-gap: 8px;
-    align-items: baseline;
-    padding: 13px 16px;
-    border-left: 1px solid rgba(255,255,255,.14);
-  }
-
-  .story-steps span { grid-row: 1 / 3; color: #66666e; font: 600 12px/1 ui-monospace, monospace; }
-  .story-steps strong { font-size: 14px; }
-  .story-steps small { color: #85838a; font-size: 12px; }
-
-  .shortcuts {
-    display: flex;
-    gap: 22px;
-    margin-top: 32px;
-    color: #74737a;
-    font-size: 12px;
-  }
-
-  .shortcuts span { display: flex; align-items: center; gap: 7px; }
-  kbd {
-    min-width: 26px;
-    padding: 4px 7px;
-    border: 1px solid rgba(255,255,255,.14);
-    border-bottom-color: rgba(255,255,255,.26);
-    border-radius: 6px;
-    color: #c9c4bd;
-    background: rgba(255,255,255,.055);
-    font: 600 10px/1 ui-monospace, monospace;
-    text-align: center;
+  .stage-caption::before {
+    display: inline-block;
+    width: 24px;
+    height: 1px;
+    margin: 0 12px 5px 0;
+    content: "";
+    background: var(--stage-accent);
   }
 
   .device-area {
     position: relative;
-    height: 968px;
+    width: min(500px, calc((100vh - 32px) * .4771), calc(100vw - 32px));
+    aspect-ratio: 125 / 262;
     display: grid;
     place-items: center;
   }
@@ -372,16 +206,16 @@ const homeUrl = withBase('/');
     filter: blur(80px);
     opacity: .23;
   }
-  .ambient-one { width: 330px; height: 330px; top: 60px; right: 10px; background: #ff6b52; }
-  .ambient-two { width: 260px; height: 260px; bottom: 18px; left: 20px; background: #6956df; }
+  .ambient-one { width: 72%; aspect-ratio: 1; top: 5%; right: -18%; background: #ff6b52; }
+  .ambient-two { width: 56%; aspect-ratio: 1; bottom: 2%; left: -15%; background: #6956df; }
 
   .phone-shell {
     position: relative;
-    width: 462px;
-    height: 964px;
-    padding: 16px;
+    width: 100%;
+    height: 100%;
+    padding: 12px;
     border: 1px solid rgba(255,255,255,.23);
-    border-radius: 54px;
+    border-radius: clamp(32px, 5vh, 54px);
     background: linear-gradient(145deg, #303138, #111217 62%);
     box-shadow:
       0 45px 90px rgba(0,0,0,.55),
@@ -390,21 +224,21 @@ const homeUrl = withBase('/');
   }
 
   .phone-shell iframe {
-    width: 430px;
-    height: 932px;
+    width: 100%;
+    height: 100%;
     display: block;
     border: 0;
-    border-radius: 39px;
+    border-radius: clamp(24px, 3.7vh, 40px);
     background: #fffaf4;
   }
 
   .phone-top {
     position: absolute;
     z-index: 5;
-    top: 24px;
+    top: 20px;
     left: 50%;
-    width: 122px;
-    height: 27px;
+    width: 26%;
+    height: 28px;
     transform: translateX(-50%);
     display: flex;
     align-items: center;
@@ -416,51 +250,33 @@ const homeUrl = withBase('/');
   }
   .speaker { width: 46px; height: 4px; border-radius: 4px; background: #2e3037; }
   .camera { width: 7px; height: 7px; border-radius: 50%; background: #293553; box-shadow: inset 0 0 0 2px #141923; }
-  .phone-home { position: absolute; z-index: 5; bottom: 22px; left: 50%; width: 118px; height: 4px; transform: translateX(-50%); border-radius: 4px; background: rgba(21,22,24,.7); pointer-events: none; }
-
-  .live-pill {
+  .phone-home {
     position: absolute;
-    top: 22px;
-    right: 5px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 11px;
-    border: 1px solid rgba(255,255,255,.12);
-    border-radius: 999px;
-    color: #d6d0c9;
-    background: rgba(12,13,17,.78);
-    backdrop-filter: blur(12px);
-    font: 700 10px/1 ui-monospace, monospace;
-    letter-spacing: .08em;
-  }
-  .live-pill span { width: 6px; height: 6px; border-radius: 50%; background: #ff675c; box-shadow: 0 0 9px #ff675c; }
-
-  footer {
-    position: absolute;
-    right: 112px;
-    bottom: 24px;
-    left: 112px;
-    display: flex;
-    justify-content: space-between;
-    color: #54545b;
-    font: 600 10px/1.2 ui-monospace, monospace;
-    letter-spacing: .08em;
-    text-transform: uppercase;
+    z-index: 5;
+    bottom: 19px;
+    left: 50%;
+    width: 25%;
+    height: 4px;
+    transform: translateX(-50%);
+    border-radius: 4px;
+    background: rgba(21,22,24,.7);
+    pointer-events: none;
   }
 
-  @keyframes status-pulse {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 0 5px rgba(255,182,100,.1); }
-    50% { transform: scale(.78); box-shadow: 0 0 0 10px rgba(255,182,100,.04); }
+  .presenter-signals {
+    position: fixed;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   }
 
-  @media (max-width: 1919px), (max-height: 1079px) {
-    .stage {
-      transform: scale(min(calc(100vw / 1920), calc(100vh / 1080)));
-    }
+  @media (max-width: 700px) {
+    .stage-caption { display: none; }
   }
 </style>
