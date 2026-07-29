@@ -7,6 +7,7 @@ import argparse
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import hashlib
 import hmac
 import io
 import json
@@ -422,7 +423,10 @@ def windows_test_archive(request: web.Request) -> bytes:
         "relay_url": public_base_url(request),
         "stage_url": f"{public_base_url(request)}/internal/presenter-stage/",
         "agent_token": security.agent_token,
-        "agent_id": f"first-test-{uuid4()}",
+        "agent_id": (
+            "first-test-"
+            + hashlib.sha256(security.agent_token.encode("utf-8")).hexdigest()[:12]
+        ),
         "release_kind": "FIRST_TEST_NOT_M3",
     }
     required_files = {

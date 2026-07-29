@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 import unittest
 import asyncio
+import hashlib
 import io
 import json
 import zipfile
@@ -187,6 +188,11 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(response.content_type, "application/zip")
         archive_bytes = await response.read()
+        repeat = await self.client.get(
+            "/api/download/windows-test.zip",
+            headers={"Authorization": "Bearer control-secret"},
+        )
+        self.assertEqual(await repeat.read(), archive_bytes)
         with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
             names = set(archive.namelist())
             self.assertIn("START-DEMONSTRATOR.cmd", names)
@@ -199,6 +205,10 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             "https://presenter.example/internal/presenter-stage/",
         )
         self.assertEqual(config["agent_token"], "agent-secret")
+        self.assertEqual(
+            config["agent_id"],
+            "first-test-" + hashlib.sha256(b"agent-secret").hexdigest()[:12],
+        )
         self.assertEqual(config["release_kind"], "FIRST_TEST_NOT_M3")
 
 
