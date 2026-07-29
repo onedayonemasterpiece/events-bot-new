@@ -1,7 +1,13 @@
 # Autopresenter prototype agent
 
-One headed Playwright agent for the single `tomorrow-mobile` prototype scenario.
-It expects the local relay and Astro presenter stage to be running.
+One headed Playwright agent for exactly three explicit scenarios:
+
+- `tomorrow-mobile` (the fallback when `command.scenario` is omitted);
+- `tomorrow-rail-like`;
+- `weekend-amber-artifact`.
+
+It expects the local relay and Astro presenter stage to be running. Unknown scenario
+IDs fail instead of being interpreted as a scenario DSL.
 
 ```bash
 AUTOPRESENTER_RELAY_URL=http://127.0.0.1:8787 \
@@ -12,18 +18,16 @@ NODE_PATH="$(npm root -g)" npm start
 Defaults are the values above. The loader accepts either a project-local Playwright
 package or the centrally installed package. Set `AUTOPRESENTER_HEADLESS=1` only for
 CI diagnostics; the supported prototype mode is headed. Optional
-`AUTOPRESENTER_ARTIFACT_DIR` enables 1920x1080 WebM capture and a pre-click PNG
-of the final concrete event description.
+`AUTOPRESENTER_ARTIFACT_DIR` enables 1920x1080 WebM capture and a final PNG named
+after the completed scenario.
 
 The mobile interaction contract deliberately hides every mouse cursor. Real
 Playwright taps are shown as a tap circle. Horizontal touch navigation is shown
 as a directional swipe trail: the finger moves left while the event content is
-presented as moving rightward toward its description. The scenario opens `/zavtra/`, chooses the
-deterministic mobile event with the fewest rail images (then the lowest numeric
-event ID), reveals and dwells on its `О событии` rail, opens the event detail,
-and completes only after its mobile description is visibly highlighted. The
-completion detail carries the selected event ID/title and both description
-checkpoints for public E2E evidence.
+presented as moving rightward. Vertical navigation uses sampled wheel input with
+visible intermediate movement; tap helpers never scroll. The explicit like scenario
+uses only the armed rail-edge gesture, and the amber scenario uses only real rail
+drags and taps. Runs are paced to at least 12 seconds and have a 30-second ceiling.
 
 The dormant desktop interaction contract is separate: when a future desktop
 scenario selects `desktop` interaction mode, the shell shows currently pressed

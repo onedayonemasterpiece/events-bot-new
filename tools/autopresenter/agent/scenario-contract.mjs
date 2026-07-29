@@ -16,6 +16,37 @@ export const TOMORROW_MOBILE_CONTRACT = Object.freeze({
   completion: "concrete-event-detail-description-visible-after-horizontal-rail-gesture",
 });
 
+export const TOMORROW_RAIL_LIKE_CONTRACT = Object.freeze({
+  id: "tomorrow-rail-like",
+  surface: "mobile",
+  eventId: 5296,
+  eventTitle: "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»",
+  completion: "gesture-like-persisted-after-reload",
+});
+
+export const WEEKEND_AMBER_ARTIFACT_CONTRACT = Object.freeze({
+  id: "weekend-amber-artifact",
+  surface: "mobile",
+  snapshotEventId: 7014,
+  completion: "artifact-collected-and-detail-dialog-visible-after-reload",
+});
+
+export const DEFAULT_SCENARIO_ID = TOMORROW_MOBILE_CONTRACT.id;
+export const SCENARIO_IDS = Object.freeze([
+  TOMORROW_MOBILE_CONTRACT.id,
+  TOMORROW_RAIL_LIKE_CONTRACT.id,
+  WEEKEND_AMBER_ARTIFACT_CONTRACT.id,
+]);
+
+export function resolveScenarioId(value) {
+  const requested = String(value || "").trim();
+  if (!requested) return DEFAULT_SCENARIO_ID;
+  if (SCENARIO_IDS.includes(requested)) return requested;
+  throw new Error(
+    `unsupported scenario "${requested}"; expected one of ${SCENARIO_IDS.join(", ")}`,
+  );
+}
+
 export function selectDeterministicMobileEvent(candidates) {
   const eligible = candidates
     .map((candidate) => ({

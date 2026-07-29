@@ -5,29 +5,43 @@ import { execFileSync } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import {
+  DEFAULT_SCENARIO_ID,
+  SCENARIO_IDS,
   TOMORROW_MOBILE_CONTRACT,
+  TOMORROW_RAIL_LIKE_CONTRACT,
+  WEEKEND_AMBER_ARTIFACT_CONTRACT,
+  resolveScenarioId,
   selectDeterministicMobileEvent,
 } from "./scenario-contract.mjs";
+import { buildVerticalWheelTrajectory, PACING } from "./pacing.mjs";
 import { abortableDelay, assertNotAborted } from "./abort-utils.mjs";
 
-const SCENARIO = TOMORROW_MOBILE_CONTRACT.id;
 const VIEWPORT = Object.freeze({ width: 1920, height: 1080 });
 const FRAME_SELECTOR = '#presenter-mobile-frame[data-presenter-id="mobile-site-frame"]';
 const STAGE_READY_SELECTOR =
   '[data-presenter-id="presenter-stage"][data-presenter-stage-ready="true"]';
-const TARGET_SELECTOR = '[data-presenter-id="nav-tomorrow"]';
-const DESTINATION_SELECTOR = '[data-presenter-id="tomorrow-page-ready"]';
-const MOBILE_EVENT_SELECTOR =
+const TOMORROW_NAV_SELECTOR = '[data-presenter-id="nav-tomorrow"]';
+const TOMORROW_READY_SELECTOR = '[data-presenter-id="tomorrow-page-ready"]';
+const TOMORROW_ROWS_SELECTOR =
   '[data-mobile-v23-page="tomorrow"] [data-mobile-listing-row][data-event-id]';
 const MOBILE_EVENT_RAIL_SELECTOR = ".rail-window";
 const MOBILE_EVENT_DESCRIPTION_SELECTOR = '.event-digest[aria-label="О событии"]';
 const MOBILE_DETAIL_SELECTOR = "[data-mobile-event-production]";
 const MOBILE_DETAIL_DESCRIPTION_SELECTOR =
   "[data-mobile-event-production] .mobile-event-production__prose";
-const DESCRIPTION_DWELL_MS = 2_200;
+const WEEKEND_MENU_SUMMARY_SELECTOR = "[data-mobile-discovery-menu] > summary";
+const WEEKEND_MENU_LINK_SELECTOR =
+  'nav[aria-label="Быстрый выбор даты"] a[href$="/vyhodnye/"]';
+const WEEKEND_ROOT_SELECTOR =
+  '[data-date-listing="weekend"][data-amber-artifact-research="tail"]';
+const ARTIFACT_SELECTOR = "[data-amber-artifact]";
+const ARTIFACT_STORAGE_KEY = "ke_artifact_collection_v1";
+const PROFILE_STORAGE_KEY = "ke_personalization_profile";
+const FEEDBACK_LOG_STORAGE_KEY = "ke_event_feedback_log_v1";
+const DESCRIPTION_DWELL_MS = 1_700;
+const DETAIL_DWELL_MS = 2_100;
 
 const config = Object.freeze({
   relayUrl: (process.env.AUTOPRESENTER_RELAY_URL || "http://127.0.0.1:8787").replace(/\/$/, ""),
@@ -56,6 +70,10 @@ function log(message, details = undefined) {
 
 function errorText(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function assertCondition(condition, message) {
+  if (!condition) throw new Error(message);
 }
 
 function loadPlaywright() {
@@ -89,6 +107,20 @@ function loadPlaywright() {
   }
 }
 
+async function raceWithAbort(promise, signal) {
+  assertNotAborted(signal);
+  let abortHandler;
+  const aborted = new Promise((_, reject) => {
+    abortHandler = () => reject(signal.reason || new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", abortHandler, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener("abort", abortHandler);
+  }
+}
+
 class PrototypeAgent {
   constructor(chromium) {
     this.chromium = chromium;
@@ -100,6 +132,7 @@ class PrototypeAgent {
     this.statusDetail = "starting";
     this.activeRun = null;
     this.runController = null;
+    this.activeScenario = null;
     this.ackCache = new Map();
     this.shuttingDown = false;
     this.shutdownPromise = null;
@@ -135,7 +168,8 @@ class PrototypeAgent {
     }));
     log("ready", {
       agentId: config.agentId,
-      scenario: SCENARIO,
+      scenarios: SCENARIO_IDS,
+      defaultScenario: DEFAULT_SCENARIO_ID,
       viewport: VIEWPORT,
       zoom: "100% assumed",
       ...metrics,
@@ -303,7 +337,7 @@ class PrototypeAgent {
     await page.goto(config.stageUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.locator(STAGE_READY_SELECTOR).waitFor({ state: "visible", timeout: 30_000 });
     await page.locator(FRAME_SELECTOR).waitFor({ state: "visible", timeout: 30_000 });
-    await this.setInteractionMode(TOMORROW_MOBILE_CONTRACT.surface);
+    await this.setInteractionMode("mobile");
     if (!config.headless && config.fullscreen) {
       let browserWindowFullscreen = false;
       try {
@@ -375,7 +409,6 @@ class PrototypeAgent {
         if (!command) continue;
 
         this.afterSequence = Math.max(this.afterSequence, Number(command.sequence) || 0);
-        // Intentionally do not await: polling must remain alive while the scenario runs.
         void this.dispatch(command, { remote: true }).catch((error) =>
           log("command dispatch failed", { id: command.id, error: errorText(error) }),
         );
@@ -404,7 +437,16 @@ class PrototypeAgent {
     }
 
     if (command.action === "run") {
-      await this.handleRun(command, remote);
+      let scenarioId;
+      try {
+        scenarioId = resolveScenarioId(command.scenario);
+      } catch (error) {
+        const detail = errorText(error);
+        await this.setAgentState("error", detail);
+        if (remote) await this.ack(command, "error", detail);
+        return;
+      }
+      await this.handleRun(command, remote, scenarioId);
       return;
     }
     if (command.action === "stop") {
@@ -419,46 +461,68 @@ class PrototypeAgent {
     return Date.now() > Date.parse(command.expires_at) + config.commandTtlGraceMs;
   }
 
-  async handleRun(command, remote) {
+  async handleRun(command, remote, scenarioId) {
     if (this.activeRun) {
-      if (remote) await this.ack(command, "error", `${SCENARIO} is already running`);
+      if (remote) {
+        await this.ack(command, "error", `${this.activeScenario || scenarioId} is already running`);
+      }
       return;
     }
 
     this.runController = new AbortController();
-    await this.setAgentState("running", SCENARIO);
-    if (remote) await this.ack(command, "running", SCENARIO);
+    this.activeScenario = scenarioId;
+    await this.setAgentState("running", scenarioId);
+    if (remote) await this.ack(command, "running", scenarioId);
 
-    const runPromise = this.runTomorrowMobile(this.runController.signal)
+    const timeout = setTimeout(() => {
+      const error = new Error(`${scenarioId} exceeded ${PACING.scenarioMaxMs}ms`);
+      error.name = "TimeoutError";
+      this.runController?.abort(error);
+    }, PACING.scenarioMaxMs);
+
+    const runPromise = this.runScenario(scenarioId, this.runController.signal)
       .then(async (evidence) => {
-        const detail =
-          `${SCENARIO}: event ${evidence.eventId} "${evidence.title}"; ` +
-          "digest revealed after horizontal swipe; detail description visible";
+        const detail = `${scenarioId}: ${evidence.summary}`;
         await this.setAgentState("completed", detail);
         if (remote) await this.ack(command, "completed", detail);
       })
       .catch(async (error) => {
-        if (error?.name === "AbortError" || this.runController?.signal.aborted) {
-          log("scenario cooperatively stopped", { commandId: command.id });
+        const timedOut = error?.name === "TimeoutError" || this.runController?.signal.reason?.name === "TimeoutError";
+        if (!timedOut && (error?.name === "AbortError" || this.runController?.signal.aborted)) {
+          log("scenario cooperatively stopped", { commandId: command.id, scenario: scenarioId });
           return;
         }
-        const detail = `${SCENARIO}: ${errorText(error)}`;
+        const detail = `${scenarioId}: ${errorText(timedOut ? this.runController?.signal.reason : error)}`;
         await this.setAgentState("error", detail);
         if (remote) await this.ack(command, "error", detail);
       })
       .finally(() => {
+        clearTimeout(timeout);
         if (this.activeRun === runPromise) this.activeRun = null;
         this.runController = null;
+        this.activeScenario = null;
       });
 
     this.activeRun = runPromise;
+  }
+
+  async runScenario(scenarioId, signal) {
+    if (scenarioId === TOMORROW_MOBILE_CONTRACT.id) {
+      return this.runTomorrowMobile(signal);
+    }
+    if (scenarioId === TOMORROW_RAIL_LIKE_CONTRACT.id) {
+      return this.runTomorrowRailLike(signal);
+    }
+    if (scenarioId === WEEKEND_AMBER_ARTIFACT_CONTRACT.id) {
+      return this.runWeekendAmberArtifact(signal);
+    }
+    throw new Error(`unreachable scenario dispatch: ${scenarioId}`);
   }
 
   async handleStop(command, remote) {
     await this.setAgentState("stopping", "stop requested");
     if (remote) await this.ack(command, "stopping", "stop requested");
     await this.confirmStopped();
-    // Idle is only published after the run settled or hard browser recovery completed.
     await this.setAgentState("idle", "agent confirmed stopped");
     if (remote) await this.ack(command, "idle", "agent confirmed stopped");
   }
@@ -508,97 +572,251 @@ class PrototypeAgent {
     if (!this.shuttingDown) await this.createContextAndStage();
   }
 
-  async runTomorrowMobile(signal) {
+  async prepareScenarioStage(scenarioId, signal, { freshContext = false } = {}) {
     assertNotAborted(signal);
-    await this.openStage();
-    // openStage navigates the shell, so mirror the already-accepted run state
-    // again on the newly loaded visual status surface.
-    await this.setAgentState("running", SCENARIO);
-    assertNotAborted(signal);
-
+    if (freshContext) {
+      const oldContext = this.context;
+      this.page = null;
+      this.context = null;
+      await raceWithAbort(oldContext?.close().catch(() => {}), signal);
+      await raceWithAbort(this.createContextAndStage(), signal);
+    } else {
+      await raceWithAbort(this.openStage(), signal);
+    }
+    await this.setAgentState("running", scenarioId);
     const frame = this.page.frameLocator(FRAME_SELECTOR);
+    await this.waitForEmbeddedReady(frame, signal);
     await this.enforceMobilePointerShield(frame);
-    const target = frame.locator(TARGET_SELECTOR);
-    await target.waitFor({ state: "visible", timeout: 20_000 });
-    await target.scrollIntoViewIfNeeded();
-    const boundingBox = await target.boundingBox();
-    if (!boundingBox) throw new Error(`${TARGET_SELECTOR} has no boundingBox`);
-    log("target acquired", { selector: TARGET_SELECTOR, boundingBox });
-    await this.tapMobileLocator(frame, target, signal);
-    await frame.locator(DESTINATION_SELECTOR).waitFor({ state: "visible", timeout: 20_000 });
-    await this.page.waitForFunction(
-      (selector) => {
-        const embedded = document.querySelector(selector);
-        return embedded?.contentWindow?.location?.pathname === "/zavtra/";
-      },
-      FRAME_SELECTOR,
-      { timeout: 20_000 },
-    );
-    assertNotAborted(signal);
+    return frame;
+  }
 
-    await this.enforceMobilePointerShield(frame);
-    const event = await this.selectTomorrowEvent(frame);
-    const row = frame.locator(
-      `${MOBILE_EVENT_SELECTOR}[data-event-id="${event.eventId}"]`,
+  async openTomorrowFromHome(frame, signal) {
+    const target = frame.locator(TOMORROW_NAV_SELECTOR);
+    await raceWithAbort(target.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await this.naturalVerticalScroll(frame, target, signal);
+    const boundingBox = await target.boundingBox();
+    if (!boundingBox) throw new Error(`${TOMORROW_NAV_SELECTOR} has no boundingBox`);
+    log("target acquired", { selector: TOMORROW_NAV_SELECTOR, boundingBox });
+    await this.tapMobileLocator(frame, target, signal);
+    await raceWithAbort(
+      frame.locator(TOMORROW_READY_SELECTOR).waitFor({ state: "visible", timeout: 10_000 }),
+      signal,
     );
-    await row.scrollIntoViewIfNeeded();
-    await abortableDelay(350, signal);
+    await this.waitForEmbeddedPath("/zavtra/", signal);
+    await this.waitForEmbeddedReady(frame, signal);
+    await abortableDelay(PACING.routeDwellMs, signal);
+    await this.enforceMobilePointerShield(frame);
+  }
+
+  async runTomorrowMobile(signal) {
+    const startedAt = Date.now();
+    const frame = await this.prepareScenarioStage(TOMORROW_MOBILE_CONTRACT.id, signal);
+    await this.openTomorrowFromHome(frame, signal);
+
+    const event = await this.selectTomorrowEvent(frame, signal);
+    const row = frame.locator(
+      `${TOMORROW_ROWS_SELECTOR}[data-event-id="${event.eventId}"]`,
+    );
+    await this.naturalVerticalScroll(frame, row, signal);
     const rail = row.locator(MOBILE_EVENT_RAIL_SELECTOR);
     const digest = row.locator(MOBILE_EVENT_DESCRIPTION_SELECTOR);
-    await rail.waitFor({ state: "visible", timeout: 10_000 });
-    await digest.waitFor({ state: "attached", timeout: 10_000 });
+    await raceWithAbort(rail.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await raceWithAbort(digest.waitFor({ state: "attached", timeout: 10_000 }), signal);
     log("deterministic tomorrow event selected", event);
 
     let digestRevealed = await this.isHorizontallyRevealed(digest);
-    for (let attempt = 0; attempt < 3 && !digestRevealed; attempt += 1) {
-      await this.swipeRailTowardDescription(frame, rail, signal);
-      await abortableDelay(420, signal);
+    for (let attempt = 0; attempt < 4 && !digestRevealed; attempt += 1) {
+      await this.swipeRailLeft(frame, rail, signal, "Листаем к описанию");
+      await this.waitForScrollSettle(rail, signal, "horizontal");
       digestRevealed = await this.isHorizontallyRevealed(digest);
     }
     if (!digestRevealed) {
-      const geometry = await rail.evaluate((node) => ({
-        scrollLeft: node.scrollLeft,
-        maxScroll: node.scrollWidth - node.clientWidth,
-      }));
+      const geometry = await this.railGeometry(rail);
       throw new Error(
         `${MOBILE_EVENT_DESCRIPTION_SELECTOR} did not become horizontally visible: ${JSON.stringify(geometry)}`,
       );
     }
 
-    await this.dwellOnDescription(digest, signal, "rail");
+    await this.dwellOnDescription(digest, signal, "rail", DESCRIPTION_DWELL_MS);
+    await abortableDelay(PACING.routeDwellMs, signal);
     await this.tapMobileLocator(frame, digest, signal);
-    await frame.locator(MOBILE_DETAIL_SELECTOR).waitFor({ state: "visible", timeout: 20_000 });
-    await this.page.waitForFunction(
-      (selector) => {
-        const embedded = document.querySelector(selector);
-        return /^\/sobytiya\/[^/]+\/$/u.test(embedded?.contentWindow?.location?.pathname || "");
-      },
-      FRAME_SELECTOR,
-      { timeout: 20_000 },
+    await raceWithAbort(
+      frame.locator(MOBILE_DETAIL_SELECTOR).waitFor({ state: "visible", timeout: 10_000 }),
+      signal,
     );
+    await this.waitForEmbeddedPath(/^\/sobytiya\/[^/]+\/$/u, signal);
+    await this.waitForEmbeddedReady(frame, signal);
 
     await this.enforceMobilePointerShield(frame);
     const detailDescription = frame.locator(MOBILE_DETAIL_DESCRIPTION_SELECTOR);
-    await detailDescription.waitFor({ state: "visible", timeout: 20_000 });
-    await detailDescription.scrollIntoViewIfNeeded();
-    await this.dwellOnDescription(detailDescription, signal, "event-detail");
-
-    if (config.artifactDir) {
-      await this.page.screenshot({
-        path: path.join(config.artifactDir, "tomorrow-mobile-1920x1080.png"),
-        fullPage: false,
-      });
-    }
-    assertNotAborted(signal);
+    await raceWithAbort(detailDescription.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await this.naturalVerticalScroll(frame, detailDescription, signal);
+    await this.dwellOnDescription(detailDescription, signal, "event-detail", DETAIL_DWELL_MS);
+    await this.finishTypicalPacing(startedAt, signal);
+    await this.captureScenario(TOMORROW_MOBILE_CONTRACT.id);
     return {
-      eventId: event.eventId,
-      title: event.title.replace(/\s+/gu, " ").replaceAll('"', "'").trim().slice(0, 100),
+      summary:
+        `event ${event.eventId} "${this.cleanTitle(event.title)}"; ` +
+        "digest revealed after horizontal swipe; detail description visible",
     };
   }
 
-  async selectTomorrowEvent(frame) {
-    const rows = frame.locator(MOBILE_EVENT_SELECTOR);
-    await rows.first().waitFor({ state: "visible", timeout: 20_000 });
+  async runTomorrowRailLike(signal) {
+    const startedAt = Date.now();
+    const contract = TOMORROW_RAIL_LIKE_CONTRACT;
+    const frame = await this.prepareScenarioStage(contract.id, signal, { freshContext: true });
+    await this.openTomorrowFromHome(frame, signal);
+
+    const row = frame.locator(
+      `${TOMORROW_ROWS_SELECTOR}[data-event-id="${contract.eventId}"]`,
+    );
+    await raceWithAbort(row.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    const title = await row.getAttribute("data-event-title");
+    assertCondition(
+      title === contract.eventTitle,
+      `event ${contract.eventId} title mismatch: ${JSON.stringify(title)}`,
+    );
+    await this.assertEventNotPreLiked(frame, row, contract.eventId);
+    await this.naturalVerticalScroll(frame, row, signal);
+
+    const rail = row.locator(MOBILE_EVENT_RAIL_SELECTOR);
+    const like = row.locator('[data-feedback-action="like"]');
+    await raceWithAbort(rail.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    const beforeCount = await this.readLikeCount(like);
+
+    await this.dragRailToEndInOneRelease(frame, rail, signal);
+    const atEnd = await this.railGeometry(rail);
+    assertCondition(
+      atEnd.maxScroll > 0 && atEnd.maxScroll - atEnd.scrollLeft <= 1,
+      `event ${contract.eventId} rail did not settle at maxScroll: ${JSON.stringify(atEnd)}`,
+    );
+
+    await this.pullLikeEdgeAndAssertArmed(frame, rail, signal);
+    const consent = frame.locator("[data-personalization-consent].is-visible");
+    const consentAccept = consent.locator("[data-personalization-consent-accept]");
+    if (await this.waitForEitherPressedOrConsent(like, consent, signal)) {
+      await raceWithAbort(consentAccept.waitFor({ state: "visible", timeout: 2_000 }), signal);
+      await this.tapMobileLocator(frame, consentAccept, signal);
+    }
+
+    await this.waitForLikeState(row, like, true, signal);
+    const afterCount = await this.waitForStableLikeCount(like, beforeCount + 1, signal);
+    assertCondition(
+      afterCount === beforeCount + 1,
+      `like count did not increment exactly once: before=${beforeCount} after=${afterCount}`,
+    );
+    await this.assertLikePersistenceStorage(frame, contract.eventId);
+
+    await this.reloadEmbeddedFrame(signal);
+    await this.waitForEmbeddedPath("/zavtra/", signal);
+    await this.waitForEmbeddedReady(frame, signal);
+    const reloadedRow = frame.locator(
+      `${TOMORROW_ROWS_SELECTOR}[data-event-id="${contract.eventId}"]`,
+    );
+    await raceWithAbort(reloadedRow.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    await this.naturalVerticalScroll(frame, reloadedRow, signal);
+    const reloadedLike = reloadedRow.locator('[data-feedback-action="like"]');
+    await this.waitForLikeState(reloadedRow, reloadedLike, true, signal);
+    assertCondition(
+      (await this.readLikeCount(reloadedLike)) === afterCount,
+      `persisted like count changed after reload for event ${contract.eventId}`,
+    );
+    await this.assertLikePersistenceStorage(frame, contract.eventId);
+
+    await this.finishTypicalPacing(startedAt, signal);
+    await this.captureScenario(contract.id);
+    return {
+      summary:
+        `event ${contract.eventId} "${contract.eventTitle}" liked only by armed edge gesture; ` +
+        `count ${beforeCount}→${afterCount}; storage and reload persistence verified`,
+    };
+  }
+
+  async runWeekendAmberArtifact(signal) {
+    const startedAt = Date.now();
+    const contract = WEEKEND_AMBER_ARTIFACT_CONTRACT;
+    const frame = await this.prepareScenarioStage(contract.id, signal, { freshContext: true });
+
+    const menuSummary = frame.locator(WEEKEND_MENU_SUMMARY_SELECTOR);
+    await raceWithAbort(menuSummary.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await this.tapMobileLocator(frame, menuSummary, signal);
+    const menu = frame.locator("[data-mobile-discovery-menu]");
+    await this.waitForAttribute(menu, "open", null, signal);
+    const weekendLink = frame.locator(WEEKEND_MENU_LINK_SELECTOR);
+    await raceWithAbort(weekendLink.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await this.tapMobileLocator(frame, weekendLink, signal);
+    await this.waitForEmbeddedPath("/vyhodnye/", signal);
+    await this.waitForEmbeddedReady(frame, signal);
+    await abortableDelay(PACING.routeDwellMs, signal);
+
+    const weekendRoot = frame.locator(WEEKEND_ROOT_SELECTOR);
+    await raceWithAbort(weekendRoot.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    const marker = Number(await weekendRoot.getAttribute("data-amber-artifact-event-id"));
+    assertCondition(Number.isSafeInteger(marker) && marker > 0, "weekend artifact event marker is invalid");
+    assertCondition(
+      marker === contract.snapshotEventId,
+      `weekend artifact snapshot drift: expected ${contract.snapshotEventId}, DOM marker=${marker}`,
+    );
+    const row = frame.locator(
+      `[data-mobile-v23-page="weekend"] [data-mobile-listing-row][data-event-id="${marker}"]`,
+    );
+    const artifact = row.locator(ARTIFACT_SELECTOR);
+    await raceWithAbort(row.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    await this.naturalVerticalScroll(frame, row, signal);
+    await this.revealRailLocatorWithRealDrags(frame, row.locator(".rail-window"), artifact, signal);
+    await this.armArtifactEventProbe(frame);
+    const beforeUrl = await this.embeddedUrl();
+    await abortableDelay(PACING.routeDwellMs, signal);
+    await this.tapMobileLocator(frame, artifact, signal);
+    await this.waitForAttribute(artifact, "aria-pressed", "true", signal);
+    const firstUrl = await this.embeddedUrl();
+    assertCondition(firstUrl === beforeUrl, `first artifact tap changed URL: ${beforeUrl} → ${firstUrl}`);
+    await this.assertArtifactCollected(frame, artifact, marker);
+
+    await this.reloadEmbeddedFrame(signal);
+    await this.waitForEmbeddedPath("/vyhodnye/", signal);
+    await this.waitForEmbeddedReady(frame, signal);
+    const reloadedRoot = frame.locator(WEEKEND_ROOT_SELECTOR);
+    const reloadedMarker = Number(
+      await reloadedRoot.getAttribute("data-amber-artifact-event-id"),
+    );
+    assertCondition(reloadedMarker === marker, `artifact event marker changed after reload: ${marker} → ${reloadedMarker}`);
+    const reloadedRow = frame.locator(
+      `[data-mobile-v23-page="weekend"] [data-mobile-listing-row][data-event-id="${marker}"]`,
+    );
+    const reloadedArtifact = reloadedRow.locator(ARTIFACT_SELECTOR);
+    await this.naturalVerticalScroll(frame, reloadedRow, signal);
+    await this.revealRailLocatorWithRealDrags(
+      frame,
+      reloadedRow.locator(".rail-window"),
+      reloadedArtifact,
+      signal,
+    );
+    await abortableDelay(PACING.routeDwellMs, signal);
+    await this.tapMobileLocator(frame, reloadedArtifact, signal);
+    await this.waitForEmbeddedPath("/artefakty/#amber_cosmonaut", signal);
+    await this.waitForEmbeddedReady(frame, signal);
+    const dialog = frame.locator("[data-artifact-dialog]");
+    await raceWithAbort(dialog.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    const foundCount = (await frame.locator("[data-artifact-found-count]").textContent())?.trim();
+    assertCondition(foundCount === "1", `artifact collection found count is ${JSON.stringify(foundCount)}`);
+    assertCondition(
+      (await frame.locator('[data-artifact-state="found"]').count()) === 1,
+      "artifact collection must contain exactly one found slot",
+    );
+
+    await this.finishTypicalPacing(startedAt, signal);
+    await this.captureScenario(contract.id);
+    return {
+      summary:
+        `artifact amber_cosmonaut on DOM-selected event ${marker} collected once; ` +
+        "storage/event/aria verified; reload and detail dialog count=1 verified",
+    };
+  }
+
+  async selectTomorrowEvent(frame, signal) {
+    const rows = frame.locator(TOMORROW_ROWS_SELECTOR);
+    await raceWithAbort(rows.first().waitFor({ state: "visible", timeout: 10_000 }), signal);
     const candidates = await rows.evaluateAll((nodes) =>
       nodes
         .filter((node) => {
@@ -614,17 +832,205 @@ class PrototypeAgent {
     const selected = selectDeterministicMobileEvent(candidates);
     if (!selected) {
       throw new Error(
-        `${MOBILE_EVENT_SELECTOR} has no deterministic event candidate with id/title/gallery count`,
+        `${TOMORROW_ROWS_SELECTOR} has no deterministic event candidate with id/title/gallery count`,
       );
     }
     return selected;
   }
 
+  async waitForEmbeddedReady(frame, signal) {
+    const html = frame.locator("html");
+    await raceWithAbort(html.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    await raceWithAbort(
+      html.evaluate(async () => {
+        if (document.readyState !== "complete") {
+          await new Promise((resolve) => addEventListener("load", resolve, { once: true }));
+        }
+        await document.fonts?.ready;
+      }),
+      signal,
+    );
+    const mobileSurface = frame.locator("[data-mobile-listing-rails]");
+    if ((await mobileSurface.count()) > 0) {
+      await this.waitForAttribute(mobileSurface.first(), "data-mobile-v23-ready", "true", signal);
+    }
+    await this.waitForVisibleMediaSettled(frame, signal);
+    await this.waitForScrollSettle(frame.locator("html"), signal, "vertical");
+  }
+
+  async waitForVisibleMediaSettled(frame, signal) {
+    const deadline = Date.now() + 3_500;
+    while (Date.now() <= deadline) {
+      assertNotAborted(signal);
+      const state = await frame.locator("body").evaluate(() => {
+        const visible = (node) => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            rect.bottom > 0 &&
+            rect.top < innerHeight &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        };
+        const images = [...document.images].filter(visible);
+        const videos = [...document.querySelectorAll("video")].filter(visible);
+        return {
+          pendingImages: images.filter((image) => !image.complete).length,
+          pendingVideos: videos.filter((video) => video.readyState < 2).length,
+          pendingMediaStates: [...document.querySelectorAll('[data-media-state="loading"]')]
+            .filter(visible).length,
+        };
+      });
+      if (!state.pendingImages && !state.pendingVideos && !state.pendingMediaStates) return;
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw new Error("visible embedded media did not settle within 3500ms");
+  }
+
+  async waitForEmbeddedPath(expected, signal) {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() <= deadline) {
+      assertNotAborted(signal);
+      const url = new URL(await this.embeddedUrl());
+      const value = `${url.pathname}${url.hash}`;
+      if (
+        (expected instanceof RegExp && expected.test(url.pathname)) ||
+        (typeof expected === "string" && value === expected)
+      ) {
+        await abortableDelay(PACING.routeDwellMs, signal);
+        return;
+      }
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw new Error(`embedded route did not reach ${String(expected)}; current=${await this.embeddedUrl()}`);
+  }
+
+  async embeddedUrl() {
+    return this.page.locator(FRAME_SELECTOR).evaluate((embedded) => embedded.contentWindow.location.href);
+  }
+
+  embeddedFrame() {
+    const main = this.page.mainFrame();
+    const frame = this.page.frames().find((candidate) => candidate.parentFrame() === main);
+    if (!frame) throw new Error("embedded presenter frame is unavailable");
+    return frame;
+  }
+
+  async reloadEmbeddedFrame(signal) {
+    const embedded = this.embeddedFrame();
+    await raceWithAbort(
+      embedded.goto(embedded.url(), { waitUntil: "domcontentloaded", timeout: 10_000 }),
+      signal,
+    );
+  }
+
+  async naturalVerticalScroll(frame, locator, signal) {
+    assertNotAborted(signal);
+    await raceWithAbort(locator.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    const geometry = await locator.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      const desiredTop = Math.max(
+        92,
+        Math.min(innerHeight * 0.28, innerHeight - Math.min(rect.height, innerHeight * 0.6) - 132),
+      );
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+        viewportHeight: innerHeight,
+        desiredTop,
+        deltaY: rect.top - desiredTop,
+      };
+    });
+
+    if (Math.abs(geometry.deltaY) > 4) {
+      const iframeBox = await this.page.locator(FRAME_SELECTOR).boundingBox();
+      if (!iframeBox) throw new Error("presenter iframe has no boundingBox for wheel gesture");
+      await this.page.mouse.move(
+        Math.round(iframeBox.x + iframeBox.width / 2),
+        Math.round(iframeBox.y + iframeBox.height / 2),
+      );
+      const trajectory = buildVerticalWheelTrajectory(geometry.deltaY);
+      let observedIntermediate = false;
+      const initialY = await frame.locator("html").evaluate(() => scrollY);
+      for (let index = 0; index < trajectory.length; index += 1) {
+        const step = trajectory[index];
+        await this.page.mouse.wheel(0, step.deltaY);
+        await abortableDelay(step.delayMs, signal);
+        if (index < trajectory.length - 1) {
+          const currentY = await frame.locator("html").evaluate(() => scrollY);
+          if (Math.abs(currentY - initialY) > 1) observedIntermediate = true;
+        }
+      }
+      assertCondition(observedIntermediate, "vertical wheel trajectory had no observable intermediate movement");
+      await this.waitForScrollSettle(frame.locator("html"), signal, "vertical");
+    }
+
+    const correction = await locator.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      const desiredTop = Math.max(
+        92,
+        Math.min(innerHeight * 0.28, innerHeight - Math.min(rect.height, innerHeight * 0.6) - 132),
+      );
+      const visible = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0));
+      return {
+        deltaY: rect.top - desiredTop,
+        visibleRatio: rect.height ? visible / Math.min(rect.height, innerHeight) : 0,
+      };
+    });
+    if (correction.visibleRatio < 0.72) {
+      assertCondition(
+        Math.abs(correction.deltaY) <= PACING.verticalFinalCorrectionPx,
+        `natural scroll requires an oversized final correction: ${JSON.stringify(correction)}`,
+      );
+      await raceWithAbort(locator.scrollIntoViewIfNeeded({ timeout: 3_000 }), signal);
+      await this.waitForScrollSettle(frame.locator("html"), signal, "vertical");
+    }
+    const visible = await locator.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      const intersection = Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0));
+      return intersection >= Math.min(rect.height, innerHeight) * 0.72;
+    });
+    assertCondition(visible, "natural vertical scroll did not leave target visibly framed");
+  }
+
+  async waitForScrollSettle(locator, signal, axis) {
+    const startedAt = Date.now();
+    let stable = 0;
+    let previous = null;
+    while (Date.now() - startedAt <= PACING.settleMaxMs) {
+      assertNotAborted(signal);
+      const current = await locator.evaluate((node, requestedAxis) => {
+        if (requestedAxis === "horizontal") return Number(node.scrollLeft || 0);
+        return Number(document.scrollingElement?.scrollTop || scrollY || 0);
+      }, axis);
+      if (previous !== null && Math.abs(current - previous) <= 0.5) stable += 1;
+      else stable = 0;
+      if (stable >= PACING.settleStableSamples) return current;
+      previous = current;
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw new Error(`${axis} scroll did not settle within ${PACING.settleMaxMs}ms`);
+  }
+
+  async waitForAttribute(locator, name, expected, signal) {
+    const deadline = Date.now() + 5_000;
+    while (Date.now() <= deadline) {
+      assertNotAborted(signal);
+      const value = await locator.getAttribute(name);
+      if ((expected === null && value !== null) || value === expected) return value;
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw new Error(`${name} did not become ${expected === null ? "present" : JSON.stringify(expected)}`);
+  }
+
   async tapMobileLocator(frame, locator, signal) {
     assertNotAborted(signal);
-    await locator.scrollIntoViewIfNeeded();
     const box = await locator.boundingBox();
-    if (!box) throw new Error("mobile tap target has no boundingBox");
+    if (!box) throw new Error("mobile tap target has no boundingBox; reveal it before tapping");
     const point = await locator.evaluate((node) => {
       const rect = node.getBoundingClientRect();
       return {
@@ -661,83 +1067,158 @@ class PrototypeAgent {
       );
       animation.finished.finally(() => tap.remove());
     }, point);
-    await abortableDelay(180, signal);
-    // Required real Playwright action. CSS hides the pointer, so this presents
-    // as the tap circle rather than a desktop cursor.
-    await locator.click({ timeout: 10_000 });
+    await abortableDelay(PACING.tapLeadMs, signal);
+    await raceWithAbort(locator.click({ timeout: 5_000 }), signal);
   }
 
-  async swipeRailTowardDescription(frame, rail, signal) {
-    assertNotAborted(signal);
-    const box = await rail.boundingBox();
-    if (!box) throw new Error(`${MOBILE_EVENT_RAIL_SELECTOR} has no boundingBox`);
-    const start = {
-      x: Math.round(box.x + box.width * 0.84),
-      y: Math.round(box.y + box.height * 0.52),
-    };
-    const end = {
-      x: Math.round(box.x + box.width * 0.12),
-      y: start.y,
-    };
-
-    await frame.locator("body").evaluate((body) => {
-      document.querySelectorAll("[data-autopresenter-swipe-trail]").forEach((node) => node.remove());
+  async showSwipeCue(rail, label, direction = "left") {
+    await rail.evaluate((node, cue) => {
+      document.querySelectorAll("[data-autopresenter-swipe-trail]").forEach((item) => item.remove());
+      const rect = node.getBoundingClientRect();
       const trail = document.createElement("div");
       trail.dataset.autopresenterSwipeTrail = "true";
-      trail.dataset.autopresenterSwipeFingerDirection = "left";
-      trail.dataset.autopresenterSwipeContentDirection = "right";
+      trail.dataset.autopresenterSwipeFingerDirection = cue.direction;
+      trail.dataset.autopresenterSwipeContentDirection = cue.direction === "left" ? "right" : "left";
       trail.setAttribute("aria-hidden", "true");
       Object.assign(trail.style, {
         position: "fixed",
         zIndex: "2147483647",
-        left: "12%",
-        top: "50%",
-        width: "76%",
-        height: "52px",
+        left: `${Math.max(10, rect.left + rect.width * .12)}px`,
+        top: `${Math.max(70, rect.top + rect.height * .35)}px`,
+        width: `${Math.max(210, rect.width * .76)}px`,
+        minHeight: "48px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         borderRadius: "999px",
-        background: "rgba(17,24,39,.78)",
+        background: "rgba(17,24,39,.82)",
         boxShadow: "0 10px 32px rgba(0,0,0,.28)",
         color: "#fff",
-        font: "850 15px/1 Inter,system-ui,sans-serif",
-        letterSpacing: ".02em",
+        font: "850 13px/1 Inter,system-ui,sans-serif",
         pointerEvents: "none",
       });
       trail.innerHTML =
-        '<span style="color:#7de6c2;font-size:24px;margin-right:10px">←━━━━━━━━</span><span>Листаем событие вправо →</span>';
-      body.append(trail);
+        `<span style="color:#7de6c2;font-size:23px;margin-right:9px">${cue.direction === "left" ? "←━━━━━━━━" : "━━━━━━━━→"}</span>` +
+        `<span>${cue.label}</span>`;
+      document.body.append(trail);
       const animation = trail.animate(
         [
-          { transform: "translateX(-20px)", opacity: 0 },
-          { transform: "translateX(0)", opacity: 1, offset: 0.18 },
-          { transform: "translateX(20px)", opacity: 1 },
+          { transform: "translateX(-16px)", opacity: 0 },
+          { transform: "translateX(0)", opacity: 1, offset: .18 },
+          { transform: "translateX(16px)", opacity: 1 },
         ],
-        { duration: 900, easing: "cubic-bezier(.22,.8,.24,1)", fill: "forwards" },
+        { duration: 1_050, easing: "cubic-bezier(.22,.8,.24,1)", fill: "forwards" },
       );
       animation.finished.finally(() => trail.remove());
-    });
+    }, { label, direction });
+  }
 
+  async swipeRailLeft(frame, rail, signal, label) {
+    assertNotAborted(signal);
+    const box = await rail.boundingBox();
+    if (!box) throw new Error(`${MOBILE_EVENT_RAIL_SELECTOR} has no boundingBox`);
+    const start = {
+      x: Math.round(box.x + box.width * 0.86),
+      y: Math.round(box.y + box.height * 0.52),
+    };
+    const end = {
+      x: Math.round(box.x + box.width * 0.10),
+      y: start.y,
+    };
+    await this.showSwipeCue(rail, label, "left");
+    await this.performMouseDrag(start, end, signal);
+  }
+
+  async performMouseDrag(start, end, signal, { beforeMouseUp } = {}) {
     let pointerDown = false;
     try {
       await this.page.mouse.move(start.x, start.y);
       await this.page.mouse.down();
       pointerDown = true;
-      for (let step = 1; step <= 12; step += 1) {
+      for (let step = 1; step <= PACING.railSteps; step += 1) {
         assertNotAborted(signal);
-        const progress = step / 12;
+        const progress = step / PACING.railSteps;
         await this.page.mouse.move(
           Math.round(start.x + (end.x - start.x) * progress),
-          start.y,
+          Math.round(start.y + (end.y - start.y) * progress),
         );
-        await abortableDelay(24, signal);
+        await abortableDelay(PACING.railStepMs, signal);
       }
+      if (beforeMouseUp) await beforeMouseUp();
       await this.page.mouse.up();
       pointerDown = false;
     } finally {
       if (pointerDown) await this.page.mouse.up().catch(() => {});
     }
+  }
+
+  async dragRailToEndInOneRelease(frame, rail, signal) {
+    const geometry = await this.railGeometry(rail);
+    assertCondition(geometry.maxScroll > 0, "like rail has no horizontal overflow");
+    const box = await rail.boundingBox();
+    if (!box) throw new Error("like rail has no boundingBox");
+    const start = {
+      x: Math.round(box.x + box.width * .88),
+      y: Math.round(box.y + box.height * .52),
+    };
+    const required = Math.ceil(geometry.maxScroll - geometry.scrollLeft + 36);
+    const minimumX = 20;
+    assertCondition(
+      required <= start.x - minimumX,
+      `rail maxScroll cannot be reached by one visible bounded drag: required=${required} available=${start.x - minimumX}`,
+    );
+    const end = { x: Math.max(minimumX, start.x - required), y: start.y };
+    await this.showSwipeCue(rail, "Тянем ряд до самого края", "left");
+    await this.performMouseDrag(start, end, signal);
+    await this.waitForScrollSettle(rail, signal, "horizontal");
+  }
+
+  async pullLikeEdgeAndAssertArmed(frame, rail, signal) {
+    const geometry = await this.railGeometry(rail);
+    assertCondition(geometry.maxScroll - geometry.scrollLeft <= 1, "like edge pull started before maxScroll");
+    const box = await rail.boundingBox();
+    if (!box) throw new Error("like rail has no boundingBox at edge");
+    const start = {
+      x: Math.round(box.x + box.width * .82),
+      y: Math.round(box.y + box.height * .52),
+    };
+    const pull = Math.max(132, Math.ceil(box.width * .38));
+    const end = { x: start.x - pull, y: start.y };
+    await this.showSwipeCue(rail, "Ещё движение — поставить лайк", "left");
+    await this.performMouseDrag(start, end, signal, {
+      beforeMouseUp: async () => {
+        const armed = await rail.evaluate((node) => node.classList.contains("is-like-armed"));
+        assertCondition(armed, `rail did not arm like before mouseup after ${pull}px edge pull`);
+      },
+    });
+    await this.waitForScrollSettle(rail, signal, "horizontal");
+  }
+
+  async revealRailLocatorWithRealDrags(frame, rail, target, signal) {
+    await raceWithAbort(rail.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await raceWithAbort(target.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    let previous = -1;
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      if (await this.isHorizontallyRevealed(target)) return;
+      const geometry = await this.railGeometry(rail);
+      assertCondition(
+        geometry.scrollLeft > previous + .5 || previous < 0,
+        `rail drag made no progress: ${JSON.stringify(geometry)}`,
+      );
+      previous = geometry.scrollLeft;
+      await this.swipeRailLeft(frame, rail, signal, "Ищем находку у края");
+      await this.waitForScrollSettle(rail, signal, "horizontal");
+    }
+    throw new Error(`artifact did not become visible through real rail drags: ${JSON.stringify(await this.railGeometry(rail))}`);
+  }
+
+  async railGeometry(rail) {
+    return rail.evaluate((node) => ({
+      scrollLeft: node.scrollLeft,
+      maxScroll: Math.max(0, node.scrollWidth - node.clientWidth),
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+    }));
   }
 
   async isHorizontallyRevealed(locator) {
@@ -754,7 +1235,7 @@ class PrototypeAgent {
     });
   }
 
-  async dwellOnDescription(locator, signal, surface) {
+  async dwellOnDescription(locator, signal, surface, dwellMs) {
     await locator.evaluate((node, dwellSurface) => {
       node.dataset.autopresenterDescriptionDwell = dwellSurface;
       Object.assign(node.style, {
@@ -764,7 +1245,166 @@ class PrototypeAgent {
         boxShadow: "0 0 0 10px rgba(38,211,154,.16)",
       });
     }, surface);
-    await abortableDelay(DESCRIPTION_DWELL_MS, signal);
+    await abortableDelay(dwellMs, signal);
+  }
+
+  async assertEventNotPreLiked(frame, row, eventId) {
+    const state = await frame.locator("body").evaluate(
+      (body, { profileKey, id }) => {
+        let profile = null;
+        try {
+          profile = JSON.parse(localStorage.getItem(profileKey) || "null");
+        } catch {}
+        return {
+          storageLiked: Array.isArray(profile?.liked_event_ids)
+            && profile.liked_event_ids.some((value) => Number(value) === id),
+          rowLiked: body.querySelector(`[data-mobile-listing-row][data-event-id="${id}"]`)
+            ?.classList.contains("is-liked") || false,
+        };
+      },
+      { profileKey: PROFILE_STORAGE_KEY, id: eventId },
+    );
+    const pressed = await row.locator('[data-feedback-action="like"]').getAttribute("aria-pressed");
+    assertCondition(
+      !state.storageLiked && !state.rowLiked && pressed !== "true",
+      `event ${eventId} is already liked in the fresh scenario profile; refusing to silently unlike`,
+    );
+  }
+
+  async waitForEitherPressedOrConsent(like, consent, signal) {
+    const deadline = Date.now() + 2_500;
+    while (Date.now() <= deadline) {
+      assertNotAborted(signal);
+      if ((await like.getAttribute("aria-pressed")) === "true") return false;
+      if ((await consent.count()) > 0 && await consent.isVisible()) return true;
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw new Error("like gesture produced neither a pressed control nor visible consent");
+  }
+
+  async waitForLikeState(row, like, expected, signal) {
+    const deadline = Date.now() + 5_000;
+    while (Date.now() <= deadline) {
+      assertNotAborted(signal);
+      const pressed = (await like.getAttribute("aria-pressed")) === "true";
+      const rowLiked = await row.evaluate((node) => node.classList.contains("is-liked"));
+      if (pressed === expected && rowLiked === expected) return;
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw new Error(`like aria/row state did not become ${expected}`);
+  }
+
+  async readLikeCount(like) {
+    const text = (await like.locator("[data-like-count]").textContent())?.trim() || "";
+    const base = Number(await like.getAttribute("data-base-count"));
+    const parsed = Number(text);
+    return Number.isFinite(parsed) ? parsed : (Number.isFinite(base) ? base : 0);
+  }
+
+  async waitForStableLikeCount(like, minimum, signal) {
+    const startedAt = Date.now();
+    let previous = null;
+    let stable = 0;
+    while (Date.now() - startedAt <= 5_000) {
+      assertNotAborted(signal);
+      const current = await this.readLikeCount(like);
+      if (current >= minimum && current === previous) stable += 1;
+      else stable = 0;
+      if (stable >= PACING.settleStableSamples) return current;
+      previous = current;
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw new Error(`like count did not stabilize at or above ${minimum}`);
+  }
+
+  async assertLikePersistenceStorage(frame, eventId) {
+    const state = await frame.locator("body").evaluate(
+      (body, { profileKey, logKey, id }) => {
+        const parse = (key) => {
+          try { return JSON.parse(localStorage.getItem(key) || "null"); }
+          catch { return null; }
+        };
+        const profile = parse(profileKey);
+        const log = parse(logKey);
+        return {
+          liked: Array.isArray(profile?.liked_event_ids)
+            && profile.liked_event_ids.some((value) => Number(value) === id),
+          normalizedLog: Array.isArray(log)
+            && log.some((entry) => Number(entry?.event_id) === id && entry?.action === "like_event"),
+          legacyEventIdKey: Array.isArray(log)
+            && log.some((entry) => entry && Object.hasOwn(entry, "eventId")),
+          bodyPresent: Boolean(body),
+        };
+      },
+      { profileKey: PROFILE_STORAGE_KEY, logKey: FEEDBACK_LOG_STORAGE_KEY, id: eventId },
+    );
+    assertCondition(state.bodyPresent && state.liked, `profile storage does not contain liked event ${eventId}`);
+    assertCondition(state.normalizedLog, `feedback log has no normalized event_id=${eventId} like_event entry`);
+    assertCondition(!state.legacyEventIdKey, "feedback log contains non-normalized eventId keys");
+  }
+
+  async armArtifactEventProbe(frame) {
+    await frame.locator("body").evaluate(() => {
+      window.__autopresenterAmberEvent = null;
+      addEventListener(
+        "kenigevents:artifact-collected",
+        (event) => {
+          window.__autopresenterAmberEvent = event.detail;
+        },
+        { once: true },
+      );
+    });
+  }
+
+  async assertArtifactCollected(frame, artifact, eventId) {
+    const state = await frame.locator("body").evaluate(
+      (body, { storageKey, expectedEventId }) => {
+        let collection = null;
+        try {
+          collection = JSON.parse(localStorage.getItem(storageKey) || "null");
+        } catch {}
+        const found = collection?.artifacts?.amber_cosmonaut;
+        return {
+          bodyPresent: Boolean(body),
+          collectionId: collection?.collectionId,
+          status: found?.status,
+          eventId: Number(found?.eventId),
+          placement: found?.placement,
+          event: window.__autopresenterAmberEvent,
+          expectedEventId,
+        };
+      },
+      { storageKey: ARTIFACT_STORAGE_KEY, expectedEventId: eventId },
+    );
+    const aria = await artifact.getAttribute("aria-label");
+    assertCondition((await artifact.getAttribute("aria-pressed")) === "true", "artifact aria-pressed is not true");
+    assertCondition(/найден/iu.test(aria || ""), `artifact found aria label is invalid: ${JSON.stringify(aria)}`);
+    assertCondition(state.bodyPresent && state.status === "found", "artifact storage status is not found");
+    assertCondition(state.eventId === eventId, `artifact storage eventId ${state.eventId} != ${eventId}`);
+    assertCondition(
+      state.event?.artifactId === "amber_cosmonaut"
+        && Number(state.event?.eventId) === eventId
+        && state.event?.placement === state.placement,
+      `artifact custom event mismatch: ${JSON.stringify(state.event)}`,
+    );
+  }
+
+  async finishTypicalPacing(startedAt, signal) {
+    const remaining = PACING.scenarioTypicalMinMs - (Date.now() - startedAt);
+    if (remaining > 0) await abortableDelay(remaining, signal);
+    assertNotAborted(signal);
+  }
+
+  cleanTitle(title) {
+    return title.replace(/\s+/gu, " ").replaceAll('"', "'").trim().slice(0, 100);
+  }
+
+  async captureScenario(scenarioId) {
+    if (!config.artifactDir) return;
+    await this.page.screenshot({
+      path: path.join(config.artifactDir, `${scenarioId}-1920x1080.png`),
+      fullPage: false,
+    });
   }
 
   async setAgentState(status, detail) {
@@ -847,9 +1487,6 @@ class PrototypeAgent {
           abortableDelay(config.hardStopMs).catch(() => {}),
         ]);
       }
-      // Playwright guarantees the video only after BrowserContext.close()
-      // resolves. All shutdown callers share this promise so main() cannot
-      // race process exit against the signal handler's recorder flush.
       await this.context?.close().catch(() => {});
       await this.browser?.close().catch(() => {});
     })();
@@ -860,31 +1497,21 @@ class PrototypeAgent {
 async function main() {
   const { chromium } = loadPlaywright();
   const agent = new PrototypeAgent(chromium);
-
-  let shutdownStarted = false;
+  let signalShutdown = null;
   for (const signalName of ["SIGINT", "SIGTERM"]) {
-    process.on(signalName, () => {
-      if (shutdownStarted) return;
-      shutdownStarted = true;
-      void agent.shutdown(signalName).finally(() => {
-        process.exitCode = 0;
-      });
+    process.once(signalName, () => {
+      signalShutdown = agent.shutdown(signalName);
     });
   }
 
   try {
     await agent.start();
   } finally {
-    await agent.shutdown("main-exit");
+    await (signalShutdown || agent.shutdown("main-finally"));
   }
 }
 
-const invokedDirectly = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (invokedDirectly) {
-  main().catch((error) => {
-    process.stderr.write(`[autopresenter-agent] fatal: ${error?.stack || errorText(error)}\n`);
-    process.exitCode = 1;
-  });
-}
-
-export { PrototypeAgent, SCENARIO, VIEWPORT, loadPlaywright };
+main().catch((error) => {
+  process.stderr.write(`[autopresenter-agent] fatal: ${error?.stack || errorText(error)}\n`);
+  process.exitCode = 1;
+});

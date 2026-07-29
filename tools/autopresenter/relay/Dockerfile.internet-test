@@ -1,6 +1,9 @@
 FROM node:22.12.0-bookworm-slim AS site-build
 
-ENV ASTRO_TELEMETRY_DISABLED=1
+ENV ASTRO_TELEMETRY_DISABLED=1 \
+    PUBLIC_SITE_MODE=preview \
+    PUBLIC_ENABLE_AMBER_ARTIFACT_RESEARCH=tail \
+    PUBLIC_PREVIEW_BUILD_ID=autopresenter-54
 WORKDIR /build/site
 COPY site/package.json site/package-lock.json ./
 RUN npm ci --no-audit --no-fund
