@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Distinguished the nested transport controls as `03.12.3.1` (train) and
+  `03.12.3.2` (bus) while keeping their stable scenario IDs.
 - Fixed the latest Autopresenter owner-review regressions without adding
   infrastructure: visible media readiness is now bounded best-effort instead
   of aborting artifact/rail journeys, 03.3 visibly holds found/collected/detail

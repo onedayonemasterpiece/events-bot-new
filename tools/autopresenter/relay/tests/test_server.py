@@ -78,6 +78,8 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('data-scenario="outro-qr"', text)
         self.assertIn("Hero Talk, музыка", text)
         self.assertIn("Смысл, затем FHD", text)
+        self.assertIn("<span>03.12.3.1</span><span>Транспорт · поезд", text)
+        self.assertIn("<span>03.12.3.2</span><span>Транспорт · автобус", text)
         self.assertIn('id="presentation-timer"', text)
         self.assertIn('id="smart-search-query"', text)
         self.assertNotIn('class="primary scenario"', text)
