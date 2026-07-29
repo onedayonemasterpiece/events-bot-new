@@ -1,0 +1,100 @@
+mode: read_only_parallel_then_serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/integration/autopresenter-iteration-20260729-b
+base_branch: integration/autopresenter-iteration-20260729-b
+integration_branch: integration/autopresenter-iteration-20260729-c
+global_constraints:
+  - Preserve accepted scenes not named in R01-R13.
+  - Keep one browser/page/window and existing Fly/Yandex resources.
+  - Never modify tools/autopresenter/m0/**.
+  - Prefer current static-site assets and deterministic SVG/CSS; no paid image generation.
+  - Validate with targeted live smokes before one final full build.
+verification_owner: INT
+stop_conditions:
+  - Real search still lacks an authorized demo session and cannot be prepared without credentials.
+  - The current immutable focus build lacks the requested artifact/product surface.
+lanes:
+  - id: DISC-VISUAL
+    role: planner
+    requirement_ids: []
+    support_requirement_ids: [R02, R03, R05, R07, R08, R10, R11, R13]
+    target: FHD visual audit, exact site icons/font/wordmark extraction guidance.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Screenshot-backed bounded corrections.
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: DISC-LIVE
+    role: planner
+    requirement_ids: []
+    support_requirement_ids: [R01, R06, R09, R12]
+    target: Reproduce artifact/rail/search against the supplied current focus route and identify exact failure points.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Live selectors, auth state and deterministic repair guidance.
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: DISC-MOTION
+    role: planner
+    requirement_ids: []
+    support_requirement_ids: [R02, R04, R07]
+    target: Audit motion/typing timing and propose compact cinematic parameters.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Exact timing/easing/choreography patch guidance.
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: INT
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12, R13]
+    target: Implement all corrections, test, deploy existing app, publish branch and Telegram handoff.
+    depends_on: [DISC-VISUAL, DISC-LIVE, DISC-MOTION]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-iteration-20260729-c
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files:
+      - site/src/pages/internal/presenter-stage/index.astro
+      - site/tests/presenter-stage.test.mjs
+      - tools/autopresenter/agent/**
+      - tools/autopresenter/relay/**
+      - tools/autopresenter/README.md
+      - docs/features/static-site-pages/auto-present/**
+      - .codex/integration/**
+      - CHANGELOG.md
+    forbidden_files:
+      - tools/autopresenter/m0/**
+      - unrelated production files
+    expected_output: Public branch, existing Fly deploy, fresh Windows ZIP, Telegram links.
+    verification_scope: targeted_then_full_local
+    effort: high
+    status: planned
+  - id: AUDIT
+    role: reviewer
+    requirement_ids: []
+    support_requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12, R13]
+    target: Final read-only closure audit.
+    depends_on: [INT]
+    execution_mode: serial_after_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Done/Partial/Missing/Blocked per R01-R13.
+    verification_scope: inspection_only
+    effort: high
+    status: planned
