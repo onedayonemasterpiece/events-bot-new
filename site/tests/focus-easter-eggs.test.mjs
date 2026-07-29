@@ -73,21 +73,26 @@ test('FG-E12 remains found after the current saved list later becomes short', ()
   assert.ok(once.foundEggIds.includes('FG-E12'), 'short list must not erase the prior find');
 });
 
-test('collection surface keeps pending prize copy and a local-only boundary', async () => {
+test('collection surface keeps pending prize copy and plain-language boundaries', async () => {
   const page = await read('../src/pages/fokus-gruppa/kollektsiya/index.astro');
+  const visibleCopy = page
+    .replace(/^---[\s\S]*?---/u, '')
+    .replace(/<script>[\s\S]*?<\/script>/gu, '')
+    .replace(/<style>[\s\S]*?<\/style>/gu, '');
 
   assert.match(page, /Правила готовятся/u);
   assert.match(page, /один приз — <strong>два билета в театр<\/strong>/u);
-  assert.match(page, /не начисляют[\s\S]*не создают право/u);
-  assert.match(page, /На этом устройстве · не конкурсный результат/u);
+  assert.match(page, /не начисляют[\s\S]*не[\s\n]*дают право/u);
+  assert.match(page, /Результат на этом устройстве пока не участвует в розыгрыше/u);
   assert.match(page, /Проверьте сайт на двух экранах/u);
-  assert.match(page, /одно полезное действие на телефоне и одно на компьютере/u);
-  assert.match(page, /single-device equivalent/u);
-  assert.match(page, /не пасхалку и не[\s\S]*преимущество/u);
+  assert.match(page, /одно полезное действие на телефоне и одно[\s\n]*на компьютере/u);
+  assert.match(page, /Результат от этого не уменьшится/u);
+  assert.match(page, /не даст преимущества/u);
   assert.match(page, /40/u);
   assert.match(page, /7/u);
   assert.doesNotMatch(page, /Ваш конкурсный балл/u);
   assert.doesNotMatch(page, /на любой спектакль/iu);
+  assert.doesNotMatch(visibleCopy, /prototype|handoff|device receipts?|single-device|NPS|локальная иллюстрация/iu);
 });
 
 test('saved-list prototype inserts one FG-E12 anchor after source item three only', async () => {

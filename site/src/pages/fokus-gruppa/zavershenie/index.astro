@@ -10,14 +10,14 @@ const states = [
     tab: 'Срок завершён',
     eyebrow: 'Автоматическое завершение',
     title: 'Исследовательский период завершён',
-    body: 'Срок программы истёк. Режим тестера, новые приглашения и исследовательские сообщения выключены.',
+    body: 'Срок программы истёк. Новые приглашения и вопросы фокус-группы больше не появятся.',
   },
   {
     id: 'operator_closed',
     tab: 'Команда завершила',
-    eyebrow: 'Решение оператора',
+    eyebrow: 'Решение команды',
     title: 'Программа завершена раньше',
-    body: 'Команда закрыла исследовательский период досрочно. Новые tester-действия больше не принимаются.',
+    body: 'Команда закрыла исследовательский период досрочно. Новые ответы больше не принимаются.',
   },
   {
     id: 'operator_cancelled',
@@ -41,8 +41,8 @@ const robots = IS_SECRET_CANDIDATE
     <meta name="robots" content={robots} />
     <meta name="referrer" content="no-referrer" />
     <link rel="canonical" href={absoluteUrl('/fokus-gruppa/zavershenie/')} />
-    <title>Завершение фокус-группы · продуктовый прототип</title>
-    <meta name="description" content="Макет автоматического и операторского завершения фокус-группы с сохранением обычной персонализации." />
+    <title>Завершение фокус-группы · Анонсы</title>
+    <meta name="description" content="Что произойдёт после завершения фокус-группы." />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
     <meta name="theme-color" content="#fff7e7" />
   </head>

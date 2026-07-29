@@ -114,11 +114,12 @@ test('account logout and explicit programme exit stay separate on focus surfaces
   assert.doesNotMatch(runtime, /clearFocusParticipationMarker|kenigevents:focus-participation/u);
 });
 
-test('feedback keeps overall NPS, usefulness, improvement and fact issue separate', async () => {
+test('feedback keeps distinct questions in plain user language', async () => {
   const source = await read('../src/components/FocusGroupFeedback.astro');
-  assert.match(source, /Общий relationship NPS/u);
-  assert.match(source, /это не общий NPS/u);
+  assert.match(source, /Общее впечатление/u);
+  assert.match(source, /Оцените только эту страницу/u);
   assert.match(source, /Предложить улучшение/u);
   assert.match(source, /data-feedback-panel="event_issue"/u);
   assert.match(source, /не меняет событие автоматически/u);
+  assert.doesNotMatch(source, /relationship NPS|page family|event_id|specimen|production|серверной проверки/iu);
 });

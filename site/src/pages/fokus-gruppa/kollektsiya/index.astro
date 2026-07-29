@@ -4,8 +4,6 @@ import FocusEggSavedListDemo from '../../../components/FocusEggSavedListDemo.ast
 import FocusLabBadge from '../../../components/FocusLabBadge.astro';
 import {
   FOCUS_EGG_DEFINITIONS,
-  FOCUS_EGG_COLLECTION_VERSION,
-  FOCUS_EGG_RULES_VERSION,
   capFocusParticipation,
   getFocusEggCollectionProgress,
   type FocusEggId,
@@ -14,7 +12,7 @@ import {
 import { absoluteUrl, IS_SECRET_CANDIDATE, withBase } from '../../../lib/events';
 import '../../../styles/design-system.css';
 
-const prototypeStates: Record<FocusEggId, FocusEggState> = {
+const exampleStates: Record<FocusEggId, FocusEggState> = {
   'FG-E01': 'found',
   'FG-E02': 'eligible',
   'FG-E03': 'locked',
@@ -29,7 +27,7 @@ const prototypeStates: Record<FocusEggId, FocusEggState> = {
   'FG-E12': 'locked',
 };
 const collectionProgress = getFocusEggCollectionProgress(
-  FOCUS_EGG_DEFINITIONS.map(({ id }) => prototypeStates[id]),
+  FOCUS_EGG_DEFINITIONS.map(({ id }) => exampleStates[id]),
 );
 const participationProgress = capFocusParticipation({ points: 18, categories: 4 });
 const robots = IS_SECRET_CANDIDATE
@@ -49,7 +47,7 @@ const robots = IS_SECRET_CANDIDATE
     <title>Коллекция пасхалок · фокус-группа</title>
     <meta
       name="description"
-      content="Мобильный продуктовый прототип коллекции пасхалок фокус-группы."
+      content="Коллекция найденных пасхалок фокус-группы."
     />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
     <meta name="theme-color" content="#fff7e7" />
@@ -59,7 +57,7 @@ const robots = IS_SECRET_CANDIDATE
     <main id="main" class="focus-collection" data-focus-collection>
       <nav class="focus-collection__nav" aria-label="Навигация коллекции">
         <a href={withBase('/zakrytaya-afisha/')} class="focus-collection__back">← В закрытую афишу</a>
-        <FocusLabBadge label="Лаборатория" detail="Коллекция · прототип" />
+        <FocusLabBadge label="Коллекция" detail="Найденные пасхалки" />
       </nav>
 
       <header class="focus-collection__hero">
@@ -70,7 +68,7 @@ const robots = IS_SECRET_CANDIDATE
         <p>
           Каждая пасхалка появляется после полезного действия: поиска, настройки
           интересов, изучения события или календаря. Один и тот же объект доступен
-          с телефона, компьютера, клавиатуры и screen reader.
+          с телефона, компьютера, клавиатуры и программы чтения с экрана.
         </p>
       </header>
 
@@ -105,9 +103,8 @@ const robots = IS_SECRET_CANDIDATE
           </article>
         </div>
         <p class="focus-collection__score-note">
-          Это локальная иллюстрация формулы. Больше найденная доля коллекции
-          всегда важнее активности; лайки и дизлайки симметричны, а значение NPS
-          и тон текста не оцениваются.
+          На первом месте — найденные пасхалки. Лайки и отметки «Не интересно»
+          равноценны, а количество и тон ваших ответов не влияют на результат.
         </p>
       </section>
 
@@ -116,9 +113,9 @@ const robots = IS_SECRET_CANDIDATE
         <div>
           <h2 id="rules-title">Правила готовятся</h2>
           <p>
-            Прототип показывает, как может считаться коллекция и
-            исследовательская активность. Сейчас действия на сайте не начисляют
-            конкурсные баллы и не создают право на два билета.
+            Сейчас можно познакомиться с коллекцией и проверить, как она
+            работает. Действия на сайте пока не начисляют конкурсные баллы и не
+            дают право на два билета.
           </p>
           <p>
             После утверждения условий будет один приз — <strong>два билета в театр</strong>.
@@ -144,7 +141,7 @@ const robots = IS_SECRET_CANDIDATE
         </div>
         <div class="focus-collection__grid">
           {FOCUS_EGG_DEFINITIONS.map((egg) => (
-            <FocusEggCollectionCard egg={egg} state={prototypeStates[egg.id]} />
+            <FocusEggCollectionCard egg={egg} state={exampleStates[egg.id]} />
           ))}
         </div>
       </section>
@@ -154,10 +151,10 @@ const robots = IS_SECRET_CANDIDATE
           <p class="focus-collection__eyebrow">Исследовательская миссия · вне конкурса</p>
           <h2 id="device-mission-title">Проверьте сайт на двух экранах</h2>
           <p>
-            После первых трёх находок система предложит одноразовый handoff:
-            одно полезное действие на телефоне и одно на компьютере. Это даёт
-            команде две отдельные отметки покрытия, но не пасхалку и не
-            преимущество при выборе победителя.
+            После первых трёх находок можно будет открыть короткую ссылку на
+            другом устройстве: сделать одно полезное действие на телефоне и одно
+            на компьютере. Это поможет проверить сайт, но не даст преимущества
+            при выборе победителя.
           </p>
         </div>
         <ol class="focus-collection__device-steps">
@@ -168,20 +165,18 @@ const robots = IS_SECRET_CANDIDATE
         <div class="focus-collection__device-alternative">
           <strong>Нет второго устройства?</strong>
           <span>
-            Выберите «У меня один экран» и пройдите отдельную guided-проверку.
-            Она будет честно отмечена как single-device equivalent, а не как
-            реальная проба двух устройств, и не уменьшит результат.
+            Выберите «У меня один экран» и пройдите похожую проверку на нём.
+            Результат от этого не уменьшится.
           </span>
         </div>
         <p class="focus-collection__device-boundary">
-          В прототипе handoff не создаётся и device receipts не отправляются.
-          Здесь показаны сценарий и его границы до server/privacy gate.
+          Переход между устройствами пока готовится. Когда он станет доступен,
+          здесь появится короткая ссылка.
         </p>
       </section>
 
       <footer class="focus-collection__footer">
-        <span>На этом устройстве · не конкурсный результат</span>
-        <span>{FOCUS_EGG_COLLECTION_VERSION} · {FOCUS_EGG_RULES_VERSION}</span>
+        <span>Результат на этом устройстве пока не участвует в розыгрыше</span>
       </footer>
     </main>
   </body>

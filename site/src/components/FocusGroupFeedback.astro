@@ -26,18 +26,18 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
   aria-labelledby={`${idPrefix}-title`}
 >
   <div>
-    <p class="focus-feedback__eyebrow">Обратная связь · прототип</p>
-    <h2 id={`${idPrefix}-title`}>Разные вопросы — разные сигналы</h2>
+    <p class="focus-feedback__eyebrow">Ваше мнение</p>
+    <h2 id={`${idPrefix}-title`}>Расскажите, что получилось, а что нет</h2>
     <p>
-      Общий NPS задаётся раз в неделю или при выходе. Полезность относится только
-      к текущей странице. Улучшение доступно всегда, а ошибка в событии идёт
-      отдельным путём проверки фактов.
+      Общее впечатление мы спрашиваем не чаще раза в неделю. Отдельно можно
+      оценить текущую страницу, предложить улучшение или сообщить об ошибке в
+      событии.
     </p>
   </div>
   <div class="focus-feedback__launchers" aria-label="Виды обратной связи">
     {overallNpsDue && (
       <button class="ke-button ke-button--secondary" type="button" data-feedback-open="overall">
-        Общий NPS
+        Общее впечатление
       </button>
     )}
     <button class="ke-button ke-button--secondary" type="button" data-feedback-open="surface">
@@ -54,9 +54,8 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
   </div>
 
   <p class="focus-feedback__boundary">
-    Здесь ответы только демонстрируют интерфейс и остаются в текущей вкладке:
-    отправки и записи в базу нет. В production элементы доступны лишь после
-    серверной проверки активного участника.
+    Сейчас это пример формы: ответы не отправляются и исчезнут после закрытия
+    страницы.
   </p>
 
   <dialog class="focus-feedback__dialog" data-feedback-dialog aria-labelledby={`${idPrefix}-dialog-title`}>
@@ -72,7 +71,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
       </header>
 
       <div class="focus-feedback__switcher" aria-label="Выберите вид ответа">
-        <button type="button" aria-pressed="false" data-feedback-kind="overall">Общий NPS</button>
+        <button type="button" aria-pressed="false" data-feedback-kind="overall">Общее впечатление</button>
         <button type="button" aria-pressed="false" data-feedback-kind="surface">Полезность</button>
         <button type="button" aria-pressed="false" data-feedback-kind="improvement">Улучшение</button>
         {showEventIssue && (
@@ -85,7 +84,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
           <legend>
             Насколько вероятно, что вы порекомендуете «Полюбить Калининград · Анонсы» знакомым?
           </legend>
-          <p class="focus-feedback__hint">Общий relationship NPS · раз в неделю или при выходе</p>
+          <p class="focus-feedback__hint">Этот вопрос появится не чаще раза в неделю.</p>
           <div class="focus-feedback__scale">
             {Array.from({ length: 11 }, (_, score) => (
               <label>
@@ -96,15 +95,13 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
           </div>
           <div class="focus-feedback__ends" aria-hidden="true"><span>Совсем не вероятно</span><span>Очень вероятно</span></div>
         </fieldset>
-        <button class="ke-button ke-button--primary" type="submit">Отметить в макете</button>
+        <button class="ke-button ke-button--primary" type="submit">Сохранить ответ на этой странице</button>
       </form>
 
       <form class="focus-feedback__panel" data-feedback-panel="surface" data-feedback-form hidden>
         <fieldset>
           <legend>Насколько {pageLabel} помогла выбрать или понять событие?</legend>
-          <p class="focus-feedback__hint">
-            Полезность page family <code>{pageFamily}</code> · это не общий NPS
-          </p>
+          <p class="focus-feedback__hint">Оцените только эту страницу.</p>
           <div class="focus-feedback__scale">
             {Array.from({ length: 11 }, (_, score) => (
               <label>
@@ -115,7 +112,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
           </div>
           <div class="focus-feedback__ends" aria-hidden="true"><span>Не помогла</span><span>Очень помогла</span></div>
         </fieldset>
-        <button class="ke-button ke-button--primary" type="submit">Отметить в макете</button>
+        <button class="ke-button ke-button--primary" type="submit">Сохранить ответ на этой странице</button>
       </form>
 
       <form class="focus-feedback__panel" data-feedback-panel="improvement" data-feedback-form hidden>
@@ -132,7 +129,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
         </label>
         <div class="focus-feedback__form-footer">
           <span data-feedback-count aria-live="polite">0 / 2 000</span>
-          <button class="ke-button ke-button--primary" type="submit">Отметить в макете</button>
+          <button class="ke-button ke-button--primary" type="submit">Сохранить ответ на этой странице</button>
         </div>
       </form>
 
@@ -141,7 +138,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
           <fieldset>
             <legend>Что неверно в событии?</legend>
             <p class="focus-feedback__hint">
-              {eventLabel}{eventId ? ` · event_id ${eventId}` : ' · без реального event_id в этом specimen'}
+              {eventLabel}
             </p>
             <div class="focus-feedback__issue-types">
               {[
@@ -174,12 +171,12 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
           </label>
           <div class="focus-feedback__fact-boundary">
             <strong>Сообщение не меняет событие автоматически.</strong>
-            Оператор сверяет категорию с каноническим event ID и серверным
-            снимком, затем отдельно принимает решение об исправлении.
+            Сначала команда сверит дату, место и другие сведения с источником,
+            а затем решит, что нужно исправить.
           </div>
           <div class="focus-feedback__form-footer">
             <span data-feedback-count aria-live="polite">0 / 2 000</span>
-            <button class="ke-button ke-button--primary" type="submit">Отметить в макете</button>
+            <button class="ke-button ke-button--primary" type="submit">Сохранить ответ на этой странице</button>
           </div>
         </form>
       )}
@@ -230,7 +227,7 @@ const idPrefix = `focus-feedback-${pageFamily.replace(/[^a-z0-9_-]/giu, '-')}`;
     root.querySelectorAll<HTMLFormElement>('[data-feedback-form]').forEach((form) => {
       form.addEventListener('submit', (event) => {
         event.preventDefault();
-        status.textContent = 'Ответ отмечен только в макете этой вкладки и никуда не отправлен.';
+        status.textContent = 'Ответ сохранён только на этой странице и никуда не отправлен.';
       });
     });
 
