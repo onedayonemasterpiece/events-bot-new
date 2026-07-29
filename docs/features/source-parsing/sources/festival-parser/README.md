@@ -7,8 +7,10 @@ The Universal Festival Parser enables adding/updating festivals by parsing their
 Preproduction design for grouped, evidence-first processing of
 `festival_queue.source_kind=url` and all non-social linked sources:
 [`preproduction-web-research.md`](preproduction-web-research.md). It is a
-shadow/approval-gated successor lane; the current Universal Festival Parser
-remains the baseline until its rollout gates pass.
+shadow/approval-gated, Antigravity-first successor lane: one primary researcher,
+one independent fresh-sandbox checker and an optional conflict adjudicator.
+The current Universal Festival Parser remains the baseline until rollout gates
+pass.
 
 ## Architecture: RDR (Render–Distill–Reason)
 

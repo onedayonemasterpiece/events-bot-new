@@ -1,6 +1,6 @@
 # Festival Web Research: preproduction design
 
-Статус: `approved design`, реализация и rollout ещё не выполнены.
+Статус: `proposed preproduction design`, реализация и rollout ещё не выполнены.
 
 Область: `festival_queue.source_kind=url` и все найденные из таких страниц
 несоциальные источники. Telegram/VK intake, Telegram Monitoring и VK auto
@@ -88,14 +88,17 @@ festival source.
    state, не personalization Supabase и не YDB.
 4. **Большие snapshots хранить в существующем Supabase Storage bucket
    `festival-parsing`.**
-5. **Antigravity — researcher/challenger, не renderer.** Его structured output
-   не поддерживается, а token guard best-effort.
-6. **Source-local extraction — Gemma 4 31b через shared Google gateway** с
-   native JSON schema. Legacy Gemma 3 parser остаётся comparison baseline, но
-   не fallback внутри candidate lane.
-7. **Local evidence gate является authority.** Ни Antigravity, ни Gemma не
-   выставляют publishable/confidence самостоятельно.
-8. **Preproduction всегда shadow и approval-gated.**
+5. **Antigravity — основной semantic research runtime.** Первый независимый
+   агент строит source/claim ledger, второй в новой песочнице ищет
+   контрдоказательства, третий вызывается только для реального конфликта.
+6. **Локальный код только ограничивает вход и проверяет доказательства.** Он
+   fetch/mount-ит seed sources, хранит hashes/checkpoints и валидирует
+   JSON/references/quotes, но не подменяет агентское смысловое исследование.
+7. **Legacy Gemma 3 Universal Parser — только comparison baseline.** Gemma 4
+   не входит в candidate critical path этого Antigravity-first контура.
+8. **Local evidence gate является authority.** Antigravity не выставляет
+   publishable/confidence самостоятельно.
+9. **Preproduction всегда shadow и approval-gated.**
 
 ## End-to-end flow
 
@@ -103,14 +106,12 @@ festival source.
 festival_queue URL rows
   -> group target edition
   -> deterministic URL preflight
-  -> adapter/fetch/render/document extraction
-  -> immutable source snapshots
-  -> source-local Gemma 4 review + atomic claims
-  -> primary candidate from accepted claims
-  -> Antigravity counter-evidence check
+  -> bounded adapter/fetch/render/document snapshots
+  -> Antigravity A: primary research + atomic claims + candidate
+  -> Antigravity B: independent fresh-sandbox counter-evidence
   -> local compare
        agreement -> deterministic final gate
-       conflict  -> optional compact Antigravity adjudicator
+       conflict  -> Antigravity C: optional compact adjudicator
   -> shadow diff + operator review
   -> approve/reject
   -> approved Festival update + Smart Update event plan
@@ -133,7 +134,7 @@ Inputs:
 - explicit source URLs and `dedup_links_json`;
 - explicit dates/year already present in `signals_json`;
 - existing `festival` aliases/source URLs;
-- source-local LLM series/edition decision when deterministic evidence
+- source-local Antigravity series/edition decision when deterministic evidence
   недостаточно.
 
 Hard rules:
@@ -226,8 +227,8 @@ mode                    # shadow | approval | apply
 input_fingerprint UNIQUE
 contract_version
 prompt_version
-extractor_model
-agent_code
+primary_agent_code
+checker_agent_code
 primary_queue_item_id
 candidate_json          # bounded summary only
 quality_json
@@ -303,7 +304,7 @@ Existing `festival_queue.result_json` receives only:
 discovered
 -> grouped
 -> fetching
--> extracted
+-> researched_primary
 -> challenged
 -> validating
 -> ready_shadow
@@ -399,19 +400,63 @@ immediately.
 Only conflicting claim values, exact quotes, hashes and at most two cited URLs.
 No full HTML, no full raw candidate, no broad search.
 
-## 6. Model/runtime split
+## 6. Antigravity-first runtime
 
-### Gemma 4 source-local extraction
+### Call A — primary researcher
 
-- model: `gemma-4-31b` / provider `models/gemma-4-31b-it`;
-- shared `GoogleAIClient`;
-- native `response_mime_type=application/json` + compact response schema;
-- one source-local job at a time, optionally packed into a bounded batch;
-- thought parts filtered before parsing/persistence;
-- no Gemma 3 fallback inside this lane;
-- legacy Gemma 3 result may be generated only as shadow comparison.
+Каждая festival group получает отдельную свежую Antigravity environment.
+Агент видит target manifest и bounded snapshots исходных URL, но не результат
+legacy parser.
 
-Semantic responsibilities:
+Контракт:
+
+1. до первого network call записать `/workspace/state.json`;
+2. разобрать seed sources по одному;
+3. если среди них нет credible current source — выполнить ровно один
+   discovery query;
+4. использовать не более шести источников суммарно;
+5. после каждого успешного fetch сразу сохранить snapshot и обновить source
+   ledger;
+6. для каждого source определить role/edition и выписать atomic claims с
+   точными quotes;
+7. собрать candidate только из этих claims.
+
+Так как Antigravity не поддерживает structured output, JSON-файлы агента —
+предложение, а не доверенный результат. Их принимает только local validator.
+
+### Call B — independent checker
+
+Вторая свежая environment получает только target manifest и исходные seed
+URLs/snapshots. Ей не передаются candidate, claims или решения Call A, чтобы
+не закреплять первую ошибку.
+
+Контракт:
+
+1. использовать альтернативную формулировку ровно одного search query;
+2. открыть не более четырёх страниц;
+3. независимо проверить актуальность edition, модификаторы названия и роль
+   ticket URL (`single_event|subscription|festival_pass`);
+4. checkpoint-ить каждый источник немедленно;
+5. вернуть собственный source/claim ledger и counter-evidence, а не оценку
+   уверенности первого агента.
+
+Два вызова Antigravity — нормальный путь для каждой группы, а не исключение.
+
+### Call C — optional adjudicator
+
+Вызывается только если local compare нашёл критический конфликт A/B.
+Получает компактный claim diff: значения, exact quotes, hashes и не более двух
+цитируемых URL. Полные страницы, исходные candidates и broad search не
+передаются. Search выключен; допустимо максимум два reopen указанных URL.
+Результат — `supported|unknown|conflict`, без создания новых фактов.
+
+Никакого автоматического четвёртого вызова нет. `status=incomplete` у любого
+агента допустим, если обязательные checkpoints уже записаны и проходят
+локальную проверку.
+
+### Semantic ownership
+
+Antigravity A/B/C отвечают за:
 
 - festival vs event vs program-only;
 - source role and edition match;
@@ -419,20 +464,8 @@ Semantic responsibilities:
 - event identity/reconciliation;
 - explicit conflict classification.
 
-### Antigravity
-
-Default:
-
-1. one bounded independent counter-evidence call;
-2. optional compact adjudicator when local comparison finds a critical
-   conflict.
-
-Primary discovery Antigravity call is allowed only when deterministic
-fetch/adapters cannot find a credible official/current source. Therefore
-normal target cost is 1 agent call, hard maximum 3.
-
-Antigravity writes every fetched source to `/workspace` immediately.
-`status=incomplete` is accepted if required checkpoints exist.
+Legacy Gemma 3 result может быть создан отдельно только для shadow comparison
+и не смешивается с Antigravity candidate.
 
 ### Deterministic code
 
@@ -528,7 +561,8 @@ Review card:
 - conflicts and unknowns;
 - candidate diff against current `festival`;
 - event create/update/program-only plan;
-- Antigravity/Gemma model IDs, calls, actual tokens and limiter status;
+- Antigravity role/code, interaction/environment IDs, actual calls/tokens and
+  limiter status;
 - links to source ledger, claims, candidate and validation artifacts;
 - explicit `Approve` / `Reject` actions.
 
@@ -562,6 +596,11 @@ No parallel Antigravity calls. Scheduler uses actual finalized usage before
 the next reservation. `max_total_tokens` remains best-effort and cannot replace
 TPM accounting.
 
+При feature cap `12 RPD` схема обрабатывает до шести обычных групп в день
+(`A + B`) либо четыре группы, если каждой понадобился adjudicator (`A + B + C`).
+Это осознанный отдельный бюджет внутри общего безопасного лимита `90 RPD`, а
+не попытка израсходовать все 100 запросов на один фестиваль.
+
 ## 11. Observability
 
 `ops_run.kind = festival_web_research`.
@@ -580,11 +619,13 @@ claims_total/critical
 candidate_conflicts
 stale_edition_blocks
 ticket_role_blocks
-agent_calls
+agent_primary_calls
+agent_checker_calls
+agent_adjudicator_calls
 agent_incomplete
 agent_checkpoint_recovered
 agent_actual_tokens
-gemma_calls/tokens/schema_rejects
+baseline_parser_calls/tokens/schema_rejects
 ready_shadow/needs_review/rejected/failed
 apply_events_create/update/program_only/skipped
 ```
@@ -626,8 +667,8 @@ prompt examples.
 
 ### Operational gates
 
-- typical Antigravity calls/group: `<= 1`, hard cap `3`;
-- median agent tokens/group: `<= 40k`, p95 `<= 80k`;
+- typical Antigravity calls/group: `2`, hard cap `3`;
+- median agent tokens/group: `<= 60k`, p95 `<= 90k`;
 - workspace state written before first network call;
 - every successful fetch checkpointed immediately;
 - checkpoint recovery succeeds for `status=incomplete`;
@@ -699,8 +740,9 @@ festival_web_research/
   fetch.py
   adapters/
   snapshots.py
-  extract_gemma4.py
-  antigravity.py
+  antigravity_primary.py
+  antigravity_checker.py
+  antigravity_adjudicator.py
   reconcile.py
   gates.py
   apply.py
@@ -733,6 +775,6 @@ tests/e2e/features/festival_web_research.feature
 - scope remains URL/non-social only;
 - storage contour accepted: Fly SQLite + existing parser object storage;
 - preproduction starts shadow-only;
-- Gemma 4 source-local extraction and Antigravity checker roles accepted;
+- Antigravity-first two-pass research and optional adjudicator roles accepted;
 - operator approval required for every apply;
 - scheduler and production apply remain disabled until rollout gates pass.
