@@ -31,7 +31,7 @@ lanes:
     expected_output: read-only implementation brief for scenario_engine
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: like_discovery
     role: planner
     requirement_ids: []
@@ -46,7 +46,7 @@ lanes:
     expected_output: read-only selector and acceptance brief for scenario_engine
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: pacing_discovery
     role: planner
     requirement_ids: []
@@ -61,7 +61,7 @@ lanes:
     expected_output: read-only timing and scroll acceptance brief for scenario_engine
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: pwa_control
     role: worker
     requirement_ids: [R01]
@@ -84,7 +84,7 @@ lanes:
     expected_output: committed PWA manifest/service-worker/icons/control shell and targeted tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: in_progress
   - id: scenario_engine
     role: worker
     requirement_ids: [R02, R03, R04]
@@ -110,11 +110,11 @@ lanes:
     expected_output: committed three-scenario agent with natural scroll/settle contracts and targeted tests
     verification_scope: full_local
     effort: high
-    status: planned
+    status: in_progress
   - id: integration_release
     role: merge_reviewer
     requirement_ids: [R05]
-    target: merge lanes, add confirmed shutdown protocol, package, document, public E2E and deploy
+    target: merge lanes, bridge explicit scenario selection, add confirmed shutdown protocol, package, document, public E2E and deploy
     depends_on: [pwa_control, scenario_engine]
     execution_mode: serial_after_dependency
     branch: integration/autopresenter-pwa-three-scenes

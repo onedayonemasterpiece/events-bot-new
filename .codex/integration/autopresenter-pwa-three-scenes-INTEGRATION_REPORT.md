@@ -24,14 +24,17 @@
   from code/data before implementation.
 - Shutdown requires a confirmation on the phone because it ends the Windows
   agent and cannot be undone from that same disconnected session.
+- The integrator owns the small relay protocol bridge that carries one of the
+  three explicit scenario IDs from the PWA to the agent; this remains a fixed
+  allowlist and is not a scenario DSL.
 
 ## Lane status
 
 | Lane | Requirement IDs | Status | Head SHA | Evidence |
 |---|---|---|---|---|
-| artifact_discovery | support R04 | planned | — | pending |
-| like_discovery | support R03 | planned | — | pending |
-| pacing_discovery | support R02 | planned | — | pending |
-| pwa_control | R01 | planned | pending | pending |
-| scenario_engine | R02–R04 | planned | pending | pending |
+| artifact_discovery | support R04 | completed | read-only | route, gates, selectors and storage contract mapped |
+| like_discovery | support R03 | completed | read-only | native edge pull-to-like and durable acceptance mapped |
+| pacing_discovery | support R02 | completed | read-only | readiness, natural scroll and bounded timing contract mapped |
+| pwa_control | R01 | in progress | pending | worker active |
+| scenario_engine | R02–R04 | in progress | pending | worker active after discovery |
 | integration_release | R05 | planned | pending | pending |
