@@ -1,6 +1,6 @@
 # Автопрезентатор static-сайта
 
-- **Статус:** `m0_implementation_accepted + seven_scene_owner_test_candidate`;
+- **Статус:** `m0_implementation_accepted + expanded_scenario_owner_test_candidate`;
   фактический M0-прогон на целевом ноутбуке ещё не выполнен.
 - **Implementation gate:** M0 empirical и visible prototype идут параллельными
   непересекающимися треками.
@@ -16,8 +16,8 @@
 M0 продолжает отдельно доказывать exact portable-связку на целевой Windows 10:
 для каждого кандидата нужны 20/20 холодных loopback-циклов и 5/5 live smoke.
 Параллельно доступен узкий owner-test vertical slice: fullscreen stage
-1920×1080, реальный same-origin сайт в увеличенном mobile iframe, шесть
-фиксированных browser-сценариев, полноэкранное QR-аутро, настоящие Playwright
+1920×1080, реальный same-origin сайт в увеличенном mobile iframe, явные
+browser- и презентационные сцены, полноэкранное QR-аутро, настоящие Playwright
 click/drag/wheel и минимальный
 `aiohttp`-пульт Run/Stop/Reset/Shutdown.
 Этот прототип ускоряет product learning, но не является M0 evidence,
@@ -72,8 +72,9 @@ native output работают в UTF-8. Для headed owner test устанав
 ### Явные owner-test сцены и быстрые итерации
 
 Актуальный продуктовый список и точные формулировки живут в
-[`scenario-30072026-technical.md`](scenario-30072026-technical.md). Intro, семь
-отдельно удерживаемых лекционных кадров, сервисные тезисы, medallion/search
+[`scenario-30072026-technical.md`](scenario-30072026-technical.md). Intro,
+девять отдельно удерживаемых лекционных кадров, интерактивный блок рынка,
+расширенные сервисные тезисы 1–24, medallion/search
 live-вставки, принятые mobile journeys, двухфазный Weekend desktop и QR-outro
 остаются явными scene IDs. Универсального DSL и редактора нет.
 
@@ -133,8 +134,8 @@ skill `.codex/skills/autopresenter-audio-cues/`.
 ### Два непересекающихся трека
 
 M0 остаётся только compatibility experiment и не переписывается ради прототипа.
-Visible prototype работает только с stage, agent, relay, control PWA и семью
-явными сценами. Он может разрабатываться и демонстрироваться владельцу
+Visible prototype работает только с stage, agent, relay, control PWA и
+явными сценами авторского сценария. Он может разрабатываться и демонстрироваться владельцу
 продукта на поддерживаемой dev-ОС до M0 PASS.
 
 До M0 PASS по-прежнему запрещены:

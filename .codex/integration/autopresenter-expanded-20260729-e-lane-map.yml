@@ -1,0 +1,58 @@
+mode: serial_integrator_after_read_only_parallel
+repo: events-bot-new
+base_ref: 6a5f6c5fdbc8bfce82f0fa6a07150ec51946e8c1
+base_branch: integration/autopresenter-iteration-20260729-d
+integration_branch: integration/autopresenter-expanded-20260729-e
+global_constraints:
+  - preserve iteration-D accepted scenes
+  - no invented competitor market share
+  - reuse existing Fly app and Yandex CDN only
+  - no paid image generation
+verification_owner: root
+stop_conditions:
+  - author source changes again during implementation
+  - no source-backed live transport specimen exists
+lanes:
+  - id: expanded-scenario-audit
+    role: planner
+    requirement_ids: [R01, R04]
+    target: current author doc delta
+    execution_mode: parallel
+    writable_files: []
+    expected_output: gap matrix
+    verification_scope: inspection_only
+    status: completed
+  - id: visual-asset-audit
+    role: planner
+    requirement_ids: [R02]
+    target: media inventory and Pinterest need
+    execution_mode: parallel
+    writable_files: []
+    expected_output: asset matrix
+    verification_scope: inspection_only
+    status: completed
+  - id: competition-stats-audit
+    role: planner
+    requirement_ids: [R03]
+    target: source-backed charts and SVG family
+    execution_mode: parallel
+    writable_files: []
+    expected_output: chart specification
+    verification_scope: inspection_only
+    status: completed
+  - id: integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: stage, agent, relay, docs, tests
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-expanded-20260729-e
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files:
+      - site/src/pages/internal/presenter-stage/index.astro
+      - tools/autopresenter/**
+      - site/tests/**
+      - docs/features/static-site-pages/auto-present/**
+      - CHANGELOG.md
+    expected_output: deployable expanded owner-test build
+    verification_scope: full_local
+    status: completed

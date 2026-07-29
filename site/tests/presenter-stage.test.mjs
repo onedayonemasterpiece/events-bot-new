@@ -25,8 +25,10 @@ test('intro follows the Hero Talk semantic-fragment reveal and keeps two explici
   assert.match(source, /Добро пожаловать!/u);
   assert.match(source, /Почему одни сервисы удобны,/u);
   assert.match(source, /Сегодня вы — наша фокус-группа\./u);
+  assert.match(source, /Сегодня задача со звёздочкой\./u);
+  assert.match(source, /как устроен этот инструмент\./u);
   assert.match(source, /const introRoutes = \[/u);
-  assert.match(source, /\['welcome', 'topic', 'format'/u);
+  assert.match(source, /\['welcome', 'topic', 'challenge', 'format'/u);
   assert.match(source, /splitSemanticChunks/u);
   assert.match(source, /className = 'hero-fragment'/u);
   assert.match(source, /node\.append\(document\.createTextNode\(' '\)\)/u);
@@ -45,13 +47,18 @@ test('intro follows the Hero Talk semantic-fragment reveal and keeps two explici
   assert.match(source, /\.intro-thought \{[\s\S]*font-size: clamp\(54px, 4\.35vw, 86px\)/u);
 });
 
-test('lecture is seven independently held frames with varied layouts and transparent branding', () => {
+test('lecture keeps seven source frames and adds two independently held conceptual frames', () => {
   for (const messageId of [821, 822, 823, 824, 825, 826, 830]) {
     assert.match(source, new RegExp(`messageId: ${messageId}`, 'u'));
   }
   assert.match(source, /Интерфейс видят\. Опыт проживают\./u);
   assert.match(source, /В сложных системах удобство — безопасность\./u);
   assert.match(source, /Понять → спроектировать → проверить\./u);
+  assert.match(source, /data-presenter-scene-id="lecture-convenience-emergence"/u);
+  assert.match(source, /data-presenter-scene-id="lecture-usability-measurement"/u);
+  assert.match(source, /Можно ли сразу стать удобным\?/u);
+  assert.match(source, /Можно ли удобство измерить\?/u);
+  assert.match(source, /desire-path-ludwell-cc-by-sa-2\.jpg/u);
   assert.match(source, /data-presenter-scene-id=\{`lecture-\$\{String\(index \+ 1\)/u);
   assert.match(source, /brand-plate brand-plate--lecture/u);
   assert.match(source, /brand-logo--on-\$\{slide\.theme\}/u);
@@ -65,6 +72,49 @@ test('lecture is seven independently held frames with varied layouts and transpa
   assert.match(source, /\.lecture-visual \{[\s\S]*border: 0; border-radius: 0; background: transparent; box-shadow: none;/u);
   assert.match(source, /\.lecture-slide\[data-lecture-index="6"\][\s\S]*minmax\(50vw/u);
   assert.match(source, /@keyframes lecture-image-enter \{[\s\S]*scale\(\.88\)[\s\S]*scale\(1\.025\)/u);
+});
+
+test('market chapter uses interactive source-structure charts without invented market shares', () => {
+  for (const scene of ['market-01-primary', 'market-02-substitutes', 'market-03-dynamics', 'market-04-position']) {
+    assert.match(source, new RegExp(`data-presenter-scene-id="${scene}"`, 'u'));
+  }
+  assert.match(source, /const marketPlayers = \[/u);
+  assert.match(source, /const marketSubstitutes = \[/u);
+  assert.match(source, /const marketCapabilities = \[/u);
+  assert.match(source, /data-market-focus/u);
+  assert.match(source, /data-market-scrubber/u);
+  assert.match(source, /scrubber\.addEventListener\('input'/u);
+  assert.match(source, /scene\.style\.setProperty\('--market-progress'/u);
+  assert.match(source, /data-market-state="idle"/u);
+  assert.match(source, /startMarketScene/u);
+  assert.match(source, /Качественный вывод исследования/u);
+  assert.match(source, /Вместе — ни у кого\./u);
+  assert.doesNotMatch(source, /market share|доля рынка|600 000|0,1%|7×/iu);
+  assert.doesNotMatch(source, /--value:\.(?:92|66|81|78)/u);
+});
+
+test('expanded author scenario has explicit visual scenes instead of empty placeholders', () => {
+  for (const scene of [
+    'service-navigation-map',
+    'service-social-proof',
+    'service-artifacts-explained',
+    'service-artifact-desktop',
+    'service-laws',
+    'service-keyboard-concept',
+    'service-keyboard-day',
+    'service-keyboard-event',
+    'service-fast-find',
+    'service-share-friends',
+    'service-calendar-memory',
+    'service-community-curator',
+    'service-location-artifact',
+    'service-friends-club',
+  ]) assert.match(source, new RegExp(`id: '${scene}'|data-presenter-scene-id=\"${scene}\"`, 'u'));
+  assert.match(source, /data-presenter-id="friends-club-video"/u);
+  assert.match(source, /createFocusInviteQrSvg\(friendsClubUrl\)/u);
+  assert.match(source, /friends-club-darya-[a-f0-9]{64}\.mp4/u);
+  assert.match(source, /data-visual-state="idle"/u);
+  assert.match(source, /activeScene\.hasAttribute\('data-visual-state'\)/u);
 });
 
 test('desktop weekend scene presents meaning first and then reveals the clean FHD site', () => {
@@ -99,7 +149,7 @@ test('outro remains the accepted restrained fullscreen QR scene', () => {
 test('all presentation media are immutable Yandex CDN assets and reduced motion is safe', () => {
   const urls = [...source.matchAll(/https:\/\/static\.kenigevents\.ru\/assets\/autopresenter\/scenario-20260730\/[^'"]+/gu)].map((match) => match[0]);
   assert.ok(urls.length >= 10);
-  for (const url of urls) assert.match(url, /-[a-f0-9]{64}\.(?:png|svg|mp3|wav|webp)$/u);
+  for (const url of urls) assert.match(url, /-[a-f0-9]{64}\.(?:png|svg|mp3|mp4|wav|webp)$/u);
   assert.match(source, /@media \(prefers-reduced-motion: reduce\)/u);
   assert.match(source, /if \(reduceMotion\.matches\)/u);
   assert.match(source, /\.hero-fragment\.is-active::after \{ display: none; \}/u);
@@ -112,6 +162,9 @@ test('service presentation uses the requested focus preview and explicit input-d
   assert.match(source, /data-presenter-scene-id="service-medallions-desktop"/u);
   assert.match(source, /data-presenter-scene-id="service-medallions-mobile"/u);
   assert.match(source, /data-presenter-scene-id="service-future-celebrity"/u);
+  assert.match(source, /data-presenter-scene-id="service-personalization"/u);
+  assert.match(source, /data-presenter-scene-id="service-transport-rail"/u);
+  assert.match(source, /data-presenter-scene-id="service-transport-bus"/u);
   assert.match(source, /service-search-live/u);
   assert.match(source, /class="wordmark-plain"[\s\S]*>Анонсы</u);
   assert.match(source, /class="wordmark-vector" src=\{announcementsWordmarkUrl\}/u);

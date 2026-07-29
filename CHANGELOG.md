@@ -80,6 +80,16 @@
 
 ### Added
 
+- Expanded the 30 July Autopresenter from the updated author source: two new
+  lecture beats, four animated interactive competitor/research charts,
+  personalization and legal-status visuals, keyboard/transport-ready scenes,
+  navigation/social-proof/artifact frames, and service beats 19–24. Added a
+  real Telegram-supplied Friends Club video plus channel QR on the existing
+  Yandex CDN, a coherent six-icon CC0 Lucide Line set for the market charts,
+  separately sourced transport/compliance pictograms, official competitor
+  marks, and Pinterest-backed composition research without redistributing pin
+  thumbnails.
+
 - Added a one-time «Подготовить поиск» control flow: the Windows agent opens
   the real focus-build search, waits for an interactive Yandex demo-account
   login, stores only the resulting browser state in the shared local cache,

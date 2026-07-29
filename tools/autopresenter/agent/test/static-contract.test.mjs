@@ -25,9 +25,11 @@ const source = await readFile(new URL("../agent.mjs", import.meta.url), "utf8");
 
 test("declares the accepted journeys plus explicit intro, lecture, desktop and outro scenes", () => {
   for (const id of [
-    "intro-loop", "lecture-01", "lecture-07", "tomorrow-mobile",
+    "intro-loop", "lecture-01", "lecture-07", "lecture-convenience-emergence",
+    "lecture-usability-measurement", "market-01-primary", "market-04-position", "tomorrow-mobile",
     "tomorrow-rail-like", "weekend-amber-artifact", "service-search-live",
-    "service-focus-group", "weekend-desktop", "outro-qr",
+    "service-focus-group", "service-laws", "service-keyboard-event",
+    "service-friends-club", "weekend-desktop", "outro-qr",
   ]) assert.ok(SCENARIO_IDS.includes(id), `${id} is allowlisted`);
   assert.equal(DEFAULT_SCENARIO_ID, "tomorrow-mobile");
   assert.equal(resolveScenarioId(undefined), "tomorrow-mobile");
@@ -42,9 +44,11 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventTitle, "Фестиваль Pianissimo: Игорь Сидоров");
   assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 7164);
   assert.equal(INTRO_LOOP_CONTRACT.completion, "fifty-minute-logical-randomized-two-line-hero-talk-loop");
-  assert.equal(LECTURE_SCENE_CONTRACTS.length, 7);
+  assert.equal(LECTURE_SCENE_CONTRACTS.length, 9);
   assert.ok(LECTURE_SCENE_CONTRACTS.every(({ completion }) => completion === "held-until-another-explicit-command"));
   assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-search-live"));
+  assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-personalization"));
+  assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-transport-rail"));
   assert.equal(WEEKEND_DESKTOP_CONTRACT.surface, "desktop");
   assert.deepEqual(OUTRO_QR_CONTRACT, {
     id: "outro-qr",

@@ -41,6 +41,32 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('data-scenario="intro-loop"', text)
         for index in range(1, 8):
             self.assertIn(f'data-scenario="lecture-{index:02d}"', text)
+        for scenario in (
+            "lecture-convenience-emergence",
+            "lecture-usability-measurement",
+            "market-01-primary",
+            "market-02-substitutes",
+            "market-03-dynamics",
+            "market-04-position",
+            "service-personalization",
+            "service-transport-rail",
+            "service-transport-bus",
+            "service-navigation-map",
+            "service-social-proof",
+            "service-artifacts-explained",
+            "service-artifact-desktop",
+            "service-laws",
+            "service-keyboard-concept",
+            "service-keyboard-day",
+            "service-keyboard-event",
+            "service-fast-find",
+            "service-share-friends",
+            "service-calendar-memory",
+            "service-community-curator",
+            "service-location-artifact",
+            "service-friends-club",
+        ):
+            self.assertIn(f'data-scenario="{scenario}"', text)
         self.assertIn('data-scenario="tomorrow-mobile"', text)
         self.assertIn('data-scenario="tomorrow-rail-like"', text)
         self.assertIn('data-scenario="weekend-amber-artifact"', text)
@@ -164,7 +190,14 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 202)
         self.assertEqual(payload["command"]["scenario"], "outro-qr")
 
-        for scenario in ("intro-loop", "lecture-01", "weekend-desktop"):
+        for scenario in (
+            "intro-loop",
+            "lecture-01",
+            "market-01-primary",
+            "service-personalization",
+            "service-transport-rail",
+            "weekend-desktop",
+        ):
             response, payload = await self.json(
                 "POST",
                 "/api/commands",
@@ -210,13 +243,14 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["command"]["action"], "shutdown")
         self.assertIsNone(payload["command"]["scenario"])
         self.assertEqual(payload["state"]["status"], "stopping")
+        shutdown_sequence = payload["command"]["sequence"]
 
         response, payload = await self.json(
             "POST",
             "/api/commands/close-all/ack",
             json={
                 "agent_id": "agent-one",
-                "sequence": 6,
+                "sequence": shutdown_sequence,
                 "status": "closed",
                 "detail": "presentation closed; browser and agent stopped",
             },

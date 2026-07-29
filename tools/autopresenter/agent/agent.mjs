@@ -649,6 +649,9 @@ class PrototypeAgent {
     if (scenarioId === "service-future-celebrity") {
       return this.runPeopleScene(signal);
     }
+    if (scenarioId === "service-transport-rail") {
+      return this.runTransportRail(signal);
+    }
     if (isStaticPresentationScenario(scenarioId)) {
       return this.runHeldPresentationScene(scenarioId, signal);
     }
@@ -971,12 +974,95 @@ class PrototypeAgent {
         signal,
       );
     }
+    if (scenarioId.startsWith("market-")) {
+      await raceWithAbort(
+        this.page.waitForFunction(
+          (sceneSelector) =>
+            document.querySelector(sceneSelector)?.getAttribute("data-market-state") ===
+            "complete",
+          selector,
+          { timeout: 15_000 },
+        ),
+        signal,
+      );
+    }
+    if (await this.page.locator(selector).getAttribute("data-visual-state") !== null) {
+      await raceWithAbort(
+        this.page.waitForFunction(
+          (sceneSelector) =>
+            document.querySelector(sceneSelector)?.getAttribute("data-visual-state") ===
+            "complete",
+          selector,
+          { timeout: 15_000 },
+        ),
+        signal,
+      );
+    }
+    if (scenarioId === "service-friends-club") {
+      await raceWithAbort(
+        this.page.waitForFunction(
+          (sceneSelector) => {
+            const video = document.querySelector(sceneSelector)
+              ?.querySelector('[data-presenter-id="friends-club-video"]');
+            return video instanceof HTMLVideoElement
+              && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+          },
+          selector,
+          { timeout: 15_000 },
+        ),
+        signal,
+      );
+    }
     await abortableDelay(scenarioId === "service-wordmark" ? 3_600 : 900, signal);
     await this.captureScenario(scenarioId);
     return {
       summary: lecture
         ? `source-backed lecture frame ${scenarioId} is visible and held until the next command`
         : `presentation frame ${scenarioId} is visible and held until the next command`,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runTransportRail(signal) {
+    const scenarioId = "service-transport-rail";
+    const startedAt = Date.now();
+    await this.setInteractionMode("stage");
+    await this.setAgentState("running", scenarioId);
+    await this.showPresenterScene(scenarioId, signal);
+    const scene = this.page.locator(`[data-presenter-scene-id="${scenarioId}"]`);
+    await raceWithAbort(scene.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await scene.evaluate((node) => node.setAttribute("data-transport-phase", "mobile"));
+
+    const mobileFrame = await this.focusFrame(
+      '[data-presenter-id="transport-rail-mobile-frame"]',
+      signal,
+    );
+    const mobileSchedule = mobileFrame.locator("[data-event-transport-schedule]:visible").first();
+    await raceWithAbort(
+      mobileSchedule.waitFor({ state: "visible", timeout: 30_000 }),
+      signal,
+    );
+    await mobileSchedule.scrollIntoViewIfNeeded();
+    await abortableDelay(2_400, signal);
+
+    await scene.evaluate((node) => node.setAttribute("data-transport-phase", "desktop"));
+    const desktopFrame = await this.focusFrame(
+      '[data-presenter-id="transport-rail-desktop-frame"]',
+      signal,
+    );
+    const desktopSchedule = desktopFrame.locator(
+      "[data-desktop-transport] [data-event-transport-schedule]:visible",
+    ).first();
+    await raceWithAbort(
+      desktopSchedule.waitFor({ state: "visible", timeout: 30_000 }),
+      signal,
+    );
+    await desktopSchedule.scrollIntoViewIfNeeded();
+    await abortableDelay(2_400, signal);
+    await this.captureScenario(scenarioId);
+    return {
+      summary:
+        "same source-backed rail schedule shown first in the mobile event page and then in desktop",
       durationMs: Date.now() - startedAt,
     };
   }

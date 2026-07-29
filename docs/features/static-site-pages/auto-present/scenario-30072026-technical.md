@@ -43,8 +43,10 @@ owner-review. `tomorrow-mobile` и `outro-qr` остаются замороже�
 
 ### Лекция
 
-Лекция — **семь отдельных кнопок и сцен** `lecture-01`…`lecture-07`, а не
-автопроигрываемая колода. Каждый кадр остаётся на экране до следующей команды.
+Лекция — **девять отдельных кнопок и сцен**: семь source-backed кадров
+`lecture-01`…`lecture-07` плюс `lecture-convenience-emergence` и
+`lecture-usability-measurement`, а не автопроигрываемая колода. Каждый кадр
+остаётся на экране до следующей команды.
 Композиции чередуют светлую/тёмную тему и разные layout: split, horizontal,
 poster, portrait, cinema. Горизонтальные изображения показываются целиком,
 под ними есть смысловая подпись. Знак «Знание» без белой плашки: светлый на
@@ -72,6 +74,18 @@ poster, portrait, cinema. Горизонтальные изображения п
 7. `service-disruption`, `service-taste`, `service-feedback`,
    `service-focus-group`, `service-nps`, `service-future-celebrity` —
    последовательность тезисов из авторского документа.
+8. `service-navigation-map`, `service-social-proof`,
+   `service-artifacts-explained`, `service-artifact-desktop` — недостающие
+   объясняющие кадры навигации, явных сигналов и артефактов;
+9. `service-personalization`, `service-laws`, `service-keyboard-concept`,
+   `service-keyboard-day`, `service-keyboard-event`,
+   `service-transport-rail`, `service-transport-bus` — персонализация,
+   compliance-status и keyboard/transport-контур;
+10. `service-fast-find`, `service-share-friends`,
+    `service-calendar-memory`, `service-community-curator`,
+    `service-location-artifact`, `service-friends-club` — блоки 19–24
+    расширенного авторского сценария. В последней сцене воспроизводится
+    предоставленный ролик Дарьи и показывается QR точного Telegram-канала.
 
 Новые live-вставки используют предоставленную immutable focus-preview сборку.
 Сцена фокус-группы показывает крупный QR иерархии «Присоединяйтесь к
@@ -130,13 +144,51 @@ relay или логи. Это обязательная подготовител�
 ## Coverage дополнений авторского документа
 
 Обновлённый `scenario-30072026-base.md` остаётся авторским источником и не
-переписывается генератором. В этой быстрой итерации реализованы только явно
-повторно открытые 03.3, 03.9–03.12, 03.14 и 04.2. Новые описанные в источнике
-будущие сцены (включая дополнительные PWA/navigation/social-proof/artifact
-desktop/laws/keyboard/friend-club/video/jokes/future-feature блоки) сохранены
-как следующий backlog и не выдаются за готовые. Поэтому public demo остаётся
-`NO-GO`; owner-test этой итерации проверяет перечисленные исправления без
-переделки уже принятых частей.
+переписывается генератором. Итерация E сверена с точным SHA-256 источника
+`6ad71bb801869aa3640b3455fa9d78b4e3f577eb494139f90bfae3596571dca2`.
+
+Реализованы новые intro-фразы, лекционные пункты 7–8, четыре рыночных экрана,
+персонализация, compliance, keyboard-контур, поезд/автобус и отдельные кадры
+19–24, включая настоящий ролик из Telegram 871. Пустых текстовых заглушек в
+этом добавленном блоке нет: каждый кадр имеет анимируемую визуальную систему,
+схему, карточки, граф или видео.
+
+Два ограничения помечены прямо на кадре, а не скрыты:
+
+- `service-transport-bus` использует source-backed preview маршрута до
+  появления bus schedule в focus-сборке;
+- `service-artifact-desktop`, `service-keyboard-day` и
+  `service-keyboard-event` имеют готовую презентационную сцену, но не
+  изображают live-действие, пока параллельная сборка страниц не опубликует
+  keyboard-hooks. После публикации меняется только runner, сами слайды не
+  переделываются.
+
+Поэтому контентный audit закрыт, но public demo остаётся `NO-GO` до live-hook
+подключения и финальной репетиции на целевом Windows.
+
+## Рынок, графики и визуальные источники
+
+Рыночные экраны используют интерактивные, анимируемые, но честные структуры:
+evidence matrix четырёх основных игроков, три равноправных класса замен,
+две качественные линии изменений 2023→2026 и шесть целевых возможностей.
+Числовая доля рынка, объём пользователей и другие неподтверждённые значения
+из чернового appendix не визуализируются.
+
+Для рыночных графиков использован единый CC0 Lucide Line set из SVG Repo;
+numeric IDs сохранены в именах файлов (`389439`, `389291`, `389049`, `389461`,
+`389494`, `389241`). Отдельные sourced-пиктограммы поезда, автобуса и
+compliance (`337651`, `360852`, `417817`) не выдаются за ту же геометрическую
+семью. Логотипы конкурентов взяты с официальных сайтов только для nominative
+comparison; provenance находится в `site/public/assets/autopresenter/README.md`.
+
+Pinterest использован как композиционный research, не как источник
+перепубликуемых thumbnail: просмотрено 80 pin, отобрано 10 референсов.
+Публичный shortlist и правила reuse:
+[`scenario-assets/pinterest-research-20260729.md`](scenario-assets/pinterest-research-20260729.md).
+Локальная коллекция:
+`/home/dev/projects/pinterest-idea-library/collections/20260729-autopresenter-ux-desire-paths-measurement-competitor-charts/`.
+Для слайда о «народной тропинке» взята отдельная лицензированная фотография
+David Smith / Geograph, CC BY-SA 2.0.
 
 ## Verification
 
@@ -161,3 +213,18 @@ Iteration D live smoke на 29.07.2026:
 `artifacts/codex/autopresenter-iteration-d/`. Поиск 03.9 всё ещё требует
 единственного интерактивного входа владельца через новую кнопку подготовки;
 без этого шага нельзя честно заявить реальную авторизованную выдачу.
+
+Iteration E targeted verification на 29.07.2026:
+
+- exact author source hash подтверждён без drift;
+- agent contracts: `33/33`;
+- stage contracts: `9/9`;
+- relay/PWA API: `16/16`;
+- live transport probe на event `6976`: mobile rail selectors `2`, desktop
+  rail selectors `1`, bus selector `0`; поэтому поезд подключён live, а
+  автобус оставлен честным source-backed preview;
+- ролик Дарьи получен из Telegram message `871`, SHA-256
+  `7cb34fb872eb528a4938f4e7af3cd8d2ebf1850246cb0cf9e2b44e7b17b05ac6`,
+  загружен в существующий Yandex bucket/CDN, публичный `HEAD` — `200`,
+  `content-type: video/mp4`, `content-length: 18596869`;
+- новый bucket, CDN, Fly app, база или очередь не создавались.

@@ -3,11 +3,14 @@ import test from "node:test";
 
 import {
   CAT_KEYBOARD_ASSET,
+  FRIENDS_CLUB_VIDEO_ASSET,
   INTRO_LOOP_RUNTIME_MS,
   INTRO_MUSIC_ASSET,
   INTRO_SCENE_ID,
+  EXTRA_LECTURE_SCENE_IDS,
   LECTURE_ASSETS,
   LECTURE_SCENE_IDS,
+  MARKET_SCENE_IDS,
   SCENE_ACCEPTANCE_CONTRACT,
   SERVICE_SCENE_IDS,
   WEEKEND_DESKTOP_SCENE_ID,
@@ -21,8 +24,19 @@ test("presentation scenes remain explicit and the intro defaults to fifty minute
     ["lecture-01", "lecture-02", "lecture-03", "lecture-04", "lecture-05", "lecture-06", "lecture-07"],
   );
   assert.equal(WEEKEND_DESKTOP_SCENE_ID, "weekend-desktop");
+  assert.deepEqual(
+    EXTRA_LECTURE_SCENE_IDS,
+    ["lecture-convenience-emergence", "lecture-usability-measurement"],
+  );
+  assert.deepEqual(
+    MARKET_SCENE_IDS,
+    ["market-01-primary", "market-02-substitutes", "market-03-dynamics", "market-04-position"],
+  );
   assert.equal(INTRO_LOOP_RUNTIME_MS, 50 * 60 * 1_000);
   assert.ok(SERVICE_SCENE_IDS.includes("service-search-live"));
+  assert.ok(SERVICE_SCENE_IDS.includes("service-personalization"));
+  assert.ok(SERVICE_SCENE_IDS.includes("service-transport-rail"));
+  assert.ok(SERVICE_SCENE_IDS.includes("service-transport-bus"));
   assert.deepEqual(
     SCENE_ACCEPTANCE_CONTRACT.frozen,
     ["tomorrow-mobile", "outro-qr"],
@@ -50,4 +64,13 @@ test("cat interruption uses a content-addressed sourced CDN asset", () => {
   assert.match(CAT_KEYBOARD_ASSET.url, new RegExp(`${CAT_KEYBOARD_ASSET.sha256}\\.webp$`, "u"));
   assert.match(CAT_KEYBOARD_ASSET.source, /^https:\/\/unsplash\.com\/photos\//u);
   assert.equal(CAT_KEYBOARD_ASSET.license, "Unsplash License");
+});
+
+test("friends club video is a content-addressed Telegram source asset", () => {
+  assert.match(FRIENDS_CLUB_VIDEO_ASSET.url, new RegExp(`${FRIENDS_CLUB_VIDEO_ASSET.sha256}\\.mp4$`, "u"));
+  assert.equal(FRIENDS_CLUB_VIDEO_ASSET.source, "https://t.me/c/4337049383/803/871");
+  assert.equal(FRIENDS_CLUB_VIDEO_ASSET.contentType, "video/mp4");
+  assert.ok(SERVICE_SCENE_IDS.includes("service-friends-club"));
+  assert.ok(SERVICE_SCENE_IDS.includes("service-laws"));
+  assert.ok(SERVICE_SCENE_IDS.includes("service-keyboard-event"));
 });

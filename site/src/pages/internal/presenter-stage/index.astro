@@ -6,19 +6,23 @@ const focusPreviewBase = 'https://kenigevents.ru/preview-20260729-focus-simple-r
 const homeUrl = `${focusPreviewBase}/`;
 const weekendUrl = `${focusPreviewBase}/vyhodnye/`;
 const focusInvitationUrl = `${focusPreviewBase}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
+const friendsClubUrl = 'https://t.me/+8Tm6gQlNNxlhOGRi';
 const focusSearchUrl = `${focusPreviewBase}/poisk/`;
 const focusEventUrl = `${focusPreviewBase}/sobytiya/triatlon-pokoleniy-kaliningrad-6865/`;
 const focusDesktopMedallionUrl = `${focusPreviewBase}/sobytiya/otkrytie-festivalya-bahosluzhenie-proekt-evgeniya-knyazeva-ya-gospodi-tvor-kaliningrad-6153/`;
 const focusMobileMedallionUrl = focusEventUrl;
 const focusNpsUrl = `${focusPreviewBase}/segodnya/`;
 const peopleInterfaceUrl = `${focusPreviewBase}/lab/event-participants/`;
+const railTransportEventUrl = `${focusPreviewBase}/sobytiya/spektakl-chudnyy-otdyh-zelenogradsk-6976/`;
 const focusInvitationQrSvg = createFocusInviteQrSvg(focusInvitationUrl);
+const friendsClubQrSvg = createFocusInviteQrSvg(friendsClubUrl);
 const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/qr-survey-nikiforov-916b6fee58256c4f2111887bf70c502070a55e45a667650dfccdb1495016ccd9.png';
 const znanieLogoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg';
 const introMusicUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3';
 const jokeAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/joke-electronic-brain-c0efea54a93d4a6bcbb8e244bc35cfbe9a23556783d78df0fcffa457b5dead79.wav';
 const errorAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/computer-error-cc0-d7ec5eeba2b280017100e9deb3f063d580755469ce326332df7da9b4dcd63d1a.mp3';
 const catKeyboardUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/cat-keyboard-unsplash-dbbe5f90f00dc4e4bb483d3374626a668aa1d395ea1e352ec1661b8b7ebc9e79.webp';
+const friendsClubVideoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/friends-club-darya-7cb34fb872eb528a4938f4e7af3cd8d2ebf1850246cb0cf9e2b44e7b17b05ac6.mp4';
 const announcementsWordmarkUrl = '/brand/announcements-wordmark-ui.svg';
 const findIconUrl = '/assets/icons/reference4-v8/search-thin.svg';
 const people = [
@@ -128,7 +132,8 @@ const lectureSlides = [
   },
   {
     messageId: 830,
-    chapter: '07 · Работа над удобством',
+    position: 9,
+    chapter: '09 · Работа над удобством',
     statement: 'Понять → спроектировать → проверить.',
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-830-cdcb0a381189715a8cebf90122000b7ddad74350390df87fd881fed658eff582.webp',
     alt: 'Цикл пользовательского проектирования от анализа к дизайну и тестированию',
@@ -138,9 +143,171 @@ const lectureSlides = [
     caption: 'Удобство рождается из наблюдения, проектирования и проверки.',
   },
 ];
+const marketPlayers = [
+  {
+    name: 'Клопс Афиша',
+    logo: '/assets/autopresenter/competitors/klops-afisha.svg',
+    strength: 'Локальный каталог и быстрый переход к билету',
+    gap: 'Пользователь сам разбирает плотную массовую выдачу',
+    metrics: ['yes', 'yes', 'yes', 'yes', 'no'],
+  },
+  {
+    name: 'Visit Kaliningrad',
+    logo: '/assets/autopresenter/competitors/visit-kaliningrad.png',
+    strength: 'Официальный календарь и сильное покрытие области',
+    gap: 'Туристическая логика сильнее повседневного личного выбора',
+    metrics: ['yes', 'yes', 'unknown', 'unknown', 'no'],
+  },
+  {
+    name: 'Новый Калининград',
+    logo: '/assets/autopresenter/competitors/new-kaliningrad.gif',
+    strength: 'Редакторский отбор и контекст',
+    gap: 'Статья удобна для чтения, но не для сравнения и плана',
+    metrics: ['limited', 'yes', 'yes', 'unknown', 'unknown'],
+  },
+  {
+    name: 'Яндекс Афиша',
+    logo: '/assets/autopresenter/competitors/yandex-afisha.svg',
+    strength: 'Зрелый поиск, покупка и рекомендательные технологии',
+    gap: 'Локальный длинный хвост и область покрыты слабее',
+    metrics: ['yes', 'limited', 'unknown', 'yes', 'limited'],
+  },
+];
+const marketSubstitutes = [
+  ['ГородЗовёт', 'Много событий и категорий', 'Шум экскурсий, туров и повторов', '389439-star'],
+  ['Билетные системы', 'Цена, наличие, быстрая покупка', 'Каждая показывает только свой инвентарь', '389461-ticket'],
+  ['Telegram и VK', 'Привычно и оперативно', 'Лента быстро уносит событие вниз', '389494-users'],
+];
+const marketCapabilities = [
+  ['389291-map-pin', 'Калининград и малые города'],
+  ['389049-book-open', 'Очистка и объединение источников'],
+  ['389439-star', 'Персональное ранжирование событий'],
+  ['389241-history', 'Сегодня · Выходные · Скоро закроется · Новое'],
+  ['389461-ticket', 'Одна карточка — любой путь к регистрации'],
+  ['389291-map-pin', 'Транспорт рядом с событием'],
+];
 const serviceTextScenes = [
   { id: 'service-taste', eyebrow: '08 · Не только свой вкус', title: 'Удобство нельзя\nсделать для себя.', support: 'Сервисом будут пользоваться другие люди.', theme: 'light' },
   { id: 'service-feedback', eyebrow: '09 · Слушать аудиторию', title: 'Обратная связь —\nчасть интерфейса.', support: 'Не приложение для людей. Приложение вместе с людьми.', theme: 'dark' },
+];
+const expandedServiceScenes = [
+  {
+    id: 'service-navigation-map',
+    eyebrow: '04 · Навигация',
+    title: 'Не искать меню.\nВыбирать намерение.',
+    support: 'Главная · Сегодня · Завтра · Выходные · Избранное · Для меня',
+    icon: '389291-map-pin',
+    cards: ['Сегодня', 'Завтра', 'Выходные', 'Избранное', 'Для меня', 'Популярное'],
+    theme: 'light',
+  },
+  {
+    id: 'service-social-proof',
+    eyebrow: '06 · Social proof',
+    title: 'Каждый жест\nделает выбор точнее.',
+    support: 'Лайк, «не интересует» и отправка другу — это понятные сигналы, а не скрытая магия.',
+    icon: '389494-users',
+    cards: ['♥ нравится', '× не интересует', '↗ поделиться'],
+    theme: 'dark',
+  },
+  {
+    id: 'service-artifacts-explained',
+    eyebrow: '08 · Артефакты',
+    title: 'Сувенир,\nкоторый находят.',
+    support: 'Четыре знакомых символа открыты. Остальные пока остаются тайной.',
+    icon: '389439-star',
+    cards: ['Янтарь', 'Кирха', 'Марципан', 'Балтийский ветер', '?', '?', '?', '?'],
+    theme: 'light',
+  },
+  {
+    id: 'service-artifact-desktop',
+    eyebrow: '08.4 · Артефакт на desktop',
+    title: 'Стрелка вправо.\nИ находка оживает.',
+    support: 'Сценарий экрана подготовлен; live-действие подключается без переделки слайда, когда сборка страницы отдаст keyboard-hook.',
+    icon: '389241-history',
+    cards: ['↑', '↓', '←', '→', 'Enter'],
+    theme: 'dark',
+  },
+  {
+    id: 'service-laws',
+    eyebrow: '11 · Персонализация и законы',
+    title: 'Персонально.\nИ под контролем.',
+    support: 'Статусный план, не юридическое заключение: данные в РФ, минимизация, согласия и документирование.',
+    icon: '417817-shield-check',
+    cards: ['152-ФЗ', 'Серверы в РФ', 'РКН · план', '149-ФЗ', '152.1 ГК РФ', '436-ФЗ · готовность'],
+    theme: 'light',
+  },
+  {
+    id: 'service-keyboard-concept',
+    eyebrow: '12 · Навигация клавишами',
+    title: 'Не мышь.\nРитм клавиш.',
+    support: 'На desktop подсказка остаётся поверх страницы и подсвечивает только нажатую клавишу.',
+    icon: '389241-history',
+    cards: ['↑', '↓', '←', '→', 'Enter', 'L'],
+    theme: 'dark',
+  },
+  {
+    id: 'service-keyboard-day',
+    eyebrow: '12.1 · Страница дня',
+    title: 'Вниз — смотреть.\nВбок — выбирать.',
+    support: 'Сцена готова для подключения к актуальной странице дня после публикации keyboard-hooks.',
+    icon: '389241-history',
+    cards: ['↓ список', '→ rail', 'Enter открыть'],
+    theme: 'light',
+  },
+  {
+    id: 'service-keyboard-event',
+    eyebrow: '12.2 · Страница события',
+    title: 'Фото. Похожие.\nЛайк буквой L.',
+    support: 'Кадр фиксирует полный маршрут: карусель → похожее событие → блок рекомендаций → L.',
+    icon: '389439-star',
+    cards: ['→ фото', '↓ похожие', 'Enter открыть', 'L лайк'],
+    theme: 'dark',
+  },
+  {
+    id: 'service-fast-find',
+    eyebrow: '19 · Быстро найти',
+    title: '30 карточек.\nИ выбор становится вашим.',
+    support: 'Листайте, ставьте лайк и отмечайте лишнее — ранжирование получает явные сигналы.',
+    icon: '389439-star',
+    cards: ['1', '5', '10', '15', '20', '25', '30'],
+    theme: 'light',
+  },
+  {
+    id: 'service-share-friends',
+    eyebrow: '20 · Рассказать друзьям',
+    title: 'Одно нажатие.\nСобытие уже в чате.',
+    support: 'Картинка · короткое описание · ссылка',
+    icon: '389494-users',
+    cards: ['Событие', 'Поделиться', 'Чат друзей'],
+    theme: 'dark',
+  },
+  {
+    id: 'service-calendar-memory',
+    eyebrow: '21 · Не забыть',
+    title: 'В календарь.\nИ сразу в избранное.',
+    support: 'Скачанный календарный файл и сохранённое событие образуют один понятный маршрут.',
+    icon: '389241-history',
+    cards: ['Событие', '+ календарь', 'Избранное'],
+    theme: 'light',
+  },
+  {
+    id: 'service-community-curator',
+    eyebrow: '22 · Для авторов сообществ',
+    title: 'Картинка.\nТекст. Готово.',
+    support: 'Desktop-сценарий показывает две отдельные команды: скопировать изображение и скопировать описание.',
+    icon: '389049-book-open',
+    cards: ['Скопировать картинку', 'Скопировать описание'],
+    theme: 'dark',
+  },
+  {
+    id: 'service-location-artifact',
+    eyebrow: '23 · Для владельцев мест',
+    title: 'Место может стать\nчастью коллекции.',
+    support: 'Кафе, гостевой дом или точка притяжения получают собственный узнаваемый артефакт.',
+    icon: '389291-map-pin',
+    cards: ['место', 'история', 'артефакт', 'коллекция'],
+    theme: 'light',
+  },
 ];
 ---
 <!doctype html>
@@ -159,6 +326,7 @@ const serviceTextScenes = [
     <link rel="preload" as="audio" href={jokeAudioUrl} />
     <link rel="preload" as="audio" href={errorAudioUrl} />
     <link rel="preload" as="image" href={catKeyboardUrl} />
+    <link rel="preload" as="video" href={friendsClubVideoUrl} type="video/mp4" />
     {people.map((person) => <link rel="preload" as="image" href={person.avatar} />)}
     {lectureSlides.map((slide) => <link rel="preload" as="image" href={slide.image} />)}
     <title>Автопрезентатор · Сцена</title>
@@ -239,7 +407,7 @@ const serviceTextScenes = [
               </div>
               <p class="lecture-chapter">{slide.chapter}</p>
               <h2 data-lecture-statement data-lecture-text={slide.statement}></h2>
-              <p class="lecture-counter">{String(index + 1).padStart(2, '0')} / {String(lectureSlides.length).padStart(2, '0')}</p>
+              <p class="lecture-counter">{String(slide.position || index + 1).padStart(2, '0')} / 09</p>
             </div>
             <figure class="lecture-visual">
               <img src={slide.image} alt={slide.alt} loading="eager" decoding="async" />
@@ -247,6 +415,134 @@ const serviceTextScenes = [
             </figure>
         </section>
       ))}
+
+      <section
+        class="lecture-slide lecture-convenience presentation-scene theme--light"
+        data-presenter-scene-id="lecture-convenience-emergence"
+        data-lecture-state="idle"
+        aria-label="Лекционный экран: можно ли сразу стать удобным"
+        hidden
+      >
+        <div class="lecture-copy">
+          <div class="brand-plate brand-plate--lecture brand-logo--on-light">
+            <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
+          </div>
+          <p class="lecture-chapter">07 · Удобство появляется</p>
+          <h2 data-lecture-statement data-lecture-text="Можно ли сразу стать удобным?"></h2>
+          <p class="lecture-counter">07 / 09</p>
+        </div>
+        <figure class="lecture-visual desire-path-visual">
+          <img
+            src="/assets/autopresenter/lecture/desire-path-ludwell-cc-by-sa-2.jpg"
+            alt="Протоптанные людьми короткие дорожки через траву"
+            loading="eager"
+            decoding="async"
+          />
+          <span class="desire-label desire-label--design">сначала спроектировали</span>
+          <span class="desire-label desire-label--people">потом люди выбрали путь</span>
+          <span class="desire-label desire-label--tradition">немецкая практика: сначала наблюдать — потом мостить</span>
+          <small>David Smith · CC BY-SA 2.0</small>
+        </figure>
+      </section>
+
+      <section
+        class="lecture-slide lecture-measurement presentation-scene theme--dark"
+        data-presenter-scene-id="lecture-usability-measurement"
+        data-lecture-state="idle"
+        aria-label="Лекционный экран: как измерить удобство"
+        hidden
+      >
+        <div class="lecture-copy">
+          <div class="brand-plate brand-plate--lecture brand-logo--on-dark">
+            <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
+          </div>
+          <p class="lecture-chapter">08 · Проверить числами</p>
+          <h2 data-lecture-statement data-lecture-text="Можно ли удобство измерить?"></h2>
+          <p class="lecture-counter">08 / 09</p>
+        </div>
+        <div class="lecture-visual measurement-visual" role="img" aria-label="Четыре показателя удобства: успех, время, ошибки и оценка">
+          <div class="measurement-ring"><strong>Цель</strong><span>задача выполнена?</span></div>
+          <div class="measurement-ring"><strong>Время</strong><span>сколько занял выбор?</span></div>
+          <div class="measurement-ring"><strong>Ошибки</strong><span>где человек сбился?</span></div>
+          <div class="measurement-ring"><strong>Ясность</strong><span>понятно без подсказки?</span></div>
+        </div>
+      </section>
+
+      <section class="market-scene market-primary presentation-scene theme--light" data-presenter-scene-id="market-01-primary" data-market-state="idle" hidden>
+        <header class="market-header">
+          <p class="service-eyebrow">Рынок · 01</p>
+          <h2><b>4</b> игрока.<br /><span>4 разные силы.</span></h2>
+          <p>Нажмите строку: карточка раскроет сильную сторону и ограничение.</p>
+        </header>
+        <div class="market-matrix" role="group" aria-label="Сравнение основных сервисов">
+          <div class="market-matrix-head" aria-hidden="true"><span>Сервис</span><span>Каталог</span><span>Область</span><span>Контекст</span><span>Покупка</span><span>Личный выбор</span></div>
+          {marketPlayers.map((player, index) => (
+            <button class="market-player" type="button" data-market-focus={index} aria-expanded={index === 0 ? 'true' : 'false'}>
+              <span class="market-logo"><img src={player.logo} alt="" /><b>{player.name}</b></span>
+              {player.metrics.map((metric) => <i data-evidence={metric} aria-label={metric === 'yes' ? 'явно есть' : metric === 'limited' ? 'ограниченно' : metric === 'no' ? 'явно отсутствует' : 'не указано'}></i>)}
+              <span class="market-detail"><strong>{player.strength}</strong><small>{player.gap}</small></span>
+            </button>
+          ))}
+          <p class="market-legend">● явно есть · ◐ ограниченно · × явно нет · — не указано</p>
+        </div>
+      </section>
+
+      <section class="market-scene market-substitutes presentation-scene theme--dark" data-presenter-scene-id="market-02-substitutes" data-market-state="idle" hidden>
+        <header class="market-header">
+          <p class="service-eyebrow">Рынок · 02</p>
+          <h2><b>3</b> замены.<br /><span>И три разрыва.</span></h2>
+        </header>
+        <div class="market-flow">
+          {marketSubstitutes.map(([name, strength, gap, icon], index) => (
+            <button type="button" data-market-focus={index} aria-expanded={index === 0 ? 'true' : 'false'}>
+              <img src={`/assets/autopresenter/icons/${icon}.svg`} alt="" />
+              <strong>{name}</strong>
+              <span>{strength}</span>
+              <i aria-hidden="true">→</i>
+              <small>{gap}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section class="market-scene market-dynamics presentation-scene theme--light" data-presenter-scene-id="market-03-dynamics" data-market-state="idle" hidden>
+        <header class="market-header">
+          <p class="service-eyebrow">Рынок · 03 · Качественный вывод исследования</p>
+          <h2><b>2</b> перемены<br /><span>за три года.</span></h2>
+        </header>
+        <div class="market-timeline" role="img" aria-label="Два качественных направления изменения рынка с 2023 по 2026 год">
+          <article>
+            <img src="/assets/autopresenter/icons/389291-map-pin.svg" alt="" />
+            <strong>География</strong>
+            <div class="market-shift"><span><b>2023</b>Калининград</span><i>→</i><span><b>2026</b>курорты и малые города</span></div>
+            <small>Светлогорск · Зеленоградск · Янтарный</small>
+          </article>
+          <article>
+            <img src="/assets/autopresenter/icons/389461-ticket.svg" alt="" />
+            <strong>Дистрибуция</strong>
+            <div class="market-shift"><span><b>2023</b>билетные посредники</span><i>→</i><span><b>2026</b>прямые площадки · D2C</span></div>
+            <small>Собор · Драмтеатр · Музей Мирового океана</small>
+          </article>
+          <input data-market-scrubber type="range" min="0" max="100" value="0" aria-label="Показать изменение рынка во времени" />
+        </div>
+      </section>
+
+      <section class="market-scene market-position presentation-scene theme--dark" data-presenter-scene-id="market-04-position" data-market-state="idle" hidden>
+        <header class="market-header">
+          <p class="service-eyebrow">Рынок · 04 · Целевой контур</p>
+          <h2><b>6</b> условий.<br /><span>Вместе — ни у кого.</span></h2>
+        </header>
+        <div class="market-capabilities">
+          {marketCapabilities.map(([icon, label], index) => (
+            <button type="button" data-market-focus={index} aria-expanded={index === 0 ? 'true' : 'false'}>
+              <img src={`/assets/autopresenter/icons/${icon}.svg`} alt="" />
+              <span>{label}</span>
+              <i aria-label="целевая возможность">✓</i>
+            </button>
+          ))}
+        </div>
+        <blockquote><span>Другие сервисы показывают, что проводится.</span><strong>«Анонсы» помогают понять, куда стоит пойти именно вам.</strong></blockquote>
+      </section>
 
       <section class="service-scene service-wordmark presentation-scene theme--light" data-presenter-scene-id="service-wordmark" hidden>
         <p class="service-eyebrow">01 · Полюбить Калининград</p>
@@ -327,6 +623,49 @@ const serviceTextScenes = [
         </div>
       </section>
 
+      <section class="service-scene personalization-scene presentation-scene theme--dark" data-presenter-scene-id="service-personalization" data-visual-state="idle" hidden>
+        <p class="service-eyebrow">10 · Как устроена персонализация</p>
+        <h2>Не угадывать.<br />Учиться на выборе.</h2>
+        <div class="personalization-flow" aria-label="Схема персонализации">
+          <article><img src="/assets/autopresenter/icons/389494-users.svg" alt="" /><b>Сигналы</b><span>лайк · пропуск · календарь</span></article>
+          <i aria-hidden="true">→</i>
+          <article><img src="/assets/autopresenter/icons/389049-book-open.svg" alt="" /><b>Профиль</b><span>темы · места · формат</span></article>
+          <i aria-hidden="true">→</i>
+          <article><img src="/assets/autopresenter/icons/389439-star.svg" alt="" /><b>Ранжирование</b><span>сначала то, что ближе вам</span></article>
+          <i aria-hidden="true">→</i>
+          <article><img src="/assets/autopresenter/icons/417817-shield-check.svg" alt="" /><b>Контроль</b><span>без сигнала — общая выдача</span></article>
+        </div>
+        <p class="personalization-note">Это продуктовая схема, а не обещание «читать мысли».</p>
+      </section>
+
+      {expandedServiceScenes.map((scene) => (
+        <section
+          class={`service-scene expanded-feature-scene presentation-scene theme--${scene.theme}`}
+          data-presenter-scene-id={scene.id}
+          data-visual-state="idle"
+          hidden
+        >
+          <div class="expanded-feature-copy">
+            <p class="service-eyebrow">{scene.eyebrow}</p>
+            <h2>
+              {scene.title.split('\n').map((line) => <span>{line}</span>)}
+            </h2>
+            <p>{scene.support}</p>
+          </div>
+          <div class="expanded-feature-visual">
+            <img src={`/assets/autopresenter/icons/${scene.icon}.svg`} alt="" />
+            <div class="expanded-feature-cards" style={`--card-count:${scene.cards.length}`}>
+              {scene.cards.map((card, index) => (
+                <article style={`--card-index:${index}`}>
+                  <b>{String(index + 1).padStart(2, '0')}</b>
+                  <span>{card}</span>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      ))}
+
       {serviceTextScenes.map((scene) => (
         <section
           class={`service-scene service-word-sequence presentation-scene theme--${scene.theme}`}
@@ -400,6 +739,67 @@ const serviceTextScenes = [
         <div class="people-interface">
           <p class="preview-ui-label">Preview UI · связь с реальным событием ещё не опубликована</p>
           <iframe data-presenter-id="people-interface-frame" data-src={peopleInterfaceUrl} title="Блок известных людей на странице события" width="1920" height="1080"></iframe>
+        </div>
+      </section>
+
+      <section
+        class="friends-club-scene presentation-scene theme--dark"
+        data-presenter-scene-id="service-friends-club"
+        data-visual-state="idle"
+        hidden
+      >
+        <div class="friends-club-copy">
+          <p class="service-eyebrow">24 · Клуб друзей «Анонсов»</p>
+          <h2>Слово —<br />хранителю клуба.</h2>
+          <p>Обращение Дарьи. После ролика наведите телефон на QR-код.</p>
+          <a class="friends-club-qr" href={friendsClubUrl} aria-label="Открыть канал клуба друзей Анонсов" set:html={friendsClubQrSvg}></a>
+          <small>t.me · Клуб друзей «Анонсов»</small>
+        </div>
+        <video
+          data-presenter-id="friends-club-video"
+          src={friendsClubVideoUrl}
+          preload="auto"
+          playsinline
+          controls
+        ></video>
+      </section>
+
+      <section class="transport-scene transport-rail presentation-scene theme--light" data-presenter-scene-id="service-transport-rail" data-transport-phase="mobile" hidden>
+        <aside class="transport-copy">
+          <p class="service-eyebrow">12.3 · Транспорт · ЖД</p>
+          <h2>Событие —<br />и дорога к нему.</h2>
+          <p>Один и тот же реальный пример: сначала телефон, затем desktop.</p>
+          <div class="transport-phase-label"><span data-phase-mobile>Телефон</span><span data-phase-desktop>Desktop</span></div>
+        </aside>
+        <div class="transport-mobile">
+          <div class="phone-shell focus-phone">
+            <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+            <iframe data-presenter-id="transport-rail-mobile-frame" data-src={railTransportEventUrl} title="Железнодорожный транспорт на мобильной странице события" width="476" height="1024"></iframe>
+            <div class="phone-home" aria-hidden="true"></div>
+          </div>
+        </div>
+        <div class="transport-desktop">
+          <iframe data-presenter-id="transport-rail-desktop-frame" data-src={railTransportEventUrl} title="Железнодорожный транспорт на десктопной странице события" width="1920" height="1080"></iframe>
+        </div>
+      </section>
+
+      <section class="transport-scene transport-bus presentation-scene theme--dark" data-presenter-scene-id="service-transport-bus" data-visual-state="idle" hidden>
+        <aside class="transport-copy">
+          <p class="service-eyebrow">12.3 · Транспорт · Автобус</p>
+          <h2>Не только поезд.</h2>
+          <p>Сценарий готов заранее; live-страница подключится после следующей сборки сайта.</p>
+        </aside>
+        <div class="phone-shell bus-preview-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <div class="bus-preview" role="img" aria-label="Предпросмотр автобусного маршрута на мобильной странице события">
+            <span class="preview-ui-label">Preview · source-backed route</span>
+            <img src="/assets/autopresenter/icons/337651-tour-bus.svg" alt="" />
+            <p>Как добраться</p>
+            <h3>Калининград<br /><i>→</i> Пионерский</h3>
+            <div><b>118 · 118А · 119</b><span>Автовокзал → Пионерский курорт</span></div>
+            <small>Маршрут подтверждён официальным реестром. Время появится после привязки события.</small>
+          </div>
+          <div class="phone-home" aria-hidden="true"></div>
         </div>
       </section>
 
@@ -505,12 +905,14 @@ const serviceTextScenes = [
           networking: ['Пока знакомьтесь друг с другом.', 'Сегодня здесь много уважаемых гостей.'],
           heat: ['Сегодня жаркий день.', 'Рады, что вы пришли на презентацию.'],
           format: ['Лекция — и презентация сервиса анонсов.', 'Сегодня вы — наша фокус-группа.'],
+          challenge: ['Сегодня — не просто лекция.', 'Сегодня задача со звёздочкой.'],
+          backstage: ['После презентации покажем лекторам «Знания»,', 'как устроен этот инструмент.'],
         };
         const introRoutes = [
-          ['welcome', 'heat', 'networking', 'topic', 'format'],
-          ['welcome', 'networking', 'heat', 'topic', 'format'],
-          ['welcome', 'topic', 'format', 'heat', 'networking'],
-          ['welcome', 'topic', 'format', 'networking', 'heat'],
+          ['welcome', 'heat', 'networking', 'topic', 'challenge', 'format', 'backstage'],
+          ['welcome', 'networking', 'heat', 'topic', 'challenge', 'format', 'backstage'],
+          ['welcome', 'topic', 'challenge', 'format', 'heat', 'networking', 'backstage'],
+          ['welcome', 'topic', 'challenge', 'format', 'networking', 'heat', 'backstage'],
         ];
         const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
         let generation = 0;
@@ -560,6 +962,12 @@ const serviceTextScenes = [
               try { cue.currentTime = 0; } catch {}
             }
           }
+          document.querySelectorAll('video').forEach((video) => {
+            video.pause();
+            if (rewindAudio) {
+              try { video.currentTime = 0; } catch {}
+            }
+          });
           introScene.dataset.introState = 'stopped';
           document.querySelector('[data-joke-state]')?.setAttribute('data-joke-state', 'stopped');
           document.querySelector('[data-medallion-state]')?.setAttribute('data-medallion-state', 'stopped');
@@ -569,6 +977,12 @@ const serviceTextScenes = [
           document.querySelector('[data-error-phase]')?.setAttribute('data-error-phase', 'stopped');
           document.querySelectorAll('[data-lecture-state]')
             .forEach((scene) => scene.setAttribute('data-lecture-state', 'stopped'));
+          document.querySelectorAll('[data-market-state]')
+            .forEach((scene) => scene.setAttribute('data-market-state', 'stopped'));
+          document.querySelectorAll('[data-visual-state]')
+            .forEach((scene) => scene.setAttribute('data-visual-state', 'stopped'));
+          document.querySelectorAll('[data-transport-phase]')
+            .forEach((scene) => scene.setAttribute('data-transport-phase', 'mobile'));
         };
 
         const splitSemanticChunks = (value) => {
@@ -874,6 +1288,57 @@ const serviceTextScenes = [
           scene.dataset.serviceCopyState = 'complete';
         };
 
+        const setMarketFocus = (scene, index) => {
+          scene.querySelectorAll('[data-market-focus]').forEach((node, offset) => {
+            if (!(node instanceof HTMLElement)) return;
+            const active = offset === index;
+            node.classList.toggle('is-active', active);
+            node.setAttribute('aria-expanded', String(active));
+          });
+        };
+
+        const startMarketScene = async (scene, token) => {
+          scene.dataset.marketState = 'revealing';
+          setMarketFocus(scene, 0);
+          const focusItems = [...scene.querySelectorAll('[data-market-focus]')];
+          focusItems.forEach((node, index) => {
+            if (!(node instanceof HTMLElement) || node.dataset.marketBound === 'true') return;
+            node.dataset.marketBound = 'true';
+            node.addEventListener('click', () => setMarketFocus(scene, index));
+          });
+          const scrubber = scene.querySelector('[data-market-scrubber]');
+          if (scrubber instanceof HTMLInputElement && scrubber.dataset.marketBound !== 'true') {
+            scrubber.dataset.marketBound = 'true';
+            scrubber.addEventListener('input', () => {
+              const progress = Math.max(0, Math.min(1, Number(scrubber.value) / 100));
+              scene.style.setProperty('--market-progress', String(progress));
+            });
+          }
+          for (let step = 0; step <= 10; step += 1) {
+            if (token !== generation) return;
+            scene.style.setProperty('--market-progress', String(step / 10));
+            if (scrubber instanceof HTMLInputElement) scrubber.value = String(step * 10);
+            if (step > 0 && focusItems.length) setMarketFocus(scene, Math.min(focusItems.length - 1, step % focusItems.length));
+            if (!await pause(reduceMotion.matches ? 1 : 190, token)) return;
+          }
+          scene.dataset.marketState = 'complete';
+        };
+
+        const startVisualScene = async (scene, token) => {
+          scene.dataset.visualState = 'revealing';
+          const video = scene.querySelector('video');
+          if (video instanceof HTMLVideoElement) {
+            video.volume = 1;
+            void video.play().catch(() => {});
+          }
+          if (!await pause(reduceMotion.matches ? 1 : 2100, token)) return;
+          scene.dataset.visualState = 'complete';
+        };
+
+        const startTransportRail = (scene) => {
+          scene.dataset.transportPhase = 'mobile';
+        };
+
         const showScene = (sceneId, options = {}) => {
           if (!scenes.has(sceneId)) return;
           stopPresentationMotion();
@@ -896,6 +1361,15 @@ const serviceTextScenes = [
           if (sceneId === 'intro-loop') void startIntro(options);
           if (sceneId.startsWith('lecture-') && activeScene instanceof HTMLElement) {
             void typeLecture(activeScene, token);
+          }
+          if (sceneId.startsWith('market-') && activeScene instanceof HTMLElement) {
+            void startMarketScene(activeScene, token);
+          }
+          if (activeScene instanceof HTMLElement && activeScene.hasAttribute('data-visual-state')) {
+            void startVisualScene(activeScene, token);
+          }
+          if (sceneId === 'service-transport-rail' && activeScene instanceof HTMLElement) {
+            startTransportRail(activeScene);
           }
           if (sceneId === 'service-joke') void startJoke();
           if (sceneId === 'service-medallions' && activeScene instanceof HTMLElement) {
@@ -1267,6 +1741,175 @@ const serviceTextScenes = [
   .people-scene[data-people-phase="interface"] .people-portraits { opacity: 0; visibility: hidden; transform: translateY(-3%); }
   .people-scene[data-people-phase="interface"] .people-interface { opacity: 1; visibility: visible; transform: none; }
   @keyframes heart-pop { 0% { opacity: 0; transform: scale(.2); } 65% { transform: scale(1.15); } 100% { opacity: 1; transform: none; } }
+
+  .desire-path-visual { border-radius: 34px; box-shadow: 0 34px 85px rgba(54,37,27,.18); }
+  .desire-path-visual img { object-fit: cover; filter: saturate(.82) contrast(1.04); }
+  .desire-label { position: absolute; z-index: 2; max-width: 14ch; padding: 15px 20px; border-radius: 999px; color: #fff; background: rgba(15,16,21,.88); font: 600 clamp(17px,1.2vw,23px)/1.05 "Cygre",sans-serif; box-shadow: 0 12px 34px rgba(0,0,0,.24); opacity: 0; transform: translateY(16px); transition: opacity 500ms ease, transform 720ms var(--ease-cinematic); }
+  .desire-label--design { top: 12%; right: 7%; }
+  .desire-label--people { left: 8%; bottom: 13%; background: #ff7657; transition-delay: 440ms; }
+  .desire-label--tradition { right: 4%; bottom: 3%; max-width: 31ch; border-radius: 14px; color: #17121a; background: rgba(255,250,242,.9); font-size: clamp(14px,.95vw,18px); transition-delay: 720ms; }
+  .desire-path-visual small { position: absolute; right: 16px; bottom: 12px; color: rgba(255,255,255,.72); font-size: 12px; text-shadow: 0 1px 3px #000; }
+  .lecture-convenience[data-lecture-state="media"] .desire-label,
+  .lecture-convenience[data-lecture-state="complete"] .desire-label { opacity: 1; transform: none; }
+  .measurement-visual { grid-template-columns: repeat(2,minmax(0,1fr)); gap: clamp(28px,3vw,54px); align-content: center; }
+  .measurement-ring { width: min(28vh,280px); aspect-ratio: 1; display: grid; place-content: center; justify-items: center; padding: 32px; border: 18px solid rgba(255,255,255,.14); border-radius: 50%; background: #111219; box-shadow: inset 0 0 0 2px rgba(255,118,87,.48), 0 0 60px rgba(255,118,87,.1); opacity: 0; transform: translateY(26px) scale(.82); transition: opacity 520ms ease, transform 900ms var(--ease-cinematic), border-color 500ms ease; }
+  .measurement-ring strong { max-width: 5.8ch; font-size: clamp(36px,2.7vw,52px); line-height: .9; letter-spacing: -.06em; text-align: center; }
+  .measurement-ring span { max-width: 12ch; margin-top: 12px; color: rgba(255,255,255,.64); font-size: clamp(17px,1.2vw,23px); line-height: 1.05; text-align: center; }
+  .lecture-measurement[data-lecture-state="media"] .measurement-ring,
+  .lecture-measurement[data-lecture-state="complete"] .measurement-ring { opacity: 1; transform: none; }
+  .measurement-ring:nth-child(2) { transition-delay: 120ms; }
+  .measurement-ring:nth-child(3) { transition-delay: 240ms; }
+  .measurement-ring:nth-child(4) { transition-delay: 360ms; }
+
+  .market-scene { position: absolute; inset: 0; overflow: hidden; padding: clamp(52px,5vh,72px) clamp(64px,5vw,104px); }
+  .market-scene::before, .transport-scene::before { position: absolute; z-index: 0; right: -11vw; bottom: -29vh; width: min(58vw,1050px); aspect-ratio: 1.45; content: ""; background: linear-gradient(135deg,rgba(255,118,87,.34),rgba(105,86,223,.16)); -webkit-mask: var(--brand-o-mask) center/contain no-repeat; mask: var(--brand-o-mask) center/contain no-repeat; filter: blur(18px); opacity: .54; animation: halo-drift 15s ease-in-out infinite alternate; }
+  .market-scene > *, .transport-scene > * { position: relative; z-index: 1; }
+  .market-header { max-width: 100%; }
+  .market-header .service-eyebrow { margin-bottom: 18px; }
+  .market-header h2 { margin: 0; font-size: clamp(58px,5.4vw,104px); line-height: .82; letter-spacing: -.07em; }
+  .market-header h2 b { color: #ff7657; font-weight: 800; }
+  .market-header h2 span { color: color-mix(in srgb,currentColor 76%,transparent); }
+  .market-header > p:last-child { margin: 22px 0 0; color: color-mix(in srgb,currentColor 62%,transparent); font-size: clamp(18px,1.25vw,24px); }
+  .market-primary { display: grid; grid-template-columns: minmax(400px,.55fr) minmax(0,1.45fr); align-items: center; gap: clamp(36px,4vw,76px); }
+  .market-matrix { align-self: center; }
+  .market-matrix-head, .market-player { display: grid; grid-template-columns: minmax(230px,1.8fr) repeat(5,minmax(66px,.5fr)); gap: 8px; align-items: center; }
+  .market-matrix-head { padding: 0 16px 10px; color: rgba(23,18,26,.5); font-size: 13px; line-height: 1; text-align: center; }
+  .market-matrix-head span:first-child { text-align: left; }
+  .market-player { position: relative; width: 100%; min-height: 88px; margin: 8px 0; padding: 13px 16px; border: 1px solid rgba(23,18,26,.12); border-radius: 20px; color: inherit; background: rgba(255,255,255,.56); text-align: left; cursor: pointer; opacity: 0; transform: translateX(28px); transition: opacity 480ms ease, transform 700ms var(--ease-cinematic), background 260ms ease, box-shadow 260ms ease; }
+  .market-player.is-active { background: #fff; box-shadow: 0 22px 50px rgba(55,34,29,.12); }
+  .market-logo { min-width: 0; display: grid; grid-template-columns: 72px minmax(0,1fr); align-items: center; gap: 13px; }
+  .market-logo img { width: 68px; height: 50px; object-fit: contain; }
+  .market-logo b { font-size: clamp(17px,1.15vw,22px); line-height: 1.02; }
+  .market-player > i { width: 34px; height: 34px; display: grid; place-items: center; justify-self: center; border-radius: 50%; font-style: normal; background: rgba(23,18,26,.06); }
+  .market-player > i::before { font-size: 18px; font-weight: 800; }
+  .market-player > i[data-evidence="yes"]::before { content: "●"; color: #239763; }
+  .market-player > i[data-evidence="limited"]::before { content: "◐"; color: #d47534; }
+  .market-player > i[data-evidence="no"]::before { content: "×"; color: #c3494c; }
+  .market-player > i[data-evidence="unknown"]::before { content: "—"; color: rgba(23,18,26,.38); }
+  .market-detail { grid-column: 1 / -1; max-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 0; padding: 0 18px; border-radius: 16px; color: #fff; background: #17121a; opacity: 0; overflow: hidden; pointer-events: none; transform: translateY(-8px); transition: max-height 360ms ease, margin 360ms ease, padding 360ms ease, opacity 240ms ease, transform 360ms var(--ease-cinematic); }
+  .market-player.is-active { z-index: 5; }
+  .market-player.is-active .market-detail { max-height: 88px; margin-top: 8px; padding: 15px 18px; opacity: 1; transform: none; }
+  .market-detail strong, .market-detail small { font-size: clamp(14px,.93vw,18px); line-height: 1.18; }
+  .market-detail small { color: rgba(255,255,255,.68); }
+  .market-legend { margin: 74px 0 0; color: rgba(23,18,26,.52); font-size: 14px; }
+  .market-scene[data-market-state="revealing"] .market-player,
+  .market-scene[data-market-state="complete"] .market-player { opacity: 1; transform: none; }
+  .market-player:nth-of-type(2) { transition-delay: 150ms; }
+  .market-player:nth-of-type(3) { transition-delay: 300ms; }
+  .market-player:nth-of-type(4) { transition-delay: 450ms; }
+  .market-substitutes { display: grid; grid-template-rows: auto 1fr; }
+  .market-flow { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; align-self: center; }
+  .market-flow button { min-height: 480px; display: grid; grid-template-rows: 104px auto auto 42px minmax(80px,auto); align-content: center; justify-items: start; gap: 18px; padding: 36px; border: 1px solid rgba(255,255,255,.15); border-radius: 28px; color: inherit; background: rgba(255,255,255,.06); text-align: left; opacity: 0; transform: translateY(32px); transition: opacity 500ms ease, transform 780ms var(--ease-cinematic), background 280ms ease; }
+  .market-flow button.is-active { background: rgba(255,255,255,.12); }
+  .market-flow img { width: 88px; height: 88px; filter: invert(76%) sepia(45%) saturate(1608%) hue-rotate(313deg) brightness(104%); }
+  .market-flow strong { font-size: clamp(30px,2.2vw,42px); }
+  .market-flow span { color: rgba(255,255,255,.68); font-size: clamp(20px,1.35vw,26px); line-height: 1.15; }
+  .market-flow i { color: #ff7657; font-size: 42px; font-style: normal; }
+  .market-flow small { font-size: clamp(20px,1.35vw,26px); line-height: 1.15; }
+  .market-scene[data-market-state="revealing"] .market-flow button,
+  .market-scene[data-market-state="complete"] .market-flow button { opacity: 1; transform: none; }
+  .market-flow button:nth-child(2) { transition-delay: 160ms; }
+  .market-flow button:nth-child(3) { transition-delay: 320ms; }
+  .market-dynamics { display: grid; grid-template-columns: minmax(380px,.58fr) minmax(0,1.42fr); align-items: center; gap: 60px; }
+  .market-timeline { display: grid; gap: 24px; }
+  .market-timeline article { display: grid; grid-template-columns: 82px 1fr; align-items: center; column-gap: 14px; row-gap: 12px; min-height: 210px; padding: 28px; border-radius: 26px; background: rgba(255,255,255,.72); box-shadow: 0 24px 58px rgba(55,34,29,.1); }
+  .market-timeline img { grid-row: 1 / span 3; width: 66px; height: 66px; }
+  .market-timeline strong { grid-column: 2; font-size: clamp(25px,1.8vw,34px); }
+  .market-shift { grid-column: 2; display: grid; grid-template-columns: minmax(220px,1fr) 100px minmax(250px,1.2fr); align-items: center; gap: 26px; }
+  .market-shift span { display: grid; gap: 9px; font-size: clamp(20px,1.35vw,26px); line-height: 1.08; }
+  .market-shift i { position: relative; height: 5px; border-radius: 99px; color: transparent; background: rgba(23,18,26,.12); overflow: hidden; }
+  .market-shift i::after { position: absolute; inset: 0; content: ""; background: linear-gradient(90deg,#ff7657,#6956df); transform: scaleX(var(--market-progress,0)); transform-origin: left; transition: transform 180ms linear; }
+  .market-shift b { font: 700 17px/1 ui-monospace,monospace; }
+  .market-timeline small { grid-column: 2 / -1; color: rgba(23,18,26,.56); font-size: 17px; }
+  .market-timeline input { width: 100%; accent-color: #ff7657; }
+  .market-position { display: grid; grid-template-columns: minmax(380px,.65fr) minmax(0,1.35fr); grid-template-rows: 1fr auto; align-items: center; gap: 38px 70px; }
+  .market-capabilities { display: grid; grid-template-columns: repeat(2,1fr); gap: 15px; }
+  .market-capabilities button { min-height: 114px; display: grid; grid-template-columns: 58px 1fr 42px; align-items: center; gap: 18px; padding: 20px 22px; border: 1px solid rgba(255,255,255,.15); border-radius: 22px; color: inherit; background: rgba(255,255,255,.06); text-align: left; cursor: pointer; opacity: 0; transform: translateY(24px); transition: opacity 480ms ease, transform 740ms var(--ease-cinematic), background 260ms ease, border-color 260ms ease; }
+  .market-capabilities button.is-active { border-color: rgba(255,155,128,.7); background: rgba(255,118,87,.15); }
+  .market-capabilities img { width: 54px; height: 54px; filter: invert(78%) sepia(36%) saturate(1515%) hue-rotate(313deg) brightness(103%); }
+  .market-capabilities span { font-size: clamp(20px,1.35vw,26px); line-height: 1.08; }
+  .market-capabilities i { width: 36px; height: 36px; display: grid; place-items: center; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; color: #ff9b80; font-style: normal; }
+  .market-scene[data-market-state="revealing"] .market-capabilities button,
+  .market-scene[data-market-state="complete"] .market-capabilities button { opacity: 1; transform: none; }
+  .market-capabilities button:nth-child(2) { transition-delay: 100ms; }
+  .market-capabilities button:nth-child(3) { transition-delay: 200ms; }
+  .market-capabilities button:nth-child(4) { transition-delay: 300ms; }
+  .market-capabilities button:nth-child(5) { transition-delay: 400ms; }
+  .market-capabilities button:nth-child(6) { transition-delay: 500ms; }
+  .market-position blockquote { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1.4fr; gap: 40px; margin: 0; padding-top: 26px; border-top: 1px solid rgba(255,255,255,.18); font-size: clamp(25px,1.8vw,35px); line-height: 1.06; }
+  .market-position blockquote span { color: rgba(255,255,255,.58); }
+  .market-position blockquote strong { color: #ff9b80; }
+
+  .personalization-scene h2 { max-width: 10ch; font-size: clamp(72px,6.2vw,118px); }
+  .personalization-flow { display: grid; grid-template-columns: repeat(7,auto); align-items: center; gap: clamp(14px,1.5vw,28px); margin-top: 54px; }
+  .personalization-flow article { width: min(18vw,300px); min-height: 220px; display: grid; align-content: center; gap: 12px; padding: 26px; border: 1px solid rgba(255,255,255,.16); border-radius: 26px; background: rgba(255,255,255,.07); opacity: 0; transform: translateY(28px) scale(.94); transition: opacity 480ms ease, transform 820ms var(--ease-cinematic); }
+  .personalization-flow img { width: 64px; height: 64px; filter: invert(77%) sepia(38%) saturate(1575%) hue-rotate(313deg) brightness(103%); }
+  .personalization-flow b { font-size: clamp(24px,1.6vw,31px); }
+  .personalization-flow span { color: rgba(255,255,255,.62); font-size: clamp(17px,1.08vw,21px); line-height: 1.14; }
+  .personalization-flow > i { color: #ff7657; font-size: 36px; font-style: normal; }
+  .personalization-scene[data-visual-state="revealing"] article,
+  .personalization-scene[data-visual-state="complete"] article { opacity: 1; transform: none; }
+  .personalization-flow article:nth-of-type(2) { transition-delay: 160ms; }
+  .personalization-flow article:nth-of-type(3) { transition-delay: 320ms; }
+  .personalization-flow article:nth-of-type(4) { transition-delay: 480ms; }
+  .personalization-note { margin: 28px 0 0; color: rgba(255,255,255,.5); font-size: 20px; }
+
+  .transport-scene { position: absolute; inset: 0; overflow: hidden; }
+  .transport-copy { align-self: center; padding-left: clamp(62px,6vw,118px); }
+  .transport-copy h2 { margin: 0; font-size: clamp(70px,6vw,116px); line-height: .84; letter-spacing: -.07em; }
+  .transport-copy > p:last-of-type { max-width: 30ch; margin: 34px 0 0; color: color-mix(in srgb,currentColor 64%,transparent); font-size: clamp(24px,1.7vw,32px); line-height: 1.2; }
+  .transport-rail { display: grid; grid-template-columns: minmax(430px,.72fr) minmax(0,1.28fr); }
+  .transport-mobile, .transport-desktop { position: absolute; right: 0; top: 0; bottom: 0; width: 62%; display: grid; place-items: center; transition: opacity 700ms ease, transform 900ms var(--ease-cinematic), visibility 700ms; }
+  .transport-mobile .focus-phone { height: calc(100vh - 38px); }
+  .transport-desktop { width: 68%; background: #fff; opacity: 0; visibility: hidden; transform: translateX(5%); }
+  .transport-desktop iframe { width: 100%; height: 100%; border: 0; }
+  .transport-phase-label { display: flex; gap: 10px; margin-top: 42px; }
+  .transport-phase-label span { padding: 10px 16px; border-radius: 999px; color: rgba(23,18,26,.46); background: rgba(23,18,26,.06); font-size: 18px; font-weight: 600; }
+  .transport-rail[data-transport-phase="mobile"] [data-phase-mobile],
+  .transport-rail[data-transport-phase="desktop"] [data-phase-desktop] { color: #fff; background: #17121a; }
+  .transport-rail[data-transport-phase="desktop"] .transport-mobile { opacity: 0; visibility: hidden; transform: translateX(-5%) scale(.94); }
+  .transport-rail[data-transport-phase="desktop"] .transport-desktop { opacity: 1; visibility: visible; transform: none; }
+  .transport-bus { display: grid; grid-template-columns: minmax(460px,1fr) minmax(500px,.8fr); align-items: center; gap: 54px; padding: 34px 9vw; }
+  .bus-preview-phone { justify-self: center; width: min(520px,calc((100vh - 36px)*.4771)); height: calc(100vh - 36px); }
+  .bus-preview { position: absolute; inset: 36px 10px 22px; display: flex; flex-direction: column; padding: 92px 30px 30px; border-radius: 42px; color: #2d201a; background: linear-gradient(165deg,#fffaf2,#f0dfcc); overflow: hidden; opacity: 0; transform: translateY(34px) scale(.92); transition: opacity 520ms ease, transform 920ms var(--ease-cinematic); }
+  .transport-bus[data-visual-state="revealing"] .bus-preview,
+  .transport-bus[data-visual-state="complete"] .bus-preview { opacity: 1; transform: none; }
+  .bus-preview > img { width: 120px; height: 120px; margin: 32px auto 26px; }
+  .bus-preview > p { margin: 0; color: #a84520; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
+  .bus-preview h3 { margin: 18px 0 34px; font-size: 48px; line-height: .88; letter-spacing: -.055em; }
+  .bus-preview h3 i { color: #ff7657; font-style: normal; }
+  .bus-preview > div { display: grid; gap: 8px; padding: 22px; border-radius: 20px; background: rgba(255,255,255,.74); }
+  .bus-preview > div b { font-size: 26px; }
+  .bus-preview > div span { font-size: 18px; }
+  .bus-preview > small { margin-top: auto; color: rgba(45,32,26,.56); font-size: 15px; line-height: 1.2; }
+
+  .expanded-feature-scene { display: grid; grid-template-columns: minmax(0,.9fr) minmax(680px,1.1fr); align-items: center; gap: clamp(54px,6vw,116px); padding: clamp(64px,7vw,132px); overflow: hidden; }
+  .expanded-feature-scene::after { position: absolute; z-index: -1; width: min(52vw,980px); aspect-ratio: 1.6; right: -10vw; bottom: -30vh; content: ""; color: var(--stage-accent); background: currentColor; opacity: .13; -webkit-mask: var(--brand-o-mask) center / contain no-repeat; mask: var(--brand-o-mask) center / contain no-repeat; transform: rotate(-9deg); }
+  .expanded-feature-copy h2 { max-width: 10ch; margin: 24px 0 34px; font-size: clamp(74px,6.6vw,126px); line-height: .82; letter-spacing: -.075em; }
+  .expanded-feature-copy h2 span { display: block; }
+  .expanded-feature-copy > p:last-child { max-width: 31ch; margin: 0; color: color-mix(in srgb,currentColor 62%,transparent); font-size: clamp(22px,1.55vw,30px); line-height: 1.18; }
+  .expanded-feature-visual { position: relative; min-height: 650px; display: grid; align-content: center; }
+  .expanded-feature-visual > img { position: absolute; top: -36px; right: 28px; width: 154px; height: 154px; padding: 28px; border-radius: 42px; background: color-mix(in srgb,currentColor 8%,transparent); filter: invert(57%) sepia(91%) saturate(1898%) hue-rotate(328deg) brightness(104%); opacity: 0; transform: translateY(-18px) scale(.82) rotate(-8deg); transition: opacity 440ms ease, transform 820ms var(--ease-cinematic); }
+  .expanded-feature-cards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+  .expanded-feature-cards article { min-height: 112px; display: grid; grid-template-columns: 46px 1fr; align-items: center; gap: 16px; padding: 22px 24px; border: 1px solid color-mix(in srgb,currentColor 15%,transparent); border-radius: 24px; background: color-mix(in srgb,currentColor 6%,transparent); box-shadow: 0 20px 70px rgba(0,0,0,.08); opacity: 0; transform: translateY(34px) scale(.94); transition: opacity 420ms ease, transform 880ms var(--ease-cinematic); transition-delay: calc(var(--card-index) * 90ms); }
+  .expanded-feature-cards b { color: var(--stage-accent); font: 700 16px/1 ui-monospace,monospace; letter-spacing: .08em; }
+  .expanded-feature-cards span { font-size: clamp(21px,1.55vw,30px); font-weight: 600; line-height: 1.06; }
+  .expanded-feature-scene[data-visual-state="revealing"] .expanded-feature-visual > img,
+  .expanded-feature-scene[data-visual-state="complete"] .expanded-feature-visual > img { opacity: 1; transform: none; }
+  .expanded-feature-scene[data-visual-state="revealing"] .expanded-feature-cards article,
+  .expanded-feature-scene[data-visual-state="complete"] .expanded-feature-cards article { opacity: 1; transform: none; }
+
+  .friends-club-scene { display: grid; grid-template-columns: minmax(520px,.82fr) minmax(600px,1.18fr); align-items: center; gap: clamp(54px,6vw,118px); padding: 64px 8vw; overflow: hidden; }
+  .friends-club-copy h2 { max-width: 10ch; margin: 26px 0 28px; font-size: clamp(76px,6.7vw,130px); line-height: .82; letter-spacing: -.075em; }
+  .friends-club-copy > p { max-width: 28ch; color: rgba(255,255,255,.64); font-size: clamp(22px,1.55vw,30px); line-height: 1.18; }
+  .friends-club-copy small { display: block; margin-top: 12px; color: rgba(255,255,255,.52); font-size: 18px; }
+  .friends-club-qr { width: 190px; height: 190px; display: block; margin-top: 30px; padding: 12px; border-radius: 20px; background: #fff; opacity: 0; transform: translateY(22px) scale(.86); transition: opacity 500ms ease 700ms, transform 900ms var(--ease-cinematic) 700ms; }
+  .friends-club-qr :global(svg) { width: 100%; height: 100%; display: block; }
+  .friends-club-scene video { width: 100%; max-height: calc(100vh - 100px); border: 0; border-radius: 34px; background: #050507; box-shadow: 0 36px 100px rgba(0,0,0,.5); opacity: 0; transform: translateX(42px) scale(.92); transition: opacity 500ms ease, transform 1000ms var(--ease-cinematic); }
+  .friends-club-scene[data-visual-state="revealing"] video,
+  .friends-club-scene[data-visual-state="complete"] video,
+  .friends-club-scene[data-visual-state="revealing"] .friends-club-qr,
+  .friends-club-scene[data-visual-state="complete"] .friends-club-qr { opacity: 1; transform: none; }
 
   .desktop-scene { position: absolute; inset: 0; z-index: 12; background: #fff; }
   .desktop-scene iframe { width: 100%; height: 100%; display: block; border: 0; background: #fffaf4; }

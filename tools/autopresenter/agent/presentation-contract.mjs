@@ -28,6 +28,13 @@ export const CAT_KEYBOARD_ASSET = Object.freeze({
   license: "Unsplash License",
 });
 
+export const FRIENDS_CLUB_VIDEO_ASSET = Object.freeze({
+  url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/friends-club-darya-7cb34fb872eb528a4938f4e7af3cd8d2ebf1850246cb0cf9e2b44e7b17b05ac6.mp4",
+  sha256: "7cb34fb872eb528a4938f4e7af3cd8d2ebf1850246cb0cf9e2b44e7b17b05ac6",
+  source: "https://t.me/c/4337049383/803/871",
+  contentType: "video/mp4",
+});
+
 const lectureSources = [
   [821, "2f3c1b7d9a1c7094c77da009867c25a62cb233110185ab7a1a020b61356bdc26"],
   [822, "d85cadfd1dd4aad0c0e8f5fb68482624a1a4d617585fae9737fd430fac9513d1"],
@@ -50,6 +57,32 @@ export const LECTURE_SCENES = Object.freeze(
 );
 export const LECTURE_SCENE_IDS = Object.freeze(LECTURE_SCENES.map(({ id }) => id));
 export const LECTURE_ASSETS = LECTURE_SCENES;
+export const EXTRA_LECTURE_SCENE_IDS = Object.freeze([
+  "lecture-convenience-emergence",
+  "lecture-usability-measurement",
+]);
+export const MARKET_SCENE_IDS = Object.freeze([
+  "market-01-primary",
+  "market-02-substitutes",
+  "market-03-dynamics",
+  "market-04-position",
+]);
+export const EXPANDED_SERVICE_SCENE_IDS = Object.freeze([
+  "service-navigation-map",
+  "service-social-proof",
+  "service-artifacts-explained",
+  "service-artifact-desktop",
+  "service-laws",
+  "service-keyboard-concept",
+  "service-keyboard-day",
+  "service-keyboard-event",
+  "service-fast-find",
+  "service-share-friends",
+  "service-calendar-memory",
+  "service-community-curator",
+  "service-location-artifact",
+  "service-friends-club",
+]);
 
 export const SERVICE_SCENE_IDS = Object.freeze([
   "service-wordmark",
@@ -60,29 +93,38 @@ export const SERVICE_SCENE_IDS = Object.freeze([
   "service-joke",
   "service-search-concept",
   "service-search-live",
+  "service-personalization",
   "service-disruption",
   "service-taste",
   "service-feedback",
   FOCUS_INVITATION_SCENE_ID,
   "service-nps",
   "service-future-celebrity",
+  "service-transport-rail",
+  "service-transport-bus",
+  ...EXPANDED_SERVICE_SCENE_IDS,
 ]);
 
 export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
   ...LECTURE_SCENE_IDS,
+  ...EXTRA_LECTURE_SCENE_IDS,
+  ...MARKET_SCENE_IDS,
   "service-wordmark",
   "service-needs",
   "service-medallions",
   "service-joke",
   "service-search-concept",
+  "service-personalization",
   "service-disruption",
   "service-taste",
   "service-feedback",
+  "service-transport-bus",
+  ...EXPANDED_SERVICE_SCENE_IDS,
 ]);
 
 // Explicitly accepted scenes stay closed to incidental redesign during draft iterations.
 export const SCENE_ACCEPTANCE_CONTRACT = Object.freeze({
-  version: "2026-07-29.iteration-d",
+  version: "2026-07-29.iteration-e",
   frozen: Object.freeze([
     "tomorrow-mobile",
     "outro-qr",
