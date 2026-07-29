@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Raised the hosted focus-group email and OTP project limits to 200 per hour
+  for the planned cohort while retaining the 60-second per-address resend
+  guard. The six-digit code remains Supabase Auth's minimum supported length;
+  the one-tap email link is the primary path and the code is the fallback.
 - Focus-group onboarding now presents exactly one decision or form at a time:
   invitation/install, identity choice, email address, email code, and the
   explicit completion screen. A private owner acceptance URL clears only the
