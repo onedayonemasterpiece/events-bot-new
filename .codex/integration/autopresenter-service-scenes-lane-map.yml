@@ -104,4 +104,4 @@ lanes:
     expected_output: Clean committed branch, public feature branch update, existing Fly app deploy, fresh Windows ZIP, Telegram handoff, integration report.
     verification_scope: targeted_then_full_final
     effort: high
-    status: in_progress
+    status: completed
