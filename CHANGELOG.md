@@ -11,9 +11,12 @@
   discovery, per-source edition/claim review, reconciliation and adversarial
   verification, with deterministic stale-edition, unsupported-title and
   ticket-scope fail-closed gates. Its quota-aware default uses two independent
-  Antigravity researchers in fresh environments and a third Antigravity
-  adjudicator only for disagreements; deterministic gates use no provider
-  requests.
+  Antigravity contexts and a third adjudicator only for disagreements.
+  Live acceptance caught all three known grounding errors but showed that
+  repeating the full pipeline in every call is token-heavy (`150,950` tokens,
+  `0/3` completed), so the control call is now a bounded counter-evidence
+  collector and the optional adjudicator receives only a compact claim diff;
+  deterministic gates use no provider requests.
 - Registered the Antigravity managed-agent quota in the shared Google AI
   limiter (`54 RPM / 96000 TPM / 90 RPD` safe caps over the verified
   `60 / 100000 / 100` provider quota) and documented the first bounded

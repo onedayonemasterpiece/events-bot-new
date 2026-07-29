@@ -44,17 +44,20 @@ Antigravity discovery
 
 ## Quota-aware topology
 
-Для текущего объёма фестивальной очереди default — два независимых
-Antigravity-исследования и третий Antigravity-вызов только при расхождении:
+Для текущего объёма фестивальной очереди default — primary research и
+независимый узкий counter-evidence check; третий Antigravity-вызов нужен только
+при расхождении:
 
 ```text
 Call A — primary researcher, fresh environment
+  immediate state/source checkpoints
   staged discovery -> source ledger -> claims -> candidate A
 
 Call B — independent skeptic, another fresh environment
   тот же target/seed, но не получает candidate A
-  использует альтернативные запросы и пытается опровергнуть спорные поля
-  -> independent ledger -> candidate B
+  one search query, <= 4 pages
+  пытается опровергнуть только critical fields
+  -> counter-evidence ledger B, без второго полного candidate
 
 Local deterministic comparison
   quote/source/year/URL validation
@@ -62,8 +65,9 @@ Local deterministic comparison
 
 yes -> final result from supported intersection
 no  -> Call C — Antigravity adjudicator
-       получает validated A + B и cited source snapshots
-       не начинает новый широкий поиск
+       получает compact claim diff A/B и короткие exact quotes
+       не получает полный raw candidate/pages
+       не начинает новый поиск
        -> conflicts or evidence-backed final result
 ```
 
@@ -75,8 +79,13 @@ no  -> Call C — Antigravity adjudicator
   сутки, что выше текущего объёма фестивальной очереди;
 - Call B запускается в свежем environment и не видит вывод Call A, чтобы
   контроль не превратился в согласие с уже показанным ответом;
+- Call B не повторяет полный research/reconciliation: один узкий search query,
+  не более четырёх страниц, немедленный source checkpoint после каждой fetch;
 - Call C запускается только если A и B расходятся по critical fields,
   используют несовместимые выпуски/URL или один из них не проходит local gate;
+- Call C получает только conflict packet: target, спорные values, claim ids,
+  короткие exact quotes и cited URLs. Полные HTML/raw candidate в prompt
+  запрещены как token-amplification;
 - `status=incomplete` не создаёт автоматический четвёртый запрос: сначала
   скачивается workspace, затем результат либо проверяется, либо один из трёх
   слотов осознанно используется как replacement/adjudication;
@@ -85,9 +94,9 @@ no  -> Call C — Antigravity adjudicator
   бездумно запускать три длинных interaction одновременно, даже если RPD
   остаётся.
 
-Логические stage split и source-local jobs выполняются последовательно внутри
-каждого agent interaction с checkpoint-файлами в `/workspace`. Они не означают
-отдельный HTTP-вызов на каждую страницу.
+Полный logical stage split выполняет Call A. Calls B/C имеют отдельные
+одноцелевые contracts и checkpoint-файлы в `/workspace`; они не повторяют все
+стадии и не означают отдельный HTTP-вызов на каждую страницу.
 
 Семантика выпуска, типа страницы и тождества событий остаётся LLM-first.
 Детерминированные проверки не угадывают смысл страницы: они только запрещают
@@ -107,11 +116,11 @@ no  -> Call C — Antigravity adjudicator
 - При недостатке доказательств результат — `needs_review`, а не догадка.
 - Промежуточные и финальные файлы сохраняются под `/workspace/...`, не `/tmp`.
 
-## Stage 1. Discovery и source ledger — внутри Calls A/B
+## Stage 1. Discovery и source ledger — Call A
 
 На этой стадии запрещено составлять программу или итоговую карточку. Агент
 только находит ограниченный набор страниц и сохраняет наблюдаемые признаки.
-В полном Calls A/B этот блок является первым checkpoint, после которого тот же
+В полном Call A этот блок является первым checkpoint, после которого тот же
 interaction переходит к source-local stages 2–4. Отдельный ответ
 `ledger_saved` используется только в диагностическом `discovery_only` режиме.
 
@@ -393,10 +402,13 @@ ACCEPTED_CLAIMS:
 ### Call B: independent skeptic
 
 Call B получает тот же target и seed URLs, но не candidate/ledger Call A. Его
-prompt повторяет stages 1–4 с дополнительной ролью:
+prompt не повторяет stages 1–4 и не составляет второй полный candidate:
 
 ```text
 Ты независимый skeptical researcher. Проведи исследование в свежем контексте.
+Сначала создай /workspace/.../state.json. Сделай ровно один узкий search query,
+открой не более четырёх страниц и после каждой fetch немедленно сохрани source
+text. Не исследуй JavaScript/API ticket shell.
 Не предполагай, что наиболее подробная или высоко ранжируемая страница относится
 к target edition. Для каждого critical field ищи прямую цитату и пытайся найти:
 - страницу другого выпуска с похожим названием;
@@ -405,19 +417,20 @@ prompt повторяет stages 1–4 с дополнительной роль�
 - неподтверждённый порядковый номер или статус в названии.
 
 Не угадывай, какой результат получил другой исследователь: он тебе не дан.
-Сохраняй source ledger, reviews, claims и candidate под
+Сохраняй только sources и counter-evidence ledger под
 /workspace/festival_research_skeptic/.
 ```
 
-После локальной валидации A и B сравниваются по critical fields. Совпадением
-считается не похожий текст, а одинаковое нормализованное значение с валидными
-claims из accepted target-edition sources.
+После локальной валидации candidate A и counter-evidence B сравниваются по
+critical fields. Совпадением считается не похожий текст, а совместимое
+нормализованное значение с валидными claims из accepted target-edition sources.
 
 ### Call C: adjudicator
 
 Call C — третий Antigravity interaction. Он получает только локально
-валидированные A/B ledgers, candidates и cited source snapshots. Он запускается
-при конфликте или низком покрытии и не должен повторять широкий discovery.
+валидированный compact conflict packet A/B. Он запускается при конфликте или
+низком покрытии, не получает полные raw pages/candidates и не повторяет
+discovery.
 
 ### Prompt
 
@@ -430,11 +443,11 @@ conflict/unknown.
 TARGET:
 {{target_json}}
 RESULT_A:
-{{validated_result_a_json}}
-RESULT_B:
-{{validated_result_b_json}}
-CITED_SOURCE_SNAPSHOTS:
-{{source_snapshots_json}}
+{{critical_claims_a_json}}
+COUNTER_EVIDENCE_B:
+{{counter_evidence_b_json}}
+EXACT_QUOTE_PACKET:
+{{bounded_quote_packet_json}}
 
 Верни только JSON:
 {
@@ -458,9 +471,10 @@ CITED_SOURCE_SNAPSHOTS:
 6. несовместимые accepted values отражены как conflict;
 7. rejected/ambiguous sources не просочились через косвенный claim.
 
-Не начинай новый широкий поиск. Разрешено повторно открыть только cited URLs,
-если snapshot недостаточен для проверки конкретной цитаты. При неразрешённом
-critical conflict verdict=needs_review и resolved_candidate=null.
+Не используй Google Search. Разрешено повторно открыть не более двух cited URLs,
+если bounded quote packet недостаточен для проверки конкретной цитаты. При
+неразрешённом critical conflict verdict=needs_review и
+resolved_candidate=null.
 ```
 
 ## Stage 6. Deterministic final gate
@@ -560,3 +574,39 @@ leakage или ticket-role mismatch статус всегда `needs_review`; з
 
 Поэтому основное улучшение — внешняя проверяемая provenance-цепочка, а не
 добавление фразы «не выдумывай» в исходный монолитный prompt.
+
+## Live acceptance: independent check 2026-07-29
+
+Артефакт:
+`artifacts/codex/antigravity-double-check-20260729/evaluation_report.md`
+(не коммитится).
+
+Три последовательных interaction были проведены через shared limiter:
+
+| Call | Role | Status | Actual tokens | Google Search | Snapshot |
+|---|---|---:|---:|---:|---:|
+| A | full primary retry | `incomplete` | 78,948 | 4 | 4,096 B |
+| B | compact independent skeptic | `incomplete` | 27,198 | 1 | 42,496 B |
+| C | cited-source adjudicator | `incomplete` | 44,804 | 0 | 263,168 B |
+
+Итого: `150,950` actual tokens; `0/3` interaction вернули terminal output.
+Shared ledger дошёл до `4/90 RPD`, потому что до трёх agent runs один
+preflight request получил HTTP 400 из-за неподдерживаемого Gemini API поля
+`labels` уже после reservation.
+
+Несмотря на `incomplete`, ранние workspace checkpoints B/C сохранили
+достаточное evidence. Независимый local gate:
+
+1. удалил неподтверждённое `IX Международный`;
+2. исключил `sobor39.ru/.../3930/` из evidence 2026 из-за программы
+   `29–31 августа` и несовместимого состава против явной current program
+   `28–30 августа 2026`;
+3. заменил URL абонемента первого дня прямым single-event URL
+   `2026-08-28`, связанным с событием на current official page.
+
+Factual acceptance: `3/3` известных ошибок пойманы. Operational acceptance:
+**failed** — полный staged pipeline в каждом из 2+1 calls слишком тяжёл и не
+доживает до output при best-effort budget. Поэтому канонический runtime выше
+использует полный pipeline только в A, узкий counter-evidence collector в B и
+compact claim-diff adjudicator в C. Local renderer обязан уметь завершить
+результат из checkpoint evidence при `status=incomplete`.
