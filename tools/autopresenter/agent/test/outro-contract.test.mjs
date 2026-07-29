@@ -56,7 +56,7 @@ test("records and implements the premium fullscreen visual acceptance", () => {
   assert.match(stageSource, />Как вам\?</u);
   assert.match(stageSource, /Оцените событие — это займёт минуту\./u);
   assert.match(stageSource, /@keyframes outro-qr-enter/u);
-  assert.match(stageSource, /opacity: 0;[\s\S]*scale\(\.82\)/u);
-  assert.match(stageSource, /animation: outro-qr-enter 940ms cubic-bezier/u);
+  assert.match(stageSource, /opacity: 0;[\s\S]*scale\(\.84\)/u);
+  assert.match(stageSource, /animation: outro-qr-enter 900ms var\(--ease-cinematic\)/u);
   assert.match(stageSource, /@media \(prefers-reduced-motion: reduce\)/u);
 });

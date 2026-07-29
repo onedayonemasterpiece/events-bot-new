@@ -3,23 +3,23 @@ export const PACING = Object.freeze({
   verticalVelocityPxPerSecond: 850,
   verticalMinDurationMs: 650,
   verticalMaxDurationMs: 2_600,
-  verticalSampleMs: 80,
+  verticalSampleMs: 55,
   verticalFinalCorrectionPx: 120,
   settleSampleMs: 50,
   settleStableSamples: 3,
   settleMaxMs: 1_200,
   tapLeadMs: 360,
-  routeDwellMs: 650,
-  railSteps: 18,
-  railStepMs: 34,
+  routeDwellMs: 1_100,
+  railSteps: 24,
+  railStepMs: 45,
 });
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
-function smoothstep(progress) {
-  return progress * progress * (3 - 2 * progress);
+function smootherstep(progress) {
+  return progress * progress * progress * (progress * (progress * 6 - 15) + 10);
 }
 
 export function buildVerticalWheelTrajectory(
@@ -52,7 +52,7 @@ export function buildVerticalWheelTrajectory(
 
   for (let index = 1; index <= sampleCount; index += 1) {
     const progress = index / sampleCount;
-    const cumulative = index === sampleCount ? distance : distance * smoothstep(progress);
+    const cumulative = index === sampleCount ? distance : distance * smootherstep(progress);
     const atMs = index === sampleCount ? durationMs : durationMs * progress;
     steps.push(
       Object.freeze({

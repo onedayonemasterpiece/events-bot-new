@@ -40,12 +40,14 @@ test("accepted scene implementations cannot change incidentally during draft ite
     );
   }
 
-  const outroStart = stage.lastIndexOf("<section", stage.indexOf('class="outro-scene'));
-  const outroEnd = stage.indexOf("</section>", outroStart) + "</section>".length;
-  assert.ok(outroStart >= 0 && outroEnd > outroStart);
-  assert.equal(
-    digest(stage.slice(outroStart, outroEnd)),
-    expected["outro-qr-stage"],
-    "accepted outro composition changed without explicitly reopening its acceptance",
-  );
+  if (SCENE_ACCEPTANCE_CONTRACT.frozen.includes("outro-qr")) {
+    const outroStart = stage.lastIndexOf("<section", stage.indexOf('class="outro-scene'));
+    const outroEnd = stage.indexOf("</section>", outroStart) + "</section>".length;
+    assert.ok(outroStart >= 0 && outroEnd > outroStart);
+    assert.equal(
+      digest(stage.slice(outroStart, outroEnd)),
+      expected["outro-qr-stage"],
+      "accepted outro composition changed without explicitly reopening its acceptance",
+    );
+  }
 });

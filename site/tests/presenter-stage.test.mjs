@@ -32,7 +32,8 @@ test('intro follows the Hero Talk semantic-fragment reveal and keeps two explici
   assert.match(source, /node\.append\(document\.createTextNode\(' '\)\)/u);
   assert.match(source, /requestAnimationFrame\(\(\) => requestAnimationFrame\(resolve\)\)/u);
   assert.match(source, /fragment\.classList\.add\('is-active'\)/u);
-  assert.match(source, /265 \+ \(index % 2\) \* 35/u);
+  assert.match(source, /seededUnit/u);
+  assert.match(source, /cadence = 190/u);
   assert.match(source, /const route = \[\.\.\.pickRoute\(\)\]/u);
   assert.match(source, /return \['Вот-вот', 'начинаем'\]/u);
   assert.match(source, /aria-live="off"/u);
@@ -63,7 +64,7 @@ test('lecture is seven independently held frames with varied layouts and transpa
   assert.doesNotMatch(source, /slideIntervalMs/u);
   assert.match(source, /\.lecture-visual \{[\s\S]*border: 0; border-radius: 0; background: transparent; box-shadow: none;/u);
   assert.match(source, /\.lecture-slide\[data-lecture-index="6"\][\s\S]*minmax\(50vw/u);
-  assert.match(source, /@keyframes lecture-image-enter \{[\s\S]*scale\(\.9\)[\s\S]*scale\(1\)/u);
+  assert.match(source, /@keyframes lecture-image-enter \{[\s\S]*scale\(\.88\)[\s\S]*scale\(1\.025\)/u);
 });
 
 test('desktop weekend scene presents meaning first and then reveals the clean FHD site', () => {
@@ -92,7 +93,7 @@ test('outro remains the accepted restrained fullscreen QR scene', () => {
   assert.match(outroMarkup, /data-presenter-id="outro-qr-image"/u);
   assert.doesNotMatch(outroMarkup, /phone-shell|stage-status|dashboard|instruction/iu);
   assert.match(source, /width="1155"\s+height="1155"/u);
-  assert.match(source, /@keyframes outro-qr-enter \{[\s\S]*scale\(\.82\)[\s\S]*opacity: 1/u);
+  assert.match(source, /@keyframes outro-qr-enter \{[\s\S]*scale\(\.84\)[\s\S]*opacity: 1/u);
 });
 
 test('all presentation media are immutable Yandex CDN assets and reduced motion is safe', () => {
@@ -116,18 +117,25 @@ test('service presentation uses the requested focus preview and explicit input-d
   assert.match(source, /class="wordmark-vector" src=\{announcementsWordmarkUrl\}/u);
   assert.match(source, /class="wordmark-o-glyph"/u);
   assert.match(source, /transform: scaleX\(3\.25\)/u);
-  assert.match(source, /otkrytie-festivalya-bahosluzhenie[\s\S]*-6153\//u);
+  assert.match(source, /triatlon-pokoleniy-kaliningrad-6865\//u);
   assert.match(source, /typeInto\(first, 'Максим, самое время для шутки'/u);
   assert.match(source, /pause\(7000, token\)/u);
   assert.match(source, /мой электронный мозг не создан для шуток/u);
   assert.match(source, /jokeAudio\.play\(\)/u);
   assert.match(source, /errorAudio\.play\(\)/u);
   assert.match(source, /reference4-v8\/search-thin\.svg/u);
-  assert.match(source, /reference4-v8\/share-network-thin\.svg/u);
+  assert.match(source, /<Icon name="share" className="need-icon need-icon--share"/u);
+  assert.doesNotMatch(source, /share-network-thin/u);
   assert.match(source, /const medallions = \[[\s\S]*world-ocean-museum[\s\S]*mumod/u);
   assert.match(source, /data-medallion-state="idle"/u);
   assert.match(source, /createFocusInviteQrSvg\(focusInvitationUrl\)/u);
   assert.match(source, /focusNpsUrl = `\$\{focusPreviewBase\}\/segodnya\/`/u);
   assert.match(source, /Татьяна Удовенко[\s\S]*Андрей Бойко[\s\S]*Светлана Соколова/u);
   assert.match(source, /data-focus-phase="meaning"/u);
+  assert.match(source, /@font-face \{ font-family: "Cygre"/u);
+  assert.match(source, /\/brand\/announcements-o-expanded\.svg/u);
+  assert.match(source, /04 · Медальоны/u);
+  assert.match(source, /<h2>Умный поиск\.<\/h2>/u);
+  assert.match(source, /Присоединяйтесь<br \/>к фокус-группе\./u);
+  assert.match(source, /startErrorCue/u);
 });

@@ -47,11 +47,12 @@ portable release:
   `START-DEMONSTRATOR.cmd`;
 - the bootstrap is non-interactive, treats per-console QuickEdit setup as
   best-effort, and forces the browser into fullscreen;
-- the stage supports a larger mobile phone, strong fullscreen intro/lecture/
-  service/outro typography, and a two-phase FHD Weekend desktop page; mobile
+- the stage ships Cygre 400/600/800, exact SVG-derived stretched «о» ornaments,
+  stronger cinematic image motion, a larger mobile phone and strong fullscreen
+  intro/lecture/service/outro typography, and a two-phase FHD Weekend desktop page; mobile
   actions use tap/swipe affordances;
-- scenario pacing uses visible natural scroll/drag motion, readiness checks and
-  bounded dwell instead of instant component jumps;
+- scenario pacing uses visible smootherstep scroll/drag motion, readiness checks,
+  per-phase relay status and bounded audience dwell instead of instant jumps;
 - real mobile date menus remain open for 2.2 seconds before the selected item
   is tapped, and the PWA right-hand ↑/↓ strip can nudge the visible page without
   stopping the active scenario;

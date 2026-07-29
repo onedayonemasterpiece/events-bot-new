@@ -79,10 +79,12 @@ live-вставки, принятые mobile journeys, двухфазный Week
 
 Согласованные сцены замораживаются в `SCENE_ACCEPTANCE_CONTRACT`. Черновая
 итерация проверяет только новые и адресно переоткрытые сцены; полный regression
-выполняется один раз перед финальным handoff. Замороженным остаётся
-`outro-qr`. Сцены `tomorrow-mobile`, `tomorrow-rail-like` и
-`weekend-amber-artifact` адресно переоткрыты замечаниями 29.07 и обновлены под
-текущую разметку; после owner acceptance они получают новый freeze.
+выполняется один раз перед финальным handoff. В итерации C фон outro адресно
+переоткрывался требованием заменить круг точной фирменной «о». Сцены
+`tomorrow-mobile`, `tomorrow-rail-like`, `weekend-amber-artifact` и `outro-qr`
+обновлены по замечаниям 29.07 и снова заморожены новыми hashes. Intro, лекция,
+PWA и остальные явно перечисленные сервисные сцены остаются открытыми до
+owner acceptance.
 
 PWA содержит отдельные кнопки для каждой лекционной и сервисной сцены,
 sticky elapsed/countdown timer, стабильный status shelf, время начала intro и
@@ -113,9 +115,9 @@ Smart Search считается успешным только после вид�
 «Помогла ли вам эта страница?» с 11 оценками 0–10. Это называется **оценкой
 страницы**, а не relationship NPS. Сцена «Люди» использует проверенные данные
 Татьяны Удовенко, Андрея Бойко и Светланы Соколовой, затем показывает
-настоящий `EventParticipants` lab UI и реальный pressed-like; event relations в
-immutable focus export пока отсутствуют, поэтому это owner-test preview, не
-утверждение о production event page.
+настоящий `EventParticipants` lab UI внутри той же immutable focus-сборки и
+реальный pressed-like; event relations пока отсутствуют, поэтому сцена явно
+помечена как owner-test preview, не утверждение о production event page.
 
 Narration шутки и CC0 error sting лежат content-addressed на существующем
 Yandex CDN. Provenance и повторяемый процесс закреплены в project skill

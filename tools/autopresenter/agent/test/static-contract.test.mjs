@@ -125,15 +125,15 @@ test("pacing contract is bounded, sampled, and typical duration is explicit", ()
     verticalVelocityPxPerSecond: 850,
     verticalMinDurationMs: 650,
     verticalMaxDurationMs: 2_600,
-    verticalSampleMs: 80,
+    verticalSampleMs: 55,
     verticalFinalCorrectionPx: 120,
     settleSampleMs: 50,
     settleStableSamples: 3,
     settleMaxMs: 1_200,
     tapLeadMs: 360,
-    routeDwellMs: 650,
-    railSteps: 18,
-    railStepMs: 34,
+    routeDwellMs: 1_100,
+    railSteps: 24,
+    railStepMs: 45,
   });
   assert.match(source, /buildVerticalWheelTrajectory\(geometry\.deltaY\)/u);
   assert.match(source, /await this\.page\.mouse\.wheel\(0, step\.deltaY\)/u);
@@ -254,6 +254,8 @@ test("intro, held lecture and desktop scenes use pinned assets and real FHD scro
   assert.match(source, /focus invitation QR SVG is missing/u);
   assert.match(source, /await this\.naturalVerticalScroll\(frame, inlineMedallions, signal, frameSelector\)/u);
   assert.match(source, /desktop example has no enabled top medallion slot/u);
+  assert.match(source, /tokenCount >= \(mode === "desktop" \? 2 : 1\)/u);
+  assert.match(source, /supplied focus-preview event 6865/u);
   assert.match(source, /ratio >= 1\.45/u);
   assert.match(source, /async runWeekendDesktop\(signal\)/u);
   assert.match(source, /setInteractionMode\("desktop-passive"\)/u);

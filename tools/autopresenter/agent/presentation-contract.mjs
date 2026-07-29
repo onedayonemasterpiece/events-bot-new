@@ -8,7 +8,7 @@ export const FOCUS_PREVIEW_BASE_URL =
 export const FOCUS_INVITATION_URL =
   `${FOCUS_PREVIEW_BASE_URL}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
 export const FOCUS_INVITATION_SCENE_ID = "service-focus-group";
-export const FOCUS_NPS_URL = `${FOCUS_PREVIEW_BASE_URL}/segodnya/`;
+export const FOCUS_PAGE_RATING_URL = `${FOCUS_PREVIEW_BASE_URL}/segodnya/`;
 
 export const ZNANIE_LOGO_ASSET = Object.freeze({
   url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg",
@@ -74,23 +74,25 @@ export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
 
 // Explicitly accepted scenes stay closed to incidental redesign during draft iterations.
 export const SCENE_ACCEPTANCE_CONTRACT = Object.freeze({
-  version: "2026-07-29.telegram-850",
-  frozen: Object.freeze(["outro-qr"]),
+  version: "2026-07-29.iteration-c",
+  frozen: Object.freeze([
+    "tomorrow-mobile",
+    "tomorrow-rail-like",
+    "weekend-amber-artifact",
+    "outro-qr",
+  ]),
   sourceSha256: Object.freeze({
     "tomorrow-mobile": "c4c6c6845fd129ef8701e34c8463e05570a5b3e7e110e1b12994704d7e03e776",
-    "tomorrow-rail-like": "9c989b823a8a9967dddd4dcd634ec8cc8610f5ba841ab9633ccde0c500e8dba1",
-    "weekend-amber-artifact": "bbc133dda3526fd9ecb790a537776e1a400a1f82100f775645681d6b48691465",
+    "tomorrow-rail-like": "a74cd05d72f5de9204a8e53ab50996fb3100e7ceb167df6a43e1ae10d353f3d7",
+    "weekend-amber-artifact": "5c1904c1ebdac2fd99e4f6f7072a6b6443f1339077dae7d4bf68de5f3c1bb5f0",
     "outro-qr": "625cc68566bb112c809d14873d4a446b8fb7cd250a6a769467944a6f2a44ad55",
     "outro-qr-stage": "7f9cdd99fb2cb1c2c8d581d9e9b1f2c7efac83b4a9e6bc1bcfaef75652478c31",
   }),
   reopened: Object.freeze({
     "intro-loop": "Hero Talk behavior and timer feedback",
     lecture: "Telegram 843–849: seven held scenes, varied layouts and themes",
-    "tomorrow-mobile": "Telegram 803/2026-07-29: current-preview menu/selectors and pacing regression",
-    "tomorrow-rail-like": "Telegram 803/2026-07-29: current event contract and missing rail gesture",
-    "weekend-amber-artifact": "Telegram 803/2026-07-29: artifact actions absent after Weekend transition",
     "weekend-desktop": "Telegram 850: meaning-first then live site",
-    pwa: "Telegram 840/844: stable shelf and sticky timer",
+    pwa: "Telegram 840/844 and base: stable shelf, sticky timer, long PWA name and rating terminology",
   }),
   draftVerification: "targeted-new-or-reopened-scenes-only",
   finalVerification: "one-full-regression-gate",

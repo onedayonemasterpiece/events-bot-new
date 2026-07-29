@@ -3,6 +3,21 @@
 ## [Unreleased]
 
 ### Fixed
+- Reworked the Autopresenter review iteration without adding infrastructure:
+  the stage now ships Cygre 400/600/800, uses the exact SVG-derived stretched
+  «о» instead of generic rings, applies stronger cinematic entrances and
+  varied faster typing, fixes service icon glyphs/search/QR hierarchy, and
+  moves each real medallion from the grid centre into its 4×4 slot.
+- Made the artifact and rail-like journeys audience-visible with smoother,
+  slower horizontal gestures, result dwell and per-phase control status;
+  restored the desktop top-slot/two-medallion contract while using supplied
+  event `6865` for mobile, asserted the 1–2 August Weekend range, and kept the
+  sole artifact preview exception explicit.
+- Corrected owner-control terminology and stability: the PWA long name is
+  «Пульт презентации» (`Пульт` short), the status pill has reserved geometry,
+  page usefulness is no longer mislabeled NPS, people UI is served from the
+  pinned focus build with a visible preview notice, and error-audio progress is
+  now asserted.
 - Kept Fly owner-test builds reproducible from linked worktrees by excluding
   symlinked `site/node_modules` and agent dependency caches from the dedicated
   Autopresenter Docker context.

@@ -28,7 +28,7 @@ import {
   FOCUS_PREVIEW_BASE_URL,
   FOCUS_INVITATION_SCENE_ID,
   FOCUS_INVITATION_URL,
-  FOCUS_NPS_URL,
+  FOCUS_PAGE_RATING_URL,
   LECTURE_SCENES,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
@@ -932,6 +932,22 @@ class PrototypeAgent {
         signal,
       );
     }
+    if (scenarioId === "service-disruption") {
+      await raceWithAbort(
+        this.page.waitForFunction(
+          (sceneSelector) => {
+            const scene = document.querySelector(sceneSelector);
+            const audio = scene?.querySelector('[data-presenter-id="error-audio"]');
+            return scene?.getAttribute("data-error-audio") === "complete"
+              && audio instanceof HTMLAudioElement
+              && audio.currentTime > 0;
+          },
+          selector,
+          { timeout: 10_000 },
+        ),
+        signal,
+      );
+    }
     await abortableDelay(scenarioId === "service-wordmark" ? 3_600 : 900, signal);
     await this.captureScenario(scenarioId);
     return {
@@ -1015,11 +1031,16 @@ class PrototypeAgent {
     } else {
       await medallions.scrollIntoViewIfNeeded();
     }
-    assertCondition(tokenCount >= 2, `${mode} example exposes only ${tokenCount} medallion`);
+    assertCondition(
+      tokenCount >= (mode === "desktop" ? 2 : 1),
+      `${mode} example exposes only ${tokenCount} medallion`,
+    );
     await abortableDelay(1_400, signal);
     await this.captureScenario(scenarioId);
     return {
-      summary: `real focus-preview event page shows medallions in ${mode} composition`,
+      summary: mode === "desktop"
+        ? `focus-preview desktop specimen shows top slot and ${tokenCount} real medallions`
+        : `supplied focus-preview event 6865 shows ${tokenCount} real medallion in mobile composition`,
       durationMs: Date.now() - startedAt,
     };
   }
@@ -1085,7 +1106,7 @@ class PrototypeAgent {
     const frame = await this.focusFrame(selector, signal);
     await this.activateFocusParticipation(frame, signal);
     await raceWithAbort(
-      frame.goto(FOCUS_NPS_URL, { waitUntil: "domcontentloaded", timeout: 30_000 }),
+      frame.goto(FOCUS_PAGE_RATING_URL, { waitUntil: "domcontentloaded", timeout: 30_000 }),
       signal,
     );
     const panel = frame.locator("[data-focus-lab-panel]:not([hidden])");
@@ -1206,6 +1227,11 @@ class PrototypeAgent {
     const frame = this.page.frameLocator(DESKTOP_FRAME_SELECTOR);
     const weekend = frame.locator(WEEKEND_DESKTOP_ROOT_SELECTOR);
     await raceWithAbort(weekend.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    assertCondition(
+      (await weekend.getAttribute("data-weekend-start")) === "2026-08-01"
+        && (await weekend.getAttribute("data-weekend-end")) === "2026-08-02",
+      "weekend desktop page does not show the current 1–2 August 2026 range",
+    );
     await this.waitForEmbeddedReady(frame, signal);
     const iframeHandle = await iframe.elementHandle();
     const desktopContentFrame = await iframeHandle?.contentFrame();
@@ -1366,6 +1392,7 @@ class PrototypeAgent {
     await this.assertEventNotPreLiked(frame, row, contract.eventId);
     await this.naturalVerticalScroll(frame, row, signal);
     log("like scenario target framed", { eventId: contract.eventId });
+    await this.setAgentState("running", "04.2 · карточка события в кадре");
 
     const rail = row.locator(MOBILE_EVENT_RAIL_SELECTOR);
     const like = row.locator('[data-feedback-action="like"]');
@@ -1379,9 +1406,13 @@ class PrototypeAgent {
       `event ${contract.eventId} rail did not settle at maxScroll: ${JSON.stringify(atEnd)}`,
     );
     log("like scenario rail reached edge", { eventId: contract.eventId, ...atEnd });
+    await this.setAgentState("running", "04.2 · rail у правого края, показываем состояние");
+    await abortableDelay(1_200, signal);
 
     await this.pullLikeEdgeAndAssertArmed(frame, rail, signal);
     log("like scenario edge pull released", { eventId: contract.eventId });
+    await this.setAgentState("running", "04.2 · дополнительная протяжка поставила лайк");
+    await abortableDelay(900, signal);
     const consent = frame.locator("[data-personalization-consent].is-visible");
     const consentAccept = consent.locator("[data-personalization-consent-accept]");
     const consentRequired = await this.waitForEitherPressedOrConsent(
@@ -1434,6 +1465,7 @@ class PrototypeAgent {
 
     await this.waitForLikePersistenceStorage(frame, contract.eventId, signal);
     log("like scenario storage committed", { eventId: contract.eventId });
+    await abortableDelay(1_800, signal);
 
     await this.reloadEmbeddedFrame(signal);
     await this.waitForEmbeddedPath("/zavtra/", signal);
@@ -1446,6 +1478,7 @@ class PrototypeAgent {
     const reloadedLike = reloadedRow.locator('[data-feedback-action="like"]');
     await this.waitForLikeState(reloadedRow, reloadedLike, true, signal);
     log("like scenario UI state pressed after reload", { eventId: contract.eventId });
+    await this.setAgentState("running", "04.2 · лайк сохранён и подтверждён после reload");
     const afterCount = await this.waitForStableLikeCount(
       reloadedLike,
       beforeCount + 1,
@@ -1479,6 +1512,7 @@ class PrototypeAgent {
       signal,
     );
     await this.waitForEmbeddedReady(frame, signal);
+    await this.setAgentState("running", "03.3 · открываем меню и раздел «Выходные»");
 
     const menuSummary = frame.locator(WEEKEND_MENU_SUMMARY_SELECTOR);
     await raceWithAbort(menuSummary.waitFor({ state: "visible", timeout: 10_000 }), signal);
@@ -1507,8 +1541,11 @@ class PrototypeAgent {
     );
     const artifact = row.locator(ARTIFACT_SELECTOR);
     await raceWithAbort(row.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    await this.setAgentState("running", "03.3 · событие найдено, подводим карточку естественным скроллом");
     await this.naturalVerticalScroll(frame, row, signal);
+    await this.setAgentState("running", "03.3 · сдвигаем rail карточки к артефакту");
     await this.revealRailLocatorWithRealDrags(frame, row.locator(".rail-window"), artifact, signal);
+    await this.setAgentState("running", "03.3 · артефакт виден, собираем");
     await this.armArtifactEventProbe(frame);
     const beforeUrl = await this.embeddedUrl();
     await abortableDelay(PACING.routeDwellMs, signal);
@@ -1517,7 +1554,11 @@ class PrototypeAgent {
     const firstUrl = await this.embeddedUrl();
     assertCondition(firstUrl === beforeUrl, `first artifact tap changed URL: ${beforeUrl} → ${firstUrl}`);
     await this.assertArtifactCollected(frame, artifact, marker);
+    log("artifact collected and held for the audience", { eventId: marker });
+    await this.setAgentState("running", "03.3 · артефакт собран, показываем результат");
+    await abortableDelay(1_800, signal);
 
+    await this.setAgentState("running", "03.3 · проверяем сохранение после перезагрузки");
     await this.reloadEmbeddedFrame(signal);
     await this.waitForEmbeddedPath("/vyhodnye/", signal);
     await this.waitForEmbeddedReady(frame, signal);
@@ -1543,6 +1584,7 @@ class PrototypeAgent {
     await this.waitForEmbeddedReady(frame, signal);
     const dialog = frame.locator("[data-artifact-dialog]");
     await raceWithAbort(dialog.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await this.setAgentState("running", "03.3 · коллекция открыта, найден 1 артефакт");
     const foundCount = (await frame.locator("[data-artifact-found-count]").textContent())?.trim();
     assertCondition(foundCount === "1", `artifact collection found count is ${JSON.stringify(foundCount)}`);
     assertCondition(
@@ -1875,7 +1917,7 @@ class PrototypeAgent {
           { transform: "translateX(0)", opacity: 1, offset: .18 },
           { transform: "translateX(16px)", opacity: 1 },
         ],
-        { duration: 1_050, easing: "cubic-bezier(.22,.8,.24,1)", fill: "forwards" },
+        { duration: 1_650, easing: "cubic-bezier(.83,0,.17,1)", fill: "forwards" },
       );
       animation.finished.finally(() => trail.remove());
     }, { label, direction });
@@ -1906,9 +1948,10 @@ class PrototypeAgent {
       for (let step = 1; step <= PACING.railSteps; step += 1) {
         assertNotAborted(signal);
         const progress = step / PACING.railSteps;
+        const eased = progress * progress * progress * (progress * (progress * 6 - 15) + 10);
         await this.page.mouse.move(
-          Math.round(start.x + (end.x - start.x) * progress),
-          Math.round(start.y + (end.y - start.y) * progress),
+          Math.round(start.x + (end.x - start.x) * eased),
+          Math.round(start.y + (end.y - start.y) * eased),
         );
         await abortableDelay(PACING.railStepMs, signal);
       }
@@ -1967,15 +2010,17 @@ class PrototypeAgent {
     await raceWithAbort(target.waitFor({ state: "attached", timeout: 10_000 }), signal);
     let previous = -1;
     for (let attempt = 0; attempt < 7; attempt += 1) {
-      if (await this.isHorizontallyRevealed(target)) return;
+      if (attempt > 0 && await this.isHorizontallyRevealed(target)) return;
       const geometry = await this.railGeometry(rail);
+      assertCondition(geometry.maxScroll > 0, `artifact rail has no horizontal movement: ${JSON.stringify(geometry)}`);
       assertCondition(
         geometry.scrollLeft > previous + .5 || previous < 0,
         `rail drag made no progress: ${JSON.stringify(geometry)}`,
       );
       previous = geometry.scrollLeft;
-      await this.swipeRailLeft(frame, rail, signal, "Ищем находку у края");
+      await this.swipeRailLeft(frame, rail, signal, attempt === 0 ? "Сдвигаем карточку — ищем артефакт" : "Ищем находку у края");
       await this.waitForScrollSettle(rail, signal, "horizontal");
+      await abortableDelay(1_100, signal);
     }
     throw new Error(`artifact did not become visible through real rail drags: ${JSON.stringify(await this.railGeometry(rail))}`);
   }
