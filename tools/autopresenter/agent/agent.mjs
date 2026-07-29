@@ -7,14 +7,26 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import {
+  TOMORROW_MOBILE_CONTRACT,
+  selectDeterministicMobileEvent,
+} from "./scenario-contract.mjs";
 
-const SCENARIO = "tomorrow-mobile";
+const SCENARIO = TOMORROW_MOBILE_CONTRACT.id;
 const VIEWPORT = Object.freeze({ width: 1920, height: 1080 });
 const FRAME_SELECTOR = '#presenter-mobile-frame[data-presenter-id="mobile-site-frame"]';
 const STAGE_READY_SELECTOR =
   '[data-presenter-id="presenter-stage"][data-presenter-stage-ready="true"]';
 const TARGET_SELECTOR = '[data-presenter-id="nav-tomorrow"]';
 const DESTINATION_SELECTOR = '[data-presenter-id="tomorrow-page-ready"]';
+const MOBILE_EVENT_SELECTOR =
+  '[data-mobile-v23-page="tomorrow"] [data-mobile-listing-row][data-event-id]';
+const MOBILE_EVENT_RAIL_SELECTOR = ".rail-window";
+const MOBILE_EVENT_DESCRIPTION_SELECTOR = '.event-digest[aria-label="О событии"]';
+const MOBILE_DETAIL_SELECTOR = "[data-mobile-event-production]";
+const MOBILE_DETAIL_DESCRIPTION_SELECTOR =
+  "[data-mobile-event-production] .mobile-event-production__prose";
+const DESCRIPTION_DWELL_MS = 2_200;
 
 const config = Object.freeze({
   relayUrl: (process.env.AUTOPRESENTER_RELAY_URL || "http://127.0.0.1:8787").replace(/\/$/, ""),
@@ -173,6 +185,84 @@ class PrototypeAgent {
 
     await this.page.addInitScript(() => {
       if (window !== window.top) return;
+      const keyLabels = new Map([
+        ["Space", "Space"],
+        ["ArrowLeft", "←"],
+        ["ArrowRight", "→"],
+        ["ArrowUp", "↑"],
+        ["ArrowDown", "↓"],
+        ["Escape", "Esc"],
+      ]);
+      const pressedKeys = new Map();
+
+      const desktopOverlay = () => {
+        if (document.documentElement.dataset.presenterInteractionMode !== "desktop") return null;
+        let overlay = document.querySelector("[data-autopresenter-keyboard]");
+        if (overlay) return overlay;
+        overlay = document.createElement("aside");
+        overlay.dataset.autopresenterKeyboard = "true";
+        overlay.setAttribute("aria-live", "polite");
+        Object.assign(overlay.style, {
+          position: "fixed",
+          zIndex: "2147483647",
+          right: "32px",
+          bottom: "32px",
+          minWidth: "220px",
+          padding: "16px",
+          border: "1px solid rgba(255,255,255,.28)",
+          borderRadius: "18px",
+          background: "rgba(17,24,39,.9)",
+          boxShadow: "0 18px 48px rgba(0,0,0,.34)",
+          color: "#fff",
+          font: "700 16px/1.25 Inter,system-ui,sans-serif",
+          pointerEvents: "none",
+        });
+        overlay.innerHTML =
+          '<div data-autopresenter-pressed-keys></div><div data-autopresenter-ui-response style="margin-top:8px;color:#7de6c2;font-size:13px">Интерфейс готов</div>';
+        document.body.append(overlay);
+        return overlay;
+      };
+
+      const renderPressedKeys = () => {
+        const overlay = desktopOverlay();
+        if (!overlay) return;
+        const host = overlay.querySelector("[data-autopresenter-pressed-keys]");
+        host.replaceChildren(
+          ...[...pressedKeys.values()].map((label) => {
+            const key = document.createElement("kbd");
+            key.dataset.autopresenterKeyPressed = "true";
+            key.textContent = label;
+            Object.assign(key.style, {
+              display: "inline-grid",
+              minWidth: "44px",
+              minHeight: "40px",
+              marginRight: "8px",
+              padding: "0 10px",
+              placeItems: "center",
+              border: "1px solid rgba(255,255,255,.46)",
+              borderRadius: "10px",
+              background: "rgba(255,255,255,.15)",
+              boxShadow: "inset 0 -3px rgba(0,0,0,.25)",
+            });
+            return key;
+          }),
+        );
+      };
+
+      const renderDesktopResponse = (label) => {
+        const overlay = desktopOverlay();
+        const response = overlay?.querySelector("[data-autopresenter-ui-response]");
+        if (!response) return;
+        response.textContent = label || "Интерфейс ответил";
+        response.dataset.autopresenterUiResponded = "true";
+      };
+      window.addEventListener("presenter:desktop-ui-response", (event) => {
+        renderDesktopResponse(event.detail?.label);
+      });
+      window.addEventListener("presenter:status", (event) => {
+        renderDesktopResponse(event.detail?.detail || event.detail?.status);
+      });
+
       window.addEventListener(
         "keydown",
         (event) => {
@@ -194,6 +284,23 @@ class PrototypeAgent {
         },
         { capture: true },
       );
+      window.addEventListener(
+        "keydown",
+        (event) => {
+          if (document.documentElement.dataset.presenterInteractionMode !== "desktop") return;
+          pressedKeys.set(event.code, keyLabels.get(event.code) || event.key);
+          renderPressedKeys();
+        },
+        { capture: true },
+      );
+      window.addEventListener(
+        "keyup",
+        (event) => {
+          if (!pressedKeys.delete(event.code)) return;
+          renderPressedKeys();
+        },
+        { capture: true },
+      );
     });
 
     await this.openStage(this.page);
@@ -204,6 +311,7 @@ class PrototypeAgent {
     await page.goto(config.stageUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.locator(STAGE_READY_SELECTOR).waitFor({ state: "visible", timeout: 30_000 });
     await page.locator(FRAME_SELECTOR).waitFor({ state: "visible", timeout: 30_000 });
+    await this.setInteractionMode(TOMORROW_MOBILE_CONTRACT.surface);
     if (!config.headless && config.fullscreen) {
       const isFullscreen = await page.evaluate(() => Boolean(document.fullscreenElement));
       if (!isFullscreen) {
@@ -213,6 +321,35 @@ class PrototypeAgent {
           .catch(() => log("browser denied automatic fullscreen; use local F"));
       }
     }
+  }
+
+  async setInteractionMode(mode) {
+    await this.page.evaluate((nextMode) => {
+      document.documentElement.dataset.presenterInteractionMode = nextMode;
+      document.querySelector("[data-autopresenter-keyboard]")?.remove();
+      let shield = document.querySelector("[data-autopresenter-mobile-pointer-shield]");
+      if (nextMode !== "mobile") {
+        shield?.remove();
+        return;
+      }
+      if (!shield) {
+        shield = document.createElement("style");
+        shield.dataset.autopresenterMobilePointerShield = "true";
+        shield.textContent = "*,*::before,*::after{cursor:none!important}";
+        document.head.append(shield);
+      }
+    }, mode);
+  }
+
+  async enforceMobilePointerShield(frame) {
+    await frame.locator("head").evaluate((head) => {
+      let shield = document.querySelector("[data-autopresenter-mobile-pointer-shield]");
+      if (shield) return;
+      shield = document.createElement("style");
+      shield.dataset.autopresenterMobilePointerShield = "true";
+      shield.textContent = "*,*::before,*::after{cursor:none!important}";
+      head.append(shield);
+    });
   }
 
   async pollLoop() {
@@ -289,9 +426,12 @@ class PrototypeAgent {
     if (remote) await this.ack(command, "running", SCENARIO);
 
     const runPromise = this.runTomorrowMobile(this.runController.signal)
-      .then(async () => {
-        await this.setAgentState("completed", `${SCENARIO}: /zavtra/ ready`);
-        if (remote) await this.ack(command, "completed", `${SCENARIO}: /zavtra/ ready`);
+      .then(async (evidence) => {
+        const detail =
+          `${SCENARIO}: event ${evidence.eventId} "${evidence.title}"; ` +
+          "digest revealed after horizontal swipe; detail description visible";
+        await this.setAgentState("completed", detail);
+        if (remote) await this.ack(command, "completed", detail);
       })
       .catch(async (error) => {
         if (error?.name === "AbortError" || this.runController?.signal.aborted) {
@@ -373,97 +513,14 @@ class PrototypeAgent {
     assertNotAborted(signal);
 
     const frame = this.page.frameLocator(FRAME_SELECTOR);
+    await this.enforceMobilePointerShield(frame);
     const target = frame.locator(TARGET_SELECTOR);
     await target.waitFor({ state: "visible", timeout: 20_000 });
     await target.scrollIntoViewIfNeeded();
     const boundingBox = await target.boundingBox();
     if (!boundingBox) throw new Error(`${TARGET_SELECTOR} has no boundingBox`);
-
-    const localBox = await target.evaluate((node) => {
-      const rect = node.getBoundingClientRect();
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    });
-    const point = {
-      x: Math.round(localBox.x + localBox.width / 2),
-      y: Math.round(localBox.y + localBox.height / 2),
-    };
-    log("target acquired", { selector: TARGET_SELECTOR, boundingBox, framePoint: point });
-
-    await frame.locator("body").evaluate(async (body, destination) => {
-      document.querySelector("[data-autopresenter-cursor]")?.remove();
-      const cursor = document.createElement("div");
-      cursor.dataset.autopresenterCursor = "true";
-      cursor.setAttribute("aria-hidden", "true");
-      Object.assign(cursor.style, {
-        position: "fixed",
-        zIndex: "2147483647",
-        width: "24px",
-        height: "24px",
-        left: "0",
-        top: "0",
-        pointerEvents: "none",
-        filter: "drop-shadow(0 5px 9px rgba(0,0,0,.38))",
-        transform: "translate3d(330px, 700px, 0)",
-      });
-      cursor.innerHTML =
-        '<svg width="24" height="30" viewBox="0 0 24 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 2v21l5.8-5.2 4.1 9.4 4.1-1.8-4-9.1H20L2 2Z" fill="#fff" stroke="#111827" stroke-width="2" stroke-linejoin="round"/></svg>';
-      body.append(cursor);
-      const animation = cursor.animate(
-        [
-          { transform: "translate3d(330px, 700px, 0) scale(.9)", opacity: 0 },
-          { transform: "translate3d(330px, 700px, 0) scale(1)", opacity: 1, offset: 0.18 },
-          {
-            transform: `translate3d(${destination.x}px, ${destination.y}px, 0) scale(1)`,
-            opacity: 1,
-          },
-        ],
-        { duration: 900, easing: "cubic-bezier(.22,.8,.24,1)", fill: "forwards" },
-      );
-      await animation.finished;
-    }, point);
-    assertNotAborted(signal);
-
-    // This is a genuine Playwright pointer action, not a DOM-dispatched hover.
-    await target.hover({ timeout: 10_000 });
-    await abortableDelay(180, signal);
-    await frame.locator("body").evaluate((body, destination) => {
-      const ripple = document.createElement("div");
-      ripple.dataset.autopresenterRipple = "true";
-      ripple.setAttribute("aria-hidden", "true");
-      Object.assign(ripple.style, {
-        position: "fixed",
-        zIndex: "2147483646",
-        width: "12px",
-        height: "12px",
-        left: `${destination.x - 6}px`,
-        top: `${destination.y - 6}px`,
-        border: "3px solid rgba(38,211,154,.95)",
-        borderRadius: "999px",
-        pointerEvents: "none",
-      });
-      body.append(ripple);
-      const animation = ripple.animate(
-        [
-          { transform: "scale(.5)", opacity: 1 },
-          { transform: "scale(5)", opacity: 0 },
-        ],
-        { duration: 520, easing: "ease-out", fill: "forwards" },
-      );
-      animation.finished.finally(() => ripple.remove());
-    }, point);
-    await abortableDelay(120, signal);
-    assertNotAborted(signal);
-
-    // Capture the visible pointer/ripple state. The WebM continues through completion.
-    if (config.artifactDir) {
-      await this.page.screenshot({
-        path: path.join(config.artifactDir, "tomorrow-mobile-1920x1080.png"),
-        fullPage: false,
-      });
-    }
-
-    // Required real browser interaction. Never replace with a DOM-dispatched activation.
-    await target.click({ timeout: 10_000 });
+    log("target acquired", { selector: TARGET_SELECTOR, boundingBox });
+    await this.tapMobileLocator(frame, target, signal);
     await frame.locator(DESTINATION_SELECTOR).waitFor({ state: "visible", timeout: 20_000 });
     await this.page.waitForFunction(
       (selector) => {
@@ -474,6 +531,236 @@ class PrototypeAgent {
       { timeout: 20_000 },
     );
     assertNotAborted(signal);
+
+    await this.enforceMobilePointerShield(frame);
+    const event = await this.selectTomorrowEvent(frame);
+    const row = frame.locator(
+      `${MOBILE_EVENT_SELECTOR}[data-event-id="${event.eventId}"]`,
+    );
+    await row.scrollIntoViewIfNeeded();
+    await abortableDelay(350, signal);
+    const rail = row.locator(MOBILE_EVENT_RAIL_SELECTOR);
+    const digest = row.locator(MOBILE_EVENT_DESCRIPTION_SELECTOR);
+    await rail.waitFor({ state: "visible", timeout: 10_000 });
+    await digest.waitFor({ state: "attached", timeout: 10_000 });
+    log("deterministic tomorrow event selected", event);
+
+    let digestRevealed = await this.isHorizontallyRevealed(digest);
+    for (let attempt = 0; attempt < 3 && !digestRevealed; attempt += 1) {
+      await this.swipeRailTowardDescription(frame, rail, signal);
+      await abortableDelay(420, signal);
+      digestRevealed = await this.isHorizontallyRevealed(digest);
+    }
+    if (!digestRevealed) {
+      const geometry = await rail.evaluate((node) => ({
+        scrollLeft: node.scrollLeft,
+        maxScroll: node.scrollWidth - node.clientWidth,
+      }));
+      throw new Error(
+        `${MOBILE_EVENT_DESCRIPTION_SELECTOR} did not become horizontally visible: ${JSON.stringify(geometry)}`,
+      );
+    }
+
+    await this.dwellOnDescription(digest, signal, "rail");
+    await this.tapMobileLocator(frame, digest, signal);
+    await frame.locator(MOBILE_DETAIL_SELECTOR).waitFor({ state: "visible", timeout: 20_000 });
+    await this.page.waitForFunction(
+      (selector) => {
+        const embedded = document.querySelector(selector);
+        return /^\/sobytiya\/[^/]+\/$/u.test(embedded?.contentWindow?.location?.pathname || "");
+      },
+      FRAME_SELECTOR,
+      { timeout: 20_000 },
+    );
+
+    await this.enforceMobilePointerShield(frame);
+    const detailDescription = frame.locator(MOBILE_DETAIL_DESCRIPTION_SELECTOR);
+    await detailDescription.waitFor({ state: "visible", timeout: 20_000 });
+    await detailDescription.scrollIntoViewIfNeeded();
+    await this.dwellOnDescription(detailDescription, signal, "event-detail");
+
+    if (config.artifactDir) {
+      await this.page.screenshot({
+        path: path.join(config.artifactDir, "tomorrow-mobile-1920x1080.png"),
+        fullPage: false,
+      });
+    }
+    assertNotAborted(signal);
+    return {
+      eventId: event.eventId,
+      title: event.title.replace(/\s+/gu, " ").replaceAll('"', "'").trim().slice(0, 100),
+    };
+  }
+
+  async selectTomorrowEvent(frame) {
+    const rows = frame.locator(MOBILE_EVENT_SELECTOR);
+    await rows.first().waitFor({ state: "visible", timeout: 20_000 });
+    const candidates = await rows.evaluateAll((nodes) =>
+      nodes
+        .filter((node) => {
+          const style = getComputedStyle(node);
+          return !node.hidden && style.display !== "none" && style.visibility !== "hidden";
+        })
+        .map((node) => ({
+          eventId: node.dataset.eventId,
+          title: node.dataset.eventTitle,
+          galleryCount: node.dataset.mobileRailGalleryCount,
+        })),
+    );
+    const selected = selectDeterministicMobileEvent(candidates);
+    if (!selected) {
+      throw new Error(
+        `${MOBILE_EVENT_SELECTOR} has no deterministic event candidate with id/title/gallery count`,
+      );
+    }
+    return selected;
+  }
+
+  async tapMobileLocator(frame, locator, signal) {
+    assertNotAborted(signal);
+    await locator.scrollIntoViewIfNeeded();
+    const box = await locator.boundingBox();
+    if (!box) throw new Error("mobile tap target has no boundingBox");
+    const point = await locator.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return {
+        x: Math.round(rect.x + rect.width / 2),
+        y: Math.round(rect.y + rect.height / 2),
+      };
+    });
+    await frame.locator("body").evaluate((body, destination) => {
+      document.querySelectorAll("[data-autopresenter-tap]").forEach((node) => node.remove());
+      const tap = document.createElement("div");
+      tap.dataset.autopresenterTap = "true";
+      tap.setAttribute("aria-hidden", "true");
+      Object.assign(tap.style, {
+        position: "fixed",
+        zIndex: "2147483647",
+        width: "28px",
+        height: "28px",
+        left: `${destination.x - 14}px`,
+        top: `${destination.y - 14}px`,
+        border: "4px solid rgba(38,211,154,.98)",
+        borderRadius: "999px",
+        background: "rgba(38,211,154,.24)",
+        boxShadow: "0 0 0 8px rgba(255,255,255,.72)",
+        pointerEvents: "none",
+      });
+      body.append(tap);
+      const animation = tap.animate(
+        [
+          { transform: "scale(.45)", opacity: 0 },
+          { transform: "scale(1)", opacity: 1, offset: 0.22 },
+          { transform: "scale(2.8)", opacity: 0 },
+        ],
+        { duration: 760, easing: "cubic-bezier(.22,.8,.24,1)", fill: "forwards" },
+      );
+      animation.finished.finally(() => tap.remove());
+    }, point);
+    await abortableDelay(180, signal);
+    // Required real Playwright action. CSS hides the pointer, so this presents
+    // as the tap circle rather than a desktop cursor.
+    await locator.click({ timeout: 10_000 });
+  }
+
+  async swipeRailTowardDescription(frame, rail, signal) {
+    assertNotAborted(signal);
+    const box = await rail.boundingBox();
+    if (!box) throw new Error(`${MOBILE_EVENT_RAIL_SELECTOR} has no boundingBox`);
+    const start = {
+      x: Math.round(box.x + box.width * 0.84),
+      y: Math.round(box.y + box.height * 0.52),
+    };
+    const end = {
+      x: Math.round(box.x + box.width * 0.12),
+      y: start.y,
+    };
+
+    await frame.locator("body").evaluate((body) => {
+      document.querySelectorAll("[data-autopresenter-swipe-trail]").forEach((node) => node.remove());
+      const trail = document.createElement("div");
+      trail.dataset.autopresenterSwipeTrail = "true";
+      trail.dataset.autopresenterSwipeFingerDirection = "left";
+      trail.dataset.autopresenterSwipeContentDirection = "right";
+      trail.setAttribute("aria-hidden", "true");
+      Object.assign(trail.style, {
+        position: "fixed",
+        zIndex: "2147483647",
+        left: "12%",
+        top: "50%",
+        width: "76%",
+        height: "52px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "999px",
+        background: "rgba(17,24,39,.78)",
+        boxShadow: "0 10px 32px rgba(0,0,0,.28)",
+        color: "#fff",
+        font: "850 15px/1 Inter,system-ui,sans-serif",
+        letterSpacing: ".02em",
+        pointerEvents: "none",
+      });
+      trail.innerHTML =
+        '<span style="color:#7de6c2;font-size:24px;margin-right:10px">←━━━━━━━━</span><span>Листаем событие вправо →</span>';
+      body.append(trail);
+      const animation = trail.animate(
+        [
+          { transform: "translateX(-20px)", opacity: 0 },
+          { transform: "translateX(0)", opacity: 1, offset: 0.18 },
+          { transform: "translateX(20px)", opacity: 1 },
+        ],
+        { duration: 900, easing: "cubic-bezier(.22,.8,.24,1)", fill: "forwards" },
+      );
+      animation.finished.finally(() => trail.remove());
+    });
+
+    let pointerDown = false;
+    try {
+      await this.page.mouse.move(start.x, start.y);
+      await this.page.mouse.down();
+      pointerDown = true;
+      for (let step = 1; step <= 12; step += 1) {
+        assertNotAborted(signal);
+        const progress = step / 12;
+        await this.page.mouse.move(
+          Math.round(start.x + (end.x - start.x) * progress),
+          start.y,
+        );
+        await abortableDelay(24, signal);
+      }
+      await this.page.mouse.up();
+      pointerDown = false;
+    } finally {
+      if (pointerDown) await this.page.mouse.up().catch(() => {});
+    }
+  }
+
+  async isHorizontallyRevealed(locator) {
+    return locator.evaluate((node) => {
+      const rail = node.closest(".rail-window");
+      if (!rail) return false;
+      const nodeRect = node.getBoundingClientRect();
+      const railRect = rail.getBoundingClientRect();
+      const intersection = Math.max(
+        0,
+        Math.min(nodeRect.right, railRect.right) - Math.max(nodeRect.left, railRect.left),
+      );
+      return intersection >= Math.min(nodeRect.width, railRect.width) * 0.72;
+    });
+  }
+
+  async dwellOnDescription(locator, signal, surface) {
+    await locator.evaluate((node, dwellSurface) => {
+      node.dataset.autopresenterDescriptionDwell = dwellSurface;
+      Object.assign(node.style, {
+        outline: "4px solid rgba(38,211,154,.94)",
+        outlineOffset: "5px",
+        borderRadius: "10px",
+        boxShadow: "0 0 0 10px rgba(38,211,154,.16)",
+      });
+    }, surface);
+    await abortableDelay(DESCRIPTION_DWELL_MS, signal);
   }
 
   async setAgentState(status, detail) {
