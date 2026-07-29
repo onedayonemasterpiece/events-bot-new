@@ -365,7 +365,9 @@ for (const club of interestClubsData.clubs) {
   if (!detailHtml.includes('id="future-meetings-title"')) throw new Error(`Club ${club.slug} misses future-meetings section`);
   if (!detailHtml.includes('data-product-breadcrumbs') || !detailHtml.includes('data-product-parent-link') || !detailHtml.includes('aria-current="page"')) throw new Error(`Club ${club.slug} misses responsive semantic product breadcrumbs`);
   if (!detailHtml.includes('BreadcrumbList') || !detailHtml.includes('application/ld+json')) throw new Error(`Club ${club.slug} misses structured data`);
-  const clubPrimaryHtml = detailHtml.replace(/<section[^>]*data-pwa-install-root[^>]*>[\s\S]*?<\/section>/giu, '');
+  const clubPrimaryHtml = detailHtml
+    .replace(/<section[^>]*data-pwa-install-root[^>]*>[\s\S]*?<\/section>/giu, '')
+    .replace(/<section[^>]*data-focus-lab-panel[^>]*>[\s\S]*?<\/section>/giu, '');
   if (/<main[^>]+hidden|<article[^>]+hidden|<section[^>]+hidden/iu.test(clubPrimaryHtml)) throw new Error(`Club ${club.slug} requires JavaScript to reveal primary content`);
 }
 

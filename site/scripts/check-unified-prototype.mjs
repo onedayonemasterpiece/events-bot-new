@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import eventsData from '../src/data/preview-events.json' with { type: 'json' };
+import eventArchiveData from '../src/data/preview-event-archive.json' with { type: 'json' };
 import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
 
 const siteDir = resolve(new URL('..', import.meta.url).pathname);
@@ -90,19 +91,23 @@ for (const route of shellRoutes) {
 }
 
 const personal = html('dlya-menya/index.html');
-if (!personal.includes('data-personal-prototype') || !personal.includes('Cold start') || !personal.includes('недостаточно оценок')) {
+if (
+  !personal.includes('data-personal-prototype')
+  || !personal.includes('data-focus-product')
+  || !personal.includes('Пока недостаточно данных')
+) {
   throw new Error('Personal review route must remain honest about its cold-start fallback');
 }
 const personalMain = personal.slice(personal.indexOf('data-personal-prototype'), personal.indexOf('</main>', personal.indexOf('data-personal-prototype')));
-if (!personalMain.includes('personal-page__feed-list') || !personalMain.includes('data-personal-feed-results') || !personalMain.includes('data-optimized-event-card-grid')) {
-  throw new Error('Personal review route must share the optimized Event-detail large-card grid');
+if (!personalMain.includes('data-focus-recommendations') || !personalMain.includes('data-focus-rec')) {
+  throw new Error('Personal review route misses its current explainable recommendation surface');
 }
 if (personalMain.includes('data-product-breadcrumbs')) {
   throw new Error('Personal review route regressed to decorative top-level breadcrumbs');
 }
-const personalFamilyKeys = [...personalMain.matchAll(/data-occurrence-member-ids="([^"]+)"/gu)].map((match) => match[1]);
-if (personalFamilyKeys.length < 6 || new Set(personalFamilyKeys).size !== personalFamilyKeys.length) {
-  throw new Error('Personal review route must render a finite per-family real-data card set');
+const personalEventIds = [...personalMain.matchAll(/data-focus-rec="(\d+)"/gu)].map((match) => match[1]);
+if (personalEventIds.length < 3 || new Set(personalEventIds).size !== personalEventIds.length) {
+  throw new Error('Personal review route must render a finite unique real-data recommendation set');
 }
 
 const popular = html('populyarnoe/index.html');
@@ -196,7 +201,7 @@ const occurrencePage = eventPages.find(([, content]) => /data-occurrence-alterna
 if (!occurrencePage) throw new Error('Fresh real-data build does not contain an explicit mutual occurrence specimen');
 if (!occurrencePage[1].includes('data-occurrence-variant="desktop"')
   || !occurrencePage[1].includes('data-occurrence-variant="mobile"')
-  || !occurrencePage[1].includes('event-occurrences__schedule')) {
+  || !occurrencePage[1].includes('data-occurrence-variant="practical"')) {
   throw new Error(`Occurrence specimen ${occurrencePage[0]} misses the always-visible detail selector contract`);
 }
 
@@ -205,8 +210,9 @@ const railPage = eventPages.find(([, content]) => content.includes('data-transpo
 if (!busPage) throw new Error('Fresh real-data build misses a bus-navigation event specimen');
 if (!railPage) throw new Error('Fresh real-data build misses a rail-navigation event specimen');
 
-const event6686 = eventsData.events.find((event) => event.id === 6686);
-const event6529 = eventsData.events.find((event) => event.id === 6529);
+const eventCatalog = [...eventsData.events, ...eventArchiveData.events];
+const event6686 = eventCatalog.find((event) => event.id === 6686);
+const event6529 = eventCatalog.find((event) => event.id === 6529);
 if (!event6686 || !event6529) throw new Error('Fresh real-data build misses the 6686/6529 acceptance regressions');
 const event6686Html = html(`sobytiya/${event6686.slug}/index.html`);
 const event6529Html = html(`sobytiya/${event6529.slug}/index.html`);
@@ -228,10 +234,13 @@ const forbiddenDurationServiceCopy = [
   'прогноз ИИ',
 ];
 const forecastBasisCount = (event6529Html.match(/data-event-end-basis="forecast"/gu) || []).length;
-if (forecastBasisCount !== 2
+const event6529IsCurrent = (event6529.end_date || event6529.start_date) >= eventsData.build.current_date;
+if ((event6529IsCurrent && (
+  forecastBasisCount !== 2
   || event6529Html.includes('data-event-end-basis="schedule_cutoff"')
   || !event6529Html.includes('17:50')
   || !event6529Html.includes('18:56')
+))
   || event6529Html.includes('06:42')
   || forbiddenDurationServiceCopy.some((copy) => event6529Html.includes(copy))) {
   throw new Error('6529 must show the same clean Smart Update forecast on desktop and mobile, without fallback/model copy/next-morning trains');

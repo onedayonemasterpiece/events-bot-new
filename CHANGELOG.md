@@ -8,7 +8,9 @@
   calendar type; the scale stays enabled so a participant can change the
   score. The Free collection's pinned identity is now 124 px on desktop and
   108 px on mobile, aligned directly below the top chrome instead of appearing
-  as a tiny low marker.
+  as a tiny low marker. Generated preview gates now distinguish optional
+  focus/PWA panels from primary club content and validate the current
+  explainable «Для меня» surface instead of its retired feed markup.
 - Raised the hosted focus-group email and OTP project limits to 200 per hour
   for the planned cohort while retaining the 60-second per-address resend
   guard. The six-digit code remains Supabase Auth's minimum supported length;
