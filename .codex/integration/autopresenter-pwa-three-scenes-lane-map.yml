@@ -1,0 +1,133 @@
+mode: worktree_workers_then_serial_integrator
+repo: events-bot-new
+base_ref: edce9daf9d5e5e6ea9e2041187ae2726db5c62a9
+base_branch: feature/autopresenter-design
+integration_branch: integration/autopresenter-pwa-three-scenes
+global_constraints:
+  - keep the current public control and demonstrator URLs
+  - keep the existing shared Windows runtime cache compatible
+  - preserve FIRST_TEST_NOT_M3 and do not claim public-demo readiness
+  - use exactly three explicit scenarios; do not introduce a generic DSL
+  - mobile gestures must remain tap/swipe visuals without a mouse cursor
+  - shutdown is explicit, confirmed, and terminates browser plus Windows agent
+verification_owner: root integrator plus final checklist reviewer
+stop_conditions:
+  - artifact route or appearance condition cannot be made deterministic
+  - like gesture cannot be verified through real UI state
+  - control PWA requires a new auth surface or a second backend
+  - public exact-HEAD E2E cannot complete all three scenarios
+lanes:
+  - id: artifact_discovery
+    role: planner
+    requirement_ids: []
+    target: map the real amber-artifact route, date/menu path, feature flags, state and selectors
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files:
+      - "**"
+    expected_output: read-only implementation brief for scenario_engine
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: like_discovery
+    role: planner
+    requirement_ids: []
+    target: map event rail horizontal navigation and real like interaction/state
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files:
+      - "**"
+    expected_output: read-only selector and acceptance brief for scenario_engine
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: pacing_discovery
+    role: planner
+    requirement_ids: []
+    target: identify current timing, scroll and loading weaknesses and propose bounded natural pacing
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files:
+      - "**"
+    expected_output: read-only timing and scroll acceptance brief for scenario_engine
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: pwa_control
+    role: worker
+    requirement_ids: [R01]
+    target: installable authenticated control PWA named "Пульт презентации" with short name "Пульт"
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/autopresenter-pwa-three-scenes/pwa-control
+    worktree: /home/dev/projects/events-bot-new-autopresenter-pwa-control
+    writable_files:
+      - tools/autopresenter/relay/control/**
+      - tools/autopresenter/relay/server.py
+      - tools/autopresenter/relay/tests/**
+      - .codex/lanes/pwa_control/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/agent/**
+      - tools/autopresenter/m0/**
+      - site/**
+      - CHANGELOG.md
+      - docs/**
+    expected_output: committed PWA manifest/service-worker/icons/control shell and targeted tests
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: scenario_engine
+    role: worker
+    requirement_ids: [R02, R03, R04]
+    target: natural pacing plus explicit rail-like and artifact scenarios
+    depends_on: [artifact_discovery, like_discovery, pacing_discovery]
+    execution_mode: serial_after_dependency
+    branch: agent/autopresenter-pwa-three-scenes/scenario-engine
+    worktree: /home/dev/projects/events-bot-new-autopresenter-scenario-engine
+    writable_files:
+      - tools/autopresenter/agent/**
+      - site/src/components/listings/AmberRailArtifact.astro
+      - site/src/components/listings/WeekendListingSurface.astro
+      - site/src/lib/artifacts.mjs
+      - site/src/pages/vyhodnye/index.astro
+      - tools/autopresenter/relay/Dockerfile.internet-test
+      - .codex/lanes/scenario_engine/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/relay/control/**
+      - tools/autopresenter/relay/server.py
+      - tools/autopresenter/m0/**
+      - CHANGELOG.md
+      - docs/**
+    expected_output: committed three-scenario agent with natural scroll/settle contracts and targeted tests
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: integration_release
+    role: merge_reviewer
+    requirement_ids: [R05]
+    target: merge lanes, add confirmed shutdown protocol, package, document, public E2E and deploy
+    depends_on: [pwa_control, scenario_engine]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-pwa-three-scenes
+    worktree: /home/dev/projects/events-bot-new-autopresenter-pwa-scenes
+    writable_files:
+      - tools/autopresenter/**
+      - docs/features/static-site-pages/auto-present/README.md
+      - docs/reports/incidents/INC-2026-07-29-autopresenter-windows-bootstrap-startup.md
+      - CHANGELOG.md
+      - .codex/integration/**
+    forbidden_files:
+      - tools/autopresenter/m0/**
+    expected_output: deployed five-requirement owner-test update with exact-HEAD evidence
+    verification_scope: full_local
+    effort: high
+    status: planned
