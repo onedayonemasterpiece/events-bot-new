@@ -18,6 +18,7 @@ const znanieLogoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenar
 const introMusicUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3';
 const jokeAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/joke-electronic-brain-c0efea54a93d4a6bcbb8e244bc35cfbe9a23556783d78df0fcffa457b5dead79.wav';
 const errorAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/computer-error-cc0-d7ec5eeba2b280017100e9deb3f063d580755469ce326332df7da9b4dcd63d1a.mp3';
+const catKeyboardUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/cat-keyboard-unsplash-dbbe5f90f00dc4e4bb483d3374626a668aa1d395ea1e352ec1661b8b7ebc9e79.webp';
 const announcementsWordmarkUrl = '/brand/announcements-wordmark-ui.svg';
 const findIconUrl = '/assets/icons/reference4-v8/search-thin.svg';
 const people = [
@@ -157,6 +158,7 @@ const serviceTextScenes = [
     <link rel="preload" as="audio" href={introMusicUrl} />
     <link rel="preload" as="audio" href={jokeAudioUrl} />
     <link rel="preload" as="audio" href={errorAudioUrl} />
+    <link rel="preload" as="image" href={catKeyboardUrl} />
     {people.map((person) => <link rel="preload" as="image" href={person.avatar} />)}
     {lectureSlides.map((slide) => <link rel="preload" as="image" href={slide.image} />)}
     <title>Автопрезентатор · Сцена</title>
@@ -326,16 +328,38 @@ const serviceTextScenes = [
       </section>
 
       {serviceTextScenes.map((scene) => (
-        <section class={`service-scene presentation-scene theme--${scene.theme}`} data-presenter-scene-id={scene.id} hidden>
+        <section
+          class={`service-scene service-word-sequence presentation-scene theme--${scene.theme}`}
+          data-presenter-scene-id={scene.id}
+          data-service-copy-state="idle"
+          hidden
+        >
           <p class="service-eyebrow">{scene.eyebrow}</p>
-          <h2>{scene.title.split('\n').map((line) => <span>{line}</span>)}</h2>
+          <h2>
+            {scene.title.split('\n').map((line) => (
+              <span class="service-word-line">
+                {line.split(/\s+/u).map((word) => <i class="service-word">{word}</i>)}
+              </span>
+            ))}
+          </h2>
           {scene.support && <p class="service-support">{scene.support}</p>}
         </section>
       ))}
 
-      <section class="service-scene disruption-scene presentation-scene theme--dark" data-presenter-scene-id="service-disruption" hidden>
-        <p class="service-eyebrow">07 · Честный момент</p>
-        <h2>И тут презентация<br />пошла не по плану…</h2>
+      <section
+        class="service-scene disruption-scene presentation-scene theme--dark"
+        data-presenter-scene-id="service-disruption"
+        data-error-phase="idle"
+        hidden
+      >
+        <div class="disruption-copy">
+          <p class="service-eyebrow">07 · Честный момент</p>
+          <h2>И тут презентация<br />пошла не по плану…</h2>
+        </div>
+        <figure class="disruption-cat">
+          <img data-presenter-id="error-cat-image" src={catKeyboardUrl} alt="Белый кот сидит у компьютерной клавиатуры" />
+          <figcaption>Кажется, нашли ответственного.</figcaption>
+        </figure>
         <audio data-presenter-id="error-audio" src={errorAudioUrl} preload="auto"></audio>
       </section>
 
@@ -540,6 +564,9 @@ const serviceTextScenes = [
           document.querySelector('[data-joke-state]')?.setAttribute('data-joke-state', 'stopped');
           document.querySelector('[data-medallion-state]')?.setAttribute('data-medallion-state', 'stopped');
           document.querySelector('[data-people-phase]')?.setAttribute('data-people-phase', 'portraits');
+          document.querySelectorAll('[data-service-copy-state]')
+            .forEach((scene) => scene.setAttribute('data-service-copy-state', 'stopped'));
+          document.querySelector('[data-error-phase]')?.setAttribute('data-error-phase', 'stopped');
           document.querySelectorAll('[data-lecture-state]')
             .forEach((scene) => scene.setAttribute('data-lecture-state', 'stopped'));
         };
@@ -794,19 +821,57 @@ const serviceTextScenes = [
         const startErrorCue = async (scene, token) => {
           errorAudio.volume = 1;
           scene.dataset.errorAudio = 'starting';
-          for (let repeat = 0; repeat < 3; repeat += 1) {
-            if (token !== generation) return;
+          scene.dataset.errorPhase = 'copy';
+          const playCue = async () => {
             try { errorAudio.currentTime = 0; } catch {}
             try {
               await errorAudio.play();
               scene.dataset.errorAudio = 'playing';
             } catch {
               scene.dataset.errorAudio = 'blocked';
-              return;
+              return false;
             }
-            if (!await pause(420, token)) return;
+            return pause(520, token);
+          };
+          if (!await pause(900, token)) return;
+          scene.dataset.errorPhase = 'first-cue';
+          if (!await playCue()) return;
+          if (!await pause(2_300, token)) return;
+          scene.dataset.errorPhase = 'second-cue';
+          if (!await playCue()) return;
+          scene.dataset.errorPhase = 'cat';
+          if (!await pause(1_450, token)) return;
+          const image = scene.querySelector('[data-presenter-id="error-cat-image"]');
+          if (!(image instanceof HTMLImageElement) || !image.complete || image.naturalWidth <= 0) {
+            scene.dataset.errorAudio = 'asset-error';
+            return;
           }
           scene.dataset.errorAudio = 'complete';
+          scene.dataset.errorPhase = 'complete';
+        };
+
+        const startServiceWordSequence = async (scene, token) => {
+          const words = [...scene.querySelectorAll('.service-word')];
+          const support = scene.querySelector('.service-support');
+          scene.dataset.serviceCopyState = 'running';
+          words.forEach((word) => word.classList.remove('is-visible'));
+          support?.classList.remove('is-visible');
+          if (reduceMotion.matches) {
+            words.forEach((word) => word.classList.add('is-visible'));
+            support?.classList.add('is-visible');
+            scene.dataset.serviceCopyState = 'complete';
+            return;
+          }
+          for (let index = 0; index < words.length; index += 1) {
+            if (token !== generation) return;
+            words[index]?.classList.add('is-visible');
+            const delay = 250 + Math.round(seededUnit(scene.dataset.presenterSceneId || 'service', index) * 190);
+            if (!await pause(delay, token)) return;
+          }
+          if (!await pause(380, token)) return;
+          support?.classList.add('is-visible');
+          if (!await pause(620, token)) return;
+          scene.dataset.serviceCopyState = 'complete';
         };
 
         const showScene = (sceneId, options = {}) => {
@@ -838,6 +903,12 @@ const serviceTextScenes = [
           }
           if (sceneId === 'service-disruption' && activeScene instanceof HTMLElement) {
             void startErrorCue(activeScene, token);
+          }
+          if (
+            (sceneId === 'service-taste' || sceneId === 'service-feedback')
+            && activeScene instanceof HTMLElement
+          ) {
+            void startServiceWordSequence(activeScene, token);
           }
           if (sceneId === 'service-future-celebrity') {
             activeScene?.setAttribute('data-people-phase', 'portraits');
@@ -1101,6 +1172,13 @@ const serviceTextScenes = [
   .service-scene h2 > span { display: block; }
   .service-support { max-width: 36ch; margin: clamp(38px,5vh,66px) 0 0; color: color-mix(in srgb,currentColor 68%,transparent); font: 400 clamp(25px,2.15vw,41px)/1.22 "Cygre",sans-serif; }
   .service-scene.is-entering h2, .service-scene.is-entering .service-support, .service-scene.is-entering .search-principle { animation: service-copy-in 620ms var(--ease-cinematic) both; }
+  .service-word-sequence.is-entering h2,
+  .service-word-sequence.is-entering .service-support { animation: none; }
+  .service-word-line { display: flex !important; flex-wrap: wrap; column-gap: .22em; }
+  .service-word { display: inline-block; font: inherit; opacity: 0; filter: blur(7px); transform: translateY(.18em) scale(.96); transition: opacity 360ms ease, filter 520ms ease, transform 620ms var(--ease-cinematic); }
+  .service-word.is-visible { opacity: 1; filter: none; transform: none; }
+  .service-word-sequence .service-support { opacity: 0; transform: translateY(18px); transition: opacity 520ms ease, transform 680ms var(--ease-cinematic); }
+  .service-word-sequence .service-support.is-visible { opacity: 1; transform: none; }
   @keyframes service-copy-in { 0% { opacity: 0; transform: translateY(32px) scale(.975); filter: blur(8px); } 70% { opacity: 1; transform: translateY(-3px) scale(1.008); filter: none; } 100% { opacity: 1; transform: none; filter: none; } }
   .service-wordmark { align-items: center; text-align: center; }
   .wordmark-motion { position: relative; width: min(1240px,78vw); aspect-ratio: 7819 / 1514; }
@@ -1138,6 +1216,16 @@ const serviceTextScenes = [
   .medallion-feature strong { position: absolute; top: calc(100% + 14px); width: 360px; text-align: center; font-size: 25px; line-height: 1.05; transition: opacity 120ms linear; }
   .medallion-feature strong.is-travelling { opacity: 0; }
   .service-joke [data-joke-line="two"] { min-height: 1.25em; margin: 52px 0 0; color: #ff9b80; font: 600 clamp(44px,4.15vw,80px)/1 "Cygre",sans-serif; animation: service-copy-in 500ms ease-out both; }
+  .disruption-scene { display: grid; grid-template-columns: minmax(0,.86fr) minmax(560px,1.14fr); align-items: center; gap: clamp(54px,6vw,116px); }
+  .disruption-copy { min-width: 0; transition: transform 950ms var(--ease-cinematic), opacity 650ms ease; }
+  .disruption-copy h2 { max-width: 7.8ch; font-size: clamp(82px,7.2vw,138px); }
+  .disruption-cat { min-width: 0; margin: 0; opacity: 0; transform: translate3d(5vw,0,0) scale(.86) rotate(2deg); filter: blur(12px); transition: opacity 460ms ease, transform 980ms var(--ease-cinematic), filter 700ms ease; }
+  .disruption-cat img { width: 100%; max-height: 76vh; display: block; object-fit: cover; border-radius: 34px; box-shadow: 0 44px 110px rgba(0,0,0,.52); }
+  .disruption-cat figcaption { margin-top: 18px; color: rgba(255,255,255,.68); font-size: clamp(22px,1.6vw,31px); text-align: center; }
+  .disruption-scene[data-error-phase="cat"] .disruption-cat,
+  .disruption-scene[data-error-phase="complete"] .disruption-cat { opacity: 1; transform: none; filter: none; }
+  .disruption-scene[data-error-phase="cat"] .disruption-copy,
+  .disruption-scene[data-error-phase="complete"] .disruption-copy { opacity: .7; transform: translateX(-2vw) scale(.94); }
   .search-concept-scene h2 { max-width: none; font-size: clamp(112px,11vw,210px); }
   .search-principle { margin: 34px 0 0; font-size: clamp(36px,3.2vw,62px); line-height: .98; letter-spacing: -.035em; }
   .search-principle strong { color: #ff7657; font-weight: 600; }

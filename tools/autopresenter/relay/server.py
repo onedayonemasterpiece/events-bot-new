@@ -45,6 +45,7 @@ ALLOWED_SCENARIOS = frozenset(
         "service-medallions-mobile",
         "service-joke",
         "service-search-concept",
+        "service-search-auth-setup",
         "service-search-live",
         "service-disruption",
         "service-taste",

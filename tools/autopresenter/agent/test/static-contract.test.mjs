@@ -151,6 +151,10 @@ test("readiness waits for document, fonts, optional mobile ready marker, and vis
   assert.match(source, /pendingMediaStates/u);
   assert.match(source, /rect\.right > 0/u);
   assert.match(source, /rect\.left < innerWidth/u);
+  assert.match(source, /deadlineMs: 12_000/u);
+  assert.match(source, /continuing with scenario-specific gates/u);
+  assert.match(source, /initial vertical scroll did not settle; continuing with the scenario target gate/u);
+  assert.doesNotMatch(source, /visible embedded media did not settle/u);
 });
 
 test("tomorrow-mobile naturally reveals a concrete detail description", () => {
@@ -204,6 +208,8 @@ test("tomorrow like is armed before mouseup and never agent-clicked", () => {
   assert.match(source, /liked_event_ids/u);
   assert.match(source, /event_id/u);
   assert.match(likeScenario, /like count did not increment exactly once/u);
+  assert.match(likeScenario, /RAIL СДВИНУТ ВПРАВО/u);
+  assert.match(likeScenario, /ЛАЙК СОХРАНЁН/u);
   assert.doesNotMatch(likeScenario, /like\.click\(|locator\('\[data-feedback-action="like"\]'\)\.click/u);
 });
 
@@ -219,7 +225,19 @@ test("weekend artifact uses the visible menu, real rails, storage, reload and di
   assert.match(source, /\/artefakty\/#amber_cosmonaut/u);
   assert.match(source, /data-artifact-dialog/u);
   assert.match(source, /found count/u);
+  assert.match(source, /АРТЕФАКТ НАЙДЕН/u);
+  assert.match(source, /КОЛЛЕКЦИЯ · НАЙДЕНО 1/u);
   assert.doesNotMatch(source, /scrollLeft\s*=/u);
+});
+
+test("search has an explicit one-time persistent Yandex demo-session setup", () => {
+  assert.match(source, /async runSearchAuthSetup\(signal\)/u);
+  assert.match(source, /SEARCH_AUTH_SETUP_SCENE_ID/u);
+  assert.match(source, /data-search-login/u);
+  assert.match(source, /data-search-logout/u);
+  assert.match(source, /9 \* 60 \* 1_000/u);
+  assert.match(source, /this\.context\.storageState\(\{ path: config\.storageStatePath \}\)/u);
+  assert.doesNotMatch(source, /password|service_role/iu);
 });
 
 test("relay, lifecycle, fullscreen, and evidence contracts remain intact", () => {

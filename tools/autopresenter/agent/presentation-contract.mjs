@@ -20,6 +20,14 @@ export const INTRO_MUSIC_ASSET = Object.freeze({
   sha256: "6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a",
 });
 
+export const CAT_KEYBOARD_ASSET = Object.freeze({
+  url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/cat-keyboard-unsplash-dbbe5f90f00dc4e4bb483d3374626a668aa1d395ea1e352ec1661b8b7ebc9e79.webp",
+  sha256: "dbbe5f90f00dc4e4bb483d3374626a668aa1d395ea1e352ec1661b8b7ebc9e79",
+  source: "https://unsplash.com/photos/a-white-cat-sitting-on-top-of-a-computer-keyboard-ek1GsWCSY50",
+  author: "Cheung Gnaiq",
+  license: "Unsplash License",
+});
+
 const lectureSources = [
   [821, "2f3c1b7d9a1c7094c77da009867c25a62cb233110185ab7a1a020b61356bdc26"],
   [822, "d85cadfd1dd4aad0c0e8f5fb68482624a1a4d617585fae9737fd430fac9513d1"],
@@ -74,11 +82,9 @@ export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
 
 // Explicitly accepted scenes stay closed to incidental redesign during draft iterations.
 export const SCENE_ACCEPTANCE_CONTRACT = Object.freeze({
-  version: "2026-07-29.iteration-c",
+  version: "2026-07-29.iteration-d",
   frozen: Object.freeze([
     "tomorrow-mobile",
-    "tomorrow-rail-like",
-    "weekend-amber-artifact",
     "outro-qr",
   ]),
   sourceSha256: Object.freeze({
@@ -93,6 +99,8 @@ export const SCENE_ACCEPTANCE_CONTRACT = Object.freeze({
     lecture: "Telegram 843–849: seven held scenes, varied layouts and themes",
     "weekend-desktop": "Telegram 850: meaning-first then live site",
     pwa: "Telegram 840/844 and base: stable shelf, sticky timer, long PWA name and rating terminology",
+    "tomorrow-rail-like": "latest owner run: readiness gate hid the rail and like gesture",
+    "weekend-amber-artifact": "latest owner run: artifact journey was not observable",
   }),
   draftVerification: "targeted-new-or-reopened-scenes-only",
   finalVerification: "one-full-regression-gate",

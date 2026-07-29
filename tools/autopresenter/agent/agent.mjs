@@ -16,6 +16,7 @@ import {
   INTRO_LOOP_CONTRACT,
   WEEKEND_DESKTOP_CONTRACT,
   OUTRO_QR_CONTRACT,
+  SEARCH_AUTH_SETUP_SCENE_ID,
   isStaticPresentationScenario,
   resolveScenarioId,
   resolveScenarioTimeoutMs,
@@ -32,6 +33,7 @@ import {
   LECTURE_SCENES,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
+  CAT_KEYBOARD_ASSET,
 } from "./presentation-contract.mjs";
 import {
   DEFAULT_PRESENTER_SCENE_ID,
@@ -659,6 +661,9 @@ class PrototypeAgent {
     if (scenarioId === "service-search-live") {
       return this.runFocusSearch(signal, command.options?.query);
     }
+    if (scenarioId === SEARCH_AUTH_SETUP_SCENE_ID) {
+      return this.runSearchAuthSetup(signal);
+    }
     if (scenarioId === WEEKEND_DESKTOP_CONTRACT.id) {
       return this.runWeekendDesktop(signal);
     }
@@ -933,17 +938,35 @@ class PrototypeAgent {
       );
     }
     if (scenarioId === "service-disruption") {
+      await this.assertStageAssetLoaded(
+        '[data-presenter-id="error-cat-image"]',
+        CAT_KEYBOARD_ASSET.url,
+        signal,
+      );
       await raceWithAbort(
         this.page.waitForFunction(
           (sceneSelector) => {
             const scene = document.querySelector(sceneSelector);
             const audio = scene?.querySelector('[data-presenter-id="error-audio"]');
-            return scene?.getAttribute("data-error-audio") === "complete"
+            return scene?.getAttribute("data-error-phase") === "complete"
+              && scene?.getAttribute("data-error-audio") === "complete"
               && audio instanceof HTMLAudioElement
               && audio.currentTime > 0;
           },
           selector,
           { timeout: 10_000 },
+        ),
+        signal,
+      );
+    }
+    if (scenarioId === "service-taste" || scenarioId === "service-feedback") {
+      await raceWithAbort(
+        this.page.waitForFunction(
+          (sceneSelector) =>
+            document.querySelector(sceneSelector)?.getAttribute("data-service-copy-state")
+              === "complete",
+          selector,
+          { timeout: 15_000 },
         ),
         signal,
       );
@@ -1077,12 +1100,18 @@ class PrototypeAgent {
       frame.goto(FOCUS_INVITATION_URL, { waitUntil: "domcontentloaded", timeout: 30_000 }),
       signal,
     );
+    await this.setAgentState("running", "03.14 · приглашение открыто — показываем вход");
+    await abortableDelay(2_800, signal);
     const installSkip = frame.locator("[data-focus-install-skip]");
     if (await installSkip.isVisible().catch(() => false)) {
       await installSkip.click();
+      await this.setAgentState("running", "03.14 · продолжаем на сайте");
+      await abortableDelay(2_400, signal);
     }
     const skip = frame.locator("[data-focus-skip]");
     await raceWithAbort(skip.waitFor({ state: "visible", timeout: 15_000 }), signal);
+    await this.setAgentState("running", "03.14 · шаг фокус-группы виден");
+    await abortableDelay(2_800, signal);
     await skip.click();
     await raceWithAbort(
       frame.waitForFunction(() => {
@@ -1096,6 +1125,8 @@ class PrototypeAgent {
       }, undefined, { timeout: 10_000 }),
       signal,
     );
+    await this.setAgentState("running", "03.14 · вход в фокус-группу завершён");
+    await abortableDelay(2_200, signal);
   }
 
   async runFocusNps(signal) {
@@ -1116,10 +1147,16 @@ class PrototypeAgent {
       (await panel.locator("[data-focus-score]").count()) === 11,
       "real page rating block must show scores 0–10",
     );
-    await abortableDelay(2_000, signal);
+    await this.setAgentState("running", "03.14 · оценка страницы 0–10 в кадре");
+    await abortableDelay(4_500, signal);
     await this.captureScenario("service-nps");
+    await this.setInteractionMode("stage");
+    await this.showPresenterScene(FOCUS_INVITATION_SCENE_ID, signal);
+    await this.setAgentState("running", "03.14 · возвращаем QR, чтобы успели отсканировать");
+    await abortableDelay(2_000, signal);
     return {
-      summary: "real current Today page scrolled to the visible focus-group 0–10 rating block",
+      summary:
+        "slow focus onboarding and real Today 0–10 rating were shown; the held focus-group QR was restored",
       durationMs: Date.now() - startedAt,
     };
   }
@@ -1158,6 +1195,64 @@ class PrototypeAgent {
     await this.captureScenario("service-future-celebrity");
     return {
       summary: "three verified people transitioned into the real participant UI and one like was shown",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runSearchAuthSetup(signal) {
+    const startedAt = Date.now();
+    await raceWithAbort(this.openStage(this.page), signal);
+    await this.setInteractionMode("desktop");
+    await this.setAgentState(
+      "running",
+      "Подготовка поиска · один раз войдите в отдельный demo-аккаунт Яндекса в этом окне",
+    );
+    await raceWithAbort(
+      this.page.goto(`${FOCUS_PREVIEW_BASE_URL}/poisk/`, {
+        waitUntil: "domcontentloaded",
+        timeout: 30_000,
+      }),
+      signal,
+    );
+    const login = this.page.locator("[data-search-login]");
+    const logout = this.page.locator("[data-search-logout]");
+    await raceWithAbort(
+      this.page.locator("[data-authorized-search]").waitFor({ state: "visible", timeout: 30_000 }),
+      signal,
+    );
+    if (!(await logout.isVisible().catch(() => false))) {
+      await abortableDelay(1_800, signal);
+      await login.click();
+      await this.setAgentState(
+        "running",
+        "Подготовка поиска · завершите вход через Яндекс; ожидание до 10 минут",
+      );
+      await raceWithAbort(
+        this.page.waitForFunction(
+          () => {
+            const control = document.querySelector("[data-search-logout]");
+            return control instanceof HTMLElement && !control.hidden;
+          },
+          undefined,
+          { timeout: 9 * 60 * 1_000 },
+        ),
+        signal,
+      );
+    }
+    assertCondition(
+      await logout.isVisible().catch(() => false),
+      "demo search account did not become authenticated",
+    );
+    if (config.storageStatePath) {
+      await mkdir(path.dirname(config.storageStatePath), { recursive: true });
+      await this.context.storageState({ path: config.storageStatePath });
+    }
+    await this.setAgentState("running", "Подготовка поиска · вход сохранён в локальном кеше Windows");
+    await abortableDelay(1_500, signal);
+    await this.openStage(this.page);
+    return {
+      summary:
+        "dedicated Yandex demo-account session is authenticated and saved only in the Windows browser-state cache",
       durationMs: Date.now() - startedAt,
     };
   }
@@ -1407,12 +1502,22 @@ class PrototypeAgent {
     );
     log("like scenario rail reached edge", { eventId: contract.eventId, ...atEnd });
     await this.setAgentState("running", "04.2 · rail у правого края, показываем состояние");
-    await abortableDelay(1_200, signal);
+    await this.dwellOnAudienceTarget(
+      rail,
+      signal,
+      "RAIL СДВИНУТ ВПРАВО",
+      2_400,
+    );
 
     await this.pullLikeEdgeAndAssertArmed(frame, rail, signal);
     log("like scenario edge pull released", { eventId: contract.eventId });
     await this.setAgentState("running", "04.2 · дополнительная протяжка поставила лайк");
-    await abortableDelay(900, signal);
+    await this.dwellOnAudienceTarget(
+      like,
+      signal,
+      "ДОПОЛНИТЕЛЬНАЯ ПРОТЯЖКА → ЛАЙК",
+      2_200,
+    );
     const consent = frame.locator("[data-personalization-consent].is-visible");
     const consentAccept = consent.locator("[data-personalization-consent-accept]");
     const consentRequired = await this.waitForEitherPressedOrConsent(
@@ -1489,6 +1594,12 @@ class PrototypeAgent {
       `like count did not increment exactly once: before=${beforeCount} after=${afterCount}`,
     );
     await this.assertLikePersistenceStorage(frame, contract.eventId);
+    await this.dwellOnAudienceTarget(
+      reloadedLike,
+      signal,
+      `ЛАЙК СОХРАНЁН · ${afterCount}`,
+      3_400,
+    );
 
     await this.finishTypicalPacing(startedAt, signal);
     await this.captureScenario(contract.id);
@@ -1545,7 +1656,9 @@ class PrototypeAgent {
     await this.naturalVerticalScroll(frame, row, signal);
     await this.setAgentState("running", "03.3 · сдвигаем rail карточки к артефакту");
     await this.revealRailLocatorWithRealDrags(frame, row.locator(".rail-window"), artifact, signal);
-    await this.setAgentState("running", "03.3 · артефакт виден, собираем");
+    await this.setAgentState("running", "03.3 · артефакт найден и виден в rail");
+    await this.dwellOnAudienceTarget(artifact, signal, "АРТЕФАКТ НАЙДЕН", 3_200);
+    await this.setAgentState("running", "03.3 · собираем найденный артефакт");
     await this.armArtifactEventProbe(frame);
     const beforeUrl = await this.embeddedUrl();
     await abortableDelay(PACING.routeDwellMs, signal);
@@ -1556,7 +1669,7 @@ class PrototypeAgent {
     await this.assertArtifactCollected(frame, artifact, marker);
     log("artifact collected and held for the audience", { eventId: marker });
     await this.setAgentState("running", "03.3 · артефакт собран, показываем результат");
-    await abortableDelay(1_800, signal);
+    await this.dwellOnAudienceTarget(artifact, signal, "АРТЕФАКТ СОБРАН", 2_800);
 
     await this.setAgentState("running", "03.3 · проверяем сохранение после перезагрузки");
     await this.reloadEmbeddedFrame(signal);
@@ -1591,6 +1704,7 @@ class PrototypeAgent {
       (await frame.locator('[data-artifact-state="found"]').count()) === 1,
       "artifact collection must contain exactly one found slot",
     );
+    await this.dwellOnAudienceTarget(dialog, signal, "КОЛЛЕКЦИЯ · НАЙДЕНО 1", 4_500);
 
     await this.finishTypicalPacing(startedAt, signal);
     await this.captureScenario(contract.id);
@@ -1642,11 +1756,19 @@ class PrototypeAgent {
       await this.waitForAttribute(mobileSurface.first(), "data-mobile-v23-ready", "true", signal);
     }
     await this.waitForVisibleMediaSettled(frame, signal);
-    await this.waitForScrollSettle(frame.locator("html"), signal, "vertical");
+    try {
+      await this.waitForScrollSettle(frame.locator("html"), signal, "vertical");
+    } catch (error) {
+      if (signal.aborted) throw error;
+      log("initial vertical scroll did not settle; continuing with the scenario target gate", {
+        error: errorText(error),
+      });
+    }
   }
 
   async waitForVisibleMediaSettled(frame, signal) {
-    const deadline = Date.now() + 3_500;
+    const deadline = Date.now() + 12_000;
+    let lastState = null;
     while (Date.now() <= deadline) {
       assertNotAborted(signal);
       const state = await frame.locator("body").evaluate(() => {
@@ -1673,10 +1795,14 @@ class PrototypeAgent {
             .filter(visible).length,
         };
       });
+      lastState = state;
       if (!state.pendingImages && !state.pendingVideos && !state.pendingMediaStates) return;
       await abortableDelay(PACING.settleSampleMs, signal);
     }
-    throw new Error("visible embedded media did not settle within 3500ms");
+    log("visible media readiness deadline reached; continuing with scenario-specific gates", {
+      deadlineMs: 12_000,
+      ...lastState,
+    });
   }
 
   async waitForEmbeddedPath(expected, signal) {
@@ -2059,6 +2185,49 @@ class PrototypeAgent {
       });
     }, surface);
     await abortableDelay(dwellMs, signal);
+  }
+
+  async dwellOnAudienceTarget(locator, signal, label, dwellMs) {
+    await locator.evaluate((node, audienceLabel) => {
+      document.querySelectorAll("[data-autopresenter-audience-label]")
+        .forEach((item) => item.remove());
+      node.dataset.autopresenterAudienceTarget = audienceLabel;
+      Object.assign(node.style, {
+        outline: "4px solid rgba(38,211,154,.98)",
+        outlineOffset: "5px",
+        borderRadius: "12px",
+        boxShadow: "0 0 0 10px rgba(38,211,154,.2)",
+      });
+      const rect = node.getBoundingClientRect();
+      const tag = document.createElement("div");
+      tag.dataset.autopresenterAudienceLabel = "true";
+      tag.textContent = audienceLabel;
+      Object.assign(tag.style, {
+        position: "fixed",
+        zIndex: "2147483647",
+        left: `${Math.max(12, Math.min(innerWidth - 280, rect.left + 12))}px`,
+        top: `${Math.max(12, rect.top - 54)}px`,
+        padding: "12px 18px",
+        borderRadius: "999px",
+        color: "#08130f",
+        background: "#7de6c2",
+        boxShadow: "0 14px 36px rgba(0,0,0,.28)",
+        font: "900 14px/1 Inter,system-ui,sans-serif",
+        letterSpacing: ".04em",
+        pointerEvents: "none",
+      });
+      document.body.append(tag);
+    }, label);
+    await abortableDelay(dwellMs, signal);
+    await locator.evaluate((node) => {
+      delete node.dataset.autopresenterAudienceTarget;
+      node.style.outline = "";
+      node.style.outlineOffset = "";
+      node.style.borderRadius = "";
+      node.style.boxShadow = "";
+      document.querySelectorAll("[data-autopresenter-audience-label]")
+        .forEach((item) => item.remove());
+    }).catch(() => {});
   }
 
   async assertEventNotPreLiked(frame, row, eventId) {

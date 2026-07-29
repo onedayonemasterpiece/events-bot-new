@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Fixed
+- Fixed the latest Autopresenter owner-review regressions without adding
+  infrastructure: visible media readiness is now bounded best-effort instead
+  of aborting artifact/rail journeys, 03.3 visibly holds found/collected/detail
+  states, and 04.2 visibly holds rail-edge, pull-to-like and reload-persisted
+  states.
+- Completed the reopened service beats: 03.10 now repeats the licensed error
+  cue and reveals a content-addressed Unsplash cat-at-keyboard image, 03.11 and
+  03.12 reveal copy word by word, and 03.14 slows onboarding/rating before
+  restoring the focus-group QR.
 - Reworked the Autopresenter review iteration without adding infrastructure:
   the stage now ships Cygre 400/600/800, uses the exact SVG-derived stretched
   «о» instead of generic rings, applies stronger cinematic entrances and
@@ -71,6 +80,10 @@
 
 ### Added
 
+- Added a one-time «Подготовить поиск» control flow: the Windows agent opens
+  the real focus-build search, waits for an interactive Yandex demo-account
+  login, stores only the resulting browser state in the shared local cache,
+  and leaves 03.9 gated on a real submit with real result cards.
 - Added real static-site need icons, a sequenced 16-medallion 4×4 scene, exact
   focus-group onboarding QR, real current-page 0–10 rating flow, verified
   Tatyana Udovenko/Andrey Boyko/Svetlana Sokolova participant preview and like,

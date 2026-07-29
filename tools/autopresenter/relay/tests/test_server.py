@@ -44,6 +44,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('data-scenario="tomorrow-mobile"', text)
         self.assertIn('data-scenario="tomorrow-rail-like"', text)
         self.assertIn('data-scenario="weekend-amber-artifact"', text)
+        self.assertIn('data-scenario="service-search-auth-setup"', text)
         self.assertIn('data-scenario="weekend-desktop"', text)
         self.assertIn("Пульт презентации", text)
         self.assertIn("Оценка страницы", text)

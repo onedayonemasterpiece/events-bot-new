@@ -79,12 +79,13 @@ live-вставки, принятые mobile journeys, двухфазный Week
 
 Согласованные сцены замораживаются в `SCENE_ACCEPTANCE_CONTRACT`. Черновая
 итерация проверяет только новые и адресно переоткрытые сцены; полный regression
-выполняется один раз перед финальным handoff. В итерации C фон outro адресно
-переоткрывался требованием заменить круг точной фирменной «о». Сцены
-`tomorrow-mobile`, `tomorrow-rail-like`, `weekend-amber-artifact` и `outro-qr`
-обновлены по замечаниям 29.07 и снова заморожены новыми hashes. Intro, лекция,
-PWA и остальные явно перечисленные сервисные сцены остаются открытыми до
-owner acceptance.
+выполняется один раз перед финальным handoff. В итерации D после фактического
+owner-сбоя readiness адресно переоткрыты `tomorrow-rail-like` и
+`weekend-amber-artifact`: ожидание медиа больше не завершает весь сценарий до
+его selector-specific gates, а реальные rail/artifact состояния получают
+видимые выдержки. `tomorrow-mobile` и `outro-qr` остаются заморожены; intro,
+лекция, PWA и остальные явно перечисленные сервисные сцены остаются открытыми
+до owner acceptance.
 
 PWA содержит отдельные кнопки для каждой лекционной и сервисной сцены,
 sticky elapsed/countdown timer, стабильный status shelf, время начала intro и
@@ -106,8 +107,12 @@ Smart Search считается успешным только после вид�
 `[data-event-card]`. Сессия отдельного непривилегированного demo-account
 сохраняется в
 `%LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1\browser-state-v1.json`;
-секреты не входят в Git/ZIP/relay. До однократной подготовки аккаунта сцена
-завершается явной ошибкой, а не изображает результаты.
+секреты не входят в Git/ZIP/relay. На пульте есть отдельная одноразовая кнопка
+«Подготовить поиск»: агент открывает живой `/poisk/`, ведущий завершает
+обычный вход через Яндекс в fullscreen-окне, после чего состояние сохраняется
+в Windows cache и 03.9 автоматически отправляет запрос и ждёт реальные
+карточки. До этой подготовки 03.9 завершается явной ошибкой, а не изображает
+результаты.
 
 Сцена фокус-группы показывает крупный inline SVG QR точного invitation URL.
 Сцена оценки выполняет onboarding participation в том же browser context,
@@ -119,9 +124,11 @@ Smart Search считается успешным только после вид�
 реальный pressed-like; event relations пока отсутствуют, поэтому сцена явно
 помечена как owner-test preview, не утверждение о production event page.
 
-Narration шутки и CC0 error sting лежат content-addressed на существующем
-Yandex CDN. Provenance и повторяемый процесс закреплены в project skill
-`.codex/skills/autopresenter-audio-cues/`.
+Narration шутки, CC0 error sting и лицензированное фото кота у клавиатуры лежат
+content-addressed на существующем Yandex CDN. В 03.10 sting звучит дважды, а
+после второго сигнала появляется кот; источник фото — Cheung Gnaiq,
+Unsplash License. Provenance audio и повторяемый процесс закреплены в project
+skill `.codex/skills/autopresenter-audio-cues/`.
 
 ### Два непересекающихся трека
 

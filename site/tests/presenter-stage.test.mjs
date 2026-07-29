@@ -123,6 +123,14 @@ test('service presentation uses the requested focus preview and explicit input-d
   assert.match(source, /мой электронный мозг не создан для шуток/u);
   assert.match(source, /jokeAudio\.play\(\)/u);
   assert.match(source, /errorAudio\.play\(\)/u);
+  assert.match(source, /cat-keyboard-unsplash-[a-f0-9]{64}\.webp/u);
+  assert.match(source, /data-presenter-id="error-cat-image"/u);
+  assert.match(source, /scene\.dataset\.errorPhase = 'second-cue'/u);
+  assert.match(source, /scene\.dataset\.errorPhase = 'cat'/u);
+  assert.match(source, /const startServiceWordSequence = async/u);
+  assert.match(source, /data-service-copy-state="idle"/u);
+  assert.match(source, /class="service-word"/u);
+  assert.match(source, /words\[index\]\?\.classList\.add\('is-visible'\)/u);
   assert.match(source, /reference4-v8\/search-thin\.svg/u);
   assert.match(source, /<Icon name="share" className="need-icon need-icon--share"/u);
   assert.doesNotMatch(source, /share-network-thin/u);

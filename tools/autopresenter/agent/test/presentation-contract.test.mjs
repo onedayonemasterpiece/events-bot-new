@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CAT_KEYBOARD_ASSET,
   INTRO_LOOP_RUNTIME_MS,
   INTRO_MUSIC_ASSET,
   INTRO_SCENE_ID,
@@ -24,11 +25,13 @@ test("presentation scenes remain explicit and the intro defaults to fifty minute
   assert.ok(SERVICE_SCENE_IDS.includes("service-search-live"));
   assert.deepEqual(
     SCENE_ACCEPTANCE_CONTRACT.frozen,
-    ["tomorrow-mobile", "tomorrow-rail-like", "weekend-amber-artifact", "outro-qr"],
+    ["tomorrow-mobile", "outro-qr"],
   );
   assert.ok(Object.hasOwn(SCENE_ACCEPTANCE_CONTRACT.reopened, "intro-loop"));
   assert.ok(Object.hasOwn(SCENE_ACCEPTANCE_CONTRACT.reopened, "lecture"));
   assert.ok(Object.hasOwn(SCENE_ACCEPTANCE_CONTRACT.reopened, "pwa"));
+  assert.ok(Object.hasOwn(SCENE_ACCEPTANCE_CONTRACT.reopened, "tomorrow-rail-like"));
+  assert.ok(Object.hasOwn(SCENE_ACCEPTANCE_CONTRACT.reopened, "weekend-amber-artifact"));
 });
 
 test("intro and lecture media use immutable content-addressed Yandex CDN URLs", () => {
@@ -41,4 +44,10 @@ test("intro and lecture media use immutable content-addressed Yandex CDN URLs", 
     LECTURE_ASSETS.map((asset) => asset.messageId),
     [821, 822, 823, 824, 825, 826, 830],
   );
+});
+
+test("cat interruption uses a content-addressed sourced CDN asset", () => {
+  assert.match(CAT_KEYBOARD_ASSET.url, new RegExp(`${CAT_KEYBOARD_ASSET.sha256}\\.webp$`, "u"));
+  assert.match(CAT_KEYBOARD_ASSET.source, /^https:\/\/unsplash\.com\/photos\//u);
+  assert.equal(CAT_KEYBOARD_ASSET.license, "Unsplash License");
 });
