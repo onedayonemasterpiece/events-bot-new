@@ -74,4 +74,4 @@ lanes:
     expected_output: committed product corrections, browser evidence and immutable candidate
     verification_scope: full_local
     effort: extra-high
-    status: in_progress
+    status: completed

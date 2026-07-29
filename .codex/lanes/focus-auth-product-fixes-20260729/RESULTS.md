@@ -2,8 +2,7 @@
 
 ## Status
 
-Integration and local verification complete; immutable candidate release and
-live hosted E2E are the remaining gate.
+Integration, immutable candidate release and live hosted E2E are complete.
 
 ## Requirements
 
@@ -35,6 +34,20 @@ live hosted E2E are the remaining gate.
   QR → install stage → manifest start → identity stage → skip → ordinary home.
 - Local mobile page-family sweep: Lab panel visible on all mapped principal
   page families, with no horizontal overflow.
+- Immutable noindex candidate:
+  `preview-20260729-focus-simple-r15-a5cc0256`.
+- Hosted mobile flow:
+  QR → install choice → PWA resume at identity → six-digit email OTP →
+  ordinary home with hero and visible Lab panel.
+- Hosted authenticated feedback: score, issue report and private screenshot
+  upload passed; synthetic rows, object and test identity were removed after
+  verification.
+- Hosted mobile sweep: 15/15 mapped page families expose one Lab panel and
+  have no horizontal overflow.
+- Hosted desktop flow: ordinary home has hero, Lab panel and no horizontal
+  overflow at 1440 px.
+- The regenerated QR was decoded before sending and decoded again after
+  Telegram delivery; messages `828` and `829` reply to thread anchor `548`.
 
 ## Read-only lanes
 
@@ -43,9 +56,13 @@ live hosted E2E are the remaining gate.
   insertion/data boundary.
 - `focus_copy_ux_review`: completed; exact plain-language state copy applied.
 
-## Remaining release gate
+## Release result
 
-- Commit/push exact source.
-- Build and publish one immutable noindex candidate.
-- Repeat QR/PWA, email code/link, Yandex and authenticated feedback browser E2E.
-- Send the exact candidate link and regenerated QR to Telegram.
+- Exact source commit: `a5cc0256cad62c8de290beaf3d78daf646b06cd1`.
+- Candidate:
+  `https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256/`.
+- Mass invitation:
+  `https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`.
+- Preview output gate has one pre-existing unrelated Pianissimo rail fixture
+  mismatch (`5297`, expected gallery-count marker); focus-group product tests,
+  build, hosted route checks and live focus E2E passed.

@@ -27,4 +27,4 @@
 | R11 | Done | One stable mass token is reused by owner and per-page share surfaces |
 | R12 | Done | Read-only UX review applied; visible public copy avoids implementation vocabulary |
 | R13 | Done | `TD-PRESENTATION-UI-002` recorded as post-launch P0 |
-| R07 | In progress | Immutable candidate build, hosted browser E2E and Telegram QR delivery remain the integration release gate |
+| R07 | Done | Immutable noindex candidate `preview-20260729-focus-simple-r15-a5cc0256` published; hosted mobile/desktop E2E passed; exact QR decoded before and after Telegram delivery in thread `548` |
