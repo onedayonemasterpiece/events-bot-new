@@ -1,0 +1,92 @@
+mode: worktree_workers_then_serial_integrator
+repo: events-bot-new
+base_ref: 01d65e327e60acda993b2f928afd6f9e1960ce93
+base_branch: feature/autopresenter-design
+integration_branch: integration/autopresenter-first-test-ux
+global_constraints:
+  - keep the public phone and laptop entry URLs unchanged
+  - keep FIRST_TEST_NOT_M3 and do not claim Windows compatibility PASS
+  - no manual Enter or install prompts in the happy path
+  - mobile scene uses tap/swipe affordances, never a mouse cursor
+  - desktop scenarios retain visible pressed-key feedback
+  - do not modify tools/autopresenter/m0
+verification_owner: root integrator plus final checklist reviewer
+stop_conditions:
+  - target event cannot be selected deterministically
+  - automatic bootstrap needs administrator rights
+  - public E2E cannot reach a completed state
+lanes:
+  - id: bootstrap_auto
+    role: worker
+    requirement_ids: [R01]
+    target: remove any interactive installer pause and make first-run bootstrap fully automatic
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/autopresenter-first-test-ux/bootstrap-auto
+    worktree: /home/dev/projects/events-bot-new-autopresenter-bootstrap-auto
+    writable_files:
+      - tools/autopresenter/prototype/first-test/**
+      - .codex/lanes/bootstrap_auto/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/m0/**
+    expected_output: committed automatic bootstrap with targeted verification
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: stage_ux
+    role: worker
+    requirement_ids: [R02, R03, R06]
+    target: clean fullscreen presentation shell with a larger phone and no left explanatory panel
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/autopresenter-first-test-ux/stage-ux
+    worktree: /home/dev/projects/events-bot-new-autopresenter-stage-ux
+    writable_files:
+      - site/src/pages/internal/presenter-stage.astro
+      - site/src/styles/**
+      - .codex/lanes/stage_ux/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/m0/**
+      - tools/autopresenter/agent/**
+    expected_output: committed presentation-only responsive scene and stage hooks
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: interaction_scenario
+    role: worker
+    requirement_ids: [R04, R05]
+    target: mobile tap/swipe visualization and deterministic event-detail continuation; preserve desktop key overlay contract
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/autopresenter-first-test-ux/interaction-scenario
+    worktree: /home/dev/projects/events-bot-new-autopresenter-interaction-scenario
+    writable_files:
+      - tools/autopresenter/agent/**
+      - .codex/lanes/interaction_scenario/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/m0/**
+      - site/src/pages/internal/presenter-stage.astro
+    expected_output: committed mobile scenario and tests
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: integration_release
+    role: merge_reviewer
+    requirement_ids: [R07]
+    target: integrate lanes, align stage-agent contract, update docs/changelog, live E2E, redeploy and refresh Windows ZIP
+    depends_on: [bootstrap_auto, stage_ux, interaction_scenario]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-first-test-ux
+    worktree: /home/dev/projects/events-bot-new-autopresenter-internet-test
+    writable_files:
+      - tools/autopresenter/**
+      - site/src/pages/internal/presenter-stage.astro
+      - docs/features/static-site-pages/auto-present/README.md
+      - CHANGELOG.md
+      - .codex/integration/**
+    forbidden_files:
+      - tools/autopresenter/m0/**
+    expected_output: deployed public first-test update with exact-HEAD evidence
+    verification_scope: full_local
+    effort: high
+    status: planned
