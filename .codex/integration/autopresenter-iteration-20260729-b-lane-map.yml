@@ -1,0 +1,144 @@
+mode: serial_integrator_with_parallel_discovery_and_isolated_pwa_worker
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/integration/autopresenter-service-scenes
+base_sha: 23e6be76b4e04d79cb3dc1004715790df3cfff92
+base_branch: integration/autopresenter-service-scenes
+integration_branch: integration/autopresenter-iteration-20260729-b
+global_constraints:
+  - Preserve scenes without an explicit R01-R25 correction.
+  - Use preview-20260729-focus-simple-r15-a5cc0256 for all live-site demonstrations.
+  - Keep one persistent Chromium context/page/window; only Shutdown may close it.
+  - Use the existing Fly app and existing Yandex Object Storage/CDN resources; create no infrastructure.
+  - Never modify tools/autopresenter/m0/**.
+  - Append requirements to the user-authored base scenario; do not rewrite its source sections.
+  - Run targeted tests during iteration and only one full regression gate before handoff.
+verification_owner: INT
+stop_conditions:
+  - A requested live behavior requires weakening authentication or exposing credentials.
+  - Approved TELEGRAM_AUTH_BUNDLE_E2E is unavailable for the requested Telegram media.
+  - The latest preview genuinely lacks a requested not-yet-deployed product surface.
+lanes:
+  - id: DISC-INTRO
+    role: planner
+    requirement_ids: []
+    support_requirement_ids: [R01, R02, R03]
+    target: Map historical Hero Talk timing, current space loss, and countdown copy.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Exact minimum timing/DOM/CSS correction.
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: DISC-LECTURE
+    role: planner
+    requirement_ids: []
+    support_requirement_ids: [R04, R05, R06, R07, R08, R15]
+    target: Visual and implementation audit of the seven lecture scenes at FHD.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Screenshot-backed defect list and bounded fixes.
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: DISC-LIVE
+    role: planner
+    requirement_ids: []
+    support_requirement_ids: [R10, R11, R16, R18, R19, R20, R21, R22, R23, R24]
+    target: Map latest preview routes, auth/search path, NPS, people, artifact and rail hooks.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Live route/selector/auth evidence and safe implementation guidance.
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: DISC-MEDIA
+    role: planner
+    requirement_ids: []
+    support_requirement_ids: [R09, R12, R13, R17, R19, R21]
+    target: Locate canonical site icons, medallions, real KGD80 people data, Telegram joke audio, and a reusable licensed error sting.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Source paths, provenance, licenses and media handoff.
+    verification_scope: inspection_only
+    effort: high
+    status: planned
+  - id: PWA
+    role: worker
+    requirement_ids: [R10, R25]
+    target: Slow visible mobile-menu control affordance and manual vertical scroll strip/protocol.
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/autopresenter-iteration-20260729-b/pwa
+    worktree: /home/dev/.codex/worktrees/events-bot-new/autopresenter-pwa-20260729-b
+    writable_files:
+      - tools/autopresenter/relay/control/**
+      - tools/autopresenter/relay/server.py
+      - tools/autopresenter/relay/tests/**
+      - .codex/lanes/autopresenter-pwa-20260729-b/RESULTS.md
+    forbidden_files:
+      - tools/autopresenter/agent/**
+      - tools/autopresenter/m0/**
+      - site/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: Committed PWA/server changes with targeted tests and RESULTS.md.
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: INT
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R11, R12, R13, R14, R15, R16, R17, R18, R19, R20, R21, R22, R23, R24]
+    support_requirement_ids: [R10, R25]
+    target: Implement scene/agent/media/auth fixes, consolidate docs, integrate PWA, validate, deploy and hand off.
+    depends_on: [DISC-INTRO, DISC-LECTURE, DISC-LIVE, DISC-MEDIA, PWA]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-iteration-20260729-b
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files:
+      - docs/features/static-site-pages/auto-present/**
+      - site/src/pages/internal/presenter-stage/index.astro
+      - site/tests/presenter-stage.test.mjs
+      - tools/autopresenter/agent/**
+      - tools/autopresenter/prototype/first-test/**
+      - tools/autopresenter/relay/**
+      - .codex/integration/**
+      - .codex/skills/**
+      - CHANGELOG.md
+    forbidden_files:
+      - tools/autopresenter/m0/**
+      - unrelated production application files
+    expected_output: Clean public branch, existing Fly deploy, fresh Windows ZIP, Telegram handoff, integration report.
+    verification_scope: targeted_then_full_final
+    effort: high
+    status: planned
+  - id: AUDIT
+    role: reviewer
+    requirement_ids: []
+    support_requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12, R13, R14, R15, R16, R17, R18, R19, R20, R21, R22, R23, R24, R25]
+    target: Read-only closure audit against every original requirement and integration evidence.
+    depends_on: [INT]
+    execution_mode: serial_after_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-continuous
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Done/Partial/Missing/Blocked verdict per R01-R25.
+    verification_scope: inspection_only
+    effort: high
+    status: planned
