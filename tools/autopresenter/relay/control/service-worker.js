@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'autopresenter-control-shell-v6';
+const CACHE_VERSION = 'autopresenter-control-shell-v7';
 const CONTROL_SHELL = [
   '/control/',
   '/control/auth-storage.js',

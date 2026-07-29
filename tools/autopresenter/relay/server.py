@@ -20,7 +20,11 @@ import zipfile
 
 from aiohttp import web
 
-ALLOWED_ACTIONS = frozenset({"run", "stop", "reset", "shutdown"})
+ALLOWED_ACTIONS = frozenset({"run", "scroll", "stop", "reset", "shutdown"})
+SCROLL_DIRECTIONS = frozenset({"up", "down"})
+DEFAULT_SCROLL_AMOUNT = 420
+MIN_SCROLL_AMOUNT = 120
+MAX_SCROLL_AMOUNT = 1200
 ALLOWED_SCENARIOS = frozenset(
     {
         "intro-loop",
@@ -98,7 +102,7 @@ class Command:
     sequence: int
     action: str
     scenario: str | None
-    options: dict[str, str]
+    options: dict[str, Any]
     issued_epoch: float
     expires_epoch: float
     acknowledgments: list[dict[str, Any]] = field(default_factory=list)
@@ -178,10 +182,10 @@ class Relay:
             raise ApiError(
                 400,
                 "invalid_action",
-                "action must be run, stop, reset, or shutdown",
+                "action must be run, scroll, stop, reset, or shutdown",
             )
         normalized_scenario: str | None = None
-        normalized_options: dict[str, str] = {}
+        normalized_options: dict[str, Any] = {}
         if action == "run":
             normalized_scenario = str(scenario or "tomorrow-mobile").strip()
             if normalized_scenario not in ALLOWED_SCENARIOS:
@@ -208,6 +212,48 @@ class Relay:
                         normalized_options["start_at"] = start_at
                 elif options:
                     raise ApiError(400, "unexpected_options", "this scenario accepts no options")
+        elif action == "scroll":
+            if scenario not in (None, ""):
+                raise ApiError(
+                    400,
+                    "unexpected_scenario",
+                    "scroll commands do not accept a scenario",
+                )
+            if not isinstance(options, dict):
+                raise ApiError(
+                    400,
+                    "invalid_options",
+                    "scroll options must be an object",
+                )
+            direction = str(options.get("direction") or "").strip().lower()
+            if direction not in SCROLL_DIRECTIONS:
+                raise ApiError(
+                    400,
+                    "invalid_scroll_direction",
+                    "scroll direction must be up or down",
+                )
+            amount = options.get("amount", DEFAULT_SCROLL_AMOUNT)
+            if (
+                isinstance(amount, bool)
+                or not isinstance(amount, int)
+                or not MIN_SCROLL_AMOUNT <= amount <= MAX_SCROLL_AMOUNT
+            ):
+                raise ApiError(
+                    400,
+                    "invalid_scroll_amount",
+                    (
+                        "scroll amount must be an integer from "
+                        f"{MIN_SCROLL_AMOUNT} to {MAX_SCROLL_AMOUNT}"
+                    ),
+                )
+            extra_keys = set(options) - {"direction", "amount"}
+            if extra_keys:
+                raise ApiError(
+                    400,
+                    "unexpected_options",
+                    "scroll accepts only direction and amount",
+                )
+            normalized_options = {"direction": direction, "amount": amount}
         elif scenario not in (None, "") or options not in (None, "", {}):
             raise ApiError(
                 400,
@@ -247,11 +293,17 @@ class Relay:
             self._next_sequence += 1
             self._commands.append(command)
             self._by_id[command.id] = command
-            self._current_command_id = command.id
             if action == "run":
+                self._current_command_id = command.id
                 self._presentation_status = "running"
                 self._detail = f"Scenario {normalized_scenario} queued"
+            elif action == "scroll":
+                # A manual viewport nudge is an overlay control. Keep the active
+                # scene and its status visible in the PWA while the command is
+                # delivered and acknowledged.
+                pass
             elif action in {"stop", "shutdown"}:
+                self._current_command_id = command.id
                 self._presentation_status = "stopping"
                 self._detail = (
                     "Presentation shutdown requested"
@@ -259,6 +311,7 @@ class Relay:
                     else "Stop requested"
                 )
             else:
+                self._current_command_id = command.id
                 self._presentation_status = "idle"
                 self._detail = "Reset requested"
             self._condition.notify_all()
@@ -340,9 +393,10 @@ class Relay:
             }
             if acknowledgment not in command.acknowledgments:
                 command.acknowledgments.append(acknowledgment)
-            self._current_command_id = command.id
-            self._presentation_status = status
-            self._detail = acknowledgment["detail"] or status
+            if command.action != "scroll":
+                self._current_command_id = command.id
+                self._presentation_status = status
+                self._detail = acknowledgment["detail"] or status
             self._condition.notify_all()
             return command
 

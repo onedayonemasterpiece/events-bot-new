@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#090f1f">
-  <meta name="application-name" content="Пульт презентации">
+  <meta name="application-name" content="Пульт">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Пульт">
   <link rel="manifest" href="/control/manifest.webmanifest">
   <link rel="icon" href="/control/icons/icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="/control/icons/icon-192.png">
-  <title>Пульт презентации</title>
+  <title>Пульт</title>
   <style>
     :root {
       color-scheme: dark;
@@ -177,6 +177,49 @@
       text-underline-offset: 3px;
     }
     .access-reset:hover { border: 0; color: #c5cffa; background: transparent; }
+    .manual-scroll {
+      position: fixed;
+      z-index: 40;
+      top: 50%;
+      right: max(6px, env(safe-area-inset-right));
+      width: 44px;
+      padding: 5px;
+      display: grid;
+      gap: 5px;
+      transform: translateY(-50%);
+      border: 1px solid rgba(164,180,230,.26);
+      border-radius: 17px;
+      background: rgba(9,15,31,.9);
+      box-shadow: 0 12px 36px rgba(0,0,0,.38);
+      backdrop-filter: blur(14px);
+    }
+    .manual-scroll-label {
+      padding: 4px 0 2px;
+      color: #95a6d7;
+      font-size: .56rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+    button.manual-scroll-button {
+      width: 32px;
+      min-height: 44px;
+      border-radius: 12px;
+      padding: 0;
+      font-size: 1.15rem;
+      line-height: 1;
+      touch-action: manipulation;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
     @keyframes pulse { 50% { transform: scale(.72); opacity: .6; } }
     @media (min-height: 900px) { body { place-items: start center; } }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
@@ -185,7 +228,7 @@
 <body>
   <main>
     <p class="eyebrow">Kenig Events · Live control</p>
-    <h1>Пульт<br>презентации</h1>
+    <h1>Пульт</h1>
     <p class="lede">Сцены меняются в одном окне. Настоящие жесты и сильные полноэкранные кадры.</p>
     <section class="timer-shelf" aria-label="Таймер презентации"><div><span id="timer-mode">Время презентации</span><output id="presentation-timer">00:00:00</output></div><small id="timer-note">Запустится с первой сцены</small></section>
     <section class="panel" aria-labelledby="control-title">
@@ -219,7 +262,7 @@
           <div class="scene-list">
             <button class="scenario" type="button" data-action="run" data-scenario="service-wordmark" aria-pressed="false"><span>03.1</span><span>Логотип «Анонсы»<small>Кинетический стрейч буквы «о»</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-needs" aria-pressed="false"><span>03.2</span><span>Что нужно человеку<small>Найти, поделиться, не забыть</small></span></button>
-            <button class="scenario" type="button" data-action="run" data-scenario="weekend-amber-artifact" aria-pressed="false"><span>03.3</span><span>Найти артефакт<small>Живой мобильный сценарий</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="weekend-amber-artifact" aria-pressed="false"><span>03.3</span><span>Найти артефакт<small>Меню с паузой → «Выходные» → артефакт</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-medallions" aria-pressed="false"><span>03.4</span><span>Что такое медальоны<small>Ключевой смысл одним взглядом</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-medallions-desktop" aria-pressed="false"><span>03.5</span><span>Медальоны · desktop<small>Реальная страница события</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-medallions-mobile" aria-pressed="false"><span>03.6</span><span>Медальоны · mobile<small>Реальная страница на телефоне</small></span></button>
@@ -238,7 +281,7 @@
         <details class="scene-group" >
           <summary>Живые демонстрации и финал<span>4</span></summary>
           <div class="scene-list">
-            <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-mobile" aria-pressed="false"><span>04.1</span><span>Событие завтра<small>Rail → описание события</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-mobile" aria-pressed="false"><span>04.1</span><span>Событие завтра<small>Меню с паузой → «Завтра» → rail</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-rail-like" aria-pressed="false"><span>04.2</span><span>Лайк через rail<small>Дотянуть влево и лайкнуть</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="weekend-desktop" aria-pressed="false"><span>04.3</span><span>Выходные · desktop<small>Смысл, затем FHD и прокрутка</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="outro-qr" aria-pressed="false"><span>05</span><span>Аутро с QR<small>Полноэкранный опрос</small></span></button>
@@ -255,6 +298,15 @@
       <p class="meta" id="meta">Интернет · защищённый HTTPS-пульт</p>
     </section>
   </main>
+  <aside class="manual-scroll" aria-label="Ручная прокрутка демонстрации">
+    <span class="manual-scroll-label" aria-hidden="true">Экран</span>
+    <button class="manual-scroll-button" type="button" data-action="scroll" data-direction="up" data-amount="420" title="Прокрутить демонстрацию вверх">
+      ↑<span class="visually-hidden">Прокрутить демонстрацию вверх</span>
+    </button>
+    <button class="manual-scroll-button" type="button" data-action="scroll" data-direction="down" data-amount="420" title="Прокрутить демонстрацию вниз">
+      ↓<span class="visually-hidden">Прокрутить демонстрацию вниз</span>
+    </button>
+  </aside>
   <script src="/control/auth-storage.js"></script>
   <script>
     const statusNode = document.querySelector('#status');
@@ -370,7 +422,7 @@
       }
     }
 
-    async function issue(action, scenario = '') {
+    async function issue(action, scenario = '', options = null) {
       if (posting) return;
       if (
         action === 'shutdown'
@@ -399,6 +451,9 @@
           }
           if (!Object.keys(command.options).length) delete command.options;
         }
+        if (action === 'scroll') {
+          command.options = options;
+        }
         const response = await fetch('/api/commands', {
           method: 'POST',
           headers: authHeaders({'Content-Type': 'application/json'}),
@@ -417,7 +472,13 @@
 
     buttons.forEach(button => button.addEventListener('click', () => {
       if (button.dataset.action === 'reset') localStorage.removeItem(presentationStartedKey);
-      issue(button.dataset.action, button.dataset.scenario || '');
+      const scrollOptions = button.dataset.action === 'scroll'
+        ? {
+            direction: button.dataset.direction,
+            amount: Number(button.dataset.amount),
+          }
+        : null;
+      issue(button.dataset.action, button.dataset.scenario || '', scrollOptions);
     }));
     introStartInput.addEventListener('input', updateTimer);
     forgetAccessButton.addEventListener('click', () => {

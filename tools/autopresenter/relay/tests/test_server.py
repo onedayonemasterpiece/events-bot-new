@@ -35,7 +35,8 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/control/")
         text = await response.text()
         self.assertEqual(response.status, 200)
-        self.assertIn("<title>Пульт презентации</title>", text)
+        self.assertIn("<title>Пульт</title>", text)
+        self.assertIn('<meta name="application-name" content="Пульт">', text)
         self.assertIn('rel="manifest" href="/control/manifest.webmanifest"', text)
         self.assertIn('data-scenario="intro-loop"', text)
         for index in range(1, 8):
@@ -57,6 +58,11 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(">Сброс<", text)
         self.assertIn(">Закрыть презентацию<", text)
         self.assertIn("window.confirm(", text)
+        self.assertIn('aria-label="Ручная прокрутка демонстрации"', text)
+        self.assertIn('data-action="scroll" data-direction="up" data-amount="420"', text)
+        self.assertIn('data-action="scroll" data-direction="down" data-amount="420"', text)
+        self.assertIn("Меню с паузой → «Выходные» → артефакт", text)
+        self.assertIn("Меню с паузой → «Завтра» → rail", text)
         self.assertIn("Сбросить доступ на этом устройстве", text)
 
         response, payload = await self.json("GET", "/api/state")
@@ -247,6 +253,134 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 409)
         self.assertEqual(payload["error"], "idempotency_conflict")
 
+    async def test_manual_scroll_is_bounded_and_preserves_active_scene_state(self):
+        await self.json(
+            "POST",
+            "/api/state/agent",
+            json={"agent_id": "agent-one", "status": "idle"},
+        )
+        run_response, run_payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={
+                "action": "run",
+                "scenario": "tomorrow-mobile",
+                "command_id": "active-scene",
+            },
+        )
+        self.assertEqual(run_response.status, 202)
+        self.assertEqual(run_payload["state"]["status"], "running")
+        response, payload = await self.json(
+            "POST",
+            "/api/commands/active-scene/ack",
+            json={
+                "agent_id": "agent-one",
+                "sequence": 1,
+                "status": "completed",
+                "detail": "scenario ready for manual scroll",
+            },
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["state"]["status"], "completed")
+
+        body = {
+            "action": "scroll",
+            "command_id": "scroll-down",
+            "options": {"direction": "down", "amount": 420},
+        }
+        response, payload = await self.json("POST", "/api/commands", json=body)
+        self.assertEqual(response.status, 202)
+        self.assertEqual(payload["command"]["action"], "scroll")
+        self.assertIsNone(payload["command"]["scenario"])
+        self.assertEqual(payload["command"]["options"], body["options"])
+        self.assertEqual(payload["state"]["status"], "completed")
+        self.assertEqual(payload["state"]["current_command"]["id"], "active-scene")
+
+        response, payload = await self.json(
+            "POST",
+            "/api/commands/scroll-down/ack",
+            json={
+                "agent_id": "agent-one",
+                "sequence": 2,
+                "status": "completed",
+                "detail": "viewport nudged down",
+            },
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["state"]["status"], "completed")
+        self.assertEqual(payload["state"]["current_command"]["id"], "active-scene")
+        self.assertEqual(
+            payload["state"]["detail"],
+            "scenario ready for manual scroll",
+        )
+
+        response, payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={
+                "action": "scroll",
+                "command_id": "scroll-up-default",
+                "options": {"direction": "UP"},
+            },
+        )
+        self.assertEqual(response.status, 202)
+        self.assertEqual(
+            payload["command"]["options"],
+            {"direction": "up", "amount": 420},
+        )
+
+    async def test_manual_scroll_rejects_unbounded_or_ambiguous_options(self):
+        invalid_cases = (
+            ({}, "invalid_options"),
+            ({"options": {}}, "invalid_scroll_direction"),
+            (
+                {"options": {"direction": "sideways", "amount": 420}},
+                "invalid_scroll_direction",
+            ),
+            (
+                {"options": {"direction": "down", "amount": 119}},
+                "invalid_scroll_amount",
+            ),
+            (
+                {"options": {"direction": "down", "amount": 1201}},
+                "invalid_scroll_amount",
+            ),
+            (
+                {"options": {"direction": "down", "amount": True}},
+                "invalid_scroll_amount",
+            ),
+            (
+                {
+                    "options": {
+                        "direction": "down",
+                        "amount": 420,
+                        "selector": "body",
+                    }
+                },
+                "unexpected_options",
+            ),
+            (
+                {
+                    "scenario": "tomorrow-mobile",
+                    "options": {"direction": "down", "amount": 420},
+                },
+                "unexpected_scenario",
+            ),
+        )
+        for index, (extra, expected_error) in enumerate(invalid_cases):
+            with self.subTest(extra=extra):
+                response, payload = await self.json(
+                    "POST",
+                    "/api/commands",
+                    json={
+                        "action": "scroll",
+                        "command_id": f"invalid-scroll-{index}",
+                        **extra,
+                    },
+                )
+                self.assertEqual(response.status, 400)
+                self.assertEqual(payload["error"], expected_error)
+
     async def test_expired_command_is_not_delivered(self):
         await self.json("POST", "/api/commands", json={"action": "reset", "command_id": "short"})
         await asyncio.sleep(0.1)
@@ -394,7 +528,7 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content_type, "application/manifest+json")
         self.assertEqual(response.headers["Cache-Control"], "no-cache")
         manifest = await response.json()
-        self.assertEqual(manifest["name"], "Пульт презентации")
+        self.assertEqual(manifest["name"], "Пульт")
         self.assertEqual(manifest["short_name"], "Пульт")
         self.assertNotIn(" ", manifest["short_name"])
         self.assertEqual(manifest["start_url"], "/control/")
