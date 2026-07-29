@@ -7,6 +7,11 @@
 
 ### Added
 
+- Designed the shadow/approval-gated preproduction Festival Web Research lane
+  for grouped `festival_queue` URL and document sources: immutable evidence,
+  Gemma 4 source-local claims, bounded Antigravity counter-checks, deterministic
+  stale-edition/ticket-role gates, operator review, Smart Update-only event
+  apply, quotas, observability and staged rollout.
 - Added an evidence-first Antigravity festival-research prompt pack that splits
   discovery, per-source edition/claim review, reconciliation and adversarial
   verification, with deterministic stale-edition, unsupported-title and

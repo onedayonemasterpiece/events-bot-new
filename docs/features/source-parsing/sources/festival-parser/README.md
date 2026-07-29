@@ -4,6 +4,12 @@
 
 The Universal Festival Parser enables adding/updating festivals by parsing their official website URLs using a Kaggle notebook with Playwright + Gemma 3-27B LLM.
 
+Preproduction design for grouped, evidence-first processing of
+`festival_queue.source_kind=url` and all non-social linked sources:
+[`preproduction-web-research.md`](preproduction-web-research.md). It is a
+shadow/approval-gated successor lane; the current Universal Festival Parser
+remains the baseline until its rollout gates pass.
+
 ## Architecture: RDR (Render–Distill–Reason)
 
 ```mermaid
