@@ -1,0 +1,35 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/integration/focus-email-otp-e2e-20260729
+base_branch: integration/focus-email-otp-e2e-20260729
+integration_branch: integration/focus-email-otp-e2e-20260729
+global_constraints:
+  - Preserve the working hosted six-digit OTP and magic-link contract.
+  - User-facing copy must avoid implementation vocabulary.
+  - Research expiry must not delete the ordinary account, saved events or product settings.
+  - Do not publish to the production root.
+verification_owner: /root
+stop_conditions:
+  - A change would merge an unrelated stale branch wholesale.
+  - A secret or live OTP would enter Git or a generated page.
+lanes:
+  - id: integrator
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07]
+    target: shared focus onboarding/auth/PWA product flow
+    depends_on: []
+    execution_mode: serial_after_dependency
+    branch: integration/focus-email-otp-e2e-20260729
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-r15-e2e-final
+    writable_files:
+      - site/**
+      - docs/**
+      - CHANGELOG.md
+      - .codex/lanes/focus-auth-product-fixes-20260729/**
+    forbidden_files:
+      - .env
+      - artifacts/**
+    expected_output: committed product corrections, browser evidence and immutable candidate
+    verification_scope: full_local
+    effort: extra-high
+    status: in_progress

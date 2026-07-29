@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Fixed
+- Focus-group onboarding now responds immediately when an email is requested,
+  reveals the six-digit code form after delivery, supports cooldown resend and
+  exposes an obvious signed-in account/logout state. Its user-facing copy
+  explains that confirmation is optional for the site but required for the
+  theatre-ticket draw, without implementation jargon.
+- Focus-group installation now uses the permanent `Анонсы` app identity,
+  standard icon and ordinary home start route instead of disposable
+  `Анонсы Lab`. Research expiry preserves the ordinary account, saved events,
+  product settings and an explicitly accepted continuing communication choice.
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 - Focus-group email identity now supports both paths from one hosted message:
   a visible magic-link CTA and a six-digit numeric OTP whose last digit

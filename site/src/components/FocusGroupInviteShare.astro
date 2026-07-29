@@ -9,9 +9,8 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
     <p class="focus-share__eyebrow">Пригласить в фокус-группу</p>
     <h2 id="focus-share-title">Одна ссылка — тот же адрес в QR</h2>
     <p>
-      Ссылка и QR открывают один и тот же экран вступления. Код во fragment
-      удалится из адресной строки до остальных действий, а участие останется в
-      этом браузере на 30 дней.
+      Ссылка и QR открывают один и тот же экран вступления. Участие сохранится
+      на этом телефоне на 30 дней.
     </p>
   </div>
 
@@ -29,7 +28,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
         <div class="focus-share__qr-image" data-focus-share-qr aria-live="polite"></div>
         <div class="focus-share__qr-copy">
           <strong>QR ведёт по этой же ссылке</strong>
-          <span>Код строится прямо в браузере и не отправляется во внешний сервис.</span>
+          <span>Можно сразу показать его с экрана или скачать.</span>
           <a
             class="ke-button ke-button--secondary"
             data-focus-share-qr-download
@@ -54,11 +53,8 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
   </div>
 
   <p class="focus-share__boundary">
-    <strong>Граница текущего запуска:</strong> ссылка открывает рабочий
-    browser-local сценарий фокус-группы, но сама не подтверждает личность и
-    пока не имеет серверных max-use/revoke. Email или Яндекс подтверждают
-    аккаунт отдельно; серверная membership остаётся обязательным следующим
-    gate перед публичным набором.
+    <strong>Подтверждение участия — по желанию.</strong> Афишей можно пользоваться
+    без входа. Для участия в розыгрыше билетов нужно войти по email или через Яндекс.
   </p>
 </section>
 
@@ -126,7 +122,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
         result.hidden = false;
         createButton.textContent = 'Создать другую ссылку и QR';
         nativeButton.hidden = typeof navigator.share !== 'function';
-        setStatus('Ссылка и QR готовы. Код нигде не отправлялся и не сохранялся сайтом.');
+        setStatus('Ссылка и QR готовы.');
       } catch {
         setStatus('Браузер не смог создать ссылку и QR. Ничего не было сохранено.');
       }
@@ -137,10 +133,10 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
       try {
         await navigator.share({
           title: 'Фокус-группа «Полюбить Калининград · Анонсы»',
-          text: 'Приглашение проверить продуктовый прототип.',
+          text: 'Приглашение в фокус-группу афиши «Анонсы».',
           url: input.value,
         });
-        setStatus('Системное меню «Поделиться» закрыто. Ссылка не хранится сайтом.');
+        setStatus('Меню «Поделиться» закрыто.');
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
           setStatus('Отправка отменена.');
@@ -154,7 +150,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
       if (!input.value) return;
       try {
         await navigator.clipboard.writeText(input.value);
-        setStatus('Ссылка скопирована. Она открывает вступление, но не заменяет подтверждение аккаунта.');
+        setStatus('Ссылка скопирована.');
       } catch {
         selectFallback();
       }

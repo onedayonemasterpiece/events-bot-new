@@ -65,13 +65,14 @@ test('focus identity supports real email OTP and Yandex linking through the shar
   assert.match(intake, /new URL\(intake\.cleanHref, window\.location\.origin\)\.href/u);
   assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirectTo\)/u);
   assert.match(intake, /auth\.linkYandexIdentity\(\)/u);
-  assert.match(intake, /адрес локально не сохраняется/u);
+  assert.match(intake, /Письмо отправлено\. Введите шесть цифр ниже/u);
   assert.match(intake, /inputmode="numeric"/u);
   assert.match(intake, /autocomplete="one-time-code"/u);
   assert.match(intake, /maxlength="6"/u);
   assert.match(intake, /canSubmitEmailOtp/u);
   assert.match(intake, /token\.length === EMAIL_OTP_LENGTH[\s\S]*void submitOtp\(\)/u);
   assert.match(invitation, /<StaticSiteAuthRuntime \/>/u);
+  assert.match(intake, /data-static-auth-logout/u);
   assert.doesNotMatch(intake, /Макет не отправлял код|провайдер не запускается/u);
 });
 

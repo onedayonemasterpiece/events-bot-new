@@ -23,8 +23,9 @@ side effects:
 - `/` остаётся обычной продуктовой главной R15 и не подменяется программой;
 - `/fokus-gruppa/` — программа и честная механика благодарности;
 - `/fokus-gruppa/priglashenie/` — fragment intake, немедленное удаление кода,
-  отдельная 30-дневная participation marker с отсчётом от вступления, focus PWA
-  install/start controller и необязательный email/Яндекс identity-choice.
+  отдельная 30-дневная participation marker с отсчётом от вступления,
+  установка постоянного приложения «Анонсы» и необязательный email/Яндекс
+  identity-choice.
   Страница программы и закрытый hub сразу показывают один точный fragment URL
   и соответствующий QR, без дополнительного скрытого шага: ссылку можно
   открыть/скопировать/поделиться, а детерминированный локальный SVG скачать
@@ -70,6 +71,26 @@ production URL, а в immutable candidate — тот же маршрут под 
 `build-secret-candidate.mjs` по-прежнему владеют своими root transformations;
 наличие focus routes не считается production root rollout.
 
+### Продуктовая коррекция 29.07.2026
+
+- onboarding обращается к новому пользователю обычными словами и не показывает
+  implementation vocabulary (`fragment`, `membership`, `identity`,
+  `localStorage`, `PWA`);
+- подтверждение email/Яндекс прямо названо необязательным для использования
+  афиши и важным для участия в розыгрыше двух театральных билетов;
+- после нажатия `Получить код и ссылку` сразу появляется состояние отправки,
+  после ответа — видимая форма шестизначного кода; через 60 секунд разрешена
+  повторная отправка, а изменение адреса сбрасывает только предыдущий код;
+- вошедший пользователь видит имя и кнопку `Выйти` непосредственно на экране
+  вступления; logout не удаляет участие, сохранённые события или настройки;
+- focus route использует тот же manifest identity, имя, иконки и start route,
+  что обычное приложение `Анонсы`; отдельного `Анонсы Lab` больше нет;
+- окончание 30-дневного исследования выключает только исследовательский режим.
+  Аккаунт, приложение, сохранения и продуктовые настройки продолжают работать;
+- явно отмеченный выбор получать итоги фокус-группы, результат розыгрыша и
+  важные обновления сохраняется после исследования до отзыва. Он не
+  предвыбран и не создаётся из факта входа, установки приложения или участия.
+
 ## 1. Решение
 
 30 июля сайт не объявляется готовым для всей аудитории и не закрывает общий
@@ -78,7 +99,8 @@ public-release checklist. Запускается отдельный **режим
 - ограниченный cohort с атомарным потолком `200`;
 - участие можно начать без email/Яндекса; подтверждённая identity остаётся
   необязательным upgrade для восстановления и связи между устройствами;
-- PWA как основной путь возвращения, но не обязательное условие участия;
+- обычное приложение «Анонсы» как удобный путь возвращения, но не обязательное
+  условие участия;
 - явный feedback layer на всех ключевых page families;
 - отдельный быстрый путь исправления фактов события;
 - один консолидированный анализ feedback в сутки в течение месяца;
@@ -242,8 +264,8 @@ QR конкретной пасхалки не переносит tester status �
 
 - `active → alumni` даже если housekeeping job опоздал;
 - tester feedback prompts, новые invites и weekly tester mail выключаются;
-- Supabase Auth identity, явно сохранённые события и обычные пользовательские
-  consent остаются;
+- Supabase Auth identity, явно сохранённые события, product settings и
+  сделанные пользователем consent-choice остаются;
 - recommendation/marketing consent не создаётся автоматически;
 - участник становится обычным пользователем, а не удаляется.
 
@@ -259,32 +281,40 @@ session; 30-дневная focus participation marker и обычная перс
 
 ## 4. Зачем участник может подтвердить email или Яндекс
 
-Email запрашивается после объяснения ценности, а не как безымянная стена:
+Email запрашивается после объяснения ценности, а не как безымянная стена.
+Основная понятная человеку ценность — возможность участвовать в розыгрыше
+двух театральных билетов и получить результат:
 
 1. сохранить статус тестера и прогресс между устройствами;
 2. получить личный weekly impact review: что проверено, что принято в работу,
    что исправлено и что появилось;
 3. восстановить доступ после переустановки PWA/очистки браузера;
 4. получить ограниченную возможность пригласить ещё одного участника;
-5. получить уведомление о результате prize programme, только если он будет
-   отдельно юридически принят и пользователь подал заявку.
+5. получить уведомление о результате розыгрыша.
 
 Подтверждение необязательно для входа в исследовательские страницы, но до
 уведомления/получения материального приза победителю понадобится
 опубликованный способ подтвердить, что result ledger принадлежит именно ему.
 Это не должно менять уже набранный проверяемый результат.
 
-Нужны раздельные цели:
+На текущем экране есть один явный, не предвыбранный выбор получать итоги
+фокус-группы, результат розыгрыша и важные обновления «Анонсов». Этот выбор не
+истекает автоматически вместе с 30-дневным исследованием, поэтому его не надо
+просить повторно на 31-й день; пользователь может снять его в любой момент.
+Факт входа или участия сам по себе этот выбор не создаёт.
+
+Отдельные будущие рекламные или персональные рассылки, которые не входят в
+показанный пользователю текст, требуют своей цели и своего согласия.
 
 - подтверждение email и focus-group identity;
-- согласие на еженедельную исследовательскую коммуникацию ровно на срок cohort;
-- обычные рекомендации/маркетинг — отдельный необязательный consent.
+- явно показанный continuing communication choice;
+- любые новые рекомендации/маркетинг вне его текста — отдельный необязательный
+  consent.
 
 Никаких prechecked boxes. Отказ от email/Яндекса оставляет участие активным на
-текущем устройстве, но weekly email отсутствует и восстановление после очистки
-браузера не обещается. Отзыв research-mail consent прекращает именно письма и
-не должен автоматически удалять membership, PWA, сохранения или
-персонализацию. Обычная подписка не появляется из tester/PWA/calendar state.
+текущем устройстве. Отзыв communication choice прекращает именно письма и не
+должен автоматически удалять membership, приложение, сохранения или
+персонализацию. Обычная подписка не появляется из tester/install/calendar state.
 
 `tester@kenigevents.ru` — обязательный human support/Reply-To alias or mailbox
 для программы. До показа адреса должны быть подтверждены создание, MX/routing,
@@ -567,12 +597,15 @@ leaderboards of tiny page cohorts.
   immutable focus candidate including post-R14 PWA/icon/analytics changes.
 - [ ] Rehearse candidate rollback/freshness and close live OAuth/Search on the
   exact frozen candidate; do not call old R14 candidate current.
-- [ ] Implement optional email OTP/magic link + Yandex identity upgrade,
-  anonymous continuation and idempotent anonymous→verified progress merge.
+- [x] Implement optional email OTP/magic link + Yandex identity UI, anonymous
+  continuation, immediate send feedback, visible numeric OTP, cooldown resend
+  and obvious logout. Durable anonymous→verified progress merge remains in the
+  membership backend item below.
 - [ ] Implement program/membership/invite RPC, seed QR, referral, atomic cap 200,
   expiry/alumni/withdrawal and negative auth/concurrency tests.
-- [ ] Publish focus terms/privacy/retention and purpose-specific tester-mail
-  consent; keep recommendation consent separate.
+- [ ] Publish focus terms/privacy/retention and persist the explicit continuing
+  communication choice server-side; keep any purpose not named in its visible
+  text separate.
 - [ ] Implement shared usefulness/improvement UI plus typed event-fact issue UI,
   authenticated RPC, idempotency/rate limits and operator-visible receipt.
 - [ ] Implement one daily digest claim/redaction/clustering/triage path and

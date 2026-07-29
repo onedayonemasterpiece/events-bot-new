@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  FOCUS_CONTINUING_CONSENT_STORAGE_KEY,
   FOCUS_PARTICIPATION_DURATION_MS,
   FOCUS_PARTICIPATION_MAX_BYTES,
   FOCUS_PARTICIPATION_STORAGE_KEY,
@@ -10,6 +11,8 @@ import {
   inspectFocusInviteUrl,
   parseFocusParticipationMarker,
   readFocusParticipationMarker,
+  readFocusContinuingConsent,
+  setFocusContinuingConsent,
   storeFocusParticipationMarker,
   updateFocusParticipationIdentityChoice,
   type FocusStorage,
@@ -152,4 +155,33 @@ test('participation payload never retains invite, email or identity credentials'
   assert.equal(raw.includes('invite='), false);
   assert.equal(raw.includes('@'), false);
   assert.equal(raw.includes('token'), false);
+});
+
+test('an accepted updates choice survives the end of the 30-day research period', () => {
+  const storage = new MemoryStorage();
+  const now = Date.UTC(2026, 6, 29, 12, 0, 0);
+  storeFocusParticipationMarker(storage, now);
+  activateFocusParticipation(storage, 'email_intent', now + 1);
+  const accepted = setFocusContinuingConsent(storage, true, now + 2);
+
+  assert.ok(accepted);
+  assert.ok(readFocusContinuingConsent(storage));
+  assert.equal(
+    readFocusParticipationMarker(storage, now + 1 + FOCUS_PARTICIPATION_DURATION_MS),
+    null,
+  );
+  assert.ok(readFocusContinuingConsent(storage));
+  assert.equal(storage.getItem(FOCUS_CONTINUING_CONSENT_STORAGE_KEY)?.includes('@'), false);
+});
+
+test('the updates choice can be withdrawn without changing participation', () => {
+  const storage = new MemoryStorage();
+  const now = Date.UTC(2026, 6, 29, 12, 0, 0);
+  storeFocusParticipationMarker(storage, now);
+  activateFocusParticipation(storage, 'skipped', now + 1);
+  setFocusContinuingConsent(storage, true, now + 2);
+  setFocusContinuingConsent(storage, false, now + 3);
+
+  assert.equal(readFocusContinuingConsent(storage), null);
+  assert.ok(readFocusParticipationMarker(storage, now + 4));
 });

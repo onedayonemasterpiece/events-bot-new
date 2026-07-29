@@ -12,7 +12,7 @@ const sections = [
   ['/vyhodnye/', 'Выходные', 'Спланировать ближайшие выходные'],
   ['/populyarnoe/', 'Популярное', 'Посмотреть события с заметным интересом'],
   ['/poisk/', 'Поиск', 'Проверить поиск и готовые сценарии'],
-  ['/dlya-menya/', 'Для меня', 'Настроить честный локальный прототип'],
+  ['/dlya-menya/', 'Для меня', 'Настроить рекомендации под свои интересы'],
   ['/festivali/', 'Фестивали', 'Открыть календарь больших программ'],
   ['/fokus-gruppa/kollektsiya/', 'Коллекция', 'Проверить пасхалки и условие третьего события'],
 ] as const;
@@ -41,19 +41,16 @@ const robots = IS_SECRET_CANDIDATE
       <section class="focus-secret__gate" data-secret-checking aria-live="polite">
         <span class="focus-secret__spinner" aria-hidden="true"></span>
         <h1>Проверяем участие на устройстве</h1>
-        <p>Это локальная UX-проверка, а не проверка авторизации.</p>
+        <p>Это займёт всего несколько секунд.</p>
       </section>
 
       <section class="focus-secret__gate focus-secret__gate--locked" data-secret-locked hidden>
-        <FocusLabBadge label="Лаборатория сайта" detail="Закрытый hub · прототип" />
-        <p class="focus-secret__eyebrow">Нужен маршрут приглашения</p>
-        <h1>В этом браузере нет метки текущего периода</h1>
+        <FocusLabBadge label="Фокус-группа" detail="Приглашение" />
+        <p class="focus-secret__eyebrow">Нужно приглашение</p>
+        <h1>На этом телефоне участие ещё не сохранено</h1>
         <p>
-          После вступления локальная метка даёт 30 дней возврата в PWA и не
-          зависит от персонализации. Если её нет, снова откройте исходное
-          приглашение. Метка не заменяет identity, сессию или server membership;
-          после очистки данных браузера восстановление потребует будущего
-          подтверждённого аккаунта.
+          Снова откройте исходную ссылку или отсканируйте QR-код. После
+          вступления возвращаться в афишу можно будет как обычно.
         </p>
         <div class="focus-secret__gate-actions">
           <a class="ke-button ke-button--primary" href={withBase('/fokus-gruppa/')}>О программе</a>
@@ -65,22 +62,21 @@ const robots = IS_SECRET_CANDIDATE
         <header class="focus-secret__header">
           <a class="focus-secret__brand" href={withBase('/zakrytaya-afisha/')}>
             <img src={withBase('/favicon.svg')} width="48" height="48" alt="" />
-            <span><strong>Полюбить Калининград</strong><small>Закрытая афиша · hub</small></span>
+            <span><strong>Полюбить Калининград</strong><small>Афиша фокус-группы</small></span>
           </a>
           <div class="focus-secret__header-actions">
-            <FocusLabBadge label="Участник лаборатории" detail="Локальный прототип" />
+            <FocusLabBadge label="Фокус-группа" detail="Участие сохранено" />
             <button class="focus-secret__leave" type="button" data-secret-clear>Выйти из фокус-группы</button>
           </div>
         </header>
 
         <section class="focus-secret__account" aria-labelledby="focus-account-title">
           <div>
-            <p class="focus-secret__eyebrow">Независимые состояния</p>
-            <h2 id="focus-account-title">Аккаунт и участие — не одно и то же</h2>
+            <p class="focus-secret__eyebrow">Ваш аккаунт</p>
+            <h2 id="focus-account-title">Вход нужен только для личных возможностей</h2>
             <p>
-              Выход из аккаунта завершает Supabase-сессию, но сохраняет
-              30-дневное участие. Только кнопка «Выйти из фокус-группы»
-              удаляет локальную метку участия; настройки «Для меня» она не стирает.
+              Без входа можно пользоваться афишей и участвовать в исследовании.
+              Войдите, чтобы участвовать в розыгрыше билетов и сохранять свои события.
             </p>
           </div>
           <div class="focus-secret__account-actions">
@@ -108,15 +104,11 @@ const robots = IS_SECRET_CANDIDATE
           <div class="focus-secret__hero-copy">
             <p>
               Выбирайте настоящий сценарий: план на сегодня, выходные, поиск,
-              фестиваль или локальный прототип «Для меня».
+              фестиваль или персональную подборку «Для меня».
             </p>
             <div class="focus-secret__truth">
-              <strong>Hub не защищает и не переносит весь сайт под префикс.</strong>
-              <span>
-                В этой single-build демонстрации карточки ведут на существующие
-                страницы. Для реального закрытого candidate нужен отдельный
-                noindex build и server-side privilege checks.
-              </span>
+              <strong>После исследования всё останется на месте.</strong>
+              <span>Аккаунт, избранное, приложение и настройки продолжат работать как обычно.</span>
             </div>
           </div>
         </section>
@@ -137,9 +129,8 @@ const robots = IS_SECRET_CANDIDATE
             <h2>Сначала сделайте что-нибудь полезное</h2>
           </div>
           <p>
-            Автоматический prompt не должен появляться на первом paint. В
-            production usefulness спрашивается после meaningful use, не чаще
-            одного раза на page family за 7 дней и максимум два auto-prompt в сутки.
+            Сначала выберите событие или попробуйте поиск. После этого мы
+            ненавязчиво спросим, помогла ли страница.
           </p>
         </section>
 
@@ -155,7 +146,7 @@ const robots = IS_SECRET_CANDIDATE
         <FocusGroupThankYou compact />
 
         <footer class="focus-secret__footer">
-          <span>Предварительный продуктовый макет · noindex / no-referrer</span>
+          <span>Фокус-группа афиши «Анонсы»</span>
           <span>
             <a href={withBase('/fokus-gruppa/zavershenie/')}>Макет завершения</a>
             · <a href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
@@ -165,8 +156,8 @@ const robots = IS_SECRET_CANDIDATE
 
       <noscript>
         <section class="focus-secret__no-script">
-          Для этой демонстрации локальной метки нужен JavaScript. Обычные
-          статические страницы сайта от этой механики не зависят.
+          Для участия нужно включить JavaScript. Обычные страницы афиши
+          по-прежнему доступны.
         </section>
       </noscript>
     </main>

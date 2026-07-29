@@ -50,7 +50,7 @@ const robots = IS_SECRET_CANDIDATE
     <main class="focus-end" data-focus-end data-root-href={withBase('/')}>
       <nav class="focus-end__nav" aria-label="Навигация">
         <a href={withBase('/fokus-gruppa/')}>← О программе</a>
-        <FocusLabBadge label="Лаборатория сайта" detail="Завершение · прототип" />
+        <FocusLabBadge label="Фокус-группа" detail="Завершение" />
       </nav>
 
       <section class="focus-end__hero">
@@ -75,9 +75,9 @@ const robots = IS_SECRET_CANDIDATE
         ))}
 
         <dl class="focus-end__continuity">
-          <div><dt>Выключается</dt><dd>Tester feedback, NPS prompts, новые invites и focus updates</dd></div>
-          <div><dt>Остаётся</dt><dd>Обычный аккаунт, сохранённые события и отдельные consent</dd></div>
-          <div><dt>Не стирается</dt><dd>Локальный профиль «Для меня» в этом браузере</dd></div>
+          <div><dt>Завершается</dt><dd>Только вопросы и сообщения фокус-группы</dd></div>
+          <div><dt>Остаётся</dt><dd>Обычный аккаунт, сохранённые события и приложение</dd></div>
+          <div><dt>Сохраняется</dt><dd>Ваш выбор новостей и настройки «Для меня»</dd></div>
         </dl>
 
         <div class="focus-end__actions">
@@ -91,13 +91,8 @@ const robots = IS_SECRET_CANDIDATE
       <FocusGroupThankYou compact />
 
       <aside class="focus-end__boundary">
-        <strong>Преемственность — отдельный контракт.</strong>
-        <span>
-          Эта кнопка очищает только отдельную метку участия текущей программы.
-          Ключ локальной персонализации намеренно не затрагивается. В production
-          то же правило должно применяться сервером к membership, а не только
-          через localStorage.
-        </span>
+        <strong>Вы остаётесь пользователем «Анонсов».</strong>
+        <span>Завершение фокус-группы не удаляет аккаунт, избранное, приложение и настройки.</span>
       </aside>
     </main>
   </body>
@@ -122,10 +117,10 @@ const robots = IS_SECRET_CANDIDATE
       try {
         clearFocusParticipationMarker(window.localStorage);
         const status = root.querySelector<HTMLElement>('[data-end-status]');
-        if (status) status.textContent = 'Участие на этом устройстве завершено. Локальные настройки «Для меня» сохранены.';
+        if (status) status.textContent = 'Участие завершено. Настройки «Для меня» сохранены.';
       } catch {
         const status = root.querySelector<HTMLElement>('[data-end-status]');
-        if (status) status.textContent = 'Браузер не дал изменить localStorage. Обычные страницы по-прежнему доступны.';
+        if (status) status.textContent = 'Не получилось завершить участие. Обычные страницы по-прежнему доступны.';
       }
     });
   });

@@ -29,19 +29,24 @@ test('focus programme stays on dedicated noindex/noarchive routes without replac
   assert.match(invitation, /FocusGroupInviteIntake/u);
 });
 
-test('invite intake and secret hub state the local marker boundary', async () => {
+test('invite intake keeps the 30-day boundary while user copy stays plain', async () => {
   const [intake, secret, helper] = await Promise.all([
     read('../src/components/FocusGroupInviteIntake.astro'),
     read('../src/pages/zakrytaya-afisha/index.astro'),
     read('../src/lib/focus-group-prototype.ts'),
   ]);
   assert.match(intake, /history\.replaceState/u);
-  assert.match(intake, /метка участия на полные 30 дней/u);
-  assert.match(intake, /не зависит от\s+настроек «Для меня»/u);
-  assert.match(intake, /не подтверждение личности и не защита/u);
-  assert.match(secret, /UX-проверка, а не проверка авторизации/u);
+  assert.match(intake, /участие сохранено на 30 дней/u);
+  assert.match(intake, /После исследования ничего удалять или настраивать заново не нужно/u);
+  assert.match(intake, /розыгрыше двух билетов в театр/u);
+  assert.match(secret, /После исследования всё останется на месте/u);
   assert.match(secret, /readFocusParticipationMarker/u);
   assert.match(helper, /FOCUS_PARTICIPATION_DURATION_MS = 30 \* 24/u);
+  const visibleIntake = intake
+    .split('<script>')[0]
+    .replace(/^---[\s\S]*?---/u, '')
+    .replace(/<[^>]+>/gu, ' ');
+  assert.doesNotMatch(visibleIntake, /локальн|fragment|membership|identity|localStorage|PKCE/iu);
   assert.doesNotMatch(helper, /FOCUS_PREVIEW/u);
   assert.doesNotMatch(helper, /token:/u);
 });
@@ -57,6 +62,10 @@ test('email identity offers one message with link plus six-digit mobile OTP', as
   assert.match(intake, /autocomplete="one-time-code"/u);
   assert.match(intake, /pattern="\[0-9\]\{6\}"/u);
   assert.match(intake, /После шестой цифры[\s\S]*Enter нажимать не нужно/u);
+  assert.match(intake, /Отправляем письмо с кодом и ссылкой/u);
+  assert.match(intake, /aria-busy/u);
+  assert.match(intake, /Отправить код ещё раз/u);
+  assert.match(intake, /data-static-auth-logout/u);
   assert.match(intake, /window\.setInterval\(tick, 1000\)/u);
   assert.match(auth, /verifyEmailOtp/u);
   assert.match(auth, /verifyOtp/u);
@@ -85,19 +94,22 @@ test('end-state page clears participation but preserves personalization continui
   assert.match(source, /operator_closed/u);
   assert.match(source, /operator_cancelled/u);
   assert.match(source, /clearFocusParticipationMarker/u);
-  assert.match(source, /Локальный профиль «Для меня»/u);
+  assert.match(source, /Ваш выбор новостей и настройки «Для меня»/u);
   assert.doesNotMatch(source, /removeItem\([^)]*focus-personalization/u);
 });
 
 test('account logout and explicit programme exit stay separate on focus surfaces', async () => {
-  const [personal, hub, runtime] = await Promise.all([
+  const [personal, hub, invitation, runtime] = await Promise.all([
     read('../src/pages/dlya-menya/index.astro'),
     read('../src/pages/zakrytaya-afisha/index.astro'),
+    read('../src/components/FocusGroupInviteIntake.astro'),
     read('../src/components/auth/StaticSiteAuthRuntime.astro'),
   ]);
   assert.match(personal, /data-static-auth-logout/u);
   assert.match(personal, /30-дневное участие/u);
   assert.match(hub, /data-secret-clear>Выйти из фокус-группы/u);
+  assert.match(invitation, /data-static-auth-logout/u);
+  assert.match(invitation, />\s*Выйти\s*</u);
   assert.match(hub, /clearFocusParticipationMarker\(focusStorage\)/u);
   assert.doesNotMatch(runtime, /clearFocusParticipationMarker|kenigevents:focus-participation/u);
 });

@@ -20,7 +20,7 @@ const robots = IS_SECRET_CANDIDATE
     <meta name="referrer" content="no-referrer" />
     <link rel="canonical" href={absoluteUrl('/fokus-gruppa/')} />
     <title>Как проходит фокус-группа · Полюбить Калининград Анонсы</title>
-    <meta name="description" content="Программа продуктового прототипа закрытой фокус-группы KenigEvents." />
+    <meta name="description" content="Как проходит фокус-группа афиши «Анонсы»." />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
     <meta name="theme-color" content="#fff7e7" />
   </head>
@@ -29,7 +29,7 @@ const robots = IS_SECRET_CANDIDATE
     <main id="main" class="focus-programme">
       <nav class="focus-programme__nav" aria-label="Навигация фокус-группы">
         <a href={withBase('/')} class="focus-programme__back">← Стартовый экран</a>
-        <FocusLabBadge label="Фокус-группа" detail="Программа · прототип" />
+        <FocusLabBadge label="Фокус-группа" detail="Как всё устроено" />
       </nav>
 
       <header class="focus-programme__hero">
@@ -39,7 +39,7 @@ const robots = IS_SECRET_CANDIDATE
         </div>
         <p>
           Открывайте страницы, когда действительно ищете событие. Раз в неделю
-          отвечайте на общий NPS, отдельно отмечайте полезность конкретных страниц
+          отвечайте на короткий вопрос о впечатлении, отмечайте полезность страниц
           и в любой момент предлагайте улучшение.
         </p>
       </header>
@@ -50,20 +50,20 @@ const robots = IS_SECRET_CANDIDATE
           <h2 id="journey-title">Четыре понятных шага</h2>
         </div>
         <ol>
-          <li><span>01</span><div><strong>Открыть личное приглашение</strong><p>Код живёт во fragment и удаляется из адресной строки на специальной странице.</p></div></li>
-          <li><span>02</span><div><strong>Подтвердить свою identity</strong><p>Email-код / magic link или Яндекс. Ссылка, QR и localStorage не являются входом.</p></div></li>
-          <li><span>03</span><div><strong>Пользоваться афишей</strong><p>Статические страницы остаются полезными, даже если feedback-сервис недоступен.</p></div></li>
+          <li><span>01</span><div><strong>Открыть приглашение</strong><p>Одна ссылка или QR-код сохранят участие на этом телефоне на 30 дней.</p></div></li>
+          <li><span>02</span><div><strong>При желании подтвердить участие</strong><p>Можно войти по коду из письма или через Яндекс. Это понадобится для розыгрыша билетов.</p></div></li>
+          <li><span>03</span><div><strong>Пользоваться афишей</strong><p>Выбирайте события в привычном темпе и возвращайтесь, когда это действительно нужно.</p></div></li>
           <li><span>04</span><div><strong>Говорить честно</strong><p>Тон, длина и количество ответов не дают преимуществ и не меняют возможные шансы.</p></div></li>
         </ol>
       </section>
 
       <section class="focus-programme__signals" aria-labelledby="signals-title">
         <div class="focus-programme__section-head">
-          <p class="focus-programme__eyebrow">Не называем всё NPS</p>
+          <p class="focus-programme__eyebrow">Коротко и по делу</p>
           <h2 id="signals-title">У каждого ответа своя задача</h2>
         </div>
         <div class="focus-programme__signal-grid">
-          <article><span>Раз в неделю / exit</span><h3>Общий NPS 0–10</h3><p>Вероятность рекомендовать весь сервис знакомым.</p></article>
+          <article><span>Раз в неделю</span><h3>Общее впечатление 0–10</h3><p>Насколько вы готовы рекомендовать афишу знакомым.</p></article>
           <article><span>После полезного действия</span><h3>Полезность 0–10</h3><p>Насколько конкретная страница помогла выбрать или понять событие.</p></article>
           <article><span>Всегда доступно</span><h3>Предложение</h3><p>Свободный текст до 2 000 символов без обязательной оценки.</p></article>
           <article><span>Отдельная проверка</span><h3>Ошибка события</h3><p>Дата, время, место и другие факты не меняются без проверки оператора.</p></article>
@@ -77,8 +77,8 @@ const robots = IS_SECRET_CANDIDATE
       <section class="focus-programme__cta" aria-labelledby="prototype-title">
         <div>
           <p class="focus-programme__eyebrow">Попробовать механику</p>
-          <h2 id="prototype-title">Проверить повторный вход и завершение</h2>
-          <p>Ссылка и QR выше ведут в сценарий вступления. После него можно выйти из аккаунта, не удаляя участие, и повторить вход.</p>
+          <h2 id="prototype-title">Пригласить участника</h2>
+          <p>Одна ссылка подходит для массового приглашения. Её можно открыть или показать как QR-код.</p>
         </div>
         <div class="focus-programme__cta-actions">
           <a class="ke-button ke-button--primary ke-button--large" href="#focus-invite-share">Ссылка и QR для приглашения</a>
@@ -87,8 +87,8 @@ const robots = IS_SECRET_CANDIDATE
       </section>
 
       <aside class="focus-programme__boundary">
-        <strong>Текущий candidate запускает browser-local участие.</strong>
-        <span>Capacity, отзыв согласия и active membership ещё обязаны стать серверными до публичного набора; email/Yandex используют реальный Auth только при наличии public-конфигурации сборки.</span>
+        <strong>После 30 дней вы останетесь обычным пользователем «Анонсов».</strong>
+        <span>Аккаунт, избранное, приложение и настройки сохранятся. Повторно подтверждать уже сделанный выбор не потребуется.</span>
       </aside>
     </main>
   </body>
