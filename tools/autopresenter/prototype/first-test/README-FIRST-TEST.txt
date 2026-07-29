@@ -10,8 +10,11 @@ WHAT TO CLICK
 5. Press "Запустить «Завтра»".
 
 The first start downloads pinned Node dependencies and a Playwright-managed
-browser into this folder. No administrator rights, Python, system Node or
-system Chrome are required. The computer needs outbound HTTPS access.
+browser into this folder and then opens the demonstrator automatically. No
+keyboard confirmation, administrator rights, Python, system Node or system
+Chrome are required. The computer needs outbound HTTPS access. This launch
+temporarily disables QuickEdit only in its current console window so an
+accidental click cannot pause a download; no permanent console setting changes.
 
 If startup fails, run SELF-TEST.cmd and send the logs folder to the developer.
 
