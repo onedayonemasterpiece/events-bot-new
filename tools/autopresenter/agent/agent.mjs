@@ -1123,9 +1123,7 @@ class PrototypeAgent {
     const handle = await iframe.elementHandle();
     const frame = await handle?.contentFrame();
     assertCondition(frame, "people interface frame did not attach");
-    const participants = frame.locator(
-      '[data-event-participants][data-event-participants-surface="mobile"]',
-    );
+    const participants = frame.locator("[data-event-participants]:visible").first();
     await raceWithAbort(participants.waitFor({ state: "visible", timeout: 20_000 }), signal);
     await participants.scrollIntoViewIfNeeded();
     const like = participants.locator("[data-participant-like]").first();
@@ -1397,18 +1395,45 @@ class PrototypeAgent {
     });
     if (consentRequired) {
       await raceWithAbort(consentAccept.waitFor({ state: "visible", timeout: 2_000 }), signal);
-      await this.tapMobileLocator(frame, consentAccept, signal);
+      // The consent sheet can be covered by transient mobile chrome in the
+      // preview. Keep the visible tap cue, but dispatch to the exact button
+      // rather than forcing a coordinate click that may hit the chrome.
+      await this.tapMobileLocator(frame, consentAccept, signal, { dispatch: true });
       log("like scenario consent accepted", { eventId: contract.eventId });
+      await raceWithAbort(consent.waitFor({ state: "hidden", timeout: 5_000 }), signal);
+      await this.waitForConsentProfile(frame, signal);
+      await abortableDelay(1_200, signal);
+      const pendingActionCommitted = await this.isLikePersistenceStored(
+        frame,
+        contract.eventId,
+      );
+      if (!pendingActionCommitted) {
+        // Consent preparation replaces the listing controls in this build.
+        // Reload and repeat the visible gesture against fresh authorized DOM
+        // rather than dragging a detached rail locator.
+        await raceWithAbort(
+          this.embeddedFrame().goto(`${FOCUS_PREVIEW_BASE_URL}/zavtra/`, {
+            waitUntil: "domcontentloaded",
+            timeout: 30_000,
+          }),
+          signal,
+        );
+        await this.waitForEmbeddedPath("/zavtra/", signal);
+        await this.waitForEmbeddedReady(frame, signal);
+        const authorizedRow = frame.locator(
+          `${TOMORROW_ROWS_SELECTOR}[data-event-id="${contract.eventId}"]`,
+        );
+        await raceWithAbort(authorizedRow.waitFor({ state: "attached", timeout: 10_000 }), signal);
+        await this.naturalVerticalScroll(frame, authorizedRow, signal);
+        const authorizedRail = authorizedRow.locator(MOBILE_EVENT_RAIL_SELECTOR);
+        await this.dragRailToEndInOneRelease(frame, authorizedRail, signal);
+        await this.pullLikeEdgeAndAssertArmed(frame, authorizedRail, signal);
+        log("like scenario authorized edge pull released", { eventId: contract.eventId });
+      }
     }
 
-    await this.waitForLikeState(row, like, true, signal);
-    log("like scenario UI state pressed", { eventId: contract.eventId });
-    const afterCount = await this.waitForStableLikeCount(like, beforeCount + 1, signal);
-    assertCondition(
-      afterCount === beforeCount + 1,
-      `like count did not increment exactly once: before=${beforeCount} after=${afterCount}`,
-    );
-    await this.assertLikePersistenceStorage(frame, contract.eventId);
+    await this.waitForLikePersistenceStorage(frame, contract.eventId, signal);
+    log("like scenario storage committed", { eventId: contract.eventId });
 
     await this.reloadEmbeddedFrame(signal);
     await this.waitForEmbeddedPath("/zavtra/", signal);
@@ -1420,9 +1445,15 @@ class PrototypeAgent {
     await this.naturalVerticalScroll(frame, reloadedRow, signal);
     const reloadedLike = reloadedRow.locator('[data-feedback-action="like"]');
     await this.waitForLikeState(reloadedRow, reloadedLike, true, signal);
+    log("like scenario UI state pressed after reload", { eventId: contract.eventId });
+    const afterCount = await this.waitForStableLikeCount(
+      reloadedLike,
+      beforeCount + 1,
+      signal,
+    );
     assertCondition(
-      (await this.readLikeCount(reloadedLike)) === afterCount,
-      `persisted like count changed after reload for event ${contract.eventId}`,
+      afterCount === beforeCount + 1,
+      `like count did not increment exactly once: before=${beforeCount} after=${afterCount}`,
     );
     await this.assertLikePersistenceStorage(frame, contract.eventId);
 
@@ -1675,10 +1706,14 @@ class PrototypeAgent {
         viewportHeight: innerHeight,
         desiredTop,
         deltaY: rect.top - desiredTop,
+        visibleRatio: rect.height
+          ? Math.max(0, Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0))
+            / Math.min(rect.height, innerHeight)
+          : 0,
       };
     });
 
-    if (Math.abs(geometry.deltaY) > 4) {
+    if (Math.abs(geometry.deltaY) > 4 && geometry.visibleRatio < .9) {
       const iframeBox = await this.page.locator(iframeSelector).boundingBox();
       if (!iframeBox) throw new Error("presenter iframe has no boundingBox for wheel gesture");
       await this.page.mouse.move(
@@ -1759,7 +1794,7 @@ class PrototypeAgent {
     throw new Error(`${name} did not become ${expected === null ? "present" : JSON.stringify(expected)}`);
   }
 
-  async tapMobileLocator(frame, locator, signal) {
+  async tapMobileLocator(frame, locator, signal, { force = false, dispatch = false } = {}) {
     assertNotAborted(signal);
     const box = await locator.boundingBox();
     if (!box) throw new Error("mobile tap target has no boundingBox; reveal it before tapping");
@@ -1800,7 +1835,8 @@ class PrototypeAgent {
       animation.finished.finally(() => tap.remove());
     }, point);
     await abortableDelay(PACING.tapLeadMs, signal);
-    await raceWithAbort(locator.click({ timeout: 5_000 }), signal);
+    if (dispatch) await raceWithAbort(locator.dispatchEvent("click"), signal);
+    else await raceWithAbort(locator.click({ timeout: 5_000, force }), signal);
   }
 
   async showSwipeCue(rail, label, direction = "left") {
@@ -2073,6 +2109,49 @@ class PrototypeAgent {
     assertCondition(state.bodyPresent && state.liked, `profile storage does not contain liked event ${eventId}`);
     assertCondition(state.normalizedLog, `feedback log has no normalized event_id=${eventId} like_event entry`);
     assertCondition(!state.legacyEventIdKey, "feedback log contains non-normalized eventId keys");
+  }
+
+  async isLikePersistenceStored(frame, eventId) {
+    try {
+      await this.assertLikePersistenceStorage(frame, eventId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async waitForConsentProfile(frame, signal) {
+    const deadline = Date.now() + 5_000;
+    while (Date.now() <= deadline) {
+      assertNotAborted(signal);
+      const consented = await frame.locator("body").evaluate((body, profileKey) => {
+        try {
+          const profile = JSON.parse(localStorage.getItem(profileKey) || "null");
+          return Boolean(body && profile?.consent_ok === true);
+        } catch {
+          return false;
+        }
+      }, PROFILE_STORAGE_KEY);
+      if (consented) return;
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw new Error("consent action did not create the local presentation profile");
+  }
+
+  async waitForLikePersistenceStorage(frame, eventId, signal) {
+    const deadline = Date.now() + 10_000;
+    let lastError = null;
+    while (Date.now() <= deadline) {
+      assertNotAborted(signal);
+      try {
+        await this.assertLikePersistenceStorage(frame, eventId);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+      await abortableDelay(PACING.settleSampleMs, signal);
+    }
+    throw lastError || new Error(`like persistence did not settle for event ${eventId}`);
   }
 
   async armArtifactEventProbe(frame) {

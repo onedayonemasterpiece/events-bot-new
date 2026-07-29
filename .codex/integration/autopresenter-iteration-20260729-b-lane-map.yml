@@ -32,7 +32,7 @@ lanes:
     expected_output: Exact minimum timing/DOM/CSS correction.
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: DISC-LECTURE
     role: planner
     requirement_ids: []
@@ -47,7 +47,7 @@ lanes:
     expected_output: Screenshot-backed defect list and bounded fixes.
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: DISC-LIVE
     role: planner
     requirement_ids: []
@@ -62,7 +62,7 @@ lanes:
     expected_output: Live route/selector/auth evidence and safe implementation guidance.
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
   - id: DISC-MEDIA
     role: planner
     requirement_ids: []
@@ -77,7 +77,7 @@ lanes:
     expected_output: Source paths, provenance, licenses and media handoff.
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
   - id: PWA
     role: worker
     requirement_ids: [R10, R25]
@@ -100,7 +100,7 @@ lanes:
     expected_output: Committed PWA/server changes with targeted tests and RESULTS.md.
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: INT
     role: merge_reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R11, R12, R13, R14, R15, R16, R17, R18, R19, R20, R21, R22, R23, R24]
@@ -126,7 +126,7 @@ lanes:
     expected_output: Clean public branch, existing Fly deploy, fresh Windows ZIP, Telegram handoff, integration report.
     verification_scope: targeted_then_full_final
     effort: high
-    status: planned
+    status: in_progress
   - id: AUDIT
     role: reviewer
     requirement_ids: []

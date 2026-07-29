@@ -173,7 +173,8 @@ test("tap helper has a visible 360ms lead and no hidden scrolling", () => {
   const tapHelper = source.slice(start, end);
   assert.match(tapHelper, /tap\.dataset\.autopresenterTap = "true"/u);
   assert.match(tapHelper, /await abortableDelay\(PACING\.tapLeadMs, signal\)/u);
-  assert.match(tapHelper, /locator\.click\(\{ timeout: 5_000 \}\)/u);
+  assert.match(tapHelper, /locator\.click\(\{ timeout: 5_000, force \}\)/u);
+  assert.match(tapHelper, /locator\.dispatchEvent\("click"\)/u);
   assert.doesNotMatch(tapHelper, /scrollIntoView|scrollTop|scrollLeft|mouse\.wheel/u);
 });
 
@@ -198,6 +199,8 @@ test("tomorrow like is armed before mouseup and never agent-clicked", () => {
   assert.ok(callbackIndex > 0 && upIndex > callbackIndex);
   assert.match(source, /beforeMouseUp: async \(\) => \{[\s\S]*classList\.contains\("is-like-armed"\)/u);
   assert.match(likeScenario, /data-personalization-consent-accept/u);
+  assert.match(likeScenario, /consentAccept, signal, \{ dispatch: true \}/u);
+  assert.match(likeScenario, /waitForConsentProfile\(frame, signal\)/u);
   assert.match(source, /liked_event_ids/u);
   assert.match(source, /event_id/u);
   assert.match(likeScenario, /like count did not increment exactly once/u);
