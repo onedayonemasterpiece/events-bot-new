@@ -1,18 +1,62 @@
 ---
-import { withBase } from '../../../lib/events';
+import Icon from '../../../components/Icon.astro';
+import { createFocusInviteQrSvg } from '../../../lib/focus-invite-qr';
 
-const homeUrl = withBase('/');
-const weekendUrl = withBase('/vyhodnye/');
 const focusPreviewBase = 'https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256';
+const homeUrl = `${focusPreviewBase}/`;
+const weekendUrl = `${focusPreviewBase}/vyhodnye/`;
 const focusInvitationUrl = `${focusPreviewBase}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
 const focusSearchUrl = `${focusPreviewBase}/poisk/`;
 const focusMedallionUrl = `${focusPreviewBase}/sobytiya/otkrytie-festivalya-bahosluzhenie-proekt-evgeniya-knyazeva-ya-gospodi-tvor-kaliningrad-6153/`;
+const focusNpsUrl = `${focusPreviewBase}/segodnya/`;
+const peopleInterfaceUrl = '/lab/event-participants/';
+const focusInvitationQrSvg = createFocusInviteQrSvg(focusInvitationUrl);
 const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/qr-survey-nikiforov-916b6fee58256c4f2111887bf70c502070a55e45a667650dfccdb1495016ccd9.png';
 const znanieLogoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg';
 const introMusicUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3';
+const jokeAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/joke-electronic-brain-c0efea54a93d4a6bcbb8e244bc35cfbe9a23556783d78df0fcffa457b5dead79.wav';
+const errorAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/computer-error-cc0-d7ec5eeba2b280017100e9deb3f063d580755469ce326332df7da9b4dcd63d1a.mp3';
 const announcementsWordmarkUrl = '/brand/announcements-wordmark-ui.svg';
-const shareIconUrl = '/assets/icons/reference4/share-nodes.svg';
-const celebrityAvatarUrl = '/assets/participants/udovenko-tatyana.webp';
+const findIconUrl = '/assets/icons/reference4-v8/search-thin.svg';
+const shareIconUrl = '/assets/icons/reference4-v8/share-network-thin.svg';
+const people = [
+  {
+    name: 'Татьяна Удовенко',
+    role: 'эксперт по туризму, гид, филолог, руководитель туркомпании',
+    avatar: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/person-udovenko-tatyana-bc3c802595b109f4c9a96c7f5bc214449401a6dca6cf3e94386e29a0e0c82461.webp',
+    likes: 128,
+  },
+  {
+    name: 'Андрей Бойко',
+    role: 'краевед, исследователь киноистории',
+    avatar: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/person-boyko-andrey-b1bc39b613306c364b7b2881d0cf1f4fef50ab019633a7729ac1ae399cab6228.webp',
+    likes: 74,
+  },
+  {
+    name: 'Светлана Соколова',
+    role: 'директор Калининградского зоопарка',
+    avatar: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/person-sokolova-svetlana-51ccbfc58f6c421b9c805eb72a3587b273bd61118511a6cd2deaf29a96843a16.webp',
+    likes: 93,
+  },
+];
+const medallions = [
+  ['Музей Мирового океана', '/assets/organizers/world-ocean-museum.svg'],
+  ['Историко-художественный музей', '/assets/organizers/history-art-museum.svg'],
+  ['Калининградская филармония', '/assets/organizers/kaliningrad-philharmonic.svg'],
+  ['Остров Канта', '/assets/organizers/kant-island.svg'],
+  ['Третьяковская галерея', '/assets/organizers/tretyakovka-kaliningrad.svg'],
+  ['Научная библиотека', '/assets/organizers/konb.webp'],
+  ['Общество «Знание»', '/assets/organizers/znanie-russia.svg'],
+  ['80 историй о главном', '/assets/organizers/kgd80.svg'],
+  ['Кантата', '/assets/organizers/kantata-festival.webp'],
+  ['Драматический театр', '/assets/organizers/dramteatr39.svg'],
+  ['Янтарь холл', '/assets/organizers/yantar-hall.svg'],
+  ['Музыкальный театр', '/assets/organizers/muzteatr39.webp'],
+  ['Дом искусств', '/assets/organizers/dom-iskusstv.svg'],
+  ['City Jazz Club', '/assets/organizers/city-jazz-club.webp'],
+  ['Калининградский зоопарк', '/assets/organizers/kldzoo.webp'],
+  ['Музей модерна', '/assets/organizers/mumod.svg'],
+];
 const lectureSlides = [
   {
     messageId: 821,
@@ -93,10 +137,8 @@ const lectureSlides = [
   },
 ];
 const serviceTextScenes = [
-  { id: 'service-disruption', eyebrow: '07 · Честный момент', title: 'И тут презентация\nпошла не по плану…', theme: 'dark' },
   { id: 'service-taste', eyebrow: '08 · Не только свой вкус', title: 'Удобство нельзя\nсделать для себя.', support: 'Сервисом будут пользоваться другие люди.', theme: 'light' },
   { id: 'service-feedback', eyebrow: '09 · Слушать аудиторию', title: 'Обратная связь —\nчасть интерфейса.', support: 'Не приложение для людей. Приложение вместе с людьми.', theme: 'dark' },
-  { id: 'service-nps', eyebrow: '11 · Простая проверка', title: 'Посоветовали бы\nэту страницу?', support: 'NPS помогает измерять не красоту, а готовность рекомендовать.', theme: 'light' },
 ];
 ---
 <!doctype html>
@@ -109,6 +151,9 @@ const serviceTextScenes = [
     <link rel="preload" as="image" href={outroQrUrl} fetchpriority="high" />
     <link rel="preload" as="image" href={znanieLogoUrl} fetchpriority="high" />
     <link rel="preload" as="audio" href={introMusicUrl} />
+    <link rel="preload" as="audio" href={jokeAudioUrl} />
+    <link rel="preload" as="audio" href={errorAudioUrl} />
+    {people.map((person) => <link rel="preload" as="image" href={person.avatar} />)}
     {lectureSlides.map((slide) => <link rel="preload" as="image" href={slide.image} />)}
     <title>Автопрезентатор · Сцена</title>
   </head>
@@ -159,8 +204,8 @@ const serviceTextScenes = [
         </div>
         <p class="intro-kicker">80 историй о главном · Калининград</p>
         <h1 class="intro-thought" data-presenter-id="intro-thought" aria-live="off">
-          <span data-intro-line="one" aria-hidden="true"></span>
-          <span data-intro-line="two" aria-hidden="true"></span>
+          <span data-intro-line="one"></span>
+          <span data-intro-line="two"></span>
         </h1>
         <p class="intro-footnote">До начала можно знакомиться и общаться</p>
         <audio
@@ -178,6 +223,7 @@ const serviceTextScenes = [
           data-presenter-scene-id={`lecture-${String(index + 1).padStart(2, '0')}`}
           data-lecture-index={index}
           data-source-message-id={slide.messageId}
+          data-lecture-state="idle"
           aria-label={`Лекционный экран ${index + 1}`}
           hidden
         >
@@ -186,7 +232,7 @@ const serviceTextScenes = [
                 <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
               </div>
               <p class="lecture-chapter">{slide.chapter}</p>
-              <h2>{slide.statement}</h2>
+              <h2 data-lecture-statement data-lecture-text={slide.statement}></h2>
               <p class="lecture-counter">{String(index + 1).padStart(2, '0')} / {String(lectureSlides.length).padStart(2, '0')}</p>
             </div>
             <figure class="lecture-visual">
@@ -211,22 +257,29 @@ const serviceTextScenes = [
         <p class="service-eyebrow">02 · Что нужно человеку</p>
         <h2>Найти. Поделиться.<br />Не забыть.</h2>
         <div class="need-row">
-          <div><strong>01</strong><span>Быстро найти<br />то, что нравится</span></div>
+          <div><img src={findIconUrl} alt="" /><span>Быстро найти<br />то, что нравится</span></div>
           <div><img src={shareIconUrl} alt="" /><span>Позвать<br />друзей</span></div>
-          <div>
-            <svg viewBox="0 0 64 64" role="img" aria-label="Календарь"><rect x="8" y="13" width="48" height="43" rx="10"/><path d="M8 27h48M21 8v12M43 8v12"/><circle cx="32" cy="41" r="5"/></svg>
-            <span>Добавить<br />в календарь</span>
-          </div>
+          <div><Icon name="calendar" /><span>Добавить<br />в календарь</span></div>
         </div>
       </section>
 
-      <section class="service-scene presentation-scene theme--light" data-presenter-scene-id="service-medallions" hidden>
-        <p class="service-eyebrow">04 · Смысл одним взглядом</p>
-        <h2>Медальон отвечает<br />раньше текста.</h2>
-        <div class="medallion-demo" aria-label="Примеры медальонов">
-          <span>Бесплатно</span><span>Третьяковка</span><span>Для всей семьи</span>
+      <section class="service-scene medallion-scene presentation-scene theme--light" data-presenter-scene-id="service-medallions" data-medallion-state="idle" hidden>
+        <div class="medallion-copy">
+          <p class="service-eyebrow">04 · Смысл одним взглядом</p>
+          <h2>Узнать место<br />до чтения.</h2>
+          <p class="service-support">Знакомый образ появляется крупно — и занимает своё место.</p>
+          <div class="medallion-feature" aria-live="off">
+            <img data-medallion-feature-image alt="" />
+            <strong data-medallion-feature-label></strong>
+          </div>
         </div>
-        <p class="service-support">Где? Для кого? На каких условиях? Ключевой факт виден сразу.</p>
+        <div class="medallion-grid" aria-label="16 реальных медальонов площадок и проектов">
+          {medallions.map(([label, image], index) => (
+            <figure data-medallion-grid-item data-index={index} data-image={image} data-label={label}>
+              <img src={image} alt={label} loading="eager" />
+            </figure>
+          ))}
+        </div>
       </section>
 
       <section class="focus-live-scene desktop-medallion-scene presentation-scene theme--light" data-presenter-scene-id="service-medallions-desktop" data-focus-phase="meaning" hidden>
@@ -244,9 +297,10 @@ const serviceTextScenes = [
       </section>
 
       <section class="service-scene service-joke presentation-scene theme--dark" data-presenter-scene-id="service-joke" data-joke-state="idle" hidden>
-        <p class="service-eyebrow">05 · Нужна пауза</p>
+        <p class="service-eyebrow">03.7 · Время шутки</p>
         <h2 data-joke-line="one"></h2>
         <p data-joke-line="two"></p>
+        <audio data-presenter-id="joke-audio" src={jokeAudioUrl} preload="auto"></audio>
       </section>
 
       <section class="service-scene presentation-scene theme--light" data-presenter-scene-id="service-search-concept" hidden>
@@ -272,18 +326,48 @@ const serviceTextScenes = [
         </section>
       ))}
 
-      <section class="focus-live-scene invitation-scene presentation-scene theme--dark" data-presenter-scene-id="service-focus-group" hidden>
-        <aside class="live-meaning"><p>10 · Фокус-группа</p><h2>Удобство<br />делают вместе.</h2><span>Показываем именно версию сайта для фокус-группы.</span></aside>
-        <iframe data-presenter-id="focus-invitation-frame" data-src={focusInvitationUrl} title="Приглашение в фокус-группу" width="1120" height="1080"></iframe>
+      <section class="service-scene disruption-scene presentation-scene theme--dark" data-presenter-scene-id="service-disruption" hidden>
+        <p class="service-eyebrow">07 · Честный момент</p>
+        <h2>И тут презентация<br />пошла не по плану…</h2>
+        <audio data-presenter-id="error-audio" src={errorAudioUrl} preload="auto"></audio>
       </section>
 
-      <section class="service-scene celebrity-scene presentation-scene theme--dark" data-presenter-scene-id="service-future-celebrity" hidden>
-        <p class="service-eyebrow">12 · Скоро</p>
-        <h2>Люди, за которыми<br />хочется следить.</h2>
-        <div class="celebrity">
-          <img src={celebrityAvatarUrl} alt="Татьяна Удовенко" />
-          <div><strong>Татьяна Удовенко</strong><span>актриса · режиссёр</span></div>
-          <button type="button" aria-label="Нравится Татьяна Удовенко"><b>♥</b><span>128</span></button>
+      <section class="focus-qr-scene presentation-scene theme--dark" data-presenter-scene-id="service-focus-group" hidden>
+        <div class="focus-qr-copy">
+          <p class="service-eyebrow">10 · Фокус-группа</p>
+          <h2>Присоединяйтесь.</h2>
+          <p>Наведите камеру телефона на QR-код.</p>
+          <small>{focusInvitationUrl}</small>
+        </div>
+        <a class="focus-qr" href={focusInvitationUrl} aria-label="Открыть приглашение в фокус-группу" set:html={focusInvitationQrSvg}></a>
+      </section>
+
+      <section class="focus-live-scene nps-live-scene presentation-scene theme--light" data-presenter-scene-id="service-nps" hidden>
+        <aside class="live-meaning light"><p>11 · Оценка страницы</p><h2>Спросить<br />на месте.</h2><span>Прокручиваем реальную страницу до оценки фокус-группы от 0 до 10.</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="focus-nps-frame" data-src={focusNpsUrl} title="NPS на реальной странице выходных" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="people-scene presentation-scene theme--dark" data-presenter-scene-id="service-future-celebrity" data-people-phase="portraits" hidden>
+        <div class="people-portraits">
+          <p class="service-eyebrow">12 · Люди</p>
+          <h2>Люди, за которыми<br />хочется следить.</h2>
+          <div class="people-row">
+            {people.map((person) => (
+              <article>
+                <img src={person.avatar} alt={person.name} />
+                <strong>{person.name}</strong>
+                <span>{person.role}</span>
+                <b>♥ {person.likes}</b>
+              </article>
+            ))}
+          </div>
+        </div>
+        <div class="people-interface">
+          <iframe data-presenter-id="people-interface-frame" data-src={peopleInterfaceUrl} title="Блок известных людей на странице события" width="1920" height="1080"></iframe>
         </div>
       </section>
 
@@ -354,6 +438,8 @@ const serviceTextScenes = [
         const introLineOne = document.querySelector('[data-intro-line="one"]');
         const introLineTwo = document.querySelector('[data-intro-line="two"]');
         const introMusic = document.querySelector('[data-presenter-id="intro-music"]');
+        const jokeAudio = document.querySelector('[data-presenter-id="joke-audio"]');
+        const errorAudio = document.querySelector('[data-presenter-id="error-audio"]');
         const scenes = new Map(
           [...document.querySelectorAll('[data-presenter-scene-id]')]
             .filter((node) => node instanceof HTMLElement)
@@ -368,7 +454,9 @@ const serviceTextScenes = [
           !(outroScene instanceof HTMLElement) ||
           !(introLineOne instanceof HTMLElement) ||
           !(introLineTwo instanceof HTMLElement) ||
-          !(introMusic instanceof HTMLAudioElement)
+          !(introMusic instanceof HTMLAudioElement) ||
+          !(jokeAudio instanceof HTMLAudioElement) ||
+          !(errorAudio instanceof HTMLAudioElement)
         ) return;
 
         const labels = {
@@ -434,8 +522,18 @@ const serviceTextScenes = [
           if (rewindAudio) {
             try { introMusic.currentTime = 0; } catch {}
           }
+          for (const cue of [jokeAudio, errorAudio]) {
+            cue.pause();
+            if (rewindAudio) {
+              try { cue.currentTime = 0; } catch {}
+            }
+          }
           introScene.dataset.introState = 'stopped';
           document.querySelector('[data-joke-state]')?.setAttribute('data-joke-state', 'stopped');
+          document.querySelector('[data-medallion-state]')?.setAttribute('data-medallion-state', 'stopped');
+          document.querySelector('[data-people-phase]')?.setAttribute('data-people-phase', 'portraits');
+          document.querySelectorAll('[data-lecture-state]')
+            .forEach((scene) => scene.setAttribute('data-lecture-state', 'stopped'));
         };
 
         const splitSemanticChunks = (value) => {
@@ -447,20 +545,40 @@ const serviceTextScenes = [
         const revealHeroTalk = async (lineOne, lineTwo, token) => {
           introLineOne.replaceChildren();
           introLineTwo.replaceChildren();
-          const chunks = [
-            ...splitSemanticChunks(lineOne).map((text) => [introLineOne, text]),
-            ...splitSemanticChunks(lineTwo).map((text) => [introLineTwo, text]),
-          ];
-          for (const [node, text] of chunks) {
-            if (token !== generation) return false;
-            const fragment = document.createElement('span');
-            fragment.className = 'hero-fragment is-active';
-            fragment.textContent = `${text} `;
-            node.append(fragment);
-            if (!reduceMotion.matches && !await pause(280, token)) return false;
-            fragment.classList.remove('is-active');
-            fragment.classList.add('is-complete');
+          const chunks = [];
+          for (const [node, line] of [[introLineOne, lineOne], [introLineTwo, lineTwo]]) {
+            splitSemanticChunks(line).forEach((text, index) => {
+              if (index > 0) node.append(document.createTextNode(' '));
+              const fragment = document.createElement('span');
+              fragment.className = 'hero-fragment';
+              fragment.textContent = text;
+              node.append(fragment);
+              chunks.push({ fragment, text });
+            });
           }
+          if (reduceMotion.matches) {
+            chunks.forEach(({ fragment }) => fragment.classList.add('is-complete'));
+            return token === generation;
+          }
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          let previous = null;
+          for (let index = 0; index < chunks.length; index += 1) {
+            if (token !== generation) return false;
+            const { fragment, text } = chunks[index];
+            previous?.classList.remove('is-active');
+            previous?.classList.add('is-complete');
+            fragment.classList.add('is-active');
+            const punctuationPause = /[.!?…]$/u.test(text)
+              ? 345
+              : /[,;:—]$/u.test(text)
+                ? 315
+                : 265 + (index % 2) * 35;
+            if (!await pause(punctuationPause, token)) return false;
+            previous = fragment;
+          }
+          previous?.classList.remove('is-active');
+          previous?.classList.add('is-complete');
+          if (!await pause(260, token)) return false;
           return token === generation;
         };
 
@@ -497,6 +615,7 @@ const serviceTextScenes = [
           const timestamp = Date.parse(startAt || '');
           if (!Number.isFinite(timestamp)) return null;
           const minutes = Math.max(0, Math.ceil((timestamp - Date.now()) / 60000));
+          if (minutes === 0) return ['Вот-вот', 'начинаем'];
           return ['Начнём через', `${minutes} ${minutes === 1 ? 'минуту' : minutes > 1 && minutes < 5 ? 'минуты' : 'минут'}.`];
         };
 
@@ -506,7 +625,7 @@ const serviceTextScenes = [
           introScene.dataset.introAudio = 'starting';
           void startMusic(token);
           while (token === generation) {
-            const route = pickRoute();
+            const route = [...pickRoute()];
             if (countdownPhrase(options.startAt)) route.splice(1, 0, 'countdown');
             for (const phraseId of route) {
               if (token !== generation) return;
@@ -517,14 +636,64 @@ const serviceTextScenes = [
               if (!await revealHeroTalk(phrase[0], phrase[1], token)) return;
               if (!await pause(5200, token)) return;
               introScene.classList.add('is-clearing');
-              if (!await pause(420, token)) return;
+              if (!await pause(650, token)) return;
               introLineOne.replaceChildren();
               introLineTwo.replaceChildren();
               introScene.classList.remove('is-clearing');
-              if (!await pause(900 + Math.random() * 450, token)) return;
+              if (!await pause(650, token)) return;
             }
-            if (!await pause(1400, token)) return;
+            if (!await pause(900, token)) return;
           }
+        };
+
+        const typeLecture = async (scene, token) => {
+          const statement = scene.querySelector('[data-lecture-statement]');
+          if (!(statement instanceof HTMLElement)) return;
+          const value = statement.dataset.lectureText || '';
+          scene.dataset.lectureState = 'typing';
+          statement.textContent = '';
+          if (reduceMotion.matches) {
+            statement.textContent = value;
+            scene.dataset.lectureState = 'complete';
+            return;
+          }
+          const graphemes = Array.from(value);
+          for (let index = 0; index < graphemes.length; index += 1) {
+            if (token !== generation) return;
+            const grapheme = graphemes[index];
+            statement.textContent += grapheme;
+            const delay = /[.!?…]/u.test(grapheme)
+              ? 210
+              : /[,;:—→]/u.test(grapheme)
+                ? 145
+                : /\s/u.test(grapheme)
+                  ? 28
+                  : 44 + (index % 11 === 8 ? 95 : index % 4) * 5;
+            if (!await pause(delay, token)) return;
+          }
+          if (!await pause(420, token)) return;
+          scene.dataset.lectureState = 'media';
+          if (!await pause(1_100, token)) return;
+          scene.dataset.lectureState = 'complete';
+        };
+
+        const typeInto = async (node, value, token, { base = 64, hesitationEvery = 13 } = {}) => {
+          node.textContent = '';
+          const graphemes = Array.from(value);
+          for (let index = 0; index < graphemes.length; index += 1) {
+            if (token !== generation) return false;
+            const grapheme = graphemes[index];
+            node.textContent += grapheme;
+            const delay = /[.!?…]/u.test(grapheme)
+              ? 230
+              : /[,;:—]/u.test(grapheme)
+                ? 155
+                : /\s/u.test(grapheme)
+                  ? 34
+                  : base + (index % hesitationEvery === hesitationEvery - 2 ? 110 : index % 4 * 7);
+            if (!await pause(delay, token)) return false;
+          }
+          return true;
         };
 
         const startJoke = async () => {
@@ -536,14 +705,51 @@ const serviceTextScenes = [
           scene.dataset.jokeState = 'typing';
           first.textContent = '';
           second.textContent = '';
-          for (const grapheme of Array.from('Максим, самое время для шутки')) {
-            if (token !== generation) return;
-            first.textContent += grapheme;
-            if (!await pause(/[,.!?]/u.test(grapheme) ? 180 : /\s/u.test(grapheme) ? 35 : 72, token)) return;
-          }
+          if (!await typeInto(first, 'Максим, самое время для шутки', token, { base: 72, hesitationEvery: 11 })) return;
           if (!await pause(7000, token)) return;
-          second.textContent = 'нет, я сама шутить не умею…';
+          jokeAudio.volume = .9;
+          try {
+            await jokeAudio.play();
+            scene.dataset.jokeAudio = 'playing';
+          } catch {
+            scene.dataset.jokeAudio = 'blocked';
+          }
+          if (!await typeInto(second, 'нет, мой электронный мозг не создан для шуток…', token, { base: 58, hesitationEvery: 15 })) return;
+          if (!jokeAudio.paused && Number.isFinite(jokeAudio.duration)) {
+            const remaining = Math.max(0, (jokeAudio.duration - jokeAudio.currentTime) * 1000);
+            if (remaining && !await pause(remaining, token)) return;
+          }
           scene.dataset.jokeState = 'complete';
+        };
+
+        const startMedallions = async (scene, token) => {
+          const feature = scene.querySelector('.medallion-feature');
+          const featureImage = scene.querySelector('[data-medallion-feature-image]');
+          const featureLabel = scene.querySelector('[data-medallion-feature-label]');
+          const items = [...scene.querySelectorAll('[data-medallion-grid-item]')];
+          if (
+            !(feature instanceof HTMLElement) ||
+            !(featureImage instanceof HTMLImageElement) ||
+            !(featureLabel instanceof HTMLElement)
+          ) return;
+          scene.dataset.medallionState = 'running';
+          feature.classList.remove('is-visible');
+          items.forEach((item) => item.classList.remove('is-placed'));
+          for (const item of items) {
+            if (token !== generation || !(item instanceof HTMLElement)) return;
+            featureImage.src = item.dataset.image || '';
+            featureImage.alt = item.dataset.label || '';
+            featureLabel.textContent = item.dataset.label || '';
+            feature.classList.add('is-visible');
+            if (!await pause(520, token)) return;
+            feature.classList.remove('is-visible');
+            if (!await pause(150, token)) return;
+            item.classList.add('is-placed');
+            if (!await pause(210, token)) return;
+          }
+          featureImage.src = '';
+          featureLabel.textContent = '';
+          scene.dataset.medallionState = 'complete';
         };
 
         const showScene = (sceneId, options = {}) => {
@@ -566,7 +772,25 @@ const serviceTextScenes = [
             requestAnimationFrame(() => requestAnimationFrame(() => outroScene.classList.add('is-entering')));
           }
           if (sceneId === 'intro-loop') void startIntro(options);
+          if (sceneId.startsWith('lecture-') && activeScene instanceof HTMLElement) {
+            void typeLecture(activeScene, token);
+          }
           if (sceneId === 'service-joke') void startJoke();
+          if (sceneId === 'service-medallions' && activeScene instanceof HTMLElement) {
+            void startMedallions(activeScene, token);
+          }
+          if (sceneId === 'service-disruption') {
+            errorAudio.volume = .8;
+            void errorAudio.play().catch(() => {
+              if (activeScene instanceof HTMLElement) activeScene.dataset.errorAudio = 'blocked';
+            });
+          }
+          if (sceneId === 'service-future-celebrity') {
+            activeScene?.setAttribute('data-people-phase', 'portraits');
+            window.setTimeout(() => {
+              if (generation === token) activeScene?.setAttribute('data-people-phase', 'interface');
+            }, 7_500);
+          }
           if (sceneId === 'service-search-live') {
             const meaning = activeScene?.querySelector('[data-search-meaning]');
             if (meaning && options.query) meaning.textContent = `«${options.query}»`;
@@ -724,55 +948,83 @@ const serviceTextScenes = [
   .intro-thought { position: absolute; top: 50%; left: clamp(76px, 7vw, 140px); width: calc(100% - clamp(152px, 14vw, 280px)); margin: 0; transform: translateY(-48%); color: #fffaf3; font-size: clamp(54px, 4.35vw, 86px); font-weight: 920; line-height: .98; letter-spacing: -.06em; text-wrap: balance; }
   .intro-thought > span { display: block; min-height: 1.04em; white-space: nowrap; }
   .intro-thought > span:last-of-type { color: #ff9b80; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 650; letter-spacing: -.045em; }
-  .hero-fragment { display: inline-block; opacity: 0; transform: translateY(.28em); filter: blur(6px); transition: opacity 320ms cubic-bezier(.22,.8,.22,1), transform 320ms cubic-bezier(.22,.8,.22,1), filter 320ms cubic-bezier(.22,.8,.22,1); }
+  .hero-fragment { display: inline-block; opacity: 0; transform: translateY(.2em); filter: blur(1px); transition: opacity 270ms cubic-bezier(.16,1,.3,1), transform 300ms cubic-bezier(.16,1,.3,1), filter 230ms cubic-bezier(.16,1,.3,1); }
   .hero-fragment.is-active, .hero-fragment.is-complete { opacity: 1; transform: none; filter: none; }
-  .hero-fragment.is-active::after { display: inline-block; width: .085em; height: .76em; margin-left: .11em; vertical-align: -.03em; background: var(--stage-accent); content: ""; animation: cursor-blink .92s step-end infinite; }
+  .hero-fragment.is-active::after { display: inline-block; width: .085em; height: .76em; margin-left: .11em; vertical-align: -.03em; background: var(--stage-accent); content: ""; animation: cursor-blink .78s step-end infinite; }
   .intro-scene.is-clearing .intro-thought { opacity: 0; transform: translateY(-48%) scale(.985); transition: opacity 650ms ease-in, transform 650ms ease-in; }
   .intro-footnote { position: absolute; left: clamp(76px, 7vw, 140px); bottom: clamp(56px, 6vh, 76px); margin: 0; color: rgba(247,241,232,.58); font: 500 clamp(18px, 1.35vw, 26px)/1.3 Georgia, "Times New Roman", serif; }
   @keyframes cursor-blink { 50% { opacity: 0; } }
 
   .lecture-scene { background: #0b0c11; }
-  .lecture-slide { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(420px, .78fr) minmax(0, 1.22fr); gap: clamp(40px, 4vw, 82px); align-items: stretch; padding: clamp(52px, 6vh, 78px) clamp(64px, 5vw, 104px); background: radial-gradient(circle at 84% 16%, rgba(255,118,87,.17), transparent 26%), linear-gradient(120deg, #12131a, #08090d 64%); overflow: hidden; }
-  .lecture-slide::after { position: absolute; z-index: 0; left: -12vw; bottom: -36vh; width: 48vw; height: 54vh; border: clamp(32px,4vw,78px) solid rgba(105,86,223,.42); border-radius: 50%; content: ""; }
+  .lecture-slide { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(420px, .78fr) minmax(0, 1.22fr); gap: clamp(40px, 4vw, 82px); align-items: stretch; padding: clamp(52px, 6vh, 78px) clamp(64px, 5vw, 104px); background: linear-gradient(120deg, #12131a, #08090d 64%); overflow: hidden; }
+  .lecture-slide::before, .service-scene::before, .intro-scene::after {
+    position: absolute;
+    z-index: 0;
+    width: min(52vw, 960px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    content: "";
+    pointer-events: none;
+    background: radial-gradient(circle, rgba(255,118,87,.22), rgba(105,86,223,.1) 36%, transparent 70%);
+    filter: blur(36px);
+    opacity: .62;
+    animation: halo-drift 16s ease-in-out infinite alternate;
+  }
+  .lecture-slide::before { top: -30%; right: -16%; }
+  .service-scene::before { top: -36%; right: -14%; }
+  .intro-scene::after { right: 8%; bottom: -43%; z-index: -1; }
+  .service-scene > * { position: relative; z-index: 1; }
+  @keyframes halo-drift {
+    0% { transform: translate3d(-2%,1%,0) scale(.92); opacity: .45; }
+    55% { transform: translate3d(3%,-2%,0) scale(1.06); opacity: .68; }
+    100% { transform: translate3d(-1%,-4%,0) scale(.98); opacity: .52; }
+  }
   .lecture-copy { position: relative; z-index: 2; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
   .brand-plate--lecture { width: clamp(230px, 16vw, 310px); padding: 13px 23px; margin-bottom: auto; }
   .lecture-chapter { margin: 0 0 clamp(22px, 3vh, 38px); color: var(--stage-accent); font-size: clamp(16px, 1.12vw, 22px); font-weight: 840; letter-spacing: .14em; text-transform: uppercase; }
-  .lecture-copy h2 { max-width: 11ch; margin: 0; color: #fffaf3; font-size: clamp(48px, 3.55vw, 70px); font-weight: 930; line-height: .92; letter-spacing: -.06em; text-wrap: balance; }
+  .lecture-copy h2 { min-height: 2.05em; max-width: 11ch; margin: 0; color: #fffaf3; font-size: clamp(48px, 3.55vw, 70px); font-weight: 930; line-height: .92; letter-spacing: -.06em; text-wrap: balance; }
   .lecture-counter { margin: auto 0 0; color: rgba(247,241,232,.44); font: 650 clamp(17px,1.2vw,23px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
-  .lecture-visual { position: relative; z-index: 2; min-width: 0; min-height: 0; margin: 0; display: grid; place-items: center; overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: clamp(24px, 2.4vw, 46px); background: #f7f4ef; box-shadow: 0 38px 80px rgba(0,0,0,.45); }
+  .lecture-visual { position: relative; z-index: 2; min-width: 0; min-height: 0; margin: 0; display: grid; place-items: center; overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; opacity: 0; transform: scale(.965); }
   .lecture-visual img { width: 100%; height: 100%; display: block; object-fit: contain; }
   .lecture-slide--wide .lecture-visual img { object-fit: cover; }
-  .lecture-slide--portrait .lecture-visual { background: radial-gradient(circle at center, #f9f6f0 0 31%, #22232a 75%); }
-  .lecture-slide--portrait .lecture-visual img { width: auto; max-width: 74%; object-fit: contain; filter: drop-shadow(0 25px 42px rgba(0,0,0,.32)); }
+  .lecture-slide--portrait .lecture-visual { background: transparent; }
+  .lecture-slide--portrait .lecture-visual img { width: auto; max-width: 74%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 25px 42px rgba(0,0,0,.24)); }
   .lecture-slide.is-entering .lecture-copy { animation: lecture-copy-enter 720ms cubic-bezier(.42,0,.22,1) both; }
-  .lecture-slide.is-entering .lecture-visual { animation: lecture-image-enter 1050ms cubic-bezier(.42,0,.22,1) 80ms both; transform-origin: center; }
+  .lecture-slide[data-lecture-state="media"] .lecture-visual,
+  .lecture-slide[data-lecture-state="complete"] .lecture-visual { animation: lecture-image-enter 1050ms cubic-bezier(.42,0,.22,1) both; transform-origin: center; }
   @keyframes lecture-copy-enter { from { opacity: 0; transform: translate3d(-2.2vw,0,0); } to { opacity: 1; transform: none; } }
   @keyframes lecture-image-enter { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
 
   .brand-plate--intro, .brand-plate--lecture { border-radius: 0; padding: 0; background: transparent; box-shadow: none; }
   .brand-logo--on-dark img { filter: grayscale(1) brightness(0) invert(1); }
   .brand-logo--on-light img { filter: grayscale(1) brightness(.16); }
-  .lecture-slide.theme--light { color: #17121a; background: radial-gradient(circle at 82% 18%, rgba(105,86,223,.14), transparent 30%), #f5efe6; }
-  .lecture-slide.theme--light::after { border-color: rgba(255,118,87,.22); }
+  .lecture-slide.theme--light { color: #17121a; background: #f5efe6; }
   .lecture-slide.theme--light .lecture-copy h2 { color: #17121a; }
   .lecture-slide.theme--light .lecture-counter { color: rgba(23,18,26,.45); }
-  .lecture-slide.theme--light .lecture-visual { border-color: rgba(23,18,26,.15); box-shadow: 0 35px 70px rgba(67,48,43,.18); }
-  .lecture-visual { grid-template-rows: minmax(0,1fr) auto; }
-  .lecture-visual figcaption { width: 100%; padding: 16px 22px; color: #332b2a; background: #fffaf3; font: 650 clamp(15px,1vw,20px)/1.3 Georgia,serif; }
+  .lecture-visual { grid-template-rows: minmax(0,1fr); }
+  .lecture-visual figcaption { display: none; }
+  .lecture-slide[data-source-message-id="821"] .lecture-visual { align-self: center; height: fit-content; }
+  .lecture-slide[data-source-message-id="821"] .lecture-visual img { height: auto; }
   .lecture-layout--horizontal { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr); gap: 26px; }
   .lecture-layout--horizontal .lecture-copy { display: grid; grid-template-columns: auto 1fr auto; align-items: end; gap: 28px; }
   .lecture-layout--horizontal .brand-plate--lecture { width: 250px; margin: 0; grid-row: 1 / span 2; }
   .lecture-layout--horizontal .lecture-chapter { margin: 0 0 8px; }
   .lecture-layout--horizontal .lecture-copy h2 { max-width: none; font-size: clamp(42px,3.2vw,62px); }
   .lecture-layout--horizontal .lecture-counter { margin: 0; align-self: center; }
-  .lecture-layout--horizontal .lecture-visual img, .lecture-slide--wide .lecture-visual img { object-fit: contain; }
+  .lecture-layout--horizontal .lecture-visual,
+  .lecture-layout--cinema .lecture-visual { width: fit-content; max-width: 100%; justify-self: center; }
+  .lecture-layout--horizontal .lecture-visual img,
+  .lecture-layout--cinema .lecture-visual img,
+  .lecture-slide--wide .lecture-visual img { width: auto; height: auto; max-width: 100%; max-height: 100%; justify-self: center; object-fit: contain; }
   .lecture-layout--cinema { grid-template-columns: 1fr; grid-template-rows: minmax(0,1fr) auto; }
   .lecture-layout--cinema .lecture-visual { grid-row: 1; }
-  .lecture-layout--cinema .lecture-copy { grid-row: 2; display: grid; grid-template-columns: 230px 1fr auto; align-items: center; gap: 30px; }
+  .lecture-layout--cinema .lecture-copy { grid-row: 2; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 48px; }
   .lecture-layout--cinema .brand-plate--lecture { margin: 0; }
   .lecture-layout--cinema .lecture-chapter { display: none; }
   .lecture-layout--cinema .lecture-copy h2 { max-width: none; font-size: clamp(40px,3vw,58px); }
   .lecture-layout--cinema .lecture-counter { margin: 0; }
+  .lecture-slide[data-lecture-index="6"] { grid-template-columns: minmax(380px,.82fr) minmax(50vw,1.18fr); gap: clamp(42px,4vw,72px); }
+  .lecture-slide[data-lecture-index="6"] .lecture-visual img { width: 100%; height: 100%; object-fit: contain; }
 
   .service-scene { display: flex; flex-direction: column; justify-content: center; padding: clamp(70px,8vh,110px) clamp(82px,8vw,160px); }
   .theme--dark { color: #fffaf3; background: radial-gradient(circle at 86% 16%, rgba(255,118,87,.18), transparent 26%), radial-gradient(circle at 12% 82%, rgba(105,86,223,.18), transparent 28%), #0c0d12; }
@@ -800,13 +1052,21 @@ const serviceTextScenes = [
   }
   .need-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; margin-top: clamp(50px,7vh,90px); }
   .need-row > div { min-height: 190px; display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 22px; padding: 30px; border: 1px solid rgba(255,255,255,.18); border-radius: 28px; background: rgba(255,255,255,.06); font-size: clamp(22px,1.6vw,31px); font-weight: 800; }
-  .need-row strong { color: #ff7657; font: 900 50px/1 ui-monospace,monospace; }
   .need-row img, .need-row svg { width: 66px; height: 66px; animation: icon-pop 700ms cubic-bezier(.22,.8,.22,1) 450ms both; }
-  .need-row img { filter: invert(1); }
+  .need-row img { filter: brightness(0) invert(1); }
   .need-row svg { fill: none; stroke: #ff9b80; stroke-width: 4; stroke-linecap: round; }
   @keyframes icon-pop { from { opacity: 0; transform: scale(.4) rotate(-14deg); } to { opacity: 1; transform: none; } }
-  .medallion-demo { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 60px; }
-  .medallion-demo span { display: inline-flex; min-height: 84px; align-items: center; padding: 0 30px; border-radius: 999px; color: #fff; background: #8a321e; box-shadow: inset 0 0 0 2px rgba(255,255,255,.2), 0 14px 30px rgba(88,39,26,.18); font-size: clamp(22px,1.6vw,31px); font-weight: 850; }
+  .medallion-scene { display: grid; grid-template-columns: minmax(0,.78fr) minmax(620px,1.22fr); gap: clamp(50px,6vw,110px); align-items: center; }
+  .medallion-copy h2 { max-width: 9ch; font-size: clamp(72px,6.6vw,126px); }
+  .medallion-copy .service-support { max-width: 30ch; margin-top: 32px; font-size: clamp(20px,1.55vw,30px); }
+  .medallion-feature { min-height: 190px; display: grid; grid-template-columns: 160px minmax(0,1fr); align-items: center; gap: 28px; margin-top: 34px; opacity: 0; transition: opacity 220ms ease, transform 380ms cubic-bezier(.16,1,.3,1); transform: scale(.9); }
+  .medallion-feature.is-visible { opacity: 1; transform: none; }
+  .medallion-feature img { width: 160px; height: 160px; object-fit: contain; filter: drop-shadow(0 20px 28px rgba(55,36,28,.2)); }
+  .medallion-feature strong { font-size: clamp(24px,1.8vw,35px); line-height: 1.05; }
+  .medallion-grid { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 22px; }
+  .medallion-grid figure { aspect-ratio: 1; display: grid; place-items: center; margin: 0; padding: 13%; border-radius: 50%; background: rgba(255,255,255,.7); box-shadow: 0 18px 42px rgba(68,44,31,.09); opacity: .16; transform: scale(.68); filter: grayscale(1); transition: opacity 440ms ease, transform 620ms cubic-bezier(.16,1,.3,1), filter 500ms ease; }
+  .medallion-grid figure.is-placed { opacity: 1; transform: none; filter: none; }
+  .medallion-grid img { width: 100%; height: 100%; object-fit: contain; }
   .service-joke [data-joke-line="two"] { min-height: 1.25em; margin: 52px 0 0; color: #ff9b80; font: italic 650 clamp(42px,4vw,76px)/1 Georgia,serif; animation: service-copy-in 500ms ease-out both; }
   .search-example { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 34px; margin-top: 72px; padding: 34px 42px; border-radius: 28px; background: rgba(255,255,255,.65); box-shadow: 0 24px 60px rgba(50,32,31,.12); font-size: clamp(22px,1.7vw,34px); }
   .search-example i { color: #ff7657; font-size: 2em; }
@@ -822,14 +1082,28 @@ const serviceTextScenes = [
   .live-meaning--cover { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; justify-content: center; padding: 110px 150px; background: radial-gradient(circle at 84% 14%,rgba(255,118,87,.24),transparent 30%),#f5efe6; transition: opacity 650ms ease, visibility 650ms; }
   .desktop-medallion-scene[data-focus-phase="site"] .live-meaning--cover { opacity: 0; visibility: hidden; }
   .focus-phone { justify-self: center; width: min(560px,calc((100vh - 30px)*.4771)); height: calc(100vh - 30px); }
-  .invitation-scene { grid-template-columns: .78fr 1.22fr; }
-  .celebrity { display: grid; grid-template-columns: 160px 1fr auto; align-items: center; gap: 34px; max-width: 1050px; margin-top: 70px; padding: 28px 34px; border: 1px solid rgba(255,255,255,.16); border-radius: 34px; background: rgba(255,255,255,.07); }
-  .celebrity > img { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; }
-  .celebrity > div { display: grid; gap: 8px; }
-  .celebrity strong { font-size: 38px; }
-  .celebrity span { color: rgba(255,255,255,.62); font-size: 23px; }
-  .celebrity button { display: flex; align-items: center; gap: 12px; border: 0; color: #fff; background: transparent; font-size: 26px; }
-  .celebrity button b { display: grid; width: 78px; height: 78px; place-items: center; border-radius: 50%; color: #ff7657; background: #fff; font-size: 43px; animation: heart-pop 1.2s cubic-bezier(.22,.8,.22,1) 600ms both; }
+  .focus-qr-scene { display: grid; grid-template-columns: minmax(0,.9fr) minmax(560px,.7fr); align-items: center; gap: clamp(70px,8vw,150px); padding: clamp(70px,8vh,110px) clamp(82px,8vw,160px); }
+  .focus-qr-copy { position: relative; z-index: 1; }
+  .focus-qr-copy h2 { margin: 0; font-size: clamp(98px,10vw,188px); line-height: .82; letter-spacing: -.075em; }
+  .focus-qr-copy > p:not(.service-eyebrow) { margin: 48px 0 18px; font: 500 clamp(24px,2vw,38px)/1.2 Georgia,serif; }
+  .focus-qr-copy small { display: block; max-width: 52ch; color: rgba(255,255,255,.5); font-size: 16px; overflow-wrap: anywhere; }
+  .focus-qr { display: block; width: min(620px,58vh); padding: 22px; border-radius: 36px; background: #fff; box-shadow: 0 42px 90px rgba(0,0,0,.4); }
+  .focus-qr :global(svg) { width: 100%; height: auto; display: block; }
+  .nps-live-scene { grid-template-columns: minmax(460px,.72fr) minmax(0,1.28fr); }
+  .people-scene { overflow: hidden; }
+  .people-portraits, .people-interface { position: absolute; inset: 0; transition: opacity 700ms ease, transform 800ms cubic-bezier(.22,.8,.22,1), visibility 700ms; }
+  .people-portraits { display: flex; flex-direction: column; justify-content: center; padding: clamp(70px,8vh,110px) clamp(82px,8vw,160px); }
+  .people-portraits h2 { margin: 0; font-size: clamp(72px,7vw,132px); line-height: .85; letter-spacing: -.07em; }
+  .people-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; margin-top: 58px; }
+  .people-row article { display: grid; grid-template-columns: 118px minmax(0,1fr) auto; grid-template-rows: auto auto; align-items: center; gap: 5px 22px; min-height: 150px; padding: 22px 26px; border-radius: 28px; background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+  .people-row img { grid-row: 1 / span 2; width: 112px; height: 112px; border-radius: 50%; object-fit: cover; }
+  .people-row strong { align-self: end; font-size: clamp(23px,1.7vw,33px); }
+  .people-row span { align-self: start; color: rgba(255,255,255,.62); font-size: clamp(16px,1.1vw,21px); line-height: 1.2; }
+  .people-row b { grid-column: 3; grid-row: 1 / span 2; color: #ff9b80; font-size: 26px; }
+  .people-interface { opacity: 0; visibility: hidden; transform: translateY(3%); background: #f7eee2; }
+  .people-interface iframe { width: 100%; height: 100%; border: 0; }
+  .people-scene[data-people-phase="interface"] .people-portraits { opacity: 0; visibility: hidden; transform: translateY(-3%); }
+  .people-scene[data-people-phase="interface"] .people-interface { opacity: 1; visibility: visible; transform: none; }
   @keyframes heart-pop { 0% { opacity: 0; transform: scale(.2); } 65% { transform: scale(1.15); } 100% { opacity: 1; transform: none; } }
 
   .desktop-scene { position: absolute; inset: 0; z-index: 12; background: #fff; }

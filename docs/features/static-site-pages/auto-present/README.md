@@ -79,20 +79,47 @@ live-вставки, принятые mobile journeys, двухфазный Week
 
 Согласованные сцены замораживаются в `SCENE_ACCEPTANCE_CONTRACT`. Черновая
 итерация проверяет только новые и адресно переоткрытые сцены; полный regression
-выполняется один раз перед финальным handoff. Сейчас без адресного замечания не
-меняются `tomorrow-mobile`, `tomorrow-rail-like`, `weekend-amber-artifact` и
-`outro-qr`; их method/markup SHA-256 проверяет отдельный freeze gate.
+выполняется один раз перед финальным handoff. Замороженным остаётся
+`outro-qr`. Сцены `tomorrow-mobile`, `tomorrow-rail-like` и
+`weekend-amber-artifact` адресно переоткрыты замечаниями 29.07 и обновлены под
+текущую разметку; после owner acceptance они получают новый freeze.
 
 PWA содержит отдельные кнопки для каждой лекционной и сервисной сцены,
 sticky elapsed/countdown timer, стабильный status shelf, время начала intro и
-поле Smart Search. Статический кадр остаётся видимым до следующего Run; browser,
+поле Smart Search. Справа добавлена ручная полоса ↑/↓: она передаёт bounded
+wheel активной поверхности и не завершает текущую сцену. Статический кадр
+остаётся видимым до следующего Run; browser,
 BrowserContext, page и окно не пересоздаются. Stop/Reset нетерминальны, только
 Shutdown закрывает среду.
 
-Новые live-вставки используют предоставленную focus-preview сборку; точная
-invitation-ссылка зафиксирована в presentation contract. Принятые journeys с
-presenter hooks остаются на hooked review build, потому что focus-preview этих
-hooks не содержит.
+Live-вставки используют focus-preview
+`preview-20260729-focus-simple-r15-a5cc0256`; маршрут нормализуется относительно
+preview prefix. Tomorrow и Weekend работают на реальном текущем меню и
+селекторе `data-mobile-v23-ready`. Единственное явное исключение —
+`weekend-amber-artifact`: в focus-сборке build-time flag имеет значение `off`,
+поэтому только эта сцена использует проверенный актуальный R15 review candidate
+с `tail`, событием `7164` и реальным artifact UI.
+
+Smart Search считается успешным только после видимых реальных
+`[data-event-card]`. Сессия отдельного непривилегированного demo-account
+сохраняется в
+`%LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1\browser-state-v1.json`;
+секреты не входят в Git/ZIP/relay. До однократной подготовки аккаунта сцена
+завершается явной ошибкой, а не изображает результаты.
+
+Сцена фокус-группы показывает крупный inline SVG QR точного invitation URL.
+Сцена оценки выполняет onboarding participation в том же browser context,
+открывает реальную `/segodnya/` и прокручивает до блока
+«Помогла ли вам эта страница?» с 11 оценками 0–10. Это называется **оценкой
+страницы**, а не relationship NPS. Сцена «Люди» использует проверенные данные
+Татьяны Удовенко, Андрея Бойко и Светланы Соколовой, затем показывает
+настоящий `EventParticipants` lab UI и реальный pressed-like; event relations в
+immutable focus export пока отсутствуют, поэтому это owner-test preview, не
+утверждение о production event page.
+
+Narration шутки и CC0 error sting лежат content-addressed на существующем
+Yandex CDN. Provenance и повторяемый процесс закреплены в project skill
+`.codex/skills/autopresenter-audio-cues/`.
 
 ### Два непересекающихся трека
 

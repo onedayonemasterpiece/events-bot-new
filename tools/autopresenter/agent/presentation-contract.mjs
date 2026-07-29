@@ -8,6 +8,7 @@ export const FOCUS_PREVIEW_BASE_URL =
 export const FOCUS_INVITATION_URL =
   `${FOCUS_PREVIEW_BASE_URL}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
 export const FOCUS_INVITATION_SCENE_ID = "service-focus-group";
+export const FOCUS_NPS_URL = `${FOCUS_PREVIEW_BASE_URL}/segodnya/`;
 
 export const ZNANIE_LOGO_ASSET = Object.freeze({
   url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg",
@@ -69,19 +70,12 @@ export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
   "service-disruption",
   "service-taste",
   "service-feedback",
-  "service-nps",
-  "service-future-celebrity",
 ]);
 
 // Explicitly accepted scenes stay closed to incidental redesign during draft iterations.
 export const SCENE_ACCEPTANCE_CONTRACT = Object.freeze({
   version: "2026-07-29.telegram-850",
-  frozen: Object.freeze([
-    "tomorrow-mobile",
-    "tomorrow-rail-like",
-    "weekend-amber-artifact",
-    "outro-qr",
-  ]),
+  frozen: Object.freeze(["outro-qr"]),
   sourceSha256: Object.freeze({
     "tomorrow-mobile": "c4c6c6845fd129ef8701e34c8463e05570a5b3e7e110e1b12994704d7e03e776",
     "tomorrow-rail-like": "9c989b823a8a9967dddd4dcd634ec8cc8610f5ba841ab9633ccde0c500e8dba1",
@@ -92,6 +86,9 @@ export const SCENE_ACCEPTANCE_CONTRACT = Object.freeze({
   reopened: Object.freeze({
     "intro-loop": "Hero Talk behavior and timer feedback",
     lecture: "Telegram 843–849: seven held scenes, varied layouts and themes",
+    "tomorrow-mobile": "Telegram 803/2026-07-29: current-preview menu/selectors and pacing regression",
+    "tomorrow-rail-like": "Telegram 803/2026-07-29: current event contract and missing rail gesture",
+    "weekend-amber-artifact": "Telegram 803/2026-07-29: artifact actions absent after Weekend transition",
     "weekend-desktop": "Telegram 850: meaning-first then live site",
     pwa: "Telegram 840/844: stable shelf and sticky timer",
   }),

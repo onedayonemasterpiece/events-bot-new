@@ -24,6 +24,9 @@ they are not installed again for every extracted version or launch. A changed
 dependency lock gets its own cache entry. The demonstrator then opens
 automatically. No keyboard confirmation, administrator rights, Python, system
 Node or system Chrome are required. The computer needs outbound HTTPS access.
+The same cache also keeps browser-state-v1.json so a one-time sign-in to the
+separate, non-privileged search demo account survives later debug ZIP versions.
+No password or access token is shipped inside the ZIP.
 This launch temporarily disables QuickEdit only in its current console window
 so an accidental click cannot pause a download; if that console API is
 unavailable, startup continues without changing a permanent console setting.

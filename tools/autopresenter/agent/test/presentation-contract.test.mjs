@@ -24,8 +24,11 @@ test("presentation scenes remain explicit and the intro defaults to fifty minute
   assert.ok(SERVICE_SCENE_IDS.includes("service-search-live"));
   assert.deepEqual(
     SCENE_ACCEPTANCE_CONTRACT.frozen,
-    ["tomorrow-mobile", "tomorrow-rail-like", "weekend-amber-artifact", "outro-qr"],
+    ["outro-qr"],
   );
+  assert.ok(Object.hasOwn(SCENE_ACCEPTANCE_CONTRACT.reopened, "tomorrow-mobile"));
+  assert.ok(Object.hasOwn(SCENE_ACCEPTANCE_CONTRACT.reopened, "tomorrow-rail-like"));
+  assert.ok(Object.hasOwn(SCENE_ACCEPTANCE_CONTRACT.reopened, "weekend-amber-artifact"));
 });
 
 test("intro and lecture media use immutable content-addressed Yandex CDN URLs", () => {

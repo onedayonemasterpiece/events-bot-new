@@ -28,8 +28,13 @@ test('intro follows the Hero Talk semantic-fragment reveal and keeps two explici
   assert.match(source, /const introRoutes = \[/u);
   assert.match(source, /\['welcome', 'topic', 'format'/u);
   assert.match(source, /splitSemanticChunks/u);
-  assert.match(source, /className = 'hero-fragment is-active'/u);
-  assert.match(source, /if \(!reduceMotion\.matches && !await pause\(280, token\)\)/u);
+  assert.match(source, /className = 'hero-fragment'/u);
+  assert.match(source, /node\.append\(document\.createTextNode\(' '\)\)/u);
+  assert.match(source, /requestAnimationFrame\(\(\) => requestAnimationFrame\(resolve\)\)/u);
+  assert.match(source, /fragment\.classList\.add\('is-active'\)/u);
+  assert.match(source, /265 \+ \(index % 2\) \* 35/u);
+  assert.match(source, /const route = \[\.\.\.pickRoute\(\)\]/u);
+  assert.match(source, /return \['Вот-вот', 'начинаем'\]/u);
   assert.match(source, /aria-live="off"/u);
   assert.match(source, /countdownPhrase/u);
   assert.match(source, /data-presenter-id="intro-music"/u);
@@ -51,7 +56,13 @@ test('lecture is seven independently held frames with varied layouts and transpa
   assert.match(source, /brand-logo--on-\$\{slide\.theme\}/u);
   assert.match(source, /layout: 'horizontal'/u);
   assert.match(source, /layout: 'cinema'/u);
-  assert.doesNotMatch(source, /startLecture|lectureState = 'complete'|slideIntervalMs/u);
+  assert.match(source, /const typeLecture = async \(scene, token\)/u);
+  assert.match(source, /scene\.dataset\.lectureState = 'typing'/u);
+  assert.match(source, /scene\.dataset\.lectureState = 'media'/u);
+  assert.match(source, /scene\.dataset\.lectureState = 'complete'/u);
+  assert.doesNotMatch(source, /slideIntervalMs/u);
+  assert.match(source, /\.lecture-visual \{[\s\S]*border: 0; border-radius: 0; background: transparent; box-shadow: none;/u);
+  assert.match(source, /\.lecture-slide\[data-lecture-index="6"\][\s\S]*minmax\(50vw/u);
   assert.match(source, /@keyframes lecture-image-enter \{[\s\S]*scale\(\.9\)[\s\S]*scale\(1\)/u);
 });
 
@@ -87,9 +98,9 @@ test('outro remains the accepted restrained fullscreen QR scene', () => {
 test('all presentation media are immutable Yandex CDN assets and reduced motion is safe', () => {
   const urls = [...source.matchAll(/https:\/\/static\.kenigevents\.ru\/assets\/autopresenter\/scenario-20260730\/[^'"]+/gu)].map((match) => match[0]);
   assert.ok(urls.length >= 10);
-  for (const url of urls) assert.match(url, /-[a-f0-9]{64}\.(?:png|svg|mp3|webp)$/u);
+  for (const url of urls) assert.match(url, /-[a-f0-9]{64}\.(?:png|svg|mp3|wav|webp)$/u);
   assert.match(source, /@media \(prefers-reduced-motion: reduce\)/u);
-  assert.match(source, /if \(!reduceMotion\.matches && !await pause\(280, token\)\)/u);
+  assert.match(source, /if \(reduceMotion\.matches\)/u);
   assert.match(source, /\.hero-fragment\.is-active::after \{ display: none; \}/u);
   assert.match(source, /animation-duration: \.01ms !important/u);
 });
@@ -106,6 +117,17 @@ test('service presentation uses the requested focus preview and explicit input-d
   assert.match(source, /class="wordmark-o-glyph"/u);
   assert.match(source, /transform: scaleX\(3\.25\)/u);
   assert.match(source, /otkrytie-festivalya-bahosluzhenie[\s\S]*-6153\//u);
-  assert.match(source, /for \(const grapheme of Array\.from\('Максим, самое время для шутки'\)\)/u);
+  assert.match(source, /typeInto\(first, 'Максим, самое время для шутки'/u);
+  assert.match(source, /pause\(7000, token\)/u);
+  assert.match(source, /мой электронный мозг не создан для шуток/u);
+  assert.match(source, /jokeAudio\.play\(\)/u);
+  assert.match(source, /errorAudio\.play\(\)/u);
+  assert.match(source, /reference4-v8\/search-thin\.svg/u);
+  assert.match(source, /reference4-v8\/share-network-thin\.svg/u);
+  assert.match(source, /const medallions = \[[\s\S]*world-ocean-museum[\s\S]*mumod/u);
+  assert.match(source, /data-medallion-state="idle"/u);
+  assert.match(source, /createFocusInviteQrSvg\(focusInvitationUrl\)/u);
+  assert.match(source, /focusNpsUrl = `\$\{focusPreviewBase\}\/segodnya\/`/u);
+  assert.match(source, /Татьяна Удовенко[\s\S]*Андрей Бойко[\s\S]*Светлана Соколова/u);
   assert.match(source, /data-focus-phase="meaning"/u);
 });

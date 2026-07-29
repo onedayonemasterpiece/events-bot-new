@@ -52,11 +52,23 @@ portable release:
   actions use tap/swipe affordances;
 - scenario pacing uses visible natural scroll/drag motion, readiness checks and
   bounded dwell instead of instant component jumps;
+- real mobile date menus remain open for 2.2 seconds before the selected item
+  is tapped, and the PWA right-hand ↑/↓ strip can nudge the visible page without
+  stopping the active scenario;
+- current live routes are normalized relative to the pinned focus-preview
+  prefix; only the artifact scene uses the explicitly documented R15 candidate
+  because the focus build has its artifact feature flag disabled;
+- Smart Search requires a one-time login to a separate non-privileged demo
+  account, persists browser storage as `browser-state-v1.json` beside the
+  shared cache, and accepts success only when real event cards are visible;
 - the same headed window survives sequential Run, Stop and Reset commands;
   a new Run cooperatively switches the active scene, and explicit timeout
   policy admits a future scene lasting up to one hour;
 - the intro logo/music, seven lecture images, and QR outro use content-addressed
   immutable assets from the existing `static.kenigevents.ru` Yandex CDN;
+- the user-provided joke narration and the licensed CC0 error sting use the
+  same content-addressed CDN workflow documented by the project
+  `autopresenter-audio-cues` skill;
 - the confirmed `Закрыть презентацию` action closes the browser, terminates the
   Windows agent and leaves a durable `closed` status;
 - the first successful test stores versioned Node, lockfile-keyed dependencies

@@ -30,7 +30,9 @@ test("accepted scene implementations cannot change incidentally during draft ite
     "weekend-amber-artifact": ["  async runWeekendAmberArtifact", "\n  async selectTomorrowEvent"],
     "outro-qr": ["  async runOutroQr", "\n  async openTomorrowFromHome"],
   };
-  for (const [scene, markers] of Object.entries(methods)) {
+  for (const scene of SCENE_ACCEPTANCE_CONTRACT.frozen) {
+    const markers = methods[scene];
+    assert.ok(markers, `frozen scene ${scene} needs method markers`);
     assert.equal(
       digest(sliceBetween(agent, ...markers)),
       expected[scene],

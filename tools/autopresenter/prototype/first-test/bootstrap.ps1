@@ -181,6 +181,7 @@ try {
     }
 
     $Env:AUTOPRESENTER_DEPENDENCY_ROOT = $DependencyHome
+    $Env:AUTOPRESENTER_STORAGE_STATE_PATH = Join-Path $CacheRoot "browser-state-v1.json"
     $Env:PLAYWRIGHT_BROWSERS_PATH = $PlaywrightBrowsers
     $Env:PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT = "120000"
     $PlaywrightCli = Join-Path $DependencyHome "node_modules\playwright\cli.js"

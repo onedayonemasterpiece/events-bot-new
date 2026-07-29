@@ -2,7 +2,7 @@
 
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { randomUUID } from "node:crypto";
@@ -28,6 +28,7 @@ import {
   FOCUS_PREVIEW_BASE_URL,
   FOCUS_INVITATION_SCENE_ID,
   FOCUS_INVITATION_URL,
+  FOCUS_NPS_URL,
   LECTURE_SCENES,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
@@ -55,8 +56,11 @@ const DESKTOP_FRAME_SELECTOR =
   '#presenter-desktop-frame[data-presenter-id="desktop-site-frame"]';
 const WEEKEND_DESKTOP_ROOT_SELECTOR = '[data-date-listing="weekend"]';
 const SITE_FOOTER_SELECTOR = '[data-site-footer]';
-const TOMORROW_NAV_SELECTOR = '[data-presenter-id="nav-tomorrow"]';
-const TOMORROW_READY_SELECTOR = '[data-presenter-id="tomorrow-page-ready"]';
+const TOMORROW_MENU_SUMMARY_SELECTOR = "[data-mobile-discovery-menu] > summary";
+const TOMORROW_MENU_LINK_SELECTOR =
+  'nav[aria-label="Быстрый выбор даты"] a[href$="/zavtra/"]';
+const TOMORROW_READY_SELECTOR =
+  '[data-mobile-v23-page="tomorrow"][data-mobile-v23-ready="true"]';
 const TOMORROW_ROWS_SELECTOR =
   '[data-mobile-v23-page="tomorrow"] [data-mobile-listing-row][data-event-id]';
 const MOBILE_EVENT_RAIL_SELECTOR = ".rail-window";
@@ -69,6 +73,8 @@ const WEEKEND_MENU_LINK_SELECTOR =
   'nav[aria-label="Быстрый выбор даты"] a[href$="/vyhodnye/"]';
 const WEEKEND_ROOT_SELECTOR =
   '[data-date-listing="weekend"][data-amber-artifact-research="tail"]';
+const ARTIFACT_PREVIEW_BASE_URL =
+  "https://kenigevents.ru/_review/pp1wRctXBd6boYU1EcnBrod3z8MmKpD7SGEufK1t-xw";
 const ARTIFACT_SELECTOR = "[data-amber-artifact]";
 const ARTIFACT_STORAGE_KEY = "ke_artifact_collection_v1";
 const PROFILE_STORAGE_KEY = "ke_personalization_profile";
@@ -86,6 +92,7 @@ const config = Object.freeze({
   headless: process.env.AUTOPRESENTER_HEADLESS === "1",
   fullscreen: process.env.AUTOPRESENTER_FULLSCREEN !== "0",
   artifactDir: process.env.AUTOPRESENTER_ARTIFACT_DIR || "",
+  storageStatePath: process.env.AUTOPRESENTER_STORAGE_STATE_PATH || "",
   pollWaitMs: numberFromEnv("AUTOPRESENTER_POLL_WAIT_MS", 20_000, 100, 25_000),
   commandTtlGraceMs: numberFromEnv("AUTOPRESENTER_TTL_GRACE_MS", 250, 0, 5_000),
   hardStopMs: numberFromEnv("AUTOPRESENTER_HARD_STOP_MS", 2_000, 250, 10_000),
@@ -225,6 +232,15 @@ class PrototypeAgent {
 
   async contextOptions() {
     const options = { viewport: VIEWPORT, deviceScaleFactor: 1 };
+    if (config.storageStatePath) {
+      try {
+        await access(config.storageStatePath);
+        options.storageState = config.storageStatePath;
+      } catch {
+        // First launch intentionally starts without credentials; a later authenticated
+        // session is persisted to this file without shipping secrets in the package.
+      }
+    }
     if (config.artifactDir) {
       options.recordVideo = { dir: config.artifactDir, size: VIEWPORT };
     }
@@ -479,7 +495,7 @@ class PrototypeAgent {
   }
 
   async dispatchCommand(command, { remote }) {
-    if (!command || !["run", "stop", "reset", "shutdown"].includes(command.action)) return;
+    if (!command || !["run", "scroll", "stop", "reset", "shutdown"].includes(command.action)) return;
 
     if (remote && this.ackCache.has(command.id)) {
       const previous = this.ackCache.get(command.id);
@@ -509,11 +525,41 @@ class PrototypeAgent {
       await this.handleStop(command, remote);
       return;
     }
+    if (command.action === "scroll") {
+      await this.handleManualScroll(command, remote);
+      return;
+    }
     if (command.action === "shutdown") {
       await this.handleShutdown(command, remote);
       return;
     }
     await this.handleReset(command, remote);
+  }
+
+  async handleManualScroll(command, remote) {
+    const direction = command.options?.direction === "up" ? -1 : 1;
+    const amount = Math.max(120, Math.min(1_200, Number(command.options?.amount) || 420));
+    const visibleFrame = this.page.locator("iframe:visible").last();
+    const frameCount = await visibleFrame.count();
+    const target = frameCount ? visibleFrame : this.page.locator("body");
+    const box = await target.boundingBox();
+    if (!box) {
+      if (remote) await this.ack(command, "error", "visible presentation surface is unavailable");
+      return;
+    }
+
+    await this.page.mouse.move(
+      Math.round(box.x + box.width / 2),
+      Math.round(box.y + box.height / 2),
+    );
+    const delta = direction * amount;
+    for (const factor of [.22, .33, .45]) {
+      await this.page.mouse.wheel(0, Math.round(delta * factor));
+      await abortableDelay(70);
+    }
+    const detail = `manual scroll ${command.options?.direction || "down"} ${amount}px`;
+    log(detail, { activeScenario: this.activeScenario });
+    if (remote) await this.ack(command, "completed", detail);
   }
 
   isExpired(command) {
@@ -594,6 +640,12 @@ class PrototypeAgent {
     }
     if (scenarioId === FOCUS_INVITATION_SCENE_ID) {
       return this.runFocusInvitation(signal);
+    }
+    if (scenarioId === "service-nps") {
+      return this.runFocusNps(signal);
+    }
+    if (scenarioId === "service-future-celebrity") {
+      return this.runPeopleScene(signal);
     }
     if (isStaticPresentationScenario(scenarioId)) {
       return this.runHeldPresentationScene(scenarioId, signal);
@@ -847,6 +899,16 @@ class PrototypeAgent {
         ZNANIE_LOGO_ASSET.url,
         signal,
       );
+      await raceWithAbort(
+        this.page.waitForFunction(
+          (lectureSelector) =>
+            document.querySelector(lectureSelector)?.getAttribute("data-lecture-state") ===
+            "complete",
+          selector,
+          { timeout: 15_000 },
+        ),
+        signal,
+      );
     }
     if (scenarioId === "service-joke") {
       await raceWithAbort(
@@ -855,6 +917,17 @@ class PrototypeAgent {
             document.querySelector(selector)?.getAttribute("data-joke-state") === "complete",
           selector,
           { timeout: 15_000 },
+        ),
+        signal,
+      );
+    }
+    if (scenarioId === "service-medallions") {
+      await raceWithAbort(
+        this.page.waitForFunction(
+          (selector) =>
+            document.querySelector(selector)?.getAttribute("data-medallion-state") === "complete",
+          selector,
+          { timeout: 25_000 },
         ),
         signal,
       );
@@ -955,36 +1028,117 @@ class PrototypeAgent {
     const startedAt = Date.now();
     await this.setInteractionMode("stage");
     await this.showPresenterScene(FOCUS_INVITATION_SCENE_ID, signal);
-    const selector = '[data-presenter-id="focus-invitation-frame"]';
-    await this.resetFocusFrame(selector, signal);
-    const frame = await this.focusFrame(selector, signal);
+    const scene = this.page.locator(
+      `[data-presenter-scene-id="${FOCUS_INVITATION_SCENE_ID}"]`,
+    );
+    await raceWithAbort(scene.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    const link = scene.locator(".focus-qr");
+    const actualUrl = new URL(await link.getAttribute("href"));
     const expectedUrl = new URL(FOCUS_INVITATION_URL);
-    const actualUrl = new URL(frame.url());
     assertCondition(
-      actualUrl.origin === expectedUrl.origin && actualUrl.pathname === expectedUrl.pathname,
-      `focus invitation opened unexpected URL ${frame.url()}`,
+      actualUrl.href === expectedUrl.href,
+      `focus QR points to unexpected URL ${actualUrl.href}`,
     );
-    const body = frame.locator("body");
-    await raceWithAbort(body.waitFor({ state: "visible", timeout: 30_000 }), signal);
     assertCondition(
-      (await body.innerText()).includes("ПРИГЛАШЕНИЕ ПРИНЯТО"),
-      "focus invitation acceptance is not visible",
-    );
-    const participation = await frame.evaluate(() => {
-      try {
-        return JSON.parse(localStorage.getItem("kenigevents:focus-participation:v1") || "null");
-      } catch {
-        return null;
-      }
-    });
-    assertCondition(
-      participation?.source === "invite_fragment" && participation?.status === "joining",
-      "focus invitation fragment was not accepted into the participation state",
+      (await link.locator("svg").count()) === 1,
+      "focus invitation QR SVG is missing",
     );
     await abortableDelay(1_200, signal);
     await this.captureScenario(FOCUS_INVITATION_SCENE_ID);
     return {
-      summary: "focus-group invitation fragment was accepted and the invitation remains visible",
+      summary: "large focus-group QR points to the exact current onboarding invitation",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async activateFocusParticipation(frame, signal) {
+    await raceWithAbort(
+      frame.goto(FOCUS_INVITATION_URL, { waitUntil: "domcontentloaded", timeout: 30_000 }),
+      signal,
+    );
+    const installSkip = frame.locator("[data-focus-install-skip]");
+    if (await installSkip.isVisible().catch(() => false)) {
+      await installSkip.click();
+    }
+    const skip = frame.locator("[data-focus-skip]");
+    await raceWithAbort(skip.waitFor({ state: "visible", timeout: 15_000 }), signal);
+    await skip.click();
+    await raceWithAbort(
+      frame.waitForFunction(() => {
+        try {
+          return JSON.parse(
+            localStorage.getItem("kenigevents:focus-participation:v1") || "null",
+          )?.status === "active";
+        } catch {
+          return false;
+        }
+      }, undefined, { timeout: 10_000 }),
+      signal,
+    );
+  }
+
+  async runFocusNps(signal) {
+    const startedAt = Date.now();
+    await this.setInteractionMode("mobile");
+    await this.showPresenterScene("service-nps", signal);
+    const selector = '[data-presenter-id="focus-nps-frame"]';
+    const frame = await this.focusFrame(selector, signal);
+    await this.activateFocusParticipation(frame, signal);
+    await raceWithAbort(
+      frame.goto(FOCUS_NPS_URL, { waitUntil: "domcontentloaded", timeout: 30_000 }),
+      signal,
+    );
+    const panel = frame.locator("[data-focus-lab-panel]:not([hidden])");
+    await raceWithAbort(panel.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, panel, signal, selector);
+    assertCondition(
+      (await panel.locator("[data-focus-score]").count()) === 11,
+      "real page rating block must show scores 0–10",
+    );
+    await abortableDelay(2_000, signal);
+    await this.captureScenario("service-nps");
+    return {
+      summary: "real current Today page scrolled to the visible focus-group 0–10 rating block",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runPeopleScene(signal) {
+    const startedAt = Date.now();
+    await this.setInteractionMode("stage");
+    await this.showPresenterScene("service-future-celebrity", signal);
+    const selector = '[data-presenter-id="people-interface-frame"]';
+    const iframe = this.page.locator(selector);
+    await raceWithAbort(iframe.waitFor({ state: "visible", timeout: 20_000 }), signal);
+    await raceWithAbort(
+      this.page.waitForFunction(
+        () =>
+          document.querySelector('[data-presenter-scene-id="service-future-celebrity"]')
+            ?.getAttribute("data-people-phase") === "interface",
+        undefined,
+        { timeout: 15_000 },
+      ),
+      signal,
+    );
+    const handle = await iframe.elementHandle();
+    const frame = await handle?.contentFrame();
+    assertCondition(frame, "people interface frame did not attach");
+    const participants = frame.locator(
+      '[data-event-participants][data-event-participants-surface="mobile"]',
+    );
+    await raceWithAbort(participants.waitFor({ state: "visible", timeout: 20_000 }), signal);
+    await participants.scrollIntoViewIfNeeded();
+    const like = participants.locator("[data-participant-like]").first();
+    const before = await like.getAttribute("aria-pressed");
+    if (before !== "true") await like.click();
+    assertCondition(
+      (await like.getAttribute("aria-pressed")) === "true",
+      "participant like did not become pressed",
+    );
+    await abortableDelay(1_500, signal);
+    await this.captureScenario("service-future-celebrity");
+    return {
+      summary: "three verified people transitioned into the real participant UI and one like was shown",
       durationMs: Date.now() - startedAt,
     };
   }
@@ -1004,14 +1158,30 @@ class PrototypeAgent {
     await input.pressSequentially(query, { delay: 86 });
     const submit = frame.locator("[data-search-submit]");
     const signedIn = await frame.locator("[data-search-logout]").isVisible().catch(() => false);
-    const enabled = signedIn && (await submit.isEnabled().catch(() => false));
-    if (enabled) await submit.click();
+    assertCondition(
+      signedIn,
+      "Поиск требует однократного входа в отдельный demo-аккаунт; сессия затем сохраняется в общем browser-state cache",
+    );
+    assertCondition(
+      await submit.isEnabled().catch(() => false),
+      "search submit stayed disabled after the authenticated query was typed",
+    );
+    await submit.click();
+    const results = frame.locator("[data-search-results]:visible");
+    await raceWithAbort(results.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    const cards = results.locator("[data-event-card]");
+    await raceWithAbort(cards.first().waitFor({ state: "visible", timeout: 30_000 }), signal);
+    assertCondition((await cards.count()) > 0, "search completed without real event cards");
+    if (config.storageStatePath) {
+      await mkdir(path.dirname(config.storageStatePath), { recursive: true });
+      await this.context.storageState({ path: config.storageStatePath });
+    }
     await abortableDelay(2_000, signal);
     await this.captureScenario("service-search-live");
     return {
-      summary: enabled
-        ? `query "${query}" was typed and submitted on the focus-preview search page`
-        : `query "${query}" was typed visibly; site sign-in gate left unchanged`,
+      summary:
+        `query "${query}" was typed, submitted with the persistent demo session, ` +
+        `and produced ${await cards.count()} real event cards`,
       durationMs: Date.now() - startedAt,
     };
   }
@@ -1039,9 +1209,11 @@ class PrototypeAgent {
     const weekend = frame.locator(WEEKEND_DESKTOP_ROOT_SELECTOR);
     await raceWithAbort(weekend.waitFor({ state: "visible", timeout: 30_000 }), signal);
     await this.waitForEmbeddedReady(frame, signal);
-    const path = await iframe.evaluate(
-      (node) => `${node.contentWindow.location.pathname}${node.contentWindow.location.hash}`,
-    );
+    const iframeHandle = await iframe.elementHandle();
+    const desktopContentFrame = await iframeHandle?.contentFrame();
+    assertCondition(desktopContentFrame, "desktop weekend frame did not attach");
+    const desktopUrl = new URL(desktopContentFrame.url());
+    const path = `${this.normalizedPreviewPath(desktopUrl.pathname)}${desktopUrl.hash}`;
     assertCondition(path === "/vyhodnye/", `desktop weekend route is ${path}`);
     await abortableDelay(1_500, signal);
     const footer = frame.locator(SITE_FOOTER_SELECTOR);
@@ -1101,12 +1273,19 @@ class PrototypeAgent {
   }
 
   async openTomorrowFromHome(frame, signal) {
-    const target = frame.locator(TOMORROW_NAV_SELECTOR);
+    const menuSummary = frame.locator(TOMORROW_MENU_SUMMARY_SELECTOR);
+    await raceWithAbort(menuSummary.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await this.naturalVerticalScroll(frame, menuSummary, signal);
+    await this.tapMobileLocator(frame, menuSummary, signal);
+    const menu = frame.locator("[data-mobile-discovery-menu]");
+    await this.waitForAttribute(menu, "open", null, signal);
+    await abortableDelay(2_200, signal);
+    const target = frame.locator(TOMORROW_MENU_LINK_SELECTOR);
     await raceWithAbort(target.waitFor({ state: "visible", timeout: 10_000 }), signal);
-    await this.naturalVerticalScroll(frame, target, signal);
     const boundingBox = await target.boundingBox();
-    if (!boundingBox) throw new Error(`${TOMORROW_NAV_SELECTOR} has no boundingBox`);
-    log("target acquired", { selector: TOMORROW_NAV_SELECTOR, boundingBox });
+    if (!boundingBox) throw new Error(`${TOMORROW_MENU_LINK_SELECTOR} has no boundingBox`);
+    log("target acquired", { selector: TOMORROW_MENU_LINK_SELECTOR, boundingBox });
+    await abortableDelay(600, signal);
     await this.tapMobileLocator(frame, target, signal);
     await raceWithAbort(
       frame.locator(TOMORROW_READY_SELECTOR).waitFor({ state: "visible", timeout: 10_000 }),
@@ -1260,14 +1439,25 @@ class PrototypeAgent {
     const startedAt = Date.now();
     const contract = WEEKEND_AMBER_ARTIFACT_CONTRACT;
     const frame = await this.prepareScenarioStage(contract.id, signal);
+    const embedded = this.embeddedFrame();
+    await raceWithAbort(
+      embedded.goto(`${ARTIFACT_PREVIEW_BASE_URL}/`, {
+        waitUntil: "domcontentloaded",
+        timeout: 30_000,
+      }),
+      signal,
+    );
+    await this.waitForEmbeddedReady(frame, signal);
 
     const menuSummary = frame.locator(WEEKEND_MENU_SUMMARY_SELECTOR);
     await raceWithAbort(menuSummary.waitFor({ state: "visible", timeout: 10_000 }), signal);
     await this.tapMobileLocator(frame, menuSummary, signal);
     const menu = frame.locator("[data-mobile-discovery-menu]");
     await this.waitForAttribute(menu, "open", null, signal);
+    await abortableDelay(2_200, signal);
     const weekendLink = frame.locator(WEEKEND_MENU_LINK_SELECTOR);
     await raceWithAbort(weekendLink.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await abortableDelay(600, signal);
     await this.tapMobileLocator(frame, weekendLink, signal);
     await this.waitForEmbeddedPath("/vyhodnye/", signal);
     await this.waitForEmbeddedReady(frame, signal);
@@ -1421,9 +1611,10 @@ class PrototypeAgent {
     while (Date.now() <= deadline) {
       assertNotAborted(signal);
       const url = new URL(await this.embeddedUrl());
-      const value = `${url.pathname}${url.hash}`;
+      const routePath = this.normalizedPreviewPath(url.pathname);
+      const value = `${routePath}${url.hash}`;
       if (
-        (expected instanceof RegExp && expected.test(url.pathname)) ||
+        (expected instanceof RegExp && expected.test(routePath)) ||
         (typeof expected === "string" && value === expected)
       ) {
         await abortableDelay(PACING.routeDwellMs, signal);
@@ -1435,7 +1626,17 @@ class PrototypeAgent {
   }
 
   async embeddedUrl() {
-    return this.page.locator(FRAME_SELECTOR).evaluate((embedded) => embedded.contentWindow.location.href);
+    return this.embeddedFrame().url();
+  }
+
+  normalizedPreviewPath(pathname) {
+    const focusPrefix = new URL(FOCUS_PREVIEW_BASE_URL).pathname.replace(/\/$/u, "");
+    const artifactPrefix = new URL(ARTIFACT_PREVIEW_BASE_URL).pathname.replace(/\/$/u, "");
+    for (const prefix of [focusPrefix, artifactPrefix]) {
+      if (pathname === prefix) return "/";
+      if (pathname.startsWith(`${prefix}/`)) return pathname.slice(prefix.length);
+    }
+    return pathname;
   }
 
   embeddedFrame() {
@@ -2017,6 +2218,12 @@ class PrototypeAgent {
           this.activeRun.catch(() => {}),
           abortableDelay(config.hardStopMs).catch(() => {}),
         ]);
+      }
+      if (config.storageStatePath && this.context) {
+        await mkdir(path.dirname(config.storageStatePath), { recursive: true }).catch(() => {});
+        await this.context
+          .storageState({ path: config.storageStatePath })
+          .catch((error) => log("browser state persistence failed", errorText(error)));
       }
       await this.context?.close().catch(() => {});
       await this.browser?.close().catch(() => {});

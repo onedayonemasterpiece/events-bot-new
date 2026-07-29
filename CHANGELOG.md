@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 ### Fixed
+- Repaired the Autopresenter iteration after current focus-preview drift:
+  Tomorrow now uses the real mobile date menu with a visible dwell, rail-like
+  targets current event `5297`, preview-prefixed routes normalize correctly,
+  and Weekend FHD naturally scrolls the current 1–2 August page. The artifact
+  scene uses the documented current R15 `tail` candidate because the focus
+  build has that feature disabled.
+- Restored spaces and a slower human-like Hero Talk rhythm, changed zero-minute
+  intro copy to «Вот-вот / начинаем», made lecture statements type before media,
+  removed stretched image chrome, reserved logo clearance, enlarged the final
+  scheme, and added a subtle animated halo.
 - Closed the Autopresenter service-scene acceptance gaps: a plain «Анонсы»
   now morphs into the exact vector while its branded «о» over-stretches and
   settles, the joke types before its seven-second
@@ -42,6 +52,16 @@
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
+
+- Added real static-site need icons, a sequenced 16-medallion 4×4 scene, exact
+  focus-group onboarding QR, real current-page 0–10 rating flow, verified
+  Tatyana Udovenko/Andrey Boyko/Svetlana Sokolova participant preview and like,
+  supplied joke narration, and a licensed CC0 error sting. Audio sourcing and
+  CDN provenance are captured in the `autopresenter-audio-cues` project skill.
+- Added non-terminal manual ↑/↓ presentation scrolling to the control PWA and
+  persisted the separate search demo session beside the shared Windows cache;
+  Smart Search now requires real result cards instead of accepting typed-only
+  anonymous output.
 
 - Added the explicit 30 July service-presentation scenes: kinetic «Анонсы»
   wordmark, user needs, medallion explanation with real focus-preview desktop

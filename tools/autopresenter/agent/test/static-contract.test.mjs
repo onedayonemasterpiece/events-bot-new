@@ -38,9 +38,9 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
     surface: "mobile",
     completion: "concrete-event-detail-description-visible-after-horizontal-rail-gesture",
   });
-  assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventId, 5296);
-  assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventTitle, "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»");
-  assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 6591);
+  assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventId, 5297);
+  assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventTitle, "Фестиваль Pianissimo: Игорь Сидоров");
+  assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 7164);
   assert.equal(INTRO_LOOP_CONTRACT.completion, "fifty-minute-logical-randomized-two-line-hero-talk-loop");
   assert.equal(LECTURE_SCENE_CONTRACTS.length, 7);
   assert.ok(LECTURE_SCENE_CONTRACTS.every(({ completion }) => completion === "held-until-another-explicit-command"));
@@ -154,8 +154,10 @@ test("readiness waits for document, fonts, optional mobile ready marker, and vis
 });
 
 test("tomorrow-mobile naturally reveals a concrete detail description", () => {
-  assert.match(source, /data-presenter-id="nav-tomorrow"/u);
-  assert.match(source, /data-presenter-id="tomorrow-page-ready"/u);
+  assert.match(source, /\[data-mobile-discovery-menu\] > summary/u);
+  assert.match(source, /nav\[aria-label="Быстрый выбор даты"\] a\[href\$="\/zavtra\/"\]/u);
+  assert.match(source, /await abortableDelay\(2_200, signal\)/u);
+  assert.match(source, /data-mobile-v23-ready="true"/u);
   assert.match(source, /data-mobile-v23-page="tomorrow"/u);
   assert.match(source, /event-digest\[aria-label="О событии"\]/u);
   assert.match(source, /\[data-mobile-event-production\] \.mobile-event-production__prose/u);
@@ -185,18 +187,21 @@ test("mobile hides the pointer and shows directional rail cues", () => {
 });
 
 test("tomorrow like is armed before mouseup and never agent-clicked", () => {
-  assert.match(source, /dragRailToEndInOneRelease/u);
+  const start = source.indexOf("async runTomorrowRailLike");
+  const end = source.indexOf("\n  async runWeekendAmberArtifact", start);
+  const likeScenario = source.slice(start, end);
+  assert.match(likeScenario, /dragRailToEndInOneRelease/u);
   assert.match(source, /maxScroll - geometry\.scrollLeft <= 1/u);
   assert.match(source, /const pull = Math\.max\(132,/u);
   const callbackIndex = source.indexOf("if (beforeMouseUp) await beforeMouseUp()");
   const upIndex = source.indexOf("await this.page.mouse.up()", callbackIndex);
   assert.ok(callbackIndex > 0 && upIndex > callbackIndex);
   assert.match(source, /beforeMouseUp: async \(\) => \{[\s\S]*classList\.contains\("is-like-armed"\)/u);
-  assert.match(source, /data-personalization-consent-accept/u);
+  assert.match(likeScenario, /data-personalization-consent-accept/u);
   assert.match(source, /liked_event_ids/u);
   assert.match(source, /event_id/u);
-  assert.match(source, /like count did not increment exactly once/u);
-  assert.doesNotMatch(source, /like\.click\(|locator\('\[data-feedback-action="like"\]'\)\.click/u);
+  assert.match(likeScenario, /like count did not increment exactly once/u);
+  assert.doesNotMatch(likeScenario, /like\.click\(|locator\('\[data-feedback-action="like"\]'\)\.click/u);
 });
 
 test("weekend artifact uses the visible menu, real rails, storage, reload and dialog", () => {
@@ -242,7 +247,8 @@ test("intro, held lecture and desktop scenes use pinned assets and real FHD scro
   assert.match(source, /async runHeldPresentationScene\(scenarioId, signal\)/u);
   assert.match(source, /LECTURE_SCENES\.find/u);
   assert.match(source, /async runFocusInvitation\(signal\)/u);
-  assert.match(source, /participation\?\.source === "invite_fragment"/u);
+  assert.match(source, /focus QR points to unexpected URL/u);
+  assert.match(source, /focus invitation QR SVG is missing/u);
   assert.match(source, /await this\.naturalVerticalScroll\(frame, inlineMedallions, signal, frameSelector\)/u);
   assert.match(source, /desktop example has no enabled top medallion slot/u);
   assert.match(source, /ratio >= 1\.45/u);
@@ -291,7 +297,7 @@ test("a new run is a bounded cooperative scene switch, never already-running rej
 });
 
 test("remote shutdown acknowledges a durable closed state before browser exit", () => {
-  assert.match(source, /\["run", "stop", "reset", "shutdown"\]/u);
+  assert.match(source, /\["run", "scroll", "stop", "reset", "shutdown"\]/u);
   assert.match(source, /async handleShutdown\(command, remote\)/u);
   assert.match(source, /if \(command\.action === "shutdown"\) \{[\s\S]*await dispatchPromise/u);
   assert.match(source, /this\.shuttingDown = true/u);

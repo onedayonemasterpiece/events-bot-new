@@ -21,8 +21,8 @@ export const INTERACTION_VISUAL_CONTRACTS = Object.freeze({
 });
 
 export const TOMORROW_MOBILE_CONTRACT = Object.freeze({ id: "tomorrow-mobile", surface: "mobile", completion: "concrete-event-detail-description-visible-after-horizontal-rail-gesture" });
-export const TOMORROW_RAIL_LIKE_CONTRACT = Object.freeze({ id: "tomorrow-rail-like", surface: "mobile", eventId: 5296, eventTitle: "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»", completion: "gesture-like-persisted-after-reload" });
-export const WEEKEND_AMBER_ARTIFACT_CONTRACT = Object.freeze({ id: "weekend-amber-artifact", surface: "mobile", snapshotEventId: 6591, completion: "artifact-collected-and-detail-dialog-visible-after-reload" });
+export const TOMORROW_RAIL_LIKE_CONTRACT = Object.freeze({ id: "tomorrow-rail-like", surface: "mobile", eventId: 5297, eventTitle: "Фестиваль Pianissimo: Игорь Сидоров", completion: "gesture-like-persisted-after-reload" });
+export const WEEKEND_AMBER_ARTIFACT_CONTRACT = Object.freeze({ id: "weekend-amber-artifact", surface: "mobile", snapshotEventId: 7164, completion: "artifact-collected-and-detail-dialog-visible-after-reload" });
 export const OUTRO_QR_CONTRACT = Object.freeze({ id: OUTRO_SCENE_ID, surface: "stage", completion: "fullscreen-survey-qr-loaded-and-visible" });
 export const INTRO_LOOP_CONTRACT = Object.freeze({ id: INTRO_SCENE_ID, surface: "stage", completion: "fifty-minute-logical-randomized-two-line-hero-talk-loop" });
 export const WEEKEND_DESKTOP_CONTRACT = Object.freeze({ id: WEEKEND_DESKTOP_SCENE_ID, surface: "desktop", completion: "meaning-first-then-live-weekend-page-at-fhd-and-natural-scroll" });

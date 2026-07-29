@@ -74,3 +74,43 @@ test("sequential Run commands switch scenarios in the same context generation an
   assert.equal(agent.runController, null);
   assert.equal(agent.activeScenario, null);
 });
+
+test("manual scroll nudges the visible surface without stopping the active scenario", async () => {
+  const agent = new PrototypeAgent(null);
+  const wheel = [];
+  const acknowledgments = [];
+  const activeRun = Promise.resolve();
+  agent.activeRun = activeRun;
+  agent.activeScenario = "weekend-desktop";
+  agent.page = {
+    locator(selector) {
+      assert.equal(selector, "iframe:visible");
+      return {
+        last() {
+          return {
+            async count() { return 1; },
+            async boundingBox() { return { x: 100, y: 40, width: 900, height: 800 }; },
+          };
+        },
+      };
+    },
+    mouse: {
+      async move() {},
+      async wheel(x, y) { wheel.push([x, y]); },
+    },
+  };
+  agent.ack = async (_command, status, detail) => acknowledgments.push({ status, detail });
+
+  await agent.handleManualScroll(
+    { id: "scroll-1", options: { direction: "up", amount: 420 } },
+    true,
+  );
+
+  assert.equal(agent.activeRun, activeRun);
+  assert.equal(agent.activeScenario, "weekend-desktop");
+  assert.equal(wheel.length, 3);
+  assert.ok(wheel.every(([x, y]) => x === 0 && y < 0));
+  assert.deepEqual(acknowledgments, [
+    { status: "completed", detail: "manual scroll up 420px" },
+  ]);
+});
