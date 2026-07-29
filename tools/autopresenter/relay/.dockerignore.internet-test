@@ -1,0 +1,17 @@
+*
+!site/
+!site/**
+site/node_modules/
+site/dist/
+!tools/
+!tools/autopresenter/
+!tools/autopresenter/relay/
+!tools/autopresenter/relay/**
+!tools/autopresenter/agent/
+!tools/autopresenter/agent/**
+tools/autopresenter/agent/node_modules/
+!tools/autopresenter/prototype/
+!tools/autopresenter/prototype/requirements.txt
+!tools/autopresenter/prototype/first-test/
+!tools/autopresenter/prototype/first-test/**
+tools/autopresenter/prototype/.venv/
