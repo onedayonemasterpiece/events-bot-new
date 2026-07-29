@@ -1,0 +1,82 @@
+mode: serial_integrator_with_parallel_read_only_mapping
+repo: events-bot-new
+base_ref: origin/feature/autopresenter-design
+base_branch: feature/autopresenter-design
+integration_branch: integration/autopresenter-internet-test
+global_constraints:
+  - no user-facing localhost or LAN-only acceptance path
+  - do not modify M0 compatibility harness
+  - do not impact existing production bot deployment
+  - keep one scenario and one in-memory relay instance
+  - first-test package must not be described as final M3 portable release
+verification_owner: root integrator plus final checklist reviewer
+stop_conditions:
+  - no isolated public HTTPS deployment target
+  - no deploy credentials or public TLS route
+  - unsafe unauthenticated public command endpoint
+lanes:
+  - id: discovery-public-relay
+    role: planner
+    requirement_ids: [R01, R02, R03]
+    target: map safe separate public HTTPS deployment
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-prototype-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: deployment and auth recommendation
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: discovery-windows-test
+    role: planner
+    requirement_ids: [R04]
+    target: map honest downloadable first-test Windows launcher
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-prototype-integration
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: bundle contents and bootstrap constraints
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: integration-implementation
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
+    target: implement auth/deploy/launcher/package, deploy, and run cross-network smoke
+    depends_on: [discovery-public-relay, discovery-windows-test]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-internet-test
+    worktree: /home/dev/projects/events-bot-new-autopresenter-internet-test
+    writable_files:
+      - tools/autopresenter/**
+      - docs/features/static-site-pages/auto-present/README.md
+      - docs/features/README.md
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .codex/integration/**
+    forbidden_files:
+      - tools/autopresenter/m0/**
+      - fly.toml
+      - Dockerfile
+    expected_output: public phone URL, downloadable demonstrator link, test evidence
+    verification_scope: full_local_and_live
+    effort: high
+    status: planned
+  - id: closure-review
+    role: reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
+    target: verify public URLs, auth, package, no-LAN path, and scope boundary
+    depends_on: [integration-implementation]
+    execution_mode: serial_after_dependency
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-internet-test
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: accept or must-fix list
+    verification_scope: full_local
+    effort: high
+    status: planned
