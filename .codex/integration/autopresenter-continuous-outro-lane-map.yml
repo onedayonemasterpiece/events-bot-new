@@ -20,7 +20,7 @@ stop_conditions:
 lanes:
   - id: telegram_error_discovery
     role: planner
-    requirement_ids: [R01]
+    requirement_ids: []
     target: read the new screenshot in Telegram thread 803 and report exact failure context
     depends_on: []
     execution_mode: parallel
@@ -34,7 +34,7 @@ lanes:
     status: planned
   - id: runtime_discovery
     role: planner
-    requirement_ids: [R02, R03]
+    requirement_ids: []
     target: map why scenario switching closes/recreates presentation windows and define the smallest persistent-session change
     depends_on: []
     execution_mode: parallel
@@ -48,7 +48,7 @@ lanes:
     status: planned
   - id: media_discovery
     role: planner
-    requirement_ids: [R04]
+    requirement_ids: []
     target: identify QR asset and existing Yandex bucket/CDN publication path without creating resources
     depends_on: []
     execution_mode: parallel
@@ -93,8 +93,8 @@ lanes:
     branch: agent/autopresenter-continuous-outro/outro-scene
     worktree: /home/dev/projects/events-bot-new-autopresenter-outro-scene
     writable_files:
-      - tools/autopresenter/relay/stage/**
-      - tools/autopresenter/relay/tests/test_stage.py
+      - site/src/pages/internal/presenter-stage/index.astro
+      - site/tests/presenter-stage.test.mjs
       - tools/autopresenter/agent/outro-contract.mjs
       - tools/autopresenter/agent/test/outro-contract.test.mjs
       - .codex/lanes/outro_scene/RESULTS.md
@@ -106,7 +106,6 @@ lanes:
       - tools/autopresenter/m0/**
       - docs/**
       - CHANGELOG.md
-      - site/**
     expected_output: committed outro stage surface/contract and targeted tests
     verification_scope: targeted
     effort: high
