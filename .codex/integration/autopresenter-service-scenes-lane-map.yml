@@ -1,0 +1,97 @@
+mode: serial_integrator_with_read_only_parallel_discovery
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/feature/autopresenter-design
+base_sha: dcdce5bf6b0014459e01959932894986321717eb
+base_branch: feature/autopresenter-design
+integration_branch: integration/autopresenter-service-scenes
+global_constraints:
+  - Preserve accepted seven-scene behavior and visuals unless a new explicit correction targets them.
+  - Freeze accepted scenes by contract; use targeted tests during iteration and one final full regression gate.
+  - Keep one persistent Chromium context/page; only Shutdown may close it.
+  - Add explicit scenes only; no generic DSL/editor or new infrastructure.
+  - Use the existing Fly app and existing Yandex CDN resources.
+  - Never modify tools/autopresenter/m0/**.
+  - Source scenario document remains user-authored; append only the requested consolidated Telegram requirements section.
+verification_owner: INT
+stop_conditions:
+  - A change would require new production infrastructure or destructive data changes.
+  - Approved Telegram E2E session is unavailable.
+  - A requested dynamic scene cannot be implemented without an unapproved security/auth boundary.
+requirements:
+  - id: R01
+    text: Analyze Telegram remarks around message 803, consolidate actionable requirements at the bottom of scenario-30072026-base.md, and retain message traceability.
+  - id: R02
+    text: Implement an agreement/freeze principle so accepted scenes are not redesigned or fully retested on each draft iteration.
+  - id: R03
+    text: Make intro typing behavior match the historical Hero Talk more closely without redesigning accepted composition/content.
+  - id: R04
+    text: Replace the demonstrated live-site target with the focus-group site version represented by the supplied invitation preview URL.
+  - id: R05
+    text: Add the kinetic Announcements wordmark scene with exaggerated stretched o and ease-in-out settling.
+  - id: R06
+    text: Add the three user-needs presentation beats with animated share and calendar icons.
+  - id: R07
+    text: Add medallion explanation plus one real desktop and one real mobile medallion example.
+  - id: R08
+    text: Add the typed Maxim joke beat with a seven-second pause and follow-up line.
+  - id: R09
+    text: Add the Smart Search concept and a phone-search demo whose query is entered and confirmed from the PWA control.
+  - id: R10
+    text: Add presentation beats for failure, taste, feedback, focus group, NPS, and future celebrity-like capability.
+  - id: R11
+    text: Extend explicit runtime/PWA/Windows contracts for the new service presentation while preserving single-window lifecycle.
+  - id: R12
+    text: Optimize verification: targeted new-scope tests during iteration, immutable accepted-scene freeze checks, then one final full build/E2E before handoff.
+lanes:
+  - id: DISC-TG
+    role: planner
+    requirement_ids: [R01]
+    target: Read-only Telegram requirement extraction and traceability.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-service-scenes
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Numbered requirement consolidation with Telegram message IDs and classification.
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: DISC-HERO
+    role: planner
+    requirement_ids: [R03, R04]
+    target: Read-only Hero Talk behavior comparison and focus-preview integration analysis.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-service-scenes
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Minimum behavior diff and safe URL integration recommendation.
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: INT
+    role: merge_reviewer
+    requirement_ids: [R02, R05, R06, R07, R08, R09, R10, R11, R12]
+    support_requirement_ids: [R01, R03, R04]
+    target: Consolidate requirements, implement explicit presentation scenes, integrate, test, deploy, package and hand off.
+    depends_on: [DISC-TG, DISC-HERO]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-service-scenes
+    worktree: /home/dev/projects/events-bot-new-autopresenter-service-scenes
+    writable_files:
+      - docs/features/static-site-pages/auto-present/**
+      - docs/reports/incidents/INC-2026-07-29-autopresenter-scenario-window-recreation.md
+      - site/src/pages/internal/presenter-stage/index.astro
+      - site/tests/presenter-stage.test.mjs
+      - tools/autopresenter/**
+      - CHANGELOG.md
+      - .codex/integration/**
+    forbidden_files:
+      - tools/autopresenter/m0/**
+      - unrelated production application files
+    expected_output: Clean committed branch, public feature branch update, existing Fly app deploy, fresh Windows ZIP, Telegram handoff, integration report.
+    verification_scope: targeted_then_full_final
+    effort: high
+    status: planned
