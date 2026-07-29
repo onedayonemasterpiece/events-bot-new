@@ -249,6 +249,7 @@ test("intro, lecture and desktop scenes use pinned stage assets and real FHD scr
   assert.match(source, /LECTURE_ASSETS\.length/u);
   assert.match(source, /data-lecture-state/u);
   assert.match(source, /async runWeekendDesktop\(signal\)/u);
+  assert.match(source, /setInteractionMode\("desktop-passive"\)/u);
   assert.match(source, /WEEKEND_DESKTOP_ROOT_SELECTOR/u);
   assert.match(source, /SITE_FOOTER_SELECTOR/u);
   assert.match(

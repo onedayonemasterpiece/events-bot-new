@@ -36,7 +36,7 @@
 - Added three explicit Autopresenter owner-test scenes from the 30 July
   programme: a 50-minute interruptible typographic intro with music, a seven-
   slide lecture deck from the provided Telegram images, and a caption-free
-  full-FHD Weekend desktop page with natural scroll. All media uses the existing
+  full-FHD Weekend desktop page with natural scroll and no passive debug overlay. All media uses the existing
   content-addressed Yandex CDN; no generic DSL or new infrastructure was added.
 - Added a fourth explicit Autopresenter scene, `outro-qr`: a strong fullscreen
   «Как вам?» survey outro using the existing immutable Yandex CDN asset. The

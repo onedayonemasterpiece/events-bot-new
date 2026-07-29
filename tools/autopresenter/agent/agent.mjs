@@ -864,7 +864,7 @@ class PrototypeAgent {
   async runWeekendDesktop(signal) {
     const startedAt = Date.now();
     await raceWithAbort(this.openStage(this.page), signal);
-    await this.setInteractionMode("desktop");
+    await this.setInteractionMode("desktop-passive");
     await this.setAgentState("running", WEEKEND_DESKTOP_CONTRACT.id);
     await this.showPresenterScene(WEEKEND_DESKTOP_SCENE_ID, signal);
     const iframe = this.page.locator(DESKTOP_FRAME_SELECTOR);
