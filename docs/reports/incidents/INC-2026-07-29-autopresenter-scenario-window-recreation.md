@@ -126,8 +126,16 @@ presentation window и открывало другое, разрушая кон�
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
+- owner-test deployed SHA: `dddc98fc0824c59333cfc45c275034d1e6f08c3a`
+- deploy path: manual Fly deploy from the clean, already-pushed integration
+  worktree to the existing `kenigevents-autopresenter` app; no Fly/Yandex
+  resource was created
+- Fly image:
+  `kenigevents-autopresenter:deployment-01KYPYAHH0EF1JMXNVN1KRKQW9`,
+  manifest
+  `sha256:1cfa72243279e141b58dc234db6b6c656f7ac9ce5acf04ffa311cad88d8c5c46`
+- machine `2879209fd9e998`: version 10, started, 1/1 HTTP checks passing,
+  unchanged one shared CPU / 512 MB
 - local regression checks: agent `25/25`, relay `13/13`, PWA auth `2/2`,
   Windows bootstrap `4/4`, presenter-stage `3/3`; full immutable Astro preview
   build produced 465 pages without errors
@@ -139,7 +147,20 @@ presentation window и открывало другое, разрушая кон�
 - first public deploy probe: active Run → `outro-qr` switch passed in the same
   agent generation; `tomorrow-mobile` then reproduced the remaining
   per-scene 30-second bound and was corrected before the final candidate
-- post-deploy verification: pending
+- refreshed 13-entry Windows ZIP SHA-256:
+  `ecb0b467ce0b72b068ab2d27b6612b1302544c06af63a55a998ac63ef871e252`;
+  archive includes `outro-contract.mjs` and the 120-second live-site policy
+- final public exact-source E2E: an active `tomorrow-rail-like` was
+  cooperatively switched to `outro-qr`; then `tomorrow-mobile`,
+  `tomorrow-rail-like`, `weekend-amber-artifact`, and `outro-qr` each produced
+  their successful 1920×1080 capture
+- the final agent log contains exactly one
+  `browser context ready {"generation":1}` line, stderr is 0 bytes, and
+  confirmed Shutdown produced durable `closed` and agent exit code 0
+- Telegram handoff: reply `827` to thread message `803`, verified through the
+  approved E2E human session
+- remaining closure blockers: owner retry with the fresh Windows ZIP and
+  reachability from `origin/main`
 
 ## Prevention
 

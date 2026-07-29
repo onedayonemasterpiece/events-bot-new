@@ -34,7 +34,7 @@
 | media_discovery | support R04 | completed | read-only | existing bucket/CDN/key and cache contract mapped |
 | persistent_runtime | R02/R03 | merged | `12de70bc` (`ad7bab77` implementation) | agent 21/21, relay 13/13, PWA 2/2, bootstrap 4/4 |
 | outro_scene | R05/R06 | merged | `036c587c` (`16652bf0` implementation) | focused 6/6, agent 20/20, CDN hash/dimensions |
-| integration_release | R01/R04 | in progress | integration worktree | four-scene bridge and 465-page build pass; public deploy/E2E pending |
+| integration_release | R01/R04 | completed | `dddc98fc` | existing Fly app + existing Yandex CDN; four-scene public E2E and Telegram 827 |
 
 ## Integrated local verification
 
@@ -48,3 +48,19 @@
 - Astro immutable preview build: 465 pages, including presenter stage.
 - Visual QA: 1920×1080, zero overflow/errors, strong fullscreen type, loaded
   504×504 QR from the exact 1155×1155 immutable CDN asset.
+
+## Release evidence
+
+- Public branch:
+  `https://github.com/onedayonemasterpiece/events-bot-new/tree/feature/autopresenter-design`
+- Fly release 10:
+  `deployment-01KYPYAHH0EF1JMXNVN1KRKQW9`, one shared CPU, 512 MB, 1/1 checks.
+- Windows ZIP: 13 entries, SHA-256
+  `ecb0b467ce0b72b068ab2d27b6612b1302544c06af63a55a998ac63ef871e252`.
+- Exact-source public run: active scenario switch passed; all four scenes
+  completed and captured; one context generation; zero stderr; Shutdown exit 0
+  and durable `closed`.
+- Telegram: verified reply `827` to message `803` contains PHONE,
+  DEMONSTRATOR and GitHub branch links.
+- Incidents remain open only for owner Windows/cache-reuse evidence and
+  `origin/main` reachability; public demo/M3 verdict remains NO-GO.

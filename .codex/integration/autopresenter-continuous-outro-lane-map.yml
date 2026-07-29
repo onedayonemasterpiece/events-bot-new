@@ -129,4 +129,4 @@ lanes:
     expected_output: fast deployed owner-test update with Telegram handoff
     verification_scope: full_local
     effort: high
-    status: in_progress
+    status: completed

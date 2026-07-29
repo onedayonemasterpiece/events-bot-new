@@ -203,6 +203,26 @@ visibility and therefore missed the defect.
 - device-only checks still pending: installed-PWA relaunch on the owner's
   phone and reuse of the populated Windows cache by this refreshed ZIP
 
+### Persistent four-scene owner-test regression release
+
+- deployed source SHA:
+  `dddc98fc0824c59333cfc45c275034d1e6f08c3a`
+- Fly release 10 image:
+  `kenigevents-autopresenter:deployment-01KYPYAHH0EF1JMXNVN1KRKQW9`
+  (`sha256:1cfa72243279e141b58dc234db6b6c656f7ac9ce5acf04ffa311cad88d8c5c46`)
+- refreshed 13-entry ZIP SHA-256:
+  `ecb0b467ce0b72b068ab2d27b6612b1302544c06af63a55a998ac63ef871e252`;
+  it contains the dependency-aware agent plus the explicit QR outro contract
+- regression checks: agent 25/25, relay 13/13, PWA storage 2/2, bootstrap 4/4,
+  presenter stage 3/3, 465-page immutable build, unchanged
+  `tools/autopresenter/m0/**`
+- public exact-source E2E completed all four scenes in one context generation;
+  Shutdown left durable `closed`, agent exit code was 0, stderr contained
+  0 bytes
+- device-only checks remain: owner must start the freshly downloaded ZIP on
+  Windows and confirm cache reuse; main reachability is still required for
+  incident closure
+
 ## Prevention
 
 The Windows bootstrap contract now fails if P/Invoke members become non-public,
