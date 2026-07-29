@@ -1,6 +1,6 @@
 # INC-2026-07-29 Autopresenter Windows bootstrap startup failure
 
-Status: open
+Status: monitoring
 Severity: sev1
 Service: Autopresenter owner-only Internet first test
 Opened: 2026-07-29
@@ -47,6 +47,12 @@ visibility and therefore missed the defect.
   emitted `MaxListenersExceededWarning`.
 - 2026-07-29 10:05 UTC — listener leak and PowerShell native-stderr promotion
   were localized; incident reopened.
+- 2026-07-29 10:07 UTC — listener cleanup, native exit-code handling and UTF-8
+  fix deployed in a refreshed ZIP.
+- 2026-07-29 10:09 UTC — exact-source public scenario completed through the
+  event rail and detail description with zero bytes on agent stderr; separate
+  Reset/Run/Stop lifecycle passed. Incident returned to monitoring for the
+  target-Windows retry.
 
 ## Root Cause
 
@@ -143,18 +149,21 @@ visibility and therefore missed the defect.
 
 ## Release And Closure Evidence
 
-- deployed SHA: `c1810fa33a930718106ca55a7f0b138b1f8054e8`
+- deployed SHA: `613fc30a27d8af31bf9cc4c1b75a2b02f394fc21`
 - deploy path: manual Fly deploy from clean Autopresenter integration worktree
 - Fly image:
-  `kenigevents-autopresenter:deployment-01KYPKTH8CZBE7NCV6DB9F0K60`
+  `kenigevents-autopresenter:deployment-01KYPNF3FNFVAHXVNXD1ZFRCWA`
 - refreshed ZIP SHA-256:
-  `e5365c71f3b295585f6d0812231b07576fb0096d588aa1e8271c1dbeb652c322`
-- regression checks: bootstrap 4/4, agent 12/12, relay 8/8; syntax checks and
+  `7a56fdfd7549ff790f5cc78e35863dbea2e4db76f08bbe1d3c90fb2631ce65ac`
+- regression checks: bootstrap 4/4, agent 14/14 (including 25 sequential
+  same-signal delays and abort cleanup), relay 8/8; syntax checks and
   `git diff --check` passed; no `tools/autopresenter/m0/**` diff
-- post-deploy verification: Fly machine `2879209fd9e998` version 6 is started
-  with 1/1 checks; downloaded ZIP contains public P/Invoke methods, shared-cache
-  bootstrap and shared dependency loader; public E2E completed on event `5296`
-  and the separate stop lifecycle ended at `idle / agent confirmed stopped`
+- post-deploy verification: Fly machine `2879209fd9e998` version 7 is started
+  with 1/1 checks; downloaded 11-entry ZIP contains abort cleanup, UTF-8
+  launcher, native exit-code handling and shared dependency loader; public E2E
+  completed through the event rail on event `5296`, agent stderr remained
+  empty, and the separate stop lifecycle ended at
+  `idle / agent confirmed stopped`
 - remaining closure blockers: target-Windows successful start/cache reuse
   evidence and reachability from `origin/main`
 
