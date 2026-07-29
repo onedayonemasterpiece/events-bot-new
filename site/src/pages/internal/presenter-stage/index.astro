@@ -2,6 +2,7 @@
 import { withBase } from '../../../lib/events';
 
 const homeUrl = withBase('/');
+const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/qr-survey-nikiforov-916b6fee58256c4f2111887bf70c502070a55e45a667650dfccdb1495016ccd9.png';
 ---
 <!doctype html>
 <html lang="ru">
@@ -10,6 +11,7 @@ const homeUrl = withBase('/');
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow, noarchive" />
     <meta name="color-scheme" content="dark" />
+    <link rel="preload" as="image" href={outroQrUrl} fetchpriority="high" />
     <title>Автопрезентатор · Завтра</title>
   </head>
   <body>
@@ -17,28 +19,62 @@ const homeUrl = withBase('/');
       class="stage"
       data-presenter-id="presenter-stage"
       data-presenter-stage-ready="true"
+      data-presenter-scene="live-site"
       aria-label="Сцена автопрезентатора"
     >
-      <p class="stage-caption" aria-hidden="true">Завтра — в одном движении.</p>
+      <div
+        class="live-site-scene"
+        data-presenter-id="live-site-scene"
+        data-presenter-scene-id="live-site"
+      >
+        <p class="stage-caption" aria-hidden="true">Завтра — в одном движении.</p>
 
-      <section class="device-area" aria-label="Мобильный сайт">
-        <div class="ambient ambient-one" aria-hidden="true"></div>
-        <div class="ambient ambient-two" aria-hidden="true"></div>
-        <div class="phone-shell">
-          <div class="phone-top" aria-hidden="true">
-            <span class="speaker"></span>
-            <span class="camera"></span>
+        <section class="device-area" aria-label="Мобильный сайт">
+          <div class="ambient ambient-one" aria-hidden="true"></div>
+          <div class="ambient ambient-two" aria-hidden="true"></div>
+          <div class="phone-shell">
+            <div class="phone-top" aria-hidden="true">
+              <span class="speaker"></span>
+              <span class="camera"></span>
+            </div>
+            <iframe
+              id="presenter-mobile-frame"
+              data-presenter-id="mobile-site-frame"
+              data-presenter-frame-ready="false"
+              src={homeUrl}
+              title="Мобильная версия сайта Кёнигсберг · События"
+              width="476"
+              height="1024"
+            ></iframe>
+            <div class="phone-home" aria-hidden="true"></div>
           </div>
-          <iframe
-            id="presenter-mobile-frame"
-            data-presenter-id="mobile-site-frame"
-            data-presenter-frame-ready="false"
-            src={homeUrl}
-            title="Мобильная версия сайта Кёнигсберг · События"
-            width="476"
-            height="1024"
-          ></iframe>
-          <div class="phone-home" aria-hidden="true"></div>
+        </section>
+      </div>
+
+      <section
+        class="outro-scene"
+        data-presenter-id="outro-scene"
+        data-presenter-scene-id="outro-qr"
+        aria-labelledby="outro-heading"
+        hidden
+      >
+        <div class="outro-copy">
+          <p class="outro-kicker">Ваше впечатление важно</p>
+          <h1 id="outro-heading">Как вам?</h1>
+          <p class="outro-support">Оцените событие — это займёт минуту.</p>
+        </div>
+        <div class="outro-qr-wrap">
+          <img
+            class="outro-qr"
+            data-presenter-id="outro-qr-image"
+            src={outroQrUrl}
+            alt="QR-код опроса по итогам мероприятия"
+            width="1155"
+            height="1155"
+            loading="eager"
+            decoding="sync"
+            fetchpriority="high"
+          />
         </div>
       </section>
 
@@ -60,9 +96,21 @@ const homeUrl = withBase('/');
     <script is:inline>
       (() => {
         const frame = document.querySelector('#presenter-mobile-frame');
+        const stage = document.querySelector('[data-presenter-id="presenter-stage"]');
+        const liveSiteScene = document.querySelector('[data-presenter-scene-id="live-site"]');
+        const outroScene = document.querySelector('[data-presenter-scene-id="outro-qr"]');
         const status = document.querySelector('[data-presenter-id="stage-status"]');
         const stateCard = document.querySelector('[data-presenter-id="stage-status-card"]');
-        if (!(frame instanceof HTMLIFrameElement) || !(status instanceof HTMLElement)) return;
+        if (
+          !(frame instanceof HTMLIFrameElement) ||
+          !(stage instanceof HTMLElement) ||
+          !(liveSiteScene instanceof HTMLElement) ||
+          !(outroScene instanceof HTMLElement) ||
+          !(status instanceof HTMLElement)
+        ) return;
+
+        const DEFAULT_SCENE_ID = 'live-site';
+        const OUTRO_SCENE_ID = 'outro-qr';
 
         const labels = {
           disconnected: 'Нет связи с агентом',
@@ -78,6 +126,20 @@ const homeUrl = withBase('/');
           status.dataset.status = nextStatus;
           status.textContent = label || labels[nextStatus];
           if (stateCard instanceof HTMLElement) stateCard.dataset.status = nextStatus;
+        };
+
+        const showScene = (sceneId) => {
+          if (sceneId !== DEFAULT_SCENE_ID && sceneId !== OUTRO_SCENE_ID) return;
+          const showOutro = sceneId === OUTRO_SCENE_ID;
+          stage.dataset.presenterScene = sceneId;
+          liveSiteScene.hidden = showOutro;
+          outroScene.hidden = !showOutro;
+          outroScene.classList.remove('is-entering');
+          if (showOutro) {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => outroScene.classList.add('is-entering'));
+            });
+          }
         };
 
         const requestedTarget = new URLSearchParams(window.location.search).get('target');
@@ -98,6 +160,11 @@ const homeUrl = withBase('/');
         window.addEventListener('presenter:status', (event) => {
           const detail = event instanceof CustomEvent ? event.detail : null;
           if (detail && typeof detail.status === 'string') setStatus(detail.status, detail.label);
+        });
+
+        window.addEventListener('presenter:scene', (event) => {
+          const detail = event instanceof CustomEvent ? event.detail : null;
+          if (detail && typeof detail.id === 'string') showScene(detail.id);
         });
 
         window.addEventListener('message', (event) => {
@@ -159,6 +226,8 @@ const homeUrl = withBase('/');
     isolation: isolate;
   }
 
+  [hidden] { display: none !important; }
+
   .stage::before {
     position: absolute;
     inset: 0;
@@ -170,6 +239,13 @@ const homeUrl = withBase('/');
       linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
     background-size: 64px 64px;
     mask-image: radial-gradient(circle at center, #000, transparent 67%);
+  }
+
+  .live-site-scene {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
   }
 
   .stage-caption {
@@ -272,11 +348,184 @@ const homeUrl = withBase('/');
     white-space: nowrap;
   }
 
+  .outro-scene {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: clamp(48px, 7vw, 148px);
+    padding:
+      max(64px, env(safe-area-inset-top))
+      max(72px, 6vw)
+      max(64px, env(safe-area-inset-bottom));
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 84% 49%, rgba(255, 118, 87, .24), transparent 25%),
+      radial-gradient(circle at 12% 8%, rgba(105, 86, 223, .12), transparent 32%),
+      linear-gradient(118deg, #121217 0%, #08090d 58%, #111014 100%);
+    isolation: isolate;
+  }
+
+  .outro-scene::before {
+    position: absolute;
+    z-index: -1;
+    width: min(38vw, 730px);
+    aspect-ratio: 1;
+    right: max(-16vw, -310px);
+    bottom: max(-27vw, -520px);
+    border: clamp(42px, 5vw, 94px) solid var(--stage-accent);
+    border-radius: 50%;
+    content: "";
+    opacity: .92;
+  }
+
+  .outro-scene::after {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    content: "";
+    opacity: .12;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, .07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, .07) 1px, transparent 1px);
+    background-size: clamp(54px, 5vw, 96px) clamp(54px, 5vw, 96px);
+    mask-image: linear-gradient(90deg, #000, transparent 74%);
+  }
+
+  .outro-copy {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    padding-bottom: 2vh;
+  }
+
+  .outro-kicker {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin: 0 0 clamp(28px, 4vh, 56px);
+    color: var(--stage-accent);
+    font-size: clamp(16px, 1.25vw, 24px);
+    font-weight: 750;
+    line-height: 1;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+
+  .outro-kicker::before {
+    width: clamp(42px, 4.5vw, 86px);
+    height: 3px;
+    flex: none;
+    content: "";
+    background: currentColor;
+  }
+
+  .outro-copy h1 {
+    max-width: 5.2ch;
+    margin: 0;
+    color: #fff9f1;
+    font-size: clamp(112px, 14vw, 278px);
+    font-weight: 900;
+    line-height: .78;
+    letter-spacing: -.075em;
+    text-wrap: balance;
+    text-shadow: 0 18px 72px rgba(0, 0, 0, .32);
+  }
+
+  .outro-copy h1::first-letter {
+    color: var(--stage-accent);
+  }
+
+  .outro-support {
+    max-width: 22ch;
+    margin: clamp(38px, 6vh, 76px) 0 0;
+    color: rgba(247, 241, 232, .78);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(24px, 2.3vw, 44px);
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: -.015em;
+    text-wrap: balance;
+  }
+
+  .outro-qr-wrap {
+    position: relative;
+    z-index: 1;
+    width: clamp(360px, 47vmin, 560px);
+    aspect-ratio: 1;
+    flex: none;
+    filter: drop-shadow(0 36px 68px rgba(0, 0, 0, .48));
+  }
+
+  .outro-qr {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+  }
+
+  .outro-scene.is-entering .outro-copy {
+    animation: outro-copy-enter 760ms cubic-bezier(.42, 0, .22, 1) both;
+  }
+
+  .outro-scene.is-entering .outro-qr-wrap {
+    animation: outro-qr-enter 940ms cubic-bezier(.42, 0, .24, 1) 90ms both;
+    transform-origin: 50% 50%;
+  }
+
+  @keyframes outro-copy-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(-2.5vw, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes outro-qr-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 2.5vh, 0) scale(.82);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    *, *::before, *::after {
+      animation-duration: .01ms !important;
+      animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   @media (max-width: 700px) {
     .stage-caption { display: none; }
+    .outro-scene {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      gap: 34px;
+      padding: 42px 28px;
+      text-align: center;
+    }
+    .outro-copy { padding: 0; }
+    .outro-kicker { justify-content: center; margin-bottom: 24px; }
+    .outro-copy h1 { max-width: none; font-size: clamp(72px, 22vw, 136px); }
+    .outro-support { margin: 24px auto 0; font-size: clamp(20px, 5vw, 30px); }
+    .outro-qr-wrap { width: min(52vh, 76vw); }
+  }
+
+  @media (max-height: 680px) and (min-width: 701px) {
+    .outro-scene { padding-block: 36px; }
+    .outro-copy h1 { font-size: clamp(96px, 13vw, 220px); }
+    .outro-support { margin-top: 28px; }
+    .outro-qr-wrap { width: min(66vh, 42vw); }
   }
 </style>
