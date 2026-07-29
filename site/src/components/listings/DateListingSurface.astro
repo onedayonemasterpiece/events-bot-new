@@ -9,6 +9,7 @@ import ExactTimeTimeline from './ExactTimeTimeline.astro';
 import MobileListingRailSurface from './MobileListingRailSurface.astro';
 import ListingPersonalFilter from '../ListingPersonalFilter.astro';
 import { getCurrentDate } from '../../lib/events';
+import { selectDateListingHero } from '../../lib/dateListingHero';
 
 interface Props {
   kind: 'today' | 'tomorrow' | 'date';
@@ -46,6 +47,7 @@ const mobileDate = new Intl.DateTimeFormat('ru-RU', { day:'numeric', month:'long
 const mobileWeekday = new Intl.DateTimeFormat('ru-RU', { weekday:'long', timeZone:'Europe/Kaliningrad' })
   .format(new Date(`${date}T12:00:00+02:00`));
 const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${eventCountLabel(events.length)}`;
+const dateHero = selectDateListingHero(events, date);
 ---
 <div
   class="ke-listing-shell"
@@ -78,6 +80,7 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
     cities={cities}
     calendarToday={getCurrentDate()}
     calendarDate={date}
+    dateHero={dateHero}
   />
   <div class="ke-listing-desktop-body" data-listing-representation="desktop">
   {kind === 'today' ? (

@@ -103,6 +103,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
   import { getStaticSiteAuth } from '../lib/staticSiteAuth';
   import { readFocusParticipationMarker } from '../lib/focus-group-prototype';
   import { createFocusInviteQrSvg } from '../lib/focus-invite-qr';
+  import { readFocusPageRating, writeFocusPageRating } from '../lib/focus-page-rating';
 
   document.querySelectorAll<HTMLElement>('[data-focus-lab-panel]').forEach((root) => {
     let participation = null;
@@ -133,7 +134,31 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
       if (confirmLink) confirmLink.hidden = false;
     };
 
-    root.querySelectorAll<HTMLButtonElement>('[data-focus-score]').forEach((button) => {
+    const scoreButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-focus-score]')];
+    const selectScore = (score: number | null) => {
+      scoreButtons.forEach((item) => {
+        const selected = score !== null && Number(item.dataset.focusScore) === score;
+        item.toggleAttribute('data-selected', selected);
+        item.setAttribute('aria-pressed', String(selected));
+      });
+    };
+    const restoreScore = async () => {
+      const session = await requireSession();
+      if (!session?.user) return;
+      try {
+        const rating = readFocusPageRating(
+          window.localStorage,
+          session.user.id,
+          root.dataset.pageFamily as import('../lib/focus-group-surface').FocusGroupPageFamily,
+        );
+        if (!rating) return;
+        selectScore(rating.score);
+        if (feedbackStatus) feedbackStatus.textContent = `Ваша оценка: ${rating.score}. Её можно изменить.`;
+      } catch { /* storage is an optional convenience */ }
+    };
+    void restoreScore();
+
+    scoreButtons.forEach((button) => {
       button.addEventListener('click', async () => {
         const session = await requireSession();
         if (!session?.user) {
@@ -141,7 +166,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
           return;
         }
         const score = Number(button.dataset.focusScore);
-        root.querySelectorAll<HTMLButtonElement>('[data-focus-score]').forEach((item) => { item.disabled = true; });
+        scoreButtons.forEach((item) => { item.disabled = true; });
         if (feedbackStatus) feedbackStatus.textContent = 'Отправляем оценку…';
         const { error } = await auth!.client.rpc('submit_focus_group_feedback_v1', {
           p_kind: 'page_score',
@@ -151,14 +176,21 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
           p_message: null,
           p_attachment_path: null,
         });
+        scoreButtons.forEach((item) => { item.disabled = false; });
         if (error) {
-          root.querySelectorAll<HTMLButtonElement>('[data-focus-score]').forEach((item) => { item.disabled = false; });
           if (feedbackStatus) feedbackStatus.textContent = 'Не получилось отправить оценку. Попробуйте ещё раз.';
           return;
         }
-        button.dataset.selected = 'true';
-        button.setAttribute('aria-pressed', 'true');
-        if (feedbackStatus) feedbackStatus.textContent = 'Спасибо, оценка отправлена.';
+        selectScore(score);
+        try {
+          writeFocusPageRating(
+            window.localStorage,
+            session.user.id,
+            root.dataset.pageFamily as import('../lib/focus-group-surface').FocusGroupPageFamily,
+            score,
+          );
+        } catch { /* the server receipt remains authoritative */ }
+        if (feedbackStatus) feedbackStatus.textContent = `Спасибо. Ваша оценка: ${score}. Её можно изменить.`;
       });
     });
 

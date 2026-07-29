@@ -5,6 +5,7 @@ import HomeHeroTalk from '../components/HomeHeroTalk.astro';
 import HomeQuickNav from '../components/HomeQuickNav.astro';
 import FocusPwaLaunchResume from '../components/FocusPwaLaunchResume.astro';
 import type { PreviewEvent } from '../lib/types';
+import { buildHomeHeroTalkDeck } from '../lib/homeHeroTalk';
 import {
   absoluteUrl,
   collapseLinkedSessionEvents,
@@ -32,7 +33,11 @@ for (const event of [...popular, ...fallback]) {
   familyIds.forEach((id) => offeredFamilyIds.add(id));
   if (feed.length >= 30) break;
 }
-const heroEvent = feed[0] || null;
+const heroScenes = buildHomeHeroTalkDeck(
+  feed,
+  currentDate,
+  `${currentDate}:${import.meta.env.PUBLIC_SITE_BASE_PATH || 'root'}`,
+);
 const title = SITE_NAME;
 const description = 'Афиша Калининграда без шума: полезная статическая подборка событий, быстрые маршруты по датам и локальная персонализация.';
 ---
@@ -48,7 +53,7 @@ const description = 'Афиша Калининграда без шума: пол
   <FocusPwaLaunchResume />
   <main id="main" class="home-page" data-home-page data-home-static-fallback-count={feed.length}>
     <div class="page-shell home-page__shell">
-      <HomeHeroTalk event={heroEvent} />
+      <HomeHeroTalk scenes={heroScenes} />
       <HomeQuickNav />
       <HomeColdStartFeed events={feed} />
     </div>

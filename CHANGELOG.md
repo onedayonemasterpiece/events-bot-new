@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Fixed
+- Focus page usefulness now remains selected for 24 hours across navigation by
+  authenticated user and page type, with Today/Tomorrow/date sharing the
+  calendar type; the scale stays enabled so a participant can change the
+  score. The Free collection's pinned identity is now 124 px on desktop and
+  108 px on mobile, aligned directly below the top chrome instead of appearing
+  as a tiny low marker.
 - Raised the hosted focus-group email and OTP project limits to 200 per hour
   for the planned cohort while retaining the 60-second per-address resend
   guard. The six-digit code remains Supabase Auth's minimum supported length;
@@ -49,6 +55,17 @@
   remain outside participation and personalization storage.
 
 ### Added
+- Restored the production-shaped automatic Hero Talk on the focus-candidate
+  home: a deterministic current-event deck alternates text and strict
+  photo-safe mosaics, pauses offscreen/hidden and becomes a static linked scene
+  for reduced motion or no JS. Added one shared mobile date hero for
+  Today/Tomorrow/exact-date pages: a fail-closed exact-date selector, real
+  event link and deterministic 11×6 mosaic with reversible scroll fade and
+  `scrollY × 0.28` parallax.
+- Refreshed the candidate's full static projection from the 2026-07-29
+  production SQLite snapshot: 402 active/future or ongoing events with
+  build-time related and festival projections, retained the confirmed club
+  catalog, and made no runtime provider calls.
 - Added the active-participant `Lab` panel to the bottom of every principal
   static page family. It sends an authenticated 0–10 page score or a problem
   report with an optional owner-only screenshot, and exposes the same mass

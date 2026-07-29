@@ -1,9 +1,9 @@
 {
   "schema_version": "festival-timeline-static-v1",
   "projection_version": 1,
-  "generated_at": "2026-07-26T00:00:00+00:00",
-  "current_date": "2026-07-26",
-  "source": "bounded-review-fixture",
+  "generated_at": "2026-07-29T21:36:04.991064+00:00",
+  "current_date": "2026-07-29",
+  "source": "sqlite-festival-calendar-v1",
   "catalog_versions": [
     "2026-07-26-r1"
   ],

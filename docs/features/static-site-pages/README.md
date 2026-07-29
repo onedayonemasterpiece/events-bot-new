@@ -1027,12 +1027,24 @@ Do not use the generic media poster bucket default (`kenigevents`) as the static
 
 В `v22` параллакс-вариант `right-corner-hero` принят как основной вариант
 мобильной календарной страницы; статическая версия остаётся только контрольной.
+Начиная с focus candidate 29.07 эта механика принадлежит общему
+`DateListingHero.astro` и используется на `/segodnya/`, `/zavtra/` и
+`/date-YYYY-MM-DD/`; диапазон `/vyhodnye/` намеренно исключён.
+Build-time selector выбирает событие только на точную дату и только при
+активном occurrence с `visual_only`, photo-safe role, `safe_crop=true`,
+`cover`, источником не меньше `1000px/1MP`, focal point и совпадающими current /
+geometry pixel hashes. Если такого события нет, календарь остаётся без hero:
+OCR, unknown, соседняя дата и случайный poster fallback запрещены.
 Перемещение декора замедлено до компенсации `scrollY × 0.28` (видимая скорость
 героя примерно `0.72×` скорости страницы), а `prefers-reduced-motion` полностью
-отключает transform. Случайные `baseAlpha` и порядок исчезновения создаются один
-раз на загрузку. Изменение только высоты viewport из-за browser chrome не
-пересоздаёт seed, расписание или DOM плиток; при скролле вперёд opacity каждой
+отключает transform. `baseAlpha` и порядок исчезновения создаются
+детерминированно из `date + event + asset` при статической сборке. Reload одной
+immutable-сборки и изменение только высоты viewport из-за browser chrome не
+пересоздают seed, расписание или DOM из 66 плиток; при скролле вперёд opacity каждой
 плитки может только уменьшаться, при обратном скролле — только увеличиваться.
+Вся композиция является обычной внутренней `<a>` на выбранный occurrence уже в
+no-JS HTML; tiles декоративны, focus видим, reduced motion оставляет статичное
+изображение и отключает parallax.
 
 Компактный rail сохраняет fail-closed правило: OCR и неизвестный text-mode не
 кропаются только ради заполнения карточки. Исключение допускается для конкретного
@@ -1048,8 +1060,28 @@ production-ready исправление требует повторного sema
 Обязательные browser gates для этого варианта: отсутствие горизонтального
 overflow на `320/390px`, декодирование media, окно события `6764` ровно `5:4`
 без искажения, неизменность hero schedule при height-only resize, монотонность
-tile opacity в обе стороны, новый random field после reload, transform
+tile opacity в обе стороны и после reload, transform
 `22.4±1px` на `scrollY=80` и `transform:none` при reduced motion.
+
+## Automatic home Hero Talk (2026-07-29)
+
+Главная использует production-shaped `HomeHeroTalk.astro`, а не отдельную
+лабораторию. Deck строится офлайн из текущего production snapshot в
+`buildHomeHeroTalkDeck()`: только `active` события, которые ещё идут или
+начнутся не раньше `getCurrentDate()`, и максимум один member взаимной explicit
+occurrence family. Исторический engagement не может вернуть прошедшее событие.
+Seed включает дату snapshot и immutable base path, поэтому один build всегда
+получает один порядок без runtime LLM или provider-запросов.
+
+Цикл содержит до четырёх уникальных событий и два формата: сильная
+`text-only` фраза и `photo-mosaic`. Mosaic проходит тот же fail-closed
+photo/geometry contract, что календарный hero; нехватка пригодных фотографий
+честно деградирует в текст. В нормальном цикле нет двух mosaic подряд и больше
+двух text-only подряд. Сцены запускаются и меняются автоматически без
+Play/Next/Replay/progress/Lab controls, останавливаются вне viewport и в
+скрытой вкладке. `prefers-reduced-motion` и no-JS оставляют первую полезную
+сцену и обычную внутреннюю ссылку без автопереключения. Полный текст находится
+в DOM; посимвольный live-region не используется.
 
 ## Mobile calendar feedback v23 (2026-07-21)
 

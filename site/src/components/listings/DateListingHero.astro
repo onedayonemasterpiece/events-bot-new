@@ -1,0 +1,238 @@
+---
+import type { DateListingHeroSelection } from '../../lib/dateListingHero';
+import { createDateHeroTileSchedule } from '../../lib/dateListingHero';
+import { eventHref } from '../../lib/events';
+import { eventImageUrl } from '../../lib/assets';
+
+interface Props {
+  selection: DateListingHeroSelection;
+  date: string;
+}
+
+const { selection, date } = Astro.props;
+const { event, asset } = selection;
+const src = eventImageUrl(asset.src);
+const focalX = Math.max(0, Math.min(1, Number(asset.focal_point?.x ?? .5)));
+const focalY = Math.max(0, Math.min(1, Number(asset.focal_point?.y ?? .5)));
+const tiles = createDateHeroTileSchedule(`${date}:${event.id}:${asset.asset_key || asset.src}`);
+const dateLabel = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'Europe/Kaliningrad',
+}).format(new Date(`${date}T12:00:00+02:00`));
+---
+
+{src && (
+  <a
+    class="date-listing-hero"
+    data-date-listing-hero
+    data-event-id={event.id}
+    data-source-width={asset.width}
+    data-source-height={asset.height}
+    data-focus-x={focalX}
+    data-focus-y={focalY}
+    data-parallax="true"
+    style={`--date-hero-focal-x:${focalX * 100}%;--date-hero-focal-y:${focalY * 100}%`}
+    href={eventHref(event)}
+    aria-label={`Открыть событие «${event.title}» на ${dateLabel}`}
+  >
+    <img
+      class="date-listing-hero__fallback"
+      data-date-listing-hero-image
+      src={src}
+      width={asset.width}
+      height={asset.height}
+      alt=""
+      loading="eager"
+      decoding="async"
+    />
+    <span class="date-listing-hero__tiles" aria-hidden="true">
+      {tiles.map((tile) => (
+        <span
+          class="date-listing-hero__tile"
+          data-date-listing-hero-tile
+          data-col={tile.col}
+          data-row={tile.row}
+          data-exit-start={tile.exitStart}
+          data-exit-end={tile.exitEnd}
+          style={`--base-alpha:${tile.baseAlpha};--entry-delay:${tile.entryDelay}ms;--entry-duration:${tile.entryDuration}ms`}
+        ></span>
+      ))}
+    </span>
+  </a>
+)}
+
+<style is:global>
+  @media (max-width:720px) {
+    .ke-mobile-listing-rails--v23 .page-head:has(.date-listing-hero) {
+      position:relative;
+      isolation:isolate;
+      height:148px;
+      overflow:visible;
+    }
+    .ke-mobile-listing-rails--v23 .page-head:has(.date-listing-hero) h1,
+    .ke-mobile-listing-rails--v23 .page-head:has(.date-listing-hero) > p {
+      position:relative;
+      z-index:2;
+      max-width:72%;
+      pointer-events:none;
+      text-shadow:0 1px 0 #fbf7ef, 0 0 12px #fbf7ef;
+    }
+    .date-listing-hero {
+      position:absolute;
+      z-index:1;
+      top:-64px;
+      right:0;
+      width:min(calc(100vw - 18px),372px);
+      aspect-ratio:372/202;
+      overflow:hidden;
+      color:inherit;
+      text-decoration:none;
+      contain:layout paint;
+      transform:translate3d(0,0,0);
+      -webkit-tap-highlight-color:transparent;
+    }
+    .date-listing-hero:focus-visible {
+      outline:3px solid #0f766e;
+      outline-offset:-4px;
+      border-radius:6px;
+    }
+    .date-listing-hero__fallback {
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      object-position:var(--date-hero-focal-x,50%) var(--date-hero-focal-y,50%);
+      filter:saturate(.9) contrast(1.02);
+      transition:opacity 120ms linear;
+      mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.22) 16%,#000 36%);
+    }
+    .date-listing-hero__tiles {
+      position:absolute;
+      inset:0;
+      display:grid;
+      grid-template-columns:repeat(11,1fr);
+      grid-template-rows:repeat(6,1fr);
+      gap:2px;
+    }
+    .date-listing-hero__tile {
+      position:relative;
+      overflow:hidden;
+      opacity:0;
+    }
+    .date-listing-hero__tile::before {
+      content:"";
+      position:absolute;
+      left:var(--tile-image-left);
+      top:var(--tile-image-top);
+      width:var(--mosaic-render-width);
+      height:var(--mosaic-render-height);
+      background-image:var(--date-hero-image);
+      background-repeat:no-repeat;
+      background-size:100% 100%;
+      filter:saturate(.9) contrast(1.02);
+    }
+    .date-listing-hero[data-tiles-ready] .date-listing-hero__fallback { opacity:0; }
+    .date-listing-hero.is-entering .date-listing-hero__tile {
+      animation:date-listing-hero-in var(--entry-duration) cubic-bezier(.65,0,.35,1) var(--entry-delay) both;
+    }
+    @keyframes date-listing-hero-in { from { opacity:0; } to { opacity:var(--render-alpha,var(--base-alpha)); } }
+  }
+  @media (min-width:721px) { .date-listing-hero { display:none; } }
+  @media (prefers-reduced-motion:reduce) {
+    .date-listing-hero { transform:none!important; }
+    .date-listing-hero__fallback { opacity:1!important; transition:none!important; }
+    .date-listing-hero__tiles { display:none!important; }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-date-listing-hero]').forEach((hero) => {
+    if (hero.dataset.ready === 'true') return;
+    hero.dataset.ready = 'true';
+    const image = hero.querySelector<HTMLImageElement>('[data-date-listing-hero-image]');
+    const tiles = [...hero.querySelectorAll<HTMLElement>('[data-date-listing-hero-tile]')];
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let geometryWidth = 0;
+    let endY = 1;
+    let frame = 0;
+
+    const clamp = (value: number) => Math.max(0, Math.min(1, value));
+    const smooth = (value: number) => value * value * (3 - 2 * value);
+    const measureEnd = () => {
+      const surface = hero.closest('[data-mobile-listing-rails]');
+      const firstRow = surface?.querySelector<HTMLElement>('[data-mobile-listing-row]');
+      const brandBottom = document.querySelector<HTMLElement>('.site-header')?.getBoundingClientRect().bottom || 64;
+      endY = Math.max(1, firstRow ? window.scrollY + firstRow.getBoundingClientRect().top - brandBottom : 160);
+      hero.dataset.heroEndY = String(endY);
+    };
+    const configure = () => {
+      if (!image?.naturalWidth) return;
+      const rect = hero.getBoundingClientRect();
+      const sourceWidth = Number(hero.dataset.sourceWidth);
+      const sourceHeight = Number(hero.dataset.sourceHeight);
+      const focusX = Number(hero.dataset.focusX || .5);
+      const focusY = Number(hero.dataset.focusY || .5);
+      if (!rect.width || !rect.height || !sourceWidth || !sourceHeight) return;
+      const scale = Math.max(rect.width / sourceWidth, rect.height / sourceHeight);
+      const renderWidth = sourceWidth * scale;
+      const renderHeight = sourceHeight * scale;
+      const offsetX = (rect.width - renderWidth) * focusX;
+      const offsetY = (rect.height - renderHeight) * focusY;
+      hero.style.setProperty('--date-hero-image', `url("${image.currentSrc || image.src}")`);
+      hero.style.setProperty('--date-hero-focal-x', `${focusX * 100}%`);
+      hero.style.setProperty('--date-hero-focal-y', `${focusY * 100}%`);
+      hero.style.setProperty('--mosaic-render-width', `${renderWidth}px`);
+      hero.style.setProperty('--mosaic-render-height', `${renderHeight}px`);
+      tiles.forEach((tile) => {
+        const tileRect = tile.getBoundingClientRect();
+        tile.style.setProperty('--tile-image-left', `${offsetX - (tileRect.left - rect.left)}px`);
+        tile.style.setProperty('--tile-image-top', `${offsetY - (tileRect.top - rect.top)}px`);
+        tile.style.setProperty('--render-alpha', tile.style.getPropertyValue('--base-alpha'));
+      });
+      geometryWidth = window.innerWidth;
+      hero.toggleAttribute('data-tiles-ready', !reduced);
+      if (!reduced) {
+        hero.classList.add('is-entering');
+        window.setTimeout(() => hero.classList.remove('is-entering'), 1_150);
+      }
+      measureEnd();
+      render();
+    };
+    const render = () => {
+      frame = 0;
+      if (reduced) return;
+      const progress = clamp(window.scrollY / endY);
+      const exitProgress = clamp(progress + .2 * progress * (1 - progress));
+      tiles.forEach((tile) => {
+        const start = Number(tile.dataset.exitStart);
+        const end = Number(tile.dataset.exitEnd);
+        const local = smooth(clamp((exitProgress - start) / Math.max(.001, end - start)));
+        const alpha = Number(tile.style.getPropertyValue('--base-alpha') || 0) * (1 - local);
+        tile.style.opacity = String(alpha);
+        tile.style.setProperty('--render-alpha', String(alpha));
+      });
+      hero.style.visibility = progress >= 1 ? 'hidden' : 'visible';
+      hero.style.transform = `translate3d(0,${window.scrollY * .28}px,0)`;
+    };
+    const queueRender = () => {
+      if (!frame) frame = window.requestAnimationFrame(render);
+    };
+    const ready = () => {
+      configure();
+      if (!reduced) {
+        document.addEventListener('scroll', queueRender, { passive:true });
+        window.addEventListener('resize', () => {
+          if (window.innerWidth !== geometryWidth) configure();
+          else {
+            measureEnd();
+            queueRender();
+          }
+        }, { passive:true });
+      }
+    };
+    if (image?.complete && image.naturalWidth) ready();
+    else image?.addEventListener('load', ready, { once:true });
+  });
+</script>

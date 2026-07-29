@@ -14,7 +14,9 @@ test('materialized Free collection owns a large right identity then a transparen
   assert.match(surface, /data-free-collection-medallion="compact"/u);
   assert.match(surface, /\.free-collection__medallion--hero \{[^}]*justify-self:end/u);
   assert.match(surface, /\.free-collection__sticky-identity \{[\s\S]*?position:sticky;[\s\S]*?top:57px/u);
+  assert.match(surface, /\.free-collection__medallion--compact \{\s*width:124px; height:124px/u);
   assert.match(surface, /@media\(max-width:759px\)[\s\S]*?\.free-collection__sticky-identity \{ top:64px/u);
+  assert.match(surface, /@media\(max-width:759px\)[\s\S]*?\.free-collection__medallion--compact \{ width:108px; height:108px/u);
   assert.doesNotMatch(surface, /free-collection__shelf|backdrop-filter/u);
   assert.match(surface, /data-compact-visible/u);
   assert.match(surface, /regularEvents\.map\(\(event\) => <EventCard event=\{event\} mobileFlowMedia \/>\)/u);

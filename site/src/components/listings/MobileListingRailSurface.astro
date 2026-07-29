@@ -2,6 +2,8 @@
 import type { PreviewEvent } from '../../lib/types';
 import MobileListingRailRow from './MobileListingRailRow.astro';
 import MobileDateAccessory from './MobileDateAccessory.astro';
+import DateListingHero from './DateListingHero.astro';
+import type { DateListingHeroSelection } from '../../lib/dateListingHero';
 
 interface Section { id: string; title?: string; subtitle?: string; events: PreviewEvent[]; }
 interface City { name: string; count: number; }
@@ -18,6 +20,7 @@ interface Props {
   calendarDate?: string;
   weekendEnd?: string;
   amberArtifactTailEventId?: number | null;
+  dateHero?: DateListingHeroSelection | null;
 }
 const {
   sections,
@@ -32,6 +35,7 @@ const {
   calendarDate = '',
   weekendEnd = '',
   amberArtifactTailEventId = null,
+  dateHero = null,
 } = Astro.props;
 let rowIndex = 0;
 const total = sections.reduce((sum, section) => sum + section.events.length, 0);
@@ -43,6 +47,7 @@ const total = sections.reduce((sum, section) => sum + section.events.length, 0);
   data-mobile-listing-date={calendarDate || undefined}
 >
   <section class="page-head" aria-labelledby={`mobile-v23-title-${current}`}>
+    {dateHero && calendarDate && <DateListingHero selection={dateHero} date={calendarDate} />}
     <h1 id={`mobile-v23-title-${current}`}>{title}</h1>
     <p>{meta}</p>
   </section>

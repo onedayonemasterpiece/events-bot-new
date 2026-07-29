@@ -30,9 +30,10 @@
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
     "test:festival-timeline-layout": "node --experimental-strip-types --test scripts/festival-timeline-layout.behavior.test.mjs",
     "test:date-listing-order": "node --experimental-strip-types --test tests/date-listing-order.test.mjs",
+    "test:home-date-heroes": "node --experimental-strip-types --test src/lib/homeHeroTalk.test.ts src/lib/dateListingHero.test.ts",
     "test:browser-release-gate": "node --test scripts/browser-release-gate.behavior.test.mjs",
     "test:occurrences": "node --experimental-strip-types --test tests/event-occurrences.test.mjs",
-    "test:focus-group-product": "node --experimental-strip-types --test src/lib/focus-group-prototype.test.ts src/lib/focus-group-surface.test.ts src/lib/focus-personalization.test.ts src/lib/focus-invite-qr.test.ts src/lib/emailOtp.test.ts tests/focus-group-product-surface.test.mjs tests/focus-pwa-membership.test.mjs tests/focus-easter-eggs.test.mjs tests/static-site-auth.test.mjs",
+    "test:focus-group-product": "node --experimental-strip-types --test src/lib/focus-group-prototype.test.ts src/lib/focus-group-surface.test.ts src/lib/focus-page-rating.test.ts src/lib/focus-personalization.test.ts src/lib/focus-invite-qr.test.ts src/lib/emailOtp.test.ts tests/focus-group-product-surface.test.mjs tests/focus-pwa-membership.test.mjs tests/focus-easter-eggs.test.mjs tests/static-site-auth.test.mjs",
     "astro": "astro"
   },
   "dependencies": {

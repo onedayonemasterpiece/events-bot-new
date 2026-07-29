@@ -609,6 +609,33 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 
 ### UI, accessibility и browser matrix
 
+- **ADD-HOME-HERO-01 — Current deterministic deck.** Главный Hero Talk при
+  одном snapshot/build id повторяет event IDs и режимы после reload, не
+  содержит inactive/past occurrence даже при максимальном engagement, не
+  повторяет взаимную explicit family и не делает больше двух text-only или
+  одной mosaic подряд.
+- **ADD-HOME-HERO-02 — Automatic but respectful motion.** На `1366×768` и
+  `1440×900` первая сцена запускается сама, затем появляется следующий
+  уникальный event; Play/Next/Replay/pace/progress/Lab controls отсутствуют.
+  Hidden tab и hero вне viewport останавливают цикл, возврат продолжает его;
+  reduced motion и no-JS сохраняют полезную первую ссылку без движения.
+- **ADD-DATE-HERO-01 — Exact safe linked hero.** На `/segodnya/`,
+  `/zavtra/` и `/date-YYYY-MM-DD/` selector использует только active occurrence
+  выбранной даты с fresh `visual_only` cover-safe geometry. OCR/unknown,
+  соседняя дата или отсутствие safe photo дают обычную страницу без hero.
+  `/vyhodnye/` hero не получает.
+- **ADD-DATE-HERO-02 — Reversible 66 tiles.** На `320×667`, `390×844` и
+  `430×932` hero содержит одну настоящую внутреннюю ссылку и 66 decorative
+  tiles. Scroll вниз монотонно уменьшает alpha, scroll вверх восстанавливает те
+  же значения; height-only resize и reload не меняют schedule. При `scrollY=80`
+  Y-transform равен `22.4±1px`, до первой карточки hero исчезает, horizontal
+  overflow отсутствует.
+- **ADD-FOCUS-SCORE-01 — Page-type 24-hour continuity.** Подтверждённая
+  оценка восстанавливается после перехода на другую страницу того же типа для
+  того же auth user, calendar объединяет today/tomorrow/date, другой тип и
+  другой user её не наследуют. До истечения 24 часов число можно заменить;
+  после TTL выбор исчезает. Локальное состояние меняется только после успешного
+  RPC.
 - **ADD-UI-01 — Единая навигационная модель.** Mobile tag/menu и desktop header сохраняют одинаковые destinations, labels, порядок, active state, избранное и identity semantics.
 - **ADD-UI-02 — Граничные viewport.** Помимо обычных mobile/desktop проверить узкий телефон, landscape, tablet и ширины непосредственно до/после breakpoint; исключить horizontal overflow и скачки layout.
 - **ADD-A11Y-01 — Keyboard/focus.** Все ссылки, меню, карусель, modal/gallery, like/share/calendar, email form и undo доступны с клавиатуры; focus видим, не заперт и возвращается к trigger.
