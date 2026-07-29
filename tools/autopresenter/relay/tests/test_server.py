@@ -41,6 +41,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(">Стоп<", text)
         self.assertIn(">Сброс<", text)
         self.assertNotIn("Выключить", text)
+        self.assertIn("Сбросить доступ на этом устройстве", text)
 
         response, payload = await self.json("GET", "/api/state")
         self.assertEqual(response.status, 200)
@@ -299,21 +300,42 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("new URLSearchParams(location.hash.slice(1))", control)
         self.assertIn("fragment.get('token')", control)
         self.assertIn(
-            "sessionStorage.setItem('autopresenter-control-token', fragmentToken)",
+            "sessionStorage.setItem(tokenStorageKey, fragmentToken)",
             control,
         )
         self.assertIn("history.replaceState", control)
-        self.assertIn(
-            "sessionStorage.getItem('autopresenter-control-token')",
-            control,
-        )
+        self.assertIn("sessionStorage.getItem(tokenStorageKey)", control)
         self.assertIn("Authorization: `Bearer ${token}`", control)
-        self.assertNotIn("localStorage", control)
         self.assertIn(
             "navigator.serviceWorker.register('/control/service-worker.js'",
             control,
         )
         self.assertIn("scope: '/control/'", control)
+
+    async def test_control_pwa_recovers_and_can_clear_persisted_access(self):
+        response = await self.client.get("/control/")
+        control = await response.text()
+        self.assertIn(
+            "localStorage.setItem(tokenStorageKey, fragmentToken)",
+            control,
+        )
+        self.assertIn(
+            "persistedToken = localStorage.getItem(tokenStorageKey) || ''",
+            control,
+        )
+        self.assertIn(
+            "const token = sessionStorage.getItem(tokenStorageKey) || persistedToken",
+            control,
+        )
+        self.assertIn(
+            "if (token) sessionStorage.setItem(tokenStorageKey, token)",
+            control,
+        )
+        self.assertIn("sessionStorage.removeItem(tokenStorageKey)", control)
+        self.assertIn("localStorage.removeItem(tokenStorageKey)", control)
+        self.assertIn("location.replace('/control/')", control)
+        self.assertNotIn("localStorage.clear(", control)
+        self.assertNotIn("sessionStorage.clear(", control)
 
     def test_pwa_assets_are_in_the_relay_container_package(self):
         dockerfile = (RELAY_DIR / "Dockerfile.internet-test").read_text(

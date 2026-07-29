@@ -105,6 +105,21 @@
       text-align: center;
       text-underline-offset: 3px;
     }
+    .access-reset {
+      display: block;
+      width: auto;
+      min-height: 44px;
+      margin: 5px auto -6px;
+      border: 0;
+      padding: 8px 12px;
+      color: #8796bd;
+      background: transparent;
+      font-size: .75rem;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .access-reset:hover { border: 0; color: #c5cffa; background: transparent; }
     @keyframes pulse { 50% { transform: scale(.72); opacity: .6; } }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   </style>
@@ -128,6 +143,7 @@
         </div>
       </div>
       <a class="download-link" id="demonstrator-link" href="/demonstrator/">Скачать демонстратор для Windows</a>
+      <button class="access-reset" id="forget-access" type="button">Сбросить доступ на этом устройстве</button>
       <p class="meta" id="meta">Интернет · защищённый HTTPS-пульт</p>
     </section>
   </main>
@@ -136,8 +152,10 @@
     const detailNode = document.querySelector('#detail');
     const metaNode = document.querySelector('#meta');
     const demonstratorLink = document.querySelector('#demonstrator-link');
+    const forgetAccessButton = document.querySelector('#forget-access');
     const buttons = [...document.querySelectorAll('button[data-action]')];
     let posting = false;
+    const tokenStorageKey = 'autopresenter-control-token';
     const statusLabels = {
       disconnected: 'Агент не подключён',
       idle: 'Готов',
@@ -149,10 +167,22 @@
     const fragment = new URLSearchParams(location.hash.slice(1));
     const fragmentToken = fragment.get('token');
     if (fragmentToken) {
-      sessionStorage.setItem('autopresenter-control-token', fragmentToken);
+      sessionStorage.setItem(tokenStorageKey, fragmentToken);
+      try {
+        localStorage.setItem(tokenStorageKey, fragmentToken);
+      } catch (error) {
+        console.warn('Не удалось сохранить доступ для следующего запуска:', error);
+      }
       history.replaceState(null, '', `${location.pathname}${location.search}`);
     }
-    const token = sessionStorage.getItem('autopresenter-control-token') || '';
+    let persistedToken = '';
+    try {
+      persistedToken = localStorage.getItem(tokenStorageKey) || '';
+    } catch (error) {
+      console.warn('Не удалось прочитать сохранённый доступ:', error);
+    }
+    const token = sessionStorage.getItem(tokenStorageKey) || persistedToken;
+    if (token) sessionStorage.setItem(tokenStorageKey, token);
     demonstratorLink.href = token
       ? `/demonstrator/#token=${encodeURIComponent(token)}`
       : '/demonstrator/';
@@ -213,6 +243,15 @@
     }
 
     buttons.forEach(button => button.addEventListener('click', () => issue(button.dataset.action)));
+    forgetAccessButton.addEventListener('click', () => {
+      sessionStorage.removeItem(tokenStorageKey);
+      try {
+        localStorage.removeItem(tokenStorageKey);
+      } catch (error) {
+        console.warn('Не удалось удалить сохранённый доступ:', error);
+      }
+      location.replace('/control/');
+    });
     readState();
     setInterval(readState, 800);
 
