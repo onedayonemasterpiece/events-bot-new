@@ -120,7 +120,7 @@ test('mobile onboarding mounts the permanent manifest and explicit no-confirmati
   assert.match(page, /apple-touch-icon/u);
   assert.match(intake, /assets\/pwa\/announcements-brand-v2-192\.png/u);
   assert.match(intake, /width="192" height="192"/u);
-  assert.match(intake, />\s*Пропустить\s*</u);
+  assert.match(intake, />\s*Продолжить без подтверждения\s*</u);
   assert.match(intake, /Пройти подключение заново на этом устройстве/u);
   assert.match(intake, /Выйти и выбрать другой способ/u);
   assert.match(intake, /activateFocusParticipation/u);

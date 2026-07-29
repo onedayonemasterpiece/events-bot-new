@@ -64,7 +64,7 @@ test('focus identity supports real email OTP and Yandex linking through the shar
   assert.match(auth, /this\.client\.auth\.linkIdentity/u);
   assert.match(intake, /emailRedirect\.searchParams\.set\('email_callback', '1'\)/u);
   assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirect\.href\)/u);
-  assert.match(intake, /pendingEmail \|\| emailInput\?\.value\.trim\(\)/u);
+  assert.match(intake, /if \(!pendingEmail\)[\s\S]*Сначала укажите адрес/u);
   assert.match(intake, /snapshot\.callbackAttempted && emailCallbackAttempted/u);
   assert.match(auth, /verifyOtp\(\{ token_hash: tokenHash, type: 'email' \}\)/u);
   assert.match(intake, /auth\.linkYandexIdentity\(\)/u);

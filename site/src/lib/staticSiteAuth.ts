@@ -583,6 +583,38 @@ class StaticSiteAuthController {
     });
     return true;
   }
+
+  /**
+   * Owner-only clean-start helper for the focus-group acceptance run.
+   * It resets this browser's auth session without touching personalization.
+   */
+  async resetForOnboardingTest(): Promise<void> {
+    try {
+      await this.client.auth.signOut({ scope: 'local' });
+    } catch {
+      // A missing or unreachable session is already equivalent to signed out
+      // for this device-only acceptance reset.
+    }
+    clearAuthIntent();
+    try {
+      const keys = Array.from(
+        { length: window.localStorage.length },
+        (_value, index) => window.localStorage.key(index),
+      ).filter((key): key is string => Boolean(key));
+      for (const key of keys) {
+        if (isPkceCodeVerifierKey(key)) authStorage.removeItem(key);
+      }
+    } catch {
+      // The reset still clears the participation marker when storage is blocked.
+    }
+    this.initialization = null;
+    this.snapshot = {
+      status: 'signed_out',
+      user: null,
+      message: 'Вы вышли из аккаунта.',
+      callbackAttempted: false,
+    };
+  }
 }
 
 declare global {

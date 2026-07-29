@@ -3,12 +3,18 @@
 ## [Unreleased]
 
 ### Fixed
+- Focus-group onboarding now presents exactly one decision or form at a time:
+  invitation/install, identity choice, email address, email code, and the
+  explicit completion screen. A private owner acceptance URL clears only the
+  current device's focus marker and auth session before replaying the public
+  mass invitation, so one phone can repeatedly test the new-user journey
+  without deleting personalization.
 - Focus-group Android onboarding now keeps a visible `Устанавливаем…` state
   while the PWA settles, reveals the open action only after installed-app
   detection or a bounded fallback, and uses a user-triggered app intent before
   falling back to HTTPS. Email links now verify a first-party token hash across
-  browser/PWA contexts; an expired link immediately opens the email and
-  six-digit code fields so the already-delivered OTP remains usable.
+  browser/PWA contexts; an expired link now offers one clear recovery action
+  and never exposes the email and code forms simultaneously.
 - Focus-group onboarding now lets an existing participant restart the same
   device journey, shows the current account with explicit continue/sign-out
   choices, and falls back from an unavailable install prompt to

@@ -39,9 +39,13 @@ test('invite intake keeps the 30-day boundary internal while user copy stays pla
   assert.match(intake, /data-intake-stage="install"/u);
   assert.match(intake, /data-intake-stage="identity"/u);
   assert.match(intake, /data-intake-stage="done"/u);
-  assert.match(intake, /Хотите участвовать в розыгрыше двух билетов/u);
-  assert.match(intake, /Афишей можно пользоваться и без подтверждения/u);
-  assert.match(intake, /window\.location\.replace\(homeHref\)/u);
+  assert.match(intake, /Присоединяйтесь к фокус-группе/u);
+  assert.match(intake, /Можно выиграть два билета в театр/u);
+  assert.match(intake, /Шаг 1 из 3/u);
+  assert.match(intake, /Шаг 2 из 3/u);
+  assert.match(intake, /Шаг 3 из 3/u);
+  assert.match(intake, /Открыть афишу/u);
+  assert.doesNotMatch(intake, /window\.setTimeout\(\(\) => window\.location\.replace\(homeHref\)/u);
   assert.match(secret, /После исследования всё останется на месте/u);
   assert.match(secret, /readFocusParticipationMarker/u);
   assert.match(helper, /FOCUS_PARTICIPATION_DURATION_MS = 30 \* 24/u);
@@ -64,19 +68,39 @@ test('email identity offers one message with link plus six-digit mobile OTP', as
   assert.match(intake, /inputmode="numeric"/u);
   assert.match(intake, /autocomplete="one-time-code"/u);
   assert.match(intake, /pattern="\[0-9\]\{6\}"/u);
-  assert.match(intake, /После последней цифры продолжим автоматически/u);
+  assert.match(intake, /После шестой цифры продолжим автоматически/u);
   assert.match(intake, /Отправляем письмо/u);
   assert.match(intake, /aria-busy/u);
   assert.match(intake, /Отправить ещё раз/u);
   assert.match(intake, /window\.setInterval\(tick, 1000\)/u);
-  assert.match(intake, /Проверьте почту: письмо могло уже прийти/u);
-  assert.match(intake, /Ссылка не подтвердила вход.*шестизначный код/u);
-  assert.match(intake, /if \(otpForm\) otpForm\.hidden = false/u);
+  assert.match(intake, /Письмо могло уже прийти\. Проверьте почту/u);
+  assert.match(intake, /Предыдущая ссылка не сработала.*пришлём новую ссылку и код/u);
+  assert.match(intake, /showIdentityView\('email_address'\)/u);
+  assert.match(intake, /showIdentityView\('email_code'\)/u);
+  assert.doesNotMatch(
+    intake,
+    /emailOpen\?\.addEventListener\('click',[\s\S]{0,200}otpForm[\s\S]{0,80}hidden\s*=\s*false/u,
+  );
   assert.match(intake, /data-focus-account-continue/u);
   assert.match(intake, /data-focus-account-logout/u);
   assert.match(auth, /verifyEmailOtp/u);
   assert.match(auth, /verifyOtp/u);
   assert.match(otp, /EMAIL_OTP_LENGTH = 6/u);
+});
+
+test('owner clean-start link resets only focus onboarding and local auth before replaying the invite', async () => {
+  const [intake, auth] = await Promise.all([
+    read('../src/components/FocusGroupInviteIntake.astro'),
+    read('../src/lib/staticSiteAuth.ts'),
+  ]);
+  assert.match(intake, /focus_test_reset/u);
+  assert.match(intake, /Начинаем проверку заново/u);
+  assert.match(intake, /clearFocusParticipationMarker\(storage\)/u);
+  assert.match(intake, /resetForOnboardingTest/u);
+  assert.match(intake, /restartUrl\.searchParams\.delete\('focus_test_reset'\)/u);
+  assert.match(intake, /window\.location\.replace\(restartUrl\.toString\(\)\)/u);
+  assert.match(auth, /signOut\(\{ scope: 'local' \}\)/u);
+  assert.doesNotMatch(intake, /focus-personalization|saved-event|localStorage\.clear\(/u);
 });
 
 test('for-me uses tri-state native radios and separates inferred index', async () => {

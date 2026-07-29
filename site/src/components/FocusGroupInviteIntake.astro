@@ -17,10 +17,10 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     <img src={focusIconHref} width="192" height="192" alt="Полюбить Калининград · Анонсы" />
   </header>
 
-  <section class="focus-intake__card" data-intake-pending aria-live="polite">
+  <section class="focus-intake__card focus-intake__card--pending" data-intake-pending aria-live="polite">
     <span class="focus-intake__spinner" aria-hidden="true"></span>
-    <h1>Открываем приглашение…</h1>
-    <p>Подождите немного.</p>
+    <h1 data-intake-pending-title>Открываем приглашение…</h1>
+    <p data-intake-pending-copy>Подождите немного.</p>
   </section>
 
   <section class="focus-intake__card" data-intake-error hidden>
@@ -32,24 +32,38 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
 
   <section class="focus-intake__card" data-intake-stage="install" hidden>
     <FocusLabBadge label="Lab" detail="Фокус-группа" />
-    <p class="focus-intake__eyebrow">Приглашение принято</p>
-    <h1>Как вам удобнее возвращаться к афише?</h1>
+    <p class="focus-intake__eyebrow">Шаг 1 из 3</p>
+    <h1 tabindex="-1">Присоединяйтесь к фокус-группе</h1>
     <p>
-      Можно установить «Анонсы» на телефон или продолжить на сайте.
-      Участие от этого не зависит.
+      Пользуйтесь афишей и помогайте нам сделать её понятнее и удобнее.
     </p>
+    <div class="focus-intake__prize-note">
+      <strong>Можно выиграть два билета в театр</strong>
+      <span>
+        В розыгрыше смогут участвовать те, кто пользуется афишей, находит
+        артефакты, сообщает об ошибках, оценивает удобство и оставляет честные оценки.
+      </span>
+    </div>
+    <div class="focus-intake__next">
+      <strong>Сначала добавьте «Анонсы» на телефон</strong>
+      <span>Так к афише будет удобно возвращаться. Можно продолжить и без установки.</span>
+    </div>
     <FocusPwaInstallAction />
   </section>
 
   <section class="focus-intake__card" data-intake-stage="identity" hidden>
     <FocusLabBadge label="Lab" detail="Фокус-группа" />
-    <h1>Хотите участвовать в розыгрыше двух билетов?</h1>
-    <p>
-      Для этого подтвердите себя по электронной почте или через Яндекс.
-      Афишей можно пользоваться и без подтверждения.
-    </p>
 
-    <div class="focus-intake__choices" data-static-auth-signed-out hidden>
+    <div class="focus-intake__heading" data-focus-identity-heading>
+      <p class="focus-intake__eyebrow">Шаг 2 из 3</p>
+      <h1 tabindex="-1">Подтвердите участие</h1>
+      <p>
+        Выберите почту или Яндекс. Так мы сможем связать ваши отзывы и находки
+        с участием в розыгрыше.
+      </p>
+    </div>
+
+    <div class="focus-intake__choices" data-focus-auth-signed-out hidden>
       <button class="ke-button ke-button--primary" type="button" data-focus-email-open>
         По электронной почте
       </button>
@@ -57,13 +71,16 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
         Через Яндекс
       </button>
       <button class="focus-intake__skip" type="button" data-focus-skip>
-        Пропустить
+        Продолжить без подтверждения
       </button>
+      <p class="focus-intake__helper">
+        Афиша откроется сразу, но для участия в розыгрыше подтверждение понадобится позже.
+      </p>
     </div>
 
-    <div class="focus-intake__signed" data-static-auth-signed-in hidden>
+    <div class="focus-intake__signed" data-focus-auth-signed-in hidden>
       <strong>Вы вошли как <span data-static-auth-name></span></strong>
-      <span>Продолжите с этим аккаунтом или выйдите, чтобы проверить другой способ.</span>
+      <span>Можно продолжить с этим аккаунтом или выбрать другой.</span>
       <button class="ke-button ke-button--primary" type="button" data-focus-account-continue>
         Продолжить с этим аккаунтом
       </button>
@@ -73,46 +90,77 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     </div>
 
     <div class="focus-intake__email" data-focus-email-panel hidden>
-      <form data-focus-email-form>
-        <label for="focus-email">
-          <span>Электронная почта</span>
-          <input
-            id="focus-email"
-            name="email"
-            type="email"
-            autocomplete="email"
-            placeholder="name@example.ru"
-            required
-          />
-        </label>
-        <button class="ke-button ke-button--primary" type="submit" data-focus-email-send>
-          Получить код и ссылку
+      <div class="focus-intake__email-step" data-focus-email-address-step>
+        <div class="focus-intake__subheading">
+          <p class="focus-intake__eyebrow">Подтверждение по почте</p>
+          <h2 data-focus-email-address-title>Куда отправить письмо?</h2>
+          <p data-focus-email-address-copy>
+            Пришлём одну ссылку и шестизначный код. Вы сможете выбрать любой способ.
+          </p>
+        </div>
+        <form data-focus-email-form>
+          <label for="focus-email">
+            <span>Электронная почта</span>
+            <input
+              id="focus-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="name@example.ru"
+              required
+            />
+          </label>
+          <button class="ke-button ke-button--primary" type="submit" data-focus-email-send>
+            Получить код и ссылку
+          </button>
+        </form>
+        <button class="focus-intake__back" type="button" data-focus-email-back>
+          Выбрать другой способ
         </button>
-        <span data-focus-email-resend-status aria-live="polite"></span>
-      </form>
+      </div>
 
-      <form data-focus-email-otp-form hidden>
-        <label for="focus-email-otp">
-          <span>Код из письма</span>
-          <input
-            id="focus-email-otp"
-            name="otp"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            enterkeyhint="done"
-            pattern="[0-9]{6}"
-            minlength="6"
-            maxlength="6"
-            placeholder="000000"
-            required
-          />
-        </label>
-        <p>Введите шесть цифр. После последней цифры продолжим автоматически.</p>
-        <button class="ke-button ke-button--secondary" type="submit" data-focus-email-otp-submit disabled>
-          Подтвердить
+      <div class="focus-intake__email-step" data-focus-email-code-step hidden>
+        <div class="focus-intake__subheading">
+          <p class="focus-intake__eyebrow">Письмо отправлено</p>
+          <h2>Введите код</h2>
+          <p>
+            Нажмите кнопку в письме или введите шесть цифр, отправленных на
+            <strong data-focus-email-destination></strong>.
+          </p>
+        </div>
+        <form data-focus-email-otp-form>
+          <label for="focus-email-otp">
+            <span>Код из письма</span>
+            <input
+              id="focus-email-otp"
+              name="otp"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              enterkeyhint="done"
+              pattern="[0-9]{6}"
+              minlength="6"
+              maxlength="6"
+              placeholder="000000"
+              required
+            />
+          </label>
+          <p>После шестой цифры продолжим автоматически.</p>
+          <button class="ke-button ke-button--primary" type="submit" data-focus-email-otp-submit disabled>
+            Подтвердить
+          </button>
+        </form>
+        <button class="focus-intake__back" type="button" data-focus-email-resend disabled>
+          Отправить ещё раз
         </button>
-      </form>
+        <span class="focus-intake__resend" data-focus-email-resend-status aria-live="polite"></span>
+        <button class="focus-intake__back" type="button" data-focus-email-change>
+          Изменить адрес
+        </button>
+        <button class="focus-intake__back" type="button" data-focus-email-back>
+          Выбрать другой способ
+        </button>
+      </div>
     </div>
 
     <p class="focus-intake__status" data-focus-identity-status role="status" aria-live="polite"></p>
@@ -120,10 +168,13 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
 
   <section class="focus-intake__card focus-intake__card--done" data-intake-stage="done" hidden>
     <FocusLabBadge label="Lab" detail="Фокус-группа" />
+    <p class="focus-intake__eyebrow">Шаг 3 из 3</p>
     <span class="focus-intake__check" aria-hidden="true">✓</span>
-    <h1 data-focus-done-title>Готово, можно начинать</h1>
-    <p data-focus-done-copy>Теперь можно выбирать события и делиться впечатлениями.</p>
-    <a class="ke-button ke-button--primary ke-button--large" href={homeHref}>Перейти к афише</a>
+    <h1 data-focus-done-title tabindex="-1">Вы в фокус-группе</h1>
+    <p data-focus-done-copy>
+      Пользуйтесь афишей, находите артефакты, сообщайте об ошибках и оставляйте честные оценки.
+    </p>
+    <a class="ke-button ke-button--primary ke-button--large" href={homeHref}>Открыть афишу</a>
     <button class="focus-intake__skip" type="button" data-focus-restart hidden>
       Пройти подключение заново на этом устройстве
     </button>
@@ -147,28 +198,66 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     type FocusIdentityChoice,
   } from '../lib/focus-group-prototype';
 
+  type IdentityView = 'choices' | 'signed_in' | 'email_address' | 'email_code';
+
   document.querySelectorAll<HTMLElement>('[data-focus-intake]').forEach((root) => {
+    void bootstrapFocusIntake(root);
+  });
+
+  async function bootstrapFocusIntake(root: HTMLElement) {
     const initialUrl = new URL(window.location.href);
+    const resetRequested = initialUrl.searchParams.get('focus_test_reset') === '1';
     const emailCallbackAttempted = initialUrl.searchParams.get('email_callback') === '1'
       || Boolean(initialUrl.searchParams.get('token_hash'));
     const intake = inspectFocusInviteUrl(window.location.href);
-    window.history.replaceState(window.history.state, '', intake.cleanHref);
-
     const pending = root.querySelector<HTMLElement>('[data-intake-pending]');
+    const pendingTitle = root.querySelector<HTMLElement>('[data-intake-pending-title]');
+    const pendingCopy = root.querySelector<HTMLElement>('[data-intake-pending-copy]');
     const error = root.querySelector<HTMLElement>('[data-intake-error]');
     const errorTitle = root.querySelector<HTMLElement>('[data-intake-error-title]');
     const errorMessage = root.querySelector<HTMLElement>('[data-intake-error-message]');
     const stages = Array.from(root.querySelectorAll<HTMLElement>('[data-intake-stage]'));
     const identityStatus = root.querySelector<HTMLElement>('[data-focus-identity-status]');
+    const identityHeading = root.querySelector<HTMLElement>('[data-focus-identity-heading]');
     const doneTitle = root.querySelector<HTMLElement>('[data-focus-done-title]');
     const doneCopy = root.querySelector<HTMLElement>('[data-focus-done-copy]');
     const restartButton = root.querySelector<HTMLButtonElement>('[data-focus-restart]');
     const homeHref = root.dataset.homeHref || '/';
+    const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
+    const auth = authRuntime?.dataset.authEnabled === 'true'
+      && authRuntime.dataset.supabaseUrl
+      && authRuntime.dataset.supabaseKey
+      ? getStaticSiteAuth({
+          supabaseUrl: authRuntime.dataset.supabaseUrl,
+          publishableKey: authRuntime.dataset.supabaseKey,
+          provider: authRuntime.dataset.yandexProvider || 'custom:yandex',
+        })
+      : null;
     let storage: Storage | null = null;
     try { storage = window.localStorage; } catch { storage = null; }
 
+    if (resetRequested) {
+      if (pendingTitle) pendingTitle.textContent = 'Начинаем проверку заново…';
+      if (pendingCopy) pendingCopy.textContent = 'Сбрасываем только вход в фокус-группу на этом устройстве.';
+      if (storage) clearFocusParticipationMarker(storage);
+      await auth?.resetForOnboardingTest();
+      const restartUrl = new URL(initialUrl);
+      restartUrl.searchParams.delete('focus_test_reset');
+      restartUrl.searchParams.delete('code');
+      restartUrl.searchParams.delete('email_callback');
+      restartUrl.searchParams.delete('token_hash');
+      restartUrl.searchParams.delete('type');
+      window.location.replace(restartUrl.toString());
+      return;
+    }
+
+    window.history.replaceState(window.history.state, '', intake.cleanHref);
+
     const showStage = (stage: 'install' | 'identity' | 'done') => {
       stages.forEach((node) => { node.hidden = node.dataset.intakeStage !== stage; });
+      window.setTimeout(() => {
+        root.querySelector<HTMLElement>(`[data-intake-stage="${stage}"] h1`)?.focus();
+      }, 0);
     };
 
     let participation = storage ? readFocusParticipationMarker(storage) : null;
@@ -189,55 +278,88 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       return;
     }
 
-    const intakeUrl = new URL(intake.cleanHref, window.location.origin);
-    const launchFromApp = intakeUrl.searchParams.get('launch') === 'pwa';
-    const confirmationRequested = intakeUrl.searchParams.get('confirm') === '1';
-    if (participation.status === 'active' && confirmationRequested) showStage('identity');
-    else if (participation.status === 'active') {
-      if (doneTitle) doneTitle.textContent = 'Вы уже участвуете';
-      if (doneCopy) doneCopy.textContent = 'Можно открыть афишу или пройти подключение заново на этом устройстве.';
-      if (restartButton) restartButton.hidden = false;
-      showStage('done');
-    }
-    else if (launchFromApp || participation.identityChoice !== 'undecided') showStage('identity');
-    else showStage('install');
-
-    root.querySelector<HTMLButtonElement>('[data-focus-install-skip]')?.addEventListener('click', () => {
-      showStage('identity');
-      root.querySelector<HTMLElement>('[data-intake-stage="identity"] h1')?.focus();
-    });
-
-    root.addEventListener('focuspwainstalled', () => {
-      if (identityStatus) identityStatus.textContent = '«Анонсы» установлены. Откройте приложение с главного экрана или продолжите здесь.';
-    });
-
     const emailOpen = root.querySelector<HTMLButtonElement>('[data-focus-email-open]');
     const emailPanel = root.querySelector<HTMLElement>('[data-focus-email-panel]');
+    const emailAddressStep = root.querySelector<HTMLElement>('[data-focus-email-address-step]');
+    const emailCodeStep = root.querySelector<HTMLElement>('[data-focus-email-code-step]');
+    const emailAddressTitle = root.querySelector<HTMLElement>('[data-focus-email-address-title]');
+    const emailAddressCopy = root.querySelector<HTMLElement>('[data-focus-email-address-copy]');
     const emailForm = root.querySelector<HTMLFormElement>('[data-focus-email-form]');
     const emailInput = root.querySelector<HTMLInputElement>('#focus-email');
     const emailSend = root.querySelector<HTMLButtonElement>('[data-focus-email-send]');
+    const resendButton = root.querySelector<HTMLButtonElement>('[data-focus-email-resend]');
     const resendStatus = root.querySelector<HTMLElement>('[data-focus-email-resend-status]');
+    const emailDestination = root.querySelector<HTMLElement>('[data-focus-email-destination]');
     const otpForm = root.querySelector<HTMLFormElement>('[data-focus-email-otp-form]');
     const otpInput = root.querySelector<HTMLInputElement>('#focus-email-otp');
     const otpSubmit = root.querySelector<HTMLButtonElement>('[data-focus-email-otp-submit]');
     const yandexButton = root.querySelector<HTMLButtonElement>('[data-focus-yandex]');
     const skipButton = root.querySelector<HTMLButtonElement>('[data-focus-skip]');
-    const signedInPanel = root.querySelector<HTMLElement>('[data-static-auth-signed-in]');
-    const signedOutChoices = root.querySelector<HTMLElement>('[data-static-auth-signed-out]');
+    const signedInPanel = root.querySelector<HTMLElement>('[data-focus-auth-signed-in]');
+    const signedOutChoices = root.querySelector<HTMLElement>('[data-focus-auth-signed-out]');
     const signedInName = root.querySelector<HTMLElement>('[data-static-auth-name]');
     const accountContinue = root.querySelector<HTMLButtonElement>('[data-focus-account-continue]');
     const accountLogout = root.querySelector<HTMLButtonElement>('[data-focus-account-logout]');
-    const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
-    const auth = authRuntime?.dataset.authEnabled === 'true'
-      && authRuntime.dataset.supabaseUrl
-      && authRuntime.dataset.supabaseKey
-      ? getStaticSiteAuth({
-          supabaseUrl: authRuntime.dataset.supabaseUrl,
-          publishableKey: authRuntime.dataset.supabaseKey,
-          provider: authRuntime.dataset.yandexProvider || 'custom:yandex',
-        })
-      : null;
-    if (!auth && signedOutChoices) signedOutChoices.hidden = false;
+    let identityView: IdentityView = 'choices';
+
+    const showIdentityView = (view: IdentityView) => {
+      identityView = view;
+      if (identityHeading) identityHeading.hidden = view !== 'choices' && view !== 'signed_in';
+      if (signedOutChoices) signedOutChoices.hidden = view !== 'choices';
+      if (signedInPanel) signedInPanel.hidden = view !== 'signed_in';
+      if (emailPanel) emailPanel.hidden = view !== 'email_address' && view !== 'email_code';
+      if (emailAddressStep) emailAddressStep.hidden = view !== 'email_address';
+      if (emailCodeStep) emailCodeStep.hidden = view !== 'email_code';
+    };
+
+    const showEmailAddress = (recovery = false) => {
+      showIdentityView('email_address');
+      if (emailAddressTitle) {
+        emailAddressTitle.textContent = recovery ? 'Получить новое письмо' : 'Куда отправить письмо?';
+      }
+      if (emailAddressCopy) {
+        emailAddressCopy.textContent = recovery
+          ? 'Предыдущая ссылка не сработала. Укажите адрес — пришлём новую ссылку и код.'
+          : 'Пришлём одну ссылку и шестизначный код. Вы сможете выбрать любой способ.';
+      }
+      if (emailSend) emailSend.textContent = recovery ? 'Получить новое письмо' : 'Получить код и ссылку';
+      window.setTimeout(() => emailInput?.focus(), 0);
+    };
+
+    const showEmailCode = () => {
+      showIdentityView('email_code');
+      if (emailDestination) emailDestination.textContent = pendingEmail;
+      if (otpInput) {
+        otpInput.disabled = false;
+        otpInput.value = '';
+      }
+      lastSubmittedOtp = '';
+      if (otpSubmit) otpSubmit.disabled = true;
+      window.setTimeout(() => otpInput?.focus(), 0);
+    };
+
+    const intakeUrl = new URL(intake.cleanHref, window.location.origin);
+    const launchFromApp = intakeUrl.searchParams.get('launch') === 'pwa';
+    const confirmationRequested = intakeUrl.searchParams.get('confirm') === '1';
+    if (participation.status === 'active' && confirmationRequested) {
+      showStage('identity');
+      showIdentityView('choices');
+    } else if (participation.status === 'active') {
+      if (doneTitle) doneTitle.textContent = 'Вы уже в фокус-группе';
+      if (doneCopy) doneCopy.textContent = 'Можно открыть афишу или пройти подключение заново на этом устройстве.';
+      if (restartButton) restartButton.hidden = false;
+      showStage('done');
+    } else if (launchFromApp || participation.identityChoice !== 'undecided' || emailCallbackAttempted) {
+      showStage('identity');
+      showIdentityView('choices');
+    } else {
+      showStage('install');
+    }
+
+    root.querySelector<HTMLButtonElement>('[data-focus-install-skip]')?.addEventListener('click', () => {
+      showStage('identity');
+      showIdentityView('choices');
+    });
 
     let selectedChoice: Exclude<FocusIdentityChoice, 'undecided'> = participation.identityChoice === 'undecided'
       ? 'skipped'
@@ -248,9 +370,35 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     let resendTimer = 0;
     let completed = participation.status === 'active';
 
-    restartButton?.addEventListener('click', () => {
+    const clearResendTimer = () => {
+      if (resendTimer) window.clearInterval(resendTimer);
+      resendTimer = 0;
+    };
+
+    const startResendTimer = () => {
+      clearResendTimer();
+      let remaining = 60;
+      const tick = () => {
+        if (resendStatus) {
+          resendStatus.textContent = remaining > 0
+            ? `Повторить можно через ${remaining} сек.`
+            : 'Можно отправить письмо ещё раз.';
+        }
+        if (resendButton) resendButton.disabled = remaining > 0;
+        if (remaining <= 0) {
+          clearResendTimer();
+          return;
+        }
+        remaining -= 1;
+      };
+      tick();
+      resendTimer = window.setInterval(tick, 1000);
+    };
+
+    restartButton?.addEventListener('click', async () => {
       if (!storage) return;
       clearFocusParticipationMarker(storage);
+      await auth?.resetForOnboardingTest();
       const restarted = storeFocusParticipationMarker(storage);
       if (!restarted) {
         if (doneCopy) doneCopy.textContent = 'Не получилось начать заново. Обновите страницу и повторите.';
@@ -261,57 +409,43 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       selectedChoice = 'skipped';
       if (restartButton) restartButton.hidden = true;
       showStage('install');
-      root.querySelector<HTMLElement>('[data-intake-stage="install"] h1')?.focus();
     });
 
     const finish = (choice: Exclude<FocusIdentityChoice, 'undecided'>, verified: boolean) => {
       if (!storage) return;
-      if (completed) {
-        if (verified) {
-          if (doneTitle) doneTitle.textContent = 'Готово, участие подтверждено';
-          if (doneCopy) doneCopy.textContent = 'Теперь можно участвовать в розыгрыше.';
-          showStage('done');
-          window.setTimeout(() => window.location.replace(homeHref), 1400);
+      if (!completed) {
+        const activated = activateFocusParticipation(storage, choice);
+        if (!activated) {
+          if (identityStatus) identityStatus.textContent = 'Не получилось продолжить. Откройте приглашение ещё раз.';
+          return;
         }
-        return;
+        completed = true;
       }
-      const activated = activateFocusParticipation(storage, choice);
-      if (!activated) {
-        if (identityStatus) identityStatus.textContent = 'Не получилось продолжить. Откройте приглашение ещё раз.';
-        return;
-      }
-      completed = true;
-      if (doneTitle) doneTitle.textContent = verified ? 'Готово, участие подтверждено' : 'Готово, можно начинать';
+      if (doneTitle) doneTitle.textContent = verified ? 'Участие подтверждено' : 'Вы в фокус-группе';
       if (doneCopy) {
         doneCopy.textContent = verified
-          ? 'Теперь можно выбирать события и участвовать в розыгрыше.'
-          : 'Подтвердить участие для розыгрыша можно позже.';
+          ? 'Пользуйтесь афишей, находите артефакты, сообщайте об ошибках и оставляйте честные оценки.'
+          : 'Афиша уже доступна. Чтобы участвовать в розыгрыше, подтвердите участие позже.';
       }
       showStage('done');
-      window.setTimeout(() => window.location.replace(homeHref), 1400);
     };
 
-    emailOpen?.addEventListener('click', () => {
-      if (emailPanel) emailPanel.hidden = false;
-      if (otpForm) otpForm.hidden = false;
-      emailInput?.focus();
-    });
+    const setSending = (sending: boolean) => {
+      if (!emailSend) return;
+      emailSend.disabled = sending;
+      emailSend.toggleAttribute('aria-busy', sending);
+      if (sending) emailSend.textContent = 'Отправляем…';
+    };
 
-    emailForm?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      if (!emailForm.reportValidity()) return;
+    const sendEmail = async (email: string) => {
       if (!auth) {
-        if (identityStatus) identityStatus.textContent = 'Сейчас письмо отправить не получилось. Можно продолжить без подтверждения.';
+        if (identityStatus) identityStatus.textContent = 'Сейчас письмо отправить не получилось. Выберите другой способ.';
         return;
       }
-      const email = emailInput?.value.trim() || '';
+      pendingEmail = email;
       selectedChoice = 'email_intent';
       if (storage) updateFocusParticipationIdentityChoice(storage, selectedChoice);
-      if (emailSend) {
-        emailSend.disabled = true;
-        emailSend.setAttribute('aria-busy', 'true');
-        emailSend.textContent = 'Отправляем…';
-      }
+      setSending(true);
       if (identityStatus) identityStatus.textContent = 'Отправляем письмо…';
       let sent = false;
       try {
@@ -321,51 +455,48 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       } catch {
         sent = false;
       }
-      emailSend?.removeAttribute('aria-busy');
-      pendingEmail = email;
-      lastSubmittedOtp = '';
-      if (otpInput) otpInput.value = '';
-      if (otpSubmit) otpSubmit.disabled = true;
-      if (otpForm) otpForm.hidden = false;
-      otpInput?.focus();
+      setSending(false);
+      showEmailCode();
       if (identityStatus) {
         identityStatus.textContent = sent
           ? 'Письмо отправлено. Введите код или нажмите кнопку в письме.'
-          : 'Проверьте почту: письмо могло уже прийти. Если его нет, отправьте ещё раз через минуту.';
+          : 'Письмо могло уже прийти. Проверьте почту; если письма нет, отправьте ещё раз через минуту.';
       }
-      if (emailSend) emailSend.textContent = 'Отправить ещё раз';
-      let remaining = 60;
-      const tick = () => {
-        if (resendStatus) resendStatus.textContent = remaining > 0 ? `Повторить через ${remaining} сек.` : 'Можно отправить ещё раз.';
-        if (emailSend) emailSend.disabled = remaining > 0;
-        if (remaining <= 0) {
-          window.clearInterval(resendTimer);
-          resendTimer = 0;
-          return;
-        }
-        remaining -= 1;
-      };
-      if (resendTimer) window.clearInterval(resendTimer);
-      tick();
-      resendTimer = window.setInterval(tick, 1000);
+      startResendTimer();
+    };
+
+    emailOpen?.addEventListener('click', () => showEmailAddress(false));
+
+    root.querySelectorAll<HTMLButtonElement>('[data-focus-email-back]').forEach((button) => {
+      button.addEventListener('click', () => {
+        clearResendTimer();
+        if (identityStatus) identityStatus.textContent = '';
+        showIdentityView('choices');
+      });
     });
 
-    emailInput?.addEventListener('input', () => {
-      if (!pendingEmail || emailInput.value.trim() === pendingEmail) return;
-      pendingEmail = '';
-      if (resendTimer) window.clearInterval(resendTimer);
-      if (emailSend) {
-        emailSend.disabled = false;
-        emailSend.textContent = 'Получить код и ссылку';
-      }
+    root.querySelector<HTMLButtonElement>('[data-focus-email-change]')?.addEventListener('click', () => {
+      clearResendTimer();
+      if (identityStatus) identityStatus.textContent = '';
+      showEmailAddress(false);
+    });
+
+    emailForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!emailForm.reportValidity()) return;
+      void sendEmail(emailInput?.value.trim() || '');
+    });
+
+    resendButton?.addEventListener('click', () => {
+      if (!pendingEmail || resendButton.disabled) return;
+      void sendEmail(pendingEmail);
     });
 
     const verifyOtp = async () => {
       if (!auth || !otpInput) return;
-      const email = pendingEmail || emailInput?.value.trim() || '';
-      if (!email || !emailInput?.checkValidity()) {
+      if (!pendingEmail) {
         if (identityStatus) identityStatus.textContent = 'Сначала укажите адрес, на который пришёл код.';
-        emailInput?.focus();
+        showEmailAddress(false);
         return;
       }
       const token = normalizeEmailOtp(otpInput.value);
@@ -376,7 +507,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       otpInput.disabled = true;
       if (otpSubmit) otpSubmit.disabled = true;
       if (identityStatus) identityStatus.textContent = 'Проверяем код…';
-      const verified = await auth.verifyEmailOtp(email, token);
+      const verified = await auth.verifyEmailOtp(pendingEmail, token);
       otpVerifying = false;
       if (!verified) {
         otpInput.disabled = false;
@@ -399,14 +530,20 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
 
     yandexButton?.addEventListener('click', async () => {
       if (!auth) {
-        if (identityStatus) identityStatus.textContent = 'Сейчас вход через Яндекс недоступен. Можно продолжить без подтверждения.';
+        if (identityStatus) identityStatus.textContent = 'Сейчас вход через Яндекс недоступен. Выберите почту или продолжите без подтверждения.';
         return;
       }
       selectedChoice = 'yandex_intent';
       if (storage) updateFocusParticipationIdentityChoice(storage, selectedChoice);
+      yandexButton.disabled = true;
+      yandexButton.setAttribute('aria-busy', 'true');
       if (identityStatus) identityStatus.textContent = 'Открываем Яндекс…';
       const started = await auth.linkYandexIdentity();
-      if (!started && identityStatus) identityStatus.textContent = 'Не получилось открыть Яндекс. Попробуйте ещё раз.';
+      if (!started) {
+        yandexButton.disabled = false;
+        yandexButton.removeAttribute('aria-busy');
+        if (identityStatus) identityStatus.textContent = 'Не получилось открыть Яндекс. Попробуйте ещё раз.';
+      }
     });
 
     skipButton?.addEventListener('click', () => finish('skipped', false));
@@ -421,67 +558,66 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       const signedOut = await auth.signOut();
       accountLogout.disabled = false;
       if (!signedOut) return;
-      if (signedInPanel) signedInPanel.hidden = true;
-      if (signedOutChoices) signedOutChoices.hidden = false;
-      if (identityStatus) identityStatus.textContent = 'Вы вышли. Теперь выберите способ подтверждения или пропустите этот шаг.';
+      if (identityStatus) identityStatus.textContent = 'Вы вышли. Теперь выберите способ подтверждения.';
+      showIdentityView('choices');
     });
 
-    if (auth) {
-      auth.subscribe((snapshot) => {
-        if (snapshot.status === 'signed_in') {
-          const intendedChoice = selectedChoice !== 'skipped'
-            ? selectedChoice
-            : participation.identityChoice;
-          if (
-            participation.status === 'joining'
-            && (intendedChoice === 'email_intent' || intendedChoice === 'yandex_intent')
-          ) {
-            finish(intendedChoice, true);
-            return;
-          }
-          if (signedInName) signedInName.textContent = staticAuthDisplayName(snapshot.user);
-          if (signedInPanel) signedInPanel.hidden = false;
-          if (signedOutChoices) signedOutChoices.hidden = true;
-          if (identityStatus) identityStatus.textContent = 'Аккаунт уже подключён. Выберите, как продолжить.';
-        } else if (snapshot.status === 'signed_out') {
-          if (signedInPanel) signedInPanel.hidden = true;
-          if (signedOutChoices) signedOutChoices.hidden = false;
-        } else if (snapshot.status === 'error' && identityStatus) {
-          if (snapshot.callbackAttempted && emailCallbackAttempted) {
-            if (emailPanel) emailPanel.hidden = false;
-            if (otpForm) otpForm.hidden = false;
-            identityStatus.textContent = 'Ссылка не подтвердила вход. Укажите адрес и введите шестизначный код из этого же письма.';
-            window.setTimeout(() => (emailInput?.value ? otpInput?.focus() : emailInput?.focus()), 0);
-          } else {
-            identityStatus.textContent = snapshot.message;
-          }
-          if (otpInput) otpInput.disabled = false;
-        }
-      });
-      auth.initialize().catch(() => {
-        if (identityStatus) identityStatus.textContent = 'Не получилось проверить вход. Можно продолжить без подтверждения.';
-      });
+    if (!auth) {
+      showIdentityView('choices');
+      return;
     }
-  });
+
+    auth.subscribe((snapshot) => {
+      if (snapshot.status === 'signed_in') {
+        const intendedChoice = selectedChoice !== 'skipped'
+          ? selectedChoice
+          : participation.identityChoice;
+        if (
+          participation.status === 'joining'
+          && (intendedChoice === 'email_intent' || intendedChoice === 'yandex_intent')
+        ) {
+          finish(intendedChoice, true);
+          return;
+        }
+        if (signedInName) signedInName.textContent = staticAuthDisplayName(snapshot.user);
+        showIdentityView('signed_in');
+        if (identityStatus) identityStatus.textContent = '';
+      } else if (snapshot.status === 'signed_out') {
+        if (identityView === 'signed_in') showIdentityView('choices');
+      } else if (snapshot.status === 'error') {
+        if (snapshot.callbackAttempted && emailCallbackAttempted) {
+          showEmailAddress(true);
+          if (identityStatus) identityStatus.textContent = 'Ссылка не сработала. Получите новое письмо или выберите другой способ.';
+        } else if (identityStatus) {
+          identityStatus.textContent = snapshot.message;
+        }
+        if (otpInput) otpInput.disabled = false;
+      }
+    });
+    auth.initialize().catch(() => {
+      if (identityStatus) identityStatus.textContent = 'Не получилось проверить вход. Выберите способ ещё раз.';
+      showIdentityView('choices');
+    });
+  }
 </script>
 
 <style>
   .focus-intake {
     width: min(560px, calc(100% - 1rem));
     margin: 0 auto;
-    padding: clamp(.75rem, 3vw, 1.5rem) 0 3rem;
+    padding: clamp(.75rem, 3vw, 1.5rem) 0 max(3rem, env(safe-area-inset-bottom));
     color: var(--ke-color-copy, #44362d);
     font-family: var(--ke-font-sans, system-ui, sans-serif);
   }
   .focus-intake__brand { display: flex; justify-content: center; padding: .2rem 0 .8rem; }
   .focus-intake__brand img {
-    width: 6.5rem;
-    height: 6.5rem;
-    min-width: 6.5rem;
-    min-height: 6.5rem;
-    max-width: 6.5rem;
-    max-height: 6.5rem;
-    flex: 0 0 6.5rem;
+    width: 5.75rem;
+    height: 5.75rem;
+    min-width: 5.75rem;
+    min-height: 5.75rem;
+    max-width: 5.75rem;
+    max-height: 5.75rem;
+    flex: 0 0 5.75rem;
     border-radius: 24%;
     object-fit: contain;
     box-shadow: 0 12px 30px rgb(72 45 25 / 14%);
@@ -495,32 +631,163 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     background: #fffdf8;
     box-shadow: 0 18px 52px rgb(72 45 25 / 12%);
   }
-  .focus-intake__card[hidden] { display: none; }
-  .focus-intake__card h1 { margin: 0; color: #221a14; font-size: clamp(1.8rem, 7vw, 2.8rem); line-height: 1.02; letter-spacing: -.045em; }
-  .focus-intake__card > p { margin: 0; color: #6d6259; font-size: 1rem; line-height: 1.5; }
+  .focus-intake__card[hidden],
+  .focus-intake__heading[hidden],
+  .focus-intake__email[hidden],
+  .focus-intake__email-step[hidden],
+  .focus-intake__signed[hidden],
+  .focus-intake__choices[hidden] { display: none; }
+  .focus-intake__card h1 {
+    margin: 0;
+    color: #221a14;
+    font-size: clamp(1.75rem, 7vw, 2.7rem);
+    line-height: 1.04;
+    letter-spacing: -.04em;
+  }
+  .focus-intake__card h1:focus { outline: none; }
+  .focus-intake__card h2 {
+    margin: 0;
+    color: #221a14;
+    font-size: clamp(1.45rem, 6vw, 2rem);
+    line-height: 1.08;
+    letter-spacing: -.025em;
+  }
+  .focus-intake__card > p,
+  .focus-intake__heading > p,
+  .focus-intake__subheading > p {
+    margin: 0;
+    color: #6d6259;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  .focus-intake__heading,
+  .focus-intake__subheading,
+  .focus-intake__email,
+  .focus-intake__email-step,
+  .focus-intake__signed { display: grid; gap: .75rem; }
   :global(.focus-intake .ke-button) { max-width: 100%; box-sizing: border-box; }
-  .focus-intake__eyebrow { color: #98401f !important; font-size: .72rem !important; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+  .focus-intake__eyebrow {
+    margin: 0;
+    color: #98401f !important;
+    font-size: .75rem !important;
+    font-weight: 900;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .focus-intake__prize-note,
+  .focus-intake__next {
+    display: grid;
+    gap: .35rem;
+    border-radius: 1rem;
+    padding: .9rem 1rem;
+  }
+  .focus-intake__prize-note {
+    border: 1px solid #ecd29a;
+    background: #fff4d6;
+    color: #5d3c12;
+  }
+  .focus-intake__next { background: #f6efe6; color: #44362d; }
+  .focus-intake__prize-note strong,
+  .focus-intake__next strong { color: #221a14; font-size: 1rem; line-height: 1.3; }
+  .focus-intake__prize-note span,
+  .focus-intake__next span { font-size: .88rem; line-height: 1.45; }
   .focus-intake__choices { display: grid; gap: .7rem; }
   .focus-intake__choices .ke-button { width: 100%; min-height: 50px; }
-  .focus-intake__skip { min-height: 44px; border: 0; background: transparent; color: #6d6259; font: 800 .9rem/1.2 var(--ke-font-sans); text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
-  .focus-intake__email, .focus-intake__email form, .focus-intake__signed { display: grid; gap: .75rem; }
-  .focus-intake__email[hidden], .focus-intake__email form[hidden], .focus-intake__signed[hidden] { display: none; }
-  .focus-intake__email label { display: grid; gap: .35rem; font-size: .84rem; font-weight: 850; }
-  .focus-intake__email input { width: 100%; min-height: 52px; box-sizing: border-box; border: 1px solid #cdbfad; border-radius: .9rem; padding: .75rem .85rem; background: #fff; color: #221a14; font: 1rem/1.2 var(--ke-font-sans); }
-  .focus-intake__email input:focus-visible, .focus-intake__skip:focus-visible { outline: 3px solid rgb(15 118 110 / 35%); outline-offset: 2px; }
+  .focus-intake__skip,
+  .focus-intake__back {
+    min-height: 44px;
+    border: 0;
+    padding: .55rem;
+    background: transparent;
+    color: #6d6259;
+    font: 800 .9rem/1.2 var(--ke-font-sans);
+    text-decoration: underline;
+    text-underline-offset: .2em;
+    cursor: pointer;
+  }
+  .focus-intake__back { color: #98401f; }
+  .focus-intake__back:disabled { opacity: .48; cursor: default; }
+  .focus-intake__helper {
+    margin: -.25rem 0 0;
+    color: #6d6259;
+    font-size: .78rem;
+    line-height: 1.4;
+    text-align: center;
+  }
+  .focus-intake__email form { display: grid; gap: .75rem; }
+  .focus-intake__email label { display: grid; gap: .4rem; font-size: .88rem; font-weight: 850; }
+  .focus-intake__email input {
+    width: 100%;
+    min-height: 54px;
+    box-sizing: border-box;
+    border: 1px solid #cdbfad;
+    border-radius: .9rem;
+    padding: .75rem .9rem;
+    background: #fff;
+    color: #221a14;
+    font: 1rem/1.2 var(--ke-font-sans);
+  }
+  .focus-intake__email input:focus-visible,
+  .focus-intake__skip:focus-visible,
+  .focus-intake__back:focus-visible {
+    outline: 3px solid rgb(15 118 110 / 35%);
+    outline-offset: 2px;
+  }
   .focus-intake__email form > .ke-button { width: 100%; }
-  .focus-intake__email form > span, .focus-intake__email form > p { margin: 0; color: #6d6259; font-size: .78rem; line-height: 1.4; }
-  .focus-intake__signed { border-radius: 1rem; padding: .9rem 1rem; background: #e6f4ef; color: #0f5d57; }
-  .focus-intake__status { min-height: 1.5em; color: #98401f !important; font-size: .85rem !important; font-weight: 750; }
-  .focus-intake__card--done { justify-items: center; text-align: center; }
-  .focus-intake__check { width: 3.5rem; height: 3.5rem; display: grid; place-items: center; border-radius: 50%; background: #d7f0ec; color: #0f6c3d; font-size: 2rem; font-weight: 900; }
-  .focus-intake__card--done .ke-button { width: 100%; }
+  .focus-intake__email form > p {
+    margin: 0;
+    color: #6d6259;
+    font-size: .78rem;
+    line-height: 1.4;
+    text-align: center;
+  }
+  .focus-intake__resend {
+    min-height: 1.2em;
+    color: #6d6259;
+    font-size: .78rem;
+    line-height: 1.3;
+    text-align: center;
+  }
+  .focus-intake__signed {
+    border-radius: 1rem;
+    padding: .9rem 1rem;
+    background: #e6f4ef;
+    color: #0f5d57;
+  }
   .focus-intake__signed .ke-button { width: 100%; }
-  .focus-intake__spinner { width: 2rem; height: 2rem; border: 3px solid #e1d3c2; border-top-color: #98401f; border-radius: 50%; animation: focus-spin .8s linear infinite; }
+  .focus-intake__status {
+    min-height: 1.5em;
+    color: #98401f !important;
+    font-size: .85rem !important;
+    font-weight: 750;
+  }
+  .focus-intake__card--done { justify-items: center; text-align: center; }
+  .focus-intake__check {
+    width: 3.5rem;
+    height: 3.5rem;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #d7f0ec;
+    color: #0f6c3d;
+    font-size: 2rem;
+    font-weight: 900;
+  }
+  .focus-intake__card--done .ke-button { width: 100%; }
+  .focus-intake__card--pending { justify-items: center; text-align: center; }
+  .focus-intake__spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid #e1d3c2;
+    border-top-color: #98401f;
+    border-radius: 50%;
+    animation: focus-spin .8s linear infinite;
+  }
   @keyframes focus-spin { to { transform: rotate(360deg); } }
   @media (max-width: 420px) {
     .focus-intake { width: min(100% - .75rem, 560px); }
-    .focus-intake__card { border-radius: 1.2rem; }
+    .focus-intake__brand { padding-bottom: .55rem; }
+    .focus-intake__card { gap: .85rem; border-radius: 1.2rem; }
   }
   @media (prefers-reduced-motion: reduce) { .focus-intake__spinner { animation: none; } }
 </style>
