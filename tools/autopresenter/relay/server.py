@@ -25,8 +25,16 @@ ALLOWED_STATUSES = frozenset(
     {"idle", "running", "stopping", "completed", "error"}
 )
 MAX_LONG_POLL_MS = 25_000
-CONTROL_FILE = Path(__file__).with_name("control") / "index.html"
-DEMONSTRATOR_FILE = Path(__file__).with_name("control") / "demonstrator.html"
+CONTROL_DIR = Path(__file__).with_name("control")
+CONTROL_FILE = CONTROL_DIR / "index.html"
+CONTROL_MANIFEST_FILE = CONTROL_DIR / "manifest.webmanifest"
+CONTROL_SERVICE_WORKER_FILE = CONTROL_DIR / "service-worker.js"
+CONTROL_ICON_FILES = {
+    "icon-192.png": CONTROL_DIR / "icons" / "icon-192.png",
+    "icon-512.png": CONTROL_DIR / "icons" / "icon-512.png",
+    "icon-maskable-512.png": CONTROL_DIR / "icons" / "icon-maskable-512.png",
+}
+DEMONSTRATOR_FILE = CONTROL_DIR / "demonstrator.html"
 FIRST_TEST_DIR = Path(__file__).parents[1] / "prototype" / "first-test"
 AGENT_DIR = Path(__file__).parents[1] / "agent"
 
@@ -266,7 +274,47 @@ def security_for(request: web.Request) -> SecurityConfig:
 
 
 async def control_page(_: web.Request) -> web.FileResponse:
-    return web.FileResponse(CONTROL_FILE)
+    return web.FileResponse(
+        CONTROL_FILE,
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+async def control_manifest(_: web.Request) -> web.FileResponse:
+    return web.FileResponse(
+        CONTROL_MANIFEST_FILE,
+        headers={
+            "Cache-Control": "no-cache",
+            "Content-Type": "application/manifest+json",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+async def control_service_worker(_: web.Request) -> web.FileResponse:
+    return web.FileResponse(
+        CONTROL_SERVICE_WORKER_FILE,
+        headers={
+            "Cache-Control": "no-cache",
+            "Content-Type": "text/javascript; charset=utf-8",
+            "Service-Worker-Allowed": "/control/",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+async def control_icon(request: web.Request) -> web.FileResponse:
+    icon = CONTROL_ICON_FILES.get(request.match_info["name"])
+    if icon is None:
+        raise web.HTTPNotFound()
+    return web.FileResponse(
+        icon,
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "Content-Type": "image/png",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 async def demonstrator_page(_: web.Request) -> web.FileResponse:
@@ -398,7 +446,7 @@ async def cors_middleware(request: web.Request, handler: Any) -> web.StreamRespo
             raise
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response.headers["Cache-Control"] = "no-store"
+    response.headers.setdefault("Cache-Control", "no-store")
     return response
 
 
@@ -524,6 +572,9 @@ def create_app(
         [
             web.get("/control", redirect_to_control),
             web.get("/control/", control_page),
+            web.get("/control/manifest.webmanifest", control_manifest),
+            web.get("/control/service-worker.js", control_service_worker),
+            web.get("/control/icons/{name}", control_icon),
             web.get("/demonstrator", redirect_to_demonstrator),
             web.get("/demonstrator/", demonstrator_page),
             web.get("/healthz", health),

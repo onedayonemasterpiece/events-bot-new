@@ -1,0 +1,35 @@
+{
+  "id": "/control/",
+  "name": "Пульт презентации",
+  "short_name": "Пульт",
+  "description": "Защищённый телефонный пульт для управления презентацией.",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "/control/",
+  "scope": "/control/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#090f1f",
+  "theme_color": "#090f1f",
+  "icons": [
+    {
+      "src": "/control/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/control/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/control/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "prefer_related_applications": false
+}

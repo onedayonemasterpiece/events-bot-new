@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Пульт презентации</title>
+  <rect width="512" height="512" rx="112" fill="#090f1f"/>
+  <circle cx="104" cy="92" r="92" fill="#5060d8" opacity=".34"/>
+  <circle cx="425" cy="432" r="118" fill="#18b995" opacity=".28"/>
+  <rect x="139" y="85" width="234" height="342" rx="70" fill="#ecf0ff"/>
+  <rect x="176" y="123" width="160" height="46" rx="23" fill="#202b50"/>
+  <path d="M225 205v102l88-51z" fill="#28cda6"/>
+  <circle cx="256" cy="367" r="25" fill="#6574e8"/>
+</svg>

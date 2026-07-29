@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import io
 import json
+import struct
 import zipfile
 
 from aiohttp.test_utils import TestClient, TestServer
@@ -34,9 +35,12 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/control/")
         text = await response.text()
         self.assertEqual(response.status, 200)
+        self.assertIn("<title>Пульт презентации</title>", text)
+        self.assertIn('rel="manifest" href="/control/manifest.webmanifest"', text)
         self.assertIn("Запустить «Завтра»", text)
         self.assertIn(">Стоп<", text)
         self.assertIn(">Сброс<", text)
+        self.assertNotIn("Выключить", text)
 
         response, payload = await self.json("GET", "/api/state")
         self.assertEqual(response.status, 200)
@@ -226,6 +230,112 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             "first-test-" + hashlib.sha256(b"agent-secret").hexdigest()[:12],
         )
         self.assertEqual(config["release_kind"], "FIRST_TEST_NOT_M3")
+
+    async def test_control_pwa_assets_are_public_but_api_stays_no_store(self):
+        response = await self.client.get("/control/manifest.webmanifest")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.content_type, "application/manifest+json")
+        self.assertEqual(response.headers["Cache-Control"], "no-cache")
+        manifest = await response.json()
+        self.assertEqual(manifest["name"], "Пульт презентации")
+        self.assertEqual(manifest["short_name"], "Пульт")
+        self.assertNotIn(" ", manifest["short_name"])
+        self.assertEqual(manifest["start_url"], "/control/")
+        self.assertEqual(manifest["scope"], "/control/")
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertEqual(manifest["theme_color"], "#090f1f")
+        self.assertEqual(manifest["background_color"], "#090f1f")
+        self.assertNotIn("token", json.dumps(manifest).lower())
+        self.assertEqual(
+            {(icon["sizes"], icon["purpose"]) for icon in manifest["icons"]},
+            {
+                ("192x192", "any"),
+                ("512x512", "any"),
+                ("512x512", "maskable"),
+            },
+        )
+
+        response = await self.client.get("/control/service-worker.js")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.content_type, "text/javascript")
+        self.assertEqual(response.headers["Cache-Control"], "no-cache")
+        self.assertEqual(response.headers["Service-Worker-Allowed"], "/control/")
+        service_worker = await response.text()
+        self.assertIn("url.pathname.startsWith('/api/')", service_worker)
+        self.assertIn("request.method !== 'GET'", service_worker)
+        self.assertIn("CONTROL_SHELL_PATHS.has(url.pathname)", service_worker)
+        self.assertNotIn("cache.put(", service_worker)
+
+        for name, expected_size in (
+            ("icon-192.png", 192),
+            ("icon-512.png", 512),
+            ("icon-maskable-512.png", 512),
+        ):
+            response = await self.client.get(f"/control/icons/{name}")
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.content_type, "image/png")
+            self.assertEqual(
+                response.headers["Cache-Control"],
+                "public, max-age=31536000, immutable",
+            )
+            icon = await response.read()
+            self.assertEqual(icon[:8], b"\x89PNG\r\n\x1a\n")
+            width, height = struct.unpack(">II", icon[16:24])
+            self.assertEqual((width, height), (expected_size, expected_size))
+
+        response = await self.client.get("/control/icons/not-an-icon.png")
+        self.assertEqual(response.status, 404)
+
+        response = await self.client.get(
+            "/api/state",
+            headers={"Authorization": "Bearer control-secret"},
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+
+    async def test_control_pwa_keeps_fragment_session_auth_contract(self):
+        response = await self.client.get("/control/")
+        control = await response.text()
+        self.assertIn("new URLSearchParams(location.hash.slice(1))", control)
+        self.assertIn("fragment.get('token')", control)
+        self.assertIn(
+            "sessionStorage.setItem('autopresenter-control-token', fragmentToken)",
+            control,
+        )
+        self.assertIn("history.replaceState", control)
+        self.assertIn(
+            "sessionStorage.getItem('autopresenter-control-token')",
+            control,
+        )
+        self.assertIn("Authorization: `Bearer ${token}`", control)
+        self.assertNotIn("localStorage", control)
+        self.assertIn(
+            "navigator.serviceWorker.register('/control/service-worker.js'",
+            control,
+        )
+        self.assertIn("scope: '/control/'", control)
+
+    def test_pwa_assets_are_in_the_relay_container_package(self):
+        dockerfile = (RELAY_DIR / "Dockerfile.internet-test").read_text(
+            encoding="utf-8"
+        )
+        dockerignore = (RELAY_DIR / ".dockerignore.internet-test").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "COPY tools/autopresenter/relay /app/tools/autopresenter/relay",
+            dockerfile,
+        )
+        self.assertIn("!tools/autopresenter/relay/**", dockerignore)
+        for relative_path in (
+            "control/index.html",
+            "control/manifest.webmanifest",
+            "control/service-worker.js",
+            "control/icons/icon-192.png",
+            "control/icons/icon-512.png",
+            "control/icons/icon-maskable-512.png",
+        ):
+            self.assertTrue((RELAY_DIR / relative_path).is_file(), relative_path)
 
 
 if __name__ == "__main__":
