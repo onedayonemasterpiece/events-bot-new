@@ -1,0 +1,83 @@
+mode: serial_integrator_with_read_only_parallel_discovery
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/feature/autopresenter-design
+base_sha: d499a97924f8868ea21597c8e4db6552b23570ac
+base_branch: feature/autopresenter-design
+integration_branch: integration/autopresenter-intro-lecture
+global_constraints:
+  - Preserve the four already accepted scenarios without redesign.
+  - Keep one persistent Chromium context/page; only Shutdown may close it.
+  - Add explicit scenes only; no scenario DSL/editor or new infrastructure.
+  - Use the existing Fly test app and existing Yandex CDN resources.
+  - Store reusable media in the existing Yandex Object Storage/CDN path.
+  - Do not use paid image generation.
+  - Keep M0 compatibility and the public-demo NO-GO boundary unchanged.
+verification_owner: INT
+stop_conditions:
+  - Any change would require production infrastructure or a new Fly app.
+  - Required Telegram media cannot be read with the approved E2E session.
+  - Existing accepted scene contracts regress.
+requirements:
+  - id: R01
+    text: Add a looping presentation-quality intro with human-like two-line typing, short strong phrases, visible Znanie logo, and background music.
+  - id: R02
+    text: Add the lecture sequence from scenario-30072026-base.md with all referenced examples and a visible Znanie logo.
+  - id: R03
+    text: Add intro and lecture choices to the existing PWA remote without replacing accepted controls.
+  - id: R04
+    text: Run every new scene inside the same persistent presentation window/context; Shutdown remains the only terminal action.
+  - id: R05
+    text: Update canonical documentation, CHANGELOG, contracts, automated tests, and Windows package.
+  - id: R06
+    text: Add a desktop FHD Weekend live-page scene, fullscreen and without adjacent explanatory copy, with natural downward scrolling.
+lanes:
+  - id: DISC-INTRO
+    role: planner
+    support_requirement_ids: [R01]
+    target: Inspect source assets and existing hero-talk patterns; propose concise two-line copy and timing.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-intro-lecture
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: Read-only message with asset findings, copy, timing, and risks.
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: DISC-LECTURE
+    role: planner
+    support_requirement_ids: [R02]
+    target: Inspect/download the referenced Telegram lecture examples with the approved E2E session and map them into a coherent deck.
+    depends_on: []
+    execution_mode: parallel
+    branch: none-read-only
+    worktree: /home/dev/projects/events-bot-new-autopresenter-intro-lecture
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: Read-only message with source message content/media inventory, ordering, and presentation notes.
+    verification_scope: inspection_only
+    effort: medium
+    status: planned
+  - id: INT
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
+    target: Implement, integrate, test, visually verify, deploy, push, package, and hand off all scenes.
+    depends_on: [DISC-INTRO, DISC-LECTURE]
+    execution_mode: serial_after_dependency
+    branch: integration/autopresenter-intro-lecture
+    worktree: /home/dev/projects/events-bot-new-autopresenter-intro-lecture
+    writable_files:
+      - site/src/pages/internal/presenter-stage/index.astro
+      - tools/autopresenter/**
+      - docs/features/static-site-pages/auto-present/**
+      - docs/reports/incidents/INC-2026-07-29-autopresenter-scenario-window-recreation.md
+      - CHANGELOG.md
+      - .codex/integration/**
+    forbidden_files:
+      - tools/autopresenter/m0/**
+      - unrelated production application files
+    expected_output: Clean committed integration branch, public feature branch, deployed existing Fly test app, fresh Windows ZIP, Telegram thread handoff, and integration report.
+    verification_scope: full_local
+    effort: high
+    status: planned
