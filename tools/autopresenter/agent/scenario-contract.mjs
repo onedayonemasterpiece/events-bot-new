@@ -1,4 +1,9 @@
 import { OUTRO_SCENE_ID } from "./outro-contract.mjs";
+import {
+  INTRO_SCENE_ID,
+  LECTURE_SCENE_ID,
+  WEEKEND_DESKTOP_SCENE_ID,
+} from "./presentation-contract.mjs";
 
 export const INTERACTION_VISUAL_CONTRACTS = Object.freeze({
   mobile: Object.freeze({
@@ -39,18 +44,42 @@ export const OUTRO_QR_CONTRACT = Object.freeze({
   completion: "fullscreen-survey-qr-loaded-and-visible",
 });
 
+export const INTRO_LOOP_CONTRACT = Object.freeze({
+  id: INTRO_SCENE_ID,
+  surface: "stage",
+  completion: "fifty-minute-logical-randomized-two-line-typing-loop",
+});
+
+export const LECTURE_DECK_CONTRACT = Object.freeze({
+  id: LECTURE_SCENE_ID,
+  surface: "stage",
+  completion: "seven-source-backed-lecture-frames-presented-in-order",
+});
+
+export const WEEKEND_DESKTOP_CONTRACT = Object.freeze({
+  id: WEEKEND_DESKTOP_SCENE_ID,
+  surface: "desktop",
+  completion: "live-weekend-page-loaded-at-fhd-and-naturally-scrolled-down",
+});
+
 export const DEFAULT_SCENARIO_ID = TOMORROW_MOBILE_CONTRACT.id;
 export const SCENARIO_IDS = Object.freeze([
+  INTRO_LOOP_CONTRACT.id,
+  LECTURE_DECK_CONTRACT.id,
   TOMORROW_MOBILE_CONTRACT.id,
   TOMORROW_RAIL_LIKE_CONTRACT.id,
   WEEKEND_AMBER_ARTIFACT_CONTRACT.id,
+  WEEKEND_DESKTOP_CONTRACT.id,
   OUTRO_QR_CONTRACT.id,
 ]);
 export const LONG_SCENE_TIMEOUT_CEILING_MS = 60 * 60 * 1_000;
 export const SCENARIO_TIMEOUT_POLICY = Object.freeze({
+  [INTRO_LOOP_CONTRACT.id]: LONG_SCENE_TIMEOUT_CEILING_MS,
+  [LECTURE_DECK_CONTRACT.id]: 180_000,
   [TOMORROW_MOBILE_CONTRACT.id]: 120_000,
   [TOMORROW_RAIL_LIKE_CONTRACT.id]: 120_000,
   [WEEKEND_AMBER_ARTIFACT_CONTRACT.id]: 120_000,
+  [WEEKEND_DESKTOP_CONTRACT.id]: 120_000,
   [OUTRO_QR_CONTRACT.id]: 30_000,
 });
 

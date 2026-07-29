@@ -25,7 +25,7 @@
       margin: 0;
       padding: max(24px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
       display: grid;
-      place-items: center;
+      place-items: start center;
       background:
         radial-gradient(circle at 12% 5%, rgba(92, 112, 255, .24), transparent 35%),
         radial-gradient(circle at 92% 94%, rgba(14, 205, 167, .16), transparent 30%),
@@ -155,6 +155,7 @@
     }
     .access-reset:hover { border: 0; color: #c5cffa; background: transparent; }
     @keyframes pulse { 50% { transform: scale(.72); opacity: .6; } }
+    @media (min-height: 900px) { body { place-items: center; } }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   </style>
 </head>
@@ -170,20 +171,32 @@
       </div>
       <p id="detail">Подключаемся к relay…</p>
       <div class="controls">
-        <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-mobile" aria-pressed="false">
+        <button class="scenario" type="button" data-action="run" data-scenario="intro-loop" aria-pressed="false">
           <span>01</span>
+          <span>Интро<small>50 минут: фразы, «Знание» и музыка</small></span>
+        </button>
+        <button class="scenario" type="button" data-action="run" data-scenario="lecture-deck" aria-pressed="false">
+          <span>02</span>
+          <span>Лекция<small>7 экранов о пользовательском опыте</small></span>
+        </button>
+        <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-mobile" aria-pressed="false">
+          <span>03</span>
           <span>Событие завтра<small>от списка к полному описанию</small></span>
         </button>
         <button class="scenario" type="button" data-action="run" data-scenario="tomorrow-rail-like" aria-pressed="false">
-          <span>02</span>
+          <span>04</span>
           <span>Лайк через rail<small>дотянуть событие влево и лайкнуть</small></span>
         </button>
         <button class="scenario" type="button" data-action="run" data-scenario="weekend-amber-artifact" aria-pressed="false">
-          <span>03</span>
+          <span>05</span>
           <span>Найти артефакт<small>меню, выходные и Янтарный космонавт</small></span>
         </button>
+        <button class="scenario" type="button" data-action="run" data-scenario="weekend-desktop" aria-pressed="false">
+          <span>06</span>
+          <span>Выходные · desktop<small>живой сайт в FHD и прокрутка вниз</small></span>
+        </button>
         <button class="scenario" type="button" data-action="run" data-scenario="outro-qr" aria-pressed="false">
-          <span>04</span>
+          <span>07</span>
           <span>Аутро с QR<small>полноэкранный опрос после мероприятия</small></span>
         </button>
         <div class="secondary-row">

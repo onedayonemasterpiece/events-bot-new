@@ -8,6 +8,9 @@ import {
   TOMORROW_MOBILE_CONTRACT,
   TOMORROW_RAIL_LIKE_CONTRACT,
   WEEKEND_AMBER_ARTIFACT_CONTRACT,
+  INTRO_LOOP_CONTRACT,
+  LECTURE_DECK_CONTRACT,
+  WEEKEND_DESKTOP_CONTRACT,
   OUTRO_QR_CONTRACT,
   LONG_SCENE_TIMEOUT_CEILING_MS,
   SCENARIO_TIMEOUT_POLICY,
@@ -19,11 +22,14 @@ import { PACING } from "../pacing.mjs";
 
 const source = await readFile(new URL("../agent.mjs", import.meta.url), "utf8");
 
-test("declares three mobile journeys plus one fullscreen outro and the fallback", () => {
+test("declares the accepted journeys plus explicit intro, lecture, desktop and outro scenes", () => {
   assert.deepEqual(SCENARIO_IDS, [
+    "intro-loop",
+    "lecture-deck",
     "tomorrow-mobile",
     "tomorrow-rail-like",
     "weekend-amber-artifact",
+    "weekend-desktop",
     "outro-qr",
   ]);
   assert.equal(DEFAULT_SCENARIO_ID, "tomorrow-mobile");
@@ -38,6 +44,9 @@ test("declares three mobile journeys plus one fullscreen outro and the fallback"
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventId, 5296);
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventTitle, "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»");
   assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 6591);
+  assert.equal(INTRO_LOOP_CONTRACT.completion, "fifty-minute-logical-randomized-two-line-typing-loop");
+  assert.equal(LECTURE_DECK_CONTRACT.completion, "seven-source-backed-lecture-frames-presented-in-order");
+  assert.equal(WEEKEND_DESKTOP_CONTRACT.surface, "desktop");
   assert.deepEqual(OUTRO_QR_CONTRACT, {
     id: "outro-qr",
     surface: "stage",
@@ -47,19 +56,28 @@ test("declares three mobile journeys plus one fullscreen outro and the fallback"
   assert.match(source, /if \(scenarioId === TOMORROW_MOBILE_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === TOMORROW_RAIL_LIKE_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === WEEKEND_AMBER_ARTIFACT_CONTRACT\.id\)/u);
+  assert.match(source, /if \(scenarioId === INTRO_LOOP_CONTRACT\.id\)/u);
+  assert.match(source, /if \(scenarioId === LECTURE_DECK_CONTRACT\.id\)/u);
+  assert.match(source, /if \(scenarioId === WEEKEND_DESKTOP_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === OUTRO_QR_CONTRACT\.id\)/u);
 });
 
 test("scenario timeout policy is explicit and can admit a future one-hour scene", () => {
   assert.deepEqual(SCENARIO_TIMEOUT_POLICY, {
+    "intro-loop": 3_600_000,
+    "lecture-deck": 180_000,
     "tomorrow-mobile": 120_000,
     "tomorrow-rail-like": 120_000,
     "weekend-amber-artifact": 120_000,
+    "weekend-desktop": 120_000,
     "outro-qr": 30_000,
   });
+  assert.equal(resolveScenarioTimeoutMs("intro-loop"), 3_600_000);
+  assert.equal(resolveScenarioTimeoutMs("lecture-deck"), 180_000);
   assert.equal(resolveScenarioTimeoutMs("tomorrow-mobile"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("tomorrow-rail-like"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("weekend-amber-artifact"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("weekend-desktop"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("outro-qr"), 30_000);
   assert.equal(LONG_SCENE_TIMEOUT_CEILING_MS, 3_600_000);
   assert.equal(
@@ -216,9 +234,28 @@ test("relay, lifecycle, fullscreen, and evidence contracts remain intact", () =>
   assert.match(source, /`\$\{scenarioId\}-1920x1080\.png`/u);
   assert.match(source, /"--kiosk"/u);
   assert.match(source, /"--start-fullscreen"/u);
+  assert.match(source, /"--autoplay-policy=no-user-gesture-required"/u);
   assert.match(source, /Browser\.setWindowBounds/u);
   assert.match(source, /windowState: "fullscreen"/u);
   assert.match(source, /this\.shutdownPromise/u);
+});
+
+test("intro, lecture and desktop scenes use pinned stage assets and real FHD scrolling", () => {
+  assert.match(source, /async runIntroLoop\(signal\)/u);
+  assert.match(source, /config\.introRuntimeMs/u);
+  assert.match(source, /INTRO_MUSIC_ASSET\.url/u);
+  assert.match(source, /ZNANIE_LOGO_ASSET\.url/u);
+  assert.match(source, /async runLectureDeck\(signal\)/u);
+  assert.match(source, /LECTURE_ASSETS\.length/u);
+  assert.match(source, /data-lecture-state/u);
+  assert.match(source, /async runWeekendDesktop\(signal\)/u);
+  assert.match(source, /WEEKEND_DESKTOP_ROOT_SELECTOR/u);
+  assert.match(source, /SITE_FOOTER_SELECTOR/u);
+  assert.match(
+    source,
+    /naturalVerticalScroll\([\s\S]*?DESKTOP_FRAME_SELECTOR/u,
+  );
+  assert.match(source, /iframeSelector = FRAME_SELECTOR/u);
 });
 
 test("normal scenarios reuse the sole page and clear embedded state without closing context", () => {

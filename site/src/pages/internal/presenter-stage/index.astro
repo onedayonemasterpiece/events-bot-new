@@ -2,7 +2,68 @@
 import { withBase } from '../../../lib/events';
 
 const homeUrl = withBase('/');
+const weekendUrl = withBase('/vyhodnye/');
 const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/qr-survey-nikiforov-916b6fee58256c4f2111887bf70c502070a55e45a667650dfccdb1495016ccd9.png';
+const znanieLogoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg';
+const introMusicUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3';
+const lectureSlides = [
+  {
+    messageId: 821,
+    chapter: '01 · UI ≠ UX',
+    statement: 'Интерфейс видят. Опыт проживают.',
+    image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-821-2f3c1b7d9a1c7094c77da009867c25a62cb233110185ab7a1a020b61356bdc26.webp',
+    alt: 'Сравнение пользовательского интерфейса и опыта на примере игрушки над детской кроваткой',
+    fit: 'contain',
+  },
+  {
+    messageId: 822,
+    chapter: '02 · Проверка действием',
+    statement: 'Удобство проверяется действием.',
+    image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-822-d85cadfd1dd4aad0c0e8f5fb68482624a1a4d617585fae9737fd430fac9513d1.webp',
+    alt: 'Сравнение двух бутылок кетчупа и опыта их использования',
+    fit: 'contain',
+  },
+  {
+    messageId: 823,
+    chapter: '03 · Эргономика телефона',
+    statement: 'Интерфейс должен быть под рукой.',
+    image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-823-61de6c5363792bc2fb5e50d6182c90f926fa7021c12d9bd80f96dff5b9d62bdc.webp',
+    alt: 'Зоны доступности интерфейса смартфона для большого пальца',
+    fit: 'contain',
+  },
+  {
+    messageId: 824,
+    chapter: '04 · Цена сложности',
+    statement: 'Когда всё важно — ничего не понятно.',
+    image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-824-19c1f686d1b04f0b99463d24a16625827f0ff3e45bccbffb7c6e3b9d8f5d561b.webp',
+    alt: 'Иллюстрация перегруженного пульта управления и растерянного оператора',
+    fit: 'wide',
+  },
+  {
+    messageId: 825,
+    chapter: '05 · Критические системы',
+    statement: 'В сложных системах удобство — безопасность.',
+    image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-825-1734e48aa4ef2b20c19c975c76d91b507fe98999d49655bf71749e0b8fd9f43b.webp',
+    alt: 'Обложка книги Вопросы эргономики в ядерной энергетике',
+    fit: 'portrait',
+  },
+  {
+    messageId: 826,
+    chapter: '06 · Видеть главное',
+    statement: 'Хорошая система помогает видеть главное.',
+    image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-826-252137528a929f8165c441b6fccdc853169fd4c4a249c0870f3b9b26a15ecadb.webp',
+    alt: 'Организованный большой зал управления с операторами и обзорными экранами',
+    fit: 'contain',
+  },
+  {
+    messageId: 830,
+    chapter: '07 · Работа над удобством',
+    statement: 'Понять → спроектировать → проверить.',
+    image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-830-cdcb0a381189715a8cebf90122000b7ddad74350390df87fd881fed658eff582.webp',
+    alt: 'Цикл пользовательского проектирования от анализа к дизайну и тестированию',
+    fit: 'contain',
+  },
+];
 ---
 <!doctype html>
 <html lang="ru">
@@ -12,7 +73,10 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
     <meta name="robots" content="noindex, nofollow, noarchive" />
     <meta name="color-scheme" content="dark" />
     <link rel="preload" as="image" href={outroQrUrl} fetchpriority="high" />
-    <title>Автопрезентатор · Завтра</title>
+    <link rel="preload" as="image" href={znanieLogoUrl} fetchpriority="high" />
+    <link rel="preload" as="audio" href={introMusicUrl} />
+    {lectureSlides.map((slide) => <link rel="preload" as="image" href={slide.image} />)}
+    <title>Автопрезентатор · Сцена</title>
   </head>
   <body>
     <main
@@ -28,15 +92,11 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
         data-presenter-scene-id="live-site"
       >
         <p class="stage-caption" aria-hidden="true">Завтра — в одном движении.</p>
-
         <section class="device-area" aria-label="Мобильный сайт">
           <div class="ambient ambient-one" aria-hidden="true"></div>
           <div class="ambient ambient-two" aria-hidden="true"></div>
           <div class="phone-shell">
-            <div class="phone-top" aria-hidden="true">
-              <span class="speaker"></span>
-              <span class="camera"></span>
-            </div>
+            <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
             <iframe
               id="presenter-mobile-frame"
               data-presenter-id="mobile-site-frame"
@@ -52,7 +112,83 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
       </div>
 
       <section
-        class="outro-scene"
+        class="intro-scene presentation-scene"
+        data-presenter-id="intro-scene"
+        data-presenter-scene-id="intro-loop"
+        data-intro-state="idle"
+        aria-label="Интро перед лекцией"
+        hidden
+      >
+        <div class="presentation-orbit" aria-hidden="true"></div>
+        <div class="brand-plate brand-plate--intro">
+          <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
+        </div>
+        <p class="intro-kicker">80 историй о главном · Калининград</p>
+        <h1 class="intro-thought" data-presenter-id="intro-thought" aria-live="polite">
+          <span data-intro-line="one"></span>
+          <span class="intro-line-two"><b data-intro-line="two"></b><i class="typing-cursor" aria-hidden="true"></i></span>
+        </h1>
+        <p class="intro-footnote">До начала можно знакомиться и общаться</p>
+        <audio
+          data-presenter-id="intro-music"
+          src={introMusicUrl}
+          preload="auto"
+          loop
+        ></audio>
+      </section>
+
+      <section
+        class="lecture-scene presentation-scene"
+        data-presenter-id="lecture-scene"
+        data-presenter-scene-id="lecture-deck"
+        data-lecture-state="idle"
+        data-lecture-active-index="0"
+        aria-label="Лекционная последовательность"
+        hidden
+      >
+        {lectureSlides.map((slide, index) => (
+          <article
+            class={`lecture-slide lecture-slide--${slide.fit}`}
+            data-lecture-slide
+            data-lecture-index={index}
+            data-source-message-id={slide.messageId}
+            hidden={index !== 0}
+          >
+            <div class="lecture-copy">
+              <div class="brand-plate brand-plate--lecture">
+                <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
+              </div>
+              <p class="lecture-chapter">{slide.chapter}</p>
+              <h2>{slide.statement}</h2>
+              <p class="lecture-counter">{String(index + 1).padStart(2, '0')} / {String(lectureSlides.length).padStart(2, '0')}</p>
+            </div>
+            <figure class="lecture-visual">
+              <img src={slide.image} alt={slide.alt} loading="eager" decoding="async" />
+            </figure>
+          </article>
+        ))}
+      </section>
+
+      <section
+        class="desktop-scene"
+        data-presenter-id="desktop-scene"
+        data-presenter-scene-id="weekend-desktop"
+        aria-label="Десктопная страница событий на выходные"
+        hidden
+      >
+        <iframe
+          id="presenter-desktop-frame"
+          data-presenter-id="desktop-site-frame"
+          data-presenter-frame-ready="false"
+          data-src={weekendUrl}
+          title="Десктопная версия страницы событий на выходные"
+          width="1920"
+          height="1080"
+        ></iframe>
+      </section>
+
+      <section
+        class="outro-scene presentation-scene"
         data-presenter-id="outro-scene"
         data-presenter-scene-id="outro-qr"
         aria-labelledby="outro-heading"
@@ -79,38 +215,40 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
       </section>
 
       <div class="presenter-signals" data-presenter-id="stage-status-card">
-        <strong
-          data-presenter-id="stage-status"
-          data-status="idle"
-          role="status"
-          aria-live="polite"
-        >Готов к запуску</strong>
-        <ol aria-label="Этапы сценария">
-          <li data-presenter-step="find">Найти раздел «Завтра»</li>
-          <li data-presenter-step="focus">Показать действие</li>
-          <li data-presenter-step="open">Открыть реальным кликом</li>
-        </ol>
+        <strong data-presenter-id="stage-status" data-status="idle" role="status" aria-live="polite">Готов к запуску</strong>
       </div>
     </main>
 
     <script is:inline>
       (() => {
-        const frame = document.querySelector('#presenter-mobile-frame');
         const stage = document.querySelector('[data-presenter-id="presenter-stage"]');
-        const liveSiteScene = document.querySelector('[data-presenter-scene-id="live-site"]');
-        const outroScene = document.querySelector('[data-presenter-scene-id="outro-qr"]');
+        const mobileFrame = document.querySelector('#presenter-mobile-frame');
+        const desktopFrame = document.querySelector('#presenter-desktop-frame');
         const status = document.querySelector('[data-presenter-id="stage-status"]');
         const stateCard = document.querySelector('[data-presenter-id="stage-status-card"]');
+        const introScene = document.querySelector('[data-presenter-scene-id="intro-loop"]');
+        const lectureScene = document.querySelector('[data-presenter-scene-id="lecture-deck"]');
+        const outroScene = document.querySelector('[data-presenter-scene-id="outro-qr"]');
+        const introLineOne = document.querySelector('[data-intro-line="one"]');
+        const introLineTwo = document.querySelector('[data-intro-line="two"]');
+        const introMusic = document.querySelector('[data-presenter-id="intro-music"]');
+        const scenes = new Map(
+          [...document.querySelectorAll('[data-presenter-scene-id]')]
+            .filter((node) => node instanceof HTMLElement)
+            .map((node) => [node.dataset.presenterSceneId, node]),
+        );
         if (
-          !(frame instanceof HTMLIFrameElement) ||
           !(stage instanceof HTMLElement) ||
-          !(liveSiteScene instanceof HTMLElement) ||
+          !(mobileFrame instanceof HTMLIFrameElement) ||
+          !(desktopFrame instanceof HTMLIFrameElement) ||
+          !(status instanceof HTMLElement) ||
+          !(introScene instanceof HTMLElement) ||
+          !(lectureScene instanceof HTMLElement) ||
           !(outroScene instanceof HTMLElement) ||
-          !(status instanceof HTMLElement)
+          !(introLineOne instanceof HTMLElement) ||
+          !(introLineTwo instanceof HTMLElement) ||
+          !(introMusic instanceof HTMLAudioElement)
         ) return;
-
-        const DEFAULT_SCENE_ID = 'live-site';
-        const OUTRO_SCENE_ID = 'outro-qr';
 
         const labels = {
           disconnected: 'Нет связи с агентом',
@@ -120,6 +258,25 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
           completed: 'Показ завершён',
           error: 'Нужна проверка',
         };
+        const introPhrases = {
+          welcome: ['Добро пожаловать!', 'Скоро начинаем.'],
+          topic: ['Почему одни сервисы удобны,', 'а другие — нет?'],
+          networking: ['Знакомьтесь друг с другом.', 'Сегодня здесь особенные гости.'],
+          heat: ['Сегодня жарко.', 'Спасибо, что вы с нами.'],
+          format: ['Сначала — короткая лекция.', 'Потом вы — фокус-группа «Анонсов».'],
+        };
+        const introRoutes = [
+          ['welcome', 'heat', 'networking', 'topic', 'format'],
+          ['welcome', 'networking', 'heat', 'topic', 'format'],
+          ['welcome', 'topic', 'format', 'heat', 'networking'],
+          ['welcome', 'topic', 'format', 'networking', 'heat'],
+        ];
+        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+        let generation = 0;
+        let activeTimer = 0;
+        let activeWaitResolve = null;
+        let musicFade = 0;
+        let previousRoute = -1;
 
         const setStatus = (nextStatus, label) => {
           if (!Object.hasOwn(labels, nextStatus)) return;
@@ -128,17 +285,162 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
           if (stateCard instanceof HTMLElement) stateCard.dataset.status = nextStatus;
         };
 
-        const showScene = (sceneId) => {
-          if (sceneId !== DEFAULT_SCENE_ID && sceneId !== OUTRO_SCENE_ID) return;
-          const showOutro = sceneId === OUTRO_SCENE_ID;
+        const cancelWait = () => {
+          if (activeTimer) clearTimeout(activeTimer);
+          activeTimer = 0;
+          if (activeWaitResolve) activeWaitResolve(false);
+          activeWaitResolve = null;
+        };
+
+        const pause = (ms, token) => new Promise((resolve) => {
+          cancelWait();
+          if (token !== generation) return resolve(false);
+          activeWaitResolve = resolve;
+          activeTimer = window.setTimeout(() => {
+            activeTimer = 0;
+            activeWaitResolve = null;
+            resolve(token === generation);
+          }, ms);
+        });
+
+        const stopPresentationMotion = ({ rewindAudio = true } = {}) => {
+          generation += 1;
+          cancelWait();
+          if (musicFade) clearInterval(musicFade);
+          musicFade = 0;
+          introMusic.pause();
+          introMusic.volume = 0;
+          if (rewindAudio) {
+            try { introMusic.currentTime = 0; } catch {}
+          }
+          introScene.dataset.introState = 'stopped';
+          lectureScene.dataset.lectureState = 'stopped';
+        };
+
+        const randomTypingDelay = (grapheme) => {
+          if (/\s/u.test(grapheme)) return 25 + Math.random() * 20;
+          if (/[.!?]/u.test(grapheme)) return 220 + Math.random() * 35;
+          if (/[,;:]/u.test(grapheme)) return 130 + Math.random() * 30;
+          return 52 + Math.random() * 26;
+        };
+
+        const graphemes = (value) => {
+          if (typeof Intl.Segmenter === 'function') {
+            return [...new Intl.Segmenter('ru', { granularity: 'grapheme' }).segment(value)]
+              .map((part) => part.segment);
+          }
+          return Array.from(value);
+        };
+
+        const typeLine = async (node, value, token) => {
+          node.textContent = '';
+          if (reduceMotion.matches) {
+            node.textContent = value;
+            return token === generation;
+          }
+          for (const grapheme of graphemes(value)) {
+            if (token !== generation) return false;
+            node.textContent += grapheme;
+            if (!await pause(randomTypingDelay(grapheme), token)) return false;
+          }
+          return true;
+        };
+
+        const pickRoute = () => {
+          let index = Math.floor(Math.random() * introRoutes.length);
+          if (introRoutes.length > 1 && index === previousRoute) index = (index + 1) % introRoutes.length;
+          previousRoute = index;
+          return introRoutes[index];
+        };
+
+        const startMusic = async (token) => {
+          introMusic.volume = 0;
+          try {
+            await introMusic.play();
+          } catch {
+            introScene.dataset.introAudio = 'blocked';
+            return;
+          }
+          if (token !== generation) return;
+          introScene.dataset.introAudio = 'playing';
+          const startedAt = performance.now();
+          musicFade = window.setInterval(() => {
+            if (token !== generation) return clearInterval(musicFade);
+            const progress = Math.min(1, (performance.now() - startedAt) / 1500);
+            introMusic.volume = .15 * progress;
+            if (progress >= 1) {
+              clearInterval(musicFade);
+              musicFade = 0;
+            }
+          }, 50);
+        };
+
+        const startIntro = async () => {
+          const token = generation;
+          introScene.dataset.introState = 'running';
+          introScene.dataset.introAudio = 'starting';
+          void startMusic(token);
+          while (token === generation) {
+            for (const phraseId of pickRoute()) {
+              if (token !== generation) return;
+              const phrase = introPhrases[phraseId];
+              introScene.dataset.introPhrase = phraseId;
+              introScene.classList.remove('is-clearing');
+              if (!await typeLine(introLineOne, phrase[0], token)) return;
+              if (!await pause(260, token)) return;
+              if (!await typeLine(introLineTwo, phrase[1], token)) return;
+              if (!await pause(7500, token)) return;
+              introScene.classList.add('is-clearing');
+              if (!await pause(650, token)) return;
+              introLineOne.textContent = '';
+              introLineTwo.textContent = '';
+              introScene.classList.remove('is-clearing');
+              if (!await pause(3500 + Math.random() * 2000, token)) return;
+            }
+            if (!await pause(8000, token)) return;
+          }
+        };
+
+        const showLectureSlide = (index) => {
+          const slides = [...lectureScene.querySelectorAll('[data-lecture-slide]')];
+          slides.forEach((slide, slideIndex) => {
+            if (!(slide instanceof HTMLElement)) return;
+            slide.hidden = slideIndex !== index;
+            slide.classList.remove('is-entering');
+            if (slideIndex === index) requestAnimationFrame(() => requestAnimationFrame(() => slide.classList.add('is-entering')));
+          });
+          lectureScene.dataset.lectureActiveIndex = String(index);
+        };
+
+        const startLecture = async (requestedInterval) => {
+          const token = generation;
+          const slides = [...lectureScene.querySelectorAll('[data-lecture-slide]')];
+          const interval = Math.max(800, Math.min(20000, Number(requestedInterval) || 8500));
+          lectureScene.dataset.lectureState = 'running';
+          lectureScene.dataset.lectureIntervalMs = String(interval);
+          for (let index = 0; index < slides.length; index += 1) {
+            if (token !== generation) return;
+            showLectureSlide(index);
+            if (!await pause(interval, token)) return;
+          }
+          if (token === generation) lectureScene.dataset.lectureState = 'complete';
+        };
+
+        const showScene = (sceneId, options = {}) => {
+          if (!scenes.has(sceneId)) return;
+          stopPresentationMotion();
+          const token = generation;
           stage.dataset.presenterScene = sceneId;
-          liveSiteScene.hidden = showOutro;
-          outroScene.hidden = !showOutro;
+          scenes.forEach((scene, id) => { scene.hidden = id !== sceneId; });
           outroScene.classList.remove('is-entering');
-          if (showOutro) {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => outroScene.classList.add('is-entering'));
-            });
+          if (sceneId === 'outro-qr') {
+            requestAnimationFrame(() => requestAnimationFrame(() => outroScene.classList.add('is-entering')));
+          }
+          if (sceneId === 'intro-loop') void startIntro(token);
+          if (sceneId === 'lecture-deck') void startLecture(options.slideIntervalMs, token);
+          if (sceneId === 'weekend-desktop' && !desktopFrame.src) {
+            desktopFrame.dataset.presenterFrameReady = 'false';
+            desktopFrame.src = desktopFrame.dataset.src || '';
           }
         };
 
@@ -146,32 +448,30 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
         if (requestedTarget) {
           try {
             const target = new URL(requestedTarget, window.location.origin);
-            if (target.origin === window.location.origin) frame.src = target.href;
+            if (target.origin === window.location.origin) mobileFrame.src = target.href;
           } catch {
             setStatus('error', 'Некорректный адрес показа');
           }
         }
 
-        frame.addEventListener('load', () => {
-          frame.dataset.presenterFrameReady = 'true';
+        mobileFrame.addEventListener('load', () => {
+          mobileFrame.dataset.presenterFrameReady = 'true';
           document.documentElement.dataset.presenterFrameReady = 'true';
+        });
+        desktopFrame.addEventListener('load', () => {
+          desktopFrame.dataset.presenterFrameReady = 'true';
+          document.documentElement.dataset.presenterDesktopFrameReady = 'true';
         });
 
         window.addEventListener('presenter:status', (event) => {
           const detail = event instanceof CustomEvent ? event.detail : null;
           if (detail && typeof detail.status === 'string') setStatus(detail.status, detail.label);
         });
-
         window.addEventListener('presenter:scene', (event) => {
           const detail = event instanceof CustomEvent ? event.detail : null;
-          if (detail && typeof detail.id === 'string') showScene(detail.id);
+          if (detail && typeof detail.id === 'string') showScene(detail.id, detail);
         });
-
-        window.addEventListener('message', (event) => {
-          if (event.origin !== window.location.origin || event.source !== window) return;
-          const message = event.data;
-          if (message?.type === 'presenter:status') setStatus(message.status, message.label);
-        });
+        window.addEventListener('presenter:stop', () => stopPresentationMotion({ rewindAudio: true }));
 
         document.addEventListener('keydown', async (event) => {
           if (event.key.toLowerCase() !== 'f' || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -193,24 +493,15 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
 <style is:global>
   :root {
     color-scheme: dark;
-    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: #080a0f;
     --stage-ink: #f7f1e8;
     --stage-accent: #ff7657;
+    --stage-violet: #6956df;
   }
-
   * { box-sizing: border-box; }
-
-  html,
-  body {
-    width: 100vw;
-    height: 100vh;
-    min-width: 320px;
-    margin: 0;
-    overflow: hidden;
-    background: #080a0f;
-  }
-
+  html, body { width: 100vw; height: 100vh; min-width: 320px; margin: 0; overflow: hidden; background: #080a0f; }
+  [hidden] { display: none !important; }
   .stage {
     position: relative;
     width: 100vw;
@@ -225,29 +516,17 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
       linear-gradient(135deg, #101116 0%, #080a0f 52%, #101117 100%);
     isolation: isolate;
   }
-
-  [hidden] { display: none !important; }
-
   .stage::before {
     position: absolute;
     inset: 0;
     z-index: -1;
     content: "";
     opacity: .18;
-    background-image:
-      linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+    background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
     background-size: 64px 64px;
     mask-image: radial-gradient(circle at center, #000, transparent 67%);
   }
-
-  .live-site-scene {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-  }
-
+  .live-site-scene { position: absolute; inset: 0; display: grid; place-items: center; }
   .stage-caption {
     position: absolute;
     top: clamp(24px, 5vh, 54px);
@@ -258,33 +537,11 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
     font: 500 clamp(15px, 1.05vw, 20px)/1.35 Georgia, "Times New Roman", serif;
     letter-spacing: .015em;
   }
-
-  .stage-caption::before {
-    display: inline-block;
-    width: 24px;
-    height: 1px;
-    margin: 0 12px 5px 0;
-    content: "";
-    background: var(--stage-accent);
-  }
-
-  .device-area {
-    position: relative;
-    width: min(500px, calc((100vh - 32px) * .4771), calc(100vw - 32px));
-    aspect-ratio: 125 / 262;
-    display: grid;
-    place-items: center;
-  }
-
-  .ambient {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: .23;
-  }
+  .stage-caption::before { display: inline-block; width: 24px; height: 1px; margin: 0 12px 5px 0; content: ""; background: var(--stage-accent); }
+  .device-area { position: relative; width: min(500px, calc((100vh - 32px) * .4771), calc(100vw - 32px)); aspect-ratio: 125 / 262; display: grid; place-items: center; }
+  .ambient { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .23; }
   .ambient-one { width: 72%; aspect-ratio: 1; top: 5%; right: -18%; background: #ff6b52; }
   .ambient-two { width: 56%; aspect-ratio: 1; bottom: 2%; left: -15%; background: #6956df; }
-
   .phone-shell {
     position: relative;
     width: 100%;
@@ -293,239 +550,89 @@ const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-
     border: 1px solid rgba(255,255,255,.23);
     border-radius: clamp(32px, 5vh, 54px);
     background: linear-gradient(145deg, #303138, #111217 62%);
-    box-shadow:
-      0 45px 90px rgba(0,0,0,.55),
-      0 0 0 5px rgba(255,255,255,.035),
-      inset 0 1px 1px rgba(255,255,255,.26);
+    box-shadow: 0 45px 90px rgba(0,0,0,.55), 0 0 0 5px rgba(255,255,255,.035), inset 0 1px 1px rgba(255,255,255,.26);
   }
-
-  .phone-shell iframe {
-    width: 100%;
-    height: 100%;
-    display: block;
-    border: 0;
-    border-radius: clamp(24px, 3.7vh, 40px);
-    background: #fffaf4;
-  }
-
-  .phone-top {
-    position: absolute;
-    z-index: 5;
-    top: 20px;
-    left: 50%;
-    width: 26%;
-    height: 28px;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    border-radius: 18px;
-    background: #111217;
-    pointer-events: none;
-  }
+  .phone-shell iframe { width: 100%; height: 100%; display: block; border: 0; border-radius: clamp(24px, 3.7vh, 40px); background: #fffaf4; }
+  .phone-top { position: absolute; z-index: 5; top: 20px; left: 50%; width: 26%; height: 28px; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 9px; border-radius: 18px; background: #111217; pointer-events: none; }
   .speaker { width: 46px; height: 4px; border-radius: 4px; background: #2e3037; }
   .camera { width: 7px; height: 7px; border-radius: 50%; background: #293553; box-shadow: inset 0 0 0 2px #141923; }
-  .phone-home {
-    position: absolute;
-    z-index: 5;
-    bottom: 19px;
-    left: 50%;
-    width: 25%;
-    height: 4px;
-    transform: translateX(-50%);
-    border-radius: 4px;
-    background: rgba(21,22,24,.7);
-    pointer-events: none;
-  }
+  .phone-home { position: absolute; z-index: 5; bottom: 19px; left: 50%; width: 25%; height: 4px; transform: translateX(-50%); border-radius: 4px; background: rgba(21,22,24,.7); pointer-events: none; }
+  .presenter-signals { position: fixed; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-  .presenter-signals {
-    position: fixed;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .outro-scene {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: clamp(48px, 7vw, 148px);
-    padding:
-      max(64px, env(safe-area-inset-top))
-      max(72px, 6vw)
-      max(64px, env(safe-area-inset-bottom));
-    overflow: hidden;
+  .presentation-scene { position: absolute; inset: 0; z-index: 10; overflow: hidden; isolation: isolate; }
+  .brand-plate { display: grid; place-items: center; border-radius: 999px; background: #fffaf3; box-shadow: 0 20px 65px rgba(0,0,0,.28); }
+  .brand-plate img { width: 100%; height: auto; display: block; }
+  .intro-scene {
+    padding: clamp(64px, 7vh, 90px) clamp(76px, 7vw, 140px);
     background:
-      radial-gradient(circle at 84% 49%, rgba(255, 118, 87, .24), transparent 25%),
-      radial-gradient(circle at 12% 8%, rgba(105, 86, 223, .12), transparent 32%),
-      linear-gradient(118deg, #121217 0%, #08090d 58%, #111014 100%);
-    isolation: isolate;
+      radial-gradient(circle at 16% 14%, rgba(105,86,223,.23), transparent 29%),
+      radial-gradient(circle at 88% 72%, rgba(255,118,87,.22), transparent 28%),
+      linear-gradient(118deg, #0a0b10, #13131b 56%, #090a0d);
   }
+  .intro-scene::before { position: absolute; inset: 0; z-index: -2; content: ""; opacity: .11; background-image: linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px); background-size: 88px 88px; mask-image: linear-gradient(90deg, #000, transparent 82%); }
+  .presentation-orbit { position: absolute; z-index: -1; right: -12vw; bottom: -32vh; width: min(67vw, 1280px); height: min(78vh, 840px); border: clamp(46px, 6vw, 116px) solid var(--stage-accent); border-radius: 50%; opacity: .86; transform: rotate(-10deg); }
+  .brand-plate--intro { position: absolute; top: clamp(58px, 7vh, 82px); right: clamp(76px, 7vw, 140px); width: clamp(270px, 19vw, 365px); padding: 17px 28px; }
+  .intro-kicker { margin: 0; color: var(--stage-accent); font-size: clamp(17px, 1.25vw, 24px); font-weight: 820; letter-spacing: .16em; text-transform: uppercase; }
+  .intro-thought { position: absolute; top: 50%; left: clamp(76px, 7vw, 140px); width: calc(100% - clamp(152px, 14vw, 280px)); margin: 0; transform: translateY(-48%); color: #fffaf3; font-size: clamp(54px, 4.35vw, 86px); font-weight: 920; line-height: .98; letter-spacing: -.06em; text-wrap: balance; }
+  .intro-thought > span { display: block; min-height: 1.04em; white-space: nowrap; }
+  .intro-thought > span:last-of-type { color: #ff9b80; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 650; letter-spacing: -.045em; }
+  .intro-line-two b { font: inherit; letter-spacing: inherit; }
+  .typing-cursor { display: inline-block; width: .085em; height: .76em; margin-left: .11em; vertical-align: -.03em; background: var(--stage-accent); animation: cursor-blink .92s step-end infinite; }
+  .intro-scene.is-clearing .intro-thought { opacity: 0; transform: translateY(-48%) scale(.985); transition: opacity 650ms ease-in, transform 650ms ease-in; }
+  .intro-footnote { position: absolute; left: clamp(76px, 7vw, 140px); bottom: clamp(56px, 6vh, 76px); margin: 0; color: rgba(247,241,232,.58); font: 500 clamp(18px, 1.35vw, 26px)/1.3 Georgia, "Times New Roman", serif; }
+  @keyframes cursor-blink { 50% { opacity: 0; } }
 
-  .outro-scene::before {
-    position: absolute;
-    z-index: -1;
-    width: min(38vw, 730px);
-    aspect-ratio: 1;
-    right: max(-16vw, -310px);
-    bottom: max(-27vw, -520px);
-    border: clamp(42px, 5vw, 94px) solid var(--stage-accent);
-    border-radius: 50%;
-    content: "";
-    opacity: .92;
-  }
+  .lecture-scene { background: #0b0c11; }
+  .lecture-slide { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(420px, .78fr) minmax(0, 1.22fr); gap: clamp(40px, 4vw, 82px); align-items: stretch; padding: clamp(52px, 6vh, 78px) clamp(64px, 5vw, 104px); background: radial-gradient(circle at 84% 16%, rgba(255,118,87,.17), transparent 26%), linear-gradient(120deg, #12131a, #08090d 64%); overflow: hidden; }
+  .lecture-slide::after { position: absolute; z-index: 0; left: -12vw; bottom: -36vh; width: 48vw; height: 54vh; border: clamp(32px,4vw,78px) solid rgba(105,86,223,.42); border-radius: 50%; content: ""; }
+  .lecture-copy { position: relative; z-index: 2; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+  .brand-plate--lecture { width: clamp(230px, 16vw, 310px); padding: 13px 23px; margin-bottom: auto; }
+  .lecture-chapter { margin: 0 0 clamp(22px, 3vh, 38px); color: var(--stage-accent); font-size: clamp(16px, 1.12vw, 22px); font-weight: 840; letter-spacing: .14em; text-transform: uppercase; }
+  .lecture-copy h2 { max-width: 11ch; margin: 0; color: #fffaf3; font-size: clamp(48px, 3.55vw, 70px); font-weight: 930; line-height: .92; letter-spacing: -.06em; text-wrap: balance; }
+  .lecture-counter { margin: auto 0 0; color: rgba(247,241,232,.44); font: 650 clamp(17px,1.2vw,23px)/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
+  .lecture-visual { position: relative; z-index: 2; min-width: 0; min-height: 0; margin: 0; display: grid; place-items: center; overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: clamp(24px, 2.4vw, 46px); background: #f7f4ef; box-shadow: 0 38px 80px rgba(0,0,0,.45); }
+  .lecture-visual img { width: 100%; height: 100%; display: block; object-fit: contain; }
+  .lecture-slide--wide .lecture-visual img { object-fit: cover; }
+  .lecture-slide--portrait .lecture-visual { background: radial-gradient(circle at center, #f9f6f0 0 31%, #22232a 75%); }
+  .lecture-slide--portrait .lecture-visual img { width: auto; max-width: 74%; object-fit: contain; filter: drop-shadow(0 25px 42px rgba(0,0,0,.32)); }
+  .lecture-slide.is-entering .lecture-copy { animation: lecture-copy-enter 720ms cubic-bezier(.42,0,.22,1) both; }
+  .lecture-slide.is-entering .lecture-visual { animation: lecture-image-enter 1050ms cubic-bezier(.42,0,.22,1) 80ms both; transform-origin: center; }
+  @keyframes lecture-copy-enter { from { opacity: 0; transform: translate3d(-2.2vw,0,0); } to { opacity: 1; transform: none; } }
+  @keyframes lecture-image-enter { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
 
-  .outro-scene::after {
-    position: absolute;
-    z-index: -1;
-    inset: 0;
-    content: "";
-    opacity: .12;
-    background-image:
-      linear-gradient(rgba(255, 255, 255, .07) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, .07) 1px, transparent 1px);
-    background-size: clamp(54px, 5vw, 96px) clamp(54px, 5vw, 96px);
-    mask-image: linear-gradient(90deg, #000, transparent 74%);
-  }
+  .desktop-scene { position: absolute; inset: 0; z-index: 12; background: #fff; }
+  .desktop-scene iframe { width: 100%; height: 100%; display: block; border: 0; background: #fffaf4; }
 
-  .outro-copy {
-    position: relative;
-    z-index: 1;
-    min-width: 0;
-    padding-bottom: 2vh;
-  }
-
-  .outro-kicker {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    margin: 0 0 clamp(28px, 4vh, 56px);
-    color: var(--stage-accent);
-    font-size: clamp(16px, 1.25vw, 24px);
-    font-weight: 750;
-    line-height: 1;
-    letter-spacing: .16em;
-    text-transform: uppercase;
-  }
-
-  .outro-kicker::before {
-    width: clamp(42px, 4.5vw, 86px);
-    height: 3px;
-    flex: none;
-    content: "";
-    background: currentColor;
-  }
-
-  .outro-copy h1 {
-    max-width: 5.2ch;
-    margin: 0;
-    color: #fff9f1;
-    font-size: clamp(112px, 14vw, 278px);
-    font-weight: 900;
-    line-height: .78;
-    letter-spacing: -.075em;
-    text-wrap: balance;
-    text-shadow: 0 18px 72px rgba(0, 0, 0, .32);
-  }
-
-  .outro-copy h1::first-letter {
-    color: var(--stage-accent);
-  }
-
-  .outro-support {
-    max-width: 22ch;
-    margin: clamp(38px, 6vh, 76px) 0 0;
-    color: rgba(247, 241, 232, .78);
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: clamp(24px, 2.3vw, 44px);
-    font-weight: 400;
-    line-height: 1.2;
-    letter-spacing: -.015em;
-    text-wrap: balance;
-  }
-
-  .outro-qr-wrap {
-    position: relative;
-    z-index: 1;
-    width: clamp(360px, 47vmin, 560px);
-    aspect-ratio: 1;
-    flex: none;
-    filter: drop-shadow(0 36px 68px rgba(0, 0, 0, .48));
-  }
-
-  .outro-qr {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: contain;
-  }
-
-  .outro-scene.is-entering .outro-copy {
-    animation: outro-copy-enter 760ms cubic-bezier(.42, 0, .22, 1) both;
-  }
-
-  .outro-scene.is-entering .outro-qr-wrap {
-    animation: outro-qr-enter 940ms cubic-bezier(.42, 0, .24, 1) 90ms both;
-    transform-origin: 50% 50%;
-  }
-
-  @keyframes outro-copy-enter {
-    from {
-      opacity: 0;
-      transform: translate3d(-2.5vw, 0, 0);
-    }
-    to {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
-  }
-
-  @keyframes outro-qr-enter {
-    from {
-      opacity: 0;
-      transform: translate3d(0, 2.5vh, 0) scale(.82);
-    }
-    to {
-      opacity: 1;
-      transform: translate3d(0, 0, 0) scale(1);
-    }
-  }
+  .outro-scene { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: clamp(48px, 7vw, 148px); padding: max(64px, env(safe-area-inset-top)) max(72px, 6vw) max(64px, env(safe-area-inset-bottom)); background: radial-gradient(circle at 84% 49%, rgba(255, 118, 87, .24), transparent 25%), radial-gradient(circle at 12% 8%, rgba(105, 86, 223, .12), transparent 32%), linear-gradient(118deg, #121217 0%, #08090d 58%, #111014 100%); }
+  .outro-scene::before { position: absolute; z-index: -1; width: min(38vw, 730px); aspect-ratio: 1; right: max(-16vw, -310px); bottom: max(-27vw, -520px); border: clamp(42px, 5vw, 94px) solid var(--stage-accent); border-radius: 50%; content: ""; opacity: .92; }
+  .outro-scene::after { position: absolute; z-index: -1; inset: 0; content: ""; opacity: .12; background-image: linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px); background-size: clamp(54px,5vw,96px); mask-image: linear-gradient(90deg,#000,transparent 74%); }
+  .outro-copy { position: relative; z-index: 1; min-width: 0; padding-bottom: 2vh; }
+  .outro-kicker { display: flex; align-items: center; gap: 18px; margin: 0 0 clamp(28px,4vh,56px); color: var(--stage-accent); font-size: clamp(16px,1.25vw,24px); font-weight: 750; line-height: 1; letter-spacing: .16em; text-transform: uppercase; }
+  .outro-kicker::before { width: clamp(42px,4.5vw,86px); height: 3px; flex: none; content: ""; background: currentColor; }
+  .outro-copy h1 { max-width: 5.2ch; margin: 0; color: #fff9f1; font-size: clamp(112px,14vw,278px); font-weight: 900; line-height: .78; letter-spacing: -.075em; text-wrap: balance; text-shadow: 0 18px 72px rgba(0,0,0,.32); }
+  .outro-copy h1::first-letter { color: var(--stage-accent); }
+  .outro-support { max-width: 22ch; margin: clamp(38px,6vh,76px) 0 0; color: rgba(247,241,232,.78); font: 400 clamp(24px,2.3vw,44px)/1.2 Georgia, "Times New Roman", serif; letter-spacing: -.015em; text-wrap: balance; }
+  .outro-qr-wrap { position: relative; z-index: 1; width: clamp(360px,47vmin,560px); aspect-ratio: 1; filter: drop-shadow(0 36px 68px rgba(0,0,0,.48)); }
+  .outro-qr { width: 100%; height: 100%; display: block; object-fit: contain; }
+  .outro-scene.is-entering .outro-copy { animation: outro-copy-enter 760ms cubic-bezier(.42,0,.22,1) both; }
+  .outro-scene.is-entering .outro-qr-wrap { animation: outro-qr-enter 940ms cubic-bezier(.42,0,.24,1) 90ms both; transform-origin: 50% 50%; }
+  @keyframes outro-copy-enter { from { opacity: 0; transform: translate3d(-2.5vw,0,0); } to { opacity: 1; transform: none; } }
+  @keyframes outro-qr-enter { from { opacity: 0; transform: translate3d(0,2.5vh,0) scale(.82); } to { opacity: 1; transform: none; } }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: .01ms !important;
-      animation-delay: 0ms !important;
-      animation-iteration-count: 1 !important;
-      scroll-behavior: auto !important;
-    }
+    *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+    .typing-cursor { display: none; }
   }
-
-  @media (max-width: 700px) {
-    .stage-caption { display: none; }
-    .outro-scene {
-      grid-template-columns: 1fr;
-      justify-items: center;
-      gap: 34px;
-      padding: 42px 28px;
-      text-align: center;
-    }
-    .outro-copy { padding: 0; }
+  @media (max-width: 900px) {
+    .intro-thought > span { white-space: normal; }
+    .lecture-slide { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr); gap: 26px; padding: 34px; }
+    .brand-plate--lecture { width: 190px; margin-bottom: 24px; }
+    .lecture-copy h2 { max-width: 16ch; font-size: clamp(40px,8vw,68px); }
+    .lecture-counter { position: absolute; top: 0; right: 0; }
+    .outro-scene { grid-template-columns: 1fr; justify-items: center; gap: 34px; padding: 42px 28px; text-align: center; }
     .outro-kicker { justify-content: center; margin-bottom: 24px; }
-    .outro-copy h1 { max-width: none; font-size: clamp(72px, 22vw, 136px); }
-    .outro-support { margin: 24px auto 0; font-size: clamp(20px, 5vw, 30px); }
-    .outro-qr-wrap { width: min(52vh, 76vw); }
-  }
-
-  @media (max-height: 680px) and (min-width: 701px) {
-    .outro-scene { padding-block: 36px; }
-    .outro-copy h1 { font-size: clamp(96px, 13vw, 220px); }
-    .outro-support { margin-top: 28px; }
-    .outro-qr-wrap { width: min(66vh, 42vw); }
+    .outro-copy h1 { max-width: none; font-size: clamp(72px,22vw,136px); }
+    .outro-support { margin: 24px auto 0; font-size: clamp(20px,5vw,30px); }
+    .outro-qr-wrap { width: min(52vh,76vw); }
   }
 </style>

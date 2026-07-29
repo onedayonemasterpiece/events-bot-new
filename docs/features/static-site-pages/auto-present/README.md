@@ -1,6 +1,6 @@
 # Автопрезентатор static-сайта
 
-- **Статус:** `m0_implementation_accepted + four_scene_owner_test_candidate`;
+- **Статус:** `m0_implementation_accepted + seven_scene_owner_test_candidate`;
   фактический M0-прогон на целевом ноутбуке ещё не выполнен.
 - **Implementation gate:** M0 empirical и visible prototype идут параллельными
   непересекающимися треками.
@@ -16,8 +16,8 @@
 M0 продолжает отдельно доказывать exact portable-связку на целевой Windows 10:
 для каждого кандидата нужны 20/20 холодных loopback-циклов и 5/5 live smoke.
 Параллельно доступен узкий owner-test vertical slice: fullscreen stage
-1920×1080, реальный same-origin сайт в увеличенном mobile iframe, три
-фиксированных browser-сценария, полноэкранное QR-аутро, настоящие Playwright
+1920×1080, реальный same-origin сайт в увеличенном mobile iframe, шесть
+фиксированных browser-сценариев, полноэкранное QR-аутро, настоящие Playwright
 click/drag/wheel и минимальный
 `aiohttp`-пульт Run/Stop/Reset/Shutdown.
 Этот прототип ускоряет product learning, но не является M0 evidence,
@@ -69,7 +69,20 @@ native output работают в UTF-8. Для headed owner test устанав
 
 ## Продуктовая граница
 
-### Четыре фиксированные owner-test сцены
+### Семь фиксированных owner-test сцен
+
+`intro-loop`:
+
+1. показывает 50-минутный прерываемый цикл коротких типографических мыслей;
+2. использует четыре логичных маршрута фраз, знак «Знание» и тихую музыку из
+   immutable Yandex CDN;
+3. следующий Run/Stop немедленно снимает таймеры и останавливает аудио.
+
+`lecture-deck`:
+
+1. показывает семь явных слайдов из предоставленных Telegram-изображений;
+2. держит на каждом кадре одну крупную мысль и знак «Знание»;
+3. мягко меняет кадры каждые 8,5 секунды без пересоздания окна.
 
 `tomorrow-mobile`:
 
@@ -100,6 +113,13 @@ native output работают в UTF-8. Для headed owner test устанав
    проверяет настоящее persisted/ARIA-состояние;
 4. повторным настоящим действием открывает карточку артефакта.
 
+`weekend-desktop`:
+
+1. без боковых подписей загружает настоящую `/vyhodnye/` во весь FHD stage;
+2. ждёт desktop-ready marker и естественным wheel-жестом прокручивает страницу
+   до footer;
+3. не вводит универсальный desktop renderer и остаётся узким owner-test путём.
+
 `outro-qr`:
 
 1. в том же browser/context/page переключает stage с live-сайта на отдельную
@@ -113,7 +133,7 @@ Browser, BrowserContext, stage page и видимое окно создаютс�
 presentation session. Следующий Run кооперативно останавливает текущую сцену и
 переключает содержимое того же окна; Stop и Reset нетерминальны. Только
 «Закрыть презентацию»/Shutdown закрывает browser и Windows agent. У каждой
-явной сцены собственный timeout: live-site сценарии 120 секунд, готовое
+явной сцены собственный timeout: live-site сценарии 120 секунд, lecture 180 секунд, intro 60 минут, готовое
 QR-аутро 30 секунд; policy допускает будущую явную часовую сцену без
 универсального DSL или редактора.
 
@@ -122,22 +142,23 @@ QR-аутро 30 секунд; policy допускает будущую явну
 компоненту. Stop и Reset обрабатываются параллельным polling.
 
 Mobile-контракт скрывает системный cursor и показывает только tap/swipe
-affordances. Отдельный desktop-контракт, когда появится desktop-сценарий,
+affordances. Отдельный desktop-контракт для интерактивных desktop-сценариев
 показывает нажатые клавиши и текст реакции интерфейса.
 
 ### Два непересекающихся трека
 
 M0 остаётся только compatibility experiment и не переписывается ради прототипа.
-Visible prototype работает только с stage, agent, relay, control PWA и четырьмя
+Visible prototype работает только с stage, agent, relay, control PWA и семью
 явными сценами. Он может разрабатываться и демонстрироваться владельцу
 продукта на поддерживаемой dev-ОС до M0 PASS.
 
 До M0 PASS по-прежнему запрещены:
 
 - финальную portable-сборку и backup-video pipeline;
-- desktop-сцены;
-- typing, произвольные media/stats сцены и key hints; текущее фиксированное
-  QR-аутро является узким owner-test исключением;
+- универсальные desktop-сцены; текущее полноэкранное `/vyhodnye/` является
+  узким owner-test исключением;
+- произвольные typing/media/stats сцены и key hints; фиксированные intro,
+  lecture и QR-аутро являются узкими owner-test исключениями;
 - универсальный DSL, произвольные пользовательские сцены и редактор сценариев;
 - `.exe`, Electron, Socket.IO, Redis, отдельная очередь/БД;
 - AI-планирование live-сценария;
@@ -170,11 +191,11 @@ MP4 и SHA-256 лежат в
 |---|---|
 | Телефон: кнопка, countdown, stop | M2 control page + подтверждённая state machine |
 | Интернет, не локальная сеть | отдельный Fly HTTPS relay; телефон и агент делают только исходящие запросы |
-| Mobile/desktop реального сайта | mobile в M1; desktop только после M3 |
+| Mobile/desktop реального сайта | mobile плюс один явный owner-test desktop `/vyhodnye/`; универсальный desktop — после M3 |
 | Tap/pointer и human-like motion | deterministic overlay + настоящие Playwright actions |
-| Сценарии в файлах | четыре явных action path; schema только после нескольких проверенных итераций |
+| Сценарии в файлах | семь явных action path; schema только после нескольких проверенных итераций |
 | «Завтра», event rail, суббота | immutable presentation dataset + exact scenario contract |
-| Typing/произвольные media/stats/captions/keys | post-M3 extensions; одно фиксированное QR-аутро уже проверяется в owner test |
+| Typing/произвольные media/stats/captions/keys | post-M3 extensions; фиксированные intro/lecture/QR — узкие owner-test исключения |
 | Тонкий Windows-клиент | hermetic ZIP, portable Node, managed browser, `start.cmd` |
 | Локальная отладка | Linux smoke полезен, но не заменяет M0 на Windows 10 |
 | Резервная запись | заранее созданный и просмотренный MP4 из того же commit/scenario |
@@ -554,7 +575,7 @@ Autopresenter-Win10-x64/
 
 ### После M3 — полноценное расширение
 
-Последовательно добавлять desktop, typing, дополнительные image/video/stats
+Последовательно добавлять универсальные desktop/typing и дополнительные image/video/stats
 сцены, captions, key hints, дополнительные resolution profiles и только затем
 versioned declarative schema. Проверенное фиксированное QR-аутро не является
 универсальной media-платформой или редактором.
@@ -621,4 +642,4 @@ path-matrix/<candidate>/
 | Data | immutable build, Europe/Kaliningrad, exact event/date/build markers |
 | Distribution | exact portable ZIP + manifests/checksums/self-test |
 | Backup | заранее созданный и просмотренный offline MP4 |
-| Extras | одно фиксированное QR-аутро разрешено owner test; desktop/typing/произвольные media/stats только после M3 |
+| Extras | явные intro/lecture/desktop `/vyhodnye/`/QR разрешены owner test; универсальные desktop/typing/media/stats — только после M3 |

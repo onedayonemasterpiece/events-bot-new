@@ -37,10 +37,15 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         self.assertIn("<title>Пульт презентации</title>", text)
         self.assertIn('rel="manifest" href="/control/manifest.webmanifest"', text)
+        self.assertIn('data-scenario="intro-loop"', text)
+        self.assertIn('data-scenario="lecture-deck"', text)
         self.assertIn('data-scenario="tomorrow-mobile"', text)
         self.assertIn('data-scenario="tomorrow-rail-like"', text)
         self.assertIn('data-scenario="weekend-amber-artifact"', text)
+        self.assertIn('data-scenario="weekend-desktop"', text)
         self.assertIn('data-scenario="outro-qr"', text)
+        self.assertIn("50 минут: фразы", text)
+        self.assertIn("живой сайт в FHD", text)
         self.assertNotIn('class="primary scenario"', text)
         self.assertIn("state.current_command?.action === 'run'", text)
         self.assertIn("button.classList.toggle('primary', selected)", text)
@@ -146,6 +151,19 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 202)
         self.assertEqual(payload["command"]["scenario"], "outro-qr")
 
+        for scenario in ("intro-loop", "lecture-deck", "weekend-desktop"):
+            response, payload = await self.json(
+                "POST",
+                "/api/commands",
+                json={
+                    "action": "run",
+                    "scenario": scenario,
+                    "command_id": scenario,
+                },
+            )
+            self.assertEqual(response.status, 202)
+            self.assertEqual(payload["command"]["scenario"], scenario)
+
         response, payload = await self.json(
             "POST",
             "/api/commands",
@@ -185,7 +203,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             "/api/commands/close-all/ack",
             json={
                 "agent_id": "agent-one",
-                "sequence": 3,
+                "sequence": 6,
                 "status": "closed",
                 "detail": "presentation closed; browser and agent stopped",
             },
@@ -301,6 +319,7 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("agent/abort-utils.mjs", names)
             self.assertIn("agent/pacing.mjs", names)
             self.assertIn("agent/scenario-contract.mjs", names)
+            self.assertIn("agent/presentation-contract.mjs", names)
             self.assertIn("agent/outro-contract.mjs", names)
             self.assertTrue(
                 all(info.date_time == (2025, 1, 1, 0, 0, 0) for info in archive.infolist())
@@ -318,6 +337,10 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIn(
                 'Require-File (Join-Path $AgentDir "pacing.mjs")',
+                bootstrap,
+            )
+            self.assertIn(
+                'Require-File (Join-Path $AgentDir "presentation-contract.mjs")',
                 bootstrap,
             )
             self.assertIn(

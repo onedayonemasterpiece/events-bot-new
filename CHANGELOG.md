@@ -33,6 +33,11 @@
 
 ### Added
 
+- Added three explicit Autopresenter owner-test scenes from the 30 July
+  programme: a 50-minute interruptible typographic intro with music, a seven-
+  slide lecture deck from the provided Telegram images, and a caption-free
+  full-FHD Weekend desktop page with natural scroll. All media uses the existing
+  content-addressed Yandex CDN; no generic DSL or new infrastructure was added.
 - Added a fourth explicit Autopresenter scene, `outro-qr`: a strong fullscreen
   «Как вам?» survey outro using the existing immutable Yandex CDN asset. The
   phone PWA now selects all four scenes while retaining the terminal
@@ -61,6 +66,9 @@
 
 ### Changed
 
+- Expanded «Пульт презентации» to seven explicit scenarios while preserving
+  the single browser/context/page/window lifecycle; the persistent Windows
+  package now includes the pinned presentation media contract.
 - Slowed Autopresenter scene pacing with bounded readiness/settle waits,
   visible human-like wheel and drag trajectories, and deliberate dwell so the
   real mobile interface finishes loading and scrolling before the next action.

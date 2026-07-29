@@ -13,11 +13,24 @@ import {
   TOMORROW_MOBILE_CONTRACT,
   TOMORROW_RAIL_LIKE_CONTRACT,
   WEEKEND_AMBER_ARTIFACT_CONTRACT,
+  INTRO_LOOP_CONTRACT,
+  LECTURE_DECK_CONTRACT,
+  WEEKEND_DESKTOP_CONTRACT,
   OUTRO_QR_CONTRACT,
   resolveScenarioId,
   resolveScenarioTimeoutMs,
   selectDeterministicMobileEvent,
 } from "./scenario-contract.mjs";
+import {
+  INTRO_LOOP_RUNTIME_MS,
+  INTRO_MUSIC_ASSET,
+  INTRO_SCENE_ID,
+  LECTURE_ASSETS,
+  LECTURE_SCENE_ID,
+  LECTURE_SLIDE_INTERVAL_MS,
+  WEEKEND_DESKTOP_SCENE_ID,
+  ZNANIE_LOGO_ASSET,
+} from "./presentation-contract.mjs";
 import {
   DEFAULT_PRESENTER_SCENE_ID,
   OUTRO_QR_ASSET,
@@ -33,6 +46,17 @@ const STAGE_READY_SELECTOR =
 const OUTRO_READY_SELECTOR =
   '[data-presenter-id="presenter-stage"][data-presenter-scene="outro-qr"]';
 const OUTRO_QR_SELECTOR = '[data-presenter-id="outro-qr-image"]';
+const INTRO_SCENE_SELECTOR =
+  '[data-presenter-id="intro-scene"][data-presenter-scene-id="intro-loop"]';
+const INTRO_LOGO_SELECTOR = `${INTRO_SCENE_SELECTOR} .brand-plate--intro img`;
+const INTRO_AUDIO_SELECTOR = '[data-presenter-id="intro-music"]';
+const LECTURE_SCENE_SELECTOR =
+  '[data-presenter-id="lecture-scene"][data-presenter-scene-id="lecture-deck"]';
+const LECTURE_SLIDE_SELECTOR = `${LECTURE_SCENE_SELECTOR} [data-lecture-slide]`;
+const DESKTOP_FRAME_SELECTOR =
+  '#presenter-desktop-frame[data-presenter-id="desktop-site-frame"]';
+const WEEKEND_DESKTOP_ROOT_SELECTOR = '[data-date-listing="weekend"]';
+const SITE_FOOTER_SELECTOR = '[data-site-footer]';
 const TOMORROW_NAV_SELECTOR = '[data-presenter-id="nav-tomorrow"]';
 const TOMORROW_READY_SELECTOR = '[data-presenter-id="tomorrow-page-ready"]';
 const TOMORROW_ROWS_SELECTOR =
@@ -67,6 +91,18 @@ const config = Object.freeze({
   pollWaitMs: numberFromEnv("AUTOPRESENTER_POLL_WAIT_MS", 20_000, 100, 25_000),
   commandTtlGraceMs: numberFromEnv("AUTOPRESENTER_TTL_GRACE_MS", 250, 0, 5_000),
   hardStopMs: numberFromEnv("AUTOPRESENTER_HARD_STOP_MS", 2_000, 250, 10_000),
+  introRuntimeMs: numberFromEnv(
+    "AUTOPRESENTER_INTRO_RUNTIME_MS",
+    INTRO_LOOP_RUNTIME_MS,
+    5_000,
+    INTRO_LOOP_RUNTIME_MS,
+  ),
+  lectureSlideMs: numberFromEnv(
+    "AUTOPRESENTER_LECTURE_SLIDE_MS",
+    LECTURE_SLIDE_INTERVAL_MS,
+    800,
+    20_000,
+  ),
 });
 
 function numberFromEnv(name, fallback, minimum, maximum) {
@@ -167,6 +203,7 @@ class PrototypeAgent {
         "--no-first-run",
         "--disable-session-crashed-bubble",
         "--disable-features=Translate,TranslateUI",
+        "--autoplay-policy=no-user-gesture-required",
         "--lang=ru-RU",
       ],
     });
@@ -560,6 +597,15 @@ class PrototypeAgent {
     if (scenarioId === WEEKEND_AMBER_ARTIFACT_CONTRACT.id) {
       return this.runWeekendAmberArtifact(signal);
     }
+    if (scenarioId === INTRO_LOOP_CONTRACT.id) {
+      return this.runIntroLoop(signal);
+    }
+    if (scenarioId === LECTURE_DECK_CONTRACT.id) {
+      return this.runLectureDeck(signal);
+    }
+    if (scenarioId === WEEKEND_DESKTOP_CONTRACT.id) {
+      return this.runWeekendDesktop(signal);
+    }
     if (scenarioId === OUTRO_QR_CONTRACT.id) {
       return this.runOutroQr(signal);
     }
@@ -570,6 +616,7 @@ class PrototypeAgent {
     await this.setAgentState("stopping", "stop requested");
     if (remote) await this.ack(command, "stopping", "stop requested");
     await this.confirmStopped();
+    await this.stopPresenterScene();
     await this.setAgentState("idle", "agent confirmed stopped");
     if (remote) await this.ack(command, "idle", "agent confirmed stopped");
   }
@@ -633,6 +680,7 @@ class PrototypeAgent {
       if (this.runController === controller) this.runController = null;
       this.activeScenario = null;
     }
+    await this.stopPresenterScene();
   }
 
   async recoverPersistentStage(reason) {
@@ -668,14 +716,16 @@ class PrototypeAgent {
     return frame;
   }
 
-  async showPresenterScene(sceneId, signal) {
+  async showPresenterScene(sceneId, signal, options = {}) {
     assertNotAborted(signal);
     await raceWithAbort(
-      this.page.evaluate((nextSceneId) => {
+      this.page.evaluate(({ nextSceneId, sceneOptions }) => {
         window.dispatchEvent(
-          new CustomEvent("presenter:scene", { detail: { id: nextSceneId } }),
+          new CustomEvent("presenter:scene", {
+            detail: { id: nextSceneId, ...sceneOptions },
+          }),
         );
-      }, sceneId),
+      }, { nextSceneId: sceneId, sceneOptions: options }),
       signal,
     );
     await raceWithAbort(
@@ -684,6 +734,175 @@ class PrototypeAgent {
         .waitFor({ state: "visible", timeout: 10_000 }),
       signal,
     );
+  }
+
+  async stopPresenterScene() {
+    if (
+      !this.page ||
+      typeof this.page.evaluate !== "function" ||
+      (typeof this.page.isClosed === "function" && this.page.isClosed())
+    ) {
+      return;
+    }
+    await this.page
+      .evaluate(() => window.dispatchEvent(new CustomEvent("presenter:stop")))
+      .catch(() => {});
+  }
+
+  async assertStageAssetLoaded(selector, expectedUrl, signal) {
+    const asset = this.page.locator(selector);
+    await raceWithAbort(asset.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    await raceWithAbort(
+      asset.evaluate(async (node, url) => {
+        if (node instanceof HTMLImageElement) {
+          if (!node.complete) {
+            await new Promise((resolve, reject) => {
+              node.addEventListener("load", resolve, { once: true });
+              node.addEventListener("error", reject, { once: true });
+            });
+          }
+          if (node.naturalWidth <= 0 || node.currentSrc !== url) {
+            throw new Error(`stage image failed to load from pinned CDN URL: ${node.currentSrc}`);
+          }
+          return;
+        }
+        if (node instanceof HTMLMediaElement) {
+          if (node.readyState < HTMLMediaElement.HAVE_METADATA) {
+            await new Promise((resolve, reject) => {
+              node.addEventListener("loadedmetadata", resolve, { once: true });
+              node.addEventListener("error", reject, { once: true });
+            });
+          }
+          if (node.currentSrc !== url) {
+            throw new Error(`stage media failed to load from pinned CDN URL: ${node.currentSrc}`);
+          }
+          return;
+        }
+        throw new Error("stage asset node is neither image nor media");
+      }, expectedUrl),
+      signal,
+    );
+  }
+
+  async runIntroLoop(signal) {
+    const startedAt = Date.now();
+    await this.setInteractionMode("stage");
+    await this.setAgentState("running", INTRO_LOOP_CONTRACT.id);
+    await this.showPresenterScene(INTRO_SCENE_ID, signal);
+    const scene = this.page.locator(INTRO_SCENE_SELECTOR);
+    await raceWithAbort(scene.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await this.assertStageAssetLoaded(INTRO_LOGO_SELECTOR, ZNANIE_LOGO_ASSET.url, signal);
+    await this.assertStageAssetLoaded(INTRO_AUDIO_SELECTOR, INTRO_MUSIC_ASSET.url, signal);
+    await raceWithAbort(
+      this.page.waitForFunction(
+        (selector) =>
+          document.querySelector(selector)?.getAttribute("data-intro-state") === "running",
+        INTRO_SCENE_SELECTOR,
+        { timeout: 10_000 },
+      ),
+      signal,
+    );
+    await abortableDelay(config.introRuntimeMs, signal);
+    await this.captureScenario(INTRO_LOOP_CONTRACT.id);
+    return {
+      summary:
+        `two-line human-like intro loop ran ${config.introRuntimeMs}ms with Znanie logo ` +
+        "and CDN music in the persistent stage",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runLectureDeck(signal) {
+    const startedAt = Date.now();
+    await this.setInteractionMode("stage");
+    await this.setAgentState("running", LECTURE_DECK_CONTRACT.id);
+    await this.showPresenterScene(LECTURE_SCENE_ID, signal, {
+      slideIntervalMs: config.lectureSlideMs,
+    });
+    const scene = this.page.locator(LECTURE_SCENE_SELECTOR);
+    await raceWithAbort(scene.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    const slides = this.page.locator(LECTURE_SLIDE_SELECTOR);
+    assertCondition(
+      (await slides.count()) === LECTURE_ASSETS.length,
+      `lecture slide count differs from pinned asset count ${LECTURE_ASSETS.length}`,
+    );
+    for (let index = 0; index < LECTURE_ASSETS.length; index += 1) {
+      await this.assertStageAssetLoaded(
+        `${LECTURE_SLIDE_SELECTOR}[data-lecture-index="${index}"] .lecture-visual img`,
+        LECTURE_ASSETS[index].url,
+        signal,
+      );
+    }
+    await this.assertStageAssetLoaded(
+      `${LECTURE_SLIDE_SELECTOR}[data-lecture-index="0"] .brand-plate--lecture img`,
+      ZNANIE_LOGO_ASSET.url,
+      signal,
+    );
+    await raceWithAbort(
+      this.page.waitForFunction(
+        (selector) =>
+          document.querySelector(selector)?.getAttribute("data-lecture-state") === "complete",
+        LECTURE_SCENE_SELECTOR,
+        { timeout: config.lectureSlideMs * LECTURE_ASSETS.length + 15_000 },
+      ),
+      signal,
+    );
+    assertCondition(
+      (await scene.getAttribute("data-lecture-active-index")) ===
+        String(LECTURE_ASSETS.length - 1),
+      "lecture deck did not finish on the seventh source-backed frame",
+    );
+    await this.captureScenario(LECTURE_DECK_CONTRACT.id);
+    return {
+      summary:
+        `${LECTURE_ASSETS.length} lecture frames completed in source order; ` +
+        "every CDN image and the Znanie logo loaded",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runWeekendDesktop(signal) {
+    const startedAt = Date.now();
+    await raceWithAbort(this.openStage(this.page), signal);
+    await this.setInteractionMode("desktop");
+    await this.setAgentState("running", WEEKEND_DESKTOP_CONTRACT.id);
+    await this.showPresenterScene(WEEKEND_DESKTOP_SCENE_ID, signal);
+    const iframe = this.page.locator(DESKTOP_FRAME_SELECTOR);
+    await raceWithAbort(iframe.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await raceWithAbort(
+      this.page.waitForFunction(
+        (selector) =>
+          document.querySelector(selector)?.getAttribute("data-presenter-frame-ready") ===
+          "true",
+        DESKTOP_FRAME_SELECTOR,
+        { timeout: 30_000 },
+      ),
+      signal,
+    );
+    const frame = this.page.frameLocator(DESKTOP_FRAME_SELECTOR);
+    const weekend = frame.locator(WEEKEND_DESKTOP_ROOT_SELECTOR);
+    await raceWithAbort(weekend.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.waitForEmbeddedReady(frame, signal);
+    const path = await iframe.evaluate(
+      (node) => `${node.contentWindow.location.pathname}${node.contentWindow.location.hash}`,
+    );
+    assertCondition(path === "/vyhodnye/", `desktop weekend route is ${path}`);
+    await abortableDelay(1_500, signal);
+    const footer = frame.locator(SITE_FOOTER_SELECTOR);
+    await raceWithAbort(footer.waitFor({ state: "attached", timeout: 10_000 }), signal);
+    await this.naturalVerticalScroll(
+      frame,
+      footer,
+      signal,
+      DESKTOP_FRAME_SELECTOR,
+    );
+    await abortableDelay(2_000, signal);
+    await this.captureScenario(WEEKEND_DESKTOP_CONTRACT.id);
+    return {
+      summary:
+        "live /vyhodnye/ desktop page filled the 1920x1080 stage and naturally scrolled down",
+      durationMs: Date.now() - startedAt,
+    };
   }
 
   async runOutroQr(signal) {
@@ -1078,7 +1297,12 @@ class PrototypeAgent {
     );
   }
 
-  async naturalVerticalScroll(frame, locator, signal) {
+  async naturalVerticalScroll(
+    frame,
+    locator,
+    signal,
+    iframeSelector = FRAME_SELECTOR,
+  ) {
     assertNotAborted(signal);
     await raceWithAbort(locator.waitFor({ state: "attached", timeout: 10_000 }), signal);
     const geometry = await locator.evaluate((node) => {
@@ -1098,7 +1322,7 @@ class PrototypeAgent {
     });
 
     if (Math.abs(geometry.deltaY) > 4) {
-      const iframeBox = await this.page.locator(FRAME_SELECTOR).boundingBox();
+      const iframeBox = await this.page.locator(iframeSelector).boundingBox();
       if (!iframeBox) throw new Error("presenter iframe has no boundingBox for wheel gesture");
       await this.page.mouse.move(
         Math.round(iframeBox.x + iframeBox.width / 2),
