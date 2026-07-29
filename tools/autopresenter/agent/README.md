@@ -28,9 +28,9 @@ as a directional swipe trail: the finger moves left while the event content is
 presented as moving rightward. Vertical navigation uses sampled wheel input with
 visible intermediate movement; tap helpers never scroll. The explicit like scenario
 uses only the armed rail-edge gesture, and the amber scenario uses only real rail
-drags and taps. Runs are paced to at least 12 seconds. Each explicit scenario has
-its own timeout policy entry: the short tomorrow scenario remains bounded at 30
-seconds, and the gesture-heavy rail/artifact scenarios at 120 seconds. The policy
+drags and taps. Runs are paced to at least 12 seconds. Each explicit scene has
+its own timeout policy entry: all live-site journeys are bounded at 120
+seconds, while the already-loaded QR outro is bounded at 30 seconds. The policy
 admits a future explicit scene lasting up to one hour.
 
 The headed browser, BrowserContext, stage page, and window are created once and

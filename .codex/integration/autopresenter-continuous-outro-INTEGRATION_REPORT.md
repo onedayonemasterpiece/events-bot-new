@@ -41,7 +41,7 @@
 - Runtime and control expose exactly four explicit scenes; no DSL/editor.
 - Sequential Run regression keeps one context generation and one page; Stop
   and Reset remain non-terminal, Shutdown remains the only terminal action.
-- Explicit timeout policy is 30/120/120/30 seconds and validates a future
+- Explicit timeout policy is 120/120/120/30 seconds and validates a future
   explicit timeout up to one hour.
 - Agent `25/25`, relay `13/13`, control auth `2/2`, Windows bootstrap `4/4`,
   presenter-stage `3/3`.

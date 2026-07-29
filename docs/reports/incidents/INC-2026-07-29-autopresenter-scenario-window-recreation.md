@@ -41,6 +41,9 @@ presentation window и открывало другое, разрушая кон�
 - 2026-07-29 12:10 UTC — начат минимальный persistent-session fix и QR-аутро.
 - 2026-07-29 12:15 UTC — после завершения загрузки Telegram screenshot
   подтверждён exact timeout `tomorrow-rail-like exceeded 30000ms`.
+- 2026-07-29 12:40 UTC — первый public exact-source прогон подтвердил, что
+  сетевой `tomorrow-mobile` тоже может обоснованно перейти границу 30 секунд;
+  live-site policy унифицирована на 120 секунд до повторного deploy.
 
 ## Root Cause
 
@@ -133,6 +136,9 @@ presentation window и открывало другое, разрушая кон�
   exact immutable CDN URL and zero browser console/page errors
 - CDN evidence: public asset returned `200 image/png`, immutable one-year cache
   headers and exact SHA-256
+- first public deploy probe: active Run → `outro-qr` switch passed in the same
+  agent generation; `tomorrow-mobile` then reproduced the remaining
+  per-scene 30-second bound and was corrected before the final candidate
 - post-deploy verification: pending
 
 ## Prevention

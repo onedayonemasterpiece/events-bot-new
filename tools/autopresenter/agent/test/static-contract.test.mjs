@@ -52,12 +52,12 @@ test("declares three mobile journeys plus one fullscreen outro and the fallback"
 
 test("scenario timeout policy is explicit and can admit a future one-hour scene", () => {
   assert.deepEqual(SCENARIO_TIMEOUT_POLICY, {
-    "tomorrow-mobile": 30_000,
+    "tomorrow-mobile": 120_000,
     "tomorrow-rail-like": 120_000,
     "weekend-amber-artifact": 120_000,
     "outro-qr": 30_000,
   });
-  assert.equal(resolveScenarioTimeoutMs("tomorrow-mobile"), 30_000);
+  assert.equal(resolveScenarioTimeoutMs("tomorrow-mobile"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("tomorrow-rail-like"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("weekend-amber-artifact"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("outro-qr"), 30_000);

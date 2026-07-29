@@ -6,8 +6,8 @@
 - Fixed Autopresenter scene switching so sequential Run, Stop, and Reset reuse
   one headed browser/context/page/window instead of visibly closing and
   recreating it. Replaced the global 30-second scenario abort with explicit
-  30/120-second per-scene bounds and an hour-capable policy, so the rail-like
-  scenario no longer fails with `exceeded 30000ms`.
+  120-second live-site and 30-second loaded-outro bounds plus an hour-capable
+  policy, so real browser journeys no longer fail with `exceeded 30000ms`.
 - Fixed Autopresenter owner-test readiness so horizontally offscreen lazy media
   does not block a mobile scene, and raised the existing personalization
   consent above the fixed mobile navigation so its real visible confirmation
