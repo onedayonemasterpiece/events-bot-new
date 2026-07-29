@@ -25,7 +25,7 @@ lanes:
     forbidden_files: ["**/*"]
     expected_output: read-only mapping
     verification_scope: inspection_only
-    status: spawned
+    status: committed
   - id: map-skill-docs
     role: planner
     requirement_ids: [R05, R06]
@@ -61,4 +61,4 @@ lanes:
       - production databases
     expected_output: committed and pushed implementation
     verification_scope: full_local
-    status: planned
+    status: committed
