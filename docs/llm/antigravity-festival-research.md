@@ -38,6 +38,44 @@ Antigravity discovery
 -> deterministic final gate and confidence
 ```
 
+Это логические стадии, а не требование делать отдельный Antigravity interaction
+на каждую стадию или страницу.
+
+## Quota-aware topology
+
+Default budget одного фестивального исследования:
+
+```text
+1 Antigravity interaction
+  discovery + fetch + source snapshots
+
+1 обычный structured-output LLM request
+  batched source-local edition review + claims + reconciliation candidate
+
+0 обычных LLM requests
+  если deterministic gate пропускает candidate
+
+или 1 дополнительный обычный verifier request
+  только при конфликте / низком покрытии / критичном поле
+```
+
+Таким образом:
+
+- Antigravity расходует **1 RPD на фестиваль**;
+- hard cap — **2 Antigravity RPD на фестиваль**, если первый interaction
+  завершился `incomplete` и workspace действительно недостаточен;
+- continuation не запускается автоматически: сначала скачивается workspace;
+- review/extraction/verifier не вызывают Antigravity и не расходуют его лимит
+  `100 RPD`;
+- source-local isolation внутри batch обеспечивается отдельными source blocks,
+  а локальный quote validator отклоняет claim, цитата которого отсутствует
+  именно в указанном source text;
+- все deterministic checks выполняются без provider requests.
+
+Разбивать review/extraction на отдельные обычные LLM-вызовы по source допустимо
+только для offline eval или если у соответствующей модели есть отдельный
+явно зарезервированный bulk budget. Это не production default.
+
 Семантика выпуска, типа страницы и тождества событий остаётся LLM-first.
 Детерминированные проверки не угадывают смысл страницы: они только запрещают
 использовать отсутствующую цитату, отвергнутый источник, несовместимый год или
@@ -47,7 +85,8 @@ Antigravity discovery
 
 - Все reusable prompt'ы domain-generic: названия, даты и артисты из конкретного
   probe не становятся few-shot примерами.
-- Один LLM-вызов извлекает факты только из одного источника.
+- Один логический extraction job работает только с одним источником; несколько
+  таких jobs могут исполняться одним quota-aware batch request.
 - Reconciler не видит web и raw-страницы: только уже проверенный claim ledger.
 - Rejected/ambiguous source не может подтверждать финальное поле.
 - Любой значимый scalar в результате имеет `claim_ids`.
@@ -144,11 +183,12 @@ TARGET:
 `status=incomplete` как штатный budget outcome и скачивать snapshot до
 continuation.
 
-## Stage 2. Edition и source role — малый LLM-вызов на один source
+## Stage 2. Edition и source role — source-local job внутри batch
 
-Вызов получает target и ровно один source record с его текстом. Он не видит
-другие страницы, поэтому не может «подтянуть» более правдоподобную программу
-из соседнего выпуска.
+Логический job получает target и ровно один source record с его текстом. В
+quota-aware runtime все такие jobs передаются одним batch-запросом обычной
+structured-output модели. Каждый ответ остаётся привязанным к одному
+`source_id`; quote validator проверяет его только против текста этого source.
 
 ### Prompt
 
@@ -209,7 +249,7 @@ SOURCE TEXT:
 Неоднозначное семантическое противоречие floor не разрешает сам: оно отправляет
 источник в `ambiguous`.
 
-## Stage 3. Atomic claim extraction — малый LLM-вызов на один accepted source
+## Stage 3. Atomic claim extraction — source-local job внутри того же batch
 
 ### Prompt
 
@@ -330,10 +370,12 @@ ACCEPTED_CLAIMS:
 - unknown лучше догадки.
 ```
 
-## Stage 5. Adversarial verifier — отдельный LLM-вызов
+## Stage 5. Adversarial verifier — условный обычный LLM-вызов
 
 Это не self-review в том же контексте. Verifier получает candidate, полный
 source review ledger и claims, но не имеет права переписывать результат.
+Он запускается только при конфликте, низком покрытии или перед
+production-critical публикацией. Это не Antigravity interaction.
 
 ### Prompt
 
