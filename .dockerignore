@@ -15,6 +15,10 @@ backups/
 .gemini/
 .pytest_cache/
 .venv/
+site/node_modules
+site/dist/
+tools/autopresenter/agent/node_modules
+tools/autopresenter/prototype/.venv/
 video_announce/test_output/
 video_announce/test_afisha/
 tmp/
