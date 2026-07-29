@@ -15,9 +15,10 @@
 
 M0 продолжает отдельно доказывать exact portable-связку на целевой Windows 10:
 для каждого кандидата нужны 20/20 холодных loopback-циклов и 5/5 live smoke.
-Параллельно доступен узкий dev vertical slice: headed stage 1920×1080,
-реальный same-origin сайт в `iframe` 430×932, один `tomorrow-mobile`,
-настоящий `locator.click()` и минимальный `aiohttp`-пульт Run/Stop/Reset.
+Параллельно доступен узкий dev vertical slice: fullscreen stage 1920×1080,
+реальный same-origin сайт в увеличенном mobile iframe, один
+`tomorrow-mobile`, настоящие Playwright click/drag и минимальный
+`aiohttp`-пульт Run/Stop/Reset.
 Этот прототип ускоряет product learning, но не является M0 evidence,
 portable release или разрешением публичного показа.
 
@@ -36,8 +37,11 @@ portable release или разрешением публичного показа
 - сцена и review-сборка сайта обслуживаются тем же immutable test deployment,
   поэтому phone и laptop не обязаны находиться в одной сети.
 
-Первый Windows-запуск выполняет online bootstrap зафиксированных Node/npm и
-Playwright-managed browser в распакованную папку без admin rights. Это
+Первый Windows-запуск выполняет полностью автоматический online bootstrap
+зафиксированных Node/npm и Playwright-managed browser в распакованную папку
+без admin rights. Launcher временно отключает QuickEdit только для своего
+console input, использует non-interactive installer flags и после установки
+сам открывает fullscreen stage. Нажатие Enter не входит в happy path. Это
 пригодно для первого owner test, но не подменяет M0: финальный hermetic ZIP
 без runtime downloads и публичный показ остаются заблокированы.
 
@@ -49,11 +53,18 @@ Playwright-managed browser в распакованную папку без admin
 
 1. открывает служебный noindex stage с настоящей главной страницей в iframe;
 2. находит видимый `[data-presenter-id="nav-tomorrow"]`;
-3. прокручивает target в видимую область и получает `boundingBox`;
-4. плавно ведёт декоративный cursor, выполняет настоящий `locator.hover()`;
-5. показывает ripple и выполняет настоящий `locator.click()`;
-6. ждёт `/zavtra/` и `[data-presenter-id="tomorrow-page-ready"]`;
-7. подтверждает `completed` телефону; Stop и Reset обрабатываются параллельным polling.
+3. показывает mobile tap-circle и выполняет настоящий `locator.click()`;
+4. ждёт `/zavtra/` и `[data-presenter-id="tomorrow-page-ready"]`;
+5. детерминированно выбирает конкретную event rail, настоящим Playwright drag
+   листает её к блоку «О событии» и показывает swipe trail;
+6. удерживает описание в кадре, открывает detail выбранного события и
+   прокручивает к настоящему полному описанию;
+7. только после description dwell подтверждает `completed` телефону; Stop и
+   Reset обрабатываются параллельным polling.
+
+Mobile-контракт скрывает системный cursor и показывает только tap/swipe
+affordances. Отдельный desktop-контракт, когда появится desktop-сценарий,
+показывает нажатые клавиши и текст реакции интерфейса.
 
 ### Два непересекающихся трека
 
@@ -116,8 +127,8 @@ MP4 и SHA-256 лежат в
 flowchart LR
   P[Phone control] -->|admin HTTPS| R[Dynamic aiohttp relay<br/>one instance]
   A[Portable Windows agent] -->|agent HTTPS long-poll/status| R
-  A --> S[Local stage<br/>127.0.0.1]
-  S --> F[iframe 430×932<br/>real immutable review build]
+  A --> S[Hosted fullscreen stage<br/>same public HTTPS deployment]
+  S --> F[larger mobile iframe<br/>real immutable review build]
   A --> B[Prepared backup MP4]
 ```
 

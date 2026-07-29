@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Fixed
+- Autopresenter first test now disables Windows Console QuickEdit for the
+  current launch so installation cannot pause in “Select” mode, runs the
+  bootstrap non-interactively, forces the headed browser window to fullscreen,
+  replaces the explanatory side panel with a clean larger-phone stage, and
+  completes `tomorrow-mobile` through a visible tap, horizontal event rail
+  gesture, concrete event detail, and description dwell. Mobile no longer
+  shows a mouse cursor; the separate desktop interaction contract shows
+  pressed keys and UI response.
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added

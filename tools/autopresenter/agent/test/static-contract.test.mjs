@@ -149,3 +149,12 @@ test("stage status, reset, and fixed-resolution evidence contracts remain intact
   assert.match(source, /this\.shutdownPromise/);
   assert.match(source, /await this\.context\?\.close/);
 });
+
+test("headed demonstrator forces the native browser window to fullscreen", () => {
+  assert.match(source, /"--kiosk"/);
+  assert.match(source, /"--start-fullscreen"/);
+  assert.match(source, /newCDPSession\(page\)/);
+  assert.match(source, /Browser\.getWindowForTarget/);
+  assert.match(source, /Browser\.setWindowBounds/);
+  assert.match(source, /windowState: "fullscreen"/);
+});

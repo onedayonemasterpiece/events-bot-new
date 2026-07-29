@@ -18,9 +18,11 @@ Open the printed control URL:
 http://127.0.0.1:8787/control/
 ```
 
-Press **Запустить «Завтра»**. A headed 1920×1080 stage opens the real site in a
-430×932 iframe, moves the decorative cursor, performs real Playwright
-`locator.hover()` and `locator.click()`, and confirms `/zavtra/`.
+Press **Запустить «Завтра»**. A headed fullscreen stage opens the real site in
+an enlarged mobile frame. The scenario shows a tap circle (never a mouse
+cursor), opens `/zavtra/`, horizontally reveals one concrete event's
+**О событии** digest, opens its detail page, and dwells on the real description
+before reporting completion.
 
 The first run installs the lockfile-pinned Node dependencies, the pinned
 Playwright-managed browser and a small local Python environment if `aiohttp` is
@@ -53,14 +55,16 @@ Internet and press **Запустить «Завтра»**. The laptop needs onl
 the phone and laptop do not share a LAN.
 
 The first start downloads portable Node.js, lockfile-pinned dependencies and
-the pinned Playwright-managed browser into the extracted folder. This is an
-online first-test bootstrap, not the final hermetic M3 package and not M0
+the pinned Playwright-managed browser into the extracted folder. It disables
+QuickEdit for that console window and is non-interactive: no Enter confirmation
+is part of the happy path, and the fullscreen stage opens automatically. This
+is an online first-test bootstrap, not the final hermetic M3 package and not M0
 compatibility evidence.
 
 ## Evidence
 
 `AUTOPRESENTER_ARTIFACT_DIR=<absolute-directory>` makes the agent capture a
-1920×1080 pre-click PNG with the cursor/ripple and record the stage as WebM.
+1920×1080 final-description PNG and record the stage as WebM.
 The bounded reviewed PNG and MP4 shipped in `evidence/` are generated from the
 integrated smoke run. Windows 10 portable M3 remains blocked by empirical M0.
 

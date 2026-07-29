@@ -127,8 +127,11 @@ class PrototypeAgent {
       args: [
         "--force-device-scale-factor=1",
         "--kiosk",
+        "--start-fullscreen",
         "--window-position=0,0",
         "--window-size=1920,1080",
+        "--no-first-run",
+        "--disable-session-crashed-bubble",
         "--disable-features=Translate,TranslateUI",
         "--lang=ru-RU",
       ],
@@ -313,12 +316,24 @@ class PrototypeAgent {
     await page.locator(FRAME_SELECTOR).waitFor({ state: "visible", timeout: 30_000 });
     await this.setInteractionMode(TOMORROW_MOBILE_CONTRACT.surface);
     if (!config.headless && config.fullscreen) {
-      const isFullscreen = await page.evaluate(() => Boolean(document.fullscreenElement));
-      if (!isFullscreen) {
+      let browserWindowFullscreen = false;
+      try {
+        const session = await this.context.newCDPSession(page);
+        const { windowId } = await session.send("Browser.getWindowForTarget");
+        await session.send("Browser.setWindowBounds", {
+          windowId,
+          bounds: { windowState: "fullscreen" },
+        });
+        await session.detach();
+        browserWindowFullscreen = true;
+      } catch (error) {
+        log("native browser fullscreen failed; trying document fullscreen", errorText(error));
+      }
+      if (!browserWindowFullscreen) {
         await page.keyboard.press("f");
         await page
           .waitForFunction(() => Boolean(document.fullscreenElement), undefined, { timeout: 2_000 })
-          .catch(() => log("browser denied automatic fullscreen; use local F"));
+          .catch(() => log("automatic fullscreen unavailable; use local F"));
       }
     }
   }
