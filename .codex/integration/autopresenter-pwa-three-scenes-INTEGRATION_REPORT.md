@@ -41,7 +41,7 @@
 | pacing_discovery | support R02 | completed | read-only | readiness, natural scroll and bounded timing contract mapped |
 | pwa_control | R01 | completed | `fa80be39` | 12 relay/PWA tests and 2 behavioral relaunch tests passed |
 | scenario_engine | R02–R04 | completed | `55eccd11` (`5c5dc2d6` implementation) | 17 agent tests, real local runs for all three scenarios, persisted like/artifact assertions |
-| integration_release | R05 | in progress | integration worktree | confirmed shutdown reached durable `closed` and the agent exited 0; public exact-HEAD release pending |
+| integration_release | R05 | completed | `fb30ac6e` | deployed public relay; all three exact-source scenarios and terminal Shutdown passed |
 
 ## Local integration evidence
 
@@ -63,3 +63,23 @@
 - Bounded evidence is stored under
   `artifacts/codex/autopresenter-pwa-three-scenes/` and is intentionally not
   committed.
+
+## Public owner-test release
+
+- Source SHA: `fb30ac6eb98fbe49e8e653edc4a5aade91e3a44e`.
+- Existing Fly app only; no new resources. Machine `2879209fd9e998`, release
+  version 8, one `shared-cpu-1x` / 512 MB instance, health check passing.
+- Image:
+  `kenigevents-autopresenter:deployment-01KYPTPC96EKZMQKPNVVCN6XVT`
+  (`sha256:f303487981728dca0eb7e18620988d224c886d5af9079b9f2c7a97b2647b66be`).
+- Refreshed 12-entry Windows ZIP SHA-256:
+  `fc3f2e76b576af66b8946424a5d75b74563f341e1693e0cdf13ae0efb2fc6265`.
+  It contains `pacing.mjs`, all three scenario contracts and the corrected
+  non-interactive shared-cache bootstrap.
+- Public exact-source E2E completed all three scenarios with the real state
+  assertions recorded above. Confirmed Shutdown left `closed`, the agent exited
+  0, and agent stderr was empty.
+- PWA manifest and public control expose exact names «Пульт презентации» /
+  «Пульт», all three selectors and «Закрыть презентацию».
+- Physical installation/relaunch on the owner's phone and cache reuse by the
+  refreshed ZIP remain owner-device empirical checks, not CI claims.

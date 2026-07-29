@@ -56,10 +56,14 @@ visibility and therefore missed the defect.
 - 2026-07-29 10:20 UTC — owner confirmed the corrected target-Windows run
   works and no longer crashes. Reuse of the already populated cache by a later
   compatible ZIP remains a separate empirical closure check.
-- 2026-07-29 12:00 UTC — the next owner-test candidate added three explicit
+- 2026-07-29 11:10 UTC — the next owner-test candidate added three explicit
   scenes, slower pacing, a PWA control and terminal shutdown without changing
   the pinned Windows dependency/cache contract; full local regression and a
   refreshed public exact-HEAD test were started.
+- 2026-07-29 11:44 UTC — refreshed public candidate completed all three real
+  scenarios; confirmed Shutdown preserved `closed`, closed the browser, and
+  exited the agent with code 0 and empty stderr. Incident remains monitoring
+  only for refreshed-ZIP cache reuse and main reachability.
 
 ## Root Cause
 
@@ -177,6 +181,27 @@ visibility and therefore missed the defect.
   `idle / agent confirmed stopped`
 - remaining closure blockers: target-Windows cache-reuse evidence and
   reachability from `origin/main`
+
+### Three-scene owner-test regression release
+
+- deployed source SHA:
+  `fb30ac6eb98fbe49e8e653edc4a5aade91e3a44e`
+- Fly release 8 image:
+  `kenigevents-autopresenter:deployment-01KYPTPC96EKZMQKPNVVCN6XVT`
+  (`sha256:f303487981728dca0eb7e18620988d224c886d5af9079b9f2c7a97b2647b66be`)
+- machine `2879209fd9e998`: started, 1/1 HTTP checks passing; resource contract
+  unchanged at one shared CPU and 512 MB
+- refreshed 12-entry ZIP SHA-256:
+  `fc3f2e76b576af66b8946424a5d75b74563f341e1693e0cdf13ae0efb2fc6265`
+- regression checks: agent 17/17, relay 13/13, PWA storage 2/2, targeted site
+  16/16; syntax, `git diff --check`, unchanged `tools/autopresenter/m0/**`,
+  and 465-page immutable preview build passed
+- public exact-source E2E:
+  `tomorrow-mobile`, `tomorrow-rail-like`, and
+  `weekend-amber-artifact` all completed against real UI state; Shutdown left
+  durable `closed`, agent exit code was 0, and stderr contained 0 bytes
+- device-only checks still pending: installed-PWA relaunch on the owner's
+  phone and reuse of the populated Windows cache by this refreshed ZIP
 
 ## Prevention
 

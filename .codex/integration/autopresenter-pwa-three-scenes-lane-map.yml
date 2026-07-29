@@ -132,4 +132,4 @@ lanes:
     expected_output: deployed five-requirement owner-test update with exact-HEAD evidence
     verification_scope: full_local
     effort: high
-    status: in_progress
+    status: completed
