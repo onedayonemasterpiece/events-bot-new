@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
-import { siteHomeHref, withBase } from '../lib/events';
+import { withBase } from '../lib/events';
 
 export const GET: APIRoute = () => {
   const scope = withBase('/');
   const configuredStartUrl = String(import.meta.env.PUBLIC_PWA_START_URL || '').trim();
-  const startUrl = configuredStartUrl || siteHomeHref();
+  const startUrl = configuredStartUrl || withBase('/?launch=pwa');
   if (!startUrl.startsWith('/') || startUrl.startsWith('//') || !startUrl.startsWith(scope)) {
     throw new Error(`PUBLIC_PWA_START_URL must stay inside manifest scope ${scope}`);
   }

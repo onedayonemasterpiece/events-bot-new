@@ -105,6 +105,12 @@ of being left only in review chats.
   `Ближайших встреч` was correctly positioned but its intended lower glow was
   not visually legible over the media. R5 strengthens the compact,
   lower-directed glow without changing mobile placement or card geometry.
+- [ ] **P0 after focus-group launch — `TD-PRESENTATION-UI-002`:** verify that
+  the installed PWA home resolves to the real product root and visibly renders
+  `HomeHeroTalk`. The source component remains mounted on `/`; the reported
+  missing hero must be reproduced on the newly published candidate after a
+  fresh uninstall/reinstall, then fixed without delaying the focus onboarding
+  repair.
 
 ## 4. Schedule freshness
 

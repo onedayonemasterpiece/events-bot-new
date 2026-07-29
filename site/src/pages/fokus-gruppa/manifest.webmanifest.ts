@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { siteHomeHref, withBase } from '../../lib/events';
+import { withBase } from '../../lib/events';
 
 export const GET: APIRoute = () => {
   const scope = withBase('/');
@@ -10,7 +10,7 @@ export const GET: APIRoute = () => {
     description: 'Полюбить Калининград: события города и области — с понятным маршрутом к следующему впечатлению.',
     lang: 'ru',
     dir: 'ltr',
-    start_url: siteHomeHref(),
+    start_url: withBase('/?launch=pwa'),
     scope,
     display: 'standalone',
     background_color: '#fbf7ef',

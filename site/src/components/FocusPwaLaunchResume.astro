@@ -1,0 +1,33 @@
+---
+import { withBase } from '../lib/events';
+
+const invitationHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
+---
+
+<div data-focus-pwa-launch-resume data-invitation-href={invitationHref} hidden></div>
+
+<script>
+  import {
+    readFocusParticipationMarker,
+  } from '../lib/focus-group-prototype';
+
+  document.querySelectorAll<HTMLElement>('[data-focus-pwa-launch-resume]').forEach((root) => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('launch') !== 'pwa') return;
+
+    let marker = null;
+    try {
+      marker = readFocusParticipationMarker(window.localStorage);
+    } catch {
+      marker = null;
+    }
+
+    if (marker?.status === 'joining') {
+      window.location.replace(root.dataset.invitationHref || '/fokus-gruppa/priglashenie/?launch=pwa');
+      return;
+    }
+
+    url.searchParams.delete('launch');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  });
+</script>

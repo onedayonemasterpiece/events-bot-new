@@ -65,8 +65,8 @@ test('focus compatibility manifest installs the permanent Announcements app', as
   assert.match(manifest, /id: scope/u);
   assert.match(manifest, /name: 'Анонсы'/u);
   assert.match(manifest, /short_name: 'Анонсы'/u);
-  assert.match(manifest, /start_url: siteHomeHref\(\)/u);
-  assert.doesNotMatch(manifest, /Анонсы Lab|focus-group-icon|zakrytaya-afisha|launch=pwa/u);
+  assert.match(manifest, /start_url: withBase\('\/\?launch=pwa'\)/u);
+  assert.doesNotMatch(manifest, /Анонсы Lab|focus-group-icon|zakrytaya-afisha/u);
   assert.match(manifest, /sizes: '192x192'/u);
   assert.match(manifest, /sizes: '512x512'/u);
   assert.match(manifest, /purpose: 'maskable'/u);
@@ -86,13 +86,12 @@ test('mobile onboarding mounts the permanent manifest and explicit no-confirmati
   assert.doesNotMatch(page, /Анонсы Lab/u);
   assert.match(page, /apple-touch-icon/u);
   assert.match(intake, /assets\/pwa\/focus-group-icon\.png/u);
-  assert.match(intake, /Продолжить пока без подтверждения/u);
+  assert.match(intake, />\s*Пропустить\s*</u);
   assert.match(intake, /activateFocusParticipation/u);
-  assert.match(intake, /launchFromPwa/u);
+  assert.match(intake, /launchFromApp/u);
   assert.doesNotMatch(intake, /авторизац/iu);
-  assert.match(action, /обычное приложение «Анонсы»/u);
-  assert.match(action, /удалять или устанавливать заново ничего не придётся/u);
-  assert.match(action, /Android:[\s\S]*iPhone\/iPad:/u);
+  assert.match(action, /Установить «Анонсы»/u);
+  assert.match(action, /Продолжить на сайте/u);
 });
 
 test('focus install action preserves one-shot beforeinstallprompt and honest installed state', async () => {
@@ -119,7 +118,7 @@ test('focus install action preserves one-shot beforeinstallprompt and honest ins
 
   state.windowRef.dispatch('appinstalled');
   assert.equal(state.root.dataset.focusPwaInstalled, 'true');
-  assert.match(state.status.textContent, /запуск остаётся действием пользователя/u);
+  assert.match(state.status.textContent, /Откройте «Анонсы» с главного экрана/u);
 });
 
 test('iOS guidance never claims that the page can open a system install prompt', () => {

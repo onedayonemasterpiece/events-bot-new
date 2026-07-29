@@ -50,7 +50,7 @@ export function createFocusPwaInstallController({
   const appleMobile = isAppleMobile(navigatorRef);
   if (standalone) {
     if (status) {
-      status.textContent = 'Приложение уже открыто с главного экрана.';
+      status.textContent = '«Анонсы» уже открыты как приложение.';
     }
   } else if (appleMobile) {
     if (status) {
@@ -58,14 +58,17 @@ export function createFocusPwaInstallController({
     }
   } else if (!/android/iu.test(String(navigatorRef.userAgent || ''))) {
     if (status) {
-      status.textContent = 'Если браузер поддерживает установку, используйте его меню. Можно продолжить и в обычной вкладке.';
+      status.textContent = 'Можно продолжить в этой вкладке.';
     }
   }
 
   const onInstalled = () => {
     root.dataset.focusPwaInstalled = 'true';
     if (status) {
-      status.textContent = 'Приложение установлено. Его запуск остаётся действием пользователя на главном экране.';
+      status.textContent = 'Готово. Откройте «Анонсы» с главного экрана.';
+    }
+    if (typeof root.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      root.dispatchEvent(new CustomEvent('focuspwainstalled', { bubbles: true }));
     }
   };
   windowRef.addEventListener('appinstalled', onInstalled);

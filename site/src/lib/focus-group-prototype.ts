@@ -1,6 +1,7 @@
 export const FOCUS_PARTICIPATION_STORAGE_KEY = 'kenigevents:focus-participation:v1';
 export const FOCUS_PARTICIPATION_MARKER_VERSION = 1;
 export const FOCUS_PARTICIPATION_PROGRAM_ID = 'static-site-focus-group-2026';
+export const FOCUS_GROUP_MASS_INVITE_TOKEN = 'focus-group-2026-announcements';
 export const FOCUS_PARTICIPATION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 export const FOCUS_PARTICIPATION_MAX_BYTES = 640;
 export const FOCUS_CONTINUING_CONSENT_STORAGE_KEY = 'kenigevents:focus-continuing-consent:v1';

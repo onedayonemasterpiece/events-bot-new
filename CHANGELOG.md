@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Focus-group joining is now a single-step-at-a-time flow: install or continue
+  on the site, confirm by email/Yandex or skip, then return to the ordinary
+  home. A fresh PWA launch resumes an unfinished invitation instead of losing
+  it or routing a completed participant through the old closed hub.
 - Focus-group onboarding now responds immediately when an email is requested,
   reveals the six-digit code form after delivery, supports cooldown resend and
   exposes an obvious signed-in account/logout state. Its user-facing copy
@@ -22,6 +26,11 @@
   remain outside participation and personalization storage.
 
 ### Added
+- Added the active-participant `Lab` panel to the bottom of every principal
+  static page family. It sends an authenticated 0–10 page score or a problem
+  report with an optional owner-only screenshot, and exposes the same mass
+  invitation as QR/native share. Raw feedback is private in Supabase; the
+  screenshot bucket is private, MIME-restricted and capped at 5 MB.
 
 - Recorded the observed Supabase Egress growth (`3.24 / 5 GB`, roughly
   `0.48–0.90 GB/day`) as P0 investigation / P1 remediation debt: attribute

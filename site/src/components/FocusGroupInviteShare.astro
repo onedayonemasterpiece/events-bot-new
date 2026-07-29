@@ -16,7 +16,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
 
   <div class="focus-share__actions">
     <button class="ke-button ke-button--secondary" type="button" data-focus-share-create>
-      Создать новую ссылку и QR
+      Показать ссылку и QR
     </button>
     <div class="focus-share__result" data-focus-share-result hidden>
       <label for="focus-share-url">Ссылка для проверки</label>
@@ -60,16 +60,9 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
 
 <script>
   import { createFocusInviteQrSvg } from '../lib/focus-invite-qr';
+  import { FOCUS_GROUP_MASS_INVITE_TOKEN } from '../lib/focus-group-prototype';
 
   const roots = document.querySelectorAll<HTMLElement>('[data-focus-share]');
-
-  const makeToken = () => {
-    const bytes = new Uint8Array(32);
-    window.crypto.getRandomValues(bytes);
-    let binary = '';
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    return window.btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-  };
 
   roots.forEach((root) => {
     const createButton = root.querySelector<HTMLButtonElement>('[data-focus-share-create]');
@@ -108,7 +101,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
     createButton.addEventListener('click', () => {
       try {
         const inviteUrl = new URL(root.dataset.invitePath || '/fokus-gruppa/priglashenie/', window.location.origin);
-        inviteUrl.hash = `invite=${makeToken()}`;
+        inviteUrl.hash = `invite=${FOCUS_GROUP_MASS_INVITE_TOKEN}`;
         const exactInviteUrl = inviteUrl.toString();
         const qrSvg = createFocusInviteQrSvg(exactInviteUrl);
         if (qrObjectUrl) URL.revokeObjectURL(qrObjectUrl);
@@ -120,7 +113,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
         qrContainer.innerHTML = qrSvg;
         qrDownload.href = qrObjectUrl;
         result.hidden = false;
-        createButton.textContent = 'Создать другую ссылку и QR';
+        createButton.textContent = 'Ссылка и QR готовы';
         nativeButton.hidden = typeof navigator.share !== 'function';
         setStatus('Ссылка и QR готовы.');
       } catch {

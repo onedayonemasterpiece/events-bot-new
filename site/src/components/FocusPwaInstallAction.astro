@@ -1,132 +1,63 @@
-<section
+<div
   class="focus-pwa"
   data-focus-pwa-install
   data-pwa-install-root
   data-pwa-install-ready="false"
-  aria-labelledby="focus-pwa-title"
 >
-  <div class="focus-pwa__step" aria-hidden="true">02</div>
-  <div class="focus-pwa__copy">
-    <p>Афиша всегда под рукой</p>
-    <h2 id="focus-pwa-title">Установите афишу на главный экран</h2>
-    <span>
-      Установится обычное приложение «Анонсы». После фокус-группы оно останется
-      вашей афишей — удалять или устанавливать заново ничего не придётся.
-    </span>
-  </div>
-
   <button
     type="button"
     class="ke-button ke-button--primary ke-button--large focus-pwa__button"
     data-pwa-install-button
     hidden
   >
-    Установить приложение
+    Установить «Анонсы»
+  </button>
+
+  <button class="focus-pwa__skip" type="button" data-focus-install-skip>
+    Продолжить на сайте
   </button>
 
   <p class="focus-pwa__status" data-pwa-install-status role="status" aria-live="polite">
-    Проверяем, предложит ли браузер установку.
+    Можно продолжить на сайте.
   </p>
-  <div class="focus-pwa__guidance" data-pwa-install-guidance>
-    <strong>Если системная кнопка не появилась</strong>
-    <span>
-      Android: откройте страницу в Chrome и выберите в меню «Установить
-      приложение» или «Добавить на главный экран».
-    </span>
-    <span>
-      iPhone/iPad: откройте страницу в Safari, нажмите «Поделиться» и выберите
-      «На экран Домой».
-    </span>
-  </div>
-  <p class="focus-pwa__after">
-    После установки откройте «Анонсы» с главного экрана. В фокус-группу можно
-    вернуться из приложения, а после исследования оно продолжит работать как обычно.
-  </p>
-</section>
+  <div class="focus-pwa__guidance" data-pwa-install-guidance hidden></div>
+</div>
 
 <style>
   .focus-pwa {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: .8rem 1rem;
-    border: 1px solid var(--ke-color-line, #e1d3c2);
-    border-radius: 1.5rem;
-    padding: clamp(1.1rem, 4vw, 2rem);
-    background:
-      radial-gradient(circle at 100% 0, rgb(15 118 110 / 13%), transparent 16rem),
-      #fff;
-    box-shadow: var(--ke-shadow-1, 0 8px 25px rgb(72 45 25 / 8%));
+    gap: .7rem;
   }
-  .focus-pwa__step {
-    width: 2.5rem;
-    height: 2.5rem;
-    display: grid;
-    place-items: center;
-    grid-row: span 2;
-    border-radius: .85rem;
-    background: var(--ke-color-success-50, #e6f4ef);
-    color: var(--ke-color-success-700, #166a64);
-    font-size: .72rem;
-    font-weight: 900;
-    letter-spacing: .08em;
-  }
-  .focus-pwa__copy { display: grid; gap: .35rem; }
-  .focus-pwa__copy p {
-    margin: 0;
-    color: var(--ke-color-success-700, #166a64);
-    font-size: .7rem;
-    font-weight: 900;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-  }
-  .focus-pwa__copy h2 {
-    margin: 0;
-    color: var(--ke-color-ink, #221a14);
-    font-size: clamp(1.45rem, 5vw, 2.4rem);
-    line-height: 1;
-    letter-spacing: -.035em;
-  }
-  .focus-pwa__copy span,
-  .focus-pwa__after {
-    color: var(--ke-color-muted, #6d6259);
-    line-height: 1.5;
-  }
-  .focus-pwa__button,
-  .focus-pwa__status,
-  .focus-pwa__guidance,
-  .focus-pwa__after {
-    grid-column: 2;
+  .focus-pwa__button {
+    width: 100%;
+    min-height: 52px;
   }
   .focus-pwa__button[hidden] { display: none; }
-  .focus-pwa__status,
-  .focus-pwa__after {
+  .focus-pwa__skip {
+    min-height: 44px;
+    border: 0;
+    padding: .55rem;
+    background: transparent;
+    color: var(--ke-color-brand-700, #98401f);
+    font: 800 .9rem/1.2 var(--ke-font-sans, system-ui, sans-serif);
+    text-decoration: underline;
+    text-underline-offset: .2em;
+    cursor: pointer;
+  }
+  .focus-pwa__skip:focus-visible {
+    border-radius: .7rem;
+    outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 55%, transparent);
+    outline-offset: 2px;
+  }
+  .focus-pwa__status {
+    min-height: 1.4em;
     margin: 0;
-    font-size: .84rem;
+    color: var(--ke-color-muted, #6d6259);
+    font-size: .78rem;
+    line-height: 1.4;
+    text-align: center;
   }
-  .focus-pwa__status { color: var(--ke-color-brand-700, #98401f); font-weight: 750; }
-  .focus-pwa__guidance {
-    display: grid;
-    gap: .3rem;
-    border-radius: 1rem;
-    padding: .85rem 1rem;
-    background: var(--ke-color-info-50, #e7f2f7);
-    color: var(--ke-color-info-700, #1f658d);
-    font-size: .8rem;
-    line-height: 1.45;
-  }
-  .focus-pwa__guidance[hidden] { display: none; }
-  @media (max-width: 620px) {
-    .focus-pwa {
-      grid-template-columns: 1fr;
-      border-radius: 1.25rem;
-    }
-    .focus-pwa__step { grid-row: auto; }
-    .focus-pwa__button,
-    .focus-pwa__status,
-    .focus-pwa__guidance,
-    .focus-pwa__after { grid-column: 1; }
-    .focus-pwa__button { width: 100%; }
-  }
+  .focus-pwa__guidance { display: none; }
 </style>
 
 <script>

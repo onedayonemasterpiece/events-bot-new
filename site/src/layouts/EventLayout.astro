@@ -1,5 +1,6 @@
 ---
 import EventCard from '../components/EventCard.astro';
+import FocusGroupLabPanel from '../components/FocusGroupLabPanel.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import AnnouncementsLockup from '../components/brand/AnnouncementsLockup.astro';
 import MobileBottomNav, { type MobileSection } from '../components/MobileBottomNav.astro';
@@ -11,6 +12,7 @@ import UnusualUnreadRuntime from '../components/UnusualUnreadRuntime.astro';
 import '../styles/design-system.css';
 import { BASE_PATH, getCurrentDate, IS_PRODUCTION, IS_SECRET_CANDIDATE, siteHomeHref, SITE_NAME, SITE_ORIGIN, withBase } from '../lib/events';
 import { INTEREST_CLUBS_PUBLIC_ENABLED } from '../lib/clubs';
+import { focusGroupPageFamily, focusGroupPageLabel } from '../lib/focus-group-surface';
 import type { PreviewEvent } from '../lib/types';
 
 export type HeaderCurrent = 'today' | 'tomorrow' | 'weekend' | 'exhibitions' | 'festivals' | 'popular' | 'unusual' | 'clubs';
@@ -49,6 +51,7 @@ const robots = IS_SECRET_CANDIDATE
   : (noindex ? 'noindex,nofollow,noarchive' : (IS_PRODUCTION ? 'index,follow' : 'noindex,nofollow,noarchive'));
 const safeDescription = description || 'Анонс события в Калининградской области.';
 const routePath = Astro.url.pathname.replace(/\/+$/u, '') || '/';
+const focusPageFamily = focusGroupPageFamily(routePath);
 const derivedMobileSection: MobileSection = heroChrome === 'immersive'
   ? null
   : /\/(?:poisk|podborki)(?:\/|$)/u.test(`${routePath}/`)
@@ -166,7 +169,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     {ogImageHeight && <meta property="og:image:height" content={String(ogImageHeight)} />}
     <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
-    <link rel="manifest" href={`${withBase('/manifest.webmanifest')}?v=20260727-brand-icon-v2`} />
+    <link rel="manifest" href={`${withBase('/manifest.webmanifest')}?v=20260729-focus-resume-v3`} />
     <meta name="theme-color" content="#f7efe3" />
     <meta name="format-detection" content="telephone=yes" />
     {structuredData.map((item) => (
@@ -2505,6 +2508,13 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
     <StaticSiteAuthRuntime />
     <UnusualUnreadRuntime />
     <slot />
+    {focusPageFamily && (
+      <FocusGroupLabPanel
+        pageFamily={focusPageFamily}
+        pageLabel={focusGroupPageLabel(focusPageFamily)}
+        pagePath={routePath}
+      />
+    )}
     <!-- EventCard is the single DOM/interaction source for every client-added card. -->
     <template data-event-card-template="split-actions">
       <EventCard event={runtimeTemplateEvent} variant="split-actions" desktopRelatedCrop runtimeTemplate />

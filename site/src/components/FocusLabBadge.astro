@@ -8,14 +8,18 @@ interface Props {
 }
 
 const {
-  label = 'Лаборатория сайта',
-  detail = 'Прототип',
+  label = 'Lab',
+  detail = 'Фокус-группа',
   size = 'compact',
 } = Astro.props;
 const iconHref = withBase('/assets/icons/lab-flask-287837.svg');
 ---
 
-<span class:list={['focus-lab-badge', `focus-lab-badge--${size}`]}>
+<span
+  class:list={['focus-lab-badge', `focus-lab-badge--${size}`]}
+  role="note"
+  aria-label="Экспериментальная функция"
+>
   <span class="focus-lab-badge__icon" aria-hidden="true">
     <img src={iconHref} width="32" height="32" alt="" />
   </span>

@@ -13,11 +13,53 @@ stop_conditions:
   - A change would merge an unrelated stale branch wholesale.
   - A secret or live OTP would enter Git or a generated page.
 lanes:
+  - id: focus_onboarding_map
+    role: planner
+    requirement_ids: [R08]
+    target: installed-PWA resume gap and current invite state machine
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: read-only routing/state findings
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: focus_feedback_map
+    role: planner
+    requirement_ids: [R09, R10, R11]
+    target: shared page layouts, feedback insertion point and Supabase integration surface
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: read-only component/data map and security risks
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: focus_copy_ux_review
+    role: reviewer
+    requirement_ids: [R12]
+    target: one-step onboarding copy and public-language audit
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: exact user-facing Russian copy and acceptance checklist
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
   - id: integrator
     role: merge_reviewer
-    requirement_ids: [R01, R02, R03, R04, R05, R06, R07]
-    target: shared focus onboarding/auth/PWA product flow
-    depends_on: []
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12, R13]
+    target: shared focus onboarding/auth/PWA/feedback product flow and immutable release
+    depends_on: [focus_onboarding_map, focus_feedback_map, focus_copy_ux_review]
     execution_mode: serial_after_dependency
     branch: integration/focus-email-otp-e2e-20260729
     worktree: /home/dev/.codex/worktrees/events-bot-new/focus-r15-e2e-final
