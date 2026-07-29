@@ -147,6 +147,7 @@
       <p class="meta" id="meta">Интернет · защищённый HTTPS-пульт</p>
     </section>
   </main>
+  <script src="/control/auth-storage.js"></script>
   <script>
     const statusNode = document.querySelector('#status');
     const detailNode = document.querySelector('#detail');
@@ -155,7 +156,8 @@
     const forgetAccessButton = document.querySelector('#forget-access');
     const buttons = [...document.querySelectorAll('button[data-action]')];
     let posting = false;
-    const tokenStorageKey = 'autopresenter-control-token';
+    const accessStorage = window.AutopresenterControlAuth;
+    const reportStorageError = (message, error) => console.warn(message, error);
     const statusLabels = {
       disconnected: 'Агент не подключён',
       idle: 'Готов',
@@ -167,22 +169,10 @@
     const fragment = new URLSearchParams(location.hash.slice(1));
     const fragmentToken = fragment.get('token');
     if (fragmentToken) {
-      sessionStorage.setItem(tokenStorageKey, fragmentToken);
-      try {
-        localStorage.setItem(tokenStorageKey, fragmentToken);
-      } catch (error) {
-        console.warn('Не удалось сохранить доступ для следующего запуска:', error);
-      }
+      accessStorage.remember(fragmentToken, sessionStorage, localStorage, reportStorageError);
       history.replaceState(null, '', `${location.pathname}${location.search}`);
     }
-    let persistedToken = '';
-    try {
-      persistedToken = localStorage.getItem(tokenStorageKey) || '';
-    } catch (error) {
-      console.warn('Не удалось прочитать сохранённый доступ:', error);
-    }
-    const token = sessionStorage.getItem(tokenStorageKey) || persistedToken;
-    if (token) sessionStorage.setItem(tokenStorageKey, token);
+    const token = accessStorage.restore(sessionStorage, localStorage, reportStorageError);
     demonstratorLink.href = token
       ? `/demonstrator/#token=${encodeURIComponent(token)}`
       : '/demonstrator/';
@@ -244,12 +234,7 @@
 
     buttons.forEach(button => button.addEventListener('click', () => issue(button.dataset.action)));
     forgetAccessButton.addEventListener('click', () => {
-      sessionStorage.removeItem(tokenStorageKey);
-      try {
-        localStorage.removeItem(tokenStorageKey);
-      } catch (error) {
-        console.warn('Не удалось удалить сохранённый доступ:', error);
-      }
+      accessStorage.forget(sessionStorage, localStorage, reportStorageError);
       location.replace('/control/');
     });
     readState();

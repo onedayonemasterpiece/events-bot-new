@@ -265,7 +265,13 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("url.pathname.startsWith('/api/')", service_worker)
         self.assertIn("request.method !== 'GET'", service_worker)
         self.assertIn("CONTROL_SHELL_PATHS.has(url.pathname)", service_worker)
+        self.assertIn("'/control/auth-storage.js'", service_worker)
         self.assertNotIn("cache.put(", service_worker)
+
+        response = await self.client.get("/control/auth-storage.js")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.content_type, "text/javascript")
+        self.assertEqual(response.headers["Cache-Control"], "no-cache")
 
         for name, expected_size in (
             ("icon-192.png", 192),
@@ -300,11 +306,14 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("new URLSearchParams(location.hash.slice(1))", control)
         self.assertIn("fragment.get('token')", control)
         self.assertIn(
-            "sessionStorage.setItem(tokenStorageKey, fragmentToken)",
+            "accessStorage.remember(fragmentToken, sessionStorage, localStorage",
             control,
         )
         self.assertIn("history.replaceState", control)
-        self.assertIn("sessionStorage.getItem(tokenStorageKey)", control)
+        self.assertIn(
+            "accessStorage.restore(sessionStorage, localStorage",
+            control,
+        )
         self.assertIn("Authorization: `Bearer ${token}`", control)
         self.assertIn(
             "navigator.serviceWorker.register('/control/service-worker.js'",
@@ -316,23 +325,17 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/control/")
         control = await response.text()
         self.assertIn(
-            "localStorage.setItem(tokenStorageKey, fragmentToken)",
+            "accessStorage.remember(fragmentToken, sessionStorage, localStorage",
             control,
         )
         self.assertIn(
-            "persistedToken = localStorage.getItem(tokenStorageKey) || ''",
+            "accessStorage.restore(sessionStorage, localStorage",
             control,
         )
         self.assertIn(
-            "const token = sessionStorage.getItem(tokenStorageKey) || persistedToken",
+            "accessStorage.forget(sessionStorage, localStorage",
             control,
         )
-        self.assertIn(
-            "if (token) sessionStorage.setItem(tokenStorageKey, token)",
-            control,
-        )
-        self.assertIn("sessionStorage.removeItem(tokenStorageKey)", control)
-        self.assertIn("localStorage.removeItem(tokenStorageKey)", control)
         self.assertIn("location.replace('/control/')", control)
         self.assertNotIn("localStorage.clear(", control)
         self.assertNotIn("sessionStorage.clear(", control)
@@ -351,6 +354,7 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("!tools/autopresenter/relay/**", dockerignore)
         for relative_path in (
             "control/index.html",
+            "control/auth-storage.js",
             "control/manifest.webmanifest",
             "control/service-worker.js",
             "control/icons/icon-192.png",

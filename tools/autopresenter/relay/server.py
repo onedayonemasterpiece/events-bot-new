@@ -27,6 +27,7 @@ ALLOWED_STATUSES = frozenset(
 MAX_LONG_POLL_MS = 25_000
 CONTROL_DIR = Path(__file__).with_name("control")
 CONTROL_FILE = CONTROL_DIR / "index.html"
+CONTROL_AUTH_STORAGE_FILE = CONTROL_DIR / "auth-storage.js"
 CONTROL_MANIFEST_FILE = CONTROL_DIR / "manifest.webmanifest"
 CONTROL_SERVICE_WORKER_FILE = CONTROL_DIR / "service-worker.js"
 CONTROL_ICON_FILES = {
@@ -286,6 +287,17 @@ async def control_manifest(_: web.Request) -> web.FileResponse:
         headers={
             "Cache-Control": "no-cache",
             "Content-Type": "application/manifest+json",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+async def control_auth_storage(_: web.Request) -> web.FileResponse:
+    return web.FileResponse(
+        CONTROL_AUTH_STORAGE_FILE,
+        headers={
+            "Cache-Control": "no-cache",
+            "Content-Type": "text/javascript; charset=utf-8",
             "X-Content-Type-Options": "nosniff",
         },
     )
@@ -572,6 +584,7 @@ def create_app(
         [
             web.get("/control", redirect_to_control),
             web.get("/control/", control_page),
+            web.get("/control/auth-storage.js", control_auth_storage),
             web.get("/control/manifest.webmanifest", control_manifest),
             web.get("/control/service-worker.js", control_service_worker),
             web.get("/control/icons/{name}", control_icon),
