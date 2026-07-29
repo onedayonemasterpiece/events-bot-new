@@ -126,7 +126,7 @@ lanes:
     expected_output: Clean public branch, existing Fly deploy, fresh Windows ZIP, Telegram handoff, integration report.
     verification_scope: targeted_then_full_final
     effort: high
-    status: in_progress
+    status: completed
   - id: AUDIT
     role: reviewer
     requirement_ids: []
@@ -141,4 +141,4 @@ lanes:
     expected_output: Done/Partial/Missing/Blocked verdict per R01-R25.
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: in_progress
