@@ -35,6 +35,6 @@
 | artifact_discovery | support R04 | completed | read-only | route, gates, selectors and storage contract mapped |
 | like_discovery | support R03 | completed | read-only | native edge pull-to-like and durable acceptance mapped |
 | pacing_discovery | support R02 | completed | read-only | readiness, natural scroll and bounded timing contract mapped |
-| pwa_control | R01 | in progress | pending | worker active |
+| pwa_control | R01 | completed | `fa80be39` | 12 relay/PWA tests and 2 behavioral relaunch tests passed |
 | scenario_engine | R02–R04 | in progress | pending | worker active after discovery |
 | integration_release | R05 | planned | pending | pending |

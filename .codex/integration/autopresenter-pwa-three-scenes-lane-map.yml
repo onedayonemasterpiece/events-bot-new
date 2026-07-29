@@ -84,7 +84,7 @@ lanes:
     expected_output: committed PWA manifest/service-worker/icons/control shell and targeted tests
     verification_scope: targeted
     effort: high
-    status: in_progress
+    status: completed
   - id: scenario_engine
     role: worker
     requirement_ids: [R02, R03, R04]
