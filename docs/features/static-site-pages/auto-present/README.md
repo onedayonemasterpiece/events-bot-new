@@ -81,7 +81,7 @@ live-вставки, принятые mobile journeys, двухфазный Week
 итерация проверяет только новые и адресно переоткрытые сцены; полный regression
 выполняется один раз перед финальным handoff. Сейчас без адресного замечания не
 меняются `tomorrow-mobile`, `tomorrow-rail-like`, `weekend-amber-artifact` и
-`outro-qr`.
+`outro-qr`; их method/markup SHA-256 проверяет отдельный freeze gate.
 
 PWA содержит отдельные кнопки для каждой лекционной и сервисной сцены,
 sticky elapsed/countdown timer, стабильный status shelf, время начала intro и

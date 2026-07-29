@@ -7,6 +7,7 @@ export const FOCUS_PREVIEW_BASE_URL =
   "https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256";
 export const FOCUS_INVITATION_URL =
   `${FOCUS_PREVIEW_BASE_URL}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
+export const FOCUS_INVITATION_SCENE_ID = "service-focus-group";
 
 export const ZNANIE_LOGO_ASSET = Object.freeze({
   url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg",
@@ -53,7 +54,7 @@ export const SERVICE_SCENE_IDS = Object.freeze([
   "service-disruption",
   "service-taste",
   "service-feedback",
-  "service-focus-group",
+  FOCUS_INVITATION_SCENE_ID,
   "service-nps",
   "service-future-celebrity",
 ]);
@@ -68,7 +69,6 @@ export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
   "service-disruption",
   "service-taste",
   "service-feedback",
-  "service-focus-group",
   "service-nps",
   "service-future-celebrity",
 ]);
@@ -82,6 +82,13 @@ export const SCENE_ACCEPTANCE_CONTRACT = Object.freeze({
     "weekend-amber-artifact",
     "outro-qr",
   ]),
+  sourceSha256: Object.freeze({
+    "tomorrow-mobile": "c4c6c6845fd129ef8701e34c8463e05570a5b3e7e110e1b12994704d7e03e776",
+    "tomorrow-rail-like": "9c989b823a8a9967dddd4dcd634ec8cc8610f5ba841ab9633ccde0c500e8dba1",
+    "weekend-amber-artifact": "bbc133dda3526fd9ecb790a537776e1a400a1f82100f775645681d6b48691465",
+    "outro-qr": "625cc68566bb112c809d14873d4a446b8fb7cd250a6a769467944a6f2a44ad55",
+    "outro-qr-stage": "7f9cdd99fb2cb1c2c8d581d9e9b1f2c7efac83b4a9e6bc1bcfaef75652478c31",
+  }),
   reopened: Object.freeze({
     "intro-loop": "Hero Talk behavior and timer feedback",
     lecture: "Telegram 843–849: seven held scenes, varied layouts and themes",

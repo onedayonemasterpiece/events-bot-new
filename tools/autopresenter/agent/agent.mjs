@@ -26,6 +26,8 @@ import {
   INTRO_MUSIC_ASSET,
   INTRO_SCENE_ID,
   FOCUS_PREVIEW_BASE_URL,
+  FOCUS_INVITATION_SCENE_ID,
+  FOCUS_INVITATION_URL,
   LECTURE_SCENES,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
@@ -590,6 +592,9 @@ class PrototypeAgent {
     if (scenarioId === INTRO_LOOP_CONTRACT.id) {
       return this.runIntroLoop(signal, command.options);
     }
+    if (scenarioId === FOCUS_INVITATION_SCENE_ID) {
+      return this.runFocusInvitation(signal);
+    }
     if (isStaticPresentationScenario(scenarioId)) {
       return this.runHeldPresentationScene(scenarioId, signal);
     }
@@ -843,6 +848,17 @@ class PrototypeAgent {
         signal,
       );
     }
+    if (scenarioId === "service-joke") {
+      await raceWithAbort(
+        this.page.waitForFunction(
+          (selector) =>
+            document.querySelector(selector)?.getAttribute("data-joke-state") === "complete",
+          selector,
+          { timeout: 15_000 },
+        ),
+        signal,
+      );
+    }
     await abortableDelay(900, signal);
     await this.captureScenario(scenarioId);
     return {
@@ -900,11 +916,75 @@ class PrototypeAgent {
     const frame = await this.focusFrame(frameSelector, signal);
     const medallions = frame.locator("[data-medallion-layout]:visible").first();
     await raceWithAbort(medallions.waitFor({ state: "visible", timeout: 30_000 }), signal);
-    await medallions.scrollIntoViewIfNeeded();
+    const layout = await medallions.getAttribute("data-medallion-layout");
+    const tokenCount = await medallions.locator("[data-medallion-role]").count();
+    if (mode === "desktop") {
+      assertCondition(layout === "desktop-slots", `desktop medallion layout is ${layout}`);
+      assertCondition(
+        (await medallions.getAttribute("data-top-slot-enabled")) === "true",
+        "desktop example has no enabled top medallion slot",
+      );
+      const hero = frame.locator("[data-clean-hero-image]").first();
+      await raceWithAbort(hero.waitFor({ state: "visible", timeout: 30_000 }), signal);
+      const ratio = await hero.evaluate((image) =>
+        image instanceof HTMLImageElement && image.naturalHeight
+          ? image.naturalWidth / image.naturalHeight
+          : 0,
+      );
+      assertCondition(ratio >= 1.45, `desktop example hero ratio ${ratio} is not horizontal`);
+      await abortableDelay(4_500, signal);
+      const inlineMedallions = medallions.locator('[data-medallion-slot="inline"]');
+      await raceWithAbort(
+        inlineMedallions.waitFor({ state: "visible", timeout: 30_000 }),
+        signal,
+      );
+      await this.naturalVerticalScroll(frame, inlineMedallions, signal, frameSelector);
+    } else {
+      await medallions.scrollIntoViewIfNeeded();
+    }
+    assertCondition(tokenCount >= 2, `${mode} example exposes only ${tokenCount} medallion`);
     await abortableDelay(1_400, signal);
     await this.captureScenario(scenarioId);
     return {
       summary: `real focus-preview event page shows medallions in ${mode} composition`,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runFocusInvitation(signal) {
+    const startedAt = Date.now();
+    await this.setInteractionMode("stage");
+    await this.showPresenterScene(FOCUS_INVITATION_SCENE_ID, signal);
+    const selector = '[data-presenter-id="focus-invitation-frame"]';
+    await this.resetFocusFrame(selector, signal);
+    const frame = await this.focusFrame(selector, signal);
+    const expectedUrl = new URL(FOCUS_INVITATION_URL);
+    const actualUrl = new URL(frame.url());
+    assertCondition(
+      actualUrl.origin === expectedUrl.origin && actualUrl.pathname === expectedUrl.pathname,
+      `focus invitation opened unexpected URL ${frame.url()}`,
+    );
+    const body = frame.locator("body");
+    await raceWithAbort(body.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    assertCondition(
+      (await body.innerText()).includes("ПРИГЛАШЕНИЕ ПРИНЯТО"),
+      "focus invitation acceptance is not visible",
+    );
+    const participation = await frame.evaluate(() => {
+      try {
+        return JSON.parse(localStorage.getItem("kenigevents:focus-participation:v1") || "null");
+      } catch {
+        return null;
+      }
+    });
+    assertCondition(
+      participation?.source === "invite_fragment" && participation?.status === "joining",
+      "focus invitation fragment was not accepted into the participation state",
+    );
+    await abortableDelay(1_200, signal);
+    await this.captureScenario(FOCUS_INVITATION_SCENE_ID);
+    return {
+      summary: "focus-group invitation fragment was accepted and the invitation remains visible",
       durationMs: Date.now() - startedAt,
     };
   }

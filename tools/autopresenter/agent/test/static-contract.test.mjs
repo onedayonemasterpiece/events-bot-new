@@ -58,6 +58,7 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
   assert.match(source, /if \(scenarioId === INTRO_LOOP_CONTRACT\.id\)/u);
   assert.match(source, /isStaticPresentationScenario\(scenarioId\)/u);
   assert.match(source, /scenarioId === "service-search-live"/u);
+  assert.match(source, /scenarioId === FOCUS_INVITATION_SCENE_ID/u);
   assert.match(source, /if \(scenarioId === WEEKEND_DESKTOP_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === OUTRO_QR_CONTRACT\.id\)/u);
 });
@@ -69,6 +70,7 @@ test("scenario timeout policy is explicit and can admit a future one-hour scene"
   assert.equal(resolveScenarioTimeoutMs("tomorrow-mobile"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("tomorrow-rail-like"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("weekend-amber-artifact"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("service-focus-group"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("weekend-desktop"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("outro-qr"), 30_000);
   assert.equal(LONG_SCENE_TIMEOUT_CEILING_MS, 3_600_000);
@@ -239,6 +241,11 @@ test("intro, held lecture and desktop scenes use pinned assets and real FHD scro
   assert.match(source, /ZNANIE_LOGO_ASSET\.url/u);
   assert.match(source, /async runHeldPresentationScene\(scenarioId, signal\)/u);
   assert.match(source, /LECTURE_SCENES\.find/u);
+  assert.match(source, /async runFocusInvitation\(signal\)/u);
+  assert.match(source, /participation\?\.source === "invite_fragment"/u);
+  assert.match(source, /await this\.naturalVerticalScroll\(frame, inlineMedallions, signal, frameSelector\)/u);
+  assert.match(source, /desktop example has no enabled top medallion slot/u);
+  assert.match(source, /ratio >= 1\.45/u);
   assert.match(source, /async runWeekendDesktop\(signal\)/u);
   assert.match(source, /setInteractionMode\("desktop-passive"\)/u);
   assert.match(source, /WEEKEND_DESKTOP_ROOT_SELECTOR/u);

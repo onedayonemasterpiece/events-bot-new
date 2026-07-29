@@ -10,6 +10,9 @@
 
 Сцена после принятия получает статус `frozen` в
 `SCENE_ACCEPTANCE_CONTRACT` (`tools/autopresenter/agent/presentation-contract.mjs`).
+SHA-256 выбранных method/markup-сегментов проверяется отдельным
+`accepted-scene-freeze.test.mjs`, поэтому случайная правка замороженной сцены
+роняет gate; осознанная правка требует явно переоткрыть acceptance.
 В черновой итерации проверяются только новые и явно переоткрытые сцены. Полный
 регрессионный прогон выполняется один раз перед финальной передачей. Текущие
 замороженные сцены: `tomorrow-mobile`, `tomorrow-rail-like`,
@@ -50,11 +53,14 @@ poster, portrait, cinema. Горизонтальные изображения п
 
 Явные полноэкранные сцены:
 
-1. `service-wordmark` — кинетический stretch буквы «о» в «Анонсах»;
+1. `service-wordmark` — кинетический вход точного фирменного SVG «Анонсы»,
+   включая широкую мягко-прямоугольную букву «о»;
 2. `service-needs` — найти, поделиться, добавить в календарь;
 3. `weekend-amber-artifact` — принятый живой сценарий артефакта;
 4. `service-medallions`, `service-medallions-desktop`,
    `service-medallions-mobile` — объяснение и реальная страница события;
+   desktop сначала показывает отдельную мысль, затем страницу с горизонтальным
+   hero, top-slot и как минимум двумя медальонами;
 5. `service-joke` — фраза Максиму, пауза 7 секунд, ответ;
 6. `service-search-concept`, `service-search-live` — поиск по смыслам и
    видимый ввод запроса с пульта на телефоне;
@@ -63,7 +69,8 @@ poster, portrait, cinema. Горизонтальные изображения п
    последовательность тезисов из авторского документа.
 
 Новые live-вставки используют предоставленную immutable focus-preview сборку.
-Сцена фокус-группы открывает точный URL
+Сцена фокус-группы открывает точный URL, дожидается принятия invite-fragment
+в `kenigevents:focus-participation:v1` и подтверждает видимый экран приглашения
 `/preview-20260729-focus-simple-r15-a5cc0256/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`.
 Принятые mobile rail/artifact сцены остаются на своей hooked review-сборке:
 в focus-preview нет presenter hooks и замена сломала бы замороженные сценарии.

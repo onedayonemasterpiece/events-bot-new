@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- Closed the Autopresenter service-scene acceptance gaps: the exact branded
+  «Анонсы» vector now enters cleanly, the joke types before its seven-second
+  pause, the desktop medallion example shows a horizontal hero plus top and
+  inline medallions through natural scrolling, and the focus-group invite is
+  considered ready only after the fragment is accepted into participation state.
 - Stabilized the Autopresenter PWA status/detail shelf, preserved focus-group
   participation during presenter-owned resets, and replaced the intro's
   per-grapheme imitation with the original Hero Talk semantic-fragment reveal,

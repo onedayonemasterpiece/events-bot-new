@@ -6,7 +6,7 @@ const weekendUrl = withBase('/vyhodnye/');
 const focusPreviewBase = 'https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256';
 const focusInvitationUrl = `${focusPreviewBase}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
 const focusSearchUrl = `${focusPreviewBase}/poisk/`;
-const focusMedallionUrl = `${focusPreviewBase}/sobytiya/kofeynaya-geometriya-kaliningrad-6989/`;
+const focusMedallionUrl = `${focusPreviewBase}/sobytiya/otkrytie-festivalya-bahosluzhenie-proekt-evgeniya-knyazeva-ya-gospodi-tvor-kaliningrad-6153/`;
 const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/qr-survey-nikiforov-916b6fee58256c4f2111887bf70c502070a55e45a667650dfccdb1495016ccd9.png';
 const znanieLogoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg';
 const introMusicUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3';
@@ -198,10 +198,7 @@ const serviceTextScenes = [
 
       <section class="service-scene service-wordmark presentation-scene theme--light" data-presenter-scene-id="service-wordmark" hidden>
         <p class="service-eyebrow">01 · Полюбить Калининград</p>
-        <div class="wordmark-motion" aria-label="Анонсы">
-          <span>Ан</span><span class="wordmark-o">о</span><span>нсы</span>
-        </div>
-        <img class="wordmark-reference" src={announcementsWordmarkUrl} alt="Итоговый логотип Анонсы" />
+        <img class="wordmark-motion" src={announcementsWordmarkUrl} alt="Анонсы" />
       </section>
 
       <section class="service-scene service-needs presentation-scene theme--dark" data-presenter-scene-id="service-needs" hidden>
@@ -226,8 +223,8 @@ const serviceTextScenes = [
         <p class="service-support">Где? Для кого? На каких условиях? Ключевой факт виден сразу.</p>
       </section>
 
-      <section class="focus-live-scene desktop-medallion-scene presentation-scene theme--light" data-presenter-scene-id="service-medallions-desktop" hidden>
-        <aside class="live-meaning light"><p>Реальная страница</p><h2>Сначала —<br />главное.</h2><span>Медальоны находятся рядом с событием, а не прячутся в описании.</span></aside>
+      <section class="focus-live-scene desktop-medallion-scene presentation-scene theme--light" data-presenter-scene-id="service-medallions-desktop" data-focus-phase="meaning" hidden>
+        <aside class="live-meaning live-meaning--cover light"><p>Реальная страница</p><h2>Сначала —<br />главное.</h2><span>Медальоны находятся рядом с событием, а не прячутся в описании.</span></aside>
         <iframe data-presenter-id="medallion-desktop-frame" data-src={focusMedallionUrl} title="Реальная страница события с медальонами" width="1360" height="1080"></iframe>
       </section>
 
@@ -531,8 +528,13 @@ const serviceTextScenes = [
           const second = scene?.querySelector('[data-joke-line="two"]');
           if (!(scene instanceof HTMLElement) || !(first instanceof HTMLElement) || !(second instanceof HTMLElement)) return;
           scene.dataset.jokeState = 'typing';
-          first.textContent = 'Максим, самое время для шутки';
+          first.textContent = '';
           second.textContent = '';
+          for (const grapheme of Array.from('Максим, самое время для шутки')) {
+            if (token !== generation) return;
+            first.textContent += grapheme;
+            if (!await pause(/[,.!?]/u.test(grapheme) ? 180 : /\s/u.test(grapheme) ? 35 : 72, token)) return;
+          }
           if (!await pause(7000, token)) return;
           second.textContent = 'нет, я сама шутить не умею…';
           scene.dataset.jokeState = 'complete';
@@ -562,6 +564,12 @@ const serviceTextScenes = [
           if (sceneId === 'service-search-live') {
             const meaning = activeScene?.querySelector('[data-search-meaning]');
             if (meaning && options.query) meaning.textContent = `«${options.query}»`;
+          }
+          if (sceneId === 'service-medallions-desktop') {
+            activeScene?.setAttribute('data-focus-phase', 'meaning');
+            window.setTimeout(() => {
+              if (generation === token) activeScene?.setAttribute('data-focus-phase', 'site');
+            }, 4200);
           }
           if (
             sceneId === 'weekend-desktop'
@@ -770,10 +778,8 @@ const serviceTextScenes = [
   .service-scene.is-entering h2, .service-scene.is-entering .service-support { animation: service-copy-in 700ms cubic-bezier(.22,.8,.22,1) both; }
   @keyframes service-copy-in { from { opacity: 0; transform: translateY(32px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
   .service-wordmark { align-items: center; text-align: center; }
-  .wordmark-motion { display: flex; align-items: center; font: 950 clamp(160px,18vw,350px)/.72 Inter,sans-serif; letter-spacing: -.12em; }
-  .wordmark-o { display: inline-block; color: #ff7657; transform-origin: center; animation: wordmark-stretch 2.8s cubic-bezier(.65,0,.22,1) both; }
-  .wordmark-reference { width: min(500px,38vw); margin-top: 55px; opacity: .42; }
-  @keyframes wordmark-stretch { 0% { transform: scaleX(1); } 46% { transform: scaleX(3.8); } 100% { transform: scaleX(1.7); } }
+  .wordmark-motion { display: block; width: min(1240px,78vw); height: auto; transform-origin: center; animation: wordmark-enter 1.8s cubic-bezier(.22,.8,.22,1) both; }
+  @keyframes wordmark-enter { 0% { opacity: 0; transform: scale(.82); filter: blur(14px); } 58% { opacity: 1; transform: scale(1.035); filter: blur(0); } 100% { opacity: 1; transform: scale(1); filter: none; } }
   .need-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; margin-top: clamp(50px,7vh,90px); }
   .need-row > div { min-height: 190px; display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 22px; padding: 30px; border: 1px solid rgba(255,255,255,.18); border-radius: 28px; background: rgba(255,255,255,.06); font-size: clamp(22px,1.6vw,31px); font-weight: 800; }
   .need-row strong { color: #ff7657; font: 900 50px/1 ui-monospace,monospace; }
@@ -793,6 +799,10 @@ const serviceTextScenes = [
   .live-meaning > span { display: block; max-width: 27ch; color: rgba(255,255,255,.68); font: 500 clamp(22px,1.7vw,32px)/1.3 Georgia,serif; }
   .live-meaning.light > span { color: rgba(23,18,26,.68); }
   .focus-live-scene > iframe { width: 100%; height: 100vh; border: 0; background: #fff; box-shadow: -25px 0 65px rgba(0,0,0,.16); }
+  .desktop-medallion-scene { display: block; padding: 0; background: #fff; }
+  .desktop-medallion-scene > iframe { position: absolute; inset: 0; width: 100%; height: 100%; box-shadow: none; }
+  .live-meaning--cover { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; justify-content: center; padding: 110px 150px; background: radial-gradient(circle at 84% 14%,rgba(255,118,87,.24),transparent 30%),#f5efe6; transition: opacity 650ms ease, visibility 650ms; }
+  .desktop-medallion-scene[data-focus-phase="site"] .live-meaning--cover { opacity: 0; visibility: hidden; }
   .focus-phone { justify-self: center; width: min(560px,calc((100vh - 30px)*.4771)); height: calc(100vh - 30px); }
   .invitation-scene { grid-template-columns: .78fr 1.22fr; }
   .celebrity { display: grid; grid-template-columns: 160px 1fr auto; align-items: center; gap: 34px; max-width: 1050px; margin-top: 70px; padding: 28px 34px; border: 1px solid rgba(255,255,255,.16); border-radius: 34px; background: rgba(255,255,255,.07); }

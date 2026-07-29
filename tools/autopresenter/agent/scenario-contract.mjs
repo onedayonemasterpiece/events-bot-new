@@ -1,5 +1,6 @@
 import { OUTRO_SCENE_ID } from "./outro-contract.mjs";
 import {
+  FOCUS_INVITATION_SCENE_ID,
   INTRO_SCENE_ID,
   LECTURE_SCENE_IDS,
   SERVICE_SCENE_IDS,
@@ -40,7 +41,7 @@ export const SCENARIO_IDS = Object.freeze([
   OUTRO_QR_CONTRACT.id,
 ]);
 export const LONG_SCENE_TIMEOUT_CEILING_MS = 60 * 60 * 1_000;
-export const SCENARIO_TIMEOUT_POLICY = Object.freeze(Object.fromEntries(SCENARIO_IDS.map((id) => [id, id === INTRO_LOOP_CONTRACT.id ? LONG_SCENE_TIMEOUT_CEILING_MS : [TOMORROW_MOBILE_CONTRACT.id, TOMORROW_RAIL_LIKE_CONTRACT.id, WEEKEND_AMBER_ARTIFACT_CONTRACT.id, WEEKEND_DESKTOP_CONTRACT.id, "service-search-live", "service-medallions-desktop", "service-medallions-mobile"].includes(id) ? 120_000 : 30_000])));
+export const SCENARIO_TIMEOUT_POLICY = Object.freeze(Object.fromEntries(SCENARIO_IDS.map((id) => [id, id === INTRO_LOOP_CONTRACT.id ? LONG_SCENE_TIMEOUT_CEILING_MS : [TOMORROW_MOBILE_CONTRACT.id, TOMORROW_RAIL_LIKE_CONTRACT.id, WEEKEND_AMBER_ARTIFACT_CONTRACT.id, WEEKEND_DESKTOP_CONTRACT.id, "service-search-live", "service-medallions-desktop", "service-medallions-mobile", FOCUS_INVITATION_SCENE_ID].includes(id) ? 120_000 : 30_000])));
 
 export function isStaticPresentationScenario(id) { return STATIC_PRESENTATION_SCENE_IDS.includes(id); }
 export function resolveScenarioId(value) {
