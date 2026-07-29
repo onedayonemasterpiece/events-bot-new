@@ -174,7 +174,7 @@ class StaticSiteAuthController {
   private snapshot: StaticSiteAuthSnapshot = {
     status: 'checking',
     user: null,
-    message: 'Проверяю сохранённый вход через Яндекс…',
+    message: 'Проверяю сохранённый вход…',
     callbackAttempted: false,
   };
 
@@ -207,7 +207,7 @@ class StaticSiteAuthController {
           this.publish({
             status: 'signed_out',
             user: null,
-            message: 'Войдите через Яндекс.',
+            message: 'Войдите через Яндекс или email.',
             callbackAttempted: this.snapshot.callbackAttempted,
           });
         }
@@ -241,7 +241,7 @@ class StaticSiteAuthController {
       return this.publish({
         status: 'error',
         user: null,
-        message: 'Вход через Яндекс не завершён. Попробуйте ещё раз.',
+        message: 'Вход не завершён. Попробуйте ещё раз.',
         callbackAttempted: true,
       });
     }
@@ -251,7 +251,7 @@ class StaticSiteAuthController {
       this.publish({
         status: 'checking',
         user: null,
-        message: 'Завершаю вход через Яндекс…',
+        message: 'Завершаю вход…',
         callbackAttempted: true,
       });
       writeAuthIntent('callback_started');
@@ -302,10 +302,10 @@ class StaticSiteAuthController {
         }
         writeAuthIntent('callback_failed', { reason: rawMessage.slice(0, 120) });
         const message = rawMessage === 'auth_callback_timeout'
-          ? 'Вход через Яндекс не завершён: браузер не получил ответ. Попробуйте ещё раз.'
+          ? 'Вход не завершён: браузер не получил ответ. Попробуйте ещё раз.'
           : /code verifier|flow state|auth code|invalid|pkce/iu.test(rawMessage)
-            ? 'Вход через Яндекс не завершён: сессия входа устарела. Попробуйте ещё раз с этой страницы.'
-            : 'Вход через Яндекс не завершён. Попробуйте ещё раз.';
+            ? 'Вход не завершён: одноразовая сессия устарела. Попробуйте ещё раз с этой страницы.'
+            : 'Вход не завершён. Попробуйте ещё раз.';
         return this.publish({
           status: 'error',
           user: null,
@@ -333,7 +333,7 @@ class StaticSiteAuthController {
       return this.publish({
         status: 'signed_out',
         user: null,
-        message: 'Войдите через Яндекс.',
+        message: 'Войдите через Яндекс или email.',
         callbackAttempted: false,
       });
     } catch {
@@ -391,7 +391,7 @@ class StaticSiteAuthController {
     this.publish({
       status: 'checking',
       user: null,
-      message: 'Отправляю одноразовую ссылку на email…',
+      message: 'Отправляю одноразовый код и ссылку на email…',
       callbackAttempted: false,
     });
     const { error } = await this.client.auth.signInWithOtp({
@@ -405,7 +405,7 @@ class StaticSiteAuthController {
       this.publish({
         status: 'signed_out',
         user: null,
-        message: 'Письмо отправлено. Откройте одноразовую ссылку в этом браузере.',
+        message: 'Письмо отправлено. Введите шестизначный код или откройте одноразовую ссылку.',
         callbackAttempted: false,
       });
       return true;
@@ -418,6 +418,59 @@ class StaticSiteAuthController {
       callbackAttempted: false,
     });
     return false;
+  }
+
+  async verifyEmailOtp(email: string, token: string): Promise<boolean> {
+    await this.initialize();
+    const normalizedEmail = String(email || '').trim().toLocaleLowerCase('en-US');
+    const normalizedToken = String(token || '').replace(/\D/gu, '').slice(0, 6);
+    if (!normalizedEmail || !/^\d{6}$/u.test(normalizedToken)) return false;
+    writeAuthIntent('email_otp_verify_started');
+    this.publish({
+      status: 'checking',
+      user: null,
+      message: 'Проверяю одноразовый код…',
+      callbackAttempted: false,
+    });
+    try {
+      const { data, error } = await withTimeout(
+        this.client.auth.verifyOtp({
+          email: normalizedEmail,
+          token: normalizedToken,
+          type: 'email',
+        }),
+        CALLBACK_TIMEOUT_MS,
+        'email_otp_verify_timeout',
+      );
+      if (error) throw error;
+      if (data.session?.access_token && data.session.refresh_token) {
+        await this.client.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+      if (!data.user) throw new Error('email_otp_no_user');
+      writeAuthIntent('signed_in');
+      this.publish({
+        status: 'signed_in',
+        user: data.user,
+        message: `Вошли как ${staticAuthDisplayName(data.user)}`,
+        callbackAttempted: false,
+      });
+      return true;
+    } catch (error) {
+      const rawMessage = String((error as Error)?.message || error);
+      writeAuthIntent('email_otp_verify_failed', { reason: rawMessage.slice(0, 120) });
+      this.publish({
+        status: 'error',
+        user: null,
+        message: rawMessage === 'email_otp_verify_timeout'
+          ? 'Проверка заняла слишком много времени. Попробуйте код ещё раз.'
+          : 'Код не подошёл или уже использован. Проверьте шесть цифр либо запросите новое письмо.',
+        callbackAttempted: false,
+      });
+      return false;
+    }
   }
 
   async linkYandexIdentity(): Promise<boolean> {

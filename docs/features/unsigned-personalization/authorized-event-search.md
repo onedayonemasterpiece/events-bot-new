@@ -1224,3 +1224,49 @@ Required release evidence remains: real mobile Yandex login → return to the
 same immutable candidate → menu, Personal and Search all show the same identity
 → Enter submits → a real Edge result renders canonical cards. Mocked callback
 and network-stall tests are regression gates, not a substitute.
+
+## Shared email OTP identity, 2026-07-29
+
+The origin-scoped controller also owns focus-group email identity. Both hosted
+`confirmation` (new/unconfirmed address) and `magic_link` (confirmed address)
+templates have the same product contract. One `signInWithOtp()` request
+produces a hosted email with both `{{ .ConfirmationURL }}` and `{{ .Token }}`:
+
+- the magic link returns to the cleaned current same-origin route and completes
+  the existing explicit PKCE `exchangeCodeForSession` flow;
+- the six-digit fallback is verified with
+  `verifyOtp({ email, token, type: "email" })`;
+- the controller message and callback errors are provider-neutral, because the
+  same callback can now belong to Yandex or email;
+- neither email nor OTP is copied into DOM events, participation storage or
+  personalization storage.
+
+The focus input is one logical accessible control with `inputmode="numeric"`,
+`autocomplete="one-time-code"` and six-character bounds. Non-digits are
+removed, the sixth digit auto-submits without Enter, and a single-flight guard
+prevents duplicate verification for one complete value. A visible submit
+button remains as a keyboard/assistive fallback. Hosted Auth is configured for
+the provider minimum of six digits and a 600-second expiry; a three-digit OTP
+is outside Supabase's supported `6..10` contract and is not an acceptable
+security downgrade.
+
+Canonical hosted-template/config files are
+`supabase/templates/focus-magic-link.subject.txt`,
+`supabase/templates/focus-magic-link.html` and
+`scripts/configure_focus_auth_email.py`. The live gate requires two different
+issuances through the Yandex Cloud technical mail receiver: numeric auto-submit
+plus replay rejection, then magic-link PKCE plus replay rejection. Receipts
+must never retain a live token, confirmation URL or receiver address.
+
+The hosted project uses Yandex Cloud Postbox custom SMTP (`STARTTLS:587`,
+verified `kenigevents.ru`, sender `notify@kenigevents.ru`) because Supabase
+Free projects cannot customize these templates while using the default sender.
+The Postbox credential is scoped only to `yc.postbox.send`, stored only in the
+hosted Auth configuration and must be rotated by 2027-07-29.
+
+Live closure on 2026-07-29 passed both independent issuances. For the numeric
+path, five digits caused zero verify calls, digit six caused exactly one,
+created the session, cleaned callback state and a replay returned `403`. For
+the link path, the originating PKCE browser returned to the clean invite route,
+created the session and a replay returned `303` with an Auth error code. The
+stored evidence contains only hashes, booleans and status codes.

@@ -44,10 +44,17 @@ side effects:
 Это **не закрытая production-сборка**. LocalStorage и opaque path не являются
 авторизацией; focus membership/feedback остаются локальными. Экран вступления
 уже вызывает общий Supabase Auth controller: email использует
-`signInWithOtp()` с одноразовой ссылкой, Яндекс — общий `custom:yandex` flow,
-а для уже вошедшего пользователя `linkIdentity()`. Однако реальная email
-доставка не является принятой до custom SMTP, отдельного E2E inbox и полного
-mailbox browser test; это не выдаётся за готовый cohort backend. Feedback не
+`signInWithOtp()` с одним письмом, содержащим кнопку-ссылку и шестизначный
+цифровой код, Яндекс — общий `custom:yandex` flow, а для уже вошедшего
+пользователя `linkIdentity()`. Код вводится в одно логическое поле с
+`inputmode="numeric"` и `autocomplete="one-time-code"`; шестая цифра запускает
+проверку без Enter, при этом явная кнопка остаётся доступным fallback.
+Трёхзначный код намеренно не используется: hosted Supabase Auth поддерживает
+длину OTP только `6..10`, а минимальный безопасный OOB-код — шесть цифр.
+Оба email-пути прошли live-прогон 29.07.2026 через технический Yandex Cloud
+Mail Trigger receiver: код сработал только после шестой цифры, а отдельная
+ссылка завершила PKCE; оба replay были отклонены. Это всё ещё не выдаётся за
+готовый cohort backend. Feedback не
 отправляется; подарок не объявлен. Обычный
 `astro build` сохраняет публичную R15 главную, а focus mechanics доступны
 только на выделенных `noindex,nofollow,noarchive` routes. Root-form production
@@ -86,6 +93,27 @@ public-release checklist. Запускается отдельный **режим
 promotion, rollback, freshness, OAuth/Search и product-acceptance gates.
 
 ## 2. Не переутяжелённая модель запуска
+
+### P0–P1 capacity debt: Supabase Egress
+
+На 29.07.2026 dashboard personalization-проекта показывает `3.24 GB / 5 GB`
+Egress за текущий billing cycle при `55 MB` database size и `12` MAU. Суточный
+график 24–28 июля уже показывает примерно `0.48–0.90 GB/day` и резкий пик
+26 июля; при таком темпе free-limit может быть исчерпан ещё до роста аудитории.
+Это не обычный «когда-нибудь оптимизировать», а **P0 investigation / P1
+remediation** перед расширением фокус-группы. По одному billing-графику нельзя
+утверждать причину; гипотеза о static-site generation/export обязана быть
+проверена отдельно, а не записана как факт.
+
+P0: снять почасовой/суточный разрез egress по Postgres/Data API/Auth/Storage/
+Realtime/Edge Function, сопоставить пики с `StaticSiteBuilder`, DB-export,
+build/E2E/backfill и cron run IDs, измерить количество запросов, строки и байты,
+а также временно остановить очевидный runaway/repeated full export, если он
+подтвердится. P1: перейти на bounded/incremental export, убрать N+1 и повторные
+полные выборки, уменьшить payload, добавить caching/coalescing и alerts на
+60/75/90% месячного лимита. Расширение аудитории блокируется, если расследование
+не объяснило текущие `~0.5–0.9 GB/day`. Решение о Pro-плане принимается после
+аудита, а не вместо устранения лишнего трафика.
 
 ### Волны
 
@@ -172,11 +200,22 @@ browser-controlled: её нельзя вызвать или запустить �
 но не выдаёт localStorage за готовую production-авторизацию.
 
 Email и Яндекс используют один origin-scoped auth controller. Одноразовая
-email-ссылка возвращается на очищенный текущий focus route; введённый адрес не
-попадает в participation payload/localStorage. Если пользователь сначала
-подтвердил email, Яндекс связывается через `linkIdentity()` с текущим
-`auth.uid()`, а не создаёт второй продуктовый профиль. Этот кодовый контракт не
-заменяет обязательный E2E через custom SMTP и dedicated inbox.
+email-ссылка возвращается на очищенный текущий focus route; цифровой код
+проверяется через `verifyOtp({ type: "email" })`; введённые адрес и код не
+попадают в participation payload/localStorage. Hosted-шаблон использует один
+и тот же `{{ .Token }}` в теме и крупном fallback-блоке письма, а
+`{{ .ConfirmationURL }}` — в единственной основной CTA-кнопке. Срок действия —
+10 минут, длина — шесть цифр. Если пользователь сначала подтвердил email,
+Яндекс связывается через `linkIdentity()` с текущим `auth.uid()`, а не создаёт
+второй продуктовый профиль.
+
+Live E2E обязан выпускать два разных письма: сначала проверить автоматическое
+срабатывание кода после шестой цифры и невозможность повторного использования,
+затем запросить новый OTP и проверить реальную ссылку в том браузере, где был
+создан PKCE verifier. Приём подтверждается техническим Yandex Cloud Mail
+Trigger/Object Storage контуром; в артефакты попадают только хеши, статусы и
+sanitized-разметка, но не live code, URL или адрес receiver. Это технический
+E2E inbox и не замена human support mailbox.
 
 ### Тестер делится режимом
 
@@ -252,6 +291,55 @@ Email запрашивается после объяснения ценност�
 владелец, retention, response SLO и test send/reply. Сейчас канонический human
 mailbox — `info@kenigevents.ru`; одной UI-строки недостаточно, а временная
 подмена адреса не закрывает этот gate.
+
+### Hosted email OTP contract
+
+- тема: `{{ .Token }} — код входа в KenigEvents`, чтобы код был виден в списке
+  писем без открытия;
+- тело: один главный action `Войти по ссылке`, затем крупный шестизначный код
+  как fallback, срок/одноразовость, запрет передачи и безопасный сценарий
+  «не запрашивали — проигнорируйте»;
+- HTML — узкая адаптивная карточка без внешних картинок, трекеров и критичных
+  web-fonts; смысл сохраняется при отключённых стилях;
+- на странице — одно поле, а не шесть независимых accessibility controls:
+  цифровая мобильная клавиатура, системное OTP autocomplete, фильтрация
+  нецифровых символов, auto-submit ровно один раз на полном коде, inline
+  success/error и явный resend после cooldown;
+- `{{ .Token }}` и `{{ .ConfirmationURL }}` живут в одинаково оформленных
+  hosted `confirmation` и `magic_link` шаблонах Supabase: новый адрес сначала
+  получает confirmation-flow, подтверждённый — magic-link flow; email-код и
+  ссылка остаются двумя интерфейсами одной одноразовой выдачи, но E2E проверяет
+  их на разных выдачах;
+- канонические файлы:
+  `supabase/templates/focus-magic-link.subject.txt`,
+  `supabase/templates/focus-magic-link.html`,
+  `scripts/configure_focus_auth_email.py`.
+
+Hosted Auth отправляет эти шаблоны не через ограниченный default sender, а
+через отдельный custom SMTP Yandex Cloud Postbox: подтверждённый домен
+`kenigevents.ru`, sender `notify@kenigevents.ru`, STARTTLS `587`. SMTP API key
+хранится только в hosted Auth config, ограничен `yc.postbox.send` и должен быть
+заменён не позднее `29.07.2027`; секрет и технический receiver в Git/receipt не
+попадают. Management API receipt проверяет hashes обоих template families,
+`mailer_otp_length=6`, `mailer_otp_exp=600` и сам факт SMTP-конфигурации.
+
+Live evidence 29.07.2026: первая выдача дала один и тот же шестизначный код в
+теме и теле, пять цифр не отправили verify-запрос, шестая отправила ровно один,
+создала session и повтор кода получил `403`; вторая выдача завершила PKCE на
+чистом fragment-free route, а повтор ссылки вернулся `303` с error code.
+Канонические sanitized receipts:
+`artifacts/codex/focus-email-live-e2e-20260729/live-email-dual-path-receipt.json`,
+`live-email-final-template-receipt.json`,
+`live-email-code-e2e-receipt.json`,
+`live-email-link-issuance-receipt.json` и
+`live-email-link-replay-receipt.json`.
+
+Визуальное исследование 29.07.2026: Pinterest funnel `60 collected / 60
+self-reviewed / 10 shortlisted` по 10 query families. Приняты не конкретные
+макеты, а повторяющиеся механики: код как крупнейший элемент, одна CTA,
+спокойная узкая карточка, короткая security-copy, отсутствие декоративного
+шума. Источник исследования:
+`/home/dev/projects/pinterest-idea-library/collections/20260729-otp-email-verification-ux-references/`.
 
 ## 5. Feedback model
 
@@ -444,8 +532,8 @@ SMTP; default provider не предназначен для пользовате
 [Auth](https://supabase.com/docs/guides/auth),
 [custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp).
 
-Текущий personalization database занимает около `38 MB`; запас порядка
-`460 MB` до 500 MB ceiling достаточен. Цель — не использовать запас, а сохранить
+На 29.07.2026 personalization database занимает около `55 MB`; запас до
+500 MB ceiling пока достаточен. Цель — не использовать запас, а сохранить
 bounded rows, retention и shed-first weak telemetry.
 
 ## 12. Метрики решения

@@ -1,0 +1,79 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: integration/focus-email-otp-e2e-20260729
+global_constraints:
+  - Never expose Supabase secret keys, OAuth tokens, mailbox contents or one-time codes.
+  - Use the personalization Supabase project only.
+  - Keep the existing SpaceWeb mailbox and production inbound path unchanged.
+  - Three-digit OTP is rejected when the provider or security contract requires six.
+verification_owner: /root
+stop_conditions:
+  - A write would change production MX or replace the retained info@ mailbox.
+  - A secret would need to enter Git, static HTML or an artifact.
+  - The exact candidate or production root no longer matches its recorded SHA.
+lanes:
+  - id: otp_code_mapper
+    role: planner
+    requirement_ids: [R04, R05, R07]
+    target: current auth and focus-group implementation map
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: read-only mapping and test recommendations
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: otp_pinterest_research
+    role: planner
+    requirement_ids: [R06]
+    target: OTP email and mobile input reference patterns
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files:
+      - /home/dev/projects/events-bot-new/**
+    expected_output: Pinterest library collection, board, shortlist and self-review
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: otp_official_contract
+    role: planner
+    requirement_ids: [R02, R03]
+    target: Supabase OTP/template/security contract
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: primary-source constraints and recommendation
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: integrator
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R07, R08]
+    target: implementation, hosted configuration and live E2E closure
+    depends_on: [otp_code_mapper, otp_pinterest_research, otp_official_contract]
+    execution_mode: serial_after_dependency
+    branch: integration/focus-email-otp-e2e-20260729
+    worktree: /home/dev/.codex/worktrees/events-bot-new/focus-r15-e2e-final
+    writable_files:
+      - site/**
+      - docs/**
+      - CHANGELOG.md
+      - .codex/lanes/focus-email-otp-e2e-20260729/**
+    forbidden_files:
+      - .env
+      - artifacts/**
+    expected_output: committed implementation, live receipts and closure audit
+    verification_scope: full_local
+    effort: extra-high
+    status: completed

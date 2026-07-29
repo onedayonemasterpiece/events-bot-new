@@ -4,9 +4,23 @@
 
 ### Fixed
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
+- Focus-group email identity now supports both paths from one hosted message:
+  a visible magic-link CTA and a six-digit numeric OTP whose last digit
+  auto-submits on mobile without Enter. The shared auth callback copy is
+  provider-neutral, OTP verification is single-flight, and email/code values
+  remain outside participation and personalization storage.
 
 ### Added
 
+- Recorded the observed Supabase Egress growth (`3.24 / 5 GB`, roughly
+  `0.48–0.90 GB/day`) as P0 investigation / P1 remediation debt: attribute
+  traffic by product and run ID before scaling the focus group, test
+  StaticSiteBuilder/full-export as a hypothesis rather than an assumed cause,
+  then introduce bounded incremental reads, caching and 60/75/90% alerts.
+- Added the branded responsive Supabase Auth email contract with the OTP in
+  both subject and body, ten-minute expiry, no external imagery/trackers, a
+  guarded Management API configuration tool and live-E2E contracts for
+  separate code and link issuances through Yandex Cloud Mail Trigger.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link

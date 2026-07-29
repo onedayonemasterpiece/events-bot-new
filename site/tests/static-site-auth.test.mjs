@@ -57,14 +57,29 @@ test('focus identity supports real email OTP and Yandex linking through the shar
   assert.match(auth, /async signInWithEmailOtp/u);
   assert.match(auth, /this\.client\.auth\.signInWithOtp/u);
   assert.match(auth, /emailRedirectTo:\s*redirectTo/u);
+  assert.match(auth, /async verifyEmailOtp/u);
+  assert.match(auth, /this\.client\.auth\.verifyOtp/u);
+  assert.match(auth, /type: 'email'/u);
   assert.match(auth, /async linkYandexIdentity/u);
   assert.match(auth, /this\.client\.auth\.linkIdentity/u);
   assert.match(intake, /new URL\(intake\.cleanHref, window\.location\.origin\)\.href/u);
   assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirectTo\)/u);
   assert.match(intake, /auth\.linkYandexIdentity\(\)/u);
-  assert.match(intake, /введённый адрес локально не сохраняется/u);
+  assert.match(intake, /адрес локально не сохраняется/u);
+  assert.match(intake, /inputmode="numeric"/u);
+  assert.match(intake, /autocomplete="one-time-code"/u);
+  assert.match(intake, /maxlength="6"/u);
+  assert.match(intake, /canSubmitEmailOtp/u);
+  assert.match(intake, /token\.length === EMAIL_OTP_LENGTH[\s\S]*void submitOtp\(\)/u);
   assert.match(invitation, /<StaticSiteAuthRuntime \/>/u);
   assert.doesNotMatch(intake, /Макет не отправлял код|провайдер не запускается/u);
+});
+
+test('shared callback copy is provider-neutral for email links and Yandex OAuth', () => {
+  assert.doesNotMatch(auth, /Завершаю вход через Яндекс/u);
+  assert.doesNotMatch(auth, /Вход через Яндекс не завершён/u);
+  assert.match(auth, /message: 'Завершаю вход…'/u);
+  assert.match(auth, /message: 'Вход не завершён\. Попробуйте ещё раз\.'/u);
 });
 
 test('bespoke focus hub exposes auth state while keeping leave-focus as the only membership action', () => {

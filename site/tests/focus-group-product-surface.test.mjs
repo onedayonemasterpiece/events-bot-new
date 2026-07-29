@@ -46,6 +46,23 @@ test('invite intake and secret hub state the local marker boundary', async () =>
   assert.doesNotMatch(helper, /token:/u);
 });
 
+test('email identity offers one message with link plus six-digit mobile OTP', async () => {
+  const [intake, auth, otp] = await Promise.all([
+    read('../src/components/FocusGroupInviteIntake.astro'),
+    read('../src/lib/staticSiteAuth.ts'),
+    read('../src/lib/emailOtp.ts'),
+  ]);
+  assert.match(intake, /Получить код и ссылку/u);
+  assert.match(intake, /inputmode="numeric"/u);
+  assert.match(intake, /autocomplete="one-time-code"/u);
+  assert.match(intake, /pattern="\[0-9\]\{6\}"/u);
+  assert.match(intake, /После шестой цифры[\s\S]*Enter нажимать не нужно/u);
+  assert.match(intake, /window\.setInterval\(tick, 1000\)/u);
+  assert.match(auth, /verifyEmailOtp/u);
+  assert.match(auth, /verifyOtp/u);
+  assert.match(otp, /EMAIL_OTP_LENGTH = 6/u);
+});
+
 test('for-me uses tri-state native radios and separates inferred index', async () => {
   const [component, page] = await Promise.all([
     read('../src/components/InterestProfile.astro'),
