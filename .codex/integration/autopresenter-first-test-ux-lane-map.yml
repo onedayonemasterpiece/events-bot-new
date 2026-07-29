@@ -32,7 +32,7 @@ lanes:
     expected_output: committed automatic bootstrap with targeted verification
     verification_scope: targeted
     effort: high
-    status: spawned
+    status: merged
   - id: stage_ux
     role: worker
     requirement_ids: [R02, R03, R06]
@@ -42,7 +42,7 @@ lanes:
     branch: agent/autopresenter-first-test-ux/stage-ux
     worktree: /home/dev/projects/events-bot-new-autopresenter-stage-ux
     writable_files:
-      - site/src/pages/internal/presenter-stage.astro
+      - site/src/pages/internal/presenter-stage/index.astro
       - site/src/styles/**
       - .codex/lanes/stage_ux/RESULTS.md
     forbidden_files:
@@ -51,7 +51,7 @@ lanes:
     expected_output: committed presentation-only responsive scene and stage hooks
     verification_scope: targeted
     effort: high
-    status: spawned
+    status: merged
   - id: interaction_scenario
     role: worker
     requirement_ids: [R04, R05]
@@ -65,11 +65,11 @@ lanes:
       - .codex/lanes/interaction_scenario/RESULTS.md
     forbidden_files:
       - tools/autopresenter/m0/**
-      - site/src/pages/internal/presenter-stage.astro
+      - site/src/pages/internal/presenter-stage/index.astro
     expected_output: committed mobile scenario and tests
     verification_scope: targeted
     effort: high
-    status: spawned
+    status: merged
   - id: integration_release
     role: merge_reviewer
     requirement_ids: [R07]
@@ -80,7 +80,7 @@ lanes:
     worktree: /home/dev/projects/events-bot-new-autopresenter-internet-test
     writable_files:
       - tools/autopresenter/**
-      - site/src/pages/internal/presenter-stage.astro
+      - site/src/pages/internal/presenter-stage/index.astro
       - docs/features/static-site-pages/auto-present/README.md
       - CHANGELOG.md
       - .codex/integration/**
@@ -89,4 +89,4 @@ lanes:
     expected_output: deployed public first-test update with exact-HEAD evidence
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed
