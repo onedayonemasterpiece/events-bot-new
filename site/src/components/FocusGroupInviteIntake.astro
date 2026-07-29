@@ -5,7 +5,7 @@ import { withBase } from '../lib/events';
 
 const homeHref = withBase('/');
 const programmeHref = withBase('/fokus-gruppa/');
-const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
+const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
 ---
 
 <main
@@ -14,7 +14,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
   data-home-href={homeHref}
 >
   <header class="focus-intake__brand">
-    <img src={focusIconHref} width="1254" height="1254" alt="Полюбить Калининград" />
+    <img src={focusIconHref} width="192" height="192" alt="Полюбить Калининград · Анонсы" />
   </header>
 
   <section class="focus-intake__card" data-intake-pending aria-live="polite">
@@ -49,7 +49,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
       Афишей можно пользоваться и без подтверждения.
     </p>
 
-    <div class="focus-intake__choices" data-static-auth-signed-out>
+    <div class="focus-intake__choices" data-static-auth-signed-out hidden>
       <button class="ke-button ke-button--primary" type="button" data-focus-email-open>
         По электронной почте
       </button>
@@ -63,7 +63,13 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
 
     <div class="focus-intake__signed" data-static-auth-signed-in hidden>
       <strong>Вы вошли как <span data-static-auth-name></span></strong>
-      <span>Участие в розыгрыше подтверждено.</span>
+      <span>Продолжите с этим аккаунтом или выйдите, чтобы проверить другой способ.</span>
+      <button class="ke-button ke-button--primary" type="button" data-focus-account-continue>
+        Продолжить с этим аккаунтом
+      </button>
+      <button class="focus-intake__skip" type="button" data-focus-account-logout>
+        Выйти и выбрать другой способ
+      </button>
     </div>
 
     <div class="focus-intake__email" data-focus-email-panel hidden>
@@ -118,14 +124,18 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
     <h1 data-focus-done-title>Готово, можно начинать</h1>
     <p data-focus-done-copy>Теперь можно выбирать события и делиться впечатлениями.</p>
     <a class="ke-button ke-button--primary ke-button--large" href={homeHref}>Перейти к афише</a>
+    <button class="focus-intake__skip" type="button" data-focus-restart hidden>
+      Пройти подключение заново на этом устройстве
+    </button>
   </section>
 </main>
 
 <script>
-  import { getStaticSiteAuth } from '../lib/staticSiteAuth';
+  import { getStaticSiteAuth, staticAuthDisplayName } from '../lib/staticSiteAuth';
   import { EMAIL_OTP_LENGTH, canSubmitEmailOtp, normalizeEmailOtp } from '../lib/emailOtp';
   import {
     activateFocusParticipation,
+    clearFocusParticipationMarker,
     inspectFocusInviteUrl,
     readFocusParticipationMarker,
     storeFocusParticipationMarker,
@@ -145,6 +155,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
     const identityStatus = root.querySelector<HTMLElement>('[data-focus-identity-status]');
     const doneTitle = root.querySelector<HTMLElement>('[data-focus-done-title]');
     const doneCopy = root.querySelector<HTMLElement>('[data-focus-done-copy]');
+    const restartButton = root.querySelector<HTMLButtonElement>('[data-focus-restart]');
     const homeHref = root.dataset.homeHref || '/';
     let storage: Storage | null = null;
     try { storage = window.localStorage; } catch { storage = null; }
@@ -175,7 +186,12 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
     const launchFromApp = intakeUrl.searchParams.get('launch') === 'pwa';
     const confirmationRequested = intakeUrl.searchParams.get('confirm') === '1';
     if (participation.status === 'active' && confirmationRequested) showStage('identity');
-    else if (participation.status === 'active') showStage('done');
+    else if (participation.status === 'active') {
+      if (doneTitle) doneTitle.textContent = 'Вы уже участвуете';
+      if (doneCopy) doneCopy.textContent = 'Можно открыть афишу или пройти подключение заново на этом устройстве.';
+      if (restartButton) restartButton.hidden = false;
+      showStage('done');
+    }
     else if (launchFromApp || participation.identityChoice !== 'undecided') showStage('identity');
     else showStage('install');
 
@@ -199,6 +215,11 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
     const otpSubmit = root.querySelector<HTMLButtonElement>('[data-focus-email-otp-submit]');
     const yandexButton = root.querySelector<HTMLButtonElement>('[data-focus-yandex]');
     const skipButton = root.querySelector<HTMLButtonElement>('[data-focus-skip]');
+    const signedInPanel = root.querySelector<HTMLElement>('[data-static-auth-signed-in]');
+    const signedOutChoices = root.querySelector<HTMLElement>('[data-static-auth-signed-out]');
+    const signedInName = root.querySelector<HTMLElement>('[data-static-auth-name]');
+    const accountContinue = root.querySelector<HTMLButtonElement>('[data-focus-account-continue]');
+    const accountLogout = root.querySelector<HTMLButtonElement>('[data-focus-account-logout]');
     const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
     const auth = authRuntime?.dataset.authEnabled === 'true'
       && authRuntime.dataset.supabaseUrl
@@ -209,6 +230,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
           provider: authRuntime.dataset.yandexProvider || 'custom:yandex',
         })
       : null;
+    if (!auth && signedOutChoices) signedOutChoices.hidden = false;
 
     let selectedChoice: Exclude<FocusIdentityChoice, 'undecided'> = participation.identityChoice === 'undecided'
       ? 'skipped'
@@ -218,6 +240,22 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
     let lastSubmittedOtp = '';
     let resendTimer = 0;
     let completed = participation.status === 'active';
+
+    restartButton?.addEventListener('click', () => {
+      if (!storage) return;
+      clearFocusParticipationMarker(storage);
+      const restarted = storeFocusParticipationMarker(storage);
+      if (!restarted) {
+        if (doneCopy) doneCopy.textContent = 'Не получилось начать заново. Обновите страницу и повторите.';
+        return;
+      }
+      participation = restarted;
+      completed = false;
+      selectedChoice = 'skipped';
+      if (restartButton) restartButton.hidden = true;
+      showStage('install');
+      root.querySelector<HTMLElement>('[data-intake-stage="install"] h1')?.focus();
+    });
 
     const finish = (choice: Exclude<FocusIdentityChoice, 'undecided'>, verified: boolean) => {
       if (!storage) return;
@@ -267,23 +305,24 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
         emailSend.textContent = 'Отправляем…';
       }
       if (identityStatus) identityStatus.textContent = 'Отправляем письмо…';
-      const sent = await auth.signInWithEmailOtp(email, new URL(intake.cleanHref, window.location.origin).href);
-      emailSend?.removeAttribute('aria-busy');
-      if (!sent) {
-        if (emailSend) {
-          emailSend.disabled = false;
-          emailSend.textContent = 'Получить код и ссылку';
-        }
-        if (identityStatus) identityStatus.textContent = 'Письмо не отправилось. Проверьте адрес или попробуйте позже.';
-        return;
+      let sent = false;
+      try {
+        sent = await auth.signInWithEmailOtp(email, new URL(intake.cleanHref, window.location.origin).href);
+      } catch {
+        sent = false;
       }
+      emailSend?.removeAttribute('aria-busy');
       pendingEmail = email;
       lastSubmittedOtp = '';
       if (otpInput) otpInput.value = '';
       if (otpSubmit) otpSubmit.disabled = true;
       if (otpForm) otpForm.hidden = false;
       otpInput?.focus();
-      if (identityStatus) identityStatus.textContent = 'Письмо отправлено. Введите код или нажмите кнопку в письме.';
+      if (identityStatus) {
+        identityStatus.textContent = sent
+          ? 'Письмо отправлено. Введите код или нажмите кнопку в письме.'
+          : 'Проверьте почту: письмо могло уже прийти. Если его нет, отправьте ещё раз через минуту.';
+      }
       if (emailSend) emailSend.textContent = 'Отправить ещё раз';
       let remaining = 60;
       const tick = () => {
@@ -356,12 +395,42 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
     });
 
     skipButton?.addEventListener('click', () => finish('skipped', false));
+    accountContinue?.addEventListener('click', () => {
+      const choice = selectedChoice === 'yandex_intent' ? 'yandex_intent' : 'email_intent';
+      finish(choice, true);
+    });
+    accountLogout?.addEventListener('click', async () => {
+      if (!auth) return;
+      accountLogout.disabled = true;
+      if (identityStatus) identityStatus.textContent = 'Выходим из аккаунта…';
+      const signedOut = await auth.signOut();
+      accountLogout.disabled = false;
+      if (!signedOut) return;
+      if (signedInPanel) signedInPanel.hidden = true;
+      if (signedOutChoices) signedOutChoices.hidden = false;
+      if (identityStatus) identityStatus.textContent = 'Вы вышли. Теперь выберите способ подтверждения или пропустите этот шаг.';
+    });
 
     if (auth) {
       auth.subscribe((snapshot) => {
         if (snapshot.status === 'signed_in') {
-          const choice = selectedChoice === 'yandex_intent' ? 'yandex_intent' : 'email_intent';
-          finish(choice, true);
+          const intendedChoice = selectedChoice !== 'skipped'
+            ? selectedChoice
+            : participation.identityChoice;
+          if (
+            participation.status === 'joining'
+            && (intendedChoice === 'email_intent' || intendedChoice === 'yandex_intent')
+          ) {
+            finish(intendedChoice, true);
+            return;
+          }
+          if (signedInName) signedInName.textContent = staticAuthDisplayName(snapshot.user);
+          if (signedInPanel) signedInPanel.hidden = false;
+          if (signedOutChoices) signedOutChoices.hidden = true;
+          if (identityStatus) identityStatus.textContent = 'Аккаунт уже подключён. Выберите, как продолжить.';
+        } else if (snapshot.status === 'signed_out') {
+          if (signedInPanel) signedInPanel.hidden = true;
+          if (signedOutChoices) signedOutChoices.hidden = false;
         } else if (snapshot.status === 'error' && identityStatus) {
           identityStatus.textContent = snapshot.message;
           if (otpInput) otpInput.disabled = false;
@@ -384,10 +453,15 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
   }
   .focus-intake__brand { display: flex; justify-content: center; padding: .2rem 0 .8rem; }
   .focus-intake__brand img {
-    width: clamp(5.5rem, 24vw, 7.5rem);
-    aspect-ratio: 1;
+    width: 6.5rem;
+    height: 6.5rem;
+    min-width: 6.5rem;
+    min-height: 6.5rem;
+    max-width: 6.5rem;
+    max-height: 6.5rem;
+    flex: 0 0 6.5rem;
     border-radius: 24%;
-    object-fit: cover;
+    object-fit: contain;
     box-shadow: 0 12px 30px rgb(72 45 25 / 14%);
   }
   .focus-intake__card {
@@ -402,6 +476,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
   .focus-intake__card[hidden] { display: none; }
   .focus-intake__card h1 { margin: 0; color: #221a14; font-size: clamp(1.8rem, 7vw, 2.8rem); line-height: 1.02; letter-spacing: -.045em; }
   .focus-intake__card > p { margin: 0; color: #6d6259; font-size: 1rem; line-height: 1.5; }
+  :global(.focus-intake .ke-button) { max-width: 100%; box-sizing: border-box; }
   .focus-intake__eyebrow { color: #98401f !important; font-size: .72rem !important; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
   .focus-intake__choices { display: grid; gap: .7rem; }
   .focus-intake__choices .ke-button { width: 100%; min-height: 50px; }
@@ -418,6 +493,7 @@ const focusIconHref = withBase('/assets/pwa/focus-group-icon.png');
   .focus-intake__card--done { justify-items: center; text-align: center; }
   .focus-intake__check { width: 3.5rem; height: 3.5rem; display: grid; place-items: center; border-radius: 50%; background: #d7f0ec; color: #0f6c3d; font-size: 2rem; font-weight: 900; }
   .focus-intake__card--done .ke-button { width: 100%; }
+  .focus-intake__signed .ke-button { width: 100%; }
   .focus-intake__spinner { width: 2rem; height: 2rem; border: 3px solid #e1d3c2; border-top-color: #98401f; border-radius: 50%; animation: focus-spin .8s linear infinite; }
   @keyframes focus-spin { to { transform: rotate(360deg); } }
   @media (max-width: 420px) {

@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Fixed
+- Focus-group onboarding now lets an existing participant restart the same
+  device journey, shows the current account with explicit continue/sign-out
+  choices, and falls back from an unavailable install prompt to
+  `Открыть «Анонсы»` plus `Продолжить на сайте`. The lightweight-install copy
+  is user-facing, the compact brand icon has fixed mobile geometry, and an
+  ambiguous email transport response still reveals the OTP form instead of
+  falsely claiming that a delivered message was not sent.
 - Focus-group joining is now a single-step-at-a-time flow: install or continue
   on the site, confirm by email/Yandex or skip, then return to the ordinary
   home. A fresh PWA launch resumes an unfinished invitation instead of losing

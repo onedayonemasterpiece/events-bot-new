@@ -1,3 +1,9 @@
+---
+import { withBase } from '../lib/events';
+
+const openAppHref = `${withBase('/')}?launch=pwa`;
+---
+
 <div
   class="focus-pwa"
   data-focus-pwa-install
@@ -13,12 +19,23 @@
     Установить «Анонсы»
   </button>
 
+  <a
+    class="ke-button ke-button--primary ke-button--large focus-pwa__button"
+    data-pwa-open-app
+    href={openAppHref}
+  >
+    Открыть «Анонсы»
+  </a>
+
   <button class="focus-pwa__skip" type="button" data-focus-install-skip>
     Продолжить на сайте
   </button>
 
+  <p class="focus-pwa__space">
+    Почти не занимает места: это быстрый доступ к афише, а не отдельная тяжёлая программа.
+  </p>
   <p class="focus-pwa__status" data-pwa-install-status role="status" aria-live="polite">
-    Можно продолжить на сайте.
+    Если «Анонсы» уже установлены, нажмите «Открыть». Если не откроются — продолжите на сайте.
   </p>
   <div class="focus-pwa__guidance" data-pwa-install-guidance hidden></div>
 </div>
@@ -30,9 +47,18 @@
   }
   .focus-pwa__button {
     width: 100%;
+    max-width: 100%;
     min-height: 52px;
+    box-sizing: border-box;
   }
   .focus-pwa__button[hidden] { display: none; }
+  .focus-pwa__button:is(a) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+  .focus-pwa__button:is(a)[hidden] { display: none; }
   .focus-pwa__skip {
     min-height: 44px;
     border: 0;
@@ -49,13 +75,17 @@
     outline: 3px solid color-mix(in srgb, var(--ke-color-focus, #0f766e) 55%, transparent);
     outline-offset: 2px;
   }
+  .focus-pwa__space,
   .focus-pwa__status {
-    min-height: 1.4em;
     margin: 0;
     color: var(--ke-color-muted, #6d6259);
     font-size: .78rem;
     line-height: 1.4;
     text-align: center;
+  }
+  .focus-pwa__space {
+    color: var(--ke-color-copy, #44362d);
+    font-weight: 750;
   }
   .focus-pwa__guidance { display: none; }
 </style>

@@ -36,6 +36,8 @@ function fixture({ userAgent = 'Mozilla/5.0 (Linux; Android 15)', standalone = f
   const button = new FakeTarget();
   button.hidden = false;
   button.disabled = false;
+  const openButton = new FakeTarget();
+  openButton.hidden = false;
   const status = { textContent: '' };
   const guidance = { hidden: false };
   const controller = createFocusPwaInstallController({
@@ -43,10 +45,11 @@ function fixture({ userAgent = 'Mozilla/5.0 (Linux; Android 15)', standalone = f
     navigatorRef,
     root,
     button,
+    openButton,
     status,
     guidance,
   });
-  return { windowRef, root, button, status, guidance, controller };
+  return { windowRef, root, button, openButton, status, guidance, controller };
 }
 
 test('focus launcher artwork is an exact copy of the supplied reference PNG', async () => {
@@ -85,19 +88,25 @@ test('mobile onboarding mounts the permanent manifest and explicit no-confirmati
   assert.match(page, /apple-mobile-web-app-title" content="Анонсы"/u);
   assert.doesNotMatch(page, /Анонсы Lab/u);
   assert.match(page, /apple-touch-icon/u);
-  assert.match(intake, /assets\/pwa\/focus-group-icon\.png/u);
+  assert.match(intake, /assets\/pwa\/announcements-brand-v2-192\.png/u);
+  assert.match(intake, /width="192" height="192"/u);
   assert.match(intake, />\s*Пропустить\s*</u);
+  assert.match(intake, /Пройти подключение заново на этом устройстве/u);
+  assert.match(intake, /Выйти и выбрать другой способ/u);
   assert.match(intake, /activateFocusParticipation/u);
   assert.match(intake, /launchFromApp/u);
   assert.doesNotMatch(intake, /авторизац/iu);
   assert.match(action, /Установить «Анонсы»/u);
+  assert.match(action, /Открыть «Анонсы»/u);
   assert.match(action, /Продолжить на сайте/u);
+  assert.match(action, /Почти не занимает места/u);
 });
 
 test('focus install action preserves one-shot beforeinstallprompt and honest installed state', async () => {
   const state = fixture();
   assert.equal(state.root.hidden, false);
   assert.equal(state.button.hidden, true);
+  assert.equal(state.openButton.hidden, false);
 
   const installEvent = {
     prevented: false,
@@ -111,6 +120,7 @@ test('focus install action preserves one-shot beforeinstallprompt and honest ins
   state.windowRef.dispatch('beforeinstallprompt', installEvent);
   assert.equal(installEvent.prevented, true);
   assert.equal(state.button.hidden, false);
+  assert.equal(state.openButton.hidden, true);
   state.button.dispatch('click', { preventDefault() {} });
   state.button.dispatch('click', { preventDefault() {} });
   await new Promise((resolve) => setImmediate(resolve));
@@ -118,7 +128,8 @@ test('focus install action preserves one-shot beforeinstallprompt and honest ins
 
   state.windowRef.dispatch('appinstalled');
   assert.equal(state.root.dataset.focusPwaInstalled, 'true');
-  assert.match(state.status.textContent, /Откройте «Анонсы» с главного экрана/u);
+  assert.equal(state.openButton.hidden, false);
+  assert.match(state.status.textContent, /Открыть “Анонсы”.*главного экрана/u);
 });
 
 test('iOS guidance never claims that the page can open a system install prompt', () => {

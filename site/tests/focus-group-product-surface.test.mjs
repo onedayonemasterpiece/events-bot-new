@@ -69,6 +69,9 @@ test('email identity offers one message with link plus six-digit mobile OTP', as
   assert.match(intake, /aria-busy/u);
   assert.match(intake, /Отправить ещё раз/u);
   assert.match(intake, /window\.setInterval\(tick, 1000\)/u);
+  assert.match(intake, /Проверьте почту: письмо могло уже прийти/u);
+  assert.match(intake, /data-focus-account-continue/u);
+  assert.match(intake, /data-focus-account-logout/u);
   assert.match(auth, /verifyEmailOtp/u);
   assert.match(auth, /verifyOtp/u);
   assert.match(otp, /EMAIL_OTP_LENGTH = 6/u);
