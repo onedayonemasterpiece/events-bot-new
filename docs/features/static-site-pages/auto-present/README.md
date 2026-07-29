@@ -49,6 +49,14 @@ stage. Нажатие Enter не входит в happy path. Это пригод
 test, но не подменяет M0: финальный hermetic ZIP без runtime downloads и
 публичный показ остаются заблокированы.
 
+Windows launcher считает источником истины exit code native Node process:
+диагностическая строка из `stderr` сохраняется в логе, но сама по себе не
+завершает PowerShell bootstrap. Все abortable scenario delays обязаны снимать
+listener и после abort, и после обычного timeout; regression test выполняет 25
+последовательных задержек на одном signal без накопления listeners. Console и
+native output работают в UTF-8. Для headed owner test устанавливается Chromium
+с `--no-shell`, без неиспользуемого headless-shell архива.
+
 ## Продуктовая граница
 
 ### Первый видимый vertical slice

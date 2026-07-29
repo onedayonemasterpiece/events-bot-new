@@ -1,6 +1,6 @@
 # INC-2026-07-29 Autopresenter Windows bootstrap startup failure
 
-Status: monitoring
+Status: open
 Severity: sev1
 Service: Autopresenter owner-only Internet first test
 Opened: 2026-07-29
@@ -42,6 +42,11 @@ visibility and therefore missed the defect.
 - 2026-07-29 09:40 UTC — exact-source public Run → Completed and
   Reset/Run/Stop lifecycle passed; incident moved to monitoring pending the
   target-Windows retry.
+- 2026-07-29 09:57 UTC — owner confirmed bootstrap and shared-cache install
+  succeeded on Windows; scenario then stopped at the event rail when Node
+  emitted `MaxListenersExceededWarning`.
+- 2026-07-29 10:05 UTC — listener leak and PowerShell native-stderr promotion
+  were localized; incident reopened.
 
 ## Root Cause
 
@@ -51,12 +56,24 @@ visibility and therefore missed the defect.
    succeeded.
 3. The regression test checked that the method name existed in source but did
    not require public visibility or a best-effort console-mode fallback.
+4. `abortableDelay()` attached an abort listener for each delay but removed it
+   only on abort, not after a normal timeout; the eleventh listener caused
+   Node's `MaxListenersExceededWarning`.
+5. Windows PowerShell ran with `$ErrorActionPreference = "Stop"` and merged
+   native stderr into its pipeline, promoting that warning into a terminating
+   bootstrap error even though the Node process had not returned a failing exit
+   code.
 
 ## Contributing Factors
 
 - no target-Windows execution was available before owner handoff;
 - runtime/dependency storage was scoped to the extracted ZIP rather than to a
   stable per-user cache.
+- public Linux E2E asserted final state and process exit, but did not fail on
+  stderr warnings and did not reproduce Windows PowerShell native-error
+  semantics;
+- Windows console code page was not explicitly UTF-8, producing mojibake in
+  Russian event-title diagnostics.
 
 ## Automation Contract
 
@@ -76,7 +93,10 @@ visibility and therefore missed the defect.
 ### Mandatory checks before closure or deploy
 
 - bootstrap contract tests require public console methods, best-effort fallback
-  and the stable versioned cache;
+  and the stable versioned cache; native stderr alone must not own launcher
+  failure;
+- abort utility tests execute at least 20 sequential delays on one signal and
+  prove zero retained abort listeners after every normal completion;
 - agent and relay suites pass;
 - refreshed ZIP contains the corrected bootstrap and dependency-aware agent;
 - public exact-HEAD Run → Completed and Reset/Run/Stop lifecycle pass;
@@ -100,6 +120,9 @@ visibility and therefore missed the defect.
 - make all three console P/Invoke methods public;
 - make console-mode adjustment best-effort so a console API limitation cannot
   block the demonstrator.
+- remove abort listeners after both normal delay completion and cancellation;
+- make the native Node exit code, not warning text on stderr, own launcher
+  failure.
 
 ## Corrective Actions
 
@@ -108,6 +131,8 @@ visibility and therefore missed the defect.
 - teach the agent to resolve Playwright from that explicit shared dependency
   root;
 - add regression assertions for member visibility, fallback and cache reuse.
+- force UTF-8 for CMD/PowerShell native output and omit the unused Chromium
+  headless shell from new headed-browser installs.
 
 ## Follow-up Actions
 

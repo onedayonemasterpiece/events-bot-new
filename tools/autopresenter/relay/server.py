@@ -436,6 +436,7 @@ def windows_test_archive(request: web.Request) -> bytes:
         FIRST_TEST_DIR / "self-test.ps1": "self-test.ps1",
         FIRST_TEST_DIR / "README-FIRST-TEST.txt": "README-FIRST-TEST.txt",
         AGENT_DIR / "agent.mjs": "agent/agent.mjs",
+        AGENT_DIR / "abort-utils.mjs": "agent/abort-utils.mjs",
         AGENT_DIR / "scenario-contract.mjs": "agent/scenario-contract.mjs",
         AGENT_DIR / "package.json": "agent/package.json",
         AGENT_DIR / "package-lock.json": "agent/package-lock.json",

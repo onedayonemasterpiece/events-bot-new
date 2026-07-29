@@ -11,6 +11,7 @@ import {
   TOMORROW_MOBILE_CONTRACT,
   selectDeterministicMobileEvent,
 } from "./scenario-contract.mjs";
+import { abortableDelay, assertNotAborted } from "./abort-utils.mjs";
 
 const SCENARIO = TOMORROW_MOBILE_CONTRACT.id;
 const VIEWPORT = Object.freeze({ width: 1920, height: 1080 });
@@ -55,31 +56,6 @@ function log(message, details = undefined) {
 
 function errorText(error) {
   return error instanceof Error ? error.message : String(error);
-}
-
-function abortError() {
-  const error = new Error("scenario stopped");
-  error.name = "AbortError";
-  return error;
-}
-
-function assertNotAborted(signal) {
-  if (signal?.aborted) throw abortError();
-}
-
-function abortableDelay(milliseconds, signal) {
-  assertNotAborted(signal);
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, milliseconds);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        reject(abortError());
-      },
-      { once: true },
-    );
-  });
 }
 
 function loadPlaywright() {

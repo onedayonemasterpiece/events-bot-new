@@ -10,6 +10,7 @@ try {
         "bootstrap.ps1",
         "test-config.json",
         "agent\agent.mjs",
+        "agent\abort-utils.mjs",
         "agent\package.json",
         "agent\package-lock.json"
     )

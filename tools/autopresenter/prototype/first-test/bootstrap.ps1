@@ -1,5 +1,9 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::InputEncoding = $Utf8NoBom
+[Console]::OutputEncoding = $Utf8NoBom
+$OutputEncoding = $Utf8NoBom
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AgentDir = Join-Path $Root "agent"
@@ -193,7 +197,7 @@ try {
     )
     if (-not $BrowserReady) {
         Write-Step "Installing the pinned Playwright-managed browser into the shared cache..."
-        & $NodeExe $PlaywrightCli install chromium
+        & $NodeExe $PlaywrightCli install --no-shell chromium
         if ($LASTEXITCODE -ne 0) { throw "Playwright browser install failed with exit code $LASTEXITCODE." }
         Set-Content -LiteralPath $BrowserMarker -Value $LockHash -Encoding ASCII
     }
@@ -212,8 +216,23 @@ try {
     Write-Host "Use the PHONE link and press Run." -ForegroundColor Green
     Write-Host "Close this window to stop the demonstrator." -ForegroundColor DarkGray
     Write-Host ""
-    & $NodeExe (Join-Path $AgentDir "agent.mjs") 2>&1 | Tee-Object -FilePath $LogPath -Append
-    $ExitCode = $LASTEXITCODE
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell converts native stderr lines (including harmless
+        # Node warnings) into ErrorRecord objects. Do not turn those lines into
+        # a terminating bootstrap failure; the native process exit code owns
+        # success/failure here.
+        $ErrorActionPreference = "Continue"
+        & $NodeExe (Join-Path $AgentDir "agent.mjs") 2>&1 | Tee-Object -FilePath $LogPath -Append
+        $AgentExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+    if ($AgentExitCode -ne 0) {
+        throw "Presenter agent failed with exit code $AgentExitCode."
+    }
+    $ExitCode = 0
 }
 catch {
     $Message = "ERROR: {0}" -f $_.Exception.Message

@@ -198,6 +198,7 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("START-DEMONSTRATOR.cmd", names)
             self.assertIn("SELF-TEST.cmd", names)
             self.assertIn("agent/agent.mjs", names)
+            self.assertIn("agent/abort-utils.mjs", names)
             self.assertIn("agent/scenario-contract.mjs", names)
             self.assertTrue(
                 all(info.date_time == (2025, 1, 1, 0, 0, 0) for info in archive.infolist())

@@ -33,7 +33,7 @@ class BootstrapContractTest(unittest.TestCase):
         script = self.bootstrap
         launcher = (FIRST_TEST_DIR / "START-DEMONSTRATOR.cmd").read_text(encoding="utf-8")
         npm = script.index("& $NodeExe $NpmCli ci")
-        playwright = script.index("& $NodeExe $PlaywrightCli install chromium")
+        playwright = script.index("& $NodeExe $PlaywrightCli install --no-shell chromium")
         agent = script.index('& $NodeExe (Join-Path $AgentDir "agent.mjs")')
         self.assertIn("-NonInteractive", launcher)
         for setting in (
@@ -47,6 +47,10 @@ class BootstrapContractTest(unittest.TestCase):
             self.assertLess(script.index(setting), npm)
         self.assertLess(npm, playwright)
         self.assertLess(playwright, agent)
+        self.assertIn('chcp 65001 >nul', launcher)
+        self.assertIn('[Console]::OutputEncoding = $Utf8NoBom', script)
+        self.assertIn('$ErrorActionPreference = "Continue"', script)
+        self.assertIn('if ($AgentExitCode -ne 0)', script)
 
     def test_versioned_dependencies_and_browser_are_reused_from_local_app_data(self):
         script = self.bootstrap

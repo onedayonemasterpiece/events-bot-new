@@ -8,6 +8,10 @@
   while versioned Node, npm dependencies and Playwright browser binaries live
   in `%LOCALAPPDATA%\KenigEvents\Autopresenter\cache-v1` and are reused by
   compatible later debug ZIPs instead of being installed per extraction.
+  Scenario delays now remove settled `AbortSignal` listeners, Windows
+  PowerShell no longer promotes native warning output into a launcher failure,
+  UTF-8 console output preserves Russian event titles, and headed installs skip
+  the unused Chromium headless shell.
 - Autopresenter first test now disables Windows Console QuickEdit for the
   current launch so installation cannot pause in “Select” mode, runs the
   bootstrap non-interactively, forces the headed browser window to fullscreen,
