@@ -198,6 +198,9 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("START-DEMONSTRATOR.cmd", names)
             self.assertIn("SELF-TEST.cmd", names)
             self.assertIn("agent/agent.mjs", names)
+            self.assertTrue(
+                all(info.date_time == (2025, 1, 1, 0, 0, 0) for info in archive.infolist())
+            )
             config = json.loads(archive.read("test-config.json"))
         self.assertEqual(config["relay_url"], "https://presenter.example")
         self.assertEqual(

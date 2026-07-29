@@ -440,13 +440,21 @@ def windows_test_archive(request: web.Request) -> bytes:
         AGENT_DIR / "package-lock.json": "agent/package-lock.json",
     }
 
+    def add_file(archive: zipfile.ZipFile, target: str, content: bytes) -> None:
+        entry = zipfile.ZipInfo(target, date_time=(2025, 1, 1, 0, 0, 0))
+        entry.compress_type = zipfile.ZIP_DEFLATED
+        entry.create_system = 3
+        entry.external_attr = 0o100644 << 16
+        archive.writestr(entry, content)
+
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for source, target in required_files.items():
-            archive.write(source, target)
-        archive.writestr(
+            add_file(archive, target, source.read_bytes())
+        add_file(
+            archive,
             "test-config.json",
-            json.dumps(config, ensure_ascii=False, indent=2) + "\n",
+            (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
         )
     return output.getvalue()
 
