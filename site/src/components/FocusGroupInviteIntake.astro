@@ -131,7 +131,11 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
 </main>
 
 <script>
-  import { getStaticSiteAuth, staticAuthDisplayName } from '../lib/staticSiteAuth';
+  import {
+    cleanStaticAuthUrl,
+    getStaticSiteAuth,
+    staticAuthDisplayName,
+  } from '../lib/staticSiteAuth';
   import { EMAIL_OTP_LENGTH, canSubmitEmailOtp, normalizeEmailOtp } from '../lib/emailOtp';
   import {
     activateFocusParticipation,
@@ -144,6 +148,9 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
   } from '../lib/focus-group-prototype';
 
   document.querySelectorAll<HTMLElement>('[data-focus-intake]').forEach((root) => {
+    const initialUrl = new URL(window.location.href);
+    const emailCallbackAttempted = initialUrl.searchParams.get('email_callback') === '1'
+      || Boolean(initialUrl.searchParams.get('token_hash'));
     const intake = inspectFocusInviteUrl(window.location.href);
     window.history.replaceState(window.history.state, '', intake.cleanHref);
 
@@ -286,6 +293,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
 
     emailOpen?.addEventListener('click', () => {
       if (emailPanel) emailPanel.hidden = false;
+      if (otpForm) otpForm.hidden = false;
       emailInput?.focus();
     });
 
@@ -307,7 +315,9 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       if (identityStatus) identityStatus.textContent = 'Отправляем письмо…';
       let sent = false;
       try {
-        sent = await auth.signInWithEmailOtp(email, new URL(intake.cleanHref, window.location.origin).href);
+        const emailRedirect = new URL(cleanStaticAuthUrl(window.location.href));
+        emailRedirect.searchParams.set('email_callback', '1');
+        sent = await auth.signInWithEmailOtp(email, emailRedirect.href);
       } catch {
         sent = false;
       }
@@ -343,7 +353,6 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     emailInput?.addEventListener('input', () => {
       if (!pendingEmail || emailInput.value.trim() === pendingEmail) return;
       pendingEmail = '';
-      if (otpForm) otpForm.hidden = true;
       if (resendTimer) window.clearInterval(resendTimer);
       if (emailSend) {
         emailSend.disabled = false;
@@ -352,7 +361,13 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     });
 
     const verifyOtp = async () => {
-      if (!auth || !otpInput || !pendingEmail) return;
+      if (!auth || !otpInput) return;
+      const email = pendingEmail || emailInput?.value.trim() || '';
+      if (!email || !emailInput?.checkValidity()) {
+        if (identityStatus) identityStatus.textContent = 'Сначала укажите адрес, на который пришёл код.';
+        emailInput?.focus();
+        return;
+      }
       const token = normalizeEmailOtp(otpInput.value);
       otpInput.value = token;
       if (!canSubmitEmailOtp(token, { inFlight: otpVerifying, lastSubmitted: lastSubmittedOtp })) return;
@@ -361,7 +376,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       otpInput.disabled = true;
       if (otpSubmit) otpSubmit.disabled = true;
       if (identityStatus) identityStatus.textContent = 'Проверяем код…';
-      const verified = await auth.verifyEmailOtp(pendingEmail, token);
+      const verified = await auth.verifyEmailOtp(email, token);
       otpVerifying = false;
       if (!verified) {
         otpInput.disabled = false;
@@ -432,7 +447,14 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
           if (signedInPanel) signedInPanel.hidden = true;
           if (signedOutChoices) signedOutChoices.hidden = false;
         } else if (snapshot.status === 'error' && identityStatus) {
-          identityStatus.textContent = snapshot.message;
+          if (snapshot.callbackAttempted && emailCallbackAttempted) {
+            if (emailPanel) emailPanel.hidden = false;
+            if (otpForm) otpForm.hidden = false;
+            identityStatus.textContent = 'Ссылка не подтвердила вход. Укажите адрес и введите шестизначный код из этого же письма.';
+            window.setTimeout(() => (emailInput?.value ? otpInput?.focus() : emailInput?.focus()), 0);
+          } else {
+            identityStatus.textContent = snapshot.message;
+          }
           if (otpInput) otpInput.disabled = false;
         }
       });

@@ -27,8 +27,17 @@ class FakeTarget {
 
 function fixture({ userAgent = 'Mozilla/5.0 (Linux; Android 15)', standalone = false } = {}) {
   const windowRef = new FakeTarget();
-  windowRef.location = { search: '' };
+  const timers = [];
+  windowRef.location = {
+    href: 'https://kenigevents.ru/preview/fokus-gruppa/priglashenie/',
+    search: '',
+  };
   windowRef.matchMedia = () => ({ matches: standalone });
+  windowRef.setTimeout = (callback) => {
+    timers.push(callback);
+    return timers.length;
+  };
+  windowRef.clearTimeout = () => {};
   const navigatorRef = { userAgent, platform: '', maxTouchPoints: 0 };
   const root = new FakeTarget();
   root.hidden = false;
@@ -36,8 +45,11 @@ function fixture({ userAgent = 'Mozilla/5.0 (Linux; Android 15)', standalone = f
   const button = new FakeTarget();
   button.hidden = false;
   button.disabled = false;
+  button.dataset = {};
+  button.textContent = 'Установить «Анонсы»';
   const openButton = new FakeTarget();
   openButton.hidden = false;
+  openButton.href = 'https://kenigevents.ru/preview/?launch=pwa';
   const status = { textContent: '' };
   const guidance = { hidden: false };
   const controller = createFocusPwaInstallController({
@@ -49,7 +61,18 @@ function fixture({ userAgent = 'Mozilla/5.0 (Linux; Android 15)', standalone = f
     status,
     guidance,
   });
-  return { windowRef, root, button, openButton, status, guidance, controller };
+  return {
+    windowRef,
+    root,
+    button,
+    openButton,
+    status,
+    guidance,
+    controller,
+    runTimers() {
+      while (timers.length) timers.shift()();
+    },
+  };
 }
 
 test('focus launcher artwork is an exact copy of the supplied reference PNG', async () => {
@@ -64,18 +87,25 @@ test('focus launcher artwork is an exact copy of the supplied reference PNG', as
 });
 
 test('focus compatibility manifest installs the permanent Announcements app', async () => {
-  const manifest = await read('src/pages/fokus-gruppa/manifest.webmanifest.ts');
-  assert.match(manifest, /id: scope/u);
-  assert.match(manifest, /name: 'Анонсы'/u);
-  assert.match(manifest, /short_name: 'Анонсы'/u);
-  assert.match(manifest, /start_url: withBase\('\/\?launch=pwa'\)/u);
-  assert.doesNotMatch(manifest, /Анонсы Lab|focus-group-icon|zakrytaya-afisha/u);
-  assert.match(manifest, /sizes: '192x192'/u);
-  assert.match(manifest, /sizes: '512x512'/u);
-  assert.match(manifest, /purpose: 'maskable'/u);
-  assert.match(manifest, /display: 'standalone'/u);
-  assert.match(manifest, /prefer_related_applications: false/u);
-  assert.match(manifest, /application\/manifest\+json/u);
+  const [compatibilityManifest, primaryManifest] = await Promise.all([
+    read('src/pages/fokus-gruppa/manifest.webmanifest.ts'),
+    read('src/pages/manifest.webmanifest.ts'),
+  ]);
+  for (const manifest of [compatibilityManifest, primaryManifest]) {
+    assert.match(manifest, /id:\s*scope/u);
+    assert.match(manifest, /name:\s*'Анонсы'/u);
+    assert.match(manifest, /short_name:\s*'Анонсы'/u);
+    assert.match(manifest, /start_url:\s*(?:withBase\('\/\?launch=pwa'\)|startUrl)/u);
+    assert.doesNotMatch(manifest, /Анонсы Lab|focus-group-icon|zakrytaya-afisha/u);
+    assert.match(manifest, /sizes:\s*'192x192'/u);
+    assert.match(manifest, /sizes:\s*'512x512'/u);
+    assert.match(manifest, /purpose:\s*'maskable'/u);
+    assert.match(manifest, /display:\s*'standalone'/u);
+    assert.match(manifest, /prefer_related_applications:\s*false/u);
+    assert.match(manifest, /related_applications/u);
+    assert.match(manifest, /launch_handler/u);
+    assert.match(manifest, /application\/manifest\+json/u);
+  }
 });
 
 test('mobile onboarding mounts the permanent manifest and explicit no-confirmation path', async () => {
@@ -125,11 +155,30 @@ test('focus install action preserves one-shot beforeinstallprompt and honest ins
   state.button.dispatch('click', { preventDefault() {} });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(installEvent.promptCalls, 1);
+  assert.equal(state.button.hidden, false);
+  assert.equal(state.button.disabled, true);
+  assert.equal(state.button.dataset.installing, 'true');
+  assert.equal(state.openButton.hidden, true);
+  assert.match(state.status.textContent, /Устанавливаем.*Подождите/u);
 
   state.windowRef.dispatch('appinstalled');
+  assert.equal(state.openButton.hidden, true);
+  state.runTimers();
   assert.equal(state.root.dataset.focusPwaInstalled, 'true');
   assert.equal(state.openButton.hidden, false);
-  assert.match(state.status.textContent, /Открыть “Анонсы”.*главного экрана/u);
+  assert.match(state.status.textContent, /Готово.*Откройте «Анонсы»/u);
+});
+
+test('Android open action uses a user-triggered app intent with an HTTPS fallback', () => {
+  const state = fixture();
+  let prevented = false;
+  state.openButton.dispatch('click', {
+    preventDefault() { prevented = true; },
+  });
+  assert.equal(prevented, true);
+  assert.match(state.windowRef.location.href, /^intent:\/\/kenigevents\.ru\/preview\/\?launch=pwa#Intent;/u);
+  assert.match(state.windowRef.location.href, /scheme=https/u);
+  assert.match(state.windowRef.location.href, /browser_fallback_url=/u);
 });
 
 test('iOS guidance never claims that the page can open a system install prompt', () => {

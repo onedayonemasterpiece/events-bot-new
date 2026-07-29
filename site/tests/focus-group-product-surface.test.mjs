@@ -70,6 +70,8 @@ test('email identity offers one message with link plus six-digit mobile OTP', as
   assert.match(intake, /Отправить ещё раз/u);
   assert.match(intake, /window\.setInterval\(tick, 1000\)/u);
   assert.match(intake, /Проверьте почту: письмо могло уже прийти/u);
+  assert.match(intake, /Ссылка не подтвердила вход.*шестизначный код/u);
+  assert.match(intake, /if \(otpForm\) otpForm\.hidden = false/u);
   assert.match(intake, /data-focus-account-continue/u);
   assert.match(intake, /data-focus-account-logout/u);
   assert.match(auth, /verifyEmailOtp/u);

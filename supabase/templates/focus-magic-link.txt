@@ -1,7 +1,7 @@
 {{ .Token }} — код входа в KenigEvents
 
 Войти по одноразовой ссылке:
-{{ .ConfirmationURL }}
+{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email
 
 Или введите шестизначный код на экране входа:
 {{ .Token }}

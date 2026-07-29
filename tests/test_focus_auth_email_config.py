@@ -22,7 +22,8 @@ def test_focus_email_contract_has_link_code_and_six_digit_provider_minimum() -> 
     assert "{{ .Token }}" in desired["mailer_templates_confirmation_content"]
     assert "{{ .Token }}" in desired["mailer_subjects_magic_link"]
     assert "{{ .Token }}" in desired["mailer_templates_magic_link_content"]
-    assert "{{ .ConfirmationURL }}" in desired["mailer_templates_magic_link_content"]
+    assert "{{ .TokenHash }}" in desired["mailer_templates_magic_link_content"]
+    assert "{{ .RedirectTo }}" in desired["mailer_templates_magic_link_content"]
 
 
 def test_redacted_receipt_exposes_hashes_not_template_contents() -> None:

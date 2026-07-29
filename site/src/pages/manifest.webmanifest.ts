@@ -21,6 +21,16 @@ export const GET: APIRoute = () => {
     background_color:'#fbf7ef',
     theme_color:'#98401f',
     prefer_related_applications:false,
+    related_applications:[
+      {
+        platform:'webapp',
+        url:withBase('/manifest.webmanifest'),
+        id:scope,
+      },
+    ],
+    launch_handler:{
+      client_mode:'navigate-existing',
+    },
     icons:[
       {
         src:withBase('/assets/pwa/announcements-brand-v2-192.png'),

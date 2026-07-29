@@ -62,8 +62,11 @@ test('focus identity supports real email OTP and Yandex linking through the shar
   assert.match(auth, /type: 'email'/u);
   assert.match(auth, /async linkYandexIdentity/u);
   assert.match(auth, /this\.client\.auth\.linkIdentity/u);
-  assert.match(intake, /new URL\(intake\.cleanHref, window\.location\.origin\)\.href/u);
-  assert.match(intake, /auth\.signInWithEmailOtp\(email, new URL\(intake\.cleanHref/u);
+  assert.match(intake, /emailRedirect\.searchParams\.set\('email_callback', '1'\)/u);
+  assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirect\.href\)/u);
+  assert.match(intake, /pendingEmail \|\| emailInput\?\.value\.trim\(\)/u);
+  assert.match(intake, /snapshot\.callbackAttempted && emailCallbackAttempted/u);
+  assert.match(auth, /verifyOtp\(\{ token_hash: tokenHash, type: 'email' \}\)/u);
   assert.match(intake, /auth\.linkYandexIdentity\(\)/u);
   assert.match(intake, /Письмо отправлено\. Введите код или нажмите кнопку в письме/u);
   assert.match(intake, /inputmode="numeric"/u);

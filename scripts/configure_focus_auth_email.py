@@ -72,7 +72,11 @@ def _desired() -> dict[str, Any]:
     html = HTML_PATH.read_text(encoding="utf-8").strip()
     if "{{ .Token }}" not in subject:
         raise ConfigError("subject_token_missing")
-    if "{{ .Token }}" not in html or "{{ .ConfirmationURL }}" not in html:
+    if (
+        "{{ .Token }}" not in html
+        or "{{ .TokenHash }}" not in html
+        or "{{ .RedirectTo }}" not in html
+    ):
         raise ConfigError("template_dual_path_missing")
     return {
         "mailer_subjects_confirmation": subject,
@@ -104,7 +108,9 @@ def _receipt(config: dict[str, Any], desired: dict[str, Any]) -> dict[str, Any]:
         ),
         "subject_has_token": "{{ .Token }}" in subject,
         "template_has_token": "{{ .Token }}" in html,
-        "template_has_confirmation_url": "{{ .ConfirmationURL }}" in html,
+        "template_has_token_hash_link": (
+            "{{ .TokenHash }}" in html and "{{ .RedirectTo }}" in html
+        ),
         "otp_length": config.get("mailer_otp_length"),
         "otp_expiry_seconds": config.get("mailer_otp_exp"),
         "smtp_configured": bool(config.get("smtp_host")),

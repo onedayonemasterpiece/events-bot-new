@@ -1230,10 +1230,13 @@ and network-stall tests are regression gates, not a substitute.
 The origin-scoped controller also owns focus-group email identity. Both hosted
 `confirmation` (new/unconfirmed address) and `magic_link` (confirmed address)
 templates have the same product contract. One `signInWithOtp()` request
-produces a hosted email with both `{{ .ConfirmationURL }}` and `{{ .Token }}`:
+produces a hosted email with a six-digit `{{ .Token }}` and a first-party link
+composed from `{{ .RedirectTo }}` and `{{ .TokenHash }}`:
 
-- the magic link returns to the cleaned current same-origin route and completes
-  the existing explicit PKCE `exchangeCodeForSession` flow;
+- the email link returns to the cleaned current same-origin route and verifies
+  `verifyOtp({ token_hash, type: "email" })`, so a mail client may hand it to
+  the installed Android PWA without depending on the browser context that
+  requested the message;
 - the six-digit fallback is verified with
   `verifyOtp({ email, token, type: "email" })`;
 - the controller message and callback errors are provider-neutral, because the
@@ -1255,7 +1258,7 @@ Canonical hosted-template/config files are
 `supabase/templates/focus-magic-link.html` and
 `scripts/configure_focus_auth_email.py`. The live gate requires two different
 issuances through the Yandex Cloud technical mail receiver: numeric auto-submit
-plus replay rejection, then magic-link PKCE plus replay rejection. Receipts
+plus replay rejection, then token-hash link plus replay rejection. Receipts
 must never retain a live token, confirmation URL or receiver address.
 
 The hosted project uses Yandex Cloud Postbox custom SMTP (`STARTTLS:587`,
@@ -1264,9 +1267,14 @@ Free projects cannot customize these templates while using the default sender.
 The Postbox credential is scoped only to `yc.postbox.send`, stored only in the
 hosted Auth configuration and must be rotated by 2027-07-29.
 
-Live closure on 2026-07-29 passed both independent issuances. For the numeric
+The earlier PKCE live closure on 2026-07-29 remains historical evidence, not
+the acceptance contract after the Android cross-context defect. Current
+closure requires both independent issuances against the token-hash template.
+For the numeric
 path, five digits caused zero verify calls, digit six caused exactly one,
 created the session, cleaned callback state and a replay returned `403`. For
-the link path, the originating PKCE browser returned to the clean invite route,
-created the session and a replay returned `303` with an Auth error code. The
-stored evidence contains only hashes, booleans and status codes.
+the link path, a separate installed-PWA context must return to the clean invite
+route, create the session and reject replay. If link verification fails, the
+same screen immediately reveals email plus the code field and accepts the code
+from that already-delivered message. Stored evidence contains only hashes,
+booleans and status codes.

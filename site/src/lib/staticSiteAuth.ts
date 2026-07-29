@@ -20,7 +20,17 @@ const PKCE_COOKIE_PREFIX = 'ke_pkce_';
 const AUTH_INTENT_KEY = 'ke_yandex_auth_intent_v1';
 const CALLBACK_TIMEOUT_MS = 20_000;
 const SESSION_TIMEOUT_MS = 8_000;
-const CALLBACK_KEYS = ['code', 'error', 'error_code', 'error_description', 'state', 'sb'];
+const CALLBACK_KEYS = [
+  'code',
+  'email_callback',
+  'error',
+  'error_code',
+  'error_description',
+  'state',
+  'sb',
+  'token_hash',
+  'type',
+];
 
 function isPkceCodeVerifierKey(key: string): boolean {
   return key.endsWith('-code-verifier');
@@ -247,6 +257,52 @@ class StaticSiteAuthController {
     }
 
     const code = params.get('code');
+    const tokenHash = params.get('token_hash');
+    const tokenType = params.get('type');
+    if (tokenHash && tokenType === 'email') {
+      this.publish({
+        status: 'checking',
+        user: null,
+        message: 'Завершаю вход…',
+        callbackAttempted: true,
+      });
+      writeAuthIntent('email_link_callback_started');
+      try {
+        const { data, error } = await withTimeout(
+          this.client.auth.verifyOtp({ token_hash: tokenHash, type: 'email' }),
+          CALLBACK_TIMEOUT_MS,
+          'auth_callback_timeout',
+        );
+        if (error) throw error;
+        if (data.session?.access_token && data.session.refresh_token) {
+          await this.client.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          });
+        }
+        cleanCallbackHistory();
+        if (!data.user) throw new Error('email_link_no_user');
+        writeAuthIntent('signed_in');
+        return this.publish({
+          status: 'signed_in',
+          user: data.user,
+          message: `Вошли как ${staticAuthDisplayName(data.user)}`,
+          callbackAttempted: true,
+        });
+      } catch (error) {
+        cleanCallbackHistory();
+        writeAuthIntent('email_link_callback_failed', {
+          reason: String((error as Error)?.message || error).slice(0, 120),
+        });
+        return this.publish({
+          status: 'error',
+          user: null,
+          message: 'Ссылка уже использована или устарела. Введите код из письма.',
+          callbackAttempted: true,
+        });
+      }
+    }
+
     if (code) {
       this.publish({
         status: 'checking',

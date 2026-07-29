@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Fixed
+- Focus-group Android onboarding now keeps a visible `Устанавливаем…` state
+  while the PWA settles, reveals the open action only after installed-app
+  detection or a bounded fallback, and uses a user-triggered app intent before
+  falling back to HTTPS. Email links now verify a first-party token hash across
+  browser/PWA contexts; an expired link immediately opens the email and
+  six-digit code fields so the already-delivered OTP remains usable.
 - Focus-group onboarding now lets an existing participant restart the same
   device journey, shows the current account with explicit continue/sign-out
   choices, and falls back from an unavailable install prompt to

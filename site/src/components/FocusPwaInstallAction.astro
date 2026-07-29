@@ -51,6 +51,22 @@ const openAppHref = `${withBase('/')}?launch=pwa`;
     min-height: 52px;
     box-sizing: border-box;
   }
+  .focus-pwa__button[data-installing="true"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .65rem;
+  }
+  .focus-pwa__button[data-installing="true"]::before {
+    width: 1rem;
+    height: 1rem;
+    box-sizing: border-box;
+    border: 2px solid rgb(255 253 248 / 45%);
+    border-top-color: #fffdf8;
+    border-radius: 50%;
+    content: "";
+    animation: focus-pwa-spin .75s linear infinite;
+  }
   .focus-pwa__button[hidden] { display: none; }
   .focus-pwa__button:is(a) {
     display: inline-flex;
@@ -88,6 +104,10 @@ const openAppHref = `${withBase('/')}?launch=pwa`;
     font-weight: 750;
   }
   .focus-pwa__guidance { display: none; }
+  @keyframes focus-pwa-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .focus-pwa__button[data-installing="true"]::before { animation: none; }
+  }
 </style>
 
 <script>
