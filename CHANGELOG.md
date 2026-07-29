@@ -10,10 +10,10 @@
 - Added an evidence-first Antigravity festival-research prompt pack that splits
   discovery, per-source edition/claim review, reconciliation and adversarial
   verification, with deterministic stale-edition, unsupported-title and
-  ticket-scope fail-closed gates. Its quota-aware default spends one
-  Antigravity interaction per festival (hard cap two); source-local review is
-  batched through an ordinary structured-output model and deterministic gates
-  use no provider requests.
+  ticket-scope fail-closed gates. Its quota-aware default uses two independent
+  Antigravity researchers in fresh environments and a third Antigravity
+  adjudicator only for disagreements; deterministic gates use no provider
+  requests.
 - Registered the Antigravity managed-agent quota in the shared Google AI
   limiter (`54 RPM / 96000 TPM / 90 RPD` safe caps over the verified
   `60 / 100000 / 100` provider quota) and documented the first bounded

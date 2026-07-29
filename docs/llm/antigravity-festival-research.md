@@ -34,7 +34,8 @@ Antigravity discovery
 -> per-source claim extraction
 -> deterministic quote/reference validation
 -> entity/event reconciliation
--> adversarial verifier
+-> independent skeptic
+-> conditional adjudicator
 -> deterministic final gate and confidence
 ```
 
@@ -43,38 +44,50 @@ Antigravity discovery
 
 ## Quota-aware topology
 
-Default budget одного фестивального исследования:
+Для текущего объёма фестивальной очереди default — два независимых
+Antigravity-исследования и третий Antigravity-вызов только при расхождении:
 
 ```text
-1 Antigravity interaction
-  discovery + fetch + source snapshots
+Call A — primary researcher, fresh environment
+  staged discovery -> source ledger -> claims -> candidate A
 
-1 обычный structured-output LLM request
-  batched source-local edition review + claims + reconciliation candidate
+Call B — independent skeptic, another fresh environment
+  тот же target/seed, но не получает candidate A
+  использует альтернативные запросы и пытается опровергнуть спорные поля
+  -> independent ledger -> candidate B
 
-0 обычных LLM requests
-  если deterministic gate пропускает candidate
+Local deterministic comparison
+  quote/source/year/URL validation
+  strict agreement on critical fields?
 
-или 1 дополнительный обычный verifier request
-  только при конфликте / низком покрытии / критичном поле
+yes -> final result from supported intersection
+no  -> Call C — Antigravity adjudicator
+       получает validated A + B и cited source snapshots
+       не начинает новый широкий поиск
+       -> conflicts or evidence-backed final result
 ```
 
 Таким образом:
 
-- Antigravity расходует **1 RPD на фестиваль**;
-- hard cap — **2 Antigravity RPD на фестиваль**, если первый interaction
-  завершился `incomplete` и workspace действительно недостаточен;
-- continuation не запускается автоматически: сначала скачивается workspace;
-- review/extraction/verifier не вызывают Antigravity и не расходуют его лимит
-  `100 RPD`;
-- source-local isolation внутри batch обеспечивается отдельными source blocks,
-  а локальный quote validator отклоняет claim, цитата которого отсутствует
-  именно в указанном source text;
-- все deterministic checks выполняются без provider requests.
+- обычный расход — **2 Antigravity RPD на фестиваль**;
+- hard cap — **3 Antigravity RPD на фестиваль**;
+- при `100 RPD` это до 33 полностью спорных или до 50 обычных исследований в
+  сутки, что выше текущего объёма фестивальной очереди;
+- Call B запускается в свежем environment и не видит вывод Call A, чтобы
+  контроль не превратился в согласие с уже показанным ответом;
+- Call C запускается только если A и B расходятся по critical fields,
+  используют несовместимые выпуски/URL или один из них не проходит local gate;
+- `status=incomplete` не создаёт автоматический четвёртый запрос: сначала
+  скачивается workspace, затем результат либо проверяется, либо один из трёх
+  слотов осознанно используется как replacement/adjudication;
+- все deterministic checks выполняются без provider requests;
+- вызовы идут последовательно через shared limiter. `100000 TPM` не позволяет
+  бездумно запускать три длинных interaction одновременно, даже если RPD
+  остаётся.
 
-Разбивать review/extraction на отдельные обычные LLM-вызовы по source допустимо
-только для offline eval или если у соответствующей модели есть отдельный
-явно зарезервированный bulk budget. Это не production default.
+Логические stage split и source-local jobs выполняются последовательно внутри
+каждого agent interaction с checkpoint-файлами в `/workspace`. Они не означают
+отдельный HTTP-вызов на каждую страницу.
 
 Семантика выпуска, типа страницы и тождества событий остаётся LLM-first.
 Детерминированные проверки не угадывают смысл страницы: они только запрещают
@@ -86,7 +99,7 @@ Default budget одного фестивального исследования:
 - Все reusable prompt'ы domain-generic: названия, даты и артисты из конкретного
   probe не становятся few-shot примерами.
 - Один логический extraction job работает только с одним источником; несколько
-  таких jobs могут исполняться одним quota-aware batch request.
+  таких jobs последовательно исполняются внутри одного Antigravity interaction.
 - Reconciler не видит web и raw-страницы: только уже проверенный claim ledger.
 - Rejected/ambiguous source не может подтверждать финальное поле.
 - Любой значимый scalar в результате имеет `claim_ids`.
@@ -94,10 +107,13 @@ Default budget одного фестивального исследования:
 - При недостатке доказательств результат — `needs_review`, а не догадка.
 - Промежуточные и финальные файлы сохраняются под `/workspace/...`, не `/tmp`.
 
-## Stage 1. Discovery и source ledger — Antigravity
+## Stage 1. Discovery и source ledger — внутри Calls A/B
 
 На этой стадии запрещено составлять программу или итоговую карточку. Агент
 только находит ограниченный набор страниц и сохраняет наблюдаемые признаки.
+В полном Calls A/B этот блок является первым checkpoint, после которого тот же
+interaction переходит к source-local stages 2–4. Отдельный ответ
+`ledger_saved` используется только в диагностическом `discovery_only` режиме.
 
 ### Prompt
 
@@ -127,9 +143,11 @@ TARGET:
    - не более двух независимых cross-check источников;
    либо достигнут лимит {{max_fetches}} загрузок.
 7. Сохрани UTF-8 JSON в
-   /workspace/festival_research/source_ledger.json, программно проверь
-   json.loads и затем верни только краткий JSON:
-   {"status":"ledger_saved","path":"...","source_count":N}.
+   /workspace/festival_research/source_ledger.json и программно проверь
+   json.loads. Если execution_mode=discovery_only, верни только краткий JSON
+   {"status":"ledger_saved","path":"...","source_count":N}. Если
+   execution_mode=full_pipeline, не завершай interaction: переходи к
+   source-local stages 2–4, используя сохранённые файлы как immutable input.
 
 Схема source_ledger.json:
 {
@@ -183,12 +201,12 @@ TARGET:
 `status=incomplete` как штатный budget outcome и скачивать snapshot до
 continuation.
 
-## Stage 2. Edition и source role — source-local job внутри batch
+## Stage 2. Edition и source role — source-local job внутри interaction
 
-Логический job получает target и ровно один source record с его текстом. В
-quota-aware runtime все такие jobs передаются одним batch-запросом обычной
-structured-output модели. Каждый ответ остаётся привязанным к одному
-`source_id`; quote validator проверяет его только против текста этого source.
+Логический job получает target и ровно один source record с его текстом.
+Antigravity выполняет такие jobs последовательно и пишет отдельный review для
+каждого `source_id`; quote validator проверяет ответ только против текста этого
+source.
 
 ### Prompt
 
@@ -249,7 +267,7 @@ SOURCE TEXT:
 Неоднозначное семантическое противоречие floor не разрешает сам: оно отправляет
 источник в `ambiguous`.
 
-## Stage 3. Atomic claim extraction — source-local job внутри того же batch
+## Stage 3. Atomic claim extraction — source-local job внутри interaction
 
 ### Prompt
 
@@ -370,38 +388,65 @@ ACCEPTED_CLAIMS:
 - unknown лучше догадки.
 ```
 
-## Stage 5. Adversarial verifier — условный обычный LLM-вызов
+## Stage 5. Independent skeptic и условный adjudicator
 
-Это не self-review в том же контексте. Verifier получает candidate, полный
-source review ledger и claims, но не имеет права переписывать результат.
-Он запускается только при конфликте, низком покрытии или перед
-production-critical публикацией. Это не Antigravity interaction.
+### Call B: independent skeptic
+
+Call B получает тот же target и seed URLs, но не candidate/ledger Call A. Его
+prompt повторяет stages 1–4 с дополнительной ролью:
+
+```text
+Ты независимый skeptical researcher. Проведи исследование в свежем контексте.
+Не предполагай, что наиболее подробная или высоко ранжируемая страница относится
+к target edition. Для каждого critical field ищи прямую цитату и пытайся найти:
+- страницу другого выпуска с похожим названием;
+- несовместимые даты или состав;
+- различие между single-event ticket и subscription/pass;
+- неподтверждённый порядковый номер или статус в названии.
+
+Не угадывай, какой результат получил другой исследователь: он тебе не дан.
+Сохраняй source ledger, reviews, claims и candidate под
+/workspace/festival_research_skeptic/.
+```
+
+После локальной валидации A и B сравниваются по critical fields. Совпадением
+считается не похожий текст, а одинаковое нормализованное значение с валидными
+claims из accepted target-edition sources.
+
+### Call C: adjudicator
+
+Call C — третий Antigravity interaction. Он получает только локально
+валидированные A/B ledgers, candidates и cited source snapshots. Он запускается
+при конфликте или низком покрытии и не должен повторять широкий discovery.
 
 ### Prompt
 
 ```text
-Ты adversarial evidence verifier. Ищи причины ОТКЛОНИТЬ candidate.
-Не исправляй его и не предлагай более правдоподобные факты.
+Ты evidence adjudicator. У тебя есть два независимо полученных результата.
+Не выбирай ответ по большинству, подробности или стилю. Разрешай поле только
+по accepted claims target edition. Если доказательств недостаточно, оставь
+conflict/unknown.
 
 TARGET:
 {{target_json}}
-SOURCE_REVIEWS:
-{{source_reviews_json}}
-CLAIMS:
-{{all_claims_json}}
-CANDIDATE:
-{{candidate_json}}
+RESULT_A:
+{{validated_result_a_json}}
+RESULT_B:
+{{validated_result_b_json}}
+CITED_SOURCE_SNAPSHOTS:
+{{source_snapshots_json}}
 
 Верни только JSON:
 {
-  "verdict": "pass|fail",
+  "verdict": "pass|needs_review",
   "violations": [{
     "code":
       "missing_claim|claim_value_mismatch|quote_missing|rejected_source_leak|ambiguous_source_leak|edition_mismatch|unsupported_title_modifier|event_identity_mismatch|ticket_role_mismatch|silent_conflict|unknown_claim_id",
     "json_path": "string",
     "claim_ids": ["C..."],
     "details": "short string"
-  }]
+  }],
+  "resolved_candidate": "festival-research-evidence-v2 object|null"
 }
 
 Обязательно проверь:
@@ -413,13 +458,15 @@ CANDIDATE:
 6. несовместимые accepted values отражены как conflict;
 7. rejected/ambiguous sources не просочились через косвенный claim.
 
-Если есть хотя бы одно нарушение, verdict=fail.
+Не начинай новый широкий поиск. Разрешено повторно открыть только cited URLs,
+если snapshot недостаточен для проверки конкретной цитаты. При неразрешённом
+critical conflict verdict=needs_review и resolved_candidate=null.
 ```
 
 ## Stage 6. Deterministic final gate
 
-Финальный renderer выполняется только после verifier и повторяет критические
-проверки независимо от него:
+Финальный renderer выполняется после локального A/B comparison либо
+adjudicator и повторяет критические проверки независимо:
 
 - JSON парсится и соответствует локальной схеме;
 - все ссылки `source_id`, `claim_id`, `local_subject_id` существуют;
@@ -431,7 +478,8 @@ CANDIDATE:
   не имеют скрытого конфликта;
 - `event.ticket_url` подтверждён claim из `ticket_single_event` и совпадает с
   тем же event cluster;
-- `verifier.verdict == pass`;
+- для согласованных A/B third-party verdict не нужен; для спорных результатов
+  `adjudicator.verdict == pass`;
 - rejected/ambiguous source никогда не считается cross-check;
 - `conflicts=[]` допустим только после сравнения всех accepted claims одного
   поля.
@@ -472,8 +520,9 @@ Gate не редактирует семантические значения и 
 ### Для результата
 
 Overall confidence — минимум по critical fields, не среднее. При
-`verifier=fail`, любом critical `unknown/conflict`, stale-source leakage или
-ticket-role mismatch статус всегда `needs_review`; значение `high` невозможно.
+`adjudicator=needs_review`, любом critical `unknown/conflict`, stale-source
+leakage или ticket-role mismatch статус всегда `needs_review`; значение `high`
+невозможно.
 
 ## Acceptance pack
 
