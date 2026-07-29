@@ -123,3 +123,21 @@ test('feedback keeps distinct questions in plain user language', async () => {
   assert.match(source, /не меняет событие автоматически/u);
   assert.doesNotMatch(source, /relationship NPS|page family|event_id|specimen|production|серверной проверки/iu);
 });
+
+test('participant hub and prize explanation contain only user-facing copy', async () => {
+  const [hub, prize] = await Promise.all([
+    read('../src/pages/zakrytaya-afisha/index.astro'),
+    read('../src/components/FocusGroupThankYou.astro'),
+  ]);
+  assert.match(prize, /Пользоваться афишей и участвовать в исследовании можно без подтверждения/u);
+  assert.match(prize, /Если хотите участвовать в розыгрыше, подтвердите участие/u);
+  assert.match(hub, /Фокус-группа · выбирайте как обычно/u);
+  assert.doesNotMatch(
+    prize,
+    /NPS|дизлайк|проектируемой механике/iu,
+  );
+  assert.doesNotMatch(
+    hub,
+    /product prototype|продуктовый прототип|Specimen|production данных|секретный вход для приёмки/iu,
+  );
+});

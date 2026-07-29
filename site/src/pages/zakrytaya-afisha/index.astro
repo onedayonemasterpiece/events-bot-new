@@ -14,7 +14,7 @@ const sections = [
   ['/poisk/', 'Поиск', 'Проверить поиск и готовые сценарии'],
   ['/dlya-menya/', 'Для меня', 'Настроить рекомендации под свои интересы'],
   ['/festivali/', 'Фестивали', 'Открыть календарь больших программ'],
-  ['/fokus-gruppa/kollektsiya/', 'Коллекция', 'Проверить пасхалки и условие третьего события'],
+  ['/fokus-gruppa/kollektsiya/', 'Коллекция', 'Посмотреть найденные пасхалки'],
 ] as const;
 const robots = IS_SECRET_CANDIDATE
   ? 'noindex,nofollow,noarchive,nosnippet'
@@ -30,8 +30,8 @@ const robots = IS_SECRET_CANDIDATE
     <meta name="robots" content={robots} />
     <meta name="referrer" content="no-referrer" />
     <link rel="canonical" href={absoluteUrl('/zakrytaya-afisha/')} />
-    <title>Закрытая афиша · продуктовый прототип</title>
-    <meta name="description" content="Предварительная оболочка текущего сайта для проверки механик фокус-группы." />
+    <title>Закрытая афиша · фокус-группа</title>
+    <meta name="description" content="Афиша для участников фокус-группы." />
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
     <meta name="theme-color" content="#fff7e7" />
   </head>
@@ -98,7 +98,7 @@ const robots = IS_SECRET_CANDIDATE
 
         <section class="focus-secret__hero">
           <div>
-            <p class="focus-secret__eyebrow">Текущий сайт · секретный вход для приёмки</p>
+            <p class="focus-secret__eyebrow">Фокус-группа · выбирайте как обычно</p>
             <h1>Куда пойдём проверять афишу?</h1>
           </div>
           <div class="focus-secret__hero-copy">
@@ -136,10 +136,10 @@ const robots = IS_SECRET_CANDIDATE
 
         <FocusGroupFeedback
           pageFamily="home"
-          pageLabel="главная оболочка"
+          pageLabel="эта страница"
           overallNpsDue
           showEventIssue
-          eventLabel="Specimen: карточка события без подключения production данных"
+          eventLabel="Карточка события"
         />
 
         <FocusGroupInviteShare />
@@ -148,7 +148,7 @@ const robots = IS_SECRET_CANDIDATE
         <footer class="focus-secret__footer">
           <span>Фокус-группа афиши «Анонсы»</span>
           <span>
-            <a href={withBase('/fokus-gruppa/zavershenie/')}>Макет завершения</a>
+            <a href={withBase('/fokus-gruppa/zavershenie/')}>Что будет после фокус-группы</a>
             · <a href="mailto:info@kenigevents.ru">info@kenigevents.ru</a>
           </span>
         </footer>

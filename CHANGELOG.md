@@ -8,7 +8,8 @@
   exposes an obvious signed-in account/logout state. Its user-facing copy
   explains that confirmation is optional for the site but required for the
   theatre-ticket draw, without implementation jargon. The collection,
-  feedback and completion screens now follow the same plain-language rule.
+  feedback, participant hub, prize and completion screens now follow the same
+  plain-language rule.
 - Focus-group installation now uses the permanent `Анонсы` app identity,
   standard icon and ordinary home start route instead of disposable
   `Анонсы Lab`. Research expiry preserves the ordinary account, saved events,

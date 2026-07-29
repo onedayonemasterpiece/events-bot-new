@@ -110,5 +110,5 @@ test('saved-list prototype inserts one FG-E12 anchor after source item three onl
 test('closed hub links to the collection prototype', async () => {
   const hub = await read('../src/pages/zakrytaya-afisha/index.astro');
   assert.match(hub, /\/fokus-gruppa\/kollektsiya\//u);
-  assert.match(hub, /Проверить пасхалки и условие третьего события/u);
+  assert.match(hub, /Посмотреть найденные пасхалки/u);
 });

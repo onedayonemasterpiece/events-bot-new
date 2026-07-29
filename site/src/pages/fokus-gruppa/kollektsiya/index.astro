@@ -74,14 +74,14 @@ const robots = IS_SECRET_CANDIDATE
 
       <section class="focus-collection__score" aria-labelledby="score-title">
         <div class="focus-collection__score-title">
-          <p class="focus-collection__eyebrow">Демонстрация результата</p>
-          <h2 id="score-title">Три показателя — без вводящей в заблуждение суммы</h2>
+          <p class="focus-collection__eyebrow">Ваш результат</p>
+          <h2 id="score-title">Что уже найдено</h2>
         </div>
         <div class="focus-collection__metrics">
           <article class="focus-collection__metric focus-collection__metric--primary">
-            <small>Основной результат</small>
+            <small>Пасхалки</small>
             <strong><span data-collection-found>{collectionProgress.found}</span> из <span data-collection-eligible>{collectionProgress.eligible}</span></strong>
-            <span>Коллекция доступных объектов</span>
+            <span>Найдено в доступной коллекции</span>
             <meter
               data-collection-meter
               min="0"
@@ -92,14 +92,14 @@ const robots = IS_SECRET_CANDIDATE
             </meter>
           </article>
           <article class="focus-collection__metric">
-            <small>Дополнительный результат</small>
+            <small>Полезные действия</small>
             <strong>{participationProgress.points} из {participationProgress.maxPoints}</strong>
-            <span>Ограниченное участие</span>
+            <span>Что вы успели попробовать</span>
           </article>
           <article class="focus-collection__metric">
-            <small>Широта проверки</small>
+            <small>Разные разделы</small>
             <strong>{participationProgress.categories} из {participationProgress.maxCategories}</strong>
-            <span>Разные способы участия</span>
+            <span>Где вы уже побывали</span>
           </article>
         </div>
         <p class="focus-collection__score-note">
@@ -130,13 +130,12 @@ const robots = IS_SECRET_CANDIDATE
       <section class="focus-collection__catalogue" aria-labelledby="catalogue-title">
         <div class="focus-collection__section-head">
           <div>
-            <p class="focus-collection__eyebrow">12 маршрутов</p>
-            <h2 id="catalogue-title">Состояния коллекции</h2>
+            <p class="focus-collection__eyebrow">12 пасхалок</p>
+            <h2 id="catalogue-title">Вся коллекция</h2>
           </div>
           <p>
-            «Закрыто» означает, что условие ещё не выполнено. «Недоступно» не
-            превращается в более лёгкую находку и исключается одинаково для всех
-            только по опубликованному решению.
+            «Закрыто» означает, что пасхалка ещё не найдена. Если какая-то
+            пасхалка временно недоступна, она не влияет ни на чей результат.
           </p>
         </div>
         <div class="focus-collection__grid">
@@ -148,7 +147,7 @@ const robots = IS_SECRET_CANDIDATE
 
       <section class="focus-collection__device-mission" aria-labelledby="device-mission-title">
         <div class="focus-collection__device-mission-head">
-          <p class="focus-collection__eyebrow">Исследовательская миссия · вне конкурса</p>
+          <p class="focus-collection__eyebrow">Дополнительное задание · вне конкурса</p>
           <h2 id="device-mission-title">Проверьте сайт на двух экранах</h2>
           <p>
             После первых трёх находок можно будет открыть короткую ссылку на
