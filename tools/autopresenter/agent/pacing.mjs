@@ -1,6 +1,5 @@
 export const PACING = Object.freeze({
   scenarioTypicalMinMs: 12_000,
-  scenarioMaxMs: 30_000,
   verticalVelocityPxPerSecond: 850,
   verticalMinDurationMs: 650,
   verticalMaxDurationMs: 2_600,

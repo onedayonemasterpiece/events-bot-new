@@ -6,6 +6,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import {
   DEFAULT_SCENARIO_ID,
   SCENARIO_IDS,
@@ -13,6 +14,7 @@ import {
   TOMORROW_RAIL_LIKE_CONTRACT,
   WEEKEND_AMBER_ARTIFACT_CONTRACT,
   resolveScenarioId,
+  resolveScenarioTimeoutMs,
   selectDeterministicMobileEvent,
 } from "./scenario-contract.mjs";
 import { buildVerticalWheelTrajectory, PACING } from "./pacing.mjs";
@@ -139,6 +141,7 @@ class PrototypeAgent {
     this.heartbeatTimer = null;
     this.pollAbort = null;
     this.contextGeneration = 0;
+    this.dispatchTail = Promise.resolve();
   }
 
   async start() {
@@ -430,6 +433,14 @@ class PrototypeAgent {
   }
 
   async dispatch(command, { remote }) {
+    const operation = this.dispatchTail.then(() =>
+      this.dispatchCommand(command, { remote }),
+    );
+    this.dispatchTail = operation.catch(() => {});
+    return operation;
+  }
+
+  async dispatchCommand(command, { remote }) {
     if (!command || !["run", "stop", "reset", "shutdown"].includes(command.action)) return;
 
     if (remote && this.ackCache.has(command.id)) {
@@ -474,33 +485,37 @@ class PrototypeAgent {
 
   async handleRun(command, remote, scenarioId) {
     if (this.activeRun) {
-      if (remote) {
-        await this.ack(command, "error", `${this.activeScenario || scenarioId} is already running`);
-      }
-      return;
+      const previousScenario = this.activeScenario || "active scenario";
+      const detail = `switching ${previousScenario} → ${scenarioId}`;
+      await this.setAgentState("stopping", detail);
+      if (remote) await this.ack(command, "stopping", detail);
+      await this.confirmStopped(`scene switch to ${scenarioId}`);
     }
 
-    this.runController = new AbortController();
+    const controller = new AbortController();
+    this.runController = controller;
     this.activeScenario = scenarioId;
     await this.setAgentState("running", scenarioId);
     if (remote) await this.ack(command, "running", scenarioId);
 
+    const timeoutMs = resolveScenarioTimeoutMs(scenarioId);
     const timeout = setTimeout(() => {
-      const error = new Error(`${scenarioId} exceeded ${PACING.scenarioMaxMs}ms`);
+      const error = new Error(`${scenarioId} exceeded ${timeoutMs}ms`);
       error.name = "TimeoutError";
-      this.runController?.abort(error);
-    }, PACING.scenarioMaxMs);
+      controller.abort(error);
+    }, timeoutMs);
 
-    const runPromise = this.runScenario(scenarioId, this.runController.signal)
+    const runPromise = this.runScenario(scenarioId, controller.signal)
       .then(async (evidence) => {
         const detail = `${scenarioId}: ${evidence.summary}`;
         await this.setAgentState("completed", detail);
         if (remote) await this.ack(command, "completed", detail);
       })
       .catch(async (error) => {
-        const timedOut = error?.name === "TimeoutError" || this.runController?.signal.reason?.name === "TimeoutError";
-        const failure = timedOut ? this.runController?.signal.reason : error;
-        if (!timedOut && (error?.name === "AbortError" || this.runController?.signal.aborted)) {
+        const timedOut =
+          error?.name === "TimeoutError" || controller.signal.reason?.name === "TimeoutError";
+        const failure = timedOut ? controller.signal.reason : error;
+        if (!timedOut && (error?.name === "AbortError" || controller.signal.aborted)) {
           log("scenario cooperatively stopped", { commandId: command.id, scenario: scenarioId });
           return;
         }
@@ -516,9 +531,11 @@ class PrototypeAgent {
       })
       .finally(() => {
         clearTimeout(timeout);
-        if (this.activeRun === runPromise) this.activeRun = null;
-        this.runController = null;
-        this.activeScenario = null;
+        if (this.activeRun === runPromise) {
+          this.activeRun = null;
+          this.runController = null;
+          this.activeScenario = null;
+        }
       });
 
     this.activeRun = runPromise;
@@ -572,57 +589,68 @@ class PrototypeAgent {
     }
 
     try {
-      for (const extraPage of this.context.pages()) {
-        if (extraPage !== this.page) await extraPage.close().catch(() => {});
-      }
-      await this.openStage();
+      await this.openStage(this.page);
+      const frame = this.page.frameLocator(FRAME_SELECTOR);
+      await this.waitForEmbeddedReady(frame, new AbortController().signal);
+      await this.resetEmbeddedState(frame, new AbortController().signal);
       await this.setAgentState("idle", "stage reset");
       if (remote) await this.ack(command, "idle", "stage reset");
     } catch (error) {
-      await this.hardRecoverContext(`reset recovery: ${errorText(error)}`);
-      await this.setAgentState("idle", "stage reset after browser recovery");
-      if (remote) await this.ack(command, "idle", "stage reset after browser recovery");
+      await this.recoverPersistentStage(`reset recovery: ${errorText(error)}`);
+      await this.openStage(this.page);
+      await this.setAgentState("idle", "stage reset after same-page recovery");
+      if (remote) await this.ack(command, "idle", "stage reset after same-page recovery");
     }
   }
 
-  async confirmStopped() {
+  async confirmStopped(reason = "stop requested") {
     if (!this.activeRun) return;
-    this.runController?.abort();
     const active = this.activeRun;
+    const controller = this.runController;
+    controller?.abort(new DOMException(reason, "AbortError"));
     const settled = Symbol("settled");
     const outcome = await Promise.race([
       active.then(() => settled, () => settled),
       abortableDelay(config.hardStopMs).then(() => "timeout"),
     ]);
     if (outcome === "timeout") {
-      await this.hardRecoverContext("cooperative stop deadline exceeded");
-      await active.catch(() => {});
+      await this.recoverPersistentStage("cooperative stop deadline exceeded");
+    }
+    if (this.activeRun === active) {
+      this.activeRun = null;
+      if (this.runController === controller) this.runController = null;
+      this.activeScenario = null;
     }
   }
 
-  async hardRecoverContext(reason) {
-    log("hard browser recovery", { reason });
-    const oldContext = this.context;
-    this.page = null;
-    this.context = null;
-    await oldContext?.close().catch(() => {});
-    if (!this.shuttingDown) await this.createContextAndStage();
+  async recoverPersistentStage(reason) {
+    log("recovering persistent stage", { reason, generation: this.contextGeneration });
+    if (!this.shuttingDown && this.page && !this.page.isClosed()) {
+      await this.page
+        .goto(config.stageUrl, { waitUntil: "commit", timeout: config.hardStopMs })
+        .catch((error) => log("persistent stage recovery navigation failed", errorText(error)));
+    }
   }
 
-  async prepareScenarioStage(scenarioId, signal, { freshContext = false } = {}) {
+  async resetEmbeddedState(frame, signal) {
+    await raceWithAbort(
+      frame.locator("body").evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      }),
+      signal,
+    );
+    await this.reloadEmbeddedFrame(signal);
+    await this.waitForEmbeddedReady(frame, signal);
+  }
+
+  async prepareScenarioStage(scenarioId, signal) {
     assertNotAborted(signal);
-    if (freshContext) {
-      const oldContext = this.context;
-      this.page = null;
-      this.context = null;
-      await raceWithAbort(oldContext?.close().catch(() => {}), signal);
-      await raceWithAbort(this.createContextAndStage(), signal);
-    } else {
-      await raceWithAbort(this.openStage(), signal);
-    }
+    await raceWithAbort(this.openStage(this.page), signal);
     await this.setAgentState("running", scenarioId);
     const frame = this.page.frameLocator(FRAME_SELECTOR);
     await this.waitForEmbeddedReady(frame, signal);
+    await this.resetEmbeddedState(frame, signal);
     await this.enforceMobilePointerShield(frame);
     return frame;
   }
@@ -701,7 +729,7 @@ class PrototypeAgent {
   async runTomorrowRailLike(signal) {
     const startedAt = Date.now();
     const contract = TOMORROW_RAIL_LIKE_CONTRACT;
-    const frame = await this.prepareScenarioStage(contract.id, signal, { freshContext: true });
+    const frame = await this.prepareScenarioStage(contract.id, signal);
     await this.openTomorrowFromHome(frame, signal);
 
     const row = frame.locator(
@@ -786,7 +814,7 @@ class PrototypeAgent {
   async runWeekendAmberArtifact(signal) {
     const startedAt = Date.now();
     const contract = WEEKEND_AMBER_ARTIFACT_CONTRACT;
-    const frame = await this.prepareScenarioStage(contract.id, signal, { freshContext: true });
+    const frame = await this.prepareScenarioStage(contract.id, signal);
 
     const menuSummary = frame.locator(WEEKEND_MENU_SUMMARY_SELECTOR);
     await raceWithAbort(menuSummary.waitFor({ state: "visible", timeout: 10_000 }), signal);
@@ -1564,7 +1592,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  process.stderr.write(`[autopresenter-agent] fatal: ${error?.stack || errorText(error)}\n`);
-  process.exitCode = 1;
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    process.stderr.write(`[autopresenter-agent] fatal: ${error?.stack || errorText(error)}\n`);
+    process.exitCode = 1;
+  });
+}
+
+export { PrototypeAgent };

@@ -27,7 +27,17 @@ as a directional swipe trail: the finger moves left while the event content is
 presented as moving rightward. Vertical navigation uses sampled wheel input with
 visible intermediate movement; tap helpers never scroll. The explicit like scenario
 uses only the armed rail-edge gesture, and the amber scenario uses only real rail
-drags and taps. Runs are paced to at least 12 seconds and have a 30-second ceiling.
+drags and taps. Runs are paced to at least 12 seconds. Each explicit scenario has
+its own timeout policy entry: the short tomorrow scenario remains bounded at 30
+seconds, and the gesture-heavy rail/artifact scenarios at 120 seconds. The policy
+admits a future explicit scene lasting up to one hour.
+
+The headed browser, BrowserContext, stage page, and window are created once and
+stay alive across Run, Stop, Reset, and scene switches. A new Run cooperatively
+stops the active scene within a bounded deadline and starts the requested explicit
+scenario in that same window. Scenario isolation clears the embedded site's local
+and session storage and reloads its iframe instead of recreating the context.
+Only Shutdown, SIGINT, or SIGTERM closes the presentation environment.
 
 The dormant desktop interaction contract is separate: when a future desktop
 scenario selects `desktop` interaction mode, the shell shows currently pressed

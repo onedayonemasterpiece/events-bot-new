@@ -8,7 +8,10 @@ import {
   TOMORROW_MOBILE_CONTRACT,
   TOMORROW_RAIL_LIKE_CONTRACT,
   WEEKEND_AMBER_ARTIFACT_CONTRACT,
+  LONG_SCENE_TIMEOUT_CEILING_MS,
+  SCENARIO_TIMEOUT_POLICY,
   resolveScenarioId,
+  resolveScenarioTimeoutMs,
   selectDeterministicMobileEvent,
 } from "../scenario-contract.mjs";
 import { PACING } from "../pacing.mjs";
@@ -37,6 +40,30 @@ test("declares exactly three explicit mobile scenario IDs and the fallback", () 
   assert.match(source, /if \(scenarioId === TOMORROW_MOBILE_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === TOMORROW_RAIL_LIKE_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === WEEKEND_AMBER_ARTIFACT_CONTRACT\.id\)/u);
+});
+
+test("scenario timeout policy is explicit and can admit a future one-hour scene", () => {
+  assert.deepEqual(SCENARIO_TIMEOUT_POLICY, {
+    "tomorrow-mobile": 30_000,
+    "tomorrow-rail-like": 120_000,
+    "weekend-amber-artifact": 120_000,
+  });
+  assert.equal(resolveScenarioTimeoutMs("tomorrow-mobile"), 30_000);
+  assert.equal(resolveScenarioTimeoutMs("tomorrow-rail-like"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("weekend-amber-artifact"), 120_000);
+  assert.equal(LONG_SCENE_TIMEOUT_CEILING_MS, 3_600_000);
+  assert.equal(
+    resolveScenarioTimeoutMs("future-hour-scene", {
+      "future-hour-scene": LONG_SCENE_TIMEOUT_CEILING_MS,
+    }),
+    3_600_000,
+  );
+  assert.throws(
+    () => resolveScenarioTimeoutMs("future-too-long", { "future-too-long": 3_600_001 }),
+    /needs an explicit timeout/u,
+  );
+  assert.match(source, /const timeoutMs = resolveScenarioTimeoutMs\(scenarioId\)/u);
+  assert.doesNotMatch(source, /PACING\.scenarioMaxMs/u);
 });
 
 test("declares separate mobile and desktop interaction semantics", () => {
@@ -73,7 +100,6 @@ test("deterministic event selection prefers the shortest rail then numeric event
 test("pacing contract is bounded, sampled, and typical duration is explicit", () => {
   assert.deepEqual(PACING, {
     scenarioTypicalMinMs: 12_000,
-    scenarioMaxMs: 30_000,
     verticalVelocityPxPerSecond: 850,
     verticalMinDurationMs: 650,
     verticalMaxDurationMs: 2_600,
@@ -172,7 +198,7 @@ test("relay, lifecycle, fullscreen, and evidence contracts remain intact", () =>
   assert.match(source, /ackCache/u);
   assert.match(source, /isExpired\(command\)/u);
   assert.match(source, /hardStopMs/u);
-  assert.match(source, /hardRecoverContext/u);
+  assert.match(source, /recoverPersistentStage/u);
   assert.match(source, /AUTOPRESENTER_AGENT_TOKEN/u);
   assert.match(source, /authorization: `Bearer \$\{config\.agentToken\}`/u);
   assert.match(source, /AUTOPRESENTER_DEPENDENCY_ROOT/u);
@@ -183,6 +209,29 @@ test("relay, lifecycle, fullscreen, and evidence contracts remain intact", () =>
   assert.match(source, /Browser\.setWindowBounds/u);
   assert.match(source, /windowState: "fullscreen"/u);
   assert.match(source, /this\.shutdownPromise/u);
+});
+
+test("normal scenarios reuse the sole page and clear embedded state without closing context", () => {
+  const prepareStart = source.indexOf("async prepareScenarioStage");
+  const prepareEnd = source.indexOf("\n  async openTomorrowFromHome", prepareStart);
+  const prepare = source.slice(prepareStart, prepareEnd);
+  assert.ok(prepareStart > 0 && prepareEnd > prepareStart);
+  assert.match(prepare, /this\.openStage\(this\.page\)/u);
+  assert.match(prepare, /this\.resetEmbeddedState\(frame, signal\)/u);
+  assert.doesNotMatch(prepare, /freshContext|createContextAndStage|context.*close/u);
+  assert.doesNotMatch(source, /freshContext/u);
+  assert.doesNotMatch(source, /oldContext/u);
+  assert.match(source, /localStorage\.clear\(\)/u);
+  assert.match(source, /sessionStorage\.clear\(\)/u);
+  assert.match(source, /await this\.reloadEmbeddedFrame\(signal\)/u);
+  assert.equal(source.match(/this\.context\?\.close\(\)/gu)?.length, 1);
+});
+
+test("a new run is a bounded cooperative scene switch, never already-running rejection", () => {
+  assert.match(source, /switching \$\{previousScenario\} → \$\{scenarioId\}/u);
+  assert.match(source, /await this\.confirmStopped\(`scene switch to \$\{scenarioId\}`\)/u);
+  assert.match(source, /abortableDelay\(config\.hardStopMs\)/u);
+  assert.doesNotMatch(source, /is already running/u);
 });
 
 test("remote shutdown acknowledges a durable closed state before browser exit", () => {

@@ -37,6 +37,12 @@ export const SCENARIO_IDS = Object.freeze([
   TOMORROW_RAIL_LIKE_CONTRACT.id,
   WEEKEND_AMBER_ARTIFACT_CONTRACT.id,
 ]);
+export const LONG_SCENE_TIMEOUT_CEILING_MS = 60 * 60 * 1_000;
+export const SCENARIO_TIMEOUT_POLICY = Object.freeze({
+  [TOMORROW_MOBILE_CONTRACT.id]: 30_000,
+  [TOMORROW_RAIL_LIKE_CONTRACT.id]: 120_000,
+  [WEEKEND_AMBER_ARTIFACT_CONTRACT.id]: 120_000,
+});
 
 export function resolveScenarioId(value) {
   const requested = String(value || "").trim();
@@ -45,6 +51,24 @@ export function resolveScenarioId(value) {
   throw new Error(
     `unsupported scenario "${requested}"; expected one of ${SCENARIO_IDS.join(", ")}`,
   );
+}
+
+export function resolveScenarioTimeoutMs(
+  scenarioId,
+  policy = SCENARIO_TIMEOUT_POLICY,
+) {
+  const timeoutMs = policy?.[scenarioId];
+  if (
+    !Number.isSafeInteger(timeoutMs) ||
+    timeoutMs <= 0 ||
+    timeoutMs > LONG_SCENE_TIMEOUT_CEILING_MS
+  ) {
+    throw new Error(
+      `scenario "${scenarioId}" needs an explicit timeout between 1ms and ` +
+        `${LONG_SCENE_TIMEOUT_CEILING_MS}ms`,
+    );
+  }
+  return timeoutMs;
 }
 
 export function selectDeterministicMobileEvent(candidates) {
