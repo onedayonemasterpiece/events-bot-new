@@ -141,4 +141,4 @@ lanes:
     expected_output: Done/Partial/Missing/Blocked verdict per R01-R25.
     verification_scope: inspection_only
     effort: high
-    status: in_progress
+    status: completed

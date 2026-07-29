@@ -32,7 +32,7 @@
 | R15 | Done | Presentation frames use a slowly animated soft halo with reduced-motion fallback. |
 | R16 | Blocked | Real search submission/results are implemented, but require one-time sign-in to the separate demo account. No credentials/session were supplied; the scene now fails explicitly instead of pretending to search. |
 | R17 | Done | A provenance-first reusable audio-cue skill was added; the error scene plays a licensed CC0 cue from Yandex CDN. |
-| R18 | Done | Live journeys use the exact current focus build; the artifact-only exception is documented because that build ships the feature disabled. |
+| R18 | Partial | Live journeys use the exact current focus build. Two explicit exceptions remain: artifact uses the checked R15 candidate because focus disables it, and People uses the local real participant lab because focus has no canonical event-to-person relation. |
 | R19 | Done | Focus-group scene shows a large QR for the exact onboarding invitation. |
 | R20 | Done | The real current Today page is activated and naturally scrolled to its visible 0–10 focus rating block. |
 | R21 | Partial | Verified KGD80 people and real participant-like UI are shown and live-smoked. Current static data has no canonical event-to-person relation, so the second step uses the explicit event-participants lab surface rather than inventing production relations. |
@@ -63,8 +63,22 @@
 - Actual Windows x64 launch remains an owner-machine smoke; Linux validation covers packaging/contracts only.
 - Post-deploy checks: `/healthz`, PWA HTML/manifest, presenter stage, authenticated
   ZIP download and all 14 archive entries passed.
+- Telegram handoff was delivered as message `868`, replying to requested message
+  `803`; the redacted verification receipt is retained only under ignored
+  `artifacts/`.
+
+## Read-only final audit
+
+- R01–R15, R17, R19–R20 and R22–R25: **Done**.
+- R16: **Blocked** by the missing prepared demo-account session.
+- R18 and R21: **Partial** for the explicitly documented artifact/people data
+  limitations.
+- No lost PWA changes, no M0 changes, clean worktree, and branch/origin parity
+  were found.
 
 ## Release gate
 
-- Owner test: **GO**, except authenticated search until the demo session is prepared.
-- Public demo: **NO-GO** until the one-time search login and a full uninterrupted owner rehearsal are completed.
+- Owner test: **GO**, except authenticated search until the demo session is
+  prepared; actual Windows x64 launch remains the owner smoke.
+- Public demo: **NO-GO** until the one-time search login, R18/R21 product-data
+  limitations and a full uninterrupted owner rehearsal are closed.
