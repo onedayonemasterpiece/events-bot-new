@@ -7,6 +7,11 @@
 
 ### Added
 
+- Registered the Antigravity managed-agent quota in the shared Google AI
+  limiter (`54 RPM / 96000 TPM / 90 RPD` safe caps over the verified
+  `60 / 100000 / 100` provider quota) and documented the first bounded
+  Interactions API festival-research probe, including incomplete-budget and
+  provenance-review guardrails.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link

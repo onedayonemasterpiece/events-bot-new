@@ -111,6 +111,55 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 
 Техническая деталь: в таблице `google_ai_model_limits.tpm` "Unlimited TPM" хранится как `2147483647`, потому что схема лимитера требует целочисленный cap.
 
+#### Antigravity managed agent
+
+`antigravity-preview-05-2026` — это agent code для Gemini Interactions API, а
+не модель для `generate_content`. Google предоставляет ему управляемую Linux
+песочницу, code execution, Google Search, URL context и сохраняемую между
+interaction файловую систему.
+
+Quota UI проекта проверен `2026-07-29`:
+
+* provider quota: `60 RPM / 100000 TPM / 100 RPD`;
+* shared-limiter safe cap:
+  `54 RPM / 96000 TPM / 90 RPD` (`migrations/006_google_ai_antigravity_limits.sql`).
+
+`100000 TPM` — минутная квота, а не документированный жёсткий предел одного
+запроса. Для одного interaction нужно отдельно задавать
+`agent_config.max_total_tokens`; Google описывает этот бюджет как best-effort.
+Structured output у Antigravity preview не поддерживается, поэтому JSON
+задаётся prompt-контрактом и обязательно валидируется локально.
+
+Запись в `google_ai_model_limits` сама по себе не делает agent call через
+`GoogleAIClient.generate_content_async()`. Новый production consumer обязан
+явно reserve/finalize-ить interaction под canonical id
+`antigravity-preview-05-2026`, учитывать все `usage.total_tokens` и
+fail-closed завершаться при недоступном shared limiter.
+
+Ограниченный live probe `2026-07-29` прошёл через `GOOGLE_API_KEY5`:
+
+* API создал remote environment и агент реально использовал Bash/Python,
+  Google Search и web fetching;
+* исследован свежий `festival_queue.id=1291` — выпуск 2026 фестиваля
+  «Территория мира — Территория музыки»;
+* первый interaction с `max_total_tokens=45000` завершился `incomplete` после
+  `78690` total tokens, continuation с `20000` — после `29704`;
+* итоговый JSON агент записал и проверил в sandbox, но из-за исчерпания
+  best-effort budget финальный `output_text` не был возвращён.
+
+Практические правила после probe:
+
+1. Просить агента сохранять результат под `/workspace/...`, а не `/tmp/...`:
+   environment snapshot Files API экспортирует workspace, но не временный
+   `/tmp`.
+2. Считать `status=incomplete` отдельным нормальным исходом budget guard и
+   скачивать workspace snapshot до continuation.
+3. Не принимать агентный JSON напрямую в production. В этом probe агент
+   корректно нашёл официальный `festtm.ru` и программу трёх дней, но также
+   назвал неподтверждённый номер выпуска, сослался на прошлогоднюю страницу
+   `sobor39.ru/news/nashi-novosti/3930/` как на 2026 год и подставил абонемент
+   вместо билета первого дня. Нужен deterministic provenance/date/URL review.
+
 ### 2.6. Structured output и thought filtering для Gemma 4
 
 Для `Gemma 4` клиент теперь различает два runtime-контракта:
