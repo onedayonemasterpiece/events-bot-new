@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Kept Fly owner-test builds reproducible from linked worktrees by excluding
+  symlinked `site/node_modules` and agent dependency caches from the dedicated
+  Autopresenter Docker context.
 - Repaired the Autopresenter iteration after current focus-preview drift:
   Tomorrow now uses the real mobile date menu with a visible dwell, rail-like
   targets current event `5297`, preview-prefixed routes normalize correctly,
