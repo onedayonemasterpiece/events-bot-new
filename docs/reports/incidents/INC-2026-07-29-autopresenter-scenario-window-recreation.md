@@ -167,3 +167,36 @@ presentation window и открывало другое, разрушая кон�
 Каждая новая сцена обязана доказывать не только собственное UI-состояние, но и
 сохранение presentation session. Context/browser close является terminal
 операцией и проверяется отдельно от scene completion.
+
+### Seven-scene owner-test candidate — 2026-07-29
+
+- final source SHA: `0e9ba9d87f10342e2f8f614065dc3724ef1497b6`, pushed to
+  `origin/feature/autopresenter-design` before deploy;
+- existing Fly app only: image
+  `kenigevents-autopresenter:deployment-01KYQ2K51H6C3YA4WB62FR8JCE`, manifest
+  `sha256:5e1295218dfd6e371ba86ad262b7287a800b580275db52e18a3839e4ac9b83c6`;
+  machine `2879209fd9e998` version 12 remained one shared vCPU / 512 MB with
+  1/1 HTTP check passing;
+- no new Fly/Yandex resource was created; the intro logo/music and seven
+  lecture frames were uploaded content-addressed beneath the existing
+  `assets/autopresenter/scenario-20260730/` CDN prefix;
+- regression suites: agent `28/28`, relay `13/13`, Windows bootstrap `4/4`,
+  presenter stage `6/6`; exact Astro build completed 465 pages;
+- the 1920×1080 visual review covered intro, lecture frames 01/04/07 and
+  Weekend desktop top/bottom; desktop iframe bounding box was exactly
+  `0,0,1920,1080` with zero console/page errors;
+- exact downloaded 14-entry Windows ZIP SHA-256:
+  `bdca1a1ce249100f1100200d8f48f9f7b3a21c12860c011313e9700815396989`;
+- full exact-package sequence against the deployed public stage completed
+  intro → lecture → intro → tomorrow-mobile → tomorrow-rail-like →
+  weekend-amber-artifact → weekend-desktop → outro-qr → Shutdown in one
+  context generation; stderr was empty and every scenario produced a
+  1920×1080 capture;
+- after removing the passive desktop debug overlay, the final exact ZIP reran
+  `weekend-desktop` against the deployed stage: natural scroll reached the
+  footer, the final frame had no adjacent/overlay copy, and Shutdown exited 0;
+- the owner’s already-running older Windows agent was not interrupted to seize
+  the public single-agent relay. Telegram reply `831` to message `803` explains
+  that the fresh ZIP must be downloaded after closing the old presentation;
+- `tools/autopresenter/m0/**` remained unchanged. Incident stays open for owner
+  retry on Windows and reachability from `origin/main`.

@@ -44,7 +44,8 @@ lanes:
     expected_output: Read-only message with asset findings, copy, timing, and risks.
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: merged
+    result: Source assets, copy routes, timing, and hero-talk constraints were mapped into the explicit intro contract.
   - id: DISC-LECTURE
     role: planner
     support_requirement_ids: [R02]
@@ -58,7 +59,8 @@ lanes:
     expected_output: Read-only message with source message content/media inventory, ordering, and presentation notes.
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: merged
+    result: Telegram messages 821, 822, 823, 824, 825, 826, and 830 were inventoried and mapped into the seven-frame lecture deck.
   - id: INT
     role: merge_reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06]
@@ -80,4 +82,5 @@ lanes:
     expected_output: Clean committed integration branch, public feature branch, deployed existing Fly test app, fresh Windows ZIP, Telegram thread handoff, and integration report.
     verification_scope: full_local
     effort: high
-    status: planned
+    status: merged
+    result: Seven-scene owner-test candidate was implemented, tested, deployed to the existing Fly app, packaged, pushed, and handed off in Telegram reply 831.
