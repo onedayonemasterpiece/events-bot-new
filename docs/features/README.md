@@ -10,7 +10,7 @@
 - `docs/features/kenigsberg-stories/README.md` — генератор исторических Telegram Stories `Мост в Кёнигсберг` (MVP spec)
 - `docs/features/source-parsing/README.md` — извлечение/парсинг событий из внешних источников (в т.ч. `/parse`)
 - `docs/features/tourist-label/README.md` — туристическая метка (ручная разметка + экспорт)
-- `docs/features/llm-gateway/README.md` — управление лимитами Google AI (Gemma/Gemini) и ретраи
+- `docs/features/llm-gateway/README.md` — управление лимитами Google AI (Gemma/Gemini), текстовые вызовы и fail-closed Gemini TTS
 - `docs/features/smart-event-update/README.md` — единый Smart Update (match/merge, лог фактов, Telegraph)
 - `docs/features/event-media/README.md` — единый автоматический Smart Update gate для event images и approved public projection
 - `docs/features/event-age-rating/README.md` — declared/assessed возраст, provenance, Smart Update, CPU BGE и backfill

@@ -257,6 +257,66 @@ python kaggle/execute_gemma_key2_probe.py --env-file ".env copy"
 * prompt-level contract `Return only JSON` остаётся обязательным, но сам по себе не заменяет native schema;
 * любые новые `Gemma 4` structured stages нужно smoke-проверять именно на реальном provider, а не только по локальным unit-тестам.
 
+### 4.3. Gemini TTS: обязательный общий лимитер
+
+Google TTS доступен только через `google_ai.tts.GoogleTTSClient` и проектный
+skill `.codex/skills/google-tts-generation/`. Прямые REST/SDK-вызовы с raw key
+запрещены: они не создают atomic reserve/audit и могут незаметно сжечь дневную
+квоту.
+
+Поддерживаемые exact model IDs:
+
+* `gemini-2.5-flash-preview-tts` — default;
+* `gemini-3.1-flash-tts-preview` — только по явному выбору, не fallback.
+
+Обе модели используют один quota bucket `google-tts`: переключение alias не
+удваивает бюджет. В `google_ai_model_limits` задан project guard
+`1 RPM / 10 RPD`; TPM в локальном ledger не используется как утверждение о
+provider audio quota. Счётчик day bucket соответствует существующему контракту
+gateway — UTC.
+
+Строгий runtime-контракт:
+
+1. `--check` проверяет без reserve/provider-вызова:
+   Supabase, model row, `quota_scope`, все env-name pool members, active registry
+   rows, наличие secrets и текущие daily counters.
+2. `google_ai_reserve` под advisory transaction lock атомарно выбирает один
+   доступный key lane и увеличивает общий scope counter.
+3. `google_ai_mark_sent` обязан завершиться успешно **до** обращения к Google.
+4. Выполняется ровно один provider-вызов. Нет provider retry, model fallback,
+   emergency overflow или перехода на второй key после sent failure.
+5. `google_ai_finalize` сохраняет success/provider failure и token metadata.
+   Уже отправленный failed call остаётся потраченным.
+
+Отсутствие Supabase, RPC, model row, полного registry pool или secret всегда
+заканчивается fail-closed до provider-вызова. Process-local limiter и direct-env
+fallback для TTS запрещены.
+
+Multi-key pool задаётся только именами env-переменных:
+
+```bash
+GOOGLE_TTS_KEY_ENVS=GOOGLE_API_KEY,GOOGLE_API_KEY2,GOOGLE_API_KEY3,GOOGLE_API_KEY5
+python .codex/skills/google-tts-generation/scripts/generate_tts.py \
+  --env-file .env \
+  --check
+```
+
+Google применяет Gemini rate limits к проекту, а не к API key. Поэтому несколько
+ключей одного Google AI project не создают независимый provider RPD; включать в
+pool следует только понятные operator lanes. Наш per-registry-key ledger —
+conservative routing/accounting слой, а не способ обойти project quota.
+
+Результат single-speaker TTS — mono PCM `audio/L16`, обычно `24000 Hz`,
+упакованный CLI в WAV. Артефакты и redacted receipts хранятся только в
+`artifacts/codex/google-tts/`.
+
+Миграция `migrations/006_google_ai_tts_limits.sql` также идемпотентно учитывает
+один успешный direct-запрос от `2026-07-29` для registry lane
+`GOOGLE_API_KEY`: synthetic audit имеет финальный `succeeded`, а daily
+`google-tts` counter увеличивается только при первой вставке. Пользователь
+подтвердил расход `1`; наблюдавшийся перед успехом provider `503` сохранён как
+операционный факт, но не добавлен вторым RPD вопреки quota UI.
+
 ## TODO / Risks
 - Дочистить оставшиеся direct-SDK inspect/probe scripts после Smart Update G4 rollout, чтобы удалить legacy `google.generativeai` fallback из runtime dependencies.
 

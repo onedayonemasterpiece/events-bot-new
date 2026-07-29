@@ -69,6 +69,14 @@
 - For `guide_monitoring`, an existing `kaggle_registry` entry with Kaggle status `UNKNOWN` or Kaggle API status errors (especially `GetKernelSessionStatus` HTTP 5xx) must be treated as an active remote Telethon session. Do not remove that registry entry and do not start a new guide Kaggle run until there is terminal Kaggle evidence, fresh output has been imported, or the user explicitly confirms the old auth bundle/session can be abandoned after replacement.
 - If the intended bundle is broken or missing, stop and report it clearly instead of borrowing another bundle.
 
+## Google Gemini TTS quota gate (critical)
+
+- Для любой Google/Gemini TTS-озвучки используй project skill `google-tts-generation`.
+- Запрещены прямые `curl`/REST/`google.genai.Client` вызовы TTS и передача raw Google key.
+- До генерации обязателен no-request `--check`; live-запуск идёт только через fail-closed shared Supabase limiter.
+- Один явный запрос пользователя = не более одного provider-вызова. Не делай автоматический retry, model fallback или второй key после уже отправленного неуспешного вызова.
+- Multi-key означает атомарный выбор одного доступного зарегистрированного key lane до provider-вызова; отсутствие Supabase/RPC/model/registry/secret завершает операцию без обращения к Google.
+
 ## Правила раскладки
 
 - **Фича** → `docs/features/<feature>/README.md` + дочерние файлы в этой же папке.

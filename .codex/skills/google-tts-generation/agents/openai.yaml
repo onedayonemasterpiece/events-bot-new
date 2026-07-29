@@ -1,0 +1,4 @@
+interface:
+  display_name: "Google TTS Generation"
+  short_description: "Generate Gemini TTS through shared limits"
+  default_prompt: "Use $google-tts-generation to generate Russian speech through the fail-closed shared Google AI limiter."

@@ -275,6 +275,10 @@ features:
       - google_ai/client.py
       - google_ai/exceptions.py
       - google_ai/secrets.py
+      - google_ai/tts.py
+      - migrations/006_google_ai_tts_limits.sql
+      - .codex/skills/google-tts-generation/SKILL.md
+      - .codex/skills/google-tts-generation/scripts/generate_tts.py
       - kaggle/GemmaKey2Probe/gemma_key2_probe.ipynb
       - kaggle/execute_gemma_key2_probe.py
   admin_action_assistant:

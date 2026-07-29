@@ -52,6 +52,7 @@ class ReserveResult:
     key_alias: Optional[str] = None
     minute_bucket: Optional[str] = None
     day_bucket: Optional[str] = None
+    quota_scope: Optional[str] = None
     limits: Optional[dict] = None
     used_after: Optional[dict] = None
     blocked_reason: Optional[str] = None
@@ -213,6 +214,7 @@ class GoogleAIClient:
         incident_notifier: Optional[IncidentNotifier] = None,
         reserve_overflow_key_envs: Optional[Any] = None,
         reserve_key_envs: Optional[Any] = None,
+        require_shared_limiter: bool = False,
     ):
         """Initialize the client.
         
@@ -275,6 +277,10 @@ class GoogleAIClient:
         # fallback/overflow chain: every request starts at the next pool member
         # and atomically probes only eligible members through the shared RPC.
         self.reserve_key_envs = self._normalize_overflow_envs(reserve_key_envs)
+        # Strict consumers (currently Gemini TTS) must never fall back to a
+        # process-local counter or a direct env key.  Their provider call is
+        # allowed only after the shared RPC reserved and durably marked it.
+        self.require_shared_limiter = bool(require_shared_limiter)
 
         # Cache missing Supabase RPCs to avoid noisy per-request fallbacks when
         # the Supabase project hasn't been migrated yet (PGRST202).
@@ -494,12 +500,33 @@ class GoogleAIClient:
                 self.supabase.table("google_ai_api_keys")
                 .select("id, env_var_name, priority")
                 .eq("is_active", True)
+                .eq("provider", "google")
                 .in_("env_var_name", list(env_tuple))
                 .order("priority")
                 .order("id")
                 .execute()
             )
             rows = list(result.data or [])
+            duplicate_envs = sorted(
+                {
+                    env_name
+                    for env_name in env_tuple
+                    if sum(
+                        1
+                        for row in rows
+                        if str(row.get("env_var_name") or "") == env_name
+                    )
+                    > 1
+                }
+            )
+            if duplicate_envs:
+                logger.warning(
+                    "google_ai.normal_pool_duplicate_registry_rows consumer=%s envs=%s",
+                    self.consumer,
+                    ",".join(duplicate_envs),
+                )
+                _NORMAL_POOL_ENV_CANDIDATE_CACHE[env_tuple] = ()
+                return []
             by_env = {
                 str(row.get("env_var_name") or ""): str(row.get("id"))
                 for row in rows
@@ -582,6 +609,7 @@ class GoogleAIClient:
             key_alias=data.get("key_alias"),
             minute_bucket=data.get("minute_bucket"),
             day_bucket=data.get("day_bucket"),
+            quota_scope=data.get("quota_scope"),
             limits=data.get("limits"),
             used_after=data.get("used_after"),
             blocked_reason=data.get("blocked_reason"),
@@ -1252,6 +1280,10 @@ class GoogleAIClient:
     ) -> ReserveResult:
         """Reserve rate limit slot via Supabase RPC."""
         if not self.supabase:
+            if self.require_shared_limiter:
+                raise ReservationError(
+                    "Shared Google AI limiter is required but Supabase is unavailable"
+                )
             if self.reserve_key_envs:
                 logger.error(
                     "google_ai.normal_pool_limiter_unavailable consumer=%s envs=%s",
@@ -1281,6 +1313,10 @@ class GoogleAIClient:
             )
         was_cached_missing = self._reserve_rpc_missing
         if was_cached_missing:
+            if self.require_shared_limiter:
+                raise ReservationError(
+                    "Shared Google AI limiter is required but google_ai_reserve is unavailable"
+                )
             now = _monotonic()
             age = (
                 now - self._reserve_rpc_missing_since
@@ -1311,6 +1347,10 @@ class GoogleAIClient:
             )
 
         if self._reserve_rpc_missing:
+            if self.require_shared_limiter:
+                raise ReservationError(
+                    "Shared Google AI limiter is required but google_ai_reserve is unavailable"
+                )
             if self.allow_local_limiter_fallback:
                 return await self._local_reserve(
                     ctx,
@@ -1331,6 +1371,10 @@ class GoogleAIClient:
         if normal_pool_active:
             scoped_candidate_key_ids = self._resolve_normal_pool_candidate_key_ids()
             if not scoped_candidate_key_ids:
+                if self.require_shared_limiter:
+                    raise ReservationError(
+                        "Every configured Google TTS key must be active in google_ai_api_keys"
+                    )
                 return ReserveResult(
                     ok=False,
                     blocked_reason="normal_pool_candidates_missing",
@@ -1346,6 +1390,10 @@ class GoogleAIClient:
                 ctx.consumer,
                 self.default_env_var_name,
             )
+            if self.require_shared_limiter:
+                raise ReservationError(
+                    "The configured Google AI key is missing from google_ai_api_keys"
+                )
             if self.allow_local_limiter_fallback:
                 return await self._local_reserve(
                     ctx,
@@ -1448,6 +1496,9 @@ class GoogleAIClient:
             return result
 
         except Exception as e:
+            if self.require_shared_limiter:
+                logger.error("Strict shared limiter reservation failed: %s", e)
+                raise ReservationError(f"Shared limiter reservation failed: {e}") from e
             if (
                 self.allow_reserve_fallback
                 and self._is_missing_reserve_rpc_error(e)
@@ -1755,8 +1806,16 @@ class GoogleAIClient:
     async def _mark_sent(self, ctx: RequestContext, attempt_no: int) -> None:
         """Mark request as sent (before calling provider)."""
         if not self.supabase:
+            if self.require_shared_limiter:
+                raise ReservationError(
+                    "Shared Google AI limiter is required before a provider call"
+                )
             return
         if self._mark_sent_rpc_missing:
+            if self.require_shared_limiter:
+                raise ReservationError(
+                    "google_ai_mark_sent is unavailable; provider call refused"
+                )
             return
         request_uid = ctx.request_uid
 
@@ -1780,6 +1839,10 @@ class GoogleAIClient:
                         "Will skip it for the rest of the process. error=%s",
                         message,
                     )
+                if self.require_shared_limiter:
+                    raise ReservationError(
+                        "google_ai_mark_sent is unavailable; provider call refused"
+                    ) from e
                 return
             logger.warning("Failed to mark_sent: %s", e)
             await self._notify_incident(
@@ -1789,6 +1852,10 @@ class GoogleAIClient:
                 message=message,
                 details={"attempt_no": attempt_no, "rpc": "google_ai_mark_sent"},
             )
+            if self.require_shared_limiter:
+                raise ReservationError(
+                    f"google_ai_mark_sent failed; provider call refused: {e}"
+                ) from e
     
     async def _finalize(
         self,

@@ -7,6 +7,10 @@
 
 ### Added
 
+- Added fail-closed Gemini TTS generation through the shared Google AI limiter:
+  both supported TTS models share a 10-RPD scope, registered key lanes are
+  selected atomically, every explicit generation makes one provider attempt,
+  and the `google-tts-generation` skill prohibits direct/untracked calls.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link

@@ -1,0 +1,64 @@
+mode: serial_integrator
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: feature/google-tts-quota-gateway
+global_constraints:
+  - no live TTS generation during implementation or validation
+  - never expose Google or Supabase secrets
+  - one provider attempt per explicit generation
+  - shared limiter is mandatory and fail-closed
+verification_owner: /root
+stop_conditions:
+  - live registry or shared reserve RPC cannot be verified
+  - quota migration cannot be represented idempotently
+lanes:
+  - id: map-google-quota
+    role: planner
+    requirement_ids: [R01, R02, R03, R04]
+    target: google_ai limiter and migrations
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: read-only mapping
+    verification_scope: inspection_only
+    status: spawned
+  - id: map-skill-docs
+    role: planner
+    requirement_ids: [R05, R06]
+    target: project skill and canonical documentation
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["**/*"]
+    expected_output: read-only mapping
+    verification_scope: inspection_only
+    status: committed
+  - id: serial-integrator
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05, R06]
+    target: integrated fail-closed TTS gateway
+    depends_on: [map-google-quota, map-skill-docs]
+    execution_mode: serial_after_dependency
+    branch: feature/google-tts-quota-gateway
+    worktree: /home/dev/worktrees/events-bot-google-tts-quota
+    writable_files:
+      - google_ai/**
+      - migrations/**
+      - .codex/skills/google-tts-generation/**
+      - tests/**
+      - docs/**
+      - .env.example
+      - CHANGELOG.md
+    forbidden_files:
+      - .env
+      - artifacts/**
+      - production databases
+    expected_output: committed and pushed implementation
+    verification_scope: full_local
+    status: planned
