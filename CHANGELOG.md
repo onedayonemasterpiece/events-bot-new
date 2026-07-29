@@ -7,6 +7,10 @@
 
 ### Added
 
+- Added an evidence-first Antigravity festival-research prompt pack that splits
+  discovery, per-source edition/claim review, reconciliation and adversarial
+  verification, with deterministic stale-edition, unsupported-title and
+  ticket-scope fail-closed gates.
 - Registered the Antigravity managed-agent quota in the shared Google AI
   limiter (`54 RPM / 96000 TPM / 90 RPD` safe caps over the verified
   `60 / 100000 / 100` provider quota) and documented the first bounded

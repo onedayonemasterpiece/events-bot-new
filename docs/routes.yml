@@ -46,6 +46,7 @@ sections:
     admin_actions: docs/llm/admin-actions.md
     guide_excursions_dedup: docs/llm/guide-excursions-dedup.md
     request_guide: docs/llm/request-guide.md
+    antigravity_festival_research: docs/llm/antigravity-festival-research.md
     smart_update_lollipop_funnel: docs/llm/smart-update-lollipop-funnel.md
     smart_update_lollipop_casebook: docs/llm/smart-update-lollipop-casebook.md
     smart_update_lollipop_mixed_phase_prompts: docs/llm/smart-update-lollipop-mixed-phase-prompts.md

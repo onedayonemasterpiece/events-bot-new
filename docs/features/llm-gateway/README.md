@@ -159,6 +159,10 @@ fail-closed завершаться при недоступном shared limiter.
    назвал неподтверждённый номер выпуска, сослался на прошлогоднюю страницу
    `sobor39.ru/news/nashi-novosti/3930/` как на 2026 год и подставил абонемент
    вместо билета первого дня. Нужен deterministic provenance/date/URL review.
+4. Канонический evidence-first prompt pack и fail-closed pipeline для
+   фестивального исследования описаны в
+   `docs/llm/antigravity-festival-research.md`. Монолитный research+merge
+   prompt не является допустимым production contract.
 
 ### 2.6. Structured output и thought filtering для Gemma 4
 
