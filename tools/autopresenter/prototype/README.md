@@ -1,7 +1,7 @@
 # Visible Autopresenter prototype
 
 This is the deliberately small M1 + M2-lite development slice. It runs exactly
-three fixed scenarios and does not modify or replace the M0 compatibility
+four fixed scenes in one persistent presentation window and does not modify or replace the M0 compatibility
 harness:
 
 - `tomorrow-mobile` — opens Tomorrow, reveals a rail description and event
@@ -10,6 +10,8 @@ harness:
   gesture until its native like state is stored;
 - `weekend-amber-artifact` — follows the mobile menu to Weekend and collects
   the existing amber artifact.
+- `outro-qr` — shows a fullscreen survey QR from the existing immutable Yandex
+  CDN path with strong presentation typography.
 
 There is intentionally no generic scene DSL or editor.
 
@@ -27,10 +29,14 @@ Open the printed control URL:
 http://127.0.0.1:8787/control/
 ```
 
-Choose one of the three scenario buttons. A headed fullscreen stage opens the
+Choose one of the four scene buttons. A headed fullscreen stage opens the
 real site in an enlarged mobile frame. Every scenario shows tap circles and
 swipe trails (never a mouse cursor), uses visible natural scrolling and waits
 for the interface to settle before the next action.
+
+Starting another scene does not close the presentation window: Run switches
+within the same browser/context/page, Stop and Reset are non-terminal, and only
+the confirmed Shutdown command closes the environment.
 
 The first run installs the lockfile-pinned Node dependencies, the pinned
 Playwright-managed browser and a small local Python environment if `aiohttp` is
@@ -39,7 +45,7 @@ not already available. Later launches reuse them. Set
 
 ### Controls
 
-- phone/web control: three Run buttons, Stop, Reset and confirmed
+- phone/web control: four Run buttons, Stop, Reset and confirmed
   **Закрыть презентацию**;
 - local stage: `Space` or `Right Arrow` Run, `Esc` Stop, `R` Reset, `F` fullscreen;
 - `Ctrl+C` in the launcher stops site, relay, agent and browser.

@@ -1,3 +1,5 @@
+import { OUTRO_SCENE_ID } from "./outro-contract.mjs";
+
 export const INTERACTION_VISUAL_CONTRACTS = Object.freeze({
   mobile: Object.freeze({
     pointerVisual: "tap-circle",
@@ -31,17 +33,25 @@ export const WEEKEND_AMBER_ARTIFACT_CONTRACT = Object.freeze({
   completion: "artifact-collected-and-detail-dialog-visible-after-reload",
 });
 
+export const OUTRO_QR_CONTRACT = Object.freeze({
+  id: OUTRO_SCENE_ID,
+  surface: "stage",
+  completion: "fullscreen-survey-qr-loaded-and-visible",
+});
+
 export const DEFAULT_SCENARIO_ID = TOMORROW_MOBILE_CONTRACT.id;
 export const SCENARIO_IDS = Object.freeze([
   TOMORROW_MOBILE_CONTRACT.id,
   TOMORROW_RAIL_LIKE_CONTRACT.id,
   WEEKEND_AMBER_ARTIFACT_CONTRACT.id,
+  OUTRO_QR_CONTRACT.id,
 ]);
 export const LONG_SCENE_TIMEOUT_CEILING_MS = 60 * 60 * 1_000;
 export const SCENARIO_TIMEOUT_POLICY = Object.freeze({
   [TOMORROW_MOBILE_CONTRACT.id]: 30_000,
   [TOMORROW_RAIL_LIKE_CONTRACT.id]: 120_000,
   [WEEKEND_AMBER_ARTIFACT_CONTRACT.id]: 120_000,
+  [OUTRO_QR_CONTRACT.id]: 30_000,
 });
 
 export function resolveScenarioId(value) {

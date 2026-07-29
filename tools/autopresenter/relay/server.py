@@ -22,7 +22,12 @@ from aiohttp import web
 
 ALLOWED_ACTIONS = frozenset({"run", "stop", "reset", "shutdown"})
 ALLOWED_SCENARIOS = frozenset(
-    {"tomorrow-mobile", "tomorrow-rail-like", "weekend-amber-artifact"}
+    {
+        "tomorrow-mobile",
+        "tomorrow-rail-like",
+        "weekend-amber-artifact",
+        "outro-qr",
+    }
 )
 ALLOWED_STATUSES = frozenset(
     {"idle", "running", "stopping", "completed", "error", "closed"}
@@ -153,7 +158,8 @@ class Relay:
                 raise ApiError(
                     400,
                     "invalid_scenario",
-                    "scenario must be tomorrow-mobile, tomorrow-rail-like, or weekend-amber-artifact",
+                    "scenario must be tomorrow-mobile, tomorrow-rail-like, "
+                    "weekend-amber-artifact, or outro-qr",
                 )
         elif scenario not in (None, ""):
             raise ApiError(
@@ -548,6 +554,7 @@ def windows_test_archive(request: web.Request) -> bytes:
         AGENT_DIR / "abort-utils.mjs": "agent/abort-utils.mjs",
         AGENT_DIR / "pacing.mjs": "agent/pacing.mjs",
         AGENT_DIR / "scenario-contract.mjs": "agent/scenario-contract.mjs",
+        AGENT_DIR / "outro-contract.mjs": "agent/outro-contract.mjs",
         AGENT_DIR / "package.json": "agent/package.json",
         AGENT_DIR / "package-lock.json": "agent/package-lock.json",
     }

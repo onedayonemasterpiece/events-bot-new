@@ -1,6 +1,6 @@
 # Автопрезентатор static-сайта
 
-- **Статус:** `m0_implementation_accepted + three_scene_owner_test_candidate`;
+- **Статус:** `m0_implementation_accepted + four_scene_owner_test_candidate`;
   фактический M0-прогон на целевом ноутбуке ещё не выполнен.
 - **Implementation gate:** M0 empirical и visible prototype идут параллельными
   непересекающимися треками.
@@ -17,7 +17,8 @@ M0 продолжает отдельно доказывать exact portable-с�
 для каждого кандидата нужны 20/20 холодных loopback-циклов и 5/5 live smoke.
 Параллельно доступен узкий owner-test vertical slice: fullscreen stage
 1920×1080, реальный same-origin сайт в увеличенном mobile iframe, три
-фиксированных сценария, настоящие Playwright click/drag/wheel и минимальный
+фиксированных browser-сценария, полноэкранное QR-аутро, настоящие Playwright
+click/drag/wheel и минимальный
 `aiohttp`-пульт Run/Stop/Reset/Shutdown.
 Этот прототип ускоряет product learning, но не является M0 evidence,
 portable release или разрешением публичного показа.
@@ -68,7 +69,7 @@ native output работают в UTF-8. Для headed owner test устанав
 
 ## Продуктовая граница
 
-### Три фиксированных owner-test сценария
+### Четыре фиксированные owner-test сцены
 
 `tomorrow-mobile`:
 
@@ -99,6 +100,23 @@ native output работают в UTF-8. Для headed owner test устанав
    проверяет настоящее persisted/ARIA-состояние;
 4. повторным настоящим действием открывает карточку артефакта.
 
+`outro-qr`:
+
+1. в том же browser/context/page переключает stage с live-сайта на отдельную
+   полноэкранную композицию;
+2. показывает короткую мысль «Как вам?» сильной типографикой и без служебного
+   dashboard-интерфейса;
+3. ждёт фактическую загрузку QR из immutable Yandex CDN URL и оставляет кадр
+   видимым до следующего Run, Stop/Reset или terminal Shutdown.
+
+Browser, BrowserContext, stage page и видимое окно создаются один раз на всю
+presentation session. Следующий Run кооперативно останавливает текущую сцену и
+переключает содержимое того же окна; Stop и Reset нетерминальны. Только
+«Закрыть презентацию»/Shutdown закрывает browser и Windows agent. У каждой
+явной сцены собственный timeout: короткие сцены 30 секунд, gesture-heavy
+сценарии 120 секунд; policy допускает будущую явную часовую сцену без
+универсального DSL или редактора.
+
 Между действиями сценарии используют bounded readiness/settle checkpoints,
 видимые wheel/drag-траектории и dwell, а не мгновенный прыжок к найденному
 компоненту. Stop и Reset обрабатываются параллельным polling.
@@ -110,15 +128,16 @@ affordances. Отдельный desktop-контракт, когда появи�
 ### Два непересекающихся трека
 
 M0 остаётся только compatibility experiment и не переписывается ради прототипа.
-Visible prototype работает только с stage, agent, relay, control PWA и тремя
-явными сценариями. Он может разрабатываться и демонстрироваться владельцу
+Visible prototype работает только с stage, agent, relay, control PWA и четырьмя
+явными сценами. Он может разрабатываться и демонстрироваться владельцу
 продукта на поддерживаемой dev-ОС до M0 PASS.
 
 До M0 PASS по-прежнему запрещены:
 
 - финальную portable-сборку и backup-video pipeline;
 - desktop-сцены;
-- typing, QR/image, инфографика и key hints;
+- typing, произвольные media/stats сцены и key hints; текущее фиксированное
+  QR-аутро является узким owner-test исключением;
 - универсальный DSL, произвольные пользовательские сцены и редактор сценариев;
 - `.exe`, Electron, Socket.IO, Redis, отдельная очередь/БД;
 - AI-планирование live-сценария;
@@ -153,9 +172,9 @@ MP4 и SHA-256 лежат в
 | Интернет, не локальная сеть | отдельный Fly HTTPS relay; телефон и агент делают только исходящие запросы |
 | Mobile/desktop реального сайта | mobile в M1; desktop только после M3 |
 | Tap/pointer и human-like motion | deterministic overlay + настоящие Playwright actions |
-| Сценарии в файлах | TypeScript action graph; schema только после трёх сценариев |
+| Сценарии в файлах | четыре явных action path; schema только после нескольких проверенных итераций |
 | «Завтра», event rail, суббота | immutable presentation dataset + exact scenario contract |
-| Typing/QR/stats/captions/keys | post-M3 extensions |
+| Typing/произвольные media/stats/captions/keys | post-M3 extensions; одно фиксированное QR-аутро уже проверяется в owner test |
 | Тонкий Windows-клиент | hermetic ZIP, portable Node, managed browser, `start.cmd` |
 | Локальная отладка | Linux smoke полезен, но не заменяет M0 на Windows 10 |
 | Резервная запись | заранее созданный и просмотренный MP4 из того же commit/scenario |
@@ -535,7 +554,10 @@ Autopresenter-Win10-x64/
 
 ### После M3 — полноценное расширение
 
-Последовательно добавлять desktop, typing, QR/image, stats, captions, key hints, дополнительные resolution profiles и только затем versioned declarative schema. Полноценное решение остаётся presentation tool, а не универсальной медиаплатформой.
+Последовательно добавлять desktop, typing, дополнительные image/video/stats
+сцены, captions, key hints, дополнительные resolution profiles и только затем
+versioned declarative schema. Проверенное фиксированное QR-аутро не является
+универсальной media-платформой или редактором.
 
 ## Public-demo acceptance suite
 
@@ -599,4 +621,4 @@ path-matrix/<candidate>/
 | Data | immutable build, Europe/Kaliningrad, exact event/date/build markers |
 | Distribution | exact portable ZIP + manifests/checksums/self-test |
 | Backup | заранее созданный и просмотренный offline MP4 |
-| Extras | desktop/typing/QR/stats только после M3 |
+| Extras | одно фиксированное QR-аутро разрешено owner test; desktop/typing/произвольные media/stats только после M3 |

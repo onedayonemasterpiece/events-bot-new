@@ -40,6 +40,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('data-scenario="tomorrow-mobile"', text)
         self.assertIn('data-scenario="tomorrow-rail-like"', text)
         self.assertIn('data-scenario="weekend-amber-artifact"', text)
+        self.assertIn('data-scenario="outro-qr"', text)
         self.assertNotIn('class="primary scenario"', text)
         self.assertIn("state.current_command?.action === 'run'", text)
         self.assertIn("button.classList.toggle('primary', selected)", text)
@@ -138,6 +139,18 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             "/api/commands",
             json={
                 "action": "run",
+                "scenario": "outro-qr",
+                "command_id": "outro-qr",
+            },
+        )
+        self.assertEqual(response.status, 202)
+        self.assertEqual(payload["command"]["scenario"], "outro-qr")
+
+        response, payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={
+                "action": "run",
                 "scenario": "made-up",
                 "command_id": "invalid-scenario",
             },
@@ -172,7 +185,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             "/api/commands/close-all/ack",
             json={
                 "agent_id": "agent-one",
-                "sequence": 2,
+                "sequence": 3,
                 "status": "closed",
                 "detail": "presentation closed; browser and agent stopped",
             },
@@ -288,6 +301,7 @@ class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("agent/abort-utils.mjs", names)
             self.assertIn("agent/pacing.mjs", names)
             self.assertIn("agent/scenario-contract.mjs", names)
+            self.assertIn("agent/outro-contract.mjs", names)
             self.assertTrue(
                 all(info.date_time == (2025, 1, 1, 0, 0, 0) for info in archive.infolist())
             )

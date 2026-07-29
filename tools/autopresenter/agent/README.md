@@ -1,10 +1,11 @@
 # Autopresenter prototype agent
 
-One headed Playwright agent for exactly three explicit scenarios:
+One headed Playwright agent for exactly four explicit scenes:
 
 - `tomorrow-mobile` (the fallback when `command.scenario` is omitted);
 - `tomorrow-rail-like`;
-- `weekend-amber-artifact`.
+- `weekend-amber-artifact`;
+- `outro-qr` (fullscreen survey QR, no iframe interaction).
 
 It expects the local relay and Astro presenter stage to be running. Unknown scenario
 IDs fail instead of being interpreted as a scenario DSL.

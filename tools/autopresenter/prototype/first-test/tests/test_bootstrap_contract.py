@@ -51,6 +51,10 @@ class BootstrapContractTest(unittest.TestCase):
         self.assertIn('[Console]::OutputEncoding = $Utf8NoBom', script)
         self.assertIn('$ErrorActionPreference = "Continue"', script)
         self.assertIn('if ($AgentExitCode -ne 0)', script)
+        self.assertIn(
+            'Require-File (Join-Path $AgentDir "outro-contract.mjs")',
+            script,
+        )
 
     def test_versioned_dependencies_and_browser_are_reused_from_local_app_data(self):
         script = self.bootstrap

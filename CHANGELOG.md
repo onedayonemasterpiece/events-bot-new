@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- Fixed Autopresenter scene switching so sequential Run, Stop, and Reset reuse
+  one headed browser/context/page/window instead of visibly closing and
+  recreating it. Replaced the global 30-second scenario abort with explicit
+  30/120-second per-scene bounds and an hour-capable policy, so the rail-like
+  scenario no longer fails with `exceeded 30000ms`.
 - Fixed Autopresenter owner-test readiness so horizontally offscreen lazy media
   does not block a mobile scene, and raised the existing personalization
   consent above the fixed mobile navigation so its real visible confirmation
@@ -28,9 +33,13 @@
 
 ### Added
 
+- Added a fourth explicit Autopresenter scene, `outro-qr`: a strong fullscreen
+  «Как вам?» survey outro using the existing immutable Yandex CDN asset. The
+  phone PWA now selects all four scenes while retaining the terminal
+  «Закрыть презентацию» action; no generic scene DSL/editor was added.
 - Added the installable Autopresenter control PWA «Пульт презентации»
   (`short_name: Пульт`) with device-scoped relaunch authorization, explicit
-  access reset, three fixed scenario selectors, and the confirmed
+  access reset, four fixed scene selectors, and the confirmed
   «Закрыть презентацию» command that terminates the browser and Windows agent.
 - Added two explicit Autopresenter owner-test scenes alongside
   `tomorrow-mobile`: a real event-rail pull-to-like flow with persisted UI

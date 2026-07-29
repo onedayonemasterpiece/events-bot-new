@@ -8,6 +8,7 @@ import {
   TOMORROW_MOBILE_CONTRACT,
   TOMORROW_RAIL_LIKE_CONTRACT,
   WEEKEND_AMBER_ARTIFACT_CONTRACT,
+  OUTRO_QR_CONTRACT,
   LONG_SCENE_TIMEOUT_CEILING_MS,
   SCENARIO_TIMEOUT_POLICY,
   resolveScenarioId,
@@ -18,11 +19,12 @@ import { PACING } from "../pacing.mjs";
 
 const source = await readFile(new URL("../agent.mjs", import.meta.url), "utf8");
 
-test("declares exactly three explicit mobile scenario IDs and the fallback", () => {
+test("declares three mobile journeys plus one fullscreen outro and the fallback", () => {
   assert.deepEqual(SCENARIO_IDS, [
     "tomorrow-mobile",
     "tomorrow-rail-like",
     "weekend-amber-artifact",
+    "outro-qr",
   ]);
   assert.equal(DEFAULT_SCENARIO_ID, "tomorrow-mobile");
   assert.equal(resolveScenarioId(undefined), "tomorrow-mobile");
@@ -36,10 +38,16 @@ test("declares exactly three explicit mobile scenario IDs and the fallback", () 
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventId, 5296);
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventTitle, "Концерт «Фестиваль Pianissimo: Жуан Нету Виейра»");
   assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 6591);
+  assert.deepEqual(OUTRO_QR_CONTRACT, {
+    id: "outro-qr",
+    surface: "stage",
+    completion: "fullscreen-survey-qr-loaded-and-visible",
+  });
   assert.match(source, /resolveScenarioId\(command\.scenario\)/u);
   assert.match(source, /if \(scenarioId === TOMORROW_MOBILE_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === TOMORROW_RAIL_LIKE_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === WEEKEND_AMBER_ARTIFACT_CONTRACT\.id\)/u);
+  assert.match(source, /if \(scenarioId === OUTRO_QR_CONTRACT\.id\)/u);
 });
 
 test("scenario timeout policy is explicit and can admit a future one-hour scene", () => {
@@ -47,10 +55,12 @@ test("scenario timeout policy is explicit and can admit a future one-hour scene"
     "tomorrow-mobile": 30_000,
     "tomorrow-rail-like": 120_000,
     "weekend-amber-artifact": 120_000,
+    "outro-qr": 30_000,
   });
   assert.equal(resolveScenarioTimeoutMs("tomorrow-mobile"), 30_000);
   assert.equal(resolveScenarioTimeoutMs("tomorrow-rail-like"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("weekend-amber-artifact"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("outro-qr"), 30_000);
   assert.equal(LONG_SCENE_TIMEOUT_CEILING_MS, 3_600_000);
   assert.equal(
     resolveScenarioTimeoutMs("future-hour-scene", {
@@ -225,6 +235,15 @@ test("normal scenarios reuse the sole page and clear embedded state without clos
   assert.match(source, /sessionStorage\.clear\(\)/u);
   assert.match(source, /await this\.reloadEmbeddedFrame\(signal\)/u);
   assert.equal(source.match(/this\.context\?\.close\(\)/gu)?.length, 1);
+});
+
+test("fullscreen outro switches the existing stage without navigation or context recreation", () => {
+  const outroStart = source.indexOf("async runOutroQr");
+  const nextMethod = source.indexOf("async openTomorrowFromHome", outroStart);
+  assert.ok(outroStart >= 0 && nextMethod > outroStart);
+  const outro = source.slice(outroStart, nextMethod);
+  assert.match(outro, /showPresenterScene\(OUTRO_SCENE_ID, signal\)/u);
+  assert.doesNotMatch(outro, /openStage|createContextAndStage|context.*close/u);
 });
 
 test("a new run is a bounded cooperative scene switch, never already-running rejection", () => {

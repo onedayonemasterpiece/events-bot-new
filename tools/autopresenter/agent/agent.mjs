@@ -13,10 +13,16 @@ import {
   TOMORROW_MOBILE_CONTRACT,
   TOMORROW_RAIL_LIKE_CONTRACT,
   WEEKEND_AMBER_ARTIFACT_CONTRACT,
+  OUTRO_QR_CONTRACT,
   resolveScenarioId,
   resolveScenarioTimeoutMs,
   selectDeterministicMobileEvent,
 } from "./scenario-contract.mjs";
+import {
+  DEFAULT_PRESENTER_SCENE_ID,
+  OUTRO_QR_ASSET,
+  OUTRO_SCENE_ID,
+} from "./outro-contract.mjs";
 import { buildVerticalWheelTrajectory, PACING } from "./pacing.mjs";
 import { abortableDelay, assertNotAborted } from "./abort-utils.mjs";
 
@@ -24,6 +30,9 @@ const VIEWPORT = Object.freeze({ width: 1920, height: 1080 });
 const FRAME_SELECTOR = '#presenter-mobile-frame[data-presenter-id="mobile-site-frame"]';
 const STAGE_READY_SELECTOR =
   '[data-presenter-id="presenter-stage"][data-presenter-stage-ready="true"]';
+const OUTRO_READY_SELECTOR =
+  '[data-presenter-id="presenter-stage"][data-presenter-scene="outro-qr"]';
+const OUTRO_QR_SELECTOR = '[data-presenter-id="outro-qr-image"]';
 const TOMORROW_NAV_SELECTOR = '[data-presenter-id="nav-tomorrow"]';
 const TOMORROW_READY_SELECTOR = '[data-presenter-id="tomorrow-page-ready"]';
 const TOMORROW_ROWS_SELECTOR =
@@ -551,6 +560,9 @@ class PrototypeAgent {
     if (scenarioId === WEEKEND_AMBER_ARTIFACT_CONTRACT.id) {
       return this.runWeekendAmberArtifact(signal);
     }
+    if (scenarioId === OUTRO_QR_CONTRACT.id) {
+      return this.runOutroQr(signal);
+    }
     throw new Error(`unreachable scenario dispatch: ${scenarioId}`);
   }
 
@@ -647,12 +659,70 @@ class PrototypeAgent {
   async prepareScenarioStage(scenarioId, signal) {
     assertNotAborted(signal);
     await raceWithAbort(this.openStage(this.page), signal);
+    await this.showPresenterScene(DEFAULT_PRESENTER_SCENE_ID, signal);
     await this.setAgentState("running", scenarioId);
     const frame = this.page.frameLocator(FRAME_SELECTOR);
     await this.waitForEmbeddedReady(frame, signal);
     await this.resetEmbeddedState(frame, signal);
     await this.enforceMobilePointerShield(frame);
     return frame;
+  }
+
+  async showPresenterScene(sceneId, signal) {
+    assertNotAborted(signal);
+    await raceWithAbort(
+      this.page.evaluate((nextSceneId) => {
+        window.dispatchEvent(
+          new CustomEvent("presenter:scene", { detail: { id: nextSceneId } }),
+        );
+      }, sceneId),
+      signal,
+    );
+    await raceWithAbort(
+      this.page
+        .locator(`[data-presenter-id="presenter-stage"][data-presenter-scene="${sceneId}"]`)
+        .waitFor({ state: "visible", timeout: 10_000 }),
+      signal,
+    );
+  }
+
+  async runOutroQr(signal) {
+    const startedAt = Date.now();
+    await raceWithAbort(
+      this.page.locator(STAGE_READY_SELECTOR).waitFor({ state: "visible", timeout: 10_000 }),
+      signal,
+    );
+    await this.setAgentState("running", OUTRO_QR_CONTRACT.id);
+    await this.showPresenterScene(OUTRO_SCENE_ID, signal);
+
+    const scene = this.page.locator(OUTRO_READY_SELECTOR);
+    const qr = scene.locator(OUTRO_QR_SELECTOR);
+    await raceWithAbort(qr.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await raceWithAbort(
+      qr.evaluate(async (image, expectedUrl) => {
+        if (!(image instanceof HTMLImageElement)) {
+          throw new Error("outro QR node is not an image");
+        }
+        if (!image.complete) {
+          await new Promise((resolve, reject) => {
+            image.addEventListener("load", resolve, { once: true });
+            image.addEventListener("error", reject, { once: true });
+          });
+        }
+        if (image.naturalWidth <= 0 || image.currentSrc !== expectedUrl) {
+          throw new Error(
+            `outro QR failed to load from the pinned CDN URL: ${image.currentSrc}`,
+          );
+        }
+      }, OUTRO_QR_ASSET.url),
+      signal,
+    );
+    await abortableDelay(1_500, signal);
+    await this.captureScenario(OUTRO_QR_CONTRACT.id);
+    return {
+      summary: "fullscreen survey QR loaded from the immutable CDN and remains visible",
+      durationMs: Date.now() - startedAt,
+    };
   }
 
   async openTomorrowFromHome(frame, signal) {

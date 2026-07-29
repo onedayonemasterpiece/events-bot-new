@@ -125,7 +125,14 @@ presentation window и открывало другое, разрушая кон�
 
 - deployed SHA: pending
 - deploy path: pending
-- regression checks: pending
+- local regression checks: agent `25/25`, relay `13/13`, PWA auth `2/2`,
+  Windows bootstrap `4/4`, presenter-stage `3/3`; full immutable Astro preview
+  build produced 465 pages without errors
+- visual QA: 1920×1080 stage remained exactly viewport-sized; `outro-qr`
+  rendered «Как вам?» with a 504×504 visible QR, intrinsic image width 1155,
+  exact immutable CDN URL and zero browser console/page errors
+- CDN evidence: public asset returned `200 image/png`, immutable one-year cache
+  headers and exact SHA-256
 - post-deploy verification: pending
 
 ## Prevention

@@ -32,6 +32,19 @@
 | telegram_error_discovery | support R01 | completed | read-only | message 820 screenshot and exact timeout captured |
 | runtime_discovery | support R02/R03 | completed | read-only | freshContext/window and timeout lifecycle mapped |
 | media_discovery | support R04 | completed | read-only | existing bucket/CDN/key and cache contract mapped |
-| persistent_runtime | R02/R03 | committed | `12de70bc` (`ad7bab77` implementation) | agent 21/21, relay 13/13, PWA 2/2, bootstrap 4/4 |
-| outro_scene | R05/R06 | committed | `036c587c` (`16652bf0` implementation) | focused 6/6, agent 20/20, CDN hash/dimensions |
-| integration_release | R01/R04 | in progress | integration worktree | bridge/build/live/deploy pending |
+| persistent_runtime | R02/R03 | merged | `12de70bc` (`ad7bab77` implementation) | agent 21/21, relay 13/13, PWA 2/2, bootstrap 4/4 |
+| outro_scene | R05/R06 | merged | `036c587c` (`16652bf0` implementation) | focused 6/6, agent 20/20, CDN hash/dimensions |
+| integration_release | R01/R04 | in progress | integration worktree | four-scene bridge and 465-page build pass; public deploy/E2E pending |
+
+## Integrated local verification
+
+- Runtime and control expose exactly four explicit scenes; no DSL/editor.
+- Sequential Run regression keeps one context generation and one page; Stop
+  and Reset remain non-terminal, Shutdown remains the only terminal action.
+- Explicit timeout policy is 30/120/120/30 seconds and validates a future
+  explicit timeout up to one hour.
+- Agent `25/25`, relay `13/13`, control auth `2/2`, Windows bootstrap `4/4`,
+  presenter-stage `3/3`.
+- Astro immutable preview build: 465 pages, including presenter stage.
+- Visual QA: 1920×1080, zero overflow/errors, strong fullscreen type, loaded
+  504×504 QR from the exact 1155×1155 immutable CDN asset.

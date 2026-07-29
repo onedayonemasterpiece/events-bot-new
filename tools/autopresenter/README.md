@@ -24,9 +24,11 @@ tools/autopresenter/
         └── tomorrow-mobile.mp4
 ```
 
-The visible slice runs exactly three explicit scenarios: `tomorrow-mobile`,
-`tomorrow-rail-like`, and `weekend-amber-artifact`. It deliberately has no
-generic scenario DSL. Start at [`prototype/README.md`](prototype/README.md).
+The visible slice runs exactly four explicit scenes: `tomorrow-mobile`,
+`tomorrow-rail-like`, `weekend-amber-artifact`, and the fullscreen `outro-qr`.
+They share one browser/context/page/window until terminal Shutdown. It
+deliberately has no generic scenario DSL. Start at
+[`prototype/README.md`](prototype/README.md).
 The M0 target-laptop procedure remains at [`m0/README.md`](m0/README.md).
 
 The first-test Internet path is deliberately separate from the final M3
@@ -47,6 +49,11 @@ portable release:
   affordances, while the separate desktop contract visualizes pressed keys;
 - scenario pacing uses visible natural scroll/drag motion, readiness checks and
   bounded dwell instead of instant component jumps;
+- the same headed window survives sequential Run, Stop and Reset commands;
+  a new Run cooperatively switches the active scene, and explicit timeout
+  policy admits a future scene lasting up to one hour;
+- the QR outro uses strong fullscreen typography and an immutable asset from
+  the existing `static.kenigevents.ru` Yandex CDN;
 - the confirmed `Закрыть презентацию` action closes the browser, terminates the
   Windows agent and leaves a durable `closed` status;
 - the first successful test stores versioned Node, lockfile-keyed dependencies

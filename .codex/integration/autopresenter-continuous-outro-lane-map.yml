@@ -83,7 +83,7 @@ lanes:
     expected_output: committed persistent-session runtime and targeted regression tests
     verification_scope: full_local
     effort: high
-    status: committed
+    status: merged
   - id: outro_scene
     role: worker
     requirement_ids: [R05, R06]
@@ -109,7 +109,7 @@ lanes:
     expected_output: committed outro stage surface/contract and targeted tests
     verification_scope: targeted
     effort: high
-    status: committed
+    status: merged
   - id: integration_release
     role: merge_reviewer
     requirement_ids: [R01, R04]

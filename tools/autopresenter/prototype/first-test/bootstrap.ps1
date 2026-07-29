@@ -121,6 +121,7 @@ try {
     Require-File (Join-Path $AgentDir "abort-utils.mjs") "Presenter abort utilities"
     Require-File (Join-Path $AgentDir "pacing.mjs") "Presenter pacing contract"
     Require-File (Join-Path $AgentDir "scenario-contract.mjs") "Presenter scenario contract"
+    Require-File (Join-Path $AgentDir "outro-contract.mjs") "Presenter outro contract"
     Require-File (Join-Path $AgentDir "package.json") "Pinned dependency manifest"
     Require-File (Join-Path $AgentDir "package-lock.json") "Pinned dependency lock"
     $Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
