@@ -90,6 +90,14 @@
     .primary:hover { border-color: transparent; background: linear-gradient(135deg, #d4d9ff, #83f6da); }
     .secondary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .meta { margin: 14px 2px 0; color: #7381a9; font-size: .72rem; text-align: center; }
+    .download-link {
+      display: block;
+      margin-top: 12px;
+      color: #aebcff;
+      font-size: .82rem;
+      text-align: center;
+      text-underline-offset: 3px;
+    }
     @keyframes pulse { 50% { transform: scale(.72); opacity: .6; } }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   </style>
@@ -102,7 +110,7 @@
     <section class="panel" aria-labelledby="control-title">
       <div class="state-row">
         <span class="state-label" id="control-title">Статус агента</span>
-        <output id="status" data-status="disconnected" aria-live="polite">disconnected</output>
+        <output id="status" data-status="disconnected" aria-live="polite">Агент не подключён</output>
       </div>
       <p id="detail">Подключаемся к relay…</p>
       <div class="controls">
@@ -112,18 +120,44 @@
           <button type="button" data-action="reset">Сброс</button>
         </div>
       </div>
-      <p class="meta" id="meta">session · local</p>
+      <a class="download-link" id="demonstrator-link" href="/demonstrator/">Скачать демонстратор для Windows</a>
+      <p class="meta" id="meta">Интернет · защищённый HTTPS-пульт</p>
     </section>
   </main>
   <script>
     const statusNode = document.querySelector('#status');
     const detailNode = document.querySelector('#detail');
     const metaNode = document.querySelector('#meta');
+    const demonstratorLink = document.querySelector('#demonstrator-link');
     const buttons = [...document.querySelectorAll('button[data-action]')];
     let posting = false;
+    const statusLabels = {
+      disconnected: 'Агент не подключён',
+      idle: 'Готов',
+      running: 'Выполняется',
+      stopping: 'Останавливается',
+      completed: 'Завершено',
+      error: 'Ошибка',
+    };
+    const fragment = new URLSearchParams(location.hash.slice(1));
+    const fragmentToken = fragment.get('token');
+    if (fragmentToken) {
+      sessionStorage.setItem('autopresenter-control-token', fragmentToken);
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    }
+    const token = sessionStorage.getItem('autopresenter-control-token') || '';
+    demonstratorLink.href = token
+      ? `/demonstrator/#token=${encodeURIComponent(token)}`
+      : '/demonstrator/';
+
+    function authHeaders(extra = {}) {
+      return token
+        ? { ...extra, Authorization: `Bearer ${token}` }
+        : extra;
+    }
 
     function render(state) {
-      statusNode.textContent = state.status;
+      statusNode.textContent = statusLabels[state.status] || state.status;
       statusNode.dataset.status = state.status;
       detailNode.textContent = state.detail || '—';
       const agent = state.agent || {};
@@ -133,8 +167,16 @@
     }
 
     async function readState() {
+      if (!token) {
+        render({status: 'error', detail: 'В ссылке отсутствует ключ управления.', agent: {}, last_sequence: '—'});
+        buttons.forEach(button => button.disabled = true);
+        return;
+      }
       try {
-        const response = await fetch('/api/state', {cache: 'no-store'});
+        const response = await fetch('/api/state', {
+          cache: 'no-store',
+          headers: authHeaders(),
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         render((await response.json()).state);
       } catch (error) {
@@ -149,7 +191,7 @@
       try {
         const response = await fetch('/api/commands', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: authHeaders({'Content-Type': 'application/json'}),
           body: JSON.stringify({action, command_id: crypto.randomUUID()})
         });
         const payload = await response.json();

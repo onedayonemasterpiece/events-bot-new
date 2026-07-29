@@ -4,6 +4,9 @@ import sys
 from pathlib import Path
 import unittest
 import asyncio
+import io
+import json
+import zipfile
 
 from aiohttp.test_utils import TestClient, TestServer
 
@@ -130,6 +133,73 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response.status, 409)
         self.assertEqual(payload["error"], "agent_conflict")
+
+
+class RelayAuthAndPackageTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.client = TestClient(
+            TestServer(
+                create_app(
+                    control_token="control-secret",
+                    agent_token="agent-secret",
+                    public_base_url_value="https://presenter.example",
+                )
+            )
+        )
+        await self.client.start_server()
+
+    async def asyncTearDown(self) -> None:
+        await self.client.close()
+
+    async def test_public_api_is_fail_closed_by_role(self):
+        response = await self.client.get("/healthz")
+        self.assertEqual(response.status, 200)
+
+        response = await self.client.get("/api/state")
+        self.assertEqual(response.status, 401)
+
+        response = await self.client.get(
+            "/api/state",
+            headers={"Authorization": "Bearer control-secret"},
+        )
+        self.assertEqual(response.status, 200)
+
+        response = await self.client.get(
+            "/api/commands/next?agent_id=test&after_seq=0&wait_ms=0",
+            headers={"Authorization": "Bearer control-secret"},
+        )
+        self.assertEqual(response.status, 401)
+
+        response = await self.client.get(
+            "/api/commands/next?agent_id=test&after_seq=0&wait_ms=0",
+            headers={"Authorization": "Bearer agent-secret"},
+        )
+        self.assertEqual(response.status, 200)
+
+    async def test_control_token_downloads_scoped_windows_first_test(self):
+        response = await self.client.get("/api/download/windows-test.zip")
+        self.assertEqual(response.status, 401)
+
+        response = await self.client.get(
+            "/api/download/windows-test.zip",
+            headers={"Authorization": "Bearer control-secret"},
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.content_type, "application/zip")
+        archive_bytes = await response.read()
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+            names = set(archive.namelist())
+            self.assertIn("START-DEMONSTRATOR.cmd", names)
+            self.assertIn("SELF-TEST.cmd", names)
+            self.assertIn("agent/agent.mjs", names)
+            config = json.loads(archive.read("test-config.json"))
+        self.assertEqual(config["relay_url"], "https://presenter.example")
+        self.assertEqual(
+            config["stage_url"],
+            "https://presenter.example/internal/presenter-stage/",
+        )
+        self.assertEqual(config["agent_token"], "agent-secret")
+        self.assertEqual(config["release_kind"], "FIRST_TEST_NOT_M3")
 
 
 if __name__ == "__main__":

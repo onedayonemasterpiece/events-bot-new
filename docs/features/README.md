@@ -46,9 +46,10 @@
 - `docs/features/static-personal-announcements/README.md` — umbrella release map для static-site персональных анонсов: F1–F17, owners, stages, global decisions и канонические feature homes
 - `docs/features/static-site-pages/README.md` — static-first event pages на `kenigevents.ru`; production promotion пока blocked, текущий план и 10-дневный Telegraph cutover — `release-plan.md`, acceptance inventory — `test-scenarios.md`
 - `docs/features/static-site-pages/auto-present/README.md` — автопрезентатор:
-  M0 empirical на целевом Windows 10 идёт отдельно, а один M1+M2-lite dev
-  vertical slice (`tomorrow-mobile`, stage, relay, phone control) уже доступен;
-  M3 portable release и public demo по-прежнему заблокированы
+  M0 empirical на целевом Windows 10 идёт отдельно; для owner first test
+  доступен защищённый Internet relay, телефонный HTTPS-пульт и Windows
+  online-bootstrap демонстратор; M3 portable release и public demo
+  по-прежнему заблокированы
 - `docs/features/event-people/README.md` — отдельный mobile/desktop блок участников, fail-closed static export и person-like contract
 - `docs/features/unsigned-personalization/README.md` — mixed personalization family: local anonymous preview, pgvector related/search canary, remote telemetry/profile pending
 - `docs/features/site-user-identity/README.md` — Yandex/verified-email identity, sessions and anonymous→authenticated profile linking; post-release VK message-code extension: `docs/features/site-user-identity/vk-message-link.md`

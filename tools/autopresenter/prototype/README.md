@@ -37,6 +37,26 @@ To expose the control page on a trusted development LAN, set
 `AUTOPRESENTER_RELAY_HOST=0.0.0.0` and open the host's LAN address. This
 prototype has no production authentication and must not be exposed publicly.
 
+## First Internet test
+
+The owner-facing first test does **not** use the development URL above.
+It uses the separately deployed HTTPS service:
+
+```text
+PHONE:        https://kenigevents-autopresenter.fly.dev/control/#token=<secret>
+DEMONSTRATOR: https://kenigevents-autopresenter.fly.dev/demonstrator/#token=<secret>
+```
+
+Open `DEMONSTRATOR` on the Windows x64 laptop, download and extract the ZIP,
+then double-click `START-DEMONSTRATOR.cmd`. Open `PHONE` on a phone over mobile
+Internet and press **Запустить «Завтра»**. The laptop needs only outbound HTTPS;
+the phone and laptop do not share a LAN.
+
+The first start downloads portable Node.js, lockfile-pinned dependencies and
+the pinned Playwright-managed browser into the extracted folder. This is an
+online first-test bootstrap, not the final hermetic M3 package and not M0
+compatibility evidence.
+
 ## Evidence
 
 `AUTOPRESENTER_ARTIFACT_DIR=<absolute-directory>` makes the agent capture a

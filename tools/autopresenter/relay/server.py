@@ -7,11 +7,15 @@ import argparse
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import hmac
+import io
 import json
+import os
 from pathlib import Path
 import time
 from typing import Any
 from uuid import uuid4
+import zipfile
 
 from aiohttp import web
 
@@ -21,6 +25,9 @@ ALLOWED_STATUSES = frozenset(
 )
 MAX_LONG_POLL_MS = 25_000
 CONTROL_FILE = Path(__file__).with_name("control") / "index.html"
+DEMONSTRATOR_FILE = Path(__file__).with_name("control") / "demonstrator.html"
+FIRST_TEST_DIR = Path(__file__).parents[1] / "prototype" / "first-test"
+AGENT_DIR = Path(__file__).parents[1] / "agent"
 
 
 def utc_iso(epoch_seconds: float | None = None) -> str:
@@ -33,8 +40,10 @@ def ApiError(status: int, code: str, message: str) -> web.HTTPException:
 
     exception_type = {
         400: web.HTTPBadRequest,
+        401: web.HTTPUnauthorized,
         404: web.HTTPNotFound,
         409: web.HTTPConflict,
+        503: web.HTTPServiceUnavailable,
     }.get(status, web.HTTPInternalServerError)
     return exception_type(
         content_type="application/json",
@@ -226,6 +235,17 @@ class Relay:
             return command
 
 
+@dataclass(frozen=True, slots=True)
+class SecurityConfig:
+    control_token: str = ""
+    agent_token: str = ""
+    public_base_url: str = ""
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.control_token and self.agent_token)
+
+
 async def json_body(request: web.Request) -> dict[str, Any]:
     try:
         body = await request.json()
@@ -240,8 +260,16 @@ def relay_for(request: web.Request) -> Relay:
     return request.app[RELAY_KEY]
 
 
+def security_for(request: web.Request) -> SecurityConfig:
+    return request.app[SECURITY_KEY]
+
+
 async def control_page(_: web.Request) -> web.FileResponse:
     return web.FileResponse(CONTROL_FILE)
+
+
+async def demonstrator_page(_: web.Request) -> web.FileResponse:
+    return web.FileResponse(DEMONSTRATOR_FILE)
 
 
 async def get_state(request: web.Request) -> web.Response:
@@ -297,15 +325,60 @@ async def agent_state(request: web.Request) -> web.Response:
 
 
 async def health(_: web.Request) -> web.Response:
-    return web.json_response({"ok": True, "service": "autopresenter-relay"})
+    return web.json_response(
+        {"ok": True, "service": "autopresenter-relay", "auth": "required"}
+    )
 
 
 async def redirect_to_control(_: web.Request) -> web.StreamResponse:
     raise web.HTTPFound("/control/")
 
 
+async def redirect_to_demonstrator(_: web.Request) -> web.StreamResponse:
+    raise web.HTTPFound("/demonstrator/")
+
+
 async def options_response(_: web.Request) -> web.Response:
     return web.Response(status=204)
+
+
+def request_token(request: web.Request) -> str:
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, value = authorization.partition(" ")
+    if scheme.lower() == "bearer":
+        return value.strip()
+    return ""
+
+
+def token_matches(received: str, expected: str) -> bool:
+    return bool(expected and received and hmac.compare_digest(received, expected))
+
+
+def required_role(request: web.Request) -> str | None:
+    path = request.path
+    if path in {"/api/state", "/api/commands", "/api/download/windows-test.zip"}:
+        return "control"
+    if path == "/api/state/agent" or path == "/api/commands/next":
+        return "agent"
+    if path.startswith("/api/commands/") and path.endswith("/ack"):
+        return "agent"
+    return None
+
+
+@web.middleware
+async def auth_middleware(request: web.Request, handler: Any) -> web.StreamResponse:
+    if request.method == "OPTIONS":
+        return await handler(request)
+
+    role = required_role(request)
+    security = security_for(request)
+    if role and security.enabled:
+        expected = (
+            security.control_token if role == "control" else security.agent_token
+        )
+        if not token_matches(request_token(request), expected):
+            raise ApiError(401, "unauthorized", f"{role} bearer token required")
+    return await handler(request)
 
 
 @web.middleware
@@ -316,36 +389,138 @@ async def cors_middleware(request: web.Request, handler: Any) -> web.StreamRespo
         try:
             response = await handler(request)
         except web.HTTPException as exception:
-            exception.headers["Access-Control-Allow-Origin"] = "*"
-            exception.headers["Access-Control-Allow-Headers"] = "Content-Type"
+            exception.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization"
+            )
             exception.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
             exception.headers["Cache-Control"] = "no-store"
             raise
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Cache-Control"] = "no-store"
     return response
 
 
 RELAY_KEY: web.AppKey[Relay] = web.AppKey("relay", Relay)
+SECURITY_KEY: web.AppKey[SecurityConfig] = web.AppKey("security", SecurityConfig)
+STATIC_SITE_KEY: web.AppKey[Path | None] = web.AppKey("static_site", Path | None)
 
 
-def create_app(*, command_ttl_ms: int = 30_000, agent_timeout_ms: int = 30_000) -> web.Application:
-    app = web.Application(middlewares=[cors_middleware])
+def public_base_url(request: web.Request) -> str:
+    configured = security_for(request).public_base_url.rstrip("/")
+    if configured:
+        return configured
+    return f"{request.scheme}://{request.host}"
+
+
+def windows_test_archive(request: web.Request) -> bytes:
+    security = security_for(request)
+    if not security.agent_token:
+        raise ApiError(503, "package_unavailable", "agent token is not configured")
+
+    config = {
+        "relay_url": public_base_url(request),
+        "stage_url": f"{public_base_url(request)}/internal/presenter-stage/",
+        "agent_token": security.agent_token,
+        "agent_id": f"first-test-{uuid4()}",
+        "release_kind": "FIRST_TEST_NOT_M3",
+    }
+    required_files = {
+        FIRST_TEST_DIR / "START-DEMONSTRATOR.cmd": "START-DEMONSTRATOR.cmd",
+        FIRST_TEST_DIR / "bootstrap.ps1": "bootstrap.ps1",
+        FIRST_TEST_DIR / "SELF-TEST.cmd": "SELF-TEST.cmd",
+        FIRST_TEST_DIR / "self-test.ps1": "self-test.ps1",
+        FIRST_TEST_DIR / "README-FIRST-TEST.txt": "README-FIRST-TEST.txt",
+        AGENT_DIR / "agent.mjs": "agent/agent.mjs",
+        AGENT_DIR / "package.json": "agent/package.json",
+        AGENT_DIR / "package-lock.json": "agent/package-lock.json",
+    }
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for source, target in required_files.items():
+            archive.write(source, target)
+        archive.writestr(
+            "test-config.json",
+            json.dumps(config, ensure_ascii=False, indent=2) + "\n",
+        )
+    return output.getvalue()
+
+
+async def download_windows_test(request: web.Request) -> web.Response:
+    return web.Response(
+        body=windows_test_archive(request),
+        content_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="Autopresenter-First-Test-Win10-x64.zip"'
+            ),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+async def static_site(request: web.Request) -> web.StreamResponse:
+    root = request.app[STATIC_SITE_KEY]
+    if root is None:
+        raise web.HTTPNotFound()
+
+    requested = request.match_info.get("path", "").lstrip("/")
+    candidate = (root / requested).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        raise web.HTTPNotFound()
+
+    candidates = [candidate]
+    if candidate.is_dir() or not candidate.suffix:
+        candidates.insert(0, candidate / "index.html")
+    for resolved in candidates:
+        if resolved.is_file():
+            return web.FileResponse(resolved)
+    raise web.HTTPNotFound()
+
+
+def create_app(
+    *,
+    command_ttl_ms: int = 30_000,
+    agent_timeout_ms: int = 30_000,
+    control_token: str = "",
+    agent_token: str = "",
+    public_base_url_value: str = "",
+    static_site_dir: str | Path | None = None,
+) -> web.Application:
+    security = SecurityConfig(
+        control_token=control_token.strip(),
+        agent_token=agent_token.strip(),
+        public_base_url=public_base_url_value.strip(),
+    )
+    if bool(security.control_token) != bool(security.agent_token):
+        raise ValueError("control_token and agent_token must be configured together")
+
+    static_root = Path(static_site_dir).resolve() if static_site_dir else None
+    if static_root is not None and not static_root.is_dir():
+        raise ValueError(f"static site directory does not exist: {static_root}")
+
+    app = web.Application(middlewares=[cors_middleware, auth_middleware])
     app[RELAY_KEY] = Relay(command_ttl_ms=command_ttl_ms, agent_timeout_ms=agent_timeout_ms)
+    app[SECURITY_KEY] = security
+    app[STATIC_SITE_KEY] = static_root
     app.add_routes(
         [
-            web.get("/", redirect_to_control),
             web.get("/control", redirect_to_control),
             web.get("/control/", control_page),
+            web.get("/demonstrator", redirect_to_demonstrator),
+            web.get("/demonstrator/", demonstrator_page),
             web.get("/healthz", health),
             web.get("/api/state", get_state),
             web.post("/api/commands", post_command),
             web.get("/api/commands/next", next_command),
             web.post("/api/commands/{command_id}/ack", acknowledge),
             web.post("/api/state/agent", agent_state),
+            web.get("/api/download/windows-test.zip", download_windows_test),
             web.options("/{tail:.*}", options_response),
+            web.get("/{path:.*}", static_site),
         ]
     )
     return app
@@ -357,6 +532,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8787)
     parser.add_argument("--command-ttl-ms", type=int, default=30_000)
     parser.add_argument("--agent-timeout-ms", type=int, default=30_000)
+    parser.add_argument(
+        "--allow-unauthenticated",
+        action="store_true",
+        help="Development-only: allow API access without bearer tokens",
+    )
     return parser.parse_args()
 
 
@@ -364,10 +544,26 @@ def main() -> None:
     args = parse_args()
     if args.command_ttl_ms <= 0 or args.agent_timeout_ms <= 0:
         raise SystemExit("TTL and agent timeout must be positive")
+    control_token = os.environ.get("AUTOPRESENTER_CONTROL_TOKEN", "")
+    agent_token = os.environ.get("AUTOPRESENTER_AGENT_TOKEN", "")
+    if args.host not in {"127.0.0.1", "::1", "localhost"} and not (
+        control_token and agent_token
+    ):
+        raise SystemExit(
+            "Refusing non-loopback startup without AUTOPRESENTER_CONTROL_TOKEN "
+            "and AUTOPRESENTER_AGENT_TOKEN"
+        )
+    if args.allow_unauthenticated:
+        control_token = ""
+        agent_token = ""
     web.run_app(
         create_app(
             command_ttl_ms=args.command_ttl_ms,
             agent_timeout_ms=args.agent_timeout_ms,
+            control_token=control_token,
+            agent_token=agent_token,
+            public_base_url_value=os.environ.get("AUTOPRESENTER_PUBLIC_BASE_URL", ""),
+            static_site_dir=os.environ.get("AUTOPRESENTER_STATIC_SITE_DIR") or None,
         ),
         host=args.host,
         port=args.port,

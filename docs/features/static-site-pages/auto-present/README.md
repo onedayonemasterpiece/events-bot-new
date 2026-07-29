@@ -1,10 +1,10 @@
 # Автопрезентатор static-сайта
 
-- **Статус:** `m0_implementation_accepted + m1_m2_lite_dev_prototype`;
+- **Статус:** `m0_implementation_accepted + internet_first_test_candidate`;
   фактический M0-прогон на целевом ноутбуке ещё не выполнен.
 - **Implementation gate:** M0 empirical и visible prototype идут параллельными
   непересекающимися треками.
-- **Release verdict:** локальная разработка и product preview — `GO`;
+- **Release verdict:** локальная разработка и owner-only Internet first test — `GO`;
   portable M3 и публичный показ — `NO-GO` до target Windows 10 evidence и rehearsal.
 
 Автопрезентатор — отдельный Playwright-инструмент, который показывает настоящий интерфейс KenigEvents в сценической композиции. Ведущий запускает и останавливает заранее известный сценарий с телефона; Windows-агент выполняет реальные browser actions и заранее умеет воспроизвести проверенное резервное видео.
@@ -20,6 +20,26 @@ M0 продолжает отдельно доказывать exact portable-с�
 настоящий `locator.click()` и минимальный `aiohttp`-пульт Run/Stop/Reset.
 Этот прототип ускоряет product learning, но не является M0 evidence,
 portable release или разрешением публичного показа.
+
+## Первый тест через Интернет
+
+Для владельца используется отдельное одноинстансовое HTTPS-приложение
+`kenigevents-autopresenter.fly.dev`, а не loopback/LAN-пульт:
+
+- телефон открывает защищённый `/control/#token=...`;
+- Windows-агент только исходящими HTTPS long-poll/status запросами подключается
+  к тому же relay;
+- control token и agent token различаются; fragment телефона не попадает в
+  HTTP access logs;
+- `/demonstrator/#token=...` отдаёт scoped ZIP с единственным
+  `START-DEMONSTRATOR.cmd`;
+- сцена и review-сборка сайта обслуживаются тем же immutable test deployment,
+  поэтому phone и laptop не обязаны находиться в одной сети.
+
+Первый Windows-запуск выполняет online bootstrap зафиксированных Node/npm и
+Playwright-managed browser в распакованную папку без admin rights. Это
+пригодно для первого owner test, но не подменяет M0: финальный hermetic ZIP
+без runtime downloads и публичный показ остаются заблокированы.
 
 ## Продуктовая граница
 
@@ -62,7 +82,8 @@ Visible prototype работает только с stage, agent, relay, control 
 ./tools/autopresenter/prototype/start-dev.sh
 ```
 
-Пульт: `http://127.0.0.1:8787/control/`. Первый запуск выполняет только
+Локальный developer-пульт: `http://127.0.0.1:8787/control/`. Он не является
+пользовательской ссылкой первого теста. Первый dev-запуск выполняет только
 необходимый lockfile bootstrap. Интегрированный smoke, screenshot, 27-секундный
 MP4 и SHA-256 лежат в
 [`tools/autopresenter/prototype/evidence/`](../../../../tools/autopresenter/prototype/evidence/SMOKE.md).
@@ -77,7 +98,7 @@ MP4 и SHA-256 лежат в
 | Исходное требование | Нормативное решение |
 |---|---|
 | Телефон: кнопка, countdown, stop | M2 control page + подтверждённая state machine |
-| Интернет, не локальная сеть | телефон и агент делают исходящие HTTPS-запросы к dynamic relay |
+| Интернет, не локальная сеть | отдельный Fly HTTPS relay; телефон и агент делают только исходящие запросы |
 | Mobile/desktop реального сайта | mobile в M1; desktop только после M3 |
 | Tap/pointer и human-like motion | deterministic overlay + настоящие Playwright actions |
 | Сценарии в файлах | TypeScript action graph; schema только после трёх сценариев |

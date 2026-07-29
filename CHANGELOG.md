@@ -7,6 +7,12 @@
 
 ### Added
 
+- Added the Autopresenter owner first-test Internet path: a separate
+  single-instance HTTPS relay with distinct control/agent bearer tokens,
+  fragment-keyed phone and Windows download pages, an immutable hosted stage,
+  and a scoped `START-DEMONSTRATOR.cmd` Windows x64 online-bootstrap ZIP. This
+  removes LAN/localhost from the user acceptance path while retaining the M0
+  and final M3 gates.
 - Added the visible Autopresenter M1 + M2-lite development slice without
   changing M0: a headed 1920×1080 Astro stage with the real site in a 430×932
   iframe, stable `tomorrow-mobile` hooks, real Playwright hover/click with

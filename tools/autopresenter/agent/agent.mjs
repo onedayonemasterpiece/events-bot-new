@@ -18,6 +18,7 @@ const DESTINATION_SELECTOR = '[data-presenter-id="tomorrow-page-ready"]';
 
 const config = Object.freeze({
   relayUrl: (process.env.AUTOPRESENTER_RELAY_URL || "http://127.0.0.1:8787").replace(/\/$/, ""),
+  agentToken: process.env.AUTOPRESENTER_AGENT_TOKEN || "",
   stageUrl:
     process.env.AUTOPRESENTER_STAGE_URL ||
     "http://127.0.0.1:4321/internal/presenter-stage/",
@@ -224,6 +225,7 @@ class PrototypeAgent {
           wait_ms: String(config.pollWaitMs),
         });
         const response = await fetch(`${config.relayUrl}/api/commands/next?${params}`, {
+          headers: this.authHeaders(),
           signal: this.pollAbort.signal,
         });
         if (!response.ok) throw new Error(`poll HTTP ${response.status}`);
@@ -521,7 +523,10 @@ class PrototypeAgent {
   async request(route, { method = "GET", body } = {}) {
     const response = await fetch(`${config.relayUrl}${route}`, {
       method,
-      headers: body ? { "content-type": "application/json" } : undefined,
+      headers: {
+        ...this.authHeaders(),
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!response.ok) {
@@ -529,6 +534,12 @@ class PrototypeAgent {
       throw new Error(`${method} ${route} HTTP ${response.status}: ${text.slice(0, 300)}`);
     }
     return response.json();
+  }
+
+  authHeaders() {
+    return config.agentToken
+      ? { authorization: `Bearer ${config.agentToken}` }
+      : {};
   }
 
   shutdown(signalName = "shutdown") {

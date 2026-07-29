@@ -36,6 +36,12 @@ test("poll, idempotent ack, TTL and bounded hard stop contracts are explicit", (
   assert.match(source, /agent confirmed stopped/);
 });
 
+test("remote relay requests carry the dedicated agent bearer token", () => {
+  assert.match(source, /AUTOPRESENTER_AGENT_TOKEN/);
+  assert.match(source, /authorization: `Bearer \$\{config\.agentToken\}`/);
+  assert.match(source, /headers: this\.authHeaders\(\)/);
+});
+
 test("local fallback keys cover run, stop and reset", () => {
   assert.match(source, /event\.code === "Space" \|\| event\.code === "ArrowRight"/);
   assert.match(source, /event\.code === "Escape"/);
