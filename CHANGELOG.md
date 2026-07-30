@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Fixed
+- Replaced the improvised home Hero Talk with the accepted briefing donor
+  mechanics: a full-viewport desktop plane, semantic fragment links, a curated
+  28-line editorial bank, edge-reaching `16/18/20×5` mosaic and persistent
+  irregular partial-opacity field with copy/face protection and no full-raster
+  flash. Restored the accepted mobile date hero field with an invisible
+  preloader, exact sparse `11×6` topology, per-load irregular schedule,
+  text/face shields and the original `y=0` shell geometry.
 - Focus page usefulness now remains selected for 24 hours across navigation by
   authenticated user and page type, with Today/Tomorrow/date sharing the
   calendar type; the scale stays enabled so a participant can change the

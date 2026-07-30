@@ -609,27 +609,39 @@ result, actual result, artifact/log link и reviewer. Эти поля не по�
 
 ### UI, accessibility и browser matrix
 
-- **ADD-HOME-HERO-01 — Current deterministic deck.** Главный Hero Talk при
-  одном snapshot/build id повторяет event IDs и режимы после reload, не
-  содержит inactive/past occurrence даже при максимальном engagement, не
-  повторяет взаимную explicit family и не делает больше двух text-only или
-  одной mosaic подряд.
+- **ADD-HOME-HERO-01 — Grounded editorial deck.** Главный Hero Talk при одном
+  snapshot/build id повторяет event IDs и режимы после reload, не содержит
+  inactive/past occurrence даже при максимальном engagement, не повторяет
+  взаимную explicit family. Каждая сцена разрешается только из versioned
+  editorial bank, показывает semantic fragments вместо полного event title и
+  имеет ссылку лишь в отмеченных словах, не на всей сцене.
 - **ADD-HOME-HERO-02 — Automatic but respectful motion.** На `1366×768` и
   `1440×900` первая сцена запускается сама, затем появляется следующий
   уникальный event; Play/Next/Replay/pace/progress/Lab controls отсутствуют.
   Hidden tab и hero вне viewport останавливают цикл, возврат продолжает его;
   reduced motion и no-JS сохраняют полезную первую ссылку без движения.
+- **ADD-HOME-HERO-03 — Donor geometry and partial field.** На
+  `1366/1440/1920px` hero занимает `100vw`, не имеет card border/radius/shadow,
+  media заканчивается на правом краю viewport (`±1px`) и использует
+  `16/18/20×5` tiles с `row-gap=0`. После terminal reveal большинство tiles
+  остаётся `<.98`, full raster не появляется ни до decode, ни при переключении;
+  copy overlap не выше `.24`, face overlap не ниже `.5`, cover scale одинаков
+  по X/Y и upscale не выше `1.10`.
 - **ADD-DATE-HERO-01 — Exact safe linked hero.** На `/segodnya/`,
   `/zavtra/` и `/date-YYYY-MM-DD/` selector использует только active occurrence
   выбранной даты с fresh `visual_only` cover-safe geometry. OCR/unknown,
   соседняя дата или отсутствие safe photo дают обычную страницу без hero.
   `/vyhodnye/` hero не получает.
-- **ADD-DATE-HERO-02 — Reversible 66 tiles.** На `320×667`, `390×844` и
-  `430×932` hero содержит одну настоящую внутреннюю ссылку и 66 decorative
-  tiles. Scroll вниз монотонно уменьшает alpha, scroll вверх восстанавливает те
-  же значения; height-only resize и reload не меняют schedule. При `scrollY=80`
-  Y-transform равен `22.4±1px`, до первой карточки hero исчезает, horizontal
-  overflow отсутствует.
+- **ADD-DATE-HERO-02 — Exact v23 partial field.** На `320×667`, `390×844` и
+  `430×932` hero начинается у `y=0`, содержит невидимый `1×1` preload, одну
+  настоящую внутреннюю ссылку и 66 decorative tiles. Цельный raster не
+  появляется даже на первом кадре/reduced motion; верхний правый сектор
+  значительно сильнее нижнего левого, много cells остаются `≤.06`, максимум
+  после jitter `≤.92`. Scroll вниз монотонно уменьшает alpha, вверх
+  восстанавливает те же значения; height-only resize сохраняет load seed,
+  reload получает другой irregular schedule. При `scrollY=80` Y-transform
+  равен `22.4±1px`, до первой карточки hero исчезает, horizontal overflow
+  отсутствует.
 - **ADD-FOCUS-SCORE-01 — Page-type 24-hour continuity.** Подтверждённая
   оценка восстанавливается после перехода на другую страницу того же типа для
   того же auth user, calendar объединяет today/tomorrow/date, другой тип и

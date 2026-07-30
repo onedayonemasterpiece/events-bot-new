@@ -16,3 +16,5 @@
 - Event age-rating Gemini Pro architecture consultation (2026-07-15): `event-age-rating-gemini-consultation-2026-07-15.md`
 - Interest-clubs read-only catalog audit (2026-07-17): `interest-clubs-catalog-audit-2026-07-17.md`
 - Static event-medallion production usage audit (2026-07-23): `static-medallion-usage-audit-2026-07-23.md`
+- Home Hero Talk and mobile date mosaic donor audit (2026-07-30):
+  `home-date-hero-donor-audit-20260730.md`

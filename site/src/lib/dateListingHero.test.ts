@@ -94,4 +94,11 @@ test('mutual occurrence family is resolved once and tile schedule is stable', ()
   assert.equal(schedule.length, 66);
   assert.deepEqual(schedule, createDateHeroTileSchedule('2026-07-30:11'));
   assert.equal(new Set(schedule.map((tile) => tile.exitStart)).size, 66);
+  assert.ok(schedule.filter((tile) => tile.baseAlpha <= .06).length >= 30);
+  const topRight = schedule.filter((tile) => tile.row <= 1 && tile.col >= 9)
+    .reduce((sum, tile) => sum + tile.baseAlpha, 0) / 4;
+  const bottomLeft = schedule.filter((tile) => tile.row >= 4 && tile.col <= 4)
+    .reduce((sum, tile) => sum + tile.baseAlpha, 0) / 10;
+  assert.ok(topRight > bottomLeft * 6);
+  assert.equal(Math.max(...schedule.map((tile) => tile.baseAlpha)), .9);
 });

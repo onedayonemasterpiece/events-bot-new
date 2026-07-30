@@ -115,16 +115,27 @@ export interface DateHeroTile {
 }
 
 export function createDateHeroTileSchedule(seed: string): DateHeroTile[] {
+  // Accepted v23 donor field. It is deliberately sparse: the photograph is only
+  // hinted at below the date copy, then gains presence towards the top-right.
+  // Runtime jitter makes every load feel organic without destroying this field.
+  const alphaField = [
+    [.06, .06, .06, .16, .30, .30, .50, .50, .70, .90, .90],
+    [.06, .06, .06, .06, .16, .90, .06, .16, .30, .70, .90],
+    [.06, .06, .30, .16, .16, .16, .06, .90, .50, .70, .90],
+    [.06, .06, .16, .16, .16, .30, .30, .06, .16, .70, .90],
+    [.06, .06, .06, .06, .06, .06, .06, .06, .06, .70, .90],
+    [.06, .06, .06, .16, .06, .06, .06, .06, .06, .70, .90],
+  ] as const;
   const tiles = Array.from({ length: 66 }, (_, index) => {
     const unit = seededUnit(hash32(`${seed}:${index}`));
     const col = index % 11;
-    const edgeAlpha = col < 2 ? 0.03 + col * 0.08 : 0.55 + unit * 0.38;
+    const row = Math.floor(index / 11);
     return {
       index,
       col,
-      row: Math.floor(index / 11),
+      row,
       unit,
-      baseAlpha: Number(Math.min(0.94, edgeAlpha).toFixed(4)),
+      baseAlpha: alphaField[row][col],
       entryDelay: Math.round(35 + unit * 720),
       entryDuration: Math.round(260 + seededUnit(hash32(`${seed}:duration:${index}`)) * 340),
     };

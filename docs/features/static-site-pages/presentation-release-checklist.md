@@ -111,6 +111,11 @@ of being left only in review chats.
   missing hero must be reproduced on the newly published candidate after a
   fresh uninstall/reinstall, then fixed without delaying the focus onboarding
   repair.
+- [ ] **P1 — `TD-PRESENTATION-UI-003`:** replace the curated 28-line
+  `HomeHeroTalk` launch bank with the documented Smart Update batch authoring
+  pipeline (bounded event fact packs, LLM fragments, deterministic validation,
+  editorial approval and versioned static output). Runtime/browser LLM calls
+  and unreviewed publication remain forbidden.
 
 ## 4. Schedule freshness
 

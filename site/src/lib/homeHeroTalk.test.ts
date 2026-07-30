@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { EventImageAsset, PreviewEvent } from './types';
 import { buildHomeHeroTalkDeck } from './homeHeroTalk.ts';
+import type { HomeHeroTalkEditorial } from '../data/homeHeroTalkEditorial.ts';
 
 const safeAsset = (src: string): EventImageAsset => ({
   src,
@@ -67,15 +68,26 @@ const event = (id: number, start: string, options: Partial<PreviewEvent> = {}): 
   updated_at: null,
   ...options,
 });
+const editorial = (...ids: number[]): HomeHeroTalkEditorial[] => ids.map((id) => ({
+  id:`copy-${id}`,
+  eventId:id,
+  fragments:[
+    { text:`Мысль ${id}.` },
+    { text:'Открыть событие.', link:true, accent:true },
+  ],
+}));
 
 test('hero deck is deterministic, current, unique and mixed when photos exist', () => {
   const events = [event(1, '2026-07-28'), event(2, '2026-07-29'), event(3, '2026-07-30'), event(4, '2026-08-01'), event(5, '2026-08-02')];
-  const first = buildHomeHeroTalkDeck(events, '2026-07-29', 'immutable-build');
-  const second = buildHomeHeroTalkDeck(events, '2026-07-29', 'immutable-build');
+  const copy = editorial(1, 2, 3, 4, 5);
+  const first = buildHomeHeroTalkDeck(events, '2026-07-29', 'immutable-build', 4, copy);
+  const second = buildHomeHeroTalkDeck(events, '2026-07-29', 'immutable-build', 4, copy);
   assert.deepEqual(first.map(({ event: item, mode }) => [item.id, mode]), second.map(({ event: item, mode }) => [item.id, mode]));
   assert.equal(new Set(first.map((scene) => scene.event.id)).size, first.length);
   assert.ok(first.every((scene) => (scene.event.end_date || scene.event.start_date) >= '2026-07-29'));
   assert.ok(first.some((scene) => scene.mode === 'photo-mosaic'));
+  assert.ok(first.every((scene) => scene.fragments.some((fragment) => fragment.link)));
+  assert.ok(first.every((scene) => !scene.fragments.some((fragment) => fragment.text === scene.event.title)));
   assert.ok(first.every((scene, index) => index < 2 || !(scene.mode === 'text-only' && first[index - 1].mode === 'text-only' && first[index - 2].mode === 'text-only')));
   assert.ok(first.every((scene, index) => index === 0 || !(scene.mode === 'photo-mosaic' && first[index - 1].mode === 'photo-mosaic')));
 });
@@ -83,14 +95,37 @@ test('hero deck is deterministic, current, unique and mixed when photos exist', 
 test('past high-engagement and inactive events never enter hero deck', () => {
   const past = event(90, '2026-07-01', { source_views_count: 99_000_000, popularity_signal_score: 999 });
   const cancelled = event(91, '2026-08-01', { lifecycle_status: 'cancelled', source_views_count: 99_000_000 });
-  const deck = buildHomeHeroTalkDeck([past, cancelled, event(1, '2026-07-30')], '2026-07-29', 'seed');
+  const deck = buildHomeHeroTalkDeck(
+    [past, cancelled, event(1, '2026-07-30')],
+    '2026-07-29',
+    'seed',
+    4,
+    editorial(90, 91, 1),
+  );
   assert.deepEqual(deck.map((scene) => scene.event.id), [1]);
 });
 
 test('mutually linked occurrences appear only once', () => {
   const first = event(10, '2026-07-30', { other_date_ids:[11] });
   const second = event(11, '2026-08-02', { other_date_ids:[10] });
-  const ids = buildHomeHeroTalkDeck([first, second, event(12, '2026-08-03')], '2026-07-29', 'seed')
+  const ids = buildHomeHeroTalkDeck(
+    [first, second, event(12, '2026-08-03')],
+    '2026-07-29',
+    'seed',
+    4,
+    editorial(10, 11, 12),
+  )
     .map((scene) => scene.event.id);
   assert.equal(ids.filter((id) => id === 10 || id === 11).length, 1);
+});
+
+test('editorial entries fail closed when their event is absent or expired', () => {
+  const deck = buildHomeHeroTalkDeck(
+    [event(1, '2026-07-01'), event(2, '2026-08-01')],
+    '2026-07-29',
+    'seed',
+    4,
+    editorial(1, 999),
+  );
+  assert.deepEqual(deck, []);
 });

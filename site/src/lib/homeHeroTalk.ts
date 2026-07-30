@@ -1,5 +1,10 @@
 import type { EventImageAsset, PreviewEvent } from './types';
-import { eligibleDateHeroAsset } from './dateListingHero.ts';
+import { isDateHeroAssetEligible } from './dateListingHero.ts';
+import {
+  HOME_HERO_TALK_EDITORIAL,
+  type HomeHeroTalkEditorial,
+  type HomeHeroTalkEditorialFragment,
+} from '../data/homeHeroTalkEditorial.ts';
 
 export type HomeHeroTalkMode = 'text-only' | 'photo-mosaic';
 
@@ -7,9 +12,8 @@ export interface HomeHeroTalkScene {
   event: PreviewEvent;
   mode: HomeHeroTalkMode;
   asset: EventImageAsset | null;
-  eyebrow: string;
-  phrase: string;
-  detail: string;
+  editorialId: string;
+  fragments: HomeHeroTalkEditorialFragment[];
 }
 
 function hash32(value: string): number {
@@ -44,29 +48,40 @@ function eventRank(event: PreviewEvent, seed: string): number {
   return popularity + engagement + deterministicJitter * 4;
 }
 
-function formatDate(event: PreviewEvent, currentDate: string): string {
-  const date = event.start_date < currentDate && (event.end_date || event.start_date) >= currentDate
-    ? currentDate
-    : event.start_date;
-  const label = new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'Europe/Kaliningrad',
-  }).format(new Date(`${date}T12:00:00+02:00`));
-  return [label, event.start_time || event.display_time].filter(Boolean).join(' · ');
+function faceCropSafeAtRatio(asset: EventImageAsset, targetRatio: number): boolean {
+  const sourceRatio = asset.width / asset.height;
+  const focusX = Math.max(0, Math.min(1, Number(asset.focal_point?.x ?? .5)));
+  const focusY = Math.max(0, Math.min(1, Number(asset.focal_point?.y ?? .5)));
+  if (sourceRatio < targetRatio) {
+    const visible = sourceRatio / targetRatio;
+    const top = (1 - visible) * focusY;
+    return (asset.face_boxes || []).every((box) => {
+      const padding = Math.max(.012, Math.min(.04, box.h * .12));
+      return Math.max(0, box.y - padding) >= top
+        && Math.min(1, box.y + box.h + padding) <= top + visible;
+    });
+  }
+  const visible = targetRatio / sourceRatio;
+  const left = (1 - visible) * focusX;
+  return (asset.face_boxes || []).every((box) => {
+    const padding = Math.max(.012, Math.min(.04, box.w * .12));
+    return Math.max(0, box.x - padding) >= left
+      && Math.min(1, box.x + box.w + padding) <= left + visible;
+  });
 }
 
-function sceneCopy(event: PreviewEvent, currentDate: string, index: number): Pick<HomeHeroTalkScene, 'eyebrow' | 'phrase' | 'detail'> {
-  const today = event.start_date <= currentDate && (event.end_date || event.start_date) >= currentDate;
-  const eyebrows = today
-    ? ['Сегодня в городе', 'Можно успеть сегодня']
-    : ['Стоит запланировать', 'Впереди в афише', 'Выберите настроение'];
-  const place = event.venue_name || event.city || 'Калининградская область';
-  return {
-    eyebrow: eyebrows[index % eyebrows.length],
-    phrase: event.title,
-    detail: `${formatDate(event, currentDate)} · ${place}`,
-  };
+function eligibleHomeHeroAsset(event: PreviewEvent): EventImageAsset | null {
+  return (event.image_assets || [])
+    .filter(isDateHeroAssetEligible)
+    // 75vw at a 1920px acceptance viewport must not exceed donor's 1.10 cap.
+    .filter((asset) => asset.width >= 1_310)
+    .filter((asset) => [3.2, 3.6, 4].every((ratio) => faceCropSafeAtRatio(asset, ratio)))
+    .sort((left, right) => (
+      Number(right.quality_score || 0) - Number(left.quality_score || 0)
+      || Number(left.face_boxes?.length || 0) - Number(right.face_boxes?.length || 0)
+      || right.width * right.height - left.width * left.height
+      || left.src.localeCompare(right.src)
+    ))[0] || null;
 }
 
 const MODE_PATTERNS: HomeHeroTalkMode[][] = [
@@ -81,37 +96,58 @@ export function buildHomeHeroTalkDeck(
   currentDate: string,
   seed: string,
   limit = 4,
+  editorials: HomeHeroTalkEditorial[] = HOME_HERO_TALK_EDITORIAL,
 ): HomeHeroTalkScene[] {
   const eventsById = new Map(events.map((event) => [event.id, event]));
-  const deduplicated = new Map<number, PreviewEvent>();
+  const currentByFamily = new Map<number, PreviewEvent>();
   for (const event of events) {
     if (!isCurrent(event, currentDate)) continue;
     const familyKey = mutualFamilyKey(event, eventsById);
-    const previous = deduplicated.get(familyKey);
-    if (!previous || eventRank(event, seed) > eventRank(previous, seed)) deduplicated.set(familyKey, event);
+    const previous = currentByFamily.get(familyKey);
+    if (!previous || eventRank(event, seed) > eventRank(previous, seed)) currentByFamily.set(familyKey, event);
   }
-  const candidates = [...deduplicated.values()].sort((left, right) => (
-    eventRank(right, seed) - eventRank(left, seed)
-    || left.start_date.localeCompare(right.start_date)
-    || left.id - right.id
-  ));
+  const candidateById = new Map([...currentByFamily.values()].map((event) => [event.id, event]));
+  const candidates = editorials
+    .flatMap((editorial) => {
+      const exact = eventsById.get(editorial.eventId);
+      if (!exact || !isCurrent(exact, currentDate)) return [];
+      const familyKey = mutualFamilyKey(exact, eventsById);
+      const event = currentByFamily.get(familyKey);
+      if (!event || exact.id !== event.id || !candidateById.has(event.id)) return [];
+      return [{ editorial, event }];
+    })
+    .sort((left, right) => (
+      eventRank(right.event, `${seed}:${right.editorial.id}`) - eventRank(left.event, `${seed}:${left.editorial.id}`)
+      || hash32(`${seed}:${left.editorial.id}`) - hash32(`${seed}:${right.editorial.id}`)
+    ));
   const desired = MODE_PATTERNS[hash32(seed) % MODE_PATTERNS.length];
   const remaining = [...candidates];
   const scenes: HomeHeroTalkScene[] = [];
 
   for (let index = 0; index < Math.min(limit, candidates.length); index += 1) {
     let mode = desired[index % desired.length];
+    const laterNeedsPhoto = desired.slice(index + 1, Math.min(limit, desired.length))
+      .includes('photo-mosaic');
     let candidateIndex = mode === 'photo-mosaic'
-      ? remaining.findIndex((event) => Boolean(eligibleDateHeroAsset(event)))
-      : 0;
+      ? remaining.findIndex(({ event }) => Boolean(eligibleHomeHeroAsset(event)))
+      : laterNeedsPhoto
+        ? remaining.findIndex(({ event }) => !eligibleHomeHeroAsset(event))
+        : 0;
+    if (candidateIndex < 0 && mode === 'text-only') candidateIndex = 0;
     if (candidateIndex < 0) {
       mode = 'text-only';
       candidateIndex = 0;
     }
     if (candidateIndex < 0 || !remaining[candidateIndex]) break;
-    const event = remaining.splice(candidateIndex, 1)[0];
-    const asset = mode === 'photo-mosaic' ? eligibleDateHeroAsset(event) : null;
-    scenes.push({ event, mode: asset ? mode : 'text-only', asset, ...sceneCopy(event, currentDate, index) });
+    const { event, editorial } = remaining.splice(candidateIndex, 1)[0];
+    const asset = mode === 'photo-mosaic' ? eligibleHomeHeroAsset(event) : null;
+    scenes.push({
+      event,
+      mode: asset ? mode : 'text-only',
+      asset,
+      editorialId: editorial.id,
+      fragments: editorial.fragments,
+    });
   }
 
   return scenes;

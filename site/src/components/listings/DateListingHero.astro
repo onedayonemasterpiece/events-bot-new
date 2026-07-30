@@ -31,13 +31,14 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', {
     data-source-height={asset.height}
     data-focus-x={focalX}
     data-focus-y={focalY}
+    data-face-boxes={JSON.stringify(asset.face_boxes || [])}
     data-parallax="true"
     style={`--date-hero-focal-x:${focalX * 100}%;--date-hero-focal-y:${focalY * 100}%`}
     href={eventHref(event)}
     aria-label={`Открыть событие «${event.title}» на ${dateLabel}`}
   >
     <img
-      class="date-listing-hero__fallback"
+      class="date-listing-hero__preload"
       data-date-listing-hero-image
       src={src}
       width={asset.width}
@@ -64,6 +65,9 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', {
 
 <style is:global>
   @media (max-width:720px) {
+    body.mobile-shell-reference4[data-mobile-bottom-mode="nav"]:has(.ke-mobile-listing-rails--v23 .date-listing-hero) > main.ke-listing-page {
+      padding-top:64px;
+    }
     .ke-mobile-listing-rails--v23 .page-head:has(.date-listing-hero) {
       position:relative;
       isolation:isolate;
@@ -97,16 +101,12 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', {
       outline-offset:-4px;
       border-radius:6px;
     }
-    .date-listing-hero__fallback {
+    .date-listing-hero__preload {
       position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      object-fit:cover;
-      object-position:var(--date-hero-focal-x,50%) var(--date-hero-focal-y,50%);
-      filter:saturate(.9) contrast(1.02);
-      transition:opacity 120ms linear;
-      mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.22) 16%,#000 36%);
+      width:1px;
+      height:1px;
+      opacity:0;
+      pointer-events:none;
     }
     .date-listing-hero__tiles {
       position:absolute;
@@ -133,17 +133,21 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', {
       background-size:100% 100%;
       filter:saturate(.9) contrast(1.02);
     }
-    .date-listing-hero[data-tiles-ready] .date-listing-hero__fallback { opacity:0; }
     .date-listing-hero.is-entering .date-listing-hero__tile {
       animation:date-listing-hero-in var(--entry-duration) cubic-bezier(.65,0,.35,1) var(--entry-delay) both;
+    }
+    .date-listing-hero.is-present .date-listing-hero__tile {
+      opacity:var(--render-alpha,var(--base-alpha));
     }
     @keyframes date-listing-hero-in { from { opacity:0; } to { opacity:var(--render-alpha,var(--base-alpha)); } }
   }
   @media (min-width:721px) { .date-listing-hero { display:none; } }
   @media (prefers-reduced-motion:reduce) {
     .date-listing-hero { transform:none!important; }
-    .date-listing-hero__fallback { opacity:1!important; transition:none!important; }
-    .date-listing-hero__tiles { display:none!important; }
+    .date-listing-hero.is-present .date-listing-hero__tile {
+      opacity:var(--render-alpha,var(--base-alpha))!important;
+      animation:none!important;
+    }
   }
 </style>
 
@@ -157,9 +161,29 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', {
     let geometryWidth = 0;
     let endY = 1;
     let frame = 0;
+    let randoms: Uint32Array | null = null;
 
     const clamp = (value: number) => Math.max(0, Math.min(1, value));
     const smooth = (value: number) => value * value * (3 - 2 * value);
+    const ensureSchedule = () => {
+      if (randoms) return randoms;
+      randoms = new Uint32Array(tiles.length);
+      try { crypto.getRandomValues(randoms); }
+      catch { randoms = Uint32Array.from(tiles, () => Math.floor(Math.random() * 0xffffffff)); }
+      const order = [...tiles.keys()].sort((left, right) => randoms![left] - randoms![right]);
+      order.forEach((tileIndex, rank) => {
+        const tile = tiles[tileIndex];
+        const unit = randoms![tileIndex] / 0xffffffff;
+        const start = .03 + rank / Math.max(1, tiles.length - 1) * .72;
+        const duration = .16 + unit * .13;
+        tile.dataset.exitStart = String(start);
+        tile.dataset.exitEnd = String(Math.min(.98, start + duration));
+        tile.style.setProperty('--entry-delay', `${35 + Math.round(unit * 720)}ms`);
+        tile.style.setProperty('--entry-duration', `${260 + Math.round(((randoms![(tileIndex + 17) % tiles.length] / 0xffffffff)) * 340)}ms`);
+      });
+      hero.dataset.loadSeed = String(randoms[0] || 0);
+      return randoms;
+    };
     const measureEnd = () => {
       const surface = hero.closest('[data-mobile-listing-rails]');
       const firstRow = surface?.querySelector<HTMLElement>('[data-mobile-listing-row]');
@@ -174,28 +198,86 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', {
       const sourceHeight = Number(hero.dataset.sourceHeight);
       const focusX = Number(hero.dataset.focusX || .5);
       const focusY = Number(hero.dataset.focusY || .5);
+      const schedule = ensureSchedule();
+      let faceBoxes: Array<{ x:number; y:number; w:number; h:number }> = [];
+      try { faceBoxes = JSON.parse(hero.dataset.faceBoxes || '[]'); } catch { faceBoxes = []; }
       if (!rect.width || !rect.height || !sourceWidth || !sourceHeight) return;
       const scale = Math.max(rect.width / sourceWidth, rect.height / sourceHeight);
       const renderWidth = sourceWidth * scale;
       const renderHeight = sourceHeight * scale;
       const offsetX = (rect.width - renderWidth) * focusX;
       const offsetY = (rect.height - renderHeight) * focusY;
+      let cropSafe = true;
+      const projectedFaces = faceBoxes.map((box) => {
+        const padX = Math.max(.012, Math.min(.04, box.w * .12));
+        const padY = Math.max(.012, Math.min(.04, box.h * .12));
+        const projected = {
+          left: offsetX + Math.max(0, box.x - padX) * renderWidth,
+          top: offsetY + Math.max(0, box.y - padY) * renderHeight,
+          right: offsetX + Math.min(1, box.x + box.w + padX) * renderWidth,
+          bottom: offsetY + Math.min(1, box.y + box.h + padY) * renderHeight,
+        };
+        if (projected.left < -.5 || projected.top < -.5 || projected.right > rect.width + .5 || projected.bottom > rect.height + .5) cropSafe = false;
+        return projected;
+      });
+      if (faceBoxes.length && !cropSafe) {
+        hero.remove();
+        return;
+      }
       hero.style.setProperty('--date-hero-image', `url("${image.currentSrc || image.src}")`);
       hero.style.setProperty('--date-hero-focal-x', `${focusX * 100}%`);
       hero.style.setProperty('--date-hero-focal-y', `${focusY * 100}%`);
       hero.style.setProperty('--mosaic-render-width', `${renderWidth}px`);
       hero.style.setProperty('--mosaic-render-height', `${renderHeight}px`);
-      tiles.forEach((tile) => {
+      const textRects = [
+        hero.closest('.page-head')?.querySelector('h1'),
+        hero.closest('.page-head')?.querySelector('p'),
+      ].filter(Boolean).map((node) => (node as Element).getBoundingClientRect());
+      tiles.forEach((tile, index) => {
         const tileRect = tile.getBoundingClientRect();
         tile.style.setProperty('--tile-image-left', `${offsetX - (tileRect.left - rect.left)}px`);
         tile.style.setProperty('--tile-image-top', `${offsetY - (tileRect.top - rect.top)}px`);
-        tile.style.setProperty('--render-alpha', tile.style.getPropertyValue('--base-alpha'));
+        const local = {
+          left: tileRect.left - rect.left,
+          top: tileRect.top - rect.top,
+          right: tileRect.right - rect.left,
+          bottom: tileRect.bottom - rect.top,
+        };
+        const faceShield = projectedFaces.some((box) => (
+          Math.min(local.right, box.right) - Math.max(local.left, box.left) > 1
+          && Math.min(local.bottom, box.bottom) - Math.max(local.top, box.top) > 1
+        ));
+        const textShield = textRects.some((box) => (
+          Math.min(tileRect.right, box.right) - Math.max(tileRect.left, box.left) > 1
+          && Math.min(tileRect.bottom, box.bottom) - Math.max(tileRect.top, box.top) > 1
+        ));
+        const unit = schedule[index] / 0xffffffff;
+        const col = Number(tile.dataset.col);
+        let alpha = Number(tile.style.getPropertyValue('--base-alpha') || 0) * (.78 + unit * .44) + (unit - .5) * .20;
+        if (faceShield) alpha = Math.max(alpha, .56);
+        if (col < 2) alpha = Math.min(alpha, .06);
+        if (textShield) alpha = Math.min(alpha, .04);
+        alpha = Math.max(0, Math.min(.92, alpha));
+        tile.toggleAttribute('data-face-shield', faceShield);
+        tile.toggleAttribute('data-text-shield', textShield);
+        tile.style.setProperty('--base-alpha', String(alpha));
+        tile.style.setProperty('--render-alpha', String(alpha));
       });
       geometryWidth = window.innerWidth;
-      hero.toggleAttribute('data-tiles-ready', !reduced);
+      hero.toggleAttribute('data-tiles-ready', true);
       if (!reduced) {
         hero.classList.add('is-entering');
-        window.setTimeout(() => hero.classList.remove('is-entering'), 1_150);
+        const budget = Math.max(...tiles.map((tile) => (
+          Number.parseFloat(getComputedStyle(tile).getPropertyValue('--entry-delay'))
+          + Number.parseFloat(getComputedStyle(tile).getPropertyValue('--entry-duration'))
+        )), 0) + 30;
+        window.setTimeout(() => {
+          hero.classList.remove('is-entering');
+          hero.classList.add('is-present');
+          render();
+        }, budget);
+      } else {
+        hero.classList.add('is-present');
       }
       measureEnd();
       render();
