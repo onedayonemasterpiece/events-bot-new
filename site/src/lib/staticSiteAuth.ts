@@ -529,6 +529,19 @@ class StaticSiteAuthController {
     }
   }
 
+  async registerFocusGroupParticipant(options: {
+    communicationOptIn: boolean;
+    sourceRoute?: string;
+  }): Promise<boolean> {
+    const session = await this.getSession();
+    if (!session?.user?.email) return false;
+    const { error } = await this.client.rpc('register_focus_group_participant_v1', {
+      p_communication_opt_in: options.communicationOptIn === true,
+      p_source_route: String(options.sourceRoute || '/fokus-gruppa/priglashenie/').slice(0, 240),
+    });
+    return !error;
+  }
+
   async linkYandexIdentity(): Promise<boolean> {
     const session = await this.getSession();
     if (!session?.user) return this.signIn();

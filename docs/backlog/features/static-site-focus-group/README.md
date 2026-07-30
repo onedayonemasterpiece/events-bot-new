@@ -298,6 +298,34 @@ email-ссылка возвращается на очищенный текущи
 Яндекс связывается через `linkIdentity()` с текущим `auth.uid()`, а не создаёт
 второй продуктовый профиль.
 
+После успешного email/Яндекс-входа onboarding до показа финального шага вызывает
+`register_focus_group_participant_v1`. RPC берёт адрес только из подтверждённой
+`auth.users` identity, определяет `email` или `custom:yandex` на сервере и
+upsert-ит приватную строку
+`personalization.focus_group_participant_contact`. Введённый в форму адрес не
+передаётся в RPC и не может подменить адрес аккаунта. Для Яндекса
+`login:email` обязателен, а `email_optional=false`: callback без адреса закрывается
+ошибкой и не создаёт неработоспособный контакт.
+
+Сама строка участника создаётся для каждого успешно подтверждённого участника,
+но право на последующие письма хранится отдельно. Один непредвыбранный checkbox
+фиксирует три явно названные цели: итоги фокус-группы, важные обновления
+«Анонсов» и новости клуба друзей. Приватная таблица закрыта от `anon` и
+`authenticated`; оператор читает её только через direct/service-role контур.
+
+Операторская выборка адресов, которые можно использовать для текущей общей
+рассылки:
+
+```sql
+select email, auth_provider, joined_at
+from personalization.focus_group_participant_contact
+where status = 'active'
+  and focus_updates_consent
+  and product_updates_consent
+  and friends_club_consent
+order by joined_at;
+```
+
 Live E2E обязан выпускать два разных письма: сначала проверить автоматическое
 срабатывание кода после шестой цифры и невозможность повторного использования,
 затем запросить новый OTP и проверить реальную ссылку в том браузере, где был
@@ -723,9 +751,11 @@ leaderboards of tiny page cohorts.
   membership backend item below.
 - [ ] Implement program/membership/invite RPC, seed QR, referral, atomic cap 200,
   expiry/alumni/withdrawal and negative auth/concurrency tests.
-- [ ] Publish focus terms/privacy/retention and persist the explicit continuing
-  communication choice server-side; keep any purpose not named in its visible
-  text separate.
+- [x] Persist every verified focus identity and its explicit continuing
+  communication choice server-side in a private operator table. The visible
+  choice names focus results, product updates and the friends club; any other
+  purpose remains separate. Publishing final terms/privacy/retention remains a
+  release-policy gate.
 - [ ] Implement shared usefulness/improvement UI plus typed event-fact issue UI,
   authenticated RPC, idempotency/rate limits and operator-visible receipt.
 - [ ] Implement one daily digest claim/redaction/clustering/triage path and

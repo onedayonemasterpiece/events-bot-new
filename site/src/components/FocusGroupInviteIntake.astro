@@ -59,9 +59,21 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       <h1 tabindex="-1">Подтвердите участие</h1>
       <p>
         Выберите почту или Яндекс. Так мы сможем связать ваши отзывы и находки
-        с участием в розыгрыше.
+        с участием в розыгрыше. Подтверждённый адрес сохранится для связи по
+        фокус-группе.
       </p>
     </div>
+
+    <label class="focus-intake__contact-choice" data-focus-contact-choice>
+      <input type="checkbox" data-focus-contact-consent />
+      <span>
+        <strong>Получать новости после презентации</strong>
+        <small>
+          Итоги фокус-группы, важные обновления «Анонсов» и новости клуба друзей.
+          Это необязательно — отказаться можно в любой момент.
+        </small>
+      </span>
+    </label>
 
     <div class="focus-intake__choices" data-focus-auth-signed-out hidden>
       <button class="ke-button ke-button--primary" type="button" data-focus-email-open>
@@ -192,7 +204,9 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     activateFocusParticipation,
     clearFocusParticipationMarker,
     inspectFocusInviteUrl,
+    readFocusContinuingConsent,
     readFocusParticipationMarker,
+    setFocusContinuingConsent,
     storeFocusParticipationMarker,
     updateFocusParticipationIdentityChoice,
     type FocusIdentityChoice,
@@ -300,11 +314,21 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     const signedInName = root.querySelector<HTMLElement>('[data-static-auth-name]');
     const accountContinue = root.querySelector<HTMLButtonElement>('[data-focus-account-continue]');
     const accountLogout = root.querySelector<HTMLButtonElement>('[data-focus-account-logout]');
+    const contactChoice = root.querySelector<HTMLElement>('[data-focus-contact-choice]');
+    const contactConsent = root.querySelector<HTMLInputElement>('[data-focus-contact-consent]');
     let identityView: IdentityView = 'choices';
+
+    if (contactConsent && storage) {
+      contactConsent.checked = Boolean(readFocusContinuingConsent(storage));
+      contactConsent.addEventListener('change', () => {
+        setFocusContinuingConsent(storage!, contactConsent.checked);
+      });
+    }
 
     const showIdentityView = (view: IdentityView) => {
       identityView = view;
       if (identityHeading) identityHeading.hidden = view !== 'choices' && view !== 'signed_in';
+      if (contactChoice) contactChoice.hidden = view !== 'choices' && view !== 'signed_in';
       if (signedOutChoices) signedOutChoices.hidden = view !== 'choices';
       if (signedInPanel) signedInPanel.hidden = view !== 'signed_in';
       if (emailPanel) emailPanel.hidden = view !== 'email_address' && view !== 'email_code';
@@ -369,6 +393,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
     let lastSubmittedOtp = '';
     let resendTimer = 0;
     let completed = participation.status === 'active';
+    let completionInFlight = false;
 
     const clearResendTimer = () => {
       if (resendTimer) window.clearInterval(resendTimer);
@@ -411,11 +436,30 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       showStage('install');
     });
 
-    const finish = (choice: Exclude<FocusIdentityChoice, 'undecided'>, verified: boolean) => {
+    const finish = async (choice: Exclude<FocusIdentityChoice, 'undecided'>, verified: boolean) => {
       if (!storage) return;
+      if (completionInFlight) return;
+      completionInFlight = true;
+      if (verified) {
+        if (identityStatus) identityStatus.textContent = 'Сохраняем участие…';
+        const saved = await auth?.registerFocusGroupParticipant({
+          communicationOptIn: contactConsent?.checked === true,
+          sourceRoute: window.location.pathname,
+        });
+        if (!saved) {
+          completionInFlight = false;
+          if (identityStatus) {
+            identityStatus.textContent = 'Не получилось сохранить участие. Проверьте соединение и нажмите «Продолжить» ещё раз.';
+          }
+          showIdentityView('signed_in');
+          return;
+        }
+        setFocusContinuingConsent(storage, contactConsent?.checked === true);
+      }
       if (!completed) {
         const activated = activateFocusParticipation(storage, choice);
         if (!activated) {
+          completionInFlight = false;
           if (identityStatus) identityStatus.textContent = 'Не получилось продолжить. Откройте приглашение ещё раз.';
           return;
         }
@@ -428,6 +472,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
           : 'Афиша уже доступна. Чтобы участвовать в розыгрыше, подтвердите участие позже.';
       }
       showStage('done');
+      completionInFlight = false;
     };
 
     const setSending = (sending: boolean) => {
@@ -546,10 +591,10 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
       }
     });
 
-    skipButton?.addEventListener('click', () => finish('skipped', false));
+    skipButton?.addEventListener('click', () => { void finish('skipped', false); });
     accountContinue?.addEventListener('click', () => {
       const choice = selectedChoice === 'yandex_intent' ? 'yandex_intent' : 'email_intent';
-      finish(choice, true);
+      void finish(choice, true);
     });
     accountLogout?.addEventListener('click', async () => {
       if (!auth) return;
@@ -576,7 +621,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
           participation.status === 'joining'
           && (intendedChoice === 'email_intent' || intendedChoice === 'yandex_intent')
         ) {
-          finish(intendedChoice, true);
+          void finish(intendedChoice, true);
           return;
         }
         if (signedInName) signedInName.textContent = staticAuthDisplayName(snapshot.user);
@@ -636,6 +681,7 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
   .focus-intake__email[hidden],
   .focus-intake__email-step[hidden],
   .focus-intake__signed[hidden],
+  .focus-intake__contact-choice[hidden],
   .focus-intake__choices[hidden] { display: none; }
   .focus-intake__card h1 {
     margin: 0;
@@ -691,6 +737,31 @@ const focusIconHref = withBase('/assets/pwa/announcements-brand-v2-192.png');
   .focus-intake__next strong { color: #221a14; font-size: 1rem; line-height: 1.3; }
   .focus-intake__prize-note span,
   .focus-intake__next span { font-size: .88rem; line-height: 1.45; }
+  .focus-intake__contact-choice {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: .7rem;
+    align-items: start;
+    border: 1px solid #d9ccbb;
+    border-radius: 1rem;
+    padding: .85rem .9rem;
+    background: #f8f2e9;
+    color: #44362d;
+    cursor: pointer;
+  }
+  .focus-intake__contact-choice input {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: .08rem 0 0;
+    accent-color: #98401f;
+  }
+  .focus-intake__contact-choice span { display: grid; gap: .25rem; }
+  .focus-intake__contact-choice strong { color: #221a14; font-size: .92rem; line-height: 1.3; }
+  .focus-intake__contact-choice small { color: #6d6259; font-size: .78rem; line-height: 1.4; }
+  .focus-intake__contact-choice:focus-within {
+    outline: 3px solid rgb(15 118 110 / 35%);
+    outline-offset: 2px;
+  }
   .focus-intake__choices { display: grid; gap: .7rem; }
   .focus-intake__choices .ke-button { width: 100%; min-height: 50px; }
   .focus-intake__skip,

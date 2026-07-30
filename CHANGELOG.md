@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- Focus-group email and Yandex confirmation now fail closed until a verified
+  email is available, then durably register the participant in a private
+  Supabase operator table before onboarding completes. The address is derived
+  from Auth rather than browser input; a separate, unselected choice records
+  permission for focus results, product updates and friends-club news.
 - Restored readable desktop related-card share actions on the dark event-detail
   section. The label and shared icon now use the light action tone instead of
   inheriting the generic light-surface grey through an Astro child-component

@@ -273,12 +273,12 @@ def probe_yandex_userinfo_adapter() -> Check:
         return Check("yandex_userinfo_adapter_probe", False, "Custom provider fetch returned non-JSON payload")
     scopes = data.get("scopes") or []
     userinfo_url = str(data.get("userinfo_url") or "")
-    email_optional = data.get("email_optional") is True
+    email_required = data.get("email_optional") is False
     ok = (
         data.get("identifier") == "custom:yandex"
         and data.get("enabled") is True
         and userinfo_url == expected_url
-        and email_optional
+        and email_required
         and "login:email" in scopes
         and "login:info" in scopes
     )
@@ -292,7 +292,7 @@ def probe_yandex_userinfo_adapter() -> Check:
     return Check(
         "yandex_userinfo_adapter_probe",
         False,
-        f"Need custom:yandex userinfo_url={expected_url} and email_optional=true with login:email/login:info scopes; current userinfo_url={userinfo_url!r}, email_optional={email_optional}",
+        f"Need custom:yandex userinfo_url={expected_url} and email_optional=false with login:email/login:info scopes; current userinfo_url={userinfo_url!r}, email_optional={data.get('email_optional')!r}",
     )
 
 def main() -> int:

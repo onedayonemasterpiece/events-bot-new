@@ -88,6 +88,29 @@ test('email identity offers one message with link plus six-digit mobile OTP', as
   assert.match(otp, /EMAIL_OTP_LENGTH = 6/u);
 });
 
+test('verified focus identities are durably registered while mailing consent stays explicit', async () => {
+  const [intake, auth, migration] = await Promise.all([
+    read('../src/components/FocusGroupInviteIntake.astro'),
+    read('../src/lib/staticSiteAuth.ts'),
+    read('../../supabase/migrations/20260730131051_focus_group_participant_contact_v1.sql'),
+  ]);
+  assert.match(intake, /data-focus-contact-consent/u);
+  assert.match(intake, /Получать новости после презентации/u);
+  assert.match(intake, /Это необязательно/u);
+  const contactInput = intake.match(/<input[^>]*data-focus-contact-consent[^>]*>/u)?.[0] || '';
+  assert.ok(contactInput);
+  assert.doesNotMatch(contactInput, /\bchecked\b/u);
+  assert.match(intake, /registerFocusGroupParticipant/u);
+  assert.match(auth, /register_focus_group_participant_v1/u);
+  assert.match(auth, /p_communication_opt_in/u);
+  assert.match(migration, /create table personalization\.focus_group_participant_contact/u);
+  assert.match(migration, /from auth\.users/u);
+  assert.match(migration, /provider = 'custom:yandex'/u);
+  assert.match(migration, /verified email required/u);
+  assert.match(migration, /revoke all on personalization\.focus_group_participant_contact from public, anon, authenticated/u);
+  assert.match(migration, /grant execute on function public\.register_focus_group_participant_v1\(boolean, text\) to authenticated/u);
+});
+
 test('owner clean-start link resets only focus onboarding and local auth before replaying the invite', async () => {
   const [intake, auth] = await Promise.all([
     read('../src/components/FocusGroupInviteIntake.astro'),

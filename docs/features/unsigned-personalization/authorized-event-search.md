@@ -310,7 +310,7 @@ Configured in the personalization Supabase project on 2026-06-29. Manual/Dashboa
 6. Token URL: `https://oauth.yandex.ru/token`.
 7. UserInfo URL: `https://<project-ref>.supabase.co/functions/v1/yandex-userinfo`, not direct Yandex JSON.
 8. Scopes: `login:email login:info` (adjust if Yandex app requires a different minimal set).
-9. `email_optional=true`: email is useful if Yandex returns it, but the product needs a stable authenticated Yandex identity first.
+9. `email_optional=false`: the project requests `login:email` and the focus-group/contact surfaces require a verified address from Yandex. A Yandex callback without email must fail closed rather than create a participant whom operators cannot contact.
 10. Add Supabase callback URL shown by the provider form to the Yandex app redirect URLs.
 11. Add site redirect URLs such as `https://kenigevents.ru/*` and current preview prefixes to Supabase Auth URL allow-list.
 
@@ -363,7 +363,7 @@ Implemented adapter: `supabase/functions/yandex-userinfo/index.ts`, deployed wit
 Current production-like provider config on 2026-06-29:
 
 - `custom:yandex.userinfo_url = https://epyznmylqmchteykjsqj.supabase.co/functions/v1/yandex-userinfo`;
-- `email_optional = true`;
+- `email_optional = false`;
 - scopes still include `login:email` and `login:info`.
 
 Regression guard: `scripts/check_authorized_search_readiness.py --probe-yandex-userinfo-adapter` fetches the live custom provider config and checks both the adapter URL and the adapter's missing-token 401 smoke.
