@@ -10,6 +10,12 @@ export const FOCUS_INVITATION_URL =
 export const FOCUS_INVITATION_SCENE_ID = "service-focus-group";
 export const FOCUS_PAGE_RATING_URL = `${FOCUS_PREVIEW_BASE_URL}/segodnya/`;
 
+export const PWA_LEATHER_ICON_ASSET = Object.freeze({
+  url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/pwa-icon-leather-7015488739e0296f.png",
+  sha256: "7015488739e0296f6c5b04935a16769804aa8bf128436450e8a60eef32ec07dd",
+  source: "scenario-assets/PWA-icon.png",
+});
+
 const manualPageDefinitions = [
   ["home", "Главная", "/"],
   ["mobile-menu", "Меню мобильного", "/"],
@@ -218,6 +224,7 @@ export const EXPANDED_SERVICE_SCENE_IDS = Object.freeze([
 
 export const SERVICE_SCENE_IDS = Object.freeze([
   "service-wordmark",
+  "service-comfort",
   "service-needs",
   "service-medallions",
   "service-medallions-desktop",
@@ -242,6 +249,7 @@ export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
   ...MARKET_SCENE_IDS,
   ...JOKE_DATABASE_SCENE_IDS,
   "service-wordmark",
+  "service-comfort",
   "service-needs",
   "service-medallions",
   "service-joke",

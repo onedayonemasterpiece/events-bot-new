@@ -18,6 +18,7 @@ import {
   MANUAL_PAGE_SCENES,
   MANUAL_PAGE_SCENE_IDS,
   MARKET_SCENE_IDS,
+  PWA_LEATHER_ICON_ASSET,
   SCENE_ACCEPTANCE_CONTRACT,
   SHARE_PROOF_ASSETS,
   SERVICE_SCENE_IDS,
@@ -86,6 +87,7 @@ test("presentation scenes remain explicit and the intro defaults to fifty minute
     ["mobile", "desktop"],
   );
   assert.ok(SERVICE_SCENE_IDS.includes("service-search-live"));
+  assert.ok(SERVICE_SCENE_IDS.includes("service-comfort"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-personalization"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-transport-rail"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-transport-bus"));
@@ -105,6 +107,7 @@ test("presentation scenes remain explicit and the intro defaults to fifty minute
 test("intro and lecture media use immutable content-addressed Yandex CDN URLs", () => {
   for (const asset of [
     ZNANIE_LOGO_ASSET,
+    PWA_LEATHER_ICON_ASSET,
     ...INTRO_MUSIC_ASSETS,
     LECTURE_UI_UX_ASSET,
     ...LECTURE_ASSETS,
@@ -118,6 +121,7 @@ test("intro and lecture media use immutable content-addressed Yandex CDN URLs", 
     assert.match(asset.sha256, /^[a-f0-9]{64}$/u);
   }
   assert.equal(INTRO_MUSIC_ASSET, INTRO_MUSIC_ASSETS[0]);
+  assert.equal(PWA_LEATHER_ICON_ASSET.source, "scenario-assets/PWA-icon.png");
   assert.equal(INTRO_MUSIC_ASSETS.length, 5);
   assert.deepEqual(
     INTRO_MUSIC_ASSETS.map(({ id }) => id),

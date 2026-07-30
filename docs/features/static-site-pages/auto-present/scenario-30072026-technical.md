@@ -340,3 +340,29 @@ Iteration G delta на 30.07.2026:
   помещающийся post-video QR 03.24;
 - отдельная серверная сущность, новый Fly app, bucket, CDN, база или очередь
   для ручных показов не создавались.
+
+Iteration H recovery delta на 30.07.2026:
+
+- устранён откат relay sequence после process restart: sequence основан на
+  wall-clock milliseconds, state публикует `boot_id`, агент умеет rebase
+  cursor, а command TTL увеличен до 120 секунд;
+- relay принимает все сценарии, существующие на пульте. Contract test извлекает
+  каждую run-кнопку и проверяет её реальным POST, поэтому лекция 02.3/02.10/
+  02.11, 03.18 и 30 ручных страниц больше не могут исчезнуть из allowlist
+  незаметно;
+- 03.2 отделён от 03.3 и использует exact CDN-копию авторского
+  `PWA-icon.png`; 03.8.4 использует видимую FHD-коллекцию `/artefakty/` и
+  настоящий Enter; 03.10.2 корректно распознаёт auth в закрытом account menu,
+  показывает tap «Искать» и удерживает реальный progress;
+- 03.18 перенаправлен на опубликованную `/zakrytaya-afisha/`, где фактически
+  присутствуют feedback-кнопки и форма; runner восстанавливает только
+  необходимый локальный participation marker, если сцена вызвана напрямую;
+- 03.12.1 использует текущие desktop-карточки `[data-listing-item]`, ждёт
+  readiness страницы и завершает полный видимый Arrow-key цикл;
+- targeted local E2E прошёл 02.3, 02.10, 02.11, отдельную 03.2, обе D.1
+  страницы, 03.8.4, 03.12.1 и 03.18. Отдельный recovery-прогон оставил
+  Windows-агент запущенным, перезапустил relay и доставил первую Run, затем
+  scroll и D-pad без рестарта агента; automated suites: agent `39/39`, relay
+  `19/19`, control auth `2/2`, stage `10/10`, Windows bootstrap `4/4`, Astro
+  build `465 pages`;
+- новый Fly app, machine, bucket, CDN, база или очередь не создавались.

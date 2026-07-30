@@ -45,6 +45,7 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
     "lecture-good-ui", "lecture-poor-ui",
     "market-01-primary", "market-04-position", "tomorrow-mobile",
     "tomorrow-rail-like", "weekend-amber-artifact", "service-search-live",
+    "service-comfort", "service-needs",
     "service-focus-group", "service-laws", "service-keyboard-event",
     "service-navigation-map", "service-social-proof", "service-transport-bus",
     "service-report-problem", "service-share-friends", "service-calendar-memory",
@@ -347,6 +348,9 @@ test("search has an explicit one-time persistent Yandex demo-session setup", () 
   assert.match(source, /SEARCH_AUTH_SETUP_SCENE_ID/u);
   assert.match(source, /data-search-login/u);
   assert.match(source, /data-search-logout/u);
+  assert.match(source, /evaluate\(\(control\) => !control\.hidden\)/u);
+  assert.match(source, /tapMobileLocator\(frame, submit, signal\)/u);
+  assert.match(source, /data-search-progress/u);
   assert.match(source, /9 \* 60 \* 1_000/u);
   assert.match(source, /this\.context\.storageState\(\{ path: config\.storageStatePath \}\)/u);
   assert.match(source, /const authPage = await this\.context\.newPage\(\)/u);
@@ -362,6 +366,8 @@ test("search has an explicit one-time persistent Yandex demo-session setup", () 
 test("relay, lifecycle, fullscreen, and evidence contracts remain intact", () => {
   assert.match(source, /\/api\/commands\/next/u);
   assert.match(source, /after_seq/u);
+  assert.match(source, /relay restart detected; rebasing command cursor/u);
+  assert.match(source, /relay sequence rollback detected; rebasing command cursor/u);
   assert.match(source, /ackCache/u);
   assert.match(source, /isExpired\(command\)/u);
   assert.match(source, /hardStopMs/u);
@@ -404,6 +410,17 @@ test("intro, held lecture and desktop scenes use pinned assets and real FHD scro
     /naturalVerticalScroll\([\s\S]*?DESKTOP_FRAME_SELECTOR/u,
   );
   assert.match(source, /iframeSelector = FRAME_SELECTOR/u);
+});
+
+test("reopened desktop artifact, day keyboard, and feedback scenes target visible current UI", () => {
+  assert.match(source, /async runArtifactDesktop\(signal\)/u);
+  assert.match(source, /ke_artifact_collection_v1/u);
+  assert.match(source, /data-artifact-open/u);
+  assert.match(source, /artifact\.press\("Enter"\)/u);
+  assert.match(source, /data-artifact-dialog\]\[open\]/u);
+  assert.match(source, /frame\.locator\("\[data-listing-item\]:visible"\)/u);
+  assert.match(source, /kenigevents:focus-participation:v1/u);
+  assert.match(source, /data-focus-feedback/u);
 });
 
 test("normal scenarios reuse the sole page and clear embedded state without closing context", () => {

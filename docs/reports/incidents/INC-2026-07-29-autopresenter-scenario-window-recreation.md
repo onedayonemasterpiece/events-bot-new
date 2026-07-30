@@ -44,6 +44,11 @@ presentation window и открывало другое, разрушая кон�
 - 2026-07-29 12:40 UTC — первый public exact-source прогон подтвердил, что
   сетевой `tomorrow-mobile` тоже может обоснованно перейти границу 30 секунд;
   live-site policy унифицирована на 120 секунд до повторного deploy.
+- 2026-07-30 09:59 UTC — Fly deploy перезапустил in-memory relay; уже
+  работающий Windows-агент сохранил старый sequence cursor и перестал получать
+  новые команды после краткого HTTP 502.
+- 2026-07-30 10:30 UTC — owner-прогон также выявил рассинхронизацию
+  control/relay allowlist: 34 кнопки отклонялись до доставки агенту.
 
 ## Root Cause
 
@@ -55,6 +60,11 @@ presentation window и открывало другое, разрушая кон�
    смена сцены стала process-like lifecycle transition.
 4. `PACING.scenarioMaxMs = 30_000` использовался как безусловный лимит любой
    будущей сцены.
+5. Relay начинал sequence с `1` после каждого process restart, но Windows-агент
+   продолжал poll со старым большим `after_seq`; новые команды становились
+   невидимыми до искусственного превышения старого cursor.
+6. Relay allowlist поддерживался отдельно от control/agent и отстал на 34
+   сценария: 02.3, 02.10, 02.11, 03.18 и все 30 ручных страниц.
 
 ## Contributing Factors
 
@@ -89,6 +99,9 @@ presentation window и открывало другое, разрушая кон�
 - только Shutdown закрывает context/browser и завершает agent с exit code 0;
 - hour-capable explicit scene timeout policy не ограничен 30 секундами;
 - все существующие сценарии и QR-аутро проходят exact-source E2E;
+- работающий Windows-агент после relay restart получает и подтверждает первую
+  новую Run, scroll и D-pad команду без повторных нажатий;
+- каждая `data-action="run"` кнопка control входит в relay allowlist;
 - `tools/autopresenter/m0/**` неизменён;
 - Windows bootstrap regression suite из связанного incident проходит.
 

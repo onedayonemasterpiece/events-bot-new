@@ -8,7 +8,7 @@ const source = await readFile(
 );
 
 test('presenter stage keeps explicit scenes in one page without a scenario DSL', () => {
-  for (const scene of ['live-site', 'intro-loop', 'service-wordmark', 'service-search-live', 'weekend-desktop', 'outro-qr']) {
+  for (const scene of ['live-site', 'intro-loop', 'service-wordmark', 'service-comfort', 'service-needs', 'service-search-live', 'weekend-desktop', 'outro-qr']) {
     assert.match(source, new RegExp(`data-presenter-scene-id="${scene}"`, 'u'));
   }
   assert.match(source, /window\.addEventListener\('presenter:scene'/u);
@@ -166,7 +166,9 @@ test('outro remains the accepted restrained fullscreen QR scene', () => {
 test('all presentation media are immutable Yandex CDN assets and reduced motion is safe', () => {
   const urls = [...source.matchAll(/https:\/\/static\.kenigevents\.ru\/assets\/autopresenter\/scenario-20260730\/[^'"]+/gu)].map((match) => match[0]);
   assert.ok(urls.length >= 10);
-  for (const url of urls) assert.match(url, /-[a-f0-9]{64}\.(?:png|svg|mp3|mp4|wav|webp)$/u);
+  for (const url of urls) {
+    assert.match(url, /-(?:[a-f0-9]{16}|[a-f0-9]{64})\.(?:jpg|png|svg|mp3|mp4|wav|webp)$/u);
+  }
   assert.match(source, /@media \(prefers-reduced-motion: reduce\)/u);
   assert.match(source, /if \(reduceMotion\.matches\)/u);
   assert.match(source, /\.hero-fragment\.is-active::after \{ display: none; \}/u);
@@ -174,7 +176,7 @@ test('all presentation media are immutable Yandex CDN assets and reduced motion 
 });
 
 test('service presentation uses the requested focus preview and explicit input-driven search', () => {
-  assert.match(source, /preview-20260729-focus-simple-r15-a5cc0256/u);
+  assert.match(source, /preview-20260730-hero-talk-date-donor-r2/u);
   assert.match(source, /fokus-gruppa\/priglashenie\/#invite=focus-group-2026-announcements/u);
   assert.match(source, /data-presenter-scene-id="service-medallions-desktop"/u);
   assert.match(source, /data-presenter-scene-id="service-medallions-mobile"/u);
@@ -183,6 +185,11 @@ test('service presentation uses the requested focus preview and explicit input-d
   assert.match(source, /data-presenter-scene-id="service-transport-rail"/u);
   assert.match(source, /data-presenter-scene-id="service-transport-bus"/u);
   assert.match(source, /service-search-live/u);
+  assert.match(source, /pwa-icon-leather-7015488739e0296f\.png/u);
+  assert.match(source, /data-presenter-scene-id="service-comfort"/u);
+  assert.match(source, /@keyframes comfort-mark-to-corner/u);
+  assert.match(source, /03\.3 · Что нужно человеку/u);
+  assert.match(source, /artifactWeekendUrl = 'https:\/\/kenigevents\.ru\/_review\/[^']+\/artefakty\/'/u);
   assert.match(source, /class="wordmark-plain"[\s\S]*>Анонсы</u);
   assert.match(source, /class="wordmark-vector" src=\{announcementsWordmarkUrl\}/u);
   assert.match(source, /class="wordmark-o-glyph"/u);
@@ -212,7 +219,7 @@ test('service presentation uses the requested focus preview and explicit input-d
   assert.match(source, /data-focus-phase="meaning"/u);
   assert.match(source, /@font-face \{ font-family: "Cygre"/u);
   assert.match(source, /\/brand\/announcements-o-expanded\.svg/u);
-  assert.match(source, /04 · Медальоны/u);
+  assert.match(source, /03\.7 · Медальоны/u);
   assert.match(source, /<h2>Умный поиск\.<\/h2>/u);
   assert.match(source, /Присоединяйтесь<br \/>к фокус-группе\./u);
   assert.match(source, /startErrorCue/u);

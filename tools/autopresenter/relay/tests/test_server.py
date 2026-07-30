@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import io
 import json
+import re
 import struct
 import zipfile
 
@@ -15,7 +16,7 @@ from aiohttp.test_utils import TestClient, TestServer
 RELAY_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RELAY_DIR))
 
-from server import RELAY_KEY, create_app  # noqa: E402
+from server import ALLOWED_SCENARIOS, RELAY_KEY, Relay, create_app  # noqa: E402
 
 
 class RelayApiTests(unittest.IsolatedAsyncioTestCase):
@@ -133,6 +134,48 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         response, payload = await self.json("GET", "/api/state")
         self.assertEqual(response.status, 200)
         self.assertEqual(payload["state"]["status"], "disconnected")
+        self.assertTrue(payload["state"]["boot_id"])
+        self.assertGreater(payload["state"]["last_sequence"], 1_000_000_000_000)
+
+    async def test_every_control_scenario_is_accepted_by_relay(self):
+        response = await self.client.get("/control/")
+        text = await response.text()
+        control_scenarios = set(
+            re.findall(r'data-action="run"[^>]*data-scenario="([^"]+)"', text)
+        )
+        self.assertTrue(control_scenarios)
+        self.assertEqual(control_scenarios - ALLOWED_SCENARIOS, set())
+        for index, scenario in enumerate(sorted(control_scenarios)):
+            response, payload = await self.json(
+                "POST",
+                "/api/commands",
+                json={
+                    "action": "run",
+                    "scenario": scenario,
+                    "command_id": f"control-contract-{index}",
+                },
+            )
+            self.assertEqual(response.status, 202, scenario)
+            self.assertEqual(payload["command"]["scenario"], scenario)
+
+    async def test_first_command_after_relay_restart_is_newer_than_old_agent_cursor(self):
+        first_relay = Relay(command_ttl_ms=5_000)
+        old_command = await first_relay.issue("run", "before-restart", "intro-loop")
+        await asyncio.sleep(0.002)
+        restarted_relay = Relay(command_ttl_ms=5_000)
+        self.assertNotEqual(
+            first_relay.public_state()["boot_id"],
+            restarted_relay.public_state()["boot_id"],
+        )
+        new_command = await restarted_relay.issue("run", "after-restart", "lecture-01")
+        self.assertGreater(new_command.sequence, old_command.sequence)
+        delivered = await restarted_relay.poll(
+            "same-running-windows-agent",
+            old_command.sequence,
+            0,
+        )
+        self.assertIsNotNone(delivered)
+        self.assertEqual(delivered.id, "after-restart")
 
     async def test_idempotent_command_poll_and_ack_flow(self):
         response, payload = await self.json(
@@ -146,8 +189,9 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         second_response, second = await self.json("POST", "/api/commands", json=body)
         self.assertEqual(first_response.status, 202)
         self.assertEqual(second_response.status, 202)
-        self.assertEqual(first["command"]["sequence"], 1)
-        self.assertEqual(second["command"]["sequence"], 1)
+        sequence = first["command"]["sequence"]
+        self.assertGreater(sequence, 1_000_000_000_000)
+        self.assertEqual(second["command"]["sequence"], sequence)
         self.assertEqual(first["command"]["scenario"], "tomorrow-mobile")
         self.assertEqual(first["state"]["status"], "running")
 
@@ -163,7 +207,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             "/api/commands/stable-command/ack",
             json={
                 "agent_id": "agent-one",
-                "sequence": 1,
+                "sequence": sequence,
                 "status": "completed",
                 "detail": "Reached /zavtra/",
             },
@@ -174,7 +218,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_sequence_conflicts_and_stop_transition(self):
         await self.json("POST", "/api/state/agent", json={"agent_id": "agent-one", "status": "idle"})
-        await self.json("POST", "/api/commands", json={"action": "run", "command_id": "same"})
+        _, first = await self.json("POST", "/api/commands", json={"action": "run", "command_id": "same"})
         response, payload = await self.json(
             "POST", "/api/commands", json={"action": "stop", "command_id": "same"}
         )
@@ -184,7 +228,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         response, payload = await self.json(
             "POST", "/api/commands", json={"action": "stop", "command_id": "stop-one"}
         )
-        self.assertEqual(payload["command"]["sequence"], 2)
+        self.assertEqual(payload["command"]["sequence"], first["command"]["sequence"] + 1)
         self.assertEqual(payload["state"]["status"], "stopping")
 
         response, payload = await self.json(
@@ -348,7 +392,7 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             "/api/commands/active-scene/ack",
             json={
                 "agent_id": "agent-one",
-                "sequence": 1,
+                "sequence": run_payload["command"]["sequence"],
                 "status": "completed",
                 "detail": "scenario ready for manual scroll",
             },
@@ -368,13 +412,14 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["command"]["options"], body["options"])
         self.assertEqual(payload["state"]["status"], "completed")
         self.assertEqual(payload["state"]["current_command"]["id"], "active-scene")
+        scroll_sequence = payload["command"]["sequence"]
 
         response, payload = await self.json(
             "POST",
             "/api/commands/scroll-down/ack",
             json={
                 "agent_id": "agent-one",
-                "sequence": 2,
+                "sequence": scroll_sequence,
                 "status": "completed",
                 "detail": "viewport nudged down",
             },

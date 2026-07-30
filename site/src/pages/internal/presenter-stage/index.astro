@@ -17,8 +17,8 @@ const railTransportEventUrl = `${focusPreviewBase}/sobytiya/spektakl-chudnyy-otd
 const busTransportEventUrl = `${focusPreviewBase}/sobytiya/slet-babok-ezhek-romanovo-6710/`;
 const keyboardEventUrl = `${focusPreviewBase}/sobytiya/tochka-i-liniya-kaliningrad-5370/`;
 const freeCollectionUrl = `${focusPreviewBase}/podborki/besplatnye-sobytiya/`;
-const feedbackPageUrl = `${focusPreviewBase}/dlya-menya/`;
-const artifactWeekendUrl = 'https://kenigevents.ru/_review/pp1wRctXBd6boYU1EcnBrod3z8MmKpD7SGEufK1t-xw/vyhodnye/';
+const feedbackPageUrl = `${focusPreviewBase}/zakrytaya-afisha/`;
+const artifactWeekendUrl = 'https://kenigevents.ru/_review/pp1wRctXBd6boYU1EcnBrod3z8MmKpD7SGEufK1t-xw/artefakty/';
 const exhibitionsUrl = '/vystavki/';
 const festivalsUrl = '/festivali/';
 const focusInvitationQrSvg = createFocusInviteQrSvg(focusInvitationUrl);
@@ -64,6 +64,7 @@ const lectureGoodUiTbankUrl = 'https://static.kenigevents.ru/assets/autopresente
 const lectureGoodUiYandexGoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-good-ui-yandex-go-55639003f7a89671.jpg';
 const lecturePoorUiGosuslugiUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-poor-ui-gosuslugi-165c2e26ea0d3a71.jpg';
 const announcementsWordmarkUrl = '/brand/announcements-wordmark-ui.svg';
+const pwaLeatherIconUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/pwa-icon-leather-7015488739e0296f.png';
 const findIconUrl = '/assets/icons/reference4-v8/search-thin.svg';
 const people = [
   {
@@ -702,8 +703,17 @@ const expandedServiceScenes = [
         </div>
       </section>
 
+      <section class="service-scene service-comfort presentation-scene" data-presenter-scene-id="service-comfort" hidden>
+        <div class="comfort-halo" aria-hidden="true"></div>
+        <img class="comfort-leather-mark" src={pwaLeatherIconUrl} alt="Кожаная бирка «Полюбить Калининград · Анонсы»" />
+        <div class="comfort-copy">
+          <p class="service-eyebrow">03.2 · PWA как родная вещь</p>
+          <h2>Уют.<br />Тепло.<br />Своё.</h2>
+        </div>
+      </section>
+
       <section class="service-scene service-needs presentation-scene theme--dark" data-presenter-scene-id="service-needs" hidden>
-        <p class="service-eyebrow">02 · Что нужно человеку</p>
+        <p class="service-eyebrow">03.3 · Что нужно человеку</p>
         <h2>Найти. Поделиться.<br />Не забыть.</h2>
         <div class="need-row">
           <div><img class="need-icon need-icon--search" src={findIconUrl} alt="" /><span>Быстро найти<br />то, что нравится</span></div>
@@ -832,8 +842,8 @@ const expandedServiceScenes = [
       </section>
 
       <section class="live-navigation-scene real-desktop-scene presentation-scene" data-presenter-scene-id="service-artifact-desktop" hidden>
-        <iframe data-presenter-id="artifact-desktop-frame" data-src={artifactWeekendUrl} title="Реальный артефакт на десктопной странице" width="1920" height="1080"></iframe>
-        <div class="live-key-hint" aria-hidden="true"><kbd>↓</kbd><span>найти артефакт</span><kbd>→</kbd><span>раскрыть</span><kbd>Enter</kbd></div>
+        <iframe data-presenter-id="artifact-desktop-frame" data-src={artifactWeekendUrl} title="Реальная десктопная коллекция артефактов" width="1920" height="1080"></iframe>
+        <div class="live-key-hint" aria-hidden="true"><kbd>Tab</kbd><span>выбрать находку</span><kbd>Enter</kbd><span>открыть историю</span></div>
       </section>
 
       <section class="live-navigation-scene real-desktop-scene presentation-scene" data-presenter-scene-id="service-keyboard-day" hidden>
@@ -2118,6 +2128,64 @@ const expandedServiceScenes = [
     28% { opacity: 1; color: #ff7657; transform: scaleX(1); }
     60% { opacity: 1; color: #ff7657; transform: scaleX(3.25); }
     100% { opacity: 1; color: #17121a; transform: scaleX(1); }
+  }
+  .service-comfort {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    color: #2a160f;
+    background:
+      radial-gradient(circle at 50% 48%, rgba(255,190,148,.55), transparent 27%),
+      radial-gradient(circle at 14% 86%, rgba(155,78,51,.2), transparent 30%),
+      #f1e2cf;
+  }
+  .comfort-halo {
+    position: absolute;
+    inset: -20%;
+    background: conic-gradient(from 30deg at 50% 50%, transparent, rgba(255,117,87,.18), transparent 35%, rgba(111,74,48,.12), transparent 74%);
+    filter: blur(70px);
+    animation: comfort-halo-drift 8s ease-in-out infinite alternate;
+  }
+  .comfort-leather-mark {
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    top: 50%;
+    width: min(620px,52vw);
+    aspect-ratio: 1;
+    object-fit: contain;
+    border-radius: 25%;
+    filter: drop-shadow(0 34px 58px rgba(66,31,20,.28));
+  }
+  .service-comfort.is-entering .comfort-leather-mark {
+    animation: comfort-mark-to-corner 3.4s cubic-bezier(.72,0,.16,1) both;
+  }
+  .comfort-copy {
+    position: relative;
+    z-index: 1;
+    align-self: center;
+    margin-left: 17vw;
+    opacity: 0;
+    transform: translateY(34px);
+  }
+  .comfort-copy h2 { max-width: 6ch; font-size: clamp(100px,10vw,190px); }
+  .service-comfort.is-entering .comfort-copy {
+    animation: comfort-copy-in 900ms cubic-bezier(.18,.88,.22,1) 2.55s both;
+  }
+  @keyframes comfort-mark-to-corner {
+    0% { left: 50%; top: 50%; width: min(620px,52vw); opacity: 0; transform: translate(-50%,-50%) scale(.72) rotate(-3deg); }
+    18% { opacity: 1; transform: translate(-50%,-50%) scale(1.03) rotate(1deg); }
+    44% { left: 50%; top: 50%; width: min(620px,52vw); transform: translate(-50%,-50%) scale(1) rotate(0); }
+    100% { left: clamp(50px,4vw,78px); top: clamp(46px,5vh,72px); width: min(218px,13vw); opacity: 1; transform: translate(0,0) scale(1) rotate(-1deg); }
+  }
+  @keyframes comfort-copy-in {
+    0% { opacity: 0; transform: translateY(34px) scale(.97); filter: blur(8px); }
+    70% { opacity: 1; transform: translateY(-3px) scale(1.006); filter: none; }
+    100% { opacity: 1; transform: none; filter: none; }
+  }
+  @keyframes comfort-halo-drift {
+    from { transform: translate3d(-2%,1%,0) rotate(-4deg); }
+    to { transform: translate3d(3%,-2%,0) rotate(7deg); }
   }
   .need-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; margin-top: clamp(50px,7vh,90px); }
   .need-row > div { min-height: 190px; display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 22px; padding: 30px; border: 1px solid rgba(255,255,255,.18); border-radius: 28px; background: rgba(255,255,255,.06); font-size: clamp(22px,1.6vw,31px); font-weight: 800; }

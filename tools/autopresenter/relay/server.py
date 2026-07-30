@@ -36,8 +36,11 @@ ALLOWED_SCENARIOS = frozenset(
         "lecture-05",
         "lecture-06",
         "lecture-07",
+        "lecture-ui-ux-path",
         "lecture-convenience-emergence",
         "lecture-usability-measurement",
+        "lecture-good-ui",
+        "lecture-poor-ui",
         "market-01-primary",
         "market-02-substitutes",
         "market-03-dynamics",
@@ -46,6 +49,7 @@ ALLOWED_SCENARIOS = frozenset(
         "tomorrow-rail-like",
         "weekend-amber-artifact",
         "service-wordmark",
+        "service-comfort",
         "service-needs",
         "service-medallions",
         "service-medallions-desktop",
@@ -78,6 +82,7 @@ ALLOWED_SCENARIOS = frozenset(
         "service-calendar-memory",
         "service-community-curator",
         "service-location-artifact",
+        "service-report-problem",
         "service-friends-club",
         "joke-db-01",
         "joke-db-02",
@@ -90,6 +95,36 @@ ALLOWED_SCENARIOS = frozenset(
         "joke-db-09",
         "weekend-desktop",
         "outro-qr",
+        "manual-page-home-mobile",
+        "manual-page-home-desktop",
+        "manual-page-mobile-menu-mobile",
+        "manual-page-mobile-menu-desktop",
+        "manual-page-event-wide-hero-mobile",
+        "manual-page-event-wide-hero-desktop",
+        "manual-page-event-ocr-split-mobile",
+        "manual-page-event-ocr-split-desktop",
+        "manual-page-festivals-mobile",
+        "manual-page-festivals-desktop",
+        "manual-page-exhibitions-mobile",
+        "manual-page-exhibitions-desktop",
+        "manual-page-tomorrow-mobile",
+        "manual-page-tomorrow-desktop",
+        "manual-page-weekend-mobile",
+        "manual-page-weekend-desktop",
+        "manual-page-unusual-mobile",
+        "manual-page-unusual-desktop",
+        "manual-page-clubs-mobile",
+        "manual-page-clubs-desktop",
+        "manual-page-free-mobile",
+        "manual-page-free-desktop",
+        "manual-page-popular-mobile",
+        "manual-page-popular-desktop",
+        "manual-page-partners-mobile",
+        "manual-page-partners-desktop",
+        "manual-page-search-mobile",
+        "manual-page-search-desktop",
+        "manual-page-favorites-mobile",
+        "manual-page-favorites-desktop",
     }
 )
 ALLOWED_STATUSES = frozenset(
@@ -159,11 +194,16 @@ class Command:
 class Relay:
     """One-process, one-session command relay with a single active agent."""
 
-    def __init__(self, *, command_ttl_ms: int = 30_000, agent_timeout_ms: int = 30_000):
+    def __init__(self, *, command_ttl_ms: int = 120_000, agent_timeout_ms: int = 30_000):
         self.command_ttl_ms = command_ttl_ms
         self.agent_timeout_ms = agent_timeout_ms
         self._condition = asyncio.Condition()
-        self._next_sequence = 1
+        # A presenter keeps its cursor when this in-memory relay is restarted.
+        # Starting at wall-clock milliseconds keeps the first post-restart
+        # command newer than every cursor issued by an earlier relay process
+        # while remaining below JavaScript's safe-integer limit.
+        self._next_sequence = int(time.time() * 1000)
+        self._boot_id = uuid4().hex
         self._commands: list[Command] = []
         self._by_id: dict[str, Command] = {}
         self._agent_id: str | None = None
@@ -204,6 +244,7 @@ class Relay:
                 ),
             },
             "current_command": current.public() if current else None,
+            "boot_id": self._boot_id,
             "last_sequence": self._next_sequence - 1,
         }
 
@@ -784,7 +825,7 @@ async def static_site(request: web.Request) -> web.StreamResponse:
 
 def create_app(
     *,
-    command_ttl_ms: int = 30_000,
+    command_ttl_ms: int = 120_000,
     agent_timeout_ms: int = 30_000,
     control_token: str = "",
     agent_token: str = "",
@@ -835,7 +876,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Autopresenter in-memory relay and control UI")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
-    parser.add_argument("--command-ttl-ms", type=int, default=30_000)
+    parser.add_argument("--command-ttl-ms", type=int, default=120_000)
     parser.add_argument("--agent-timeout-ms", type=int, default=30_000)
     parser.add_argument(
         "--allow-unauthenticated",

@@ -190,6 +190,7 @@ class PrototypeAgent {
     this.page = null;
     this.auxiliaryPage = null;
     this.afterSequence = 0;
+    this.relayBootId = null;
     this.agentStatus = "disconnected";
     this.statusDetail = "starting";
     this.activeRun = null;
@@ -508,6 +509,27 @@ class PrototypeAgent {
         });
         if (!response.ok) throw new Error(`poll HTTP ${response.status}`);
         const payload = await response.json();
+        const relayBootId = String(payload.state?.boot_id || "");
+        const relayLastSequence = Number(payload.state?.last_sequence);
+        if (relayBootId && this.relayBootId && relayBootId !== this.relayBootId) {
+          log("relay restart detected; rebasing command cursor", {
+            previousBootId: this.relayBootId,
+            bootId: relayBootId,
+            previousAfterSequence: this.afterSequence,
+          });
+          this.afterSequence = 0;
+        } else if (
+          Number.isSafeInteger(relayLastSequence) &&
+          relayLastSequence >= 0 &&
+          relayLastSequence < this.afterSequence
+        ) {
+          log("relay sequence rollback detected; rebasing command cursor", {
+            relayLastSequence,
+            previousAfterSequence: this.afterSequence,
+          });
+          this.afterSequence = 0;
+        }
+        if (relayBootId) this.relayBootId = relayBootId;
         const command = payload.command;
         if (!command) continue;
 
@@ -630,6 +652,8 @@ class PrototypeAgent {
     let frameSelector = {
       "service-navigation-exhibitions": EXHIBITIONS_FRAME_SELECTOR,
       "service-medallions-desktop": '[data-presenter-id="medallion-desktop-frame"]',
+      "service-keyboard-day": '[data-presenter-id="keyboard-day-frame"]',
+      "service-keyboard-event": '[data-presenter-id="keyboard-event-frame"]',
       "weekend-desktop": DESKTOP_FRAME_SELECTOR,
     }[sceneId || ""];
     if (sceneId === "service-navigation-festivals") {
@@ -659,7 +683,7 @@ class PrototypeAgent {
     if (!activeTag || ["HTML", "BODY"].includes(activeTag)) {
       const target = frame
         .locator(
-          '[data-keyboard-event-surface]:visible, [data-row-focus]:visible, [data-deck]:visible, a[href]:visible, button:not([disabled]):visible, [tabindex]:not([tabindex="-1"]):visible',
+          '[data-keyboard-event-surface]:visible, [data-row-focus]:visible, [data-listing-item]:visible, [data-deck]:visible, a[href]:visible, button:not([disabled]):visible, [tabindex]:not([tabindex="-1"]):visible',
         )
         .first();
       if (!(await target.count())) {
@@ -1468,16 +1492,36 @@ class PrototypeAgent {
     await this.setInteractionMode("desktop");
     await this.showPresenterScene(scenarioId, signal);
     const frame = await this.stageFrame(frameSelector, signal);
-    const artifact = frame.locator("[data-amber-artifact]:visible").first();
+    await frame.evaluate(() => {
+      localStorage.setItem("ke_artifact_collection_v1", JSON.stringify({
+        schemaVersion: 1,
+        collectionId: "kaliningrad_artifacts_v1",
+        artifacts: {
+          amber_cosmonaut: {
+            status: "found",
+            foundAt: new Date().toISOString(),
+            eventId: 7164,
+            placement: "weekend.rail.tail.v1",
+          },
+        },
+      }));
+    });
+    await raceWithAbort(
+      frame.goto(frame.url(), { waitUntil: "domcontentloaded", timeout: 30_000 }),
+      signal,
+    );
+    const artifact = frame.locator("[data-artifact-open]:visible").first();
     await raceWithAbort(artifact.waitFor({ state: "visible", timeout: 30_000 }), signal);
     await this.naturalVerticalScroll(frame, artifact, signal, frameSelector);
-    await artifact.evaluate((node) => node.setAttribute("tabindex", "0"));
     await artifact.focus();
-    await this.showDesktopKey("ArrowRight", "→", "Артефакт найден · открываем", signal, () => artifact.press("ArrowRight"));
-    await artifact.click();
+    await this.showDesktopKey("Enter", "↵", "Артефакт найден · открываем историю", signal, () => artifact.press("Enter"));
+    await raceWithAbort(
+      frame.locator("[data-artifact-dialog][open]").waitFor({ state: "visible", timeout: 8_000 }),
+      signal,
+    );
     await abortableDelay(2_000, signal);
     await this.captureScenario(scenarioId);
-    return { summary: "real desktop weekend page scrolled to and opened the amber artifact", durationMs: Date.now() - startedAt };
+    return { summary: "real desktop collection focused the amber artifact and opened its story with Enter", durationMs: Date.now() - startedAt };
   }
 
   async runKeyboardInterface(scenarioId, signal) {
@@ -1488,12 +1532,13 @@ class PrototypeAgent {
     await this.setInteractionMode("desktop");
     await this.showPresenterScene(scenarioId, signal);
     const frame = await this.stageFrame(frameSelector, signal);
+    await this.waitForEmbeddedReady(frame, signal);
     let target = scenarioId === "service-keyboard-event"
       ? frame.locator("[data-keyboard-event-surface]:visible").first()
-      : frame.locator("[data-event-card]:visible").first();
+      : frame.locator("[data-listing-item]:visible").first();
     await raceWithAbort(target.waitFor({ state: "visible", timeout: 30_000 }), signal);
     if (scenarioId === "service-keyboard-day") {
-      const cards = frame.locator("[data-event-card]:visible");
+      const cards = frame.locator("[data-listing-item]:visible");
       const count = await cards.count();
       assertCondition(count >= 4, `day page exposes only ${count} desktop event cards`);
       for (const index of [0, 1, 2, 3]) {
@@ -1556,6 +1601,30 @@ class PrototypeAgent {
     const scene = this.page.locator(`[data-presenter-scene-id="${scenarioId}"]`);
     await scene.evaluate((node) => node.setAttribute("data-report-phase", "interface"));
     const frame = await this.stageFrame(frameSelector, signal);
+    const participationActive = await frame
+      .locator("[data-secret-hub]")
+      .evaluate((hub) => !hub.hidden)
+      .catch(() => false);
+    if (!participationActive) {
+      await frame.evaluate(() => {
+        const now = Date.now();
+        localStorage.setItem("kenigevents:focus-participation:v1", JSON.stringify({
+          version: 1,
+          kind: "focus_participation_hint",
+          programId: "static-site-focus-group-2026",
+          status: "active",
+          source: "invite_fragment",
+          identityChoice: "skipped",
+          createdAt: now,
+          joinedAt: now,
+          expiresAt: now + 30 * 24 * 60 * 60 * 1000,
+        }));
+      });
+      await raceWithAbort(
+        frame.goto(frame.url(), { waitUntil: "domcontentloaded", timeout: 30_000 }),
+        signal,
+      );
+    }
     await this.enforceMobilePointerShield(frame);
     const feedback = frame.locator("[data-focus-feedback]:visible").first();
     await raceWithAbort(feedback.waitFor({ state: "visible", timeout: 30_000 }), signal);
@@ -1919,7 +1988,9 @@ class PrototypeAgent {
         authPage.locator("[data-authorized-search]").waitFor({ state: "visible", timeout: 30_000 }),
         signal,
       );
-      if (!(await logout.isVisible().catch(() => false))) {
+      const isAuthenticated = () =>
+        logout.evaluate((control) => !control.hidden).catch(() => false);
+      if (!(await isAuthenticated())) {
         await abortableDelay(1_800, signal);
         await login.click();
         await this.setAgentState(
@@ -1939,7 +2010,7 @@ class PrototypeAgent {
         );
       }
       assertCondition(
-        await logout.isVisible().catch(() => false),
+        await isAuthenticated(),
         "demo search account did not become authenticated",
       );
       if (config.storageStatePath) {
@@ -1974,7 +2045,10 @@ class PrototypeAgent {
     await input.fill("");
     await input.pressSequentially(query, { delay: 86 });
     const submit = frame.locator("[data-search-submit]");
-    const signedIn = await frame.locator("[data-search-logout]").isVisible().catch(() => false);
+    const signedIn = await frame
+      .locator("[data-search-logout]")
+      .evaluate((control) => !control.hidden)
+      .catch(() => false);
     assertCondition(
       signedIn,
       "Поиск требует однократного входа в отдельный demo-аккаунт; сессия затем сохраняется в общем browser-state cache",
@@ -1983,7 +2057,17 @@ class PrototypeAgent {
       await submit.isEnabled().catch(() => false),
       "search submit stayed disabled after the authenticated query was typed",
     );
-    await submit.click();
+    await this.setAgentState("running", `Умный поиск · нажимаю «Искать»: ${query}`);
+    const progress = frame.locator("[data-search-progress]");
+    const progressStarted = raceWithAbort(
+      progress.waitFor({ state: "visible", timeout: 8_000 }),
+      signal,
+    );
+    await this.tapMobileLocator(frame, submit, signal);
+    await progressStarted;
+    // Keep the real progress state readable for the audience instead of
+    // jumping straight from the typed query to result cards.
+    await abortableDelay(1_200, signal);
     const results = frame.locator("[data-search-results]:visible");
     await raceWithAbort(results.waitFor({ state: "visible", timeout: 30_000 }), signal);
     const cards = results.locator("[data-event-card]");

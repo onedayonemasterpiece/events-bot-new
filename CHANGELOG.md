@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 ### Fixed
+- Restored the Autopresenter owner-test control after relay restarts: command
+  sequences no longer roll back underneath a running Windows agent, the client
+  rebases on a relay boot change, and queued commands tolerate a two-minute
+  transient reconnect. Synchronized all 96 control scenarios with the relay,
+  including lecture 02.3/02.10/02.11, feedback 03.18 and all 30 manual page
+  scenes.
+- Split the merged service beat into a dedicated 03.2 leather/PWA-icon scene
+  and the existing 03.3 needs scene; repaired 03.8.4 to open the real desktop
+  artifact collection with Enter, and fixed 03.10.2 authentication detection,
+  visible mobile tap, real progress hold and result wait. Updated 03.12.1 to
+  the current desktop listing-card selector and made 03.18 establish its
+  focus-participation precondition before opening the real feedback form.
 - Extended the Autopresenter intro to a lightweight sequential five-track
   owner-supplied playlist on the existing content-addressed Yandex CDN, and
   replaced the temporary lecture UI/UX visual with the now-filled
