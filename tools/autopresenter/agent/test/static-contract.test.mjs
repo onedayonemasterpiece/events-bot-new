@@ -22,6 +22,14 @@ import {
 import { PACING } from "../pacing.mjs";
 
 const source = await readFile(new URL("../agent.mjs", import.meta.url), "utf8");
+const controlSource = await readFile(
+  new URL("../../relay/control/index.html", import.meta.url),
+  "utf8",
+);
+const stageSource = await readFile(
+  new URL("../../../../site/src/pages/internal/presenter-stage/index.astro", import.meta.url),
+  "utf8",
+);
 
 test("declares the accepted journeys plus explicit intro, lecture, desktop and outro scenes", () => {
   for (const id of [
@@ -29,8 +37,12 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
     "lecture-usability-measurement", "market-01-primary", "market-04-position", "tomorrow-mobile",
     "tomorrow-rail-like", "weekend-amber-artifact", "service-search-live",
     "service-focus-group", "service-laws", "service-keyboard-event",
+    "service-navigation-map", "service-social-proof", "service-transport-bus",
+    "service-report-problem", "service-share-friends", "service-calendar-memory",
     "service-friends-club", "service-navigation-exhibitions",
     "service-navigation-festivals", "joke-db-01", "joke-db-09",
+    "manual-page-home-mobile", "manual-page-home-desktop",
+    "manual-page-favorites-mobile", "manual-page-favorites-desktop",
     "weekend-desktop", "outro-qr",
   ]) assert.ok(SCENARIO_IDS.includes(id), `${id} is allowlisted`);
   assert.equal(DEFAULT_SCENARIO_ID, "tomorrow-mobile");
@@ -69,6 +81,8 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
   assert.match(source, /scenarioId === FOCUS_INVITATION_SCENE_ID/u);
   assert.match(source, /if \(scenarioId === WEEKEND_DESKTOP_CONTRACT\.id\)/u);
   assert.match(source, /if \(scenarioId === OUTRO_QR_CONTRACT\.id\)/u);
+  assert.match(source, /async runManualPage\(scenarioId, signal\)/u);
+  assert.match(source, /left untouched for manual pult scrolling/u);
 });
 
 test("scenario timeout policy is explicit and can admit a future one-hour scene", () => {
@@ -82,6 +96,10 @@ test("scenario timeout policy is explicit and can admit a future one-hour scene"
   assert.equal(resolveScenarioTimeoutMs("weekend-desktop"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("service-navigation-exhibitions"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("service-navigation-festivals"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("service-report-problem"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("service-transport-bus"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("manual-page-home-mobile"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("manual-page-home-desktop"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("outro-qr"), 30_000);
   assert.equal(LONG_SCENE_TIMEOUT_CEILING_MS, 3_600_000);
   assert.equal(
@@ -96,6 +114,32 @@ test("scenario timeout policy is explicit and can admit a future one-hour scene"
   );
   assert.match(source, /const timeoutMs = resolveScenarioTimeoutMs\(scenarioId\)/u);
   assert.doesNotMatch(source, /PACING\.scenarioMaxMs/u);
+});
+
+test("manual page reserve follows the author order and never auto-scrolls", () => {
+  const serviceAt = controlSource.indexOf("<summary>Презентация сервиса");
+  const manualAt = controlSource.indexOf("<summary>Демонстрация страниц · ручная");
+  const outroAt = controlSource.indexOf("<summary>Аутро");
+  const jokesAt = controlSource.indexOf("<summary>База шуток");
+  assert.ok(serviceAt > 0 && manualAt > serviceAt && outroAt > manualAt && jokesAt > outroAt);
+  const manualBlock = controlSource.slice(manualAt, outroAt);
+  assert.equal((manualBlock.match(/data-scenario="manual-page-/gu) || []).length, 30);
+  for (const slug of [
+    "home", "mobile-menu", "event-wide-hero", "event-ocr-split", "festivals",
+    "exhibitions", "tomorrow", "weekend", "unusual", "clubs", "free", "popular",
+    "partners", "search", "favorites",
+  ]) {
+    const mobileAt = manualBlock.indexOf(`data-scenario="manual-page-${slug}-mobile"`);
+    const desktopAt = manualBlock.indexOf(`data-scenario="manual-page-${slug}-desktop"`);
+    assert.ok(mobileAt >= 0 && desktopAt > mobileAt, `${slug} keeps mobile then desktop`);
+  }
+  const start = source.indexOf("async runManualPage");
+  const end = source.indexOf("\n  async handleStop", start);
+  const runner = source.slice(start, end);
+  assert.match(runner, /showPresenterScene\(stageSceneId, signal/u);
+  assert.doesNotMatch(runner, /naturalVerticalScroll|mouse\.wheel|scrollIntoViewIfNeeded/u);
+  assert.match(stageSource, /data-presenter-scene-id="manual-page-mobile"/u);
+  assert.match(stageSource, /data-presenter-scene-id="manual-page-desktop"/u);
 });
 
 test("declares separate mobile and desktop interaction semantics", () => {

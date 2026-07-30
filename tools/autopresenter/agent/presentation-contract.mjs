@@ -4,11 +4,45 @@ export const WEEKEND_DESKTOP_SCENE_ID = "weekend-desktop";
 export const INTRO_LOOP_RUNTIME_MS = 50 * 60 * 1_000;
 
 export const FOCUS_PREVIEW_BASE_URL =
-  "https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256";
+  "https://kenigevents.ru/preview-20260730-hero-talk-date-donor-r2";
 export const FOCUS_INVITATION_URL =
   `${FOCUS_PREVIEW_BASE_URL}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
 export const FOCUS_INVITATION_SCENE_ID = "service-focus-group";
 export const FOCUS_PAGE_RATING_URL = `${FOCUS_PREVIEW_BASE_URL}/segodnya/`;
+
+const manualPageDefinitions = [
+  ["home", "Главная", "/"],
+  ["mobile-menu", "Меню мобильного", "/"],
+  ["event-wide-hero", "Событие · широкая hero и карусель", "/sobytiya/tochka-i-liniya-kaliningrad-5370/"],
+  ["event-ocr-split", "Событие · OCR и split", "/sobytiya/festival-elektronnoy-muzyki-laguna-beach-baltiysk-5833/"],
+  ["festivals", "Фестивали", "/festivali/"],
+  ["exhibitions", "Выставки", "/vystavki/"],
+  ["tomorrow", "Завтра", "/zavtra/"],
+  ["weekend", "Выходные", "/vyhodnye/"],
+  ["unusual", "Подборка · необычное", "/neobychnoe/"],
+  ["clubs", "Клубы по интересам", "/kluby-po-interesam/"],
+  ["free", "Бесплатно", "/podborki/besplatnye-sobytiya/"],
+  ["popular", "Популярное", "/populyarnoe/"],
+  ["partners", "Партнёры", "/partners/"],
+  ["search", "Поиск", "/poisk/"],
+  ["favorites", "Избранное", "/izbrannoe/"],
+];
+
+export const MANUAL_PAGE_SCENES = Object.freeze(
+  manualPageDefinitions.flatMap(([slug, label, pathname], order) =>
+    ["mobile", "desktop"].map((mode) =>
+      Object.freeze({
+        id: `manual-page-${slug}-${mode}`,
+        label,
+        mode,
+        order: order + 1,
+        url: `${FOCUS_PREVIEW_BASE_URL}${pathname}`,
+        openMobileMenu: slug === "mobile-menu" && mode === "mobile",
+      }),
+    ),
+  ),
+);
+export const MANUAL_PAGE_SCENE_IDS = Object.freeze(MANUAL_PAGE_SCENES.map(({ id }) => id));
 
 export const ZNANIE_LOGO_ASSET = Object.freeze({
   url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg",
@@ -34,6 +68,19 @@ export const FRIENDS_CLUB_VIDEO_ASSET = Object.freeze({
   source: "https://t.me/c/4337049383/803/871",
   contentType: "video/mp4",
 });
+
+export const SHARE_PROOF_ASSETS = Object.freeze([
+  Object.freeze({
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/share-telegram-885-cce1712a75b30977.jpg",
+    sha256: "cce1712a75b309773a439543d7912131720389e49725d420800ab719c8cb4c65",
+    source: "https://t.me/c/4337049383/803/885",
+  }),
+  Object.freeze({
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/share-telegram-886-2abea322a6cdd634.jpg",
+    sha256: "2abea322a6cdd634b7be7bf720d1e91813ec732a15f3ae024fceee3a5f2c7106",
+    source: "https://t.me/c/4337049383/803/886",
+  }),
+]);
 
 const lectureSources = [
   [821, "2f3c1b7d9a1c7094c77da009867c25a62cb233110185ab7a1a020b61356bdc26"],
@@ -86,6 +133,7 @@ export const EXPANDED_SERVICE_SCENE_IDS = Object.freeze([
   "service-calendar-memory",
   "service-community-curator",
   "service-location-artifact",
+  "service-report-problem",
   "service-friends-club",
 ]);
 
@@ -124,9 +172,21 @@ export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
   "service-disruption",
   "service-taste",
   "service-feedback",
-  "service-transport-bus",
   ...EXPANDED_SERVICE_SCENE_IDS.filter(
-    (id) => !["service-navigation-exhibitions", "service-navigation-festivals"].includes(id),
+    (id) => ![
+      "service-navigation-map",
+      "service-navigation-exhibitions",
+      "service-navigation-festivals",
+      "service-social-proof",
+      "service-artifact-desktop",
+      "service-keyboard-day",
+      "service-keyboard-event",
+      "service-fast-find",
+      "service-share-friends",
+      "service-calendar-memory",
+      "service-community-curator",
+      "service-report-problem",
+    ].includes(id),
   ),
 ]);
 

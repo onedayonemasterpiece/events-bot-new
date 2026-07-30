@@ -2,7 +2,7 @@
 import Icon from '../../../components/Icon.astro';
 import { createFocusInviteQrSvg } from '../../../lib/focus-invite-qr';
 
-const focusPreviewBase = 'https://kenigevents.ru/preview-20260729-focus-simple-r15-a5cc0256';
+const focusPreviewBase = 'https://kenigevents.ru/preview-20260730-hero-talk-date-donor-r2';
 const homeUrl = `${focusPreviewBase}/`;
 const weekendUrl = `${focusPreviewBase}/vyhodnye/`;
 const focusInvitationUrl = `${focusPreviewBase}/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`;
@@ -14,6 +14,11 @@ const focusMobileMedallionUrl = focusEventUrl;
 const focusNpsUrl = `${focusPreviewBase}/segodnya/`;
 const peopleInterfaceUrl = `${focusPreviewBase}/lab/event-participants/`;
 const railTransportEventUrl = `${focusPreviewBase}/sobytiya/spektakl-chudnyy-otdyh-zelenogradsk-6976/`;
+const busTransportEventUrl = `${focusPreviewBase}/sobytiya/slet-babok-ezhek-romanovo-6710/`;
+const keyboardEventUrl = `${focusPreviewBase}/sobytiya/tochka-i-liniya-kaliningrad-5370/`;
+const freeCollectionUrl = `${focusPreviewBase}/podborki/besplatnye-sobytiya/`;
+const feedbackPageUrl = `${focusPreviewBase}/dlya-menya/`;
+const artifactWeekendUrl = 'https://kenigevents.ru/_review/pp1wRctXBd6boYU1EcnBrod3z8MmKpD7SGEufK1t-xw/vyhodnye/';
 const exhibitionsUrl = '/vystavki/';
 const festivalsUrl = '/festivali/';
 const focusInvitationQrSvg = createFocusInviteQrSvg(focusInvitationUrl);
@@ -25,6 +30,8 @@ const jokeAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenari
 const errorAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/computer-error-cc0-d7ec5eeba2b280017100e9deb3f063d580755469ce326332df7da9b4dcd63d1a.mp3';
 const catKeyboardUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/cat-keyboard-unsplash-dbbe5f90f00dc4e4bb483d3374626a668aa1d395ea1e352ec1661b8b7ebc9e79.webp';
 const friendsClubVideoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/friends-club-darya-7cb34fb872eb528a4938f4e7af3cd8d2ebf1850246cb0cf9e2b44e7b17b05ac6.mp4';
+const shareProofBeforeUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/share-telegram-885-cce1712a75b30977.jpg';
+const shareProofAfterUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/share-telegram-886-2abea322a6cdd634.jpg';
 const announcementsWordmarkUrl = '/brand/announcements-wordmark-ui.svg';
 const findIconUrl = '/assets/icons/reference4-v8/search-thin.svg';
 const people = [
@@ -194,14 +201,14 @@ const serviceTextScenes = [
 ];
 const jokeDatabase = [
   'Фраза «Бесплатная доставка по всей территории РФ» всегда имеет невидимую сноску, написанную мелким шрифтом: «Кроме Калининградской области».',
-  'Слово «Материк» для жителя Калининграда звучит не как географический термин, а как мифическая земля, откуда прилетают туристы и потом улетают обратно.',
-  'Калининградский прогноз погоды: «Завтра ожидается дождь, снег, град, палящее солнце и ураган. Одевайтесь многослойно, всё это будет до обеда».',
+  'Слово «Материк» для жителя Калининграда звучит не как географический термин, а как мифическая земля, откуда прилетают туристы и потом улетают обратно',
+  'Калининградский прогноз погоды: «Завтра ожидается дождь, снег, град, палящее солнце и ураган. Одевайтесь многослойно, все это будет до обеда».',
   'Лето в Калининграде бывает прекрасным! Главное — не пропустить этот день и успеть отпроситься с работы.',
   'В Балтийске бывает так ветрено, что местные жители умеют стоять под углом 45 градусов к земле, даже не напрягаясь.',
-  'Говорят, что Танцующий лес на самом деле не танцует. Т-с-с: деревья извиваются, чтобы увернуться от туристов, желающих с ними сфотографироваться.',
+  'Говорят, что танцующий лес на самом делене танцует, т-сс, деревья извиваются чтобы увернуться от туристов желающих с ними сфотографироваться.',
   'На Куршской косе кабаны смотрят на притормаживающие машины туристов как на сервис доставки еды прямо к обочине.',
-  'Чайки в Калининграде настолько суровы, что могут отбить даже шаурму.',
-  'UI — это тротуар из дорогой красивой плитки под прямым углом. UX — протоптанная людьми тропинка по газону наискосок, потому что так быстрее.',
+  'Чайки в Калининграде настолько суровы, что могут отбить даже шаурму',
+  'UI — это тротуар, выложенный дорогой красивой плиткой под прямым углом. UX — это протоптанная людьми грязная тропинка по газону наискосок, потому что так быстрее.',
 ].map((text, index) => ({
   id: `joke-db-${String(index + 1).padStart(2, '0')}`,
   number: index + 1,
@@ -210,7 +217,7 @@ const jokeDatabase = [
 }));
 const expandedServiceScenes = [
   {
-    id: 'service-navigation-map',
+    id: 'service-navigation-concept',
     eyebrow: '04 · Навигация',
     title: 'Не искать меню.\nВыбирать намерение.',
     support: 'Главная · Сегодня · Завтра · Выходные · Избранное · Для меня',
@@ -219,7 +226,7 @@ const expandedServiceScenes = [
     theme: 'light',
   },
   {
-    id: 'service-social-proof',
+    id: 'service-social-proof-concept',
     eyebrow: '06 · Social proof',
     title: 'Каждый жест\nделает выбор точнее.',
     support: 'Лайк, «не интересует» и отправка другу — это понятные сигналы, а не скрытая магия.',
@@ -237,7 +244,7 @@ const expandedServiceScenes = [
     theme: 'light',
   },
   {
-    id: 'service-artifact-desktop',
+    id: 'service-artifact-desktop-concept',
     eyebrow: '08.4 · Артефакт на desktop',
     title: 'Стрелка вправо.\nИ находка оживает.',
     support: 'Сценарий экрана подготовлен; live-действие подключается без переделки слайда, когда сборка страницы отдаст keyboard-hook.',
@@ -251,7 +258,7 @@ const expandedServiceScenes = [
     title: 'Персонально.\nИ под контролем.',
     support: 'Статусный план, не юридическое заключение: данные в РФ, минимизация, согласия и документирование.',
     icon: '417817-shield-check',
-    cards: ['152-ФЗ', 'Серверы в РФ', 'РКН · план', '149-ФЗ', '152.1 ГК РФ', '436-ФЗ · готовность'],
+    cards: ['152-ФЗ', 'Yandex · серверы в РФ', 'РКН · план', '149-ФЗ', '152.1 ГК РФ', '436-ФЗ · готовность'],
     theme: 'light',
   },
   {
@@ -264,7 +271,7 @@ const expandedServiceScenes = [
     theme: 'dark',
   },
   {
-    id: 'service-keyboard-day',
+    id: 'service-keyboard-day-concept',
     eyebrow: '12.1 · Страница дня',
     title: 'Вниз — смотреть.\nВбок — выбирать.',
     support: 'Сцена готова для подключения к актуальной странице дня после публикации keyboard-hooks.',
@@ -273,7 +280,7 @@ const expandedServiceScenes = [
     theme: 'light',
   },
   {
-    id: 'service-keyboard-event',
+    id: 'service-keyboard-event-concept',
     eyebrow: '12.2 · Страница события',
     title: 'Фото. Похожие.\nЛайк буквой L.',
     support: 'Кадр фиксирует полный маршрут: карусель → похожее событие → блок рекомендаций → L.',
@@ -282,7 +289,7 @@ const expandedServiceScenes = [
     theme: 'dark',
   },
   {
-    id: 'service-fast-find',
+    id: 'service-fast-find-concept',
     eyebrow: '19 · Быстро найти',
     title: '30 карточек.\nИ выбор становится вашим.',
     support: 'Листайте, ставьте лайк и отмечайте лишнее — ранжирование получает явные сигналы.',
@@ -291,7 +298,7 @@ const expandedServiceScenes = [
     theme: 'light',
   },
   {
-    id: 'service-share-friends',
+    id: 'service-share-friends-concept',
     eyebrow: '20 · Рассказать друзьям',
     title: 'Одно нажатие.\nСобытие уже в чате.',
     support: 'Картинка · короткое описание · ссылка',
@@ -300,7 +307,7 @@ const expandedServiceScenes = [
     theme: 'dark',
   },
   {
-    id: 'service-calendar-memory',
+    id: 'service-calendar-memory-concept',
     eyebrow: '21 · Не забыть',
     title: 'В календарь.\nИ сразу в избранное.',
     support: 'Скачанный календарный файл и сохранённое событие образуют один понятный маршрут.',
@@ -309,9 +316,9 @@ const expandedServiceScenes = [
     theme: 'light',
   },
   {
-    id: 'service-community-curator',
-    eyebrow: '22 · Для авторов сообществ',
-    title: 'Картинка.\nТекст. Готово.',
+    id: 'service-community-curator-concept',
+    eyebrow: '22 · Новая возможность',
+    title: 'Для авторов\nсообществ.',
     support: 'Desktop-сценарий показывает две отдельные команды: скопировать изображение и скопировать описание.',
     icon: '389049-book-open',
     cards: ['Скопировать картинку', 'Скопировать описание'],
@@ -319,8 +326,8 @@ const expandedServiceScenes = [
   },
   {
     id: 'service-location-artifact',
-    eyebrow: '23 · Для владельцев мест',
-    title: 'Место может стать\nчастью коллекции.',
+    eyebrow: '23 · Новая возможность',
+    title: 'Для владельцев\nлокаций.',
     support: 'Кафе, гостевой дом или точка притяжения получают собственный узнаваемый артефакт.',
     icon: '389291-map-pin',
     cards: ['место', 'история', 'артефакт', 'коллекция'],
@@ -585,7 +592,7 @@ const expandedServiceScenes = [
 
       <section class="service-scene medallion-scene presentation-scene theme--light" data-presenter-scene-id="service-medallions" data-medallion-state="idle" hidden>
         <div class="medallion-copy">
-          <p class="service-eyebrow">04 · Медальоны</p>
+          <p class="service-eyebrow">03.7 · Медальоны</p>
           <h2>Медальон —<br />смысл одним взглядом.</h2>
           <p class="service-support">Знакомый образ появляется крупно — и занимает своё место.</p>
         </div>
@@ -619,14 +626,14 @@ const expandedServiceScenes = [
       </section>
 
       <section class="service-scene service-joke presentation-scene theme--dark" data-presenter-scene-id="service-joke" data-joke-state="idle" hidden>
-        <p class="service-eyebrow">03.7 · Время шутки</p>
+        <p class="service-eyebrow">03.9 · Время шутки</p>
         <h2 data-joke-line="one"></h2>
         <p data-joke-line="two"></p>
         <audio data-presenter-id="joke-audio" src={jokeAudioUrl} preload="auto"></audio>
       </section>
 
       <section class="service-scene search-concept-scene presentation-scene theme--light" data-presenter-scene-id="service-search-concept" hidden>
-        <p class="service-eyebrow">06 · Поиск по смыслу</p>
+        <p class="service-eyebrow">03.10 · Поиск по смыслу</p>
         <h2>Умный поиск.</h2>
         <p class="search-principle">Не совпадение слов.<br /><strong>Совпадение смыслов.</strong></p>
         <div class="search-example"><span>«хочу тихий вечер с музыкой»</span><i>→</i><strong>камерный концерт</strong></div>
@@ -642,7 +649,7 @@ const expandedServiceScenes = [
       </section>
 
       <section class="service-scene personalization-scene presentation-scene theme--dark" data-presenter-scene-id="service-personalization" data-visual-state="idle" hidden>
-        <p class="service-eyebrow">10 · Как устроена персонализация</p>
+        <p class="service-eyebrow">03.11 · Как устроена персонализация</p>
         <h2>Не угадывать.<br />Учиться на выборе.</h2>
         <div class="personalization-flow" aria-label="Схема персонализации">
           <article><img src="/assets/autopresenter/icons/389494-users.svg" alt="" /><b>Сигналы</b><span>лайк · пропуск · календарь</span></article>
@@ -683,6 +690,84 @@ const expandedServiceScenes = [
           </div>
         </section>
       ))}
+
+      <section class="focus-live-scene real-ui-scene presentation-scene theme--dark" data-presenter-scene-id="service-navigation-map" hidden>
+        <aside class="live-meaning"><p>03.4 · Навигация</p><h2>Меню видно.<br />Переходы настоящие.</h2><span>Главная → меню → подборка → Избранное → Для меня → Популярное.</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="navigation-mobile-frame" data-src={homeUrl} title="Реальная мобильная навигация" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="focus-live-scene real-ui-scene presentation-scene theme--light" data-presenter-scene-id="service-social-proof" hidden>
+        <aside class="live-meaning light"><p>03.6 · Social proof</p><h2>Жесты,<br />которые видны.</h2><span>Реальная подборка: три лайка, один «не интересует» и понятные паузы.</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="social-proof-frame" data-src={freeCollectionUrl} title="Реальная подборка бесплатных событий" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="live-navigation-scene real-desktop-scene presentation-scene" data-presenter-scene-id="service-artifact-desktop" hidden>
+        <iframe data-presenter-id="artifact-desktop-frame" data-src={artifactWeekendUrl} title="Реальный артефакт на десктопной странице" width="1920" height="1080"></iframe>
+        <div class="live-key-hint" aria-hidden="true"><kbd>↓</kbd><span>найти артефакт</span><kbd>→</kbd><span>раскрыть</span><kbd>Enter</kbd></div>
+      </section>
+
+      <section class="live-navigation-scene real-desktop-scene presentation-scene" data-presenter-scene-id="service-keyboard-day" hidden>
+        <iframe data-presenter-id="keyboard-day-frame" data-src={focusNpsUrl} title="Реальная страница дня с клавиатурным управлением" width="1920" height="1080"></iframe>
+        <div class="live-key-hint" aria-hidden="true"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd><span>страница отвечает на клавиши</span></div>
+      </section>
+
+      <section class="live-navigation-scene real-desktop-scene presentation-scene" data-presenter-scene-id="service-keyboard-event" hidden>
+        <iframe data-presenter-id="keyboard-event-frame" data-src={keyboardEventUrl} title="Реальная страница события с клавиатурным управлением" width="1920" height="1080"></iframe>
+        <div class="live-key-hint" aria-hidden="true"><kbd>→</kbd><span>галерея</span><kbd>↓</kbd><span>рекомендации</span><kbd>L</kbd><span>лайк</span></div>
+      </section>
+
+      <section class="focus-live-scene real-ui-scene presentation-scene theme--dark" data-presenter-scene-id="service-fast-find" hidden>
+        <aside class="live-meaning"><p>03.20 · Быстро найти</p><h2>Не схема.<br />Живая подборка.</h2><span>Листаем настоящие карточки и сразу отмечаем полезные сигналы.</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="fast-find-frame" data-src={freeCollectionUrl} title="Реальная подборка для быстрого выбора" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="focus-live-scene real-ui-scene share-live-scene presentation-scene theme--light" data-presenter-scene-id="service-share-friends" data-share-phase="interface" hidden>
+        <aside class="live-meaning light"><p>03.21 · Поделиться</p><h2>Нажимаем<br />в интерфейсе.</h2><span>Открываем реальную страницу события и вызываем настоящую кнопку «Поделиться».</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="share-friends-frame" data-src={focusEventUrl} title="Реальная кнопка поделиться событием" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+        <div class="share-proof" aria-label="Фактический результат отправки события">
+          <figure><img src={shareProofBeforeUrl} alt="Системное меню Поделиться после нажатия на странице события" /><figcaption>1 · Нажали «Поделиться»</figcaption></figure>
+          <figure><img src={shareProofAfterUrl} alt="Отправленная карточка события в Telegram" /><figcaption>2 · Карточка в Telegram</figcaption></figure>
+        </div>
+      </section>
+
+      <section class="focus-live-scene real-ui-scene presentation-scene theme--dark" data-presenter-scene-id="service-calendar-memory" data-calendar-phase="event" hidden>
+        <aside class="live-meaning"><p>03.21 · Не забыть</p><h2>В календарь.<br />Потом — в Избранное.</h2><span>Обе части маршрута показаны в настоящем мобильном интерфейсе.</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="calendar-memory-frame" data-src={focusEventUrl} title="Добавление события в календарь и переход в Избранное" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section class="live-navigation-scene real-desktop-scene presentation-scene" data-presenter-scene-id="service-community-curator" hidden>
+        <iframe data-presenter-id="community-curator-frame" data-src={keyboardEventUrl} title="Реальный desktop-интерфейс для авторов сообществ" width="1920" height="1080"></iframe>
+        <div class="live-key-hint hierarchy-hint"><strong>Для авторов сообществ</strong><span>копировать картинку и описание прямо со страницы события</span></div>
+      </section>
+
+      <section class="focus-live-scene report-problem-scene presentation-scene theme--dark" data-presenter-scene-id="service-report-problem" data-report-phase="meaning" hidden>
+        <aside class="live-meaning"><p>03.18 · Если что-то не работает</p><h2>Сообщить<br />о проблеме.</h2><span>Сначала обозначаем проблему. Затем показываем реальные кнопки обратной связи внизу страницы.</span></aside>
+        <div class="phone-shell focus-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe data-presenter-id="report-problem-frame" data-src={feedbackPageUrl} title="Кнопки обратной связи на реальной мобильной странице" width="476" height="1024"></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+      </section>
 
       <section
         class="live-navigation-scene exhibitions-navigation-scene presentation-scene"
@@ -732,14 +817,14 @@ const expandedServiceScenes = [
         <section
           class={`joke-database-scene presentation-scene theme--${joke.number % 2 ? 'dark' : 'light'}`}
           data-presenter-scene-id={joke.id}
-          data-visual-state="idle"
+          data-joke-typing="idle"
           data-joke-number={joke.number}
           data-tts-required={joke.ttsRequired ? 'true' : 'false'}
           hidden
         >
           <div class="joke-index" aria-hidden="true">{String(joke.number).padStart(2, '0')} / 09</div>
           <p>Калининградская пауза</p>
-          <h2>{joke.text}</h2>
+          <h2 data-joke-text={joke.text}></h2>
         </section>
       ))}
 
@@ -860,22 +945,15 @@ const expandedServiceScenes = [
         </div>
       </section>
 
-      <section class="transport-scene transport-bus presentation-scene theme--dark" data-presenter-scene-id="service-transport-bus" data-visual-state="idle" hidden>
+      <section class="transport-scene transport-bus presentation-scene theme--dark" data-presenter-scene-id="service-transport-bus" hidden>
         <aside class="transport-copy">
           <p class="service-eyebrow">12.3 · Транспорт · Автобус</p>
-          <h2>Не только поезд.</h2>
-          <p>Сценарий готов заранее; live-страница подключится после следующей сборки сайта.</p>
+          <h2>Автобус —<br />в реальном событии.</h2>
+          <p>Открываем мобильную страницу и естественно прокручиваем к настоящему расписанию.</p>
         </aside>
         <div class="phone-shell bus-preview-phone">
           <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
-          <div class="bus-preview" role="img" aria-label="Предпросмотр автобусного маршрута на мобильной странице события">
-            <span class="preview-ui-label">Preview · source-backed route</span>
-            <img src="/assets/autopresenter/icons/337651-tour-bus.svg" alt="" />
-            <p>Как добраться</p>
-            <h3>Калининград<br /><i>→</i> Пионерский</h3>
-            <div><b>118 · 118А · 119</b><span>Автовокзал → Пионерский курорт</span></div>
-            <small>Маршрут подтверждён официальным реестром. Время появится после привязки события.</small>
-          </div>
+          <iframe data-presenter-id="transport-bus-frame" data-src={busTransportEventUrl} title="Реальное автобусное расписание на странице события" width="476" height="1024"></iframe>
           <div class="phone-home" aria-hidden="true"></div>
         </div>
       </section>
@@ -901,6 +979,38 @@ const expandedServiceScenes = [
           width="1920"
           height="1080"
         ></iframe>
+      </section>
+
+      <section
+        class="manual-page-scene manual-page-scene--mobile presentation-scene"
+        data-presenter-scene-id="manual-page-mobile"
+        hidden
+      >
+        <div class="phone-shell manual-page-phone">
+          <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+          <iframe
+            data-presenter-id="manual-page-mobile-frame"
+            title="Ручной показ страницы · mobile"
+            width="476"
+            height="1024"
+          ></iframe>
+          <div class="phone-home" aria-hidden="true"></div>
+        </div>
+        <span class="manual-page-label" data-manual-page-label aria-hidden="true"></span>
+      </section>
+
+      <section
+        class="manual-page-scene manual-page-scene--desktop presentation-scene"
+        data-presenter-scene-id="manual-page-desktop"
+        hidden
+      >
+        <iframe
+          data-presenter-id="manual-page-desktop-frame"
+          title="Ручной показ страницы · desktop"
+          width="1920"
+          height="1080"
+        ></iframe>
+        <span class="manual-page-label" data-manual-page-label aria-hidden="true"></span>
       </section>
 
       <section
@@ -1058,6 +1168,8 @@ const expandedServiceScenes = [
             .forEach((scene) => scene.setAttribute('data-market-state', 'stopped'));
           document.querySelectorAll('[data-visual-state]')
             .forEach((scene) => scene.setAttribute('data-visual-state', 'stopped'));
+          document.querySelectorAll('[data-joke-typing]')
+            .forEach((scene) => scene.setAttribute('data-joke-typing', 'stopped'));
           document.querySelectorAll('[data-transport-phase]')
             .forEach((scene) => scene.setAttribute('data-transport-phase', 'mobile'));
         };
@@ -1264,6 +1376,21 @@ const expandedServiceScenes = [
           scene.dataset.jokeState = 'complete';
         };
 
+        const startDatabaseJoke = async (scene, token) => {
+          const copy = scene.querySelector('[data-joke-text]');
+          if (!(copy instanceof HTMLElement)) return;
+          const value = copy.dataset.jokeText || '';
+          scene.dataset.jokeTyping = 'typing';
+          if (reduceMotion.matches) {
+            copy.textContent = value;
+          } else if (!await typeInto(copy, value, token, {
+            base: value.length > 150 ? 24 : 29,
+            seed: scene.dataset.presenterSceneId || 'joke-database',
+          })) return;
+          if (!await pause(420, token)) return;
+          scene.dataset.jokeTyping = 'complete';
+        };
+
         const startMedallions = async (scene, token) => {
           const feature = scene.querySelector('.medallion-feature');
           const featureImage = scene.querySelector('[data-medallion-feature-image]');
@@ -1312,8 +1439,24 @@ const expandedServiceScenes = [
           scene.dataset.medallionState = 'complete';
         };
 
+        let errorAudioBoost;
+        const ensureErrorAudioBoost = () => {
+          if (errorAudioBoost) return errorAudioBoost;
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) return null;
+          const context = new AudioContextClass();
+          const source = context.createMediaElementSource(errorAudio);
+          const gain = context.createGain();
+          gain.gain.value = 3.2;
+          source.connect(gain).connect(context.destination);
+          errorAudioBoost = { context, gain };
+          return errorAudioBoost;
+        };
+
         const startErrorCue = async (scene, token) => {
           errorAudio.volume = 1;
+          const boost = ensureErrorAudioBoost();
+          await boost?.context.resume().catch(() => {});
           scene.dataset.errorAudio = 'starting';
           scene.dataset.errorPhase = 'copy';
           const playCue = async () => {
@@ -1409,7 +1552,20 @@ const expandedServiceScenes = [
           const video = scene.querySelector('video');
           if (video instanceof HTMLVideoElement) {
             video.volume = 1;
+            if (scene.dataset.presenterSceneId === 'service-friends-club') {
+              scene.dataset.friendsPhase = 'video';
+              video.currentTime = 0;
+              video.onended = () => { scene.dataset.friendsPhase = 'qr'; };
+            }
             void video.play().catch(() => {});
+          }
+          if (scene.dataset.presenterSceneId === 'service-personalization') {
+            const items = [...scene.querySelectorAll('.personalization-flow article')];
+            for (let index = 0; index < items.length; index += 1) {
+              if (token !== generation) return;
+              scene.dataset.focusIndex = String(index);
+              if (!await pause(reduceMotion.matches ? 1 : 1_150, token)) return;
+            }
           }
           if (!await pause(reduceMotion.matches ? 1 : 2100, token)) return;
           scene.dataset.visualState = 'complete';
@@ -1448,11 +1604,20 @@ const expandedServiceScenes = [
           if (activeScene instanceof HTMLElement && activeScene.hasAttribute('data-visual-state')) {
             void startVisualScene(activeScene, token);
           }
+          if (sceneId.startsWith('joke-db-') && activeScene instanceof HTMLElement) {
+            void startDatabaseJoke(activeScene, token);
+          }
           if (sceneId === 'service-transport-rail' && activeScene instanceof HTMLElement) {
             startTransportRail(activeScene);
           }
           if (sceneId === 'service-navigation-festivals' && activeScene instanceof HTMLElement) {
             activeScene.dataset.festivalPhase = 'desktop';
+          }
+          if (sceneId === 'service-share-friends' && activeScene instanceof HTMLElement) {
+            activeScene.dataset.sharePhase = 'interface';
+          }
+          if (sceneId === 'service-report-problem' && activeScene instanceof HTMLElement) {
+            activeScene.dataset.reportPhase = 'meaning';
           }
           if (sceneId === 'service-joke') void startJoke();
           if (sceneId === 'service-medallions' && activeScene instanceof HTMLElement) {
@@ -1495,6 +1660,29 @@ const expandedServiceScenes = [
             window.setTimeout(() => {
               if (generation === token) activeScene?.setAttribute('data-desktop-phase', 'site');
             }, 4200);
+          }
+          if (
+            (sceneId === 'manual-page-mobile' || sceneId === 'manual-page-desktop')
+            && activeScene instanceof HTMLElement
+          ) {
+            const frame = activeScene.querySelector('iframe');
+            const label = activeScene.querySelector('[data-manual-page-label]');
+            try {
+              const target = new URL(options.url || '', window.location.href);
+              if (
+                !(frame instanceof HTMLIFrameElement)
+                || target.origin !== 'https://kenigevents.ru'
+                || !target.pathname.startsWith('/preview-20260730-hero-talk-date-donor-r2/')
+              ) throw new Error('unsupported manual page URL');
+              if (frame.src !== target.href) {
+                frame.dataset.presenterFrameReady = 'false';
+                frame.src = target.href;
+              }
+              frame.title = `${options.label || 'Страница'} · ${sceneId.endsWith('mobile') ? 'mobile' : 'desktop'}`;
+              if (label instanceof HTMLElement) label.textContent = `${options.label || 'Страница'} · ручной показ`;
+            } catch {
+              setStatus('error', 'Некорректная страница ручного показа');
+            }
           }
         };
 
@@ -1933,6 +2121,10 @@ const expandedServiceScenes = [
   .personalization-flow > i { color: #ff7657; font-size: 36px; font-style: normal; }
   .personalization-scene[data-visual-state="revealing"] article,
   .personalization-scene[data-visual-state="complete"] article { opacity: 1; transform: none; }
+  .personalization-scene[data-focus-index="0"] .personalization-flow article:nth-of-type(1),
+  .personalization-scene[data-focus-index="1"] .personalization-flow article:nth-of-type(2),
+  .personalization-scene[data-focus-index="2"] .personalization-flow article:nth-of-type(3),
+  .personalization-scene[data-focus-index="3"] .personalization-flow article:nth-of-type(4) { transform: translateY(-12px) scale(1.12); border-color: rgba(255,118,87,.82); box-shadow: 0 28px 80px rgba(255,118,87,.24); }
   .personalization-flow article:nth-of-type(2) { transition-delay: 160ms; }
   .personalization-flow article:nth-of-type(3) { transition-delay: 320ms; }
   .personalization-flow article:nth-of-type(4) { transition-delay: 480ms; }
@@ -1955,6 +2147,7 @@ const expandedServiceScenes = [
   .transport-rail[data-transport-phase="desktop"] .transport-desktop { opacity: 1; visibility: visible; transform: none; }
   .transport-bus { display: grid; grid-template-columns: minmax(460px,1fr) minmax(500px,.8fr); align-items: center; gap: 54px; padding: 34px 9vw; }
   .bus-preview-phone { justify-self: center; width: min(520px,calc((100vh - 36px)*.4771)); height: calc(100vh - 36px); }
+  .bus-preview-phone iframe { position: absolute; inset: 36px 10px 22px; width: calc(100% - 20px); height: calc(100% - 58px); border: 0; border-radius: 42px; background: #fffaf2; }
   .bus-preview { position: absolute; inset: 36px 10px 22px; display: flex; flex-direction: column; padding: 92px 30px 30px; border-radius: 42px; color: #2d201a; background: linear-gradient(165deg,#fffaf2,#f0dfcc); overflow: hidden; opacity: 0; transform: translateY(34px) scale(.92); transition: opacity 520ms ease, transform 920ms var(--ease-cinematic); }
   .transport-bus[data-visual-state="revealing"] .bus-preview,
   .transport-bus[data-visual-state="complete"] .bus-preview { opacity: 1; transform: none; }
@@ -1985,9 +2178,28 @@ const expandedServiceScenes = [
 
   .live-navigation-scene { position: absolute; inset: 0; z-index: 12; overflow: hidden; background: #fff; }
   .live-navigation-scene > iframe { width: 100%; height: 100%; display: block; border: 0; background: #fffaf4; }
+  .manual-page-scene { position: absolute; inset: 0; z-index: 12; overflow: hidden; background: #fff; }
+  .manual-page-scene--desktop > iframe { width: 100%; height: 100%; display: block; border: 0; background: #fffaf4; }
+  .manual-page-scene--mobile { display: grid; place-items: center; background: radial-gradient(circle at 50% 44%,rgba(255,118,87,.18),transparent 31%),#0b0d13; }
+  .manual-page-phone { width: min(560px,calc((100vh - 38px)*.4771)); height: calc(100vh - 38px); animation: cinematic-phone-in 1050ms var(--ease-cinematic) both; }
+  .manual-page-label { position: absolute; z-index: 5; right: 28px; bottom: 26px; max-width: 420px; padding: 11px 16px; border-radius: 999px; color: #fff; background: rgba(8,10,15,.76); box-shadow: 0 12px 34px rgba(0,0,0,.24); backdrop-filter: blur(14px); font-size: 15px; font-weight: 600; letter-spacing: .04em; }
   .live-key-hint { position: absolute; z-index: 4; left: 32px; bottom: 28px; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 18px; color: #fff; background: rgba(7,10,16,.86); box-shadow: 0 18px 48px rgba(0,0,0,.28); backdrop-filter: blur(16px); font-size: 16px; }
   .live-key-hint kbd { min-width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.42); border-radius: 10px; background: rgba(255,255,255,.13); font: 700 19px/1 "Cygre",sans-serif; }
   .live-key-hint span + kbd { margin-left: 12px; }
+  .real-ui-scene .live-meaning { animation: cinematic-copy-in 1050ms var(--ease-cinematic) both; }
+  .real-ui-scene .phone-shell { animation: cinematic-phone-in 1300ms var(--ease-cinematic) both; }
+  .real-desktop-scene iframe { animation: cinematic-screen-in 1250ms var(--ease-cinematic) both; }
+  .hierarchy-hint { max-width: 760px; align-items: flex-start; flex-direction: column; }
+  .hierarchy-hint strong { font-size: 34px; letter-spacing: -.04em; }
+  .hierarchy-hint span { color: rgba(255,255,255,.72); font-size: 18px; }
+  .report-problem-scene .phone-shell { opacity: .16; transform: translateX(60px) scale(.9); transition: opacity 800ms ease, transform 1200ms var(--ease-cinematic); }
+  .report-problem-scene[data-report-phase="interface"] .phone-shell { opacity: 1; transform: none; }
+  .report-problem-scene[data-report-phase="interface"] .live-meaning { opacity: .52; transform: translateX(-28px) scale(.94); transition: opacity 700ms ease, transform 1100ms var(--ease-cinematic); }
+  .share-proof { position: absolute; inset: 0; z-index: 8; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 42px; place-items: center; padding: 54px 12vw; color: #fff; background: radial-gradient(circle at 50% 50%,rgba(255,118,87,.18),transparent 38%),#0c0e14; opacity: 0; visibility: hidden; transform: scale(1.04); transition: opacity 700ms ease, transform 1200ms var(--ease-cinematic), visibility 700ms; }
+  .share-proof figure { margin: 0; display: grid; justify-items: center; gap: 18px; }
+  .share-proof img { max-width: min(32vw,520px); max-height: 82vh; object-fit: contain; border-radius: 34px; box-shadow: 0 36px 100px rgba(0,0,0,.48); }
+  .share-proof figcaption { font-size: 25px; font-weight: 700; }
+  .share-live-scene[data-share-phase="proof"] .share-proof { opacity: 1; visibility: visible; transform: none; }
   .festivals-navigation-scene { background: #0d1016; }
   .festivals-navigation-scene > iframe { transition: opacity 750ms var(--ease-cinematic), transform 950ms var(--ease-cinematic), visibility 750ms; }
   .festival-mobile-stage { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 42%,rgba(255,118,87,.16),transparent 32%),#0d1016; opacity: 0; visibility: hidden; transform: translateY(22px) scale(.96); transition: opacity 750ms var(--ease-cinematic), transform 950ms var(--ease-cinematic), visibility 750ms; }
@@ -2007,8 +2219,8 @@ const expandedServiceScenes = [
   .joke-database-scene[data-joke-number="6"] h2,
   .joke-database-scene[data-joke-number="7"] h2,
   .joke-database-scene[data-joke-number="9"] h2 { max-width: 19ch; font-size: clamp(52px,4.35vw,84px); }
-  .joke-database-scene[data-visual-state="revealing"] h2,
-  .joke-database-scene[data-visual-state="complete"] h2 { opacity: 1; transform: none; }
+  .joke-database-scene[data-joke-typing="typing"] h2,
+  .joke-database-scene[data-joke-typing="complete"] h2 { opacity: 1; transform: none; }
   .joke-index { position: absolute; top: 60px; right: 7vw; color: color-mix(in srgb,currentColor 44%,transparent); font: 700 18px/1 ui-monospace,monospace; letter-spacing: .12em; }
 
   .friends-club-scene { display: grid; grid-template-columns: minmax(520px,.82fr) minmax(600px,1.18fr); align-items: center; gap: clamp(54px,6vw,118px); padding: 64px 8vw; overflow: hidden; }
@@ -2022,6 +2234,21 @@ const expandedServiceScenes = [
   .friends-club-scene[data-visual-state="complete"] video,
   .friends-club-scene[data-visual-state="revealing"] .friends-club-qr,
   .friends-club-scene[data-visual-state="complete"] .friends-club-qr { opacity: 1; transform: none; }
+  .friends-club-scene[data-friends-phase="qr"] { display: grid; grid-template-columns: 1fr; place-items: center; }
+  .friends-club-scene[data-friends-phase="qr"] video,
+  .friends-club-scene[data-friends-phase="qr"] .friends-club-copy > :not(.friends-club-qr):not(small) { opacity: 0; transform: scale(.88); pointer-events: none; }
+  .friends-club-scene[data-friends-phase="qr"] video { display: none; }
+  .friends-club-scene[data-friends-phase="qr"] .friends-club-copy > :not(.friends-club-qr):not(small) { display: none; }
+  .friends-club-scene[data-friends-phase="qr"] .friends-club-copy { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; }
+  .friends-club-scene[data-friends-phase="qr"] .friends-club-qr { width: min(62vmin,680px); height: min(62vmin,680px); margin: 0; padding: 28px; border-radius: 44px; transform: none; box-shadow: 0 42px 130px rgba(0,0,0,.5); transition: width 1200ms var(--ease-cinematic), height 1200ms var(--ease-cinematic), transform 1200ms var(--ease-cinematic); }
+  .friends-club-scene[data-friends-phase="qr"] .friends-club-copy small { margin-top: 20px; font-size: 26px; text-align: center; }
+
+  .presentation-scene .lecture-visual img,
+  .presentation-scene .disruption-cat img,
+  .presentation-scene video { border-radius: clamp(22px,2vw,36px); overflow: hidden; }
+  @keyframes cinematic-copy-in { from { opacity:0; transform:translateX(-48px) scale(.94); filter:blur(12px); } to { opacity:1; transform:none; filter:none; } }
+  @keyframes cinematic-phone-in { from { opacity:0; transform:translateX(90px) scale(.84) rotate(2deg); filter:blur(10px); } to { opacity:1; transform:none; filter:none; } }
+  @keyframes cinematic-screen-in { from { opacity:0; transform:scale(1.08); filter:blur(10px); } to { opacity:1; transform:none; filter:none; } }
 
   .desktop-scene { position: absolute; inset: 0; z-index: 12; background: #fff; }
   .desktop-scene iframe { width: 100%; height: 100%; display: block; border: 0; background: #fffaf4; }

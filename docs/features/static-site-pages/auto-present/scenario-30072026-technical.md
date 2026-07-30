@@ -75,23 +75,25 @@ poster, portrait, cinema. Горизонтальные изображения п
    `service-focus-group`, `service-nps`, `service-future-celebrity` —
    последовательность тезисов из авторского документа.
 8. `service-navigation-map`, `service-social-proof`,
-   `service-artifacts-explained`, `service-artifact-desktop` — недостающие
-   объясняющие кадры навигации, явных сигналов и артефактов;
+   `service-artifacts-explained`, `service-artifact-desktop` — реальные
+   mobile/desktop переходы навигации, явных сигналов и артефактов; статичный
+   кадр сохраняется только там, где он сам является смысловым вступлением;
 9. `service-personalization`, `service-laws`, `service-keyboard-concept`,
    `service-keyboard-day`, `service-keyboard-event`,
    `service-transport-rail`, `service-transport-bus` — персонализация,
    compliance-status и keyboard/transport-контур;
-10. `service-fast-find`, `service-share-friends`,
+10. `service-report-problem`, `service-fast-find`, `service-share-friends`,
     `service-calendar-memory`, `service-community-curator`,
     `service-location-artifact`, `service-friends-club` — блоки 19–24
     расширенного авторского сценария. В последней сцене воспроизводится
     предоставленный ролик Дарьи и показывается QR точного Telegram-канала.
 
-Новые live-вставки используют предоставленную immutable focus-preview сборку.
+Новые live-вставки используют актуальную immutable focus-preview сборку
+`preview-20260730-hero-talk-date-donor-r2`.
 Сцена фокус-группы показывает крупный QR иерархии «Присоединяйтесь к
 фокус-группе» на точный URL; onboarding-сцены дожидаются принятия invite-fragment
 в `kenigevents:focus-participation:v1`
-`/preview-20260729-focus-simple-r15-a5cc0256/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`.
+`/preview-20260730-hero-talk-date-donor-r2/fokus-gruppa/priglashenie/#invite=focus-group-2026-announcements`.
 Tomorrow/rail и остальные live-сцены работают на focus-preview. Единственное
 исключение — artifact: в focus build feature flag `off`, поэтому 03.3 использует
 проверенный R15 candidate с `tail` и событием `7164`. Сброс агента сохраняет
@@ -109,6 +111,15 @@ content-addressed на существующем CDN. 03.11 и 03.12 раскры
 словам, а support появляется только после завершения заголовка. 03.14
 показывает каждый шаг onboarding с выдержкой, держит реальный блок оценки
 0–10 и в конце возвращает удерживаемый QR 03.13.
+
+03.12.1 показывает реальную desktop-страницу дня и нативную прокрутку rail/page
+стрелками; 03.12.2 использует опубликованный
+`[data-keyboard-event-surface]` и действия галереи/рекомендаций/`L`.
+03.12.3.2 использует реальный `[data-event-bus-schedule]`, а не рисованный
+макет. 03.18 после крупного тезиса прокручивает реальную mobile-страницу к
+кнопкам feedback и открывает форму. Для 03.21 причинно-следственная связь
+показывается как реальный Share click → предоставленные кадры 885/886;
+Calendar-сцена проверяет `.ics`, затем открывает `/izbrannoe/`.
 
 ### Desktop и outro
 
@@ -145,7 +156,7 @@ relay или логи. Это обязательная подготовител�
 
 Обновлённый `scenario-30072026-base.md` остаётся авторским источником и не
 переписывается генератором. Текущая итерация сверена с точным SHA-256 источника
-`e0a547acdf560f6b5dc39b4ee3f132c1ca6273f02f99ea41ecda460e9a0067d4`.
+`43e737fc43c3673d7eb1ae20fe171c85072d6ad8ba183a188ce20a0c5018dab1`.
 
 Реализованы новые intro-фразы, лекционные пункты 7–8, четыре рыночных экрана,
 персонализация, compliance, keyboard-контур, поезд/автобус и отдельные кадры
@@ -261,3 +272,23 @@ Iteration F delta на 30.07.2026 ограничен только новыми �
 
 Новый Fly app, machine, volume, bucket, CDN, база или очередь в этой итерации
 не создавались.
+
+Iteration G delta на 30.07.2026:
+
+- авторский файл повторно синхронизирован после добавления раздела
+  «Демонстрация страниц», а порядок групп и кнопок на пульте приведён к
+  порядку документа;
+- добавлено 30 резервных scene IDs: 15 опубликованных страниц × mobile/desktop.
+  Они используют две лёгкие переиспользуемые сцены/iframe, не загружают 30
+  страниц заранее и не выполняют автопрокрутку;
+- mobile и desktop кнопки каждой страницы стоят рядом. После загрузки сцена
+  остаётся на месте, а ведущий листает её существующей полосой ↑/↓ или
+  управляет фокусом через D-pad;
+- для фактических примеров закреплены текущие страницы wide-hero/gallery и
+  OCR/split; все остальные пункты открывают одноимённые маршруты текущей
+  focus-сборки;
+- targeted gate: agent `37/37`, relay `17/17`, control auth `2/2`, Astro
+  `465 pages`; visual 1920×1080 проверил mobile/desktop reserve и полностью
+  помещающийся post-video QR 03.24;
+- отдельная серверная сущность, новый Fly app, bucket, CDN, база или очередь
+  для ручных показов не создавались.

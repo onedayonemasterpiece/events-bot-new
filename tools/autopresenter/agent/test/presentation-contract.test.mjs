@@ -11,8 +11,11 @@ import {
   JOKE_DATABASE_SCENE_IDS,
   LECTURE_ASSETS,
   LECTURE_SCENE_IDS,
+  MANUAL_PAGE_SCENES,
+  MANUAL_PAGE_SCENE_IDS,
   MARKET_SCENE_IDS,
   SCENE_ACCEPTANCE_CONTRACT,
+  SHARE_PROOF_ASSETS,
   SERVICE_SCENE_IDS,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
@@ -38,6 +41,23 @@ test("presentation scenes remain explicit and the intro defaults to fifty minute
     Array.from({ length: 9 }, (_, index) => `joke-db-${String(index + 1).padStart(2, "0")}`),
   );
   assert.equal(INTRO_LOOP_RUNTIME_MS, 50 * 60 * 1_000);
+  assert.equal(MANUAL_PAGE_SCENES.length, 30);
+  assert.equal(MANUAL_PAGE_SCENE_IDS.length, 30);
+  assert.deepEqual(
+    MANUAL_PAGE_SCENES.slice(0, 4).map(({ id }) => id),
+    [
+      "manual-page-home-mobile",
+      "manual-page-home-desktop",
+      "manual-page-mobile-menu-mobile",
+      "manual-page-mobile-menu-desktop",
+    ],
+  );
+  assert.ok(MANUAL_PAGE_SCENES.every(({ url }) =>
+    url.startsWith("https://kenigevents.ru/preview-20260730-hero-talk-date-donor-r2/")));
+  assert.deepEqual(
+    [...new Set(MANUAL_PAGE_SCENES.map(({ mode }) => mode))],
+    ["mobile", "desktop"],
+  );
   assert.ok(SERVICE_SCENE_IDS.includes("service-search-live"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-personalization"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-transport-rail"));
@@ -80,4 +100,18 @@ test("friends club video is a content-addressed Telegram source asset", () => {
   assert.ok(SERVICE_SCENE_IDS.includes("service-friends-club"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-laws"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-keyboard-event"));
+});
+
+test("share proof screenshots are pinned to the Yandex CDN with Telegram provenance", () => {
+  assert.deepEqual(
+    SHARE_PROOF_ASSETS.map(({ source }) => source),
+    [
+      "https://t.me/c/4337049383/803/885",
+      "https://t.me/c/4337049383/803/886",
+    ],
+  );
+  for (const asset of SHARE_PROOF_ASSETS) {
+    assert.match(asset.url, /^https:\/\/static\.kenigevents\.ru\/assets\/autopresenter\//u);
+    assert.match(asset.sha256, /^[a-f0-9]{64}$/u);
+  }
 });

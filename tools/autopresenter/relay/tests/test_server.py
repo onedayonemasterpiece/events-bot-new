@@ -79,7 +79,11 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("NPS страницы", text)
         self.assertIn('data-scenario="outro-qr"', text)
         self.assertIn("Hero Talk, музыка", text)
-        self.assertIn("Смысл, затем FHD", text)
+        self.assertIn("Демонстрация страниц · ручная", text)
+        self.assertIn('data-scenario="manual-page-home-mobile"', text)
+        self.assertIn('data-scenario="manual-page-home-desktop"', text)
+        self.assertIn('data-scenario="manual-page-favorites-mobile"', text)
+        self.assertIn('data-scenario="manual-page-favorites-desktop"', text)
         self.assertIn("<span>03.12.3.1</span><span>Транспорт · поезд", text)
         self.assertIn("<span>03.12.3.2</span><span>Транспорт · автобус", text)
         self.assertIn('id="presentation-timer"', text)
@@ -100,8 +104,8 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(f'data-action="navigate" data-direction="{direction}"', text)
         for index in range(1, 10):
             self.assertIn(f'data-scenario="joke-db-{index:02d}"', text)
-        self.assertIn("Меню с паузой → «Выходные» → артефакт", text)
-        self.assertIn("Меню с паузой → «Завтра» → rail", text)
+        self.assertIn("Меню → «Выходные» → реальная находка", text)
+        self.assertIn("Календарная страница · mobile", text)
         self.assertIn("Сбросить доступ на этом устройстве", text)
 
         response, payload = await self.json("GET", "/api/state")

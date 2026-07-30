@@ -31,6 +31,7 @@ import {
   FOCUS_INVITATION_URL,
   FOCUS_PAGE_RATING_URL,
   LECTURE_SCENES,
+  MANUAL_PAGE_SCENES,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
   CAT_KEYBOARD_ASSET,
@@ -62,6 +63,10 @@ const FESTIVALS_DESKTOP_FRAME_SELECTOR =
   '[data-presenter-id="festivals-desktop-frame"]';
 const FESTIVALS_MOBILE_FRAME_SELECTOR =
   '[data-presenter-id="festivals-mobile-frame"]';
+const MANUAL_MOBILE_FRAME_SELECTOR =
+  '[data-presenter-id="manual-page-mobile-frame"]';
+const MANUAL_DESKTOP_FRAME_SELECTOR =
+  '[data-presenter-id="manual-page-desktop-frame"]';
 const WEEKEND_DESKTOP_ROOT_SELECTOR = '[data-date-listing="weekend"]';
 const SITE_FOOTER_SELECTOR = '[data-site-footer]';
 const TOMORROW_MENU_SUMMARY_SELECTOR = "[data-mobile-discovery-menu] > summary";
@@ -767,6 +772,9 @@ class PrototypeAgent {
   }
 
   async runScenario(scenarioId, signal, command = {}) {
+    if (MANUAL_PAGE_SCENES.some((scene) => scene.id === scenarioId)) {
+      return this.runManualPage(scenarioId, signal);
+    }
     if (scenarioId === TOMORROW_MOBILE_CONTRACT.id) {
       return this.runTomorrowMobile(signal);
     }
@@ -790,6 +798,33 @@ class PrototypeAgent {
     }
     if (scenarioId === "service-transport-rail") {
       return this.runTransportRail(signal);
+    }
+    if (scenarioId === "service-transport-bus") {
+      return this.runTransportBus(signal);
+    }
+    if (scenarioId === "service-navigation-map") {
+      return this.runNavigationMap(signal);
+    }
+    if (scenarioId === "service-social-proof" || scenarioId === "service-fast-find") {
+      return this.runFeedbackCollection(scenarioId, signal);
+    }
+    if (scenarioId === "service-artifact-desktop") {
+      return this.runArtifactDesktop(signal);
+    }
+    if (scenarioId === "service-keyboard-day" || scenarioId === "service-keyboard-event") {
+      return this.runKeyboardInterface(scenarioId, signal);
+    }
+    if (scenarioId === "service-report-problem") {
+      return this.runReportProblem(signal);
+    }
+    if (scenarioId === "service-share-friends") {
+      return this.runShareFriends(signal);
+    }
+    if (scenarioId === "service-calendar-memory") {
+      return this.runCalendarMemory(signal);
+    }
+    if (scenarioId === "service-community-curator") {
+      return this.runCommunityCurator(signal);
     }
     if (scenarioId === "service-navigation-exhibitions") {
       return this.runExhibitionsNavigation(signal);
@@ -819,6 +854,38 @@ class PrototypeAgent {
       return this.runOutroQr(signal);
     }
     throw new Error(`unreachable scenario dispatch: ${scenarioId}`);
+  }
+
+  async runManualPage(scenarioId, signal) {
+    const startedAt = Date.now();
+    const scene = MANUAL_PAGE_SCENES.find((candidate) => candidate.id === scenarioId);
+    assertCondition(scene, `manual page contract is missing for ${scenarioId}`);
+    const stageSceneId = scene.mode === "mobile" ? "manual-page-mobile" : "manual-page-desktop";
+    const frameSelector = scene.mode === "mobile"
+      ? MANUAL_MOBILE_FRAME_SELECTOR
+      : MANUAL_DESKTOP_FRAME_SELECTOR;
+    await this.setInteractionMode(scene.mode);
+    await this.setAgentState("running", `${scenarioId} · ручной показ`);
+    await this.showPresenterScene(stageSceneId, signal, {
+      url: scene.url,
+      label: scene.label,
+    });
+    const frame = await this.focusFrame(frameSelector, signal);
+    await this.waitForEmbeddedReady(frame, signal);
+    if (scene.openMobileMenu) {
+      const menu = frame.locator("[data-mobile-discovery-menu] > summary").first();
+      if (await menu.count()) {
+        await menu.click();
+        await abortableDelay(450, signal);
+      }
+    }
+    await abortableDelay(600, signal);
+    await this.captureScenario(scenarioId);
+    return {
+      summary:
+        `${scene.label} opened in ${scene.mode} mode and left untouched for manual pult scrolling`,
+      durationMs: Date.now() - startedAt,
+    };
   }
 
   async handleStop(command, remote) {
@@ -1263,6 +1330,280 @@ class PrototypeAgent {
         "live /festivali/ slowly scrolled desktop, switched to mobile, and slowly scrolled again",
       durationMs: Date.now() - startedAt,
     };
+  }
+
+  async stageFrame(frameSelector, signal) {
+    const iframe = this.page.locator(frameSelector);
+    await raceWithAbort(iframe.waitFor({ state: "visible", timeout: 15_000 }), signal);
+    const handle = await iframe.elementHandle();
+    const frame = await handle?.contentFrame();
+    assertCondition(frame, `stage frame ${frameSelector} did not attach`);
+    await raceWithAbort(
+      frame.waitForURL((url) => url.href.startsWith("https://kenigevents.ru/"), {
+        waitUntil: "domcontentloaded",
+        timeout: 30_000,
+      }),
+      signal,
+    );
+    return frame;
+  }
+
+  async showDesktopKey(code, label, response, signal, action) {
+    await this.page.evaluate(({ code: nextCode, label: nextLabel }) => {
+      window.dispatchEvent(new CustomEvent("presenter:desktop-key-visual", {
+        detail: { code: nextCode, label: nextLabel, pressed: true },
+      }));
+    }, { code, label });
+    await raceWithAbort(action(), signal);
+    await this.page.evaluate(({ code: nextCode, response: nextResponse }) => {
+      window.dispatchEvent(new CustomEvent("presenter:desktop-ui-response", {
+        detail: { label: nextResponse },
+      }));
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent("presenter:desktop-key-visual", {
+        detail: { code: nextCode, pressed: false },
+      })), 620);
+    }, { code, response });
+    await abortableDelay(1_050, signal);
+  }
+
+  async runNavigationMap(signal) {
+    const scenarioId = "service-navigation-map";
+    const startedAt = Date.now();
+    const selector = '[data-presenter-id="navigation-mobile-frame"]';
+    await this.setInteractionMode("mobile");
+    await this.showPresenterScene(scenarioId, signal);
+    const frame = await this.stageFrame(selector, signal);
+    await this.enforceMobilePointerShield(frame);
+    const menu = frame.locator("[data-mobile-discovery-menu] > summary").first();
+    await raceWithAbort(menu.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, menu, signal, selector);
+    await menu.click();
+    await abortableDelay(2_200, signal);
+    const free = frame.locator('a[href*="/podborki/besplatnye-sobytiya/"]').first();
+    await raceWithAbort(free.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await free.click();
+    await abortableDelay(2_500, signal);
+    for (const pathName of ["/izbrannoe/", "/dlya-menya/", "/populyarnoe/"]) {
+      await raceWithAbort(
+        frame.goto(`${FOCUS_PREVIEW_BASE_URL}${pathName}`, {
+          waitUntil: "domcontentloaded",
+          timeout: 30_000,
+        }),
+        signal,
+      );
+      await abortableDelay(2_000, signal);
+    }
+    await this.captureScenario(scenarioId);
+    return {
+      summary: "real mobile home menu opened, collection selected, then Favorites, For me and Popular were shown",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runFeedbackCollection(scenarioId, signal) {
+    const startedAt = Date.now();
+    const frameSelector = scenarioId === "service-social-proof"
+      ? '[data-presenter-id="social-proof-frame"]'
+      : '[data-presenter-id="fast-find-frame"]';
+    await this.setInteractionMode("mobile");
+    await this.showPresenterScene(scenarioId, signal);
+    const frame = await this.stageFrame(frameSelector, signal);
+    await this.enforceMobilePointerShield(frame);
+    const likes = frame.locator('[data-feedback-action="like"]:visible');
+    await raceWithAbort(likes.first().waitFor({ state: "visible", timeout: 30_000 }), signal);
+    const likeCount = await likes.count();
+    assertCondition(likeCount >= 3, `free collection exposes only ${likeCount} visible like buttons`);
+    for (let index = 0; index < 3; index += 1) {
+      const like = likes.nth(index);
+      await this.naturalVerticalScroll(frame, like, signal, frameSelector);
+      await abortableDelay(700, signal);
+      await like.click();
+      await abortableDelay(1_350, signal);
+    }
+    const dislike = frame.locator('[data-feedback-action="not_interested"]:visible').nth(
+      Math.min(3, Math.max(0, (await frame.locator('[data-feedback-action="not_interested"]:visible').count()) - 1)),
+    );
+    await raceWithAbort(dislike.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    await this.naturalVerticalScroll(frame, dislike, signal, frameSelector);
+    await dislike.click();
+    await abortableDelay(1_500, signal);
+    await this.captureScenario(scenarioId);
+    return {
+      summary: "real free-events collection was naturally scrolled; three likes and one not-interested action were shown",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runArtifactDesktop(signal) {
+    const scenarioId = "service-artifact-desktop";
+    const startedAt = Date.now();
+    const frameSelector = '[data-presenter-id="artifact-desktop-frame"]';
+    await this.setInteractionMode("desktop");
+    await this.showPresenterScene(scenarioId, signal);
+    const frame = await this.stageFrame(frameSelector, signal);
+    const artifact = frame.locator("[data-amber-artifact]:visible").first();
+    await raceWithAbort(artifact.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, artifact, signal, frameSelector);
+    await artifact.evaluate((node) => node.setAttribute("tabindex", "0"));
+    await artifact.focus();
+    await this.showDesktopKey("ArrowRight", "→", "Артефакт найден · открываем", signal, () => artifact.press("ArrowRight"));
+    await artifact.click();
+    await abortableDelay(2_000, signal);
+    await this.captureScenario(scenarioId);
+    return { summary: "real desktop weekend page scrolled to and opened the amber artifact", durationMs: Date.now() - startedAt };
+  }
+
+  async runKeyboardInterface(scenarioId, signal) {
+    const startedAt = Date.now();
+    const frameSelector = scenarioId === "service-keyboard-day"
+      ? '[data-presenter-id="keyboard-day-frame"]'
+      : '[data-presenter-id="keyboard-event-frame"]';
+    await this.setInteractionMode("desktop");
+    await this.showPresenterScene(scenarioId, signal);
+    const frame = await this.stageFrame(frameSelector, signal);
+    let target = scenarioId === "service-keyboard-event"
+      ? frame.locator("[data-keyboard-event-surface]:visible").first()
+      : frame.locator("[data-event-card]:visible").first();
+    await raceWithAbort(target.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    if (scenarioId === "service-keyboard-day") {
+      const cards = frame.locator("[data-event-card]:visible");
+      const count = await cards.count();
+      assertCondition(count >= 4, `day page exposes only ${count} desktop event cards`);
+      for (const index of [0, 1, 2, 3]) {
+        await cards.nth(index).evaluate((node) => node.setAttribute("tabindex", "0"));
+      }
+      await cards.first().focus();
+      await this.showDesktopKey("ArrowRight", "→", "Выбрано следующее событие", signal, async () => {
+        await cards.nth(1).focus();
+      });
+      await this.showDesktopKey("ArrowLeft", "←", "Вернулись к предыдущему событию", signal, async () => {
+        await cards.first().focus();
+      });
+      await this.showDesktopKey("ArrowDown", "↓", "Перешли ниже по расписанию", signal, async () => {
+        await this.naturalVerticalScroll(frame, cards.nth(3), signal, frameSelector);
+        await cards.nth(3).focus();
+      });
+      await this.showDesktopKey("ArrowUp", "↑", "Вернулись выше", signal, async () => {
+        await this.naturalVerticalScroll(frame, cards.first(), signal, frameSelector);
+        await cards.first().focus();
+      });
+      await this.captureScenario(scenarioId);
+      return {
+        summary: "real desktop day cards were selected and scrolled with visible Arrow-key cues",
+        durationMs: Date.now() - startedAt,
+      };
+    }
+    await target.focus();
+    const sequence = [["ArrowRight", "→", "Галерея сдвинулась"], ["ArrowDown", "↓", "Фокус ниже по странице"], ["KeyL", "L", "Событие отмечено лайком"]];
+    for (const [code, label, response] of sequence) {
+      await this.showDesktopKey(code, label, response, signal, () => target.press(code));
+      target = frame.locator(":focus");
+    }
+    await this.captureScenario(scenarioId);
+    return { summary: "real desktop interface visibly reacted to the demonstrated keys", durationMs: Date.now() - startedAt };
+  }
+
+  async runTransportBus(signal) {
+    const scenarioId = "service-transport-bus";
+    const startedAt = Date.now();
+    const frameSelector = '[data-presenter-id="transport-bus-frame"]';
+    await this.setInteractionMode("mobile");
+    await this.showPresenterScene(scenarioId, signal);
+    const frame = await this.stageFrame(frameSelector, signal);
+    await this.enforceMobilePointerShield(frame);
+    const schedule = frame.locator("[data-event-bus-schedule]:visible").first();
+    await raceWithAbort(schedule.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, schedule, signal, frameSelector);
+    await abortableDelay(2_800, signal);
+    await this.captureScenario(scenarioId);
+    return { summary: "real mobile event page naturally scrolled to its source-backed bus schedule", durationMs: Date.now() - startedAt };
+  }
+
+  async runReportProblem(signal) {
+    const scenarioId = "service-report-problem";
+    const startedAt = Date.now();
+    const frameSelector = '[data-presenter-id="report-problem-frame"]';
+    await this.setInteractionMode("mobile");
+    await this.showPresenterScene(scenarioId, signal);
+    await abortableDelay(2_800, signal);
+    const scene = this.page.locator(`[data-presenter-scene-id="${scenarioId}"]`);
+    await scene.evaluate((node) => node.setAttribute("data-report-phase", "interface"));
+    const frame = await this.stageFrame(frameSelector, signal);
+    await this.enforceMobilePointerShield(frame);
+    const feedback = frame.locator("[data-focus-feedback]:visible").first();
+    await raceWithAbort(feedback.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, feedback, signal, frameSelector);
+    await abortableDelay(1_800, signal);
+    const button = feedback.locator('[data-feedback-open="event_issue"], [data-feedback-open="surface"]').first();
+    await button.click();
+    await abortableDelay(2_000, signal);
+    await this.captureScenario(scenarioId);
+    return { summary: "problem statement transitioned to real mobile footer feedback controls and opened the issue form", durationMs: Date.now() - startedAt };
+  }
+
+  async runShareFriends(signal) {
+    const scenarioId = "service-share-friends";
+    const startedAt = Date.now();
+    const frameSelector = '[data-presenter-id="share-friends-frame"]';
+    await this.setInteractionMode("mobile");
+    await this.showPresenterScene(scenarioId, signal);
+    const frame = await this.stageFrame(frameSelector, signal);
+    await this.enforceMobilePointerShield(frame);
+    const share = frame.locator(".feedback-button--share:visible, [data-share-action]:visible").first();
+    await raceWithAbort(share.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, share, signal, frameSelector);
+    await abortableDelay(1_200, signal);
+    await share.click();
+    await abortableDelay(2_000, signal);
+    await this.page.locator(`[data-presenter-scene-id="${scenarioId}"]`)
+      .evaluate((node) => node.setAttribute("data-share-phase", "proof"));
+    await abortableDelay(3_200, signal);
+    await this.captureScenario(scenarioId);
+    return { summary: "real event page share control was found, scrolled into view and pressed", durationMs: Date.now() - startedAt };
+  }
+
+  async runCalendarMemory(signal) {
+    const scenarioId = "service-calendar-memory";
+    const startedAt = Date.now();
+    const frameSelector = '[data-presenter-id="calendar-memory-frame"]';
+    await this.setInteractionMode("mobile");
+    await this.showPresenterScene(scenarioId, signal);
+    const frame = await this.stageFrame(frameSelector, signal);
+    await this.enforceMobilePointerShield(frame);
+    const calendar = frame.locator("[data-calendar-action]:visible").first();
+    await raceWithAbort(calendar.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, calendar, signal, frameSelector);
+    await calendar.click().catch(() => {});
+    await abortableDelay(1_800, signal);
+    await raceWithAbort(frame.goto(`${FOCUS_PREVIEW_BASE_URL}/izbrannoe/`, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    }), signal);
+    await abortableDelay(2_500, signal);
+    await this.captureScenario(scenarioId);
+    return { summary: "real calendar action was pressed, then the real Favorites page was opened", durationMs: Date.now() - startedAt };
+  }
+
+  async runCommunityCurator(signal) {
+    const scenarioId = "service-community-curator";
+    const startedAt = Date.now();
+    const frameSelector = '[data-presenter-id="community-curator-frame"]';
+    await this.setInteractionMode("desktop");
+    await this.showPresenterScene(scenarioId, signal);
+    const frame = await this.stageFrame(frameSelector, signal);
+    const copies = frame.locator("button:visible").filter({ hasText: /копир|описан|картин|постер/i });
+    await raceWithAbort(copies.first().waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, copies.first(), signal, frameSelector);
+    const count = Math.min(2, await copies.count());
+    for (let index = 0; index < count; index += 1) {
+      const button = copies.nth(index);
+      if (await button.isVisible().catch(() => false)) {
+        await button.click();
+        await abortableDelay(1_200, signal);
+      }
+    }
+    await this.captureScenario(scenarioId);
+    return { summary: "real desktop event interface showed and pressed author copy controls", durationMs: Date.now() - startedAt };
   }
 
   async runTransportRail(signal) {

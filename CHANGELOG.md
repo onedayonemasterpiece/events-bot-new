@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 ### Fixed
+- Re-synchronized the Autopresenter with the author-defined scenario order,
+  reordered the phone control accordingly, and added the new manual page
+  reserve as 15 adjacent mobile/desktop pairs that open the current focus
+  build without autoplay scrolling.
+- Replaced the Autopresenter 03.4/03.6/03.8.4/03.12/03.18/03.20–03.22
+  explanatory placeholders with current-build mobile or desktop UI journeys,
+  including visible keyboard reactions, real bus schedule, feedback controls,
+  Share proof screenshots and Calendar-to-Favorites flow; raised 03.13 audio,
+  added sequential personalization focus, rounded media, post-video large QR
+  and human-like typing for all joke-database scenes.
 - Prevented a failed Yandex search login from taking over the persistent
   Autopresenter stage: authentication now uses a disposable auxiliary tab and
   every Run restores the stage before starting, while Reset remains available.
