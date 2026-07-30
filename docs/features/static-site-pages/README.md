@@ -56,6 +56,18 @@ product:
 4. progressive client reranking only when the versioned same-origin local
    profile contains compatible preference signals.
 
+Hero Talk is not derived from the first four cold-start cards. Its static
+runtime deck is built independently from the complete current event
+projection and exposes 24 scenes: the exact donor greeting and
+Kaliningrad-language voice, two short navigation/education lines and 20
+distinct current-event lines. Each scene has one explicit terminal cursor;
+mixed linked and plain fragments must not generate one cursor per HTML element
+type. Text-only scenes retain the donor's exact wide `О` SVG background, while
+photo scenes use the accepted edge-reaching mosaic and suppress that glyph.
+The presentation/focus-group build is updated in place at
+`preview-20260729-focus-simple-r15-a5cc0256`; a separate review prefix is not
+the presentation source.
+
 Static HTML always contains the useful cold-start feed. Hydration may filter or
 rerank within the bounded contract but cannot blank first paint, duplicate
 events, introduce a page-view embedding/LLM call, or create a different

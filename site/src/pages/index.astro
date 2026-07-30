@@ -34,9 +34,10 @@ for (const event of [...popular, ...fallback]) {
   if (feed.length >= 30) break;
 }
 const heroScenes = buildHomeHeroTalkDeck(
-  feed,
+  getEvents(),
   currentDate,
   `${currentDate}:${import.meta.env.PUBLIC_SITE_BASE_PATH || 'root'}`,
+  24,
 );
 const title = SITE_NAME;
 const description = 'Афиша Калининграда без шума: полезная статическая подборка событий, быстрые маршруты по датам и локальная персонализация.';

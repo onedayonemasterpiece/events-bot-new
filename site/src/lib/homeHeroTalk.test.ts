@@ -82,9 +82,9 @@ test('hero deck is deterministic, current, unique and mixed when photos exist', 
   const copy = editorial(1, 2, 3, 4, 5);
   const first = buildHomeHeroTalkDeck(events, '2026-07-29', 'immutable-build', 4, copy);
   const second = buildHomeHeroTalkDeck(events, '2026-07-29', 'immutable-build', 4, copy);
-  assert.deepEqual(first.map(({ event: item, mode }) => [item.id, mode]), second.map(({ event: item, mode }) => [item.id, mode]));
-  assert.equal(new Set(first.map((scene) => scene.event.id)).size, first.length);
-  assert.ok(first.every((scene) => (scene.event.end_date || scene.event.start_date) >= '2026-07-29'));
+  assert.deepEqual(first.map(({ event: item, mode }) => [item?.id, mode]), second.map(({ event: item, mode }) => [item?.id, mode]));
+  assert.equal(new Set(first.map((scene) => scene.event?.id)).size, first.length);
+  assert.ok(first.every((scene) => scene.event && (scene.event.end_date || scene.event.start_date) >= '2026-07-29'));
   assert.ok(first.some((scene) => scene.mode === 'photo-mosaic'));
   assert.ok(first.every((scene) => scene.fragments.some((fragment) => fragment.link)));
   assert.ok(first.every((scene) => !scene.fragments.some((fragment) => fragment.text === scene.event.title)));
@@ -115,7 +115,7 @@ test('mutually linked occurrences appear only once', () => {
     4,
     editorial(10, 11, 12),
   )
-    .map((scene) => scene.event.id);
+    .map((scene) => scene.event?.id);
   assert.equal(ids.filter((id) => id === 10 || id === 11).length, 1);
 });
 
@@ -128,4 +128,24 @@ test('editorial entries fail closed when their event is absent or expired', () =
     editorial(1, 999),
   );
   assert.deepEqual(deck, []);
+});
+
+test('welcome and local-voice scenes survive without pretending to be events', () => {
+  const copy: HomeHeroTalkEditorial[] = [
+    { id:'greeting-day', fragments:[{ text:'Добрый день!' }, { text:'Что сегодня?', href:'/segodnya/' }] },
+    { id:'local-keska', fragments:[{ text:'Мы говорим по-калининградски.' }, { text:'«кеска».', href:'/segodnya/' }] },
+    ...editorial(1, 2, 3),
+  ];
+  const deck = buildHomeHeroTalkDeck(
+    [event(1, '2026-07-30'), event(2, '2026-08-01'), event(3, '2026-08-02')],
+    '2026-07-29',
+    'seed',
+    5,
+    copy,
+  );
+  assert.equal(deck.length, 5);
+  assert.equal(deck[0].editorialId, 'greeting-day');
+  assert.equal(deck[0].event, null);
+  assert.equal(deck[2].editorialId, 'local-keska');
+  assert.equal(deck.filter((scene) => scene.event).length, 3);
 });

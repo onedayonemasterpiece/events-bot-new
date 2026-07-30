@@ -1,11 +1,11 @@
 ---
 import type { HomeHeroTalkScene } from '../lib/homeHeroTalk';
-import { eventHref } from '../lib/events';
+import { eventHref, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
 interface Props { scenes: HomeHeroTalkScene[]; }
 const { scenes } = Astro.props;
-const visibleScenes = scenes.slice(0, 4);
+const visibleScenes = scenes.slice(0, 24);
 const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
 ---
 
@@ -17,7 +17,14 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     aria-labelledby="home-hero-talk-title"
   >
     <h1 id="home-hero-talk-title" class="home-hero-talk__sr-only">О чём говорит афиша</h1>
-    <div class="home-hero-talk__stage" data-home-hero-stage>
+    <div class="home-hero-talk__stage" data-home-hero-stage data-active-mode={visibleScenes[0]?.mode || 'text-only'}>
+      <img
+        class="home-hero-talk__brand-o"
+        data-home-hero-brand-o
+        src={withBase('/brand/announcements-wide-o-ui.svg')}
+        alt=""
+        aria-hidden="true"
+      />
       {visibleScenes.map((scene, sceneIndex) => {
         const asset = scene.asset;
         const image = asset ? eventImageUrl(asset.src) : null;
@@ -29,6 +36,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
             data-home-hero-scene
             data-scene-index={sceneIndex}
             data-editorial-id={scene.editorialId}
+            data-event-id={scene.event?.id || undefined}
             data-mode={scene.mode}
             data-source-width={asset?.width || undefined}
             data-source-height={asset?.height || undefined}
@@ -41,14 +49,16 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
               <h2 data-home-hero-copy>
                 {scene.fragments.map((fragment, fragmentIndex) => (
                   <>
-                    {fragment.link ? (
+                    {fragment.link || fragment.href ? (
                       <a
                         class:list={['home-hero-talk__fragment', fragment.accent && 'home-hero-talk__fragment--accent']}
                         data-home-hero-fragment
                         data-fragment-index={fragmentIndex}
                         style={`--fragment-delay:${100 + fragmentIndex * 185}ms`}
-                        href={eventHref(scene.event)}
-                        aria-label={`${fragment.text} Открыть событие «${scene.event.title}»`}
+                        href={fragment.href ? withBase(fragment.href) : eventHref(scene.event!)}
+                        aria-label={scene.event && !fragment.href
+                          ? `${fragment.text} Открыть событие «${scene.event.title}»`
+                          : fragment.text}
                         tabindex={sceneIndex === 0 ? '0' : '-1'}
                       >{fragment.text}</a>
                     ) : (
@@ -62,6 +72,12 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
                     {fragment.breakAfter ? <br /> : ' '}
                   </>
                 ))}
+                <span
+                  class="home-hero-talk__cursor"
+                  data-home-hero-cursor
+                  aria-hidden="true"
+                  style={`--cursor-delay:${Math.max(520, scene.fragments.length * 185 + 420)}ms`}
+                ></span>
               </h2>
             </div>
             {image && asset && (
@@ -107,6 +123,11 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;
   }
   .home-hero-talk__stage { position:absolute; inset:0; }
+  .home-hero-talk__brand-o {
+    position:absolute;z-index:-1;right:2%;top:-22%;width:clamp(15rem,34vw,27rem);height:auto;
+    opacity:.055;overflow:visible;transition:opacity 320ms ease;pointer-events:none;
+  }
+  .home-hero-talk__stage[data-active-mode="photo-mosaic"] .home-hero-talk__brand-o { opacity:0; }
   .home-hero-talk__scene {
     position:relative;
     box-sizing:border-box;
@@ -138,6 +159,10 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
   a.home-hero-talk__fragment:hover { text-decoration-thickness:.075em;text-decoration-color:currentColor; }
   a.home-hero-talk__fragment:focus-visible { border-radius:.08em;outline:.055em solid currentColor;outline-offset:.09em; }
   .home-hero-talk__fragment--accent { color:#a54821; }
+  .home-hero-talk__cursor {
+    display:inline-block;width:.11em;height:.78em;margin-left:.08em;background:#a54821;
+    vertical-align:-.03em;opacity:0;
+  }
   .home-hero-talk__scene--photo-mosaic .home-hero-talk__fragment {
     padding:0 .015em;
     background:linear-gradient(to bottom,transparent 45%,rgba(255,253,248,.28) 45%,rgba(255,253,248,.28) 57%,transparent 57%);
@@ -172,11 +197,11 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     opacity:0;transform:translateY(.28em);filter:blur(1px);
     animation:home-hero-fragment-in 340ms cubic-bezier(.16,1,.3,1) var(--fragment-delay) forwards;
   }
-  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__fragment:last-of-type::after {
-    content:"";display:inline-block;width:.11em;height:.78em;margin-left:.08em;background:#a54821;
-    animation:home-hero-cursor 780ms step-end infinite;vertical-align:-.03em;
+  .home-hero-talk__stage.is-enhanced .home-hero-talk__scene.is-active .home-hero-talk__cursor {
+    animation:home-hero-cursor-in 1ms linear var(--cursor-delay) forwards,home-hero-cursor 780ms step-end var(--cursor-delay) infinite;
   }
   @keyframes home-hero-fragment-in { to { opacity:1;transform:none;filter:none; } }
+  @keyframes home-hero-cursor-in { to { opacity:1; } }
   @keyframes home-hero-cursor { 50% { opacity:0; } }
   @media (min-width:1536px) { .home-hero-talk__media { --mosaic-columns:18; } }
   @media (min-width:1792px) { .home-hero-talk__media { --mosaic-columns:20; } }
@@ -191,7 +216,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
     .home-hero-talk__scene:not(:first-child) { display:none!important; }
     .home-hero-talk__scene:first-child { position:relative!important;opacity:1!important;visibility:visible!important; }
     .home-hero-talk__fragment { animation:none!important;opacity:1!important;transform:none!important;filter:none!important; }
-    .home-hero-talk__fragment::after { display:none!important; }
+    .home-hero-talk__cursor { display:none!important; }
     .home-hero-talk__tile { transition:none!important;opacity:var(--tile-opacity,0)!important; }
   }
 </style>
@@ -288,6 +313,7 @@ const tileIndexes = Array.from({ length: 100 }, (_, index) => index);
       await configureMosaic(scenes[next],true);
       if(token!==transitionToken)return;
       active=next;
+      stage.dataset.activeMode=scenes[next].dataset.mode||'text-only';
       scenes.forEach((scene,sceneIndex)=>{const selected=sceneIndex===active;scene.classList.toggle('is-active',selected);scene.setAttribute('aria-hidden',String(!selected));scene.querySelectorAll<HTMLAnchorElement>('a').forEach((link)=>link.tabIndex=selected?0:-1);});
     };
     const stop=()=>{window.clearTimeout(timer);timer=0;};

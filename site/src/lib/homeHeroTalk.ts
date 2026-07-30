@@ -9,7 +9,7 @@ import {
 export type HomeHeroTalkMode = 'text-only' | 'photo-mosaic';
 
 export interface HomeHeroTalkScene {
-  event: PreviewEvent;
+  event: PreviewEvent | null;
   mode: HomeHeroTalkMode;
   asset: EventImageAsset | null;
   editorialId: string;
@@ -107,8 +107,10 @@ export function buildHomeHeroTalkDeck(
     if (!previous || eventRank(event, seed) > eventRank(previous, seed)) currentByFamily.set(familyKey, event);
   }
   const candidateById = new Map([...currentByFamily.values()].map((event) => [event.id, event]));
+  const narrativeEditorials = editorials.filter((editorial) => editorial.eventId === undefined);
   const candidates = editorials
     .flatMap((editorial) => {
+      if (editorial.eventId === undefined) return [];
       const exact = eventsById.get(editorial.eventId);
       if (!exact || !isCurrent(exact, currentDate)) return [];
       const familyKey = mutualFamilyKey(exact, eventsById);
@@ -122,12 +124,12 @@ export function buildHomeHeroTalkDeck(
     ));
   const desired = MODE_PATTERNS[hash32(seed) % MODE_PATTERNS.length];
   const remaining = [...candidates];
-  const scenes: HomeHeroTalkScene[] = [];
+  const eventScenes: HomeHeroTalkScene[] = [];
+  const eventLimit = Math.max(0, limit - narrativeEditorials.length);
 
-  for (let index = 0; index < Math.min(limit, candidates.length); index += 1) {
+  for (let index = 0; index < Math.min(eventLimit, candidates.length); index += 1) {
     let mode = desired[index % desired.length];
-    const laterNeedsPhoto = desired.slice(index + 1, Math.min(limit, desired.length))
-      .includes('photo-mosaic');
+    const laterNeedsPhoto = desired[(index + 1) % desired.length] === 'photo-mosaic';
     let candidateIndex = mode === 'photo-mosaic'
       ? remaining.findIndex(({ event }) => Boolean(eligibleHomeHeroAsset(event)))
       : laterNeedsPhoto
@@ -141,7 +143,7 @@ export function buildHomeHeroTalkDeck(
     if (candidateIndex < 0 || !remaining[candidateIndex]) break;
     const { event, editorial } = remaining.splice(candidateIndex, 1)[0];
     const asset = mode === 'photo-mosaic' ? eligibleHomeHeroAsset(event) : null;
-    scenes.push({
+    eventScenes.push({
       event,
       mode: asset ? mode : 'text-only',
       asset,
@@ -150,5 +152,22 @@ export function buildHomeHeroTalkDeck(
     });
   }
 
+  const narrativeScenes: HomeHeroTalkScene[] = narrativeEditorials.map((editorial) => ({
+    event:null,
+    mode:'text-only',
+    asset:null,
+    editorialId:editorial.id,
+    fragments:editorial.fragments,
+  }));
+  const scenes: HomeHeroTalkScene[] = [];
+  let eventIndex = 0;
+  let narrativeIndex = 0;
+  while (scenes.length < limit && (eventIndex < eventScenes.length || narrativeIndex < narrativeScenes.length)) {
+    const wantsNarrative = narrativeIndex < narrativeScenes.length
+      && (scenes.length === 0 || scenes.length === 2 || scenes.length === 8 || scenes.length === 14);
+    if (wantsNarrative) scenes.push(narrativeScenes[narrativeIndex++]);
+    else if (eventIndex < eventScenes.length) scenes.push(eventScenes[eventIndex++]);
+    else scenes.push(narrativeScenes[narrativeIndex++]);
+  }
   return scenes;
 }

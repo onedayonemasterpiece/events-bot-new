@@ -9,9 +9,13 @@
   scope boundary; hover and keyboard-prompt states preserve the same contrast.
 - Replaced the improvised home Hero Talk with the accepted briefing donor
   mechanics: a full-viewport desktop plane, semantic fragment links, a curated
-  28-line editorial bank, edge-reaching `16/18/20×5` mosaic and persistent
+  event editorial bank, edge-reaching `16/18/20×5` mosaic and persistent
   irregular partial-opacity field with copy/face protection and no full-raster
-  flash. Restored the accepted mobile date hero field with an invisible
+  flash. The runtime now exposes 24 scenes/20 distinct current events instead
+  of intersecting the bank with four top-feed cards, restores «Добрый день!»,
+  the local «кеска» voice and the exact wide-`О` donor SVG, and renders exactly
+  one terminal cursor after mixed linked/plain copy. Restored the accepted
+  mobile date hero field with an invisible
   preloader, exact sparse `11×6` topology, per-load irregular schedule,
   text/face shields and the original `y=0` shell geometry.
 - Focus page usefulness now remains selected for 24 hours across navigation by

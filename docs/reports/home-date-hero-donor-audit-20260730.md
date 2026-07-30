@@ -26,6 +26,9 @@ presence of tiles was not accepted as evidence of donor parity.
 | Final image state | multi-band partial field; copy/face shields; only edge cells full | all 112 tiles animated to `opacity:1` | “Irregular” was reduced to staggered delays instead of opacity topology |
 | Loading | raster is decoder/preload only; atomic next-scene decode | raster visible until JS marked mosaic ready | fallback image was treated as presentation |
 | Safety | crop/face projection and upscale ceiling `1.10` | no face projection or runtime upscale abstention | media eligibility was assumed to be enough at all viewport sizes |
+| Narrative coverage | 19 ordinary donor scenes plus a separate 14-scene media deck; welcome/local-language scenes are not event cards | 28 authored event lines existed in source, but only four reached HTML | the home passed only its top-30 cold-start feed into the narrative resolver and then hard-capped the result to four twice |
+| Cursor | one moving/terminal cursor after the true final fragment | two cursors could blink after mixed `<span>`/`<a>` copy | `:last-of-type` selected both the final span and the final anchor |
+| Brand background | exact wide `О` SVG behind text-only scenes | absent | donor asset and DOM layer were not transferred |
 
 Why it passed earlier: unit tests asserted event IDs, modes and family
 deduplication only. They did not assert fragment links, viewport geometry,
@@ -48,7 +51,14 @@ so it stopped acting as a donor regression contract.
 
 Home:
 
-- 28-entry grounded editorial launch bank with semantic fragments;
+- 24-scene runtime deck: four donor narrative scenes and 20 distinct current
+  events selected independently from the 30-card cold-start feed;
+- exact greeting «Добрый день!» and local voice «Мы говорим
+  по-калининградски… “кеска”»;
+- one explicit terminal cursor per scene, never a per-element-type pseudo
+  cursor;
+- exact donor `announcements-wide-o-ui.svg` background on text-only scenes;
+- grounded event editorial bank with semantic fragments;
 - no whole-scene anchor;
 - `100vw` plane, `75vw` right-edge mosaic;
 - adaptive `16/18/20×5`, `row-gap:0`;
@@ -74,6 +84,15 @@ Local Playwright at `1440×900`:
 - 70/80 cells below `.98`, 10 full edge cells;
 - decoder image `1×1`, no horizontal overflow;
 - four fragment links and zero whole-scene anchors.
+
+Follow-up acceptance after the focus-link correction:
+
+- 24 scenes in generated home HTML, including 20 distinct current events;
+- exactly one `greeting-day` and one `local-keska` scene;
+- one explicit cursor in every scene and one in the active scene;
+- one shared wide-`О` layer; it is suppressed for photo-mosaic scenes;
+- the existing focus-group/Autopresenter URL is updated in place:
+  `/preview-20260729-focus-simple-r15-a5cc0256/`.
 
 Local Playwright at `390×844`:
 

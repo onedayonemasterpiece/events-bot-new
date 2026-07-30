@@ -1,13 +1,14 @@
 export interface HomeHeroTalkEditorialFragment {
   text: string;
   link?: boolean;
+  href?: string;
   accent?: boolean;
   breakAfter?: boolean;
 }
 
 export interface HomeHeroTalkEditorial {
   id: string;
-  eventId: number;
+  eventId?: number;
   fragments: HomeHeroTalkEditorialFragment[];
 }
 
@@ -17,6 +18,19 @@ export interface HomeHeroTalkEditorial {
  * A Smart Update/LLM authoring pipeline is a follow-up, not browser runtime.
  */
 export const HOME_HERO_TALK_EDITORIAL: HomeHeroTalkEditorial[] = [
+  { id:'greeting-day', fragments:[
+    { text:'Добрый день!', accent:true, breakAfter:true }, { text:'Что сегодня' }, { text:'вас удивит?', href:'/segodnya/' },
+  ] },
+  { id:'local-keska', fragments:[
+    { text:'Мы говорим', breakAfter:true }, { text:'по-калининградски.', accent:true, breakAfter:true },
+    { text:'И скажем' }, { text:'«кеска».', href:'/segodnya/' },
+  ] },
+  { id:'city-does-not-wait', fragments:[
+    { text:'Город' }, { text:'не ждёт.', accent:true, breakAfter:true }, { text:'Что удивит' }, { text:'сегодня?', href:'/segodnya/' },
+  ] },
+  { id:'ask-with-child', fragments:[
+    { text:'Можно просто спросить:', breakAfter:true }, { text:'«Куда с ребёнком?»', href:'/poisk/', accent:true },
+  ] },
   { id:'sea-inside', eventId:4211, fragments:[
     { text:'Море', accent:true }, { text:'внутри.', link:true, accent:true, breakAfter:true }, { text:'И прямо на Променаде.' },
   ] },

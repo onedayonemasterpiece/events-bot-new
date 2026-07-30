@@ -11,6 +11,26 @@ try {
   await desktop.goto(`${base}/`, { waitUntil:'networkidle' });
   assert.equal(await desktop.locator('a[data-home-hero-scene]').count(), 0);
   assert.ok(await desktop.locator('[data-home-hero-fragment][href]').count() > 0);
+  const narrativeContract = await desktop.evaluate(() => {
+    const scenes = [...document.querySelectorAll('[data-home-hero-scene]')];
+    const active = document.querySelector('[data-home-hero-scene].is-active');
+    return {
+      sceneCount:scenes.length,
+      eventCount:new Set(scenes.map((scene) => scene.getAttribute('data-event-id')).filter(Boolean)).size,
+      greeting:document.querySelectorAll('[data-editorial-id="greeting-day"]').length,
+      localVoice:document.querySelectorAll('[data-editorial-id="local-keska"]').length,
+      brandO:document.querySelectorAll('[data-home-hero-brand-o]').length,
+      cursors:document.querySelectorAll('[data-home-hero-cursor]').length,
+      activeCursors:active?.querySelectorAll('[data-home-hero-cursor]').length || 0,
+    };
+  });
+  assert.ok(narrativeContract.sceneCount >= 20);
+  assert.ok(narrativeContract.eventCount >= 16);
+  assert.equal(narrativeContract.greeting, 1);
+  assert.equal(narrativeContract.localVoice, 1);
+  assert.equal(narrativeContract.brandO, 1);
+  assert.equal(narrativeContract.cursors, narrativeContract.sceneCount);
+  assert.equal(narrativeContract.activeCursors, 1);
   await desktop.waitForFunction(() => (
     document.querySelector('[data-home-hero-scene].is-active[data-mode="photo-mosaic"] [data-home-hero-mosaic]')
       ?.getAttribute('data-ready') === 'true'
