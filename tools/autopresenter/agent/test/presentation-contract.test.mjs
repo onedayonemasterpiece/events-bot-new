@@ -6,7 +6,9 @@ import {
   FRIENDS_CLUB_VIDEO_ASSET,
   INTRO_LOOP_RUNTIME_MS,
   INTRO_MUSIC_ASSET,
+  INTRO_MUSIC_ASSETS,
   INTRO_SCENE_ID,
+  LECTURE_UI_UX_ASSET,
   EXTRA_LECTURE_SCENE_IDS,
   JOKE_DATABASE_SCENE_IDS,
   LECTURE_ASSETS,
@@ -103,7 +105,8 @@ test("presentation scenes remain explicit and the intro defaults to fifty minute
 test("intro and lecture media use immutable content-addressed Yandex CDN URLs", () => {
   for (const asset of [
     ZNANIE_LOGO_ASSET,
-    INTRO_MUSIC_ASSET,
+    ...INTRO_MUSIC_ASSETS,
+    LECTURE_UI_UX_ASSET,
     ...LECTURE_ASSETS,
     ...LECTURE_UI_REFERENCE_ASSETS,
   ]) {
@@ -114,6 +117,19 @@ test("intro and lecture media use immutable content-addressed Yandex CDN URLs", 
     );
     assert.match(asset.sha256, /^[a-f0-9]{64}$/u);
   }
+  assert.equal(INTRO_MUSIC_ASSET, INTRO_MUSIC_ASSETS[0]);
+  assert.equal(INTRO_MUSIC_ASSETS.length, 5);
+  assert.deepEqual(
+    INTRO_MUSIC_ASSETS.map(({ id }) => id),
+    [
+      "echo-sax-end",
+      "maslov-nutcracker-march",
+      "dave-brubeck-take-five",
+      "maslov-nutcracker-waltz",
+      "herbie-hancock-cantaloupe-island",
+    ],
+  );
+  assert.match(LECTURE_UI_UX_ASSET.sourceSha256, /^[a-f0-9]{64}$/u);
   assert.deepEqual(
     LECTURE_ASSETS.map((asset) => asset.messageId),
     [821, 822, 823, 824, 825, 826, 830],

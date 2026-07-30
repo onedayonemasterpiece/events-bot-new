@@ -25,6 +25,7 @@ import {
 import {
   INTRO_LOOP_RUNTIME_MS,
   INTRO_MUSIC_ASSET,
+  INTRO_MUSIC_ASSETS,
   INTRO_SCENE_ID,
   FOCUS_PREVIEW_BASE_URL,
   FOCUS_INVITATION_SCENE_ID,
@@ -1081,6 +1082,12 @@ class PrototypeAgent {
     await raceWithAbort(scene.waitFor({ state: "visible", timeout: 10_000 }), signal);
     await this.assertStageAssetLoaded(INTRO_LOGO_SELECTOR, ZNANIE_LOGO_ASSET.url, signal);
     await this.assertStageAssetLoaded(INTRO_AUDIO_SELECTOR, INTRO_MUSIC_ASSET.url, signal);
+    const playlistSize = await scene.getAttribute("data-intro-playlist-size");
+    if (playlistSize !== String(INTRO_MUSIC_ASSETS.length)) {
+      throw new Error(
+        `intro playlist size mismatch: expected ${INTRO_MUSIC_ASSETS.length}, got ${playlistSize}`,
+      );
+    }
     await raceWithAbort(
       this.page.waitForFunction(
         (selector) =>

@@ -20,7 +20,12 @@
 
 Фразы должны быть короткими, показываться в формате печати, как в hero-talk (надеюсь ты его нашёл на главной странице статического сайта, в последних версиях он странным образом исчез, но на более старых тестовых сборках был и работал, напомню что это human-like печатающаяся надпись в 2 строчки сильной типографиков)
 
-Интро часть сопровождается фоновой музыкой: /home/dev/projects/events-bot-new/docs/features/static-site-pages/auto-present/scenario-assets/Echo Sax End.mp3
+Интро часть сопровождается фоновой музыкой в ротации:
+- /home/dev/projects/events-bot-new/docs/features/static-site-pages/auto-present/scenario-assets/Echo Sax End.mp3
+- /home/dev/projects/events-bot-new/docs/features/static-site-pages/auto-present/scenario-assets/Джазовое трио Александра Маслова - Марш из джазовой сюиты Щелкунчик (hitmos.fm).mp3
+- /home/dev/projects/events-bot-new/docs/features/static-site-pages/auto-present/scenario-assets/Dave_Brubeck_-_Take_Five_47937131.mp3
+- /home/dev/projects/events-bot-new/docs/features/static-site-pages/auto-present/scenario-assets/Dzhazovoe_trio_Aleksandra_Maslova_Pjotr_Ilich_CHajjkovskijj_-_Vals_cvetov_iz_dzhazovojj_syuity_SHHelkunchik_(musmore.org).mp3
+- /home/dev/projects/events-bot-new/docs/features/static-site-pages/auto-present/scenario-assets/Herbie_Hancock_-_Cantaloupe_Island_47996094.mp3
 
 Смыслы (сформулируй краткие сильные тексты на 2 строчки):
 - Приветствие
@@ -218,6 +223,9 @@ QR-код опроса по результату мероприятия (ото�
   сканирования издалека.
 - Все сцены базы шуток печатают авторский текст human-like; TTS для шуток 03 и
   07 остаётся fail-closed до исправления shared quota schema.
+- Музыка intro последовательно ротируется по всем пяти предоставленным трекам
+  и повторяется с начала; пункт лекции 3 использует уже заполненный
+  `UI and UX.png`, а не временную иллюстрацию.
 - Лекция следует точному порядку 1–11 и содержит 12 кнопок, потому что пункт 6
   разделён на два предоставленных кадра. Пункт 3 показывает изображение раньше
   подписей, а новые пункты 10–11 используют Telegram-кадры 890/891/893.

@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Extended the Autopresenter intro to a lightweight sequential five-track
+  owner-supplied playlist on the existing content-addressed Yandex CDN, and
+  replaced the temporary lecture UI/UX visual with the now-filled
+  `UI and UX.png` source.
 - Restored the exact eleven-point lecture order in the Autopresenter control:
   the previously skipped UI/UX path beat now reveals its labels after ten
   seconds, item 6 is explicitly split into two sourced frames, and later

@@ -383,6 +383,7 @@ test("intro, held lecture and desktop scenes use pinned assets and real FHD scro
   assert.match(source, /async runIntroLoop\(signal, options = \{\}\)/u);
   assert.match(source, /config\.introRuntimeMs/u);
   assert.match(source, /INTRO_MUSIC_ASSET\.url/u);
+  assert.match(source, /INTRO_MUSIC_ASSETS\.length/u);
   assert.match(source, /ZNANIE_LOGO_ASSET\.url/u);
   assert.match(source, /async runHeldPresentationScene\(scenarioId, signal\)/u);
   assert.match(source, /LECTURE_SCENES\.find/u);

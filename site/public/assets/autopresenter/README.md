@@ -21,6 +21,24 @@ No endorsement is implied. Preserve the marks without redrawing.
 - License: CC BY-SA 2.0 — https://creativecommons.org/licenses/by-sa/2.0/
 - Adaptation: presentation crop and overlaid labels only; the source pixels are otherwise unchanged.
 
+The separate lecture point `UI and UX` now uses the owner-supplied
+`scenario-assets/UI and UX.png` (source SHA-256
+`8d00fd11188962015e668406ea0a59938ff8b40b7c31655a8b53255cf66b5a96`).
+It is delivered as a visually faithful WebP from the existing Yandex CDN
+(SHA-256
+`5910fad02ca1eeea2ab565f581f0bbe8e68136a626753e3de84db8a7578a9ce5`).
+Exact provenance and URL are pinned in `presentation-contract.mjs`.
+
+## Intro music
+
+The five-track intro playlist consists only of owner-supplied files from
+`docs/features/static-site-pages/auto-present/scenario-assets`: `Echo Sax End`,
+two Alexander Maslov jazz-trio Nutcracker arrangements, `Take Five` and
+`Cantaloupe Island`. The original bytes are stored under immutable
+content-addressed keys on the existing Yandex CDN; URLs, hashes and source
+filenames are pinned in `presentation-contract.mjs`. No licensing claim is
+added here beyond that provenance.
+
 ## Lecture UI reference screenshots
 
 The owner supplied three exact reference screenshots in the presentation

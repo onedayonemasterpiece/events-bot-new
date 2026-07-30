@@ -49,9 +49,50 @@ export const ZNANIE_LOGO_ASSET = Object.freeze({
   sha256: "b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9",
 });
 
-export const INTRO_MUSIC_ASSET = Object.freeze({
-  url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3",
-  sha256: "6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a",
+export const INTRO_MUSIC_ASSETS = Object.freeze([
+  Object.freeze({
+    id: "echo-sax-end",
+    title: "Echo Sax End",
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3",
+    sha256: "6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a",
+    source: "scenario-assets/Echo Sax End.mp3",
+  }),
+  Object.freeze({
+    id: "maslov-nutcracker-march",
+    title: "Марш из джазовой сюиты «Щелкунчик»",
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/intro-maslov-nutcracker-march-a338b464a3ccfe44.mp3",
+    sha256: "a338b464a3ccfe449a87af725b7a07d51fb6fdbc2c261f75619e8d7ae6c68720",
+    source: "scenario-assets/Джазовое трио Александра Маслова - Марш из джазовой сюиты Щелкунчик (hitmos.fm).mp3",
+  }),
+  Object.freeze({
+    id: "dave-brubeck-take-five",
+    title: "Take Five",
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/intro-dave-brubeck-take-five-7a44c8ce751d0e03.mp3",
+    sha256: "7a44c8ce751d0e032281a46fff952cb62743f06ed02621aa5467feee1e826e5d",
+    source: "scenario-assets/Dave_Brubeck_-_Take_Five_47937131.mp3",
+  }),
+  Object.freeze({
+    id: "maslov-nutcracker-waltz",
+    title: "Вальс цветов из джазовой сюиты «Щелкунчик»",
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/intro-maslov-nutcracker-waltz-e0e2ef9c1a8eb555.mp3",
+    sha256: "e0e2ef9c1a8eb555ac153d1d0d479d95ca70f5dbd1d6f42aa4c5e8622a960837",
+    source: "scenario-assets/Dzhazovoe_trio_Aleksandra_Maslova_Pjotr_Ilich_CHajjkovskijj_-_Vals_cvetov_iz_dzhazovojj_syuity_SHHelkunchik_(musmore.org).mp3",
+  }),
+  Object.freeze({
+    id: "herbie-hancock-cantaloupe-island",
+    title: "Cantaloupe Island",
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/intro-herbie-hancock-cantaloupe-island-f36ad961391ba101.mp3",
+    sha256: "f36ad961391ba1018d68bd2c3dd5a2c4be78d1824cf45fddfabdf5e0bff9c403",
+    source: "scenario-assets/Herbie_Hancock_-_Cantaloupe_Island_47996094.mp3",
+  }),
+]);
+export const INTRO_MUSIC_ASSET = INTRO_MUSIC_ASSETS[0];
+
+export const LECTURE_UI_UX_ASSET = Object.freeze({
+  url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-ui-ux-5910fad02ca1eeea.webp",
+  sha256: "5910fad02ca1eeea2ab565f581f0bbe8e68136a626753e3de84db8a7578a9ce5",
+  source: "scenario-assets/UI and UX.png",
+  sourceSha256: "8d00fd11188962015e668406ea0a59938ff8b40b7c31655a8b53255cf66b5a96",
 });
 
 export const CAT_KEYBOARD_ASSET = Object.freeze({

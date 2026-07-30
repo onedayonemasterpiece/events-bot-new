@@ -25,7 +25,35 @@ const focusInvitationQrSvg = createFocusInviteQrSvg(focusInvitationUrl);
 const friendsClubQrSvg = createFocusInviteQrSvg(friendsClubUrl);
 const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/qr-survey-nikiforov-916b6fee58256c4f2111887bf70c502070a55e45a667650dfccdb1495016ccd9.png';
 const znanieLogoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/znanie-logo-b97bf38f1b152a8eb3bbae79cb38df24cc2543ec2538d6f0d58863c9698072a9.svg';
-const introMusicUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3';
+const introMusicTracks = [
+  {
+    id: 'echo-sax-end',
+    title: 'Echo Sax End',
+    url: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/echo-sax-end-6d7494c0d24c1815ac72a120e96b23782a2e92ef1ce26fb67769693d057fd08a.mp3',
+  },
+  {
+    id: 'maslov-nutcracker-march',
+    title: 'Марш из джазовой сюиты «Щелкунчик»',
+    url: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/intro-maslov-nutcracker-march-a338b464a3ccfe44.mp3',
+  },
+  {
+    id: 'dave-brubeck-take-five',
+    title: 'Take Five',
+    url: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/intro-dave-brubeck-take-five-7a44c8ce751d0e03.mp3',
+  },
+  {
+    id: 'maslov-nutcracker-waltz',
+    title: 'Вальс цветов из джазовой сюиты «Щелкунчик»',
+    url: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/intro-maslov-nutcracker-waltz-e0e2ef9c1a8eb555.mp3',
+  },
+  {
+    id: 'herbie-hancock-cantaloupe-island',
+    title: 'Cantaloupe Island',
+    url: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/intro-herbie-hancock-cantaloupe-island-f36ad961391ba101.mp3',
+  },
+];
+const introMusicUrl = introMusicTracks[0].url;
+const lectureUiUxUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-ui-ux-5910fad02ca1eeea.webp';
 const jokeAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/joke-electronic-brain-c0efea54a93d4a6bcbb8e244bc35cfbe9a23556783d78df0fcffa457b5dead79.wav';
 const errorAudioUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/computer-error-cc0-d7ec5eeba2b280017100e9deb3f063d580755469ce326332df7da9b4dcd63d1a.mp3';
 const catKeyboardUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/cat-keyboard-unsplash-dbbe5f90f00dc4e4bb483d3374626a668aa1d395ea1e352ec1661b8b7ebc9e79.webp';
@@ -404,6 +432,7 @@ const expandedServiceScenes = [
         data-presenter-id="intro-scene"
         data-presenter-scene-id="intro-loop"
         data-intro-state="idle"
+        data-intro-playlist-size={introMusicTracks.length}
         aria-label="Интро перед лекцией"
         hidden
       >
@@ -420,8 +449,8 @@ const expandedServiceScenes = [
         <audio
           data-presenter-id="intro-music"
           src={introMusicUrl}
-          preload="auto"
-          loop
+          preload="metadata"
+          data-intro-playlist={JSON.stringify(introMusicTracks)}
         ></audio>
       </section>
 
@@ -469,14 +498,13 @@ const expandedServiceScenes = [
         </div>
         <figure class="lecture-visual desire-path-visual lecture-ui-ux-visual">
           <img
-            src="/assets/autopresenter/lecture/desire-path-ludwell-cc-by-sa-2.jpg"
+            src={lectureUiUxUrl}
             alt="Прямой оформленный маршрут и выбранные людьми короткие тропинки"
             loading="eager"
             decoding="async"
           />
           <span class="desire-label desire-label--ui"><b>UI</b> — красивый спроектированный путь</span>
           <span class="desire-label desire-label--ux"><b>UX</b> — путь, который выбрали люди</span>
-          <small>David Smith · CC BY-SA 2.0</small>
         </figure>
       </section>
 
@@ -1201,6 +1229,25 @@ const expandedServiceScenes = [
         let activeWaitResolve = null;
         let musicFade = 0;
         let previousRoute = -1;
+        let introTrackIndex = 0;
+        const introPlaylist = (() => {
+          try {
+            const parsed = JSON.parse(introMusic.dataset.introPlaylist || '[]');
+            if (
+              Array.isArray(parsed) &&
+              parsed.length > 0 &&
+              parsed.every((track) =>
+                typeof track?.id === 'string' &&
+                typeof track?.title === 'string' &&
+                typeof track?.url === 'string')
+            ) return parsed;
+          } catch {}
+          return [{
+            id: 'intro-fallback',
+            title: 'Музыка интро',
+            url: introMusic.getAttribute('src') || introMusic.currentSrc,
+          }];
+        })();
 
         const setStatus = (nextStatus, label) => {
           if (!Object.hasOwn(labels, nextStatus)) return;
@@ -1322,16 +1369,35 @@ const expandedServiceScenes = [
           return introRoutes[index];
         };
 
-        const startMusic = async (token) => {
-          introMusic.volume = 0;
+        const selectIntroTrack = (index) => {
+          introTrackIndex = ((index % introPlaylist.length) + introPlaylist.length) % introPlaylist.length;
+          const track = introPlaylist[introTrackIndex];
+          if (introMusic.getAttribute('src') !== track.url) {
+            introMusic.src = track.url;
+            introMusic.load();
+          }
+          introMusic.dataset.introTrackIndex = String(introTrackIndex);
+          introMusic.dataset.introTrackId = track.id;
+          introMusic.dataset.introTrackTitle = track.title;
+          introScene.dataset.introTrack = track.id;
+          return track;
+        };
+
+        const playMusicTrack = async (token, { fade = false, attempts = 0 } = {}) => {
+          introMusic.volume = fade ? 0 : .15;
           try {
             await introMusic.play();
           } catch {
+            if (token === generation && attempts + 1 < introPlaylist.length) {
+              selectIntroTrack(introTrackIndex + 1);
+              return playMusicTrack(token, { fade: false, attempts: attempts + 1 });
+            }
             introScene.dataset.introAudio = 'blocked';
             return;
           }
           if (token !== generation) return;
           introScene.dataset.introAudio = 'playing';
+          if (!fade) return;
           const startedAt = performance.now();
           musicFade = window.setInterval(() => {
             if (token !== generation) return clearInterval(musicFade);
@@ -1343,6 +1409,18 @@ const expandedServiceScenes = [
             }
           }, 50);
         };
+
+        const startMusic = async (token) => {
+          selectIntroTrack(0);
+          await playMusicTrack(token, { fade: true });
+        };
+
+        introMusic.addEventListener('ended', () => {
+          if (introScene.dataset.introState !== 'running') return;
+          const token = generation;
+          selectIntroTrack(introTrackIndex + 1);
+          void playMusicTrack(token);
+        });
 
         const countdownPhrase = (startAt) => {
           const timestamp = Date.parse(startAt || '');
