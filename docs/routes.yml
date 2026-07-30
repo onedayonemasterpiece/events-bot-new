@@ -747,6 +747,7 @@ features:
   festivals:
     status: in_progress
     docs: docs/features/festivals/README.md
+    data_model_v2: docs/features/festivals/data-model-v2.md
     entrypoints:
       - main.py
       - main_part2.py

@@ -6,6 +6,11 @@
 несоциальные источники. Telegram/VK intake, Telegram Monitoring и VK auto
 import этим контуром не меняются.
 
+Canonical target JSON, seven classification axes, programme profiles and
+item-disposition semantics are defined once in
+[`../../../festivals/data-model-v2.md`](../../../festivals/data-model-v2.md).
+This document owns collection/runtime, not a parallel festival taxonomy.
+
 ## Цель
 
 Получать из нескольких сайтов и документов один evidence-backed пакет выпуска
@@ -107,8 +112,8 @@ festival_queue URL rows
   -> group target edition
   -> deterministic URL preflight
   -> bounded adapter/fetch/render/document snapshots
-  -> Antigravity A: primary research + atomic claims + candidate
-  -> Antigravity B: independent fresh-sandbox counter-evidence
+  -> Antigravity A: primary research + claims + taxonomy/items + candidate
+  -> Antigravity B: independent taxonomy/item check + counter-evidence
   -> local compare
        agreement -> deterministic final gate
        conflict  -> Antigravity C: optional compact adjudicator
@@ -170,8 +175,12 @@ aggregator
 document_pdf
 document_image
 machine_feed
+social
 other
 ```
+
+`social` may be preserved as referenced provenance but is not fetched by this
+non-social lane.
 
 Role/officiality is not inferred from a `fest` substring. It requires:
 
@@ -339,7 +348,12 @@ Per source:
   "content_sha256": "...",
   "source_role": "official_program",
   "edition_status": "accepted|rejected|ambiguous",
-  "decision_quotes": ["verbatim"],
+  "normalizer_version": "host-pinned string",
+  "decision_quotes": [{
+    "quote": "verbatim",
+    "quote_start": 0,
+    "quote_end": 0
+  }],
   "artifact_path": "..."
 }
 ```
@@ -355,12 +369,16 @@ Per source:
   "raw_value": "...",
   "normalized_value": "...",
   "normalization": "none|trim|iso_date|iso_time|canonical_url",
-  "verbatim_quote": "..."
+  "verbatim_quote": "...",
+  "quote_start": 0,
+  "quote_end": 0,
+  "normalizer_version": "host-pinned string"
 }
 ```
 
-Local validator requires that quote exists inside the exact
-`content_sha256` snapshot.
+Local validator requires that the recorded offsets reproduce the quote under
+the pinned normalizer against the exact `content_sha256` snapshot. A bare
+substring match is insufficient when the same name/date occurs repeatedly.
 
 ### Candidate
 
@@ -376,6 +394,43 @@ Every scalar:
 
 Candidate cannot contain a value absent from claims.
 
+### Taxonomy and programme disposition
+
+The candidate pins:
+
+```json
+{
+  "schema_version": "festival-edition-v2",
+  "taxonomy_id": "kenigevents-festivals",
+  "taxonomy_version": "1.0.0",
+  "taxonomy_sha256": "...",
+  "classification": {
+    "programme_profile": {
+      "value": "identity_only|single_compound_event|standalone_events|schedule_only|hybrid|continuous_experience|distributed_cycle|unknown",
+      "claim_ids": ["C001"],
+      "decision_ids": ["D001"],
+      "status": "supported|conflict|unknown"
+    }
+  },
+  "programme_sections": [{
+    "section_key": "...",
+    "items": [{
+      "item_key": "...",
+      "disposition": "link_existing_event|create_event_candidate|schedule_slot|programme_only|continuous_activity|service_information|reject",
+      "decision_ids": ["D002"]
+    }]
+  }],
+  "decisions": [{
+    "decision_id": "D002",
+    "evidence_claim_ids": ["C002"]
+  }]
+}
+```
+
+The calendar branch's free-text `category`, research status, date precision,
+source role and programme profile remain different axes. Unknown taxonomy
+labels are quarantined and never become production categories automatically.
+
 ### Counter-evidence
 
 Independent Antigravity checker receives target/seed only, not candidate:
@@ -385,8 +440,12 @@ Independent Antigravity checker receives target/seed only, not candidate:
   "challenges": [{
     "field": "festival.title",
     "challenger_value": "...",
+    "source_id": "B-S001",
     "source_url": "...",
+    "content_sha256": "...",
     "quote": "...",
+    "quote_start": 0,
+    "quote_end": 0,
     "reason": "stale_edition|unsupported_modifier|ticket_scope|other"
   }]
 }
@@ -397,8 +456,8 @@ immediately.
 
 ### Adjudication packet
 
-Only conflicting claim values, exact quotes, hashes and at most two cited URLs.
-No full HTML, no full raw candidate, no broad search.
+Only conflicting claim values, exact quotes and hashes. No URLs to reopen, full
+HTML, raw candidate, broad search or network tool.
 
 ## 6. Antigravity-first runtime
 
@@ -419,7 +478,10 @@ legacy parser.
    ledger;
 6. для каждого source определить role/edition и выписать atomic claims с
    точными quotes;
-7. собрать candidate только из этих claims.
+7. классифицировать каждый programme subject и сохранить disposition decision;
+8. вывести семь taxonomy axes/programme profile только из принятых
+   claims/decisions;
+9. собрать candidate только из этих claims.
 
 Так как Antigravity не поддерживает structured output, JSON-файлы агента —
 предложение, а не доверенный результат. Их принимает только local validator.
@@ -436,19 +498,23 @@ URLs/snapshots. Ей не передаются candidate, claims или реше
 2. открыть не более четырёх страниц;
 3. независимо проверить актуальность edition, модификаторы названия и роль
    ticket URL (`single_event|subscription|festival_pass`);
-4. checkpoint-ить каждый источник немедленно;
-5. вернуть собственный source/claim ledger и counter-evidence, а не оценку
-   уверенности первого агента.
+4. независимо определить programme profile и disposition каждого критического
+   programme subject по pinned taxonomy;
+5. checkpoint-ить каждый источник немедленно;
+6. вернуть собственный source/claim/disposition ledger и counter-evidence, а
+   не оценку уверенности первого агента.
 
 Два вызова Antigravity — нормальный путь для каждой группы, а не исключение.
 
 ### Call C — optional adjudicator
 
 Вызывается только если local compare нашёл критический конфликт A/B.
-Получает компактный claim diff: значения, exact quotes, hashes и не более двух
-цитируемых URL. Полные страницы, исходные candidates и broad search не
-передаются. Search выключен; допустимо максимум два reopen указанных URL.
-Результат — `supported|unknown|conflict`, без создания новых фактов.
+Получает компактный claim diff: значения, exact quotes, hashes и перечисленные
+локально валидные alternatives. Полные страницы, URLs, исходные candidates и
+broad search не передаются. Search/network/fetch выключены.
+Для каждого `conflict_id` результат содержит только
+`choice=<existing alternative_id>|unknown|conflict` и supporting claim IDs.
+Call C не возвращает и не пересобирает candidate, не создаёт новых фактов.
 
 Никакого автоматического четвёртого вызова нет. `status=incomplete` у любого
 агента допустим, если обязательные checkpoints уже записаны и проходят
@@ -505,6 +571,12 @@ May not:
 11. all strong event candidates have date + meaningful title; time/venue
     requirements follow the existing festival program rules;
 12. program-only activities are not silently promoted to Event.
+13. A/B agree on identity kind and programme profile, or C explicitly resolves
+    the bounded conflict;
+14. every subject from the union of A/B programme inventories has an accepted,
+    rejected or unresolved disposition;
+15. taxonomy version/hash match the host registry and unmapped primary labels
+    remain quarantined.
 
 Any critical failure => `needs_review`, never guessed repair.
 
@@ -584,13 +656,18 @@ Preproduction defaults:
 | `FESTIVAL_WEB_RESEARCH_CHECK_SOURCES` | `4` |
 | `FESTIVAL_WEB_RESEARCH_AGENT_DAILY_CAP` | `12` |
 | `FESTIVAL_WEB_RESEARCH_MAX_AGENT_CALLS_PER_GROUP` | `3` |
-| `FESTIVAL_WEB_RESEARCH_PRIMARY_AGENT_TOKENS` | `25000` |
-| `FESTIVAL_WEB_RESEARCH_CHECK_AGENT_TOKENS` | `18000` |
-| `FESTIVAL_WEB_RESEARCH_ADJUDICATOR_TOKENS` | `12000` |
+| `FESTIVAL_WEB_RESEARCH_PRIMARY_AGENT_TOKENS` | `20000` |
+| `FESTIVAL_WEB_RESEARCH_CHECK_AGENT_TOKENS` | `12000` |
+| `FESTIVAL_WEB_RESEARCH_ADJUDICATOR_TOKENS` | `8000` |
+| `FESTIVAL_WEB_RESEARCH_PRIMARY_RESERVATION_TOKENS` | `50000` |
+| `FESTIVAL_WEB_RESEARCH_CHECK_RESERVATION_TOKENS` | `30000` |
+| `FESTIVAL_WEB_RESEARCH_ADJUDICATOR_RESERVATION_TOKENS` | `20000` |
 
 All calls reserve/finalize through canonical
 `antigravity-preview-05-2026` shared limiter. Feature cap `12 RPD` is inside
-the global safe `90 RPD`.
+the global safe `90 RPD`. The table is a preproduction implementation contract:
+the feature-local `12 RPD` cap and the new per-role reservations are not
+runtime-enforced until this lane is implemented.
 
 No parallel Antigravity calls. Scheduler uses actual finalized usage before
 the next reservation. `max_total_tokens` remains best-effort and cannot replace
@@ -616,6 +693,10 @@ playwright_renders
 documents_parsed
 source_accepted/rejected/ambiguous
 claims_total/critical
+taxonomy_a_b_agreement/conflicts/unmapped
+programme_profile
+programme_items_by_disposition
+programme_inventory_unresolved
 candidate_conflicts
 stale_edition_blocks
 ticket_role_blocks
@@ -636,20 +717,20 @@ log API keys, full credentials or personal data.
 
 ## 12. Preproduction eval pack
 
-At least 12 real source bundles:
+At least 14 real source bundles, two for each programme profile:
 
-1. current official program + stale organizer archive;
-2. multi-day program + subscription + three single tickets;
-3. multiple ticket occurrence URLs for one series;
-4. official homepage + separate venue event pages;
-5. regional tourism page only;
-6. Qtickets event that is a true festival;
-7. false-positive ordinary performance/person birthday;
-8. explicit prior-year tourism page;
-9. JS-only ticket shell;
-10. PDF-first program;
-11. image/OCR-first program;
-12. same series with two explicit years.
+1. identity/dates only;
+2. one compound festival visit with internal timetable;
+3. independently ticketed multi-event programme;
+4. one-ticket schedule-only stage programme;
+5. hybrid event + schedule/programme-only source;
+6. continuous fair/exhibition/zones;
+7. distributed seasonal cycle.
+
+Each pair contains an adversarial variant such as stale year, subscription vs
+single ticket, generic JS shell, conflicting times, incomplete PDF/OCR, same
+title on different dates, a current page with a separate historical section or
+an ordinary event mislabeled as a festival.
 
 Real names/contents stay in fixtures/artifacts and must not become reusable
 prompt examples.
@@ -662,6 +743,9 @@ prompt examples.
 - every non-null critical scalar has valid claim/quote: `100%`;
 - differing explicit years never merge: `100%`;
 - false-positive ordinary events never auto-create festival: `100%`;
+- programme-profile exact match against reviewed gold: `100%`;
+- item-disposition precision in shadow: `>= 0.98`;
+- source-grounded programme inventory loss: `0`;
 - rerun with same fingerprint creates no provider calls/writes;
 - approved strong events enter only through Smart Update.
 
@@ -680,6 +764,10 @@ prompt examples.
 The `2026-07-29` Antigravity 2+1 probe (`150,950` tokens, `0/3` terminal
 outputs, but `3/3` known grounding errors caught from checkpoints) fails the
 token/completion gate and is baseline evidence for the narrower roles above.
+More precisely, B/C preserved raw source checkpoints, not completed semantic
+ledgers; the errors were recovered through local/manual source review. A
+structured run is not accepted until per-source decision/claim/disposition
+checkpoints validate outside the sandbox.
 
 ## 13. Rollout
 
@@ -740,6 +828,7 @@ festival_web_research/
   fetch.py
   adapters/
   snapshots.py
+  taxonomy.py
   antigravity_primary.py
   antigravity_checker.py
   antigravity_adjudicator.py

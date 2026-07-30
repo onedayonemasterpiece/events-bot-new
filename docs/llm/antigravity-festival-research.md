@@ -7,6 +7,12 @@
 склей всё и сам оцени уверенность» на маленькие стадии с независимой
 проверкой доказательств.
 
+Канонические оси классификации, programme profiles, item dispositions и
+выходной `festival-edition-v2` определены в
+[`../features/festivals/data-model-v2.md`](../features/festivals/data-model-v2.md).
+Этот документ задаёт prompt/evidence protocol и не вводит параллельную
+таксономию.
+
 ## Почему одного усиленного prompt недостаточно
 
 В монолитном запросе один и тот же агент одновременно:
@@ -56,8 +62,9 @@ Call A — primary researcher, fresh environment
 Call B — independent skeptic, another fresh environment
   тот же target/seed, но не получает candidate A
   one search query, <= 4 pages
-  пытается опровергнуть только critical fields
-  -> counter-evidence ledger B, без второго полного candidate
+  независимо классифицирует critical fields, programme profile и items,
+  затем пытается найти опровержения
+  -> taxonomy/item ledger B и counter-evidence, без второго полного candidate
 
 Local deterministic comparison
   quote/source/year/URL validation
@@ -67,7 +74,7 @@ yes -> final result from supported intersection
 no  -> Call C — Antigravity adjudicator
        получает compact claim diff A/B и короткие exact quotes
        не получает полный raw candidate/pages
-       не начинает новый поиск
+       не имеет search/fetch/network tools
        -> conflicts or evidence-backed final result
 ```
 
@@ -79,13 +86,15 @@ no  -> Call C — Antigravity adjudicator
   сутки, что выше текущего объёма фестивальной очереди;
 - Call B запускается в свежем environment и не видит вывод Call A, чтобы
   контроль не превратился в согласие с уже показанным ответом;
-- Call B не повторяет полный research/reconciliation: один узкий search query,
-  не более четырёх страниц, немедленный source checkpoint после каждой fetch;
+- Call B не повторяет полный rich candidate/reconciliation: один узкий search
+  query, не более четырёх страниц, немедленный source checkpoint после каждой
+  fetch, но programme profile и critical item dispositions он определяет
+  независимо, иначе отсутствие записи ошибочно выглядит как согласие;
 - Call C запускается только если A и B расходятся по critical fields,
   используют несовместимые выпуски/URL или один из них не проходит local gate;
 - Call C получает только conflict packet: target, спорные values, claim ids,
-  короткие exact quotes и cited URLs. Полные HTML/raw candidate в prompt
-  запрещены как token-amplification;
+  короткие exact quotes и source hashes. Полные HTML/raw candidate и
+  открываемые URL запрещены как token-amplification;
 - `status=incomplete` не создаёт автоматический четвёртый запрос: сначала
   скачивается workspace, затем результат либо проверяется, либо один из трёх
   слотов осознанно используется как replacement/adjudication;
@@ -177,12 +186,13 @@ TARGET:
     "retrieved_at_utc": "ISO-8601",
     "content_path": "/workspace/festival_research/sources/S001.txt",
     "content_sha256": "lowercase hex",
+    "normalizer_version": "host-pinned string",
     "observed": {
-      "explicit_year_quotes": [{"value": 0, "quote": "verbatim"}],
-      "date_quotes": [{"value": "verbatim", "quote": "verbatim"}],
-      "edition_label_quotes": [{"value": "verbatim", "quote": "verbatim"}],
-      "event_quotes": [{"value": "verbatim", "quote": "verbatim"}],
-      "ticket_identity_quotes": [{"value": "verbatim", "quote": "verbatim"}]
+      "explicit_year_quotes": [{"value": 0, "quote": "verbatim", "quote_start": 0, "quote_end": 0}],
+      "date_quotes": [{"value": "verbatim", "quote": "verbatim", "quote_start": 0, "quote_end": 0}],
+      "edition_label_quotes": [{"value": "verbatim", "quote": "verbatim", "quote_start": 0, "quote_end": 0}],
+      "event_quotes": [{"value": "verbatim", "quote": "verbatim", "quote_start": 0, "quote_end": 0}],
+      "ticket_identity_quotes": [{"value": "verbatim", "quote": "verbatim", "quote_start": 0, "quote_end": 0}]
     },
     "fetch_status": "ok|partial|blocked",
     "fetch_notes": "string|null"
@@ -192,6 +202,8 @@ TARGET:
 
 Инварианты:
 - quote — дословная непрерывная подстрока сохранённого нормализованного текста;
+- `quote_start:quote_end` воспроизводит quote в тексте с указанным
+  `content_sha256`; normalizer/version задаёт host и не меняется внутри run;
 - пустой/blocked контент не подтверждает ни одного факта;
 - разные resolved URL получают разные source_id;
 - не добавляй edition_status, officiality, confidence или финальные поля.
@@ -199,10 +211,11 @@ TARGET:
 
 Рекомендуемые границы одного probe:
 
-- `max_sources=8`;
-- `max_fetches=12`;
-- один search round и один узкий retry только для blocked official URL;
-- `agent_config.max_total_tokens=30000..40000`;
+- `max_sources=6`;
+- `max_fetches=8`;
+- один search round без свободного retry;
+- целевой `agent_config.max_total_tokens=18000..20000`, а reservation shared
+  limiter остаётся консервативным `45000..50000`;
 - никаких «до 15 источников» и полного финального JSON в этом interaction.
 
 `max_total_tokens` у Antigravity является best-effort, поэтому внешний consumer
@@ -240,9 +253,17 @@ SOURCE TEXT:
   "edition_status": "accepted|rejected|ambiguous",
   "edition_year": 0|null,
   "source_role":
-    "official_program|official_organizer|ticket_single_event|ticket_subscription|festival_pass|media|aggregator|social|other",
-  "role_quote": "verbatim|null",
-  "decision_quotes": ["verbatim"],
+    "official_home|official_program|official_organizer|official_event|ticket_single_event|ticket_subscription|festival_pass|registration|regional_tourism|media|aggregator|document_pdf|document_image|machine_feed|social|other",
+  "role_evidence": {
+    "quote": "verbatim",
+    "quote_start": 0,
+    "quote_end": 0
+  },
+  "decision_evidence": [{
+    "quote": "verbatim",
+    "quote_start": 0,
+    "quote_end": 0
+  }],
   "reasons": [
     "explicit_target_year|exact_target_dates|edition_label_match|explicit_other_year|date_set_mismatch|program_identity_mismatch|no_edition_evidence|ticket_identity_match|ticket_scope_is_subscription|other"
   ]
@@ -257,7 +278,7 @@ SOURCE TEXT:
   одно событие и его дату/время;
 - абонемент, подписка, пакет или общий проходной билет — не
   ticket_single_event;
-- каждая decision_quote и role_quote должна быть дословной подстрокой SOURCE
+- каждый evidence offset range должен воспроизводить дословную цитату в SOURCE
   TEXT; при отсутствии цитаты используй null/ambiguous.
 ```
 
@@ -266,10 +287,12 @@ SOURCE TEXT:
 После LLM-классификации caller обязан:
 
 1. проверить дословное наличие всех цитат в сохранённом source text;
-2. перевести ответ в `rejected`, если источник содержит однозначный явный год,
-   отличный от target, а модель вернула `accepted`;
-3. перевести ответ минимум в `ambiguous`, если нет ни одной валидной
-   `decision_quote`;
+2. перевести ответ в `rejected`, если span, относящийся именно к извлекаемой
+   программе/выпуску, однозначно задаёт другой год и не содержит совместимого
+   target-edition evidence; отдельный исторический раздел страницы сам по себе
+   не отклоняет текущую страницу;
+3. перевести ответ минимум в `ambiguous`, если нет ни одного валидного
+   `decision_evidence`;
 4. запретить `ticket_single_event`, если нет доказательств события и его даты;
 5. считать все `fetch_status != ok` непригодными для критических полей.
 
@@ -311,6 +334,9 @@ SOURCE TEXT:
     "normalized_value": "JSON scalar|null",
     "normalization": "none|trim|iso_date|iso_time|canonical_url",
     "verbatim_quote": "non-empty verbatim substring",
+    "quote_start": 0,
+    "quote_end": 0,
+    "normalizer_version": "host-pinned string",
     "context_quote": "verbatim|null"
   }],
   "unresolved": ["string"]
@@ -327,13 +353,41 @@ SOURCE TEXT:
   source_role=ticket_single_event; для subscription/pass используй
   registration_url и сохрани scope в unresolved;
 - quote должен буквально содержать raw_value либо однозначное исходное
-  выражение, из которого получена ISO-нормализация;
+  выражение, из которого получена ISO-нормализация; offsets должны точно
+  воспроизводить quote в hash-bound normalized source text;
 - если факт подразумевается, но не написан, не извлекай его.
 ```
 
-Caller детерминированно присваивает `claim_id`, проверяет цитаты, URL и
-разрешённые нормализации. Claim из rejected/ambiguous source не попадает в
-accepted ledger.
+Caller детерминированно присваивает `claim_id`, проверяет offsets/цитаты, URL,
+hash/normalizer version и разрешённые нормализации. Claim из
+rejected/ambiguous source не попадает в accepted ledger.
+
+## Stage 3b. Programme inventory и item disposition
+
+После source-local claims Call A сохраняет source-local inventory, не
+склеивая одинаково выглядящие пункты между источниками:
+
+```json
+{
+  "source_id": "S001",
+  "items": [{
+    "local_item_id": "item:1",
+    "identity_claim_ids": ["C..."],
+    "logistics_claim_ids": ["C..."],
+    "disposition":
+      "link_existing_event|create_event_candidate|schedule_slot|programme_only|continuous_activity|service_information|reject",
+    "decision_id": "D...",
+    "reason_codes": ["host-vocabulary value"],
+    "alternatives_rejected": ["create_event_candidate"]
+  }]
+}
+```
+
+Disposition выбирает LLM по evidence из одного источника. Детерминированный
+caller только проверяет enum, ссылки и полноту inventory. Межисточниковый
+reconciliation не имеет права потерять source-local item: каждый элемент
+union A/B должен быть связан, сохранён, отвергнут с evidence или отмечен
+`unresolved`.
 
 ## Stage 4. Entity/event reconciliation — LLM над claim ledger
 
@@ -365,6 +419,40 @@ ACCEPTED_CLAIMS:
       }
     }
   },
+  "classification": {
+    "taxonomy_version": "host-pinned string",
+    "taxonomy_sha256": "host-pinned lowercase hex",
+    "identity_kind": {
+      "value": "controlled value|unknown",
+      "claim_ids": ["C..."],
+      "decision_ids": ["D..."],
+      "status": "supported|conflict|unknown"
+    },
+    "programme_profile": {
+      "value": "controlled value|unknown",
+      "claim_ids": ["C..."],
+      "decision_ids": ["D..."],
+      "status": "supported|conflict|unknown"
+    },
+    "primary_topic_id": {
+      "value": "controlled id|null",
+      "claim_ids": ["C..."],
+      "decision_ids": ["D..."],
+      "status": "supported|conflict|unknown"
+    },
+    "secondary_topic_ids": {
+      "values": ["controlled id"],
+      "claim_ids": ["C..."],
+      "decision_ids": ["D..."],
+      "status": "supported|conflict|unknown"
+    },
+    "raw_topic_labels": [{"value": "source value", "claim_ids": ["C..."]}],
+    "unmapped_topic_labels": ["source value"],
+    "temporal_profile": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "spatial_profile": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "access_profiles": {"values": ["controlled value"], "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "lifecycle_state": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]}
+  },
   "event_clusters": [{
     "cluster_id": "E001",
     "member_subjects": ["S001:event:1"],
@@ -382,6 +470,16 @@ ACCEPTED_CLAIMS:
     "field": "string",
     "alternatives": [{"value": "existing claim value", "claim_ids": ["C..."]}]
   }],
+  "decisions": [{
+    "decision_id": "D001",
+    "decision_kind": "edition_classification_bundle|programme_profile|programme_item_disposition|entity_match",
+    "subject_refs": ["S001:festival"],
+    "selected_value": "existing controlled scalar/object",
+    "alternatives_rejected": [],
+    "evidence_claim_ids": ["C..."],
+    "reason_codes": ["host-vocabulary value"],
+    "status": "supported|conflict|unknown"
+  }],
   "unresolved": ["string"]
 }
 
@@ -394,6 +492,12 @@ ACCEPTED_CLAIMS:
 - subscription/pass URL не может стать event.ticket_url;
 - при двух несовместимых accepted values ставь value=null, status=conflict и
   заполняй conflicts; не выбирай «более красивый» вариант;
+- используй только mounted taxonomy version/hash и её значения; неизвестную
+  тематическую метку сохраняй в `unmapped_topic_labels`, не изобретай новый id;
+- `programme_profile` выводится из полного accepted item inventory и
+  dispositions, а не из тематической категории или желаемого типа страницы;
+- каждый `decision_id` разрешается в `decisions`, а его evidence claims
+  существуют в accepted ledger;
 - unknown лучше догадки.
 ```
 
@@ -417,8 +521,11 @@ text. Не исследуй JavaScript/API ticket shell.
 - неподтверждённый порядковый номер или статус в названии.
 
 Не угадывай, какой результат получил другой исследователь: он тебе не дан.
-Сохраняй только sources и counter-evidence ledger под
-/workspace/festival_research_skeptic/.
+Независимо классифицируй identity kind, programme profile и каждый найденный
+programme item по mounted taxonomy/disposition vocabulary. Сохраняй sources,
+taxonomy_b.json, item_dispositions_b.jsonl и counter-evidence ledger под
+/workspace/festival_research_skeptic/. Отсутствующий item/field отмечай
+unknown/unresolved: omission не является согласием.
 ```
 
 После локальной валидации candidate A и counter-evidence B сравниваются по
@@ -428,53 +535,48 @@ critical fields. Совпадением считается не похожий �
 ### Call C: adjudicator
 
 Call C — третий Antigravity interaction. Он получает только локально
-валидированный compact conflict packet A/B. Он запускается при конфликте или
-низком покрытии, не получает полные raw pages/candidates и не повторяет
-discovery.
+валидированный compact conflict packet A/B. Он запускается при разрешимом
+конфликте, не получает полные raw pages/candidates и не повторяет discovery.
+Низкое покрытие без двух доказуемых альтернатив отправляется сразу на ручную
+проверку: adjudicator не может восстановить отсутствующее evidence.
 
 ### Prompt
 
 ```text
-Ты evidence adjudicator. У тебя есть два независимо полученных результата.
-Не выбирай ответ по большинству, подробности или стилю. Разрешай поле только
-по accepted claims target edition. Если доказательств недостаточно, оставь
-conflict/unknown.
+Ты evidence adjudicator. У тебя есть bounded conflicts между двумя независимо
+полученными результатами. Не выбирай по большинству, подробности или стилю.
+Для каждого conflict_id можно выбрать только один уже перечисленный
+alternative_id либо unknown/conflict. Нельзя создавать новый value, claim,
+source, taxonomy node, programme item или итоговый candidate.
 
-TARGET:
-{{target_json}}
-RESULT_A:
-{{critical_claims_a_json}}
-COUNTER_EVIDENCE_B:
-{{counter_evidence_b_json}}
-EXACT_QUOTE_PACKET:
-{{bounded_quote_packet_json}}
+CONFLICT_PACKET:
+{{bounded_conflict_packet_json}}
+
+Каждый conflict содержит allowed_alternatives и exact quote packet с локально
+валидированными claim/source hashes.
 
 Верни только JSON:
 {
-  "verdict": "pass|needs_review",
-  "violations": [{
-    "code":
-      "missing_claim|claim_value_mismatch|quote_missing|rejected_source_leak|ambiguous_source_leak|edition_mismatch|unsupported_title_modifier|event_identity_mismatch|ticket_role_mismatch|silent_conflict|unknown_claim_id",
-    "json_path": "string",
-    "claim_ids": ["C..."],
-    "details": "short string"
-  }],
-  "resolved_candidate": "festival-research-evidence-v2 object|null"
+  "schema_version": "festival-adjudication-v1",
+  "decisions": [{
+    "conflict_id": "CF001",
+    "choice": "existing alternative_id|unknown|conflict",
+    "supporting_claim_ids": ["C..."],
+    "reason_code":
+      "stronger_target_edition_evidence|direct_item_identity|ticket_scope_match|insufficient_evidence|incompatible_evidence"
+  }]
 }
 
-Обязательно проверь:
-1. каждый non-null финальный scalar подтверждён существующим claim;
-2. выбранное значение равно значению claim, а не пересказу модели;
-3. claim принадлежит accepted source нужного выпуска;
-4. в title нет неподтверждённого номера/статуса/эпитета;
-5. ticket_url принадлежит ticket_single_event того же event cluster;
-6. несовместимые accepted values отражены как conflict;
-7. rejected/ambiguous sources не просочились через косвенный claim.
+Обязательно:
+1. вернуть ровно одно решение для каждого входного conflict_id;
+2. existing alternative можно выбрать только по его accepted claims target
+   edition;
+3. supporting_claim_ids должны принадлежать выбранной alternative;
+4. недостаточный packet => unknown, несовместимые сильные evidence => conflict;
+5. не переносить rejected/ambiguous source через косвенный claim.
 
-Не используй Google Search. Разрешено повторно открыть не более двух cited URLs,
-если bounded quote packet недостаточен для проверки конкретной цитаты. При
-неразрешённом critical conflict verdict=needs_review и
-resolved_candidate=null.
+У тебя нет Google Search, browser, URL fetch или иных network tools. Не
+открывай cited URLs.
 ```
 
 ## Stage 6. Deterministic final gate
@@ -485,6 +587,8 @@ adjudicator и повторяет критические проверки нез
 - JSON парсится и соответствует локальной схеме;
 - все ссылки `source_id`, `claim_id`, `local_subject_id` существуют;
 - каждая цитата найдена в тексте с совпадающим `content_sha256`;
+- offsets воспроизводят цитату при совпадающем host-pinned
+  `normalizer_version`;
 - каждый финальный scalar равен значению одного из его claims;
 - все claims финального результата происходят из `accepted` source;
 - `claim.edition_year`, если задан, совпадает с target;
@@ -492,11 +596,18 @@ adjudicator и повторяет критические проверки нез
   не имеют скрытого конфликта;
 - `event.ticket_url` подтверждён claim из `ticket_single_event` и совпадает с
   тем же event cluster;
-- для согласованных A/B third-party verdict не нужен; для спорных результатов
-  `adjudicator.verdict == pass`;
+- для согласованных A/B adjudication не нужен; для каждого спорного результата
+  Call C выбрал существующий allowed alternative;
 - rejected/ambiguous source никогда не считается cross-check;
 - `conflicts=[]` допустим только после сравнения всех accepted claims одного
-  поля.
+  поля;
+- taxonomy version/hash совпадают с mounted registry, значения входят в
+  vocabulary;
+- union A/B programme inventories полностью conserved: каждый item сопоставлен,
+  сохранён, доказуемо rejected либо явно unresolved;
+- A/B согласны по identity kind, programme profile и critical dispositions
+  либо Call C выбрал существующий allowed alternative для каждого конфликта;
+- любой `unknown|conflict` Call C оставляет revision в `needs_review`.
 
 Любой сбой даёт:
 
@@ -563,6 +674,10 @@ leakage или ticket-role mismatch статус всегда `needs_review`; з
 6. **Same title, different day.** Два события имеют одинаковое название, но
    разные даты. Ожидание: разные event clusters; название само по себе не
    является достаточным identity evidence.
+7. **Current page with history.** Страница target edition содержит отдельный
+   исторический блок с прошлыми годами. Ожидание: historical claims не
+   поддерживают current programme, но валидные target-edition spans не
+   отклоняются только из-за присутствия старых лет на той же странице.
 
 ## Вывод из первого probe
 
@@ -594,8 +709,10 @@ Shared ledger дошёл до `4/90 RPD`, потому что до трёх agen
 preflight request получил HTTP 400 из-за неподдерживаемого Gemini API поля
 `labels` уже после reservation.
 
-Несмотря на `incomplete`, ранние workspace checkpoints B/C сохранили
-достаточное evidence. Независимый local gate:
+Несмотря на `incomplete`, B/C сохранили raw source/state artifacts, из которых
+последующий ручной/local analysis восстановил достаточно evidence. Это не были
+валидные source/claim/taxonomy checkpoints и не подтверждает checkpoint
+recovery contract. Восстановленный local gate:
 
 1. удалил неподтверждённое `IX Международный`;
 2. исключил `sobor39.ru/.../3930/` из evidence 2026 из-за программы
@@ -608,5 +725,7 @@ Factual acceptance: `3/3` известных ошибок пойманы. Operat
 **failed** — полный staged pipeline в каждом из 2+1 calls слишком тяжёл и не
 доживает до output при best-effort budget. Поэтому канонический runtime выше
 использует полный pipeline только в A, узкий counter-evidence collector в B и
-compact claim-diff adjudicator в C. Local renderer обязан уметь завершить
-результат из checkpoint evidence при `status=incomplete`.
+compact claim-diff adjudicator без network tools в C. Local renderer может
+завершить результат при `status=incomplete` только из schema-valid semantic
+checkpoints; raw source/state artifacts требуют review и сами по себе не
+считаются результатом.

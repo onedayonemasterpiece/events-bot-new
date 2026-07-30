@@ -7,6 +7,14 @@
 
 ### Added
 
+- Audited the exact festival-engagement R7 tree at `940fea2e`: its 21 calendar
+  rows contain 16 free topic labels, three statuses and seven derived
+  date/status shapes rather than a declared seven-class taxonomy. Designed the
+  versioned Festival Data Model v2 with separate series/edition/revision,
+  seven orthogonal classification axes, evidence-backed programme-item
+  dispositions and a bounded Antigravity A/B/C collection contract that
+  produces approval-gated `festival-edition-v2` JSON without choosing page
+  templates.
 - Designed the shadow/approval-gated preproduction Festival Web Research lane
   for grouped `festival_queue` URL and document sources: immutable evidence,
   Antigravity-first primary research plus an independent fresh-sandbox checker
