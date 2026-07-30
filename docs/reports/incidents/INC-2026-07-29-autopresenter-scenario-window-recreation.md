@@ -213,3 +213,28 @@ presentation window и открывало другое, разрушая кон�
   that the fresh ZIP must be downloaded after closing the old presentation;
 - `tools/autopresenter/m0/**` remained unchanged. Incident stays open for owner
   retry on Windows and reachability from `origin/main`.
+
+### Relay restart and blocked-scene recurrence — 2026-07-30
+
+- deployed source SHA:
+  `95269bb5a21e29369c421824df9e831c20174b0c`, pushed to
+  `origin/integration/autopresenter-expanded-20260729-e` before deploy;
+- existing Fly app only: release `v24`, image
+  `kenigevents-autopresenter:deployment-01KYSASV8V0ZX5SS2K2DKVYHWR`;
+  machine `2879209fd9e998` version 24 remains one shared vCPU / 512 MB with
+  `1/1` HTTP check passing;
+- production `/healthz`, authorized state, control markers and stage markers
+  passed after deploy. Relay state exposes `boot_id` and a timestamp-based
+  sequence, eliminating sequence rollback after process restart;
+- downloaded production Windows ZIP SHA-256:
+  `cc5af1d83a7fa9465a5491de87a008eb42d1b42c9628c8a3fe90a48619a156da`;
+- exact local regressions passed for 02.3, 02.10, 02.11, split 03.2, D.1M,
+  D.1D, 03.8.4, 03.12.1 and 03.18; the persistent-agent relay-restart
+  regression delivered Run, scroll and D-pad after restart;
+- automated suites: agent `39/39`, relay `19/19`, PWA control auth `2/2`,
+  presenter-stage `10/10`, Windows bootstrap `4/4`; Astro built 465 pages;
+- no new Fly app, machine, volume, bucket, CDN, database or queue was created;
+  `tools/autopresenter/m0/**` remained unchanged;
+- closure remains blocked on owner retry with the fresh Windows ZIP and
+  reachability of the fix from `origin/main`. The authenticated 03.10.2
+  search must also be confirmed with the owner-prepared Yandex session.

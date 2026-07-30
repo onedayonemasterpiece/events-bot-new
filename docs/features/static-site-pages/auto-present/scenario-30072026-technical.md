@@ -366,3 +366,22 @@ Iteration H recovery delta на 30.07.2026:
   `19/19`, control auth `2/2`, stage `10/10`, Windows bootstrap `4/4`, Astro
   build `465 pages`;
 - новый Fly app, machine, bucket, CDN, база или очередь не создавались.
+
+Iteration H release evidence:
+
+- source commit `95269bb5a21e29369c421824df9e831c20174b0c` был
+  запушен до deploy;
+- существующее приложение Fly обновлено до release `v24`, image
+  `kenigevents-autopresenter:deployment-01KYSASV8V0ZX5SS2K2DKVYHWR`;
+  machine `2879209fd9e998` осталась на `shared-cpu-1x`, 512 MB, с `1/1`
+  passing health check;
+- публичные `/healthz`, авторизованный `/api/state`, control PWA и stage
+  проверены после deploy. State публикует новый `boot_id` и wall-clock
+  sequence; relay на момент проверки корректно показывал отсутствие
+  подключённого Windows-агента;
+- скачанный с production Windows ZIP содержит 14 файлов, включая обновлённый
+  агент, SHA-256
+  `cc5af1d83a7fa9465a5491de87a008eb42d1b42c9628c8a3fe90a48619a156da`;
+- новый Fly/Yandex ресурс не создавался. Для полной проверки владельцу нужно
+  один раз закрыть старый агент и запустить свежий ZIP; общий Node/Playwright
+  cache при этом не переустанавливается.
