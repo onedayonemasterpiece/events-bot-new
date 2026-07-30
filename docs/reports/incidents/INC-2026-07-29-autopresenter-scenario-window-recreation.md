@@ -235,6 +235,8 @@ presentation window и открывало другое, разрушая кон�
   presenter-stage `10/10`, Windows bootstrap `4/4`; Astro built 465 pages;
 - no new Fly app, machine, volume, bucket, CDN, database or queue was created;
   `tools/autopresenter/m0/**` remained unchanged;
+- Telegram handoff: reply `897` to thread message `803`, delivery verified
+  through the approved E2E human session;
 - closure remains blocked on owner retry with the fresh Windows ZIP and
   reachability of the fix from `origin/main`. The authenticated 03.10.2
   search must also be confirmed with the owner-prepared Yandex session.
