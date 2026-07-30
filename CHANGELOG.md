@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Restored the exact eleven-point lecture order in the Autopresenter control:
+  the previously skipped UI/UX path beat now reveals its labels after ten
+  seconds, item 6 is explicitly split into two sourced frames, and later
+  lecture numbers no longer shift.
 - Re-synchronized the Autopresenter with the author-defined scenario order,
   reordered the phone control accordingly, and added the new manual page
   reserve as 15 adjacent mobile/desktop pairs that open the current focus
@@ -97,6 +101,9 @@
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
+- Added lecture points 10–11 with the owner-supplied T-Bank, Yandex Go and
+  Gosuslugi screenshots on the existing content-addressed Yandex CDN plus the
+  requested Wildberries, VK and Avito UI-friction examples.
 - Added an Autopresenter desktop D-pad with real Arrow-key delivery and visible
   key feedback, live exhibition and festival journeys, and a dedicated
   nine-scene joke group. Joke 03/07 TTS remains explicitly blocked by the

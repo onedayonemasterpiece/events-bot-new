@@ -82,6 +82,27 @@ export const SHARE_PROOF_ASSETS = Object.freeze([
   }),
 ]);
 
+export const LECTURE_UI_REFERENCE_ASSETS = Object.freeze([
+  Object.freeze({
+    id: "tbank",
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-good-ui-tbank-181b3a4b299696cc.jpg",
+    sha256: "181b3a4b299696ccad0736b0cf8007f4c94649eb89a6bf9c6ed4f6f9cfad6c15",
+    source: "https://t.me/c/4337049383/803/890",
+  }),
+  Object.freeze({
+    id: "yandex-go",
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-good-ui-yandex-go-55639003f7a89671.jpg",
+    sha256: "55639003f7a89671a7f1b0c6264092b3b9e1a7100a04ace1b2d1e0375bb48a67",
+    source: "https://t.me/c/4337049383/803/891",
+  }),
+  Object.freeze({
+    id: "gosuslugi",
+    url: "https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-poor-ui-gosuslugi-165c2e26ea0d3a71.jpg",
+    sha256: "165c2e26ea0d3a717acfb8835d12154c4e65b74c05c5d94523d0ed4ca01fdd8b",
+    source: "https://t.me/c/4337049383/803/893",
+  }),
+]);
+
 const lectureSources = [
   [821, "2f3c1b7d9a1c7094c77da009867c25a62cb233110185ab7a1a020b61356bdc26"],
   [822, "d85cadfd1dd4aad0c0e8f5fb68482624a1a4d617585fae9737fd430fac9513d1"],
@@ -105,8 +126,25 @@ export const LECTURE_SCENES = Object.freeze(
 export const LECTURE_SCENE_IDS = Object.freeze(LECTURE_SCENES.map(({ id }) => id));
 export const LECTURE_ASSETS = LECTURE_SCENES;
 export const EXTRA_LECTURE_SCENE_IDS = Object.freeze([
+  "lecture-ui-ux-path",
   "lecture-convenience-emergence",
   "lecture-usability-measurement",
+  "lecture-good-ui",
+  "lecture-poor-ui",
+]);
+export const LECTURE_SCENE_ORDER = Object.freeze([
+  "lecture-01",
+  "lecture-02",
+  "lecture-ui-ux-path",
+  "lecture-03",
+  "lecture-04",
+  "lecture-05",
+  "lecture-06",
+  "lecture-convenience-emergence",
+  "lecture-usability-measurement",
+  "lecture-07",
+  "lecture-good-ui",
+  "lecture-poor-ui",
 ]);
 export const MARKET_SCENE_IDS = Object.freeze([
   "market-01-primary",
@@ -159,8 +197,7 @@ export const SERVICE_SCENE_IDS = Object.freeze([
 ]);
 
 export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
-  ...LECTURE_SCENE_IDS,
-  ...EXTRA_LECTURE_SCENE_IDS,
+  ...LECTURE_SCENE_ORDER,
   ...MARKET_SCENE_IDS,
   ...JOKE_DATABASE_SCENE_IDS,
   "service-wordmark",

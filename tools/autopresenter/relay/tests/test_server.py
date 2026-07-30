@@ -42,8 +42,11 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         for index in range(1, 8):
             self.assertIn(f'data-scenario="lecture-{index:02d}"', text)
         for scenario in (
+            "lecture-ui-ux-path",
             "lecture-convenience-emergence",
             "lecture-usability-measurement",
+            "lecture-good-ui",
+            "lecture-poor-ui",
             "market-01-primary",
             "market-02-substitutes",
             "market-03-dynamics",
@@ -69,6 +72,25 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             "service-friends-club",
         ):
             self.assertIn(f'data-scenario="{scenario}"', text)
+        lecture_start = text.index("<summary>Лекция · 11 пунктов")
+        market_start = text.index("<summary>Рынок конкурентов")
+        lecture_block = text[lecture_start:market_start]
+        lecture_order = (
+            "lecture-01",
+            "lecture-02",
+            "lecture-ui-ux-path",
+            "lecture-03",
+            "lecture-04",
+            "lecture-05",
+            "lecture-06",
+            "lecture-convenience-emergence",
+            "lecture-usability-measurement",
+            "lecture-07",
+            "lecture-good-ui",
+            "lecture-poor-ui",
+        )
+        positions = [lecture_block.index(f'data-scenario="{scenario}"') for scenario in lecture_order]
+        self.assertEqual(positions, sorted(positions))
         self.assertIn('data-scenario="tomorrow-mobile"', text)
         self.assertIn('data-scenario="tomorrow-rail-like"', text)
         self.assertIn('data-scenario="weekend-amber-artifact"', text)

@@ -32,6 +32,9 @@ const catKeyboardUrl = 'https://static.kenigevents.ru/assets/autopresenter/scena
 const friendsClubVideoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/friends-club-darya-7cb34fb872eb528a4938f4e7af3cd8d2ebf1850246cb0cf9e2b44e7b17b05ac6.mp4';
 const shareProofBeforeUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/share-telegram-885-cce1712a75b30977.jpg';
 const shareProofAfterUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/share-telegram-886-2abea322a6cdd634.jpg';
+const lectureGoodUiTbankUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-good-ui-tbank-181b3a4b299696cc.jpg';
+const lectureGoodUiYandexGoUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-good-ui-yandex-go-55639003f7a89671.jpg';
+const lecturePoorUiGosuslugiUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-poor-ui-gosuslugi-165c2e26ea0d3a71.jpg';
 const announcementsWordmarkUrl = '/brand/announcements-wordmark-ui.svg';
 const findIconUrl = '/assets/icons/reference4-v8/search-thin.svg';
 const people = [
@@ -97,7 +100,8 @@ const lectureSlides = [
   },
   {
     messageId: 823,
-    chapter: '03 · Эргономика телефона',
+    position: 4,
+    chapter: '04 · Эргономика телефона',
     statement: 'Интерфейс должен быть под рукой.',
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-823-61de6c5363792bc2fb5e50d6182c90f926fa7021c12d9bd80f96dff5b9d62bdc.webp',
     alt: 'Зоны доступности интерфейса смартфона для большого пальца',
@@ -108,7 +112,8 @@ const lectureSlides = [
   },
   {
     messageId: 824,
-    chapter: '04 · Цена сложности',
+    position: 5,
+    chapter: '05 · Цена сложности',
     statement: 'Когда всё важно — ничего не понятно.',
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-824-19c1f686d1b04f0b99463d24a16625827f0ff3e45bccbffb7c6e3b9d8f5d561b.webp',
     alt: 'Иллюстрация перегруженного пульта управления и растерянного оператора',
@@ -119,7 +124,8 @@ const lectureSlides = [
   },
   {
     messageId: 825,
-    chapter: '05 · Критические системы',
+    position: '6.1',
+    chapter: '06.1 · Критические системы',
     statement: 'В сложных системах удобство — безопасность.',
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-825-1734e48aa4ef2b20c19c975c76d91b507fe98999d49655bf71749e0b8fd9f43b.webp',
     alt: 'Обложка книги Вопросы эргономики в ядерной энергетике',
@@ -130,7 +136,8 @@ const lectureSlides = [
   },
   {
     messageId: 826,
-    chapter: '06 · Видеть главное',
+    position: '6.2',
+    chapter: '06.2 · Видеть главное',
     statement: 'Хорошая система помогает видеть главное.',
     image: 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/lecture-826-252137528a929f8165c441b6fccdc853169fd4c4a249c0870f3b9b26a15ecadb.webp',
     alt: 'Организованный большой зал управления с операторами и обзорными экранами',
@@ -354,6 +361,9 @@ const expandedServiceScenes = [
     <link rel="preload" as="video" href={friendsClubVideoUrl} type="video/mp4" />
     {people.map((person) => <link rel="preload" as="image" href={person.avatar} />)}
     {lectureSlides.map((slide) => <link rel="preload" as="image" href={slide.image} />)}
+    <link rel="preload" as="image" href={lectureGoodUiTbankUrl} />
+    <link rel="preload" as="image" href={lectureGoodUiYandexGoUrl} />
+    <link rel="preload" as="image" href={lecturePoorUiGosuslugiUrl} />
     <title>Автопрезентатор · Сцена</title>
   </head>
   <body>
@@ -432,7 +442,7 @@ const expandedServiceScenes = [
               </div>
               <p class="lecture-chapter">{slide.chapter}</p>
               <h2 data-lecture-statement data-lecture-text={slide.statement}></h2>
-              <p class="lecture-counter">{String(slide.position || index + 1).padStart(2, '0')} / 09</p>
+              <p class="lecture-counter">{String(slide.position || index + 1).padStart(2, '0')} / 11</p>
             </div>
             <figure class="lecture-visual">
               <img src={slide.image} alt={slide.alt} loading="eager" decoding="async" />
@@ -440,6 +450,35 @@ const expandedServiceScenes = [
             </figure>
         </section>
       ))}
+
+      <section
+        class="lecture-slide lecture-ui-ux-path presentation-scene theme--light"
+        data-presenter-scene-id="lecture-ui-ux-path"
+        data-lecture-state="idle"
+        data-lecture-image-first="true"
+        aria-label="Лекционный экран: классический пример UI и UX"
+        hidden
+      >
+        <div class="lecture-copy">
+          <div class="brand-plate brand-plate--lecture brand-logo--on-light">
+            <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
+          </div>
+          <p class="lecture-chapter">03 · Классический пример</p>
+          <h2>Красиво<br />≠ удобно</h2>
+          <p class="lecture-counter">03 / 11</p>
+        </div>
+        <figure class="lecture-visual desire-path-visual lecture-ui-ux-visual">
+          <img
+            src="/assets/autopresenter/lecture/desire-path-ludwell-cc-by-sa-2.jpg"
+            alt="Прямой оформленный маршрут и выбранные людьми короткие тропинки"
+            loading="eager"
+            decoding="async"
+          />
+          <span class="desire-label desire-label--ui"><b>UI</b> — красивый спроектированный путь</span>
+          <span class="desire-label desire-label--ux"><b>UX</b> — путь, который выбрали люди</span>
+          <small>David Smith · CC BY-SA 2.0</small>
+        </figure>
+      </section>
 
       <section
         class="lecture-slide lecture-convenience presentation-scene theme--light"
@@ -454,7 +493,7 @@ const expandedServiceScenes = [
           </div>
           <p class="lecture-chapter">07 · Удобство появляется</p>
           <h2 data-lecture-statement data-lecture-text="Можно ли сразу стать удобным?"></h2>
-          <p class="lecture-counter">07 / 09</p>
+          <p class="lecture-counter">07 / 11</p>
         </div>
         <figure class="lecture-visual desire-path-visual">
           <img
@@ -483,13 +522,68 @@ const expandedServiceScenes = [
           </div>
           <p class="lecture-chapter">08 · Проверить числами</p>
           <h2 data-lecture-statement data-lecture-text="Можно ли удобство измерить?"></h2>
-          <p class="lecture-counter">08 / 09</p>
+          <p class="lecture-counter">08 / 11</p>
         </div>
         <div class="lecture-visual measurement-visual" role="img" aria-label="Четыре показателя удобства: успех, время, ошибки и оценка">
           <div class="measurement-ring"><strong>Цель</strong><span>задача выполнена?</span></div>
           <div class="measurement-ring"><strong>Время</strong><span>сколько занял выбор?</span></div>
           <div class="measurement-ring"><strong>Ошибки</strong><span>где человек сбился?</span></div>
           <div class="measurement-ring"><strong>Ясность</strong><span>понятно без подсказки?</span></div>
+        </div>
+      </section>
+
+      <section
+        class="lecture-slide lecture-ui-reference lecture-good-ui presentation-scene theme--dark"
+        data-presenter-scene-id="lecture-good-ui"
+        data-lecture-state="idle"
+        aria-label="Лекционный экран: примеры хорошего пользовательского интерфейса"
+        hidden
+      >
+        <div class="lecture-copy">
+          <div class="brand-plate brand-plate--lecture brand-logo--on-dark">
+            <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
+          </div>
+          <p class="lecture-chapter">10 · Хороший UI</p>
+          <h2 data-lecture-statement data-lecture-text="Главное видно. Действие понятно."></h2>
+          <p class="lecture-counter">10 / 11</p>
+        </div>
+        <div class="lecture-visual ui-reference-grid ui-reference-grid--good">
+          <figure>
+            <img src={lectureGoodUiTbankUrl} alt="Интерфейс мобильного приложения Т-Банка" loading="eager" decoding="async" />
+            <figcaption><strong>Т-Банк</strong><span>Быстрые действия рядом с задачами</span></figcaption>
+          </figure>
+          <figure>
+            <img src={lectureGoodUiYandexGoUrl} alt="Интерфейс мобильного приложения Яндекс Go" loading="eager" decoding="async" />
+            <figcaption><strong>Яндекс Go</strong><span>Сложный сервис остаётся ясным</span></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section
+        class="lecture-slide lecture-ui-reference lecture-poor-ui presentation-scene theme--light"
+        data-presenter-scene-id="lecture-poor-ui"
+        data-lecture-state="idle"
+        aria-label="Лекционный экран: примеры перегруженного пользовательского интерфейса"
+        hidden
+      >
+        <div class="lecture-copy">
+          <div class="brand-plate brand-plate--lecture brand-logo--on-light">
+            <img src={znanieLogoUrl} alt="Знание" width="540" height="125" loading="eager" decoding="sync" />
+          </div>
+          <p class="lecture-chapter">11 · Так себе UI</p>
+          <h2 data-lecture-statement data-lecture-text="Когда интерфейс мешает задаче."></h2>
+          <p class="lecture-counter">11 / 11</p>
+        </div>
+        <div class="lecture-visual ui-reference-grid ui-reference-grid--poor">
+          <figure class="ui-reference-proof">
+            <img src={lecturePoorUiGosuslugiUrl} alt="Ранний интерфейс мобильного приложения Госуслуг" loading="eager" decoding="async" />
+            <figcaption><strong>Госуслуги</strong><span>Плотная навигация и слабая визуальная иерархия</span></figcaption>
+          </figure>
+          <div class="ui-friction-list">
+            <article><strong>Wildberries</strong><span>Информационный шум · скрытые условия · логика списаний</span></article>
+            <article><strong>ВКонтакте</strong><span>Feature creep · навигационный лабиринт · перегрузка</span></article>
+            <article><strong>Авито</strong><span>Агрессивный апсейл · сложная публикация · смешение контекстов</span></article>
+          </div>
         </div>
       </section>
 
@@ -1315,6 +1409,12 @@ const expandedServiceScenes = [
         };
 
         const typeLecture = async (scene, token) => {
+          if (scene.dataset.lectureImageFirst === 'true') {
+            scene.dataset.lectureState = 'media';
+            if (!reduceMotion.matches && !await pause(10_000, token)) return;
+            scene.dataset.lectureState = 'complete';
+            return;
+          }
           const statement = scene.querySelector('[data-lecture-statement]');
           if (!(statement instanceof HTMLElement)) return;
           const value = statement.dataset.lectureText || '';
@@ -2023,6 +2123,29 @@ const expandedServiceScenes = [
   .desire-path-visual small { position: absolute; right: 16px; bottom: 12px; color: rgba(255,255,255,.72); font-size: 12px; text-shadow: 0 1px 3px #000; }
   .lecture-convenience[data-lecture-state="media"] .desire-label,
   .lecture-convenience[data-lecture-state="complete"] .desire-label { opacity: 1; transform: none; }
+  .lecture-ui-ux-path[data-lecture-state="complete"] .desire-label { opacity: 1; transform: none; }
+  .lecture-ui-ux-visual { min-height: 72vh; border-radius: 34px; }
+  .lecture-ui-ux-visual .desire-label--ui { top: 9%; left: 7%; max-width: 17ch; color: #17121a; background: rgba(255,250,242,.94); }
+  .lecture-ui-ux-visual .desire-label--ux { right: 5%; bottom: 10%; max-width: 17ch; background: #ff7657; transition-delay: 280ms; }
+  .lecture-ui-ux-visual .desire-label b { display: block; margin-bottom: 4px; font-size: 1.45em; line-height: .8; }
+  .lecture-ui-reference { grid-template-columns: minmax(390px,.72fr) minmax(0,1.28fr); }
+  .lecture-ui-reference .lecture-copy h2 { max-width: 9.4ch; font-size: clamp(54px,4.2vw,82px); }
+  .ui-reference-grid { width: 100%; height: 100%; align-self: stretch; gap: 24px; }
+  .ui-reference-grid figure { min-width: 0; min-height: 0; margin: 0; overflow: hidden; border-radius: 30px; background: rgba(255,255,255,.08); box-shadow: 0 30px 70px rgba(0,0,0,.24); }
+  .ui-reference-grid figure img { width: 100%; height: 100%; min-height: 0; display: block; object-fit: contain; }
+  .ui-reference-grid figcaption { display: flex; flex-direction: column; gap: 5px; padding: 18px 20px 20px; }
+  .ui-reference-grid figcaption strong { font-size: clamp(23px,1.65vw,32px); }
+  .ui-reference-grid figcaption span { color: color-mix(in srgb,currentColor 64%,transparent); font-size: clamp(16px,1.05vw,20px); line-height: 1.15; }
+  .ui-reference-grid--good { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .ui-reference-grid--good figure { display: grid; grid-template-rows: minmax(0,1fr) auto; padding-top: 18px; }
+  .ui-reference-grid--good figure img { max-width: 390px; justify-self: center; }
+  .ui-reference-grid--poor { grid-template-columns: minmax(0,1.08fr) minmax(380px,.92fr); align-items: center; }
+  .ui-reference-grid--poor .ui-reference-proof { display: grid; grid-template-rows: minmax(0,1fr) auto; background: rgba(255,255,255,.62); box-shadow: 0 30px 70px rgba(64,39,32,.16); }
+  .ui-reference-grid--poor .ui-reference-proof img { width: 100%; height: auto; align-self: center; }
+  .ui-friction-list { display: grid; gap: 18px; }
+  .ui-friction-list article { padding: 24px 26px; border-radius: 24px; background: rgba(255,255,255,.68); box-shadow: inset 0 0 0 1px rgba(23,18,26,.1), 0 18px 42px rgba(64,39,32,.08); }
+  .ui-friction-list strong { display: block; margin-bottom: 7px; font-size: clamp(25px,1.8vw,35px); line-height: 1; }
+  .ui-friction-list span { color: rgba(23,18,26,.66); font-size: clamp(17px,1.12vw,22px); line-height: 1.18; }
   .measurement-visual { grid-template-columns: repeat(2,minmax(0,1fr)); gap: clamp(28px,3vw,54px); align-content: center; }
   .measurement-ring { width: min(28vh,280px); aspect-ratio: 1; display: grid; place-content: center; justify-items: center; padding: 32px; border: 18px solid rgba(255,255,255,.14); border-radius: 50%; background: #111219; box-shadow: inset 0 0 0 2px rgba(255,118,87,.48), 0 0 60px rgba(255,118,87,.1); opacity: 0; transform: translateY(26px) scale(.82); transition: opacity 520ms ease, transform 900ms var(--ease-cinematic), border-color 500ms ease; }
   .measurement-ring strong { max-width: 5.8ch; font-size: clamp(36px,2.7vw,52px); line-height: .9; letter-spacing: -.06em; text-align: center; }

@@ -31,6 +31,7 @@ import {
   FOCUS_INVITATION_URL,
   FOCUS_PAGE_RATING_URL,
   LECTURE_SCENES,
+  LECTURE_UI_REFERENCE_ASSETS,
   MANUAL_PAGE_SCENES,
   WEEKEND_DESKTOP_SCENE_ID,
   ZNANIE_LOGO_ASSET,
@@ -1114,6 +1115,25 @@ class PrototypeAgent {
         lecture.url,
         signal,
       );
+    }
+    if (scenarioId === "lecture-good-ui") {
+      for (const asset of LECTURE_UI_REFERENCE_ASSETS.slice(0, 2)) {
+        await this.assertStageAssetLoaded(
+          `${selector} img[src="${asset.url}"]`,
+          asset.url,
+          signal,
+        );
+      }
+    }
+    if (scenarioId === "lecture-poor-ui") {
+      const asset = LECTURE_UI_REFERENCE_ASSETS[2];
+      await this.assertStageAssetLoaded(
+        `${selector} img[src="${asset.url}"]`,
+        asset.url,
+        signal,
+      );
+    }
+    if (scenarioId.startsWith("lecture-")) {
       await this.assertStageAssetLoaded(
         `${selector} .brand-plate--lecture img`,
         ZNANIE_LOGO_ASSET.url,

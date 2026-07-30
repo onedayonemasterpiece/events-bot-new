@@ -30,11 +30,20 @@ const stageSource = await readFile(
   new URL("../../../../site/src/pages/internal/presenter-stage/index.astro", import.meta.url),
   "utf8",
 );
+const baseScenarioSource = await readFile(
+  new URL(
+    "../../../../docs/features/static-site-pages/auto-present/scenario-30072026-base.md",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("declares the accepted journeys plus explicit intro, lecture, desktop and outro scenes", () => {
   for (const id of [
-    "intro-loop", "lecture-01", "lecture-07", "lecture-convenience-emergence",
-    "lecture-usability-measurement", "market-01-primary", "market-04-position", "tomorrow-mobile",
+    "intro-loop", "lecture-01", "lecture-07", "lecture-ui-ux-path",
+    "lecture-convenience-emergence", "lecture-usability-measurement",
+    "lecture-good-ui", "lecture-poor-ui",
+    "market-01-primary", "market-04-position", "tomorrow-mobile",
     "tomorrow-rail-like", "weekend-amber-artifact", "service-search-live",
     "service-focus-group", "service-laws", "service-keyboard-event",
     "service-navigation-map", "service-social-proof", "service-transport-bus",
@@ -58,7 +67,7 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
   assert.equal(TOMORROW_RAIL_LIKE_CONTRACT.eventTitle, "Фестиваль Pianissimo: Игорь Сидоров");
   assert.equal(WEEKEND_AMBER_ARTIFACT_CONTRACT.snapshotEventId, 7164);
   assert.equal(INTRO_LOOP_CONTRACT.completion, "fifty-minute-logical-randomized-two-line-hero-talk-loop");
-  assert.equal(LECTURE_SCENE_CONTRACTS.length, 9);
+  assert.equal(LECTURE_SCENE_CONTRACTS.length, 12);
   assert.ok(LECTURE_SCENE_CONTRACTS.every(({ completion }) => completion === "held-until-another-explicit-command"));
   assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-search-live"));
   assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-personalization"));
@@ -83,6 +92,42 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
   assert.match(source, /if \(scenarioId === OUTRO_QR_CONTRACT\.id\)/u);
   assert.match(source, /async runManualPage\(scenarioId, signal\)/u);
   assert.match(source, /left untouched for manual pult scrolling/u);
+});
+
+test("lecture controls follow the eleven-point author order", () => {
+  assert.ok(baseScenarioSource.indexOf("10. Хороший UI") > baseScenarioSource.indexOf("9. Удобство это результат"));
+  assert.ok(baseScenarioSource.indexOf("11. Так себе UI") > baseScenarioSource.indexOf("10. Хороший UI"));
+  const lectureAt = controlSource.indexOf("<summary>Лекция · 11 пунктов");
+  const marketAt = controlSource.indexOf("<summary>Рынок конкурентов");
+  assert.ok(lectureAt > 0 && marketAt > lectureAt);
+  const lectureBlock = controlSource.slice(lectureAt, marketAt);
+  const expected = [
+    "lecture-01",
+    "lecture-02",
+    "lecture-ui-ux-path",
+    "lecture-03",
+    "lecture-04",
+    "lecture-05",
+    "lecture-06",
+    "lecture-convenience-emergence",
+    "lecture-usability-measurement",
+    "lecture-07",
+    "lecture-good-ui",
+    "lecture-poor-ui",
+  ];
+  let previous = -1;
+  for (const scenario of expected) {
+    const current = lectureBlock.indexOf(`data-scenario="${scenario}"`);
+    assert.ok(current > previous, `${scenario} follows the author order`);
+    previous = current;
+  }
+  assert.match(stageSource, /data-lecture-image-first="true"/u);
+  assert.match(stageSource, /pause\(10_000, token\)/u);
+  assert.match(stageSource, /Т-Банк/u);
+  assert.match(stageSource, /Яндекс Go/u);
+  assert.match(stageSource, /Wildberries/u);
+  assert.match(stageSource, /ВКонтакте/u);
+  assert.match(stageSource, /Авито/u);
 });
 
 test("scenario timeout policy is explicit and can admit a future one-hour scene", () => {
