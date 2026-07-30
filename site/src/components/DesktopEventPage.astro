@@ -2045,11 +2045,18 @@ const descriptionHtml = (event.description_html || '')
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__utility-row .feedback-button--calendar) { color:#91401d; background:rgba(181,77,34,.08); border-color:transparent; }
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under),
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button) { background:transparent; border-color:transparent; box-shadow:none; }
-    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--share) { color:#fffaf2; }
+    /*
+     * OptimizedEventCardGrid is a child Astro island, so the grid node owns
+     * that component's scope token rather than DesktopEventPage's token.
+     * Keep this selector fully global: the action sits directly on the dark
+     * related-section canvas and must not inherit the generic light-surface
+     * card colour.
+     */
+    :global(.desktop-clean-related__grid[data-surface="event_detail_related"] .event-card--split-actions .event-card__feedback--under .feedback-button--share) { color:#fffaf2; }
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like),
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like[aria-pressed="true"]) { color:#f06464; background:transparent; }
-    .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--share:hover),
-    .desktop-clean-related__grid :global(.event-card--split-actions.is-share-prompt .feedback-button--share) { color:#fff; background:rgba(255,255,255,.1); border-color:transparent; box-shadow:none; transform:none; }
+    :global(.desktop-clean-related__grid[data-surface="event_detail_related"] .event-card--split-actions .event-card__feedback--under .feedback-button--share:hover),
+    :global(.desktop-clean-related__grid[data-surface="event_detail_related"] .event-card--split-actions.is-share-prompt .feedback-button--share) { color:#fff; background:rgba(255,255,255,.1); border-color:transparent; box-shadow:none; transform:none; }
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like:hover),
     .desktop-clean-related__grid :global(.event-card--split-actions .event-card__feedback--under .feedback-button--like[aria-pressed="true"]:hover) { color:#ff7a72; background:rgba(201,52,52,.16); }
     .desktop-clean-related__grid :global(.event-card--split-actions:focus-visible),

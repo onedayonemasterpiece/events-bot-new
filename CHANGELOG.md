@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
+- Restored readable desktop related-card share actions on the dark event-detail
+  section. The label and shared icon now use the light action tone instead of
+  inheriting the generic light-surface grey through an Astro child-component
+  scope boundary; hover and keyboard-prompt states preserve the same contrast.
 - Replaced the improvised home Hero Talk with the accepted briefing donor
   mechanics: a full-viewport desktop plane, semantic fragment links, a curated
   28-line editorial bank, edge-reaching `16/18/20×5` mosaic and persistent

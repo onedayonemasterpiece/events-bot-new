@@ -903,6 +903,12 @@ Google Event structured data требует добавлять required properti
   не дублируется на mobile;
 - статическая и runtime-персонализированная выдача используют один `EventCard`
   DOM/behavior contract; отдельный строковый `eventCardHtml` не допускается;
+- desktop feedback-actions под карточкой контрастируют с фактическим canvas:
+  в тёмной event-detail related-секции `Поделиться` и его currentColor-иконка
+  светлые, тогда как generic серый action-tone допустим только на светлом
+  фоне. Поскольку grid создаёт дочерний `OptimizedEventCardGrid`, этот
+  surface-contract должен пересекать Astro scope boundary полностью global-
+  селектором, а не наследовать scope-token родительской страницы;
 - cards внутри static fallback сохраняют crawlable media/title links, но служебные feedback controls остаются button-only и `data-nosnippet`;
 - `static_related_v1` уже реализован в `site/src/lib/events.ts`: seed `preview-related.json` + deterministic scoring by category/tag overlap/city/date/venue/price/status + hard exclusions for current/other-date/past/inactive. Это достаточный MVP baseline for preview, но не финальная product-quality рекомендация без expanded catalog/golden top-10 review.
 

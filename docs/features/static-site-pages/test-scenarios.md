@@ -108,6 +108,11 @@
   similarity to wider anti-bubble discovery; the latter may mix profile,
   non-rejected vector tail and diverse upcoming fallback rather than looping
   within one theatre/event type.
+- **ADD-V12-12A — Related action contrast.** At `1440×1000`, an event-detail
+  related grid on the graphite canvas must expose a visible `Поделиться`
+  action whose label and shared `currentColor` icon use the same light tone.
+  The browser regression is
+  `RELATED_CONTRAST_BASE_URL=… npm --prefix site run test:desktop-related-contrast:browser`.
 - **ADD-V12-13 — One styled listing shell.** Built Today, Tomorrow, Weekend and
   Popular HTML must resolve the shared listing selectors. After a real scroll,
   the global header stays sticky at `0..57px`, the discovery rail starts at
