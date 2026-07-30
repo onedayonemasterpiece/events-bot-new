@@ -22,6 +22,7 @@ test("sequential Run commands switch scenarios in the same context generation an
   agent.page = originalPage;
   agent.contextGeneration = 1;
   agent.setAgentState = async () => {};
+  agent.ensureStageReady = async () => {};
   agent.runScenario = async (scenarioId, signal) => {
     starts.push({
       scenarioId,
@@ -73,6 +74,33 @@ test("sequential Run commands switch scenarios in the same context generation an
   assert.equal(agent.activeRun, null);
   assert.equal(agent.runController, null);
   assert.equal(agent.activeScenario, null);
+});
+
+test("a new Run restores the persistent stage after an external auth failure", async () => {
+  const agent = new PrototypeAgent(null);
+  const calls = [];
+  agent.page = {
+    isClosed: () => false,
+    url: () => "chrome-error://chromewebdata/",
+    locator(selector) {
+      assert.equal(selector, '[data-presenter-id="presenter-stage"][data-presenter-stage-ready="true"]');
+      return { async isVisible() { return false; } };
+    },
+    async bringToFront() { calls.push("front"); },
+  };
+  agent.auxiliaryPage = {
+    isClosed: () => false,
+    async close() { calls.push("close-auth"); },
+  };
+  agent.openStage = async (page) => {
+    assert.equal(page, agent.page);
+    calls.push("open-stage");
+  };
+
+  await agent.ensureStageReady("run lecture-01");
+
+  assert.deepEqual(calls, ["close-auth", "open-stage"]);
+  assert.equal(agent.auxiliaryPage, null);
 });
 
 test("manual scroll nudges the visible surface without stopping the active scenario", async () => {

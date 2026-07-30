@@ -216,6 +216,34 @@
       line-height: 1;
       touch-action: manipulation;
     }
+    .desktop-pad {
+      position: fixed;
+      z-index: 41;
+      right: max(58px, calc(env(safe-area-inset-right) + 58px));
+      bottom: max(10px, env(safe-area-inset-bottom));
+      width: 154px;
+      padding: 9px;
+      border: 1px solid rgba(164,180,230,.3);
+      border-radius: 21px;
+      background: rgba(9,15,31,.94);
+      box-shadow: 0 15px 42px rgba(0,0,0,.42);
+      backdrop-filter: blur(16px);
+    }
+    .desktop-pad strong {
+      display: block;
+      margin: 0 0 7px;
+      color: #aebcec;
+      font-size: .62rem;
+      letter-spacing: .07em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+    .desktop-pad-grid { display: grid; grid-template: repeat(2, 48px) / repeat(3, 42px); gap: 5px; justify-content: center; }
+    button.desktop-pad-button { min-height: 48px; padding: 0; border-radius: 12px; font-size: 1.15rem; touch-action: manipulation; }
+    button.desktop-pad-button[data-direction="up"] { grid-column: 2; }
+    button.desktop-pad-button[data-direction="left"] { grid-column: 1; grid-row: 2; }
+    button.desktop-pad-button[data-direction="down"] { grid-column: 2; grid-row: 2; }
+    button.desktop-pad-button[data-direction="right"] { grid-column: 3; grid-row: 2; }
     .visually-hidden {
       position: absolute;
       width: 1px;
@@ -274,7 +302,7 @@
           </div>
         </details>
         <details class="scene-group" >
-          <summary>Презентация сервиса<span>33</span></summary>
+          <summary>Презентация сервиса<span>35</span></summary>
           <div class="scene-list">
             <button class="scenario" type="button" data-action="run" data-scenario="service-wordmark" aria-pressed="false"><span>03.1</span><span>Логотип «Анонсы»<small>Кинетический стрейч буквы «о»</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-needs" aria-pressed="false"><span>03.2</span><span>Что нужно человеку<small>Найти, поделиться, не забыть</small></span></button>
@@ -301,6 +329,8 @@
             <button class="scenario" type="button" data-action="run" data-scenario="service-nps" aria-pressed="false"><span>03.17</span><span>Оценка страницы<small>Полезность страницы · 0–10</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-future-celebrity" aria-pressed="false"><span>03.18</span><span>Скоро: люди<small>Удовенко, Бойко, Соколова · preview UI</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-navigation-map" aria-pressed="false"><span>03.4</span><span>Карта навигации<small>Сегодня · Завтра · Выходные · Для меня</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-navigation-exhibitions" aria-pressed="false"><span>03.4.10a</span><span>Выставки · desktop<small>Вниз к выставке → фото стрелкой вправо</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="service-navigation-festivals" aria-pressed="false"><span>03.4.10b</span><span>Фестивали<small>Desktop → mobile · медленный скролл</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-social-proof" aria-pressed="false"><span>03.6</span><span>Social proof<small>Лайк · не интересно · поделиться</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-artifacts-explained" aria-pressed="false"><span>03.8</span><span>Подробнее об артефактах<small>4 открыты · остальные тайна</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-artifact-desktop" aria-pressed="false"><span>03.8.4</span><span>Артефакт · desktop<small>Сцена под keyboard-hook</small></span></button>
@@ -310,6 +340,20 @@
             <button class="scenario" type="button" data-action="run" data-scenario="service-community-curator" aria-pressed="false"><span>03.22</span><span>Для авторов сообществ<small>Скопировать картинку и описание</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-location-artifact" aria-pressed="false"><span>03.23</span><span>Для владельцев мест<small>Свой артефакт в коллекции</small></span></button>
             <button class="scenario" type="button" data-action="run" data-scenario="service-friends-club" aria-pressed="false"><span>03.24</span><span>Клуб друзей «Анонсов»<small>Видео Дарьи + QR канала</small></span></button>
+          </div>
+        </details>
+        <details class="scene-group">
+          <summary>База шуток<span>9</span></summary>
+          <div class="scene-list">
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-01" aria-pressed="false"><span>Ш.1</span><span>Бесплатная доставка<small>Кроме Калининградской области</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-02" aria-pressed="false"><span>Ш.2</span><span>Материк<small>Мифическая земля</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-03" aria-pressed="false"><span>Ш.3</span><span>Прогноз погоды<small>TTS · Aoede</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-04" aria-pressed="false"><span>Ш.4</span><span>Лето<small>Главное — не пропустить этот день</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-05" aria-pressed="false"><span>Ш.5</span><span>Балтийский ветер<small>Стоять под углом 45°</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-06" aria-pressed="false"><span>Ш.6</span><span>Танцующий лес<small>Деревья и туристы</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-07" aria-pressed="false"><span>Ш.7</span><span>Кабаны на косе<small>TTS · Aoede</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-08" aria-pressed="false"><span>Ш.8</span><span>Суровые чайки<small>Берегите шаурму</small></span></button>
+            <button class="scenario" type="button" data-action="run" data-scenario="joke-db-09" aria-pressed="false"><span>Ш.9</span><span>UI и UX<small>Плитка и народная тропинка</small></span></button>
           </div>
         </details>
         <details class="scene-group" >
@@ -340,6 +384,15 @@
     <button class="manual-scroll-button" type="button" data-action="scroll" data-direction="down" data-amount="420" title="Прокрутить демонстрацию вниз">
       ↓<span class="visually-hidden">Прокрутить демонстрацию вниз</span>
     </button>
+  </aside>
+  <aside class="desktop-pad" aria-label="Навигация по desktop">
+    <strong>Desktop · клавиши</strong>
+    <div class="desktop-pad-grid">
+      <button class="desktop-pad-button" type="button" data-action="navigate" data-direction="up" title="Перейти вверх">↑<span class="visually-hidden">Перейти вверх</span></button>
+      <button class="desktop-pad-button" type="button" data-action="navigate" data-direction="left" title="Перейти влево">←<span class="visually-hidden">Перейти влево</span></button>
+      <button class="desktop-pad-button" type="button" data-action="navigate" data-direction="down" title="Перейти вниз">↓<span class="visually-hidden">Перейти вниз</span></button>
+      <button class="desktop-pad-button" type="button" data-action="navigate" data-direction="right" title="Перейти вправо">→<span class="visually-hidden">Перейти вправо</span></button>
+    </div>
   </aside>
   <script src="/control/auth-storage.js"></script>
   <script>
@@ -485,7 +538,7 @@
           }
           if (!Object.keys(command.options).length) delete command.options;
         }
-        if (action === 'scroll') {
+        if (action === 'scroll' || action === 'navigate') {
           command.options = options;
         }
         const response = await fetch('/api/commands', {
@@ -506,13 +559,15 @@
 
     buttons.forEach(button => button.addEventListener('click', () => {
       if (button.dataset.action === 'reset') localStorage.removeItem(presentationStartedKey);
-      const scrollOptions = button.dataset.action === 'scroll'
+      const overlayOptions = button.dataset.action === 'scroll'
         ? {
             direction: button.dataset.direction,
             amount: Number(button.dataset.amount),
           }
-        : null;
-      issue(button.dataset.action, button.dataset.scenario || '', scrollOptions);
+        : button.dataset.action === 'navigate'
+          ? {direction: button.dataset.direction}
+          : null;
+      issue(button.dataset.action, button.dataset.scenario || '', overlayOptions);
     }));
     introStartInput.addEventListener('input', updateTimer);
     forgetAccessButton.addEventListener('click', () => {

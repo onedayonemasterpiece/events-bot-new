@@ -56,6 +56,12 @@ const INTRO_LOGO_SELECTOR = `${INTRO_SCENE_SELECTOR} .brand-plate--intro img`;
 const INTRO_AUDIO_SELECTOR = '[data-presenter-id="intro-music"]';
 const DESKTOP_FRAME_SELECTOR =
   '#presenter-desktop-frame[data-presenter-id="desktop-site-frame"]';
+const EXHIBITIONS_FRAME_SELECTOR =
+  '[data-presenter-id="exhibitions-desktop-frame"]';
+const FESTIVALS_DESKTOP_FRAME_SELECTOR =
+  '[data-presenter-id="festivals-desktop-frame"]';
+const FESTIVALS_MOBILE_FRAME_SELECTOR =
+  '[data-presenter-id="festivals-mobile-frame"]';
 const WEEKEND_DESKTOP_ROOT_SELECTOR = '[data-date-listing="weekend"]';
 const SITE_FOOTER_SELECTOR = '[data-site-footer]';
 const TOMORROW_MENU_SUMMARY_SELECTOR = "[data-mobile-discovery-menu] > summary";
@@ -175,6 +181,7 @@ class PrototypeAgent {
     this.browser = null;
     this.context = null;
     this.page = null;
+    this.auxiliaryPage = null;
     this.afterSequence = 0;
     this.agentStatus = "disconnected";
     this.statusDetail = "starting";
@@ -344,6 +351,16 @@ class PrototypeAgent {
       window.addEventListener("presenter:desktop-ui-response", (event) => {
         renderDesktopResponse(event.detail?.label);
       });
+      window.addEventListener("presenter:desktop-key-visual", (event) => {
+        const code = event.detail?.code;
+        if (!code) return;
+        if (event.detail?.pressed) {
+          pressedKeys.set(code, event.detail?.label || keyLabels.get(code) || code);
+        } else {
+          pressedKeys.delete(code);
+        }
+        renderPressedKeys();
+      });
       window.addEventListener("presenter:status", (event) => {
         renderDesktopResponse(event.detail?.detail || event.detail?.status);
       });
@@ -417,6 +434,26 @@ class PrototypeAgent {
           .waitForFunction(() => Boolean(document.fullscreenElement), undefined, { timeout: 2_000 })
           .catch(() => log("automatic fullscreen unavailable; use local F"));
       }
+    }
+  }
+
+  async ensureStageReady(reason = "command") {
+    if (this.auxiliaryPage && !this.auxiliaryPage.isClosed()) {
+      await this.auxiliaryPage.close().catch((error) =>
+        log("auxiliary page close failed", errorText(error)));
+    }
+    this.auxiliaryPage = null;
+    assertCondition(this.page && !this.page.isClosed(), "persistent stage page is unavailable");
+
+    const stageReady = await this.page
+      .locator(STAGE_READY_SELECTOR)
+      .isVisible()
+      .catch(() => false);
+    if (!stageReady) {
+      log("restoring persistent stage before command", { reason, url: this.page.url() });
+      await this.openStage(this.page);
+    } else {
+      await this.page.bringToFront();
     }
   }
 
@@ -497,7 +534,7 @@ class PrototypeAgent {
   }
 
   async dispatchCommand(command, { remote }) {
-    if (!command || !["run", "scroll", "stop", "reset", "shutdown"].includes(command.action)) return;
+    if (!command || !["run", "scroll", "navigate", "stop", "reset", "shutdown"].includes(command.action)) return;
 
     if (remote && this.ackCache.has(command.id)) {
       const previous = this.ackCache.get(command.id);
@@ -529,6 +566,10 @@ class PrototypeAgent {
     }
     if (command.action === "scroll") {
       await this.handleManualScroll(command, remote);
+      return;
+    }
+    if (command.action === "navigate") {
+      await this.handleDesktopNavigation(command, remote);
       return;
     }
     if (command.action === "shutdown") {
@@ -564,6 +605,95 @@ class PrototypeAgent {
     if (remote) await this.ack(command, "completed", detail);
   }
 
+  async handleDesktopNavigation(command, remote) {
+    const keyByDirection = {
+      up: "ArrowUp",
+      left: "ArrowLeft",
+      down: "ArrowDown",
+      right: "ArrowRight",
+    };
+    const direction = String(command.options?.direction || "").toLowerCase();
+    const key = keyByDirection[direction];
+    if (!key) {
+      if (remote) await this.ack(command, "error", "unsupported desktop navigation direction");
+      return;
+    }
+
+    const sceneId = await this.page.locator(STAGE_READY_SELECTOR).getAttribute("data-presenter-scene");
+    let frameSelector = {
+      "service-navigation-exhibitions": EXHIBITIONS_FRAME_SELECTOR,
+      "service-medallions-desktop": '[data-presenter-id="medallion-desktop-frame"]',
+      "weekend-desktop": DESKTOP_FRAME_SELECTOR,
+    }[sceneId || ""];
+    if (sceneId === "service-navigation-festivals") {
+      const phase = await this.page
+        .locator('[data-presenter-scene-id="service-navigation-festivals"]')
+        .getAttribute("data-festival-phase");
+      frameSelector = phase === "mobile"
+        ? FESTIVALS_MOBILE_FRAME_SELECTOR
+        : FESTIVALS_DESKTOP_FRAME_SELECTOR;
+    }
+    frameSelector ||= "iframe:visible";
+    const iframe = this.page.locator(frameSelector).last();
+    if (!(await iframe.isVisible().catch(() => false))) {
+      if (remote) await this.ack(command, "error", "visible desktop navigation surface is unavailable");
+      return;
+    }
+    const handle = await iframe.elementHandle();
+    const frame = await handle?.contentFrame();
+    if (!frame) {
+      if (remote) await this.ack(command, "error", "desktop navigation frame did not attach");
+      return;
+    }
+
+    await this.setInteractionMode("desktop");
+    const focused = frame.locator(":focus");
+    const activeTag = await focused.evaluate((node) => node.tagName).catch(() => "");
+    if (!activeTag || ["HTML", "BODY"].includes(activeTag)) {
+      const target = frame
+        .locator(
+          '[data-keyboard-event-surface]:visible, [data-row-focus]:visible, [data-deck]:visible, a[href]:visible, button:not([disabled]):visible, [tabindex]:not([tabindex="-1"]):visible',
+        )
+        .first();
+      if (!(await target.count())) {
+        if (remote) await this.ack(command, "error", "page has no keyboard navigation target");
+        return;
+      }
+      await target.focus();
+    }
+
+    await this.page.evaluate(({ code, label }) => {
+      window.dispatchEvent(
+        new CustomEvent("presenter:desktop-key-visual", {
+          detail: { code, label, pressed: true },
+        }),
+      );
+    }, { code: key, label: { ArrowUp: "↑", ArrowLeft: "←", ArrowDown: "↓", ArrowRight: "→" }[key] });
+    await frame.locator(":focus").press(key);
+    const response = await frame.locator(":focus").evaluate((node) => {
+      const card = node.closest?.("[data-event-card], [data-exhibition-row], [data-deck]");
+      const title = card?.querySelector?.("h2,h3,[data-event-title]")?.textContent?.trim();
+      return title || node.getAttribute("aria-label") || node.textContent?.trim().slice(0, 90) || "Интерфейс ответил";
+    }).catch(() => "Интерфейс ответил");
+    await this.page.evaluate(({ code, label }) => {
+      window.dispatchEvent(
+        new CustomEvent("presenter:desktop-ui-response", {
+          detail: { label },
+        }),
+      );
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("presenter:desktop-key-visual", {
+            detail: { code, pressed: false },
+          }),
+        );
+      }, 460);
+    }, { code: key, label: `${key.replace("Arrow", "")} · ${response}` });
+    const detail = `desktop ${direction}: ${response}`;
+    log(detail, { sceneId });
+    if (remote) await this.ack(command, "completed", detail);
+  }
+
   isExpired(command) {
     if (!command.expires_at) return false;
     return Date.now() > Date.parse(command.expires_at) + config.commandTtlGraceMs;
@@ -576,6 +706,15 @@ class PrototypeAgent {
       await this.setAgentState("stopping", detail);
       if (remote) await this.ack(command, "stopping", detail);
       await this.confirmStopped(`scene switch to ${scenarioId}`);
+    }
+
+    try {
+      await this.ensureStageReady(`run ${scenarioId}`);
+    } catch (error) {
+      const detail = `stage recovery failed before ${scenarioId}: ${errorText(error)}`;
+      await this.setAgentState("error", detail);
+      if (remote) await this.ack(command, "error", detail);
+      return;
     }
 
     const controller = new AbortController();
@@ -651,6 +790,12 @@ class PrototypeAgent {
     }
     if (scenarioId === "service-transport-rail") {
       return this.runTransportRail(signal);
+    }
+    if (scenarioId === "service-navigation-exhibitions") {
+      return this.runExhibitionsNavigation(signal);
+    }
+    if (scenarioId === "service-navigation-festivals") {
+      return this.runFestivalsNavigation(signal);
     }
     if (isStaticPresentationScenario(scenarioId)) {
       return this.runHeldPresentationScene(scenarioId, signal);
@@ -1023,6 +1168,103 @@ class PrototypeAgent {
     };
   }
 
+  async runExhibitionsNavigation(signal) {
+    const scenarioId = "service-navigation-exhibitions";
+    const startedAt = Date.now();
+    await raceWithAbort(this.openStage(this.page), signal);
+    await this.setInteractionMode("desktop");
+    await this.setAgentState("running", scenarioId);
+    await this.showPresenterScene(scenarioId, signal);
+    const iframe = this.page.locator(EXHIBITIONS_FRAME_SELECTOR);
+    await raceWithAbort(iframe.waitFor({ state: "visible", timeout: 15_000 }), signal);
+    const frame = this.page.frameLocator(EXHIBITIONS_FRAME_SELECTOR);
+    const root = frame.locator("[data-exhibitions-prototype]");
+    await raceWithAbort(root.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    const row = frame.locator('[data-exhibition-row][data-event-id="5370"]');
+    await raceWithAbort(row.waitFor({ state: "attached", timeout: 30_000 }), signal);
+    await this.naturalVerticalScroll(frame, row, signal, EXHIBITIONS_FRAME_SELECTOR);
+    const deck = row.locator("[data-deck]");
+    const mediaTotal = Number(await deck.getAttribute("data-media-total"));
+    assertCondition(mediaTotal >= 4, `exhibition 5370 exposes only ${mediaTotal} image(s)`);
+    await deck.focus();
+    await this.page.evaluate(() => {
+      window.dispatchEvent(
+        new CustomEvent("presenter:desktop-ui-response", {
+          detail: { label: "Выставка найдена · нажимайте → на пульте" },
+        }),
+      );
+    });
+    await abortableDelay(1_200, signal);
+    await this.captureScenario(scenarioId);
+    return {
+      summary:
+        `live /vystavki/ scrolled to exhibition 5370 with ${mediaTotal} images; ` +
+        "desktop D-pad is focused on its gallery",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  async runFestivalsNavigation(signal) {
+    const scenarioId = "service-navigation-festivals";
+    const startedAt = Date.now();
+    await raceWithAbort(this.openStage(this.page), signal);
+    await this.setInteractionMode("desktop-passive");
+    await this.setAgentState("running", `${scenarioId} · desktop`);
+    await this.showPresenterScene(scenarioId, signal);
+    const scene = this.page.locator(`[data-presenter-scene-id="${scenarioId}"]`);
+    await raceWithAbort(scene.waitFor({ state: "visible", timeout: 15_000 }), signal);
+    const desktop = this.page.frameLocator(FESTIVALS_DESKTOP_FRAME_SELECTOR);
+    const desktopRoot = desktop.locator("[data-festival-timeline]");
+    await raceWithAbort(desktopRoot.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    const desktopMonths = desktop.locator("[data-festival-month]");
+    assertCondition((await desktopMonths.count()) >= 2, "festival desktop timeline has fewer than two months");
+    await this.naturalVerticalScroll(
+      desktop,
+      desktopMonths.nth(1),
+      signal,
+      FESTIVALS_DESKTOP_FRAME_SELECTOR,
+    );
+    await abortableDelay(1_300, signal);
+    await this.naturalVerticalScroll(
+      desktop,
+      desktopMonths.last(),
+      signal,
+      FESTIVALS_DESKTOP_FRAME_SELECTOR,
+    );
+    await abortableDelay(1_500, signal);
+
+    await scene.evaluate((node) => node.setAttribute("data-festival-phase", "mobile"));
+    await this.setInteractionMode("mobile");
+    await this.setAgentState("running", `${scenarioId} · mobile`);
+    const mobileIframe = this.page.locator(FESTIVALS_MOBILE_FRAME_SELECTOR);
+    await raceWithAbort(mobileIframe.waitFor({ state: "visible", timeout: 10_000 }), signal);
+    const mobile = this.page.frameLocator(FESTIVALS_MOBILE_FRAME_SELECTOR);
+    const mobileRoot = mobile.locator("[data-festival-timeline]");
+    await raceWithAbort(mobileRoot.waitFor({ state: "visible", timeout: 30_000 }), signal);
+    await this.enforceMobilePointerShield(mobile);
+    const mobileMonths = mobile.locator("[data-festival-month]");
+    await this.naturalVerticalScroll(
+      mobile,
+      mobileMonths.nth(Math.min(1, Math.max(0, (await mobileMonths.count()) - 1))),
+      signal,
+      FESTIVALS_MOBILE_FRAME_SELECTOR,
+    );
+    await abortableDelay(1_300, signal);
+    await this.naturalVerticalScroll(
+      mobile,
+      mobileMonths.last(),
+      signal,
+      FESTIVALS_MOBILE_FRAME_SELECTOR,
+    );
+    await abortableDelay(1_500, signal);
+    await this.captureScenario(scenarioId);
+    return {
+      summary:
+        "live /festivali/ slowly scrolled desktop, switched to mobile, and slowly scrolled again",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
   async runTransportRail(signal) {
     const scenarioId = "service-transport-rail";
     const startedAt = Date.now();
@@ -1287,55 +1529,62 @@ class PrototypeAgent {
 
   async runSearchAuthSetup(signal) {
     const startedAt = Date.now();
-    await raceWithAbort(this.openStage(this.page), signal);
     await this.setInteractionMode("desktop");
     await this.setAgentState(
       "running",
-      "Подготовка поиска · один раз войдите в отдельный demo-аккаунт Яндекса в этом окне",
+      "Подготовка поиска · один раз войдите в отдельный demo-аккаунт Яндекса",
     );
-    await raceWithAbort(
-      this.page.goto(`${FOCUS_PREVIEW_BASE_URL}/poisk/`, {
-        waitUntil: "domcontentloaded",
-        timeout: 30_000,
-      }),
-      signal,
-    );
-    const login = this.page.locator("[data-search-login]");
-    const logout = this.page.locator("[data-search-logout]");
-    await raceWithAbort(
-      this.page.locator("[data-authorized-search]").waitFor({ state: "visible", timeout: 30_000 }),
-      signal,
-    );
-    if (!(await logout.isVisible().catch(() => false))) {
-      await abortableDelay(1_800, signal);
-      await login.click();
-      await this.setAgentState(
-        "running",
-        "Подготовка поиска · завершите вход через Яндекс; ожидание до 10 минут",
-      );
+    const authPage = await this.context.newPage();
+    this.auxiliaryPage = authPage;
+    try {
+      await authPage.bringToFront();
       await raceWithAbort(
-        this.page.waitForFunction(
-          () => {
-            const control = document.querySelector("[data-search-logout]");
-            return control instanceof HTMLElement && !control.hidden;
-          },
-          undefined,
-          { timeout: 9 * 60 * 1_000 },
-        ),
+        authPage.goto(`${FOCUS_PREVIEW_BASE_URL}/poisk/`, {
+          waitUntil: "domcontentloaded",
+          timeout: 30_000,
+        }),
         signal,
       );
+      const login = authPage.locator("[data-search-login]");
+      const logout = authPage.locator("[data-search-logout]");
+      await raceWithAbort(
+        authPage.locator("[data-authorized-search]").waitFor({ state: "visible", timeout: 30_000 }),
+        signal,
+      );
+      if (!(await logout.isVisible().catch(() => false))) {
+        await abortableDelay(1_800, signal);
+        await login.click();
+        await this.setAgentState(
+          "running",
+          "Подготовка поиска · завершите вход через Яндекс; любая Run/Reset вернёт презентацию",
+        );
+        await raceWithAbort(
+          authPage.waitForFunction(
+            () => {
+              const control = document.querySelector("[data-search-logout]");
+              return control instanceof HTMLElement && !control.hidden;
+            },
+            undefined,
+            { timeout: 9 * 60 * 1_000 },
+          ),
+          signal,
+        );
+      }
+      assertCondition(
+        await logout.isVisible().catch(() => false),
+        "demo search account did not become authenticated",
+      );
+      if (config.storageStatePath) {
+        await mkdir(path.dirname(config.storageStatePath), { recursive: true });
+        await this.context.storageState({ path: config.storageStatePath });
+      }
+      await this.setAgentState("running", "Подготовка поиска · вход сохранён в локальном кеше Windows");
+      await abortableDelay(1_500, signal);
+    } finally {
+      if (!authPage.isClosed()) await authPage.close().catch(() => {});
+      if (this.auxiliaryPage === authPage) this.auxiliaryPage = null;
+      if (this.page && !this.page.isClosed()) await this.page.bringToFront().catch(() => {});
     }
-    assertCondition(
-      await logout.isVisible().catch(() => false),
-      "demo search account did not become authenticated",
-    );
-    if (config.storageStatePath) {
-      await mkdir(path.dirname(config.storageStatePath), { recursive: true });
-      await this.context.storageState({ path: config.storageStatePath });
-    }
-    await this.setAgentState("running", "Подготовка поиска · вход сохранён в локальном кеше Windows");
-    await abortableDelay(1_500, signal);
-    await this.openStage(this.page);
     return {
       summary:
         "dedicated Yandex demo-account session is authenticated and saved only in the Windows browser-state cache",

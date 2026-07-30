@@ -29,7 +29,9 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
     "lecture-usability-measurement", "market-01-primary", "market-04-position", "tomorrow-mobile",
     "tomorrow-rail-like", "weekend-amber-artifact", "service-search-live",
     "service-focus-group", "service-laws", "service-keyboard-event",
-    "service-friends-club", "weekend-desktop", "outro-qr",
+    "service-friends-club", "service-navigation-exhibitions",
+    "service-navigation-festivals", "joke-db-01", "joke-db-09",
+    "weekend-desktop", "outro-qr",
   ]) assert.ok(SCENARIO_IDS.includes(id), `${id} is allowlisted`);
   assert.equal(DEFAULT_SCENARIO_ID, "tomorrow-mobile");
   assert.equal(resolveScenarioId(undefined), "tomorrow-mobile");
@@ -49,6 +51,8 @@ test("declares the accepted journeys plus explicit intro, lecture, desktop and o
   assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-search-live"));
   assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-personalization"));
   assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-transport-rail"));
+  assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-navigation-exhibitions"));
+  assert.ok(SERVICE_SCENE_CONTRACTS.some(({ id }) => id === "service-navigation-festivals"));
   assert.equal(WEEKEND_DESKTOP_CONTRACT.surface, "desktop");
   assert.deepEqual(OUTRO_QR_CONTRACT, {
     id: "outro-qr",
@@ -76,6 +80,8 @@ test("scenario timeout policy is explicit and can admit a future one-hour scene"
   assert.equal(resolveScenarioTimeoutMs("weekend-amber-artifact"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("service-focus-group"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("weekend-desktop"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("service-navigation-exhibitions"), 120_000);
+  assert.equal(resolveScenarioTimeoutMs("service-navigation-festivals"), 120_000);
   assert.equal(resolveScenarioTimeoutMs("outro-qr"), 30_000);
   assert.equal(LONG_SCENE_TIMEOUT_CEILING_MS, 3_600_000);
   assert.equal(
@@ -102,6 +108,19 @@ test("declares separate mobile and desktop interaction semantics", () => {
     inputVisual: "currently-pressed-keyboard-keys",
     responseVisual: "ui-response",
   });
+});
+
+test("desktop D-pad is a state-preserving iframe keyboard overlay", () => {
+  const start = source.indexOf("async handleDesktopNavigation");
+  const end = source.indexOf("\n  isExpired", start);
+  const handler = source.slice(start, end);
+  assert.ok(start > 0 && end > start);
+  assert.match(handler, /up: "ArrowUp"[\s\S]*left: "ArrowLeft"[\s\S]*down: "ArrowDown"[\s\S]*right: "ArrowRight"/u);
+  assert.match(handler, /contentFrame\(\)/u);
+  assert.match(handler, /frame\.locator\(":focus"\)\.press\(key\)/u);
+  assert.match(handler, /presenter:desktop-key-visual/u);
+  assert.match(handler, /presenter:desktop-ui-response/u);
+  assert.doesNotMatch(handler, /handleRun|confirmStopped|openStage|page\.goto/u);
 });
 
 test("deterministic event selection prefers the shortest rail then numeric event id", () => {
@@ -241,6 +260,13 @@ test("search has an explicit one-time persistent Yandex demo-session setup", () 
   assert.match(source, /data-search-logout/u);
   assert.match(source, /9 \* 60 \* 1_000/u);
   assert.match(source, /this\.context\.storageState\(\{ path: config\.storageStatePath \}\)/u);
+  assert.match(source, /const authPage = await this\.context\.newPage\(\)/u);
+  assert.match(source, /this\.auxiliaryPage = authPage/u);
+  assert.match(source, /await this\.ensureStageReady\(`run \$\{scenarioId\}`\)/u);
+  assert.doesNotMatch(
+    source.match(/async runSearchAuthSetup\(signal\) \{[\\s\\S]*?\\n  \}/u)?.[0] || "",
+    /this\.page\.goto/u,
+  );
   assert.doesNotMatch(source, /password|service_role/iu);
 });
 
@@ -324,7 +350,7 @@ test("a new run is a bounded cooperative scene switch, never already-running rej
 });
 
 test("remote shutdown acknowledges a durable closed state before browser exit", () => {
-  assert.match(source, /\["run", "scroll", "stop", "reset", "shutdown"\]/u);
+  assert.match(source, /\["run", "scroll", "navigate", "stop", "reset", "shutdown"\]/u);
   assert.match(source, /async handleShutdown\(command, remote\)/u);
   assert.match(source, /if \(command\.action === "shutdown"\) \{[\s\S]*await dispatchPromise/u);
   assert.match(source, /this\.shuttingDown = true/u);

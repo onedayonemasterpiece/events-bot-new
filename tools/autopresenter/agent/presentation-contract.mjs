@@ -67,8 +67,13 @@ export const MARKET_SCENE_IDS = Object.freeze([
   "market-03-dynamics",
   "market-04-position",
 ]);
+export const JOKE_DATABASE_SCENE_IDS = Object.freeze(
+  Array.from({ length: 9 }, (_, index) => `joke-db-${String(index + 1).padStart(2, "0")}`),
+);
 export const EXPANDED_SERVICE_SCENE_IDS = Object.freeze([
   "service-navigation-map",
+  "service-navigation-exhibitions",
+  "service-navigation-festivals",
   "service-social-proof",
   "service-artifacts-explained",
   "service-artifact-desktop",
@@ -109,6 +114,7 @@ export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
   ...LECTURE_SCENE_IDS,
   ...EXTRA_LECTURE_SCENE_IDS,
   ...MARKET_SCENE_IDS,
+  ...JOKE_DATABASE_SCENE_IDS,
   "service-wordmark",
   "service-needs",
   "service-medallions",
@@ -119,7 +125,9 @@ export const STATIC_PRESENTATION_SCENE_IDS = Object.freeze([
   "service-taste",
   "service-feedback",
   "service-transport-bus",
-  ...EXPANDED_SERVICE_SCENE_IDS,
+  ...EXPANDED_SERVICE_SCENE_IDS.filter(
+    (id) => !["service-navigation-exhibitions", "service-navigation-festivals"].includes(id),
+  ),
 ]);
 
 // Explicitly accepted scenes stay closed to incidental redesign during draft iterations.

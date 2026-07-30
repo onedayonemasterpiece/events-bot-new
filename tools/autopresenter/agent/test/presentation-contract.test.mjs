@@ -8,6 +8,7 @@ import {
   INTRO_MUSIC_ASSET,
   INTRO_SCENE_ID,
   EXTRA_LECTURE_SCENE_IDS,
+  JOKE_DATABASE_SCENE_IDS,
   LECTURE_ASSETS,
   LECTURE_SCENE_IDS,
   MARKET_SCENE_IDS,
@@ -32,11 +33,17 @@ test("presentation scenes remain explicit and the intro defaults to fifty minute
     MARKET_SCENE_IDS,
     ["market-01-primary", "market-02-substitutes", "market-03-dynamics", "market-04-position"],
   );
+  assert.deepEqual(
+    JOKE_DATABASE_SCENE_IDS,
+    Array.from({ length: 9 }, (_, index) => `joke-db-${String(index + 1).padStart(2, "0")}`),
+  );
   assert.equal(INTRO_LOOP_RUNTIME_MS, 50 * 60 * 1_000);
   assert.ok(SERVICE_SCENE_IDS.includes("service-search-live"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-personalization"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-transport-rail"));
   assert.ok(SERVICE_SCENE_IDS.includes("service-transport-bus"));
+  assert.ok(SERVICE_SCENE_IDS.includes("service-navigation-exhibitions"));
+  assert.ok(SERVICE_SCENE_IDS.includes("service-navigation-festivals"));
   assert.deepEqual(
     SCENE_ACCEPTANCE_CONTRACT.frozen,
     ["tomorrow-mobile", "outro-qr"],

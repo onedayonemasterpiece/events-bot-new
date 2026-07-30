@@ -20,8 +20,9 @@ import zipfile
 
 from aiohttp import web
 
-ALLOWED_ACTIONS = frozenset({"run", "scroll", "stop", "reset", "shutdown"})
+ALLOWED_ACTIONS = frozenset({"run", "scroll", "navigate", "stop", "reset", "shutdown"})
 SCROLL_DIRECTIONS = frozenset({"up", "down"})
+NAVIGATE_DIRECTIONS = frozenset({"up", "left", "down", "right"})
 DEFAULT_SCROLL_AMOUNT = 420
 MIN_SCROLL_AMOUNT = 120
 MAX_SCROLL_AMOUNT = 1200
@@ -63,6 +64,8 @@ ALLOWED_SCENARIOS = frozenset(
         "service-transport-rail",
         "service-transport-bus",
         "service-navigation-map",
+        "service-navigation-exhibitions",
+        "service-navigation-festivals",
         "service-social-proof",
         "service-artifacts-explained",
         "service-artifact-desktop",
@@ -76,6 +79,15 @@ ALLOWED_SCENARIOS = frozenset(
         "service-community-curator",
         "service-location-artifact",
         "service-friends-club",
+        "joke-db-01",
+        "joke-db-02",
+        "joke-db-03",
+        "joke-db-04",
+        "joke-db-05",
+        "joke-db-06",
+        "joke-db-07",
+        "joke-db-08",
+        "joke-db-09",
         "weekend-desktop",
         "outro-qr",
     }
@@ -206,7 +218,7 @@ class Relay:
             raise ApiError(
                 400,
                 "invalid_action",
-                "action must be run, scroll, stop, reset, or shutdown",
+                "action must be run, scroll, navigate, stop, reset, or shutdown",
             )
         normalized_scenario: str | None = None
         normalized_options: dict[str, Any] = {}
@@ -278,6 +290,33 @@ class Relay:
                     "scroll accepts only direction and amount",
                 )
             normalized_options = {"direction": direction, "amount": amount}
+        elif action == "navigate":
+            if scenario not in (None, ""):
+                raise ApiError(
+                    400,
+                    "unexpected_scenario",
+                    "navigate commands do not accept a scenario",
+                )
+            if not isinstance(options, dict):
+                raise ApiError(
+                    400,
+                    "invalid_options",
+                    "navigate options must be an object",
+                )
+            direction = str(options.get("direction") or "").strip().lower()
+            if direction not in NAVIGATE_DIRECTIONS:
+                raise ApiError(
+                    400,
+                    "invalid_navigate_direction",
+                    "navigate direction must be up, left, down, or right",
+                )
+            if set(options) - {"direction"}:
+                raise ApiError(
+                    400,
+                    "unexpected_options",
+                    "navigate accepts only direction",
+                )
+            normalized_options = {"direction": direction}
         elif scenario not in (None, "") or options not in (None, "", {}):
             raise ApiError(
                 400,
@@ -321,7 +360,7 @@ class Relay:
                 self._current_command_id = command.id
                 self._presentation_status = "running"
                 self._detail = f"Scenario {normalized_scenario} queued"
-            elif action == "scroll":
+            elif action in {"scroll", "navigate"}:
                 # A manual viewport nudge is an overlay control. Keep the active
                 # scene and its status visible in the PWA while the command is
                 # delivered and acknowledged.
@@ -417,7 +456,7 @@ class Relay:
             }
             if acknowledgment not in command.acknowledgments:
                 command.acknowledgments.append(acknowledgment)
-            if command.action != "scroll":
+            if command.action not in {"scroll", "navigate"}:
                 self._current_command_id = command.id
                 self._presentation_status = status
                 self._detail = acknowledgment["detail"] or status

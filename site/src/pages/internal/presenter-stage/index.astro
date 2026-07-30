@@ -14,6 +14,8 @@ const focusMobileMedallionUrl = focusEventUrl;
 const focusNpsUrl = `${focusPreviewBase}/segodnya/`;
 const peopleInterfaceUrl = `${focusPreviewBase}/lab/event-participants/`;
 const railTransportEventUrl = `${focusPreviewBase}/sobytiya/spektakl-chudnyy-otdyh-zelenogradsk-6976/`;
+const exhibitionsUrl = '/vystavki/';
+const festivalsUrl = '/festivali/';
 const focusInvitationQrSvg = createFocusInviteQrSvg(focusInvitationUrl);
 const friendsClubQrSvg = createFocusInviteQrSvg(friendsClubUrl);
 const outroQrUrl = 'https://static.kenigevents.ru/assets/autopresenter/scenario-20260730/qr-survey-nikiforov-916b6fee58256c4f2111887bf70c502070a55e45a667650dfccdb1495016ccd9.png';
@@ -190,6 +192,22 @@ const serviceTextScenes = [
   { id: 'service-taste', eyebrow: '08 · Не только свой вкус', title: 'Удобство нельзя\nсделать для себя.', support: 'Сервисом будут пользоваться другие люди.', theme: 'light' },
   { id: 'service-feedback', eyebrow: '09 · Слушать аудиторию', title: 'Обратная связь —\nчасть интерфейса.', support: 'Не приложение для людей. Приложение вместе с людьми.', theme: 'dark' },
 ];
+const jokeDatabase = [
+  'Фраза «Бесплатная доставка по всей территории РФ» всегда имеет невидимую сноску, написанную мелким шрифтом: «Кроме Калининградской области».',
+  'Слово «Материк» для жителя Калининграда звучит не как географический термин, а как мифическая земля, откуда прилетают туристы и потом улетают обратно.',
+  'Калининградский прогноз погоды: «Завтра ожидается дождь, снег, град, палящее солнце и ураган. Одевайтесь многослойно, всё это будет до обеда».',
+  'Лето в Калининграде бывает прекрасным! Главное — не пропустить этот день и успеть отпроситься с работы.',
+  'В Балтийске бывает так ветрено, что местные жители умеют стоять под углом 45 градусов к земле, даже не напрягаясь.',
+  'Говорят, что Танцующий лес на самом деле не танцует. Т-с-с: деревья извиваются, чтобы увернуться от туристов, желающих с ними сфотографироваться.',
+  'На Куршской косе кабаны смотрят на притормаживающие машины туристов как на сервис доставки еды прямо к обочине.',
+  'Чайки в Калининграде настолько суровы, что могут отбить даже шаурму.',
+  'UI — это тротуар из дорогой красивой плитки под прямым углом. UX — протоптанная людьми тропинка по газону наискосок, потому что так быстрее.',
+].map((text, index) => ({
+  id: `joke-db-${String(index + 1).padStart(2, '0')}`,
+  number: index + 1,
+  text,
+  ttsRequired: index === 2 || index === 6,
+}));
 const expandedServiceScenes = [
   {
     id: 'service-navigation-map',
@@ -666,6 +684,65 @@ const expandedServiceScenes = [
         </section>
       ))}
 
+      <section
+        class="live-navigation-scene exhibitions-navigation-scene presentation-scene"
+        data-presenter-scene-id="service-navigation-exhibitions"
+        hidden
+      >
+        <iframe
+          data-presenter-id="exhibitions-desktop-frame"
+          data-src={exhibitionsUrl}
+          title="Страница выставок с клавиатурной навигацией"
+          width="1920"
+          height="1080"
+        ></iframe>
+        <div class="live-key-hint" aria-hidden="true"><kbd>↓</kbd><span>найти выставку</span><kbd>→</kbd><span>листать фотографии</span></div>
+      </section>
+
+      <section
+        class="live-navigation-scene festivals-navigation-scene presentation-scene"
+        data-presenter-scene-id="service-navigation-festivals"
+        data-festival-phase="desktop"
+        hidden
+      >
+        <iframe
+          data-presenter-id="festivals-desktop-frame"
+          data-src={festivalsUrl}
+          title="Десктопная страница фестивалей"
+          width="1920"
+          height="1080"
+        ></iframe>
+        <div class="festival-mobile-stage">
+          <div class="phone-shell focus-phone">
+            <div class="phone-top" aria-hidden="true"><span class="speaker"></span><span class="camera"></span></div>
+            <iframe
+              data-presenter-id="festivals-mobile-frame"
+              data-src={festivalsUrl}
+              title="Мобильная страница фестивалей"
+              width="476"
+              height="1024"
+            ></iframe>
+            <div class="phone-home" aria-hidden="true"></div>
+          </div>
+        </div>
+        <span class="festival-phase-label" aria-hidden="true">desktop → mobile</span>
+      </section>
+
+      {jokeDatabase.map((joke) => (
+        <section
+          class={`joke-database-scene presentation-scene theme--${joke.number % 2 ? 'dark' : 'light'}`}
+          data-presenter-scene-id={joke.id}
+          data-visual-state="idle"
+          data-joke-number={joke.number}
+          data-tts-required={joke.ttsRequired ? 'true' : 'false'}
+          hidden
+        >
+          <div class="joke-index" aria-hidden="true">{String(joke.number).padStart(2, '0')} / 09</div>
+          <p>Калининградская пауза</p>
+          <h2>{joke.text}</h2>
+        </section>
+      ))}
+
       {serviceTextScenes.map((scene) => (
         <section
           class={`service-scene service-word-sequence presentation-scene theme--${scene.theme}`}
@@ -1082,6 +1159,9 @@ const expandedServiceScenes = [
               const phrase = phraseId === 'countdown' ? countdownPhrase(options.startAt) : introPhrases[phraseId];
               if (!phrase) continue;
               introScene.dataset.introPhrase = phraseId;
+              introScene.dataset.introDensity = Math.max(phrase[0].length, phrase[1].length) > 30
+                ? 'compact'
+                : 'default';
               introScene.classList.remove('is-clearing');
               if (!await revealHeroTalk(phrase[0], phrase[1], token)) return;
               if (!await pause(5200, token)) return;
@@ -1371,6 +1451,9 @@ const expandedServiceScenes = [
           if (sceneId === 'service-transport-rail' && activeScene instanceof HTMLElement) {
             startTransportRail(activeScene);
           }
+          if (sceneId === 'service-navigation-festivals' && activeScene instanceof HTMLElement) {
+            activeScene.dataset.festivalPhase = 'desktop';
+          }
           if (sceneId === 'service-joke') void startJoke();
           if (sceneId === 'service-medallions' && activeScene instanceof HTMLElement) {
             void startMedallions(activeScene, token);
@@ -1547,10 +1630,11 @@ const expandedServiceScenes = [
       linear-gradient(118deg, #0a0b10, #13131b 56%, #090a0d);
   }
   .intro-scene::before { position: absolute; inset: 0; z-index: -2; content: ""; opacity: .11; background-image: linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px); background-size: 88px 88px; mask-image: linear-gradient(90deg, #000, transparent 82%); }
-  .presentation-orbit { position: absolute; z-index: -1; right: -12vw; bottom: -30vh; width: min(67vw, 1280px); height: min(78vh, 840px); background: linear-gradient(140deg, #ff9b80, var(--stage-accent)); -webkit-mask: var(--brand-o-mask) center / 100% 100% no-repeat; mask: var(--brand-o-mask) center / 100% 100% no-repeat; opacity: .86; transform: rotate(-10deg) scaleX(1.18); }
+  .presentation-orbit { position: absolute; z-index: -1; right: -17vw; bottom: -40vh; width: min(58vw, 1080px); height: min(66vh, 710px); background: linear-gradient(140deg, #ff9b80, var(--stage-accent)); -webkit-mask: var(--brand-o-mask) center / 100% 100% no-repeat; mask: var(--brand-o-mask) center / 100% 100% no-repeat; opacity: .64; transform: rotate(-10deg) scaleX(1.14); }
   .brand-plate--intro { position: absolute; top: clamp(58px, 7vh, 82px); right: clamp(76px, 7vw, 140px); width: clamp(270px, 19vw, 365px); padding: 17px 28px; }
   .intro-kicker { margin: 0; color: var(--stage-accent); font-size: clamp(17px, 1.25vw, 24px); font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
-  .intro-thought { position: absolute; top: 50%; left: clamp(76px, 7vw, 140px); width: calc(100% - clamp(152px, 14vw, 280px)); margin: 0; transform: translateY(-48%); color: #fffaf3; font-size: clamp(54px, 4.35vw, 86px); font-weight: 800; line-height: .98; letter-spacing: -.06em; text-wrap: balance; }
+  .intro-thought { position: absolute; top: 50%; left: clamp(76px, 7vw, 140px); width: min(70vw, 1340px); margin: 0; transform: translateY(-48%); color: #fffaf3; font-size: clamp(54px, 4.35vw, 86px); font-weight: 800; line-height: .98; letter-spacing: -.06em; text-wrap: balance; }
+  .intro-scene[data-intro-density="compact"] .intro-thought { width: min(68vw, 1280px); font-size: clamp(48px, 3.65vw, 70px); line-height: 1; letter-spacing: -.05em; }
   .intro-thought > span { display: block; min-height: 1.04em; white-space: nowrap; }
   .intro-thought > span:last-of-type { color: #ff9b80; font-family: "Cygre", sans-serif; font-style: italic; font-weight: 650; letter-spacing: -.045em; }
   .hero-fragment { display: inline-block; opacity: 0; transform: translateY(.22em) scale(.985); filter: blur(1px); transition: opacity 320ms var(--ease-settle), transform 320ms var(--ease-settle), filter 260ms var(--ease-settle); }
@@ -1898,6 +1982,34 @@ const expandedServiceScenes = [
   .expanded-feature-scene[data-visual-state="complete"] .expanded-feature-visual > img { opacity: 1; transform: none; }
   .expanded-feature-scene[data-visual-state="revealing"] .expanded-feature-cards article,
   .expanded-feature-scene[data-visual-state="complete"] .expanded-feature-cards article { opacity: 1; transform: none; }
+
+  .live-navigation-scene { position: absolute; inset: 0; z-index: 12; overflow: hidden; background: #fff; }
+  .live-navigation-scene > iframe { width: 100%; height: 100%; display: block; border: 0; background: #fffaf4; }
+  .live-key-hint { position: absolute; z-index: 4; left: 32px; bottom: 28px; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 18px; color: #fff; background: rgba(7,10,16,.86); box-shadow: 0 18px 48px rgba(0,0,0,.28); backdrop-filter: blur(16px); font-size: 16px; }
+  .live-key-hint kbd { min-width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.42); border-radius: 10px; background: rgba(255,255,255,.13); font: 700 19px/1 "Cygre",sans-serif; }
+  .live-key-hint span + kbd { margin-left: 12px; }
+  .festivals-navigation-scene { background: #0d1016; }
+  .festivals-navigation-scene > iframe { transition: opacity 750ms var(--ease-cinematic), transform 950ms var(--ease-cinematic), visibility 750ms; }
+  .festival-mobile-stage { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 42%,rgba(255,118,87,.16),transparent 32%),#0d1016; opacity: 0; visibility: hidden; transform: translateY(22px) scale(.96); transition: opacity 750ms var(--ease-cinematic), transform 950ms var(--ease-cinematic), visibility 750ms; }
+  .festival-mobile-stage .focus-phone { height: calc(100vh - 38px); }
+  .festival-phase-label { position: absolute; z-index: 5; right: 30px; top: 26px; padding: 10px 16px; border-radius: 999px; color: #fff; background: rgba(8,10,15,.78); font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .festivals-navigation-scene[data-festival-phase="mobile"] > iframe { opacity: 0; visibility: hidden; transform: translateY(-24px) scale(.97); }
+  .festivals-navigation-scene[data-festival-phase="mobile"] .festival-mobile-stage { opacity: 1; visibility: visible; transform: none; }
+
+  .joke-database-scene { position: absolute; inset: 0; display: grid; align-content: center; padding: 8vh 9vw; overflow: hidden; }
+  .joke-database-scene::after { position: absolute; z-index: -1; right: -15vw; bottom: -35vh; width: min(62vw,1160px); aspect-ratio: 1.45; content: ""; color: var(--stage-accent); background: currentColor; opacity: .18; -webkit-mask: var(--brand-o-mask) center/contain no-repeat; mask: var(--brand-o-mask) center/contain no-repeat; transform: rotate(-10deg); }
+  .joke-database-scene.theme--light { color: #17121a; background: radial-gradient(circle at 84% 18%,rgba(255,118,87,.2),transparent 28%),#f6efe5; }
+  .joke-database-scene.theme--dark { color: #fff9f1; background: radial-gradient(circle at 84% 18%,rgba(105,86,223,.18),transparent 30%),#0c0e14; }
+  .joke-database-scene > p { margin: 0 0 34px; color: var(--stage-accent); font-size: 20px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+  .joke-database-scene h2 { position: relative; z-index: 1; max-width: 16ch; margin: 0; font-size: clamp(62px,5.45vw,104px); line-height: .94; letter-spacing: -.06em; text-wrap: balance; opacity: 0; transform: translateY(30px) scale(.97); transition: opacity 520ms ease, transform 980ms var(--ease-cinematic); }
+  .joke-database-scene[data-joke-number="1"] h2,
+  .joke-database-scene[data-joke-number="3"] h2,
+  .joke-database-scene[data-joke-number="6"] h2,
+  .joke-database-scene[data-joke-number="7"] h2,
+  .joke-database-scene[data-joke-number="9"] h2 { max-width: 19ch; font-size: clamp(52px,4.35vw,84px); }
+  .joke-database-scene[data-visual-state="revealing"] h2,
+  .joke-database-scene[data-visual-state="complete"] h2 { opacity: 1; transform: none; }
+  .joke-index { position: absolute; top: 60px; right: 7vw; color: color-mix(in srgb,currentColor 44%,transparent); font: 700 18px/1 ui-monospace,monospace; letter-spacing: .12em; }
 
   .friends-club-scene { display: grid; grid-template-columns: minmax(520px,.82fr) minmax(600px,1.18fr); align-items: center; gap: clamp(54px,6vw,118px); padding: 64px 8vw; overflow: hidden; }
   .friends-club-copy h2 { max-width: 10ch; margin: 26px 0 28px; font-size: clamp(76px,6.7vw,130px); line-height: .82; letter-spacing: -.075em; }

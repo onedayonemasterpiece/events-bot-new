@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Fixed
+- Prevented a failed Yandex search login from taking over the persistent
+  Autopresenter stage: authentication now uses a disposable auxiliary tab and
+  every Run restores the stage before starting, while Reset remains available.
+- Corrected the Autopresenter intro collisions visible in Telegram screenshots
+  881/882 by reserving the logo safe area, compacting only long phrases and
+  moving the stretched brand «о» away from the copy.
 - Distinguished the nested transport controls as `03.12.3.1` (train) and
   `03.12.3.2` (bus) while keeping their stable scenario IDs.
 - Fixed the latest Autopresenter owner-review regressions without adding
@@ -81,6 +87,10 @@
 - Focus-group private routes now add `nosnippet` in immutable secret-candidate builds, satisfying the candidate-wide robots contract without changing production root indexing.
 
 ### Added
+- Added an Autopresenter desktop D-pad with real Arrow-key delivery and visible
+  key feedback, live exhibition and festival journeys, and a dedicated
+  nine-scene joke group. Joke 03/07 TTS remains explicitly blocked by the
+  fail-closed shared-quota preflight rather than using an unapproved fallback.
 
 - Expanded the 30 July Autopresenter from the updated author source: two new
   lecture beats, four animated interactive competitor/research charts,

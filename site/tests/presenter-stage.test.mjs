@@ -40,6 +40,8 @@ test('intro follows the Hero Talk semantic-fragment reveal and keeps two explici
   assert.match(source, /return \['Вот-вот', 'начинаем'\]/u);
   assert.match(source, /aria-live="off"/u);
   assert.match(source, /countdownPhrase/u);
+  assert.match(source, /dataIntroDensity|dataset\.introDensity/u);
+  assert.match(source, /\.intro-scene\[data-intro-density="compact"\]/u);
   assert.match(source, /data-presenter-id="intro-music"/u);
   assert.match(source, /introMusic\.volume = \.15 \* progress/u);
   assert.match(source, /introMusic\.pause\(\)/u);
@@ -115,6 +117,21 @@ test('expanded author scenario has explicit visual scenes instead of empty place
   assert.match(source, /friends-club-darya-[a-f0-9]{64}\.mp4/u);
   assert.match(source, /data-visual-state="idle"/u);
   assert.match(source, /activeScene\.hasAttribute\('data-visual-state'\)/u);
+});
+
+test('new navigation and joke blocks are explicit runnable presentation scenes', () => {
+  assert.match(source, /data-presenter-scene-id="service-navigation-exhibitions"/u);
+  assert.match(source, /data-presenter-id="exhibitions-desktop-frame"/u);
+  assert.match(source, /data-presenter-scene-id="service-navigation-festivals"/u);
+  assert.match(source, /data-presenter-id="festivals-desktop-frame"/u);
+  assert.match(source, /data-presenter-id="festivals-mobile-frame"/u);
+  assert.match(source, /data-festival-phase="desktop"/u);
+  assert.match(source, /activeScene\.dataset\.festivalPhase = 'desktop'/u);
+  assert.match(source, /const jokeDatabase = \[/u);
+  assert.match(source, /Калининградский прогноз погоды/u);
+  assert.match(source, /Куршской косе кабаны/u);
+  assert.match(source, /data-tts-required=\{joke\.ttsRequired/u);
+  assert.match(source, /id: `joke-db-\$\{String\(index \+ 1\)/u);
 });
 
 test('desktop weekend scene presents meaning first and then reveals the clean FHD site', () => {

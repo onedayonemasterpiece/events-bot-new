@@ -52,6 +52,8 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             "service-transport-rail",
             "service-transport-bus",
             "service-navigation-map",
+            "service-navigation-exhibitions",
+            "service-navigation-festivals",
             "service-social-proof",
             "service-artifacts-explained",
             "service-artifact-desktop",
@@ -93,6 +95,11 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('aria-label="Ручная прокрутка демонстрации"', text)
         self.assertIn('data-action="scroll" data-direction="up" data-amount="420"', text)
         self.assertIn('data-action="scroll" data-direction="down" data-amount="420"', text)
+        self.assertIn('aria-label="Навигация по desktop"', text)
+        for direction in ("up", "left", "down", "right"):
+            self.assertIn(f'data-action="navigate" data-direction="{direction}"', text)
+        for index in range(1, 10):
+            self.assertIn(f'data-scenario="joke-db-{index:02d}"', text)
         self.assertIn("Меню с паузой → «Выходные» → артефакт", text)
         self.assertIn("Меню с паузой → «Завтра» → rail", text)
         self.assertIn("Сбросить доступ на этом устройстве", text)
@@ -368,6 +375,88 @@ class RelayApiTests(unittest.IsolatedAsyncioTestCase):
             payload["command"]["options"],
             {"direction": "up", "amount": 420},
         )
+
+    async def test_desktop_navigation_is_bounded_and_preserves_active_scene_state(self):
+        await self.json(
+            "POST",
+            "/api/state/agent",
+            json={"agent_id": "agent-one", "status": "idle"},
+        )
+        response, payload = await self.json(
+            "POST",
+            "/api/commands",
+            json={
+                "action": "run",
+                "scenario": "service-navigation-exhibitions",
+                "command_id": "exhibitions-scene",
+            },
+        )
+        run_sequence = payload["command"]["sequence"]
+        response, payload = await self.json(
+            "POST",
+            "/api/commands/exhibitions-scene/ack",
+            json={
+                "agent_id": "agent-one",
+                "sequence": run_sequence,
+                "status": "completed",
+                "detail": "exhibition gallery focused",
+            },
+        )
+        self.assertEqual(response.status, 200)
+
+        for direction in ("up", "left", "down", "right"):
+            response, payload = await self.json(
+                "POST",
+                "/api/commands",
+                json={
+                    "action": "navigate",
+                    "command_id": f"navigate-{direction}",
+                    "options": {"direction": direction.upper()},
+                },
+            )
+            self.assertEqual(response.status, 202)
+            self.assertEqual(payload["command"]["options"], {"direction": direction})
+            self.assertEqual(payload["state"]["current_command"]["id"], "exhibitions-scene")
+            sequence = payload["command"]["sequence"]
+            response, payload = await self.json(
+                "POST",
+                f"/api/commands/navigate-{direction}/ack",
+                json={
+                    "agent_id": "agent-one",
+                    "sequence": sequence,
+                    "status": "completed",
+                    "detail": f"desktop {direction}",
+                },
+            )
+            self.assertEqual(response.status, 200)
+            self.assertEqual(payload["state"]["current_command"]["id"], "exhibitions-scene")
+            self.assertEqual(payload["state"]["detail"], "exhibition gallery focused")
+
+        invalid_cases = (
+            ({}, "invalid_options"),
+            ({"options": {}}, "invalid_navigate_direction"),
+            ({"options": {"direction": "diagonal"}}, "invalid_navigate_direction"),
+            ({"options": {"direction": "up", "key": "Escape"}}, "unexpected_options"),
+            (
+                {
+                    "scenario": "service-navigation-exhibitions",
+                    "options": {"direction": "up"},
+                },
+                "unexpected_scenario",
+            ),
+        )
+        for index, (extra, expected_error) in enumerate(invalid_cases):
+            response, payload = await self.json(
+                "POST",
+                "/api/commands",
+                json={
+                    "action": "navigate",
+                    "command_id": f"invalid-navigate-{index}",
+                    **extra,
+                },
+            )
+            self.assertEqual(response.status, 400)
+            self.assertEqual(payload["error"], expected_error)
 
     async def test_manual_scroll_rejects_unbounded_or_ambiguous_options(self):
         invalid_cases = (
