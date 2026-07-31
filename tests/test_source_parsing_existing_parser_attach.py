@@ -168,6 +168,72 @@ async def test_exact_ticket_slot_allows_presentation_title_without_llm(
 
 
 @pytest.mark.asyncio
+async def test_unchanged_exact_ticket_replay_skips_page_rebuild_and_schedule(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    event_date = (date.today() + timedelta(days=7)).isoformat()
+    official_url = "https://example.org/afisha/unchanged-slot"
+
+    async with db.get_session() as session:
+        stored = Event(
+            title="Неизменившийся концерт",
+            description="Existing canonical description",
+            date=event_date,
+            time="19:00",
+            location_name="Янтарь холл",
+            source_text="Parser source",
+            ticket_status="available",
+            ticket_link=official_url,
+        )
+        session.add(stored)
+        await session.commit()
+        await session.refresh(stored)
+        event_id = int(stored.id)
+
+    async def find_existing(*_args, **_kwargs):
+        return event_id, False
+
+    async def no_result(*_args, **_kwargs):
+        return None
+
+    async def forbidden_effect(*_args, **_kwargs):
+        raise AssertionError("unchanged replay must not rebuild or schedule pages")
+
+    monkeypatch.setattr(handlers, "find_existing_event", find_existing)
+    monkeypatch.setattr(handlers, "update_linked_events", no_result)
+    monkeypatch.setattr(handlers, "schedule_existing_event_update", forbidden_effect)
+    monkeypatch.setattr(handlers, "_ensure_telegraph_url", forbidden_effect)
+    monkeypatch.setattr(handlers, "add_new_event_via_queue", forbidden_effect)
+
+    candidate = TheatreEvent(
+        title="Неизменившийся концерт",
+        date_raw=f"{event_date} 19:00",
+        parsed_date=event_date,
+        parsed_time="19:00",
+        ticket_status="available",
+        url=official_url,
+        location="Янтарь холл",
+        source_type="yantarhall",
+    )
+    stats, _ = await handlers.process_source_events(
+        db,
+        None,
+        [candidate],
+        source="yantarhall",
+        start_index=0,
+        total_count=1,
+    )
+    await db.engine.dispose()
+
+    assert stats.ticket_updated == 0
+    assert stats.already_exists == 1
+    assert stats.failed == 0
+
+
+@pytest.mark.asyncio
 async def test_title_mismatch_without_explicit_slot_still_reaches_llm(
     tmp_path,
     monkeypatch,

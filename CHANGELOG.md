@@ -12,8 +12,10 @@
 - Source-parsing replay now treats an exact official URL, date and explicit
   time as an idempotent occurrence even when Smart Update previously expanded
   the presentation title; shared URLs without an exact slot still reach the
-  LLM identity gate, while deploy-interrupted catch-ups no longer repay the
-  full semantic merge for already restored rows.
+  LLM identity gate. An unchanged ticket status/link now also skips Telegraph
+  rebuild and deferred page scheduling, so deploy-interrupted catch-ups no
+  longer repay either the semantic merge or page-render LLM work for already
+  restored rows.
 - StaticSiteBuilder now reclaims only unreferenced immutable snapshots and
   lock-protected `static-site-kaggle-*` scratch trees before its capacity
   probe. A killed Fly process can no longer leave one staged database copy that

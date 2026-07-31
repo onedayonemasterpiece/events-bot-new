@@ -989,7 +989,9 @@ async def update_event_ticket_status(
     event_id: int,
     ticket_status: str,
     ticket_link: str | None = None,
-) -> bool:
+    *,
+    return_changed: bool = False,
+) -> bool | tuple[bool, bool]:
     """Update ticket status for an existing event.
     
     Args:
@@ -1010,31 +1012,41 @@ async def update_event_ticket_status(
                 return False
             
             old_status = event.ticket_status
+            old_ticket_link = event.ticket_link
             event.ticket_status = ticket_status
             
             if ticket_link and not event.ticket_link:
                 event.ticket_link = ticket_link
-            
-            await session.commit()
+
+            changed = (
+                event.ticket_status != old_status
+                or event.ticket_link != old_ticket_link
+            )
+            if changed:
+                await session.commit()
             
             logger.info(
-                "source_parsing: updated ticket_status event_id=%d old=%s new=%s",
+                "source_parsing: ticket_status sync event_id=%d old=%s new=%s changed=%d",
                 event_id,
                 old_status,
                 ticket_status,
+                int(changed),
             )
             
-            # Rebuild Telegraph page with updated data
-            await _ensure_telegraph_url(db, event_id)
+            # A cached source replay must not rebuild the public page (and pay
+            # for its Smart Update rendering pass) when the canonical ticket
+            # state is byte-for-byte unchanged.
+            if changed:
+                await _ensure_telegraph_url(db, event_id)
             
-            return True
+            return (True, changed) if return_changed else True
     except Exception as e:
         logger.error(
             "source_parsing: update failed event_id=%d error=%s",
             event_id,
             e,
         )
-        return False
+        return (False, False) if return_changed else False
 
 
 async def update_event_full(
@@ -2938,18 +2950,30 @@ async def process_source_events(
                         result_tag = "existing_full_update_failed"
                 else:
                     # Source already imported via parser -> cheap status/ticket sync only.
-                    success = await update_event_ticket_status(
+                    ticket_sync = await update_event_ticket_status(
                         db,
                         existing_id,
                         event.ticket_status,
                         event.url,
+                        return_changed=True,
                     )
+                    if isinstance(ticket_sync, tuple):
+                        success, ticket_changed = ticket_sync
+                    else:
+                        # Backward-compatible with tests and integrations that
+                        # monkeypatch the legacy boolean contract.
+                        success = bool(ticket_sync)
+                        ticket_changed = success
                     if success:
-                        await schedule_existing_event_update(db, existing_id)
-                        stats.ticket_updated += 1
-                        result_tag = "existing_ticket_update"
+                        if ticket_changed:
+                            await schedule_existing_event_update(db, existing_id)
+                            stats.ticket_updated += 1
+                            result_tag = "existing_ticket_update"
+                        else:
+                            stats.already_exists += 1
+                            result_tag = "existing_ticket_unchanged"
                         # Track updated event for reporting
-                        if updated_events is not None:
+                        if ticket_changed and updated_events is not None:
                             info = await build_updated_event_info(
                                 db,
                                 existing_id,

@@ -153,6 +153,12 @@ ticket URL, той же даты и того же явного времени. �
 общий performance URL может содержать несколько сеансов, а legacy festival
 aggregate — ссылки отдельных концертов. Такие случаи всегда возвращаются в
 Smart Update identity gate для создания или разделения occurrence.
+Если в этом exact replay одновременно не изменились `ticket_status` и
+`ticket_link`, он считается полностью идемпотентным: parser обновляет только
+provenance freshness, но не перестраивает Telegraph и не ставит публичные
+страницы в очередь. Это исключает скрытый page-render LLM-вызов для каждого
+элемента компенсирующего повтора; реальное изменение билетов сохраняет прежний
+rebuild/scheduling contract.
 После исключения same-parser explicit-time conflict последующие
 city-noise/copy-post rescue-проходы не имеют права вернуть исключённый event в
 shortlist: один performance/ticket URL не является доказательством одного
