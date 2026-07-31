@@ -1,0 +1,94 @@
+mode: worktree_worker
+repo: events-bot-new
+base_ref: origin/main
+base_sha: c128bde4fe7a7b289c3ed4a64a4fe56d33124ad9
+latest_upstream_seen: 897dd56631808d1d65a82498312418f35412609f
+base_branch: main
+integration_branch: integration/telegram-video-quality-cdn
+global_constraints:
+  - Analyze only posts with at least one confirmed extracted event.
+  - Analyze only videos smaller than 10 MB.
+  - All Gemini calls use GoogleAIClient with Supabase reserve/finalize; no bypass.
+  - Dedicated normal key pool with safety margins; no unrelated key widening.
+  - Never rescan a sha256 with cached analysis, including rejected videos.
+  - Upload accepted videos only to Yandex CDN with content-addressed keys.
+  - No static-site UI in this project; export contract only.
+verification_owner: /root
+stop_conditions:
+  - missing strict limiter registry members
+  - unavailable Yandex credentials
+  - concurrent TELEGRAM_AUTH_BUNDLE_S22 remote run
+lanes:
+  - id: video-research
+    role: worker
+    requirement_ids: [R04]
+    target: calibrated video aesthetics/showcase rubric and canonical docs
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/telegram-video-quality/video-research
+    worktree: /home/dev/projects/events-bot-new.worktrees/video-research
+    writable_files: [docs/features/telegram-monitoring/video-quality.md]
+    forbidden_files: [kaggle/TelegramMonitor/telegram_monitor.py, db.py, models.py]
+    expected_output: research-backed rubric, score bands, schema and calibration plan
+    verification_scope: inspection_only
+    status: merged
+    worker_head: b7dd350c2298504686fd9c03a4ee3bc2b267a231
+    integration_commit: b2671830
+  - id: video-producer
+    role: worker
+    requirement_ids: [R01, R02, R03, R04, R05]
+    target: Kaggle event-gated cached analysis + accepted-only CDN producer
+    depends_on: [video-research]
+    execution_mode: serial_after_dependency
+    branch: agent/telegram-video-quality/video-producer
+    worktree: /home/dev/projects/events-bot-new.worktrees/video-producer
+    writable_files: [kaggle/TelegramMonitor/telegram_monitor.py, kaggle/TelegramMonitor/telegram_monitor.ipynb, source_parsing/telegram/service.py, tests/test_tg_monitor_gemma4_contract.py, tests/test_telegram_monitor_service.py, .env.example]
+    forbidden_files: [db.py, models.py, site/]
+    expected_output: strict pooled limiter, <10MB/event-confirmed gates, sha cache, CDN output
+    verification_scope: targeted
+    status: merged_and_integration_hardened
+    worker_head: 3fb4da233bb08776ad5210b01d0082db7b847ea5
+    integration_commits: [3bb84aac, 209fe8cd]
+  - id: video-persistence
+    role: worker
+    requirement_ids: [R04, R06, R07]
+    target: ranked metadata persistence, multi-event links, dedup-safe cleanup
+    depends_on: [video-producer contract]
+    execution_mode: read_only_until_dependency
+    branch: agent/telegram-video-quality/video-persistence
+    worktree: /home/dev/projects/events-bot-new.worktrees/video-persistence
+    writable_files: [db.py, models.py, source_parsing/telegram/handlers.py, main_part2.py, supabase_storage.py, targeted tests]
+    forbidden_files: [kaggle/TelegramMonitor/telegram_monitor.py, site/]
+    expected_output: schema migration/init, ranked idempotent links, multi-event mapping, orphan cleanup
+    verification_scope: targeted
+    status: merged_and_integration_hardened
+    worker_head: 832cd44f0fd2a7683ffcfebdc7ee046b421ed3b3
+    integration_commits: [d2cdb2cb, 05af18c5]
+  - id: video-export
+    role: worker
+    requirement_ids: [R08]
+    target: static export JSON/type contract without UI
+    depends_on: [video-persistence schema]
+    execution_mode: read_only_until_dependency
+    branch: agent/telegram-video-quality/video-export
+    worktree: /home/dev/projects/events-bot-new.worktrees/video-export
+    writable_files: [site/scripts/export-production-preview-data.py, site/src/lib/types.ts, site/src/lib/events.ts, site/scripts/check-preview.mjs, tests]
+    forbidden_files: [kaggle/TelegramMonitor/telegram_monitor.py, db.py, models.py]
+    expected_output: deterministic ranked video_assets export and tests
+    verification_scope: targeted
+    status: merged
+    worker_head: 0b882925eff5b732c085bcc2fbed358ad7115faa
+    integration_commits: [b96a009f, 8ceab2bc, f3368e30, 22c169c0]
+  - id: integrator
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08]
+    target: reconcile, document, validate, deploy and live verify
+    depends_on: [video-research, video-producer, video-persistence, video-export]
+    execution_mode: serial_after_dependency
+    branch: integration/telegram-video-quality-cdn
+    worktree: /home/dev/projects/events-bot-new.worktrees/video-quality-integration
+    writable_files: [docs/features/telegram-monitoring/README.md, docs/operations/supabase-storage.md, CHANGELOG.md, integration fixes/tests]
+    forbidden_files: []
+    expected_output: merged clean release with live evidence
+    verification_scope: full_local
+    status: in_progress

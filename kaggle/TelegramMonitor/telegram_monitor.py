@@ -7,6 +7,7 @@ import io
 import importlib.util
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -121,6 +122,7 @@ bootstrap_google_ai_bundle()
 def ensure_libs() -> None:
     modules = [
         ("telethon", "telethon"),
+        ("google.genai", "google-genai>=1.75.0"),
         ("google.generativeai", "google-generativeai"),
         ("cryptography", "cryptography"),
         ("supabase", "supabase"),
@@ -143,7 +145,7 @@ import imagehash
 from google_ai import GoogleAIClient, SecretsProvider
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.types import Channel, Chat, MessageEntityCustomEmoji, MessageEntityTextUrl, MessageEntityUrl, PeerChannel, PeerChat, PeerUser, User
+from telethon.tl.types import Channel, Chat, DocumentAttributeVideo, MessageEntityCustomEmoji, MessageEntityTextUrl, MessageEntityUrl, PeerChannel, PeerChat, PeerUser, User
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetFullChatRequest
 from telethon.helpers import add_surrogate, del_surrogate
@@ -238,6 +240,7 @@ TG_API_HASH = os.getenv('TG_API_HASH', '')
 
 DEFAULT_TG_MONITORING_TEXT_MODEL = 'models/gemma-4-31b-it'
 DEFAULT_TG_MONITORING_VISION_MODEL = 'models/gemma-4-31b-it'
+DEFAULT_TG_MONITORING_VIDEO_MODEL = 'gemini-3.1-flash-lite'
 GOOGLE_KEY_ENV = (os.getenv('TG_MONITORING_GOOGLE_KEY_ENV') or 'GOOGLE_API_KEY3').strip() or 'GOOGLE_API_KEY3'
 GOOGLE_FALLBACK_KEY_ENV = (os.getenv('TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV') or GOOGLE_KEY_ENV).strip() or GOOGLE_KEY_ENV
 GOOGLE_ACCOUNT_ENV = (os.getenv('TG_MONITORING_GOOGLE_ACCOUNT_ENV') or 'GOOGLE_API_LOCALNAME3').strip() or 'GOOGLE_API_LOCALNAME3'
@@ -267,6 +270,7 @@ TEXT_MODEL = (os.getenv('TG_MONITORING_TEXT_MODEL') or DEFAULT_TG_MONITORING_TEX
 VISION_MODEL = (os.getenv('TG_MONITORING_VISION_MODEL') or os.getenv('TG_MONITORING_TEXT_MODEL') or DEFAULT_TG_MONITORING_VISION_MODEL).strip()
 FALLBACK_TEXT_MODEL = (os.getenv('TG_MONITORING_TEXT_MODEL_FALLBACK') or '').strip()
 FALLBACK_VISION_MODEL = (os.getenv('TG_MONITORING_VISION_MODEL_FALLBACK') or '').strip()
+VIDEO_MODEL = (os.getenv('TG_MONITORING_VIDEO_MODEL') or DEFAULT_TG_MONITORING_VIDEO_MODEL).strip()
 LLM_CALL_TIMEOUT_SECONDS = float(
     (os.getenv('TG_MONITORING_LLM_TIMEOUT_SECONDS') or os.getenv('GOOGLE_AI_PROVIDER_TIMEOUT_SEC') or '45').strip()
     or '45'
@@ -692,6 +696,12 @@ MODEL_REGISTRY = {
         'name': VISION_MODEL,
         'fallback': FALLBACK_VISION_MODEL,
     },
+    'video': {
+        'name': VIDEO_MODEL,
+        # Video quality decisions deliberately have no model fallback. A quota or
+        # provider failure must not turn into an untracked direct/alternate call.
+        'fallback': '',
+    },
 }
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', '').strip()
@@ -738,6 +748,67 @@ def _env_int(name: str, default: int) -> int:
 
 
 TG_MONITORING_VIDEO_MAX_MB = _env_float('TG_MONITORING_VIDEO_MAX_MB', 10.0)
+TG_MONITORING_VIDEO_MAX_BYTES = min(
+    10 * 1024 * 1024,
+    max(1, int(TG_MONITORING_VIDEO_MAX_MB * 1024 * 1024)),
+)
+TG_MONITORING_VIDEO_MIN_WIDTH_HEIGHT_RATIO = _env_float(
+    'TG_MONITORING_VIDEO_MIN_WIDTH_HEIGHT_RATIO',
+    0.50,
+)
+TG_MONITORING_VIDEO_MAX_WIDTH_HEIGHT_RATIO = _env_float(
+    'TG_MONITORING_VIDEO_MAX_WIDTH_HEIGHT_RATIO',
+    0.80,
+)
+TG_MONITORING_VIDEO_MIN_WIDTH = max(1, _env_int('TG_MONITORING_VIDEO_MIN_WIDTH', 540))
+TG_MONITORING_VIDEO_MIN_HEIGHT = max(1, _env_int('TG_MONITORING_VIDEO_MIN_HEIGHT', 960))
+TG_MONITORING_VIDEO_MIN_DURATION_SEC = _env_float('TG_MONITORING_VIDEO_MIN_DURATION_SEC', 2.0)
+TG_MONITORING_VIDEO_MAX_DURATION_SEC = _env_float('TG_MONITORING_VIDEO_MAX_DURATION_SEC', 60.0)
+TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN = max(
+    0,
+    min(6, _env_int('TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN', 6)),
+)
+TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS = [
+    item.strip()
+    for item in (
+        os.getenv('TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS')
+        or 'GOOGLE_API_KEY3,GOOGLE_API_KEY5'
+    ).split(',')
+    if item.strip()
+]
+if len(set(TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS)) < 2:
+    raise RuntimeError(
+        'TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS must contain at least two distinct keys'
+    )
+TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES = {
+    item.strip().lower().lstrip('@')
+    for item in (
+        os.getenv('TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES') or ''
+    ).split(',')
+    if item.strip()
+}
+TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY = (
+    os.getenv('TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY') or ''
+).strip()
+TG_MONITORING_VIDEO_ANALYSIS_VERSION = (
+    os.getenv('TG_MONITORING_VIDEO_ANALYSIS_VERSION') or 'video-showcase-v2'
+).strip() or 'video-showcase-v2'
+TG_MONITORING_VIDEO_PROVIDER_TIMEOUT_SEC = _env_float(
+    'TG_MONITORING_VIDEO_PROVIDER_TIMEOUT_SEC',
+    120.0,
+)
+TG_MONITORING_VIDEO_UNKNOWN_DURATION_SEC = _env_float(
+    'TG_MONITORING_VIDEO_UNKNOWN_DURATION_SEC',
+    180.0,
+)
+TG_MONITORING_VIDEO_TOKENS_PER_SECOND_RESERVE = _env_float(
+    'TG_MONITORING_VIDEO_TOKENS_PER_SECOND_RESERVE',
+    320.0,
+)
+TG_MONITORING_VIDEO_MAX_RESERVED_TPM = max(
+    10000,
+    _env_int('TG_MONITORING_VIDEO_MAX_RESERVED_TPM', 200000),
+)
 # Videos use a stricter safe bucket threshold than posters.
 TG_MONITORING_VIDEO_BUCKET_SAFE_MB = _env_float('TG_MONITORING_VIDEO_BUCKET_SAFE_MB', 430.0)
 SUPABASE_BUCKET_USAGE_GUARD_MAX_USED_MB = _env_float('SUPABASE_BUCKET_USAGE_GUARD_MAX_USED_MB', 490.0)
@@ -748,11 +819,19 @@ if SUPABASE_BUCKET_USAGE_GUARD_ON_ERROR not in {'deny', 'allow'}:
 _VIDEO_BUCKET_USAGE_CACHE = {'checked_at': 0.0, 'used_bytes': None}
 
 logger.info(
-    'tg_monitor.video_config mode=%s max_mb=%.1f safe_mb=%.1f bucket=%s',
+    'tg_monitor.video_config mode=%s max_bytes=%d ratio=%.2f..%.2f min_geometry=%dx%d duration=%.1f..%.1f model=%s max_calls=%d key_envs=%s bucket=%s',
     SUPABASE_VIDEOS_MODE,
-    TG_MONITORING_VIDEO_MAX_MB,
-    TG_MONITORING_VIDEO_BUCKET_SAFE_MB,
-    SUPABASE_MEDIA_BUCKET,
+    TG_MONITORING_VIDEO_MAX_BYTES,
+    TG_MONITORING_VIDEO_MIN_WIDTH_HEIGHT_RATIO,
+    TG_MONITORING_VIDEO_MAX_WIDTH_HEIGHT_RATIO,
+    TG_MONITORING_VIDEO_MIN_WIDTH,
+    TG_MONITORING_VIDEO_MIN_HEIGHT,
+    TG_MONITORING_VIDEO_MIN_DURATION_SEC,
+    TG_MONITORING_VIDEO_MAX_DURATION_SEC,
+    VIDEO_MODEL,
+    TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN,
+    ','.join(TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS),
+    YC_STORAGE_BUCKET,
 )
 
 def _short_id_from_digest(digest: str) -> str:
@@ -1100,43 +1179,223 @@ def _supabase_storage_object_exists(*, bucket: str, object_path: str) -> bool | 
             return None
     return None
 
-def upload_video_to_supabase_storage(video_bytes: bytes, *, sha256_hex: str | None, mime_type: str, ext: str) -> tuple[str | None, str | None, str | None]:
-    if SUPABASE_VIDEOS_MODE != 'always':
-        return None, None, 'mode_off'
-    if not SUPABASE_STORAGE_ENABLED:
-        return None, None, 'storage_disabled'
-    if not video_bytes:
-        return None, None, 'empty'
-    allowed, deny_reason = _video_bucket_guard_allows(bucket=SUPABASE_MEDIA_BUCKET, extra_bytes=len(video_bytes))
-    if not allowed:
-        return None, None, deny_reason or 'bucket_guard'
-    sha = (sha256_hex or '').strip()
-    if not sha:
-        return None, None, 'missing_sha256'
-    # Canonical, content-addressed key (cross-env + cross-post dedup).
-    object_path = f"{SUPABASE_VIDEOS_PREFIX}/sha256/{sha[:2]}/{sha}.{ext}"
+def _video_document(msg):
+    return (
+        getattr(msg, 'video', None)
+        or getattr(msg, 'video_note', None)
+        or getattr(msg, 'document', None)
+    )
 
-    # If the object is already in storage, skip upload to save traffic.
-    exists = _supabase_storage_object_exists(bucket=SUPABASE_MEDIA_BUCKET, object_path=object_path)
-    if exists is True:
-        public_url = SUPABASE_URL.rstrip('/') + f"/storage/v1/object/public/{SUPABASE_MEDIA_BUCKET}/{object_path}"
-        return public_url, object_path, 'supabase'
 
-    upload_url = SUPABASE_URL.rstrip('/') + f"/storage/v1/object/{SUPABASE_MEDIA_BUCKET}/{object_path}"
-    headers = {
-        'apikey': SUPABASE_KEY,
-        'Authorization': f"Bearer {SUPABASE_KEY}",
-        'Content-Type': mime_type or 'video/mp4',
-        'x-upsert': 'false',
-        'cache-control': 'public, max-age=31536000',
+def _video_meta_from_message(msg) -> dict:
+    doc = _video_document(msg)
+    width = None
+    height = None
+    duration_seconds = None
+    for attr in (getattr(doc, 'attributes', None) or []):
+        if isinstance(attr, DocumentAttributeVideo) or (
+            hasattr(attr, 'w') and hasattr(attr, 'h') and hasattr(attr, 'duration')
+        ):
+            try:
+                width = int(getattr(attr, 'w', None) or 0) or None
+                height = int(getattr(attr, 'h', None) or 0) or None
+            except Exception:
+                width = height = None
+            try:
+                duration_seconds = float(getattr(attr, 'duration', None) or 0.0) or None
+            except Exception:
+                duration_seconds = None
+            break
+    try:
+        size_bytes = int(getattr(doc, 'size', None) or 0) or None
+    except Exception:
+        size_bytes = None
+    mime_type, ext = _video_mime_ext_from_message(msg)
+    return {
+        'size_bytes': size_bytes,
+        'mime_type': mime_type,
+        'ext': ext,
+        'width': width,
+        'height': height,
+        'duration_seconds': duration_seconds,
     }
-    resp = requests.post(upload_url, headers=headers, data=video_bytes, timeout=90)
-    if resp.status_code not in (200, 201, 409):
-        logger.warning('supabase video upload failed: %s %s', resp.status_code, resp.text[:200])
-        return None, None, 'upload_failed'
-    _VIDEO_OBJECT_EXISTS_CACHE[(SUPABASE_MEDIA_BUCKET, object_path)] = True
-    public_url = SUPABASE_URL.rstrip('/') + f"/storage/v1/object/public/{SUPABASE_MEDIA_BUCKET}/{object_path}"
-    return public_url, object_path, 'supabase'
+
+
+def _video_size_allowed(size_bytes: int | None) -> bool:
+    if size_bytes is None:
+        return True
+    # Product contract is strict: a file of exactly 10 MiB is not eligible.
+    return 0 < int(size_bytes) < int(TG_MONITORING_VIDEO_MAX_BYTES)
+
+
+def _video_is_rollout_eligible(
+    width: int | None,
+    height: int | None,
+    duration_seconds: float | None,
+) -> bool:
+    """Cheap fail-closed rollout gate based on Telegram's trusted video attrs."""
+    if not width or not height or not duration_seconds:
+        return False
+    try:
+        width_i = int(width)
+        height_i = int(height)
+        duration = float(duration_seconds)
+    except Exception:
+        return False
+    if width_i < TG_MONITORING_VIDEO_MIN_WIDTH or height_i < TG_MONITORING_VIDEO_MIN_HEIGHT:
+        return False
+    if height_i <= width_i:
+        return False
+    ratio = float(width_i) / float(height_i)
+    return bool(
+        TG_MONITORING_VIDEO_MIN_WIDTH_HEIGHT_RATIO
+        <= ratio
+        <= TG_MONITORING_VIDEO_MAX_WIDTH_HEIGHT_RATIO
+        and TG_MONITORING_VIDEO_MIN_DURATION_SEC
+        <= duration
+        <= TG_MONITORING_VIDEO_MAX_DURATION_SEC
+    )
+
+
+def _video_analysis_cache_path(sha256_hex: str) -> str:
+    sha = str(sha256_hex or '').strip().lower()
+    return f"v/analysis/v1/{sha[:2]}/{sha}.json"
+
+
+def _video_cdn_path(sha256_hex: str, ext: str) -> str:
+    sha = str(sha256_hex or '').strip().lower()
+    safe_ext = 'webm' if str(ext or '').strip().lower() == 'webm' else 'mp4'
+    return f"v/video/v1/{sha[:2]}/{sha}.{safe_ext}"
+
+
+_VIDEO_ANALYSIS_CACHE: dict[str, dict] = {}
+
+
+def _video_source_republication_allowed(username: str) -> bool:
+    normalized = str(username or '').strip().lower().lstrip('@')
+    return bool(
+        normalized
+        and normalized in TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES
+    )
+
+
+def _encrypt_video_analysis_cache(payload: dict) -> bytes | None:
+    if not TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY or not isinstance(payload, dict):
+        return None
+    try:
+        from cryptography.fernet import Fernet
+
+        plaintext = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode('utf-8')
+        return Fernet(
+            TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY.encode('ascii')
+        ).encrypt(plaintext)
+    except Exception as exc:
+        logger.warning('video analysis cache encryption failed: %s', exc)
+        return None
+
+
+def _decrypt_video_analysis_cache(raw: bytes) -> dict | None:
+    if not TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY or not raw:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+
+        plaintext = Fernet(
+            TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY.encode('ascii')
+        ).decrypt(raw)
+        payload = json.loads(plaintext.decode('utf-8'))
+    except Exception as exc:
+        logger.warning('video analysis cache decryption failed: %s', exc)
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _load_video_analysis_cache(sha256_hex: str) -> tuple[str, dict | None]:
+    sha = str(sha256_hex or '').strip().lower()
+    if sha in _VIDEO_ANALYSIS_CACHE:
+        return 'hit', dict(_VIDEO_ANALYSIS_CACHE[sha])
+    client = _get_yandex_storage_client()
+    if client is None:
+        return 'error', None
+    object_path = _video_analysis_cache_path(sha)
+    try:
+        response = client.get_object(Bucket=YC_STORAGE_BUCKET, Key=object_path)
+        body = response.get('Body')
+        raw = body.read(768 * 1024 + 1) if body is not None else b''
+    except Exception as exc:
+        code = str(getattr(exc, 'response', {}).get('Error', {}).get('Code') or '').strip()
+        if code in {'404', 'NoSuchKey', 'NotFound'}:
+            return 'miss', None
+        logger.warning('video analysis cache read failed sha=%s: %s', sha[:12], exc)
+        return 'error', None
+    if not raw or len(raw) > 768 * 1024:
+        logger.warning('video analysis cache invalid size sha=%s bytes=%s', sha[:12], len(raw))
+        return 'error', None
+    payload = _decrypt_video_analysis_cache(raw)
+    if payload is None:
+        logger.warning('video analysis cache invalid ciphertext sha=%s', sha[:12])
+        return 'error', None
+    if not isinstance(payload, dict) or str(payload.get('sha256') or '').lower() != sha:
+        logger.warning('video analysis cache identity mismatch sha=%s', sha[:12])
+        return 'error', None
+    _VIDEO_ANALYSIS_CACHE[sha] = dict(payload)
+    return 'hit', dict(payload)
+
+
+def _store_video_analysis_cache(sha256_hex: str, payload: dict) -> bool:
+    sha = str(sha256_hex or '').strip().lower()
+    client = _get_yandex_storage_client()
+    if client is None or not isinstance(payload, dict):
+        return False
+    try:
+        data = _encrypt_video_analysis_cache(payload)
+        if not data:
+            return False
+        client.put_object(
+            Bucket=YC_STORAGE_BUCKET,
+            Key=_video_analysis_cache_path(sha),
+            Body=data,
+            ContentType='application/octet-stream',
+            CacheControl='private, no-store',
+        )
+    except Exception as exc:
+        logger.warning('video analysis cache write failed sha=%s: %s', sha[:12], exc)
+        return False
+    _VIDEO_ANALYSIS_CACHE[sha] = dict(payload)
+    return True
+
+
+def _ensure_video_cdn_object(
+    video_bytes: bytes,
+    *,
+    sha256_hex: str,
+    mime_type: str,
+    ext: str,
+) -> tuple[str | None, str | None]:
+    if not YC_STORAGE_ENABLED or not video_bytes:
+        return None, None
+    object_path = _video_cdn_path(sha256_hex, ext)
+    exists = _yandex_storage_object_exists(bucket=YC_STORAGE_BUCKET, object_path=object_path)
+    if exists is True:
+        return _yandex_public_url(YC_STORAGE_BUCKET, object_path), object_path
+    if exists is None:
+        # Unknown is not absence. Fail closed instead of risking an unverified
+        # publication path after a storage/auth/network error.
+        return None, None
+    public_url = _upload_yandex_public_bytes(
+        video_bytes,
+        bucket=YC_STORAGE_BUCKET,
+        object_path=object_path,
+        content_type=mime_type or 'video/mp4',
+    )
+    if not public_url:
+        return None, None
+    _VIDEO_OBJECT_EXISTS_CACHE[(YC_STORAGE_BUCKET, object_path)] = True
+    return public_url, object_path
 
 SUPABASE_CONSUMER = (os.getenv('TG_MONITORING_CONSUMER') or 'kaggle').strip() or 'kaggle'
 GEMMA_CLIENT_MAX_RETRIES = max(1, int(os.getenv('TG_GEMMA_RETRIES', '2') or 2))
@@ -1147,8 +1406,10 @@ os.environ.setdefault('GOOGLE_AI_LOCAL_RPD', str(max(1, RATE_RPD)))
 os.environ.setdefault('GOOGLE_AI_MAX_RETRIES', str(GEMMA_CLIENT_MAX_RETRIES))
 
 _GEMMA_CLIENT: GoogleAIClient | None = None
+_VIDEO_GEMINI_CLIENT: GoogleAIClient | None = None
 _CANDIDATE_KEY_IDS: list[str] | None = None
 _SUPABASE_CLIENT = None
+_VIDEO_MODEL_CALLS_USED = 0
 
 
 def _key_env_aliases(name: str | None) -> list[str]:
@@ -1278,6 +1539,45 @@ def _get_gemma_client() -> GoogleAIClient:
             'yes' if _get_supabase_client() is not None else 'no',
         )
     return _GEMMA_CLIENT
+
+
+def _get_video_gemini_client() -> GoogleAIClient:
+    global _VIDEO_GEMINI_CLIENT
+    if _VIDEO_GEMINI_CLIENT is None:
+        pool = list(TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS)
+        default_env = pool[0] if pool else GOOGLE_KEY_ENV
+        client = GoogleAIClient(
+            supabase_client=_get_supabase_client(),
+            secrets_provider=_TelegramSecretsProviderAdapter(SecretsProvider()),
+            consumer='tg_monitor_video_quality',
+            account_name='telegram-monitor-video-quality',
+            default_env_var_name=default_env,
+            reserve_key_envs=pool,
+            reserve_overflow_key_envs=[],
+        )
+        # Video calls are allowed only through the atomic shared Supabase
+        # reserve/mark_sent/finalize path. There is no direct/local/model fallback.
+        client.allow_reserve_fallback = False
+        client.allow_local_limiter_fallback = False
+        client.allow_local_limiter_on_reserve_error = False
+        client.fallback_models = []
+        client.max_retries = 1
+        # The per-run feature cap is a hard cap on provider sends, not merely
+        # logical analyses.  A provider 429 therefore fails this video closed
+        # instead of rotating and sending the same bytes through a second key.
+        client.allow_provider_429_rotation = False
+        client.hard_single_provider_attempt = True
+        client.provider_timeout_seconds = max(
+            10.0,
+            float(TG_MONITORING_VIDEO_PROVIDER_TIMEOUT_SEC),
+        )
+        _VIDEO_GEMINI_CLIENT = client
+        logger.info(
+            'tg_monitor.video_llm_gateway model=%s key_envs=%s strict_shared_limiter=1',
+            VIDEO_MODEL,
+            ','.join(pool),
+        )
+    return _VIDEO_GEMINI_CLIENT
 
 
 def _string_schema(description: str | None = None) -> dict:
@@ -1501,6 +1801,64 @@ OCR_SCHEMA = {
 }
 
 
+VIDEO_ANALYSIS_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'v': {'type': 'integer'},
+        'description': _string_schema(),
+        'visible_text': {'type': 'array', 'items': _string_schema()},
+        'tags': {'type': 'array', 'items': _string_schema()},
+        'scores': {
+            'type': 'object',
+            'properties': {
+                'technical': {'type': 'integer'},
+                'visual': {'type': 'integer'},
+                'motion': {'type': 'integer'},
+                'legibility': {'type': 'integer'},
+                'usefulness': {'type': 'integer'},
+            },
+            'required': ['technical', 'visual', 'motion', 'legibility', 'usefulness'],
+        },
+        'legibility_applicable': {'type': 'boolean'},
+        'muted_ok': {'type': 'boolean'},
+        'best_frame_sec': {'type': 'number'},
+        'pros': {'type': 'array', 'items': _string_schema()},
+        'cons': {'type': 'array', 'items': _string_schema()},
+        'risk_flags': {'type': 'array', 'items': _string_schema()},
+        'score_confidence': {'type': 'number'},
+        'events': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'id': _string_schema(),
+                    'relevance': {'type': 'integer'},
+                    'confidence': {'type': 'number'},
+                    'reason': _string_schema(),
+                    'contradictions': {'type': 'array', 'items': _string_schema()},
+                },
+                'required': ['id', 'relevance', 'confidence', 'reason', 'contradictions'],
+            },
+        },
+    },
+    'required': [
+        'v',
+        'description',
+        'visible_text',
+        'tags',
+        'scores',
+        'legibility_applicable',
+        'muted_ok',
+        'best_frame_sec',
+        'pros',
+        'cons',
+        'risk_flags',
+        'score_confidence',
+        'events',
+    ],
+}
+
+
 def _generation_config(response_schema: dict | None = None) -> dict:
     cfg = {
         'temperature': 0,
@@ -1543,6 +1901,694 @@ async def _call_model(kind: str, prompt: str, images=None, *, response_schema: d
             raise
 
     raise last_error or RuntimeError(f'tg_monitor model call failed kind={kind}')
+
+
+_VIDEO_ALLOWED_RISK_FLAGS = {
+    'unsafe_explicit',
+    'graphic_violence',
+    'personal_data',
+    'wrong_event',
+    'prohibited_source',
+    'no_republication_permission',
+    'third_party_watermark',
+    'rapid_flashing',
+    'possible_minor_privacy',
+    'dominant_unrelated_brand',
+    'ocr_uncertain',
+}
+_VIDEO_HARD_RISK_FLAGS = {
+    'unsafe_explicit',
+    'graphic_violence',
+    'personal_data',
+    'wrong_event',
+    'prohibited_source',
+    'no_republication_permission',
+}
+
+
+def _strict_video_score(value) -> int | None:
+    # Out-of-range/provider-coerced scores are invalid, never silently clamped.
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    if value < 0 or value > 100 or value % 5:
+        return None
+    return int(value)
+
+
+def _strict_video_confidence(value) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+    except Exception:
+        return None
+    if not math.isfinite(result) or result < 0.0 or result > 1.0:
+        return None
+    return round(result, 4)
+
+
+def _strict_video_strings(value, *, max_items: int, max_chars: int) -> list[str] | None:
+    if not isinstance(value, list) or len(value) > max_items:
+        return None
+    out: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            return None
+        text = item.strip()
+        if not text or len(text) > max_chars:
+            return None
+        out.append(text)
+    return out
+
+
+def _validated_video_analysis(value, *, event_count: int | None = None, duration_seconds=None) -> dict | None:
+    """Validate semantic model output without repairing or inventing fields."""
+    if not isinstance(value, dict) or value.get('v') != 1:
+        return None
+    description = value.get('description')
+    if not isinstance(description, str) or not description.strip() or len(description.strip()) > 600:
+        return None
+    visible_text = _strict_video_strings(value.get('visible_text'), max_items=12, max_chars=160)
+    tags = _strict_video_strings(value.get('tags'), max_items=12, max_chars=80)
+    pros = _strict_video_strings(value.get('pros'), max_items=3, max_chars=160)
+    cons = _strict_video_strings(value.get('cons'), max_items=3, max_chars=160)
+    risk_flags = _strict_video_strings(value.get('risk_flags'), max_items=12, max_chars=80)
+    if any(item is None for item in (visible_text, tags, pros, cons, risk_flags)):
+        return None
+    if not (pros or cons):
+        return None
+    if len(set(risk_flags)) != len(risk_flags) or any(flag not in _VIDEO_ALLOWED_RISK_FLAGS for flag in risk_flags):
+        return None
+    scores_value = value.get('scores')
+    if not isinstance(scores_value, dict):
+        return None
+    scores: dict[str, int] = {}
+    for name in ('technical', 'visual', 'motion', 'legibility', 'usefulness'):
+        score = _strict_video_score(scores_value.get(name))
+        if score is None:
+            return None
+        scores[name] = score
+    if not isinstance(value.get('legibility_applicable'), bool) or not isinstance(value.get('muted_ok'), bool):
+        return None
+    score_confidence = _strict_video_confidence(value.get('score_confidence'))
+    if score_confidence is None:
+        return None
+    try:
+        best_frame_sec = float(value.get('best_frame_sec'))
+    except Exception:
+        return None
+    if not math.isfinite(best_frame_sec) or best_frame_sec < 0.0:
+        return None
+    if duration_seconds is not None:
+        try:
+            if best_frame_sec > float(duration_seconds):
+                return None
+        except Exception:
+            return None
+
+    expected_ids = None
+    if event_count is not None:
+        expected_ids = {f'event-{idx}' for idx in range(max(0, int(event_count)))}
+    events_value = value.get('events')
+    if not isinstance(events_value, list):
+        return None
+    by_id: dict[str, dict] = {}
+    for item in events_value:
+        if not isinstance(item, dict):
+            return None
+        event_id = item.get('id')
+        if not isinstance(event_id, str) or not re.fullmatch(r'event-\d+', event_id):
+            return None
+        if event_id in by_id or (expected_ids is not None and event_id not in expected_ids):
+            return None
+        relevance = _strict_video_score(item.get('relevance'))
+        confidence = _strict_video_confidence(item.get('confidence'))
+        reason = item.get('reason')
+        contradictions = _strict_video_strings(item.get('contradictions'), max_items=6, max_chars=160)
+        if relevance is None or confidence is None or contradictions is None:
+            return None
+        if not isinstance(reason, str) or not reason.strip() or len(reason.strip()) > 160:
+            return None
+        event_index = int(event_id.split('-', 1)[1])
+        by_id[event_id] = {
+            'id': event_id,
+            'event_index': event_index,
+            'relevance_score': relevance,
+            'relation_confidence': confidence,
+            'reason': reason.strip(),
+            'contradictions': contradictions,
+        }
+    if expected_ids is not None and set(by_id) != expected_ids:
+        return None
+
+    technical = scores['technical']
+    visual = scores['visual']
+    motion = scores['motion']
+    legibility = scores['legibility']
+    usefulness = scores['usefulness']
+    aesthetic = round(0.55 * visual + 0.45 * motion, 2)
+    if value['legibility_applicable']:
+        showcase = round(
+            0.20 * technical
+            + 0.35 * visual
+            + 0.25 * motion
+            + 0.10 * legibility
+            + 0.10 * usefulness,
+            2,
+        )
+    else:
+        showcase = round(
+            (
+                0.20 * technical
+                + 0.35 * visual
+                + 0.25 * motion
+                + 0.10 * usefulness
+            )
+            / 0.90,
+            2,
+        )
+    events = []
+    for event_id in sorted(by_id, key=lambda item: int(item.split('-', 1)[1])):
+        item = dict(by_id[event_id])
+        item['ranking_score'] = round(0.75 * showcase + 0.25 * item['relevance_score'], 2)
+        events.append(item)
+    search_parts = [description.strip(), *visible_text, *tags]
+    search_text = ' '.join(dict.fromkeys(part for part in search_parts if part)).strip()[:2000]
+    return {
+        'v': 1,
+        'description': description.strip(),
+        'visible_text': visible_text,
+        'tags': tags,
+        'scores': scores,
+        'technical_score': technical,
+        'visual_score': visual,
+        'motion_score': motion,
+        'legibility_score': legibility,
+        'usefulness_score': usefulness,
+        'legibility_applicable': value['legibility_applicable'],
+        'muted_ok': value['muted_ok'],
+        'best_frame_sec': round(best_frame_sec, 3),
+        'pros': pros,
+        'cons': cons,
+        'risk_flags': risk_flags,
+        'score_confidence': score_confidence,
+        'events': events,
+        'event_matches': events,
+        'aesthetic_score': aesthetic,
+        'showcase_score': showcase,
+        'search_text': search_text,
+    }
+
+
+def _video_event_fingerprint(event: dict) -> str:
+    title = str((event or {}).get('title') or '').strip().casefold().replace('ё', 'е')
+    title = re.sub(r'[^\w]+', ' ', title, flags=re.UNICODE)
+    title = re.sub(r'\s+', ' ', title).strip()
+    event_date = str((event or {}).get('date') or '').strip()
+    return f'{title}|{event_date}'
+
+
+def _matched_video_events(analysis: dict, events: list[dict]) -> list[dict]:
+    matched: list[dict] = []
+    for item in analysis.get('event_matches') or []:
+        try:
+            idx = int(item.get('event_index'))
+            relevance = float(item.get('relevance_score'))
+            relation_confidence = float(item.get('relation_confidence'))
+        except Exception:
+            continue
+        contradictions = list(item.get('contradictions') or [])
+        if (
+            idx < 0
+            or idx >= len(events)
+            or relevance < 85.0
+            or relation_confidence < 0.80
+            or contradictions
+        ):
+            continue
+        matched.append(
+            {
+                'event_index': idx,
+                'fingerprint': _video_event_fingerprint(events[idx]),
+                'relevance_score': round(relevance, 2),
+                'relation_confidence': round(relation_confidence, 4),
+                'ranking_score': round(float(item.get('ranking_score') or 0.0), 2),
+                'reason': str(item.get('reason') or '').strip()[:160],
+                'contradictions': contradictions,
+            }
+        )
+    return matched
+
+
+def _cached_video_matches(cache_payload: dict, events: list[dict]) -> list[dict]:
+    cached_fingerprints = {
+        str(item).strip()
+        for item in (cache_payload.get('matched_event_fingerprints') or [])
+        if str(item or '').strip()
+    }
+    relation_by_fingerprint = cache_payload.get('event_relations_by_fingerprint')
+    if not isinstance(relation_by_fingerprint, dict):
+        return []
+    matches: list[dict] = []
+    for idx, event in enumerate(events):
+        fingerprint = _video_event_fingerprint(event)
+        if fingerprint not in cached_fingerprints:
+            continue
+        relation = relation_by_fingerprint.get(fingerprint)
+        if not isinstance(relation, dict):
+            continue
+        relevance = relation.get('relevance_score')
+        confidence = relation.get('relation_confidence')
+        try:
+            relevance_float = float(relevance)
+            confidence_float = float(confidence)
+        except Exception:
+            continue
+        if relevance_float < 85.0 or confidence_float < 0.80 or relation.get('contradictions'):
+            continue
+        matches.append(
+            {
+                'event_index': idx,
+                'fingerprint': fingerprint,
+                'relevance_score': round(relevance_float, 2),
+                'relation_confidence': round(confidence_float, 4),
+                'ranking_score': round(float(relation.get('ranking_score') or 0.0), 2),
+                'reason': str(relation.get('reason') or '').strip()[:160],
+                'contradictions': [],
+            }
+        )
+    return matches
+
+
+def _video_analysis_accepted(
+    analysis: dict,
+    matches: list[dict],
+    *,
+    rights_allowed: bool = False,
+) -> bool:
+    return bool(
+        rights_allowed
+        and matches
+        and not analysis.get('risk_flags')
+        and float(analysis.get('showcase_score') or 0.0) >= 75.0
+        and float(analysis.get('aesthetic_score') or 0.0) >= 70.0
+        and float(analysis.get('technical_score') or 0.0) >= 55.0
+        and float(analysis.get('usefulness_score') or 0.0) >= 60.0
+        and float(analysis.get('score_confidence') or 0.0) >= 0.80
+    )
+
+
+def _video_analysis_decision(
+    analysis: dict,
+    matches: list[dict],
+    *,
+    rights_allowed: bool = False,
+) -> str:
+    if _video_analysis_accepted(
+        analysis,
+        matches,
+        rights_allowed=rights_allowed,
+    ):
+        return 'accepted'
+    flags = set(analysis.get('risk_flags') or [])
+    if flags & _VIDEO_HARD_RISK_FLAGS:
+        return 'rejected'
+    all_relations = analysis.get('event_matches') or []
+    best_relevance = max(
+        (float(item.get('relevance_score') or 0.0) for item in all_relations),
+        default=0.0,
+    )
+    if (
+        float(analysis.get('showcase_score') or 0.0) >= 60.0
+        and float(analysis.get('aesthetic_score') or 0.0) >= 50.0
+        and float(analysis.get('technical_score') or 0.0) >= 45.0
+        and best_relevance >= 75.0
+    ):
+        return 'review'
+    return 'rejected'
+
+
+def _video_analysis_prompt(*, post_text: str, events: list[dict], video_meta: dict) -> str:
+    event_context = []
+    for idx, event in enumerate(events):
+        event_context.append(
+            {
+                'id': f'event-{idx}',
+                'title': str(event.get('title') or '')[:300],
+                'date': str(event.get('date') or '')[:40],
+                'time': str(event.get('time') or '')[:20],
+                'location_name': str(event.get('location_name') or '')[:300],
+                'event_type': str(event.get('event_type') or '')[:100],
+                'raw_excerpt': str(event.get('raw_excerpt') or '')[:800],
+            }
+        )
+    evidence = {
+        'post_text': str(post_text or '')[:5000],
+        'events': event_context,
+        'video_metadata': {
+            'width': video_meta.get('width'),
+            'height': video_meta.get('height'),
+            'duration_seconds': video_meta.get('duration_seconds'),
+        },
+    }
+    return (
+        'Оцени ОДИН вертикальный ролик для публичной страницы события. Верни JSON v=1. '
+        'Каждый score — целое 0..100, строго кратное 5: 0..19 сломан/непригоден; '
+        '20..39 явно слабый; 40..59 обычный с недостатками; 60..74 хороший; '
+        '75..89 сильный; 90..100 исключительный. Не завышай score за бренд, насыщенность, '
+        'дорогую камеру или cinematic-эффект. technical = резкость, экспозиция, шум, компрессия, '
+        'flicker/stutter и A/V integrity; visual = композиция, свет, цвет, план и последовательность стиля; '
+        'motion = намеренность движения, temporal continuity, монтаж, темп, opening и завершение; '
+        'legibility = читаемость текста на телефоне, safe-zone, достаточная длительность и непротиворечивость; '
+        'usefulness = насколько ролик специфично и привлекательно показывает программу, артиста, площадку '
+        'или атмосферу и дополняет страницу события. Если текста намеренно нет, legibility_applicable=false. '
+        'muted_ok показывает, понятен ли главный смысл без звука. description — по-русски до 600 символов; '
+        'visible_text — до 12 точных фрагментов; tags — до 12 поисковых тегов; pros/cons — до 3 коротких '
+        'наблюдаемых свидетельств (хотя бы один элемент суммарно); best_frame_sec — секунда внутри ролика. '
+        'score_confidence снижай ниже 0.80 при слишком быстром монтаже или титрах короче секунды. '
+        'Допустимые risk_flags: unsafe_explicit, graphic_violence, personal_data, wrong_event, '
+        'prohibited_source, no_republication_permission, third_party_watermark, rapid_flashing, '
+        'possible_minor_privacy, dominant_unrelated_brand, ocr_uncertain. Не делай вывод об авторских правах '
+        'по отсутствию признаков. Для КАЖДОГО входного event id верни одну связь: relevance (0..100, кратно 5), '
+        'confidence 0..1, короткий reason и contradictions. 85+ означает точное source-grounded соответствие; '
+        'generic тематическое видео не получает 85. Несколько связанных событий могут иметь высокий relevance. '
+        'Не возвращай derived scores или финальное решение. Только JSON по schema. Evidence:\n'
+        + json.dumps(evidence, ensure_ascii=False, sort_keys=True)
+    )
+
+
+async def _call_video_model(
+    video_bytes: bytes,
+    *,
+    mime_type: str,
+    post_text: str,
+    events: list[dict],
+    video_meta: dict,
+) -> dict | None:
+    duration = video_meta.get('duration_seconds')
+    try:
+        duration_sec = float(duration) if duration else float(TG_MONITORING_VIDEO_UNKNOWN_DURATION_SEC)
+    except Exception:
+        duration_sec = float(TG_MONITORING_VIDEO_UNKNOWN_DURATION_SEC)
+    # `GoogleAIClient` currently has a fixed per-blob estimate. Supply a
+    # conservative video-aware reservation budget separately while keeping the
+    # provider output cap at 1000 tokens in generation_config.
+    reserved_tpm_budget = min(
+        int(TG_MONITORING_VIDEO_MAX_RESERVED_TPM),
+        max(
+            10000,
+            int(math.ceil(max(1.0, duration_sec) * TG_MONITORING_VIDEO_TOKENS_PER_SECOND_RESERVE))
+            + 3000,
+        ),
+    )
+    prompt = [
+        {'text': _video_analysis_prompt(post_text=post_text, events=events, video_meta=video_meta)},
+        {'inline_data': {'mime_type': mime_type or 'video/mp4', 'data': video_bytes}},
+    ]
+    client = _get_video_gemini_client()
+    raw, _usage = await client.generate_content_async(
+        model=VIDEO_MODEL,
+        prompt=prompt,
+        generation_config={
+            'temperature': 0,
+            'max_output_tokens': 1000,
+            'response_mime_type': 'application/json',
+            'response_schema': VIDEO_ANALYSIS_SCHEMA,
+        },
+        # This value is intentionally larger than the provider output cap: it is
+        # consumed only by the shared pre-call TPM reservation calculation.
+        max_output_tokens=reserved_tpm_budget,
+        candidate_key_ids=None,
+    )
+    return _safe_json(raw)
+
+
+def _accepted_video_payload(
+    *,
+    cache_payload: dict,
+    matches: list[dict],
+    video_meta: dict,
+    sha256_hex: str,
+    size_bytes: int,
+    cdn_url: str,
+    cdn_path: str,
+    status: str,
+    source_url: str,
+) -> dict:
+    analysis = cache_payload.get('analysis') or {}
+    event_indexes = sorted({int(item['event_index']) for item in matches})
+    relevance_scores = [float(item['relevance_score']) for item in matches]
+    ranking_scores = [float(item.get('ranking_score') or 0.0) for item in matches]
+    return {
+        'cdn_url': cdn_url,
+        'cdn_path': cdn_path,
+        # Legacy field aliases keep the existing server importer compatible;
+        # they contain managed CDN data, not a Supabase upload.
+        'supabase_url': cdn_url,
+        'supabase_path': cdn_path,
+        'sha256': sha256_hex,
+        'size_bytes': int(size_bytes),
+        'mime_type': video_meta.get('mime_type') or 'video/mp4',
+        'width': video_meta.get('width'),
+        'height': video_meta.get('height'),
+        'duration_seconds': video_meta.get('duration_seconds'),
+        'source_url': source_url,
+        'aesthetic_score': analysis.get('aesthetic_score'),
+        'technical_score': analysis.get('technical_score'),
+        'visual_score': analysis.get('visual_score'),
+        'motion_score': analysis.get('motion_score'),
+        'legibility_score': analysis.get('legibility_score'),
+        'usefulness_score': analysis.get('usefulness_score'),
+        'score_confidence': analysis.get('score_confidence'),
+        'event_relevance_score': round(max(relevance_scores), 2),
+        'event_relevance_scores': [
+            {
+                'event_index': int(item['event_index']),
+                'relevance_score': float(item['relevance_score']),
+                'relation_confidence': float(item.get('relation_confidence') or 0.0),
+                'ranking_score': float(item.get('ranking_score') or 0.0),
+                'reason': str(item.get('reason') or ''),
+            }
+            for item in matches
+        ],
+        'showcase_score': analysis.get('showcase_score'),
+        'ranking_score': round(max(ranking_scores), 2),
+        'description': analysis.get('description'),
+        'search_text': analysis.get('search_text'),
+        'analysis_model': cache_payload.get('analysis_model') or VIDEO_MODEL,
+        'analysis_version': cache_payload.get('analysis_version') or TG_MONITORING_VIDEO_ANALYSIS_VERSION,
+        'analysis_json': cache_payload,
+        'analysis_status': 'accepted',
+        'event_indexes': event_indexes,
+        'status': status,
+    }
+
+
+async def _process_video_for_events(
+    *,
+    client,
+    msg,
+    username: str,
+    post_text: str,
+    cleaned_events: list[dict],
+) -> tuple[list[dict], str | None]:
+    global _VIDEO_MODEL_CALLS_USED
+    # Hard product gate: no Telegram video download, hash, cache lookup, model
+    # call or CDN write until extraction has confirmed at least one real event.
+    if not cleaned_events:
+        return [], 'skipped:no_event'
+    rights_allowed = _video_source_republication_allowed(username)
+    if not rights_allowed:
+        return [], 'skipped:republication_not_allowed'
+    if not TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY:
+        return [], 'skipped:cache_key_missing'
+    if SUPABASE_VIDEOS_MODE != 'always':
+        return [], 'skipped:mode_off'
+    if not YC_STORAGE_ENABLED:
+        return [], 'skipped:storage_disabled'
+
+    video_meta = _video_meta_from_message(msg)
+    if not _video_size_allowed(video_meta.get('size_bytes')):
+        return [], 'skipped:too_large'
+    if not _video_is_rollout_eligible(
+        video_meta.get('width'),
+        video_meta.get('height'),
+        video_meta.get('duration_seconds'),
+    ):
+        return [], 'skipped:ineligible_geometry'
+
+    try:
+        await human_sleep(HUMAN_MEDIA_DELAY_MIN, HUMAN_MEDIA_DELAY_MAX)
+        video_bytes = await tg_call(
+            f'download_video:{username}:{getattr(msg, "id", "-")}',
+            client.download_media,
+            msg,
+            bytes,
+        )
+    except Exception as exc:
+        logger.warning('video download failed for %s/%s: %s', username, getattr(msg, 'id', '-'), exc)
+        return [], 'skipped:download_failed'
+    if not video_bytes:
+        return [], 'skipped:download_failed'
+    size_bytes = int(len(video_bytes))
+    if not _video_size_allowed(size_bytes):
+        return [], 'skipped:too_large'
+    sha256_hex = hashlib.sha256(video_bytes).hexdigest()
+
+    cache_state, cache_payload = _load_video_analysis_cache(sha256_hex)
+    if cache_state == 'error':
+        return [], 'skipped:cache_read_failed'
+    if cache_state == 'hit':
+        if not isinstance(cache_payload, dict):
+            return [], 'skipped:cache_invalid'
+        cached_event_count = cache_payload.get('source_event_count')
+        if (
+            isinstance(cached_event_count, bool)
+            or not isinstance(cached_event_count, int)
+            or cached_event_count <= 0
+        ):
+            return [], 'skipped:cache_invalid'
+        analysis = _validated_video_analysis(
+            cache_payload.get('analysis'),
+            # Validate against the original model-call contract, never against
+            # the possibly shorter/different current event list.
+            event_count=cached_event_count,
+            duration_seconds=(cache_payload.get('source_video_meta') or {}).get('duration_seconds'),
+        )
+        if analysis is None or str(cache_payload.get('decision') or '') not in {'accepted', 'review', 'rejected'}:
+            return [], 'skipped:cache_invalid'
+        cache_payload = dict(cache_payload)
+        cache_payload['analysis'] = analysis
+        if cache_payload.get('decision') != 'accepted':
+            return [], f"skipped:{cache_payload.get('decision')}_cache_hit"
+        matches = _cached_video_matches(cache_payload, cleaned_events)
+        if not matches:
+            return [], 'skipped:cache_event_mismatch'
+        if not _video_analysis_accepted(
+            analysis,
+            matches,
+            rights_allowed=rights_allowed,
+        ):
+            return [], 'skipped:cache_invalid'
+        cdn_url, cdn_path = _ensure_video_cdn_object(
+            video_bytes,
+            sha256_hex=sha256_hex,
+            mime_type=video_meta.get('mime_type') or 'video/mp4',
+            ext=video_meta.get('ext') or 'mp4',
+        )
+        if not cdn_url or not cdn_path:
+            return [], 'skipped:cdn_upload_failed'
+        return [
+            _accepted_video_payload(
+                cache_payload=cache_payload,
+                matches=matches,
+                video_meta=video_meta,
+                sha256_hex=sha256_hex,
+                size_bytes=size_bytes,
+                cdn_url=cdn_url,
+                cdn_path=cdn_path,
+                status='cache_hit',
+                source_url=f'https://t.me/{username}/{getattr(msg, "id", "")}',
+            )
+        ], 'cache_hit'
+
+    if _VIDEO_MODEL_CALLS_USED >= TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN:
+        return [], 'skipped:model_budget'
+    _VIDEO_MODEL_CALLS_USED += 1
+    try:
+        raw_analysis = await _call_video_model(
+            video_bytes,
+            mime_type=video_meta.get('mime_type') or 'video/mp4',
+            post_text=post_text,
+            events=cleaned_events,
+            video_meta=video_meta,
+        )
+    except Exception as exc:
+        logger.warning(
+            'video analysis failed for %s/%s sha=%s: %s',
+            username,
+            getattr(msg, 'id', '-'),
+            sha256_hex[:12],
+            exc,
+        )
+        return [], 'skipped:analysis_failed'
+    analysis = _validated_video_analysis(
+        raw_analysis,
+        event_count=len(cleaned_events),
+        duration_seconds=video_meta.get('duration_seconds'),
+    )
+    if analysis is None:
+        return [], 'skipped:analysis_invalid'
+    matches = _matched_video_events(analysis, cleaned_events)
+    decision = _video_analysis_decision(
+        analysis,
+        matches,
+        rights_allowed=rights_allowed,
+    )
+    matched_fingerprints = sorted({str(item['fingerprint']) for item in matches})
+    relation_by_fingerprint = {
+        str(item['fingerprint']): {
+            'relevance_score': float(item['relevance_score']),
+            'relation_confidence': float(item.get('relation_confidence') or 0.0),
+            'ranking_score': float(item.get('ranking_score') or 0.0),
+            'reason': str(item.get('reason') or ''),
+            'contradictions': list(item.get('contradictions') or []),
+        }
+        for item in matches
+    }
+    cache_payload = {
+        'schema_version': 1,
+        'sha256': sha256_hex,
+        'decision': decision,
+        'analysis_model': VIDEO_MODEL,
+        'analysis_version': TG_MONITORING_VIDEO_ANALYSIS_VERSION,
+        'analyzed_at': datetime.now(timezone.utc).isoformat(),
+        'analysis': analysis,
+        'source_event_count': len(cleaned_events),
+        'matched_event_fingerprints': matched_fingerprints,
+        'event_relations_by_fingerprint': relation_by_fingerprint,
+        'source_url': f'https://t.me/{username}/{getattr(msg, "id", "")}',
+        'rights_policy': {
+            'status': 'allowed',
+            'basis': 'configured_source_allowlist',
+            'source_username': str(username or '').strip().lower().lstrip('@'),
+        },
+        'source_video_meta': {
+            'width': video_meta.get('width'),
+            'height': video_meta.get('height'),
+            'duration_seconds': video_meta.get('duration_seconds'),
+            'size_bytes': size_bytes,
+            'mime_type': video_meta.get('mime_type'),
+        },
+    }
+    # Accepted and rejected decisions become durable before any CDN video write.
+    # A cache write failure is fail-closed so a later run cannot accidentally
+    # repeat a model call whose result was not recorded.
+    if not _store_video_analysis_cache(sha256_hex, cache_payload):
+        return [], 'skipped:cache_write_failed'
+    if decision != 'accepted':
+        return [], f'skipped:{decision}'
+    cdn_url, cdn_path = _ensure_video_cdn_object(
+        video_bytes,
+        sha256_hex=sha256_hex,
+        mime_type=video_meta.get('mime_type') or 'video/mp4',
+        ext=video_meta.get('ext') or 'mp4',
+    )
+    if not cdn_url or not cdn_path:
+        return [], 'skipped:cdn_upload_failed'
+    return [
+        _accepted_video_payload(
+            cache_payload=cache_payload,
+            matches=matches,
+            video_meta=video_meta,
+            sha256_hex=sha256_hex,
+            size_bytes=size_bytes,
+            cdn_url=cdn_url,
+            cdn_path=cdn_path,
+            status='accepted',
+            source_url=f'https://t.me/{username}/{getattr(msg, "id", "")}',
+        )
+    ], 'accepted'
 
 
 def _compute_hash(image_bytes: bytes) -> str:
@@ -3958,6 +5004,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         return {'messages': [], 'source_meta': source_meta}
 
     messages_out = []
+    pending_group_videos = []
     views_vals = []
     likes_vals = []
     processed = 0
@@ -4124,100 +5171,8 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                     has_video = True
         except Exception:
             has_video = False
-        if has_video and SUPABASE_VIDEOS_MODE == 'always':
-            try:
-                await human_sleep(HUMAN_MEDIA_DELAY_MIN, HUMAN_MEDIA_DELAY_MAX)
-                mime_v, ext_v = _video_mime_ext_from_message(msg)
-                doc = getattr(msg, 'video', None) or getattr(msg, 'video_note', None) or getattr(msg, 'document', None)
-                doc_id = getattr(doc, 'id', None) if doc is not None else None
-                size_hint = None
-                try:
-                    size_hint = int(getattr(doc, 'size', None) or 0) if doc is not None else None
-                except Exception:
-                    size_hint = None
-                object_path_hint = None
-                if doc_id:
-                    object_path_hint = f"{SUPABASE_VIDEOS_PREFIX}/tg/{int(doc_id)}.{ext_v}"
-        
-                # Fast path: reuse the same Telegram file already present in Supabase Storage
-                # (saves both download and upload traffic).
-                if object_path_hint:
-                    exists = _supabase_storage_object_exists(bucket=SUPABASE_MEDIA_BUCKET, object_path=object_path_hint)
-                    if exists is True:
-                        supa_v_path = object_path_hint
-                        supa_v_url = SUPABASE_URL.rstrip('/') + f"/storage/v1/object/public/{SUPABASE_MEDIA_BUCKET}/{object_path_hint}"
-                        videos.append({
-                            'size_bytes': size_hint,
-                            'mime_type': mime_v,
-                            'supabase_url': supa_v_url,
-                            'supabase_path': supa_v_path,
-                            'status': 'supabase',
-                        })
-                        video_status = 'supabase'
-        
-                if not video_status:
-                    max_bytes = int(max(1.0, float(TG_MONITORING_VIDEO_MAX_MB)) * 1024 * 1024)
-                    if size_hint and size_hint > max_bytes:
-                        logger.info(
-                            'video.skip too_large_hint username=%s message_id=%s size_mb=%.2f max_mb=%.2f',
-                            username,
-                            msg.id,
-                            size_hint / (1024 * 1024),
-                            TG_MONITORING_VIDEO_MAX_MB,
-                        )
-                        video_status = 'skipped:too_large'
-                    else:
-                        video_bytes = await tg_call(
-                            f'download_video:{username}:{msg.id}',
-                            client.download_media,
-                            msg,
-                            bytes,
-                        )
-                        if not video_bytes:
-                            video_status = 'skipped:download_failed'
-                        else:
-                            size_bytes = int(len(video_bytes))
-                            if size_bytes > max_bytes:
-                                logger.info(
-                                    'video.skip too_large username=%s message_id=%s size_mb=%.2f max_mb=%.2f',
-                                    username,
-                                    msg.id,
-                                    size_bytes / (1024 * 1024),
-                                    TG_MONITORING_VIDEO_MAX_MB,
-                                )
-                                video_status = 'skipped:too_large'
-                            else:
-                                sha_v = hashlib.sha256(video_bytes).hexdigest()
-                                supa_v_url, supa_v_path, upload_status = upload_video_to_supabase_storage(
-                                    video_bytes,
-                                    sha256_hex=sha_v,
-                                    mime_type=mime_v,
-                                    ext=ext_v,
-                                )
-                                if supa_v_url or supa_v_path:
-                                    videos.append({
-                                        'sha256': sha_v,
-                                        'size_bytes': size_bytes,
-                                        'mime_type': mime_v,
-                                        'supabase_url': supa_v_url,
-                                        'supabase_path': supa_v_path,
-                                        'status': 'supabase',
-                                    })
-                                    video_status = 'supabase'
-                                else:
-                                    reason = upload_status or 'upload_failed'
-                                    videos.append({
-                                        'sha256': sha_v,
-                                        'size_bytes': size_bytes,
-                                        'mime_type': mime_v,
-                                        'status': reason,
-                                    })
-                                    video_status = f'skipped:{reason}'
-            except Exception as exc:
-                logger.warning('video process failed for %s/%s: %s', username, msg.id, exc)
-                video_status = 'skipped:download_failed'
-        elif has_video and SUPABASE_VIDEOS_MODE != 'always':
-            video_status = 'skipped:mode_off'
+        # Video download/model/CDN work is deliberately deferred until event
+        # extraction and cleanup have produced `cleaned_events`.
         media_obj = None
         if msg.photo:
             media_obj = msg
@@ -4479,6 +5434,20 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                     if picked:
                         ev['ticket_link'] = picked
 
+        if has_video and (cleaned_events or not grouped_id):
+            videos, video_status = await _process_video_for_events(
+                client=client,
+                msg=msg,
+                username=username,
+                post_text=text,
+                cleaned_events=cleaned_events,
+            )
+        elif has_video and grouped_id:
+            # The caption/event can live on another item in the same Telegram
+            # album. Resolve it after all siblings have completed extraction.
+            video_status = 'pending:media_group'
+            pending_group_videos.append(msg)
+
         if cleaned_events:
             messages_with_events += 1
             events_total += len(cleaned_events)
@@ -4598,6 +5567,34 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         msg['metrics']['channel_median_views'] = median_views
         msg['metrics']['channel_median_likes'] = median_likes
 
+    for video_msg in pending_group_videos:
+        grouped_id = getattr(video_msg, 'grouped_id', None)
+        if not grouped_id:
+            continue
+        peers = [item for item in messages_out if item.get('grouped_id') == grouped_id]
+        event_peer = next((item for item in peers if item.get('events')), None)
+        target = next(
+            (item for item in peers if item.get('message_id') == getattr(video_msg, 'id', None)),
+            None,
+        )
+        if target is None:
+            continue
+        if event_peer is None:
+            target['video_status'] = 'skipped:no_event'
+            continue
+        group_text = max(
+            (str(item.get('text') or '') for item in peers),
+            key=len,
+            default='',
+        )
+        target['videos'], target['video_status'] = await _process_video_for_events(
+            client=client,
+            msg=video_msg,
+            username=username,
+            post_text=group_text,
+            cleaned_events=list(event_peer.get('events') or []),
+        )
+
     if not messages_out:
         logger.info(
             'source.empty username=%s last_id=%s latest_id=%s cutoff_hit=%s',
@@ -4637,6 +5634,16 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
     def _poster_key(p: dict) -> str:
         return str(p.get('sha256') or p.get('catbox_url') or p.get('supabase_url') or '')
 
+    def _video_key(v: dict) -> str:
+        return str(
+            v.get('sha256')
+            or v.get('cdn_path')
+            or v.get('supabase_path')
+            or v.get('cdn_url')
+            or v.get('supabase_url')
+            or ''
+        )
+
     for msg in messages or []:
         gid = msg.get('grouped_id')
         if not gid:
@@ -4662,6 +5669,11 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
                 'ocr_text': msg.get('ocr_text'),
                 'metrics': msg.get('metrics') or {},
                 'posters': [],
+                'has_video': False,
+                'video_status': None,
+                'video_statuses': [],
+                'videos': [],
+                'links': [],
                 'events': [],
                 'grouped_id': gid_i,
             }
@@ -4683,6 +5695,39 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
         if msg.get('post_author') and not acc.get('post_author'):
             acc['post_author'] = msg.get('post_author')
 
+        acc['has_video'] = bool(acc.get('has_video') or msg.get('has_video'))
+        status = str(msg.get('video_status') or '').strip()
+        if status and status not in acc['video_statuses']:
+            acc['video_statuses'].append(status)
+
+        seen_videos = {
+            _video_key(video)
+            for video in (acc.get('videos') or [])
+            if isinstance(video, dict)
+        }
+        for video in msg.get('videos') or []:
+            if not isinstance(video, dict):
+                continue
+            key = _video_key(video)
+            if not key or key in seen_videos:
+                continue
+            seen_videos.add(key)
+            acc['videos'].append(video)
+
+        seen_links = {
+            str(link.get('url') or '')
+            for link in (acc.get('links') or [])
+            if isinstance(link, dict)
+        }
+        for link in msg.get('links') or []:
+            if not isinstance(link, dict):
+                continue
+            url = str(link.get('url') or '')
+            if not url or url in seen_links:
+                continue
+            seen_links.add(url)
+            acc['links'].append(link)
+
         # merge posters (unique)
         seen = {_poster_key(p) for p in (acc.get('posters') or []) if isinstance(p, dict)}
         for p in msg.get('posters') or []:
@@ -4700,6 +5745,11 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
 
     merged = list(by_gid.values())
     for m in merged:
+        statuses = list(m.get('video_statuses') or [])
+        m['video_status'] = next(
+            (status for status in statuses if status in {'accepted', 'cache_hit'}),
+            statuses[0] if statuses else None,
+        )
         username = (m.get('source_username') or '').strip()
         mid = m.get('message_id')
         if username and mid:

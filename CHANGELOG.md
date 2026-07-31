@@ -49,6 +49,16 @@
 
 ### Added
 
+- Telegram Monitoring now evaluates only confirmed-event portrait videos under
+  10 MiB through a strict, quota-capped multi-key Gemini Flash-Lite gateway,
+  caps physical provider sends at six per run with app/SDK retries and 429
+  rotation disabled (legacy SDK fails closed),
+  requires an explicit source republication allowlist, permanently caches
+  accepted and rejected SHA decisions as encrypted sidecars, uploads accepted
+  bytes directly from Kaggle to content-addressed Yandex CDN paths, persists
+  updating ranked many-to-many event links, safely deletes last-reference
+  binaries after a minimum 24-hour production grace period, and exports ranked `video_assets` for a future
+  static-site player.
 - Added a fail-closed autonomous Region Talk web-publication research adapter:
   it applies the saved broad external-source prompt with Search + URL Context,
   strict JSON validation, the live YDB duplicate guard, the existing importer,

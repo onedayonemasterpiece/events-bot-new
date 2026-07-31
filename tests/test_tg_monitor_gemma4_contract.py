@@ -1,11 +1,41 @@
 from __future__ import annotations
 
+import asyncio
+import ast
 from datetime import date, datetime, timedelta, timezone
+import hashlib
 import json
+import math
 from pathlib import Path
 import re
+from types import SimpleNamespace
 
 import pytest
+
+
+_TG_MONITOR_SOURCE = Path("kaggle/TelegramMonitor/telegram_monitor.py")
+
+
+def _load_tg_function(name: str, namespace: dict | None = None):
+    source = _TG_MONITOR_SOURCE.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    node = next(
+        item
+        for item in tree.body
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == name
+    )
+    ns = dict(namespace or {})
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "<tg-monitor-function>", "exec"), ns)
+    return ns[name]
+
+
+def _load_video_analysis_helpers() -> dict:
+    source = _TG_MONITOR_SOURCE.read_text(encoding="utf-8")
+    start = source.index("_VIDEO_ALLOWED_RISK_FLAGS =")
+    end = source.index("async def _call_video_model", start)
+    ns = {"math": math, "re": re, "json": json}
+    exec(compile(source[start:end], "<video-analysis>", "exec"), ns)
+    return ns
 
 
 def test_tg_monitor_script_uses_google_ai_key3_and_gemma4() -> None:
@@ -292,6 +322,422 @@ def test_tg_monitor_ocr_date_ignores_vinyl_speed_metadata() -> None:
         "14:00",
     )
     assert "Record/vinyl metadata such as \"LP 33 1/3 RPM\"" in source
+
+
+def _valid_video_model_result(*, event_count: int = 1) -> dict:
+    return {
+        "v": 1,
+        "description": "Сцена, артист и зрители в тёплом концертном свете.",
+        "visible_text": ["Концерт"],
+        "tags": ["концерт", "сцена"],
+        "scores": {
+            "technical": 80,
+            "visual": 85,
+            "motion": 80,
+            "legibility": 75,
+            "usefulness": 85,
+        },
+        "legibility_applicable": True,
+        "muted_ok": True,
+        "best_frame_sec": 3.0,
+        "pros": ["Главный объект хорошо отделён светом"],
+        "cons": [],
+        "risk_flags": [],
+        "score_confidence": 0.9,
+        "events": [
+            {
+                "id": f"event-{idx}",
+                "relevance": 90,
+                "confidence": 0.9,
+                "reason": "Совпадают артист, формат и площадка",
+                "contradictions": [],
+            }
+            for idx in range(event_count)
+        ],
+    }
+
+
+def test_video_analysis_contract_rejects_out_of_range_and_computes_canonical_scores() -> None:
+    ns = _load_video_analysis_helpers()
+    validate = ns["_validated_video_analysis"]
+    raw = _valid_video_model_result(event_count=2)
+    analysis = validate(raw, event_count=2, duration_seconds=10)
+
+    assert analysis is not None
+    assert analysis["aesthetic_score"] == 82.75
+    assert analysis["showcase_score"] == 81.75
+    assert [item["event_index"] for item in analysis["event_matches"]] == [0, 1]
+    assert analysis["event_matches"][0]["ranking_score"] == 83.81
+
+    invalid = _valid_video_model_result()
+    invalid["scores"]["visual"] = 101
+    assert validate(invalid, event_count=1, duration_seconds=10) is None
+    invalid = _valid_video_model_result()
+    invalid["score_confidence"] = 1.01
+    assert validate(invalid, event_count=1, duration_seconds=10) is None
+
+
+def test_video_processing_defers_everything_for_non_event() -> None:
+    touched = []
+    process = _load_tg_function(
+        "_process_video_for_events",
+        {"_VIDEO_MODEL_CALLS_USED": 0, "SUPABASE_VIDEOS_MODE": "always"},
+    )
+    result = asyncio.run(
+        process(
+            client=SimpleNamespace(download_media=lambda *_a: touched.append("download")),
+            msg=SimpleNamespace(id=1),
+            username="source",
+            post_text="not an event",
+            cleaned_events=[],
+        )
+    )
+    assert result == ([], "skipped:no_event")
+    assert touched == []
+
+
+def test_video_processing_skips_exact_ten_mib_before_download() -> None:
+    touched = []
+    size_allowed = _load_tg_function(
+        "_video_size_allowed",
+        {"TG_MONITORING_VIDEO_MAX_BYTES": 10 * 1024 * 1024},
+    )
+    process = _load_tg_function(
+        "_process_video_for_events",
+        {
+            "_VIDEO_MODEL_CALLS_USED": 0,
+            "SUPABASE_VIDEOS_MODE": "always",
+            "YC_STORAGE_ENABLED": True,
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": "configured",
+            "_video_source_republication_allowed": lambda _username: True,
+            "_video_meta_from_message": lambda _msg: {
+                "size_bytes": 10 * 1024 * 1024,
+                "width": 540,
+                "height": 960,
+                "duration_seconds": 10,
+            },
+            "_video_size_allowed": size_allowed,
+        },
+    )
+    result = asyncio.run(
+        process(
+            client=SimpleNamespace(download_media=lambda *_a: touched.append("download")),
+            msg=SimpleNamespace(id=2),
+            username="source",
+            post_text="event",
+            cleaned_events=[{"title": "Event", "date": "2026-08-01"}],
+        )
+    )
+    assert result == ([], "skipped:too_large")
+    assert touched == []
+
+
+def test_video_rejected_cache_hit_does_not_call_model() -> None:
+    async def no_sleep(*_args):
+        return None
+
+    async def tg_call(_label, func, *args):
+        return await func(*args)
+
+    async def download_media(*_args):
+        return b"small-video"
+
+    model_calls = []
+    process = _load_tg_function(
+        "_process_video_for_events",
+        {
+            "_VIDEO_MODEL_CALLS_USED": 0,
+            "SUPABASE_VIDEOS_MODE": "always",
+            "YC_STORAGE_ENABLED": True,
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": "configured",
+            "_video_source_republication_allowed": lambda _username: True,
+            "_video_meta_from_message": lambda _msg: {
+                "size_bytes": 100,
+                "width": 540,
+                "height": 960,
+                "duration_seconds": 10,
+                "mime_type": "video/mp4",
+                "ext": "mp4",
+            },
+            "_video_size_allowed": lambda _size: True,
+            "_video_is_rollout_eligible": lambda *_args: True,
+            "human_sleep": no_sleep,
+            "HUMAN_MEDIA_DELAY_MIN": 0,
+            "HUMAN_MEDIA_DELAY_MAX": 0,
+            "tg_call": tg_call,
+            "hashlib": hashlib,
+            "_load_video_analysis_cache": lambda _sha: (
+                "hit",
+                {
+                    "decision": "rejected",
+                    "source_event_count": 1,
+                    "analysis": {"cached": True},
+                    "source_video_meta": {"duration_seconds": 10},
+                },
+            ),
+            "_validated_video_analysis": lambda *_args, **_kwargs: {"cached": True},
+            "_call_video_model": lambda *_args, **_kwargs: model_calls.append("model"),
+        },
+    )
+    result = asyncio.run(
+        process(
+            client=SimpleNamespace(download_media=download_media),
+            msg=SimpleNamespace(id=3),
+            username="source",
+            post_text="event",
+            cleaned_events=[{"title": "Event", "date": "2026-08-01"}],
+        )
+    )
+    assert result == ([], "skipped:rejected_cache_hit")
+    assert model_calls == []
+
+
+def test_video_client_uses_only_strict_shared_limiter_pool() -> None:
+    captured = {}
+
+    class Client:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    get_client = _load_tg_function(
+        "_get_video_gemini_client",
+        {
+            "_VIDEO_GEMINI_CLIENT": None,
+            "TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS": ["GOOGLE_API_KEY3", "GOOGLE_API_KEY5"],
+            "GOOGLE_KEY_ENV": "GOOGLE_API_KEY3",
+            "GoogleAIClient": Client,
+            "_get_supabase_client": lambda: object(),
+            "_TelegramSecretsProviderAdapter": lambda value: value,
+            "SecretsProvider": object,
+            "TG_MONITORING_VIDEO_PROVIDER_TIMEOUT_SEC": 120,
+            "VIDEO_MODEL": "gemini-3.1-flash-lite",
+            "logger": SimpleNamespace(info=lambda *_a, **_k: None),
+        },
+    )
+    client = get_client()
+    assert captured["reserve_key_envs"] == ["GOOGLE_API_KEY3", "GOOGLE_API_KEY5"]
+    assert captured["reserve_overflow_key_envs"] == []
+    assert client.allow_reserve_fallback is False
+    assert client.allow_local_limiter_fallback is False
+    assert client.allow_local_limiter_on_reserve_error is False
+    assert client.fallback_models == []
+    assert client.max_retries == 1
+    assert client.allow_provider_429_rotation is False
+    assert client.hard_single_provider_attempt is True
+
+
+def test_rejected_video_is_cached_but_never_uploaded() -> None:
+    async def no_sleep(*_args):
+        return None
+
+    async def tg_call(_label, func, *args):
+        return await func(*args)
+
+    async def download_media(*_args):
+        return b"new-video"
+
+    async def model(*_args, **_kwargs):
+        return {"provider": "valid"}
+
+    uploads = []
+    cache_writes = []
+    process = _load_tg_function(
+        "_process_video_for_events",
+        {
+            "_VIDEO_MODEL_CALLS_USED": 0,
+            "TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN": 6,
+            "SUPABASE_VIDEOS_MODE": "always",
+            "YC_STORAGE_ENABLED": True,
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": "configured",
+            "_video_source_republication_allowed": lambda _username: True,
+            "_video_meta_from_message": lambda _msg: {
+                "size_bytes": 100,
+                "width": 540,
+                "height": 960,
+                "duration_seconds": 10,
+                "mime_type": "video/mp4",
+                "ext": "mp4",
+            },
+            "_video_size_allowed": lambda _size: True,
+            "_video_is_rollout_eligible": lambda *_args: True,
+            "human_sleep": no_sleep,
+            "HUMAN_MEDIA_DELAY_MIN": 0,
+            "HUMAN_MEDIA_DELAY_MAX": 0,
+            "tg_call": tg_call,
+            "hashlib": hashlib,
+            "_load_video_analysis_cache": lambda _sha: ("miss", None),
+            "_call_video_model": model,
+            "_validated_video_analysis": lambda *_a, **_k: {
+                "event_matches": [],
+                "showcase_score": 40,
+                "aesthetic_score": 40,
+                "technical_score": 40,
+                "usefulness_score": 40,
+                "risk_flags": [],
+            },
+            "_matched_video_events": lambda *_a: [],
+            "_video_analysis_decision": lambda *_a, **_k: "rejected",
+            "_store_video_analysis_cache": lambda sha, payload: cache_writes.append((sha, payload)) or True,
+            "_ensure_video_cdn_object": lambda *_a, **_k: uploads.append(True),
+            "VIDEO_MODEL": "gemini-3.1-flash-lite",
+            "TG_MONITORING_VIDEO_ANALYSIS_VERSION": "video-showcase-v2",
+            "datetime": datetime,
+            "timezone": timezone,
+            "logger": SimpleNamespace(warning=lambda *_a, **_k: None),
+        },
+    )
+    result = asyncio.run(
+        process(
+            client=SimpleNamespace(download_media=download_media),
+            msg=SimpleNamespace(id=4),
+            username="source",
+            post_text="event",
+            cleaned_events=[{"title": "Event", "date": "2026-08-01"}],
+        )
+    )
+    assert result == ([], "skipped:rejected")
+    assert len(cache_writes) == 1
+    assert uploads == []
+
+
+def test_video_processing_fails_closed_without_source_republication_permission() -> None:
+    touched = []
+    process = _load_tg_function(
+        "_process_video_for_events",
+        {
+            "_VIDEO_MODEL_CALLS_USED": 0,
+            "SUPABASE_VIDEOS_MODE": "always",
+            "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": "configured",
+            "_video_source_republication_allowed": lambda _username: False,
+        },
+    )
+    result = asyncio.run(
+        process(
+            client=SimpleNamespace(download_media=lambda *_a: touched.append("download")),
+            msg=SimpleNamespace(id=5),
+            username="unauthorized_source",
+            post_text="event",
+            cleaned_events=[{"title": "Event", "date": "2030-08-01"}],
+        )
+    )
+    assert result == ([], "skipped:republication_not_allowed")
+    assert touched == []
+
+
+def test_video_config_has_hard_six_call_ceiling_and_encrypted_sidecars() -> None:
+    source = _TG_MONITOR_SOURCE.read_text(encoding="utf-8")
+    assert "min(6, _env_int('TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN', 6))" in source
+    assert '("google.genai", "google-genai>=1.75.0")' in source
+    assert "client.hard_single_provider_attempt = True" in source
+    assert "must contain at least two distinct keys" in source
+    assert "Fernet(" in source
+    assert "ContentType='application/octet-stream'" in source
+    assert "CacheControl='private, no-store'" in source
+    assert "application/json; charset=utf-8" not in source[source.index("def _store_video_analysis_cache"):source.index("def _ensure_video_cdn_object")]
+
+
+def test_video_analysis_sidecar_roundtrip_is_ciphertext() -> None:
+    namespace = {
+        "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY": (
+            "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
+        ),
+        "json": json,
+        "logger": SimpleNamespace(warning=lambda *_a, **_k: None),
+    }
+    encrypt = _load_tg_function("_encrypt_video_analysis_cache", namespace)
+    decrypt = _load_tg_function("_decrypt_video_analysis_cache", namespace)
+    payload = {"sha256": "a" * 64, "description": "private visible text"}
+
+    ciphertext = encrypt(payload)
+
+    assert isinstance(ciphertext, bytes)
+    assert b"private visible text" not in ciphertext
+    assert decrypt(ciphertext) == payload
+
+
+def test_video_auto_accept_requires_explicit_rights_gate() -> None:
+    ns = _load_video_analysis_helpers()
+    analysis = ns["_validated_video_analysis"](
+        _valid_video_model_result(),
+        event_count=1,
+        duration_seconds=10,
+    )
+    matches = ns["_matched_video_events"](
+        analysis,
+        [{"title": "Event", "date": "2030-08-01"}],
+    )
+
+    assert ns["_video_analysis_accepted"](analysis, matches) is False
+    assert (
+        ns["_video_analysis_accepted"](
+            analysis,
+            matches,
+            rights_allowed=True,
+        )
+        is True
+    )
+
+
+def test_accepted_video_payload_persists_multiple_relation_scores_and_source() -> None:
+    payload_fn = _load_tg_function(
+        "_accepted_video_payload",
+        {
+            "VIDEO_MODEL": "gemini-3.1-flash-lite",
+            "TG_MONITORING_VIDEO_ANALYSIS_VERSION": "video-showcase-v2",
+        },
+    )
+    payload = payload_fn(
+        cache_payload={
+            "analysis": {
+                "aesthetic_score": 82.75,
+                "showcase_score": 81.75,
+                "technical_score": 80,
+                "visual_score": 85,
+                "motion_score": 80,
+                "legibility_score": 75,
+                "usefulness_score": 85,
+                "score_confidence": 0.9,
+                "description": "Ролик",
+                "search_text": "ролик концерт",
+            }
+        },
+        matches=[
+            {"event_index": 0, "relevance_score": 90, "relation_confidence": 0.9, "ranking_score": 83.81, "reason": "artist"},
+            {"event_index": 2, "relevance_score": 95, "relation_confidence": 0.95, "ranking_score": 85.06, "reason": "series"},
+        ],
+        video_meta={"mime_type": "video/mp4", "width": 540, "height": 960, "duration_seconds": 10},
+        sha256_hex="a" * 64,
+        size_bytes=100,
+        cdn_url="https://static.example/v.mp4",
+        cdn_path="v/video/v1/aa/v.mp4",
+        status="accepted",
+        source_url="https://t.me/source/4",
+    )
+    assert payload["event_indexes"] == [0, 2]
+    assert payload["event_relevance_score"] == 95
+    assert payload["ranking_score"] == 85.06
+    assert payload["analysis_status"] == "accepted"
+    assert payload["source_url"] == "https://t.me/source/4"
+    assert payload["event_relevance_scores"][1]["relation_confidence"] == 0.95
+
+
+def test_merge_media_groups_preserves_and_deduplicates_videos() -> None:
+    merge = _load_tg_function(
+        "_merge_media_groups",
+        {"_assign_posters_to_events": lambda _message: None},
+    )
+    video = {"sha256": "a" * 64, "cdn_url": "https://static.example/a.mp4"}
+    merged = merge(
+        [
+            {"grouped_id": 9, "message_id": 12, "source_username": "source", "has_video": True, "video_status": "accepted", "videos": [video], "events": []},
+            {"grouped_id": 9, "message_id": 11, "source_username": "source", "has_video": False, "video_status": None, "videos": [dict(video)], "events": [{"title": "Event"}]},
+        ]
+    )
+    assert len(merged) == 1
+    assert merged[0]["has_video"] is True
+    assert merged[0]["video_status"] == "accepted"
+    assert merged[0]["videos"] == [video]
+    assert merged[0]["events"] == [{"title": "Event"}]
 
 
 

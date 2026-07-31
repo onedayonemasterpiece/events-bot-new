@@ -627,6 +627,13 @@ features:
       - source_parsing/telegram/handlers.py
       - smart_event_update.py
       - scheduling.py
+  telegram_monitoring_video_quality:
+    status: implemented
+    docs: docs/features/telegram-monitoring/video-quality.md
+    entrypoints:
+      - kaggle/TelegramMonitor/telegram_monitor.py
+      - source_parsing/telegram/handlers.py
+      - site/scripts/export-production-preview-data.py
   telegram_business_stories:
     status: implemented
     docs: docs/features/telegram-business-stories/README.md

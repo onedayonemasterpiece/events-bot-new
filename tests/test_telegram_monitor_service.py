@@ -17,6 +17,18 @@ from source_parsing.telegram.service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _video_monitoring_security_config(monkeypatch):
+    monkeypatch.setenv(
+        "TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES",
+        "meowafisha",
+    )
+    monkeypatch.setenv(
+        "TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY",
+        "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+    )
+
+
 @pytest.mark.asyncio
 async def test_build_config_payload_can_scope_to_single_source(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
@@ -44,6 +56,7 @@ def test_build_secrets_payload_includes_yandex_storage_env(monkeypatch):
     monkeypatch.setenv("TG_API_ID", "123")
     monkeypatch.setenv("TG_API_HASH", "hash")
     monkeypatch.setenv("GOOGLE_API_KEY3", "google")
+    monkeypatch.setenv("GOOGLE_API_KEY5", "video-google")
     monkeypatch.setenv("TG_SESSION", "session")
     monkeypatch.setenv("YC_SA_BOT_STORAGE", "access")
     monkeypatch.setenv("YC_SA_BOT_STORAGE_KEY", "secret")
@@ -56,6 +69,61 @@ def test_build_secrets_payload_includes_yandex_storage_env(monkeypatch):
     assert payload["YC_SA_BOT_STORAGE_KEY"] == "secret"
     assert payload["YC_STORAGE_BUCKET"] == "kenigevents"
     assert payload["YC_STORAGE_ENDPOINT"] == "https://storage.yandexcloud.net"
+
+
+def test_build_secrets_payload_ships_exact_declared_video_pool(monkeypatch):
+    monkeypatch.setenv("TG_API_ID", "123")
+    monkeypatch.setenv("TG_API_HASH", "hash")
+    monkeypatch.setenv("TG_SESSION", "session")
+    monkeypatch.setenv("TG_MONITORING_GOOGLE_KEY_ENV", "GOOGLE_API_KEY3")
+    monkeypatch.setenv("TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV", "GOOGLE_API_KEY4")
+    monkeypatch.setenv(
+        "TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS",
+        "GOOGLE_API_KEY3,GOOGLE_API_KEY5,GOOGLE_API_KEY5",
+    )
+    monkeypatch.setenv("GOOGLE_API_KEY3", "text-primary")
+    monkeypatch.setenv("GOOGLE_API_KEY4", "text-fallback")
+    monkeypatch.setenv("GOOGLE_API_KEY5", "video-secondary")
+    monkeypatch.setenv("GOOGLE_API_KEY2", "must-not-ship")
+
+    payload = json.loads(_build_secrets_payload())
+
+    assert payload["TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS"] == "GOOGLE_API_KEY3,GOOGLE_API_KEY5"
+    assert payload["GOOGLE_API_KEY3"] == "text-primary"
+    assert payload["GOOGLE_API_KEY4"] == "text-fallback"
+    assert payload["GOOGLE_API_KEY5"] == "video-secondary"
+    assert "GOOGLE_API_KEY2" not in payload
+    assert payload["TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES"] == "meowafisha"
+    assert payload["TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY"]
+
+
+def test_build_secrets_payload_requires_every_declared_video_key(monkeypatch):
+    import source_parsing.telegram.service as tg_service
+
+    monkeypatch.setenv("TG_API_ID", "123")
+    monkeypatch.setenv("TG_API_HASH", "hash")
+    monkeypatch.setenv("TG_SESSION", "session")
+    monkeypatch.setenv("GOOGLE_API_KEY3", "text-primary")
+    monkeypatch.delenv("GOOGLE_API_KEY5", raising=False)
+    monkeypatch.setattr(tg_service, "_read_env_file_value", lambda _key: None)
+    monkeypatch.setenv(
+        "TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS",
+        "GOOGLE_API_KEY3,GOOGLE_API_KEY5",
+    )
+
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY5"):
+        _build_secrets_payload()
+
+
+def test_build_secrets_payload_requires_multiple_video_keys(monkeypatch):
+    monkeypatch.setenv("TG_API_ID", "123")
+    monkeypatch.setenv("TG_API_HASH", "hash")
+    monkeypatch.setenv("TG_SESSION", "session")
+    monkeypatch.setenv("GOOGLE_API_KEY3", "text-primary")
+    monkeypatch.setenv("TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS", "GOOGLE_API_KEY3")
+
+    with pytest.raises(RuntimeError, match="at least two distinct keys"):
+        _build_secrets_payload()
 
 
 @pytest.mark.asyncio
