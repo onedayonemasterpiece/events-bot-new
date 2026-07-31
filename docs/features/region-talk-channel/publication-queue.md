@@ -302,6 +302,10 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
   publication;
 - a missing lane is persisted as `vacant`, never silently filled with a second
   item from the other lane;
+- a confirmed row is not publication-ready until it has a complete grounded
+  Telegram/VK draft, explicit attribution and one to three support points;
+  legacy rows without that package are excluded from the public schedule
+  instead of reaching a slot with no usable copy;
 - the same selected content is intended for cross-posting to Telegram and VK;
   this is two content items per day, not four unrelated platform posts.
 
@@ -336,6 +340,16 @@ does not bypass diversity ordering, rights policy or manual release gates.
 For a link-only article the eligibility evidence explicitly says
 `publication_external_article_link` and
 `not_required_link_only_article_no_media_reuse`; this is not visual approval.
+
+Historical external articles accepted before the grounded-draft rollout may be
+repaired without another semantic verdict only when their strict intake row
+already contains an evidence-backed `editorial_pack`. The planner copies those
+sentences verbatim into Telegram/VK layout, verifies every used copy surface
+against existing evidence IDs, preserves the caveat and original link, and
+records `region_talk_external_evidence_projection_v1`. This mechanical
+projection is unavailable to social posts and fails closed on a missing or
+broken support reference. Social rows without a current grounded draft remain
+outside the schedule until the LLM-first writer has produced one.
 
 ## YDB state
 

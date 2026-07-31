@@ -9,6 +9,10 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Region Talk daily planning now excludes confirmed candidates that still lack
+  complete grounded Telegram/VK copy, and safely backfills legacy accepted
+  external articles only by verbatim projection of their evidence-supported
+  research copy; social posts keep a fail-closed LLM-first draft requirement.
 - Smart Update now scopes multi-occurrence VK/TG roundups before reviewing
   date/range/time roles, and treats only the visible label of VK
   `[target|label]` markup as verbatim evidence; roundup headings can no longer
