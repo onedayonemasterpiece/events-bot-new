@@ -432,7 +432,7 @@ def publication_pre_score(row: dict[str, Any]) -> float:
     # Video has no image-model score by design. Keep it below a strong scored
     # photo, but do not rank it as zero-quality before the operator can watch it.
     manual_video = 0.18 if video_manual_review else 0.0
-    external_article = rt.is_external_link_article_candidate(row)
+    external_article = rt.uses_external_link_article_lane(row)
     article_quality = float(row.get("external_research_quality_score") or 0) * 0.55 if external_article else 0.0
     return round(
         nonlocal_bonus
@@ -748,7 +748,7 @@ def read_live_rows(
     for image in finalizer_inputs.values():
         actual_image = image.get("image_queue_status") == "actual_scored" and image.get("image_model_input_type") == "actual_image"
         video_manual_review = rt.is_video_media_candidate(image)
-        external_link_article = rt.is_external_link_article_candidate(image)
+        external_link_article = rt.uses_external_link_article_lane(image)
         if not actual_image and not video_manual_review and not external_link_article:
             continue
         original_post_url = str(image.get("post_url") or "")
@@ -2386,7 +2386,7 @@ def main() -> int:
         "finalizer_input_rows": len(rows),
         "actual_scored_rows": sum(1 for row in rows if row.get("image_queue_status") == "actual_scored" and row.get("image_model_input_type") == "actual_image"),
         "video_manual_review_rows": sum(1 for row in rows if rt.is_video_media_candidate(row)),
-        "external_link_article_rows": sum(1 for row in rows if rt.is_external_link_article_candidate(row)),
+        "external_link_article_rows": sum(1 for row in rows if rt.uses_external_link_article_lane(row)),
         "llm_calls": verifier_provider_calls + onboarding_stats["profile_calls"] + onboarding_stats["writer_calls"],
         "verifier_llm_calls": verifier_provider_calls,
         "onboarding_profile_llm_calls": onboarding_stats["profile_calls"],

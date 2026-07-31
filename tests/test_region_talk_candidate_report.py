@@ -9092,6 +9092,14 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         accepted = mod.publication_eligibility(article)
         ambiguous = mod.publication_eligibility({**article, "vector_gate_status": "vector_ambiguous_keep_for_ranking"})
         reusable_media = mod.publication_eligibility({**article, "media_reuse_allowed": True})
+        actual_image_article = mod.publication_eligibility({
+            **article,
+            "vector_content_type": "route_useful_candidate",
+            "image_model_input_type": "actual_image",
+            "image_queue_status": "actual_scored",
+            "overall_media_score": 0.86,
+            "postcardness_score": 0.77,
+        })
         social_without_media = mod.publication_eligibility({
             **article,
             "platform": "telegram",
@@ -9111,6 +9119,10 @@ class RegionTalkKaggleLauncherTests(unittest.TestCase):
         self.assertFalse(ambiguous["eligible"])
         self.assertEqual(ambiguous["primary_reason"], "vector_accept_candidate_required")
         self.assertFalse(reusable_media["eligible"])
+        self.assertTrue(actual_image_article["eligible"])
+        self.assertEqual(actual_image_article["media_review_mode"], "scored_actual_image")
+        self.assertEqual(actual_image_article["evidence"]["eligibility_phase"], "publication")
+        self.assertFalse(actual_image_article["evidence"]["external_article_link_only"])
         self.assertFalse(social_without_media["eligible"])
         self.assertEqual(social_without_media["primary_reason"], "no_media_for_image_analysis")
 

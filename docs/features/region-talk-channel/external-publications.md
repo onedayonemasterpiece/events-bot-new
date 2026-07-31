@@ -163,6 +163,9 @@ finalizer. They do **not** require actual-image scoring when
 reuse is forbidden. This is contract
 `region_talk_external_article_link_gate_v1`; it cannot admit Telegram/VK social
 posts, ambiguous vector decisions or an article that claims reusable media.
+If an article already has a current actual-image attestation, that stricter
+visual lane keeps priority; the link-only path is a fallback for the absence of
+reusable media, not a replacement for valid visual evidence.
 The finalizer reports these inputs as `external_link_article_rows` and records
 `media_review_mode=link_only_no_media_reuse` instead of pretending a picture
 was reviewed.

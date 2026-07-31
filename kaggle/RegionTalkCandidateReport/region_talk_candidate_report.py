@@ -10021,6 +10021,14 @@ def is_external_link_article_candidate(row: dict[str, Any]) -> bool:
     }
 
 
+def uses_external_link_article_lane(row: dict[str, Any]) -> bool:
+    """Prefer an existing actual-image attestation over the no-reuse lane."""
+    return bool(
+        is_external_link_article_candidate(row)
+        and str(row.get("image_model_input_type") or "") != "actual_image"
+    )
+
+
 def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
     if not str(row.get("post_url") or "").strip():
         return False, "missing_post_url"
@@ -10037,7 +10045,7 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
         return False, "ad_or_promo"
     if str(row.get("vector_gate_status") or "").startswith("vector_reject"):
         return False, str(row.get("vector_gate_status") or "vector_reject")
-    if is_external_link_article_candidate(row):
+    if uses_external_link_article_lane(row):
         if str(row.get("vector_gate_status") or "") != "vector_accept_candidate":
             return False, "vector_accept_candidate_required"
         if str(row.get("text_vector_fusion_status") or "") != "fused_e5_bge_m3":
@@ -10251,7 +10259,9 @@ def publication_eligibility(
         and str(merged.get("image_queue_status") or "") in {"", "actual_scored"}
     )
     video_manual_review = is_video_media_candidate(merged)
-    external_link_article = is_external_link_article_candidate(merged)
+    external_link_article = bool(
+        uses_external_link_article_lane(merged) and require_actual_image is not True
+    )
     if require_actual_image is None:
         require_actual_image = actual_image_scored or video_manual_review
     if external_link_article:
@@ -10427,7 +10437,7 @@ def build_publication_candidate_queue(
         eligibility = publication_eligibility(row)
         ok = bool(eligibility.get("eligible"))
         reason = str(eligibility.get("primary_reason") or "")
-        external_link_article = is_external_link_article_candidate(row)
+        external_link_article = uses_external_link_article_lane(row)
         visual = max(_rt_float(row.get("overall_media_score")), _rt_float(row.get("final_visual_score")))
         postcard = _rt_float(row.get("postcardness_score") or row.get("clip_postcardness_score") or row.get("cv_postcardness_score"))
         text_story = _publication_text_story_score(row)

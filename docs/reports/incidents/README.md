@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-31-region-talk-article-link-precedence.md`
+  - Scope: Region Talk external article eligibility/finalizer routing and the
+    daily article lane.
+  - Must not regress: a current actual-image article keeps its visual gate;
+    link-only/no-media-reuse is used only when no actual image exists, while
+    social no-media rows remain rejected and provider RPD is never bypassed.
+
 - `INC-2026-07-31-google-ai-parallel-limiter-bypass.md`
   - Scope: all Google AI provider calls from Codex agents, Fly, Kaggle, Edge
     Functions and probes; shared atomic admission and project-level quota scope.
