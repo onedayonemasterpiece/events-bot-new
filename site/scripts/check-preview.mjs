@@ -80,6 +80,9 @@ for (const event of eventsData.events) {
   for (const video of event.video_assets) {
     if (!video || typeof video !== 'object') throw new Error(`Event ${event.id} has an invalid video asset`);
     if (!/^https?:\/\//u.test(String(video.src || ''))) throw new Error(`Event ${event.id} video src is not public HTTP(S)`);
+    if (video.source_url !== null && video.source_url !== undefined && !/^https?:\/\//u.test(String(video.source_url))) {
+      throw new Error(`Event ${event.id} video ${video.asset_key} source_url is not public HTTP(S)`);
+    }
     if (!/^[0-9a-f]{64}$/u.test(String(video.asset_key || ''))) throw new Error(`Event ${event.id} video asset_key is not SHA-256`);
     if (seenVideoKeys.has(video.asset_key)) throw new Error(`Event ${event.id} repeats video ${video.asset_key}`);
     seenVideoKeys.add(video.asset_key);

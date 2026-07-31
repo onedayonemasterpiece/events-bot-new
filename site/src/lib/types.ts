@@ -98,6 +98,8 @@ export interface EventVideoAsset {
   ranking_score: number | null;
   /** Primary deterministic ranking signal for the future event-page video rail. */
   showcase_score: number | null;
+  /** Original public post URL for future attribution; never used as playback media. */
+  source_url: string | null;
   description: string | null;
   /** Model-authored retrieval text reserved for future search/indexing. */
   search_text: string | null;

@@ -30,11 +30,16 @@ def _connection(*, with_optional_columns: bool = True) -> sqlite3.Connection:
         , showcase_score REAL
         , description TEXT
         , search_text TEXT
+        , analysis_status TEXT
         """
         if with_optional_columns
         else ""
     )
-    relevance = ", event_relevance_score REAL, ranking_score REAL" if with_optional_columns else ""
+    relevance = (
+        ", event_relevance_score REAL, ranking_score REAL, source_url TEXT"
+        if with_optional_columns
+        else ""
+    )
     con.executescript(
         f"""
         CREATE TABLE video_asset(
@@ -71,8 +76,8 @@ def _insert_asset(
         INSERT INTO video_asset(
             id, sha256, cdn_url, width, height, cdn_path, mime_type,
             duration_seconds, aesthetic_score, technical_score, showcase_score,
-            description, search_text
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+            description, search_text, analysis_status
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             asset_id,
@@ -88,6 +93,7 @@ def _insert_asset(
             showcase,
             f"Описание {asset_id}",
             f"Поисковый текст {asset_id}",
+            "accepted",
         ),
     )
     return sha
@@ -114,6 +120,7 @@ def test_partial_snapshot_without_optional_columns_remains_readable() -> None:
     assert video["showcase_score"] is None
     assert video["event_relevance_score"] is None
     assert video["ranking_score"] is None
+    assert video["source_url"] is None
 
 
 def test_multiple_assets_are_ranked_by_link_score_then_showcase_and_relevance() -> None:
@@ -142,6 +149,7 @@ def test_multiple_assets_are_ranked_by_link_score_then_showcase_and_relevance() 
         "event_relevance_score": 95.0,
         "ranking_score": 92.0,
         "showcase_score": 91.0,
+        "source_url": None,
         "description": "Описание 2",
         "search_text": "Поисковый текст 2",
     }
@@ -177,3 +185,26 @@ def test_empty_url_nonvertical_and_malformed_hash_rows_are_filtered() -> None:
     videos = EXPORTER.event_video_assets_for_events(con, [7])[7]
 
     assert [video["asset_key"] for video in videos] == [valid_sha]
+
+
+def test_analysis_status_filters_rejected_asset_and_source_url_is_exported() -> None:
+    con = _connection()
+    accepted_sha = _insert_asset(con, asset_id=1, byte="3")
+    _insert_asset(con, asset_id=2, byte="4")
+    con.execute("UPDATE video_asset SET analysis_status='quality_rejected' WHERE id=2")
+    con.executemany(
+        """
+        INSERT INTO event_video_link(
+            event_id, video_asset_id, event_relevance_score, ranking_score, source_url
+        ) VALUES(7,?,?,?,?)
+        """,
+        [
+            (1, 94, 85.5, "https://t.me/example/101"),
+            (2, 99, 90, "https://t.me/example/102"),
+        ],
+    )
+
+    videos = EXPORTER.event_video_assets_for_events(con, [7])[7]
+
+    assert [video["asset_key"] for video in videos] == [accepted_sha]
+    assert videos[0]["source_url"] == "https://t.me/example/101"

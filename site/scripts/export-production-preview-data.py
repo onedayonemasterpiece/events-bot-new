@@ -1018,6 +1018,11 @@ def event_video_assets_for_events(
         if "event_relevance_score" in link_columns
         else "NULL AS event_relevance_score"
     )
+    source_url_select = (
+        "link.source_url AS source_url"
+        if "source_url" in link_columns
+        else "NULL AS source_url"
+    )
     ranking_select = (
         "link.ranking_score AS ranking_score"
         if "ranking_score" in link_columns
@@ -1039,6 +1044,11 @@ def event_video_assets_for_events(
         else ""
     )
     placeholders = ",".join("?" for _ in unique_event_ids)
+    accepted_status_where = (
+        "AND lower(trim(COALESCE(asset.analysis_status, ''))) = 'accepted'"
+        if "analysis_status" in asset_columns
+        else ""
+    )
     try:
         rows = con.execute(
             f"""
@@ -1051,11 +1061,13 @@ def event_video_assets_for_events(
                 asset.height,
                 {optional_asset_select},
                 {relevance_select},
-                {ranking_select}
+                {ranking_select},
+                {source_url_select}
             FROM event_video_link AS link
             JOIN video_asset AS asset
               ON asset.id = link.video_asset_id
             WHERE link.event_id IN ({placeholders})
+              {accepted_status_where}
             ORDER BY
                 link.event_id ASC,
                 {ranking_order},
@@ -1107,6 +1119,7 @@ def event_video_assets_for_events(
                 "event_relevance_score": _video_score(row_get(row, "event_relevance_score")),
                 "ranking_score": _video_score(row_get(row, "ranking_score")),
                 "showcase_score": _video_score(row_get(row, "showcase_score")),
+                "source_url": clean_text(row_get(row, "source_url")) or None,
                 "description": clean_text(row_get(row, "description")) or None,
                 "search_text": clean_text(row_get(row, "search_text")) or None,
             }
