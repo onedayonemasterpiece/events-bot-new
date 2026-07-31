@@ -39,6 +39,11 @@ The prompt is deliberately slim: `REGION_TALK_LLM_PROMPT_TEXT_MAX_CHARS`
 defaults to 1800, falls back from `text` to `text_excerpt`/summary fields when
 row-level YDB image rows do not carry full text, and sends only the compact
 image/vector evidence fields required by the final decision.
+The v7 wire contract uses compact enum/field notation so a social prompt with
+the configured 900-character test excerpt remains below 3.5 KB; this changes
+no keys, enum members, grounding rules or acceptance semantics. A proportional
+UTF-8 byte cap (`REGION_TALK_LLM_PROMPT_TEXT_MAX_BYTES`) complements the
+character cap so Cyrillic input cannot silently double the complete payload.
 When actual-image evidence is missing, the event name is
 `final_verifier_deferred_until_image_scoring` and its payload must make clear
 that this is non-blocking (`blocking_wait=false`, `llm_calls=0`,

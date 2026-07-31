@@ -17,7 +17,8 @@
   durable request budget. Operator notifications and ranked snapshots now fail
   closed unless the complete Telegram/VK draft and support points exist; local
   E2E/generic sessions remain excluded and future MTProto premium-emoji support
-  stays available behind the same role/session gate.
+  stays available behind the same role/session gate. The unchanged v7 writer
+  contract is also compacted below its bounded prompt-size guard.
 - Smart Update event-vector catch-up now honors bounded shared-ledger RPM/TPM
   retry windows inside one projection instead of restarting the whole job every
   ten minutes; day-level exhaustion remains fail-closed.
