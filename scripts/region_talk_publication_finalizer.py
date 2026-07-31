@@ -1379,6 +1379,29 @@ def _reconcile_terminal_provider_decision(
     return after != before or attestation_changed_from_previous
 
 
+def _eligibility_only_tombstone_can_reopen(previous: dict[str, Any], verdict: str) -> bool:
+    """Allow changed deterministic eligibility to reach Gemini for the first time.
+
+    Provider and operator decisions remain monotonic. Only a tombstone created
+    by the eligibility gate itself, with no durable Gemini verdict, may reopen
+    when the current evidence becomes eligible or reviewable.
+    """
+    if verdict not in {"eligible", "review"}:
+        return False
+    publication_status = str(previous.get("publication_status") or "").strip().lower()
+    candidate_status = str(previous.get("publication_candidate_status") or "").strip().lower()
+    provider_decision = str(
+        previous.get("llm_decision")
+        or previous.get("publication_llm_decision")
+        or ""
+    ).strip().lower()
+    return bool(
+        publication_status.startswith("eligibility_")
+        and candidate_status.startswith("tombstoned_")
+        and provider_decision not in {"accept", "reject", "needs_review"}
+    )
+
+
 def _retry_after(now_iso: str, gate_status: str) -> str:
     now = _parse_time(now_iso) or datetime.now(timezone.utc)
     env_name = (
@@ -1405,7 +1428,11 @@ def verify_rows(
     for row in rows:
         verdict, _raw_eligibility = _eligibility_fields(row)
         previous = row.get("_previous_publication") if isinstance(row.get("_previous_publication"), dict) else {}
-        if previous and _terminal_decision_blocks_text_restore(previous):
+        if (
+            previous
+            and _terminal_decision_blocks_text_restore(previous)
+            and not _eligibility_only_tombstone_can_reopen(previous, verdict)
+        ):
             if verdict not in {"eligible", "review"} and _ineligible_state_is_current(row, verdict):
                 continue
             if _reconcile_terminal_provider_decision(
