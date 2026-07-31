@@ -11,7 +11,7 @@
 - Event static pages (собственный домен, SEO/GEO, Yandex S3): `docs/backlog/features/static-event-pages/README.md`
 - Static-site focus group (product/page prototype готов; production tester
   backend и rollout отсутствуют):
-  `docs/backlog/features/static-site-focus-group/README.md`
+  `docs/features/static-site-focus-group/README.md`
 - CherryFlash / Popular Video Afisha (популярные события / `Быстрый обзор`): `docs/backlog/features/cherryflash/README.md`
   - strict shot reference for `Мобильная лента`: `docs/reference/09bc959616262101b9cd310629f08b84.jpg`
 - Guide excursions monitoring (экскурсии гидов): `docs/backlog/features/guide-excursions-monitoring/README.md`

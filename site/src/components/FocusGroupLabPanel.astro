@@ -1,0 +1,378 @@
+---
+import FocusLabBadge from './FocusLabBadge.astro';
+import { withBase } from '../lib/events';
+import { FOCUS_GROUP_MASS_INVITE_TOKEN } from '../lib/focus-group-prototype';
+import type { FocusGroupPageFamily } from '../lib/focus-group-surface';
+
+interface Props {
+  pageFamily: FocusGroupPageFamily;
+  pageLabel: string;
+  pagePath: string;
+}
+
+const { pageFamily, pageLabel, pagePath } = Astro.props;
+const invitePath = withBase('/fokus-gruppa/priglashenie/');
+const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
+---
+
+<section
+  class="focus-lab-panel"
+  data-focus-lab-panel
+  data-page-family={pageFamily}
+  data-page-path={pagePath}
+  data-invite-path={invitePath}
+  data-invite-token={FOCUS_GROUP_MASS_INVITE_TOKEN}
+  hidden
+  aria-labelledby="focus-lab-panel-title"
+>
+  <div class="focus-lab-panel__head">
+    <FocusLabBadge />
+    <div>
+      <h2 id="focus-lab-panel-title">Помогла ли вам эта страница?</h2>
+      <p>Оцените {pageLabel} от 0 до 10.</p>
+    </div>
+  </div>
+
+  <div class="focus-lab-panel__scale" role="group" aria-label="Оценка страницы от 0 до 10">
+    {Array.from({ length: 11 }, (_, score) => (
+      <button type="button" data-focus-score={score} aria-label={`Оценка ${score}`}>{score}</button>
+    ))}
+  </div>
+  <div class="focus-lab-panel__ends" aria-hidden="true"><span>Не помогла</span><span>Очень помогла</span></div>
+
+  <div class="focus-lab-panel__actions">
+    <button class="ke-button ke-button--secondary" type="button" data-focus-issue-open>
+      Сообщить о проблеме
+    </button>
+    <button class="ke-button ke-button--secondary" type="button" data-focus-invite-open>
+      Пригласить человека
+    </button>
+  </div>
+
+  <p class="focus-lab-panel__status" data-focus-feedback-status role="status" aria-live="polite"></p>
+  <a class="focus-lab-panel__confirm" href={confirmHref} data-focus-confirm hidden>
+    Подтвердить участие
+  </a>
+
+  <dialog class="focus-lab-panel__dialog" data-focus-issue-dialog aria-labelledby="focus-issue-title">
+    <form class="focus-lab-panel__sheet" data-focus-issue-form>
+      <header>
+        <div>
+          <FocusLabBadge />
+          <h2 id="focus-issue-title">Что пошло не так?</h2>
+        </div>
+        <button type="button" data-focus-dialog-close aria-label="Закрыть">×</button>
+      </header>
+      <label>
+        <span>Что произошло? Что вы хотели сделать? Что не получилось?</span>
+        <textarea name="message" rows="6" maxlength="2000" required></textarea>
+      </label>
+      <label class="focus-lab-panel__file">
+        <span>Добавить скриншот <small>(необязательно)</small></span>
+        <input type="file" name="screenshot" accept="image/png,image/jpeg,image/webp" />
+        <small>PNG, JPG или WebP до 5 МБ.</small>
+      </label>
+      <button class="ke-button ke-button--primary" type="submit" data-focus-issue-submit>
+        Отправить
+      </button>
+      <p data-focus-issue-status role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
+  <dialog class="focus-lab-panel__dialog" data-focus-invite-dialog aria-labelledby="focus-invite-title">
+    <div class="focus-lab-panel__sheet focus-lab-panel__sheet--invite">
+      <header>
+        <div>
+          <FocusLabBadge />
+          <h2 id="focus-invite-title">Пригласить в фокус-группу</h2>
+        </div>
+        <button type="button" data-focus-dialog-close aria-label="Закрыть">×</button>
+      </header>
+      <div class="focus-lab-panel__qr" data-focus-invite-qr aria-label="QR-код приглашения"></div>
+      <p>Покажите QR-код или отправьте ссылку.</p>
+      <div class="focus-lab-panel__actions">
+        <button class="ke-button ke-button--primary" type="button" data-focus-invite-share>Поделиться</button>
+        <button class="ke-button ke-button--secondary" type="button" data-focus-invite-copy>Скопировать ссылку</button>
+      </div>
+      <p data-focus-invite-status role="status" aria-live="polite"></p>
+    </div>
+  </dialog>
+</section>
+
+<script>
+  import { getStaticSiteAuth } from '../lib/staticSiteAuth';
+  import {
+    readFocusFeedbackScores,
+    rememberFocusFeedbackScore,
+  } from '../lib/focus-feedback-state';
+  import { getIdempotentOutbox, type IdempotentOutboxRecord } from '../lib/idempotentOutbox';
+  import { readFocusParticipationMarker } from '../lib/focus-group-prototype';
+  import { createFocusInviteQrSvg } from '../lib/focus-invite-qr';
+
+  document.querySelectorAll<HTMLElement>('[data-focus-lab-panel]').forEach((root) => {
+    let participation = null;
+    try { participation = readFocusParticipationMarker(window.localStorage); } catch { participation = null; }
+    if (participation?.status !== 'active') return;
+    root.hidden = false;
+
+    const feedbackStatus = root.querySelector<HTMLElement>('[data-focus-feedback-status]');
+    const confirmLink = root.querySelector<HTMLAnchorElement>('[data-focus-confirm]');
+    const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
+    const auth = authRuntime?.dataset.authEnabled === 'true'
+      && authRuntime.dataset.supabaseUrl
+      && authRuntime.dataset.supabaseKey
+      ? getStaticSiteAuth({
+          supabaseUrl: authRuntime.dataset.supabaseUrl,
+          relayUrl: authRuntime.dataset.supabaseRelayUrl || '',
+          publishableKey: authRuntime.dataset.supabaseKey,
+          provider: authRuntime.dataset.yandexProvider || 'custom:yandex',
+        })
+      : null;
+
+    const requireSession = async () => {
+      if (!auth) return null;
+      try { return await auth.getSession(); } catch { return null; }
+    };
+
+    const feedbackOutbox = getIdempotentOutbox();
+    const sendFeedbackRecord = async (record: IdempotentOutboxRecord) => {
+      if (record.channel !== 'focus_feedback_v2') return 'skip' as const;
+      const { error } = await auth!.client.rpc(
+        'submit_focus_group_feedback_v2',
+        record.payload as Record<string, unknown>,
+      );
+      return error ? 'retry' as const : 'sent' as const;
+    };
+    const flushFeedbackOutbox = async () => {
+      if (!auth || !(await requireSession())?.user) return;
+      await feedbackOutbox.flush(sendFeedbackRecord);
+    };
+
+    let browserStorage: Storage | null = null;
+    try { browserStorage = window.localStorage; } catch { browserStorage = null; }
+    const scoreButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-focus-score]'));
+    const remembered = browserStorage
+      ? readFocusFeedbackScores(browserStorage)[root.dataset.pageFamily || '']
+      : null;
+    if (remembered) {
+      scoreButtons.forEach((item) => {
+        const selected = Number(item.dataset.focusScore) === remembered.score;
+        item.dataset.selected = selected ? 'true' : 'false';
+        item.setAttribute('aria-pressed', selected ? 'true' : 'false');
+      });
+      if (feedbackStatus) feedbackStatus.textContent = 'Ваша оценка сохранена. Её можно изменить.';
+    }
+
+    const needsConfirmation = () => {
+      if (feedbackStatus) feedbackStatus.textContent = 'Чтобы отправить ответ, подтвердите участие.';
+      if (confirmLink) confirmLink.hidden = false;
+    };
+
+    let scoreInFlight = false;
+    scoreButtons.forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (scoreInFlight) return;
+        const session = await requireSession();
+        if (!session?.user) {
+          needsConfirmation();
+          return;
+        }
+        const score = Number(button.dataset.focusScore);
+        const clientRequestId = crypto.randomUUID();
+        if (browserStorage) rememberFocusFeedbackScore(
+          browserStorage,
+          root.dataset.pageFamily || '',
+          score,
+        );
+        scoreButtons.forEach((item) => {
+          const selected = item === button;
+          item.disabled = true;
+          item.dataset.selected = selected ? 'true' : 'false';
+          item.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+        scoreInFlight = true;
+        if (feedbackStatus) feedbackStatus.textContent = 'Отправляем оценку…';
+        const payload = {
+          p_client_request_id: clientRequestId,
+          p_kind: 'page_score',
+          p_page_family: root.dataset.pageFamily,
+          p_page_path: root.dataset.pagePath,
+          p_score: score,
+          p_message: null,
+          p_attachment_path: null,
+        };
+        await feedbackOutbox.enqueue({
+          id: clientRequestId,
+          channel: 'focus_feedback_v2',
+          payload,
+        });
+        await flushFeedbackOutbox();
+        const pending = (await feedbackOutbox.inspect()).some((record) => record.id === clientRequestId);
+        scoreInFlight = false;
+        scoreButtons.forEach((item) => { item.disabled = false; });
+        if (pending) {
+          if (feedbackStatus) {
+            feedbackStatus.textContent = 'Оценка сохранена на этом устройстве. Отправим её, когда связь восстановится.';
+          }
+          return;
+        }
+        if (feedbackStatus) feedbackStatus.textContent = 'Спасибо, оценка отправлена.';
+      });
+    });
+
+    const issueDialog = root.querySelector<HTMLDialogElement>('[data-focus-issue-dialog]');
+    const issueForm = root.querySelector<HTMLFormElement>('[data-focus-issue-form]');
+    const issueStatus = root.querySelector<HTMLElement>('[data-focus-issue-status]');
+    root.querySelector<HTMLButtonElement>('[data-focus-issue-open]')?.addEventListener('click', () => issueDialog?.showModal());
+
+    issueForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!issueForm.reportValidity()) return;
+      const session = await requireSession();
+      if (!session?.user) {
+        issueDialog?.close();
+        needsConfirmation();
+        return;
+      }
+      const submit = issueForm.querySelector<HTMLButtonElement>('[data-focus-issue-submit]');
+      const message = String(new FormData(issueForm).get('message') || '').trim();
+      const fileInput = issueForm.elements.namedItem('screenshot') as HTMLInputElement | null;
+      const file = fileInput?.files?.[0] || null;
+      if (file && (file.size > 5 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
+        if (issueStatus) issueStatus.textContent = 'Выберите PNG, JPG или WebP до 5 МБ.';
+        return;
+      }
+      if (submit) submit.disabled = true;
+      if (issueStatus) issueStatus.textContent = 'Отправляем…';
+      let attachmentPath: string | null = null;
+      if (file) {
+        const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+        attachmentPath = `${session.user.id}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await auth!.client.storage
+          .from('focus-feedback')
+          .upload(attachmentPath, file, { contentType: file.type, upsert: false });
+        if (uploadError) {
+          if (submit) submit.disabled = false;
+          if (issueStatus) issueStatus.textContent = 'Скриншот не загрузился. Попробуйте ещё раз.';
+          return;
+        }
+      }
+      const clientRequestId = crypto.randomUUID();
+      const payload = {
+        p_client_request_id: clientRequestId,
+        p_kind: 'issue',
+        p_page_family: root.dataset.pageFamily,
+        p_page_path: root.dataset.pagePath,
+        p_score: null,
+        p_message: message,
+        p_attachment_path: attachmentPath,
+      };
+      await feedbackOutbox.enqueue({
+        id: clientRequestId,
+        channel: 'focus_feedback_v2',
+        payload,
+      });
+      await flushFeedbackOutbox();
+      const pending = (await feedbackOutbox.inspect()).some((record) => record.id === clientRequestId);
+      if (pending) {
+        if (submit) submit.disabled = false;
+        if (issueStatus) issueStatus.textContent = 'Сообщение сохранено. Отправим его, когда связь восстановится.';
+        return;
+      }
+      issueForm.reset();
+      if (issueStatus) issueStatus.textContent = 'Спасибо, сообщение отправлено.';
+      window.setTimeout(() => issueDialog?.close(), 900);
+      if (submit) submit.disabled = false;
+    });
+
+    const inviteDialog = root.querySelector<HTMLDialogElement>('[data-focus-invite-dialog]');
+    const qr = root.querySelector<HTMLElement>('[data-focus-invite-qr]');
+    const inviteStatus = root.querySelector<HTMLElement>('[data-focus-invite-status]');
+    const inviteUrl = new URL(root.dataset.invitePath || '/fokus-gruppa/priglashenie/', window.location.origin);
+    inviteUrl.hash = `invite=${root.dataset.inviteToken || ''}`;
+    const exactInviteUrl = inviteUrl.toString();
+    try { if (qr) qr.innerHTML = createFocusInviteQrSvg(exactInviteUrl); } catch { if (qr) qr.textContent = 'QR-код не загрузился.'; }
+    root.querySelector<HTMLButtonElement>('[data-focus-invite-open]')?.addEventListener('click', () => inviteDialog?.showModal());
+    root.querySelector<HTMLButtonElement>('[data-focus-invite-share]')?.addEventListener('click', async () => {
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ title: 'Приглашение в фокус-группу', url: exactInviteUrl });
+          if (inviteStatus) inviteStatus.textContent = 'Готово.';
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') return;
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(exactInviteUrl);
+        if (inviteStatus) inviteStatus.textContent = 'Ссылка скопирована.';
+      } catch { if (inviteStatus) inviteStatus.textContent = 'Не получилось скопировать ссылку.'; }
+    });
+    root.querySelector<HTMLButtonElement>('[data-focus-invite-copy]')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(exactInviteUrl);
+        if (inviteStatus) inviteStatus.textContent = 'Ссылка скопирована.';
+      } catch { if (inviteStatus) inviteStatus.textContent = 'Не получилось скопировать ссылку.'; }
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-focus-dialog-close]').forEach((button) => {
+      button.addEventListener('click', () => button.closest('dialog')?.close());
+    });
+
+    window.addEventListener('online', () => { void flushFeedbackOutbox(); }, { passive: true });
+    void flushFeedbackOutbox();
+  });
+</script>
+
+<style>
+  .focus-lab-panel {
+    box-sizing: border-box;
+    width: min(1120px, calc(100% - 1rem));
+    margin: clamp(2rem, 5vw, 4rem) auto 1rem;
+    border: 1px solid #dbc9b5;
+    border-radius: 1.35rem;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    background: #fffdf8;
+    color: #44362d;
+    box-shadow: 0 14px 38px rgb(72 45 25 / 10%);
+    font-family: var(--ke-font-sans, system-ui, sans-serif);
+  }
+  .focus-lab-panel[hidden] { display: none; }
+  .focus-lab-panel__head { display: flex; align-items: center; gap: 1rem; }
+  .focus-lab-panel__head h2 { margin: 0 0 .25rem; color: #221a14; font-size: clamp(1.2rem, 3vw, 1.65rem); line-height: 1.1; }
+  .focus-lab-panel__head p, .focus-lab-panel__sheet p { margin: 0; color: #6d6259; line-height: 1.45; }
+  .focus-lab-panel__scale { display: grid; grid-template-columns: repeat(11, minmax(40px, 1fr)); gap: .35rem; margin-top: 1rem; }
+  .focus-lab-panel__scale button { min-width: 0; min-height: 44px; border: 1px solid #d8c8b5; border-radius: .7rem; background: #fff; color: #44362d; font: 850 .9rem/1 var(--ke-font-sans); cursor: pointer; }
+  .focus-lab-panel__scale button:hover, .focus-lab-panel__scale button[data-selected="true"] { border-color: #0f766e; background: #d7f0ec; color: #0f5d57; }
+  .focus-lab-panel__scale button:focus-visible, .focus-lab-panel__sheet button:focus-visible, .focus-lab-panel__sheet textarea:focus-visible, .focus-lab-panel__sheet input:focus-visible { outline: 3px solid rgb(15 118 110 / 35%); outline-offset: 2px; }
+  .focus-lab-panel__ends { display: flex; justify-content: space-between; margin-top: .35rem; color: #6d6259; font-size: .7rem; }
+  .focus-lab-panel__actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+  .focus-lab-panel__status { min-height: 1.4em; margin: .7rem 0 0; color: #0f6c3d; font-size: .82rem; font-weight: 750; }
+  .focus-lab-panel__confirm { display: inline-block; min-height: 44px; color: #98401f; font-weight: 850; line-height: 44px; }
+  .focus-lab-panel__confirm[hidden] { display: none; }
+  .focus-lab-panel__dialog { width: min(620px, calc(100% - 1rem)); max-height: 90dvh; border: 0; border-radius: 1.35rem; padding: 0; background: transparent; color: #44362d; box-shadow: 0 24px 64px rgb(34 26 20 / 22%); }
+  .focus-lab-panel__dialog::backdrop { background: rgb(34 26 20 / 58%); backdrop-filter: blur(3px); }
+  .focus-lab-panel__sheet { display: grid; gap: 1rem; overflow: auto; max-height: 90dvh; padding: clamp(1rem, 4vw, 1.5rem); background: #fffdf8; }
+  .focus-lab-panel__sheet header { display: flex; justify-content: space-between; gap: 1rem; }
+  .focus-lab-panel__sheet header > div { display: grid; gap: .8rem; }
+  .focus-lab-panel__sheet h2 { margin: 0; color: #221a14; font-size: clamp(1.5rem, 5vw, 2rem); line-height: 1.08; }
+  .focus-lab-panel__sheet header > button { width: 44px; height: 44px; flex: 0 0 auto; border: 1px solid #dbc9b5; border-radius: 50%; background: #fff; color: #221a14; font-size: 1.8rem; cursor: pointer; }
+  .focus-lab-panel__sheet label { display: grid; gap: .45rem; font-weight: 800; }
+  .focus-lab-panel__sheet textarea { box-sizing: border-box; width: 100%; min-height: 150px; resize: vertical; border: 1px solid #cdbfad; border-radius: .9rem; padding: .8rem; background: #fff; color: #221a14; font: 1rem/1.45 var(--ke-font-sans); }
+  .focus-lab-panel__file { border: 1px dashed #cdbfad; border-radius: .9rem; padding: .8rem; }
+  .focus-lab-panel__file small { color: #6d6259; font-weight: 600; }
+  .focus-lab-panel__sheet > .ke-button { width: 100%; }
+  .focus-lab-panel__sheet > p[role="status"] { min-height: 1.4em; color: #0f6c3d; font-weight: 750; }
+  .focus-lab-panel__sheet--invite { justify-items: center; text-align: center; }
+  .focus-lab-panel__qr { width: min(280px, 90%); aspect-ratio: 1; padding: .5rem; border-radius: 1rem; background: #fff; }
+  .focus-lab-panel__qr :global(svg) { display: block; width: 100%; height: 100%; }
+  .focus-lab-panel__sheet--invite .focus-lab-panel__actions { width: 100%; }
+  .focus-lab-panel__sheet--invite .focus-lab-panel__actions .ke-button { flex: 1 1 180px; }
+  @media (max-width: 620px) {
+    .focus-lab-panel { width: min(100% - .75rem, 1120px); margin-bottom: 5rem; border-radius: 1.15rem; }
+    .focus-lab-panel__head { align-items: flex-start; flex-direction: column; }
+    .focus-lab-panel__scale { grid-template-columns: repeat(6, minmax(40px, 1fr)); }
+    .focus-lab-panel__actions .ke-button { flex: 1 1 150px; }
+    .focus-lab-panel__dialog { width: 100%; margin: auto 0 0; border-radius: 1.25rem 1.25rem 0 0; }
+  }
+</style>

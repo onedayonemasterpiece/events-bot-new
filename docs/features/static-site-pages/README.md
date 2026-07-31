@@ -12,7 +12,7 @@ integration: a root testing stub, invite/auth-choice flow, bounded local preview
 marker, secret hub, participant feedback specimens, lifecycle end states and an
 explainable local `/dlya-menya/` editor. Canonical product decisions and the
 strict prototype/production boundary live in
-[`docs/backlog/features/static-site-focus-group/README.md`](../../backlog/features/static-site-focus-group/README.md).
+[`docs/features/static-site-focus-group/README.md`](../../features/static-site-focus-group/README.md).
 
 This does not promote a production root, provision a cohort, implement Auth or
 Supabase membership, send email, persist feedback, run a prize programme or

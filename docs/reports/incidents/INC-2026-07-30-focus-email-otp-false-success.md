@@ -7,7 +7,7 @@ Opened: 2026-07-30
 Closed: —
 Owners: static-site / auth / focus-group operations
 Related incidents: `INC-2026-07-27-pwa-presentation-install-missing`
-Related docs: `docs/backlog/features/static-site-focus-group/README.md`, `docs/operations/e2e-scenarios.md`, `docs/operations/email-delivery.md`
+Related docs: `docs/features/static-site-focus-group/README.md`, `docs/operations/e2e-scenarios.md`, `docs/operations/email-delivery.md`
 
 ## Summary
 

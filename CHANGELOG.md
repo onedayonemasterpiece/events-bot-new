@@ -49,6 +49,8 @@
   attempt for the stale sweeper. Retry attempts now retain their own minute/day
   bucket and terminal state, so attempt 1 cannot block or mis-reconcile later
   physical sends.
+- Restored the focus-group email login contract with one-time link and six-digit numeric code, sequential mobile onboarding, honest ambiguous-send handling, and bounded 24-hour per-page-family feedback state; feedback writes now have idempotency keys and a compact offline queue instead of disappearing after navigation.
+- Restored the repository migrations for focus feedback and participant contact that had already been applied in production, and moved the focus-group documentation from backlog into its canonical implemented-feature location while keeping a redirect stub.
 - Replaced the per-key/partly local Google AI limiter with a dedicated
   project-scoped atomic Supabase contract, corrected Gemma 4 to conservative
   `15 RPM / 15000 TPM / 14000 RPD`, made all runtime construction prefer the

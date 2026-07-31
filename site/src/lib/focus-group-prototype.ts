@@ -1,8 +1,12 @@
 export const FOCUS_PARTICIPATION_STORAGE_KEY = 'kenigevents:focus-participation:v1';
 export const FOCUS_PARTICIPATION_MARKER_VERSION = 1;
 export const FOCUS_PARTICIPATION_PROGRAM_ID = 'static-site-focus-group-2026';
+export const FOCUS_GROUP_MASS_INVITE_TOKEN = 'focus-group-2026-announcements';
 export const FOCUS_PARTICIPATION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 export const FOCUS_PARTICIPATION_MAX_BYTES = 640;
+export const FOCUS_CONTINUING_CONSENT_STORAGE_KEY = 'kenigevents:focus-continuing-consent:v1';
+export const FOCUS_CONTINUING_CONSENT_VERSION = 1;
+export const FOCUS_CONTINUING_CONSENT_MAX_BYTES = 320;
 
 const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,128}$/u;
 
@@ -32,6 +36,13 @@ export interface FocusStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
+}
+
+export interface FocusContinuingConsent {
+  version: 1;
+  kind: 'focus_continuing_consent';
+  acceptedAt: number;
+  purposes: ['focus_updates', 'prize_result', 'service_updates'];
 }
 
 /**
@@ -200,5 +211,63 @@ export function clearFocusParticipationMarker(storage: FocusStorage): void {
     storage.removeItem(FOCUS_PARTICIPATION_STORAGE_KEY);
   } catch {
     // Explicit programme exit remains a no-op when storage is unavailable.
+  }
+}
+
+export function readFocusContinuingConsent(
+  storage: FocusStorage,
+): FocusContinuingConsent | null {
+  try {
+    const raw = storage.getItem(FOCUS_CONTINUING_CONSENT_STORAGE_KEY);
+    if (!raw || new TextEncoder().encode(raw).byteLength > FOCUS_CONTINUING_CONSENT_MAX_BYTES) {
+      storage.removeItem(FOCUS_CONTINUING_CONSENT_STORAGE_KEY);
+      return null;
+    }
+    const value = JSON.parse(raw) as Partial<FocusContinuingConsent>;
+    if (
+      value.version !== FOCUS_CONTINUING_CONSENT_VERSION
+      || value.kind !== 'focus_continuing_consent'
+      || !Number.isFinite(value.acceptedAt)
+      || !Array.isArray(value.purposes)
+      || value.purposes.join('|') !== 'focus_updates|prize_result|service_updates'
+    ) {
+      storage.removeItem(FOCUS_CONTINUING_CONSENT_STORAGE_KEY);
+      return null;
+    }
+    return value as FocusContinuingConsent;
+  } catch {
+    try {
+      storage.removeItem(FOCUS_CONTINUING_CONSENT_STORAGE_KEY);
+    } catch {
+      // The preference remains unchanged when browser storage is unavailable.
+    }
+    return null;
+  }
+}
+
+export function setFocusContinuingConsent(
+  storage: FocusStorage,
+  accepted: boolean,
+  now = Date.now(),
+): FocusContinuingConsent | null {
+  try {
+    if (!accepted) {
+      storage.removeItem(FOCUS_CONTINUING_CONSENT_STORAGE_KEY);
+      return null;
+    }
+    const consent: FocusContinuingConsent = {
+      version: FOCUS_CONTINUING_CONSENT_VERSION,
+      kind: 'focus_continuing_consent',
+      acceptedAt: now,
+      purposes: ['focus_updates', 'prize_result', 'service_updates'],
+    };
+    const raw = JSON.stringify(consent);
+    if (new TextEncoder().encode(raw).byteLength > FOCUS_CONTINUING_CONSENT_MAX_BYTES) {
+      return null;
+    }
+    storage.setItem(FOCUS_CONTINUING_CONSENT_STORAGE_KEY, raw);
+    return consent;
+  } catch {
+    return null;
   }
 }
