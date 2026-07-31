@@ -183,6 +183,22 @@ def validate_reference_graph(
         missing_decisions = set(item.decision_ids) - set(decision_map)
         if missing_decisions:
             raise ContractViolation("unresolved_item_decision", f"{item.item_id}:{sorted(missing_decisions)}")
+        if item.disposition in {
+            ItemDisposition.CREATE_EVENT_CANDIDATE,
+            ItemDisposition.LINK_EXISTING_EVENT,
+        }:
+            identity_fields = {claim_map[ref].field for ref in item.identity_claim_ids}
+            logistics_fields = {claim_map[ref].field for ref in item.logistics_claim_ids}
+            if ClaimField.TITLE not in identity_fields:
+                raise ContractViolation("event_identity_without_title_claim", item.item_id)
+            if not logistics_fields.intersection({ClaimField.DATE, ClaimField.START_DATE}):
+                raise ContractViolation("event_logistics_without_date_claim", item.item_id)
+            if ClaimField.TIME_START not in logistics_fields:
+                raise ContractViolation("event_logistics_without_time_claim", item.item_id)
+            if not logistics_fields.intersection(
+                {ClaimField.VENUE_NAME, ClaimField.VENUE_ADDRESS, ClaimField.CITY}
+            ):
+                raise ContractViolation("event_logistics_without_place_claim", item.item_id)
         disposition_decisions = [decision_map[ref] for ref in item.decision_ids if decision_map[ref].decision_kind == DecisionKind.PROGRAMME_ITEM_DISPOSITION]
         if len(disposition_decisions) != 1 or disposition_decisions[0].selected_value != item.disposition.value:
             raise ContractViolation("item_disposition_decision_mismatch", item.item_id)
