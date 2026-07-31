@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- Region Talk external-publication research now has an explicit diversity and
+  completion gate: search must cover every editorial/research contour instead
+  of stopping after the first 7–12 scholarly results, target a verified
+  20–30-item pool when available, and document exhausted contours without
+  lowering quality or duplicate safeguards.
+
 ### Added
 
 - Region Talk external-publication intake now has a dry-run-first, evidence-backed operator review command that can promote a fully resolved manual-review row into the normal CandidateReport gates while preserving an auditable YDB review record.

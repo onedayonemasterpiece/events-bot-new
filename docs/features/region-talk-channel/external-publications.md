@@ -15,6 +15,15 @@ This lane is for analysis, criticism, research, explanatory features, interviews
 
 The attached 2025–2026 research is treated as a **map of discovery contours**, not an allowlist and not exhaustive frequency data. Military/security examples remain research evidence only and are a hard product exclusion.
 
+The saved research prompt also has an explicit diversity/completion gate.
+External research must not stop after the first easy scholarly results: it
+searches every declared contour, targets a broad 20–30-item pool when evidence
+and the live registry limits permit, normally keeps scholarly work below
+25–30%, and aims for at least half professional/popular editorial material.
+These are anti-bias and search-depth guardrails, never a reason to admit a weak
+page or manufacture a quota. Exhausted contours are reported with their actual
+queries and reasons instead.
+
 ## Lightweight architecture
 
 ```text

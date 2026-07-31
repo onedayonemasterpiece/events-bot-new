@@ -58,6 +58,36 @@ Search in every configured research language. Use not only “Калинингр
 
 Record actual queries and opened domains in coverage[]. The result is a bounded qualitative research run. Never describe its counts as the complete number or frequency of publications on the web.
 
+DIVERSITY AND COMPLETION GATE
+This is not a scholarly-only run. Search every contour above independently and
+continue until either the live maximum_candidates limit is reached or every
+contour has been materially exhausted through multiple query formulations,
+configured languages, topic synonyms, related pages and author/citation chains.
+Do not stop after the first 7–12 easy-to-verify results.
+
+Aim for 20–30 clean, verified candidates when the live limits permit and the
+web actually contains that many qualifying works. This is a coverage target,
+not permission to lower the gates or fabricate a quota. When a contour yields
+no clean candidate, record the queries, opened domains, skipped-seen count and
+the concrete exhaustion reason in coverage[].
+
+Keep the clean candidate pool editorially varied:
+- scholarly should normally be no more than 25–30% of candidates[];
+- at least half of candidates[] should normally be popular_editorial or
+  professional_editorial;
+- use reference_or_project_catalog only for substantive professional
+  descriptions with original value;
+- cover as many distinct content types as evidence permits: architecture or
+  urban criticism, project features, cultural features, interviews, essays,
+  historical essays, film criticism, explanatory guides, responsible travel,
+  natural science and social science.
+
+These proportions are anti-bias guardrails, not acceptance shortcuts. If the
+available verified web evidence cannot satisfy them, return fewer clean
+candidates and document the imbalance and exhausted contours in coverage[]
+rather than filling the result with weak, local, commercial, duplicated or
+incidental pages.
+
 PAGE VERIFICATION
 For every candidate, open the primary article/paper page; a search snippet is discovery evidence only. Verify title, author(s), original publication date, genre, access state, outlet identity/scope, how central Kaliningrad is, commercial status, and whether the page is the original rather than a syndication/aggregator copy. Open an About/editorial-policy/journal-policy page when source scope or peer-review status is unclear. Prefer DOI/publisher originals; relate preprints, syndications, and commentary in related_items.
 
