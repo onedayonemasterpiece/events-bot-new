@@ -137,7 +137,11 @@ must re-render the calendar line even when the event body itself is unchanged.
   channel. The same TPM planner still reduces that ceiling when necessary.
   Event-parse permits exactly one application/provider-SDK attempt per queue
   execution; retries are explicit queue executions and therefore separately
-  visible and controllable in the shared ledger.
+  visible and controllable in the shared ledger. Automatic model fallback is
+  disabled for this stage. `EVENT_PARSE_GEMMA_PROVIDER_TIMEOUT_SEC=210`
+  leaves bounded headroom inside the 240-second stage wall clock while allowing
+  the 6000-token Gemma response to finish; the former inherited 120-second
+  provider timeout truncated the production replay before a terminal response.
 - `SMART_UPDATE_GOOGLE_KEY_ENVS` — normal, shared-limiter-backed key pool for
   Smart Update itself. Production declares `GOOGLE_API_KEY` through
   `GOOGLE_API_KEY5`; round-robin starts on the first request, ledger-blocked

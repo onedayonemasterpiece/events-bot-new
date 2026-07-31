@@ -402,6 +402,26 @@ async def test_event_parse_gemma_model_extra_overrides_global_env(monkeypatch):
     assert captured["model"] == "models/gemma-4-31b-it"
 
 
+def test_event_parse_client_uses_one_send_no_model_fallback_and_bounded_timeout(
+    monkeypatch,
+):
+    client = SimpleNamespace(
+        max_retries=3,
+        hard_single_provider_attempt=False,
+        fallback_models=["gemini-3.1-flash-lite"],
+        provider_timeout_seconds=120.0,
+    )
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_PROVIDER_TIMEOUT_SEC", raising=False)
+
+    configured = main._configure_event_parse_gemma_client(client)
+
+    assert configured is client
+    assert client.max_retries == 1
+    assert client.hard_single_provider_attempt is True
+    assert client.fallback_models == []
+    assert client.provider_timeout_seconds == 210.0
+
+
 @pytest.mark.asyncio
 async def test_event_parse_gemma4_output_budget_fits_shared_15k_tpm(monkeypatch):
     captured: dict[str, object] = {}

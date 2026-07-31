@@ -9785,6 +9785,22 @@ class ParsedEvents(list):
         self.festival = festival
 
 
+def _configure_event_parse_gemma_client(client: Any) -> Any:
+    """Apply the explicit one-send event-parse provider contract."""
+
+    client.max_retries = 1
+    client.hard_single_provider_attempt = True
+    client.fallback_models = []
+    try:
+        provider_timeout = float(
+            os.getenv("EVENT_PARSE_GEMMA_PROVIDER_TIMEOUT_SEC", "210") or "210"
+        )
+    except Exception:
+        provider_timeout = 210.0
+    client.provider_timeout_seconds = max(30.0, min(provider_timeout, 230.0))
+    return client
+
+
 @lru_cache(maxsize=1)
 def _get_event_parse_gemma_client():
     try:
@@ -9805,9 +9821,7 @@ def _get_event_parse_gemma_client():
     # Event parsing is already bounded by its row/wall-clock orchestration.
     # Keep provider sends explicit: no hidden application or SDK retries inside
     # one parse attempt. A failed row can be retried deliberately by the queue.
-    client.max_retries = 1
-    client.hard_single_provider_attempt = True
-    return client
+    return _configure_event_parse_gemma_client(client)
 
 
 def _event_parse_strip_code_fences(text: str) -> str:

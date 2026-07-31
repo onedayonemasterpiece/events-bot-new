@@ -16,7 +16,10 @@
   keeps post-decode venue canonicalisation; a still-oversized compact prompt
   fails before provider traffic instead of retrying at minute boundaries. The
   output ceiling is now 6000 to avoid thought-only truncation, and one queue
-  execution performs exactly one physical provider attempt.
+  execution performs exactly one physical provider attempt with no implicit
+  model fallback. Its provider timeout is now 210 seconds inside the existing
+  240-second stage wall clock instead of inheriting the too-short 120-second
+  shared-client timeout.
 - Google AI attempts cancelled by an outer stage timeout now finalize their
   sent shared-ledger row as cancelled instead of leaving an ambiguous `sent`
   attempt for the stale sweeper. Retry attempts now retain their own minute/day
