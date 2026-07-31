@@ -605,6 +605,12 @@ the alternate route after an ambiguous response. The Yandex provider callback
 still points to the existing Supabase Auth host, so complete OAuth hostname
 independence remains a separate supported-custom-domain decision.
 
+The browser implementation binds native `fetch` before storing it on the
+transport object. This is a regression requirement: a `NET/0` framework result
+means no browser request was created. Relay smoke must also assert that the
+publishable-key env is non-empty before sending a request; otherwise an expected
+upstream `401` can be misdiagnosed as failed header forwarding.
+
 Personal actions remain local-first. Save/like/hide/calendar/feedback update the
 current-device profile immediately, enter a bounded idempotent outbox and are
 delivered to Supabase later through direct or relay transport. This preserves

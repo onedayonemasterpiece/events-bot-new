@@ -122,3 +122,25 @@ test('does not rewrite unrelated requests', async () => {
   await transport.fetch('https://kenigevents.ru/data/events.json');
   assert.equal(seen, 'https://kenigevents.ru/data/events.json');
 });
+
+test('browser-native fetch keeps the global receiver', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = function (this: typeof globalThis, input: RequestInfo | URL) {
+    assert.equal(this, globalThis);
+    calls.push(String(input));
+    return Promise.resolve(new Response('{}', { status: 200 }));
+  } as typeof fetch;
+  try {
+    const transport = createResilientSupabaseTransport({
+      directUrl: direct,
+      publishableKey: key,
+      sessionStorage: null,
+    });
+    const probe = await transport.probe('direct');
+    assert.equal(probe.ok, true);
+    assert.deepEqual(calls, [`${direct}/auth/v1/health`]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

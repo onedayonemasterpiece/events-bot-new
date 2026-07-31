@@ -104,7 +104,10 @@ export class ResilientSupabaseTransport {
     this.relayUrl = trimOrigin(config.relayUrl || '');
     this.publishableKey = String(config.publishableKey || '');
     if (!this.directUrl || !this.publishableKey) throw new Error('supabase_transport_public_config_missing');
-    this.rawFetch = config.fetchImpl || fetch;
+    // Browser-native fetch must keep the Window/global receiver. Invoking an
+    // unbound native fetch through an object field can fail in Chromium with
+    // `TypeError: Illegal invocation` before a request leaves the device.
+    this.rawFetch = config.fetchImpl || globalThis.fetch.bind(globalThis);
     this.now = config.now || (() => Date.now());
     this.storage = config.sessionStorage === undefined ? sessionStorageOrNull() : config.sessionStorage;
     this.probeTimeoutMs = clamp(config.probeTimeoutMs, DEFAULT_PROBE_TIMEOUT_MS, 500, 10_000);
