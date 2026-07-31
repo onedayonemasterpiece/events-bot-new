@@ -9973,6 +9973,7 @@ def publication_goal_defaults(previous_state: dict[str, Any], *, run_now: str) -
 
 
 VIDEO_MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv")
+EXTERNAL_ARTICLE_LINK_GATE_VERSION = "region_talk_external_article_link_gate_v1"
 
 
 def is_video_media_candidate(row: dict[str, Any]) -> bool:
@@ -9994,6 +9995,32 @@ def is_video_media_candidate(row: dict[str, Any]) -> bool:
     return any(suffix in evidence for suffix in VIDEO_MEDIA_SUFFIXES)
 
 
+def is_external_link_article_candidate(row: dict[str, Any]) -> bool:
+    """Return true for the verified link-only article publication lane.
+
+    Social posts still need an actual-image or explicit video-review contract.
+    Editorial/academic articles are different product objects: Region Talk links
+    to the original page and must not require (or imply permission for) image
+    reuse.  The remaining source, region, dual-vector and Gemini gates stay
+    fail-closed downstream.
+    """
+    origin = str(row.get("content_origin_type") or "").strip().lower()
+    if origin not in EXTERNAL_PUBLICATION_ORIGIN_TYPES:
+        return False
+    if str(row.get("platform") or "").strip().lower() not in {"", "web"}:
+        return False
+    if not str(row.get("external_publication_id") or "").strip():
+        return False
+    if str(row.get("rights_policy") or "").strip().lower() != "link_only":
+        return False
+    if _rt_bool(row.get("media_reuse_allowed")):
+        return False
+    return str(row.get("media_use_policy") or "").strip().lower() in {
+        "score_only_no_reuse",
+        "link_only_no_reuse",
+    }
+
+
 def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
     if not str(row.get("post_url") or "").strip():
         return False, "missing_post_url"
@@ -10010,6 +10037,14 @@ def _publication_candidate_base_ok(row: dict[str, Any]) -> tuple[bool, str]:
         return False, "ad_or_promo"
     if str(row.get("vector_gate_status") or "").startswith("vector_reject"):
         return False, str(row.get("vector_gate_status") or "vector_reject")
+    if is_external_link_article_candidate(row):
+        if str(row.get("vector_gate_status") or "") != "vector_accept_candidate":
+            return False, "vector_accept_candidate_required"
+        if str(row.get("text_vector_fusion_status") or "") != "fused_e5_bge_m3":
+            return False, "fused_e5_bge_m3_required"
+        if str(row.get("vector_content_type") or "") not in EXTERNAL_PUBLICATION_VECTOR_CONTENT_TYPES:
+            return False, "external_article_vector_content_type_required"
+        return True, ""
     if is_video_media_candidate(row):
         return True, ""
     if str(row.get("image_model_input_type") or "") != "actual_image":
@@ -10216,9 +10251,13 @@ def publication_eligibility(
         and str(merged.get("image_queue_status") or "") in {"", "actual_scored"}
     )
     video_manual_review = is_video_media_candidate(merged)
+    external_link_article = is_external_link_article_candidate(merged)
     if require_actual_image is None:
         require_actual_image = actual_image_scored or video_manual_review
-    if require_actual_image:
+    if external_link_article:
+        base_ok, base_reason = _publication_candidate_base_ok(merged)
+        eligibility_phase = "publication_external_article_link"
+    elif require_actual_image:
         base_ok, base_reason = _publication_candidate_base_ok(merged)
         eligibility_phase = "publication_video_manual_review" if video_manual_review else "publication"
     else:
@@ -10256,6 +10295,10 @@ def publication_eligibility(
         "images_scored_actual_count": merged.get("images_scored_actual_count") or 0,
         "media_kind": "video" if video_manual_review else (merged.get("media_kind") or ""),
         "manual_media_review_required": video_manual_review,
+        "external_article_link_only": external_link_article,
+        "external_article_link_gate_version": (
+            EXTERNAL_ARTICLE_LINK_GATE_VERSION if external_link_article else ""
+        ),
         "eligibility_phase": eligibility_phase,
     }
     if source_verdict == PUBLICATION_SOURCE_CONFIRMED_REJECTED:
@@ -10294,6 +10337,8 @@ def publication_eligibility(
         "media_review_mode": (
             "operator_video_review"
             if video_manual_review
+            else "link_only_no_media_reuse"
+            if external_link_article
             else "visual_review_pending"
             if decision == "needs_visual_review"
             else "scored_actual_image"
@@ -10382,11 +10427,19 @@ def build_publication_candidate_queue(
         eligibility = publication_eligibility(row)
         ok = bool(eligibility.get("eligible"))
         reason = str(eligibility.get("primary_reason") or "")
+        external_link_article = is_external_link_article_candidate(row)
         visual = max(_rt_float(row.get("overall_media_score")), _rt_float(row.get("final_visual_score")))
         postcard = _rt_float(row.get("postcardness_score") or row.get("clip_postcardness_score") or row.get("cv_postcardness_score"))
         text_story = _publication_text_story_score(row)
         nonlocal_score = _rt_float(row.get("nonlocal_value_score"))
-        base_score = round(min(1.0, 0.42 * visual + 0.18 * postcard + 0.30 * text_story + 0.10 * nonlocal_score), 3)
+        if external_link_article:
+            research_quality = _rt_float(row.get("external_research_quality_score"))
+            base_score = round(
+                min(1.0, 0.60 * research_quality + 0.30 * text_story + 0.10 * nonlocal_score),
+                3,
+            )
+        else:
+            base_score = round(min(1.0, 0.42 * visual + 0.18 * postcard + 0.30 * text_story + 0.10 * nonlocal_score), 3)
         pre_ranked.append({
             **row,
             "_publication_base_ok": ok,
@@ -10395,6 +10448,7 @@ def build_publication_candidate_queue(
             "_publication_base_score": base_score,
             "_publication_visual_score": visual,
             "_publication_text_story_score": text_story,
+            "_publication_external_link_article": external_link_article,
         })
     pre_ranked.sort(key=lambda r: (-_rt_float(r.get("_publication_base_score")), -_rt_float(r.get("overall_media_score")), -_rt_float(r.get("postcardness_score")), str(r.get("post_date") or "")))
     for row in pre_ranked:
@@ -10432,7 +10486,14 @@ def build_publication_candidate_queue(
                     "aesthetic_score": row.get("aesthetic_score"),
                     "image_model_input_type": row.get("image_model_input_type"),
                     "image_model_type": row.get("image_model_type"),
-                    "visual_confirmation_source": "RegionTalkImageDiagnostic actual-image scoring",
+                    "visual_confirmation_source": (
+                        "not_required_link_only_article_no_media_reuse"
+                        if row.get("_publication_external_link_article")
+                        else "RegionTalkImageDiagnostic actual-image scoring"
+                    ),
+                    "content_origin_type": row.get("content_origin_type"),
+                    "rights_policy": row.get("rights_policy"),
+                    "media_use_policy": row.get("media_use_policy"),
                     "vector_gate_status": row.get("vector_gate_status"),
                     "source_geo_class": row.get("source_geo_class"),
                     "source_topic_class": row.get("source_topic_class"),
@@ -10504,7 +10565,13 @@ def build_publication_candidate_queue(
             "publication_llm_decision": llm_decision,
             "publication_llm_reason": llm_reason[:500],
             "publication_llm_model": llm_model_used,
-            "visual_confirmation_source": "RegionTalkImageDiagnostic actual-image scoring" if base_ok else "",
+            "visual_confirmation_source": (
+                "not_required_link_only_article_no_media_reuse"
+                if base_ok and row.get("_publication_external_link_article")
+                else "RegionTalkImageDiagnostic actual-image scoring"
+                if base_ok
+                else ""
+            ),
             "why_selected": (row.get("why_selected") or why_selected) if is_confirmed else "",
             "why_not_selected": "" if is_confirmed else (row.get("_publication_base_reject_reason") or llm_reason),
             "goal_stop_candidate": "false",

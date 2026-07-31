@@ -432,7 +432,18 @@ def publication_pre_score(row: dict[str, Any]) -> float:
     # Video has no image-model score by design. Keep it below a strong scored
     # photo, but do not rank it as zero-quality before the operator can watch it.
     manual_video = 0.18 if video_manual_review else 0.0
-    return round(nonlocal_bonus + visual * 0.45 + postcard * 0.20 + candidate * 0.15 + vector + manual_video, 4)
+    external_article = rt.is_external_link_article_candidate(row)
+    article_quality = float(row.get("external_research_quality_score") or 0) * 0.55 if external_article else 0.0
+    return round(
+        nonlocal_bonus
+        + visual * 0.45
+        + postcard * 0.20
+        + candidate * 0.15
+        + vector
+        + manual_video
+        + article_quality,
+        4,
+    )
 
 
 def source_profile_id(source_key: str) -> str:
@@ -708,10 +719,37 @@ def read_live_rows(
     onboarding_profiles_by_source = _profile_index(onboarding_profile_items)
     now_iso = rt.utc_now_iso()
     rows_by_url: dict[str, dict[str, Any]] = {}
-    for image in images_by_pk.values():
+    finalizer_inputs = dict(images_by_pk)
+    actionable_media_urls = {
+        normalize_post_url(str(item.get("post_url") or ""))
+        for item in images_by_pk.values()
+        if (
+            item.get("image_queue_status") == "actual_scored"
+            and item.get("image_model_input_type") == "actual_image"
+        )
+        or rt.is_video_media_candidate(item)
+    }
+    for memory_pk, memory in memory_by_pk.items():
+        post_url = normalize_post_url(str(memory.get("post_url") or ""))
+        if (
+            not post_url
+            or post_url in actionable_media_urls
+            or not rt.is_external_link_article_candidate(memory)
+        ):
+            continue
+        finalizer_inputs["external-link:" + str(memory_pk)] = {
+            **memory,
+            "_ydb_pk": "",
+            "image_queue_status": "not_required_link_only",
+            "image_model_input_type": "not_required_link_only",
+            "media_review_mode": "link_only_no_media_reuse",
+        }
+
+    for image in finalizer_inputs.values():
         actual_image = image.get("image_queue_status") == "actual_scored" and image.get("image_model_input_type") == "actual_image"
         video_manual_review = rt.is_video_media_candidate(image)
-        if not actual_image and not video_manual_review:
+        external_link_article = rt.is_external_link_article_candidate(image)
+        if not actual_image and not video_manual_review and not external_link_article:
             continue
         original_post_url = str(image.get("post_url") or "")
         post_url = normalize_post_url(original_post_url)
@@ -734,6 +772,10 @@ def read_live_rows(
             row["manual_media_review_required"] = "true"
             row["video_manual_review_eligible"] = "true"
             row["media_review_mode"] = "operator_video_review"
+        elif external_link_article:
+            row["media_kind"] = "external_article_link"
+            row["manual_media_review_required"] = "false"
+            row["media_review_mode"] = "link_only_no_media_reuse"
         row["original_post_url"] = original_post_url
         row["post_url"] = post_url
         row["post_url_normalization_version"] = POST_URL_NORMALIZATION_VERSION
@@ -2344,6 +2386,7 @@ def main() -> int:
         "finalizer_input_rows": len(rows),
         "actual_scored_rows": sum(1 for row in rows if row.get("image_queue_status") == "actual_scored" and row.get("image_model_input_type") == "actual_image"),
         "video_manual_review_rows": sum(1 for row in rows if rt.is_video_media_candidate(row)),
+        "external_link_article_rows": sum(1 for row in rows if rt.is_external_link_article_candidate(row)),
         "llm_calls": verifier_provider_calls + onboarding_stats["profile_calls"] + onboarding_stats["writer_calls"],
         "verifier_llm_calls": verifier_provider_calls,
         "onboarding_profile_llm_calls": onboarding_stats["profile_calls"],
@@ -2376,7 +2419,7 @@ def main() -> int:
         "top_actual": rows[:50],
     }
     (out_dir / "publication_finalizer_results.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "llm_calls", "verifier_llm_calls", "onboarding_profile_llm_calls", "onboarding_writer_llm_calls", "onboarding_profiles_reused", "onboarding_paragraphs_ready", "onboarding_needs_review", "onboarding_evidence_rows_written", "onboarding_profile_rows_written", "accepted_new", "accepted_total", "written", "text_restore_pending_total", "text_restore_post_links_written", "terminal_text_urls_pruned", "terminal_text_rows_pruned", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({k: payload[k] for k in ["run_id", "finalizer_input_rows", "actual_scored_rows", "video_manual_review_rows", "external_link_article_rows", "llm_calls", "verifier_llm_calls", "onboarding_profile_llm_calls", "onboarding_writer_llm_calls", "onboarding_profiles_reused", "onboarding_paragraphs_ready", "onboarding_needs_review", "onboarding_evidence_rows_written", "onboarding_profile_rows_written", "accepted_new", "accepted_total", "written", "text_restore_pending_total", "text_restore_post_links_written", "terminal_text_urls_pruned", "terminal_text_rows_pruned", "source_evidence_priority_total", "source_evidence_priority_written", "source_evidence_priority_cleared_total", "llm_budget_id", "llm_budget_max", "llm_budget_reserved_total", "llm_budget_replayed_total", "llm_budget_blocked_total", "shortlist_artifact"]}, ensure_ascii=False, indent=2))
     try:
         driver.stop(timeout=5)
     except Exception:

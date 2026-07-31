@@ -286,6 +286,9 @@ selection plan with policy `region_talk_daily_pair_antivector_v1`:
 - exactly one `article` slot and one `social` slot per Kaliningrad day;
 - articles are editorial/academic external publications; social rows are
   Telegram/VK posts;
+- article slots may use the verified link-only lane: the original article is
+  linked and no publisher image is reused. Social slots keep the strict
+  actual-image/video-review gate;
 - each lane is ranked against actual target-publication history plus all
   earlier selections in that lane, so long-range diversity is recalculated
   rather than frozen when new candidates arrive;
@@ -330,6 +333,9 @@ source attribution, canonical original URL, both platform texts and one to
 three internal claim/support pairs. The operator candidate message includes the
 Telegram draft. This is the input to the future target-channel publisher; it
 does not bypass diversity ordering, rights policy or manual release gates.
+For a link-only article the eligibility evidence explicitly says
+`publication_external_article_link` and
+`not_required_link_only_article_no_media_reuse`; this is not visual approval.
 
 ## YDB state
 

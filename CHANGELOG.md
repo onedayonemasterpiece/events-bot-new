@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Fixed
+- Region Talk external editorial/academic articles with verified nonlocal
+  publishers, strict dual-vector acceptance and `link_only` rights now enter a
+  dedicated no-media-reuse finalizer lane instead of being stranded as
+  `good_text_weak_media`; Telegram/VK social posts still require the existing
+  actual-image or explicit video-review contract.
 - Gemma 4 event extraction now fits its output allowance to a conservative
   14.5K reservation target before the shared 15K TPM gate. When the full
   semantic prompt cannot fit, it omits only the global venue catalogue and
