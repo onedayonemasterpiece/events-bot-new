@@ -173,7 +173,7 @@ after any failed transport result and therefore communicated a false success.
   arbitrary browser `Origin` despite the correct preflight rule. The relay now
   replaces `Origin` in all 29 fixed integrations. Live Chromium accepted the
   production origin and blocked `https://example.com`; unknown RPC/Auth admin/
-  Function/Storage routes failed at Gateway. Regression evidence is 20/20
+  Function/Storage routes failed at Gateway. Regression evidence is 42/42
   resilient-client, 71/71 focus product, 88/88 Python, 18/18 Edge Function and
   a successful 466-page Astro build. This delivers the data plane but does not
   close the incident: separate live code/link issuances and the root/current

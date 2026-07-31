@@ -10,7 +10,7 @@
 | W2 compact egress | R04 | `agent/static-site-resilient-egress/W2` | completed | `ba3e6f53` | `6aee6cbf`, evidence `37ae6521` | 55/55 core, 39/39 adjacent, 466-page donor build |
 | W3 security hardening | R03 | `agent/static-site-resilient-egress/W3` | completed | `8fbbc8ce` | `d9a574cd`, evidence `051ab436` | 8/8 Python, 5/5 Deno, local SQL contracts |
 | W4 atomic root publisher | R04,R06 | `agent/static-site-resilient-egress/W4` | completed, default-off | `d1fed032` | `975a5e97` + evidence | 57/57; live infrastructure absent |
-| I1 integration/release | R06 | `integration/static-site-resilient-egress-20260731` | partial: data plane live, root rollout gated | `81ae96fb` | current | Supabase schema + `event-search` + exact relay live; 466-page build; atomic root infrastructure absent |
+| I1 integration/release | R06 | `integration/static-site-resilient-egress-20260731` | partial: data plane live, root rollout gated | `98c9ff25` | current | Supabase schema + `event-search` + exact relay live; 466-page build; atomic root infrastructure absent |
 
 ## Integration evidence — 2026-07-31
 
@@ -25,7 +25,7 @@
   reflected an arbitrary caller `Origin`. All 29 integrations now replace it
   with `https://kenigevents.ru`. Chromium accepts the production origin and
   rejects `https://example.com`; unsupported routes return `404` at Gateway.
-- Validation: resilient client `20/20`, focus product `71/71`, Python release /
+- Validation: resilient client `42/42`, focus product `71/71`, Python release /
   security / migration suite `88/88`, Edge Function `18/18`, Astro `466`
   pages.
 - Root publication remains default-off: the two complete root buckets and ALB
