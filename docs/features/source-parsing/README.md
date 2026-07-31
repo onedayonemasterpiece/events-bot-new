@@ -41,6 +41,11 @@ gate; this surface must not assign `Event.photo_urls` directly. See
   становиться диапазоном каждого дочернего события. Grounding остаётся
   fail-closed; при проверке дословности VK transport wrapper `[target|label]`
   эквивалентен только видимому `label`, а не произвольной перефразировке.
+- Если финальный LLM-grounding уверенно (`>=0.9`) помечает конкретные public
+  bundle fields как unsupported, Smart Update удаляет только перечисленные им
+  поля и использует уже grounded title/raw excerpt вместо отбрасывания всего
+  occurrence. `uncertain`, недословное evidence или пустой список unsupported
+  остаются fail-closed; deterministic код не переписывает смысл.
 - Для слабых VK/TG кандидатов-рубрик (`Дайджест`, `Афиша`, `куда сходить`,
   `посмотри/приходи` вместо площадки) Smart Update теперь делает отдельную
   LLM-first eventness проверку до создания события. Если LLM не подтверждает

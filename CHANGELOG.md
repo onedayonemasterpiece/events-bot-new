@@ -14,6 +14,11 @@
   `[target|label]` markup as verbatim evidence; roundup headings can no longer
   turn each child event into a false multi-day range while invented quotes
   remain fail-closed.
+- High-confidence bundle-grounding reviews now remove only the public fields
+  explicitly marked unsupported and fall back to the already grounded
+  candidate title/excerpt, instead of losing an otherwise valid child event
+  from a multi-event roundup; uncertain or ungrounded evidence still fails
+  closed.
 - Google GenAI native age-decision schemas now encode nullable fields with
   `nullable=true` and keep enum members string-only, preventing pre-provider
   SDK `ValidationError` retries and needless limiter reservations.
