@@ -122,6 +122,7 @@ bootstrap_google_ai_bundle()
 def ensure_libs() -> None:
     modules = [
         ("telethon", "telethon"),
+        ("google.genai", "google-genai>=1.75.0"),
         ("google.generativeai", "google-generativeai"),
         ("cryptography", "cryptography"),
         ("supabase", "supabase"),
@@ -1561,6 +1562,11 @@ def _get_video_gemini_client() -> GoogleAIClient:
         client.allow_local_limiter_on_reserve_error = False
         client.fallback_models = []
         client.max_retries = 1
+        # The per-run feature cap is a hard cap on provider sends, not merely
+        # logical analyses.  A provider 429 therefore fails this video closed
+        # instead of rotating and sending the same bytes through a second key.
+        client.allow_provider_429_rotation = False
+        client.hard_single_provider_attempt = True
         client.provider_timeout_seconds = max(
             10.0,
             float(TG_MONITORING_VIDEO_PROVIDER_TIMEOUT_SEC),

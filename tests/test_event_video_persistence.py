@@ -287,6 +287,39 @@ async def test_orphan_cleanup_waits_for_last_link_and_retains_analysis(tmp_path)
 
 
 @pytest.mark.asyncio
+async def test_orphan_cleanup_env_cannot_shorten_24_hour_safety_window(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        asset = VideoAsset(
+            sha256="e" * 64,
+            analysis_status="accepted",
+            cdn_url="https://storage.yandexcloud.net/kenigevents/videos/e.mp4",
+            cdn_bucket="kenigevents",
+            cdn_path="videos/e.mp4",
+        )
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+        asset_id = int(asset.id)
+
+    monkeypatch.setenv("VIDEO_ASSET_ORPHAN_GRACE_HOURS", "0")
+    assert await enqueue_orphan_video_assets(db) == 0
+    async with db.get_session() as session:
+        retained = await session.get(VideoAsset, asset_id)
+    assert retained is not None
+    assert retained.orphaned_at is not None
+    assert retained.cdn_path == "videos/e.mp4"
+
+    # Explicit zero is reserved for internal tests and is not read from prod env.
+    assert await enqueue_orphan_video_assets(db, grace_hours=0) == 1
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_same_sha_relink_restores_cdn_and_cancels_delete_intent(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

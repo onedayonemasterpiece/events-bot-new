@@ -49,9 +49,12 @@
 
 LMM нельзя оставлять единственным измерителем технического качества. В
 Q-Bench-Video proprietary и open models показали неполное и неточное понимание
-technical, aesthetic и temporal defects. Поэтому схема ниже гибридная:
-`ffprobe`/узкие media probes отвечают за измеряемые факты и hard gates, а Gemini
-— за смысл, композицию, намеренность движения и соответствие событию.
+technical, aesthetic и temporal defects. Поэтому rollout v1 гибридный в
+доступной телеметрии: actual bytes и Telegram media attributes отвечают за
+измеряемые file/geometry/duration hard gates, а Gemini — за наблюдаемые дефекты,
+смысл, композицию, намеренность движения и соответствие событию. Локальный
+`ffprobe` blend описан ниже как следующий исследовательский этап, а не как уже
+работающая acceptance-семантика.
 [Q-Bench-Video, CVPR 2025](https://openaccess.thecvf.com/content/CVPR2025/html/Zhang_Q-Bench-Video_Benchmark_the_Video_Quality_Understanding_of_LMMs_CVPR_2025_paper.html).
 
 ## Quota-aware pipeline в Kaggle
@@ -80,12 +83,15 @@ technical, aesthetic и temporal defects. Поэтому схема ниже г�
    terminal result и не записывается как вечный semantic reject. Переоценка
    возможна только отдельным явным операторским migration/backfill, не обычным
    мониторингом.
-4. **Deterministic eligibility.** Fail closed до Gemini при broken decode,
-   отсутствующем video stream, неверной rotation geometry, непортретном
-   display-aspect, слишком малом размере или длительности вне rollout-envelope.
-5. **Один multimodal call на unique SHA.** Передать локальные video bytes,
+4. **Deterministic eligibility v1.** Fail closed до Gemini, если Telegram
+   attributes не идентифицируют video, скачанные bytes пусты, reported
+   width/height не дают portrait display-aspect, разрешение слишком мало или
+   reported duration вне rollout-envelope. Полный local decode/stream/rotation
+   probe относится к следующей `ffprobe`-версии и не заявлен как v1 gate.
+5. **Один multimodal provider-send на unique SHA.** Передать локальные video bytes,
    исходный post text/OCR и все event candidates этого post одним запросом в
-   `gemini-3.1-flash-lite`. Нельзя отправлять по запросу на dimension или event.
+   `gemini-3.1-flash-lite`. Нельзя отправлять по запросу на dimension или event;
+   provider `429` не открывает повторную отправку через второй ключ.
 6. **Только через общий limiter.** Разрешён только `GoogleAIClient` с atomic
    `google_ai_reserve`/finalize, отдельным consumer/feature budget и scoped key
    lane. Direct SDK/HTTP, Antigravity, reserve fallback, emergency overflow и
@@ -100,7 +106,11 @@ technical, aesthetic и temporal defects. Поэтому схема ниже г�
 
 Production budget intentionally small: `TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN=6`.
 Код жёстко ограничивает effective значение сверху шестью, даже если env ошибочно
-задаёт большее число.
+задаёт большее число. Это предел именно физических provider sends: у video-client
+`max_retries=1`, model fallback и provider-429 key rotation отключены, current
+`google.genai` получает `HttpRetryOptions.attempts=1`, а legacy SDK fallback
+запрещён. Следующий SHA после исчерпания шести попыток получает
+`skipped:model_budget`.
 Обычный rotating pool задаётся `TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS`
 (rollout default `GOOGLE_API_KEY3,GOOGLE_API_KEY5`) и обязан содержать минимум
 два разных key env. Каждый env обязан быть и
@@ -122,11 +132,12 @@ rotation/изоляцию отказов, но их лимиты нельзя с
 Первый production rollout намеренно высокоточный:
 
 - raw file `< 10 MiB`;
-- display orientation portrait, `0.50 <= width / height <= 0.80` (от 9:16 до
-  4:5, с допуском на metadata rotation);
+- reported Telegram orientation portrait, `0.50 <= width / height <= 0.80`
+  (от 9:16 до 4:5);
 - минимум `540x960` display pixels;
 - длительность `2..60` секунд;
-- один decodable video stream.
+- Telegram video/document attributes идентифицируют ролик, а скачанные bytes
+  непусты (полный decode/stream probe — post-rollout этап).
 
 9:16 и safe-zone не являются вкусовой эвристикой: TikTok официально рекомендует
 9:16 и минимум 540x960, а Meta отмечает лучшие результаты у Reels 9:16 с audio
@@ -151,8 +162,10 @@ source-grounded `pro` или `con` невалидно. Общие anchors:
 | `75..89` | сильный, намеренно сделанный, уверенно привлекательный |
 | `90..100` | исключительный; почти нет существенных недостатков |
 
-Это ordinal anchors, а не «процент красоты». На human calibration сохраняются и
-raw, и calibrated values.
+Это ordinal anchors, а не «процент красоты». В rollout v1 сохраняется
+валидированный raw model score; calibrated score ещё не производится. Будущая
+offline calibration обязана сохранить raw неизменным и записывать mapping/version
+отдельно, без повторного model-call.
 
 ### `T` — technical quality
 
@@ -161,14 +174,19 @@ noise, compression/banding, frame drops/flicker/stutter, A/V integrity. Grain,
 motion blur, low light и handheld не являются дефектом сами по себе, если они
 намеренны, последовательны и не скрывают главное.
 
-После hard gates:
+Rollout v1 детерминированно проверяет фактический размер, display geometry,
+минимальное разрешение и длительность. После этих gates `technical_score` равен
+валидированному `T_perceptual` модели (целое, кратное 5); отсутствующие FPS и
+codec bitrate не выдумываются.
+
+Следующая исследовательская версия может добавить локальный `ffprobe` и blend:
 
 ```text
 T_det = clamp(100 - resolution_penalty - fps_penalty - bitrate_penalty, 0, 100)
 T = round5(0.40 * T_det + 0.60 * T_perceptual)
 ```
 
-Начальные penalties:
+Кандидатные penalties для этой будущей версии:
 
 | Probe | Penalty |
 |---|---:|
@@ -182,9 +200,9 @@ T = round5(0.40 * T_det + 0.60 * T_perceptual)
 | bitrate `<300 kbps` | `20` |
 
 `516 kbps` и `540x960` взяты как platform floor, а не как доказательство
-красоты. Codec efficiency и сложность сцены различаются, поэтому low metadata
-только понижает `T_det`, а видимый результат оценивает `T_perceptual`. Отсутствие
-audio не штрафуется: хранится отдельный `has_audio`, а модель отвечает
+красоты. Codec efficiency и сложность сцены различаются, поэтому такой blend
+нельзя включать в acceptance до накопления probe + human evidence и новой
+`policy_version`. Отсутствие audio не штрафуется: модель отдельно отвечает
 `muted_ok`.
 
 ### `V` — visual craft
@@ -285,7 +303,7 @@ rank(event) = round(0.75 * S + 0.25 * R(event,video)) # ranking_score
 контентное разнообразие.
 
 Thresholds — rollout priors, не исследовательская «истина». Они меняются только
-через новую `policy_version` после calibration evidence.
+через новую `policy_version` после будущей calibration evidence.
 
 ## Компактный structured-output contract
 
@@ -333,9 +351,12 @@ string, missing required field, score вне диапазона, echoed event ID
 может исправлять только syntax/whitespace; он не придумывает semantic fields.
 
 `description`, OCR, tags и intrinsic scores кэшируются на asset. `events[]`
-разворачиваются в relation records. Хранилище дополнительно сохраняет
-`raw_sha256`, byte/stream metadata, `model`, все четыре version, raw response,
-derived raw/calibrated scores, provider usage и timestamps.
+разворачиваются в relation records. Rollout v1 сохраняет exact `sha256`,
+byte/доступную Telegram stream metadata, model + `analysis_version`,
+валидированный model response, application-derived `A/S/R`, rights/source и
+timestamps. Provider usage/status остаются в общем limiter ledger
+`google_ai_requests`; отдельные calibrated score fields появятся только вместе
+с реальной offline calibration.
 
 ## Ограничение Gemini и sampling
 
@@ -349,12 +370,13 @@ request и предупреждает о потере деталей быстр�
 
 - не выдавать `score_confidence >= 0.80`, если ключевые титры видны меньше
   секунды или монтаж явно быстрее sampling;
-- сохранять deterministic scene/freeze/stream evidence;
+- при добавлении локальных probes сохранять deterministic
+  scene/freeze/stream evidence;
 - OCR/дата из единственного быстрого кадра не могут в одиночку одобрить relation;
 - `best_frame_sec` считать приблизительной секундой, затем локально проверить и
   извлечь реальный thumbnail.
 
-## Human calibration
+## Human calibration (post-rollout plan; ещё не включена в v1)
 
 Методика опирается на действующий ITU-T P.910: он поддерживает 5-point absolute
 category rating и pair comparison, требует representative stimuli и допускает
@@ -379,7 +401,7 @@ ACR успешно применяется и к более длинным рол
 
 ### Acceptance calibration
 
-- median/MOS human labels — target; raw model outputs не переписываются;
+- median/MOS human labels — будущий target; raw model outputs не переписываются;
 - monotonic/isotonic mapping к calibrated scores учится offline на cached
   results и не требует новых Flash-Lite calls;
 - главная метрика ранжирования — Spearman/Kendall по pairwise/MOS;
@@ -416,8 +438,9 @@ source mix, relation mismatch выше 5%, либо CDN upload появился 
   legibility сильны.
 - **Fast edit/OCR miss:** 1 FPS может пропустить главный титр; uncertainty
   снижает confidence и закрывает auto-accept.
-- **Score inflation/anchoring:** фиксированные anchors, кратность 5, calibration
-  и versioned drift monitoring обязательны.
+- **Score inflation/anchoring:** фиксированные anchors и кратность 5 обязательны
+  сейчас; offline calibration и versioned drift monitoring обязательны до
+  расширения rollout gate.
 - **No audio:** не штрафовать автоматически; `muted_ok` и audio dependence
   хранить отдельно.
 - **Recurring/linked events:** intrinsic score переиспользуется, `R` не
@@ -433,5 +456,6 @@ source mix, relation mismatch выше 5%, либо CDN upload появился 
   `private,no-store`). Ключ `TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY` постоянный,
   попадает в Kaggle только через encrypted secrets dataset и не логируется.
 - **Orphan cleanup:** CDN deletion разрешён только после отсутствия всех live
-  event relations и 24-hour grace period; intrinsic analysis/provenance ledger при этом
-  остаётся. Нельзя удалить shared object при устаревании одного события.
+  event relations и минимум 24-hour production grace period; intrinsic
+  analysis/provenance ledger при этом остаётся. Production env не может снизить
+  окно ниже 24 часов. Нельзя удалить shared object при устаревании одного события.

@@ -256,7 +256,8 @@ legacy-имя, но хранятся в Yandex Object Storage:
 
 После cascade удаления события binary ставится в очередь только если у global
 asset больше нет ни одной event-связи и прошёл grace period
-`VIDEO_ASSET_ORPHAN_GRACE_HOURS` (default `24`). `video_asset.orphaned_at`
+`VIDEO_ASSET_ORPHAN_GRACE_HOURS` (default и production minimum `24`; env не
+может сократить окно). `video_asset.orphaned_at`
 сбрасывается при relink. Строка `video_asset` и encrypted analysis sidecar не
 удаляются: они предотвращают повторный model scan. Перед физическим delete
 flush повторно проверяет ссылки; новый link отменяет stale queue row. Yandex

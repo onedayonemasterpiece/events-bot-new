@@ -517,12 +517,14 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - `TG_MONITORING_VIDEO_MAX_MB` (default `10`; сравнение строго `<`)
   - `TG_MONITORING_VIDEO_MODEL` (default `gemini-3.1-flash-lite`)
   - `TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS` (default `GOOGLE_API_KEY3,GOOGLE_API_KEY5`)
-  - `TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN` (default и hard maximum `6`)
+  - `TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN` (default и hard maximum `6`
+    физических provider sends; app/SDK retry, model fallback и provider-429
+    rotation отключены; legacy Google SDK fail closed)
   - `TG_MONITORING_VIDEO_REPUBLICATION_ALLOWED_SOURCES` (обязательный явный
     comma-separated allowlist без wildcard)
   - `TG_MONITORING_VIDEO_ANALYSIS_CACHE_KEY` (обязательный постоянный Fernet key)
   - `TG_MONITORING_VIDEO_ANALYSIS_VERSION`
-  - `VIDEO_ASSET_ORPHAN_GRACE_HOURS` (default `24`, server cleanup)
+  - `VIDEO_ASSET_ORPHAN_GRACE_HOURS` (default и production minimum `24`, server cleanup)
   - portrait envelope: `TG_MONITORING_VIDEO_MIN_WIDTH_HEIGHT_RATIO`,
     `TG_MONITORING_VIDEO_MAX_WIDTH_HEIGHT_RATIO`, minimum width/height and
     duration envs documented in `.env.example`

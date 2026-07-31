@@ -522,6 +522,8 @@ def test_video_client_uses_only_strict_shared_limiter_pool() -> None:
     assert client.allow_local_limiter_on_reserve_error is False
     assert client.fallback_models == []
     assert client.max_retries == 1
+    assert client.allow_provider_429_rotation is False
+    assert client.hard_single_provider_attempt is True
 
 
 def test_rejected_video_is_cached_but_never_uploaded() -> None:
@@ -625,6 +627,8 @@ def test_video_processing_fails_closed_without_source_republication_permission()
 def test_video_config_has_hard_six_call_ceiling_and_encrypted_sidecars() -> None:
     source = _TG_MONITOR_SOURCE.read_text(encoding="utf-8")
     assert "min(6, _env_int('TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN', 6))" in source
+    assert '("google.genai", "google-genai>=1.75.0")' in source
+    assert "client.hard_single_provider_attempt = True" in source
     assert "must contain at least two distinct keys" in source
     assert "Fernet(" in source
     assert "ContentType='application/octet-stream'" in source

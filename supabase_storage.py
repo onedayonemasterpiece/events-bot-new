@@ -450,13 +450,18 @@ async def enqueue_orphan_video_assets(
     fields and cancels the matching queue row.
     """
 
+    env_configured = grace_hours is None
     configured_grace = (
         os.getenv("VIDEO_ASSET_ORPHAN_GRACE_HOURS") or "24"
-        if grace_hours is None
+        if env_configured
         else str(grace_hours)
     )
     try:
-        grace = max(0.0, min(float(configured_grace), 24.0 * 30.0))
+        # Production/env configuration cannot shorten the relink safety window
+        # below 24 hours.  The explicit argument remains an internal test hook
+        # so lifecycle tests do not have to sleep or rewrite global env.
+        minimum_grace = 24.0 if env_configured else 0.0
+        grace = max(minimum_grace, min(float(configured_grace), 24.0 * 30.0))
     except (TypeError, ValueError):
         grace = 24.0
     now = datetime.now(timezone.utc)
