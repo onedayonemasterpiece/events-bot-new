@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -67,6 +69,22 @@ def test_cli_preflight_is_redacted(monkeypatch, tmp_path: Path, capsys) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload == {"ok": True, "missing": []}
     assert "google-key" not in json.dumps(payload)
+
+
+def test_cli_runs_by_absolute_path_outside_repo(tmp_path: Path) -> None:
+    env = {**os.environ, **complete_env(tmp_path)}
+    completed = subprocess.run(
+        [sys.executable, str(Path(runner.__file__).resolve()), "--preflight-only"],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=20,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"ok": True, "missing": []}
 
 
 @pytest.mark.asyncio

@@ -19,10 +19,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from ops_run import finish_ops_run, start_ops_run
-
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from ops_run import finish_ops_run, start_ops_run  # noqa: E402
+
+
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_LOCK_FILE = "/data/region_talk_orchestrator.lock"
