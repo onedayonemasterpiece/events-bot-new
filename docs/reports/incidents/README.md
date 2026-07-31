@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-30-focus-email-otp-false-success.md`
+  - Scope: focus email onboarding, Supabase Auth OTP, Postbox correlation,
+    browser connectivity and focus-member activation.
+  - Must not regress: a failed/timeout/rate-limited send never advances as
+    success; phone diagnostics compare Supabase and Yandex read-only paths and
+    closure requires separate live code/link E2E plus participant reconciliation.
+
 - `INC-2026-07-31-false-kgd80-festival-link.md`
   - Scope: source-grounded KGD80 association in Telegram Monitoring, Smart
     Update, festival queue and all event public surfaces.

@@ -545,3 +545,17 @@ bounded aggregates for accepted retention; delete/anonymize raw research text on
 schedule.
 
 - Secret-candidate packaging keeps the private focus routes noindex/noarchive and adds `nosnippet`; root-form production keeps the same routes private without changing the public candidate policy.
+
+## Phone connectivity diagnostic
+
+The unlinked `noindex` route `/fokus-gruppa/diagnostika/` is a narrow incident
+tool, not a focus-group replacement. One tap runs three parallel bounded
+`no-store` reads: Supabase Auth health, one tiny RLS-safe Supabase Data API read
+and a dedicated Yandex API Gateway → YDB `GetItem`. It never sends an OTP or
+changes account data.
+
+The entire result fits one phone screenshot: understandable statuses, response
+times, one opaque correlation code, local time and browser/PWA plus effective
+network mode. The same code is sent as Supabase `X-Client-Info` and the Yandex
+gateway query marker so the screenshot time can be compared with both provider
+logs. No email, OTP, JWT or account identity appears in the result.
