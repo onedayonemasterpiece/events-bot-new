@@ -70,6 +70,46 @@ if (festivalTimelineData.schema_version !== 'festival-timeline-static-v1') {
 const previewBuild = JSON.parse(readFileSync(join(root, 'preview-build.json'), 'utf8'));
 const previewCurrentDate = String(previewBuild.currentDate || eventsData.build.current_date || '');
 const previewReferenceIso = String(previewBuild.referenceIso || eventsData.build.generated_at || '');
+const optionalScoreIsValid = (value) => value === null || value === undefined
+  || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100);
+for (const event of eventsData.events) {
+  if (event.video_assets === undefined) continue;
+  if (!Array.isArray(event.video_assets)) throw new Error(`Event ${event.id} video_assets must be an array when present`);
+  const seenVideoKeys = new Set();
+  let previousRank = null;
+  for (const video of event.video_assets) {
+    if (!video || typeof video !== 'object') throw new Error(`Event ${event.id} has an invalid video asset`);
+    if (!/^https?:\/\//u.test(String(video.src || ''))) throw new Error(`Event ${event.id} video src is not public HTTP(S)`);
+    if (!/^[0-9a-f]{64}$/u.test(String(video.asset_key || ''))) throw new Error(`Event ${event.id} video asset_key is not SHA-256`);
+    if (seenVideoKeys.has(video.asset_key)) throw new Error(`Event ${event.id} repeats video ${video.asset_key}`);
+    seenVideoKeys.add(video.asset_key);
+    if (!Number.isInteger(video.width) || !Number.isInteger(video.height) || video.width <= 0 || video.height <= video.width) {
+      throw new Error(`Event ${event.id} video ${video.asset_key} is not a valid vertical asset`);
+    }
+    if (video.duration_seconds !== null && video.duration_seconds !== undefined
+      && (typeof video.duration_seconds !== 'number' || !Number.isFinite(video.duration_seconds) || video.duration_seconds <= 0)) {
+      throw new Error(`Event ${event.id} video ${video.asset_key} has invalid duration_seconds`);
+    }
+    for (const score of ['aesthetic_score', 'technical_score', 'event_relevance_score', 'showcase_score', 'ranking_score']) {
+      if (!optionalScoreIsValid(video[score])) throw new Error(`Event ${event.id} video ${video.asset_key} has invalid ${score}`);
+    }
+    const rank = [
+      video.ranking_score ?? -1,
+      video.showcase_score ?? -1,
+      video.event_relevance_score ?? -1,
+      String(video.asset_key),
+    ];
+    if (previousRank && (
+      rank[0] > previousRank[0]
+      || (rank[0] === previousRank[0] && rank[1] > previousRank[1])
+      || (rank[0] === previousRank[0] && rank[1] === previousRank[1] && rank[2] > previousRank[2])
+      || (rank[0] === previousRank[0] && rank[1] === previousRank[1] && rank[2] === previousRank[2] && rank[3] < previousRank[3])
+    )) {
+      throw new Error(`Event ${event.id} video_assets are not deterministically ranked`);
+    }
+    previousRank = rank;
+  }
+}
 const occurrenceLabHtml = readFileSync(join(root, 'lab/occurrences/index.html'), 'utf8');
 for (const compactLabel of ['2, 9 ноября 19:00', '4 ноября 17:00, 19:00']) {
   if (!occurrenceLabHtml.includes(compactLabel)) throw new Error(`Occurrence lab misses compact label: ${compactLabel}`);

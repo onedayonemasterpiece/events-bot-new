@@ -940,6 +940,180 @@ def sqlite_table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
     }
 
 
+VIDEO_ASSET_REQUIRED_COLUMNS = {
+    "id",
+    "sha256",
+    "cdn_url",
+    "width",
+    "height",
+}
+EVENT_VIDEO_LINK_REQUIRED_COLUMNS = {
+    "event_id",
+    "video_asset_id",
+}
+VIDEO_ASSET_OPTIONAL_EXPORT_COLUMNS = (
+    "cdn_path",
+    "mime_type",
+    "duration_seconds",
+    "aesthetic_score",
+    "technical_score",
+    "showcase_score",
+    "description",
+    "search_text",
+)
+
+
+def _finite_float(value: Any) -> float | None:
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def _video_score(value: Any) -> float | None:
+    """Project a bounded persisted model score without inventing a fallback."""
+
+    result = _finite_float(value)
+    if result is None or not 0 <= result <= 100:
+        return None
+    return round(result, 4)
+
+
+def event_video_assets_for_events(
+    con: sqlite3.Connection,
+    event_ids: list[int],
+) -> dict[int, list[dict[str, Any]]]:
+    """Project ranked public vertical video assets for multiple events.
+
+    Static-site builds may consume SQLite snapshots created before the video
+    ledger migration. Missing tables or a partially migrated required contract
+    therefore fail closed to empty lists instead of aborting the whole build.
+    Optional metadata columns are selected as ``NULL`` until the snapshot has
+    them. One content-addressed ``video_asset`` may be returned for any number
+    of events through ``event_video_link``.
+    """
+
+    unique_event_ids = sorted({int(event_id) for event_id in event_ids})
+    empty = {event_id: [] for event_id in unique_event_ids}
+    if not unique_event_ids:
+        return empty
+
+    asset_columns = sqlite_table_columns(con, "video_asset")
+    link_columns = sqlite_table_columns(con, "event_video_link")
+    if (
+        not VIDEO_ASSET_REQUIRED_COLUMNS.issubset(asset_columns)
+        or not EVENT_VIDEO_LINK_REQUIRED_COLUMNS.issubset(link_columns)
+    ):
+        return empty
+
+    optional_asset_select = ",\n            ".join(
+        f"asset.{column} AS {column}"
+        if column in asset_columns
+        else f"NULL AS {column}"
+        for column in VIDEO_ASSET_OPTIONAL_EXPORT_COLUMNS
+    )
+    relevance_select = (
+        "link.event_relevance_score AS event_relevance_score"
+        if "event_relevance_score" in link_columns
+        else "NULL AS event_relevance_score"
+    )
+    ranking_select = (
+        "link.ranking_score AS ranking_score"
+        if "ranking_score" in link_columns
+        else "NULL AS ranking_score"
+    )
+    ranking_order = (
+        "COALESCE(link.ranking_score, -1) DESC"
+        if "ranking_score" in link_columns
+        else "CAST(-1 AS REAL) DESC"
+    )
+    showcase_order = (
+        "COALESCE(asset.showcase_score, -1) DESC"
+        if "showcase_score" in asset_columns
+        else "CAST(-1 AS REAL) DESC"
+    )
+    relevance_order = (
+        ", COALESCE(link.event_relevance_score, -1) DESC"
+        if "event_relevance_score" in link_columns
+        else ""
+    )
+    placeholders = ",".join("?" for _ in unique_event_ids)
+    try:
+        rows = con.execute(
+            f"""
+            SELECT
+                link.event_id,
+                asset.id AS video_asset_id,
+                asset.sha256,
+                asset.cdn_url,
+                asset.width,
+                asset.height,
+                {optional_asset_select},
+                {relevance_select},
+                {ranking_select}
+            FROM event_video_link AS link
+            JOIN video_asset AS asset
+              ON asset.id = link.video_asset_id
+            WHERE link.event_id IN ({placeholders})
+            ORDER BY
+                link.event_id ASC,
+                {ranking_order},
+                {showcase_order}
+                {relevance_order},
+                asset.sha256 ASC,
+                asset.id ASC
+            """,
+            unique_event_ids,
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        # A concurrently copied/pre-migration snapshot must never make the
+        # complete static catalog unavailable.
+        return empty
+
+    projected = {event_id: [] for event_id in unique_event_ids}
+    seen_by_event: dict[int, set[str]] = defaultdict(set)
+    for row in rows:
+        event_id = int(row["event_id"])
+        sha256 = clean_text(row_get(row, "sha256")).lower()
+        src = canonical_event_media_cdn_url(row_get(row, "cdn_url"))
+        try:
+            width = int(row_get(row, "width") or 0)
+            height = int(row_get(row, "height") or 0)
+        except (TypeError, ValueError):
+            continue
+        # asset_key is content-addressed, so malformed/non-hash rows are not a
+        # stable public contract. Video UI is vertical-only by product policy.
+        if not re.fullmatch(r"[0-9a-f]{64}", sha256) or not src or width <= 0 or height <= width:
+            continue
+        if sha256 in seen_by_event[event_id]:
+            continue
+        seen_by_event[event_id].add(sha256)
+
+        duration = _finite_float(row_get(row, "duration_seconds"))
+        if duration is not None and duration <= 0:
+            duration = None
+        projected[event_id].append(
+            {
+                "src": src,
+                "asset_key": sha256,
+                "cdn_path": clean_text(row_get(row, "cdn_path")) or None,
+                "mime_type": clean_text(row_get(row, "mime_type")) or None,
+                "width": width,
+                "height": height,
+                "duration_seconds": round(duration, 4) if duration is not None else None,
+                "aesthetic_score": _video_score(row_get(row, "aesthetic_score")),
+                "technical_score": _video_score(row_get(row, "technical_score")),
+                "event_relevance_score": _video_score(row_get(row, "event_relevance_score")),
+                "ranking_score": _video_score(row_get(row, "ranking_score")),
+                "showcase_score": _video_score(row_get(row, "showcase_score")),
+                "description": clean_text(row_get(row, "description")) or None,
+                "search_text": clean_text(row_get(row, "search_text")) or None,
+            }
+        )
+    return projected
+
+
 def participant_photo_metadata(row: sqlite3.Row) -> tuple[str | None, str | None, str | None]:
     """Admit only a registry portrait with explicit identity and rights evidence."""
 
@@ -2149,6 +2323,7 @@ def build_event(
     current_date: str,
     *,
     participants: list[dict[str, Any]] | None = None,
+    video_assets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     event_id = int(row["id"])
     occurrence = structured_occurrence_projection(row)
@@ -2197,6 +2372,11 @@ def build_event(
     source_url = source_urls[0] if source_urls else None
     organizer_names = event_organizer_names(row_get(row, "organizer_names"))
     participants = event_participants(con, event_id) if participants is None else participants
+    video_assets = (
+        event_video_assets_for_events(con, [event_id]).get(event_id, [])
+        if video_assets is None
+        else video_assets
+    )
     age_projection = event_age_projection(row)
     structured_semantic_record = _structured_unusual_semantic_record(row)
     return {
@@ -2242,6 +2422,9 @@ def build_event(
         "image_text_mode": image_mode,
         "image_media_role": image_role,
         "image_assets": image_assets,
+        # Data-only contract for a future click-to-play vertical video rail.
+        # Rendering stays deliberately out of this exporter change.
+        "video_assets": video_assets,
         "face_boxes": list(primary_asset.get("face_boxes") or []) if primary_asset else [],
         "valuable_region": primary_asset.get("valuable_region") if primary_asset else None,
         "ocr_boxes": [],
@@ -5295,12 +5478,17 @@ def main() -> int:
         con,
         [int(row["id"]) for row in [*rows, *archive_rows]],
     )
+    videos_by_event = event_video_assets_for_events(
+        con,
+        [int(row["id"]) for row in [*rows, *archive_rows]],
+    )
     events = [
         build_event(
             con,
             row,
             effective_date,
             participants=participants_by_event.get(int(row["id"]), []),
+            video_assets=videos_by_event.get(int(row["id"]), []),
         )
         for row in rows
     ]
@@ -5311,6 +5499,7 @@ def main() -> int:
             row,
             effective_date,
             participants=participants_by_event.get(int(row["id"]), []),
+            video_assets=videos_by_event.get(int(row["id"]), []),
         )
         for row in archive_rows
     ]

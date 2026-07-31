@@ -81,6 +81,28 @@ export interface EventImageAsset {
   listing_use_natural?: boolean;
 }
 
+export interface EventVideoAsset {
+  /** Public CDN URL; source Telegram URLs are never exported as playback media. */
+  src: string;
+  /** Stable content address (the lowercase SHA-256 of the original video bytes). */
+  asset_key: string;
+  cdn_path: string | null;
+  mime_type: string | null;
+  width: number;
+  height: number;
+  duration_seconds: number | null;
+  aesthetic_score: number | null;
+  technical_score: number | null;
+  event_relevance_score: number | null;
+  /** Link-level rank: 75% showcase quality plus 25% event relevance. */
+  ranking_score: number | null;
+  /** Primary deterministic ranking signal for the future event-page video rail. */
+  showcase_score: number | null;
+  description: string | null;
+  /** Model-authored retrieval text reserved for future search/indexing. */
+  search_text: string | null;
+}
+
 export interface TicketInfo {
   kind: TicketKind;
   label: string;
@@ -159,6 +181,8 @@ export interface PreviewEvent {
   image_media_role?: EventImageMediaRole;
   /** Future multi-image/face-aware export contract; first item should match image_url when present. */
   image_assets?: EventImageAsset[];
+  /** Ranked vertical event videos; optional keeps old static snapshots readable. */
+  video_assets?: EventVideoAsset[];
   face_boxes?: ImageBox[];
   valuable_region?: ImageBox | null;
   ocr_boxes?: ImageBox[];
