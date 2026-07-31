@@ -372,22 +372,20 @@ authority. The Region Talk ledger is an extra product-run ceiling. Internal
 provider retries are set to one attempt; retryable rows are retried by the
 durable finalizer state instead.
 
-## Local Telegram notification
+## Operator Telegram notification
 
-Use `scripts/region_talk_goal_notify.py`, never on Kaggle. Local/manual mode
-uses only `TELEGRAM_AUTH_BUNDLE_E2E`; the scheduled Fly runner
-uses `--transport bot_api` with `TELEGRAM_BOT_TOKEN` and must never open the
-local human session remotely. The production bot must already be a member of
-the numeric `REGION_TALK_NOTIFY_CHAT_ID`. Both modes send unsent `llm_confirmed`
-links to the operator chat. Delivery is deduplicated by canonical post URL plus
-numeric chat id in `publication_delivery_item`. A deterministic Telegram
-`random_id` is persisted before sending and reused after a crash; the notifier
-also takes a local exclusive lock. After Telegram acceptance it records chat,
-random id, message id and timestamps both in the delivery ledger and candidate
-row. Finalizer/CandidateReport writers preserve these sent markers.
+Use `scripts/region_talk_goal_notify.py`, never on Kaggle. It has one functional
+transport in every environment: Bot API with `TELEGRAM_BOT_TOKEN`. Neither
+`TELEGRAM_AUTH_BUNDLE_E2E` nor generic `TELEGRAM_SESSION` is a notifier input;
+the scheduled wrapper removes both from child environments. The production bot
+must already be a member of the numeric `REGION_TALK_NOTIFY_CHAT_ID`. The
+notifier sends unsent `llm_confirmed` links to the operator chat and deduplicates
+them by canonical post URL plus numeric chat id in
+`publication_delivery_item`. After Telegram acceptance it records chat and
+message ids and timestamps both in the delivery ledger and candidate row.
+Finalizer/CandidateReport writers preserve these sent markers.
 
-The deterministic `random_id` replay applies to Telethon. Bot API does not
-accept a caller-supplied idempotency key, so a pre-existing ambiguous
+Bot API does not accept a caller-supplied idempotency key, so a pre-existing ambiguous
 `status=sending` is stopped for operator reconciliation instead of risking a
 duplicate. A successful Bot API response is persisted before the candidate is
 marked sent.
@@ -460,9 +458,8 @@ count and fetched/E5-scored workload. Source-overlay rows sharing a
 `last_scan_run_id` remain visible as a separate technical diagnostic and are
 not labelled as the number of deeply read sources.
 
-Invite links are checked without joining first. A one-time join requires the
-explicit `--allow-join-chat` flag. `REGION_TALK_NOTIFY_CHAT_ID` can pin the
-expected numeric peer and fail closed on a wrong target; the prepared chat is
+The bot never joins an invite link. `REGION_TALK_NOTIFY_CHAT_ID` pins the
+expected numeric chat and fails closed on a wrong target; the prepared chat is
 currently pinned by default as `-5563945596`. Every notifier result,
 including a zero-row dry run, reports the resolved numeric chat and delivery
 account ids so operators can pin them without sending a test message.
@@ -472,7 +469,7 @@ Example:
 ```bash
 python scripts/region_talk_goal_notify.py \
   --env-file /home/dev/projects/events-bot-new/.env \
-  --chat 'https://t.me/+kfaIRh98oHVkYWFi' \
+  --expected-chat-id '-5563945596' \
   --limit 20
 ```
 

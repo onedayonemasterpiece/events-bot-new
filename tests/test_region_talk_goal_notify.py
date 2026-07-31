@@ -25,17 +25,13 @@ def load_module():
 
 
 class RegionTalkGoalNotifyTests(unittest.TestCase):
-    def test_local_region_talk_rejects_generic_telegram_session_fallback(self) -> None:
+    def test_functional_notifier_has_no_human_session_decoder(self) -> None:
         mod = load_module()
-        env = {
-            "TG_API_ID": "123",
-            "TG_API_HASH": "hash",
-            "TELEGRAM_AUTH_BUNDLE_E2E": "",
-            "TELEGRAM_SESSION": "generic-session-must-not-be-used",
-        }
-        with mock.patch.dict(os.environ, env, clear=False):
-            with self.assertRaisesRegex(RuntimeError, "TELEGRAM_AUTH_BUNDLE_E2E is required"):
-                mod.decode_e2e_bundle()
+        self.assertFalse(hasattr(mod, "decode_e2e_bundle"))
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("TELEGRAM_AUTH_BUNDLE_E2E", source)
+        self.assertNotIn("TELEGRAM_SESSION", source)
+        self.assertNotIn("telethon", source.lower())
 
     def test_yc_fallback_is_bounded_when_interactive_auth_is_required(self) -> None:
         mod = load_module()
@@ -376,7 +372,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         mod.attach_latest_bge_vectors(publications, vectors)
         self.assertEqual(publications[0]["embedding_vector_f16_b64"], "new")
 
-    def test_dry_run_never_decodes_or_connects_human_session(self) -> None:
+    def test_dry_run_uses_bot_api_contract_without_connecting(self) -> None:
         mod = load_module()
         args = argparse.Namespace(
             stats=False,
@@ -389,13 +385,12 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
             adjacency_threshold=0.86,
             dry_run=True,
             expected_chat_id="-100123",
-            transport="telethon",
+            transport="bot_api",
         )
-        with mock.patch.object(mod, "decode_e2e_bundle", side_effect=AssertionError("must not connect")):
-            result = asyncio.run(mod.send_rows(args))
+        result = asyncio.run(mod.send_rows(args))
         self.assertTrue(result["ok"])
         self.assertTrue(result["dry_run"])
-        self.assertEqual(result["transport"], "telethon")
+        self.assertEqual(result["transport"], "bot_api")
 
     def test_bot_api_delivery_uses_bot_and_persists_candidate(self) -> None:
         mod = load_module()

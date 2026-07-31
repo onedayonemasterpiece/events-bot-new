@@ -7,9 +7,10 @@
   grounding: poster evidence now reads the real managed/source URL fields
   instead of nonexistent `PosterCandidate.url`, with a poster-bearing VK replay
   guarding the persistence boundary.
-- Region Talk local operator delivery now accepts only the role-scoped
-  `TELEGRAM_AUTH_BUNDLE_E2E`; the generic `TELEGRAM_SESSION` fallback was
-  removed so local diagnostics cannot borrow another process's session.
+- Region Talk functional operator notification is now Bot API-only in every
+  environment; its notifier has no Telethon/human-session transport, and the
+  scheduled wrapper strips `TELEGRAM_AUTH_BUNDLE_E2E` and generic
+  `TELEGRAM_SESSION` from every child process.
 - Region Talk production documentation now states the actual session boundary:
   scheduled discovery uses only the two role-scoped discovery bundles and Bot
   API delivery, never a local E2E or generic human session.

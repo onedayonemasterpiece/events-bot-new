@@ -233,9 +233,12 @@ async def run_region_talk_scheduled(
         child_env = os.environ.copy()
         child_env["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] = "1"
         child_env["REGION_TALK_ALLOW_LOCAL_YC_FALLBACK"] = "0"
-        # Scheduled delivery must never reuse the local live-E2E human
-        # session from a remote Fly machine.  Telegram invalidates an MTProto
-        # authorization used concurrently from separate connections/IPs.
+        # Human sessions are outside the Region Talk functional pipeline.
+        # Strip them even when an operator shell inherited either variable:
+        # delivery uses Bot API, while remote discovery receives only its
+        # explicitly role-scoped DISCOVERY1/DISCOVERY2 bundles.
+        child_env.pop("TELEGRAM_AUTH_BUNDLE_E2E", None)
+        child_env.pop("TELEGRAM_SESSION", None)
         child_env["REGION_TALK_NOTIFY_TRANSPORT"] = "bot_api"
         child_env["PYTHONUNBUFFERED"] = "1"
         max_runtime_minutes = _env_int(

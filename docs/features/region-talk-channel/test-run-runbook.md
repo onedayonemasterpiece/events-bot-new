@@ -20,7 +20,15 @@ Run one bounded offline discovery/scoring pass that reads [`seed-sources-v1.csv`
   post IDs; execute in bounded groups and re-read metrics after every batch.
 - `tests/test_region_talk_candidate_report.py` — workbook/seed/scoring smoke coverage.
 
-Telegram reading is through Telethon, not through Bot API. Role-scoped manual Region Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic, and only the E2E human session for **local/manual** Saved Messages delivery. Scheduled Fly notification uses Bot API and must never open that human session remotely. `TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote monitoring and is not packaged unless explicitly selected as `REGION_TALK_AUTH_BUNDLE_ENV`.
+Telegram reading is through Telethon, not through Bot API. Role-scoped Region
+Talk runs use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and
+`TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic. Functional operator
+notification is Bot API-only everywhere. `TELEGRAM_AUTH_BUNDLE_E2E` is reserved
+for Codex/manual live E2E and is never packaged, read, or passed to a Region
+Talk functional script; the same applies to generic `TELEGRAM_SESSION`.
+`TELEGRAM_AUTH_BUNDLE_S22` remains reserved for production Kaggle/remote
+monitoring and is not packaged unless explicitly selected as
+`REGION_TALK_AUTH_BUNDLE_ENV`.
 
 For the queue-driven To-Be flow, provision two Discovery roles before
 parallelizing Telegram-dependent notebooks:
@@ -158,7 +166,7 @@ REGION_TALK_REQUIRE_PREVIOUS_STATE=1
 
 ## Telegram session and human-like discovery constraints
 
-Telegram monitoring/discovery is Telethon-based and role-scoped. Use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic Region Talk manual runs unless the operator explicitly changes the role mapping for a single run. Do **not** use `TELEGRAM_AUTH_BUNDLE_E2E` for Kaggle kernels; it is reserved for local live E2E / Saved Messages delivery. Never run the same Telegram auth bundle concurrently in local and Kaggle contexts. The local CandidateReport and ImageDiagnostic launchers check Region Talk Kaggle kernel slots before pushing and refuse to start if their own kernel is `RUNNING`/queued with the configured Discovery bundle. Sibling kernel checks are best-effort: if the sibling status is visible and active the launch is refused; if Kaggle says the sibling slug is missing/unverified, CandidateReport may still run because the strict guard remains on its own kernel. Bypass is allowed only with `--allow-active-region-talk-kernel` or `REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1` after a manual Kaggle UI/session audit.
+Telegram monitoring/discovery is Telethon-based and role-scoped. Use `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` for CandidateReport and `TELEGRAM_AUTH_BUNDLE_DISCOVERY2` for ImageDiagnostic Region Talk runs unless the operator explicitly changes the role mapping for a single run. Do **not** use `TELEGRAM_AUTH_BUNDLE_E2E`: it is exclusive to Codex/manual live E2E and not an application input. Never run the same Telegram discovery auth bundle concurrently in local and Kaggle contexts. The local CandidateReport and ImageDiagnostic launchers check Region Talk Kaggle kernel slots before pushing and refuse to start if their own kernel is `RUNNING`/queued with the configured Discovery bundle. Sibling kernel checks are best-effort: if the sibling status is visible and active the launch is refused; if Kaggle says the sibling slug is missing/unverified, CandidateReport may still run because the strict guard remains on its own kernel. Bypass is allowed only with `--allow-active-region-talk-kernel` or `REGION_TALK_ALLOW_ACTIVE_KAGGLE_OVERWRITE=1` after a manual Kaggle UI/session audit.
 
 The runner must prefer cached Telegram entities and stop expanding work when the governor hits network-resolve/history/media/recommendation caps. Telethon API reads are paced by `REGION_TALK_TG_HUMANLIKE_PACING_ENABLED` and delay knobs for resolves, exact post-link refetches, recommendations, history queries, media downloads and source pauses; if the runtime reserve would be consumed, the operation is deferred instead of bypassing the pause. A `FloodWait` is recorded with Telegram's `seconds` value as cooldown/degraded mode; orchestrated cycles then stop later Telethon phases and still write the workbook instead of trying public web scraping as a substitute. Similar-channel discovery is limited by `REGION_TALK_TG_SIMILAR_*` and only adds source-frontier candidates; it must not join channels or publish anything.
 
@@ -625,7 +633,7 @@ python scripts/region_talk_embedding_quality_compare.py \
   authoritative online state and the snapshot should not spend the tail of a
   20-minute run rewriting thousands of unchanged rows.
   Send periodic operator stats with `scripts/region_talk_goal_notify.py --stats`; it must read row-level YDB state, not heartbeat-only rows.
-- The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. Use local `scripts/region_talk_goal_notify.py` with the E2E human session for manual delivery. Scheduled delivery uses `--transport bot_api`, `TELEGRAM_BOT_TOKEN` and a bot already added to `REGION_TALK_NOTIFY_CHAT_ID`; it never reuses the E2E session on Fly.
+- The 20-candidate product goal is tracked in YDB `publication_goal` with `target_confirmed=20` and `llm_budget_max=100`; Gemini Lite confirmations must go through the Supabase limiter. `scripts/region_talk_goal_notify.py` uses only `TELEGRAM_BOT_TOKEN` and a bot already added to `REGION_TALK_NOTIFY_CHAT_ID`, locally and on Fly. Human E2E/session variables are not inputs and are stripped from scheduled child environments.
 - CandidateReport live-canary acceptance requires exactly one
   `state_load_completed` event before acquisition, no second complete YDB state
   load after `posts_fetched`, and no `RESOURCE_EXHAUSTED` between a successful

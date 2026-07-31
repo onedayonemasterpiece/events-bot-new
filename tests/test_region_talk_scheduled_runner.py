@@ -125,6 +125,8 @@ def test_cli_runs_by_absolute_path_outside_repo(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, tmp_path: Path) -> None:
     env = complete_env(tmp_path)
+    env["TELEGRAM_AUTH_BUNDLE_E2E"] = "codex-only-must-be-stripped"
+    env["TELEGRAM_SESSION"] = "generic-human-session-must-be-stripped"
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
@@ -152,6 +154,8 @@ async def test_scheduled_run_writes_cycle_log_and_returns_metrics(monkeypatch, t
         assert "--env-file" not in args
         assert kwargs["env"]["REGION_TALK_REQUIRE_NONINTERACTIVE_YDB_CREDENTIAL"] == "1"
         assert kwargs["env"]["REGION_TALK_NOTIFY_TRANSPORT"] == "bot_api"
+        assert "TELEGRAM_AUTH_BUNDLE_E2E" not in kwargs["env"]
+        assert "TELEGRAM_SESSION" not in kwargs["env"]
         return FakeProcess()
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess)
