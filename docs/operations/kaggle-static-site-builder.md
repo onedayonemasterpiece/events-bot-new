@@ -377,13 +377,32 @@ daily pattern matches the reported project egress graph. The exporter consumes
 only `event_id` and `vector_similarity`, but the current RPC response carries a
 much wider row, about `64–65 MB` per complete rebuild.
 
-Before scheduled production-root builds are enabled, replace that response
-with a dedicated minimal RPC projection containing only those two fields (plus
-no debug/document payload). The measured estimate for the same historical run
-set is about `79 MB`, a `97.45%` reduction. Add a response-byte budget to the
-builder receipt and fail the release gate if a full related rebuild exceeds
-the agreed compact-response ceiling. Static page generation must not fetch the
-same related corpus a second time after the checked cache was produced.
+The repository now uses the dedicated backend-only RPC
+`event_related_candidates_compact_by_event_id_v1`. Each per-anchor response has
+exactly `event_id` and `vector_similarity`; the function is
+revoked from `PUBLIC`, `anon` and `authenticated` and granted only to
+`service_role`. It preserves the legacy per-anchor HNSW ordering/top-K contract
+without returning titles, tags, dates, distances or `card_snapshot`. The
+measured estimate for the same historical run set is about `79 MB`, a `97.45%`
+reduction. Applying the accompanying Supabase migration is an activation gate;
+the exporter fails closed rather than falling back to the wide legacy RPC.
+
+The exporter reads at most `STATIC_SITE_RELATED_RESPONSE_MAX_BYTES` per RPC
+body (default `256 KiB`) before JSON decoding, rejects any row whose keys differ
+from the two-field projection and records request count, row count, aggregate
+response bytes and maximum single response bytes. A full-catalog pgvector
+rebuild also fails when aggregate bytes exceed
+`STATIC_SITE_RELATED_TOTAL_RESPONSE_MAX_BYTES` (default `16 MiB`). The same
+`static_related_retrieval_receipt_v1` is stored in `preview-related.json` and
+copied into `static_site_build_result.json`.
+
+A valid related-cache hit performs **zero** Supabase candidate RPCs and records
+zero request/row/byte counters with `source=cache`. A miss still recomputes the
+whole active graph once: changed-anchor-only recomputation remains forbidden
+because a new event can change old anchors. Duplicate anchor ids fail before
+the first request, preventing a second corpus fetch inside one export. Astro
+continues to perform the full build for now; it consumes the generated related
+manifest and never retrieves the corpus again.
 
 This is independent from browser Auth transport. The Auth/Data relay, if
 enabled, is for small user requests only and must never proxy the bulk static

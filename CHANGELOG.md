@@ -72,6 +72,10 @@
   closed when Supabase, `google_ai_reserve`, or the scoped API-key registration
   is unavailable. Region Talk Gemini Lite stages can no longer fall through to
   an unreserved direct environment key.
+- Replaced full-catalog static related retrieval with a service-role-only
+  two-field Supabase RPC, bounded response bodies and aggregate rebuild
+  ceilings; related/build receipts now expose request, row and byte counters,
+  while valid cache hits make zero candidate-retrieval calls.
 - Fixed a production Smart Update crash introduced by KGD80 provenance
   grounding: poster evidence now reads the real managed/source URL fields
   instead of nonexistent `PosterCandidate.url`; poster-bearing VK and exact

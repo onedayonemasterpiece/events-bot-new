@@ -316,6 +316,8 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
         cmd.extend([
             '--related-mode', args.related_mode,
             '--related-corpus-revision', args.related_corpus_revision,
+            '--related-response-max-bytes', str(getattr(args, 'related_response_max_bytes', 256 * 1024)),
+            '--related-total-response-max-bytes', str(getattr(args, 'related_total_response_max_bytes', 16 * 1024 * 1024)),
             '--pgvector-embedding-model', args.pgvector_embedding_model,
             '--pgvector-embedding-key-env', args.pgvector_embedding_key_env,
             '--pgvector-max-provider-calls', str(args.pgvector_max_provider_calls),
@@ -688,6 +690,8 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'unusual_last_good_filename': 'unusual_events_last_good.json',
         'related_mode': args.related_mode,
         'related_corpus_revision': args.related_corpus_revision or None,
+        'related_response_max_bytes': getattr(args, 'related_response_max_bytes', 256 * 1024),
+        'related_total_response_max_bytes': getattr(args, 'related_total_response_max_bytes', 16 * 1024 * 1024),
         'sync_pgvector_vectors': bool(args.sync_pgvector_vectors),
         'pgvector_embedding_model': args.pgvector_embedding_model,
         'pgvector_embedding_key_env': args.pgvector_embedding_key_env,
@@ -888,6 +892,8 @@ def main() -> int:
     parser.add_argument('--related-cache', default=os.getenv('STATIC_SITE_RELATED_CACHE', str(ARTIFACT_ROOT / 'event_related_chain_cache.json')))
     parser.add_argument('--related-mode', choices=['sparse', 'pgvector', 'bge'], default=os.getenv('STATIC_SITE_RELATED_MODE', 'sparse'))
     parser.add_argument('--related-corpus-revision', default=os.getenv('STATIC_SITE_RELATED_CORPUS_REVISION', ''))
+    parser.add_argument('--related-response-max-bytes', type=int, default=int(os.getenv('STATIC_SITE_RELATED_RESPONSE_MAX_BYTES', str(256 * 1024)) or str(256 * 1024)))
+    parser.add_argument('--related-total-response-max-bytes', type=int, default=int(os.getenv('STATIC_SITE_RELATED_TOTAL_RESPONSE_MAX_BYTES', str(16 * 1024 * 1024)) or str(16 * 1024 * 1024)))
     parser.add_argument('--sync-pgvector-vectors', action='store_true', default=(os.getenv('STATIC_SITE_SYNC_PGVECTOR_VECTORS', '').strip().lower() in {'1', 'true', 'yes', 'on'}))
     parser.add_argument('--pgvector-embedding-model', default=os.getenv('STATIC_SITE_PGVECTOR_EMBEDDING_MODEL', 'gemini-embedding-2'))
     parser.add_argument('--pgvector-embedding-key-env', default=os.getenv('STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV', 'GOOGLE_API_KEY4'))
@@ -934,6 +940,10 @@ def main() -> int:
             '--sync-pgvector-vectors is restricted to pgvector mode; '
             'shared BGE builds keep provider_calls=0'
         )
+    if args.related_response_max_bytes < 1024:
+        raise SystemExit('--related-response-max-bytes must be at least 1024')
+    if args.related_total_response_max_bytes < args.related_response_max_bytes:
+        raise SystemExit('--related-total-response-max-bytes must be at least the per-response limit')
 
     if args.profile == 'production-candidate':
         if args.catalog_mode != 'full' or not args.export_in_kaggle:

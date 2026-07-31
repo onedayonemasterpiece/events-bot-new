@@ -436,6 +436,8 @@ def export_preview_data_if_configured(config: dict) -> None:
         '--related-cache', str(cache_path),
         '--related-mode', str(config.get('related_mode') or 'sparse'),
         '--related-corpus-revision', str(config.get('related_corpus_revision') or ''),
+        '--related-response-max-bytes', str(config.get('related_response_max_bytes') or 256 * 1024),
+        '--related-total-response-max-bytes', str(config.get('related_total_response_max_bytes') or 16 * 1024 * 1024),
         '--pgvector-embedding-model', str(config.get('pgvector_embedding_model') or 'gemini-embedding-2'),
         '--pgvector-embedding-key-env', str(config.get('pgvector_embedding_key_env') or 'GOOGLE_API_KEY4'),
         '--pgvector-max-provider-calls', str(config.get('pgvector_max_provider_calls') or 1000),
@@ -477,6 +479,17 @@ def export_preview_data_if_configured(config: dict) -> None:
         cmd.append('--gemma-related-verify')
     status_event('alive', phase='export', status='alive', progress={'phase': 'export', 'progress_percent': 18, 'progress_label': 'экспорт событий и related v2'})
     run(cmd, cwd=SITE_DIR, env=os.environ.copy())
+
+
+def read_related_retrieval_receipt() -> dict:
+    related_path = SITE_DIR / 'src' / 'data' / 'preview-related.json'
+    if not related_path.is_file():
+        return {'status': 'unavailable'}
+    payload = json.loads(related_path.read_text(encoding='utf-8'))
+    receipt = payload.get('retrieval_receipt') if isinstance(payload, dict) else None
+    if not isinstance(receipt, dict):
+        return {'status': 'legacy_manifest'}
+    return {'status': 'recorded', **receipt}
 
 
 def render_daily_service_share(config: dict, build_clock: dict) -> dict:
@@ -689,6 +702,7 @@ def main() -> int:
         ensure_python_deps_for_service_share()
         ensure_python_deps_for_bge(config)
         export_preview_data_if_configured(config)
+        related_retrieval = read_related_retrieval_receipt()
         service_share_result = render_daily_service_share(config, build_clock)
         semantic_result_path = SITE_DIR / 'src' / 'data' / 'static-semantic-build-result.json'
         if config.get('related_mode') == 'bge' or config.get('unusual_enabled'):
@@ -807,6 +821,7 @@ def main() -> int:
                     'secret_candidate': candidate_manifest.get('checks'),
                 },
                 'related_revision': root_manifest.get('versions', {}).get('related'),
+                'related_retrieval': related_retrieval,
                 'tree_sha256': {'production': root_manifest.get('tree_sha256'), 'secret_candidate': candidate_manifest.get('tree_sha256')},
                 'semantic': semantic_result,
                 'service_share': service_share_result,
@@ -829,6 +844,7 @@ def main() -> int:
                 'archive': archive_path.name,
                 'dist_root': str(dist_dir),
                 'semantic': semantic_result,
+                'related_retrieval': related_retrieval,
                 'service_share': service_share_result,
             }
         status_event('alive', phase='archive', status='alive', progress={'phase': 'archive', 'progress_percent': 92, 'progress_label': 'артефакты проверены'})
