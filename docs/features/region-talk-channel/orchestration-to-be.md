@@ -377,6 +377,7 @@ Production uses the server wrapper rather than this local command:
 ```text
 APScheduler (06:20, 13:20, 21:20 Europe/Kaliningrad)
   -> scripts/region_talk_scheduled_runner.py
+  -> optional grounded external-publication research/import (provider-gated)
   -> scripts/region_talk_orchestrator.py --loop --execute-ready
   -> CandidateReport / BGE-M3 / ImageDiagnostic / finalizer / notifier
 ```
@@ -384,8 +385,9 @@ APScheduler (06:20, 13:20, 21:20 Europe/Kaliningrad)
 The schedule is gated by `ENABLE_REGION_TALK_SCHEDULED=1`. The wrapper requires
 explicit endpoint/database plus `REGION_TALK_YDB_SERVICE_ACCOUNT_KEY_JSON`,
 Kaggle credentials, separate `TELEGRAM_AUTH_BUNDLE_DISCOVERY1` and
-`TELEGRAM_AUTH_BUNDLE_DISCOVERY2`, and the local E2E/notifier session. It never
-uses interactive `yc` fallback. One run is bounded to 90 minutes by default,
+`TELEGRAM_AUTH_BUNDLE_DISCOVERY2`, and the production bot token for operator
+delivery. It never uses `TELEGRAM_AUTH_BUNDLE_E2E`, `TELEGRAM_SESSION`, another
+generic human session, or interactive `yc` fallback. One run is bounded to 90 minutes by default,
 uses `/data/region_talk_orchestrator.lock`, retains redacted operational output
 under `/data/runtime_logs/region_talk/`, and records success/failure/skip in
 SQLite `ops_run`. Confirmed candidates continue to go only to the operator chat;
@@ -412,6 +414,13 @@ configurable). No-wait scheduling may retain inputs while a kernel is active,
 but autonomous daily operation must not depend on a human deleting them.
 
 Important invariants:
+
+- Grounded web-publication research is a server-side pre-stage with no
+  Telegram resource. It is opt-in through
+  `REGION_TALK_EXTERNAL_RESEARCH_ENABLED=1`, uses a durable cooldown, and may
+  stage only contract-valid rows through the normal importer. Provider/quota
+  failure is non-fatal to social discovery. The switch stays off while the
+  configured Google project returns zero/blocked Search grounding quota.
 
 - BGE-M3 is launched immediately when `bge_pending_sample_total >= 1`, using
   the worker's own text-length/PK contract. Raw E5/BGE coverage remains visible,
