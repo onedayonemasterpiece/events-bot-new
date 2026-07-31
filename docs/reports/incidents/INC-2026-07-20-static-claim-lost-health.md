@@ -133,3 +133,39 @@ shared embedding RPM bucket. The limiter correctly returned a bounded
 as a terminal run failure, forcing ten-minute whole-job retries. The projector
 now waits and retries only the same idempotent embedding for bounded `rpm`/`tpm`
 admission; day-level or unknown failures still terminate immediately.
+
+The recurrence also proved that the deployed mutable
+`STATIC_SITE_REPO_SHA=17d3d03d…` had drifted from the code in the Fly image.
+The actual copied source was newer, but every candidate receipt falsely
+attested the old SHA, so the artifact could not be reproduced from its recorded
+identity. Production releases now bake exact clean `origin/main` into
+`/app/.static-site-repo-sha`; the Docker build fails without it, runtime prefers
+it over the legacy secret, and the canonical deploy wrapper owns the build
+argument. Closure requires a successful compensating candidate whose receipt
+records the deployed image SHA. The concurrent export failure was separate:
+Kaggle logs showed that production still passed `--sync-pgvector-vectors`
+after the dedicated Fly vector owner and mandatory receipt barrier had already
+completed the same projection. That duplicate write lane reached
+`sync_event_search_vectors_to_supabase.py`, which correctly required the shared
+limiter's Supabase SDK absent from the read-only builder environment.
+Production now disables the redundant Kaggle write pass; the builder consumes
+the completed revision and bounded compact related RPCs.
+
+The compensating run exposed one more independent stale-input condition. Event
+`7357` queued revision `cc9d6942…`; deterministic post-Smart-Update media work
+then advanced the canonical event and vector receipt to `13021c30…`. The static
+barrier compared the newer projection only with the historical queued hash and
+could never converge, even though the projection already matched current
+SQLite. The worker now refreshes only the request's covered event revisions
+from current canonical SQLite and recomputes its watermark immediately before
+the barrier. Deleted rows are removed from that current barrier set. A matching
+current vector receipt proceeds; a genuinely stale receipt still retries.
+
+The next compensating attempt exposed a capacity recovery ordering defect. A
+killed runner had left a 337 MiB staged dataset and a terminal failed handoff
+had left a 294 MiB immutable snapshot. Both were reproducible and inactive, but
+the next run checked free space before either cleanup path and therefore failed
+at the 1 GiB critical threshold. The Fly owner now removes unreferenced
+terminal snapshots before its capacity probe; the runner removes only
+lock-protected `static-site-kaggle-*` scratch trees before its own probe.
+Active handoff paths, symlinks and unknown directories remain fail-closed.

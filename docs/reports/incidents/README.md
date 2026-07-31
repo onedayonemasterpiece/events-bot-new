@@ -18,6 +18,12 @@
 
 ## Активные regression contracts
 
+- `INC-2026-07-31-region-talk-candidate-chat-incomplete-drafts.md`
+  - Scope: Region Talk grounded-draft readiness and operator-chat delivery.
+  - Must not regress: incomplete rows stay out of chat/queue; legacy sent flags
+    cannot suppress the first exact ready draft, while same-draft retries remain
+    idempotent and use only role-scoped discovery sessions.
+
 - `INC-2026-07-31-region-talk-deploy-interrupted-sessions.md`
   - Scope: Region Talk scheduled-run durability across Fly machine replacement.
   - Must not regress: a crashed/missing latest slot is resumed automatically;

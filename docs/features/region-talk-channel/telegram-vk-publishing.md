@@ -10,6 +10,12 @@ public slot. Evidence-backed legacy external-article copy can be projected from
 the already validated research contract; social copy remains LLM-first and has
 no heuristic fallback.
 
+Operator-chat acknowledgement is bound to a fingerprint of the exact completed
+draft, not only to the candidate URL. Legacy rows marked `sent_to_chat` before
+the readiness gate are therefore delivered once again after grounded backfill,
+and a materially regenerated draft is not hidden by the older delivery ledger.
+The versioned delivery key remains idempotent for retries of the same draft.
+
 The durable selection input is `publication_schedule_item`: exactly one
 external article and one Telegram/VK social post per day. Future unlocked slots
 are recalculated after every autonomous discovery session against actual
@@ -53,6 +59,16 @@ Operational contract:
 - retry on transient API errors; no infinite retry;
 - store Telegram API response in `region_talk_publication_log`;
 - document rollback/edit/delete limitations.
+
+The future Telegram publisher may use MTProto instead of Bot API when custom
+premium emoji entities are editorially needed. Only
+`TELEGRAM_AUTH_BUNDLE_DISCOVERY1` / `DISCOVERY2` are eligible for that Region
+Talk path, and only after the mapped Kaggle notebook is verified idle and the
+per-bundle local lease is acquired. Generic `TELEGRAM_SESSION` and
+`TELEGRAM_AUTH_BUNDLE_E2E` remain Codex/manual-E2E inputs and are never passed
+to the functional publisher. Plain text remains the fallback; missing premium
+emoji capability must not block a publication. This is a transport contract,
+not an enabled target-channel publisher.
 
 ## VK target
 
@@ -108,3 +124,7 @@ Mitigations if community token is insufficient:
 - separate VK publisher dry-run;
 - fallback to text+link;
 - fallback to Telegram-only until VK image upload is validated.
+
+VK source-text restoration for the draft writer is a read-only operation and
+already uses exact `wall.getById` through the established service/user token
+priority. It neither grants nor implies permission to call `wall.post`.

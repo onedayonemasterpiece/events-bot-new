@@ -22,6 +22,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,33 @@ TELETHON_TRANSPORT_KERNELS = {
     "telethon_discovery1": "region-talk-candidate-report",
     "telethon_discovery2": "region-talk-image-diagnostic",
 }
+
+
+@contextmanager
+def discovery_session_lease(transport: str):
+    """Hold a local single-flight lock for one role-scoped discovery key.
+
+    The remote Kaggle status check prevents local/remote reuse.  This lock
+    closes the smaller race between two local agents which both observed the
+    notebook as idle and would otherwise connect the same StringSession.
+    """
+
+    auth_env = TELETHON_TRANSPORT_AUTH_ENVS.get(str(transport or ""))
+    if not auth_env:
+        raise RuntimeError(f"unsupported Region Talk Telethon transport: {transport}")
+    suffix = auth_env.removeprefix("TELEGRAM_AUTH_BUNDLE_").lower()
+    lock_dir = Path(os.getenv("REGION_TALK_TELETHON_LOCK_DIR") or "/tmp")
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_dir / f"events-bot-region-talk-{suffix}.lock"
+    with lock_path.open("w", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError(
+                f"another local Region Talk process owns {auth_env}; refusing concurrent use"
+            ) from exc
+        assert_telethon_transport_idle(transport)
+        yield {"auth_env": auth_env, "lock_path": str(lock_path)}
 
 
 def load_env(path: Path) -> None:
@@ -442,9 +470,62 @@ def is_confirmed_publication(row: dict[str, Any]) -> bool:
 def is_unsent_confirmed_publication(row: dict[str, Any]) -> bool:
     if not is_confirmed_publication(row):
         return False
-    if str(row.get("publication_candidate_status") or "") == "sent_to_chat":
+    if not is_publication_draft_ready(row):
         return False
-    return str(row.get("sent_to_chat") or "").lower() != "true"
+    was_sent = (
+        str(row.get("publication_candidate_status") or "") == "sent_to_chat"
+        or str(row.get("sent_to_chat") or "").lower() == "true"
+    )
+    if not was_sent:
+        return True
+    # Before the publication-readiness gate, legacy candidates were marked as
+    # delivered even though their operator-ready copy did not exist yet. A bare
+    # sent_to_chat flag therefore cannot suppress the first completed draft.
+    delivered_fingerprint = str(
+        row.get("sent_publication_draft_fingerprint") or ""
+    ).strip()
+    return delivered_fingerprint != publication_draft_fingerprint(row)
+
+
+def is_publication_draft_ready(row: dict[str, Any]) -> bool:
+    """Require complete operator copy before chat delivery."""
+
+    if str(row.get("publication_draft_status") or "") != "ready_for_operator_review":
+        return False
+    if not all(str(row.get(field) or "").strip() for field in (
+        "publication_draft_title",
+        "publication_draft_source_attribution",
+        "publication_draft_telegram_text",
+        "publication_draft_vk_text",
+    )):
+        return False
+    try:
+        points = json.loads(str(row.get("publication_draft_fact_points_json") or "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False
+    return bool(isinstance(points, list) and points)
+
+
+def publication_draft_fingerprint(row: dict[str, Any]) -> str:
+    """Stable identity of the exact operator-ready copy being delivered."""
+
+    payload = {
+        "status": str(row.get("publication_draft_status") or "").strip(),
+        "title": str(row.get("publication_draft_title") or "").strip(),
+        "source_attribution": str(
+            row.get("publication_draft_source_attribution") or ""
+        ).strip(),
+        "telegram_text": str(row.get("publication_draft_telegram_text") or "").strip(),
+        "vk_text": str(row.get("publication_draft_vk_text") or "").strip(),
+        "fact_points_json": str(
+            row.get("publication_draft_fact_points_json") or ""
+        ).strip(),
+        "prompt_version": str(
+            row.get("publication_draft_prompt_version") or ""
+        ).strip(),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def build_stats_message(limit: int = 20000) -> str:
@@ -528,7 +609,12 @@ def delivery_random_id(delivery_key: str) -> int:
 
 
 def publication_delivery_key(row: dict[str, Any], chat_id: str) -> str:
-    return hashlib.sha256(f"{chat_id}|{canonical_post_url(row)}".encode("utf-8")).hexdigest()
+    identity = "|".join((
+        str(chat_id),
+        canonical_post_url(row),
+        publication_draft_fingerprint(row),
+    ))
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 
 def read_delivery(pool: Any, ydb: Any, table: str, delivery_key: str) -> dict[str, Any]:
@@ -583,6 +669,10 @@ def upsert_sent(
         "sent_chat_id": chat_id,
         "delivery_key": delivery_key,
         "delivery_random_id": str(random_id or ""),
+        "sent_publication_draft_fingerprint": publication_draft_fingerprint(item),
+        "sent_publication_draft_prompt_version": str(
+            item.get("publication_draft_prompt_version") or ""
+        ),
         "publication_candidate_status": "sent_to_chat",
     })
     query_text = f"""
@@ -678,7 +768,10 @@ async def send_rows(args: argparse.Namespace) -> dict[str, Any]:
         history = read_kind_rows(pool, ydb, table, "publication_semantic_history_item", int(args.history_limit))
         attach_latest_bge_vectors(publications, vectors)
         attach_latest_bge_vectors(history, vectors)
-        eligible = [row for row in publications if is_confirmed_publication(row)]
+        eligible = [
+            row for row in publications
+            if is_confirmed_publication(row) and is_publication_draft_ready(row)
+        ]
         ranked = rank_publication_queue(
             eligible,
             history=history,
@@ -911,83 +1004,84 @@ async def send_rows_telethon(
     del driver  # The caller owns the driver lifecycle.
     from telethon import functions  # type: ignore
 
-    client, peer, chat_id, account_id = await _telethon_client_and_chat(args)
-    sent: list[dict[str, Any]] = []
-    try:
-        for idx, text in enumerate(messages):
-            row = rows[idx] if idx < len(rows) else None
-            delivery_key = ""
-            existing: dict[str, Any] = {}
-            if row is not None and ydb is not None and pool is not None and table is not None:
-                delivery_key = publication_delivery_key(row, chat_id)
-                existing = read_delivery(pool, ydb, table, delivery_key)
-                random_id = int(existing.get("random_id") or delivery_random_id(delivery_key))
-                if str(existing.get("status") or "") == "delivered":
-                    mid = int(existing.get("message_id") or 0)
+    with discovery_session_lease(str(args.transport)):
+        client, peer, chat_id, account_id = await _telethon_client_and_chat(args)
+        sent: list[dict[str, Any]] = []
+        try:
+            for idx, text in enumerate(messages):
+                row = rows[idx] if idx < len(rows) else None
+                delivery_key = ""
+                existing: dict[str, Any] = {}
+                if row is not None and ydb is not None and pool is not None and table is not None:
+                    delivery_key = publication_delivery_key(row, chat_id)
+                    existing = read_delivery(pool, ydb, table, delivery_key)
+                    random_id = int(existing.get("random_id") or delivery_random_id(delivery_key))
+                    if str(existing.get("status") or "") == "delivered":
+                        mid = int(existing.get("message_id") or 0)
+                        upsert_sent(
+                            pool, ydb, table, row, mid,
+                            chat_id=chat_id, delivery_key=delivery_key, random_id=random_id,
+                        )
+                        sent.append({
+                            "message_id": mid,
+                            "post_url": row.get("post_url"),
+                            "delivery_key": delivery_key,
+                            "replayed": True,
+                        })
+                        continue
+                    upsert_delivery(pool, ydb, table, delivery_key, {
+                        **existing,
+                        "status": "sending",
+                        "transport": str(args.transport),
+                        "post_url": canonical_post_url(row),
+                        "chat_id": chat_id,
+                        "random_id": str(random_id),
+                        "sending_started_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                else:
+                    random_id = delivery_random_id(hashlib.sha256(f"{chat_id}|{text}".encode("utf-8")).hexdigest())
+
+                result = await client(functions.messages.SendMessageRequest(
+                    peer=peer,
+                    message=text,
+                    random_id=random_id,
+                    no_webpage=getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False),
+                ))
+                mid = _telethon_result_message_id(result, random_id)
+                if not mid:
+                    raise RuntimeError("Telethon delivery returned no verifiable message id")
+                if row is not None and ydb is not None and pool is not None and table is not None:
+                    upsert_delivery(pool, ydb, table, delivery_key, {
+                        **existing,
+                        "status": "delivered",
+                        "transport": str(args.transport),
+                        "post_url": canonical_post_url(row),
+                        "chat_id": chat_id,
+                        "random_id": str(random_id),
+                        "message_id": str(mid),
+                        "delivered_at": datetime.now(timezone.utc).isoformat(),
+                    })
                     upsert_sent(
                         pool, ydb, table, row, mid,
                         chat_id=chat_id, delivery_key=delivery_key, random_id=random_id,
                     )
-                    sent.append({
-                        "message_id": mid,
-                        "post_url": row.get("post_url"),
-                        "delivery_key": delivery_key,
-                        "replayed": True,
-                    })
-                    continue
-                upsert_delivery(pool, ydb, table, delivery_key, {
-                    **existing,
-                    "status": "sending",
-                    "transport": str(args.transport),
-                    "post_url": canonical_post_url(row),
-                    "chat_id": chat_id,
-                    "random_id": str(random_id),
-                    "sending_started_at": datetime.now(timezone.utc).isoformat(),
-                })
-            else:
-                random_id = delivery_random_id(hashlib.sha256(f"{chat_id}|{text}".encode("utf-8")).hexdigest())
-
-            result = await client(functions.messages.SendMessageRequest(
-                peer=peer,
-                message=text,
-                random_id=random_id,
-                no_webpage=getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False),
-            ))
-            mid = _telethon_result_message_id(result, random_id)
-            if not mid:
-                raise RuntimeError("Telethon delivery returned no verifiable message id")
-            if row is not None and ydb is not None and pool is not None and table is not None:
-                upsert_delivery(pool, ydb, table, delivery_key, {
-                    **existing,
-                    "status": "delivered",
-                    "transport": str(args.transport),
-                    "post_url": canonical_post_url(row),
-                    "chat_id": chat_id,
-                    "random_id": str(random_id),
-                    "message_id": str(mid),
-                    "delivered_at": datetime.now(timezone.utc).isoformat(),
-                })
-                upsert_sent(
-                    pool, ydb, table, row, mid,
-                    chat_id=chat_id, delivery_key=delivery_key, random_id=random_id,
-                )
-            sent.append({"message_id": mid, "post_url": row.get("post_url") if row else ""})
-            if idx + 1 < len(messages):
-                await asyncio.sleep(random.uniform(
-                    float(os.getenv("REGION_TALK_NOTIFY_DELAY_MIN_SECONDS") or "2"),
-                    float(os.getenv("REGION_TALK_NOTIFY_DELAY_MAX_SECONDS") or "5"),
-                ))
-    finally:
-        await client.disconnect()
-    return {
-        "ok": True,
-        "sent": sent,
-        "sent_count": len(sent),
-        "dry_run": False,
-        "resolved_chat_id": chat_id,
-        "delivery_account_id": account_id,
-        "transport": str(args.transport),
-    }
+                sent.append({"message_id": mid, "post_url": row.get("post_url") if row else ""})
+                if idx + 1 < len(messages):
+                    await asyncio.sleep(random.uniform(
+                        float(os.getenv("REGION_TALK_NOTIFY_DELAY_MIN_SECONDS") or "2"),
+                        float(os.getenv("REGION_TALK_NOTIFY_DELAY_MAX_SECONDS") or "5"),
+                    ))
+        finally:
+            await client.disconnect()
+        return {
+            "ok": True,
+            "sent": sent,
+            "sent_count": len(sent),
+            "dry_run": False,
+            "resolved_chat_id": chat_id,
+            "delivery_account_id": account_id,
+            "transport": str(args.transport),
+        }
 
 
 async def send_rows_bot_api(

@@ -22838,6 +22838,47 @@ def _first_env(*names: str, default: str = "") -> str:
     return default
 
 
+def _resolve_static_site_repo_sha() -> str:
+    """Return the source revision baked into the running application image.
+
+    A mutable Fly secret used to be the only source of this value.  That can
+    silently drift away from the code copied into the image, so production
+    images now carry an immutable revision file written by the Docker build.
+    The environment value remains a local/backwards-compatible fallback only.
+    """
+
+    configured_path = (os.getenv("STATIC_SITE_IMAGE_REPO_SHA_FILE") or "").strip()
+    revision_path = (
+        Path(configured_path)
+        if configured_path
+        else Path(__file__).with_name(".static-site-repo-sha")
+    )
+    legacy_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
+
+    if revision_path.exists():
+        image_sha = revision_path.read_text(encoding="utf-8").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{40}", image_sha):
+            raise StaticSitePermanentError(
+                "static-site image revision must be an exact 40-character SHA"
+            )
+        if re.fullmatch(r"[0-9a-f]{40}", legacy_sha) and legacy_sha != image_sha:
+            logging.warning(
+                "STATIC_SITE_REPO_SHA drift ignored: image=%s legacy=%s",
+                image_sha,
+                legacy_sha,
+            )
+        return image_sha
+
+    if re.fullmatch(r"[0-9a-f]{40}", legacy_sha):
+        logging.warning(
+            "static-site image revision file is absent; using legacy STATIC_SITE_REPO_SHA"
+        )
+        return legacy_sha
+    raise StaticSitePermanentError(
+        "static-site image revision is absent; deploy exact origin/main with the canonical release script"
+    )
+
+
 def _static_site_build_kaggle_command(
     *,
     db_path: str,
@@ -23196,6 +23237,70 @@ async def _patch_static_site_request_payload(
                 delay,
             )
             await asyncio.sleep(delay)
+
+
+async def _refresh_static_site_vector_barrier_payload(
+    db: Database,
+    request_payload: Mapping[str, Any],
+) -> tuple[dict[str, Any], list[int]]:
+    """Bind the vector barrier to current canonical event revisions.
+
+    Smart Update records the revision that caused the build request, but
+    deterministic follow-up jobs (for example media review) may update another
+    public field before the debounced vector projection and static build run.
+    A newer complete projection must not be rejected forever merely because the
+    queued request still contains that historical intermediate hash.
+
+    Only ids already covered by the request are refreshed.  Missing rows are
+    removed from the barrier because a hard-deleted event is absent from both
+    the current static snapshot and the current vector projection.
+    """
+
+    payload = dict(request_payload)
+    expected = payload.get("event_revisions")
+    if not isinstance(expected, Mapping) or not expected:
+        return payload, []
+    event_ids: list[int] = []
+    for raw_id in expected:
+        try:
+            event_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if event_id > 0:
+            event_ids.append(event_id)
+    if not event_ids:
+        return payload, []
+
+    async with db.get_session() as session:
+        events = list(
+            (
+                await session.execute(
+                    select(Event).where(Event.id.in_(sorted(set(event_ids))))
+                )
+            ).scalars().all()
+        )
+    current = {
+        str(int(event.id)): event_public_revision(event)
+        for event in events
+        if event.id is not None
+    }
+    previous = {
+        str(int(key)): str(expected[key])
+        for key in expected
+        if str(key).isdigit() and int(key) > 0
+    }
+    changed_ids = sorted(
+        {
+            int(event_id)
+            for event_id in set(previous) | set(current)
+            if previous.get(event_id) != current.get(event_id)
+        }
+    )
+    if not changed_ids:
+        return payload, []
+    payload["event_revisions"] = current
+    payload["target_watermark"] = static_site_request_watermark(payload)
+    return payload, changed_ids
 
 
 async def _finish_static_site_candidate(
@@ -23575,6 +23680,53 @@ async def _reconcile_current_static_site_candidate_status(db: Database) -> dict[
     return result
 
 
+async def _prune_static_site_terminal_snapshots_for_capacity(
+    db: Database,
+) -> dict[str, Any]:
+    """Recover volume capacity before the builder write probe.
+
+    Exact active handoff paths are preserved fail-closed.  Every other complete
+    snapshot is terminal and reproducible from the canonical database, so it
+    must not prevent the next Smart Update build from starting.
+    """
+
+    snapshot_root = Path(
+        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
+        or str(Path(db.path).resolve().parent / "static_site_snapshots")
+    )
+    prune_safe, active_snapshot_paths = await asyncio.to_thread(
+        _static_site_snapshot_retention_context, db.path
+    )
+    if not prune_safe:
+        logging.error(
+            "static_site_build: capacity snapshot cleanup skipped; "
+            "active handoff is unreadable"
+        )
+        return {
+            "removed_snapshot_ids": [],
+            "removed_incomplete_files": [],
+            "removed_bytes": 0,
+            "preserved_paths": [],
+            "retained_terminal_count": 0,
+            "status": "skipped_unreadable_active_handoff",
+        }
+    report = await asyncio.to_thread(
+        prune_immutable_snapshots,
+        snapshot_root,
+        preserve_paths=active_snapshot_paths,
+        keep_latest_terminal=0,
+        stale_incomplete_seconds=max(
+            60, _env_int("STATIC_SITE_SNAPSHOT_STALE_INCOMPLETE_SECONDS", 900)
+        ),
+    )
+    if report["removed_snapshot_ids"] or report["removed_incomplete_files"]:
+        logging.info(
+            "static_site_build: capacity snapshot cleanup %s",
+            json.dumps(report, sort_keys=True),
+        )
+    return report
+
+
 async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) -> bool | str:
     """Coalesced static-site build after Smart Update.
 
@@ -23600,6 +23752,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     # to remove only recognized terminal outputs not named by the exact active
     # handoff in durable state.
     await _prune_static_site_terminal_outputs(db)
+    await _prune_static_site_terminal_snapshots_for_capacity(db)
     try:
         await asyncio.to_thread(_static_site_storage_preflight)
     except StaticSiteRetryableError as exc:
@@ -23617,9 +23770,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     # Production builds own the whole actionable catalog; bounded preview
     # canaries must opt into a smaller limit explicitly.
     limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "5000").strip() or "5000")
-    repo_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
-        raise StaticSitePermanentError("STATIC_SITE_REPO_SHA must be the exact pushed 40-character SHA")
+    repo_sha = _resolve_static_site_repo_sha()
     await _reconcile_current_static_site_candidate_status(db)
     recovered, recovered_result = await _recover_previous_static_site_attempt(
         db=db,
@@ -23641,6 +23792,24 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         if isinstance(handoff, Mapping) and handoff.get("build_id"):
             await _delete_terminal_static_site_output(str(handoff["build_id"]))
         return recovered_result if recovered_result is not None else True
+    request_payload, refreshed_revision_ids = (
+        await _refresh_static_site_vector_barrier_payload(db, request_payload)
+    )
+    if refreshed_revision_ids:
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {
+                "event_revisions": request_payload["event_revisions"],
+                "target_watermark": request_payload["target_watermark"],
+            },
+        )
+        logging.info(
+            "static_site_build: refreshed vector barrier revisions "
+            "job_id=%s event_ids=%s",
+            job_id,
+            refreshed_revision_ids,
+        )
     vector_evidence = await asyncio.to_thread(
         validate_vector_barrier,
         request_payload,

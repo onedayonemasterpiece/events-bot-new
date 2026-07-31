@@ -91,6 +91,9 @@ app = "events-bot-new-wngqia"
   REGION_TALK_SOCIAL_TIME_LOCAL = "18:00"
   REGION_TALK_PUBLICATION_DIVERSITY_WEIGHT = "0.35"
   REGION_TALK_PUBLICATION_PAIR_SIMILARITY_THRESHOLD = "0.82"
+  REGION_TALK_DRAFT_BACKFILL_TRANSPORT = "telethon_discovery2"
+  REGION_TALK_DRAFT_BACKFILL_BATCH_SIZE = "2"
+  REGION_TALK_DRAFT_BACKFILL_VK_BATCH_SIZE = "2"
   REGION_TALK_YDB_ENDPOINT = "grpcs://ydb.serverless.yandexcloud.net:2135"
   REGION_TALK_YDB_DATABASE = "/ru-central1/b1goifscr17duurhullj/etnrao7p6gh6il6b4qv9"
   REGION_TALK_YDB_NAMESPACE = "region_talk_compact"
@@ -260,7 +263,11 @@ app = "events-bot-new-wngqia"
   STATIC_SITE_RELATED_MODE = "pgvector"
   STATIC_SITE_REQUIRE_VECTOR_BARRIER = "1"
   STATIC_SITE_VECTOR_RECEIPT_PATH = "/data/event_vector_sync_receipt.json"
-  STATIC_SITE_SYNC_PGVECTOR_VECTORS = "1"
+  # The dedicated Fly owner completes and receipts the incremental projection
+  # before this build crosses the vector barrier. Kaggle only reads the compact
+  # candidate RPC; repeating the write projection here wastes egress and makes
+  # the build depend on an extra SDK that the notebook does not need.
+  STATIC_SITE_SYNC_PGVECTOR_VECTORS = "0"
   STATIC_SITE_BGE_MODEL_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
   STATIC_SITE_BGE_BATCH_SIZE = "8"
   STATIC_SITE_BGE_VECTOR_CACHE = "/data/static_site_builder/static_event_bge_vectors.npz"

@@ -14,6 +14,55 @@ def _arg_after(cmd: list[str], name: str) -> str:
     return cmd[cmd.index(name) + 1]
 
 
+@pytest.mark.asyncio
+async def test_vector_barrier_refreshes_intermediate_smart_update_revision(tmp_path: Path) -> None:
+    import main
+
+    db = main.Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            event = main.Event(
+                title="Current canonical title",
+                description="Current canonical description",
+                date="2026-08-08",
+                time="19:00",
+                city="Калининград",
+                location_name="Дом искусств",
+                source_text="source",
+                photo_urls=["https://static.kenigevents.ru/p/current.webp"],
+            )
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+            event_id = int(event.id)
+            current_revision = main.event_public_revision(event)
+
+        payload = main.make_static_site_request_payload(
+            reason="smart_update",
+            event_ids=[event_id, 999999],
+            event_revisions={event_id: "historical-intermediate", 999999: "deleted"},
+            require_vector_barrier=True,
+        )
+        old_watermark = payload["target_watermark"]
+        refreshed, changed_ids = await main._refresh_static_site_vector_barrier_payload(
+            db, payload
+        )
+
+        assert changed_ids == [event_id, 999999]
+        assert refreshed["event_revisions"] == {str(event_id): current_revision}
+        assert refreshed["target_watermark"] != old_watermark
+        assert refreshed["target_watermark"] == main.static_site_request_watermark(refreshed)
+
+        unchanged, changed_ids = await main._refresh_static_site_vector_barrier_payload(
+            db, refreshed
+        )
+        assert changed_ids == []
+        assert unchanged == refreshed
+    finally:
+        await db.close()
+
+
 def test_snapshot_retention_context_fails_closed_for_malformed_active_handoff(tmp_path: Path) -> None:
     import main
 
@@ -406,8 +455,24 @@ def test_fly_requires_vector_receipt_and_keeps_strict_gemma_verifier_off() -> No
     assert env["STATIC_SITE_REQUIRE_VECTOR_BARRIER"] == "1"
     assert env["EVENT_VECTOR_SYNC_RECEIPT_PATH"] == "/data/event_vector_sync_receipt.json"
     assert env["STATIC_SITE_VECTOR_RECEIPT_PATH"] == "/data/event_vector_sync_receipt.json"
+    assert env["ENABLE_EVENT_VECTOR_SYNC"] == "1"
+    assert env["STATIC_SITE_SYNC_PGVECTOR_VECTORS"] == "0"
     assert env["STATIC_SITE_GEMMA_RELATED_VERIFY"] == "0"
     assert env["STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS"] == "0"
+
+
+def test_fly_release_bakes_exact_main_revision_into_image() -> None:
+    root = Path(__file__).resolve().parents[1]
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    deploy_script = (root / "scripts" / "deploy_fly_main.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "ARG STATIC_SITE_IMAGE_REPO_SHA" in dockerfile
+    assert "> /app/.static-site-repo-sha" in dockerfile
+    assert 'MAIN_SHA="$(git rev-parse origin/main)"' in deploy_script
+    assert 'if [[ "$HEAD_SHA" != "$MAIN_SHA" ]]' in deploy_script
+    assert '--build-arg "STATIC_SITE_IMAGE_REPO_SHA=$HEAD_SHA"' in deploy_script
 
 
 def test_kaggle_builder_bridges_decrypted_public_club_flag_into_astro(
@@ -607,6 +672,62 @@ def test_runner_storage_preflight_checks_root_and_durable_scratch(
 
     assert scratch.is_dir()
     assert probes == [scratch]
+
+
+def test_runner_prunes_only_abandoned_owned_scratch(tmp_path: Path) -> None:
+    from scripts.run_static_site_builder_kaggle import prune_abandoned_static_site_scratch
+
+    abandoned = tmp_path / "static-site-kaggle-dead123"
+    abandoned.mkdir()
+    (abandoned / "snapshot.sqlite").write_bytes(b"stale")
+    unrelated = tmp_path / "operator-notes"
+    unrelated.mkdir()
+    (unrelated / "keep.txt").write_text("keep", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = tmp_path / "static-site-kaggle-linked"
+    link.symlink_to(outside, target_is_directory=True)
+
+    report = prune_abandoned_static_site_scratch(tmp_path)
+
+    assert report == {
+        "removed_directories": ["static-site-kaggle-dead123"],
+        "removed_bytes": 5,
+    }
+    assert not abandoned.exists()
+    assert unrelated.is_dir()
+    assert link.is_symlink()
+    assert outside.is_dir()
+
+
+def test_capacity_cleanup_removes_unreferenced_terminal_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import asyncio
+    import sqlite3
+    import main
+
+    database = tmp_path / "db.sqlite"
+    sqlite3.connect(database).close()
+    snapshots = tmp_path / "snapshots"
+    snapshots.mkdir()
+    snapshot = snapshots / "snapshot-20260731T010203-deadbeef00.sqlite"
+    manifest = snapshots / "snapshot-20260731T010203-deadbeef00.manifest.json"
+    snapshot.write_bytes(b"snapshot")
+    manifest.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("STATIC_SITE_SNAPSHOT_DIR", str(snapshots))
+
+    report = asyncio.run(
+        main._prune_static_site_terminal_snapshots_for_capacity(
+            SimpleNamespace(path=str(database))
+        )
+    )
+
+    assert report["removed_snapshot_ids"] == [snapshot.stem]
+    assert report["retained_terminal_count"] == 0
+    assert not snapshot.exists()
+    assert not manifest.exists()
 
 
 def test_static_site_storage_capacity_defers_without_consuming_attempt_budget() -> None:

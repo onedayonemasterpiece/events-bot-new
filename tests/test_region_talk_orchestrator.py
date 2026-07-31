@@ -520,6 +520,77 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(main["env"]["REGION_TALK_YDB_STATE_WRITE_REQUEST_TIMEOUT_SECONDS"], "20")
         self.assertEqual(main["env"]["REGION_TALK_YDB_RETENTION_PRUNE"], "0")
 
+    def test_missing_confirmed_drafts_schedule_role_scoped_backfill(self) -> None:
+        mod = load_module()
+        actions = mod.build_decision_plan(
+            {
+                "publication_draft_backfill_actionable_total": 20,
+                "publication_draft_backfill_actionable_telegram_total": 17,
+                "publication_draft_backfill_actionable_vk_total": 3,
+                "publication_unsent_confirmed_total": 0,
+            },
+            target_confirmed=0,
+            bge_threshold=1,
+            image_threshold=1,
+        )
+        backfill = next(action for action in actions if action["action"] == "backfill_publication_drafts")
+        self.assertEqual(backfill["resource"], "telegram:DISCOVERY2")
+        self.assertTrue(backfill["parallel_safe"])
+        self.assertIn("telethon_discovery2", backfill["cmd"])
+        vk_backfill = next(action for action in actions if action["action"] == "backfill_publication_drafts_vk")
+        self.assertEqual(vk_backfill["resource"], "local:vk-api")
+        self.assertIn("vk", vk_backfill["cmd"])
+        selected = mod.select_actions_for_execution(actions, execute_ready=True, max_actions=3)
+        self.assertEqual(
+            [action["action"] for action in selected],
+            ["launch_candidate_report", "backfill_publication_drafts", "backfill_publication_drafts_vk"],
+        )
+        self.assertEqual(
+            [action["resource"] for action in selected],
+            ["telegram:DISCOVERY1", "telegram:DISCOVERY2", "local:vk-api"],
+        )
+
+    def test_publication_metrics_split_telegram_and_vk_draft_debt(self) -> None:
+        mod = load_module()
+        sources = [
+            {
+                "canonical_source_key": "telegram:travel",
+                "source_url": "https://t.me/travel",
+                "source_scope": "external",
+                "source_geo_class": "nonlocal_russia",
+                "source_queue_status": "processed_found_ko_candidate",
+            },
+            {
+                "canonical_source_key": "vk:-10",
+                "source_url": "https://vk.com/club10",
+                "source_scope": "external",
+                "source_geo_class": "nonlocal_russia",
+                "source_queue_status": "processed_found_ko_candidate",
+            },
+        ]
+        publications = []
+        for url, source in (
+            ("https://t.me/travel/1", sources[0]),
+            ("https://vk.com/wall-10_20", sources[1]),
+        ):
+            publications.append({
+                "post_url": url,
+                "canonical_source_key": source["canonical_source_key"],
+                "publication_candidate_status": "llm_confirmed",
+                "publication_status": "gemini_accept",
+                "publication_eligibility_verdict": "eligible",
+                "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
+                "authoritative_source_fingerprint_version": mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+                "authoritative_source_fingerprint": mod.authoritative_source_fingerprint(source),
+            })
+        metrics = mod._publication_handoff_metrics([], publications, sources)
+        self.assertEqual(metrics["publication_confirmed_total"], 2)
+        self.assertEqual(metrics["publication_ready_total"], 0)
+        self.assertEqual(metrics["publication_draft_missing_telegram_total"], 1)
+        self.assertEqual(metrics["publication_draft_missing_vk_total"], 1)
+        self.assertEqual(metrics["publication_draft_backfill_actionable_telegram_total"], 1)
+        self.assertEqual(metrics["publication_draft_backfill_actionable_vk_total"], 1)
+
     def test_image_action_batch_is_explicitly_tunable_and_bounded(self) -> None:
         mod = load_module()
         metrics = {
@@ -1190,6 +1261,12 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
                 "publication_eligibility_verdict": "eligible",
                 "publication_eligibility_gate_version": mod.CURRENT_PUBLICATION_ELIGIBILITY_GATE_VERSION,
                 "authoritative_source_fingerprint_version": mod.AUTHORITATIVE_SOURCE_FINGERPRINT_VERSION,
+                "publication_draft_status": "ready_for_operator_review",
+                "publication_draft_title": "Маршрут",
+                "publication_draft_source_attribution": "Автор",
+                "publication_draft_telegram_text": "Текст Telegram",
+                "publication_draft_vk_text": "Текст VK",
+                "publication_draft_fact_points_json": '[{"claim":"Факт","support_excerpt":"Опора"}]',
             },
             {
                 "post_url": "https://t.me/c/3",
@@ -1221,6 +1298,8 @@ class RegionTalkOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["publication_active_candidate_total"], 1)
         self.assertEqual(metrics["publication_ready_total"], 1)
         self.assertEqual(metrics["publication_confirmed_total"], 1)
+        self.assertEqual(metrics["publication_draft_ready_confirmed_total"], 1)
+        self.assertEqual(metrics["publication_draft_missing_confirmed_total"], 0)
         self.assertEqual(metrics["publication_rejected_total"], 1)
         self.assertEqual(metrics["finalizer_pending_url_total"], 1)
         self.assertEqual(metrics["finalizer_pending_urls"], ["https://t.me/b/2"])
