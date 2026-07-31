@@ -35,7 +35,11 @@ Each slot invokes the bounded queue orchestrator chain through
 non-interactive credential preflight, 14-day JSONL log retention and
 `ops_run(kind='region_talk')` evidence. Scheduler health reports the earliest
 next Region Talk slot. The job sends accepted candidates only to the prepared
-operator chat and does not enable target-channel publishing.
+operator chat and does not enable target-channel publishing. It is deliberately
+outside the legacy global heavy-job gate: CandidateReport/ImageDiagnostic use
+dedicated `DISCOVERY1`/`DISCOVERY2` sessions and every Region Talk resource has
+its own kernel/lock guard, so an unrelated long render cannot starve all three
+daily discovery slots.
 
 ## Observed runtimes (local runs)
 

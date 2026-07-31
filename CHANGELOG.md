@@ -17,8 +17,9 @@
   daily APScheduler slots. The runner chains discovery, E5/BGE fusion, image
   diagnostics, Gemini finalization and operator-chat delivery with
   non-interactive credential preflight, single-flight locking, retained JSONL
-  logs, scheduler health and `ops_run` evidence; public TG/VK publishing stays
-  disabled.
+  logs, scheduler health, resource-specific session/kernel guards and `ops_run`
+  evidence; unrelated global heavy jobs cannot starve all discovery slots, and
+  public TG/VK publishing stays disabled.
 - Integrated the noindex 30-day focus-group product shell into the R15 candidate: fragment onboarding, separate participation state, optional identity intent, installable focus PWA, closed hub, feedback specimens, local interest prototype and the 12-item research Easter-egg collection remain isolated from the ordinary public home.
 - Added a focus-group PWA start controller that returns an active participant to the closed hub while keeping participation independent from personalization reset; the previous 72-hour preview marker is migration input only, never the access period.
 - Added a deterministic self-contained SVG QR and exact visible fragment link

@@ -389,7 +389,11 @@ uses interactive `yc` fallback. One run is bounded to 90 minutes by default,
 uses `/data/region_talk_orchestrator.lock`, retains redacted operational output
 under `/data/runtime_logs/region_talk/`, and records success/failure/skip in
 SQLite `ops_run`. Confirmed candidates continue to go only to the operator chat;
-the target Telegram/VK publishing surfaces stay disabled.
+the target Telegram/VK publishing surfaces stay disabled. The scheduler does
+not put this job behind the legacy global heavy-operation lock: its Telegram
+sessions are role-scoped (`DISCOVERY1`/`DISCOVERY2`), Kaggle kernels are guarded
+individually, and the wrapper supplies a process-wide Region Talk lock. This
+prevents unrelated multi-hour render/monitoring work from starving every slot.
 
 Important invariants:
 

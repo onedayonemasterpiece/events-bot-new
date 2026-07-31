@@ -106,7 +106,6 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
         assert {"region_talk_0", "region_talk_1", "region_talk_2"} <= set(scheduler.jobs)
         assert scheduler.jobs["region_talk_0"].kwargs["hour"] == "4"
         assert scheduler.jobs["region_talk_0"].kwargs["minute"] == "20"
-        assert "region_talk" in scheduling._HEAVY_JOB_IDS
         assert scheduling._ops_run_kind_for_job("region_talk") == "region_talk"
 
         tz = ZoneInfo("UTC")

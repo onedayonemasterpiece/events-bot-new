@@ -3415,7 +3415,6 @@ _HEAVY_JOB_IDS: set[str] = {
     "telegraph_cache_sanitize",
     "vk_post_prune",
     "event_vector_sync",
-    "region_talk",
 }
 
 _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
