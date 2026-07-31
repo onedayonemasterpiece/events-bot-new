@@ -521,3 +521,12 @@ Production must not enable `STATIC_SITE_REQUIRE_VECTOR_BARRIER=1` while leaving
 revision permanently unproducible. After the shared atomic Google limiter and
 event-vector path have passed their release gate, both flags stay enabled and
 the independent vector receipt is allowed to converge before the static build.
+
+The event-vector projection keeps the shared Google AI gateway's fail-fast
+NO_WAIT boundary. Its batch caller may smooth only `rpm`/`tpm` admission by
+honoring the ledger's bounded `retry_after_ms` (maximum 65 seconds, jittered,
+three retries) for the same idempotent embedding input. It never waits or
+spills to another key for `rpd`, `no_keys`, unknown admission, or a wait outside
+that bound. This avoids restarting an otherwise healthy projection every ten
+minutes at the next minute-bucket boundary while preserving fail-closed quota
+accounting.
