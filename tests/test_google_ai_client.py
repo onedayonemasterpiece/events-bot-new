@@ -161,7 +161,31 @@ async def test_gemma4_keeps_native_json_config_and_filters_thought_parts():
     assert fake_genai.calls[0]["model_name"] == "models/gemma-4-31b-it"
     assert fake_genai.calls[0]["generation_config"]["response_mime_type"] == "application/json"
     assert fake_genai.calls[0]["generation_config"]["response_schema"] == {"type": "object"}
+    assert fake_genai.calls[0]["generation_config"]["thinking_config"] == {
+        "thinking_level": "minimal"
+    }
     assert "response_schema_name" not in fake_genai.calls[0]["generation_config"]
+
+
+@pytest.mark.asyncio
+async def test_gemma4_preserves_explicit_thinking_choice():
+    response = SimpleNamespace(text='{"ok":true}', usage_metadata={})
+    fake_genai = _FakeGenAI(response)
+    client = GoogleAIClient()
+    client._genai = fake_genai
+
+    await client._call_provider(
+        api_key="test-key",
+        model="gemma-4-31b",
+        prompt="hello",
+        generation_config={"thinking_config": {"thinking_level": "high"}},
+        safety_settings=None,
+        max_output_tokens=None,
+    )
+
+    assert fake_genai.calls[0]["generation_config"]["thinking_config"] == {
+        "thinking_level": "high"
+    }
 
 
 @pytest.mark.asyncio

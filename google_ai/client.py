@@ -2367,6 +2367,18 @@ class GoogleAIClient:
         # - For Gemini, use the model name as-is (no "-it" suffix).
         _provider_model, model_name = self._resolve_provider_model(model)
 
+        # Hosted Gemma 4 thinking is enabled unless callers opt out through the
+        # API. Most repository consumers are bounded extraction, validation,
+        # and rewrite stages; private thoughts can otherwise consume their
+        # complete output allowance and yield an empty MAX_TOKENS response.
+        # Preserve an explicit caller choice, but default to Google's documented
+        # Gemma 4 off switch.
+        if self._is_gemma4_model(model_name) or self._is_gemma4_model(model):
+            config.setdefault(
+                "thinking_config",
+                {"thinking_level": "minimal"},
+            )
+
         # Gemma 3 frequently rejects native JSON-mode knobs, while Gemma 4
         # benefits from native structured output contracts. Keep the old guard
         # for pre-Gemma-4 models, but allow `response_mime_type` /

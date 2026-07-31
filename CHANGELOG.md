@@ -3,9 +3,10 @@
 ## [Unreleased]
 
 ### Fixed
-- Event parsing now explicitly disables hosted Gemma 4 thinking with
-  `thinking_level=minimal` and uses the documented Gemma 4 sampling defaults,
-  preventing `MAX_TOKENS` responses that contain only private thought tokens.
+- The shared Google AI client now defaults hosted Gemma 4 to
+  `thinking_level=minimal`, preventing bounded extraction/rewrite stages from
+  returning `MAX_TOKENS` responses containing only private thought tokens;
+  event parsing also uses the documented Gemma 4 sampling defaults.
 - Region Talk external-publication scoring now honors the strict imported
   noncommercial policy attestation before applying generic social ad regexes,
   preventing editorial caveats such as a hotel-selection mention from

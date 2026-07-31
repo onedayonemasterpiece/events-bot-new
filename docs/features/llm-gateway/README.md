@@ -17,6 +17,11 @@
 
 ### 2.1. Ключевые компоненты
 *   **GoogleAIClient (`google_ai/client.py`)**: Единая точка входа. Управляет повторными попытками (Retries), логированием и вызовом RPC.
+    Для hosted Gemma 4 клиент по умолчанию передаёт
+    `thinking_config.thinking_level=minimal`: это документированный API-switch,
+    который не даёт коротким extraction/rewrite стадиям потратить весь output
+    budget в приватном thought-channel. Явный `thinking_config` consumer-а не
+    перезаписывается.
 *   **Dedicated Supabase Database**:
     *   Таблицы `google_ai_*` хранят лимиты/счётчики/аудит. Схема описана в `docs/architecture/eve-arch-phase-1.md`.
     *   *Примечание:* Сами ключи хранятся в ENV, а Supabase возвращает имя переменной окружения для выбранного ключа.
