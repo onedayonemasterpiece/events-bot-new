@@ -1,10 +1,10 @@
 # INC-2026-07-31-false-kgd80-festival-link Ложная привязка событий к «80 историй о главном»
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Telegram Monitoring / Smart Update / event public surfaces
 Opened: 2026-07-31
-Closed: —
+Closed: 2026-07-31
 Owners: events-bot
 Related incidents: `INC-2026-04-10-tg-monitoring-festival-bool`, `INC-2026-05-05-80-stories-source-coverage`, `INC-2026-07-15-tg-rich-medallion-rendering-gaps`, `INC-2026-07-21-faberge-tg-public-writer-gap`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/llm/prompts.md`, `docs/operations/incident-management.md`, `docs/operations/release-governance.md`
@@ -22,8 +22,9 @@ Related docs: `docs/features/telegram-monitoring/README.md`, `docs/llm/prompts.m
 
 - Пользователи видели неверную принадлежность четырёх событий к отдельному
   фестивальному проекту.
-- Ошибка распространялась в Telegram, managed VK, Telegraph, фестивальную
-  страницу и статический каталог.
+- Ошибка распространялась в Telegram, managed VK, Telegraph и фестивальную
+  страницу; canonical static inputs также были загрязнены, хотя сообщённое
+  событие `7332` в текущий публичный root не попало.
 - Смешение юбилея области с конкретной кампанией ухудшает доверие к афише и
   загрязняет программу фестиваля.
 
@@ -111,9 +112,17 @@ Related docs: `docs/features/telegram-monitoring/README.md`, `docs/llm/prompts.m
 
 ## Immediate Mitigation
 
-- Подготовлен полный inventory неподтверждённых KGD80 связей.
-- Pending festival queue row `1315` включён в production repair plan, чтобы
-  ошибочная связь не вернулась до следующей обработки.
+- Выполнен полный inventory: из 39 KGD80-связей четыре оказались
+  неподтверждёнными (`6129`, `6427`, `6991`, `7332`).
+- У всех четырёх canonical rows снята ложная связь; `festival_queue.id=1315`
+  удалён после резервного копирования.
+- Telegram posts `770`, `1357`, `2650`, `3010` исправлены на месте с
+  сохранением message id. Managed VK post `8453` исправлен на месте; устаревший
+  managed post `7784` удалён после подтверждения owner, потому что VK уже не
+  разрешал его редактировать.
+- Пересобраны четыре Telegraph event pages, KGD80 festival page и festival
+  navigation. Повторный production audit оставил 35 подтверждённых связей и
+  ноль неподтверждённых.
 
 ## Corrective Actions
 
@@ -126,17 +135,39 @@ Related docs: `docs/features/telegram-monitoring/README.md`, `docs/llm/prompts.m
 
 ## Follow-up Actions
 
-- [ ] Проверять campaign-association precision при последующих KGD80 массовых
+- [x] Проверять campaign-association precision при последующих KGD80 массовых
   импортах.
-- [ ] Сохранить audit query как часть incident evidence; не добавлять
+- [x] Сохранить audit query как часть incident evidence; не добавлять
   title-keyword classifier вместо LLM-first extraction.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `1632ce819272ee1bd86f0c9984c9e8bce664a955`, достижим
+  из `origin/main`; behavioral commits `3d2720fb` и `ee0cda8d`.
+- deploy path: PR
+  [#152](https://github.com/onedayonemasterpiece/events-bot-new/pull/152) и
+  [#153](https://github.com/onedayonemasterpiece/events-bot-new/pull/153),
+  Fly release `v1785`, image
+  `deployment-01KYVRFXCX0NV0RSE32JQMCFF6`, status `complete`.
+- regression checks: incident replay `5 passed`; расширенный релевантный набор
+  `83 passed`; `py_compile` для изменённых runtime modules; в обоих PR зелёные
+  `python-ci` и `static-browser-release-gate`.
+- post-deploy verification: `/healthz` вернул `ok=true`, `ready=true`,
+  `issues=[]`; deployed smoke отбрасывает общее 80-летие, сохраняет literal
+  campaign anchor и curated source binding. Production readback подтвердил:
+  `35` grounded KGD80 rows, `0` ungrounded; все четыре Telegram posts без
+  KGD80; VK `8453` без KGD80, VK `7784` удалён; Telegraph event/festival pages
+  без четырёх ложных событий.
+- static-site verification: текущий public root не содержал event `7332`.
+  Во время forced rebuild обнаружен отдельный ранее известный stale
+  secret-candidate job и нехватка volume capacity; assertion-gated recovery
+  сохранён в incident artifacts и ведётся по regression contracts
+  `INC-2026-07-18-static-snapshot-disk-pressure` /
+  `INC-2026-07-19-static-site-stale-builder-lease`. Это не оставляет ложную
+  фестивальную связь на public root и не блокирует closure этого incident.
+- evidence: redacted runtime extracts, production backups/audits и live
+  readbacks сохранены в
+  `artifacts/codex/INC-2026-07-31-false-kgd80-link/` (не коммитятся).
 
 ## Prevention
 
