@@ -394,6 +394,17 @@ not put this job behind the legacy global heavy-operation lock: its Telegram
 sessions are role-scoped (`DISCOVERY1`/`DISCOVERY2`), Kaggle kernels are guarded
 individually, and the wrapper supplies a process-wide Region Talk lock. This
 prevents unrelated multi-hour render/monitoring work from starving every slot.
+For an operator-controlled production diagnostic, run the same wrapper (not a
+hand-built partial chain):
+
+```bash
+python3 scripts/region_talk_scheduled_runner.py \
+  --scheduler-run-id supervised-YYYYMMDDTHHMMSSZ \
+  --db-path /data/db.sqlite
+```
+
+`--preflight-only` validates secret names without printing values or touching
+YDB/Kaggle/Telegram.
 
 Important invariants:
 

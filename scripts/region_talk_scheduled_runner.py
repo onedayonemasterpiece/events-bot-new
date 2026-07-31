@@ -9,6 +9,7 @@ durable JSONL logs and ``ops_run`` lifecycle accounting.
 from __future__ import annotations
 
 import asyncio
+import argparse
 import fcntl
 import json
 import logging
@@ -284,3 +285,29 @@ async def run_region_talk_scheduled(
             pass
         if lock_handle is not None:
             lock_handle.close()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run one bounded Region Talk autonomous session")
+    parser.add_argument("--scheduler-run-id", default="manual-diagnostic")
+    parser.add_argument("--db-path", default=os.getenv("DB_PATH") or "/data/db.sqlite")
+    parser.add_argument("--preflight-only", action="store_true")
+    args = parser.parse_args()
+    missing = missing_autonomy_config()
+    if args.preflight_only:
+        print(json.dumps({"ok": not missing, "missing": missing}, ensure_ascii=False))
+        return 0 if not missing else 2
+    from db import Database
+
+    result = asyncio.run(
+        run_region_talk_scheduled(
+            Database(args.db_path),
+            scheduler_run_id=str(args.scheduler_run_id or "manual-diagnostic"),
+        )
+    )
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

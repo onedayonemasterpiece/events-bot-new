@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -52,6 +54,19 @@ def test_build_command_does_not_require_dotenv(monkeypatch, tmp_path: Path) -> N
     assert "--execute-ready" in command
     assert "--env-file" not in command
     assert command[command.index("--target-confirmed") + 1] == "0"
+
+
+def test_cli_preflight_is_redacted(monkeypatch, tmp_path: Path, capsys) -> None:
+    env = complete_env(tmp_path)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(sys, "argv", ["region_talk_scheduled_runner.py", "--preflight-only"])
+
+    assert runner.main() == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"ok": True, "missing": []}
+    assert "google-key" not in json.dumps(payload)
 
 
 @pytest.mark.asyncio
