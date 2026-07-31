@@ -156,10 +156,17 @@ INSERT INTO google_ai_model_limits (model, rpm, tpm, rpd, tpm_reserve_extra)
 VALUES
     ('gemma-3-27b', 30, 15000, 14400, 1000),
     ('gemini-2.5-flash', 5, 250000, 20, 1000),
+    ('gemini-2.5-flash-lite', 10, 250000, 20, 1000),
+    ('gemini-2.5-flash-tts', 3, 10000, 10, 1000),
+    ('gemini-3-flash', 5, 250000, 20, 1000),
+    ('gemini-3-flash-preview', 5, 250000, 20, 1000),
     ('gemma-3-4b', 30, 15000, 14400, 1000),
     ('gemma-3-12b', 30, 15000, 14400, 1000),
     ('gemma-3-1b', 30, 15000, 14400, 1000),
+    ('gemma-3-2b', 30, 15000, 14400, 1000),
+    ('gemini-embedding-1.0', 100, 30000, 1000, 1000),
     ('gemini-embedding-2', 10, 30000, 1000, 1000),
+    ('gemini-robotics-er-1.5-preview', 10, 250000, 20, 1000),
     -- 2026-07-31 provider UI: 16K TPM / 14.4K RPD.  These seeds retain
     -- conservative headroom and supersede the old unlimited/1.5K assumption.
     ('gemma-4-31b', 15, 15000, 14000, 1000),
