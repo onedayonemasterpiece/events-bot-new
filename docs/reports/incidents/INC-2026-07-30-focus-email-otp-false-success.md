@@ -85,7 +85,8 @@ after any failed transport result and therefore communicated a false success.
   redirected to Yandex and advertised the same existing Supabase callback.
   This proves browser CORS/header/body forwarding, and also proves the relay
   does not silently solve the OAuth callback-host dependency. The canary is
-  not connected to onboarding or production personalization.
+  not connected to onboarding or production personalization and was deleted
+  after the evidence was captured, so it creates no persistent public route.
 
 ## Root Cause
 
