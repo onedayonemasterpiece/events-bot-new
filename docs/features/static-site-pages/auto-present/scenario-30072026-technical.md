@@ -385,3 +385,22 @@ Iteration H release evidence:
 - новый Fly/Yandex ресурс не создавался. Для полной проверки владельцу нужно
   один раз закрыть старый агент и запустить свежий ZIP; общий Node/Playwright
   cache при этом не переустанавливается.
+
+## Завершение временного стенда — 31.07.2026
+
+- После состоявшейся презентации выключено только выделенное Fly-приложение
+  `kenigevents-autopresenter`.
+- Перед операцией подтверждены app name, hostname, image и единственная machine
+  `2879209fd9e998` (`shared-cpu-1x`, 512 MB). Проверка-ограничитель отдельно
+  подтвердила, что это не production Eventsbot
+  `events-bot-new-wngqia`.
+- Выполнено `fly scale count 0 -a kenigevents-autopresenter`: machine
+  `2879209fd9e998` удалена, итоговый список Machines пуст. Это прекращает
+  compute-расход временного стенда и исключает автоматический старт по
+  случайному HTTP-запросу.
+- Само Fly-приложение, исходники, конфигурация и CDN-ассеты сохранены. Для
+  восстановления нужен новый явный deploy из актуальной ветки с
+  `tools/autopresenter/relay/fly.internet-test.toml`; основной Eventsbot при
+  выключении и восстановлении затрагивать нельзя.
+- После выключения `events-bot-new-wngqia` повторно проверен: его production
+  machine осталась `started`, health check `1/1 passing`.

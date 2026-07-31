@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- Retired the completed Autopresenter owner-test runtime by scaling only the
+  dedicated `kenigevents-autopresenter` Fly app to zero Machines; the main
+  `events-bot-new-wngqia` production app was identity-checked and left
+  untouched. Source, configuration and CDN assets remain available for a
+  future explicit redeploy.
+
 ### Fixed
 - Restored the Autopresenter owner-test control after relay restarts: command
   sequences no longer roll back underneath a running Windows agent, the client
