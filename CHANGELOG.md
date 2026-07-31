@@ -7,33 +7,31 @@
 
 ### Added
 
-- Finalized the festival-queue dual-lane target: the existing Kaggle+Gemma RDR
-  parser remains active while Antigravity is shadow/canary, then becomes a
-  health-checked hot standby/fallback after Antigravity acceptance instead of
-  being discarded. Defined provider-neutral lane runs, technical failover vs
-  semantic review, the seven structural festival profiles, one superset
-  edition/revision store, and atomic `festival-index-v2`/detail/manifest
-  projections for the general festival index and future detail pages.
+- Corrected the festival web-research target: Antigravity is the sole planned
+  primary collector from the first implementation, initially collect-only and
+  approval-gated. The built Kaggle+Gemma RDR parser has never been
+  production-run, is not a current standby and is deferred to a separate
+  future fallback project. Added the fresh 31-row/22-group non-social queue
+  cohort plus «Балтийская Ухана» acceptance case.
 - Audited the exact festival-engagement R7 tree at `940fea2e`: its 21 calendar
   rows contain 16 free topic labels, three statuses and seven derived
-  date/status shapes rather than a declared seven-class taxonomy. Designed the
-  versioned Festival Data Model v2 with separate series/edition/revision,
-  seven orthogonal classification axes, evidence-backed programme-item
-  dispositions and a bounded Antigravity A/B/C collection contract that
-  produces approval-gated `festival-edition-v2` JSON without choosing page
-  templates.
-- Designed the shadow/approval-gated preproduction Festival Web Research lane
-  for grouped `festival_queue` URL and document sources: immutable evidence,
-  Antigravity A/B primary-and-checker roles inside its independent lane plus an
-  optional conflict adjudicator, deterministic stale-edition/ticket-role
-  gates, operator review, Smart Update-only event apply, quotas, observability
-  and staged rollout.
+  date/status shapes rather than a declared seven-class taxonomy. Integrated
+  the actual static-site discovery taxonomy — `series_season`, `lineup`,
+  `grid_showcase`, `territory`, `market`, `route_promenade`, `network_pass` —
+  into Festival Data Model v2, separately from programme structure, topics and
+  item dispositions.
+- Designed the approval-gated Antigravity-primary Festival Web Research project
+  for grouped `festival_queue` URL/document sources: immutable evidence,
+  independent A/B roles and optional no-network C, a normative topology-aware
+  programme-subject→Event gate, operator review, Smart Update-only Event apply,
+  quotas, observability and staged rollout without implementing runtime code.
 - Added an evidence-first Antigravity festival-research prompt pack that splits
   discovery, per-source edition/claim review, reconciliation and adversarial
   verification, with deterministic stale-edition, unsupported-title and
   ticket-scope fail-closed gates. Its quota-aware default uses two independent
   Antigravity contexts and a third adjudicator only for disagreements.
-  Live acceptance caught all three known grounding errors but showed that
+  The live probe's manual/local review caught all three known grounding errors
+  but showed that
   repeating the full pipeline in every call is token-heavy (`150,950` tokens,
   `0/3` completed), so the control call is now a bounded counter-evidence
   collector and the optional adjudicator receives only a compact claim diff;

@@ -1,375 +1,265 @@
-# Festival Web Research: preproduction design
+# Antigravity-primary Festival Web Research — preproduction project
 
-Статус: `proposed preproduction design`, реализация и rollout ещё не выполнены.
+Статус: `design only`; код, provider calls, queue mutation и production apply в
+этой работе не выполняются.
 
-Область: `festival_queue.source_kind=url` и все найденные из таких страниц
-несоциальные источники. Telegram/VK intake, Telegram Monitoring и VK auto
-import этим контуром не меняются.
+Контур относится только к `festival_queue.source_kind=url` и другим
+несоциальным web/document-источникам. Telegram/VK intake остаётся отдельной
+системой.
 
-Canonical target JSON, the seven structural festival profiles, orthogonal
-classification facets and item-disposition semantics are defined once in
+Каноническая модель семи discovery-топологий, programme subject→Event и
+`festival-edition-v2` определена в
 [`../../../festivals/data-model-v2.md`](../../../festivals/data-model-v2.md).
-This document owns collection/runtime, not a parallel festival taxonomy.
+Датированный набор будущей проверки — в
+[`antigravity-primary-evaluation.md`](antigravity-primary-evaluation.md).
+Промпты/checkpoints — в
+[`../../../../llm/antigravity-festival-research.md`](../../../../llm/antigravity-festival-research.md).
+
+## Исправленная целевая роль
+
+1. **Antigravity — основной collector новой системы с первой реализации.**
+   Eligible non-social group не проходит сначала через Kaggle.
+2. До acceptance feature выключена; ручные прогоны `collect-only` и требуют
+   operator review. Это ограничение качества/apply, а не shadow за другим
+   parser.
+3. Построенный Kaggle+Gemma Universal Festival Parser никогда не запускался на
+   production и не считается production-контуром, baseline или standby.
+4. Kaggle+Gemma не отлаживается в текущем проекте. В целевом end-state это
+   fallback, но его adapter/conformance/live acceptance — отдельная будущая
+   работа.
+5. Пока fallback не реализован, техническая ошибка Antigravity приводит к
+   checkpoint recovery/retry/review. Она не включает legacy Kaggle direct
+   writer и не стирает последнюю approved revision.
 
 ## Цель
 
-Получать из нескольких сайтов и документов один evidence-backed пакет выпуска
-фестиваля, который:
+По группе URL одного фестивального выпуска получить проверяемый
+`festival-edition-v2` candidate, который:
 
-- не смешивает программы разных лет;
-- различает официальный сайт, отдельное событие, билет, абонемент, СМИ и
-  агрегатор;
-- не добавляет неподтверждённые номера/статусы в название;
-- сохраняет точные claims и цитаты;
-- разделяет самостоятельные события и program-only активности;
-- до ручного approval новый unified/Antigravity candidate ничего не меняет в
-  `festival`, `event`, Telegraph и публичных индексах; существующий Kaggle
-  continuity path продолжает текущее поведение на shadow-фазе;
-- после approval создаёт/обновляет события только через Smart Update.
-
-## Scope
-
-### Входит
-
-- обычные и динамические HTML-страницы;
-- официальный сайт/лендинг и страницы программы;
-- страницы организаторов и площадок;
-- ticketing: single-event, subscription, pass, registration;
-- региональные туристические афиши, СМИ и агрегаторы;
-- PDF/DOC с программой;
-- изображения/афиши с OCR, если они связаны с несоциальной страницей;
-- JSON-LD, embedded JSON, RSS/Atom, iCal и sitemap как дополнительные
-  машиночитаемые источники;
-- redirects и canonical URLs.
-
-### Не входит
-
-- `t.me`, `telegram.me`, `vk.com`, `m.vk.com` и другие social sources;
-- чтение постов/комментариев/сторий;
-- автоматический public apply;
-- замена существующих TG/VK pipelines;
-- deterministic keyword-классификация смысла фестиваля или события.
-
-Если сайт содержит social link, контур может сохранить его как
-`unfetched_social_reference`, но не загружает и не использует как evidence.
+- отделяет серию от выпуска и текущий выпуск от архива;
+- классифицирует одну из семи discovery-топологий;
+- хранит secondary topology, discovery/time/space/access/mechanics и programme
+  structure раздельно;
+- сохраняет полный inventory programme/catalogue/spatial subjects;
+- обоснованно решает, что становится отдельным Event, а что остаётся schedule,
+  programme block, temporal anchor, zone, participant, work, route point или
+  product;
+- содержит hash-bound claims, exact quotes, conflicts and unknowns;
+- после отдельного approval может атомарно обновить festival projection и
+  отправить только разрешённые Event candidates в Smart Update.
 
 ## Фактическая отправная точка
 
-Read-only production probe `2026-07-29`:
+### Очередь на `2026-07-31`
 
-- `festival_queue`: `88` pending URL rows;
-- после нормализации существующих name hints: `54` группы;
-- `15` групп содержат несколько URL, всего `49` rows;
-- крупнейшие URL-домены:
-  - `kaliningrad.tretyakovgallery.ru` — 21;
-  - `tickets.sobor-kaliningrad.ru` — 17;
-  - `visit-kaliningrad.ru` — 16;
-  - `kaliningrad.qtickets.events` — 13;
-  - `dramteatr39.ru` — 5;
-  - `filarmonia39.ru` — 3.
+Read-only production SQL показал:
 
-Текущий `_festival_group_key()` группирует только `vk/tg`; каждый URL row идёт
-в Universal Festival Parser отдельно. Это приводит к повторным Kaggle runs,
-потере cross-source evidence и риску принять event/ticket page за полный
-festival source.
+- `1318` pending rows: `tg=536`, `vk=694`, `url=88`;
+- после фильтра по дате события, а не queue timestamps, остаётся `31`
+  defensibly-current non-social URL row;
+- они группируются примерно в `22` edition targets;
+- все 31 имеют `attempts=0`, `last_error IS NULL`, пустой `result_json`;
+- URL rows не являются доказательством фестивальной identity: current
+  false-positive cases (`Три кота: День Варенья`) специально остаются в review
+  cohort;
+- ambiguous `80 историй о главном` исключён из auto-target из-за периода
+  `2026-03-28/2026-07-19 or 2026-09-01` и отдельного false-queue backup signal.
 
-Текущий Universal Festival Parser на Kaggle + Gemma остаётся активным
-production-контуром до acceptance Antigravity, а после acceptance должен
-остаться регулярно проверяемым hot standby/fallback. Его UDS v1 нельзя сразу
-использовать как authority для общей v2-модели:
+Freshness rule:
 
-- один URL за запуск;
-- `GREEDY` prompt максимизирует извлечение, а не precision;
-- officiality частично определяется наличием `fest` в домене;
-- второй LLM-pass вызывается только при missing fields;
-- нет claim/source/edition ledger;
-- model confidence является self-grade;
-- UDS напрямую upsert-ится до внешнего evidence gate.
+```text
+status=pending AND source_kind=url
+-> parse explicit event/edition period from signals/source text
+-> accept only one unambiguous interval/single date with effective end >= cutoff
+-> do not use created_at/updated_at/next_run_at as event freshness
+-> semantic festival identity remains an Antigravity/review decision
+```
 
-Кроме того, текущая реализация ещё не доказана live E2E и имеет блокирующие
-разрывы, которые нужно исправить независимо от Antigravity:
+### Antigravity
 
-- URL/run config формируется launcher'ом, но общий Kaggle runner инжектит
-  config только в `.ipynb`, тогда как Universal Festival Parser — script
-  kernel и ожидает `FESTIVAL_URL` либо `/kaggle/input/run-config/config.json`;
-- prompt и `UDSFestival`/`UDSActivity` расходятся по типу, ticket, participant,
-  work и image fields; schema failure сейчас допускает raw fallback;
-- URL programme сохраняется в `activities_json`, но не проходит через Smart
-  Update и не появляется как Event;
-- URL rows не группируются по выпуску и запускают отдельные тяжёлые runs;
-- текущий parser напрямую пишет Festival/Telegraph до revision/approval gate.
+Tracked runtime implementation отсутствует. В репозитории есть только quota
+registration/test для `antigravity-preview-05-2026`; generic Interactions
+wrapper, grouping, state tables, validators, scheduler и apply coordinator ещё
+не реализованы.
 
-## Главные решения
+Проба `2026-07-29` доказала Interactions API, agent tools, сохранение/download
+environment и actual usage. Но A/B/C дали `150950` tokens суммарно и `0/3`
+terminal semantic results; обязательные checkpoints отсутствовали. Три
+известные factual ошибки были исправлены manual/local review сырого evidence,
+а не автономным готовым результатом. Это baseline, не acceptance.
 
-1. **Не создавать вторую intake-очередь.** `festival_queue` остаётся
-   каноническим входом.
-2. **Группировать URL rows до fetch/LLM.** Одна группа выпуска — один research
-   target.
-3. **Research state хранить в core Fly SQLite.** Это canonical operational
-   state, не personalization Supabase и не YDB.
-4. **Большие snapshots хранить в существующем Supabase Storage bucket
-   `festival-parsing`.**
-5. **Роль primary зависит от rollout phase.** До acceptance Kaggle+Gemma
-   остаётся активным writer, а Antigravity работает collect-only shadow/canary.
-   После acceptance Antigravity становится primary для eligible non-social
-   web-групп, Kaggle+Gemma — регулярно проверяемым hot standby/fallback.
-6. **Локальный код только ограничивает вход и проверяет доказательства.** Он
-   fetch/mount-ит seed sources, хранит hashes/checkpoints и валидирует
-   JSON/references/quotes, но не подменяет агентское смысловое исследование.
-7. **Оба коллектора приводятся к одному provider-neutral contract.** Ни
-   Antigravity, ни Kaggle+Gemma не являются canonical truth и не могут быть
-   параллельными writer'ами. Общий host-side gate собирает одну revision.
-8. **Local evidence gate является authority.** Модели не выставляют
-   publishable/confidence самостоятельно.
-9. **Preproduction всегда shadow и approval-gated.**
+### Kaggle+Gemma
+
+RDR/UDS code построен, но production-run отсутствует. Его потенциальный URL
+path имеет известные config/schema/Smart Update/direct-write разрывы, однако их
+исправление намеренно вынесено из текущего Antigravity-проекта.
 
 ## End-to-end flow
 
 ```text
-festival_queue URL rows
-  -> group by series + explicit edition
-  -> freeze target manifest, source snapshots and input fingerprint
-  -> provider-neutral lane router
-
-  before Antigravity acceptance:
-     Kaggle+Gemma -> current apply path
-     Antigravity A+B(+C) -> independent collect-only shadow
-
-  after Antigravity acceptance:
-     Antigravity A+B(+C) -> primary candidate
-     Kaggle+Gemma -> fallback on runtime failure + scheduled hot-standby sample
-
-  -> common evidence validation and programme-inventory reconciliation
-  -> host-built festival-edition-v2 candidate
-  -> shadow diff + operator approval
-  -> one immutable effective revision / one apply lock
-  -> Smart Update accepted Event candidates
-  -> compatibility + festival-index-v2 + festival-detail-v2 projections
+current pending URL rows + explicitly supplied official non-social sources
+  -> deterministic currentness prefilter
+  -> group series + explicit edition
+  -> freeze target manifest, queue ids, normalized seed snapshots, input hash
+  -> Antigravity A: evidence + subject inventory + topology + candidate
+  -> Antigravity B: independent topology/Event checker + counter-evidence
+  -> host compare and inventory conservation
+       compatible -> host candidate
+       valid conflict -> optional no-network Antigravity C
+       missing evidence/unknown -> review
+       technical failure -> checkpoint recovery/retry
+  -> schema/evidence/topology/Event gates
+  -> collect-only candidate + operator review
+  -> [future approved apply]
+       one immutable effective revision
+       approved Event candidates -> Smart Update
+       compatibility + atomic index/detail/manifest projections
 ```
 
-Runtime failure (`429/5xx`, unavailable model/runtime, invalid/missing mandatory
-checkpoints) may route to the healthy standby. Semantic `unknown`, low evidence
-coverage or A/B conflict is **not** availability failure: it goes to C/operator
-review and must not be silently replaced by a more convenient Gemma answer.
-
-## 1. Grouping
+## 1. Grouping before provider calls
 
 ### Target key
 
 ```text
-series_key
-+ explicit edition year/number/season when present
-+ date-cluster only when explicit edition label is absent
+series_candidate + explicit edition identity
 ```
 
-Inputs:
+Strong edition identity, in order:
 
-- `festival_name`, `festival_series`, `festival_full`;
-- explicit source URLs and `dedup_links_json`;
-- explicit dates/year already present in `signals_json`;
-- existing `festival` aliases/source URLs;
-- source-local Antigravity series/edition decision when deterministic evidence
-  недостаточно.
+1. explicit year/ordinal/season from current official evidence;
+2. exact bounded date range in one edition source;
+3. source-declared edition label;
+4. unresolved temporary group requiring review.
 
-Hard rules:
+A target group contains:
 
-- differing explicit years never merge;
-- `Pianissimo` and `PIANISSIMO` may group by normalized series;
-- event/ticket pages with the same series remain separate sources inside one
-  group, not separate festival runs;
-- unknown edition cannot silently merge into a known edition; it becomes an
-  ambiguous member until reviewed;
-- `bot:*`, invalid URLs and social domains are excluded before fetch.
+- all current queue row IDs believed to describe the same edition;
+- all seed URLs and source roles;
+- normalized content hashes;
+- known aliases only as leads, never truth;
+- target cutoff/retrieval time;
+- schema/taxonomy/prompt/normalizer versions and hashes.
 
-Production snapshot expectation: current `88` URL rows should become roughly
-`54` initial targets instead of `88` independent Kaggle jobs. Exact count is
-versioned and may change after LLM edition review.
+Multiple day-ticket URLs for one three-day festival are one group, not three
+festival runs. A direct child-event URL stays in the same group but carries
+`seed_subject_hint=possible_child_event`; it must not redefine the edition.
 
-## 2. Source preflight and routing
+### Input fingerprint
 
-### Source roles
+Fingerprint binds:
+
+```text
+target identity candidate
+sorted queue ids
+canonical seed urls + normalized snapshot hashes
+schema/taxonomy/prompt/normalizer versions + hashes
+```
+
+Unchanged input with a reusable schema/evidence-valid candidate consumes zero
+provider calls. `needs_review`, incomplete or failed input may create a new
+attempt; an operator-forced rerun always stays under the same parent target
+rather than hiding history.
+
+## 2. Source preflight
+
+### Roles
 
 ```text
 official_home
+official_edition
 official_program
+official_document
 official_organizer
-official_event
-ticket_single_event
-ticket_subscription
-festival_pass
-registration
-regional_tourism
-media
-aggregator
-document_pdf
-document_image
-machine_feed
-social
-other
+official_venue
+ticket_single_item
+ticket_day
+ticket_festival
+ticket_pass_or_subscription
+regional_official
+media_or_aggregator
+ambiguous
+rejected
 ```
 
-`social` may be preserved as referenced provenance but is not fetched by this
-non-social lane.
-
-Role/officiality is not inferred from a `fest` substring. It requires:
-
-- curated domain/series relationship; or
-- explicit self-identification/organizer link inside current source evidence;
-  or
-- LLM source-role decision with exact quote, downgraded by local checks.
+Role is source- and scope-specific. A ticket subscription page cannot prove an
+individual Event ticket; a regional calendar can prove an edition lead/date but
+not missing programme details.
 
 ### Adapter order
 
-1. Known structured adapter:
-   - `visit-kaliningrad`;
-   - `tickets.sobor` / `sobor39`;
-   - Tretyakov ticket/catalog;
-   - Qtickets;
-   - Philharmonia/theatre/venue parsers already present in repo.
-2. Plain HTTP fetch + metadata/JSON-LD/anchor extraction.
-3. Playwright only for JS shell or materially incomplete static response.
-4. PDF text extraction; OCR only if text layer is absent/insufficient.
-5. Generic browser fallback.
+1. safe HTTP + metadata;
+2. browser-rendered official page;
+3. linked PDF/document extraction plus OCR when needed;
+4. bounded known ticket adapter;
+5. generic browser fallback;
+6. Antigravity discovery only if seed sources lack credible current evidence.
 
-Ticket JS reverse engineering is adapter-owned. Antigravity не исследует
-произвольные bundle/API endpoints.
+Host fetches seed snapshots where feasible; Antigravity receives bounded
+snapshots and may research only within its limits. Social links discovered on a
+site are stored as contact/source leads but are not opened or treated as
+non-social evidence by this contour.
 
-### Fetch safety
+### Safety
 
-- only `http/https`;
-- reject loopback, link-local, private network and metadata endpoints;
-- resolve/recheck DNS across redirects;
-- at most 5 redirects;
-- connect/read timeout 10/20 seconds;
-- default max response 2 MB, document override 15 MB;
-- MIME allowlist;
-- no credentials/cookies from production bot;
-- canonical URL and resolved URL stored separately;
-- HTML/text normalized once and hashed;
-- identical `(canonical_url, content_sha256)` reuses snapshot.
+- public `http/https` only;
+- DNS rebinding/private/reserved/credential URL rejection;
+- redirect/byte/time/MIME limits;
+- no browser profile/cookies/auth mounts;
+- raw documents, HTML, screenshots and logs stored outside SQLite with hashes;
+- prompt-injection text is source content, never instruction authority.
 
-## 3. Storage model
+## 3. Operational storage project
 
-These provider-neutral tables belong to core Fly SQLite.
+All operational metadata is provider-neutral enough for a future collector, but
+only `lane=antigravity` is schedulable in this design version.
 
 ### `festival_web_research_run`
 
 ```text
-id
-run_uid UNIQUE
-target_key
-series_hint
-edition_hint
-state
-mode                    # shadow | approval | apply
+id, run_uid, target_key, series_candidate, edition_candidate
+state, mode                       # collect_only | approval | apply
 input_fingerprint UNIQUE
-contract_version
-orchestration_version
-primary_queue_item_id
-planned_primary_lane    # antigravity | kaggle_gemma
-effective_lane_run_id
-fallback_reason
-candidate_json          # bounded summary only
-quality_json
-artifact_manifest_json
-verdict                 # ready | needs_review | rejected | failed
-last_error
-lease_owner
-lease_expires_at
-started_at
-completed_at
-created_at
-updated_at
+orchestration_version, contract_version, taxonomy_version/hash
+primary_queue_item_id, candidate_sha256, candidate_json
+quality_json, artifact_manifest_json
+lease_owner, lease_expires_at, created_at, updated_at
 ```
 
 ### `festival_web_research_lane_run`
 
 ```text
-id
-run_id
-lane                    # antigravity | kaggle_gemma
-lane_role               # active_writer | shadow | canary | primary | fallback | audit
+id, run_id
+lane                              # antigravity; reserved future values disabled
 attempt_no
-state                    # not_scheduled | running | checkpoint_valid | complete |
-                         # incomplete | quota_blocked | failed
-model_id
-contract_version
-prompt_version
-taxonomy_version
-taxonomy_sha256
-input_fingerprint
-kernel_or_agent_sha
-artifact_manifest_json
-usage_json
-validation_json
-candidate_sha256
-fallback_capability     # continuity_only | full_v2
-started_at
-completed_at
-UNIQUE(run_id, lane, lane_role, attempt_no)
+state                             # running | checkpoint_valid | complete |
+                                  # incomplete | quota_blocked | failed
+interaction_ids_json              # A/B/C with role and remote environment
+model_id, prompt_version, contract_version, taxonomy_version/hash
+input_fingerprint, artifact_manifest_json, usage_json, validation_json
+candidate_sha256, started_at, completed_at
+UNIQUE(run_id, lane, attempt_no)
 ```
 
-Antigravity A/B/C interaction IDs/checkpoints belong to one Antigravity lane
-run. Kaggle kernel/output IDs belong to the separate Kaggle+Gemma lane run.
-Fallback never overwrites or hides the failed primary lane record.
-
-### `festival_web_research_item`
+### Queue/source links
 
 ```text
-run_id
-queue_item_id
-selected
-input_role_hint
-PRIMARY KEY (run_id, queue_item_id)
+festival_web_research_item
+  run_id, queue_item_id, original_status, source_role, decision, decision_reason
+
+festival_web_research_source
+  lane_run_id, source_id, requested/resolved/canonical_url
+  source_role, edition_status, content_sha256, snapshot_ref
+  normalizer_version, quote_index_ref, fetched_at, decision/exclusion
 ```
 
-### `festival_web_research_source`
+Large artifacts:
 
 ```text
-lane_run_id
-source_id                # lane-local; A/B/Gemma namespaces do not collide
-global_snapshot_id       # host mapping by URL/hash/normalizer
-requested_url
-resolved_url
-canonical_url
-domain
-content_type
-fetch_mode
-fetch_status
-http_status
-content_sha256
-artifact_path
-source_role
-edition_status
-edition_year
-authority_status
-decision_json
-excluded_reason
-fetched_at
-PRIMARY KEY (lane_run_id, source_id)
+festival-parsing/web-research/<target_slug>/<run_uid>/antigravity/<role>/...
 ```
 
-Full source text, HTML, screenshots, documents, claims, LLM logs,
-counter-evidence and adjudication packets remain in:
-
-```text
-festival-parsing/web-research/<target_slug>/<run_uid>/<lane>/
-```
-
-SQLite stores only bounded manifests/hashes and the final candidate summary.
-The final candidate is built host-side from validated lane evidence; a lane
-candidate is not canonical truth by itself.
-
-Existing `festival_queue.result_json` receives only:
-
-```json
-{
-  "web_research_run_uid": "...",
-  "web_research_verdict": "ready|needs_review|rejected|failed",
-  "web_research_input_fingerprint": "...",
-  "shadow": true
-}
-```
+Operational candidate is never canonical truth. After approval, durable
+snapshot/claim/decision references are copied into the edition revision graph.
 
 ## 4. State machine
 
@@ -377,724 +267,316 @@ Existing `festival_queue.result_json` receives only:
 pending
 -> grouped
 -> input_frozen
--> routed
--> collecting_primary
--> collecting_check
--> [adjudicating]
+-> collecting_a
+-> collecting_b
+-> [adjudicating_c]
 -> evidence_validating
--> reconciling
--> candidate_shadow
+-> reconciling_inventory
+-> candidate_collect_only
 -> needs_review | ready_for_approval
 -> approved
 -> applying
 -> applied
 
-Any collection state -> retryable | degraded_fallback | failed
+collection state -> retryable | quota_blocked | failed
 ```
 
 Rules:
 
-- shadow run never changes queue `status`;
-- same input fingerprint reuses terminal shadow run;
-- the fingerprint binds target identity, grouped queue IDs, normalized source
-  hashes, normalizer, schema/contract and taxonomy version/hash; a forced
-  operator rerun creates a new lane attempt rather than a duplicate parent;
-- content hash change creates a new run;
-- stale lease is recoverable without duplicating provider requests;
-- agent `incomplete` with valid checkpoints is not automatically `failed`;
-- no automatic fourth Antigravity interaction;
-- provider switch creates a new lane run bound to the same input fingerprint;
-- only a technical/runtime failure may trigger automatic fallback;
-- last approved revision remains serving through retry/fallback/failure;
-- queue rows become `done` only after approved apply, Smart Update terminal
-  outcomes and atomic index/detail projection sync.
+- collector never writes Festival/Event/Telegraph/static artifacts directly;
+- same fingerprint/candidate hash is idempotent;
+- incomplete is recoverable only with all mandatory semantic checkpoints;
+- technical and semantic failure remain distinct;
+- no automatic fourth interaction;
+- no automatic Kaggle route;
+- last approved revision stays serving through any failure;
+- queue rows become done only after a future approved apply and required public
+  projection sync.
 
-## 5. Evidence contracts
+## 5. Evidence/checkpoint contracts
 
 ### Source ledger
 
-Per source:
-
-```json
-{
-  "source_id": "S001",
-  "canonical_url": "https://...",
-  "content_sha256": "...",
-  "source_role": "official_program",
-  "edition_status": "accepted|rejected|ambiguous",
-  "normalizer_version": "host-pinned string",
-  "decision_quotes": [{
-    "quote": "verbatim",
-    "quote_start": 0,
-    "quote_end": 0
-  }],
-  "artifact_path": "..."
-}
-```
+Each source records canonical URL, requested/resolved URL, role, current edition
+status, snapshot hash/reference, normalizer, retrieval time and decision.
 
 ### Atomic claim
 
 ```json
 {
-  "claim_id": "C0001",
-  "source_id": "S001",
-  "local_subject_id": "festival|event:1",
-  "field": "title|date|time_start|venue|ticket_url|...",
-  "raw_value": "...",
-  "normalized_value": "...",
-  "normalization": "none|trim|iso_date|iso_time|canonical_url",
+  "claim_id": "A-C0001",
+  "source_id": "A-S001",
+  "subject_kind": "festival_edition",
+  "subject_key": "edition:target",
+  "field_path": "/dates/start_date",
+  "raw_value": "7 августа 2026",
+  "normalized_value": "2026-08-07",
+  "normalization": "iso_date",
   "verbatim_quote": "...",
-  "quote_start": 0,
-  "quote_end": 0,
-  "normalizer_version": "host-pinned string"
+  "quote_start": 100,
+  "quote_end": 115,
+  "normalizer_version": "festival-text-normalizer-v1"
 }
 ```
 
-Local validator requires that the recorded offsets reproduce the quote under
-the pinned normalizer against the exact `content_sha256` snapshot. A bare
-substring match is insufficient when the same name/date occurs repeatedly.
+Host reruns offset/hash/reference validation. Bare substring match is
+insufficient.
+
+### Subject inventory
+
+Every found source-local subject receives stable local signature, entity role,
+claims and one of:
+
+```text
+accepted | duplicate_of | rejected | unresolved
+```
+
+Accepted programme items additionally receive one canonical action disposition
+from the data model. Participants, works, route points, products and zones
+remain conserved subjects even when they are not Event candidates.
+Every item also retains the explicit Event-gate ledger; model stages may assess
+semantic/evidence gates, while `operator_approval` and `smart_update` are
+host-owned states that remain pending during collect-only.
 
 ### Candidate
 
-Every **source-derived semantic fact** is either represented by this claim
-wrapper or belongs to a typed object that carries the required
-`claim_ids`/`decision_ids` for that fact:
+Every source-derived semantic fact is claim-backed. Stable keys, schema/hash
+metadata, decision-backed enums and deterministic quality/serving fields may be
+unwrapped but must have pinned derivation/reference rules.
 
-```json
-{
-  "value": "...",
-  "claim_ids": ["C0001"],
-  "status": "supported|conflict|unknown"
-}
-```
+## 6. Antigravity A/B/C project
 
-Candidate cannot contain a source-derived value absent from claims. Stable
-keys, schema/taxonomy/hash metadata, host-normalized ISO components, controlled
-enums selected by an evidence-backed decision and deterministic serving/quality
-fields may remain unwrapped; the JSON Schema pins their derivation and required
-references. Thus fields such as `disposition` or `programme_profile` cite a
-decision, while `serving.index_ready` is recomputed by the host rather than
-quoted from a page.
+### A — primary researcher
 
-### Taxonomy and programme disposition
-
-The candidate pins:
-
-```json
-{
-  "schema_version": "festival-edition-v2",
-  "taxonomy_id": "kenigevents-festivals",
-  "taxonomy_version": "1.0.0",
-  "taxonomy_sha256": "...",
-  "classification": {
-    "programme_profile": {
-      "value": "identity_only|single_compound_event|standalone_events|schedule_only|hybrid|continuous_experience|distributed_cycle|unknown",
-      "claim_ids": ["C001"],
-      "decision_ids": ["D001"],
-      "status": "supported|conflict|unknown"
-    }
-  },
-  "programme_sections": [{
-    "section_key": "...",
-    "items": [{
-      "item_key": "...",
-      "disposition": "link_existing_event|create_event_candidate|schedule_slot|programme_only|continuous_activity|service_information|reject",
-      "decision_ids": ["D002"]
-    }]
-  }],
-  "decisions": [{
-    "decision_id": "D002",
-    "evidence_claim_ids": ["C002"]
-  }]
-}
-```
-
-The calendar branch's free-text `category`, research status, date precision,
-source role and programme profile remain different axes. Unknown taxonomy
-labels are quarantined and never become production categories automatically.
-
-### Counter-evidence
-
-Independent Antigravity checker receives target/seed only, not candidate:
-
-```json
-{
-  "challenges": [{
-    "field": "festival.title",
-    "challenger_value": "...",
-    "source_id": "B-S001",
-    "source_url": "...",
-    "content_sha256": "...",
-    "quote": "...",
-    "quote_start": 0,
-    "quote_end": 0,
-    "reason": "stale_edition|unsupported_modifier|ticket_scope|other"
-  }]
-}
-```
-
-It does one search query, fetches at most four pages and checkpoints each page
-immediately.
-
-### Adjudication packet
-
-Only conflicting claim values, exact quotes and hashes. No URLs to reopen, full
-HTML, raw candidate, broad search or network tool.
-
-## 6. Dual-lane runtime
-
-### Kaggle + Gemma collector/hot standby
-
-The existing Render–Distill–Reason kernel is retained. Before Antigravity
-acceptance it remains the active URL path while Antigravity is shadow-only.
-After acceptance it runs on primary technical failure, operator request and a
-bounded health/audit sample.
-
-The current UDS v1 output supports only `continuity_only` fallback because it
-lacks hash-bound claims and full programme taxonomy. A target `full_v2`
-adapter must add, without discarding RDR/Gemma:
+Fresh environment. Before first network call write `state.json`. Inspect grouped
+seed sources independently; at most one discovery query and six accepted
+sources. Checkpoint after each source, then build:
 
 ```text
-strict UDS validation (no raw apply fallback)
--> source snapshots + quote/offset claims
--> seven-profile classification + programme inventory/dispositions
--> festival-edition-v2 candidate
--> collect-only result, no direct Festival/Telegraph mutation
+source ledger
+source reviews + atomic claims
+source-local subject inventories
+edition identity/currentness
+primary + secondary topology and discovery facets
+programme structure
+programme item roles/dispositions
+candidate_a + run summary
 ```
 
-Until that adapter passes the common gate, a Gemma fallback result is
-`needs_enrichment/needs_review`; it may preserve current service continuity but
-cannot automatically claim detail-page readiness.
+A receives taxonomy/schema/validator but no legacy Kaggle result or prior public
+narrative.
 
-### Call A — primary researcher
+### B — independent checker
 
-Каждая festival group получает отдельную свежую Antigravity environment.
-Агент видит target manifest и bounded snapshots исходных URL, но не результат
-Kaggle+Gemma. Cross-lane comparison выполняется только host-side, поэтому
-ошибка standby не закрепляется внутри primary prompt.
+Separate environment receives the same frozen target/snapshots, not A output.
+At most one alternative query and four accepted pages. B independently checks:
 
-Контракт:
+- festival/not-festival and current edition;
+- seven-value primary topology, route subtype and discovery unit;
+- complete critical subject inventory;
+- child Event gate vs schedule/programme/continuous/service/reject;
+- stale edition, unsupported title modifier, offer scope and source authority.
 
-1. до первого network call записать `/workspace/state.json`;
-2. разобрать seed sources по одному;
-3. если среди них нет credible current source — выполнить ровно один
-   discovery query;
-4. использовать не более шести источников суммарно;
-5. после каждого успешного fetch сразу сохранить snapshot и обновить source
-   ledger;
-6. для каждого source определить role/edition и выписать atomic claims с
-   точными quotes;
-7. классифицировать каждый programme subject и сохранить disposition decision;
-8. вывести семь taxonomy axes/programme profile только из принятых
-   claims/decisions;
-9. собрать candidate только из этих claims.
+B omission is unresolved.
 
-Так как Antigravity не поддерживает structured output, JSON-файлы агента —
-предложение, а не доверенный результат. Их принимает только local validator.
+### Local comparison
 
-### Call B — independent checker
+Proceed without C only when:
 
-Вторая свежая environment получает только target manifest и исходные seed
-URLs/snapshots. Ей не передаются candidate, claims или решения Call A, чтобы
-не закреплять первую ошибку.
+- edition identity/currentness compatible;
+- primary topology compatible and secondary differences non-blocking;
+- every subject in `A ∪ B` is accepted/rejected/unresolved;
+- every possible Event has compatible disposition or blocking review;
+- source/claim/hash/quote/reference validators pass;
+- there is no stale-edition, ticket-scope or false-festival conflict.
 
-Контракт:
+Agreement is compatible evidence, not identical prose.
 
-1. использовать альтернативную формулировку ровно одного search query;
-2. открыть не более четырёх страниц;
-3. независимо проверить актуальность edition, модификаторы названия и роль
-   ticket URL (`single_event|subscription|festival_pass`);
-4. независимо определить programme profile и disposition каждого критического
-   programme subject по pinned taxonomy;
-5. checkpoint-ить каждый источник немедленно;
-6. вернуть собственный source/claim/disposition ledger и counter-evidence, а
-   не оценку уверенности первого агента.
+### C — conditional adjudicator
 
-Два вызова Antigravity — нормальный путь для каждой группы, а не исключение.
+Only for two locally valid conflicting alternatives. Receives compact claim
+diff with exact quotes and hashes. No URLs, raw pages, full candidate,
+search/fetch/network. Chooses an existing alternative or `unknown|conflict`.
+C cannot be used as retry/recovery researcher.
 
-### Call C — optional adjudicator
+## 7. Taxonomy and Event gates
 
-Вызывается только если local compare нашёл критический конфликт A/B.
-Получает компактный claim diff: значения, exact quotes, hashes и перечисленные
-локально валидные alternatives. Полные страницы, URLs, исходные candidates и
-broad search не передаются. Search/network/fetch выключены.
-Для каждого `conflict_id` результат содержит только
-`choice=<existing alternative_id>|unknown|conflict` и supporting claim IDs.
-Call C не возвращает и не пересобирает candidate, не создаёт новых фактов.
+The data model owns the normative contract. Required summary:
 
-Никакого автоматического четвёртого вызова нет. `status=incomplete` у любого
-агента допустим, если обязательные checkpoints уже записаны и проходят
-локальную проверку.
+- seven primary topologies:
+  `series_season|lineup|grid_showcase|territory|market|route_promenade|network_pass`;
+- topology answers the first user choice; topic, duration, access and Event count
+  do not choose it directly;
+- programme structure is a different representation axis;
+- every programme item has entity role + disposition;
+- standalone Event requires current-edition identity, independent public choice,
+  event-grade occurrence, meaningful identity, access compatibility,
+  topology compatibility, validated evidence and approval;
+- shared-admission artist slots, zones, participants/products, institutions,
+  works and permanent route objects are not Events;
+- a programme block can be Event while constituent works remain nested;
+- the Festival edition is not automatically duplicated into Event.
 
-### Semantic ownership
-
-Inside the Antigravity lane A/B/C отвечают за:
-
-- festival vs event vs program-only;
-- source role and edition match;
-- atomic claim extraction;
-- event identity/reconciliation;
-- explicit conflict classification.
-
-Kaggle+Gemma независимо извлекает те же семантические объекты через свой RDR
-contract. Ни одна lane не «побеждает» по имени модели или голосованию. Existing
-UDS values без source-bound claims являются proposals/leads; после перехода на
-общий evidence envelope валидные claims обеих lanes имеют одинаковые правила
-проверки. Host reconciler выбирает source-backed facts по field-specific
-authority и сохраняет conflict/unknown.
-
-Field authority is not a single global source score:
-
-- current official home/organizer evidence owns edition identity;
-- current official programme/PDF and direct official event pages own
-  programme/occurrence facts;
-- the matched direct single-event ticket page owns sale/price for that item;
-- pass/subscription owns only edition/pass scope;
-- a newest explicit organizer/venue cancellation or change may supersede an
-  older schedule;
-- media/aggregators are fallback evidence and never silently override current
-  official evidence;
-- text disappearing from a page is not proof of cancellation: a volatile field
-  becomes stale/unknown until explicit new evidence exists.
-
-### Deterministic code
-
-May:
-
-- validate JSON/references/hashes/quotes;
-- canonicalize URLs and exact ISO dates/times;
-- enforce explicit year mismatch floor;
-- enforce ticket role/identity compatibility;
-- reject source leakage and unsupported candidate values;
-- compute confidence;
-- route ambiguous semantics to review.
-
-May not:
-
-- decide broad festival/event meaning by keywords;
-- invent/repair titles/descriptions;
-- merge events on title similarity alone;
-- infer free admission from missing price;
-- choose a winner in an unresolved semantic conflict.
-
-## 7. Fail-closed gates
-
-`ready_shadow` requires:
-
-1. title has accepted current-edition claim;
-2. no unsupported ordinal/status/modifier;
-3. period has accepted evidence or remains explicitly unknown;
-4. each program event has source-local identity;
-5. each event ticket URL comes from `ticket_single_event` or an official
-   program anchor tied to the same event/date;
-6. subscription/pass never becomes event ticket;
-7. rejected/ambiguous source contributes no final scalar;
-8. all exact quotes pass hash-bound lookup;
-9. incompatible accepted values are listed in `conflicts`;
-10. source count/authority/coverage metrics are computed locally;
-11. all strong event candidates have date + meaningful title; time/venue
-    requirements follow the existing festival program rules;
-12. program-only activities are not silently promoted to Event.
-13. A/B agree on identity kind and programme profile, or C explicitly resolves
-    the bounded conflict;
-14. every subject from the union of Antigravity A/B and any scheduled
-    Kaggle+Gemma inventory has an accepted, rejected or unresolved disposition;
-15. taxonomy version/hash match the host registry and unmapped primary labels
-    remain quarantined.
-16. `continuity_only` Gemma fallback cannot auto-apply a v2 revision;
-17. runtime fallback preserves the primary failure and uses the same frozen
-    target/input fingerprint;
-18. only one approved revision/apply lock may feed public projections.
-
-Any critical failure => `needs_review`, never guessed repair.
-
-Confidence is computed per field and overall is the minimum across critical
-fields. Models do not return final confidence.
+Any missing mandatory gate produces non-Event/review, not guessed promotion.
 
 ## 8. Apply boundary
 
-### Shadow
+### Collect-only acceptance
 
-- Antigravity lane changes no `festival`/`event`, makes no Smart Update calls
-  and rebuilds no Telegraph/index;
-- existing Kaggle+Gemma production behaviour remains active until the unified
-  approval/apply coordinator is accepted;
-- operator sees the independent Antigravity candidate and diff against current
-  DB/Kaggle output;
-- after the unified coordinator lands, neither collector writes public state
-  directly; the distinction becomes lane role rather than separate writers.
+- no Festival/Event/Telegraph/static index mutation;
+- operator sees source decisions, topology rationale, subject conservation,
+  candidate diff and every Event/non-Event decision;
+- collecting as primary does not grant write authority.
 
-### Approved apply
+### Future approved apply
 
-1. create one immutable approved festival edition revision from accepted claims;
-2. persist source/provenance/decision manifests and activate it atomically;
-3. create an apply plan for approved Event dispositions;
-4. send every strong occurrence through `smart_event_update`;
-5. send images through the existing event-media ingest/gate;
-6. wait for terminal Smart Update outcomes;
-7. generate legacy Festival/`activities_json` compatibility projections;
-8. atomically generate festival index/detail/manifest projections and sync
-   Telegraph compatibility surfaces;
-9. only then mark linked queue rows `done`.
+1. build one immutable edition revision from accepted evidence/decisions;
+2. activate it atomically;
+3. create Event apply plan only for approved event dispositions;
+4. pass every Event candidate through Smart Update and media gate;
+5. record terminal results;
+6. build legacy compatibility projections;
+7. atomically publish festival index/detail/manifest and sync compatibility
+   surfaces;
+8. only then finalize linked queue rows.
 
-Partial apply:
-
-- successful events are recorded;
-- unresolved events remain `needs_review`;
-- queue group is not `done` until required page/index state exists;
-- rerun is idempotent by approved candidate hash.
-
-## 9. Operator UX
-
-Proposed commands reuse `/fest_queue`:
+## 9. Operator surface project
 
 ```text
-/fest_queue web --shadow --limit 1
+/fest_queue web --collect --limit 1
 /fest_queue web --info
 /fest_queue web --review <run_uid>
 /fest_queue web --approve <run_uid>
 /fest_queue web --reject <run_uid> <reason>
-/fest_queue web --rerun <run_uid>
+/fest_queue web --retry <run_uid>
 ```
 
-Review card:
+Review must show:
 
-- series/edition target and grouped queue IDs;
-- accepted/rejected/ambiguous sources;
-- field coverage;
-- conflicts and unknowns;
-- candidate diff against current `festival`;
-- event create/update/program-only plan;
-- Antigravity role/code, interaction/environment IDs, actual calls/tokens and
-  limiter status;
-- links to source ledger, claims, candidate and validation artifacts;
-- explicit `Approve` / `Reject` actions.
+- grouped queue IDs and edition target;
+- A/B/C interaction/environment IDs and actual usage;
+- accepted/rejected/stale/ambiguous sources;
+- primary/secondary topology + discovery rationale;
+- full conserved subject inventory;
+- Event candidates and exact failed/passed gates;
+- conflicts/unknowns and candidate diff;
+- immutable artifact links/hashes;
+- explicit candidate hash in callback.
 
-No approval through a text coincidence; callback must carry `run_uid` and
-candidate hash.
+## 10. Quotas and wrapper requirements
 
-## 10. Quotas and concurrency
+Design defaults:
 
-Preproduction defaults:
-
-| Variable | Default |
+| Setting | Value |
 |---|---:|
-| `FESTIVAL_WEB_RESEARCH_ENABLED` | `0` |
-| `FESTIVAL_WEB_RESEARCH_SHADOW` | `1` |
-| `FESTIVAL_WEB_RESEARCH_AUTO_APPLY` | `0` |
-| `FESTIVAL_WEB_RESEARCH_MAX_GROUPS_PER_RUN` | `2` |
-| `FESTIVAL_WEB_RESEARCH_CONCURRENCY` | `1` |
-| `FESTIVAL_WEB_RESEARCH_MAX_SOURCES` | `6` |
-| `FESTIVAL_WEB_RESEARCH_CHECK_SOURCES` | `4` |
-| `FESTIVAL_WEB_RESEARCH_AGENT_DAILY_CAP` | `12` |
-| `FESTIVAL_WEB_RESEARCH_MAX_AGENT_CALLS_PER_GROUP` | `3` |
-| `FESTIVAL_WEB_RESEARCH_PRIMARY_AGENT_TOKENS` | `20000` |
-| `FESTIVAL_WEB_RESEARCH_CHECK_AGENT_TOKENS` | `12000` |
-| `FESTIVAL_WEB_RESEARCH_ADJUDICATOR_TOKENS` | `8000` |
-| `FESTIVAL_WEB_RESEARCH_PRIMARY_RESERVATION_TOKENS` | `50000` |
-| `FESTIVAL_WEB_RESEARCH_CHECK_RESERVATION_TOKENS` | `30000` |
-| `FESTIVAL_WEB_RESEARCH_ADJUDICATOR_RESERVATION_TOKENS` | `20000` |
+| feature daily cap | 12 interactions |
+| concurrency | 1 |
+| calls/group | normally 2, maximum 3 |
+| A target/reservation | 20k / 50k tokens |
+| B target/reservation | 12k / 30k tokens |
+| C target/reservation | 8k / 20k tokens |
+| A/B accepted sources | 6 / 4 |
 
-All calls reserve/finalize through canonical
-`antigravity-preview-05-2026` shared limiter. Feature cap `12 RPD` is inside
-the global safe `90 RPD`. The table is a preproduction implementation contract:
-the feature-local `12 RPD` cap and the new per-role reservations are not
-runtime-enforced until this lane is implemented.
+The registered shared safe cap is `54 RPM / 96000 TPM / 90 RPD` under
+`antigravity-preview-05-2026`; feature 12 RPD is a stricter planned limit and is
+not yet runtime-enforced.
 
-No parallel Antigravity calls. Scheduler uses actual finalized usage before
-the next reservation. `max_total_tokens` remains best-effort and cannot replace
-TPM accounting.
+The future wrapper must:
 
-При feature cap `12 RPD` схема обрабатывает до шести обычных групп в день
-(`A + B`) либо четыре группы, если каждой понадобился adjudicator (`A + B + C`).
-Это осознанный отдельный бюджет внутри общего безопасного лимита `90 RPD`, а
-не попытка израсходовать все 100 запросов на один фестиваль.
-
-### Routing and hot-standby health
-
-Before acceptance the route is `Kaggle active + Antigravity shadow`. After
-acceptance the default is `Antigravity primary`; Kaggle+Gemma is scheduled only
-for technical fallback, operator request and health/audit sampling. Unchanged
-input fingerprint consumes no model requests.
-
-After the unified coordinator cutover, automatic fallback is allowed only when
-standby health is `green` **and** `fallback_capability=full_v2`:
-
-```text
-green   # fresh live canary, current kernel/schema/taxonomy adapter, artifacts
-yellow  # manual fallback only; canary stale or partially degraded
-red     # routing prohibited; credentials/model/config/runtime gate failed
-```
-
-`fallback_capability` is tracked separately:
-
-```text
-continuity_only   # collect current flat proposal for review; never direct-write after cutover
-full_v2           # common evidence/profile/programme/detail contract passes
-```
-
-`continuity_only` is useful during migration and as an operator-visible
-emergency research result, but it is not a functional automatic reserve for
-the unified pipeline. It never bypasses the coordinator, never mutates the old
-Festival/Telegraph surfaces directly after cutover and cannot activate a v2
-revision. If no green `full_v2` standby exists, the last approved revision
-keeps serving and the new queue group becomes `needs_review/retryable`.
-
-Proposed drills:
-
-- daily cheap config/render/distill/offline-schema smoke;
-- weekly full Kaggle+Gemma live canary on a pinned source bundle;
-- during the first 30 stable days, mirror every eligible target;
-- steady state: bounded changed-target sample (initial policy: 20%, at least
-  one successful live group per week);
-- forced Antigravity-off failover before each canary expansion.
-
-Antigravity may become primary only after the golden 14-bundle pack, five
-manual live shadow targets, seven scheduled shadow days, a successful forced
-failover through a green **`full_v2`** Kaggle standby, `0`
-unsupported/stale/ticket-scope critical errors, `>=0.98` item-disposition
-precision and `>=0.95` terminal-or-checkpoint recovery. A green
-`continuity_only` canary does not satisfy the primary-switch gate.
-
-### Refresh triggers and freshness
-
-A new immutable research run is triggered by a new queue URL, source content
-hash change, operator rerun or risk-window poll. Unchanged fingerprint reuses
-the terminal result with zero provider calls.
-
-Initial proposed cadence, subject to production measurements:
-
-- dates-only/far future: about every 14 days;
-- 60–14 days before start: about every 3 days;
-- under 14 days or programme/sales actively changing: daily;
-- final 72 hours for affected official/ticket sources: every 6–12 hours;
-- after completion: one closure capture, then archive.
-
-Identity/static claims may carry forward with provenance. Volatile time, venue,
-ticket availability and lifecycle facts have separate freshness TTL. A changed
-snapshot creates a new candidate/revision; collection failure never erases the
-last approved data shown by the index/detail projections.
+- use Interactions API without unsupported `labels` or structured-output
+  assumptions;
+- persist an idempotency record before/with remote create to prevent paid
+  duplicate work after crashes;
+- separate provider/accounting terminality from semantic lane state;
+- finalize actual usage on success, incomplete and error;
+- enforce wall deadline/cancellation, poll/resume and download integrity;
+- hash/redact/checkpoint the environment manifest;
+- use actual finalized usage before the next reservation;
+- treat best-effort token budgets as non-authoritative because the probe
+  overshot them materially.
 
 ## 11. Observability
 
-`ops_run.kind = festival_web_research`.
-
-Required metrics:
+Per parent run/lane/interaction:
 
 ```text
-queue_rows_selected
-targets_grouped
-sources_fetched/reused/blocked
-adapter_hits
-playwright_renders
-documents_parsed
-source_accepted/rejected/ambiguous
-claims_total/critical
-taxonomy_a_b_agreement/conflicts/unmapped
-programme_profile
-programme_items_by_disposition
-programme_inventory_unresolved
-candidate_conflicts
-stale_edition_blocks
-ticket_role_blocks
-antigravity_primary_calls
-antigravity_checker_calls
-antigravity_adjudicator_calls
-agent_incomplete
-agent_checkpoint_recovered
-agent_actual_tokens
-kaggle_gemma_lane_calls/tokens/schema_rejects
-primary_lane_runtime_failures
-fallback_attempts/successes/capability
-standby_health/last_live_canary_age
-ready_shadow/needs_review/rejected/failed
-apply_events_create/update/program_only/skipped
+run_uid, target_key, input_fingerprint
+state, attempt_no, interaction_id, environment_id
+prompt/schema/taxonomy/normalizer versions + hashes
+search/fetch/source counts
+requested/reserved/actual tokens, RPD/RPM/TPM outcome
+checkpoint names/hashes/validation
+primary/secondary topology and A/B compatibility
+subject counts by entity role/disposition
+Event gate failures and review reasons
+latency, incomplete recovery, retry outcome
+candidate/revision hashes
 ```
 
-Structured logs include `run_uid`, target key, queue IDs, source ID, model,
-requested/final tokens, interaction/environment IDs and artifact paths. Never
-log API keys, full credentials or personal data.
+Alert on missing mandatory checkpoint, token overshoot, quote/hash mismatch,
+false-festival candidate, unresolved current-edition conflict, third-call rate,
+RPD exhaustion, repeated incomplete or public mutation attempt during
+collect-only.
 
-## 12. Preproduction eval pack
+## 12. Evaluation and acceptance
 
-At least 14 real source bundles, two for each programme profile:
+The dated cohort contains 31 current URL rows / about 22 groups plus
+«Балтийская Ухана». It intentionally covers all seven topologies, a route
+subtype, multi-URL grouping, shared-admission schedules, networks/passes,
+markets/catalogues, continuous territories, series, grid/showcases, likely
+false-positive festival rows and child-source rows.
 
-1. identity/dates only;
-2. one compound festival visit with internal timetable;
-3. independently ticketed multi-event programme;
-4. one-ticket schedule-only stage programme;
-5. hybrid event + schedule/programme-only source;
-6. continuous fair/exhibition/zones;
-7. distributed seasonal cycle.
+Required gates:
 
-Each pair contains an adversarial variant such as stale year, subscription vs
-single ticket, generic JS shell, conflicting times, incomplete PDF/OCR, same
-title on different dates, a current page with a separate historical section or
-an ordinary event mislabeled as a festival.
+- topology exact match `100%` on reviewed gold;
+- child Event precision and recall `1.00` against reviewed gold;
+- disposition macro precision `>=0.98`;
+- source-grounded subject loss `0`;
+- stale/unsupported/ticket-scope critical errors `0`;
+- accepted critical exact-quote coverage `100%`;
+- terminal-or-mandatory-checkpoint recovery `>=0.95`;
+- typical 2 calls, hard max 3;
+- five manual diverse live successes, then seven scheduled collect-only days;
+- no public mutation during acceptance.
 
-Real names/contents stay in fixtures/artifacts and must not become reusable
-prompt examples.
+## 13. Planned phases — no implementation in this change
 
-### Quality gates
+### Phase 0 — wrapper/contracts/offline fixtures
 
-- unsupported critical claims: `0`;
-- stale-edition leakage: `0`;
-- subscription/single-ticket mismatch: `0`;
-- every non-null critical scalar has valid claim/quote: `100%`;
-- differing explicit years never merge: `100%`;
-- false-positive ordinary events never auto-create festival: `100%`;
-- programme-profile exact match against reviewed gold: `100%`;
-- item-disposition precision in shadow: `>= 0.98`;
-- source-grounded programme inventory loss: `0`;
-- rerun with same fingerprint creates no provider calls/writes;
-- approved strong events enter only through Smart Update.
+Interactions wrapper, limiter lease, taxonomy/schema, checkpoint validators,
+grouping and reviewed fixture pack.
 
-### Operational gates
+### Phase 1 — manual Antigravity-primary collect-only
 
-- typical Antigravity calls/group: `2`, hard cap `3`;
-- median agent tokens/group: `<= 60k`, p95 `<= 90k`;
-- workspace state written before first network call;
-- every successful fetch checkpointed immediately;
-- checkpoint recovery succeeds for `status=incomplete`;
-- group p95 wall time `<= 12 min`;
-- zero limiter bypass;
-- zero public DB/Telegraph mutations in shadow;
-- no `/healthz`, `/webhook` or bot responsiveness regression.
+One group/run; A+B(+C); five diverse live groups including «Балтийская Ухана»;
+operator review of every topology and disposition.
 
-The `2026-07-29` Antigravity 2+1 probe (`150,950` tokens, `0/3` terminal
-outputs, but `3/3` known grounding errors caught from checkpoints) fails the
-token/completion gate and is baseline evidence for the narrower roles above.
-More precisely, B/C preserved raw source checkpoints, not completed semantic
-ledgers; the errors were recovered through local/manual source review. A
-structured run is not accepted until per-source decision/claim/disposition
-checkpoints validate outside the sandbox.
+### Phase 2 — scheduled approval-gated canary
 
-## 13. Rollout
+At most two changed groups/run, concurrency one, seven days, no auto apply,
+quota/checkpoint/quality reports.
 
-### Phase 0 — stabilize the existing Kaggle lane
+### Phase 3 — approved unified apply
 
-- fix script-kernel run-config transport and run-ID round trip;
-- align prompt with strict UDS schema; remove raw-unvalidated apply fallback;
-- give festival kernel its own telemetry namespace/heartbeat/timeout;
-- add live render→Gemma→artifact E2E and URL-programme→Smart Update coverage;
-- keep current production writer behaviour until the unified coordinator is
-  accepted.
+Immutable revision, Smart Update only for approved Event candidates, atomic
+index/detail/manifest projections. Auto-apply remains a later gate.
 
-### Phase 1 — common contracts and collectors
+### Future separate phase — Kaggle+Gemma fallback
 
-- migrations/tables;
-- grouping and input fingerprint;
-- adapters/fetch safety;
-- evidence schemas/gates;
-- Google gateway/Antigravity wrappers;
-- collect-only UDS-v1→v2 adapter and Kaggle lane manifest;
-- operator review UI;
-- fixtures/tests.
-
-### Phase 2 — offline replay
-
-- run saved snapshots only;
-- no network/provider calls where artifacts suffice;
-- compare Kaggle+Gemma and Antigravity candidates against reviewed gold;
-- freeze golden verdicts.
-
-### Phase 3 — manual live shadow
-
-- flag enabled only in local/preprod runtime;
-- `/fest_queue web --shadow --limit 1`;
-- five targets, operator review of every source/claim/diff;
-- Kaggle+Gemma remains active production path; Antigravity makes no apply.
-
-### Phase 4 — scheduled shadow and failover drill
-
-- maximum two targets/run, concurrency one;
-- seven consecutive days;
-- no auto apply;
-- daily summary and quota/token report;
-- forced Antigravity-off run must succeed through a green Kaggle standby for
-  early continuity; before Phase 7 the drill is repeated through `full_v2`.
-
-### Phase 5 — unified staging apply
-
-- separate DB snapshot and Telegraph token;
-- approve at least five targets;
-- verify Smart Update, program-only split, media gate and atomic index/detail
-  projections from one effective revision.
-
-### Phase 6 — production canary
-
-- `AUTO_APPLY=0`;
-- one manually approved target/day;
-- Kaggle+Gemma remains active outside canary; inside the unified canary it is
-  automatic fallback only when green and `full_v2`, otherwise the candidate
-  remains unapplied for review/retry;
-- only after quality/operational gates may approval-gated production apply
-  expand.
-
-### Phase 7 — primary switch and steady hot standby
-
-- route eligible non-social URL groups to Antigravity primary;
-- require Kaggle+Gemma `fallback_capability=full_v2` at cutover and keep it
-  green through scheduled canaries/samples and failover drills;
-- `continuity_only` or `yellow/red` standby cannot receive automatic fallback;
-- monitor primary error/quota/checkpoint recovery and fallback rate;
-- failback occurs only for a new target run after Antigravity health is stable,
-  never by switching provider in the middle of one lane run.
-
-Автоматический apply не входит в первый production rollout. Primary switch is
-an explicit acceptance decision, not a consequence of merely enabling the
-Antigravity flag.
-
-## 14. Implementation map
-
-```text
-festival_web_research/
-  contracts.py
-  grouping.py
-  preflight.py
-  fetch.py
-  adapters/
-  snapshots.py
-  taxonomy.py
-  antigravity_primary.py
-  antigravity_checker.py
-  antigravity_adjudicator.py
-  reconcile.py
-  gates.py
-  apply.py
-  service.py
-  reporting.py
-
-alembic/versions/<...>_festival_web_research.py
-models.py
-festival_queue.py
-source_parsing/festival_parser.py        # retained Kaggle collector + v2 adapter
-main_part2.py                            # operator commands/callbacks
-scheduling.py                            # shadow job behind flag
-```
-
-Required tests:
-
-```text
-tests/test_festival_web_grouping.py
-tests/test_festival_web_preflight.py
-tests/test_festival_web_evidence.py
-tests/test_festival_web_ticket_roles.py
-tests/test_festival_web_state_machine.py
-tests/test_festival_web_apply.py
-tests/test_festival_web_quota.py
-tests/e2e/features/festival_web_research.feature
-```
+Not designed as an operational dependency here. It must be implemented and
+accepted separately before any automatic fallback can exist. После этого
+целевой routing: Antigravity technical failure или rejection его candidate по
+quality gates → Kaggle collect-only fallback; disagreement/повторный low-quality
+result → operator review, а не автоматический выбор. Оба collectors используют
+единый v2 contract и не пишут public data напрямую.
 
 ## Definition of Ready for implementation
 
-- scope remains URL/non-social only;
-- storage contour accepted: Fly SQLite + existing parser object storage;
-- existing Kaggle+Gemma blocking config/schema/E2E gaps are owned explicitly;
-- Antigravity preproduction starts shadow-only while Kaggle remains active;
-- Antigravity A+B and optional C roles plus common Kaggle v2 adapter accepted;
-- primary-switch and green `full_v2` hot-standby/failover contract accepted;
-- operator approval required for every apply;
-- the new dual-lane scheduler and unified production apply remain disabled
-  until rollout gates pass; existing queue behaviour is not disabled by this
-  design document.
+- Antigravity-primary and no-current-fallback policy accepted;
+- correct seven discovery topologies and route subtype pinned;
+- one normative child Event gate accepted;
+- fresh evaluation cohort and «Балтийская Ухана» expected decisions reviewed;
+- Interactions wrapper/checkpoint/quota boundaries accepted;
+- collect-only and operator approval mandatory;
+- code, DB migration, provider calls and queue mutation remain for a separate
+  implementation command.

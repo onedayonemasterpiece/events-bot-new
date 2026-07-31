@@ -2,24 +2,27 @@
 
 ## Overview
 
-The Universal Festival Parser enables adding/updating festivals by parsing their official website URLs using a Kaggle notebook with Playwright + Gemma 3-27B LLM.
+The Universal Festival Parser is a built, production-disabled Kaggle
+Render–Distill–Reason path for Playwright + Gemma 3-27B URL parsing. It has
+never been run on production and must not be described as an active parser or
+healthy reserve.
 
 Preproduction design for grouped, evidence-first processing of
 `festival_queue.source_kind=url` and all non-social linked sources:
-[`preproduction-web-research.md`](preproduction-web-research.md). It adds an
-independent Antigravity lane; it does **not** discard this RDR/Gemma process.
-Until Antigravity acceptance, this Kaggle parser remains the active URL path and
-Antigravity is collect-only shadow/canary. After acceptance, Antigravity becomes
-primary for eligible non-social groups and this parser remains a regularly
-tested hot standby/fallback behind the same evidence/revision/apply contract.
-They must never operate as two parallel public writers.
+[`preproduction-web-research.md`](preproduction-web-research.md). Antigravity is
+the only planned primary collector for that new contour. Debugging this
+Kaggle+Gemma parser is explicitly outside the current project. It is designated
+as the future fallback, but that route can be enabled only after a separate
+strict collect-only adapter, evidence contract and live acceptance.
 
-The built parser is not yet a proven hot standby: script-kernel run-config
-transport, prompt/UDS schema drift, strict failure handling and URL programme
-handoff through Smart Update require live E2E repair before health may be
-reported as green. The target UDS→`festival-edition-v2` adapter is collect-only;
-current direct Festival/Telegraph writes remain compatibility behaviour during
-the staged migration.
+The dated future acceptance cohort (31 current URL rows / about 22 groups plus
+«Балтийская Ухана») is documented in
+[`antigravity-primary-evaluation.md`](antigravity-primary-evaluation.md).
+
+Known future-reserve gaps include script-kernel run-config transport,
+prompt/UDS schema drift, raw failure handling, URL programme handoff and direct
+Festival/Telegraph writes. They are recorded here so the built code is not
+mistaken for an operational standby.
 
 ## Architecture: RDR (Render–Distill–Reason)
 
@@ -42,6 +45,9 @@ flowchart LR
 
 ## Usage
 
+The following sections describe the built/manual interface and intended code
+flow. They are not evidence of a production run.
+
 ### Via Telegram Bot
 
 1. Send `/fest` command (or tap "➕ Добавить фестиваль")
@@ -54,7 +60,8 @@ flowchart LR
 
 ### Via Festival Queue (current behavior and target Smart Update integration)
 
-Universal Festival Parser также вызывается из фестивальной очереди:
+Universal Festival Parser code также wired для вызова из фестивальной очереди,
+но production execution этого URL path не подтверждён:
 
 - источники **с внешней ссылкой** → Playwright + Gemma через Kaggle;
 - источники **из Telegram** обрабатываются **только через Kaggle** (Telethon внутри kernel);
@@ -67,9 +74,9 @@ Universal Festival Parser также вызывается из фестивал�
 - отдельные social/programme paths уже умеют передавать подходящие пункты в
   Smart Update, поэтому их поведение нельзя приписывать URL path.
 
-Целевой общий coordinator должен сделать Smart Update единственным механизмом
-создания/обновления **Event** из любой фестивальной программы. Это migration
-target, а не описание уже реализованного URL-пути.
+Целевой Antigravity coordinator должен сделать Smart Update единственным
+механизмом создания/обновления **Event** из web-программы. Это migration
+target, а не описание уже реализованного/запущенного URL-пути.
 
 ### Re-parsing
 
@@ -87,11 +94,12 @@ From festival edit menu (`/fest` → select festival → Edit), use **"🔄 Пе
 
 ## Program-only vs Event
 
-Не все пункты программы должны превращаться в события. В целевом общем
-контракте:
-
-- если есть дата + время + локация и смысловая «сильная» единица — создаём событие через Smart Update;
-- если пункт слабосигнальный (развлечения/активности без самостоятельного события) — сохраняем в `festival.activities_json` как program-only.
+Не все пункты программы должны превращаться в события. Целевой нормативный
+gate требует одновременно current-edition identity, самостоятельный
+пользовательский выбор/action, date+time+source-backed location, самостоятельную
+identity, корректный access scope, topology compatibility, evidence approval и
+Smart Update. Упрощённого правила «дата + время + локация + strong signal»
+недостаточно.
 
 В текущем URL parser это разделение ещё не materialized через Smart Update:
 все extracted URL activities остаются в `activities_json`. Реализация target
@@ -180,7 +188,7 @@ Operational guardrails for URL-based Kaggle parsing:
 | `FESTIVAL_PARSER_MAX_ESTIMATED_TOKENS_PER_CALL` | `8000` | Per-call estimated prompt budget, below the effective TPM bucket |
 | `FESTIVAL_PARSER_NO_LLM` | `0` | Render/distill only, skip LLM and write metrics/rate usage |
 | `FESTIVAL_PARSER_DRY_RUN` | `0` | Same safety stop before LLM for parser smoke checks |
-| `FESTIVAL_PARSER_LLM_MODEL` | `gemma-3-27b` | Explicit model override for the existing Kaggle hot-standby parser |
+| `FESTIVAL_PARSER_LLM_MODEL` | `gemma-3-27b` | Explicit model override for the built, production-disabled Kaggle parser |
 
 For the VK dynamic-cover MVP (`80 историй о главном` + `Кантата`), prefer the
 existing lightweight festival-queue path and deterministic enrichment first.

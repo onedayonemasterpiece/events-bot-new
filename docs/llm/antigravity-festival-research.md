@@ -7,14 +7,17 @@
 склей всё и сам оцени уверенность» на маленькие стадии с независимой
 проверкой доказательств.
 
-Он заменяет только старый монолитный **Antigravity interaction contract**, а
-не существующий Kaggle + Gemma Universal Festival Parser. До acceptance этот
-prompt pack работает collect-only shadow/canary; после acceptance Antigravity
-может стать primary для non-social web-групп, а Kaggle+Gemma сохраняется как
-проверяемый hot standby/fallback. Cross-lane reconciliation выполняется
-host-side; ни одна модель не пишет canonical Festival напрямую.
+Antigravity является единственным planned primary collector нового non-social
+web-контура с первой реализации. До acceptance prompt pack запускается только
+collect-only и требует operator approval; это не shadow за Kaggle. Построенный,
+но ни разу не production-run Kaggle+Gemma parser не входит в текущую отладку и
+ещё не является operational fallback. В целевом end-state fallback закреплён
+за ним после отдельного conformance/live acceptance. До этого при технической
+ошибке Antigravity используются checkpoint recovery/retry/review. Ни агент, ни
+legacy parser не пишет canonical Festival напрямую.
 
-Канонические оси классификации, programme profiles, item dispositions и
+Канонические семь discovery-топологий, programme structure, entity roles,
+item dispositions и
 выходной `festival-edition-v2` определены в
 [`../features/festivals/data-model-v2.md`](../features/festivals/data-model-v2.md).
 Этот документ задаёт prompt/evidence protocol и не вводит параллельную
@@ -69,7 +72,8 @@ Call A — primary researcher, fresh environment
 Call B — independent skeptic, another fresh environment
   тот же target/seed, но не получает candidate A
   one search query, <= 4 pages
-  независимо классифицирует critical fields, programme profile и items,
+  независимо классифицирует critical fields, primary topology,
+  programme structure и items,
   затем пытается найти опровержения
   -> taxonomy/item ledger B и counter-evidence, без второго полного candidate
 
@@ -89,24 +93,25 @@ no  -> Call C — Antigravity adjudicator
 
 - обычный расход — **2 Antigravity RPD на фестиваль**;
 - hard cap — **3 Antigravity RPD на фестиваль**;
-- при `100 RPD` это до 33 полностью спорных или до 50 обычных исследований в
-  сутки, что выше текущего объёма фестивальной очереди;
+- provider quota составляет 100 RPD, но planned feature cap — **12 RPD**:
+  максимум шесть обычных A+B групп либо четыре A+B+C группы в сутки;
 - Call B запускается в свежем environment и не видит вывод Call A, чтобы
   контроль не превратился в согласие с уже показанным ответом;
 - Call B не повторяет полный rich candidate/reconciliation: один узкий search
   query, не более четырёх страниц, немедленный source checkpoint после каждой
-  fetch, но programme profile и critical item dispositions он определяет
+  fetch, но primary topology, programme structure и critical item dispositions
+  он определяет
   независимо, иначе отсутствие записи ошибочно выглядит как согласие;
 - Call C запускается только если A и B дают две локально валидные конфликтующие
   alternatives по critical fields или edition/item identity; schema failure
-  идёт в technical fallback, а низкое покрытие — сразу в review, не в C;
+  идёт в technical retry/review, а низкое покрытие — сразу в review, не в C;
 - Call C получает только conflict packet: target, спорные values, claim ids,
   короткие exact quotes и source hashes. Полные HTML/raw candidate и
   открываемые URL запрещены как token-amplification;
 - `status=incomplete` не создаёт автоматический четвёртый запрос: schema-valid
   mandatory checkpoints можно восстановить локально; без них Antigravity lane
-  является technical failure и маршрутизируется в healthy standby/review, а C
-  не превращается в свободный recovery researcher;
+  является technical failure и маршрутизируется в retry/review, а C не
+  превращается в свободный recovery researcher;
 - все deterministic checks выполняются без provider requests;
 - вызовы идут последовательно через shared limiter. `100000 TPM` не позволяет
   бездумно запускать три длинных interaction одновременно, даже если RPD
@@ -116,7 +121,8 @@ no  -> Call C — Antigravity adjudicator
 одноцелевые contracts и checkpoint-файлы в `/workspace`; они не повторяют все
 стадии и не означают отдельный HTTP-вызов на каждую страницу.
 
-Семантика выпуска, типа страницы и тождества событий остаётся LLM-first.
+Семантика выпуска, primary topology, programme structure и тождества событий
+остаётся LLM-first.
 Детерминированные проверки не угадывают смысл страницы: они только запрещают
 использовать отсутствующую цитату, отвергнутый источник, несовместимый год или
 не тот класс билетной ссылки.
@@ -332,11 +338,11 @@ SOURCE TEXT:
 {
   "source_id": "S001",
   "subjects": [{
-    "local_subject_id": "festival|event:1|venue:1|organizer:1",
-    "subject_kind": "festival|event|venue|organizer"
+    "local_subject_id": "festival|programme:1|participant:1|work:1|route:1|product:1|venue:1|organizer:1",
+    "subject_kind": "festival|programme_item|participant|work|route_point|product_or_offer|venue|organizer"
   }],
   "claims": [{
-    "local_subject_id": "event:1",
+    "local_subject_id": "programme:1",
     "field":
       "title|edition_label|description_fact|start_date|end_date|date|time_start|timezone|venue_name|venue_address|city|organizer_name|organizer_role|participant_name|participant_role|ticket_url|price_text|registration_url|canonical_url",
     "raw_value": "JSON scalar",
@@ -381,10 +387,21 @@ rejected/ambiguous source не попадает в accepted ledger.
   "source_id": "S001",
   "items": [{
     "local_item_id": "item:1",
+    "entity_role":
+      "child_event|programme_block|temporal_anchor|activity_or_zone|participant|work|route_point|product_or_offer|service_information",
     "identity_claim_ids": ["C..."],
     "logistics_claim_ids": ["C..."],
     "disposition":
       "link_existing_event|create_event_candidate|schedule_slot|programme_only|continuous_activity|service_information|reject",
+    "event_gate": {
+      "current_edition": "pass|fail|unknown|not_applicable",
+      "independent_choice": "pass|fail|unknown|not_applicable",
+      "event_grade_occurrence": "pass|fail|unknown|not_applicable",
+      "meaningful_identity": "pass|fail|unknown|not_applicable",
+      "access_compatibility": "pass|fail|unknown|not_applicable",
+      "topology_guardrail": "pass|fail|unknown|not_applicable",
+      "evidence_validation": "pass|fail|unknown|not_applicable"
+    },
     "decision_id": "D...",
     "reason_codes": ["host-vocabulary value"],
     "alternatives_rejected": ["create_event_candidate"]
@@ -392,11 +409,13 @@ rejected/ambiguous source не попадает в accepted ledger.
 }
 ```
 
-Disposition выбирает LLM по evidence из одного источника. Детерминированный
-caller только проверяет enum, ссылки и полноту inventory. Межисточниковый
-reconciliation не имеет права потерять source-local item: каждый элемент
-union A/B должен быть связан, сохранён, отвергнут с evidence или отмечен
-`unresolved`.
+Disposition и предварительные gate statuses выбирает LLM по evidence из одного
+источника; `unknown` обязателен, если источник сам не закрывает gate.
+`operator_approval` и `smart_update` здесь отсутствуют: их может проставить
+только host на apply boundary. Детерминированный caller проверяет enum, ссылки
+и полноту inventory. Межисточниковый reconciliation не имеет права потерять
+source-local item: каждый элемент union A/B должен быть связан, сохранён,
+отвергнут с evidence или отмечен `unresolved`.
 
 ## Stage 4. Entity/event reconciliation — LLM над claim ledger
 
@@ -437,7 +456,26 @@ ACCEPTED_CLAIMS:
       "decision_ids": ["D..."],
       "status": "supported|conflict|unknown"
     },
-    "programme_profile": {
+    "primary_topology": {
+      "value": "series_season|lineup|grid_showcase|territory|market|route_promenade|network_pass|unknown",
+      "claim_ids": ["C..."],
+      "decision_ids": ["D..."],
+      "status": "supported|conflict|unknown"
+    },
+    "route_subtype": {
+      "value": "curated|free_promenade|unknown|null",
+      "claim_ids": ["C..."],
+      "decision_ids": ["D..."],
+      "status": "supported|conflict|unknown"
+    },
+    "secondary_topologies": {"values": ["controlled value"], "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "discovery_unit": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "time_mode": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "space_mode": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "access_modes": {"values": ["controlled value"], "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "program_mechanics": {"values": ["controlled value"], "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "data_completeness": {"value": "controlled value", "claim_ids": ["C..."], "decision_ids": ["D..."]},
+    "programme_structure": {
       "value": "controlled value|unknown",
       "claim_ids": ["C..."],
       "decision_ids": ["D..."],
@@ -459,9 +497,24 @@ ACCEPTED_CLAIMS:
     "unmapped_topic_labels": ["source value"],
     "temporal_profile": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]},
     "spatial_profile": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]},
-    "access_profiles": {"values": ["controlled value"], "claim_ids": ["C..."], "decision_ids": ["D..."]},
     "lifecycle_state": {"value": "controlled value|unknown", "claim_ids": ["C..."], "decision_ids": ["D..."]}
   },
+  "programme_items": [{
+    "item_key": "opaque proposed key",
+    "member_subjects": ["S001:programme:1"],
+    "entity_role": "controlled value",
+    "disposition": "controlled value",
+    "event_gate": {
+      "current_edition": {"status": "pass|fail|unknown|not_applicable", "claim_ids": ["C..."]},
+      "independent_choice": {"status": "pass|fail|unknown|not_applicable", "claim_ids": ["C..."]},
+      "event_grade_occurrence": {"status": "pass|fail|unknown|not_applicable", "claim_ids": ["C..."]},
+      "meaningful_identity": {"status": "pass|fail|unknown|not_applicable", "claim_ids": ["C..."]},
+      "access_compatibility": {"status": "pass|fail|unknown|not_applicable", "claim_ids": ["C..."]},
+      "topology_guardrail": {"status": "pass|fail|unknown|not_applicable", "claim_ids": ["C..."]},
+      "evidence_validation": {"status": "pass|fail|unknown|not_applicable", "claim_ids": ["C..."]}
+    },
+    "decision_ids": ["D..."]
+  }],
   "event_clusters": [{
     "cluster_id": "E001",
     "member_subjects": ["S001:event:1"],
@@ -481,7 +534,7 @@ ACCEPTED_CLAIMS:
   }],
   "decisions": [{
     "decision_id": "D001",
-    "decision_kind": "edition_classification_bundle|programme_profile|programme_item_disposition|entity_match",
+    "decision_kind": "edition_classification_bundle|discovery_topology|programme_structure|programme_item_entity_role|programme_item_disposition|event_gate_bundle|entity_match",
     "subject_refs": ["S001:festival"],
     "selected_value": "existing controlled scalar/object",
     "alternatives_rejected": [],
@@ -503,8 +556,16 @@ ACCEPTED_CLAIMS:
   заполняй conflicts; не выбирай «более красивый» вариант;
 - используй только mounted taxonomy version/hash и её значения; неизвестную
   тематическую метку сохраняй в `unmapped_topic_labels`, не изобретай новый id;
-- `programme_profile` выводится из полного accepted item inventory и
+- `primary_topology` выбирай по первой пользовательской единице discovery, а
+  не по жанру, длительности, цене или количеству строк программы;
+- `programme_structure` выводится из полного accepted item inventory и
   dispositions, а не из тематической категории или желаемого типа страницы;
+- `create_event_candidate` допустим только при одновременном прохождении
+  current-edition identity, independent public choice/action,
+  date+time+source-backed location, meaningful identity, compatible access
+  scope, topology/entity-role guardrail и host evidence validation; approval и
+  Smart Update остаются host-side pending apply gates. Один strong signal или
+  длительность недостаточны;
 - каждый `decision_id` разрешается в `decisions`, а его evidence claims
   существуют в accepted ledger;
 - unknown лучше догадки.
@@ -530,8 +591,9 @@ text. Не исследуй JavaScript/API ticket shell.
 - неподтверждённый порядковый номер или статус в названии.
 
 Не угадывай, какой результат получил другой исследователь: он тебе не дан.
-Независимо классифицируй identity kind, programme profile и каждый найденный
-programme item по mounted taxonomy/disposition vocabulary. Сохраняй sources,
+Независимо классифицируй identity kind, primary/secondary topology,
+discovery unit, programme structure и каждый найденный programme item по
+mounted taxonomy/disposition vocabulary. Сохраняй sources,
 taxonomy_b.json, item_dispositions_b.jsonl и counter-evidence ledger под
 /workspace/festival_research_skeptic/. Отсутствующий item/field отмечай
 unknown/unresolved: omission не является согласием.
@@ -614,7 +676,13 @@ adjudicator и повторяет критические проверки нез
   vocabulary;
 - union A/B programme inventories полностью conserved: каждый item сопоставлен,
   сохранён, доказуемо rejected либо явно unresolved;
-- A/B согласны по identity kind, programme profile и critical dispositions
+- каждый canonical programme item сохраняет entity role, disposition и все
+  семь semantic/evidence gate statuses с claim/decision refs;
+- `create_event_candidate` требует `pass` по шести semantic gates и
+  `evidence_validation`; `operator_approval`/`smart_update` остаются
+  `pending` до host apply boundary и не могут быть выставлены моделью;
+- A/B согласны по identity kind, primary topology, programme structure и
+  critical dispositions
   либо Call C выбрал существующий allowed alternative для каждого конфликта;
 - любой `unknown|conflict` Call C оставляет revision в `needs_review`.
 

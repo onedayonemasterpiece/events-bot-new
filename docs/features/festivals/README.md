@@ -1,14 +1,19 @@
 # Festivals (серии и выпуски)
 
-Документация описывает **серии фестивалей** (бренд/линейка) и **выпуски** (конкретная итерация), а также их связь с событиями, Smart Update и Universal Festival Parser.
+Документация описывает **серии фестивалей** (бренд/линейка) и **выпуски**
+(конкретная итерация), а также их связь с программными субъектами, отдельными
+Events, Smart Update и исследовательскими collectors.
 
-Проектируемая нормализованная модель series/edition/revision, семь структурных
-programme profiles, orthogonal facets, programme-item dispositions и общий
-`festival-edition-v2` для двух collectors описаны в
+Проектируемая нормализованная модель series/edition/revision, семь
+discovery/UI-топологий, отдельный programme structure, programme-item
+dispositions и общий `festival-edition-v2` описаны в
 [`data-model-v2.md`](data-model-v2.md). Это preproduction design: текущую
-production-модель и страницы он пока не заменяет. До acceptance Antigravity
-работает shadow/canary рядом с существующим Kaggle+Gemma; после acceptance он
-может стать primary, а Kaggle+Gemma остаётся health-checked hot standby.
+production-модель и страницы он пока не заменяет. Antigravity проектируется
+единственным primary collector для нового non-social web-контура с первой
+реализации, но до acceptance работает только collect-only с ручным approval.
+Kaggle+Gemma построен, ни разу не запускался на production и в текущую работу
+не входит; в целевом end-state он должен стать fallback, но его
+repair/conformance/acceptance — отдельный будущий проект.
 
 ## Основные понятия
 
@@ -122,8 +127,14 @@ production-модель и страницы он пока не заменяет.
 
 - VK‑посты анализируются локально (без Kaggle).
 - Telegram‑посты обрабатываются **только через Kaggle**.
-- Внешние сайты фестиваля — через Universal Festival Parser (Playwright + Gemma).
-- Если TG/Kaggle прогон завершился ошибкой, но в `festival_queue` уже есть валидные `festival_name` + `source_text`, очередь делает fallback: создаёт/обновляет stub фестиваля из данных очереди и продолжает синхронизацию страницы фестиваля/индекса (в `result_json` фиксируется `monitor_error`).
+- Внешние сайты/документы целевого нового контура группируются по выпуску и
+  исследуются через Antigravity; проект и acceptance описаны в
+  [`../source-parsing/sources/festival-parser/preproduction-web-research.md`](../source-parsing/sources/festival-parser/preproduction-web-research.md).
+- Построенный Universal Festival Parser (Playwright + Gemma на Kaggle) выключен,
+  production-run не имеет и сейчас не является fallback Antigravity.
+- Существующий stub fallback после ошибки TG/Kaggle относится к текущим social
+  ingestion paths; его нельзя считать URL web-research fallback или
+  доказательством качества полной festival revision.
 - TG/VK соцсети фестиваля не выводим из URL поста-источника «по умолчанию»; сохраняем только явно подтверждённые ссылки (payload/UDS/сайт/явный self-link).
 - Для Telegram: если `festival.tg_url` совпадает с каналом `source_post_url`, ссылка показывается только при явном подтверждении канала в БД (`telegram_source.festival_source=1` и серия совпадает с фестивалем).
 - Для кейсов `День <...>` приоритет у явного названия из исходного текста/цитаты поста; если имя серии из parser/queue не заземлено в тексте поста, оно заменяется на явно указанное в источнике (чтобы не склеивать разные «Дни ...» между собой).
@@ -175,16 +186,33 @@ Smart Update сообщает оператору:
    - при ручном запуске `/fest_queue` бот должен показывать прогресс (как минимум: сколько элементов найдено, какой элемент сейчас обрабатывается, и финальный итог);
    - для TG‑элементов очереди прогресс Kaggle/Telegram Monitoring должен быть виден оператору (а не только “тихий” финальный результат).
 
-## Программа фестиваля: события vs program‑only
+## Программа фестиваля: отдельный Event или внутренняя сущность
 
-Создаём отдельное событие, если есть:
-- дата, время и локация;
-- хотя бы один «сильный» признак: уникальное название, отдельная площадка, отдельная регистрация/билет, явный тип (концерт/лекция/показ/спектакль) или длительность ≥ 45 минут.
+Каноническое правило находится в
+[`data-model-v2.md`](data-model-v2.md#normative-child-event-gate). Топология
+задаёт guardrail, но не создаёт Event автоматически.
 
-В `festival.activities_json` остаются «program‑only» пункты:
-- микропрограмма без времени/локации;
-- развлечения без самостоятельного смысла («батуты/шарики/сахарная вата»);
-- слабосигнальные пункты без уникального события.
+Для отдельного Event одновременно обязательны:
+
+- принадлежность текущему выпуску;
+- независимый пользовательский выбор, подтверждённый item-specific
+  регистрацией/билетом/detail CTA либо отдельным официальным анонсом;
+- явные дата/сеанс, время и source-backed локация/маршрут;
+- самостоятельная смысловая identity;
+- корректный scope доступа;
+- совместимость с topology/entity role;
+- validated evidence, approval и отдельный проход Smart Update.
+
+Артист внутри общего lineup, participant/product маркета, институция в pass,
+зона/активность территории, отдельное произведение внутри блока и постоянный
+route object не становятся Events. Duration `>=45m`, формат, артист, время или
+площадка — только supporting evidence, не достаточное условие. Поэтому прежнее
+широкое правило «дата + время + локация + один сильный сигнал» этим v2-контрактом
+заменяется.
+
+До миграции non-Event items могут проецироваться в `activities_json`, но
+канонически различаются как schedule slot, programme block, temporal anchor,
+continuous activity, participant/work/route point/product или service info.
 
 ## Иллюстрации и 3D‑превью
 

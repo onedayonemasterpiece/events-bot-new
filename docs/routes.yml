@@ -73,6 +73,7 @@ sections:
     tretyakov_parser: docs/features/source-parsing/sources/tretyakov/README.md
     festival_parser: docs/features/source-parsing/sources/festival-parser/README.md
     festival_web_research_preproduction: docs/features/source-parsing/sources/festival-parser/preproduction-web-research.md
+    festival_antigravity_primary_evaluation: docs/features/source-parsing/sources/festival-parser/antigravity-primary-evaluation.md
   backlog:
     index: docs/backlog/README.md
     features:
