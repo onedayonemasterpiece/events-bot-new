@@ -951,7 +951,7 @@ async def send_rows_telethon(
                 peer=peer,
                 message=text,
                 random_id=random_id,
-                no_webpage=True,
+                no_webpage=getenv_bool("REGION_TALK_NOTIFY_DISABLE_WEB_PREVIEW", False),
             ))
             mid = _telethon_result_message_id(result, random_id)
             if not mid:

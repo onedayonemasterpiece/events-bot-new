@@ -492,6 +492,7 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertEqual(result["sent_count"], 1)
         self.assertEqual(result["transport"], "telethon_discovery2")
         self.assertEqual(requests[0].random_id, 4242)
+        self.assertFalse(requests[0].no_webpage)
         self.assertEqual([item[1]["status"] for item in persisted if item[0] == "delivery"], ["sending", "delivered"])
 
 
