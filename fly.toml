@@ -227,6 +227,7 @@ app = "events-bot-new-wngqia"
   EVENT_MEDIA_CDN_BASE_URL = "https://static.kenigevents.ru"
   # Cross-process quota safety: production must never replace the shared
   # Supabase ledger with a process-local/direct-key fallback.
+  GOOGLE_AI_LIMITER_SUPABASE_URL = "https://epyznmylqmchteykjsqj.supabase.co"
   GOOGLE_AI_ALLOW_RESERVE_FALLBACK = "0"
   GOOGLE_AI_LOCAL_LIMITER_FALLBACK = "0"
   GOOGLE_AI_LOCAL_LIMITER_ON_RESERVE_ERROR = "0"

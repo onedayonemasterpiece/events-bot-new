@@ -575,6 +575,8 @@ def _build_secrets_payload() -> str:
     # video pool are present.
     # Pass storage credentials to Kaggle runtime.
     for key in (
+        "GOOGLE_AI_LIMITER_SUPABASE_URL",
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY",
         "SUPABASE_URL",
         "SUPABASE_KEY",
         "SUPABASE_SERVICE_KEY",

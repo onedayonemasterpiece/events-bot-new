@@ -46,25 +46,12 @@ def test_new_direct_sdk_path_fails_without_exposing_key_value(tmp_path: Path) ->
     assert secret not in encoded
 
 
-def test_debt_rule_is_line_shaped_and_count_bounded(tmp_path: Path) -> None:
-    allowed = (
+def test_former_debt_shape_is_no_longer_allowlisted(tmp_path: Path) -> None:
+    former_debt = (
         'endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/'
         '{model}:embedContent"'
     )
-    _write(tmp_path, "event_identity.py", allowed + "\n")
-    assert audit.audit_repository(tmp_path).passed
-
-    _write(tmp_path, "event_identity.py", allowed + "\n" + allowed + "\n")
-    report = audit.audit_repository(tmp_path)
-    assert not report.passed
-    assert report.summary["allowlisted_debt"] == 1
-    assert report.summary["unapproved"] == 1
-
-    _write(
-        tmp_path,
-        "event_identity.py",
-        'url = "https://generativelanguage.googleapis.com/v1beta/models/x:embedContent"\n',
-    )
+    _write(tmp_path, "event_identity.py", former_debt + "\n")
     report = audit.audit_repository(tmp_path)
     assert not report.passed
     assert report.summary["allowlisted_debt"] == 0

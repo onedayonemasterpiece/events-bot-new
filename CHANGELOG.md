@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Fixed
+- Replaced the per-key/partly local Google AI limiter with a dedicated
+  project-scoped atomic Supabase contract, corrected Gemma 4 to conservative
+  `15 RPM / 15000 TPM / 14000 RPD`, made all runtime construction prefer the
+  dedicated ledger, gated Edge search and legacy Kaggle consumers, retired the
+  raw Gemma key probe, and reduced the static bypass inventory to zero approved
+  debt and zero unapproved paths.
 - Google AI calls now fail closed by default when the shared Supabase limiter is
   unavailable; production explicitly disables process-local/direct fallbacks,
   and event-vector embeddings use the shared reserve/finalize gateway instead

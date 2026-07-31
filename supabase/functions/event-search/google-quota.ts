@@ -42,6 +42,19 @@ export type GoogleQuotaLease = GoogleQuotaKey & {
 };
 
 export const REQUIRED_LIMITER_CONTRACT = "google_ai_project_model_atomic_v1";
+const GOOGLE_GENERATIVE_LANGUAGE_BASE_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models";
+
+export function googleModelActionUrl(
+  model: string,
+  action: "embedContent" | "generateContent",
+): string {
+  const normalizedModel = String(model || "").trim().replace(/^models\//u, "");
+  if (!normalizedModel) {
+    throw new SharedGoogleQuotaError("metadata", "google_provider_model_missing");
+  }
+  return `${GOOGLE_GENERATIVE_LANGUAGE_BASE_URL}/${encodeURIComponent(normalizedModel)}:${action}`;
+}
 
 type SharedGoogleQuotaErrorStage =
   | "backend"

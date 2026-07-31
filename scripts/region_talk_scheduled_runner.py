@@ -66,6 +66,8 @@ def missing_autonomy_config(env: Mapping[str, str] | None = None) -> list[str]:
         ("TG_API_HASH", "TELEGRAM_API_HASH"),
         ("SUPABASE_URL",),
         ("SUPABASE_SERVICE_KEY", "SUPABASE_KEY"),
+        ("GOOGLE_AI_LIMITER_SUPABASE_URL",),
+        ("GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY",),
     )
     missing = ["|".join(group) for group in groups if not any(present(name) for name in group)]
 

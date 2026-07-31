@@ -8,6 +8,7 @@ import {
 } from "./occurrence-families.ts";
 import {
   GoogleProviderAttemptError,
+  googleModelActionUrl,
   GoogleQuotaBackend,
   GoogleQuotaKey,
   GoogleQuotaKeyCandidate,
@@ -674,7 +675,7 @@ async function embedQuery(
             day_bucket: lease.day_bucket,
           });
           const response = await fetchWithTimeout(
-            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent`,
+            googleModelActionUrl(model, "embedContent"),
             {
               method: "POST",
               headers: {
@@ -1421,7 +1422,7 @@ async function llmVerify(
               day_bucket: lease.day_bucket,
             });
             const response = await fetchWithTimeout(
-              `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+              googleModelActionUrl(model, "generateContent"),
               {
                 method: "POST",
                 headers: {

@@ -122,6 +122,7 @@ APPROVED_GATEWAY_PATHS = frozenset(
     {
         "google_ai/client.py",
         "google_ai/interactions.py",
+        "supabase/functions/event-search/google-quota.ts",
     }
 )
 
@@ -178,156 +179,10 @@ APPROVED_DEPENDENCY_PROBES: tuple[AllowRule, ...] = (
 )
 
 
-def _afisha_thumb_debt(path: str, *, response_name: str, key_name: str) -> tuple[AllowRule, ...]:
-    rationale = "AfishaThumb notebook helper still calls google.genai directly; migrate to GoogleAIClient"
-    return (
-        AllowRule(path, "current_sdk_import", _exact_line("from google import genai"), 1, rationale),
-        AllowRule(
-            path,
-            "current_sdk_client",
-            _exact_line(f"client = genai.Client(api_key={key_name})"),
-            1,
-            rationale,
-        ),
-        AllowRule(
-            path,
-            "current_sdk_generate",
-            _exact_line(f"{response_name} = client.models.generate_content("),
-            1,
-            rationale,
-        ),
-    )
-
-
-# Known bypasses are migration debt, not approved architecture.  Each entry is
-# deliberately constrained to one path, one detector, a source-line shape, and
-# a maximum occurrence count.  The audit output keeps these visible on every run.
-KNOWN_BYPASS_DEBT: tuple[AllowRule, ...] = (
-    AllowRule(
-        "event_identity.py",
-        "google_provider_endpoint",
-        re.escape(
-            'endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/'
-            '{model}:embedContent"'
-        ),
-        1,
-        "opt-in low-level identity embedding helper bypasses GoogleAIClient",
-    ),
-    AllowRule(
-        "kaggle/GemmaKey2Probe/gemma_key2_probe.ipynb",
-        "google_provider_endpoint",
-        re.escape(
-            'endpoint = f"https://generativelanguage.googleapis.com/v1beta/'
-            '{model}:generateContent?key={api_key}"'
-        ),
-        1,
-        "legacy key probe calls the provider REST endpoint directly",
-    ),
-    *_afisha_thumb_debt(
-        "kaggle/AfishaThumb/scripts/camera_llm.py",
-        response_name="resp",
-        key_name="key",
-    ),
-    *_afisha_thumb_debt(
-        "kaggle/AfishaThumb/scripts/poster_llm.py",
-        response_name="response",
-        key_name="api_key",
-    ),
-    *_afisha_thumb_debt(
-        "kaggle/AfishaThumb/scripts/scene_llm.py",
-        response_name="resp",
-        key_name="api_key",
-    ),
-    *_afisha_thumb_debt(
-        "kaggle/AfishaThumb/scripts/tour_llm.py",
-        response_name="resp",
-        key_name="key",
-    ),
-    AllowRule(
-        "kaggle/UniversalFestivalParser/src/enrich.py",
-        "legacy_sdk_import",
-        _exact_line("import google.generativeai as genai"),
-        1,
-        "UniversalFestivalParser enrichment still uses the legacy SDK directly",
-    ),
-    AllowRule(
-        "kaggle/UniversalFestivalParser/src/enrich.py",
-        "legacy_sdk_configure",
-        _exact_line("genai.configure(api_key=api_key)"),
-        1,
-        "UniversalFestivalParser enrichment still uses the legacy SDK directly",
-    ),
-    AllowRule(
-        "kaggle/UniversalFestivalParser/src/enrich.py",
-        "legacy_sdk_model",
-        _exact_line('model_instance = genai.GenerativeModel(model_name=f"models/{model}")'),
-        1,
-        "UniversalFestivalParser enrichment still uses the legacy SDK directly",
-    ),
-    AllowRule(
-        "kaggle/UniversalFestivalParser/src/reason.py",
-        "legacy_sdk_import",
-        _exact_line("import google.generativeai as genai"),
-        2,
-        "UniversalFestivalParser reasoning paths still use the legacy SDK directly",
-    ),
-    AllowRule(
-        "kaggle/UniversalFestivalParser/src/reason.py",
-        "legacy_sdk_configure",
-        _exact_line("genai.configure(api_key=api_key)"),
-        2,
-        "UniversalFestivalParser reasoning paths still use the legacy SDK directly",
-    ),
-    AllowRule(
-        "kaggle/UniversalFestivalParser/src/reason.py",
-        "legacy_sdk_model",
-        r"(?:model_instance|model)\s*=\s*genai\.GenerativeModel\(",
-        2,
-        "UniversalFestivalParser reasoning paths still use the legacy SDK directly",
-    ),
-    AllowRule(
-        "scripts/inspect/benchmark_lollipop_g4.py",
-        "legacy_sdk_import",
-        _exact_line("import google.generativeai as genai"),
-        1,
-        "legacy benchmark harness has not yet migrated to GoogleAIClient",
-    ),
-    AllowRule(
-        "scripts/inspect/benchmark_lollipop_g4.py",
-        "legacy_sdk_configure",
-        _exact_line("genai.configure(api_key=api_key)"),
-        2,
-        "legacy benchmark harness has not yet migrated to GoogleAIClient",
-    ),
-    AllowRule(
-        "scripts/inspect/benchmark_lollipop_g4.py",
-        "legacy_sdk_model",
-        r"genai\.GenerativeModel(?:\(|\(model_name=model_name\)\.generate_content_async\()",
-        4,
-        "legacy benchmark harness has not yet migrated to GoogleAIClient",
-    ),
-    AllowRule(
-        "scripts/smoke_authorized_event_search_rpc.py",
-        "google_provider_endpoint",
-        re.escape(
-            'f"https://generativelanguage.googleapis.com/v1beta/models/'
-            '{model}:embedContent",'
-        ),
-        1,
-        "authorized-search smoke helper obtains its query embedding directly",
-    ),
-    AllowRule(
-        "supabase/functions/event-search/index.ts",
-        "google_provider_endpoint",
-        re.escape(
-            '`https://generativelanguage.googleapis.com/v1beta/models/'
-            '${encodeURIComponent(model)}:'
-        )
-        + r"(?:embedContent|generateContent)`\,",
-        2,
-        "event-search Edge Function still calls provider REST endpoints directly",
-    ),
-)
+# No direct provider bypass remains intentionally callable. Keeping this tuple
+# empty is deliberate: reintroducing any former legacy line must fail the audit
+# instead of silently matching a stale migration allowlist.
+KNOWN_BYPASS_DEBT: tuple[AllowRule, ...] = ()
 
 
 SOURCE_SUFFIXES = frozenset(

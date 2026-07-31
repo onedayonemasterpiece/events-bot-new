@@ -864,6 +864,8 @@ class RegionTalkCandidateReportTests(unittest.TestCase):
         self.assertIn("TELEGRAM_AUTH_BUNDLE_DISCOVERY1", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_S22", names)
         self.assertNotIn("TELEGRAM_AUTH_BUNDLE_E2E", names)
+        self.assertIn("GOOGLE_AI_LIMITER_SUPABASE_URL", names)
+        self.assertIn("GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY", names)
 
         names = mod.region_talk_secret_names("TELEGRAM_AUTH_BUNDLE_S22")
         self.assertIn("TELEGRAM_AUTH_BUNDLE_S22", names)

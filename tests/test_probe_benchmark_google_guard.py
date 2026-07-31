@@ -149,7 +149,7 @@ def _probe_namespace(tmp_path: Path, config: dict[str, object], requests_stub) -
     }
 
 
-def test_gemma_key2_probe_default_execution_fails_before_provider_send(tmp_path) -> None:
+def test_gemma_key2_probe_is_permanently_retired_before_provider_send(tmp_path) -> None:
     class RequestsStub:
         calls = 0
 
@@ -163,28 +163,19 @@ def test_gemma_key2_probe_default_execution_fails_before_provider_send(tmp_path)
         {"secret_env_var": "GOOGLE_API_KEY2"},
         RequestsStub,
     )
-    with pytest.raises(RuntimeError, match="direct Google probe disabled"):
+    with pytest.raises(RuntimeError, match="retired"):
         exec(compile(_probe_cell_source(), "gemma_key2_probe_cell", "exec"), namespace)
     assert RequestsStub.calls == 0
 
 
-def test_gemma_key2_probe_manual_override_consumes_single_attempt(tmp_path) -> None:
-    class Response:
-        status_code = 200
-        ok = True
-        text = ""
-
-        @staticmethod
-        def json():
-            return {"text": "OK"}
-
+def test_gemma_key2_probe_cannot_be_reenabled_by_old_override(tmp_path) -> None:
     class RequestsStub:
         calls = 0
 
         @classmethod
         def post(cls, *_args, **_kwargs):
             cls.calls += 1
-            return Response()
+            raise AssertionError("provider transport must not run")
 
     namespace = _probe_namespace(
         tmp_path,
@@ -195,13 +186,9 @@ def test_gemma_key2_probe_manual_override_consumes_single_attempt(tmp_path) -> N
         },
         RequestsStub,
     )
-    exec(compile(_probe_cell_source(), "gemma_key2_probe_cell", "exec"), namespace)
-
-    assert RequestsStub.calls == 1
-    assert namespace["provider_send_attempts"] == 1
-    output = json.loads((tmp_path / "output.json").read_text(encoding="utf-8"))
-    assert output["provider_send_attempt_budget"] == 1
-    assert output["provider_send_attempts"] == 1
+    with pytest.raises(RuntimeError, match="retired"):
+        exec(compile(_probe_cell_source(), "gemma_key2_probe_cell", "exec"), namespace)
+    assert RequestsStub.calls == 0
 
 
 def test_routine_python_surfaces_have_no_raw_google_transport() -> None:
@@ -222,10 +209,9 @@ def test_routine_python_surfaces_have_no_raw_google_transport() -> None:
             assert marker not in source, f"{path.relative_to(ROOT)} contains {marker}"
 
 
-def test_notebook_direct_transport_is_explicitly_guarded_and_bounded() -> None:
+def test_notebook_contains_no_direct_transport_or_dangerous_override() -> None:
     source = _probe_cell_source()
-    assert "dangerously_allow_unaccounted_google_provider_call" in source
-    assert "dangerously_max_unaccounted_provider_send_attempts" in source
-    assert source.count("requests.post(") == 1
-    assert source.index("if not dangerous_override:") < source.index("requests.post(")
-    assert source.index("provider_send_attempts += 1") < source.index("requests.post(")
+    assert "dangerously_allow_unaccounted_google_provider_call" not in source
+    assert "dangerously_max_unaccounted_provider_send_attempts" not in source
+    assert "requests.post(" not in source
+    assert "generativelanguage.googleapis.com" not in source

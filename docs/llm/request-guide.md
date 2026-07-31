@@ -4,6 +4,26 @@ This document describes how the bot communicates with model **4o**.
 
 ## LLM-first policy (applies to all LLM providers)
 
+## Google AI request admission (all agents and runtimes)
+
+Every API-key-authenticated Gemini, Gemma or Antigravity provider attempt must
+use the dedicated shared ledger and the versioned
+`google_ai_project_model_atomic_v1` contract. The required order is
+`reserve → mark_sent → provider → finalize`; a reservation without the exact
+contract and non-empty `quota_scope` must fail before the secret is read.
+
+This applies equally to Codex/local diagnostics, Fly, Kaggle and Supabase Edge
+Functions. Raw `urllib`/`requests`, direct provider SDK clients and manual
+dangerous overrides are prohibited. Unavailable limiter configuration is an
+observable fail-closed result, never permission to send through a process-local
+counter. Before release run
+`python3 scripts/inspect/audit_google_ai_provider_paths.py` and require both
+`allowlisted_debt=0` and `unapproved=0`.
+
+Provider quotas are scoped by Google Cloud project/model. Different local key
+aliases are not assumed to be independent: unmapped keys share one conservative
+`quota_scope` until an operator-verified key→project inventory permits a split.
+
 Prompts and few-shot material must be domain-generic. Do not embed names,
 franchises, organizers or narrative facts from a production incident as a
 positive example in a reusable prompt: a later fallback can copy them into an

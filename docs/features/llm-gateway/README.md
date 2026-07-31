@@ -1,29 +1,36 @@
 # LLM Limit Management Framework (LLM Gateway)
 
 > **Linear Task:** [EVE-11](https://linear.app/events-bot-new/issue/EVE-11/llm-rate-limits)
-> **Status:** ⚠️ Implemented in code; cross-process rollout blocked by
-> `INC-2026-07-31-google-ai-parallel-limiter-bypass`
+> **Status:** canonical project-scoped database contract is applied; runtime
+> cutover and post-deploy reconciliation are tracked by
+> `INC-2026-07-31-google-ai-parallel-limiter-bypass`.
 > **Component:** `google_ai.client.GoogleAIClient`
 
 ## 1. Цель
 Обеспечить надежную работу с LLM (Gemma 2/3, Gemini) в условиях жестких ограничений API (RPM, TPM, Daily Limit), исключая "молчаливые" падения и превышения квот.
 
 ## 2. Архитектура
-Фреймворк реализован как обертка над текущим SDK `google.genai` с централизованным контролем стейта через Supabase. Deprecated `google.generativeai` оставлен только ленивым fallback для старых локальных probe/скриптов, которые ещё не прошли миграцию.
+Фреймворк реализован как обертка над текущим SDK `google.genai` с
+централизованным контролем через отдельный Supabase ledger. Legacy SDK может
+использоваться только внутри `GoogleAIClient`; прямые probe/скрипты удалены или
+переведены на тот же gateway.
 
 ### 2.1. Ключевые компоненты
 *   **GoogleAIClient (`google_ai/client.py`)**: Единая точка входа. Управляет повторными попытками (Retries), логированием и вызовом RPC.
-*   **Supabase Database**:
+*   **Dedicated Supabase Database**:
     *   Таблицы `google_ai_*` хранят лимиты/счётчики/аудит. Схема описана в `docs/architecture/eve-arch-phase-1.md`.
     *   *Примечание:* Сами ключи хранятся в ENV, а Supabase возвращает имя переменной окружения для выбранного ключа.
 *   **Supabase RPC (`google_ai_reserve`)**: Резервирование лимитов. Оно является
-    атомарным между процессами только после применения
-    `migrations/008_google_ai_atomic_reserve.sql`; наличие старой RPC с тем же
-    именем не доказывает этот контракт. RPC возвращает `env_var_name` (какую
-    переменную среды читать).
+    атомарным между процессами только для версии
+    `google_ai_project_model_atomic_v1`. Каноническая self-contained схема —
+    `supabase/migrations/20260731170000_google_ai_canonical_limiter_bootstrap.sql`;
+    наличие старой RPC с тем же именем не доказывает этот контракт. Успешный
+    ответ обязательно содержит `limiter_contract`, `quota_scope` и
+    `env_var_name`; клиент отвергает старый или неполный ответ до чтения ключа.
     *   По умолчанию reserve теперь **scope-ится к `default_env_var_name` клиента**: если вызывающий consumer не передал явные `candidate_key_ids`, клиент сначала резолвит metadata только для своего ENV-ключа (`GOOGLE_API_KEY` для обычных bot-потоков, `GOOGLE_API_KEY2` для guide-only runtimes). Это защищает общие пайплайны от случайного “перетекания” на чужой ключ только потому, что в `google_ai_api_keys` появилась новая активная строка.
-    *   Если metadata для scoped ENV-ключа отсутствует в Supabase registry (например `GOOGLE_API_KEY3` в Telegram Monitoring canary), клиент **не** снимает scope и не берёт общий key pool. Он переходит на process-local limiter fallback с тем же `default_env_var_name`, чтобы provider call всё равно шёл через выбранный runtime key.
-    *   Empty scoped-key cache is sticky: an empty result is cached as `[]` and remains local-limiter fallback on later calls in the same process, instead of widening back to an unscoped reserve.
+    *   Если metadata для scoped ENV-ключа отсутствует, клиент **не** снимает
+        scope и не берёт общий key pool: remote runtime fail-closed завершает
+        вызов без provider send.
 *   **Supabase RPC (`google_ai_mark_sent`)**: Помечает, что запрос реально отправлен провайдеру (для диагностики/восстановления).
 *   **Supabase RPC (`google_ai_finalize`)**: Фиксирует фактическое потребление токенов и статус провайдера.
 *   **Reserve fallback (только изолированная локальная разработка)**:
@@ -68,7 +75,10 @@
 
 Что проверить:
 
-*   Убедитесь, что задан `SUPABASE_SERVICE_KEY` (а не только `SUPABASE_KEY`). Для rate-limit RPC обычно нужен service role.
+*   Убедитесь, что атомарной парой заданы
+    `GOOGLE_AI_LIMITER_SUPABASE_URL` и
+    `GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY`. Общие `SUPABASE_*` не являются
+    steady-state fallback для limiter.
 *   Если RPC лежит не в `public`, выставьте `SUPABASE_SCHEMA` в нужную схему (и проверьте, что PostgREST эту схему экспонирует).
 *   Если в проекте есть только `finalize_google_ai_usage`, это допустимо: клиент продолжит работать в режиме legacy finalize без DDL-изменений.
 
@@ -82,6 +92,25 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_reserve --schema public -
 Если `--use-service` даёт 200/2xx, а без него 404/PGRST202, проблема в правах (нужен service key).
 
 ### 2.4. Включение межсервисного лимитера (rollout)
+
+Текущий rollout создаёт отдельный канонический ledger двумя миграциями:
+
+```text
+supabase/migrations/20260731170000_google_ai_canonical_limiter_bootstrap.sql
+supabase/migrations/20260731170100_google_ai_limiter_registry_seed.sql
+```
+
+После применения обязательны:
+
+1. `google_ai_limiter_capabilities().limiter_contract ==
+   google_ai_project_model_atomic_v1`;
+2. пять активных redacted key metadata rows и полный model registry;
+3. reserve-smoke внутри транзакции с `ROLLBACK` — без provider send;
+4. Supabase advisors без замечаний по `google_ai_*`;
+5. dedicated URL/service-key pair во всех Fly/Kaggle consumers.
+
+Старые migrations 002/008 ниже остаются только для истории существующего
+legacy-проекта и не являются целевым production deployment.
 
 Для проектов, где есть только legacy `finalize_google_ai_usage`, нужно один раз применить SQL-миграцию:
 
@@ -118,8 +147,9 @@ python scripts/inspect/probe_supabase_rpc.py google_ai_finalize --schema public
 
 ### 2.4.1. Provider quota scope и прямые обходы
 
-Google AI Studio показывает квоту на уровне Cloud project/model, тогда как
-текущая таблица counters исторически разделена по `google_ai_api_keys.id`.
+Google AI Studio показывает квоту на уровне Cloud project/model. Новый reserve
+берёт advisory lock и суммирует counters по `quota_scope/model`, а не по id
+ключа.
 Поэтому до инвентаризации `API key -> Cloud project` нельзя считать два разных
 ключа независимыми quota lanes. Если они принадлежат одному проекту, их расход
 должен суммироваться перед admission. Это открытый rollout blocker из
@@ -127,15 +157,15 @@ Google AI Studio показывает квоту на уровне Cloud project
 
 Запрещены production-вызовы `generativelanguage.googleapis.com`,
 `google.genai` или `google.generativeai` в обход shared reserve/mark/finalize.
-На 2026-07-31 остаются известные legacy/direct поверхности:
+Edge search, Universal Festival Parser, AfishaThumb, benchmarks и runtime
+consumers переведены на gateway; legacy GemmaKey2 raw-key notebook выведен из
+эксплуатации без manual override. Офлайн-аудит
+`scripts/inspect/audit_google_ai_provider_paths.py` обязан показывать
+`allowlisted_debt=0` и `unapproved=0`.
 
-* Supabase Edge Function `event-search` — embedding и LLM с raw multi-key
-  rotation (P0, ещё не мигрирован);
-* Universal Festival Parser, AfishaThumb и отдельные benchmark/probe scripts
-  (P1/P2, должны быть мигрированы или явно отключены);
-* локальные `agy`/Gemini CLI используют отдельную OAuth-аутентификацию и не
-  входят в API-key ledger; их нельзя запускать как будто они защищены этим
-  limiter.
+Локальные `agy`/Gemini CLI используют отдельную OAuth-аутентификацию и не
+входят в API-key ledger; их нельзя запускать как будто они защищены этим
+limiter.
 
 Production event-vector sync с этого изменения использует
 `GoogleAIClient.embed_content_async()`; скрытый direct REST retry-loop удалён,
@@ -146,18 +176,20 @@ Production event-vector sync с этого изменения используе
 Лимитер работает по нормализованным `model` из `google_ai_model_limits`, а не по raw provider name.
 Для Gemma 4 это важно, потому что в провайдера уходит `...-it`, а в Supabase quota-table хранится base id.
 
-Актуальные seed-значения ниже были проверены в quota UI Google AI Studio для этого проекта `2026-04-06`:
+Консервативные seed-значения Gemma 4 исправлены по quota UI от `2026-07-31`:
 
 *   `gemma-3-27b` -> `30 RPM / 15000 TPM / 14400 RPD`
-*   `gemma-4-31b` -> `15 RPM / Unlimited TPM / 1500 RPD`
-*   `gemma-4-26b-a4b` -> `15 RPM / Unlimited TPM / 1500 RPD`
+*   `gemma-4-31b` -> `15 RPM / 15000 TPM / 14000 RPD`
+*   `gemma-4-26b-a4b` -> `15 RPM / 15000 TPM / 14000 RPD`
 
 Нормализация в клиенте:
 
 *   `models/gemma-4-31b-it` -> `gemma-4-31b`
 *   `models/gemma-4-26b-a4b-it` -> `gemma-4-26b-a4b`
 
-Техническая деталь: в таблице `google_ai_model_limits.tpm` "Unlimited TPM" хранится как `2147483647`, потому что схема лимитера требует целочисленный cap.
+Предыдущее значение `2147483647` ошибочно трактовало TPM как unlimited и не
+могло остановить показанное на dashboard превышение. Оно запрещено в
+канонической bootstrap migration.
 
 #### Antigravity managed agent
 

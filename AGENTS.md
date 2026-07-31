@@ -90,6 +90,23 @@
 
 ## LLM‑first обработка текста (важно)
 
+### Google AI provider boundary (critical)
+
+- Любой реальный Google/Gemini/Gemma/Antigravity вызов из агента, локального
+  скрипта, Fly, Kaggle или Edge Function обязан пройти через общий атомарный
+  limiter contract `google_ai_project_model_atomic_v1` (`reserve → mark_sent →
+  provider → finalize`).
+- Агентам запрещено делать диагностические `urllib`/`requests`/SDK-вызовы
+  напрямую с `GOOGLE_API_KEY*`, даже «один тестовый запрос». Нельзя добавлять
+  dangerous/manual override для обхода ledger. При недоступном limiter вызов
+  fail-closed; это blocker evidence, а не повод использовать сырой ключ.
+- Перед изменением или запуском Google consumer выполнять офлайн-аудит:
+  `python3 scripts/inspect/audit_google_ai_provider_paths.py`. Результат должен
+  иметь `unapproved=0` и `allowlisted_debt=0`.
+- `quota_scope` означает Google Cloud project, а не локальный alias ключа.
+  Несопоставленные ключи остаются в одном консервативном scope; разделять их
+  можно только после проверенной инвентаризации key → project.
+
 Если задача касается качества/смысла данных событий (например `title`, `description`, `search_digest`, `is_free`, `ticket_status`, work-hours/non-event классификация, venue/title semantics, duplicate/match решения), приоритет у обработки **через LLM** (промпты в `docs/llm/`, provider prompts вроде `kaggle/TelegramMonitor/telegram_monitor.py`, и LLM‑пасс в Smart Update).
 
 Детерминированные функции допустимы как поддержка (санитайзеры, нормализация, извлечение дат/времени, узкие consistency/safety guardrail‑проверки), но они **не должны менять смысл** текста или подменять LLM‑решение широкими regex/keyword правилами.

@@ -26,6 +26,8 @@ def complete_env(tmp_path: Path) -> dict[str, str]:
         "TELEGRAM_API_HASH": "hash",
         "SUPABASE_URL": "https://example.supabase.co",
         "SUPABASE_SERVICE_KEY": "service-key",
+        "GOOGLE_AI_LIMITER_SUPABASE_URL": "https://limiter.supabase.co",
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY": "limiter-service-key",
         "GOOGLE_API_KEY3": "google-key",
         "REGION_TALK_SCHEDULED_LOCK_FILE": str(tmp_path / "region-talk.lock"),
         "REGION_TALK_SCHEDULED_LOG_DIR": str(tmp_path / "logs"),

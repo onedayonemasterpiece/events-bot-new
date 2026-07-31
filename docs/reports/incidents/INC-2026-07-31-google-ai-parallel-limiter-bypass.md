@@ -66,6 +66,20 @@ no Antigravity limiter bypass was found.
 - 2026-07-31 16:xx UTC — code audit found the fail-open shared-client defaults,
   direct Edge search/vector sync paths and multiple legacy agent/Kaggle paths.
   Containment changes were implemented locally without live provider calls.
+- 2026-07-31 17:06 UTC — the canonical limiter schema was applied to the
+  administrable personalization Supabase project. Capability, five-key
+  registry, 17-model registry and a rollback-only Antigravity reservation were
+  verified without a Google request.
+- 2026-07-31 17:08 UTC — Supabase advisors found seven mutable function search
+  paths; an additive migration pinned all limiter RPCs to `public, pg_temp` and
+  the repeated advisor check returned zero `google_ai_*` findings.
+- 2026-07-31 17:xx UTC — all inventoried runtime, Edge, benchmark and probe
+  paths were migrated or retired. Static audit reached
+  `allowlisted_debt=0`, `unapproved=0` without provider traffic.
+- 2026-07-31 17:41 UTC — the old ledger's current-day reservations were copied
+  into the canonical ledger before cutover. The shared scope now carries
+  Antigravity `4 RPD`, Flash-Lite `900 RPD`, Gemma 4 31B `519 RPD` and Gemini
+  3 Flash Preview `1 RPD`; no provider request was made by this import.
 
 ## Root Cause
 
@@ -78,13 +92,18 @@ no Antigravity limiter bypass was found.
    paths are Supabase `event-search` (direct multi-key rotation) and production
    event-vector sync (direct embeddings with up to six attempts per successful
    item).
-4. `migrations/008_google_ai_atomic_reserve.sql`, which serializes shared
-   check+increment, has not been applied to the live limiter database because
-   the available management credential lacks database-write permission.
+4. The old/core limiter project was not administrable with the available
+   management credential, so its migration state could not be made the
+   production safety boundary. A separate administrable canonical ledger was
+   required.
 5. The ledger is keyed by API-key row while Google quota dashboards are scoped
    to Cloud project/model. Without an explicit key-to-project quota-scope map,
    multiple keys from one project can be admitted independently and then summed
    by Google.
+6. The stored Gemma 4 limits were materially wrong: TPM was represented as
+   `2147483647` and RPD as `1500`, while the supplied dashboard showed
+   `15000 TPM / 14000 RPD`. The limiter therefore could not stop the observed
+   Gemma TPM overrun even when the RPC path itself was used.
 
 ## Contributing Factors
 
@@ -92,10 +111,10 @@ no Antigravity limiter bypass was found.
   which protected one process but did not close the cross-process failure mode.
 - `event_vector_sync --max-provider-calls` counted successful documents, not
   failed HTTP attempts hidden inside its retry loop.
-- `event-search` rotates across up to five raw keys on retry and has user-search
-  quota, but no `google_ai_reserve/finalize` provider accounting.
+- Before remediation, `event-search` rotated across up to five raw keys on
+  retry and had user-search quota but no provider accounting.
 - Direct benchmarks, AfishaThumb modules, Universal Festival Parser and local
-  smokes remain callable by agents outside the repository ledger.
+  smokes were callable by agents outside the repository ledger.
 - The dashboard screenshots do not provide a safe deterministic mapping from
   local env aliases to Google Cloud project IDs.
 
@@ -130,7 +149,8 @@ no Antigravity limiter bypass was found.
 
 - Shared client must fail closed by default when Supabase/RPC/key metadata is
   unavailable; no direct env-key success result is permitted.
-- Apply and verify migration 008 before concurrent shared-limiter traffic.
+- Apply and verify the canonical
+  `google_ai_project_model_atomic_v1` bootstrap before concurrent traffic.
 - Route all deployed direct Google paths, including Edge search, through shared
   reserve/mark/finalize or disable them.
 - Inventory API key → Google Cloud project quota scope and enforce limits at the
@@ -158,33 +178,53 @@ no Antigravity limiter bypass was found.
 - Production vector sync was changed locally to use the shared embedding gateway
   instead of direct REST/retries, and its Fly schedule was disabled pending the
   atomic rollout gate.
-- No deployment was attempted: migration 008 and the direct Edge Function gap
-  remain release blockers.
+- The dedicated schema and conservative registry are live; all five keys remain
+  in one `google:unmapped-shared` scope until a project mapping is proved.
+- Current-day counters were imported before cutover, so the new ledger does not
+  incorrectly treat 2026-07-31 as an unused day. In particular, the shared
+  Flash-Lite scope is already above its conservative daily cap and must deny
+  further Flash-Lite admission today.
+- The unrelated `PosterCandidate.url` production regression discovered during
+  this work was fixed and deployed separately under
+  `INC-2026-07-31-poster-candidate-url`; it was not caused by limiter rollout.
 
 ## Corrective Actions
 
-- Make process-local limiting explicit dev-only opt-in.
-- Never return `ok=true` with a raw env key when the shared limiter is absent.
-- Account each embedding provider attempt through shared reserve/finalize.
-- Add project-level quota scopes to key metadata and atomic SQL admission.
-- Migrate or disable every deployed direct provider path.
+- Made process-local limiting explicit dev-only opt-in.
+- Dedicated limiter configuration is an atomic URL/service-key pair and always
+  wins over explicitly transitional legacy factories.
+- Successful reserve requires exact contract and non-empty project scope before
+  a key is read.
+- Added project-level quota scopes and atomic SQL admission.
+- Routed Edge search, embeddings, Universal Festival Parser, AfishaThumb and
+  benchmark consumers through the gateway; permanently retired the raw
+  GemmaKey2 probe.
+- Added an offline repository audit and agent policy that reject any newly
+  introduced direct endpoint/SDK path.
 
 ## Follow-up Actions
 
-- [ ] Apply migration 008 with an authorized database-write credential.
-- [ ] Migrate Supabase `event-search` embedding and LLM calls to the shared gate.
-- [ ] Add and populate a redacted API-key → Cloud-project quota-scope registry.
-- [ ] Migrate/disable Universal Festival Parser, AfishaThumb, benchmarks and
-  smokes that still call Google directly.
+- [x] Apply and verify the canonical project-scoped limiter schema.
+- [x] Migrate Supabase `event-search` embedding and LLM calls to the shared gate.
+- [x] Add a conservative redacted key registry without secret values.
+- [x] Migrate/disable Universal Festival Parser, AfishaThumb, benchmarks and
+  smokes that called Google directly.
+- [ ] Replace `google:unmapped-shared` with verified per-project scopes only
+  after key → Google Cloud project evidence is available.
+- [ ] Deploy the runtime/Edge cutover from an `origin/main`-reachable SHA and
+  distribute the dedicated limiter pair to every encrypted Kaggle payload.
 - [ ] Add static CI policy plus runtime alert for any successful provider call
   lacking `api_key_id`, `minute_bucket` or `used_after`.
 - [ ] Reconcile or sweep stale/overreserved counters without refunding sent RPD.
 
 ## Release And Closure Evidence
 
-- deployed SHA: not deployed
-- deploy path: blocked by unapplied migration 008 and direct Edge search path
-- regression checks: local targeted suite `48 passed`
+- deployed SHA: pending application/Edge cutover
+- deploy path: canonical Supabase schema applied; Fly/Edge release pending
+- regression checks: targeted Python/Edge suites and offline static audit
+  (`122` targeted Python tests plus the Region Talk secret-contract test,
+  `13` Edge tests, TypeScript check; audit of `808` files with
+  `allowlisted_debt=0`, `unapproved=0`)
 - post-deploy verification: not performed; external requests explicitly stopped
 
 ## Prevention

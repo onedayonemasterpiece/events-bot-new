@@ -348,6 +348,8 @@ def _build_secrets_payload() -> str:
         payload["GUIDE_MONITORING_VK_TOKEN"] = vk_token
         payload["GUIDE_MONITORING_VK_TOKEN_ENV"] = vk_token_env
     for key in (
+        "GOOGLE_AI_LIMITER_SUPABASE_URL",
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY",
         "SUPABASE_URL",
         "SUPABASE_KEY",
         "SUPABASE_SERVICE_KEY",

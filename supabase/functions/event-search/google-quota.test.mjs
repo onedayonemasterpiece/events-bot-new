@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   GoogleProviderAttemptError,
+  googleModelActionUrl,
   resolveStrictGoogleQuotaPool,
   SharedGoogleQuotaError,
   withSharedGoogleQuotaAttempt,
@@ -70,6 +71,14 @@ test("strict pool fails closed without the shared backend", async () => {
     resolveStrictGoogleQuotaPool(null, [{ env_name: "GOOGLE_API_KEY5" }]),
     (error) =>
       error instanceof SharedGoogleQuotaError && error.stage === "backend",
+  );
+});
+
+test("provider URL construction is owned by the shared quota module", () => {
+  const providerHost = ["generativelanguage", "googleapis", "com"].join(".");
+  assert.equal(
+    googleModelActionUrl("models/gemini-embedding-2", "embedContent"),
+    `https://${providerHost}/v1beta/models/gemini-embedding-2:embedContent`,
   );
 });
 
@@ -345,7 +354,7 @@ test("Edge provider call sites use the shared-attempt wrapper only", async () =>
     2,
   );
   assert.equal(
-    source.match(/generativelanguage\.googleapis\.com/gu)?.length,
-    2,
+    source.match(/generativelanguage\.googleapis\.com/gu)?.length || 0,
+    0,
   );
 });

@@ -62,6 +62,12 @@ def test_build_secrets_payload_includes_yandex_storage_env(monkeypatch):
     monkeypatch.setenv("YC_SA_BOT_STORAGE_KEY", "secret")
     monkeypatch.setenv("YC_STORAGE_BUCKET", "kenigevents")
     monkeypatch.setenv("YC_STORAGE_ENDPOINT", "https://storage.yandexcloud.net")
+    monkeypatch.setenv(
+        "GOOGLE_AI_LIMITER_SUPABASE_URL", "https://limiter.supabase.co"
+    )
+    monkeypatch.setenv(
+        "GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY", "limiter-service-key"
+    )
 
     payload = json.loads(_build_secrets_payload())
 
@@ -69,6 +75,8 @@ def test_build_secrets_payload_includes_yandex_storage_env(monkeypatch):
     assert payload["YC_SA_BOT_STORAGE_KEY"] == "secret"
     assert payload["YC_STORAGE_BUCKET"] == "kenigevents"
     assert payload["YC_STORAGE_ENDPOINT"] == "https://storage.yandexcloud.net"
+    assert payload["GOOGLE_AI_LIMITER_SUPABASE_URL"] == "https://limiter.supabase.co"
+    assert payload["GOOGLE_AI_LIMITER_SUPABASE_SERVICE_KEY"] == "limiter-service-key"
 
 
 def test_build_secrets_payload_ships_exact_declared_video_pool(monkeypatch):
