@@ -64,14 +64,19 @@ technical, aesthetic и temporal defects. Поэтому схема ниже г�
    Пустой, non-event, completed-report или невалидный post не открывает
    video-call.
 2. **Cheap file gate.** Скачать байты в Kaggle, проверить фактический размер
-   `<= TG_MONITORING_VIDEO_MAX_MB` (production default `10 MiB`), посчитать raw
-   SHA-256 и прочитать streams через `ffprobe`. Ролик больше лимита получает
+   строго `< TG_MONITORING_VIDEO_MAX_MB` (production default `10 MiB`), посчитать
+   raw SHA-256 и прочитать доступные stream metadata (Telegram attributes;
+   `ffprobe` допустим как дополнительная проверка). Ролик размером ровно
+   `10 MiB` или больше получает
    `skipped:too_large`, но не низкую оценку качества.
-3. **Versioned cache gate.** До model reserve искать точный
-   `sha256 + model + prompt_version + schema_version + policy_version`.
-   Успешный результат, `accept`, `review` или semantic `reject` для этой версии
-   хранится без TTL. Cache hit не открывает model request. Transport/provider
-   failure не является вечным semantic reject.
+3. **Permanent SHA cache gate.** До model reserve искать exact raw `sha256`.
+   Первый валидный terminal result (`accept`, `review` или semantic `reject`)
+   хранится без TTL в sidecar; model/prompt/schema/policy versions остаются его
+   audit metadata, но их смена не запускает автоматический повторный просмотр.
+   Cache hit не открывает model request. Transport/provider failure не является
+   terminal result и не записывается как вечный semantic reject. Переоценка
+   возможна только отдельным явным операторским migration/backfill, не обычным
+   мониторингом.
 4. **Deterministic eligibility.** Fail closed до Gemini при broken decode,
    отсутствующем video stream, неверной rotation geometry, непортретном
    display-aspect, слишком малом размере или длительности вне rollout-envelope.
@@ -90,17 +95,27 @@ technical, aesthetic и temporal defects. Поэтому схема ниже г�
    в Yandex Object Storage/CDN по content-addressed key. Rejected/review video
    не расходует CDN storage. Один объект может иметь несколько event links.
 
+Production budget intentionally small: `TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN=6`.
+Обычный rotating pool задаётся `TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS`
+(rollout default `GOOGLE_API_KEY3,GOOGLE_API_KEY5`). Каждый env обязан быть и
+runtime secret, и active registry member общего Supabase limiter; отсутствие
+любого участника или reserve RPC означает fail closed. Несколько ключей дают
+rotation/изоляцию отказов, но их лимиты нельзя складывать, пока не доказано, что
+они относятся к независимым provider projects. Поэтому общий feature cap
+применяется ко всему run, а не отдельно к каждому ключу.
+
 Если уже проанализированный SHA позднее предлагается новому событию, само видео
-повторно модели не передаётся. Relation review использует сохранённые
-`description/visible_text/tags` и новый event context в одном маленьком
-text-only LLM-first запросе через тот же limiter. Для связанных event candidates
-из одного post все relation scores нужно получить в исходном video-call.
+повторно модели не передаётся. В rollout v1 cache hit связывается только с
+совпавшим сохранённым fingerprint `normalized title + date`; отсутствие такого
+совпадения означает fail closed, а не широкое прикрепление ко всем событиям.
+Для нескольких связанных event candidates из одного post все relation scores
+получаются в исходном единственном video-call.
 
 ### Rollout-envelope
 
 Первый production rollout намеренно высокоточный:
 
-- raw file `<= 10 MiB`;
+- raw file `< 10 MiB`;
 - display orientation portrait, `0.50 <= width / height <= 0.80` (от 9:16 до
   4:5, с допуском на metadata rotation);
 - минимум `540x960` display pixels;

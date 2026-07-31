@@ -389,23 +389,32 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
 - `eventposter.supabase_url/supabase_path` — legacy имена полей для managed-storage URL/путей афиш
   (могут хранить как Supabase, так и Yandex URL для надёжного preview и контролируемой очистки).
 
-## Видео (Supabase)
+## Оценённые вертикальные видео (Yandex CDN)
 
-- Kaggle (producer) может экспортировать `messages[].videos[]` с `sha256/size_bytes/mime_type/supabase_url/supabase_path` (часть полей опциональна).
-- Режим загрузки видео: `TG_MONITORING_VIDEOS_SUPABASE_MODE=off|always` (default: `always`).
-- Дедуп видео делается по `sha256` (content‑addressed ключ):
-  - canonical `supabase_path`: `v/sha256/<first2>/<sha256>.<ext>`;
-  - перед upload producer проверяет existence в Supabase Storage и при наличии не загружает видео повторно.
-- Дополнительно есть fast‑path: если удаётся получить Telegram `document.id`, producer перед скачиванием проверяет
-  legacy‑путь `v/tg/<document.id>.<ext>`; если объект уже есть — повторно не скачивает и использует его URL.
-- Сервер прикрепляет такие видео в `event_media_asset`, когда сообщение мапится ровно на одно событие (включая `skipped_nochange`: событие уже существует, но прикрепление медиа всё равно полезно).
-- Если из одного поста импортировано несколько событий, видео не мапится (статус для UI: `skipped:multi_event_message`), чтобы не прикрепить видео к неверному событию.
-- В `/tg` per-post отчёте выводится явный статус: `🎬 видео (supabase)` или `🎬 видео (skipped: <reason>)`.
-- Если видео прикреплено к событию, оно отображается на Telegraph-странице события:
-  - как встроенное видео (preview) для прямых файлов (`.mp4/.webm/.mov`);
-  - иначе как ссылка (🎬).
-- После прикрепления новых видео сервер requeue-ит `telegraph_build`, чтобы Telegraph страница гарантированно отразила новые ссылки (защита от гонок с уже запущенной сборкой страницы).
-- Очистка старых событий (`cleanup_old_events`) подхватывает `event_media_asset` и ставит объекты в `supabase_delete_queue` до удаления событий из БД.
+Каноническая рубрика, thresholds и structured-output contract:
+[`video-quality.md`](video-quality.md).
+
+- Producer рассматривает видео только **после** получения хотя бы одного
+  подтверждённого event candidate и только при фактическом размере строго
+  `< 10 MiB`; non-event/oversize/non-vertical пост не открывает video model call.
+- Один unique raw SHA анализируется `gemini-3.1-flash-lite` не более одного раза.
+  Accepted и rejected решения немедленно сохраняются в permanent Yandex sidecar
+  `v/analysis/v1/<first2>/<sha256>.json`; cache hit не пересматривает байты.
+- Все запросы идут только через `GoogleAIClient` и общий atomic Supabase limiter.
+  Dedicated normal pool не включает unrelated keys, fail-closed при отсутствии
+  registry/RPC и имеет общий cap `6` video calls на monitoring run.
+- Только `auto_accept` загружается **прямо из Kaggle** в Yandex Object Storage:
+  `v/video/v1/<first2>/<sha256>.<ext>`. Rejected/review bytes в CDN не попадают,
+  поэтому Fly не проксирует тяжёлый внутренний трафик.
+- Core SQLite разделяет global `video_asset` (описание, search text, intrinsic
+  scores, CDN state) и M:N `event_video_link` (event relevance/ranking). Один SHA
+  может быть связан с несколькими событиями, а повторный import не создаёт
+  дубликаты.
+- Static export отдаёт `video_assets[]`, отсортированные по link-level rank,
+  для будущего click-to-play UI. Сам UI в этот rollout намеренно не входит.
+- После удаления последней event-связи cleanup ставит только video binary в
+  durable managed-storage delete queue. Analysis sidecar/global SHA result
+  остаётся, а повторная связь до flush отменяет stale delete.
 
 ## Seed источников (prod/test)
 
@@ -497,13 +506,16 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - `TG_MONITORING_POSTERS_SUPABASE_MODE=off|fallback|always` (default `always`)
   - `TG_MONITORING_POSTERS_PREFIX` (default `p`)
   - `TG_MONITORING_POSTERS_WEBP_QUALITY` (default `82`)
-- Видео в Supabase (Kaggle + import):
+- Оценка и CDN видео (Kaggle + import):
   - `TG_MONITORING_VIDEOS_SUPABASE_MODE=off|always` (default `always`)
-  - `TG_MONITORING_VIDEO_MAX_MB` (default `10`)
-  - `TG_MONITORING_VIDEO_BUCKET_SAFE_MB` (default `430`; для видео отдельный safe guard)
-  - для фото/постеров остаётся safe-порог `490MB` (default общего helper-а bucket guard)
-  - `SUPABASE_BUCKET_USAGE_GUARD_CACHE_SEC` (default `600`)
-  - `SUPABASE_BUCKET_USAGE_GUARD_ON_ERROR=deny|allow` (default `deny`, рекомендуется `deny`)
+  - `TG_MONITORING_VIDEO_MAX_MB` (default `10`; сравнение строго `<`)
+  - `TG_MONITORING_VIDEO_MODEL` (default `gemini-3.1-flash-lite`)
+  - `TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS` (default `GOOGLE_API_KEY3,GOOGLE_API_KEY5`)
+  - `TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN` (default `6`)
+  - `TG_MONITORING_VIDEO_ANALYSIS_VERSION`
+  - portrait envelope: `TG_MONITORING_VIDEO_MIN_WIDTH_HEIGHT_RATIO`,
+    `TG_MONITORING_VIDEO_MAX_WIDTH_HEIGHT_RATIO`, minimum width/height and
+    duration envs documented in `.env.example`
 - `TG_MONITORING_KERNEL_REF`
 - `TG_MONITORING_KERNEL_PATH`
 - `TG_MONITORING_CONFIG_CIPHER`

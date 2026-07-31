@@ -242,6 +242,23 @@ Runtime-диагностика:
 Важно: при включённом удалении медиа `cleanup_old_events` дополнительно проверяет, что `supabase_path` больше не
 встречается в текущей БД (иначе объект общий/дедупнутый и удалять его нельзя).
 
+### Yandex CDN video lifecycle
+
+Новые Telegram video binaries используют ту же durable queue, несмотря на её
+legacy-имя, но хранятся в Yandex Object Storage:
+
+- global asset: `video_asset`, exact `sha256 UNIQUE`;
+- M:N references: `event_video_link(event_id, video_asset_id)`;
+- immutable binary: `v/video/v1/<first2>/<sha256>.<ext>`;
+- permanent analysis sidecar: `v/analysis/v1/<first2>/<sha256>.json`.
+
+После cascade удаления события binary ставится в очередь только если у global
+asset больше нет ни одной event-связи. Строка `video_asset` и analysis sidecar
+не удаляются: они предотвращают повторный model scan. Перед физическим delete
+flush повторно проверяет ссылки; новый link отменяет stale queue row. Yandex
+flush должен работать и с `supabase_client=None`, поэтому отсутствие Supabase
+Storage не блокирует очистку Yandex objects.
+
 ## Ручная очистка медиа (scripts)
 
 Иногда нужно быстро очистить Supabase Storage от “старых” картинок в **тесте/локально** (без удаления событий из SQLite):
