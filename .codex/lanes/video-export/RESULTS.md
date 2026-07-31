@@ -5,7 +5,7 @@
 - **Branch:** `agent/telegram-video-quality/video-export`
 - **Worktree:** `/home/dev/projects/events-bot-new.worktrees/video-export`
 - **Base SHA:** `c128bde4fe7a7b289c3ed4a64a4fe56d33124ad9`
-- **Implementation head SHA:** `f4393458`
+- **Implementation head SHA:** `8d6c8ff3`
 
 ## Outcome
 
@@ -17,12 +17,13 @@
   columns and missing optional columns fail closed without breaking an older
   static-site snapshot.
 - Public projection admits only stable SHA-256 assets with a canonical public CDN
-  URL and valid vertical dimensions (`height > width`). The same asset can be
-  projected for multiple events with a different event-relative score.
+  URL and valid vertical dimensions (`height > width`). When the snapshot has
+  `video_asset.analysis_status`, only `accepted` rows are public. The same asset
+  can be projected for multiple events with a different event-relative score.
 - Assets sort deterministically by persisted link-level `ranking_score`, then
   `showcase_score`, `event_relevance_score`, SHA-256 and asset id. The public
   contract exposes CDN path/type/geometry/duration, quality/relevance/ranking
-  scores, description and future retrieval text.
+  scores, source-post attribution URL, description and future retrieval text.
 - Added optional-contract validation to `check-preview.mjs`: public URL, SHA-256,
   vertical positive dimensions, bounded finite scores, duration, uniqueness and
   rank order are checked whenever `video_assets` is present. Old JSON fixtures
@@ -43,7 +44,7 @@ uv run --with pytest python -m pytest --noconftest -q \
   tests/test_event_video_static_export.py \
   tests/test_event_participants_static_export.py \
   tests/test_static_site_content_projection.py
-# 19 passed in 0.27s
+# 20 passed in 0.32s
 
 python3 -m compileall -q \
   site/scripts/export-production-preview-data.py \
@@ -58,7 +59,8 @@ git diff --check
 ```
 
 Focused video tests cover absent tables, a partial old schema, multiple ranked
-assets, one asset linked to two events, and invalid/nonvertical rows filtered.
+assets, one asset linked to two events, invalid/nonvertical rows filtered, the
+accepted-status gate and source-URL projection.
 
 ## Risks and integration notes
 
@@ -76,7 +78,7 @@ assets, one asset linked to two events, and invalid/nonvertical rows filtered.
 
 ## Merge notes
 
-- Cherry-pick implementation commit `f4393458` plus the following lane-results
-  metadata commit.
+- Cherry-pick implementation commits `f4393458` and `8d6c8ff3`, plus both
+  lane-results metadata commits (or cherry-pick the branch range in order).
 - No changes were made to `site/src/lib/events.ts` because imported JSON already
   conforms structurally to the optional `PreviewEvent` field.
