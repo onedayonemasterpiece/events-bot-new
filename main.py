@@ -22838,6 +22838,47 @@ def _first_env(*names: str, default: str = "") -> str:
     return default
 
 
+def _resolve_static_site_repo_sha() -> str:
+    """Return the source revision baked into the running application image.
+
+    A mutable Fly secret used to be the only source of this value.  That can
+    silently drift away from the code copied into the image, so production
+    images now carry an immutable revision file written by the Docker build.
+    The environment value remains a local/backwards-compatible fallback only.
+    """
+
+    configured_path = (os.getenv("STATIC_SITE_IMAGE_REPO_SHA_FILE") or "").strip()
+    revision_path = (
+        Path(configured_path)
+        if configured_path
+        else Path(__file__).with_name(".static-site-repo-sha")
+    )
+    legacy_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
+
+    if revision_path.exists():
+        image_sha = revision_path.read_text(encoding="utf-8").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{40}", image_sha):
+            raise StaticSitePermanentError(
+                "static-site image revision must be an exact 40-character SHA"
+            )
+        if re.fullmatch(r"[0-9a-f]{40}", legacy_sha) and legacy_sha != image_sha:
+            logging.warning(
+                "STATIC_SITE_REPO_SHA drift ignored: image=%s legacy=%s",
+                image_sha,
+                legacy_sha,
+            )
+        return image_sha
+
+    if re.fullmatch(r"[0-9a-f]{40}", legacy_sha):
+        logging.warning(
+            "static-site image revision file is absent; using legacy STATIC_SITE_REPO_SHA"
+        )
+        return legacy_sha
+    raise StaticSitePermanentError(
+        "static-site image revision is absent; deploy exact origin/main with the canonical release script"
+    )
+
+
 def _static_site_build_kaggle_command(
     *,
     db_path: str,
@@ -23617,9 +23658,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     # Production builds own the whole actionable catalog; bounded preview
     # canaries must opt into a smaller limit explicitly.
     limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "5000").strip() or "5000")
-    repo_sha = (os.getenv("STATIC_SITE_REPO_SHA") or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
-        raise StaticSitePermanentError("STATIC_SITE_REPO_SHA must be the exact pushed 40-character SHA")
+    repo_sha = _resolve_static_site_repo_sha()
     await _reconcile_current_static_site_candidate_status(db)
     recovered, recovered_result = await _recover_previous_static_site_attempt(
         db=db,

@@ -406,8 +406,24 @@ def test_fly_requires_vector_receipt_and_keeps_strict_gemma_verifier_off() -> No
     assert env["STATIC_SITE_REQUIRE_VECTOR_BARRIER"] == "1"
     assert env["EVENT_VECTOR_SYNC_RECEIPT_PATH"] == "/data/event_vector_sync_receipt.json"
     assert env["STATIC_SITE_VECTOR_RECEIPT_PATH"] == "/data/event_vector_sync_receipt.json"
+    assert env["ENABLE_EVENT_VECTOR_SYNC"] == "1"
+    assert env["STATIC_SITE_SYNC_PGVECTOR_VECTORS"] == "0"
     assert env["STATIC_SITE_GEMMA_RELATED_VERIFY"] == "0"
     assert env["STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS"] == "0"
+
+
+def test_fly_release_bakes_exact_main_revision_into_image() -> None:
+    root = Path(__file__).resolve().parents[1]
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    deploy_script = (root / "scripts" / "deploy_fly_main.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "ARG STATIC_SITE_IMAGE_REPO_SHA" in dockerfile
+    assert "> /app/.static-site-repo-sha" in dockerfile
+    assert 'MAIN_SHA="$(git rev-parse origin/main)"' in deploy_script
+    assert 'if [[ "$HEAD_SHA" != "$MAIN_SHA" ]]' in deploy_script
+    assert '--build-arg "STATIC_SITE_IMAGE_REPO_SHA=$HEAD_SHA"' in deploy_script
 
 
 def test_kaggle_builder_bridges_decrypted_public_club_flag_into_astro(

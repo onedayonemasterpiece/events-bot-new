@@ -654,7 +654,20 @@ Contract:
 
 Verified artifact on 2026-06-28: `preview-20260628-event-pages-prod50-kaggle-v44` built 50 real production-snapshot events on Kaggle CPU and passed `npm run check:preview`. This was a local manual run without production callback env, so status dataset creation was intentionally skipped; the production outbox path must pass `/data/db.sqlite` and the Fly callback to make it visible in `kaggle_run_ledger`/poller.
 
-Outbox integration: `schedule_event_update_tasks(...)` enqueues a coalesced `JobTask.static_site_build` with key `static_site_build:prod` for 15 minutes after the last Smart Update when `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`. The handler launches the runner with `/data/db.sqlite`, status DB/callback, `--download-output`, CDN asset/ICS base envs, browser-safe AuthorizedEventSearch public envs, and the configured related mode. For the pgvector path set `STATIC_SITE_RELATED_MODE=pgvector`, `STATIC_SITE_SYNC_PGVECTOR_VECTORS=1`, `STATIC_SITE_PGVECTOR_EMBEDDING_MODEL=gemini-embedding-2`, `STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV=GOOGLE_API_KEY4`, and optionally `STATIC_SITE_GEMMA_RELATED_VERIFY=1` / `STATIC_SITE_GEMMA_RELATED_MAX_ANCHORS=50`. For focus-group builds that should show Yandex login/search, also set `STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_URL`, `STATIC_SITE_PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY` and `STATIC_SITE_PUBLIC_YANDEX_AUTH_PROVIDER=custom:yandex`; only URL + publishable key are exposed to the browser. CDN/object-storage publication is still a follow-up handoff after CDN is enabled; full page rebuilds are for content/lifecycle changes, not every counter tick.
+Outbox integration: `schedule_event_update_tasks(...)` enqueues a coalesced
+`JobTask.static_site_build` with key `static_site_build:prod` for 15 minutes
+after the last Smart Update when `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`. The
+handler launches the runner with `/data/db.sqlite`, status DB/callback,
+`--download-output`, CDN asset/ICS base envs, browser-safe AuthorizedEventSearch
+public envs, and the configured related mode. Production pgvector uses
+`STATIC_SITE_RELATED_MODE=pgvector`, `ENABLE_EVENT_VECTOR_SYNC=1`,
+`STATIC_SITE_REQUIRE_VECTOR_BARRIER=1` and
+`STATIC_SITE_SYNC_PGVECTOR_VECTORS=0`: the Fly projection receipt must be
+current before Kaggle reads compact related candidates. The Kaggle sync switch
+is manual canary/backfill only. For focus-group builds that should show Yandex
+login/search, also set the public Supabase URL/key and `custom:yandex`; only the
+URL and publishable key are exposed to the browser. Full page rebuilds are for
+content/lifecycle changes, not every counter tick.
 
 ## Build and deploy
 

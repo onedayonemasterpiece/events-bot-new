@@ -9,6 +9,15 @@
   AI consumers; fail-fast reserve rotation adds no quota-window sleep.
 
 ### Fixed
+- Fly releases now bake exact clean `origin/main` into the application image
+  through the canonical deploy wrapper, and StaticSiteBuilder uses that
+  immutable identity instead of a drift-prone secret; malformed or missing
+  image identity fails closed so Smart Update cannot publish an artifact whose
+  recorded revision differs from its actual site source.
+- Production StaticSiteBuilder no longer repeats the full vector write pass
+  after the dedicated Fly owner and receipt barrier have completed it; Kaggle
+  now performs only bounded compact related-candidate reads, fixing the missing
+  SDK failure and removing duplicate Supabase egress from each rebuild.
 - Region Talk operator-chat recovery now acknowledges delivery against the
   exact ready-draft fingerprint, so legacy `sent_to_chat` flags cannot hide the
   first complete Telegram/VK copy produced by draft backfill; retries of the

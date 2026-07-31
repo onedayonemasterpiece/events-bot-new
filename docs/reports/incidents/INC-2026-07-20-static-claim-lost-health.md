@@ -133,3 +133,20 @@ shared embedding RPM bucket. The limiter correctly returned a bounded
 as a terminal run failure, forcing ten-minute whole-job retries. The projector
 now waits and retries only the same idempotent embedding for bounded `rpm`/`tpm`
 admission; day-level or unknown failures still terminate immediately.
+
+The recurrence also proved that the deployed mutable
+`STATIC_SITE_REPO_SHA=17d3d03d…` had drifted from the code in the Fly image.
+The actual copied source was newer, but every candidate receipt falsely
+attested the old SHA, so the artifact could not be reproduced from its recorded
+identity. Production releases now bake exact clean `origin/main` into
+`/app/.static-site-repo-sha`; the Docker build fails without it, runtime prefers
+it over the legacy secret, and the canonical deploy wrapper owns the build
+argument. Closure requires a successful compensating candidate whose receipt
+records the deployed image SHA. The concurrent export failure was separate:
+Kaggle logs showed that production still passed `--sync-pgvector-vectors`
+after the dedicated Fly vector owner and mandatory receipt barrier had already
+completed the same projection. That duplicate write lane reached
+`sync_event_search_vectors_to_supabase.py`, which correctly required the shared
+limiter's Supabase SDK absent from the read-only builder environment.
+Production now disables the redundant Kaggle write pass; the builder consumes
+the completed revision and bounded compact related RPCs.
