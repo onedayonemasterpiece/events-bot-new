@@ -84,7 +84,9 @@
 - Added an unlinked noindex connectivity diagnostic for the focus-group email
   incident. It measures three bounded reads each to Supabase Auth, a tiny
   RLS-safe Supabase Data API resource and a dedicated read-only Yandex API
-  Gateway → YDB control, then copies a PII-free timing receipt. Added the
+  Gateway → YDB control. Its compact phone result shows one correlation code,
+  local time, network/app mode and asks the participant for one screenshot;
+  all three services are checked in parallel. Added the
   dedicated YDB row/service account/gateway infrastructure contract and incident
   record `INC-2026-07-30-focus-email-otp-false-success`.
 - Restored the production-shaped automatic Hero Talk on the focus-candidate

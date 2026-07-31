@@ -31,6 +31,8 @@
     "spec": "openapi.yaml",
     "cors_origin": "https://kenigevents.ru",
     "public_path": "/v1/ydb-control",
-    "method": "GET"
+    "method": "GET",
+    "log_group_id": "e2339nuan95pobmlpnjf",
+    "min_log_level": "INFO"
   }
 }

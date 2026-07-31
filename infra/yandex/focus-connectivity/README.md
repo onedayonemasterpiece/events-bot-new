@@ -11,14 +11,19 @@ The control does not send an email, verify an OTP, create a user or write
 telemetry. It reads only the dedicated
 `focus_connectivity_probe[probe_id=primary]` row. The API Gateway runs as the
 dedicated `focus-connectivity-probe` service account with `ydb.viewer`; it has
-no static keys. CORS is restricted to `https://kenigevents.ru`.
+no static keys. CORS is restricted to `https://kenigevents.ru`. Gateway
+execution logging is enabled at `INFO` in the folder default log group so the
+opaque code visible in a participant screenshot can be correlated with the
+request time and outcome.
 
 ## Privacy boundary
 
-The page and endpoint must not receive or persist email, Auth user id, JWT,
-OTP, full user agent or IP-derived identity. A copied diagnostic receipt may
-contain only UTC time, page origin, online/effective connection type, bounded
-status/error class, elapsed milliseconds and response byte count.
+The application must not send or persist email, Auth user id, JWT or OTP. The
+phone result contains only an opaque probe code, local time, effective
+connection type, browser/PWA mode, bounded status/error class and elapsed
+milliseconds. The infrastructure may retain ordinary short-lived access-log
+metadata under the configured Cloud Logging retention; it is not copied into
+the participant screenshot.
 
 ## Provisioning and verification
 

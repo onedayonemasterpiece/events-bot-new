@@ -18,6 +18,8 @@ def test_focus_connectivity_desired_state_is_read_only_and_dedicated() -> None:
     assert desired["service_account"]["static_keys"] == 0
     assert desired["api_gateway"]["method"] == "GET"
     assert desired["api_gateway"]["cors_origin"] == "https://kenigevents.ru"
+    assert desired["api_gateway"]["log_group_id"]
+    assert desired["api_gateway"]["min_log_level"] == "INFO"
 
 
 def test_focus_connectivity_gateway_has_no_write_integration() -> None:

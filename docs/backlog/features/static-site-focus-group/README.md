@@ -370,18 +370,23 @@ E2E inbox и не замена human support mailbox.
 network error и `429` оставляют адресную форму и честно предлагают повтор.
 Фраза «письмо могло прийти» после ошибки запрещена.
 
-Служебная noindex-страница `/fokus-gruppa/diagnostika/` по явному нажатию делает
-по три bounded/no-store GET:
+Служебная noindex-страница `/fokus-gruppa/diagnostika/` по явному нажатию
+параллельно делает по три bounded/no-store GET:
 
 - Supabase `/auth/v1/health`;
 - один tiny RLS-safe Data API read;
 - Yandex API Gateway → dedicated YDB `GetItem`.
 
-Она не отправляет OTP и ничего не пишет. Скопированный receipt не содержит
-email, UID, JWT, ключи, OTP, raw user agent или IP. Если YDB доступен, а
-Supabase Auth нет, гипотеза сетевой недоступности подтверждается для конкретного
-телефона/сети. Если доступны оба Supabase read, а `/otp` падает — исследуется
-уже endpoint/config/rate-limit, не общий маршрут.
+Она не отправляет OTP и ничего не пишет. Результат целиком помещается в один
+мобильный экран: три понятных статуса, время ответа, короткий случайный
+correlation code, локальное время и определяемый браузером тип сети/режим
+«браузер или приложение». Участник делает один скриншот и присылает его
+исследователю. Correlation code уходит только как техническая метка в
+`X-Client-Info` Supabase и query API Gateway; email, UID, JWT, ключи, OTP, raw
+user agent и IP страница не выводит. Если YDB доступен, а Supabase Auth нет,
+гипотеза сетевой недоступности подтверждается для конкретного телефона/сети.
+Если доступны оба Supabase read, а `/otp` падает — исследуется уже
+endpoint/config/rate-limit, не общий маршрут.
 
 ### Тестер делится режимом
 

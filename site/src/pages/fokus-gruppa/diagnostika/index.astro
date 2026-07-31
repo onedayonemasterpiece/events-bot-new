@@ -1,8 +1,9 @@
 ---
 import FocusConnectivityDiagnostic from '../../../components/FocusConnectivityDiagnostic.astro';
-import StaticSiteAuthRuntime from '../../../components/auth/StaticSiteAuthRuntime.astro';
-import { absoluteUrl, withBase } from '../../../lib/events';
-import '../../../styles/design-system.css';
+import { absoluteUrl } from '../../../lib/events';
+
+const supabaseUrl = (import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_URL || '').replace(/\/+$/u, '');
+const publishableKey = import.meta.env.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || '';
 ---
 
 <!doctype html>
@@ -15,11 +16,9 @@ import '../../../styles/design-system.css';
     <link rel="canonical" href={absoluteUrl('/fokus-gruppa/diagnostika/')} />
     <title>Проверка соединения · Анонсы</title>
     <meta name="description" content="Проверка доступности сервисов с устройства участника фокус-группы." />
-    <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" sizes="any" />
   </head>
   <body>
-    <FocusConnectivityDiagnostic />
-    <StaticSiteAuthRuntime />
+    <FocusConnectivityDiagnostic supabaseUrl={supabaseUrl} publishableKey={publishableKey} />
   </body>
 </html>
 

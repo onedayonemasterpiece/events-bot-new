@@ -1,54 +1,91 @@
 ---
+interface Props {
+  supabaseUrl: string;
+  publishableKey: string;
+}
+
+const {
+  supabaseUrl,
+  publishableKey,
+} = Astro.props;
 const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.net/v1/ydb-control';
 ---
 
-<main class="connectivity" data-focus-connectivity data-ydb-control-url={ydbControlUrl}>
+<main
+  class="connectivity"
+  data-focus-connectivity
+  data-supabase-url={supabaseUrl}
+  data-supabase-key={publishableKey}
+  data-ydb-control-url={ydbControlUrl}
+>
   <section class="connectivity__card">
-    <p class="connectivity__eyebrow">Проверка соединения</p>
-    <h1>Что доступно с этого телефона</h1>
+    <p class="connectivity__eyebrow">Быстрая диагностика</p>
+    <h1>Проверим соединение</h1>
     <p class="connectivity__lead">
-      Проверим связь с двумя сервисами. Письма не отправляются, вход и данные аккаунта не меняются.
+      Нажмите одну кнопку. Проверка ничего не меняет и не отправляет писем.
     </p>
-    <button class="connectivity__run" type="button" data-connectivity-run>Проверить соединение</button>
-    <p class="connectivity__status" data-connectivity-status role="status"></p>
+    <button class="connectivity__run" type="button" data-connectivity-run>Начать проверку</button>
+    <p class="connectivity__status" data-connectivity-status role="status">
+      Обычно это занимает несколько секунд.
+    </p>
     <div class="connectivity__results" data-connectivity-results hidden>
       {
         [
-          ['supabase-auth', 'Supabase · вход'],
-          ['supabase-data', 'Supabase · данные'],
-          ['ydb-control', 'Yandex Cloud · контроль'],
-        ].map(([id, label]) => (
+          ['supabase-auth', 'Вход по почте', 'Supabase'],
+          ['supabase-data', 'Данные сайта', 'Supabase'],
+          ['ydb-control', 'Резервный канал', 'Yandex'],
+        ].map(([id, label, service]) => (
           <article class="connectivity__result" data-connectivity-result={id}>
-            <h2>{label}</h2>
-            <strong data-connectivity-verdict>Ожидает проверки</strong>
+            <div>
+              <h2>{label}</h2>
+              <small>{service}</small>
+            </div>
+            <strong data-connectivity-verdict>Проверяем…</strong>
             <span data-connectivity-timing></span>
           </article>
         ))
       }
     </div>
-    <button class="connectivity__copy" type="button" data-connectivity-copy hidden>
-      Скопировать результат
-    </button>
-    <p class="connectivity__privacy">
-      В результате нет адреса почты, кодов входа или данных аккаунта.
-    </p>
+    <div class="connectivity__receipt" data-connectivity-receipt hidden>
+      <p data-connectivity-summary></p>
+      <dl>
+        <div><dt>Код проверки</dt><dd data-connectivity-id>—</dd></div>
+        <div><dt>Когда</dt><dd data-connectivity-when>—</dd></div>
+        <div><dt>Устройство</dt><dd data-connectivity-network>—</dd></div>
+      </dl>
+      <p class="connectivity__send">
+        Сделайте скриншот этого экрана и отправьте человеку, который прислал ссылку.
+      </p>
+    </div>
   </section>
 </main>
 
 <script>
   import {
-    makeConnectivityReceipt,
     runConnectivityProbe,
     type ConnectivityProbeResult,
   } from '../lib/connectivityDiagnostic';
 
   const root = document.querySelector<HTMLElement>('[data-focus-connectivity]');
   const runButton = root?.querySelector<HTMLButtonElement>('[data-connectivity-run]');
-  const copyButton = root?.querySelector<HTMLButtonElement>('[data-connectivity-copy]');
   const status = root?.querySelector<HTMLElement>('[data-connectivity-status]');
   const resultsRoot = root?.querySelector<HTMLElement>('[data-connectivity-results]');
-  let receipt = '';
+  const receiptRoot = root?.querySelector<HTMLElement>('[data-connectivity-receipt]');
+  const summary = root?.querySelector<HTMLElement>('[data-connectivity-summary]');
+  const receiptId = root?.querySelector<HTMLElement>('[data-connectivity-id]');
+  const receiptWhen = root?.querySelector<HTMLElement>('[data-connectivity-when]');
+  const receiptNetwork = root?.querySelector<HTMLElement>('[data-connectivity-network]');
   let coolingDown = false;
+
+  const diagnosticId = () => {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    return [...bytes]
+      .map((value) => value.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+      .replace(/^(.{4})(.{4})$/u, '$1-$2');
+  };
 
   const renderResult = (result: ConnectivityProbeResult) => {
     const card = root?.querySelector<HTMLElement>(`[data-connectivity-result="${result.id}"]`);
@@ -66,7 +103,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     verdict.textContent = copy;
     timing.textContent = result.medianMs === null
       ? ''
-      : `обычно ${Math.round(result.medianMs)} мс · ${result.attempts.length} проверки`;
+      : `${Math.round(result.medianMs)} мс`;
   };
 
   const setCooldown = () => {
@@ -87,17 +124,22 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   runButton?.addEventListener('click', async () => {
     if (!root || !runButton || coolingDown) return;
     const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
-    const supabaseUrl = String(authRuntime?.dataset.supabaseUrl || '').replace(/\/+$/u, '');
-    const publishableKey = String(authRuntime?.dataset.supabaseKey || '');
+    const supabaseUrl = String(root.dataset.supabaseUrl || authRuntime?.dataset.supabaseUrl || '').replace(/\/+$/u, '');
+    const publishableKey = String(root.dataset.supabaseKey || authRuntime?.dataset.supabaseKey || '');
+    const probeId = diagnosticId();
     const authHeaders = publishableKey
-      ? { apikey: publishableKey, Authorization: `Bearer ${publishableKey}` }
+      ? {
+          apikey: publishableKey,
+          Authorization: `Bearer ${publishableKey}`,
+          'X-Client-Info': `kenigevents-diagnostic/${probeId}`,
+        }
       : undefined;
     runButton.disabled = true;
     runButton.setAttribute('aria-busy', 'true');
     runButton.textContent = 'Проверяем…';
-    if (status) status.textContent = 'Три короткие проверки каждого соединения.';
+    if (status) status.textContent = 'Проверяем три независимых соединения…';
     if (resultsRoot) resultsRoot.hidden = false;
-    if (copyButton) copyButton.hidden = true;
+    if (receiptRoot) receiptRoot.hidden = true;
 
     const targets = [
       {
@@ -116,45 +158,58 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       },
       {
         id: 'ydb-control',
-        label: 'Yandex Cloud · контроль',
-        url: root.dataset.ydbControlUrl || '',
+        label: 'Резервный канал',
+        url: root.dataset.ydbControlUrl
+          ? `${root.dataset.ydbControlUrl}?probe=${encodeURIComponent(probeId)}`
+          : '',
       },
     ];
 
-    const measured: ConnectivityProbeResult[] = [];
-    for (const target of targets) {
+    const measured = await Promise.all(targets.map(async (target) => {
       const result = await runConnectivityProbe(target, { attempts: 3, timeoutMs: 8_000 });
-      measured.push(result);
       renderResult(result);
-    }
+      return result;
+    }));
     const connection = (navigator as Navigator & {
       connection?: { effectiveType?: string };
     }).connection;
-    receipt = JSON.stringify(makeConnectivityReceipt(measured, {
-      origin: window.location.origin,
-      online: navigator.onLine,
-      effectiveType: connection?.effectiveType,
-      standalone: window.matchMedia('(display-mode: standalone)').matches,
-    }), null, 2);
+    const checkedAt = new Date();
     const failed = measured.filter((result) => result.state !== 'ok').length;
+    const supabaseOk = measured
+      .filter((result) => result.id.startsWith('supabase-'))
+      .every((result) => result.state === 'ok');
+    const yandexOk = measured.find((result) => result.id === 'ydb-control')?.state === 'ok';
     if (status) {
       status.textContent = failed === 0
-        ? 'Все соединения доступны.'
-        : `Не ответили: ${failed} из ${measured.length}. Скопируйте результат и отправьте нам.`;
+        ? 'Проверка завершена.'
+        : `Не ответили: ${failed} из ${measured.length}.`;
     }
-    if (copyButton) copyButton.hidden = false;
+    if (summary) {
+      summary.textContent = supabaseOk && yandexOk
+        ? 'Сейчас оба сервиса доступны.'
+        : !supabaseOk && yandexOk
+          ? 'Основной сервис не ответил, но резервный канал доступен.'
+          : supabaseOk && !yandexOk
+            ? 'Основной сервис доступен, резервный канал не ответил.'
+            : 'Соединение не пропустило обе проверки.';
+    }
+    if (receiptId) receiptId.textContent = probeId;
+    if (receiptWhen) {
+      receiptWhen.textContent = checkedAt.toLocaleString('ru-RU', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+    if (receiptNetwork) {
+      const mode = window.matchMedia('(display-mode: standalone)').matches ? 'приложение' : 'браузер';
+      const network = connection?.effectiveType ? connection.effectiveType.toUpperCase() : 'тип сети не определён';
+      receiptNetwork.textContent = `${network} · ${mode}`;
+    }
+    if (receiptRoot) receiptRoot.hidden = false;
     runButton.removeAttribute('aria-busy');
     setCooldown();
-  });
-
-  copyButton?.addEventListener('click', async () => {
-    if (!receipt || !copyButton) return;
-    try {
-      await navigator.clipboard.writeText(receipt);
-      copyButton.textContent = 'Результат скопирован';
-    } catch {
-      copyButton.textContent = 'Не получилось скопировать';
-    }
   });
 </script>
 
@@ -162,20 +217,20 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   .connectivity {
     min-height: 100dvh;
     display: grid;
-    place-items: center;
-    padding: max(1rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom));
+    place-items: start center;
+    padding: max(.7rem, env(safe-area-inset-top)) .75rem max(.8rem, env(safe-area-inset-bottom));
     color: #33261e;
     font-family: var(--ke-font-sans, system-ui, sans-serif);
   }
   .connectivity__card {
-    width: min(620px, 100%);
+    width: min(520px, 100%);
     display: grid;
-    gap: 1rem;
-    padding: clamp(1.3rem, 5vw, 2.4rem);
+    gap: .7rem;
+    padding: clamp(1rem, 4vw, 1.5rem);
     border: 1px solid #e3d2bd;
-    border-radius: 1.6rem;
+    border-radius: 1.35rem;
     background: #fffdf8;
-    box-shadow: 0 20px 56px rgb(69 42 25 / 13%);
+    box-shadow: 0 16px 40px rgb(69 42 25 / 12%);
   }
   .connectivity__eyebrow {
     margin: 0;
@@ -185,10 +240,10 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     letter-spacing: .12em;
     text-transform: uppercase;
   }
-  h1 { margin: 0; font-size: clamp(2rem, 8vw, 3.5rem); line-height: .98; letter-spacing: -.045em; }
+  h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); line-height: .98; letter-spacing: -.045em; }
   .connectivity__lead, .connectivity__status, .connectivity__privacy { margin: 0; line-height: 1.5; }
-  .connectivity__run, .connectivity__copy {
-    min-height: 3.25rem;
+  .connectivity__run {
+    min-height: 3.15rem;
     border: 0;
     border-radius: 999px;
     padding: .8rem 1.25rem;
@@ -197,28 +252,45 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     cursor: pointer;
   }
   .connectivity__run { color: #fff; background: #a74523; box-shadow: 0 10px 26px rgb(167 69 35 / 24%); }
-  .connectivity__copy { color: #442a1c; background: #f4e6d6; }
   .connectivity__run:disabled { cursor: wait; opacity: .72; }
-  .connectivity__results { display: grid; gap: .65rem; }
+  .connectivity__status { min-height: 1.4em; color: #75675d; font-size: .9rem; }
+  .connectivity__results { display: grid; gap: .45rem; }
   .connectivity__result {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: .2rem 1rem;
+    gap: .1rem .8rem;
     align-items: center;
-    padding: .9rem 1rem;
-    border-radius: 1rem;
+    padding: .68rem .8rem;
+    border-radius: .85rem;
     background: #f5eee5;
   }
-  .connectivity__result h2 { margin: 0; font-size: 1rem; }
+  .connectivity__result h2 { margin: 0; font-size: .95rem; }
+  .connectivity__result small { display: block; margin-top: .1rem; color: #817269; font-size: .72rem; }
   .connectivity__result strong { color: #66564b; }
-  .connectivity__result span { grid-column: 1 / -1; color: #75675d; font-size: .84rem; }
+  .connectivity__result span { grid-column: 2; color: #75675d; font-size: .75rem; text-align: right; }
   .connectivity__result[data-state="ok"] strong { color: #1f744e; }
   .connectivity__result:is([data-state="network_error"], [data-state="timeout"], [data-state="http_error"]) strong { color: #b02c2c; }
-  .connectivity__privacy { color: #7a6a5e; font-size: .8rem; text-align: center; }
+  .connectivity__receipt {
+    display: grid;
+    gap: .55rem;
+    padding-top: .15rem;
+  }
+  .connectivity__receipt > p { margin: 0; line-height: 1.35; }
+  .connectivity__receipt > p:first-child { font-weight: 850; }
+  .connectivity__receipt dl { display: grid; gap: .25rem; margin: 0; }
+  .connectivity__receipt dl div { display: flex; justify-content: space-between; gap: 1rem; }
+  .connectivity__receipt dt { color: #7a6a5e; font-size: .78rem; }
+  .connectivity__receipt dd { margin: 0; font-size: .82rem; font-weight: 800; text-align: right; }
+  .connectivity__send {
+    padding: .7rem .8rem;
+    border-radius: .8rem;
+    color: #743017;
+    background: #fbe4d6;
+    font-size: .86rem;
+    font-weight: 750;
+  }
   [hidden] { display: none !important; }
   @media (max-width: 460px) {
-    .connectivity { align-items: start; }
-    .connectivity__card { border-radius: 1.35rem; }
-    .connectivity__result { grid-template-columns: 1fr; }
+    .connectivity__card { border-radius: 1.1rem; }
   }
 </style>

@@ -136,8 +136,10 @@ after any failed transport result and therefore communicated a false success.
 - Added a 20-second send timeout rather than allowing an indefinite pending
   state.
 - Deployed a dedicated read-only YDB control and added an unlinked noindex
-  diagnostic page that performs three bounded reads per service without
-  sending email or collecting personal data.
+  diagnostic page that performs three bounded reads per service in parallel
+  without sending email or collecting personal data. Its phone-sized result
+  carries one opaque correlation code and is designed to be returned as a
+  single screenshot.
 
 ## Corrective Actions
 
@@ -172,4 +174,3 @@ after any failed transport result and therefore communicated a false success.
 This incident is the required regression contract for focus email/Auth changes.
 “Code form visible” and “Supabase preflight succeeded” are explicitly forbidden
 as delivery evidence; closure requires independent evidence at every boundary.
-

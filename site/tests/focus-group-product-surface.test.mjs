@@ -39,10 +39,15 @@ test('connectivity diagnostic is read-only, bounded and contains no OTP or user 
     read('../../infra/yandex/focus-connectivity/openapi.yaml'),
   ]);
   assert.match(page, /noindex,nofollow,noarchive,nosnippet/u);
-  assert.match(component, /Supabase · вход/u);
-  assert.match(component, /Supabase · данные/u);
-  assert.match(component, /Yandex Cloud · контроль/u);
-  assert.match(component, /Письма не отправляются/u);
+  assert.match(component, /Вход по почте/u);
+  assert.match(component, /Данные сайта/u);
+  assert.match(component, /Резервный канал/u);
+  assert.match(component, /Сделайте скриншот этого экрана/u);
+  assert.match(component, /data-connectivity-id/u);
+  assert.match(component, /X-Client-Info/u);
+  assert.match(component, /Promise\.all/u);
+  assert.doesNotMatch(component, /Скопировать результат/u);
+  assert.match(component, /не отправляет писем/u);
   assert.match(helper, /cache: 'no-store'/u);
   assert.match(helper, /credentials: 'omit'/u);
   assert.match(helper, /Math\.min\(5/u);
