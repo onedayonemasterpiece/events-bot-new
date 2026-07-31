@@ -131,7 +131,19 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
         self.assertFalse(mod.is_confirmed_publication({**signed, "publication_revoked": "true"}))
         self.assertFalse(mod.is_confirmed_publication({**signed, "_live_authoritative_source_fingerprint": "source-became-local"}))
         self.assertFalse(mod.is_confirmed_publication({**signed, "_live_authoritative_source_fingerprint": ""}))
-        self.assertFalse(mod.is_unsent_confirmed_publication({**signed, "sent_to_chat": "true"}))
+        # A legacy delivery flag without a ready-draft fingerprint must not
+        # hide the first actionable copy from the operator chat.
+        legacy_sent = {**signed, "sent_to_chat": "true"}
+        self.assertTrue(mod.is_unsent_confirmed_publication(legacy_sent))
+        acknowledged = {
+            **legacy_sent,
+            "sent_publication_draft_fingerprint": mod.publication_draft_fingerprint(signed),
+        }
+        self.assertFalse(mod.is_unsent_confirmed_publication(acknowledged))
+        self.assertTrue(mod.is_unsent_confirmed_publication({
+            **acknowledged,
+            "publication_draft_telegram_text": "Исправленный текст для Telegram",
+        }))
         self.assertFalse(mod.is_unsent_confirmed_publication({**signed, "publication_draft_vk_text": ""}))
 
     def test_discovery_session_lease_blocks_a_second_local_owner(self) -> None:
@@ -244,13 +256,26 @@ class RegionTalkGoalNotifyTests(unittest.TestCase):
 
     def test_delivery_identity_is_stable_per_canonical_post_and_chat(self) -> None:
         mod = load_module()
-        first = {"post_url": "https://telegram.me/TravelCase/10?single=1"}
-        second = {"post_url": "https://t.me/travelcase/10/"}
+        draft = {
+            "publication_draft_status": "ready_for_operator_review",
+            "publication_draft_title": "Маршрут",
+            "publication_draft_source_attribution": "TravelCase",
+            "publication_draft_telegram_text": "Текст для Telegram",
+            "publication_draft_vk_text": "Текст для VK",
+            "publication_draft_fact_points_json": '[{"claim":"Факт"}]',
+            "publication_draft_prompt_version": "draft-v1",
+        }
+        first = {**draft, "post_url": "https://telegram.me/TravelCase/10?single=1"}
+        second = {**draft, "post_url": "https://t.me/travelcase/10/"}
         key1 = mod.publication_delivery_key(first, "-100123")
         key2 = mod.publication_delivery_key(second, "-100123")
         self.assertEqual(key1, key2)
         self.assertEqual(mod.delivery_random_id(key1), mod.delivery_random_id(key1))
         self.assertNotEqual(key1, mod.publication_delivery_key(second, "-100999"))
+        self.assertNotEqual(key1, mod.publication_delivery_key({
+            **second,
+            "publication_draft_telegram_text": "Исправленный текст",
+        }, "-100123"))
 
     def test_video_candidate_message_does_not_claim_visual_score(self) -> None:
         mod = load_module()

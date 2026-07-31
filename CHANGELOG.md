@@ -18,6 +18,10 @@
   after the dedicated Fly owner and receipt barrier have completed it; Kaggle
   now performs only bounded compact related-candidate reads, fixing the missing
   SDK failure and removing duplicate Supabase egress from each rebuild.
+- Region Talk operator-chat recovery now acknowledges delivery against the
+  exact ready-draft fingerprint, so legacy `sent_to_chat` flags cannot hide the
+  first complete Telegram/VK copy produced by draft backfill; retries of the
+  same draft remain idempotent while materially revised copy gets a new key.
 - Region Talk now restores missing grounded Telegram and VK copy for legacy
   confirmed social candidates in bounded autonomous batches: Telegram uses an
   idle role-scoped `DISCOVERY1/2` Telethon identity with both remote-kernel and
@@ -26,7 +30,8 @@
   durable request budget. Operator notifications and ranked snapshots now fail
   closed unless the complete Telegram/VK draft and support points exist; local
   E2E/generic sessions remain excluded and future MTProto premium-emoji support
-  stays available behind the same role/session gate.
+  stays available behind the same role/session gate. The unchanged v7 writer
+  contract is also compacted below its bounded prompt-size guard.
 - Smart Update event-vector catch-up now honors bounded shared-ledger RPM/TPM
   retry windows inside one projection instead of restarting the whole job every
   ten minutes; day-level exhaustion remains fail-closed.

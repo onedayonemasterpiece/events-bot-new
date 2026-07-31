@@ -14412,7 +14412,16 @@ def _region_talk_llm_text(post: dict[str, Any]) -> str:
         if value:
             parts.append(f"{key}: " + re.sub(r"\s+", " ", text_for_semantic_analysis(value)))
     text = "\n".join(parts)
-    return text[:max(300, limit)]
+    clipped = text[:max(300, limit)]
+    # Cyrillic can take two UTF-8 bytes per character. Keep a proportional
+    # byte ceiling as well so a valid character-bounded excerpt cannot push the
+    # complete compact JSON prompt over its transport/test budget.
+    default_byte_limit = max(1000, int(max(300, limit) * 8 / 5))
+    byte_limit = getenv_int("REGION_TALK_LLM_PROMPT_TEXT_MAX_BYTES", default_byte_limit)
+    encoded = clipped.encode("utf-8")
+    if len(encoded) > byte_limit:
+        clipped = encoded[:byte_limit].decode("utf-8", errors="ignore")
+    return clipped
 
 
 REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION = "region_talk_final_verifier_v7_grounded_draft"
@@ -14467,9 +14476,12 @@ def llm_text_gate_prompt(post: dict[str, Any], evidence: dict[str, Any]) -> str:
             "content_origin_type": content_origin_type,
             "publication_content_type": post.get("publication_content_type"),
         })
-    draft_schema = "; when decision=accept also return title_short,source_attribution,telegram_text,vk_text in Russian and fact_points array of 1..3 objects {claim,support_excerpt}; drafts must be concise original paraphrases, contain only facts supported by this post, explicitly attribute the source, preserve uncertainty, and end with the original URL; otherwise return empty draft fields"
-    social_schema = "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_single_location_card,is_ad_or_promo,is_news_or_trash,has_firsthand_visit_evidence,emotion_or_impression_evidence,review_or_opinion_evidence,memorable_detail_evidence,original_photo_evidence; content_type one of visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject; visit_evidence_type one of firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown; reason short ru" + draft_schema
-    publication_schema = "JSON keys only: decision accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score 0..1; kaliningrad_mention_role main_subject|one_item|passing_mention|unclear; booleans is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_ad_or_promo,is_news_or_trash,review_or_opinion_evidence,memorable_detail_evidence,evidence_or_expert_basis,public_interest_insight,sharp_negative_region_image; content_type editorial_publication_candidate|academic_publication_candidate|news_or_event|low_substance|reject; reason short ru" + draft_schema
+    # Keep the same v7 JSON contract while staying below the prompt-size guard:
+    # field names and enum members carry the schema, so prose need not repeat
+    # long explanatory phrases which are already present in ``rules``.
+    draft_schema = "; if accept add ru title_short,source_attribution,telegram_text,vk_text and fact_points[1..3]{claim,support_excerpt}; paraphrase only supported facts, attribute source, preserve uncertainty, end with original URL; else draft fields empty"
+    social_schema = "JSON keys: decision=accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score=0..1; kaliningrad_mention_role=main_subject|one_item|passing_mention|footer|hashtag|link_only|unclear; booleans=is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_single_location_card,is_ad_or_promo,is_news_or_trash,has_firsthand_visit_evidence,emotion_or_impression_evidence,review_or_opinion_evidence,memorable_detail_evidence,original_photo_evidence; content_type=visit_impression_candidate|route_useful_candidate|single_location_photo_card|encyclopedic_card_candidate|official_project_material|news_or_event|low_substance|reject; visit_evidence_type=firsthand_author_visit|subscriber_photo_report|route_guide|single_location_photo_card|official_project_material|news_or_event|unknown; reason=short ru" + draft_schema
+    publication_schema = "JSON keys: decision=accept|needs_review|reject; whole_post_about_kaliningrad_oblast_score=0..1; kaliningrad_mention_role=main_subject|one_item|passing_mention|unclear; booleans=is_digest_or_roundup,is_multi_region_roundup,is_multi_topic_digest,is_ad_or_promo,is_news_or_trash,review_or_opinion_evidence,memorable_detail_evidence,evidence_or_expert_basis,public_interest_insight,sharp_negative_region_image; content_type=editorial_publication_candidate|academic_publication_candidate|news_or_event|low_substance|reject; reason=short ru" + draft_schema
     payload = {
         "task": "Return JSON for one Region Talk post.",
         "prompt_version": REGION_TALK_FINAL_VERIFIER_PROMPT_VERSION,

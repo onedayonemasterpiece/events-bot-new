@@ -10,6 +10,12 @@ public slot. Evidence-backed legacy external-article copy can be projected from
 the already validated research contract; social copy remains LLM-first and has
 no heuristic fallback.
 
+Operator-chat acknowledgement is bound to a fingerprint of the exact completed
+draft, not only to the candidate URL. Legacy rows marked `sent_to_chat` before
+the readiness gate are therefore delivered once again after grounded backfill,
+and a materially regenerated draft is not hidden by the older delivery ledger.
+The versioned delivery key remains idempotent for retries of the same draft.
+
 The durable selection input is `publication_schedule_item`: exactly one
 external article and one Telegram/VK social post per day. Future unlocked slots
 are recalculated after every autonomous discovery session against actual
