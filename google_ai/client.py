@@ -23,7 +23,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING
 from time import monotonic as _monotonic
 
 from google_ai.exceptions import RateLimitError, ProviderError, ReservationError
@@ -81,6 +81,86 @@ class RequestContext:
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+@dataclass(frozen=True)
+class ExternalCallLease:
+    """Serializable identity for one strictly-accounted external provider POST.
+
+    The lease deliberately stores the environment variable name rather than the
+    secret.  Callers can pass it back to :class:`GoogleAIClient` to mark/finalize
+    the request, while provider adapters resolve the key only immediately before
+    the HTTP call.  One lease is valid for exactly one provider POST.
+    """
+
+    request_uid: str
+    attempt_no: int
+    consumer: str
+    account_name: Optional[str]
+    model: str
+    reserved_tpm: int
+    api_key_id: str
+    env_var_name: str
+    key_alias: Optional[str]
+    minute_bucket: Optional[str]
+    day_bucket: Optional[str]
+    started_at: datetime
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-safe checkpoint form; it never contains an API-key value."""
+
+        return {
+            "request_uid": self.request_uid,
+            "attempt_no": self.attempt_no,
+            "consumer": self.consumer,
+            "account_name": self.account_name,
+            "model": self.model,
+            "reserved_tpm": self.reserved_tpm,
+            "api_key_id": self.api_key_id,
+            "env_var_name": self.env_var_name,
+            "key_alias": self.key_alias,
+            "minute_bucket": self.minute_bucket,
+            "day_bucket": self.day_bucket,
+            "started_at": self.started_at.astimezone(timezone.utc).isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "ExternalCallLease":
+        """Restore a checkpointed lease without resolving its secret."""
+
+        started_at = datetime.fromisoformat(str(value["started_at"]))
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        return cls(
+            request_uid=str(value["request_uid"]),
+            attempt_no=int(value["attempt_no"]),
+            consumer=str(value["consumer"]),
+            account_name=(
+                str(value["account_name"])
+                if value.get("account_name") is not None
+                else None
+            ),
+            model=str(value["model"]),
+            reserved_tpm=int(value["reserved_tpm"]),
+            api_key_id=str(value["api_key_id"]),
+            env_var_name=str(value["env_var_name"]),
+            key_alias=(
+                str(value["key_alias"])
+                if value.get("key_alias") is not None
+                else None
+            ),
+            minute_bucket=(
+                str(value["minute_bucket"])
+                if value.get("minute_bucket") is not None
+                else None
+            ),
+            day_bucket=(
+                str(value["day_bucket"])
+                if value.get("day_bucket") is not None
+                else None
+            ),
+            started_at=started_at,
+        )
+
+
 class GoogleAIClient:
     """Google AI client with rate limiting and retry logic.
     
@@ -134,6 +214,19 @@ class GoogleAIClient:
     # per-minute spike (rpm/tpm), where waiting on the same key is correct.
     _RESERVE_OVERFLOW_TRIGGER_REASONS = frozenset({"rpd", "no_keys"})
     PROVIDER_TIMEOUT_ENV = "GOOGLE_AI_PROVIDER_TIMEOUT_SEC"
+    _EXTERNAL_TERMINAL_STATUSES = frozenset(
+        {
+            "requires_action",
+            "completed",
+            "failed",
+            "cancelled",
+            "incomplete",
+            "budget_exceeded",
+        }
+    )
+    _EXTERNAL_SEMANTIC_STATUSES = frozenset(
+        {"not_evaluated", "passed", "failed"}
+    )
 
     # Process-local limiter (used when Supabase reserve RPC is missing/flaky).
     _local_limiter_lock = asyncio.Lock()
@@ -805,6 +898,287 @@ class GoogleAIClient:
             except ImportError:
                 return None
         return self._genai_new
+
+    def _strict_external_candidate_key_ids(
+        self,
+        key_envs: Sequence[str],
+    ) -> list[str]:
+        """Resolve an explicit env-name pool without widening or fallback.
+
+        This path is intentionally independent of the permissive GenerateContent
+        compatibility fallbacks.  Managed-agent calls are expensive and must
+        fail closed when the shared ledger or any declared pool member is absent.
+        """
+
+        normalized = self._normalize_overflow_envs(key_envs)
+        if not normalized:
+            raise ReservationError("external call requires a non-empty key_env pool")
+        if self.supabase is None:
+            raise ReservationError("external call requires the shared Supabase limiter")
+
+        aliases: list[str] = []
+        for configured in normalized:
+            for alias in self._default_env_aliases(configured):
+                if alias not in aliases:
+                    aliases.append(alias)
+        try:
+            result = (
+                self.supabase.table("google_ai_api_keys")
+                .select("id, env_var_name, priority")
+                .eq("is_active", True)
+                .in_("env_var_name", aliases)
+                .order("priority")
+                .order("id")
+                .execute()
+            )
+            rows = list(result.data or [])
+        except Exception as exc:
+            raise ReservationError(
+                f"failed to resolve external key pool: {str(exc)[:300]}"
+            ) from exc
+
+        by_env = {
+            str(row.get("env_var_name") or ""): str(row.get("id"))
+            for row in rows
+            if row.get("id")
+        }
+        ids: list[str] = []
+        missing: list[str] = []
+        for configured in normalized:
+            selected = next(
+                (
+                    by_env[alias]
+                    for alias in self._default_env_aliases(configured)
+                    if alias in by_env
+                ),
+                None,
+            )
+            if not selected:
+                missing.append(configured)
+            elif selected not in ids:
+                ids.append(selected)
+        if missing or len(ids) != len(normalized):
+            # Env names are metadata and safe to report; key values are never read
+            # on this failure path.
+            suffix = f": {','.join(missing)}" if missing else ""
+            raise ReservationError(f"external key pool is incomplete{suffix}")
+        return ids
+
+    async def reserve_external_call(
+        self,
+        *,
+        model: str,
+        reserved_tpm: int,
+        key_envs: Sequence[str],
+        request_uid: Optional[str] = None,
+    ) -> ExternalCallLease:
+        """Reserve one provider POST against an explicit, fail-closed key pool.
+
+        No process-local limiter, default key, emergency overflow, or direct REST
+        RPC fallback is permitted.  A fresh UUID is generated unless the caller
+        supplies one for crash-safe idempotent replay.
+        """
+
+        limit_model = self._normalize_rate_limit_model(model)
+        if not limit_model:
+            raise ValueError("model is required")
+        try:
+            reserved = int(reserved_tpm)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("reserved_tpm must be an integer") from exc
+        if reserved < 1:
+            raise ValueError("reserved_tpm must be positive")
+
+        uid = request_uid or str(uuid.uuid4())
+        try:
+            uid = str(uuid.UUID(uid))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ValueError("request_uid must be a UUID") from exc
+
+        candidate_ids = self._strict_external_candidate_key_ids(key_envs)
+        ctx = RequestContext(
+            request_uid=uid,
+            consumer=self.consumer,
+            account_name=self.account_name,
+            model=limit_model,
+            requested_model=limit_model,
+            provider_model=limit_model,
+            provider_model_name=limit_model,
+            reserved_tpm=reserved,
+        )
+        last_result = ReserveResult(ok=False, blocked_reason="no_keys")
+        payload_base = {
+            "p_request_uid": uid,
+            "p_attempt_no": 1,
+            "p_consumer": ctx.consumer,
+            "p_account_name": ctx.account_name,
+            "p_model": ctx.model,
+            "p_reserved_tpm": ctx.reserved_tpm,
+        }
+        try:
+            for key_id in self._rotated_normal_pool(candidate_ids):
+                data = await self._run_reserve_rpc(
+                    {**payload_base, "p_candidate_key_ids": [key_id]}
+                )
+                last_result = self._reserve_result_from_data(data)
+                if last_result.ok:
+                    break
+                if (last_result.blocked_reason or "").lower() not in {
+                    "rpm",
+                    "tpm",
+                    "rpd",
+                    "no_keys",
+                }:
+                    break
+        except Exception as exc:
+            raise ReservationError(
+                f"strict external reservation failed: {str(exc)[:300]}"
+            ) from exc
+
+        if not last_result.ok:
+            raise RateLimitError(
+                blocked_reason=last_result.blocked_reason or "unknown",
+                retry_after_ms=last_result.retry_after_ms,
+                model=ctx.model,
+                api_key_id=last_result.api_key_id,
+                minute_bucket=last_result.minute_bucket,
+                day_bucket=last_result.day_bucket,
+            )
+        if not last_result.api_key_id or not last_result.env_var_name:
+            raise ReservationError("external reservation returned incomplete key metadata")
+
+        return ExternalCallLease(
+            request_uid=uid,
+            attempt_no=1,
+            consumer=ctx.consumer,
+            account_name=ctx.account_name,
+            model=ctx.model,
+            reserved_tpm=ctx.reserved_tpm,
+            api_key_id=str(last_result.api_key_id),
+            env_var_name=str(last_result.env_var_name),
+            key_alias=last_result.key_alias,
+            minute_bucket=last_result.minute_bucket,
+            day_bucket=last_result.day_bucket,
+            started_at=ctx.started_at,
+        )
+
+    def get_external_call_api_key(self, lease: ExternalCallLease) -> str:
+        """Resolve a leased key at call time without logging or storing it."""
+
+        api_key = self._get_api_key(lease.env_var_name)
+        if not api_key:
+            raise ReservationError(
+                f"API key not found for leased env: {lease.env_var_name}"
+            )
+        return api_key
+
+    async def mark_external_call_sent(self, lease: ExternalCallLease) -> None:
+        """Public sent marker for adapters that own their HTTP transport."""
+
+        if self.supabase is None:
+            raise ReservationError("external call requires the shared Supabase limiter")
+        try:
+            await self._call_supabase_rpc_with_retries(
+                "google_ai_mark_sent",
+                {
+                    "p_request_uid": lease.request_uid,
+                    "p_attempt_no": lease.attempt_no,
+                },
+                log_label="external_mark_sent",
+            )
+        except Exception as exc:
+            raise ReservationError(
+                f"external mark_sent failed: {str(exc)[:300]}"
+            ) from exc
+
+    async def finalize_external_call(
+        self,
+        lease: ExternalCallLease,
+        *,
+        provider_interaction_id: Optional[str],
+        provider_terminal_status: str,
+        usage: Optional[UsageInfo],
+        duration_ms: int,
+        semantic_status: str = "not_evaluated",
+        error: Optional[ProviderError] = None,
+    ) -> None:
+        """Finalize provider accounting without claiming semantic success.
+
+        ``completed`` is only a provider terminal state.  The independent
+        ``semantic_status`` remains ``not_evaluated`` until a downstream
+        validator records its verdict with :meth:`record_external_call_semantic_result`.
+        """
+
+        terminal = (provider_terminal_status or "").strip().lower()
+        semantic = (semantic_status or "").strip().lower()
+        if terminal not in self._EXTERNAL_TERMINAL_STATUSES:
+            raise ValueError(f"not a terminal external status: {terminal or '<empty>'}")
+        if semantic not in self._EXTERNAL_SEMANTIC_STATUSES:
+            raise ValueError(f"invalid semantic status: {semantic or '<empty>'}")
+        if semantic == "passed" and terminal != "completed":
+            raise ValueError("semantic pass requires provider completed status")
+        if self.supabase is None:
+            raise ReservationError("external call requires the shared Supabase limiter")
+
+        payload = {
+            "p_request_uid": lease.request_uid,
+            "p_attempt_no": lease.attempt_no,
+            "p_provider_interaction_id": provider_interaction_id,
+            "p_provider_terminal_status": terminal,
+            "p_semantic_status": semantic,
+            "p_usage_input_tokens": usage.input_tokens if usage else None,
+            "p_usage_output_tokens": usage.output_tokens if usage else None,
+            "p_usage_total_tokens": usage.total_tokens if usage else None,
+            "p_duration_ms": max(0, int(duration_ms)),
+            "p_error_type": error.error_type if error else None,
+            "p_error_code": error.error_code if error else None,
+            "p_error_message": error.error_message if error else None,
+        }
+        try:
+            await self._call_supabase_rpc_with_retries(
+                "google_ai_finalize_interaction",
+                payload,
+                log_label="external_finalize",
+            )
+        except Exception as exc:
+            # Deliberately no legacy google_ai_finalize fallback: that RPC maps a
+            # provider-completed response to `succeeded`, collapsing the semantic
+            # gate this facade promises to preserve.
+            raise ReservationError(
+                f"external interaction finalize failed: {str(exc)[:300]}"
+            ) from exc
+
+    async def record_external_call_semantic_result(
+        self,
+        lease: ExternalCallLease,
+        *,
+        semantic_status: str,
+        semantic_error: Optional[str] = None,
+    ) -> None:
+        """Record the downstream semantic validator's independent verdict."""
+
+        semantic = (semantic_status or "").strip().lower()
+        if semantic not in {"passed", "failed"}:
+            raise ValueError("semantic_status must be passed or failed")
+        if self.supabase is None:
+            raise ReservationError("external call requires the shared Supabase limiter")
+        try:
+            await self._call_supabase_rpc_with_retries(
+                "google_ai_record_interaction_semantic",
+                {
+                    "p_request_uid": lease.request_uid,
+                    "p_attempt_no": lease.attempt_no,
+                    "p_semantic_status": semantic,
+                    "p_semantic_error": (
+                        str(semantic_error)[:1000] if semantic_error else None
+                    ),
+                },
+                log_label="external_semantic",
+            )
+        except Exception as exc:
+            raise ReservationError(
+                f"external semantic result failed: {str(exc)[:300]}"
+            ) from exc
     
     async def generate_content_async(
         self,

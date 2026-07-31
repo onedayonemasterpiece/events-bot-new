@@ -8,13 +8,24 @@ This module provides:
 
 from google_ai.exceptions import RateLimitError, ProviderError
 from google_ai.secrets import SecretsProvider, get_secret, get_secret_pool
-from google_ai.client import GoogleAIClient
+from google_ai.client import ExternalCallLease, GoogleAIClient
+from google_ai.interactions import (
+    ANTIGRAVITY_AGENT,
+    AntigravityInteractionsClient,
+    InteractionDeadlineExceeded,
+    ProviderInteraction,
+)
 
 __all__ = [
     "SecretsProvider",
     "get_secret",
     "get_secret_pool",
     "GoogleAIClient",
+    "ExternalCallLease",
+    "ANTIGRAVITY_AGENT",
+    "AntigravityInteractionsClient",
+    "InteractionDeadlineExceeded",
+    "ProviderInteraction",
     "RateLimitError",
     "ProviderError",
 ]

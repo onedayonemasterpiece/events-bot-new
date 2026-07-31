@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -11,9 +13,10 @@ from google_ai.client import (
     _NORMAL_POOL_ENV_CANDIDATE_CACHE,
     _OVERFLOW_ENV_CANDIDATE_CACHE,
     GoogleAIClient,
+    ExternalCallLease,
     RequestContext,
 )
-from google_ai.exceptions import ProviderError
+from google_ai.exceptions import ProviderError, ReservationError
 
 
 class _FakeModel:
@@ -82,6 +85,32 @@ class _FakeSupabaseClient:
             "env_var_name": "GOOGLE_API_KEY2",
             "key_alias": "unexpected-unscoped-key",
         }
+        return SimpleNamespace(execute=lambda: SimpleNamespace(data=data))
+
+
+class _StrictExternalSupabase:
+    def __init__(self, rows):
+        self.rows = rows
+        self.rpc_calls: list[tuple[str, dict]] = []
+
+    def table(self, _name: str):
+        return _FakeSupabaseQuery(self.rows)
+
+    def rpc(self, name: str, payload: dict):
+        self.rpc_calls.append((name, dict(payload)))
+        if name == "google_ai_reserve":
+            selected = payload["p_candidate_key_ids"][0]
+            row = next(row for row in self.rows if row["id"] == selected)
+            data = {
+                "ok": True,
+                "api_key_id": selected,
+                "env_var_name": row["env_var_name"],
+                "key_alias": row.get("key_alias", "fixture"),
+                "minute_bucket": "2026-07-31T00:00:00Z",
+                "day_bucket": "2026-07-31",
+            }
+        else:
+            data = None
         return SimpleNamespace(execute=lambda: SimpleNamespace(data=data))
 
 
@@ -893,3 +922,135 @@ async def test_embed_content_async_reserves_before_provider_call(monkeypatch):
     assert supabase.rpc_calls[0]["p_consumer"] == "smart_update_identity_embedding"
     assert supabase.rpc_calls[0]["p_reserved_tpm"] > 0
     assert any("p_provider_status" in call for call in supabase.rpc_calls), "finalize RPC must be called"
+
+
+@pytest.mark.asyncio
+async def test_external_call_reservation_is_strict_and_uses_only_declared_pool(monkeypatch):
+    rows = [
+        {
+            "id": "key-a",
+            "env_var_name": "GOOGLE_ANTIGRAVITY_KEY_A",
+            "priority": 1,
+            "key_alias": "ag-a",
+        },
+        {
+            "id": "key-b",
+            "env_var_name": "GOOGLE_ANTIGRAVITY_KEY_B",
+            "priority": 2,
+            "key_alias": "ag-b",
+        },
+        {
+            "id": "unrelated",
+            "env_var_name": "GOOGLE_API_KEY",
+            "priority": 0,
+        },
+    ]
+    supabase = _StrictExternalSupabase(rows)
+    client = GoogleAIClient(supabase_client=supabase, consumer="festival_antigravity")
+    _NORMAL_POOL_CURSOR.clear()
+
+    first = await client.reserve_external_call(
+        model="antigravity-preview-05-2026",
+        reserved_tpm=50_000,
+        key_envs=["GOOGLE_ANTIGRAVITY_KEY_A", "GOOGLE_ANTIGRAVITY_KEY_B"],
+    )
+    second = await client.reserve_external_call(
+        model="antigravity-preview-05-2026",
+        reserved_tpm=50_000,
+        key_envs=["GOOGLE_ANTIGRAVITY_KEY_A", "GOOGLE_ANTIGRAVITY_KEY_B"],
+    )
+
+    assert first.request_uid != second.request_uid
+    assert [first.api_key_id, second.api_key_id] == ["key-a", "key-b"]
+    reserve_calls = [payload for name, payload in supabase.rpc_calls if name == "google_ai_reserve"]
+    assert [call["p_candidate_key_ids"] for call in reserve_calls] == [["key-a"], ["key-b"]]
+    assert all("unrelated" not in call["p_candidate_key_ids"] for call in reserve_calls)
+
+
+@pytest.mark.asyncio
+async def test_external_call_reservation_fails_closed_without_ledger_or_complete_pool():
+    no_ledger = GoogleAIClient(supabase_client=None)
+    with pytest.raises(ReservationError, match="shared Supabase limiter"):
+        await no_ledger.reserve_external_call(
+            model="antigravity-preview-05-2026",
+            reserved_tpm=10,
+            key_envs=["GOOGLE_ANTIGRAVITY_KEY_A"],
+        )
+
+    supabase = _StrictExternalSupabase(
+        [{"id": "key-a", "env_var_name": "GOOGLE_ANTIGRAVITY_KEY_A", "priority": 1}]
+    )
+    incomplete = GoogleAIClient(supabase_client=supabase)
+    with pytest.raises(ReservationError, match="pool is incomplete"):
+        await incomplete.reserve_external_call(
+            model="antigravity-preview-05-2026",
+            reserved_tpm=10,
+            key_envs=["GOOGLE_ANTIGRAVITY_KEY_A", "GOOGLE_ANTIGRAVITY_KEY_B"],
+        )
+    assert not supabase.rpc_calls
+
+
+@pytest.mark.asyncio
+async def test_external_finalize_keeps_provider_and_semantic_status_separate():
+    supabase = _StrictExternalSupabase([])
+    client = GoogleAIClient(supabase_client=supabase)
+    lease = ExternalCallLease(
+        request_uid="00000000-0000-4000-8000-000000000001",
+        attempt_no=1,
+        consumer="festival_antigravity",
+        account_name=None,
+        model="antigravity-preview-05-2026",
+        reserved_tpm=50_000,
+        api_key_id="key-a",
+        env_var_name="GOOGLE_ANTIGRAVITY_KEY_A",
+        key_alias="ag-a",
+        minute_bucket=None,
+        day_bucket=None,
+        started_at=datetime.now(timezone.utc),
+    )
+
+    await client.finalize_external_call(
+        lease,
+        provider_interaction_id="interaction-1",
+        provider_terminal_status="completed",
+        semantic_status="not_evaluated",
+        usage=SimpleNamespace(input_tokens=10, output_tokens=20, total_tokens=30),
+        duration_ms=123,
+    )
+    await client.record_external_call_semantic_result(
+        lease,
+        semantic_status="failed",
+        semantic_error="missing evidence",
+    )
+
+    finalize = next(payload for name, payload in supabase.rpc_calls if name == "google_ai_finalize_interaction")
+    semantic = next(payload for name, payload in supabase.rpc_calls if name == "google_ai_record_interaction_semantic")
+    assert finalize["p_provider_terminal_status"] == "completed"
+    assert finalize["p_semantic_status"] == "not_evaluated"
+    assert semantic["p_semantic_status"] == "failed"
+    assert semantic["p_semantic_error"] == "missing evidence"
+
+
+def test_external_call_api_key_is_resolved_only_from_leased_env(monkeypatch):
+    monkeypatch.setenv("GOOGLE_ANTIGRAVITY_KEY_A", "never-log-this-secret")
+    client = GoogleAIClient()
+    lease = ExternalCallLease(
+        request_uid="00000000-0000-4000-8000-000000000002",
+        attempt_no=1,
+        consumer="festival_antigravity",
+        account_name=None,
+        model="antigravity-preview-05-2026",
+        reserved_tpm=1,
+        api_key_id="key-a",
+        env_var_name="GOOGLE_ANTIGRAVITY_KEY_A",
+        key_alias="ag-a",
+        minute_bucket=None,
+        day_bucket=None,
+        started_at=datetime.now(timezone.utc),
+    )
+
+    assert client.get_external_call_api_key(lease) == "never-log-this-secret"
+    assert "never-log-this-secret" not in repr(lease)
+    checkpoint = lease.to_dict()
+    assert "never-log-this-secret" not in json.dumps(checkpoint)
+    assert ExternalCallLease.from_dict(checkpoint) == lease
