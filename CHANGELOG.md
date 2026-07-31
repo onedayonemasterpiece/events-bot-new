@@ -22,6 +22,10 @@
 - Google AI shared reservations now serialize check-and-increment per key/model,
   preventing concurrent workers from oversubscribing the configured RPM/TPM/RPD
   cap.
+- Google AI clients configured with reserve/local fallbacks disabled now fail
+  closed when Supabase, `google_ai_reserve`, or the scoped API-key registration
+  is unavailable. Region Talk Gemini Lite stages can no longer fall through to
+  an unreserved direct environment key.
 - Fixed a production Smart Update crash introduced by KGD80 provenance
   grounding: poster evidence now reads the real managed/source URL fields
   instead of nonexistent `PosterCandidate.url`; poster-bearing VK and exact
