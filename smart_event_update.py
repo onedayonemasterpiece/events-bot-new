@@ -541,7 +541,6 @@ class PosterCandidate:
     completion_tokens: int = 0
     total_tokens: int = 0
 
-
 def _poster_candidate_evidence_url(poster: PosterCandidate) -> str | None:
     """Return the real URL fields used for provenance-only grounding."""
 
