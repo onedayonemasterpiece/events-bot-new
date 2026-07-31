@@ -244,8 +244,12 @@ user JWT and request body, while Supabase still performs token validation and
 RLS. It stores no user or business data and runs no application function. CORS
 must allow only the production origin(s); request bodies and authorization
 headers must not be logged. API Gateway does not forward browser headers by
-default, so the fixed integration explicitly enables original header and query
-forwarding while removing cookies and forwarded-host metadata.
+default, so the fixed integration explicitly enables the required headers and
+query while removing cookies and forwarded-host metadata. Because Supabase
+reflects the received `Origin`, every fixed integration replaces an incoming
+browser value with `https://kenigevents.ru`; the preflight rule alone is not a
+simple-request boundary. Thus an unrelated site never receives a matching
+`Access-Control-Allow-Origin` response.
 The browser transport binds the native `fetch` to `globalThis`; otherwise some
 Chromium builds reject the detached Web IDL method before a network request is
 created. Relay smoke commands must fail closed when the publishable-key env is
@@ -316,8 +320,14 @@ Implementation state on 31 July:
   production-origin CORS, no service account and logging disabled; the reviewed
   v2 desired state replaces its broad Auth/REST/Functions prefixes with exact
   method/path entries, plus upload/delete only under private Storage bucket
-  `focus-feedback` (migration of live gateway state is an explicit release
-  step, not performed by the migration file or static build);
+  `focus-feedback`; the live gateway was updated to this v2 state on 31 July,
+  including fixed upstream `Origin` replacement that passed allowed/foreign
+  browser-origin checks;
+- the production migration ledger is reconciled with the repository (including
+  previously remote-only durable-save and person-like revisions), and the
+  compact-related, hardening, focus-participant and idempotent-feedback
+  migrations are applied; `event-search` is deployed with its authenticated
+  service-only internal RPC boundary;
 - the shared browser client preserves the original Supabase URL for project
   identity/OAuth and the exact historical `sb-<project-ref>-auth-token` storage
   key, while a custom `global.fetch` selects direct or relay transport;

@@ -55,6 +55,9 @@
   physical sends.
 - Restored the focus-group email login contract with one-time link and six-digit numeric code, sequential mobile onboarding, honest ambiguous-send handling, and bounded 24-hour per-page-family feedback state; feedback writes now have idempotency keys and a compact offline queue instead of disappearing after navigation.
 - Restored the repository migrations for focus feedback and participant contact that had already been applied in production, and moved the focus-group documentation from backlog into its canonical implemented-feature location while keeping a redirect stub.
+- Reconciled the remaining production Supabase migration history for durable
+  saved events and participant likes, so a clean checkout and the live project
+  now report the same applied schema sequence.
 - Added a fixed-cutoff presentation participant backfill and an advisory-lock-protected 200-member admission cap without inferring communication consent; participant registration and page feedback use the idempotent resilient route and remain on the relay exact allowlist.
 - Replaced the per-key/partly local Google AI limiter with a dedicated
   project-scoped atomic Supabase contract, corrected Gemma 4 to conservative
