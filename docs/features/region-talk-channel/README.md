@@ -288,7 +288,10 @@ state. См. [MVP candidate report](mvp-candidate-report.md).
   adds fail-closed non-interactive preflight, cross-process single-flight,
   retained JSONL logs and `ops_run(kind=region_talk)` accounting; APScheduler
   registers three configurable local-time slots when
-  `ENABLE_REGION_TALK_SCHEDULED=1`.
+  `ENABLE_REGION_TALK_SCHEDULED=1`. A separate five-minute watchdog resumes
+  the latest due slot after a deploy/process interruption by consulting the
+  same durable ledger and bounded retry cap; it never launches beside a
+  `running` or successful session.
 - Short-run runtime contract: CandidateReport must not spend the tail of a
   10–30 minute debug cycle rewriting unchanged queues. The source queue handoff
   is bounded to changed/current/keyword/cursor-neighbourhood rows, duplicate

@@ -62,9 +62,18 @@ for (const path of [
   'podborki/dzhaz-na-vyhodnyh/index.html',
   'podborki/besplatno-s-detmi/index.html',
   'podborki/stendap-na-etoy-nedele/index.html',
+  'fokus-gruppa/priglashenie/index.html',
+  'fokus-gruppa/manifest.webmanifest',
   'robots.txt',
   'sitemap.xml',
 ]) required(path);
+const focusPwa = JSON.parse(readFileSync(join(root, 'fokus-gruppa/manifest.webmanifest'), 'utf8'));
+if (
+  focusPwa.id !== '/fokus-gruppa/pwa'
+  || focusPwa.scope !== '/'
+  || focusPwa.start_url !== '/fokus-gruppa/priglashenie/?launch=pwa'
+  || focusPwa.display !== 'standalone'
+) fail('focus PWA stable identity contract is broken');
 const productionWeekendSource = html('vyhodnye/index.html');
 const productionArtifactMarker = /\bdata-amber-artifact(?:\s|=|>)/u;
 if (

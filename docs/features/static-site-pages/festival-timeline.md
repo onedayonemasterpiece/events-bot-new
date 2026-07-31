@@ -1,8 +1,8 @@
 # Festival calendar timeline
 
 > **Status:** integrated into the checked production generator; calendar view
-> only. Public root promotion is still blocked by the shared reader-atomic
-> publisher gate.
+> only. Public root promotion is still blocked by the default-off shared
+> two-bucket/ALB live-infrastructure gate.
 > **Route:** canonical root-form `/festivali/`; review delivery remains an
 > immutable `noindex` candidate under `/_review/<token>/`.
 > **Accepted visual donor:** `preview-20260726-festivals-calendar-r9`.
@@ -319,7 +319,7 @@ Review candidate:
 - page: <https://kenigevents.ru/preview-20260726-festivals-calendar-r9/festivali/>;
 - hub: <https://kenigevents.ru/preview-20260726-festivals-calendar-r9/__preview/>.
 
-The immutable URL is a public bearer link, not authentication. The repository
-still has no safe reader-atomic root publisher; generating and checking the
-root-form artifact is not a claim that `kenigevents.ru/festivali/` has been
-published.
+The immutable URL is a public bearer link, not authentication. The safe
+reader-atomic publisher now exists default-off in code, but its live
+buckets/ALB/SWS/DNS do not; generating and checking the root-form artifact is
+not a claim that `kenigevents.ru/festivali/` has been published.

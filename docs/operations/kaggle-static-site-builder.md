@@ -1,7 +1,9 @@
 # Kaggle static-site builder
 
-Status: immutable secret-candidate pipeline implemented; production-root
-promotion is blocked pending a reader-atomic origin switch and remains disabled.
+Status: immutable secret-candidate pipeline implemented. A reader-atomic
+two-root-bucket/Yandex-ALB publisher is implemented default-off; its live
+inventory, protected ALB and DNS cutover are not provisioned or approved.
+Canonical setup/rollback: [static-site atomic root](static-site-atomic-root.md).
 
 Current event-page release sequencing, top-five platform backlog and the planned
 10-day Telegraph coexistence/cutover are canonical in
@@ -58,11 +60,12 @@ The production rail is a durable state machine, not a local process lock:
    generic coalesce supersession rule must not discard the older exact active
    job: its recovery/adoption runs first, then the follow-up consumes the newly
    accumulated effects.
-6. Publication remains create-only under a fresh secret prefix. After full
+6. Review publication remains create-only under a fresh secret prefix. After full
    result/manifest/object verification, the durable internal current-review
    receipt advances atomically. Failed, no-op and artifact-only runs preserve
-   its previous value. Root/current and stable ICS are outside this state
-   machine.
+   its previous value. The optional root publisher runs only after these same
+   result/root/candidate checks and successful review publication, and only
+   under `ENABLE_STATIC_SITE_ROOT_PROMOTION`; it never mutates stable ICS.
 
 The local `fcntl` lock remains a same-process convenience only. Correctness is
 owned by SQLite claim/CAS, Kaggle dataset identity, result receipt and
@@ -72,8 +75,8 @@ conditional Object Storage writes.
 immutable Fly SQLite snapshot
   -> one Kaggle CPU build with status ledger
   -> checked production-form artifact + release manifest
-  -> create-only unlisted secret prefix (current phase)
-  -X-> production current/root (separate reader-atomic redesign and GO)
+  -> create-only unlisted secret prefix (current production phase)
+  -> default-off checked inactive root bucket -> ALB weight switch (code only)
 ```
 
 Rules:
@@ -159,9 +162,11 @@ reports plus settled related-section and `1536×864` viewport screenshots; the
 trusted runner rejects an absent, extra or mismatched artifact kind. Only the
 secret-candidate tree can be published. CDN host `static.kenigevents.ru` is configured for
 the static-site bucket and also serves mirrored event media `/p/...` plus stable
-calendar files `/ics/<event_id>.ics`. Production root/current promotion is not
-implemented: the existing website origin cannot resolve an object pointer
-atomically, while sequential root copies expose a mixed tree. For
+calendar files `/ics/<event_id>.ics`. Production root activation must never use
+an Object Storage pointer or sequential copy. The implemented default-off path
+reconciles the inactive one of two complete page-only buckets, verifies it, and
+converges Yandex ALB weights. Live buckets/ALB/DNS are still absent, so root
+apply remains `NO-GO`. For
 preview/focus-group builds pass:
 
 - `PUBLIC_ASTRO_ASSET_BASE_URL=https://static.kenigevents.ru/{buildId}` or runner `--astro-asset-base-url`;
@@ -227,6 +232,8 @@ flags are documented in `.env.example`; defaults stay off:
 ```text
 ENABLE_STATIC_SITE_KAGGLE_BUILDER=0
 ENABLE_STATIC_SITE_SECRET_PUBLISH=0
+ENABLE_STATIC_SITE_ROOT_PROMOTION=0
+STATIC_SITE_ROOT_PROMOTION_MODE=plan
 STATIC_SITE_REPO_SHA=<exact clean pushed SHA>
 STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH=0
 STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH=0
@@ -370,22 +377,42 @@ daily pattern matches the reported project egress graph. The exporter consumes
 only `event_id` and `vector_similarity`, but the current RPC response carries a
 much wider row, about `64–65 MB` per complete rebuild.
 
-Before scheduled production-root builds are enabled, replace that response
-with a dedicated minimal RPC projection containing only those two fields (plus
-no debug/document payload). The measured estimate for the same historical run
-set is about `79 MB`, a `97.45%` reduction. Add a response-byte budget to the
-builder receipt and fail the release gate if a full related rebuild exceeds
-the agreed compact-response ceiling. Static page generation must not fetch the
-same related corpus a second time after the checked cache was produced.
+The repository now uses the dedicated backend-only RPC
+`event_related_candidates_compact_by_event_id_v1`. Each per-anchor response has
+exactly `event_id` and `vector_similarity`; the function is
+revoked from `PUBLIC`, `anon` and `authenticated` and granted only to
+`service_role`. It preserves the legacy per-anchor HNSW ordering/top-K contract
+without returning titles, tags, dates, distances or `card_snapshot`. The
+measured estimate for the same historical run set is about `79 MB`, a `97.45%`
+reduction. Applying the accompanying Supabase migration is an activation gate;
+the exporter fails closed rather than falling back to the wide legacy RPC.
+
+The exporter reads at most `STATIC_SITE_RELATED_RESPONSE_MAX_BYTES` per RPC
+body (default `256 KiB`) before JSON decoding, rejects any row whose keys differ
+from the two-field projection and records request count, row count, aggregate
+response bytes and maximum single response bytes. A full-catalog pgvector
+rebuild also fails when aggregate bytes exceed
+`STATIC_SITE_RELATED_TOTAL_RESPONSE_MAX_BYTES` (default `16 MiB`). The same
+`static_related_retrieval_receipt_v1` is stored in `preview-related.json` and
+copied into `static_site_build_result.json`.
+
+A valid related-cache hit performs **zero** Supabase candidate RPCs and records
+zero request/row/byte counters with `source=cache`. A miss still recomputes the
+whole active graph once: changed-anchor-only recomputation remains forbidden
+because a new event can change old anchors. Duplicate anchor ids fail before
+the first request, preventing a second corpus fetch inside one export. Astro
+continues to perform the full build for now; it consumes the generated related
+manifest and never retrieves the corpus again.
 
 This is independent from browser Auth transport. The Auth/Data relay, if
 enabled, is for small user requests only and must never proxy the bulk static
 related rebuild.
 
-This still does **not** mean Smart Update publishes the production root. With all
-three flags enabled it can build and publish only a checked unlisted candidate.
-Root activation remains a separate NO-GO until a reader-atomic resolver/origin
-design, retained last-good pointer and rollback acceptance are implemented.
+This still does **not** mean Smart Update publishes the production root. The
+ordinary enabled flags build and publish only a checked unlisted candidate.
+The separate two-bucket/ALB state machine is default-off and remains `NO-GO`
+until its live inventory, SWS, retained previous tree and rollback drill pass
+the [atomic-root runbook](static-site-atomic-root.md).
 
 ## Static-site Gemma/related secrets
 
@@ -476,3 +503,21 @@ treated as enabled research UI. The unavailable-state gate is tied to that DOM
 contract, not to mutable reader-facing Russian copy. `/artefakty/` remains
 intentionally `noindex` even while the ordinary production route renders only
 the unavailable fallback.
+
+### Restart before remote handoff
+
+The outbox distinguishes a durable remote build from a process orphan. A row
+with an exact `static_site_build_state.active_job_id` or a persisted
+`remote_handoff` keeps the full 5400-second build budget. A `running` row with
+neither marker is a pre-handoff owner and is recovered after the bounded
+`STATIC_SITE_PRE_HANDOFF_STALE_SECONDS` window (600 seconds by default), so a
+restart between outbox claim and Kaggle handoff cannot block Smart Update for
+90 minutes. When a follow-up loses its CAS to a real owner, it is deferred for
+`STATIC_SITE_CLAIM_RETRY_SECONDS` (30 seconds by default) without consuming an
+attempt; a two-second log/SQLite hot-spin is forbidden.
+
+Production must not enable `STATIC_SITE_REQUIRE_VECTOR_BARRIER=1` while leaving
+`ENABLE_EVENT_VECTOR_SYNC=0`: that configuration makes every new Smart Update
+revision permanently unproducible. After the shared atomic Google limiter and
+event-vector path have passed their release gate, both flags stay enabled and
+the independent vector receipt is allowed to converge before the static build.

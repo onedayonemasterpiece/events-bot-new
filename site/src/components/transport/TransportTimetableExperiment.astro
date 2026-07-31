@@ -17,6 +17,7 @@ interface Props {
   mode?: string;
   releaseId?: string;
   supabaseUrl?: string;
+  supabaseRelayUrl?: string;
   supabaseKey?: string;
 }
 
@@ -24,6 +25,7 @@ const { eventId, suggestion } = Astro.props;
 const mode = normalizeTransportExperimentMode(Astro.props.mode);
 const releaseId = String(Astro.props.releaseId || 'unversioned').slice(0, 160);
 const supabaseUrl = String(Astro.props.supabaseUrl || '').replace(/\/+$/u, '');
+const supabaseRelayUrl = String(Astro.props.supabaseRelayUrl || '').replace(/\/+$/u, '');
 const supabaseKey = String(Astro.props.supabaseKey || '');
 const options = suggestion.outbound;
 ---
@@ -52,6 +54,7 @@ const options = suggestion.outbound;
     data-release-id={releaseId}
     data-transport-snapshot-hash={suggestion.scheduleSnapshotHash}
     data-supabase-url={supabaseUrl || undefined}
+    data-supabase-relay-url={supabaseRelayUrl || undefined}
     data-supabase-key={supabaseKey || undefined}
   >
     <DepartureBoardTimetable

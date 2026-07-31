@@ -18,9 +18,15 @@ const enabled = Boolean(supabaseUrl && publishableKey);
 
 <script>
   import { getStaticSiteAuth, staticAuthDisplayName, staticAuthUserInitial } from '../../lib/staticSiteAuth';
+  import { cleanupAppStorage } from '../../lib/browserStorage';
   import { installSavedEventRuntime } from '../../lib/savedEventRuntime';
 
   const runtime = document.querySelector('[data-static-site-auth-runtime]');
+  try {
+    cleanupAppStorage(window.localStorage, { currentBasePath: document.body?.dataset.siteBasePath || '/' });
+  } catch {
+    // Storage cleanup is an ecological optimization, never an Auth gate.
+  }
   if (runtime?.dataset.authEnabled === 'true' && runtime.dataset.supabaseUrl && runtime.dataset.supabaseKey) {
     const auth = getStaticSiteAuth({
       supabaseUrl: runtime.dataset.supabaseUrl,

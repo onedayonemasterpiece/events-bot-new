@@ -76,6 +76,7 @@ const HeadingTag = headingLevel;
 
 <script>
   import { getStaticSiteAuth } from '../lib/staticSiteAuth';
+  import { boundedJsonRead, boundedJsonWrite } from '../lib/browserStorage';
   import { resolveMobileEventCardMedia } from '../lib/relatedCardLayout.mjs';
 
   const roots = Array.from(document.querySelectorAll('[data-authorized-search]'));
@@ -598,10 +599,24 @@ const HeadingTag = headingLevel;
 
     function enqueueLocalFeedback(query, verdict, eventIds) {
       try {
-        const key = 'ke_search_feedback_queue_v1';
-        const queue = JSON.parse(window.localStorage.getItem(key) || '[]');
-        queue.push({ query, verdict, event_ids: eventIds || [], ts: new Date().toISOString() });
-        window.localStorage.setItem(key, JSON.stringify(queue.slice(-80)));
+        const legacyKey = 'ke_search_feedback_queue_v1';
+        const key = 'ke_search_feedback_queue_v2';
+        const now = Date.now();
+        // v1 had neither a schema marker nor an idempotency key. It is removed,
+        // never replayed into the cost-bearing RPC.
+        window.localStorage.removeItem(legacyKey);
+        const stored = boundedJsonRead(window.localStorage, key, { v: 2, e: [] }, 5 * 1024);
+        const queue = stored?.v === 2 && Array.isArray(stored.e)
+          ? stored.e.filter((item) => Number(item?.expires_at || 0) > now)
+          : [];
+        queue.push({
+          q: String(query || '').slice(0, maxQueryLength),
+          v: verdict === 'matched' ? 'm' : 'x',
+          ids: Array.from(new Set((eventIds || []).map(Number).filter(Number.isSafeInteger))).slice(0, 20),
+          at: now,
+          expires_at: now + 7 * 24 * 60 * 60 * 1000,
+        });
+        boundedJsonWrite(window.localStorage, key, { v: 2, e: queue.slice(-12) }, 5 * 1024);
       } catch (_error) {
         // Local fallback is best-effort only.
       }
@@ -918,12 +933,8 @@ const HeadingTag = headingLevel;
       }
     }
 
-    async function invokeEventSearchJson(endpoint, body, session, reason = 'json_fallback', options = {}) {
+    async function invokeEventSearchJson(endpoint, body, session, options = {}) {
       const { epoch = searchEpoch, signal } = options;
-      const rescued = reason === 'stream_stalled' || reason === 'headers_stalled' || reason === 'json_retry';
-      const fallbackBody = rescued
-        ? { ...body, use_llm_verifier: false, stream_rescue: true }
-        : body;
       const response = await fetchWithSearchHeadersTimeout(endpoint, {
         method: 'POST',
         headers: {
@@ -932,33 +943,20 @@ const HeadingTag = headingLevel;
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify(fallbackBody),
+        body: JSON.stringify(body),
       }, { signal });
       if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || payload?.error) return { data: null, error: payload || { error: 'search_failed' } };
-      setSearchProgress(100, rescued ? 'Показал быстрые карточки' : 'Готово', { epoch, stage: 'result' });
-      return { data: payload, error: null, rescued };
-    }
-
-    function isRetryableSearchTransportError(error) {
-      return error?.message === 'search_fetch_headers_timeout'
-        || error?.name === 'TypeError'
-        || /failed to fetch|networkerror|load failed/iu.test(String(error?.message || ''));
+      setSearchProgress(100, 'Готово', { epoch, stage: 'result' });
+      return { data: payload, error: null };
     }
 
     async function invokeEventSearch(body, session, options = {}) {
       const { epoch = searchEpoch, signal } = options;
       const endpoint = `${root.dataset.supabaseUrl}/functions/v1/event-search`;
       if (root.dataset.searchTransport !== 'ndjson') {
-        try {
-          return await invokeEventSearchJson(endpoint, body, session, 'json_primary', { epoch, signal });
-        } catch (error) {
-          if (!isRetryableSearchTransportError(error) || signal?.aborted) throw error;
-          if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
-          setStatus('Сервер поиска не ответил. Повторяю запрос в быстром режиме…');
-          return invokeEventSearchJson(endpoint, body, session, 'json_retry', { epoch, signal });
-        }
+        return invokeEventSearchJson(endpoint, body, session, { epoch, signal });
       }
       let response;
       try {
@@ -973,10 +971,10 @@ const HeadingTag = headingLevel;
           body: JSON.stringify(body),
         }, { signal });
       } catch (error) {
-        if (!isRetryableSearchTransportError(error) || signal?.aborted) throw error;
-        if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
-        setStatus('Связь с поиском замедлилась. Переключаюсь на обычный ответ…');
-        return invokeEventSearchJson(endpoint, body, session, 'headers_stalled', { epoch, signal });
+        // Search is a cost-bearing POST. A timeout is ambiguous: the server may
+        // already be computing it. Never issue the same search on another
+        // route; let the user explicitly retry after the honest error state.
+        throw error;
       }
       if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
       const contentType = response.headers.get('content-type') || '';
@@ -987,12 +985,11 @@ const HeadingTag = headingLevel;
         return { data: payload, error: null };
       }
       const reader = response.body?.getReader();
-      if (!reader) return invokeEventSearchJson(endpoint, body, session, 'stream_unavailable', { epoch, signal });
+      if (!reader) return { data: null, error: { error: 'search_stream_unavailable' } };
       const decoder = new TextDecoder();
       let buffer = '';
       let finalData = null;
       let finalError = null;
-      let jsonRescueAttempted = false;
       function cancelSearchReader() {
         try {
           const cancellation = reader.cancel();
@@ -1000,16 +997,6 @@ const HeadingTag = headingLevel;
         } catch (_error) {
           // Cancellation is best-effort after a proxy/browser stream stall.
         }
-      }
-      async function rescueStalledStream() {
-        if (jsonRescueAttempted) {
-          return { data: null, error: { error: 'search_stream_stalled' } };
-        }
-        jsonRescueAttempted = true;
-        cancelSearchReader();
-        if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
-        setStatus('Связь с поиском замедлилась. Переключаюсь на обычный ответ…');
-        return invokeEventSearchJson(endpoint, body, session, 'stream_stalled', { epoch, signal });
       }
       async function finishWithResult(event) {
         if (!isCurrentSearchEpoch(epoch)) return { data: null, error: null, stale: true };
@@ -1034,7 +1021,8 @@ const HeadingTag = headingLevel;
       while (true) {
         const readResult = await readSearchChunkWithTimeout(reader, signal);
         if (readResult?.streamIdleTimedOut) {
-          return rescueStalledStream();
+          cancelSearchReader();
+          return { data: null, error: { error: 'search_stream_stalled' } };
         }
         const { value, done } = readResult;
         if (done) break;
@@ -1066,7 +1054,7 @@ const HeadingTag = headingLevel;
         }
       }
       if (!finalData && !finalError) {
-        return rescueStalledStream();
+        return { data: null, error: { error: 'search_stream_incomplete' } };
       }
       return finalError ? { data: null, error: finalError } : { data: finalData, error: null };
     }
@@ -1215,7 +1203,7 @@ const HeadingTag = headingLevel;
           setStatus('Поиск занял слишком много времени. Поле уже снова доступно — попробуйте ещё раз.', 'error');
         } else if (controller.signal.aborted || error?.name === 'AbortError') {
           return;
-        } else if (isRetryableSearchTransportError(error)) {
+        } else if (error?.name === 'TypeError' || /failed to fetch|networkerror|load failed|supabase_transport/iu.test(String(error?.message || ''))) {
           setStatus('Не удалось связаться с сервером поиска. Поле уже снова доступно — попробуйте ещё раз.', 'error');
         } else if (vectorRendered && results?.children.length) {
           setStatus('Показал быстрые результаты по смыслу. Финальный ответ не пришёл, но найденные карточки остаются на экране.', 'info');

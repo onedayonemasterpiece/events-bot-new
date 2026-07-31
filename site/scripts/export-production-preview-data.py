@@ -62,6 +62,10 @@ BGE_MODEL_REVISION_DEFAULT = "5617a9f61b028005a4858fdac845db406aefb181"
 BGE_DIMENSION_DEFAULT = 1024
 UNUSUAL_MANIFEST_SCHEMA_VERSION = "static_unusual_events_v1"
 UNUSUAL_CACHE_SCHEMA_VERSION = "unusual-event-score-cache-v1"
+COMPACT_RELATED_RPC = "event_related_candidates_compact_by_event_id_v1"
+COMPACT_RELATED_FIELDS = frozenset({"event_id", "vector_similarity"})
+DEFAULT_RELATED_RESPONSE_MAX_BYTES = 256 * 1024
+DEFAULT_RELATED_TOTAL_RESPONSE_MAX_BYTES = 16 * 1024 * 1024
 # Manual QA overrides from event-page media review: these posters contain either no
 # meaningful OCR or text too small for OCR-safe preserve mode; crop them as visual.
 FORCE_VISUAL_IMAGE_MODE_IDS = {5370, 6322, 4512, 3730, 4913}
@@ -3339,7 +3343,16 @@ def build_sparse_related_chain(events: list[dict[str, Any]], *, cache_salt: str)
     return chains
 
 
-def personalization_supabase_request(function_name: str, payload: dict[str, Any], *, timeout: float = 30.0) -> Any:
+def personalization_supabase_request(
+    function_name: str,
+    payload: dict[str, Any],
+    *,
+    timeout: float = 30.0,
+    response_max_bytes: int | None = None,
+    total_response_max_bytes: int | None = None,
+    metrics: dict[str, Any] | None = None,
+    expected_row_fields: frozenset[str] | None = None,
+) -> Any:
     base_url = (os.getenv("PERSONALIZATION_SUPABASE_URL") or "").strip().rstrip("/")
     key = (
         os.getenv("PERSONALIZATION_SUPABASE_SECRET_KEY")
@@ -3359,10 +3372,58 @@ def personalization_supabase_request(function_name: str, payload: dict[str, Any]
             "Accept": "application/json",
         },
     )
+    if metrics is not None:
+        metrics["request_count"] = int(metrics.get("request_count") or 0) + 1
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-            return json.loads(raw) if raw else None
+            max_bytes = int(response_max_bytes or 0)
+            if max_bytes <= 0:
+                raw_bytes = response.read()
+            else:
+                declared_length = response.headers.get("Content-Length")
+                if declared_length and declared_length.isdigit() and int(declared_length) > max_bytes:
+                    raise RuntimeError(
+                        f"Supabase RPC {function_name} response declares {declared_length} bytes; "
+                        f"limit is {max_bytes}"
+                    )
+                raw_bytes = response.read(max_bytes + 1)
+                if len(raw_bytes) > max_bytes:
+                    raise RuntimeError(
+                        f"Supabase RPC {function_name} response exceeds {max_bytes} bytes"
+                    )
+            if metrics is not None:
+                metrics["response_bytes"] = int(metrics.get("response_bytes") or 0) + len(raw_bytes)
+                metrics["max_single_response_bytes"] = max(
+                    int(metrics.get("max_single_response_bytes") or 0), len(raw_bytes)
+                )
+                if (
+                    total_response_max_bytes is not None
+                    and int(total_response_max_bytes) > 0
+                    and int(metrics["response_bytes"]) > int(total_response_max_bytes)
+                ):
+                    raise RuntimeError(
+                        f"Supabase RPC {function_name} compact response total "
+                        f"{metrics['response_bytes']} exceeds {int(total_response_max_bytes)} bytes"
+                    )
+            if not raw_bytes:
+                parsed = None
+            else:
+                parsed = json.loads(raw_bytes.decode("utf-8", errors="replace"))
+            if expected_row_fields is not None:
+                if not isinstance(parsed, list):
+                    raise RuntimeError(
+                        f"Supabase RPC {function_name} must return a JSON row array"
+                    )
+                for index, row in enumerate(parsed):
+                    if not isinstance(row, dict) or frozenset(row) != expected_row_fields:
+                        actual = sorted(row) if isinstance(row, dict) else type(row).__name__
+                        raise RuntimeError(
+                            f"Supabase RPC {function_name} row {index} violates compact projection: "
+                            f"expected={sorted(expected_row_fields)} actual={actual}"
+                        )
+            if metrics is not None and isinstance(parsed, list):
+                metrics["row_count"] = int(metrics.get("row_count") or 0) + len(parsed)
+            return parsed
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:1500]
         raise RuntimeError(f"Supabase RPC {function_name} failed HTTP {exc.code}: {detail}") from exc
@@ -3376,15 +3437,33 @@ def build_pgvector_related_chain(
     match_count: int = 60,
     embedding_doc_kind: str = "related_v1",
     graph_meta_out: dict[str, Any] | None = None,
+    retrieval_receipt_out: dict[str, Any] | None = None,
+    response_max_bytes: int = DEFAULT_RELATED_RESPONSE_MAX_BYTES,
+    total_response_max_bytes: int | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     by_id = {int(event["id"]): event for event in events}
+    if len(by_id) != len(events):
+        raise RuntimeError("pgvector related build requires unique anchor event ids")
     allowed_ids = set(by_id)
     facets_by_id = {int(event["id"]): facet_set(event) for event in events}
     chains: dict[str, list[dict[str, Any]]] = {}
+    retrieval_metrics: dict[str, Any] = {
+        "schema_version": "static_related_retrieval_receipt_v1",
+        "rpc": COMPACT_RELATED_RPC,
+        "projection": sorted(COMPACT_RELATED_FIELDS),
+        "request_count": 0,
+        "row_count": 0,
+        "response_bytes": 0,
+        "max_single_response_bytes": 0,
+        "response_max_bytes": int(response_max_bytes),
+        "total_response_max_bytes": (
+            int(total_response_max_bytes) if total_response_max_bytes is not None else None
+        ),
+    }
     for event in events:
         event_id = int(event["id"])
         rows = personalization_supabase_request(
-            "event_related_candidates_by_event_id_v1",
+            COMPACT_RELATED_RPC,
             {
                 "p_anchor_event_id": event_id,
                 "p_embedding_model": embedding_model,
@@ -3395,6 +3474,10 @@ def build_pgvector_related_chain(
                 "p_embedding_doc_kind": embedding_doc_kind,
             },
             timeout=45.0,
+            response_max_bytes=response_max_bytes,
+            total_response_max_bytes=total_response_max_bytes,
+            metrics=retrieval_metrics,
+            expected_row_fields=COMPACT_RELATED_FIELDS,
         ) or []
         scored: list[dict[str, Any]] = []
         excluded_ids = {event_id, *[int(item) for item in event.get("other_date_ids") or []]}
@@ -3467,6 +3550,9 @@ def build_pgvector_related_chain(
     if graph_meta_out is not None:
         graph_meta_out.clear()
         graph_meta_out.update(graph_meta)
+    if retrieval_receipt_out is not None:
+        retrieval_receipt_out.clear()
+        retrieval_receipt_out.update(retrieval_metrics)
     chain_lengths = [len(value or []) for value in chains.values()]
     log_stage(
         "pgvector_rebuild_complete",
@@ -4261,6 +4347,8 @@ def build_related(
     embedding_model: str = "gemini-embedding-2",
     related_corpus_revision: str = "",
     shared_bge_artifact: dict[str, Any] | None = None,
+    related_response_max_bytes: int = DEFAULT_RELATED_RESPONSE_MAX_BYTES,
+    related_total_response_max_bytes: int | None = None,
 ) -> dict[str, Any]:
     requested_mode = str(related_mode or "").strip().lower()
     related_mode = requested_mode if requested_mode in {"sparse", "pgvector", "bge"} else "sparse"
@@ -4296,6 +4384,22 @@ def build_related(
     cache = load_related_cache(cache_path) or {}
     graph_meta: dict[str, Any] = {
         "policy": "not_applicable" if related_mode != "pgvector" else "pgvector_selective_reciprocity_v1",
+    }
+    retrieval_receipt: dict[str, Any] = {
+        "schema_version": "static_related_retrieval_receipt_v1",
+        "rpc": COMPACT_RELATED_RPC if related_mode == "pgvector" else None,
+        "projection": sorted(COMPACT_RELATED_FIELDS) if related_mode == "pgvector" else [],
+        "request_count": 0,
+        "row_count": 0,
+        "response_bytes": 0,
+        "max_single_response_bytes": 0,
+        "response_max_bytes": int(related_response_max_bytes),
+        "total_response_max_bytes": (
+            int(related_total_response_max_bytes)
+            if related_total_response_max_bytes is not None
+            else None
+        ),
+        "source": "not_applicable" if related_mode != "pgvector" else "cache",
     }
     previous_fingerprints = cache.get("event_fingerprints") if isinstance(cache.get("event_fingerprints"), dict) else {}
     previous_ids = [int(value) for value in (cache.get("event_ids") or []) if str(value).isdigit()]
@@ -4396,7 +4500,11 @@ def build_related(
                 embedding_model=embedding_model,
                 embedding_doc_kind=os.getenv("STATIC_SITE_PGVECTOR_RELATED_DOC_KIND", "related_v1") or "related_v1",
                 graph_meta_out=graph_meta,
+                retrieval_receipt_out=retrieval_receipt,
+                response_max_bytes=related_response_max_bytes,
+                total_response_max_bytes=related_total_response_max_bytes,
             )
+            retrieval_receipt["source"] = "compact_rpc"
         elif related_mode == "bge":
             if not shared_bge_artifact:
                 raise RuntimeError("BGE related mode requires the shared in-memory vector artifact")
@@ -4448,6 +4556,7 @@ def build_related(
         "chains": chains,
         "raw_chains": raw_chains_for_cache or copy.deepcopy(chains),
         "graph_reciprocity": graph_meta,
+        "retrieval_receipt": retrieval_receipt,
         "gemma_audit_cache": cache.get("gemma_audit_cache", {}),
         "gemma_verification": gemma_meta,
         "gemma_verified_model": (
@@ -4533,6 +4642,7 @@ def build_related(
             else None
         ),
         "graph_reciprocity": graph_meta,
+        "retrieval_receipt": retrieval_receipt,
         "gemma_verification": gemma_meta,
         "strict_verified_related": bool(gemma_verify),
         "cache": {
@@ -5388,6 +5498,30 @@ def main() -> int:
     parser.add_argument("--pgvector-embedding-model", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_MODEL", "gemini-embedding-2"))
     parser.add_argument("--pgvector-embedding-key-env", default=os.getenv("STATIC_SITE_PGVECTOR_EMBEDDING_KEY_ENV", "GOOGLE_API_KEY4"))
     parser.add_argument("--related-corpus-revision", default=os.getenv("STATIC_SITE_RELATED_CORPUS_REVISION", ""), help="SHA-256 revision from the completed related_v1 vector-sync receipt")
+    parser.add_argument(
+        "--related-response-max-bytes",
+        type=int,
+        default=int(
+            os.getenv(
+                "STATIC_SITE_RELATED_RESPONSE_MAX_BYTES",
+                str(DEFAULT_RELATED_RESPONSE_MAX_BYTES),
+            )
+            or str(DEFAULT_RELATED_RESPONSE_MAX_BYTES)
+        ),
+        help="Maximum encoded body size for one compact related RPC response.",
+    )
+    parser.add_argument(
+        "--related-total-response-max-bytes",
+        type=int,
+        default=int(
+            os.getenv(
+                "STATIC_SITE_RELATED_TOTAL_RESPONSE_MAX_BYTES",
+                str(DEFAULT_RELATED_TOTAL_RESPONSE_MAX_BYTES),
+            )
+            or str(DEFAULT_RELATED_TOTAL_RESPONSE_MAX_BYTES)
+        ),
+        help="Maximum aggregate compact related RPC response bytes for a full rebuild.",
+    )
     parser.add_argument("--pgvector-max-provider-calls", type=int, default=int(os.getenv("STATIC_SITE_PGVECTOR_MAX_PROVIDER_CALLS", "1000") or "1000"))
     parser.add_argument("--site-origin", default=os.getenv("PUBLIC_SITE_ORIGIN", "https://kenigevents.ru"))
     parser.add_argument("--base-path", default=os.getenv("PUBLIC_PREVIEW_BUILD_ID", ""))
@@ -5454,6 +5588,13 @@ def main() -> int:
         help="Do not make remote image-dimension requests (vector projection fast path).",
     )
     args = parser.parse_args()
+
+    if args.related_response_max_bytes < 1024:
+        raise SystemExit("--related-response-max-bytes must be at least 1024")
+    if args.related_total_response_max_bytes < args.related_response_max_bytes:
+        raise SystemExit(
+            "--related-total-response-max-bytes must be at least the per-response limit"
+        )
 
     global SKIP_IMAGE_PROBES
     SKIP_IMAGE_PROBES = bool(args.skip_image_probes)
@@ -5686,6 +5827,12 @@ def main() -> int:
         embedding_model=args.pgvector_embedding_model,
         related_corpus_revision=args.related_corpus_revision,
         shared_bge_artifact=shared_bge_artifact,
+        related_response_max_bytes=args.related_response_max_bytes,
+        related_total_response_max_bytes=(
+            args.related_total_response_max_bytes
+            if args.catalog_mode == "full" and args.related_mode == "pgvector"
+            else None
+        ),
     )
     if args.catalog_mode == "full" and args.related_mode == "pgvector":
         validate_pgvector_graph_release(related_payload.get("graph_reciprocity") or {})

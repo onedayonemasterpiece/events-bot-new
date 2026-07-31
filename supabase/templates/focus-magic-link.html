@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Код входа в KenigEvents</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f7f0e6;color:#221a14;font-family:Arial,'Helvetica Neue',sans-serif;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+      {{ .Token }} — одноразовый код входа. Можно также войти по кнопке.
+    </div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#f7f0e6;">
+      <tr>
+        <td align="center" style="padding:24px 12px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:560px;border:1px solid #e1d3c2;border-radius:24px;background:#fffdf8;box-shadow:0 16px 42px rgba(72,45,25,.12);">
+            <tr>
+              <td style="padding:30px 28px 12px;text-align:center;">
+                <div style="color:#98401f;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">
+                  Полюбить Калининград · Анонсы
+                </div>
+                <h1 style="margin:14px 0 0;color:#221a14;font-size:28px;line-height:1.15;">
+                  Вход в KenigEvents
+                </h1>
+                <p style="margin:12px auto 0;max-width:430px;color:#6d6259;font-size:16px;line-height:1.55;">
+                  Нажмите кнопку — это самый простой способ. Если письмо открыто
+                  на другом устройстве, введите код на экране входа.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px;text-align:center;">
+                <a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=email" style="display:inline-block;min-width:220px;border-radius:14px;padding:15px 24px;background:#a54821;color:#fffdf8;font-size:16px;font-weight:700;line-height:1.2;text-decoration:none;">
+                  Войти по ссылке
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 28px;text-align:center;">
+                <div style="color:#8a7667;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">
+                  Или введите код
+                </div>
+                <div aria-label="Одноразовый код {{ .Token }}" style="margin:10px 0 0;border:1px solid #d8c8b5;border-radius:16px;padding:16px 12px;background:#fff;color:#221a14;font-family:'Courier New',monospace;font-size:32px;font-weight:700;letter-spacing:.24em;line-height:1;text-indent:.24em;">
+                  {{ .Token }}
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 28px 30px;">
+                <p style="margin:0;color:#6d6259;font-size:13px;line-height:1.55;text-align:center;">
+                  Код и ссылка одноразовые и действуют 10 минут.
+                  Никому не пересылайте это письмо и не сообщайте код.
+                </p>
+                <p style="margin:10px 0 0;color:#8a7667;font-size:12px;line-height:1.5;text-align:center;">
+                  Если вы не запрашивали вход, просто проигнорируйте письмо.
+                  Никаких действий с аккаунтом не произойдёт.
+                </p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:14px 0 0;color:#8a7667;font-size:11px;line-height:1.5;text-align:center;">
+            Служебное письмо KenigEvents · без рекламной подписки
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

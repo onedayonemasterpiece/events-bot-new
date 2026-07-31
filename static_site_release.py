@@ -1856,6 +1856,45 @@ def validate_production_candidate_result(
     return dict(result), candidate_archive
 
 
+def resolve_checked_static_site_artifact(
+    build_result: Mapping[str, Any],
+    *,
+    output_dir: str | os.PathLike[str],
+    kind: str,
+) -> Path:
+    """Resolve one artifact already covered by the checked build receipt.
+
+    This repeats the bounded path/hash/size checks at the point of use so a
+    caller cannot substitute a file between result validation and publication.
+    """
+
+    if kind not in {"production_root", "secret_candidate", "browser_evidence"}:
+        raise StaticSitePermanentError("static_site_artifact_kind_invalid")
+    artifacts = build_result.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise StaticSitePermanentError("static_site_result_artifact_set_mismatch")
+    matches = [
+        item
+        for item in artifacts
+        if isinstance(item, Mapping) and item.get("kind") == kind
+    ]
+    if len(matches) != 1:
+        raise StaticSitePermanentError(f"static_site_result_artifact_missing:{kind}")
+    item = matches[0]
+    name = str(item.get("filename") or "")
+    base = Path(output_dir).resolve()
+    artifact = (base / name).resolve()
+    if (
+        artifact.parent != base
+        or not name.endswith(".tar.gz")
+        or not artifact.is_file()
+        or artifact.stat().st_size != int(item.get("size") or -1)
+        or _sha256_file(artifact) != item.get("sha256")
+    ):
+        raise StaticSitePermanentError(f"static_site_result_artifact_hash_mismatch:{kind}")
+    return artifact
+
+
 def _safe_extract_candidate_archive(archive: Path, destination: Path, token: str) -> Path:
     prefix = f"_review/{token}/"
     if destination.exists():

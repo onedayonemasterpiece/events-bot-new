@@ -34,12 +34,14 @@ function transportHarness(fetchImpl) {
     'window',
     'searchFetchHeadersTimeoutMs',
     'searchStreamIdleTimeoutMs',
+    'authController',
     `${sources}; return { fetchWithSearchHeadersTimeout, readSearchChunkWithTimeout };`,
   )(
     fetchImpl,
     { setTimeout, clearTimeout },
     30,
     30,
+    { transport: { fetch: fetchImpl } },
   );
 }
 
@@ -94,16 +96,15 @@ test('every reader.read receives a fresh idle timeout after a delivered chunk', 
   assert.equal(reads, 2);
 });
 
-test('stream rescue and overall watchdog are bounded and cleanup remains epoch-owned', () => {
+test('stream timeout never duplicates the cost-bearing POST and cleanup remains epoch-owned', () => {
   const invoke = extractFunction(search, 'invokeEventSearch');
   const run = extractFunction(search, 'runSearch');
 
-  assert.match(invoke, /!isRetryableSearchTransportError\(error\)[\s\S]*?invokeEventSearchJson\([^;]+?'headers_stalled'/u);
-  assert.match(invoke, /let jsonRescueAttempted = false/u);
-  assert.match(invoke, /if \(jsonRescueAttempted\)[\s\S]*?jsonRescueAttempted = true/u);
-  assert.match(invoke, /cancelSearchReader\(\)[\s\S]*?invokeEventSearchJson\([^;]+?'stream_stalled'/u);
+  assert.doesNotMatch(invoke, /headers_stalled|stream_rescue|json_retry|rescueStalledStream/u);
+  assert.match(invoke, /Search is a cost-bearing POST[\s\S]*Never issue the same search[\s\S]*on another[\s\S]*route/u);
   assert.match(invoke, /readSearchChunkWithTimeout\(reader, signal\)/u);
-  assert.match(invoke, /if \(!finalData && !finalError\) \{\s*return rescueStalledStream\(\);/u);
+  assert.match(invoke, /streamIdleTimedOut[\s\S]*cancelSearchReader\(\)[\s\S]*search_stream_stalled/u);
+  assert.match(invoke, /if \(!finalData && !finalError\) \{\s*return \{ data: null, error: \{ error: 'search_stream_incomplete' \} \};/u);
   assert.match(run, /Promise\.race\(\[searchRequest, overallWatchdog\]\)/u);
   assert.match(run, /controller\.abort\(error\)/u);
   assert.match(
@@ -112,17 +113,16 @@ test('stream rescue and overall watchdog are bounded and cleanup remains epoch-o
   );
 });
 
-test('mobile-safe JSON is default, retries once without LLM after a transport failure, and keeps NDJSON opt-in', () => {
+test('mobile-safe JSON is default, sends once, and keeps NDJSON opt-in', () => {
   const invoke = extractFunction(search, 'invokeEventSearch');
   const jsonInvoke = extractFunction(search, 'invokeEventSearchJson');
 
   assert.match(search, /PUBLIC_AUTHORIZED_SEARCH_TRANSPORT === 'ndjson' \? 'ndjson' : 'json'/u);
   assert.match(search, /data-search-transport=\{searchTransport\}/u);
   assert.match(invoke, /root\.dataset\.searchTransport !== 'ndjson'/u);
-  assert.match(invoke, /invokeEventSearchJson\(endpoint, body, session, 'json_primary'/u);
-  assert.match(invoke, /isRetryableSearchTransportError\(error\)[\s\S]*?'json_retry'/u);
-  assert.match(jsonInvoke, /reason === 'json_retry'/u);
-  assert.match(jsonInvoke, /use_llm_verifier: false, stream_rescue: true/u);
+  assert.match(invoke, /return invokeEventSearchJson\(endpoint, body, session, \{ epoch, signal \}\)/u);
+  assert.doesNotMatch(invoke, /json_retry|headers_stalled|stream_stalled'\)/u);
+  assert.doesNotMatch(jsonInvoke, /stream_rescue/u);
 });
 
 test('zero exact matches render discovery cards immediately instead of a blank paginated heading', () => {

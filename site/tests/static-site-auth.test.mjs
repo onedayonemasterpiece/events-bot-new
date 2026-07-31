@@ -57,12 +57,21 @@ test('focus identity supports real email OTP and Yandex linking through the shar
   assert.match(auth, /async signInWithEmailOtp/u);
   assert.match(auth, /this\.client\.auth\.signInWithOtp/u);
   assert.match(auth, /emailRedirectTo:\s*redirectTo/u);
+  assert.match(auth, /StaticSiteEmailOtpStatus = 'accepted' \| 'rate_limited' \| 'ambiguous' \| 'request_failed'/u);
+  assert.match(auth, /async verifyEmailOtp/u);
+  assert.match(auth, /\/\^\\d\{6\}\$\/u\.test\(normalizedToken\)/u);
+  assert.match(auth, /token_hash:\s*tokenHash/u);
+  assert.match(auth, /async registerFocusGroupParticipant/u);
+  assert.match(auth, /p_communication_opt_in:/u);
+  assert.match(auth, /dataClient\.idempotentReplay[\s\S]*register_focus_group_participant_v1/u);
+  assert.match(auth, /async resetForOnboardingTest/u);
   assert.match(auth, /async linkYandexIdentity/u);
   assert.match(auth, /this\.client\.auth\.linkIdentity/u);
-  assert.match(intake, /new URL\(intake\.cleanHref, window\.location\.origin\)\.href/u);
-  assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirectTo\)/u);
+  assert.match(intake, /new URL\(cleanStaticAuthUrl\(window\.location\.href\)\)/u);
+  assert.match(intake, /auth\.signInWithEmailOtp\(email, emailRedirect\.href\)/u);
   assert.match(intake, /auth\.linkYandexIdentity\(\)/u);
-  assert.match(intake, /введённый адрес локально не сохраняется/u);
+  assert.match(intake, /pendingEmail = email/u);
+  assert.doesNotMatch(intake, /localStorage\.setItem\([^)]*email/iu);
   assert.match(invitation, /<StaticSiteAuthRuntime \/>/u);
   assert.doesNotMatch(intake, /Макет не отправлял код|провайдер не запускается/u);
 });
@@ -86,9 +95,8 @@ test('Search advertises the mobile search action and submits Enter through the n
   assert.match(search, /event\.preventDefault\(\);\s*form\?\.requestSubmit\(\);/u);
 });
 
-test('initial streaming header timeout receives one bounded JSON rescue', () => {
-  assert.match(search, /!isRetryableSearchTransportError\(error\)/u);
-  assert.match(search, /invokeEventSearchJson\(endpoint, body, session, 'headers_stalled'/u);
-  assert.match(search, /reason === 'stream_stalled' \|\| reason === 'headers_stalled' \|\| reason === 'json_retry'/u);
-  assert.match(search, /use_llm_verifier: false, stream_rescue: true/u);
+test('cost-bearing Search POST is selected once and never rescued by a duplicate POST', () => {
+  assert.match(search, /Search is a cost-bearing POST/u);
+  assert.doesNotMatch(search, /headers_stalled|stream_rescue|json_retry|rescueStalledStream/u);
+  assert.match(search, /authController\?\.transport\?\.fetch/u);
 });

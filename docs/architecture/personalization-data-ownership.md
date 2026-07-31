@@ -126,6 +126,42 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Postbox used as a hidden recommendation fallback, or NotiSend used for critical transactional mail.
 - Mail-trigger processing that removes the retained SpaceWeb mailbox copy, exposes attachments publicly or can create reply/Bcc loops.
 
+## Static browser transport and storage boundary
+
+All browser access to the personalization Supabase uses one configuration-keyed
+`ResilientDataClient` singleton. The singleton owns route health/selection but
+is independent of Auth; `StaticSiteAuth` consumes it rather than defining the
+data route for the rest of the site. Direct and stateless-relay probes run in
+parallel, a healthy choice is cached briefly in `sessionStorage`, and no route
+is selected when both probes fail.
+
+Every request declares one of three policies:
+
+- `safe-read`: side-effect-free reads, including explicitly read-only RPC POSTs,
+  may try the alternate healthy route once;
+- `selected-once`: OTP, Search and other non-idempotent/cost-bearing writes are
+  sent at most once; timeout after dispatch is ambiguous and never causes an
+  automatic resend;
+- `idempotent-replay`: retry/outbox is permitted only when the server contract
+  has a stable idempotency key or state-upsert uniqueness guarantee.
+
+The shared outbox is bounded (16 records, 12 KiB, 24-hour TTL, five attempts),
+uses IndexedDB with a compact localStorage fallback, deduplicates by explicit
+record id and preserves foreign channels without burning attempts. This is an
+egress/reliability mechanism, not a security boundary. RLS, server-side rate
+limits, schema validation, authentication and idempotency enforcement remain
+authoritative; client probes/cooldowns must never be represented as DDoS
+protection.
+
+KenigEvents-owned browser state has both per-key limits and an enforced aggregate
+budget of 64 KiB, excluding the Supabase-owned auth token. Profiles,
+feedback/search queues, reconciliation markers and personal-feed hints are
+capped and/or expiring. If many individually valid cache keys exceed the total,
+disposable queues/caches are evicted first while the current focus participation
+and compact personalization state are preserved. Full per-preview feed manifests
+and obsolete continuation caches are removed. Cleanup never reads, compacts or
+rewrites Supabase Auth storage.
+
 ## Security gates
 
 - RLS on every exposed Supabase table; ownership predicates use `auth.uid()`.
@@ -139,6 +175,19 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - The existing `ru-central1` YDB resource does not by itself establish compliance: privacy tables require an isolated IAM/KMS/audit/retention boundary, and broader Supabase PII flows remain a release/legal audit item.
 - Recommendation admission and every send claim fail closed above the 200-user launch ceiling.
 - Provider credentials and mailbox passwords stay in the approved secret manager and never enter Git, artifacts or application logs.
+- The browser may read only owner-scoped saved-event state and must mutate it
+  through the capped desired-state RPC; direct authenticated table DML is
+  forbidden. Expensive vector search, quota reservation and search audit RPCs
+  are service-role-only behind an Edge Function that first validates the caller
+  JWT and passes the verified `auth.users.id` to fixed-`search_path` wrappers.
+- The stateless relay is an explicit method/path allowlist, not a generic
+  Supabase proxy. The only Storage exception is authenticated upload/delete in
+  private bucket `focus-feedback`; Storage RLS remains authoritative. Unknown
+  RPC/functions, Auth admin, Realtime and other buckets fail closed.
+- Focus participant registration and page feedback are idempotent desired-state
+  RPCs routed through the same thin client. The participant projection has a
+  serialized 200-active-member ceiling; the one-time presentation backfill uses
+  a fixed cutoff and never infers communication consent from Auth history.
 
 ## Consequences for existing branches
 

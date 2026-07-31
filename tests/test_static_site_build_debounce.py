@@ -264,6 +264,165 @@ async def test_static_build_running_owner_gets_one_deferred_followup(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_static_claim_lost_defers_followup_instead_of_hot_spinning(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "claim-lost.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        owner_event = Event(
+            title="Owner",
+            description="Description",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Venue",
+            source_text="source",
+        )
+        followup_event = Event(
+            title="Follow-up",
+            description="Description",
+            date="2026-08-02",
+            time="18:00",
+            location_name="Venue",
+            source_text="source",
+        )
+        session.add_all([owner_event, followup_event])
+        await session.commit()
+        await session.refresh(owner_event)
+        await session.refresh(followup_event)
+        session.add_all(
+            [
+                JobOutbox(
+                    event_id=owner_event.id,
+                    task=JobTask.static_site_build,
+                    payload=make_request_payload(reason="active owner"),
+                    status=JobStatus.running,
+                    coalesce_key="static_site_build:owner",
+                    updated_at=now,
+                    next_run_at=now,
+                ),
+                JobOutbox(
+                    event_id=followup_event.id,
+                    task=JobTask.static_site_build,
+                    payload=make_request_payload(reason="new Smart Update"),
+                    status=JobStatus.pending,
+                    coalesce_key="static_site_build:prod",
+                    updated_at=now,
+                    next_run_at=now - timedelta(seconds=1),
+                ),
+            ]
+        )
+        await session.commit()
+
+    calls = 0
+
+    async def forbidden_handler(*_args):
+        nonlocal calls
+        calls += 1
+        return False
+
+    monkeypatch.setenv("STATIC_SITE_CLAIM_RETRY_SECONDS", "30")
+    monkeypatch.setitem(main.JOB_HANDLERS, "static_site_build", forbidden_handler)
+    before = datetime.now(timezone.utc)
+    assert await main._run_due_jobs_once(
+        db, None, allowed_tasks={JobTask.static_site_build}
+    ) == 0
+    assert await main._run_due_jobs_once(
+        db, None, allowed_tasks={JobTask.static_site_build}
+    ) == 0
+    async with db.get_session() as session:
+        followup = (
+            await session.execute(
+                select(JobOutbox)
+                .where(JobOutbox.coalesce_key == "static_site_build:prod")
+            )
+        ).scalar_one()
+    assert followup.status == JobStatus.pending
+    assert followup.attempts == 0
+    assert followup.last_error == "waiting_for_static_site_owner"
+    assert _utc(followup.next_run_at) >= before + timedelta(seconds=29)
+    assert calls == 0
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_static_pre_handoff_orphan_recovers_before_full_runtime_budget(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "pre-handoff-orphan.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        owner_event = Event(
+            title="Orphan owner",
+            description="Description",
+            date="2026-08-01",
+            time="18:00",
+            location_name="Venue",
+            source_text="source",
+        )
+        followup_event = Event(
+            title="Catch-up",
+            description="Description",
+            date="2026-08-02",
+            time="18:00",
+            location_name="Venue",
+            source_text="source",
+        )
+        session.add_all([owner_event, followup_event])
+        await session.commit()
+        await session.refresh(owner_event)
+        await session.refresh(followup_event)
+        owner = JobOutbox(
+            event_id=owner_event.id,
+            task=JobTask.static_site_build,
+            payload=make_request_payload(reason="interrupted before handoff"),
+            status=JobStatus.running,
+            coalesce_key="static_site_build:prod",
+            updated_at=now - timedelta(minutes=11),
+            next_run_at=now - timedelta(minutes=11),
+        )
+        session.add(owner)
+        await session.commit()
+        await session.refresh(owner)
+        owner_id = int(owner.id)
+        followup = JobOutbox(
+            event_id=followup_event.id,
+            task=JobTask.static_site_build,
+            payload=make_request_payload(reason="current Smart Update"),
+            status=JobStatus.pending,
+            coalesce_key="static_site_build:prod",
+            updated_at=now,
+            next_run_at=now - timedelta(seconds=1),
+        )
+        session.add(followup)
+        await session.commit()
+
+    calls: list[int] = []
+
+    async def handler(event_id, _db, _bot):
+        calls.append(event_id)
+        return False
+
+    monkeypatch.setenv("STATIC_SITE_PRE_HANDOFF_STALE_SECONDS", "600")
+    monkeypatch.setitem(main.JOB_HANDLERS, "static_site_build", handler)
+    assert await main._run_due_jobs_once(
+        db, None, allowed_tasks={JobTask.static_site_build}
+    ) == 1
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(select(JobOutbox).order_by(JobOutbox.id))
+        ).scalars().all()
+    assert rows[0].id == owner_id
+    assert rows[0].status == JobStatus.error
+    assert rows[0].last_error == "stale"
+    assert rows[1].status == JobStatus.done
+    assert calls == [followup_event.id]
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_static_build_pending_debounce_moves_to_fifteen_minutes_after_latest_update(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

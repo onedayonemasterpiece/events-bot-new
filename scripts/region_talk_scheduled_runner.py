@@ -187,6 +187,7 @@ async def run_region_talk_scheduled(
     bot_obj: Any = None,
     *,
     scheduler_run_id: str | None = None,
+    ops_trigger: str = "scheduled",
 ) -> dict[str, Any]:
     """Run one bounded autonomous discovery/finalization/delivery session."""
 
@@ -202,7 +203,7 @@ async def run_region_talk_scheduled(
         ops_run_id = await start_ops_run(
             db_obj,
             kind="region_talk",
-            trigger="scheduled",
+            trigger=str(ops_trigger or "scheduled"),
             operator_id=0,
             details=base_details,
         )
