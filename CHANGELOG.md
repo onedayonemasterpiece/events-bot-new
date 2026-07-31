@@ -7,6 +7,13 @@
 
 ### Added
 
+- Finalized the festival-queue dual-lane target: the existing Kaggle+Gemma RDR
+  parser remains active while Antigravity is shadow/canary, then becomes a
+  health-checked hot standby/fallback after Antigravity acceptance instead of
+  being discarded. Defined provider-neutral lane runs, technical failover vs
+  semantic review, the seven structural festival profiles, one superset
+  edition/revision store, and atomic `festival-index-v2`/detail/manifest
+  projections for the general festival index and future detail pages.
 - Audited the exact festival-engagement R7 tree at `940fea2e`: its 21 calendar
   rows contain 16 free topic labels, three statuses and seven derived
   date/status shapes rather than a declared seven-class taxonomy. Designed the
@@ -17,8 +24,8 @@
   templates.
 - Designed the shadow/approval-gated preproduction Festival Web Research lane
   for grouped `festival_queue` URL and document sources: immutable evidence,
-  Antigravity-first primary research plus an independent fresh-sandbox checker
-  and an optional conflict adjudicator, deterministic stale-edition/ticket-role
+  Antigravity A/B primary-and-checker roles inside its independent lane plus an
+  optional conflict adjudicator, deterministic stale-edition/ticket-role
   gates, operator review, Smart Update-only event apply, quotas, observability
   and staged rollout.
 - Added an evidence-first Antigravity festival-research prompt pack that splits

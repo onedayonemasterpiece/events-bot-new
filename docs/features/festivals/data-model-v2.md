@@ -1,4 +1,4 @@
-# Festival Data Model v2: taxonomy, evidence and Antigravity collection
+# Festival Data Model v2: structural taxonomy, evidence and dual collection
 
 Status: `proposed preproduction contract`; no production migration or public
 festival detail pages are included in this change.
@@ -10,7 +10,7 @@ number of visual page templates are explicitly out of scope.
 Related contracts:
 
 - current festival model and queue: [`README.md`](README.md);
-- Antigravity-first non-social research:
+- dual-lane non-social research and failover:
   [`../source-parsing/sources/festival-parser/preproduction-web-research.md`](../source-parsing/sources/festival-parser/preproduction-web-research.md);
 - reusable evidence-first prompts:
   [`../../llm/antigravity-festival-research.md`](../../llm/antigravity-festival-research.md);
@@ -38,6 +38,26 @@ of free-form `dateLabel` syntax and `status`: bounded/single-day announced,
 bounded/single-day programme-pending, and month/multi-month/open-start
 date-pending. The number seven therefore does not describe festival semantics.
 
+The exact seven structural profiles discussed for discovery/storage were
+formalized later, in this design on `2026-07-30` (`f46c45b6`), not recovered
+from `940fea2e`:
+
+```text
+identity_only
+single_compound_event
+standalone_events
+schedule_only
+hybrid
+continuous_experience
+distributed_cycle
+```
+
+`unknown` is a research state, not an eighth public type. These are structural
+programme/page-data archetypes: they answer whether to store a sparse identity,
+one compound visit, independently attendable Events, a common-admission
+schedule, a mixture, continuous zones/hours or a distributed cycle. Thematic
+labels such as music/food/history remain a separate multi-valued facet.
+
 A later successor (`0abe04ab`, not a descendant of `940fea2e`) moves the
 calendar into `festivalTimelineSeed.json`/`festival_calendar_item`, adds the
 four date-precision values and optional `festival_id`. In the current reviewed
@@ -49,16 +69,20 @@ The to-be design must not replace those dimensions with one overloaded enum.
 It uses:
 
 1. stable **series** and **edition** identity;
-2. seven orthogonal classification axes;
-3. a seven-value item disposition that decides whether a programme row becomes
+2. exactly one of the seven structural `programme_profile` values, or
+   research-state `unknown`;
+3. orthogonal identity/topic/temporal/spatial/access/lifecycle facets;
+4. a seven-value item disposition that decides whether a programme row becomes
    an Event, stays a schedule row, or is rejected;
-4. atomic source claims and immutable revisions;
-5. a generated `festival-edition-v2` JSON projection as the only future page
-   input.
+5. atomic source claims and immutable revisions;
+6. generated index/detail/manifest JSON projections from one effective
+   revision as the only future page inputs.
 
-Antigravity owns semantic classification and claim extraction. Local code owns
-input bounds, schemas, exact-quote/reference validation, revisioning and the
-fail-closed apply boundary.
+The selected LLM collector owns semantic classification and claim extraction
+inside its isolated lane: Antigravity after acceptance, Kaggle+Gemma as the
+current active lane and later hot standby/fallback. Local code owns input
+bounds, schemas, exact-quote/reference validation, cross-lane reconciliation,
+revisioning and the fail-closed apply boundary.
 
 ## 1. What can and cannot be reused from the calendar branch
 
@@ -99,10 +123,11 @@ The current persistence contour has three overlapping representations:
 2. `festival_calendar_item`: reviewed year-scoped calendar projection;
 3. `event.festival`: a string relation rather than an edition foreign key.
 
-The legacy Universal Festival Parser writes UDS v1 directly into the flat
+The existing Kaggle+Gemma Universal Festival Parser writes UDS v1 directly into the flat
 Festival row. It matches by `source_url` or case-insensitive name and updates
-non-null values. Programme rows are stored wholesale in `activities_json` and
-strong rows are separately routed through Smart Update. That cannot express:
+non-null values. Its URL programme rows are stored wholesale in
+`activities_json`; unlike the VK programme path, they are not routed through
+Smart Update. That cannot express:
 
 - series vs edition identity;
 - several editions with stable redirects;
@@ -114,7 +139,7 @@ strong rows are separately routed through Smart Update. That cannot express:
 - an approved revision distinct from a newly researched candidate;
 - a controlled taxonomy version.
 
-At `940fea2e` the legacy reasoning prompt does ask for one of eight theme
+At `940fea2e` the existing reasoning prompt does ask for one of eight theme
 strings (`music|film|theater|art|literature|food|sport|other`). However
 `UDSFestival` does not declare that field; its default nested model behaviour
 discards the undeclared value, while the outer `UDSOutput.extra="allow"` does
@@ -122,10 +147,12 @@ not make it a typed Festival field. The server upsert does not persist it.
 This is neither the remembered seven-value taxonomy nor durable
 classification.
 
-## 3. Seven classification axes
+## 3. Seven-value structural taxonomy and orthogonal facets
 
-These axes answer different questions and are stored independently. `unknown`
-is always valid during research; it is never silently converted to a default.
+`programme_profile` is the seven-value structural taxonomy that most strongly
+affects future page composition. The other facets answer independent questions
+and must not be collapsed into the structural type. `unknown` is always valid
+during research; it is never silently converted to a default.
 
 ### T1 — identity kind
 
@@ -145,7 +172,7 @@ unknown
 `not_festival` is a rejection verdict, not a public edition. A marketing word
 such as “fest” is not enough to choose `festival`.
 
-### T2 — programme profile
+### T2 — structural programme profile: the seven types
 
 How should the current known programme be represented? This is the axis that
 answers “separate Events or only a schedule?”.
@@ -164,6 +191,25 @@ answers “separate Events or only a schedule?”.
 `identity_only` is a snapshot state and may change when the programme appears.
 A profile change creates a new revision; it never destructively rewrites the
 last approved programme.
+
+The profile controls **required data capabilities**, not a separate physical
+schema:
+
+| Structural profile | Required stored shape | Derived future `render_profile` |
+|---|---|---|
+| `identity_only` | identity, honest date precision, lifecycle, sources, summary/media when known | `overview` |
+| `single_compound_event` | edition admission/offer, one visit relation, optional internal timetable | `single-event` |
+| `standalone_events` | section/item/occurrence inventory with approved Event relations | `event-catalog` |
+| `schedule_only` | ordered slots, shared admission/container, venue/stage/day grouping; no item Events | `schedule` |
+| `hybrid` | Event-linked items and non-Event slots/activities in the same conserved inventory | `hybrid` |
+| `continuous_experience` | zones/activities, opening-hour windows, optional separately announced Events | `continuous` |
+| `distributed_cycle` | non-contiguous occurrences, venues/tracks/phases and Event relations | `distributed-cycle` |
+
+Do not create seven Festival tables, seven incompatible JSON schemas or seven
+hard-coded storage paths. One superset edition/revision graph stores all facts;
+`render_profile` is a deterministic, versioned serving hint derived from the
+approved structural profile. A later UI project may implement one, several or
+composable templates without migrating canonical data.
 
 ### T3 — controlled topics
 
@@ -399,6 +445,7 @@ spatial_profile
 access_profiles_json
 lifecycle_state
 taxonomy_version
+taxonomy_sha256
 effective_revision_id
 public_status            # shadow | approved | archived | merged
 merged_into_edition_id
@@ -421,6 +468,7 @@ contract_version
 prompt_version
 taxonomy_version
 input_fingerprint
+collector_manifest_json # Antigravity/Kaggle lane runs, failures and fallback
 candidate_sha256
 candidate_json
 source_manifest_json
@@ -437,8 +485,9 @@ Only an `approved` revision may become `effective_revision_id`.
 
 ### Research provenance
 
-Operational runs remain in `festival_web_research_run/item/source`. Durable
-accepted evidence is copied/referenced through:
+Provider-neutral operational runs remain in
+`festival_web_research_run/lane_run/item/source`. Durable accepted evidence is
+copied/referenced through:
 
 ```text
 festival_edition_source
@@ -450,17 +499,23 @@ festival_source_snapshot
   content_type, fetch_mode, http_status, run_uid
 
 festival_claim
-  id, revision_id, snapshot_id, subject_kind, subject_key, field_path,
+  id, revision_id, lane_run_id, snapshot_id, subject_kind, subject_key, field_path,
   raw_value_json, normalized_value_json, normalization,
   verbatim_quote, quote_start, quote_end, normalizer_version,
   context_quote, status
 
 festival_decision
-  id, revision_id, decision_key, decision_kind, subject_kind, subject_key,
+  id, revision_id, origin_lane_run_id NULL, decision_key, decision_kind,
+  subject_kind, subject_key,
   selected_value_json, alternatives_json, evidence_claim_ids_json,
   reason_codes_json, status, actor_kind, contract_version, created_at,
   UNIQUE(revision_id, decision_key)
 ```
+
+`origin_lane_run_id` is set only for a decision made wholly inside one
+collector lane. It is `NULL` for host reconciliation/operator decisions, whose
+`evidence_claim_ids_json` may intentionally cite claims from several lane runs;
+`actor_kind` distinguishes `lane_model`, `host_reconciler` and `operator`.
 
 A claim quote is valid only when the recorded offsets reproduce it under the
 pinned normalizer against its exact snapshot hash. Substring-only validation is
@@ -520,6 +575,16 @@ festival_edition_media
   id, revision_id, asset_key, role, source_id, source_url, storage_path,
   content_sha256, width, height, rights_status, rights_text,
   claim_ids_json, status, display_order
+
+festival_publication_bundle
+  id, schema_version, revision_set_sha256, state,
+  index_artifact_path, index_sha256, manifest_artifact_path, manifest_sha256,
+  created_at, activated_at
+
+festival_publication_artifact
+  id, bundle_id, edition_id, revision_id, artifact_kind,
+  artifact_path, content_sha256, schema_version, readiness_json,
+  UNIQUE(bundle_id, edition_id, artifact_kind)
 ```
 
 Event-specific offers remain on Event/programme items. Festival-level offers
@@ -797,6 +862,14 @@ projection.
     "reason_code": "not_stated",
     "needed_evidence": "direct programme or ticket page with an end time"
   }],
+  "serving": {
+    "render_profile": "hybrid",
+    "render_profile_version": "festival-render-profile-v1",
+    "index_ready": true,
+    "detail_ready": false,
+    "event_apply_ready": false,
+    "blocking_reasons": ["CF001"]
+  },
   "quality": {
     "publishable": false,
     "field_coverage": {},
@@ -822,7 +895,7 @@ object, explicit enum/length/array bounds and these reference rules:
 | Path | Cardinality and required fields |
 |---|---|
 | `evidence_manifest` | exactly one hash/count-bound claims ledger for the revision; no inline raw pages |
-| `identity` | exactly one series and edition key; every non-null public scalar has `claim_ids` |
+| `identity` | exactly one series and edition key; every non-null source-derived public identity scalar has `claim_ids` |
 | `classification` | exactly one value for each of the seven axes; multi-value axes use `values`; every semantic mapping has `decision_ids` and evidence claims |
 | `parties` | zero or more unique `party_key`; requires kind and claim-backed name; organizers and item participants reference an existing party |
 | `organizers` | zero or more edition-scoped `(party_ref, role)` relations with claims |
@@ -834,6 +907,15 @@ object, explicit enum/length/array bounds and these reference rules:
 | `decisions` | zero or more unique `decision_id`; all referenced IDs resolve inside the same revision and cite existing claims |
 | `conflicts` | alternatives cite existing claims/sources; unresolved blocking conflict makes `publishable=false` |
 | `unknowns` | machine path, reason code and needed evidence; never filled with a guessed default |
+| `serving` | derived render hint and independent index/detail/Event readiness; never a source fact |
+
+Stable keys, schema/taxonomy/hash metadata, host-normalized date/time
+components, controlled enums selected by an evidence-backed decision and
+deterministic serving/quality values are not source facts and need not use the
+scalar claim wrapper. Their schema rules still require the corresponding
+decision/claim references or a pinned host derivation. This is why, for
+example, `disposition` is decision-backed while `serving.detail_ready` is
+host-derived.
 
 All `party_ref`, `venue_ref`, `offer_ref`, `source_id`, `decision_id`,
 programme item and Event references are validated as a closed graph inside the
@@ -842,14 +924,134 @@ projection. Every `claim_id` resolves against the revision's hash-bound
 accepted evidence”, not “known absent”, unless a claim/decision explicitly
 supports absence.
 
-`display_label` and public narrative copy are later projections. Antigravity
-may extract source wording and facts, but it does not write unsupported public
-copy into canonical facts.
+`display_label` and public narrative copy are later projections. Either LLM
+collector may extract source wording and facts, but it does not write
+unsupported public copy into canonical facts.
 
-## 7. Antigravity collection topology
+## 7. Serving projections for the index and future detail pages
 
-Normal cost remains two agent interactions per festival group; the hard cap is
-three. No stage below creates an extra provider request.
+The current static `/festivali/`, Telegraph festival index and Telegraph
+festival detail compute from different representations. The static index reads
+`festival_calendar_item`; Telegraph joins the flat Festival row to Events by
+the string `Event.festival`; `activities_json` is not rendered. V2 must publish
+all future surfaces from one effective edition revision plus a small reviewed
+index-presentation overlay.
+
+### `festival-index-v2.json`
+
+Top-level `schema_version=festival-index-v2`; one compact row per index-visible
+approved edition:
+
+```text
+seriesKey, editionKey, seriesSlug, editionSlug, detailPath
+title, shortSummary
+date(start, end, precision, label, sortDate, timezone)
+lifecycleState, programmeProfile, primaryTopicId, secondaryTopicIds
+spatialSummary(cities, venueCount, placeLabel)
+accessSummary
+cover(publicUrl, width, height, alt, rightsStatus)
+counts(events, scheduleSlots, continuousActivities)
+indexReady, detailReady, lastVerifiedAt
+effectiveRevision, taxonomyId/version/hash
+officialFallbackUrl
+```
+
+The index row never contains the programme tree, raw claims or source text.
+Its card destination is `detailPath` only when the same publish manifest
+contains a validated detail artifact; otherwise it uses the explicit official
+fallback URL rather than generating a broken internal link.
+
+### `festival-details/<edition-slug>.json`
+
+Each artifact has `schema_version=festival-detail-v2`. This is the public
+bounded projection of `festival-edition-v2`, not a second truth model. It
+contains:
+
+- series/edition identity and related-edition references;
+- the seven-value `programme_profile` and orthogonal facets;
+- derived/versioned `render_profile`;
+- dates, timezone, lifecycle and supported summary facts;
+- organizers/parties, venues, scoped offers and public media;
+- sections → items → occurrences with every item disposition;
+- approved Event IDs/paths for linked occurrences;
+- public source/freshness summary and conflict/unknown status without raw
+  operator quotes or full source text;
+- schema, taxonomy, revision and artifact hashes.
+
+All seven structural profiles use this one superset schema. Page templates are
+out of scope; the future renderer may choose or compose blocks from
+`render_profile` without changing persistence.
+
+### `festival-manifest-v2.json`
+
+Uses `schema_version=festival-manifest-v2` and maps `editionKey` to edition
+slug, `detailPath`, effective revision hash,
+artifact hash and readiness. Export is atomic:
+
+```text
+read one committed effective revision set
+-> build index + detail artifacts + manifest in a temp candidate
+-> validate schema, closed references and hashes
+-> switch the whole set together
+```
+
+The general index cannot point at a detail artifact from another revision or a
+file that was not published in the same manifest.
+
+### Event compatibility projection
+
+Static Event JSON gains a stable relation while retaining the current string:
+
+```json
+{
+  "festival": "legacy compatibility name",
+  "festivalRelation": {
+    "seriesKey": "opaque-series-key",
+    "editionKey": "opaque-edition-key",
+    "name": "...",
+    "path": "/festivali/.../",
+    "relationStatus": "approved"
+  }
+}
+```
+
+### Independent readiness
+
+- `index_ready`: stable edition, source-backed title, honest date/lifecycle,
+  sort key, destination and public cover/fallback. Full programme is optional.
+- `detail_ready`: effective approved revision, supported structural profile or
+  explicit `identity_only`, complete public programme disposition coverage,
+  resolved references, scoped offers, public media rights and no blocking
+  conflict.
+- `event_apply_ready`: every Event candidate independently passes the existing
+  Smart Update contract. A detail page may be ready while some unresolved
+  Event candidates remain withheld.
+
+`festival_calendar_item` remains a reviewed ordering/feature/cover overlay but
+must eventually reference stable `edition_id`; it is not canonical dates,
+taxonomy or programme truth.
+
+## 8. Antigravity-primary / Kaggle-hot-standby collection topology
+
+Before acceptance, existing Kaggle+Gemma remains the active URL pipeline and
+Antigravity is collect-only shadow/canary. After acceptance, Antigravity is
+primary for eligible non-social web groups; Kaggle+Gemma remains a regularly
+tested hot standby/fallback. Neither lane writes canonical truth directly once
+the common coordinator is active.
+
+Normal Antigravity cost remains two agent interactions per festival group; the
+hard cap is three. No stage below creates an extra provider request. Kaggle is
+not run after every successful primary forever: it runs on technical fallback,
+operator request and a bounded health/audit sample.
+
+The existing UDS v1 can initially provide `continuity_only` collection. It
+becomes `full_v2` fallback only after strict schema validation, collect-only
+mode, source-bound claims, the same structural taxonomy/item inventory and the
+common host validator. A continuity result never directly writes after the
+coordinator cutover, never activates a v2 revision and never silently claims
+`detail_ready`; it is an operator-visible migration/emergency result, not an
+automatic post-cutover reserve. Antigravity cannot become primary until a
+green `full_v2` Kaggle failover drill passes.
 
 ### Operational correction from the live 2026-07-29 probe
 
@@ -880,7 +1082,8 @@ Fresh environment receives:
 - target/queue manifest;
 - bounded normalized snapshots of all grouped seed URLs;
 - taxonomy and JSON contracts;
-- no legacy parser result and no previous approved narrative copy.
+- no Kaggle+Gemma result and no previous approved narrative copy; cross-lane
+  reconciliation remains host-side.
 
 Required checkpoint sequence:
 
@@ -905,7 +1108,8 @@ Rules:
 6. extract source-local programme rows without cross-source merging;
 7. assign an item disposition only with claim/decision evidence;
 8. reconcile entities and programme after all accepted source-local files exist;
-9. derive all seven taxonomy axes from accepted rows/claims;
+9. derive the seven-value structural profile and all orthogonal facets from
+   accepted rows/claims;
 10. never return model confidence or publishability;
 11. execute the mounted schema validator after each checkpoint for feedback,
     while accepting that the host rerun outside the sandbox is authoritative.
@@ -970,6 +1174,13 @@ A result proceeds without C only when:
 
 Agreement is evidence compatibility, not identical prose.
 
+If a Kaggle+Gemma lane was scheduled, programme conservation uses the union
+`Gemma ∪ A ∪ B`. UDS values without source-bound claims may reveal a missing
+subject/URL but are proposals, not selected facts. There is no model vote:
+official current-edition identity/programme evidence, direct event pages and
+correctly scoped ticket sources have field-specific authority. Copied text is
+one evidence family regardless of how many lanes found it.
+
 ### Call C — conditional adjudicator
 
 C receives only the conflicting classification/item values, exact quotes and
@@ -1008,7 +1219,12 @@ best-effort. Therefore:
   claims/decisions, without semantic repair;
 - no automatic fourth interaction is allowed.
 
-## 8. Local quality gates
+A technical Antigravity failure (`unavailable|quota_blocked|invalid mandatory
+checkpoints`) may create a Kaggle fallback lane only when standby health is
+green. A valid `unknown`, low coverage or semantic disagreement goes to
+C/operator review rather than provider failover.
+
+## 9. Local quality gates
 
 ### Evidence
 
@@ -1037,21 +1253,28 @@ best-effort. Therefore:
   keyword rules;
 - one subscription/pass URL never becomes a single Event ticket;
 - duplicate source rows reconcile to one stable programme item;
-- the union of accepted A/B item inventories is conserved: every subject is
-  linked, retained, rejected with evidence, or explicitly unresolved;
+- the union of accepted A/B and any scheduled Kaggle item inventories is
+  conserved: every subject is linked, retained, rejected with evidence, or
+  explicitly unresolved;
 - a profile change that changes Event count or item disposition requires
   operator review during preproduction.
 
 ### Revision/apply
 
-- shadow runs change no Festival/Event/public projection;
+- Antigravity shadow runs change no Festival/Event/public projection while the
+  existing Kaggle path remains active until the common coordinator cutover;
+- after coordinator cutover neither collector writes public state directly;
 - approved revision activation is atomic;
 - same input fingerprint/candidate hash is idempotent;
 - failure never replaces the last approved revision;
-- legacy/calendar compatibility projections are generated after approval, not
+- existing/calendar compatibility projections are generated after approval, not
   treated as evidence sources.
+- a `continuity_only` result cannot set `detail_ready`, auto-activate a v2
+  revision or write a legacy public surface after coordinator cutover;
+- index/detail/manifest artifacts are published atomically from the same
+  effective revision.
 
-## 9. Evaluation plan
+## 10. Evaluation plan
 
 ### Recovery audit
 
@@ -1108,7 +1331,10 @@ ordinary event falsely branded as a festival.
 - typical Antigravity calls/group: `2`, hard cap `3`;
 - median actual agent tokens/group: `<= 60k`, p95 `<= 90k`;
 - terminal or checkpoint-recoverable output: `>= 95%`;
-- zero public mutation in shadow.
+- zero Antigravity public mutation in shadow;
+- Kaggle script-kernel run-config/ID E2E: `100%` before hot-standby claim;
+- strict UDS validation and UDS→v2 adapter pass: `100%` for `full_v2` standby;
+- forced failover drill and fresh scheduled Kaggle live canary: pass.
 
 Recall is measured and reported, but precision wins: an unresolved Event item
 stays in programme/review instead of being guessed into the public Event table.
@@ -1128,37 +1354,59 @@ per mounted packet; one quote is capped at 500 characters; C receives at most
 20 conflicts and 10k characters. Calls remain sequential, and actual finalized
 usage is checked before the next reservation.
 
-## 10. Migration and rollout
+## 11. Migration and rollout
 
-### Phase 0 — contract/shadow
+### Phase 0 — stabilize current Kaggle+Gemma continuity
+
+- fix script-kernel URL/run-config transport, strict UDS validation and
+  festival-specific telemetry;
+- prove one live URL E2E and programme handoff rather than assuming the built
+  notebook is already a healthy reserve;
+- keep the current pipeline active while Antigravity remains shadow-only.
+
+### Phase 1 — common contract/shadow
 
 - implement schemas, validators and offline fixture replay;
 - collect `festival-edition-v2` candidates in object storage/run tables;
-- no production schema mutation and no apply.
+- add separate Antigravity/Kaggle lane manifests under one frozen input;
+- no Antigravity production mutation and no apply.
 
-### Phase 1 — identity foundation
+### Phase 2 — identity foundation
 
 - add series, edition, revision and stable edition↔Event relation tables;
-- backfill legacy Festival rows as reviewable series/edition candidates;
+- backfill existing Festival rows as reviewable series/edition candidates;
 - import 21 calendar rows as reviewed edition candidates with preserved date
   precision and raw topic labels;
 - do not auto-link name-only collisions.
 
-### Phase 2 — evidence and programme
+### Phase 3 — evidence and programme
 
 - add durable source/snapshot/claim and programme tables;
 - convert `activities_json` to `programme_only` candidates only when source
   provenance survives; otherwise mark review;
-- run Antigravity shadow over bounded non-social queue groups.
+- run Antigravity shadow over bounded non-social queue groups while
+  Kaggle+Gemma remains the active path;
+- add a collect-only UDS→v2 adapter so Kaggle can progress from
+  `continuity_only` to `full_v2` fallback.
 
-### Phase 3 — approval-gated activation
+### Phase 4 — approval-gated unified activation
 
 - operator reviews sources, taxonomy, dispositions and candidate diff;
 - approved revision atomically becomes effective;
 - only approved Event candidates enter Smart Update;
-- refresh legacy and calendar compatibility projections.
+- refresh existing/calendar compatibility projections plus atomic shadow
+  `festival-index-v2`, detail and manifest artifacts.
 
-### Phase 4 — data readiness for future detail pages
+### Phase 5 — Antigravity primary / Kaggle hot standby
+
+- switch only after Antigravity quality/operational acceptance and forced
+  failover through a green `full_v2` Kaggle lane;
+- use Kaggle automatically only when its health is green, capability is
+  `full_v2` and primary failure is technical, not semantic;
+- keep weekly live canary and bounded changed-target audit sampling;
+- preserve both lane results and primary failure evidence in the run ledger.
+
+### Phase 6 — data readiness for future detail pages
 
 An edition is detail-data-ready when:
 
@@ -1169,7 +1417,9 @@ An edition is detail-data-ready when:
 - every programme item has a disposition and provenance;
 - organizers/venues/offers/media declare scope and source evidence;
 - conflicts/unknowns are preserved;
-- a bounded public JSON projection can be generated deterministically.
+- bounded index/detail/manifest JSON can be generated atomically;
+- stable Event→edition relations are available while the compatibility string
+  remains during migration.
 
 This gate does not require choosing or implementing a page template.
 
@@ -1180,8 +1430,12 @@ This gate does not require choosing or implementing a page template.
 - programme structure and thematic category are separate taxonomies;
 - seven programme profiles and seven item dispositions have explicit behavior;
 - series/edition/revision/source/claim/programme/Event relations are defined;
-- Antigravity A/B/C has bounded, checkpoint-first responsibilities;
+- Antigravity A/B/C has bounded, checkpoint-first responsibilities and a
+  phase-gated path to primary;
+- Kaggle+Gemma is retained, repaired and health-tested as active path then hot
+  standby/full-v2 fallback rather than removed or treated as a second writer;
 - quality gates fail closed on disagreement and unsupported facts;
 - normal cost remains two calls, maximum three;
-- future detailed pages can consume one versioned approved JSON without parsing
-  sources or guessing semantics.
+- the general index and future detailed pages consume atomic projections from
+  one versioned approved revision without parsing sources or guessing
+  semantics.

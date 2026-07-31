@@ -7,6 +7,13 @@
 склей всё и сам оцени уверенность» на маленькие стадии с независимой
 проверкой доказательств.
 
+Он заменяет только старый монолитный **Antigravity interaction contract**, а
+не существующий Kaggle + Gemma Universal Festival Parser. До acceptance этот
+prompt pack работает collect-only shadow/canary; после acceptance Antigravity
+может стать primary для non-social web-групп, а Kaggle+Gemma сохраняется как
+проверяемый hot standby/fallback. Cross-lane reconciliation выполняется
+host-side; ни одна модель не пишет canonical Festival напрямую.
+
 Канонические оси классификации, programme profiles, item dispositions и
 выходной `festival-edition-v2` определены в
 [`../features/festivals/data-model-v2.md`](../features/festivals/data-model-v2.md).
@@ -50,9 +57,9 @@ Antigravity discovery
 
 ## Quota-aware topology
 
-Для текущего объёма фестивальной очереди default — primary research и
+Внутри одного запланированного Antigravity lane default — primary research и
 независимый узкий counter-evidence check; третий Antigravity-вызов нужен только
-при расхождении:
+при доказанном конфликте:
 
 ```text
 Call A — primary researcher, fresh environment
@@ -90,14 +97,16 @@ no  -> Call C — Antigravity adjudicator
   query, не более четырёх страниц, немедленный source checkpoint после каждой
   fetch, но programme profile и critical item dispositions он определяет
   независимо, иначе отсутствие записи ошибочно выглядит как согласие;
-- Call C запускается только если A и B расходятся по critical fields,
-  используют несовместимые выпуски/URL или один из них не проходит local gate;
+- Call C запускается только если A и B дают две локально валидные конфликтующие
+  alternatives по critical fields или edition/item identity; schema failure
+  идёт в technical fallback, а низкое покрытие — сразу в review, не в C;
 - Call C получает только conflict packet: target, спорные values, claim ids,
   короткие exact quotes и source hashes. Полные HTML/raw candidate и
   открываемые URL запрещены как token-amplification;
-- `status=incomplete` не создаёт автоматический четвёртый запрос: сначала
-  скачивается workspace, затем результат либо проверяется, либо один из трёх
-  слотов осознанно используется как replacement/adjudication;
+- `status=incomplete` не создаёт автоматический четвёртый запрос: schema-valid
+  mandatory checkpoints можно восстановить локально; без них Antigravity lane
+  является technical failure и маршрутизируется в healthy standby/review, а C
+  не превращается в свободный recovery researcher;
 - все deterministic checks выполняются без provider requests;
 - вызовы идут последовательно через shared limiter. `100000 TPM` не позволяет
   бездумно запускать три длинных interaction одновременно, даже если RPD

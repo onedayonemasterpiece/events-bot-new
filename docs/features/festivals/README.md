@@ -2,11 +2,13 @@
 
 Документация описывает **серии фестивалей** (бренд/линейка) и **выпуски** (конкретная итерация), а также их связь с событиями, Smart Update и Universal Festival Parser.
 
-Проектируемая нормализованная модель series/edition/revision, семь независимых
-осей классификации, programme-item dispositions и контракт сбора
-`festival-edition-v2` через Antigravity описаны в
+Проектируемая нормализованная модель series/edition/revision, семь структурных
+programme profiles, orthogonal facets, programme-item dispositions и общий
+`festival-edition-v2` для двух collectors описаны в
 [`data-model-v2.md`](data-model-v2.md). Это preproduction design: текущую
-production-модель и страницы он пока не заменяет.
+production-модель и страницы он пока не заменяет. До acceptance Antigravity
+работает shadow/canary рядом с существующим Kaggle+Gemma; после acceptance он
+может стать primary, а Kaggle+Gemma остаётся health-checked hot standby.
 
 ## Основные понятия
 
