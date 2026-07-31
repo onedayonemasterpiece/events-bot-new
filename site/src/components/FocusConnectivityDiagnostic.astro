@@ -31,15 +31,12 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     <div class="connectivity__results" data-connectivity-results hidden>
       {
         [
-          ['supabase-auth', 'Вход по почте', 'Supabase'],
-          ['supabase-data', 'Данные сайта', 'Supabase'],
-          ['ydb-control', 'Резервный канал', 'Yandex'],
-        ].map(([id, label, service]) => (
+          ['supabase-auth', 'Вход по почте'],
+          ['supabase-data', 'Данные сайта'],
+          ['ydb-control', 'Резервный канал'],
+        ].map(([id, label]) => (
           <article class="connectivity__result" data-connectivity-result={id}>
-            <div>
-              <h2>{label}</h2>
-              <small>{service}</small>
-            </div>
+            <h2>{label}</h2>
             <strong data-connectivity-verdict>Проверяем…</strong>
             <span data-connectivity-timing></span>
           </article>
@@ -144,13 +141,13 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     const targets = [
       {
         id: 'supabase-auth',
-        label: 'Supabase · вход',
+        label: 'Вход по почте',
         url: supabaseUrl ? `${supabaseUrl}/auth/v1/health` : '',
         headers: authHeaders,
       },
       {
         id: 'supabase-data',
-        label: 'Supabase · данные',
+        label: 'Данные сайта',
         url: supabaseUrl
           ? `${supabaseUrl}/rest/v1/personalization_event_reaction_counter?select=event_id&limit=1`
           : '',
@@ -186,7 +183,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     }
     if (summary) {
       summary.textContent = supabaseOk && yandexOk
-        ? 'Сейчас оба сервиса доступны.'
+        ? 'Сейчас все соединения доступны.'
         : !supabaseOk && yandexOk
           ? 'Основной сервис не ответил, но резервный канал доступен.'
           : supabaseOk && !yandexOk
@@ -214,6 +211,10 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
 </script>
 
 <style>
+  .connectivity,
+  .connectivity * {
+    box-sizing: border-box;
+  }
   .connectivity {
     min-height: 100dvh;
     display: grid;
@@ -223,7 +224,9 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     font-family: var(--ke-font-sans, system-ui, sans-serif);
   }
   .connectivity__card {
-    width: min(520px, 100%);
+    width: 100%;
+    max-width: 520px;
+    min-width: 0;
     display: grid;
     gap: .7rem;
     padding: clamp(1rem, 4vw, 1.5rem);
@@ -243,12 +246,15 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); line-height: .98; letter-spacing: -.045em; }
   .connectivity__lead, .connectivity__status, .connectivity__privacy { margin: 0; line-height: 1.5; }
   .connectivity__run {
+    width: 100%;
+    min-width: 0;
     min-height: 3.15rem;
     border: 0;
     border-radius: 999px;
     padding: .8rem 1.25rem;
     font: inherit;
     font-weight: 850;
+    white-space: normal;
     cursor: pointer;
   }
   .connectivity__run { color: #fff; background: #a74523; box-shadow: 0 10px 26px rgb(167 69 35 / 24%); }
@@ -265,7 +271,6 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     background: #f5eee5;
   }
   .connectivity__result h2 { margin: 0; font-size: .95rem; }
-  .connectivity__result small { display: block; margin-top: .1rem; color: #817269; font-size: .72rem; }
   .connectivity__result strong { color: #66564b; }
   .connectivity__result span { grid-column: 2; color: #75675d; font-size: .75rem; text-align: right; }
   .connectivity__result[data-state="ok"] strong { color: #1f744e; }

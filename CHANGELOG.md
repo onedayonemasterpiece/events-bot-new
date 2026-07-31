@@ -86,7 +86,8 @@
   RLS-safe Supabase Data API resource and a dedicated read-only Yandex API
   Gateway → YDB control. Its compact phone result shows one correlation code,
   local time, network/app mode and asks the participant for one screenshot;
-  all three services are checked in parallel. Added the
+  all three services are checked in parallel while public labels remain
+  provider-neutral. Added the
   dedicated YDB row/service account/gateway infrastructure contract and incident
   record `INC-2026-07-30-focus-email-otp-false-success`.
 - Restored the production-shaped automatic Hero Talk on the focus-candidate

@@ -20,11 +20,14 @@ test('focus programme stays on dedicated noindex/noarchive routes without replac
   assert.match(root, /HomeColdStartFeed/u);
   assert.doesNotMatch(root, /Фокус-группа/u);
   assert.match(hub, /Фокус-группа/u);
-  for (const source of [hub, invitation, collection, ending, diagnostic, secretHub]) {
+  for (const source of [hub, invitation, collection, ending, secretHub]) {
     assert.match(source, /noindex,nofollow,noarchive/u);
     assert.match(source, /<meta name="referrer" content="no-referrer"/u);
     assert.match(source, /<link rel="canonical" href=\{absoluteUrl\('/u);
   }
+  assert.match(diagnostic, /noindex,nofollow,noarchive,nosnippet/u);
+  assert.match(diagnostic, /<meta name="referrer" content="no-referrer"/u);
+  assert.match(diagnostic, /<link rel="canonical" href="https:\/\/kenigevents\.ru\/fokus-gruppa\/diagnostika\/"/u);
   assert.match(productionCheck, /const focusPrivateRoute = file\.key === 'zakrytaya-afisha\/index\.html'/u);
   assert.match(productionCheck, /!focusPrivateRoute/u);
   assert.match(invitation, /FocusGroupInviteIntake/u);
@@ -42,6 +45,8 @@ test('connectivity diagnostic is read-only, bounded and contains no OTP or user 
   assert.match(component, /Вход по почте/u);
   assert.match(component, /Данные сайта/u);
   assert.match(component, /Резервный канал/u);
+  assert.doesNotMatch(component, /<small>\{service\}<\/small>/u);
+  assert.doesNotMatch(component, /label: 'Supabase/u);
   assert.match(component, /Сделайте скриншот этого экрана/u);
   assert.match(component, /data-connectivity-id/u);
   assert.match(component, /X-Client-Info/u);
